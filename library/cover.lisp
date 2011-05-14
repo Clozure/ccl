@@ -18,33 +18,40 @@
 
 (in-package :ccl)
 
-(export '(*compile-code-coverage*
-          report-coverage
-          reset-coverage
-          clear-coverage
-          save-coverage-in-file
-          restore-coverage-from-file
-
-          save-coverage
-          restore-coverage
-          combine-coverage
-          read-coverage-from-file
-          write-coverage-to-file
-
-          coverage-statistics
-          coverage-source-file
-          coverage-expressions-total
-          coverage-expressions-entered
-          coverage-expressions-covered
-          coverage-unreached-branches
-          coverage-code-forms-total
-          coverage-code-forms-covered
-          coverage-functions-total
-          coverage-functions-fully-covered
-          coverage-functions-partly-covered
-          coverage-functions-not-entered
-
-          without-compiling-code-coverage))
+(eval-when (eval load compile)
+  (export '(*compile-code-coverage*
+            report-coverage
+            reset-coverage
+            clear-coverage
+            save-coverage-in-file
+            restore-coverage-from-file
+            
+            save-coverage  ;; stupid name, here for backward compatibility
+            get-coverage
+            restore-coverage
+            combine-coverage
+            read-coverage-from-file
+            write-coverage-to-file
+            
+            reset-incremental-coverage
+            get-incremental-coverage
+            incremental-coverage-source-matches
+            incremental-coverage-svn-matches
+            
+            coverage-statistics
+            coverage-source-file
+            coverage-expressions-total
+            coverage-expressions-entered
+            coverage-expressions-covered
+            coverage-unreached-branches
+            coverage-code-forms-total
+            coverage-code-forms-covered
+            coverage-functions-total
+            coverage-functions-fully-covered
+            coverage-functions-partly-covered
+            coverage-functions-not-entered
+            
+            without-compiling-code-coverage)))
 
 (defconstant $no-style 0)
 (defconstant $not-executed-style 1)
@@ -57,8 +64,21 @@
 (defparameter *entry-code-notes* (make-hash-table :test #'eq))
 (defparameter *source-coverage* (make-hash-table :test #'eq))
 
+(defmacro with-decoded-coverage ((&key (cover '*code-covered-functions*) (precompute t)) &body body)
+  `(let* ((*file-coverage* nil)
+          (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
+          (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
+          (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
+          (*source-coverage* ,(and precompute `(make-hash-table :test #'eq :shared nil))))
+     (decode-coverage :cover ,cover :precompute ,precompute)
+     ,@body))
+
+
 (defstruct (coverage-state (:conc-name "%COVERAGE-STATE-"))
   alist)
+
+(defstruct incremental-coverage
+  list)
 
 ;; Wrapper in case we ever want to do dwim on raw alists
 (defun coverage-state-alist (coverage)
@@ -105,37 +125,42 @@
   (gethash source-note *source-coverage*))
 
 (defun map-function-coverage (lfun fn &optional refs)
-  (let ((refs (cons lfun refs)))
+  (let ((refs (cons lfun refs))
+        (source (function-outermost-entry-source lfun)))
     (declare (dynamic-extent refs))
     (lfunloop for imm in lfun
 	      when (code-note-p imm)
 	      do (funcall fn imm)
 	      when (and (functionp imm)
-			(not (memq imm refs)))
+			(not (memq imm refs))
+                        ;; Make sure this fn is in the source we're currently looking at.
+                        ;; It might not be, if it is referenced via (load-time-value (foo))
+                        ;; where (foo) returns an lfun from some different source entirely.
+                        ;; CL-PPCRE does that.
+                        (or (null source) (eq source (function-outermost-entry-source imm))))
 	      do (map-function-coverage imm fn refs))))
 
-(defun get-function-coverage (fn refs)
-  (let ((entry (function-entry-code-note fn))
-	(refs (cons fn refs))
-        (source (function-source-form-note fn)))
+(defun decode-coverage-subfunctions (lfun refs)
+  (let ((refs (cons lfun refs))
+        (source (function-outermost-entry-source lfun)))
     (declare (dynamic-extent refs))
-    (when entry
-      (assert (eq fn (gethash entry *entry-code-notes* fn)))
-      (setf (gethash entry *entry-code-notes*) fn))
     (nconc
-     (and entry (list fn))
-     (lfunloop for imm in fn
-       when (code-note-p imm)
-       do (setf (gethash imm *emitted-code-notes*) t)
-       when (and (functionp imm)
-                 (not (memq imm refs))
-                 ;; Make sure this fn is in the source we're currently looking at.
-                 ;; It might not be, if it is referenced via (load-time-value (foo))
-                 ;; where (foo) returns an lfun from some different source entirely.
-                 ;; CL-PPCRE does that.
-                 (or (null source)
-                     (eq source (function-source-form-note imm))))
-       nconc (get-function-coverage imm refs)))))
+     (and (function-entry-code-note lfun) (list lfun))
+     (lfunloop for imm in lfun
+               when (and (functionp imm)
+                         (not (memq imm refs))
+                         (or (null source)
+                             (eq source (function-outermost-entry-source imm))))
+               nconc (decode-coverage-subfunctions imm refs)))))
+
+(defun decode-function-coverage (fn)
+  (let ((all (decode-coverage-subfunctions fn nil)))
+    (loop for fn in all as entry = (function-entry-code-note fn)
+      do (assert (eq fn (gethash entry *entry-code-notes* fn)))
+      do (setf (gethash entry *entry-code-notes*) fn)
+      do (lfunloop for imm in fn
+                   when (code-note-p imm) do (setf (gethash imm *emitted-code-notes*) t)))
+    all))
 
 (defun code-covered-info.file (data) (and (consp data) (car data)))
 (defun code-covered-info.fns (data) (and (consp data) (if (consp (cdr data)) (cadr data) (cdr data))))
@@ -145,43 +170,51 @@
 (defun code-covered-info-with-fns (data new-fns)
   (assert (consp data))
   (if (consp (cdr data))
-    (cons (car data) new-fns)
     (let ((new (copy-list data)))
       (setf (cadr new) new-fns)
-      new)))
+      new)
+    (cons (car data) new-fns)))
 
-(defun get-coverage ()
+(defun decode-coverage (&key (cover *code-covered-functions*) (precompute t))
   (setq *file-coverage* nil)
   (clrhash *coverage-subnotes*)
   (clrhash *emitted-code-notes*)
   (clrhash *entry-code-notes*)
-  (clrhash *source-coverage*)
-  (loop for data in *code-covered-functions*
-	do (let* ((file (code-covered-info.file data))
-                  (toplevel-functions (code-covered-info.fns data)))
-             (when file
-               (let* ((all-functions (delete-duplicates
-                                      ;; Duplicates are possible if you have multiple instances of
-                                      ;; (load-time-value (foo)) where (foo) returns an lfun.
-                                      ;; CL-PPCRE does that.
-                                      (loop for fn across toplevel-functions
-                                            nconc (get-function-coverage fn nil))))
-                      (coverage (list* file
-                                       all-functions
-                                       toplevel-functions
-                                       (make-coverage-statistics :source-file file))))
-                 (push coverage *file-coverage*)))))
+  (when precompute (clrhash *source-coverage*))
+  (loop for data in cover
+    do (let* ((file (code-covered-info.file data))
+              (toplevel-functions (code-covered-info.fns data)))
+         (when file
+           (let* ((all-functions (delete-duplicates
+                                  ;; Duplicates are possible if you have multiple instances of
+                                  ;; (load-time-value (foo)) where (foo) returns an lfun.
+                                  ;; CL-PPCRE does that.
+                                  (loop for fn across toplevel-functions
+                                    nconc (decode-coverage-subfunctions fn nil))))
+                  (coverage (list* file
+                                   all-functions
+                                   toplevel-functions
+                                   (make-coverage-statistics :source-file file))))
+             (push coverage *file-coverage*)
+             ;; record emitted notes
+             (loop for fn in all-functions as entry = (function-entry-code-note fn)
+               do (assert (eq fn (gethash entry *entry-code-notes* fn)))
+               do (setf (gethash entry *entry-code-notes*) fn)
+               do (lfunloop for imm in fn
+                            when (code-note-p imm)
+                            do (setf (gethash imm *emitted-code-notes*) t)))))))
   ;; Now get subnotes, including un-emitted ones.
   (loop for note being the hash-key of *emitted-code-notes*
-        do (loop for n = note then parent as parent = (code-note-parent-note n)
-                 while parent
-                 do (pushnew n (gethash parent *coverage-subnotes*))
-                 until (emitted-code-note-p parent)))
+    do (loop for n = note then parent as parent = (code-note-parent-note n)
+         while parent
+         do (pushnew n (gethash parent *coverage-subnotes*))
+         until (emitted-code-note-p parent)))
   ;; Now get source mapping
-  (loop for coverage in *file-coverage*
-        do (precompute-source-coverage coverage)
-        ;; bit of overkill, but we end up always wanting them.
-        do (compute-file-coverage-statistics coverage)))
+  (when precompute
+    (loop for coverage in *file-coverage*
+      do (precompute-source-coverage coverage)
+      ;; bit of overkill, but we end up always wanting them.
+      do (compute-file-coverage-statistics coverage))))
 
 (defun file-coverage-acode-queue (coverage)
   (loop with hash = (make-hash-table :test #'eq :shared nil)
@@ -189,7 +222,7 @@
         as acode = (%function-acode-string fn)
         as entry = (function-entry-code-note fn)
         as sn = (entry-note-unambiguous-source entry)
-        as toplevel-sn = (function-source-form-note fn)
+        as toplevel-sn = (function-outermost-entry-source fn)
         do (when sn
              (assert toplevel-sn)
              (let* ((pos (source-note-end-pos sn))
@@ -230,9 +263,6 @@
                      (and true-path (equalp (probe-file (car data)) true-path))))
              alist)))
 
-(defun covered-functions-for-file (path)
-  (code-covered-info.fns (assoc-by-filename path *code-covered-functions*)))
-
 (defun ccl:clear-coverage ()
   "Clear all files from the coverage database. The files will be re-entered
 into the database when the FASL files (produced by compiling with
@@ -244,6 +274,11 @@ image."
   (map-function-coverage lfun #'(lambda (note)
                                   (setf (code-note-code-coverage note) nil))))
 
+(defun reset-function-incremental-coverage (lfun)
+  (map-function-coverage lfun #'(lambda (note)
+                                  (when (code-note-code-coverage note)
+                                    (setf (code-note-code-coverage note) :prior)))))
+
 (defun ccl:reset-coverage ()
   "Reset all coverage data back to the `Not executed` state."
   (loop for data in *code-covered-functions*
@@ -252,6 +287,18 @@ image."
 		(loop for fn across (code-covered-info.fns data)
 		      do (reset-function-coverage fn)))
              (function (reset-function-coverage data)))))
+
+
+(defun ccl:reset-incremental-coverage ()
+  "Mark a starting point for recording incremental coverage.
+   Has no effect on regular coverage recording."
+  (loop for data in *code-covered-functions*
+    do (typecase data
+         (cons
+          (loop for fn across (code-covered-info.fns data)
+            do (reset-function-incremental-coverage fn)))
+         (function (reset-function-incremental-coverage data)))))
+
 
 ;; Name used for consistency checking across file save/restore
 (defun function-covered-name (fn)
@@ -277,14 +324,18 @@ image."
 
 ;; (name . #(i1 i2 ...)) where in is either an index or (index . subfncoverage).
 (defun save-function-coverage (fn &optional (refs ()))
-  (let ((refs (cons fn refs)))
+  (let ((refs (cons fn refs))
+        (source (function-outermost-entry-source fn)))
     (declare (dynamic-extent refs))
     (cons (function-covered-name fn)
+          ;; See comments in map-function-coverage
           (lfunloop for imm in fn as i upfrom 0
                     when (and (code-note-p imm)
                               (code-note-code-coverage imm))
                     collect i into list
-                    when (and (functionp imm) (not (memq imm refs)))
+                    when (and (functionp imm)
+                              (not (memq imm refs))
+                              (or (null source) (eq source (function-outermost-entry-source imm))))
                     collect (cons i (save-function-coverage imm refs)) into list
                     finally (return (and list (coerce list 'vector)))))))
 
@@ -300,6 +351,7 @@ image."
 
 (defun restore-function-coverage (fn saved-fn-data &optional (refs ()))
   (let* ((refs (cons fn refs))
+         (source (function-outermost-entry-source fn))
          (saved-name (car saved-fn-data))
          (saved-imms (cdr saved-fn-data))
          (nimms (length saved-imms))
@@ -307,6 +359,7 @@ image."
     (declare (dynamic-extent refs))
     (unless (equalp saved-name (function-covered-name fn))
       (coverage-mismatch "had function ~s now have ~s" saved-name fn))
+    ;; See comments in map-function-coverage
     (lfunloop for imm in fn as i upfrom 0
               when (code-note-p imm)
               do (let* ((next (and (< n nimms) (aref saved-imms n))))
@@ -315,7 +368,9 @@ image."
                    (when (setf (code-note-code-coverage imm)
                                (and (eql next i) 'restored))
                      (incf n)))
-              when (and (functionp imm) (not (memq imm refs)))
+              when (and (functionp imm)
+                        (not (memq imm refs))
+                        (or (null source) (eq source (function-outermost-entry-source imm))))
               do (let* ((next (and (< n nimms) (aref saved-imms n))))
                    (unless (and (consp next) (eql (car next) i))
                      (coverage-mismatch "in ~s" fn))
@@ -347,13 +402,16 @@ image."
     fn-data))
 
 
-(defun ccl:save-coverage ()
+(defun ccl:get-coverage ()
   "Returns a snapshot of the current coverage state"
   (make-coverage-state
    :alist (loop for data in *code-covered-functions*
                 when (consp data)
                   collect (code-covered-info-with-fns
                                data (map 'vector #'save-function-coverage (code-covered-info.fns data))))))
+
+;; Backward compatibility with sbcl name.
+(setf (symbol-function 'ccl:save-coverage) #'ccl:get-coverage)
 
 (defun ccl:combine-coverage (coverage-states)
   (let ((result nil))
@@ -405,6 +463,95 @@ image."
                               "Restoring different version of file ~s (checksum mismatch)"
                               saved-file))
                     (map nil #'restore-function-coverage fns saved-fns))))))
+
+(defun ccl:get-incremental-coverage (&key (reset t))
+  "Return the delta coverage since the last reset of incremental coverage.
+  If RESET is true (the default), it also resets incremental coverage now."
+  ;; An incremental coverage snapshot is just a list of covered (i.e. entered) code notes.
+  ;; It is not savable in a file.
+  (let ((covered nil))
+    (flet ((get-fn (note)
+             (let ((coverage (code-note-code-coverage note)))
+               (when (and coverage (not (eq coverage :prior)))
+                 (when reset (setf (code-note-code-coverage note) :prior))
+                 (push note covered)))))
+      (loop for data in *code-covered-functions*
+        when (consp data)
+        do (loop for fn across (code-covered-info.fns data)
+             do (map-function-coverage fn #'get-fn)))
+      (make-incremental-coverage :list covered))))
+
+(defun ccl:incremental-coverage-svn-matches (collection &key (directory (current-directory)) (revision :base))
+  "Given a hash table COLLECTION whose values are incremental coverage deltas, return a list
+  of all keys corresponding to those deltas that intersect any region in a file in DIRECTORY that
+  has changed since revision REVISION in subversion."
+  (incremental-coverage-source-matches collection (get-svn-changes :directory directory
+                                                                   :revision revision
+                                                                   :reverse t)))
+
+(defun ccl:incremental-coverage-source-matches (collection sources)
+  "Given a hash table COLLECTION whose values are incremental coverage delta, return a list
+  of all keys corresponding to deltas that intersect any region in SOURCES.  SOURCES
+  should be a list of source notes and/or pathnames"
+  (let ((coverages (remove-duplicates
+                    (mapcar (lambda (file)
+                              (or (assoc-by-filename file *code-covered-functions*)
+                                  (error "There is no coverage info for ~s" file)))
+                            ;; remove dups for efficiency, since assoc-by-filename can be expensive,
+                            ;; and the filenames will typically be EQ since all created at once.
+                            ;; But don't bother with EQUAL testing, since assoc-by-filename will do that.
+                            ;; Note - source-note-filename accepts pathnames and just returns them.
+                            (remove-duplicates (mapcar #'source-note-filename sources))))))
+    (with-decoded-coverage (:cover coverages :precompute nil)
+      (loop for sn in sources
+        do (let* ((coverage (assoc-by-filename (source-note-filename sn) coverages))
+                  (matches (code-notes-for-region coverage
+                                                  (source-note-start-pos sn)
+                                                  (source-note-end-pos sn))))
+             (flet ((matches (delta)
+                      (loop for note in (incremental-coverage-list delta) thereis (memq note matches))))
+               (typecase collection
+                 (hash-table (loop for key being the hash-key of collection using (hash-value delta)
+                               when (matches delta) collect key))
+                 (sequence (remove-if-not #'matches collection)))))))))
+
+
+
+
+(defun nearest-source-note (note)
+  (loop for n = note then (code-note-parent-note n)
+        thereis (and n (code-note-source-note n))))
+
+;; Given a region of a file, find a set of code notes that completely covers it, i.e.
+;; a set such that if none of the code notes in the set have been executed, then it's guaranteed
+;; that modifying the region is not going to affect execution.  Try to make that set as small
+;; as possible.
+(defun code-notes-for-region (coverage start-pos end-pos)
+  (let* ((notes (loop for fn across (file-coverage-toplevel-functions coverage)
+                  as note = (function-entry-code-note fn) as source = (nearest-source-note note)
+                  when (and source
+                            (or (null end-pos) (< (source-note-start-pos source) end-pos))
+                            (or (null start-pos) (< start-pos (source-note-end-pos source))))
+                  ;; This function intersects the region.  Find the smallest subnote that contains all
+                  ;; of this function's part of the region.
+                  collect (let ((start (max start-pos (source-note-start-pos source)))
+                                (end (min end-pos (source-note-end-pos source))))
+                            (iterate tighten ((note note))
+                              (loop for subnote in (coverage-subnotes note)
+                                as subsource = (nearest-source-note subnote)
+                                do (when (and (<= (source-note-start-pos subsource) start)
+                                              (<= end (source-note-end-pos subsource)))
+                                     (return (tighten subnote)))
+                                finally (return note))))))
+         (emitted-notes (iterate splat ((notes notes))
+                          (loop for note in notes
+                            nconc (if (emitted-code-note-p note)
+                                    (list note)
+                                    (splat (coverage-subnotes note)))))))
+    emitted-notes))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defvar *loading-coverage*)
 
@@ -463,12 +610,7 @@ image."
 
 
 (defun ccl:coverage-statistics ()
-  (let* ((*file-coverage* nil)
-	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
-	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
-	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
-         (*source-coverage* (make-hash-table :test #'eq :shared nil)))
-    (get-coverage)
+  (with-decoded-coverage ()
     (mapcar #'file-coverage-statistics *file-coverage*)))
 
 (defun compute-file-coverage-statistics (coverage)
@@ -490,76 +632,71 @@ written to the output directory.
   (let* ((paths)
          (directory (make-pathname :name nil :type nil :defaults output-file))
          (coverage-dir (common-coverage-directory))
-	 (*file-coverage* nil)
-	 (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
-	 (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
-	 (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
-         (*source-coverage* (make-hash-table :test #'eq :shared nil))
          (index-file (and html (merge-pathnames output-file "index.html")))
          (stats-file (and statistics (merge-pathnames (if (or (stringp statistics)
                                                               (pathnamep statistics))
                                                         (merge-pathnames statistics "statistics.csv")
                                                         "statistics.csv")
                                                       output-file))))
-    (get-coverage)
     (ensure-directories-exist directory)
-    (loop for coverage in *file-coverage*
-      as truename = (or (probe-file (file-coverage-file coverage))
-		    (progn (warn "Cannot find ~s, won't report coverage" (file-coverage-file coverage))
-			   nil))
-      do (when truename
-           (let* ((src-name (enough-namestring truename coverage-dir))
-                  (html-name (substitute
-                              #\_ #\: (substitute
-                                       #\_ #\. (substitute
-                                                #\_ #\/ (namestring-unquote src-name)))))
-                  (file (file-coverage-file coverage)))
-             (when html
-               (with-coverage-mismatch-catch (file)
-                 (let* ((data (assoc-by-filename file *code-covered-functions*))
-                        (checksum (fcomp-file-checksum (code-covered-info.file data)
-                                                       :external-format (code-covered-info.ef data))))
-                   (unless (eql checksum (code-covered-info.id data))
-                     (cerror "Try coloring anyway"
-                             "File ~s has changed since coverage source location info was recorded."
-                             (code-covered-info.file data))))
-                 (with-open-file (stream (make-pathname :name html-name :type "html" :defaults directory)
-                                         :direction :output
-                                         :if-exists :supersede
-                                         :if-does-not-exist :create)
-                   (report-file-coverage index-file coverage stream external-format))))
-             (push (list* src-name html-name coverage) paths))))
-    (when (null paths)
-      (error "No code coverage data available"))
-    (setq paths (sort paths #'(lambda (path1 path2)
-                                (let* ((f1 (car path1))
-                                       (f2 (car path2)))
-                                  (or (string< (directory-namestring f1)
-                                               (directory-namestring f2))
-                                      (and (equal (pathname-directory f1)
-                                                  (pathname-directory f2))
-                                           (string< (file-namestring f1)
-                                                    (file-namestring f2))))))))
-    (if html
-      (with-open-file (html-stream index-file
-                                   :direction :output
-                                   :if-exists :supersede
-                                   :if-does-not-exist :create)
+    (with-decoded-coverage ()
+      (loop for coverage in *file-coverage*
+        as truename = (or (probe-file (file-coverage-file coverage))
+                          (progn (warn "Cannot find ~s, won't report coverage" (file-coverage-file coverage))
+                            nil))
+        do (when truename
+             (let* ((src-name (enough-namestring truename coverage-dir))
+                    (html-name (substitute
+                                #\_ #\: (substitute
+                                         #\_ #\. (substitute
+                                                  #\_ #\/ (namestring-unquote src-name)))))
+                    (file (file-coverage-file coverage)))
+               (when html
+                 (with-coverage-mismatch-catch (file)
+                   (let* ((data (assoc-by-filename file *code-covered-functions*))
+                          (checksum (fcomp-file-checksum (code-covered-info.file data)
+                                                         :external-format (code-covered-info.ef data))))
+                     (unless (eql checksum (code-covered-info.id data))
+                       (cerror "Try coloring anyway"
+                               "File ~s has changed since coverage source location info was recorded."
+                               (code-covered-info.file data))))
+                   (with-open-file (stream (make-pathname :name html-name :type "html" :defaults directory)
+                                           :direction :output
+                                           :if-exists :supersede
+                                           :if-does-not-exist :create)
+                     (report-file-coverage index-file coverage stream external-format))))
+               (push (list* src-name html-name coverage) paths))))
+      (when (null paths)
+        (error "No code coverage data available"))
+      (setq paths (sort paths #'(lambda (path1 path2)
+                                  (let* ((f1 (car path1))
+                                         (f2 (car path2)))
+                                    (or (string< (directory-namestring f1)
+                                                 (directory-namestring f2))
+                                        (and (equal (pathname-directory f1)
+                                                    (pathname-directory f2))
+                                             (string< (file-namestring f1)
+                                                      (file-namestring f2))))))))
+      (if html
+        (with-open-file (html-stream index-file
+                                     :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+          (if stats-file
+            (with-open-file (stats-stream stats-file
+                                          :direction :output
+                                          :if-exists :supersede
+                                          :if-does-not-exist :create)
+              (report-coverage-to-streams paths html-stream stats-stream))
+            (report-coverage-to-streams paths html-stream nil)))
         (if stats-file
           (with-open-file (stats-stream stats-file
                                         :direction :output
                                         :if-exists :supersede
                                         :if-does-not-exist :create)
-            (report-coverage-to-streams paths html-stream stats-stream))
-          (report-coverage-to-streams paths html-stream nil)))
-      (if stats-file
-        (with-open-file (stats-stream stats-file
-                                      :direction :output
-                                      :if-exists :supersede
-                                      :if-does-not-exist :create)
-          (report-coverage-to-streams paths nil stats-stream))
-        (error "One of :HTML or :STATISTICS must be non-nil")))
-    (values index-file stats-file)))
+            (report-coverage-to-streams paths nil stats-stream))
+          (error "One of :HTML or :STATISTICS must be non-nil")))
+      (values index-file stats-file))))
 
 (defun report-coverage-to-streams (paths html-stream stats-stream)
   (when html-stream (write-coverage-styles html-stream))
@@ -669,7 +806,7 @@ written to the output directory.
       (fill-with-text-style source styles)))
   (update-text-styles note styles))
 
-(defun function-source-form-note (fn)
+(defun function-outermost-entry-source (fn)
   ;; Find the outermost source form containing the fn.
   (loop with sn = nil
         for n = (function-entry-code-note fn) then (code-note-parent-note n)
@@ -705,7 +842,7 @@ written to the output directory.
 
 (defun colorize-function (fn styles acode-styles &optional refs)
   (let* ((note (function-entry-code-note fn))
-	 (source (function-source-form-note fn))
+	 (source (function-outermost-entry-source fn))
 	 (refs (cons fn refs)))
     (declare (dynamic-extent refs))
     ;; Colorize the body of the function
@@ -716,9 +853,9 @@ written to the output directory.
     (lfunloop for imm in fn
 	      when (and (functionp imm)
 			(not (memq imm refs))
-                        ;; See note in get-function-coverage
+                        ;; See note in decode-function-coverage
 			(or (null source)
-			    (eq source (function-source-form-note imm))
+			    (eq source (function-outermost-entry-source imm))
 			    #+debug (progn
 				      (warn "Ignoring ref to ~s from ~s" imm fn)
 				      nil)))

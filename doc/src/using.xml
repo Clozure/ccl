@@ -2932,15 +2932,14 @@ WATCH-LIST
   <programlisting>
 (progn
   (do-this)
-  (setq that ...) ...))
-  </programlisting>
+  (setq that ...) ...))</programlisting>
   do:
   <programlisting>
 (defun init-this-and-that ()
   (do-this)
   (setq that ...)  ...)
-(init-this-and-that)
-  </programlisting>
+(init-this-and-that)</programlisting>
+
 Then you can see the coverage information in the definition of
 <literal>init-this-and-that</literal>.
 </para>
@@ -2955,18 +2954,35 @@ Then you can see the coverage information in the definition of
   is true:
   <programlisting>
 (setq ccl:*compile-code-coverage* t) 
-(recompile-all-your-files) 
-  </programlisting>
+(recompile-all-your-files)</programlisting>
 </para>
 <para>
   The compilation process will be many times slower than normal, and
   the fasl files will be many times bigger.
 </para>
 <para>
-  When you execute function loaded from instrumented fasl files, they
-  will record coverage information every time they are executed. The
-  system keeps track of which instrumented files have been loaded.
+  When you execute functions loaded from instrumented fasl files, they
+  will record coverage information every time they are executed. 
+  You can examine that information by calling <literal>ccl:report-coverage</literal>
+  or <literal>ccl:coverage-statistics</literal>.
 </para>
+ <para>
+   While recording coverage, you can collect incremental coverage deltas between any two points
+   in time.  You might do this while running a test suite, to record the coverage for
+   each test, for example:
+  <programlisting>
+(ccl:reset-incremental-coverage)
+(loop with coverage = (make-hash-table)
+      for test in (tests-to-run)
+      do (run-test test)
+      do (setf (gethash test coverage) (ccl:get-incremental-coverage))
+      finally (return coverage))</programlisting>creates a hash table mapping a test to a representation of all coverage recorded while running the
+   test.  This hash table can then be passed to <literal>ccl:incremental-coverage-svn-matches</literal>
+   or <literal>ccl:incremental-coverage-source-matches</literal>.
+</para>
+</sect2>
+
+<sect2 id="code-coverage-functions-and-variables"><title>Functions and Variables</title>
 <para>
   The following functions can be used to manage the coverage data:
 </para>
@@ -3086,8 +3102,8 @@ Then you can see the coverage information in the definition of
   <refsect1><title>Description</title>
     <para>
       Gets rid of the information about which instrumented files have
-      been loaded, so ccl:report-coverage will not report any files,
-      and ccl:save-coverage-in-file will not save any info, until more
+      been loaded, so <literal>ccl:report-coverage</literal> will not report any files,
+      and <literal>ccl:save-coverage-in-file</literal> will not save any info, until more
       instrumented files are loaded.
     </para>
   </refsect1>
@@ -3116,7 +3132,7 @@ Then you can see the coverage information in the definition of
       Saves all coverage info in a file, so you can restore the
       coverage state later. This allows you to combine multiple runs
       or continue in a later session. Equivalent to
-      (ccl:write-coverage-to-file (ccl:save-coverage) pathname).
+      <literal>(ccl:write-coverage-to-file (ccl:get-coverage) pathname)</literal>.
     </para>
   </refsect1>
 </refentry>
@@ -3146,22 +3162,22 @@ Then you can see the coverage information in the definition of
       that were loaded both at save and restore time. I.e. coverage
       info is only restored for files that have been loaded in this
       session. For example if in a previous session you had loaded
-      "foo.lx86fsl" and then saved the coverage info, in this session
-      you must load the same "foo.lx86fsl" before calling
-      restore-coverage-from-file in order to retrieve the stored
-      coverage info for "foo".  Equivalent to (ccl:restore-coverage
-      (ccl:read-coverage-from-file pathname)).
+      <filename>"foo.lx86fsl"</filename> and then saved the coverage info, in this session
+      you must load the same <filename>"foo.lx86fsl"</filename> before calling
+      <literal>restore-coverage-from-file</literal> in order to retrieve the stored
+      coverage info for "foo".  Equivalent to <literal>(ccl:restore-coverage
+      (ccl:read-coverage-from-file pathname))</literal>.
     </para>
   </refsect1>
 </refentry>
 
-<refentry id="f_save-coverage">
-  <indexterm zone="f_save-coverage">
-    <primary>save-coverage</primary>
+<refentry id="f_get-coverage">
+  <indexterm zone="f_get-coverage">
+    <primary>get-coverage</primary>
   </indexterm>
   
   <refnamediv>
-    <refname>SAVE-COVERAGE</refname>
+    <refname>GET-COVERAGE</refname>
     <refpurpose>
       Returns a snapshot of the current coverage data.
     </refpurpose>
@@ -3172,9 +3188,9 @@ Then you can see the coverage information in the definition of
     <para>
       Returns a snapshot of the current coverage data. A snapshot is a
       copy of the current coverage state. It can be saved in a file
-      with ccl:write-coverage-to-file, reinstated back as the current
-      state with ccl:restore-coverage, or combined with other
-      snapshots with ccl:combine-coverage.
+      with <literal>ccl:write-coverage-to-file</literal>, reinstated back as the current
+      state with <literal>ccl:restore-coverage</literal>, or combined with other
+      snapshots with <literal>ccl:combine-coverage</literal>.
     </para>
   </refsect1>
 </refentry>
@@ -3252,8 +3268,8 @@ Then you can see the coverage information in the definition of
   <refsect1><title>Description</title>
     <para>
       Saves the coverage snapshot in a file. The snapshot can be
-      loaded back with ccl:read-coverage-from-file or loaded and
-      restored with ccl:restore-coverage-from-file. Note that the file
+      loaded back with <literal>ccl:read-coverage-from-file</literal> or loaded and
+      restored with <literal>ccl:restore-coverage-from-file</literal>. Note that the file
       created is actually a lisp source file and can be compiled for
       faster loading.
     </para>
@@ -3282,8 +3298,8 @@ Then you can see the coverage information in the definition of
     <para>
       Returns the snapshot saved in pathname. Doesn't affect the
       current coverage state. pathname can be the file previously
-      created with ccl:write-coverage-to-file or
-      ccl:save-coverage-in-file, or it can be the name of the fasl
+      created with <literal>ccl:write-coverage-to-file</literal> or
+      <literal>ccl:save-coverage-in-file</literal>, or it can be the name of the fasl
       created from compiling such a file.
     </para>
   </refsect1>
@@ -3297,7 +3313,7 @@ Then you can see the coverage information in the definition of
   <refnamediv>
     <refname>COVERAGE-STATISTICS</refname>
     <refpurpose>
-      Returns a sequence of ccl:coverage-statistics objects, one per source file.
+      Returns a sequence of <literal>ccl:coverage-statistics</literal> objects, one per source file.
     </refpurpose>
     <refclass>Function</refclass>
   </refnamediv>
@@ -3309,10 +3325,10 @@ Then you can see the coverage information in the definition of
 
   <refsect1><title>Description</title>
     <para>
-      Returns a sequence ccl:coverage-statistics objects, one for each
+      Returns a sequence of <literal>ccl:coverage-statistics</literal> objects, one for each
       source file, containing the same information as that written to
-      the statistics file by ccl:report-coverage. The following
-      accessors are defined for ccl:coverage-statistics objects:
+      the statistics file by <literal>ccl:report-coverage</literal>. The following
+      accessors are defined for <literal>ccl:coverage-statistics</literal> objects:
       <variablelist>
       <varlistentry>
 	<term><function>coverage-source-file</function></term>
@@ -3410,6 +3426,200 @@ Then you can see the coverage information in the definition of
   </refsect1>
 </refentry>
 
+<refentry id="f_reset-incremental-coverage">
+  <indexterm zone="f_reset-incremental-coverage">
+    <primary>reset-incremental-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>RESET-INCREMENTAL-COVERAGE</refname>
+    <refpurpose>
+      Reset incremental coverage.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>reset-incremental-coverage</function>
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Description</title>
+    <para>
+      Marks a starting point for recording incremental coverage.
+      Note that calling
+      this function does not affect regular coverage data (whereas calling
+      <literal>ccl:reset-coverage</literal> resets incremental coverage as well).
+    </para>
+  </refsect1>
+</refentry>
+
+
+<refentry id="f_get-incremental-coverage">
+  <indexterm zone="f_get-incremental-coverage">
+    <primary>get-incremental-coverage</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>GET-INCREMENTAL-COVERAGE</refname>
+    <refpurpose>
+      Returns the delta of coverage since the last incremental reset.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>get-incremental-coverage</function> &key; (reset t)
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Description</title>
+    <para>
+      Returns the delta of coverage since the last reset of incremental coverage.
+     If <literal>reset</literal> is true (the default), it also resets incremental coverage
+     now, so that the next call to <literal>get-incremental-coverage</literal> will return
+     the delta from this point.
+     </para>
+     <para>
+      Incremental coverage deltas are represented differently than the full coverage snapshots
+      returned by functions such as <literal>ccl:get-coverage</literal>.  Incremental
+      coverage uses an abbreviated format
+      and is missing some of the information in a full snapshot, and therefore cannot be passed to
+      functions documented to accept a <variable>snapshot</variable>, only to functions
+      specifically documented to accept incremental coverage deltas.
+     </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_incremental-coverage-source-matches">
+  <indexterm zone="f_incremental-coverage-source-matches">
+    <primary>incremental-coverage-source-matches</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>INCREMENTAL-COVERAGE-SOURCE-MATCHES</refname>
+    <refpurpose>
+      Find incremental coverage deltas intersecting source regions.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>incremental-coverage-source-matches</function> collection sources
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Arguments and Values</title>
+  <variablelist>
+    <varlistentry>
+      <term>collection</term>
+       <listitem>
+         <para>
+          A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
+          incremental coverage deltas.
+         </para>
+        </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>sources</term>
+       <listitem>
+         <para>
+          A list of pathnames and/or source-notes, the latter representing a range within a file.
+         </para>
+        </listitem>
+    </varlistentry>
+   </variablelist>
+   </refsect1>
+
+  <refsect1><title>Description</title>
+    <para>
+     Given a hash table <literal>collection</literal> whose values are incremental coverage
+     deltas, return a list of all keys corresponding to those deltas that intersect any region
+     in <literal>sources</literal>.
+     </para>
+     <para>
+     For example if the deltas represent tests, then the returned value is a list of all tests
+     that cover some part of the source regions.
+     </para>
+     <para>
+     <literal>collection</literal> can also be a sequence of deltas, in which case a subsequence
+      of matching deltas is returned.  In particular you can test whether any particular delta
+      intersects the sources by passing it in as a single-element list.
+     </para>
+  </refsect1>
+</refentry>
+
+<refentry id="f_incremental-coverage-svn-matches">
+  <indexterm zone="f_incremental-coverage-svn-matches">
+    <primary>incremental-coverage-svn-matches</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>INCREMENTAL-COVERAGE-SVN-MATCHES</refname>
+    <refpurpose>
+      Find incremental coverage deltas matching changes from a particular subversion revision.
+    </refpurpose>
+    <refclass>Function</refclass>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <synopsis><function>incremental-coverage-svn-matches</function> collection &key; (directory (current-directory)) (revision :base)
+    </synopsis>
+  </refsynopsisdiv>
+
+  <refsect1><title>Arguments and Values</title>
+  <variablelist>
+    <varlistentry>
+      <term>collection</term>
+       <listitem>
+         <para>
+          A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
+          incremental coverage deltas.
+         </para>
+        </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>directory</term>
+       <listitem>
+         <para>
+          The pathname of a subversion working directory.
+         </para>
+        </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>revision</term>
+       <listitem>
+         <para>
+          The revision to compare to the working directory, an integer or another
+          value whose printed representation is suitable for passing as the
+          <literal>--revision</literal> argument
+          to <filename>svn</filename>.
+         </para>
+        </listitem>
+    </varlistentry>
+   </variablelist>
+   </refsect1>
+
+  <refsect1><title>Description</title>
+    <para>
+     Given a hash table <literal>collection</literal> whose values are incremental coverage
+     deltas, return a list of all keys corresponding to those deltas that intersect any changed
+     source in <literal>directory</literal> since revision <literal>revision</literal> in subversion.
+     </para>
+     <para>
+     For example if the deltas represent tests, then the returned value is a list of all tests
+     that might be affected by the changes.
+     </para>
+     <para>
+     <literal>collection</literal> can also be a sequence of deltas, in which case a subsequence
+      of matching deltas is returned.  In particular you can test whether any particular delta
+      is affected by the changes by passing it in as a single-element list.
+     </para>
+  </refsect1>
+</refentry>
+
+
+
 <refentry id="v_compile-code-coverage">
   <indexterm zone="v_compile-code-coverage">
     <primary>*COMPILE-CODE-COVERAGE*</primary>
@@ -3459,7 +3669,7 @@ Then you can see the coverage information in the definition of
     <para>
       This macro arranges so that body doesn't record internal details
       of code coverage. It will be considered totally covered if it's
-      entered at all. The Common Lisp macros ASSERT and CHECK-TYPE use
+      entered at all. The Common Lisp macros <literal>ASSERT</literal> and <literal>CHECK-TYPE</literal> use
       this macro.
     </para>
   </refsect1>
@@ -3489,7 +3699,7 @@ Then you can see the coverage information in the definition of
  this approach is that every part of the outer form that is not specifically inside some executable inner
  form will have the outer form's coverage color. If the syntax of outer form involves some non-executable
  forms, or forms that do not have coverage info of their own for whatever reason, then they will just
- inherit the color of the outer form, because it doesn't get replaced with a color of its own.
+ inherit the color of the outer form, because they don't get repainted with a color of their own.
 </para>
 
 <para>
