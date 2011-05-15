@@ -20,7 +20,7 @@ Like the code, this documentation is based on the original Hemlock documentation
         </para>
         <para>
 Hemlock follows in the tradition of Emacs-compatible editors, with a rich set of extensible commands.  This document describes the API for implementing new commands.  The basic editor consists of a set of Lisp utility functions for manipulating buffers and the other data structures of the editor.  All user level commands are written in terms of these 
-functions. To find out how to define commands see <ulink url="HemlockProgrammer/Commands">Commands</ulink>.
+functions. To find out how to define commands see <link linkend="HemlockProgrammingCommands">Commands</link>.
         </para>
     </sect1>
     <sect1 id="HemlockProgrammingRepresentationOfText">
@@ -272,7 +272,7 @@ the line has no next character.
             <para>
 This section discusses the very basic operations involving marks, but
 a lot of Hemlock programming is built on altering some text at a mark.
-For more extended uses of marks see <ulink url="HemlockProgrammer/AlteringAndSearchingText">Altering And Searching Text</ulink>.
+For more extended uses of marks see <link linkend="HemlockProgrammingAlteringAndSearchingText">Altering And Searching Text</link>.
             </para>
             <sect3 id="MarksKindsOfMarks">
                 <title>Kinds of Marks</title>
@@ -1152,18 +1152,22 @@ A write protect flag.
                 </listitem>
                 <listitem>
                     <para>
-Some <ulink url="HemlockProgrammer/HemlockVariables">variables</ulink>.
+Some <link linkend="HemlockProgrammingHemlockVariables">variables</link>.
                     </para>
                 </listitem>
                 <listitem>
                     <para>
-Some <ulink url="HemlockProgrammer/Commands">key bindings</ulink>.
+Some <link linkend="HemlockProgrammingCommands">key bindings</link>.
                     </para>
                 </listitem>
                 <listitem>
                     <para>
-A collection of <ulink url="HemlockProgrammer/Modes">modes</ulink>.
-10. A list of modeline fields (optional).
+A collection of <link linkend="HemlockProgrammingModes">modes</link>.
+		    </para>
+		</listitem>
+		<listitem>
+		    <para>
+A list of modeline fields (optional).
                     </para>
                 </listitem>
             </orderedlist>Because of the way Hemlock is currently integrated in Cocoa, all modifications
@@ -1391,7 +1395,7 @@ region, and all marks returned are right-inserting.
 This function pops the current buffer's mark stack, returning the
 mark.  If the stack becomes empty, this pushes a new mark on the stack
 pointing to the buffer's start.  This always deactivates the current
-region (see <ulink url="HemlockProgrammer/AlteringAndSearchingText#ActiveRegions">Active Regions</ulink>).
+region (see <link linkend="ActiveRegions">Active Regions</link>).
                     </para>
                 </refsect1>
             </refentry>
@@ -1416,7 +1420,7 @@ This function pushes mark into the current buffer's mark stack,
 ensuring that the mark is right-inserting. If mark does not point into
 the current buffer, this signals an error.  Optionally, the current
 region is made active, but this never deactivates the current region
-(see <ulink url="HemlockProgrammer/AlteringAndSearchingText#ActiveRegions">Active Regions</ulink>).
+(see <link linkend="ActiveRegions">Active Regions</link>).
 Mark is returned.
                     </para>
                 </refsect1>
@@ -1481,7 +1485,7 @@ This function returns a list of all the buffer objects made with make-buffer.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This variable holds a <ulink url="HemlockProgrammer/Utilities#StringTables">string-table</ulink>
+This variable holds a <link linkend="StringTableFunctions">string-table</link>
 mapping the name of a buffer to the corresponding buffer object.
                     </para>
                 </refsect1>
@@ -1548,9 +1552,10 @@ make-buffer creates and returns a buffer with the given name. If a
 buffer named name already exists, nil is returned. Modes is a list of
 modes which should be in effect in the buffer, major mode first,
 followed by any minor modes.  If this is omitted then the buffer is
-created with the list of modes contained in Default Modes (page
-35). Modeline-fields is a list of modeline-field objects (see section
-3.3) which may be nil. delete-hook is a list of delete hooks specific
+created with the list of modes contained in <link linkend="hv_default_modes">
+Default Modes</link>. Modeline-fields is a list of modeline-field objects (see
+the  <link linkend="Modelines">Modelines</link> section)
+which may be nil. delete-hook is a list of delete hooks specific
 to this buffer, and delete-buffer invokes these along with Delete
 Buffer Hook.
                     </para>
@@ -1645,7 +1650,7 @@ signals an error.
                     <title>Description</title>
                     <para>
 Returns the buffer's region.  Note this is the region that contains all
-the text in a buffer, not the current-region (page 19).
+the text in a buffer, as opposed to the <link linkend="f_current-region">current-region</link>.
                     </para>
                     <para>
 This can be set with setf to replace the buffer's text.
@@ -1739,7 +1744,7 @@ unknown or there is no file.
                     <title>Description</title>
                     <para>
 Returns the mark which is the current location within buffer. To move
-the point, use move-mark or move-to-position (page 5).
+the point, use <link linkend="f_move-mark">move-mark</link> or <link linkend="f_move-to-position">move-to-position</link>
                     </para>
                 </refsect1>
             </refentry>
@@ -1966,8 +1971,8 @@ the buffer has not been modified between the calls.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This function returns a string-table (page 69) containing the names of
-the buffer's local variables.  See chapter 6.
+This function returns a <link linkend="StringTableFunctions">string-table</link> containing the names of
+the buffer's local <link linkend="HemlockProgrammingHemlockVariables">variables</link>.
                     </para>
                 </refsect1>
             </refentry>
@@ -1990,7 +1995,7 @@ the buffer's local variables.  See chapter 6.
                     <para>
 This function returns the list of the names of the modes active in
 buffer. The major mode is first, followed by any minor modes.  See
-chapter 8.
+the <link linkend="HemlockProgrammingModes">Modes</link> chapter.
                     </para>
                 </refsect1>
             </refentry>
@@ -2052,8 +2057,8 @@ delete-buffer invokes when deleting a buffer . This is setf-able.
                 <refsect1>
                     <title>Description</title>
                     <para>
-delete-buffer removes buffer from (all-buffers) (page 10) and its name
-from *buffer-names* (page 10).  Before buffer is deleted, this invokes
+delete-buffer removes buffer from <link linkend="f_all-buffers">(all-buffers)</link> and its name
+from <link linkend="v_buffer-names">*buffer-names*</link>.  Before buffer is deleted, this invokes
 the functions on buffer returned by buffer-delete-hook and those found
 in Delete Buffer Hook. If buffer is the current-buffer, or if it is
 displayed in any view, then this function signals an error.
@@ -2627,7 +2632,8 @@ Return t if the line which mark points to contains no characters.
                     <title>Description</title>
                     <para>
 Returns t if line contains only characters with a Whitespace attribute
-of 1.  See chapter 9 for discussion of character attributes.
+of 1.  See the <link linkend="HemlockProgrammingCharacterAttributes">Character Attributes</link>
+chapter for discussion of character attributes.
                     </para>
                 </refsect1>
             </refentry>
@@ -2964,10 +2970,10 @@ no line after mark.
         <sect2 id="KillRing">
             <title>Kill Ring</title>
             <para>
-There is a global ring (see section 16.2) of regions deleted from buffers.
+There is a global <link linkend="RingFunctions">ring</link> of regions deleted from buffers.
 Some commands save affected regions on the kill ring before performing
-modifications.  You should consider making the command undoable (see
-section 16.3), but this is a simple way of achieving a less
+modifications.  You should consider making the command <link linkend="UndoingCommands">undoable</link>,
+but this is a simple way of achieving a less
 satisfactory means for the user to recover.
             </para>
             <refentry id="f_kill-region">
@@ -2988,7 +2994,7 @@ satisfactory means for the user to recover.
                     <title>Description</title>
                     <para>
 This kills region saving it in the kill ring. Current-type is either
-:kill-forward or :kill-backward. When the last-command-type (page 31)
+:kill-forward or :kill-backward. When the <link linkend="f_last-command-type">last-command-type</link>
 is one of these, this adds region to the beginning or end,
 respectively, of the top of the kill ring. The result of calling this is
 undoable using the command Undo (see the Hemlock User's Manual). This
@@ -3037,7 +3043,7 @@ kill-characters kills count characters after mark if count is
 positive, otherwise before mark if count is negative.  When count is
 greater than or equal to Character Deletion Threshold, the killed
 characters are saved on the kill ring. This may be called multiple times
-contiguously (that is, without last-command-type (page 31) being set)
+contiguously (that is, without  <link linkend="f_last-command-type">last-command-type</link> being set)
 to accumulate an effective count for purposes of comparison with the
 threshold.
                     </para>
@@ -3063,7 +3069,7 @@ characters in the appropriate direction, this returns nil.
         <sect2 id="ActiveRegions">
             <title>Active Regions</title>
             <para>
-Every buffer has a mark stack (page 9) and a mark known as the point
+Every buffer has a mark stack and a mark known as the point
 where most text altering nominally occurs.  Between the top of the
 mark stack, the current-mark, and the current-buffer's point, the
 current-point, is what is known as the current-region . Certain
@@ -3155,7 +3161,7 @@ traditional Emacs region semantics.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This is a list of command types (see section 7.3), and its initial
+This is a list of <link linkend="CommandTypes">command types</link>, and its initial
 value is the list of :ephemerally-active and :unkill. When the
 previous command's type is one of these, the current-region is active
 for the currently executing command only, regardless of whether it
@@ -3286,7 +3292,7 @@ is convenient.
             <title>Searching and Replacing</title>
             <para>
 Before using any of these functions to do a character search, look at
-character attributes (page 37).  They provide a facility similar to
+<link linkend="HemlockProgrammingCharacterAttributes">character attributes</link>.  They provide a facility similar to
 the syntax table in real Emacs.  Syntax tables are a powerful,
 general, and efficient mechanism for assigning meanings to characters
 in various modes.
@@ -3512,10 +3518,10 @@ A mark pointing before the last replacement done is returned.
         <sect2 id="DifferentScopes">
             <title>Different Scopes</title>
             <para>
-In Hemlock the "current" values of <ulink url="HemlockProgrammer/HemlockVariables">variables</ulink>,
-<ulink url="HemlockProgrammer/Commands">key bindings</ulink> and
-<ulink url="HemlockProgrammer/CharacterAttributes">character-attributes</ulink>
-depend on the <ulink url="HemlockProgrammer/Buffers#CurrentBuffer">current buffer</ulink>
+In Hemlock the "current" values of <link linkend="HemlockProgrammingHemlockVariables">variables</link>,
+<link linkend="HemlockProgrammingCommands">key bindings</link> and
+<link linkend="HemlockProgrammingCharacterAttributes">character-attributes</link>
+depend on the <link linkend="CurrentBuffer">current buffer</link>
 and the modes active in it.  There are three possible scopes for
 Hemlock values:
             </para>
@@ -3593,12 +3599,12 @@ variables for the following reasons:
         <orderedlist>
             <listitem>
                 <para>
-Hemlock has different scoping rules which are useful in an editor.  Hemlock variables can be local to a buffer (page 9) or a mode (page 35).
+Hemlock has different scoping rules which are useful in an editor.  Hemlock variables can be local to a <link linkend="HemlockProgrammingBuffers">buffer</link> or a <link linkend="HemlockProgrammingModes">mode</link>.
                 </para>
             </listitem>
             <listitem>
                 <para>
-Hemlock variables have hooks (page 25), lists of functions called when someone sets the variable. See variable-value for the arguments Hemlock passes to these hook functions.
+Hemlock variables have <link linkend="ModeHooks">hooks</link>, lists of functions called when someone sets the variable. See variable-value for the arguments Hemlock passes to these hook functions.
                 </para>
             </listitem>
             <listitem>
@@ -4115,6 +4121,7 @@ variable.
             </refentry>
         </sect2>
     </sect1>
+
     <sect1 id="HemlockProgrammingCommands">
         <title>Commands</title>
         <sect2 id="HemlockProgrammingCommandsIntroduction">
@@ -4150,6 +4157,10 @@ A command is implemented by a Lisp function, which is callable from Lisp.
                     </listitem>
                 </varlistentry>
             </variablelist>
+
+	    <sect3 id="DefiningCommands">
+                    <title>Defining Commands</title>
+
             <refentry id="v_command-names">
                 <indexterm zone="v_command-names">
                     <primary>*command-names*</primary>
@@ -4167,13 +4178,14 @@ A command is implemented by a Lisp function, which is callable from Lisp.
                 <refsect1>
                     <title>Description</title>
                     <para>
-Holds a string-table (page 69) associating command names to command
+Holds a <link linkend="StringTableFunctions">string-table</link> associating command names to command
 objects.  Whenever a new command is defined it is entered in this
 table.
                     </para>
                 </refsect1>
-                <refsect3>
-                    <title>Defining Commands</title>
+	    </refentry>
+
+
                     <refentry id="m_defcommand">
                         <indexterm zone="m_defcommand">
                             <primary>defcommand</primary>
@@ -4193,7 +4205,7 @@ table.
                             <para>
 Defines a command named name. defcommand creates a function to
 implement the command from the lambda-list and forms supplied.  The
-lambda-list must specify one required argument, see <ulink url="HemlockProgrammer/Commands#CommandArguments">below</ulink>,
+lambda-list must specify one required argument, see <link linkend="CommandArguments">below</link>,
 which by convention is typically named <code>p</code>. If the caller does not specify
 function-name, defcommand creates the command name by replacing all
 spaces with hyphens and appending "-command".  Any keyword arguments
@@ -4224,9 +4236,9 @@ additional arguments are.
                             <para>
 Defines a new command named name, with command documentation
 documentation and function function.  If :transparent-p is true,
-the command becomes <ulink url="HemlockProgrammer/Commands#TransparentKeyBindings">transparent</ulink>.
+the command becomes <link linkend="TransparentKeyBindings">transparent</link>.
 The command in entered in the
-string-table *command-names* (page 27), with the command object as its
+string-table <link linkend="v_command-names">*command-names*</link>, with the command object as its
 value.  Normally command implementors will use the defcommand macro,
 but this permits access to the command definition mechanism at a lower
 level, which is occasionally useful.
@@ -4313,9 +4325,10 @@ Returns the documentation, function, or name for command. These may be
 set with setf.
                             </para>
                         </refsect1>
-                    </refentry>
-                </refsect3>
-                <refsect3>
+	      </refentry>
+	    </sect3>
+
+	    <sect3 id="CommandDocumentation">
                     <title>Command Documentation</title>
                     <para>
 Command documentation is a description of what the command does when
@@ -4338,9 +4351,9 @@ function is called with either :short or :full, indicating that the
 function should return a short documentation string or do something
 to document the command fully.
                     </para>
-                </refsect3>
-            </refentry>
+                </sect3>
         </sect2>
+
         <sect2 id="CommandInterpreter">
             <title>The Command Interpreter</title>
             <para>
@@ -4353,6 +4366,9 @@ contiguously running commands, such as a last command type register.
 It also takes care of resetting communication mechanisms, clearing the
 echo area, displaying partial keys typed slowly by the user, etc.
             </para>
+
+	    <sect3 id="ControllingTheCommandInterpreter">
+	      <title>Controlling The Command Interpreter</title>
             <refentry id="hv_command_abort_hook">
                 <indexterm zone="hv_command_abort_hook">
                     <primary>Command Abort Hook</primary>
@@ -4375,11 +4391,13 @@ someone aborts a command (for example, if someone called
 editor-error).
                     </para>
                 </refsect1>
-                <refsect3>
+            </refentry>
+	    </sect3>
+                <sect3 id="EditorInput">
                     <title>Editor Input</title>
                     <para>
 The canonical representation of editor input is a key-event structure.
-Users can bind commands to keys (see section 7.2.2), which are
+Users can bind commands to keys, which are
 non-empty sequences of key-events. A key-event consists of an
 identifying token known as a keysym and a field of bits representing
 modifiers.  Users define keysym names by supplying names that reflect
@@ -4421,25 +4439,25 @@ Between angle brackets appearing in a keysym name position, there are
 only two special characters, the closing angle bracket and backslash.
                     </para>
                     <para>
-For more information on key-events see section 18.1.
+For more information on key-events see the <link linkend="KeyEvents">Key-events</link> section.
                     </para>
-                </refsect3>
-                <refsect3>
+                </sect3>
+                <sect3 id="BindingCommandsToKeys">
                     <title>Binding Commands to Keys</title>
                     <para>
 The command interpreter determines which command to invoke on the
 basis of <emphasis>key bindings</emphasis>. A key binding is an association between a
-command and a sequence of key-events (see section 7.2.1).  A sequence
+command and a sequence of key-events.  A sequence
 of key-events is called a key and is represented by a single key-event
 or a sequence (list or vector) of key-events.
                     </para>
                     <para>
-Since key bindings may be local to a mode or buffer, the current
-environment (page 21) determines the set of key bindings in effect at
+Since key bindings may be local to a mode or buffer, the <link linkend="HemlockProgrammingTheCurrentEnvironment">current
+environment</link> determines the set of key bindings in effect at
 any given time.  When the command interpreter tries to find the
 binding for a key, it first checks if there is a local binding in
-the current buffer (page 9), then if there is a binding in each of the
-minor modes and the major mode for the current buffer (page 35), and
+the <link linkend="CurrentBuffer">current buffer</link>, then if there is a binding in each of the
+minor modes and the major <link linkend="HemlockProgrammingModes">mode</link> for the current buffer, and
 finally checks to see if there is a global binding.  If no binding is
 found, then the command interpreter beeps or flashes the screen to
 indicate this.
@@ -4492,8 +4510,8 @@ Make a binding which is local to buffer where.
                                 </varlistentry>
                             </variablelist>
                             <para>
-This processes key for key translations before establishing the
-binding.  See section 7.2.3.
+This processes key for <link linkend="KeyTranslation">key translations</link> before establishing the
+binding.
                             </para>
                             <para>
 If the key is some prefix of a key binding which already exists in the
@@ -4556,8 +4574,7 @@ the buffer.
 This function signals an error if key is unbound.
                             </para>
                             <para>
-This processes key for key translations before deleting the binding.
-See section 7.2.3.
+This processes key for <link linkend="KeyTranslation">key translations</link> before deleting the binding.
                             </para>
                         </refsect1>
                     </refentry>
@@ -4620,8 +4637,8 @@ Return the binding of key local to the buffer where.
                                 </varlistentry>
                             </variablelist>
                             <para>
-This processes key for key translations before looking for any
-binding.  See section 7.2.3.
+This processes key for <link linkend="KeyTranslation">key translations</link> before looking for any
+binding.
                             </para>
                         </refsect1>
                     </refentry>
@@ -4649,8 +4666,8 @@ guaranteed to remain valid after a given iteration.
                             </para>
                         </refsect1>
                     </refentry>
-                </refsect3>
-                <refsect3>
+                </sect3>
+                <sect3 id="KeyTranslation">
                     <title>Key Translation</title>
                     <para>
 Key translation is a process that the command interpreter applies to
@@ -4715,8 +4732,8 @@ translation.
                             </para>
                         </refsect1>
                     </refentry>
-                </refsect3>
-                <refsect3>
+                </sect3>
+                <sect3 id="TransparentKeyBindings">
                     <title>Transparent Key Bindings</title>
                     <para>
 Key bindings local to a mode may be transparent. A transparent key
@@ -4731,13 +4748,12 @@ then the command interpreter acts as though the key is unbound even if
 there are transparent key bindings.
                     </para>
                     <para>
-The :transparent-p argument to defmode (page 36) determines whether
+The :transparent-p argument to <link linkend="f_defmode">defmode</link> determines whether
 all the key bindings in a mode are transparent or not.  In addition
 a particular command may be declared to be transparent by the
 :transparent-p argument to defcommand and make-command.
                     </para>
-                </refsect3>
-            </refentry>
+                </sect3>
         </sect2>
         <sect2 id="CommandTypes">
             <title>Command Types</title>
@@ -4834,7 +4850,7 @@ any arguments not supplied.
         <title>Modes</title>
         <para>
 A mode is a collection of Hemlock values which may be present in the
-current environment (page 21) depending on the editing task at hand.
+<link linkend="HemlockProgrammingTheCurrentEnvironment">current environment</link> depending on the editing task at hand.
 An example of a typical mode is Lisp, for editing Lisp code.
         </para>
         <sect2 id="ModeHooks">
@@ -4952,7 +4968,7 @@ command calls editor-error.
                     <title>Description</title>
                     <para>
 This function defines a new mode named name, and enters it in
-*mode-names* (page 35).  If major-p is supplied and is not nil then
+<link linkend="v_mode-names">*mode-names*</link>.  If major-p is supplied and is not nil then
 the mode is a major mode; otherwise it is a minor mode.
                     </para>
                     <para>
@@ -5176,7 +5192,7 @@ character attributes are global and are there for the user to
 change. Information about characters which is internal to some set of
 commands (and which the user should not know about) should not be
 maintained as a character attribute.  For such uses various character
-searching abilities are provided by the function find-pattern (page
+searching abilities are provided by the function <link linkend="f_find-pattern">find-pattern</link>.
 20).
             </para>
         </sect2>
@@ -5208,7 +5224,7 @@ attribute named "Ada Syntax" would thus become :ada-syntax.
                     <title>Description</title>
                     <para>
 Whenever a character attribute is defined, its name is entered in this
-string table (page 69), with the corresponding keyword as the value.
+<link linkend="StringTableFunctions">string-table</link>, with the corresponding keyword as the value.
                     </para>
                 </refsect1>
             </refentry>
@@ -5572,7 +5588,7 @@ the current value changes for any reason.
                     <title>Description</title>
                     <para>
 Return the current hook list for attribute. This may be set with
-setf. The add-hook and remove-hook (page 25) macros should be used to
+setf. The <link linkend="m_add-hook">add-hook</link> and <link linkend="m_remove-hook">remove-hook</link> macros should be used to
 manipulate these lists.
                     </para>
                 </refsect1>
@@ -5596,7 +5612,8 @@ A value of 1 indicates the character is whitespace.
                     <term>"Word Delimiter"</term>
                     <listitem>
                         <para>
-A value of 1 indicates the character separates words (see section 15.3).
+A value of 1 indicates the character separates words (see the <link linkend="EnglishTextBuffers">English Text Buffers</link> section).
+
                         </para>
                     </listitem>
                 </varlistentry>
@@ -5613,7 +5630,7 @@ uses this primarily for handling indentation on a line.
                     <term>"Sentence Terminator"</term>
                     <listitem>
                         <para>
-A value of 1 indicates these characters terminate sentences (see section 15.3).
+A value of 1 indicates these characters terminate sentences (see the <link linkend="EnglishTextBuffers">English Text Buffers</link> section).
                         </para>
                     </listitem>
                 </varlistentry>
@@ -5622,7 +5639,7 @@ A value of 1 indicates these characters terminate sentences (see section 15.3).
                     <listitem>
                         <para>
 A value of 1 indicates these delimiting characters, such as " or ),
-may follow a Sentence Terminator (see section 15.3).
+may follow a Sentence Terminator.
                         </para>
                     </listitem>
                 </varlistentry>
@@ -5631,7 +5648,7 @@ may follow a Sentence Terminator (see section 15.3).
                     <listitem>
                         <para>
 A value of 1 indicates these characters delimit paragraphs when they
-begin a line (see section 15.3).
+begin a line (see the <link linkend="EnglishTextBuffers">English Text Buffers</link> section).
                         </para>
                     </listitem>
                 </varlistentry>
@@ -5639,8 +5656,8 @@ begin a line (see section 15.3).
                     <term>"Page Delimiter"</term>
                     <listitem>
                         <para>
-A value of 1 indicates this character separates logical pages (see
-section 15.4) when it begins a line.
+A value of 1 indicates this character separates <link linkend="LogicalPages">logical pages</link>
+when it begins a line.
                         </para>
                     </listitem>
                 </varlistentry>
@@ -5857,7 +5874,7 @@ takes into consideration strange characters such as tabs.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This function is analogous to move-to-position (page 5), except that
+This function is analogous to <link linkend="f_move-to-position">move-to-position</link>, except that
 it moves mark to the position on line which corresponds to the
 specified column.  If the line would not reach to the specified column, then nil is
 returned and mark is not modified.  Note that since a character may be
@@ -5958,7 +5975,7 @@ This causes <code>what</code> next lines to be scrolled in at the bottom. <code>
         <sect2 id="HemlockProgrammingLogicalKeyEventsIntroduction">
             <title>Introduction</title>
             <para>
-Some primitives such as prompt-for-key (page 50) and commands such as
+Some primitives such as <link linkend="f_prompt-for-key">prompt-for-key</link> and commands such as
 Emacs query replace read key-events directly from the keyboard instead
 of using the command interpreter.  To encourage consistency between
 these commands and to make them portable and easy to customize, there
@@ -6119,7 +6136,7 @@ functions documented in this manual.  If a command wants to read a
 single key-event command that fits one of these descriptions then the
 key-event read should be compared to the corresponding logical
 key-event instead of explicitly mentioning the particular key-event in
-the code.  In many cases you can use the command-case (page 48) macro.
+the code.  In many cases you can use the <link linkend="m_command-case">command-case</link> macro.
 It makes logical key-events easy to use and takes care of prompting
 and displaying help messages.
             </para>
@@ -6213,7 +6230,7 @@ implementation dependent characters.
             </orderedlist>
         </sect2>
     </sect1>
-    <sect1 id="EchoArea">
+    <sect1 id="HemlockProgrammingEchoArea">
         <title>The Echo Area</title>
         <para>
 Hemlock provides a number of facilities for displaying information and
@@ -6420,8 +6437,8 @@ already existing buffer.
                     <title>Description</title>
                     <para>
 This function prompts for a key-event returning immediately when the
-user types the next key-event.  command-case (page 48) is more useful
-for most purposes. When appropriate, use logical key-events (page 45).
+user types the next key-event.  <link linkend="m_command-case">command-case</link> is more useful
+for most purposes. When appropriate, use <link linkend="HemlockProgrammingLogicalKeyEvents">logical key-events</link>.
                     </para>
                 </refsect1>
             </refentry>
@@ -6443,8 +6460,8 @@ for most purposes. When appropriate, use logical key-events (page 45).
                     <title>Description</title>
                     <para>
 This function prompts for a key, a vector of key-events, suitable for
-passing to any of the functions that manipulate key bindings (page
-29).  If must-exist is true, then the key must be bound in the current
+passing to any of the functions that manipulate <link linkend="BindingCommandsToKeys">key bindings</link>.
+If must-exist is true, then the key must be bound in the current
 environment, and the command currently bound is returned as the second
 value.
                     </para>
@@ -6667,8 +6684,8 @@ must be given.
 This macro is analogous to the Common Lisp case macro. Commands such
 as Help use this to get a key-event, translate it to a
 character, and then to dispatch on the character to some case.  In
-addition to character dispatching, this supports logical key-events
-(page 45) by using the input key-event directly without translating it
+addition to character dispatching, this supports <link linkend="HemlockProgrammingLogicalKeyEvents">logical key-events</link>
+by using the input key-event directly without translating it
 to a character.  Since the description of this macro is rather
 complex, first consider the following example:
 <programlisting>
@@ -6816,8 +6833,8 @@ buffer associated with the echo area.  The following  keyword arguments are acce
                             <term><code>:verification-function</code></term>
                             <listitem>
                                 <para>
-This is invoked by the Confirm Parse command (page 52).  It does most of
-the work when parsing prompted input. Confirm Parse (page 52) calls it
+This is invoked by the <link linkend="c_confirm_parse">Confirm Parse</link> command.  It does most of
+the work when parsing prompted input. Confirm Parse calls it
 with one argument, which is the string that the user typed so far.
 The function should return a list of values which are to be the result
 of the recursive edit, or nil indicating that the parse failed.  In order
@@ -6994,7 +7011,7 @@ returns a non-nil second value.
             </refentry>
         </sect2>
     </sect1>
-    <sect1 id="Files">
+    <sect1 id="HemlockProgrammingFiles">
         <title>Files</title>
         <para>
 This chapter discusses ways to read and write files at various
@@ -7573,7 +7590,7 @@ return value is always NIL.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This is a Hemlock ring buffer (see page 70) that holds the last 60
+This is a Hemlock <link linkend="RingFunctions">ring buffer</link> that holds the last 60
 key-events received.
                     </para>
                 </refsect1>
@@ -7630,7 +7647,7 @@ of Hemlock to Lisp.
             </para>
             <para>
 Note that operations on these streams operate directly on buffers,
-therefore they have the same restrictions as described <ulink url="HemlockProgrammer/Buffers">here</ulink>
+therefore they have the same restrictions as described <link linkend="HemlockProgrammingBuffers">here</link>
 for interacting with buffers from outside of the GUI thread.
             </para>
             <refentry id="f_make-hemlock-output-stream">
@@ -8124,8 +8141,7 @@ the region for the Undo command.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This deletes all characters on either side of mark with a Space attribute (see section 9.5)
-of 1.
+This deletes all characters on either side of mark with a Space attribute (see <link linkend="SystemDefinedCharacterAttributes">System Defined Character Attributes</link>) of 1.
                     </para>
                 </refsect1>
             </refentry>
@@ -8415,7 +8431,8 @@ pre-command-parse-check first.
                     <para>
 These return, respectively, whether mark is inside a top level form or
 at the beginning of a line immediately before a character whose Lisp
-Syntax (see section 9.5) value is :opening-paren.
+Syntax (see <link linkend="SystemDefinedCharacterAttributes">System Defined Character Attributes</link>) 
+value is :opening-paren.
                     </para>
                 </refsect1>
             </refentry>
@@ -8456,7 +8473,8 @@ Syntax (see section 9.5) value is :opening-paren.
                     <title>Description</title>
                     <para>
 Respectively, these move mark immediately past a character whose Lisp
-Syntax (see section 9.5) value is :closing-paren or immediately before
+Syntax (see <link linkend="SystemDefinedCharacterAttributes">System Defined Character Attributes</link>) 
+value is :closing-paren or immediately before
 a character whose Lisp Syntax value is :opening-paren.
                     </para>
                 </refsect1>
@@ -8503,8 +8521,8 @@ strings, and character quoting.
                     <title>Description</title>
                     <para>
 This defines the function with name to have count special
-arguments. indent-for-lisp, the value of Indent Function (see section
-15.1) in Lisp mode, uses this to specially indent these arguments. For
+arguments. indent-for-lisp, the value of <link linkend="hv_indent_function">Indent Function</link>
+in Lisp mode, uses this to specially indent these arguments. For
 example, do has two, with-open-file has one, etc. There are many of
 these defined by the system including definitions for special Hemlock
 forms. Name is a simple-string, case insensitive and purely textual
@@ -8542,7 +8560,7 @@ negative). If mark is in the middle of a word, that counts as one. If
 there were count (-count if negative) words in the appropriate
 direction, this returns mark, otherwise nil. This always moves mark. A
 word lies between two characters whose Word Delimiter attribute value
-is 1 (see section 9.5).
+is 1 (see <link linkend="SystemDefinedCharacterAttributes">System Defined Character Attributes</link>).
                     </para>
                 </refsect1>
             </refentry>
@@ -8629,7 +8647,7 @@ some characters to the set and special cases certain formatting
 commands.
                     </para>
                     <para>
-Prefix defaults to Fill Prefix (see section 15.5), and the right
+Prefix defaults to <link linkend="hv_fill_prefix">Fill Prefix</link>, and the right
 prefix is necessary to correctly skip paragraphs. If prefix is
 non-nil, and a line begins with prefix, then the scanning process
 skips the prefix before invoking the Paragraph Delimiter
@@ -8680,8 +8698,8 @@ to operate. mark-paragraph understands this problem.
                     <title>Description</title>
                     <para>
 This marks the next or current paragraph, setting mark1 to the
-beginning and mark2 to the end. This uses Fill Prefix (see section
-15.5). Mark1 is always on the first line of the paragraph, regardless
+beginning and mark2 to the end. This uses <link linkend="hv_fill_prefix">Fill Prefix</link>.
+Mark1 is always on the first line of the paragraph, regardless
 of whether the previous line is blank. Mark2 is typically at the
 beginning of the line after the line the paragraph ends on, this
 returns mark2 on success. If this cannot find a paragraph, then the
@@ -8706,7 +8724,7 @@ different from justification which tries to add whitespace in awkward
 places to make each line exactly the same length. Hemlock's filling
 optionally inserts a specified string at the beginning of each
 line. Also, it eliminates extra whitespace between lines and words,
-but it knows two spaces follow sentences (see section 15.3).
+but it knows two spaces follow sentences.
             </para>
             <refentry id="hv_fill_column">
                 <indexterm zone="hv_fill_column">
@@ -8790,7 +8808,7 @@ Column.
                 <refsect1>
                     <title>Description</title>
                     <para>
-This finds paragraphs (see section 15.3) within region and fills them
+This finds paragraphs within region and fills them
 with fill-region. This ignores blank lines between paragraphs. Prefix
 and column default to Fill Prefix and Fill Column.
                     </para>
@@ -9147,8 +9165,8 @@ value-var to an entry's value.
             <para>
 There are various purposes in an editor for which a ring of values can
 be used, so Hemlock provides a general ring buffer type. It is used
-for maintaining a ring of killed regions (see section 4.3), a ring of
-marks (see section 3.1), or a ring of command strings which various
+for maintaining a ring of  <link linkend="KillRing">killed regions</link>, a ring of
+<link linkend="CurrentBuffer">marks</link>, or a ring of command strings which various
 modes and commands maintain as a history mechanism.
             </para>
             <refentry id="f_make-ring">
@@ -9326,7 +9344,7 @@ don't fit well anywhere else.
                 <title>Introduction</title>
                 <para>
 The canonical representation of editor input is a key-event
-structure. Users can bind commands to keys (see section 1.3.1), which
+structure. Users can bind commands to keys, which
 are non-empty sequences of key-events. A key-event consists of
 an identifying token known as a keysym and a field of bits
 representing modifiers. Users define keysyms by supplying names
