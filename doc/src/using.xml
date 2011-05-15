@@ -3485,7 +3485,7 @@ Then you can see the coverage information in the definition of
       returned by functions such as <literal>ccl:get-coverage</literal>.  Incremental
       coverage uses an abbreviated format
       and is missing some of the information in a full snapshot, and therefore cannot be passed to
-      functions documented to accept a <variable>snapshot</variable>, only to functions
+      functions documented to accept a <varname>snapshot</varname>, only to functions
       specifically documented to accept incremental coverage deltas.
      </para>
   </refsect1>
