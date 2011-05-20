@@ -4616,6 +4616,10 @@ _spentry(callback)
 	__endif
 	__ifndef(`WINDOWS')
 	__endif
+        /* Save caller's mxcsr */
+        __(subq $16,%rsp)
+        __(stmxcsr (%rsp))
+        __(andb $~mxcsr_all_exceptions,(%rsp))
 	/* C NVRs   */
 	__(push %csave0)
 	__(push %csave1)
@@ -4684,8 +4688,6 @@ _spentry(callback)
         __ifndef(`TCR_IN_GPR')
          __(movq 24(%rsp),%save3)
         __endif
-        __(stmxcsr rcontext(tcr.foreign_mxcsr))
-        __(andb $~mxcsr_all_exceptions,rcontext(tcr.foreign_mxcsr))
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(movq $nrs.callbacks,%fname)
 	__(lea local_label(back_from_callback)(%rip),%ra0)
@@ -4716,6 +4718,8 @@ __(tra(local_label(back_from_callback)))
 	__(pop %csave2)
 	__(pop %csave1)
 	__(pop %csave0)
+        __(ldmxcsr (%rsp))
+        __(addq $16,%rsp)
 	__(movq -8(%rbp),%rax)
         __(movq -16(%rbp),%rdx)
 	__(movq -24(%rbp),%xmm0)
