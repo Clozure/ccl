@@ -229,7 +229,8 @@
     leaks
     core-files
     dominance
-    asdf
+    ;; asdf has peculiar compile-time side-effects
+    ;;asdf
     defsystem
     jp-encode
     ))
