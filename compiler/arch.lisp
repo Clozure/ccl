@@ -67,6 +67,7 @@
 (defconstant error-kill 16)
 (defconstant error-cant-call 17)        ; Attempt to funcall something that is not a symbol or function.
 (defconstant error-allocate-list 18)
+(defconstant error-allocation-disabled 19)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant error-type-error 128)
@@ -355,7 +356,7 @@
 (defconstant gc-trap-function-ensure-static-conses 19)
 (defconstant gc-trap-function-get-gc-notification-threshold 20)
 (defconstant gc-trap-function-set-gc-notification-threshold 21)
-
+(defconstant gc-trap-function-allocation-control 22)
 (defconstant gc-trap-function-egc-control 32)
 (defconstant gc-trap-function-configure-egc 64)
 (defconstant gc-trap-function-freeze 129)

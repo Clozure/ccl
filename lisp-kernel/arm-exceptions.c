@@ -77,7 +77,7 @@ extern LispObj lisp_nil;
 extern natural lisp_heap_gc_threshold;
 extern Boolean grow_dynamic_area(natural);
 
-
+Boolean allocation_enabled = true;
 
 
 
@@ -325,6 +325,17 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   signed_natural disp = 0;
   unsigned allocptr_tag;
 
+  if (!allocation_enabled) {
+    /* Back up before the alloc_trap, then let pc_luser_xp() back
+       up some more. */
+    xpPC(xp)-=1;
+    pc_luser_xp(xp,tcr, NULL);
+    allocation_enabled = true;
+    tcr->save_allocbase = (void *)VOID_ALLOCPTR;
+    handle_error(xp, error_allocation_disabled,0,NULL);
+    return true;
+  }
+
   cur_allocptr = xpGPR(xp,allocptr);
 
   allocptr_tag = fulltag_of(cur_allocptr);
@@ -426,6 +437,46 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     xpGPR(xp, imm0) = tenured_area->static_dnodes << dnode_shift;
     break;
 
+  case GC_TRAP_FUNCTION_ALLOCATION_CONTROL:
+    switch(arg) {
+    case 0: /* disable if allocation enabled */
+      xpGPR(xp, arg_z) = lisp_nil;
+      if (allocation_enabled) {
+        TCR *other_tcr;
+        ExceptionInformation *other_context;
+        suspend_other_threads(true);
+        normalize_tcr(xp,tcr,false);
+        for (other_tcr=tcr->next; other_tcr != tcr; other_tcr = other_tcr->next) {
+          other_context = other_tcr->pending_exception_context;
+          if (other_context == NULL) {
+            other_context = other_tcr->suspend_context;
+          }
+          normalize_tcr(other_context, other_tcr, true);
+        }
+        allocation_enabled = false;
+        xpGPR(xp, arg_z) = t_value;
+        resume_other_threads(true);
+      }
+      break;
+
+    case 1:                     /* enable if disabled */
+      xpGPR(xp, arg_z) = lisp_nil;
+      if (!allocation_enabled) {
+        allocation_enabled = true;
+        xpGPR(xp, arg_z) = t_value;
+      }
+      break;
+
+    default:
+      xpGPR(xp, arg_z) = lisp_nil;
+      if (allocation_enabled) {
+        xpGPR(xp, arg_z) = t_value;
+      }
+      break;
+    }
+    break;
+
+        
   default:
     update_bytes_allocated(tcr, (void *) ptr_from_lispobj(xpGPR(xp, allocptr)));
 
@@ -647,6 +698,7 @@ tcr_frame_ptr(TCR *tcr)
 
 void
 normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
+
 {
   void *cur_allocptr = NULL;
   LispObj freeptr = 0;
@@ -1653,14 +1705,14 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 
       if (alloc_disp) {
         *alloc_disp = disp;
-        xpGPR(xp,allocptr) += disp;
+        xpGPR(xp,allocptr) -= disp;
         /* Leave the PC at the alloc trap.  When the interrupt
            handler returns, it'll decrement allocptr by disp
            and the trap may or may not be taken.
         */
       } else {
         Boolean ok = false;
-        update_bytes_allocated(tcr, (void *) ptr_from_lispobj(cur_allocptr + disp));
+        update_bytes_allocated(tcr, (void *) ptr_from_lispobj(cur_allocptr - disp));
         xpGPR(xp, allocptr) = VOID_ALLOCPTR + disp;
         instr = program_counter[-1];
         if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
@@ -1671,8 +1723,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
           }
         }
         if (ok) {
-        /* Clear the carry bit, so that the trap will be taken. */
-        xpPSR(xp) &= ~PSR_C_MASK;
+          /* Clear the carry bit, so that the trap will be taken. */
+          xpPSR(xp) &= ~PSR_C_MASK;
         } else {
           Bug(NULL, "unexpected instruction preceding alloc trap.");
         }

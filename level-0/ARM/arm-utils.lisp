@@ -417,6 +417,28 @@ be somewhat larger than what was specified)."
   (uuo-gc-trap)
   (ba .SPmakeu32))
 
+(defarmlapfunction allow-heap-allocation ((arg arg_z))
+  "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts
+at heap allocation."
+  (:arglist (arg))
+  (check-nargs 0)
+  (cmp arg_z (:$ arm::nil-value))
+  (mov imm0 (:$ arch::gc-trap-function-allocation-control))
+  (mov imm1 (:$ 0))                     ;disallow
+  (movne imm1 (:$ 1))                   ;allow if arg non-null
+  (uuo-gc-trap)
+  (bx lr))
+
+
+
+(defarmlapfunction heap-allocation-allowed-p ()
+  "Return T if heap allocation is allowed, NIL otherwise."
+  (check-nargs 0)
+  (mov imm0 (:$ arch::gc-trap-function-allocation-control))
+  (mov imm1 (:$ 2))                     ;query
+  (uuo-gc-trap)
+  (bx lr))
+
 (defun %watch (uvector)
   (declare (ignore uvector))
   (error "watching objects not supported on ARM yet"))

@@ -736,6 +736,10 @@
      object-direct-size
      add-feature
      remove-feature
+     ;; Disabling heap allocation (to detect unexpected consing.)
+     allow-heap-allocaton
+     heap-allocation-allowed-p
+     allocation-disabled
 
      ) "CCL"
    )

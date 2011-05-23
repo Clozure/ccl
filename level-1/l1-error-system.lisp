@@ -143,6 +143,11 @@
     (when instruction
       (format s "~&Faulting instruction: ~s" instruction))))
 
+(define-condition allocation-disabled (storage-condition)
+  ()
+  (:report (lambda (c s) (declare (ignore c)) (format s "Attempt to heap-allocate a lisp object when heap allocation is disabled."))))
+  
+
 (define-condition type-error (error)
   ((datum :initarg :datum)
    (expected-type :initarg :expected-type :reader type-error-expected-type)

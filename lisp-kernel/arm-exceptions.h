@@ -167,3 +167,6 @@ invoke_handler_on_main_stack(int, siginfo_t*, ExceptionInformation *, void *, vo
 #else
 #define ALTSTACK(handler) handler
 #endif
+
+void
+normalize_tcr(ExceptionInformation *,TCR *, Boolean);

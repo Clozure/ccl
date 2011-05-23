@@ -284,6 +284,11 @@
                :format-control "Stack overflow on ~a stack."
                :format-arguments (list (if (eql arg arm::vsp) "value" "control")))
               nil frame-ptr))
+            ((eql error-number arch::error-allocation-disabled)
+             (restart-case (%error 'allocation-disabled nil frame-ptr)
+               (continue ()
+                         :report (lambda (stream)
+                                   (format stream "retry the heap allocation.")))))
             (t
              (error "%errdisp callback: error-number = ~d, arg = #x~x, fnreg = ~d, rpc = ~d"
                     error-number arg fnreg relative-pc)))))
