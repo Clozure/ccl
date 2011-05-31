@@ -421,7 +421,7 @@ be somewhat larger than what was specified)."
   "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts
 at heap allocation."
   (:arglist (arg))
-  (check-nargs 0)
+  (check-nargs 1)
   (cmp arg_z (:$ arm::nil-value))
   (mov imm0 (:$ arch::gc-trap-function-allocation-control))
   (mov imm1 (:$ 0))                     ;disallow
