@@ -2790,16 +2790,16 @@
   (when tab-stop
     (format t "~vt" tab-stop))
   (format t "(~a" (x86-di-mnemonic instruction))
-        (let* ((op0 (x86-di-op0 instruction))
-	     (op1 (x86-di-op1 instruction))
-	     (op2 (x86-di-op2 instruction)))
-	(when op0
-	  (write-x86-lap-operand t op0 ds)
-	  (when op1
-	    (write-x86-lap-operand t op1 ds)
-	    (when op2
-	      (write-x86-lap-operand t op2 ds)))))
-      (format t ")~%"))
+  (let* ((op0 (x86-di-op0 instruction))
+	 (op1 (x86-di-op1 instruction))
+	 (op2 (x86-di-op2 instruction)))
+    (when op0
+      (write-x86-lap-operand t op0 ds)
+      (when op1
+	(write-x86-lap-operand t op1 ds)
+	(when op2
+	  (write-x86-lap-operand t op2 ds)))))
+  (format t ")~%"))
 
 (defun x86-print-disassembled-instruction (ds instruction seq function)
   (let* ((addr (x86-di-address instruction))
