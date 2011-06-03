@@ -800,6 +800,8 @@ are running on, or NIL if we can't find any useful information."
     (funcall *overwrite-dialog-hook* filename prompt)
     t))
 
+(defparameter *disassemble-verbose* nil)
+
 ;;; Might want to have some other entry for, e.g., the inspector
 ;;; and to let it get its hands on the list header returned by 
 ;;; disassemble-ppc-function.  Maybe disassemble-ppc-function

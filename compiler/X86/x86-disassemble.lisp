@@ -31,6 +31,8 @@
   op0
   op1
   op2
+  start					;start of instruction in code-vector
+  end					;and its end
   )
 
 (defmethod print-object ((xdi x86-disassembled-instruction) stream)
@@ -2603,6 +2605,8 @@
                 (setf (x86-di-op0 instruction) (pop operands)
                       (x86-di-op1 instruction) (pop operands)
                       (x86-di-op2 instruction) (pop operands))))))))
+      (setf (x86-di-start instruction) (x86-ds-insn-start ds)
+	    (x86-di-end instruction) (x86-ds-code-pointer ds))
       (values (x86-dis-analyze-operands ds instruction (x86-dis-flags dp))
               (or stop (eq (x86-dis-flags dp) :jump))))))
 
@@ -2778,6 +2782,25 @@
 
 (defvar *previous-source-note*)
 
+(defun x86-print-di-lap (ds instruction &optional tab-stop)
+  (dolist (p (x86-di-prefixes instruction))
+    (when tab-stop
+      (format t "~vt" tab-stop))
+    (format t "(~a)~%" p))
+  (when tab-stop
+    (format t "~vt" tab-stop))
+  (format t "(~a" (x86-di-mnemonic instruction))
+        (let* ((op0 (x86-di-op0 instruction))
+	     (op1 (x86-di-op1 instruction))
+	     (op2 (x86-di-op2 instruction)))
+	(when op0
+	  (write-x86-lap-operand t op0 ds)
+	  (when op1
+	    (write-x86-lap-operand t op1 ds)
+	    (when op2
+	      (write-x86-lap-operand t op2 ds)))))
+      (format t ")~%"))
+
 (defun x86-print-disassembled-instruction (ds instruction seq function)
   (let* ((addr (x86-di-address instruction))
          (entry (x86-ds-entry-point ds))
@@ -2794,21 +2817,27 @@
     (when (x86-di-labeled instruction)
       (format t "~&L~d~%" pc)
       (setq seq 0))
-    (format t "~&  [~D]~8T" pc)
-    (dolist (p (x86-di-prefixes instruction))
-      (format t "~&  (~a)~%" p))
-    (format t "  (~a" (x86-di-mnemonic instruction))
-    (let* ((op0 (x86-di-op0 instruction))
-	   (op1 (x86-di-op1 instruction))
-	   (op2 (x86-di-op2 instruction)))
-      (when op0
-	(write-x86-lap-operand t op0 ds)
-	(when op1
-	  (write-x86-lap-operand t op1 ds)
-	  (when op2
-	    (write-x86-lap-operand t op2 ds)))))
-    (format t ")")
-    (format t "~%")
+    (format t "~&~8<[~D]~>" pc)
+    (let* ((istart (x86-di-start instruction))
+	   (iend (x86-di-end instruction))
+	   (nbytes (- iend istart))
+	   (code-vector (x86-ds-code-vector ds))
+	   (byteidx istart)
+	   (tab-stop (if *disassemble-verbose* 22 9)))
+      (when *disassemble-verbose*
+	(dotimes (i (min nbytes 4))
+	  (format t " ~(~2,'0x~)" (aref code-vector byteidx))
+	  (incf byteidx))
+	(decf nbytes 4))
+      (x86-print-di-lap ds instruction tab-stop)
+      (when *disassemble-verbose*
+	(while (plusp nbytes)
+	  (format t "~8t")
+	  (dotimes (i (min nbytes 4))
+	    (format t " ~(~2,'0x~)" (aref code-vector byteidx))
+	    (incf byteidx))
+	  (format t "~%")
+	  (decf nbytes 4))))
     (1+ seq)))
 
 (defun x86-print-disassembled-function-header (function xfunction)
