@@ -281,8 +281,9 @@
                        hi:*buffer-list*))
            :initial-function
            #'(lambda ()
-               (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))               (when (and *standalone-cocoa-ide*
-                        (prog1 *first-listener* (setq *first-listener* nil)))
+               (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
+               (when (and *standalone-cocoa-ide*
+                          (prog1 *first-listener* (setq *first-listener* nil)))
                  (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
                  (ui-object-note-package *nsapp* *package*))
                (ccl::listener-function))
@@ -310,7 +311,8 @@
                  (perform-close-kills-process-p doc)))
       t
       (progn
-        (#/orderOut: w sender)
+        ;(#/orderOut: w sender)
+        (#/close w)
         nil))))
 
 
@@ -893,6 +895,8 @@
     ())
 
 (defun background-process-run-function (keywords function)
+  (unless (listp keywords)
+    (setf keywords (list :name keywords)))
   (destructuring-bind (&key (name "Anonymous")
                             (priority  0)
 			    (stack-size ccl::*default-control-stack-size*)
