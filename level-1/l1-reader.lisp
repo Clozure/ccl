@@ -2472,12 +2472,12 @@
                     (%casify-token tb (unless (atom escapes) escapes))
                     (let* ((pkg (if explicit-package (pkg-arg explicit-package) *package*)))
                       (if (or double-colon (eq pkg *keyword-package*))
-                        (without-interrupts
-                         (multiple-value-bind (symbol access internal-offset external-offset)
-                                              (%find-symbol string len pkg)
-                           (if access
-                             symbol
-                             (%add-symbol (%string-from-token tb) pkg internal-offset external-offset))))
+                        (with-package-lock (pkg)
+			  (multiple-value-bind (symbol access internal-offset external-offset)
+			      (%find-symbol string len pkg)
+			    (if access
+			      symbol
+			      (%add-symbol (%string-from-token tb) pkg internal-offset external-offset))))
                         (multiple-value-bind (found symbol) (%get-htab-symbol string len (pkg.etab pkg))
                           (if found
                             symbol
