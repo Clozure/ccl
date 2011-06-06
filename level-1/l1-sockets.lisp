@@ -56,7 +56,7 @@
   (defmacro check-winsock-error (form)
     (let* ((val (gensym)))
       `(let* ((,val ,form))
-        (if (< ,val 0)
+        (if (or (< ,val 0) (eql ,val #xffffffff))
           (%get-winsock-error)
           ,val))))
   (defmacro check-socket-error (form)
@@ -875,7 +875,7 @@ the socket is not connected."))
 	     ;; man accept(2). This is my best guess at what they mean...
 	     (if (and async (< res 0)
                       #+windows-target
-                      (= res #$WSAEWOULDBLOCK)
+                      (= res (- #$WSAEWOULDBLOCK))
                       #-windows-target
 		      (or (eql res (- #$ENETDOWN))
 			  (eql res (- #+linux-target #$EPROTO
