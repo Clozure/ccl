@@ -177,16 +177,16 @@
   (delete-mark (pop-buffer-mark)))
 
 (defcommand "Exchange Point and Mark" (p)
-  "Swap the positions of the point and the mark, activating region.
-   With a prefix argument, deactivates region"
+  "Swap the positions of the point and the mark, deactivating region.
+   With a prefix argument, activates region"
   (let ((point (current-point))
 	(mark (current-mark)))
     (with-mark ((temp point))
       (move-mark point mark)
       (move-mark mark temp)))
   (if p
-    (deactivate-region)
-    (activate-region)))
+    (activate-region)
+    (deactivate-region)))
 
 (defcommand "Mark Whole Buffer"  (p)
   "Set the region around the whole buffer, activating the region.

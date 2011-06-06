@@ -133,12 +133,19 @@
       (defhvar "I-Search State"
         "Internal variable containing current state of I-Search"
         :buffer buffer))
-    (push-new-buffer-mark (current-point))
+    (unless (region-active-p) ; We need the selection (if there is one) to stay put!
+      (push-new-buffer-mark (current-point)))
     (setf (value i-search-state) iss)
     (%i-search-message iss)))
 
 (defun end-isearch-mode ()
   (setf (buffer-minor-mode (current-buffer) "I-Search") nil))
+
+(defcommand "I-Search Yank Selection" (p)
+   "Pull string from current selection into search string."
+  (declare (ignore p))
+  (let* ((iss (current-isearch-state)))
+    (i-search-extend iss (region-to-string (region (current-mark) (current-point))))))
 
 (defun i-search-backup (iss)
   (if (iss-history iss)
