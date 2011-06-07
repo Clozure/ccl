@@ -72,7 +72,6 @@
 (bind-key "Transpose Characters" #k"control-t")
 (bind-key "Universal Argument" #k"control-u")
 (bind-key "Scroll Window Down" #k"control-v")
-;(bind-key "I-Search Yank Selection" #k"control-y" :mode "I-Search") ; uncomment if you want Fred-like behavior
 (bind-key "Page Down" #k"pagedown")
 (bind-key "Scroll Window Up" #k"meta-v")
 (bind-key "Page Up" #k"pageup")
@@ -935,6 +934,7 @@
 (bind-key "I-Search Exit or Search" #k"escape" :mode "I-Search")
 (bind-key "I-Search Yank Word" #k"control-w" :mode "I-Search")
 (bind-key "Quoted Insert" #k"control-q" :mode "I-Search")
+(bind-key "I-Search Yank Selection" #k"control-y" :mode "I-Search")
 
 
 ;;;; Query/Replace mode.
