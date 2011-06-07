@@ -266,16 +266,26 @@ between the region's start and end, and if there are no ill-formed expressions i
         (progn
           (insert-character (current-point-for-insertion) #\NewLine))))))
 
+(defun mark-in-region-p (mark region)
+ (and (mark<= (region-start region) mark) (mark<= mark (region-end region))))
+
+(defun input-offset ()
+ (if (hi::region-active-p)
+   0
+   (let* ((mark (current-point))
+          (history (value input-regions))
+          (region (find mark history :key 'car :test 'mark-in-region-p)))
+     (and region (count-characters (region mark (region-end (car region))))))))
+
 (defun copy-region-to-input (region)
-  (let* ((region-string (when region (region-to-string region)))
-         (input-mark (value buffer-input-mark))
-         (end-mark (region-end (buffer-region (current-buffer))))
-         (input-region (region input-mark end-mark)))
-    (with-mark ((input-mark (value buffer-input-mark)))
-      (move-mark (current-point) input-mark)
-      (delete-region input-region)
-      (insert-string (current-point) region-string)
-      (buffer-end (current-point)))))
+ (when region
+   (let* ((region-string (region-to-string region))
+          (end-mark (region-end (buffer-region (current-buffer))))
+          (offset (or (input-offset) 0)))
+     (move-mark (current-point) end-mark)
+     (insert-string (current-point) region-string)
+     (buffer-end (current-point))
+     (character-offset (current-point) (- offset)))))
 
 (defun find-backward-form (mark)
   (let ((start (copy-mark mark))
@@ -587,18 +597,34 @@ between the region's start and end, and if there are no ill-formed expressions i
                                        (region-to-string region)
                                        (mark-absolute-position (region-start region)))))
 
+(defvar *echo-expression-to-listener* nil "True if you want evaluated forms in an editor window to echo in listener, in addition to their evaluated result.")
 
 (defcommand "Editor Execute Defun" (p)
-  "Executes the current or next top-level form in the editor Lisp."
+  "Executes the current or next top-level form in the editor Lisp. Ensures the result is visible."
   (declare (ignore p))
-  (if (region-active-p)
-    (eval-region (current-region))
-    (eval-region (defun-region (current-point)))))
+  (let* ((region (copy-region
+                  (if (region-active-p)
+                    (current-region)
+                    (defun-region (current-point)))))
+         (form (when *echo-expression-to-listener* (region-to-string region)))
+         (buf (gui::hemlock-buffer (#/topListener gui::hemlock-listener-document))))
+    (when buf
+      (let ((HI::*CURRENT-BUFFER* buf))
+        (move-mark (current-point) (region-end (buffer-region buf)))))
+    (when form (format (HEMLOCK-EXT:TOP-LISTENER-OUTPUT-STREAM) "~A~&" form))
+    (eval-region region)))
 
 (defcommand "Editor Execute Expression" (p)
-  "Executes the current region in the editor Lisp."
+  "Executes the current region in the editor Lisp. Ensures the result is visible."
   (declare (ignore p))
-  (eval-region (current-form-region)))
+  (let* ((region (copy-region (current-form-region)))
+         (form (when *echo-expression-to-listener* (region-to-string region)))
+         (buf (gui::hemlock-buffer (#/topListener gui::hemlock-listener-document))))
+    (when buf
+      (let ((HI::*CURRENT-BUFFER* buf))
+        (move-mark (current-point) (region-end (buffer-region buf)))))
+    (when form (format (HEMLOCK-EXT:TOP-LISTENER-OUTPUT-STREAM) "~A~&" form))
+    (eval-region region)))
 
 (defcommand "Editor Re-evaluate Defvar" (p)
   "Evaluate the current or next top-level form if it is a DEFVAR.  Treat the
