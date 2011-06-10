@@ -4709,6 +4709,12 @@
     char))
   
   
+(defmethod stream-length ((s string-input-stream) &optional new)
+  (unless new
+    (let ((ioblock (basic-stream-ioblock s)))
+      (%i- (string-input-stream-ioblock-end ioblock)
+	   (string-input-stream-ioblock-start ioblock)))))
+
 (defmethod stream-eofp ((s string-input-stream))
   (let* ((ioblock (basic-stream-ioblock s))
          (idx (string-input-stream-ioblock-index ioblock))
@@ -6581,5 +6587,12 @@ are printed.")
           newpos)
         (report-bad-arg newpos `(integer 0 (,(- (the fixnum (io-buffer-limit inbuf)) origin)))))
       (the fixnum (- (the fixnum (io-buffer-idx inbuf)) origin)))))
+
+(defmethod stream-length ((s vector-input-stream) &optional new)
+  (unless new
+    (let ((ioblock (basic-stream-ioblock s)))
+      (%i- (io-buffer-limit (ioblock-inbuf ioblock))
+	   (vector-stream-ioblock-displacement ioblock)))))
+
 
 ; end of L1-streams.lisp
