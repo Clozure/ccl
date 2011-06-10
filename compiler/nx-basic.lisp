@@ -104,6 +104,12 @@
 	    (with-output-to-string (s) (let ((*print-circle* t)) (prin1 form s)))))
     note))
 
+(defun code-note-acode-start-pos (note)
+  (nth-value 0 (decode-file-range (code-note-acode-range note))))
+
+(defun code-note-acode-end-pos (note)
+  (nth-value 1 (decode-file-range (code-note-acode-range note))))
+
 (defmethod print-object ((note code-note) stream)
   (print-unreadable-object (note stream :type t :identity t)
     (format stream "[~s]" (code-note-code-coverage note))
