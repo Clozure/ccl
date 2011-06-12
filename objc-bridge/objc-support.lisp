@@ -8,6 +8,8 @@
 (defun allocate-objc-object (class)
   (#/alloc class))
 
+
+
 (defun conforms-to-protocol (thing protocol)
   (#/conformsToProtocol: thing (objc-protocol-address protocol)))
 
@@ -663,6 +665,22 @@ NSObjects describe themselves in more detail than others."
                                          
 (defmethod terminate ((instance objc:objc-object))
   (objc-message-send instance "release"))
+
+(defloadvar *tagged-instance-class-indices*
+  (let* ((alist ()))
+    ;; There should be a better way of doing this.  (A much better way.)
+      (let* ((instance (#/initWithInt: (#/alloc ns:ns-number) 0))
+	     (tag (tagged-objc-instance-p instance)))
+	(if tag
+	  (let* ((class (objc-message-send instance "class")))
+	    (unless (%null-ptr-p class)
+	      (install-foreign-objc-class class nil)
+	      (push (cons tag (objc-class-or-private-class-id class)) alist)))
+	  (#/release instance)))
+      alist))
+
+(defun objc-tagged-instance-class-index (tag)
+  (cdr (assoc tag *tagged-instance-class-indices* :test #'eq)))
 
 
 (provide "OBJC-SUPPORT")

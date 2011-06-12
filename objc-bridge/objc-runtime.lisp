@@ -2609,17 +2609,46 @@ argument lisp string."
   (or (objc-class-id classptr)
       (objc-private-class-id classptr)))
 
+;;; The World's Most Advanced Operating System keeps getting better!
+#+(or apple-objc-2.0 apple-objc)
+(defun objc-hidden-class-id (classptr)
+  ;; This should only be called on something for which OBJC-CLASS-ID and OBJC-PRIVATE-CLASS-ID
+  ;; both return false.
+  ;; If CLASSPTR looks enough like an ObjC class, register it as a private class and return
+  ;; the private class ID.
+  ;; This wouldn't be necessary if the ObjC class hierarchy wasn't broken.
+  (unless (%null-ptr-p classptr)
+    (with-macptrs (meta metameta)
+      (safe-get-ptr classptr meta)
+      (unless (%null-ptr-p meta)
+	(safe-get-ptr meta metameta)
+	(when (and (eql metameta (find-class 'ns::+ns-object nil))
+		   (%objc-metaclass-p meta))
+	  (let* ((classptr (%inc-ptr classptr 0)))
+	    (install-foreign-objc-class classptr nil)
+	    (objc-private-class-id classptr)))))))
+
+(defun tagged-objc-instance-p (p)
+  (let* ((tag (logand (the natural (%ptr-to-int p)) #xf)))
+    (declare (fixnum tag))
+    (if (logbitp 0 tag)
+      tag)))
 
 (defun %objc-instance-class-index (p)
   (unless (%null-ptr-p p)
-    (if (with-macptrs (q)
-          (safe-get-ptr p q)
-          (not (%null-ptr-p q)))
-      (with-macptrs ((parent #+(or apple-objc cocotron-objc) (pref p :objc_object.isa)
-                             #+gnu-objc (pref p :objc_object.class_pointer)))
-        (or
-         (objc-class-id parent)
-         (objc-private-class-id parent))))))
+    (let* ((tag (tagged-objc-instance-p p)))
+      (if tag
+	(objc-tagged-instance-class-index tag)
+	(if (with-macptrs (q)
+	      (safe-get-ptr p q)
+              (not (%null-ptr-p q)))
+	  (with-macptrs ((parent #+(or apple-objc cocotron-objc) (pref p :objc_object.isa)
+                                 #+gnu-objc (pref p :objc_object.class_pointer)))
+            (or
+             (objc-class-id parent)
+             (objc-private-class-id parent)
+             #+(or apple-objc-2.0 apple-objc)
+             (objc-hidden-class-id parent))))))))
 
 
 ;;; If an instance, return (values :INSTANCE <class>)
