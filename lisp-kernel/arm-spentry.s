@@ -2343,7 +2343,7 @@ _spentry(unbind_to)
                          
 _spentry(progvrestore)
         __(skip_stack_vector(imm0,imm1,sp))
-        __(ldr imm0,[imm0,#lisp_frame.size+node_size])
+        __(ldr imm0,[imm0,#lisp_frame.size+(9*8)+node_size]) /* 9*8 = size of saved FPR vector, with header */
         __(cmp imm0,#0)
         __(unbox_fixnum(imm0,imm0))
         __(bne _SPunbind_n)
@@ -3974,6 +3974,7 @@ local_label(throw_pushed_values):
         __(ldr fn,[sp,#catch_frame.size+lisp_frame.savefn])
         __(ldr lr,[sp,#catch_frame.size+lisp_frame.savelr])
         __(add sp,sp,#catch_frame.size+lisp_frame.size)
+        __(pop_fprs())
         __(bx lr)
 _endfn(C(_throw_found))        
 
@@ -4002,6 +4003,7 @@ local_label(_nthrow1v_dont_unbind):
         __(cmp temp2,#0)
         __(ldreq vsp,[sp,#catch_frame.size+lisp_frame.savevsp])
         __(add sp,sp,#catch_frame.size+lisp_frame.size)
+        __(pop_fprs())
         __(b local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_do_unwind):
         /* This is harder, but not as hard (not as much BLTing) as the  */
@@ -4036,6 +4038,8 @@ C(swap_lr_lisp_frame_temp0_end):
         __(str fn,[temp0,#lisp_frame.savefn])
         __(ldr vsp,[temp0,#lisp_frame.savevsp])
         __(mov fn,nfn)
+        __(add temp0,temp0,#lisp_frame.size)
+        __(restore_fprs(temp0))
         __(str imm1,[rcontext,#tcr.unwinding])
         __(blx lr)
         __(mov imm1,#1)
@@ -4044,6 +4048,7 @@ C(swap_lr_lisp_frame_temp0_end):
         __(ldr temp2,[sp,#12])
         __(add sp,sp,#4*node_size)
         __(restore_lisp_frame(imm0))
+        __(discard_fprs())
         __(b local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_done):
         __(mov imm0,#0)
@@ -4090,6 +4095,7 @@ local_label(nthrownv_push_test):
         __(mov vsp,imm0)
 local_label(nthrownv_skip):     
         __(add sp,sp,#catch_frame.size+lisp_frame.size)
+        __(pop_fprs())
         __(b local_label(nthrownv_nextframe))                
 local_label(nthrownv_do_unwind):
         __(ldr arg_x,[temp0,#catch_frame.xframe])
@@ -4129,6 +4135,8 @@ C(swap_lr_lisp_frame_arg_z_end):
         __(ldr nfn,[arg_z,#lisp_frame.savefn])
         __(str fn,[arg_z,#lisp_frame.savefn])
         __(ldr vsp,[arg_z,#lisp_frame.savevsp])
+        __(add arg_z,arg_z,#lisp_frame.size)
+        __(restore_fprs(arg_z))
         __(str imm1,[rcontext,#tcr.unwinding])
         __(mov fn,nfn)
         __(blx lr)
@@ -4153,6 +4161,7 @@ local_label(nthrownv_tpoptest):
         __(ldr fn,[sp,#lisp_frame.savefn])
         __(ldr lr,[sp,#lisp_frame.savelr])
         __(discard_lisp_frame())
+        __(discard_fprs())
         __(b local_label(nthrownv_nextframe))
 local_label(nthrownv_done):     
         __(mov imm0,#0)

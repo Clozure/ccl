@@ -7879,11 +7879,13 @@
     (let* ((*arm2-vstack* *arm2-vstack*)
            (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
            (*arm2-cstack* (%i+ *arm2-cstack* arm::lisp-frame.size)))
+      (arm2-open-undo $undostkblk)      ; saved fpr vector
       (arm2-open-undo $undostkblk)      ; tsp frame created by nthrow.
       (! save-cleanup-context)
       (setq *arm2-cstack* (%i+ *arm2-cstack*
                                arm::lisp-frame.size))       ; the frame we just pushed
       (arm2-form seg nil nil cleanup-form)
+      (arm2-close-undo)
       (arm2-close-undo)
       (! restore-cleanup-context)
       (! jump-return-pc)) ; blr

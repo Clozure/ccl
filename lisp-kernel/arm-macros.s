@@ -327,9 +327,41 @@ define(`funcall_nfn',`
 
 ')
 
+/* Save the non-volatile FPRs (d8-d15) in a stack-allocated vector.
+   Clobber d7,r0,r1.  Note that d7/s14 wind up looking like denormalized
+   floats (we effectively load a vector header into d7.)
+*/        
+   
+define(`push_fprs',`
+        __(movc16(imm0,make_header(8,subtag_double_float_vector)))
+        __(mov imm1,#0)
+        __(fmdrr d7,imm0,imm1)
+        __(fstmfdd sp!,{d7-d15})
+')
 
+/* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
+   on top of the stack.  This loads the vector header
+   into d7 as a side-effect. */
+define(`pop_fprs',`
+        __(fldmfdd sp!,{d7-d15})
+')
+
+/* Reload the non-volatile FPRs (d8-d15) from the stack-consed vector
+   on top of the stack, leaving the vector in place.  d7 winds up with
+   a denormalized float in it, if anything cares. */
+define(`restore_fprs',`
+        __(fldmfdd $1,{d7-d15})
+')                
+
+/* discard the stack-consed vector which contains a set of 8 non-volatile
+   FPRs. */
+define(`discard_fprs',`
+        __(add sp,sp,#9*8)
+')                        
+        
 define(`mkcatch',`
         new_macro_labels()
+        __(push_fprs())
 	__(build_lisp_frame(imm0))
         __(movc16(imm0,make_header(catch_frame.element_count,subtag_catch_frame)))
         __(movs temp2,fn)
@@ -347,14 +379,7 @@ define(`mkcatch',`
 ')	
 
 
-	
-define(`check_stack_alignment',`
-	new_macro_labels()
-	__(andi. $1,sp,STACK_ALIGN_MASK)
-	__(beq+ macro_label(stack_ok))
-	__(.long 0)
-macro_label(stack_ok):
-')
+
 
 define(`stack_align',`((($1)+STACK_ALIGN_MASK)&~STACK_ALIGN_MASK)')
 
