@@ -388,8 +388,14 @@
              (or (and (consp name) (neq (car name) 'setf))
                  (let ((pkg (symbol-package (if (consp name) (cadr name) name))))
                    (or (eq *common-lisp-package* pkg) (eq *ccl-package* pkg)))))
-    (cerror "Replace the definition of ~S."
-            "The function ~S is predefined in Clozure CL." name)
+    (restart-case
+	(progn ;; work around ticket:865
+	  (cerror "Replace the definition of ~S."
+		  "The function ~S is predefined in Clozure CL." name))
+      (never-complain ()
+	:report (lambda (stream)
+		  (format stream "Replace the definition of ~S and allow such redefinitions in the future" name))
+	(setq *warn-if-redefine-kernel* nil)))
     (unless (consp name)
       (proclaim-inline nil name))))
 
@@ -721,7 +727,7 @@
         (if w-file (format s "for ~S :" w-file) (princ ":" s)))
       (let* ((indenting-stream (make-indenting-string-output-stream #\; 4)))
         (format indenting-stream "~%~a" w)
-        (format s "~a" (get-output-stream-string indenting-stream))))
+        (format s "~a~&" (get-output-stream-string indenting-stream))))
     (values harsh-p any-p w-file)))
 
 ;;;; Assorted mumble-P type predicates. 
