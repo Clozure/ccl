@@ -2623,7 +2623,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
           if (allocptr_tag == fulltag_misc) {
             /* Slap the header on the new uvector */
             new_vector = xpGPR(xp,Iallocptr);
+#ifdef X8664
             deref(new_vector,0) = xpGPR(xp,Iimm0);
+#else
+            deref(new_vector,0) = xpMMXreg(xp,Imm0);
+#endif
             xpPC(xp) += sizeof(set_allocptr_header_instruction);
           }
           tcr->save_allocptr = (void *)(((LispObj)tcr->save_allocptr) & ~fulltagmask);
