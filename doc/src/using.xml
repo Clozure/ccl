@@ -3812,5 +3812,31 @@ Then you can see the coverage information in the definition of
   </refsect1>
 </refentry>
 
+<refentry id="v_disassemble-verbose">
+  <indexterm zone="v_disassemble-verbose">
+    <primary>*disassemble-verbose*</primary>
+  </indexterm>
+  
+  <refnamediv>
+    <refname>*disassemble-verbose*</refname>
+    <refpurpose>
+      When true, display verbose disassembly output.
+    </refpurpose>
+    <refclass>Variable</refclass>
+  </refnamediv>
+
+  <refsect1><title>Description</title>
+    <para>
+      When true, the output of <literal>disassemble</literal> may
+      include platform-dependent additional information.  For
+      instance, on the x86 ports, the output will include the x86
+      opcode bytes.
+    </para>
+    <para>
+      The default value is <literal>nil</literal>.
+    </para>
+  </refsect1>
+</refentry>
+
 </sect1>
 </chapter>

@@ -293,6 +293,7 @@
      *fasl-save-local-symbols*
      *save-arglist-info*
      *always-eval-user-defvars*
+     *disassemble-verbose*
 
 					;These 3 need to be set by the user in order for the correspondingly named
 					;functions to return something other than "unspecified".
