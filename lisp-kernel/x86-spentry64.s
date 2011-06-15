@@ -4631,7 +4631,7 @@ _spentry(callback)
         __ifdef(`HAVE_TLS')
 	 /* TCR initialized for lisp ?   */
 	 __ifndef(`TCR_IN_GPR') /* FIXME */
-	 __(movq %fs:current_tcr@TPOFF+tcr.linear,%rax)
+	 __(movq %fs:current_tcr@TPOFF,%rax)
 	 __(testq %rax,%rax)
 	 __(jne 1f)
 	 __endif
