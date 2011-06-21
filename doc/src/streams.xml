@@ -463,7 +463,7 @@
         inherit both from your mixin and from the appropriate other
         class, then define a method on ccl::select-stream-class which
         chooses from among those classes.</para>
-      <para>Note that some of these classes are internal to the CLL
+      <para>Note that some of these classes are internal to the CCL
         package.  If you try to inherit from those ones without the
         ccl:: prefix, you'll get an error which may confuse you, calling
         them "forward-referenced classes".  That just means you used the
