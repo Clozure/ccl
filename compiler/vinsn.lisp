@@ -400,7 +400,7 @@
             (when value
               (case class
                 (#.hard-reg-class-gpr (note-vinsn-sets-gpr vinsn value))
-                (#.hard-reg-class-fpr (note-vinsn-sets-fpr vinsn value))))
+                (#.hard-reg-class-fpr (note-vinsn-sets-fpr-lreg vinsn lreg))))
             (setf (svref vp i) lreg)
             (pushnew vinsn (lreg-defs lreg))
             (pushnew vinsn (lreg-refs lreg))))))))
@@ -432,6 +432,14 @@
          (make-unwired-lreg (select-imm-temp)
 			    :class hard-reg-class-gpr
 			    :mode (gpr-mode-name-value class)))
+        (:double-float
+         (make-unwired-lreg (select-fp-temp :double-float)
+                            :class hard-reg-class-fpr
+                            :mode hard-reg-class-fpr-mode-double))
+        (:single-float
+         (make-unwired-lreg (select-fp-temp :single-float)
+                            :class hard-reg-class-fpr
+                            :mode hard-reg-class-fpr-mode-double))
         (:lisp 
          (make-unwired-lreg 
 	  (select-node-temp) 
@@ -470,7 +478,11 @@
 	(if (eq class hard-reg-class-gpr)
 	  (logbitp value (vinsn-gprs-set element))
 	  (if (eq class hard-reg-class-fpr)
-	    (logbitp value (vinsn-fprs-set element))))))))
+            (let* ((mode-name (if (eql (get-regspec-mode reg) hard-reg-class-fpr-mode-single)
+                                :single-float
+                                :double-float))
+                   (mask (target-fpr-mask value mode-name)))
+              (eql mask (logand mask (vinsn-fprs-set element))))))))))
 
 ;;; Return bitmasks of all GPRs and all FPRs set in the vinsns between
 ;;; START and END, exclusive.  Any :call vinsn implicitly clobbers
@@ -479,7 +491,7 @@
   (let* ((gprs-set 0)
 	 (fprs-set 0))
     (do* ((element (dll-node-succ start) (dll-node-succ element)))
-	 ((eq element end) (values gprs-set fprs-set))n
+	 ((eq element end) (values gprs-set fprs-set))
       (if (typep element 'vinsn)
 	(if (vinsn-attribute-p element :call)
 	  (return (values #xffffffff #xffffffff))

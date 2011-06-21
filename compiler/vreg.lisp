@@ -248,6 +248,15 @@
 (defun note-vinsn-sets-fpr (vinsn fpr)
   (setf (vinsn-fprs-set vinsn) (logior (vinsn-fprs-set vinsn) (ash 1 fpr))))
 
+(defun note-vinsn-sets-fpr-lreg (vinsn fpr)
+  (setf (vinsn-fprs-set vinsn) (logior (vinsn-fprs-set vinsn)
+                                       (target-fpr-mask (hard-regspec-value fpr)
+                                                        (if (eql (get-regspec-mode fpr)
+                                                                 hard-reg-class-fpr-mode-single)
+                                                          :single-float
+                                                          :double-float)))))
+
+
 (defun match-vreg (vreg spec vinsn vp n)
   (declare (fixnum n))
   (let* ((class (if (atom spec) spec (car spec)))
@@ -271,8 +280,8 @@
 	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value))
 	       (use-imm-temp vreg-value))
 	      ((:single-float :double-float)
-	       (use-fp-temp vreg-value)
-	       (when result-p (note-vinsn-sets-fpr vinsn vreg-value)))
+	       (use-fp-reg vreg)
+	       (when result-p (note-vinsn-sets-fpr-lreg vinsn vreg)))
 	      ((:imm t)
 	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value))
 	       (if (logbitp vreg-value *backend-imm-temps*)

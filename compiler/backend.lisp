@@ -237,17 +237,44 @@
   (and (= (hard-regspec-class reg) hard-reg-class-fpr)
        (= (get-regspec-mode reg) hard-reg-class-fpr-mode-single)))
 
+(defun target-fpr-mask (fpreg mode-name)
+  (target-arch-case
+   (:arm
+    (ecase mode-name
+      (:double-float (ash 3 (ash fpreg 1)))
+      (:single-float (ash 1 fpreg))))
+   (t
+    (ash 1 fpreg))))
+
+
+(defun use-fp-reg (fpr)
+  (let* ((mode-name (if (eql (get-regspec-mode fpr) hard-reg-class-fpr-mode-single)
+                      :single-float
+                      :double-float))
+         (regval (hard-regspec-value fpr)))
+    (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (target-fpr-mask regval mode-name))))))
+
 (defun use-fp-temp (n)
     (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (ash 1 n))))
     n)
 
 (defun available-fp-temp (mask &optional (mode-name :double-float))
-  (dotimes (bit (integer-length mask) (error "Bug: ran out of node fp registers."))
-    (when (logbitp bit mask)
+  (do* ((regno 0 (1+ regno))
+        (regmask (target-fpr-mask regno mode-name)  (target-fpr-mask regno mode-name)))
+       ((> regmask mask) (error "Bug: ran out of fp registers."))
+    (when (eql regmask (logand mask regmask))
       (let* ((mode (if (eq mode-name :double-float) 
                      hard-reg-class-fpr-mode-double
                      hard-reg-class-fpr-mode-single)))
-        (return (make-hard-fp-reg bit mode))))))
+        (return (make-hard-fp-reg regno mode))))))
+
+(defun select-fp-temp (mode-name)
+  (do* ((i 0 (1+ i))
+        (fpr-mask (target-fpr-mask i mode-name) (target-fpr-mask i mode-name)))
+       ((> fpr-mask *available-backend-fp-temps*) (compiler-bug "Bug: ran out of fp registers."))
+    (when (= fpr-mask (logand fpr-mask *available-backend-fp-temps*))
+      (return i))))
+
 
 (defparameter *backend-all-lregs* ())
 (defun note-logical-register (l)

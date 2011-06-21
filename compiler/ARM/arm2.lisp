@@ -2818,7 +2818,7 @@
                (bclass (hard-regspec-class breg))
                (bregval (hard-regspec-value breg)))
           (if (eq bclass hard-reg-class-fpr)
-            (use-fp-temp bregval)
+            (use-fp-reg breg)
             (if (eq bclass hard-reg-class-gpr)
               (if (eq (get-regspec-mode breg) hard-reg-class-gpr-mode-node)
                 (use-node-temp bregval)
