@@ -102,7 +102,12 @@
                                     :datum (car errargs)
                                     :expected-type (array-element-type array)
                                     :array array)))
-                 (division-by-zero (make-condition condition-name))
+                 (division-by-zero (make-condition condition-name
+                                                   :operation '/
+                                                   :operands (if errargs
+                                                               (list (car errargs)
+                                                                     0)
+                                                               (list 0))))
                  (t (make-condition condition-name 
                                     :format-control format-string
                                     :format-arguments errargs)))
