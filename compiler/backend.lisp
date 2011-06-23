@@ -253,7 +253,7 @@
       (if (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-single)
         (ash 1 value)
         (ash 3 (ash value 1))))
-     (t (ash value 1)))))
+     (t (ash 1 value)))))
 
 (defun use-fp-reg (fpr)
     (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (fpr-mask-for-vreg fpr)))))
