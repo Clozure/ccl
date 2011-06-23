@@ -246,17 +246,19 @@
    (t
     (ash 1 fpreg))))
 
+(defun fpr-mask-for-vreg (vreg)
+  (let* ((value (hard-regspec-value vreg)))
+    (target-arch-case
+     (:arm
+      (if (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-single)
+        (ash 1 value)
+        (ash 3 (ash value 1))))
+     (t (ash value 1)))))
 
 (defun use-fp-reg (fpr)
-  (let* ((mode-name (if (eql (get-regspec-mode fpr) hard-reg-class-fpr-mode-single)
-                      :single-float
-                      :double-float))
-         (regval (hard-regspec-value fpr)))
-    (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (target-fpr-mask regval mode-name))))))
+    (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (fpr-mask-for-vreg fpr)))))
 
-(defun use-fp-temp (n)
-    (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (ash 1 n))))
-    n)
+
 
 (defun available-fp-temp (mask &optional (mode-name :double-float))
   (do* ((regno 0 (1+ regno))
@@ -479,7 +481,7 @@
 		       (lognot (logior
 				,@(mapcar
 				   #'(lambda (r) 
-				       `(ash 1 (hard-regspec-value ,r)))
+				       `(fpr-mask-for-vreg ,r))
 				   reserved))))
 	       ',mode-name))))
        ,@body)))

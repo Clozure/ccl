@@ -478,11 +478,9 @@
 	(if (eq class hard-reg-class-gpr)
 	  (logbitp value (vinsn-gprs-set element))
 	  (if (eq class hard-reg-class-fpr)
-            (let* ((mode-name (if (eql (get-regspec-mode reg) hard-reg-class-fpr-mode-single)
-                                :single-float
-                                :double-float))
-                   (mask (target-fpr-mask value mode-name)))
-              (eql mask (logand mask (vinsn-fprs-set element))))))))))
+            ;; The FPR is logically set in the vinsn if it or any
+            ;; conflicting FPR is physically set in the vinsn.
+            (logtest (fpr-mask-for-vreg reg) (vinsn-fprs-set element))))))))
 
 ;;; Return bitmasks of all GPRs and all FPRs set in the vinsns between
 ;;; START and END, exclusive.  Any :call vinsn implicitly clobbers
