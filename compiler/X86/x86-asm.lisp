@@ -4847,5 +4847,12 @@
       (if (not (logtest (encode-opcode-flags :cpuno64) flags))
 	(match-template-types template type0 type1 type2))))))
 
+(defun ccl::register-operand-regno (op type)
+  (when (and (typep op 'x86::x86-register-operand)
+             (eql (x86::x86-register-operand-type op)
+                  type))
+    (x86::reg-entry-reg-num
+     (x86::x86-register-operand-entry op))))
+
 
 (provide "X86-ASM")

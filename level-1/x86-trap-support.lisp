@@ -30,6 +30,8 @@
   (defconstant rip-register-offset #$REG_RIP)
   (defun xp-mxcsr (xp)
     (pref xp :ucontext.uc_mcontext.fpregs.mxcsr))
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp :ucontext.uc_mcontext.fpregs._xmm))
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(13                                ;rax
       14                                ;rcx
@@ -58,6 +60,11 @@
   (defun xp-mxcsr (xp)
     (with-macptrs ((state (pref xp :__ucontext.uc_mcontext.mc_fpstate)))
       (pref state :savefpu.sv_env.en_mxcsr)))
+  (defmacro xp-xmm-regs (xp)
+    (let* ((state (gensym)))
+      `(with-macptrs ((,state (pref ,xp :__ucontext.uc_mcontext.mc_fpstate)))
+        (pref ,state :savefpu.sv_xmm))))
+      
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(7					;rax
       4					;rcx
@@ -84,6 +91,8 @@
      (pref xp :ucontext_t.uc_mcontext.__fs.__fpu_mxcsr))
   (defmacro xp-gp-regs (xp)
     `(pref ,xp :ucontext_t.uc_mcontext.__ss))
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp :ucontext_t.uc_mcontext.__fs.__fpu_xmm0))
 
   (defconstant flags-register-offset 17)
   (defconstant rip-register-offset 16)  
@@ -115,6 +124,8 @@
   (defconstant rip-register-offset #$REG_RIP)
   (defun xp-mxcsr (xp)
     (pref xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr))
+  (defmacro xp-mmx-regs (xp)
+    `(pref ,xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm))
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(14                                ;rax
       13                                ;rcx
@@ -141,6 +152,8 @@
   (defconstant rip-register-offset 16)
   (defun xp-mxcsr (xp)
     (pref xp #>CONTEXT.MxCsr))
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp #>CONTEXT.nil.FltSave.XmmRegisters))
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(0					;rax
       1					;rcx
@@ -167,6 +180,8 @@
     `(pref ,xp :ucontext_t.uc_mcontext.__ss))
   (defun xp-mxcsr (xp)
     (pref xp :ucontext_t.uc_mcontext.__fs.__fpu_mxcsr))
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp :ucontext_t.uc_mcontext.__fs.__fpu_xmm0))
   (defconstant flags-register-offset 9)
   (defconstant eip-register-offset 10)
   (defparameter *encoded-gpr-to-indexed-gpr*
@@ -188,6 +203,8 @@
   (defun xp-mxcsr (xp)
     (pref (pref (pref xp :ucontext.uc_mcontext) :mcontext_t.fpregs)
           :_fpstate.mxcsr))
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp :ucontext.uc_mcontext.fpregs._xmm))
   (defconstant flags-register-offset #$REG_EFL)
   (defconstant eip-register-offset #$REG_EIP)
   (defparameter *encoded-gpr-to-indexed-gpr*
@@ -209,6 +226,8 @@
     `,xp)
   (defun xp-mxcsr (xp)
     (%get-unsigned-long (pref xp #>CONTEXT.ExtendedRegisters) 24))
+  (defmacro xp-xmm-regs (xp)
+    `(%inc-ptr ,xp #x16c))
   (defconstant flags-register-offset 48)
   (defconstant eip-register-offset 45)
   (defparameter *encoded-gpr-to-indexed-gpr*
@@ -231,6 +250,8 @@
   (defun xp-mxcsr (xp)
     (pref xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr))
   (defconstant flags-register-offset #$EFL)
+  (defmacro xp-xmm-regs (xp)
+    `(pref ,xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm))
   (defconstant eip-register-offset #$EIP)
   (defparameter *encoded-gpr-to-indexed-gpr*
     (vector
@@ -307,8 +328,10 @@
   (%get-signed-long-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8664::fixnumshift)))
   #+x8632-target
   (%get-signed-long (xp-gp-regs xp) (+ gp-regs-offset (ash flags-register-offset x8632::fixnumshift)))))
-  
-
+(defmacro xp-xmm-single-float (xp n)
+  `(%get-single-float (xp-xmm-regs ,xp) (ash ,n 4)))
+(defmacro xp-xmm-double-float (xp n)
+  `(%get-double-float (xp-xmm-regs ,xp) (ash ,n 4)))
 
 (defun %get-xcf-byte (xcf-ptr delta)
   (let* ((containing-object (%get-object xcf-ptr target::xcf.containing-object))
@@ -336,11 +359,60 @@
       (%set-object xcf target::xcf.relative-pc new-rpc)
       -1)
     skip))
-                            
+
+(defun arithmetic-error-operation-from-instruction (instruction)
+  (let* ((name (make-keyword (string-upcase (x86-di-mnemonic instruction)))))
+    (case name
+      ((:divss :divsd :idivl :idivd) '/)
+      ((:mulss :mulsd) '*)
+      ((:addss :addsd) '+)
+      ((:subss :subsd) '-)
+      (t 'coerce))))
+
+(defun arithmetic-error-operands-from-instruction (instruction xp)
+  (let* ((name (make-keyword (string-upcase (x86-di-mnemonic instruction)))))
+    (let* ((op0 (x86-di-op0 instruction))
+           (op1 (x86-di-op1 instruction))
+           (xmmop0 (register-operand-regno op0 #.x86::+operand-type-RegXMM+))
+           (xmmop1 (register-operand-regno op1 #.x86::+operand-type-RegXMM+)))
+      (collect ((opvals))
+        (case name
+          ((:divss :mulss :addss :subss)
+           (when (and xmmop0 xmmop1)
+             (opvals (xp-xmm-single-float xp xmmop1))
+             (opvals (xp-xmm-single-float xp xmmop0))))
+          ((:divsd :mulsd :addsd :subsd)
+           (when (and xmmop0 xmmop1)
+             (opvals (xp-xmm-double-float xp xmmop1))
+             (opvals (xp-xmm-double-float xp xmmop0))))
+            
+          )
+        (opvals)))))
+
+
                                   
 (defun decode-arithmetic-error (xp xcf)
-  (declare (ignore xp xcf))
-  (values 'unknown nil))
+  (declare (ignorable xp xcf))
+  (let* ((code-vector (make-array 15 :element-type '(unsigned-byte 8)))
+         (xfunction (%alloc-misc 1 target::subtag-xfunction)))
+    (dotimes (i 15)                     ;maximum instructon size
+      (setf (aref code-vector i) (%get-xcf-byte xcf i)))
+    (setf (uvref xfunction 0) code-vector)
+    (let* ((ds (make-x86-disassembly-state
+                :mode-64 #+x8664-target t #+x8632-target nil
+                :code-vector code-vector
+                :constants-vector xfunction
+                :entry-point 0
+                :code-pointer 0           ; for next-u32/next-u16 below
+                :symbolic-names nil
+                :pending-labels (list 0)
+                :code-limit 15
+                :code-pointer 0))
+           (instruction (ignore-errors (x86-disassemble-instruction ds nil))))
+      (if instruction
+        (values (arithmetic-error-operation-from-instruction  instruction)
+                (arithmetic-error-operands-from-instruction instruction xp))
+        (values 'unknown nil)))))
 
 (eval-when (:compile-toplevel :execute)
   (progn
