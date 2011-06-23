@@ -364,7 +364,7 @@
 (defun arithmetic-error-operation-from-instruction (instruction)
   (let* ((name (make-keyword (string-upcase (x86-di-mnemonic instruction)))))
     (case name
-      ((:divss :divsd :idivl :idivd) '/)
+      ((:divss :divsd :idivl :idivq) '/)
       ((:mulss :mulsd) '*)
       ((:addss :addsd) '+)
       ((:subss :subsd) '-)
@@ -386,6 +386,26 @@
            (when (and xmmop0 xmmop1)
              (opvals (xp-xmm-double-float xp xmmop1))
              (opvals (xp-xmm-double-float xp xmmop0))))
+          ;; (coerce a-double 'single-float) can overflow.
+          (:cvtsd2ss
+           (when xmmop0
+             (opvals (xp-xmm-double-float xp xmmop1))
+             (opvals 'single-float)))
+          #+x8632-target
+          (:idivl
+           (let* ((reg (register-operand-regno op0 #.x86::+operand-type-Reg32+)))
+             (when reg
+               (opvals (logior (ash (encoded-gpr-integer xp 2) 32)
+                               (logand #xfffffffff (encoded-gpr-integer xp 0))))
+               (opvals (encoded-gpr-integer xp reg)))))
+          #+x8664-target
+          (:idivq
+           (let* ((reg (register-operand-regno op0 #.x86::+operand-type-Reg64+)))
+             (when reg
+               (opvals (logior (ash (encoded-gpr-integer xp 2) 64)
+                               (logand (1- (ash 1 64)) (encoded-gpr-integer xp 0))))
+               (opvals (encoded-gpr-integer xp reg)))))
+               
             
           )
         (opvals)))))
