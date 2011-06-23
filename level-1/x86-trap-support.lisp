@@ -124,7 +124,7 @@
   (defconstant rip-register-offset #$REG_RIP)
   (defun xp-mxcsr (xp)
     (pref xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.mxcsr))
-  (defmacro xp-mmx-regs (xp)
+  (defmacro xp-xmm-regs (xp)
     `(pref ,xp :ucontext.uc_mcontext.fpregs.fp_reg_set.fpchip_state.xmm))
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(14                                ;rax
