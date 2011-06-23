@@ -2462,6 +2462,16 @@
                                     ((arg :double-float)))
   (fcvtsd result arg))
 
+(define-arm-vinsn (double-to-single-safe :call :subprim-call)
+    (((result :single-float))
+     ((arg :double-float))
+     ((imm :u32)))
+  (fmrx imm fpscr)
+  (bic imm imm (:$ #xff))
+  (fmxr fpscr imm)
+  (fcvtsd result arg)
+  (bla .SPcheck-fpu-exception))
+
 (define-arm-vinsn double-to-single (((result :double-float))
                                     ((arg :single-float)))
   (fcvtds result arg))

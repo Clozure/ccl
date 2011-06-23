@@ -3494,7 +3494,9 @@
                         (#.hard-reg-class-fpr-mode-double
                          (case dest-mode
                            (#.hard-reg-class-fpr-mode-single
-                            (! double-to-single dest src))
+                            (if *arm2-float-safety*
+                              (! double-to-single-safe dest src)
+                              (! double-to-single dest src)))
                            (#.hard-reg-class-fpr-mode-double
                             (! double-to-double dest src))))))))))))))))
   
@@ -8469,12 +8471,16 @@
                     (make-wired-lreg (hard-regspec-value vreg)
                                      :class hard-reg-class-fpr
                                      :mode hard-reg-class-fpr-mode-double))))
-        (! double-to-single vreg dreg)
+        (if *arm2-float-safety*
+          (! double-to-single-safe vreg dreg)
+          (! double-to-single vreg dreg))
         (^))
       (with-fp-target () (argreg :double-float)
         (arm2-one-targeted-reg-form seg arg argreg)
         (with-fp-target ()  (sreg :single-float)
-          (! double-to-single sreg argreg)
+          (if *arm2-float-safety*
+            (! double-to-single-safe sreg argreg)
+            (! double-to-single sreg argreg))
           (<- sreg)
           (^))))))
 
