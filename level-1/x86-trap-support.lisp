@@ -204,7 +204,7 @@
     (pref (pref (pref xp :ucontext.uc_mcontext) :mcontext_t.fpregs)
           :_fpstate.mxcsr))
   (defmacro xp-xmm-regs (xp)
-    `(pref ,xp :ucontext.uc_mcontext.fpregs._xmm))
+    `(pref (pref ,xp :ucontext.uc_mcontext.fpregs) :_fpstate._xmm))
   (defconstant flags-register-offset #$REG_EFL)
   (defconstant eip-register-offset #$REG_EIP)
   (defparameter *encoded-gpr-to-indexed-gpr*
