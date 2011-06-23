@@ -114,7 +114,8 @@
           (xp-gpr-lisp xp arm::nfn) f)
     ;; handle_uuo() (in the lisp kernel) will not bump the PC here.
     (setf (xp-gpr-lisp xp arm::pc) (uvref f 0))))
-   
+
+  
 (defcallback %xerr-disp (:address xp
                                   :signed-fullword error-number
                                   :unsigned-fullword arg
@@ -243,9 +244,13 @@
                                     (fv.addr eep-or-fv))))))
                         (5              ;fpu
                          (let* ((reginfo (xp-gpr-lisp xp (ldb (byte 4 8) uuo)))
+                                (instruction (logand (xp-gpr-signed-long xp (ldb (byte 4 12) uuo)) (1- (ash 1 32))))
                                 (condition-name (fp-condition-name-from-fpscr-status (aref reginfo 0))))
                            (if condition-name
-                             (%error condition-name nil frame-ptr)
+                             (let* ((template (find-arm-instruction-template instruction))
+                                    (operation (if template (arithmetic-error-operation-from-instruction template) 'unknown))
+                                    (operands (if template (arithmetic-error-operands-from-instruction template instruction reginfo xp))))
+                               (%error condition-name `(:operation ,operation :operands ,operands) frame-ptr))
                              (%error "FPU exception, fpscr = ~d" (list (aref reginfo 0)) frame-ptr)))
                          )
                         (6              ;array rank

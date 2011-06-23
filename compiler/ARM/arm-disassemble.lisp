@@ -498,3 +498,39 @@
              
 (defun arm-xdisassemble (function)
   (disassemble-arm-xfunction function *standard-output*))
+
+;;; Help arithmetic-error handlers
+(defun arithmetic-error-operation-from-instruction (template)
+  (let* ((name (make-keyword (string-upcase (arm::arm-instruction-template-name template)))))
+    (case name
+      ((:fdivs :fdivd) '/)
+      ((:fmuls :fmuld) '*)
+      ((:fadds :faddd) '+)
+      ((:fsubs :fsubd) '-)
+      (t 'coerce))))
+
+(defun arithmetic-error-operands-from-instruction (template instruction regvals xp)
+  (let* ((adi (make-arm-disassembled-instruction :opcode instruction))
+         (adi-vector (vector adi))
+         (parsed-ops (mapcar (lambda (type)
+                               (funcall (svref *arm-operand-extract-functions* type) adi-vector 0))
+                             (arm::arm-instruction-template-operand-types template)))
+         (singles (make-array 32 :element-type 'single-float))
+         (doubles (make-array 16 :element-type 'double-float)))
+    (declare (dynamic-extent singles doubles))
+    (%copy-ivector-to-ivector regvals 4 singles 0 (* 32 4))
+    (%copy-ivector-to-ivector regvals 4 doubles 4 (* 16 8))
+    (collect ((opvals))
+      (dolist (op (cdr parsed-ops))
+        (ecase (car op)
+          (:double (opvals (aref doubles (cadr op))))
+          (:single (opvals (aref singles (cadr op))))
+          (:gpr (opvals (xp-gpr-signed-long xp (cadr op))))))
+      (when (null (cddr parsed-ops))
+        (opvals (case (caar parsed-ops)
+                  (:single 'single-float)
+                  (:double 'double-float))))
+      (opvals))))
+    
+    
+  
