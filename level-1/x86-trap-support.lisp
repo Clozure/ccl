@@ -271,8 +271,9 @@
   (defmacro xp-gp-regs (xp)
     `(pref ,xp :ucontext_t.uc_mcontext))
   (defun xp-mxcsr (xp)
-    (pref (pref xp :ucontext_t.uc_mcontext.mc_fpstate) :savexmm.sv_env.en_mxcsr)
-)
+    (pref (pref xp :ucontext_t.uc_mcontext.mc_fpstate) :savexmm.sv_env.en_mxcsr))
+  (defmacro xp-xmm-regs (xp)
+    `(pref (pref ,xp :ucontext_t.uc_mcontext.mc_fpstate) :savexmm.sv_xmm))
   (defconstant flags-register-offset 17)
   (defconstant eip-register-offset 15)
   (defparameter *encoded-gpr-to-indexed-gpr*
