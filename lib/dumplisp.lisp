@@ -149,10 +149,12 @@
                "toplevel"
                 *stdin*
                 *stdout*
-                 #'quit
+                 #'false
                :initial-function (lambda ()
                                    (catch :toplevel
-                                     (funcall user-toplevel-function)))
+                                     (funcall user-toplevel-function)
+                                     (quit)))
+               :close-streams nil
                )
               (%set-toplevel #'housekeeping-loop)
               (toplevel)))))
