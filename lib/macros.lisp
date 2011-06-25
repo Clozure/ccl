@@ -960,7 +960,10 @@ are no Forms, OR returns NIL."
           (unless
               (dolist (already types nil)
                 (when (subtypep typespec already)
-                  (warn "Clause ~S ignored in ~S form - shadowed by ~S ." clause construct (assq already clauses))
+                  (warn 'shadowed-typecase-clause
+                        :construct construct
+                        :clause clause
+                        :by (assq already clauses))
                   (return t)))
             (push typespec types)
             (setq typespec `(typep ,key-var ',typespec))

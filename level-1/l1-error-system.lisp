@@ -85,6 +85,14 @@
 (define-condition invalid-arguments (style-warning) ())
 (define-condition invalid-arguments-global (style-warning) ())
 (define-condition undefined-keyword-reference (undefined-reference invalid-arguments) ())
+(define-condition shadowed-typecase-clause (style-warning)
+  ((construct :initarg :construct :initform typecase)
+   (clause :initarg :clause)
+   (by :initarg :by))
+  (:report (lambda (c s)
+             (with-slots (construct clause by) c
+               (format s "Clause ~S ignored in ~S form - shadowed by ~S ."
+                       clause construct by)))))
 
 (define-condition simple-error (simple-condition error) ())
 
