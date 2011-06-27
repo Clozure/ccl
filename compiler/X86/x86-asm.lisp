@@ -470,7 +470,14 @@
                  memtype (encode-operand-type :disp32s))
            (cond ((null index)
                   ;; Just a displacement.
-                  (setf (ldb sib-index-byte sib) +no-index-register+))
+		  (ccl::target-arch-case
+		   (:x8632
+		    ;; Don't use a sib in 32-bit mode.  In 64-bit
+		    ;; mode, a sib is needed because this modrm
+		    ;; encoding is used for rip-relative addressing.
+		    (setf (ldb modrm-rm-byte rm-byte) +no-base-register+))
+		   (:x8664
+		    (setf (ldb sib-index-byte sib) +no-index-register+))))
                  (t
                   ;; No base, but index
                   (let* ((index-reg (reg-entry-reg-num index)))
