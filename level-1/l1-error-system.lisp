@@ -86,7 +86,7 @@
 (define-condition invalid-arguments-global (style-warning) ())
 (define-condition undefined-keyword-reference (undefined-reference invalid-arguments) ())
 (define-condition shadowed-typecase-clause (style-warning)
-  ((construct :initarg :construct :initform typecase)
+  ((construct :initarg :construct :initform 'typecase)
    (clause :initarg :clause)
    (by :initarg :by))
   (:report (lambda (c s)
