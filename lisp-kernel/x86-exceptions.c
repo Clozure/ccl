@@ -865,13 +865,14 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 #endif
   Boolean valid = IS_PAGE_FAULT(info,xp);
 
+  if (tcr->safe_ref_address != NULL) {
+    xpGPR(xp,Iimm0) = 0;
+    xpPC(xp) = xpGPR(xp,Ira0);
+    tcr->safe_ref_address = NULL;
+    return true;
+  }
+
   if (valid) {
-    if (addr && (addr == tcr->safe_ref_address)) {
-      xpGPR(xp,Iimm0) = 0;
-      xpPC(xp) = xpGPR(xp,Ira0);
-      return true;
-    }
-    
     {
       protected_area *a = find_protected_area(addr);
       protection_handler *handler;
