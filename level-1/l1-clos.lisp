@@ -306,8 +306,13 @@
   (loop for obj in (gethash class *optimized-dependents*)
         do (etypecase obj
              (standard-generic-function
-	      (clear-gf-dispatch-table (%gf-dispatch-table obj))
-	      (compute-dcode obj)))))
+              (let* ((dt (%gf-dispatch-table obj))
+                     (argnum (%gf-dispatch-table-argnum dt)))
+                (when (< argnum 0)
+                  (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
+                        (%gf-dcode obj) (%gf-dispatch-table-gf dt)
+                        (%gf-dispatch-table-gf dt) obj)
+                  (clear-gf-dispatch-table dt)))))))
 
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
