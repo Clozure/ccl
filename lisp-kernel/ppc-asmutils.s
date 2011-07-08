@@ -440,19 +440,5 @@ _exportfn(C(get_vector_registers))
 	__(blr)
 _endfn
 
-/* Some versions of Linux don't implement madvise().  That's */
-/* not catastrophic, but some versions of glibc will make a */
-/* big deal out of that at link time.  This is here to try */
-/* to fool those versions of glibc. */
-
-        __ifdef(`LINUX')
-	.globl set_errno
-_exportfn(C(madvise))
-	__(li r0,205)	/* _NR_madvise; see /usr/include/asm/unistd.h */
-	__(sc)
-	__(bnslr)
-	__(b set_errno)
-_endfn
-        __endif
 
 	_endfile
