@@ -1,3 +1,0 @@
-#symbols that must be retained in a lisp kernel image
-# % strip -s <this file> dppccl
-_catch_exception_raise
