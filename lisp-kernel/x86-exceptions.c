@@ -2480,7 +2480,7 @@ recognize_alloc_instruction(pc program_counter)
    on x8664.  On x8632, it's not necessary, slightly suboptimal, and
    doesn't match what we expect; until that's fixed, we may need to
    account for this extra byte when adjusting the PC */
-#define LISP_ASSEMBLER_EXTRA_SIB_BYTE
+#undef LISP_ASSEMBLER_EXTRA_SIB_BYTE
 #define TCR_SEG_PREFIX 0x64
 
 #ifdef WIN_32
