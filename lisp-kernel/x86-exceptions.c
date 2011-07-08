@@ -2473,14 +2473,6 @@ recognize_alloc_instruction(pc program_counter)
 }
 #endif
 #ifdef X8632
-/* The lisp assembler might use both a modrm byte and a sib byte to
-   encode a memory operand that contains a displacement but no
-   base or index.  Using the sib byte is necessary for 64-bit code,
-   since the sib-less form is used to indicate %rip-relative addressing
-   on x8664.  On x8632, it's not necessary, slightly suboptimal, and
-   doesn't match what we expect; until that's fixed, we may need to
-   account for this extra byte when adjusting the PC */
-#undef LISP_ASSEMBLER_EXTRA_SIB_BYTE
 #define TCR_SEG_PREFIX 0x64
 
 #ifdef WIN_32
@@ -2492,25 +2484,23 @@ recognize_alloc_instruction(pc program_counter)
 #endif
 
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
-  {TCR_SEG_PREFIX,0x8b,0x0d,SAVE_ALLOCPTR};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x8b,0x0d,SAVE_ALLOCPTR};
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
-  {TCR_SEG_PREFIX,0x3b,0x0d,SAVE_ALLOCBASE};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x3b,0x0d,SAVE_ALLOCBASE};
 opcode branch_around_alloc_trap_instruction[] =
-  {0x77,0x02};                  /* no SIB byte issue */
+  {0x77,0x02};
 opcode alloc_trap_instruction[] =
-  {0xcd,0xc5};                  /* no SIB byte issue */
+  {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
-  {TCR_SEG_PREFIX,0x80,0x25,SAVE_ALLOCPTR,0xf8}; /* maybe SIB byte */
+  {TCR_SEG_PREFIX,0x80,0x25,SAVE_ALLOCPTR,0xf8};
 opcode set_allocptr_header_instruction[] =
-  {0x0f,0x7e,0x41,0xfa};        /* no SIB byte issue */
+  {0x0f,0x7e,0x41,0xfa};
 
 alloc_instruction_id
 recognize_alloc_instruction(pc program_counter)
 {
   switch(program_counter[0]) {
   case 0xcd: return ID_alloc_trap_instruction;
-  /* 0x7f is jg, which we used to use here instead of ja */
-  case 0x7f:
   case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x0f: return ID_set_allocptr_header_instruction;
   case 0x64: 
@@ -2568,11 +2558,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       /* Fall thru */
     case ID_clear_tcr_save_allocptr_tag_instruction:
       tcr->save_allocptr = (void *)(((LispObj)tcr->save_allocptr) & ~fulltagmask);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-      if (((pc)(xpPC(xp)))[2] == 0x24) {
-        xpPC(xp) += 1;
-      }
-#endif
       xpPC(xp) += sizeof(clear_tcr_save_allocptr_tag_instruction);
 
       break;
@@ -2590,23 +2575,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
         *interrupt_displacement = disp;
         xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
         tcr->save_allocptr += disp;
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-        /* This assumes that TCR_SEG_PREFIX can't appear 
-           anywhere but at the beginning of one of these
-           magic allocation-sequence instructions. */
-        xpPC(xp) -= (sizeof(branch_around_alloc_trap_instruction)+
-                     sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction));
-        if (*((pc)(xpPC(xp))) == TCR_SEG_PREFIX) {
-          xpPC(xp) -= sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction);
-        } else {
-          xpPC(xp) -= (sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction) + 2);
-        }
-        
-#else
         xpPC(xp) -= (sizeof(branch_around_alloc_trap_instruction)+
                      sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction) +
                      sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction));
-#endif
       }
       break;
     case ID_branch_around_alloc_trap_instruction:
@@ -2632,22 +2603,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
             xpPC(xp) += sizeof(set_allocptr_header_instruction);
           }
           tcr->save_allocptr = (void *)(((LispObj)tcr->save_allocptr) & ~fulltagmask);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-          if (((pc)xpPC(xp))[2] == 0x24) {
-            xpPC(xp) += 1;
-          }
-#endif
           xpPC(xp) += sizeof(clear_tcr_save_allocptr_tag_instruction);
         } else {
           /* Back up */
           xpPC(xp) -= (sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction) +
                        sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction));
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-          if (*((pc)(xpPC(xp))) != TCR_SEG_PREFIX) {
-            /* skipped two instructions with extra SIB byte */
-            xpPC(xp) -= 2;
-          }
-#endif
           xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
           if (interrupt_displacement) {
             *interrupt_displacement = disp;
@@ -2661,11 +2621,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     case ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction:
       xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
       xpPC(xp) -= sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-      if (*((pc)xpPC(xp)) != TCR_SEG_PREFIX) {
-        xpPC(xp) -= 1;
-      }
-#endif
       /* Fall through */
     case ID_load_allocptr_reg_from_tcr_save_allocptr_instruction:
       if (interrupt_displacement) {
