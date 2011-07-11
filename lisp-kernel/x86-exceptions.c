@@ -1864,9 +1864,10 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 
 #ifndef WINDOWS
 void
-install_signal_handler(int signo, void * handler, Boolean system, Boolean on_altstack)
+install_signal_handler(int signo, void *handler, unsigned flags)
 {
   struct sigaction sa;
+  int err;
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
@@ -1874,18 +1875,23 @@ install_signal_handler(int signo, void * handler, Boolean system, Boolean on_alt
   /* Strange FreeBSD behavior wrt synchronous signals */
   sigdelset(&sa.sa_mask,SIGTRAP);  /* let GDB work */
 #endif
-  sa.sa_flags = 
-    0 /* SA_RESTART */
-    | SA_SIGINFO
-#ifdef USE_SIGALTSTACK
-    | (on_altstack ? SA_ONSTACK : 0)
-#endif
-;
+  sa.sa_flags = SA_SIGINFO;
 
-  sigaction(signo, &sa, NULL);
-  if (system) {
+#ifdef USE_SIGALTSTACK
+  if (flags & ON_ALTSTACK)
+    sa.sa_flags |= SA_ONSTACK;
+#endif
+  if (flags & RESTART_SYSCALLS)
+    sa.sa_flags |= SA_RESTART;
+  if (flags & RESERVE_FOR_LISP) {
     extern sigset_t user_signals_reserved;
     sigaddset(&user_signals_reserved, signo);
+  }
+
+  err = sigaction(signo, &sa, NULL);
+  if (err) {
+    perror("sigaction");
+    exit(1);
   }
 }
 #endif
@@ -2092,27 +2098,24 @@ void
 install_pmcl_exception_handlers()
 {
 #ifndef DARWIN  
-  void *handler = (void *)
+  void *handler, *interrupt_hander;
+
 #ifdef USE_SIGALTSTACK
-    altstack_signal_handler
+  handler = (void *)altstack_signal_handler;
+  interrupt_handler = (void *)altstack_interrupt_handler;
 #else
-    arbstack_signal_handler;
+  handler = (void *)arbstack_signal_handler;
+  interrupt_handler = (void *)arbstack_interrupt_handler;
 #endif
-  ;
-  install_signal_handler(SIGILL, handler, true, true);
+
+  install_signal_handler(SIGILL, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGBUS, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGSEGV, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGFPE, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+#endif
   
-  install_signal_handler(SIGBUS, handler, true, true);
-  install_signal_handler(SIGSEGV,handler, true, true);
-  install_signal_handler(SIGFPE, handler, true, true);
-#endif
-  
-  install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
-#ifdef USE_SIGALTSTACK
-			 altstack_interrupt_handler
-#else
-                         arbstack_interrupt_handler
-#endif
-                         , true, true);
+  install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT, interrupt_handler,
+			 RESERVE_FOR_LISP|ON_ALTSTACK);
   signal(SIGPIPE, SIG_IGN);
 }
 #endif
@@ -2306,8 +2309,10 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER, true, true);
-  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER, true, true);
+  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER,
+			 RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER,
+			 RESERVE_FOR_LISP|ON_ALTSTACK);
 }
 #endif
 

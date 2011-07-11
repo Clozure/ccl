@@ -2211,28 +2211,27 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 
 
 void
-install_signal_handler(int signo, void *handler, Boolean system, Boolean on_altstack)
+install_signal_handler(int signo, void *handler, unsigned flags)
 {
   struct sigaction sa;
+  int err;
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
-  sa.sa_flags = 
-    0 /* SA_RESTART */
-    | SA_SIGINFO
-#ifdef DARWIN
-#ifdef PPC64
-    | SA_64REGSET
-#endif
-#endif
-    ;
+  sa.sa_flags = SA_SIGINFO;
 
-  sigaction(signo, &sa, NULL);
-  if (system) {
+  if (flags & RESTART_SYSCALLS)
+    sa.sa_flags |= SA_RESTART;
+  if (flags & RESERVE_FOR_LISP) {
     extern sigset_t user_signals_reserved;
     sigaddset(&user_signals_reserved, signo);
   }
 
+  err = sigaction(signo, &sa, NULL);
+  if (err) {
+    perror("sigaction");
+    exit(1);
+  }
 }
 
 void
@@ -2251,17 +2250,17 @@ install_pmcl_exception_handlers()
     ;
   if (install_signal_handlers_for_exceptions) {
     extern int no_sigtrap;
-    install_signal_handler(SIGILL, (void *)signal_handler, true, false);
+    install_signal_handler(SIGILL, (void *)signal_handler, RESERVE_FOR_LISP);
     if (no_sigtrap != 1) {
-      install_signal_handler(SIGTRAP, (void *)signal_handler, true, false);
+      install_signal_handler(SIGTRAP, (void *)signal_handler, RESERVE_FOR_LISP);
     }
-    install_signal_handler(SIGBUS,  (void *)signal_handler, true, false);
-    install_signal_handler(SIGSEGV, (void *)signal_handler, true, false);
-    install_signal_handler(SIGFPE, (void *)signal_handler, true, false);
+    install_signal_handler(SIGBUS,  (void *)signal_handler, RESERVE_FOR_LISP);
+    install_signal_handler(SIGSEGV, (void *)signal_handler, RESERVE_FOR_LISP);
+    install_signal_handler(SIGFPE, (void *)signal_handler, RESERVE_FOR_LISP);
   }
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
-			 (void *)interrupt_handler, true, false);
+			 (void *)interrupt_handler, RESERVE_FOR_LISP);
   signal(SIGPIPE, SIG_IGN);
 }
 
@@ -2300,8 +2299,10 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler, true, false);
-  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler, true, false);
+  install_signal_handler(thread_suspend_signal, (void *)suspend_resume_handler,
+			 RESERVE_FOR_LISP);
+  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler,
+			 RESERVE_FOR_LISP);
 }
 
 

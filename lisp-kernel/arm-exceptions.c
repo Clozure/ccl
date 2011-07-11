@@ -1859,24 +1859,36 @@ altstack_interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *co
 
 
 void
-install_signal_handler(int signo, void *handler, Boolean system_p, Boolean on_altstack)
+install_signal_handler(int signo, void *handler, unsigned flags)
 {
   struct sigaction sa;
+  int err;
 
   sigfillset(&sa.sa_mask);
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
-  sa.sa_flags = 
-    0 /* SA_RESTART */
-    | SA_NODEFER
-    | SA_SIGINFO
-#ifdef USE_SIGALTSTACK
-    | (on_altstack ? SA_ONSTACK : 0)
-#endif
-    ;
+  sa.sa_flags = SA_SIGINFO;
 
-  sigaction(signo, &sa, NULL);
+#ifdef ANDROID
+  sa.sa_flags |= SA_NODEFER
+#endif
+#ifdef USE_SIGALTSTACK
+  if (flags & ON_ALTSTACK)
+    sa.sa_flags |= SA_ONSTACK;
+#endif
+  if (flags & RESTART_SYSCALLS)
+    sa.sa_flags |= SA_RESTART;
+  if (flags & RESERVE_FOR_LISP) {
+    extern sigset_t user_signals_reserved;
+    sigaddset(&user_signals_reserved, signo);
+  }
+
+  err = sigaction(signo, &sa, NULL);
+  if (err) {
+    perror("sigaction");
+    exit(1);
+  }
 }
 
 
@@ -1895,14 +1907,16 @@ install_pmcl_exception_handlers()
 #endif
     ;
   if (install_signal_handlers_for_exceptions) {
-    install_signal_handler(SIGILL, (void *)sigill_handler, true, false);
-    install_signal_handler(SIGSEGV, (void *)ALTSTACK(signal_handler),true, true);
-    install_signal_handler(SIGBUS, (void *)ALTSTACK(signal_handler),true,true);
+    install_signal_handler(SIGILL, (void *)sigill_handler, RESERVE_FOR_LISP);
+    install_signal_handler(SIGSEGV, (void *)ALTSTACK(signal_handler),
+			   RESERVE_FOR_LISP|ON_ALTSTACK);
+    install_signal_handler(SIGBUS, (void *)ALTSTACK(signal_handler),
+			   RESERVE_FOR_LISP|ON_ALTSTACK);
 
   }
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
-			 (void *)interrupt_handler, true, false);
+			 (void *)interrupt_handler, RESERVE_FOR_LISP);
   signal(SIGPIPE, SIG_IGN);
 }
 
@@ -1968,8 +1982,10 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *) suspend_resume_handler, true, false);
-  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler, true, false);
+  install_signal_handler(thread_suspend_signal, (void *)suspend_resume_handler,
+			 RESERVE_FOR_LISP);
+  install_signal_handler(thread_kill_signal, (void *)thread_kill_handler,
+			 RESERVE_FOR_LISP);
 }
 
 

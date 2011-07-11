@@ -95,7 +95,11 @@ void ensure_static_conses(ExceptionInformation *, TCR *,natural);
 
 extern FILE *dbgout;
 
+#define RESERVE_FOR_LISP 1
+#define ON_ALTSTACK 2
+#define RESTART_SYSCALLS 4
+
 void
-install_signal_handler(int, void*, Boolean, Boolean);
+install_signal_handler(int signo, void *handler, unsigned flags);
 
 #endif /* __lisp__ */
