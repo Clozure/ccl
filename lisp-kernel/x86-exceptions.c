@@ -2097,7 +2097,6 @@ install_pmcl_exception_handlers()
 void
 install_pmcl_exception_handlers()
 {
-#ifndef DARWIN  
   void *handler, *interrupt_handler;
 
 #ifdef USE_SIGALTSTACK
@@ -2108,6 +2107,7 @@ install_pmcl_exception_handlers()
   interrupt_handler = (void *)arbstack_interrupt_handler;
 #endif
 
+#ifndef DARWIN
   install_signal_handler(SIGILL, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGBUS, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGSEGV, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
