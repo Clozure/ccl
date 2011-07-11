@@ -2098,7 +2098,7 @@ void
 install_pmcl_exception_handlers()
 {
 #ifndef DARWIN  
-  void *handler, *interrupt_hander;
+  void *handler, *interrupt_handler;
 
 #ifdef USE_SIGALTSTACK
   handler = (void *)altstack_signal_handler;
