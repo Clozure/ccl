@@ -1983,7 +1983,7 @@ thread_signal_setup()
   thread_kill_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *)suspend_resume_handler,
-			 RESERVE_FOR_LISP);
+			 RESERVE_FOR_LISP|RESTART_SYSCALLS);
   install_signal_handler(thread_kill_signal, (void *)thread_kill_handler,
 			 RESERVE_FOR_LISP);
 }

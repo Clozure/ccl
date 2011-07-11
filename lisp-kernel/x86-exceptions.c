@@ -2310,7 +2310,7 @@ thread_signal_setup()
   thread_kill_signal = SIG_KILL_THREAD;
 
   install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER,
-			 RESERVE_FOR_LISP|ON_ALTSTACK);
+			 RESERVE_FOR_LISP|ON_ALTSTACK|RESTART_SYSCALLS);
   install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER,
 			 RESERVE_FOR_LISP|ON_ALTSTACK);
 }
