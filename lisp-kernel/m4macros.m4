@@ -72,7 +72,7 @@ ifdef(`SOLARIS',`define(`SYSstabs',`ELFstabs')
 	       define(`EndTextLabel',`.Letext')')
 
 ifdef(`WINDOWS',`define(`SYSstabs',`COFFstabs')
-               define(`CNamesNeedUnderscores',`')
+        ifdef(`WIN_32',`define(`CNamesNeedUnderscores',`')')
                define(`LocalLabelPrefix',`L')
 	       define(`StartTextLabel',`Ltext0')
 	       define(`EndTextLabel',`Letext')')
