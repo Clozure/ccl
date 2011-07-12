@@ -813,9 +813,9 @@ register_user_signal_handler()
 
   SetConsoleCtrlHandler(ControlEventHandler,TRUE);
 #else
-  install_signal_handler(SIGINT, (void *)user_signal_handler, false, false);
-  install_signal_handler(SIGTERM, (void *)user_signal_handler, false, false);
-  install_signal_handler(SIGQUIT, (void *)user_signal_handler, false, false);
+  install_signal_handler(SIGINT, (void *)user_signal_handler, 0);
+  install_signal_handler(SIGTERM, (void *)user_signal_handler, 0);
+  install_signal_handler(SIGQUIT, (void *)user_signal_handler, 0);
 #endif
 }
 
@@ -833,7 +833,7 @@ wait_for_signal(int signo, int seconds, int milliseconds)
   }
   if (user_signal_semaphores[signo] == 0) {
     user_signal_semaphores[signo] = (natural)new_semaphore(0);
-    install_signal_handler(signo,(void *)user_signal_handler, false, false);
+    install_signal_handler(signo,(void *)user_signal_handler, 0);
   }
   return wait_on_semaphore((void *)user_signal_semaphores[signo],seconds,milliseconds);
 #endif

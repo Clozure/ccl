@@ -82,8 +82,6 @@ lib/*~.*
 library/*fsl
 library/*~.*
 lisp-kernel/*~.*
-lisp-kernel/darwinppc/*~.*
-lisp-kernel/darwinppc64/*~.*
 lisp-kernel/linuxppc/*~.*
 lisp-kernel/linuxppc64/*~.*
 lisp-kernel/static-linuxppc/*~.*

@@ -359,8 +359,6 @@ lisp-kernel/os-solaris.h -text
 lisp-kernel/os-windows.h -text
 lisp-kernel/platform-androidarm.h -text
 lisp-kernel/platform-darwinarm.h -text
-lisp-kernel/platform-darwinppc.h -text
-lisp-kernel/platform-darwinppc64.h -text
 lisp-kernel/platform-darwinx8632.h -text
 lisp-kernel/platform-darwinx8664.h -text
 lisp-kernel/platform-freebsdx8632.h -text

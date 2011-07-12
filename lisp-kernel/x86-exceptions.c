@@ -865,13 +865,14 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 #endif
   Boolean valid = IS_PAGE_FAULT(info,xp);
 
+  if (tcr->safe_ref_address != NULL) {
+    xpGPR(xp,Iimm0) = 0;
+    xpPC(xp) = xpGPR(xp,Ira0);
+    tcr->safe_ref_address = NULL;
+    return true;
+  }
+
   if (valid) {
-    if (addr && (addr == tcr->safe_ref_address)) {
-      xpGPR(xp,Iimm0) = 0;
-      xpPC(xp) = xpGPR(xp,Ira0);
-      return true;
-    }
-    
     {
       protected_area *a = find_protected_area(addr);
       protection_handler *handler;
@@ -1863,9 +1864,10 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 
 #ifndef WINDOWS
 void
-install_signal_handler(int signo, void * handler, Boolean system, Boolean on_altstack)
+install_signal_handler(int signo, void *handler, unsigned flags)
 {
   struct sigaction sa;
+  int err;
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
@@ -1873,18 +1875,23 @@ install_signal_handler(int signo, void * handler, Boolean system, Boolean on_alt
   /* Strange FreeBSD behavior wrt synchronous signals */
   sigdelset(&sa.sa_mask,SIGTRAP);  /* let GDB work */
 #endif
-  sa.sa_flags = 
-    0 /* SA_RESTART */
-    | SA_SIGINFO
-#ifdef USE_SIGALTSTACK
-    | (on_altstack ? SA_ONSTACK : 0)
-#endif
-;
+  sa.sa_flags = SA_SIGINFO;
 
-  sigaction(signo, &sa, NULL);
-  if (system) {
+#ifdef USE_SIGALTSTACK
+  if (flags & ON_ALTSTACK)
+    sa.sa_flags |= SA_ONSTACK;
+#endif
+  if (flags & RESTART_SYSCALLS)
+    sa.sa_flags |= SA_RESTART;
+  if (flags & RESERVE_FOR_LISP) {
     extern sigset_t user_signals_reserved;
     sigaddset(&user_signals_reserved, signo);
+  }
+
+  err = sigaction(signo, &sa, NULL);
+  if (err) {
+    perror("sigaction");
+    exit(1);
   }
 }
 #endif
@@ -2090,28 +2097,25 @@ install_pmcl_exception_handlers()
 void
 install_pmcl_exception_handlers()
 {
-#ifndef DARWIN  
-  void *handler = (void *)
+  void *handler, *interrupt_handler;
+
 #ifdef USE_SIGALTSTACK
-    altstack_signal_handler
+  handler = (void *)altstack_signal_handler;
+  interrupt_handler = (void *)altstack_interrupt_handler;
 #else
-    arbstack_signal_handler;
+  handler = (void *)arbstack_signal_handler;
+  interrupt_handler = (void *)arbstack_interrupt_handler;
 #endif
-  ;
-  install_signal_handler(SIGILL, handler, true, true);
+
+#ifndef DARWIN
+  install_signal_handler(SIGILL, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGBUS, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGSEGV, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+  install_signal_handler(SIGFPE, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
+#endif
   
-  install_signal_handler(SIGBUS, handler, true, true);
-  install_signal_handler(SIGSEGV,handler, true, true);
-  install_signal_handler(SIGFPE, handler, true, true);
-#endif
-  
-  install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
-#ifdef USE_SIGALTSTACK
-			 altstack_interrupt_handler
-#else
-                         arbstack_interrupt_handler
-#endif
-                         , true, true);
+  install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT, interrupt_handler,
+			 RESERVE_FOR_LISP|ON_ALTSTACK);
   signal(SIGPIPE, SIG_IGN);
 }
 #endif
@@ -2305,8 +2309,10 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER, true, true);
-  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER, true, true);
+  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER,
+			 RESERVE_FOR_LISP|ON_ALTSTACK|RESTART_SYSCALLS);
+  install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER,
+			 RESERVE_FOR_LISP|ON_ALTSTACK);
 }
 #endif
 
@@ -2472,14 +2478,6 @@ recognize_alloc_instruction(pc program_counter)
 }
 #endif
 #ifdef X8632
-/* The lisp assembler might use both a modrm byte and a sib byte to
-   encode a memory operand that contains a displacement but no
-   base or index.  Using the sib byte is necessary for 64-bit code,
-   since the sib-less form is used to indicate %rip-relative addressing
-   on x8664.  On x8632, it's not necessary, slightly suboptimal, and
-   doesn't match what we expect; until that's fixed, we may need to
-   account for this extra byte when adjusting the PC */
-#define LISP_ASSEMBLER_EXTRA_SIB_BYTE
 #define TCR_SEG_PREFIX 0x64
 
 #ifdef WIN_32
@@ -2491,25 +2489,23 @@ recognize_alloc_instruction(pc program_counter)
 #endif
 
 opcode load_allocptr_reg_from_tcr_save_allocptr_instruction[] =
-  {TCR_SEG_PREFIX,0x8b,0x0d,SAVE_ALLOCPTR};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x8b,0x0d,SAVE_ALLOCPTR};
 opcode compare_allocptr_reg_to_tcr_save_allocbase_instruction[] =
-  {TCR_SEG_PREFIX,0x3b,0x0d,SAVE_ALLOCBASE};  /* may have extra SIB byte */
+  {TCR_SEG_PREFIX,0x3b,0x0d,SAVE_ALLOCBASE};
 opcode branch_around_alloc_trap_instruction[] =
-  {0x77,0x02};                  /* no SIB byte issue */
+  {0x77,0x02};
 opcode alloc_trap_instruction[] =
-  {0xcd,0xc5};                  /* no SIB byte issue */
+  {0xcd,0xc5};
 opcode clear_tcr_save_allocptr_tag_instruction[] =
-  {TCR_SEG_PREFIX,0x80,0x25,SAVE_ALLOCPTR,0xf8}; /* maybe SIB byte */
+  {TCR_SEG_PREFIX,0x80,0x25,SAVE_ALLOCPTR,0xf8};
 opcode set_allocptr_header_instruction[] =
-  {0x0f,0x7e,0x41,0xfa};        /* no SIB byte issue */
+  {0x0f,0x7e,0x41,0xfa};
 
 alloc_instruction_id
 recognize_alloc_instruction(pc program_counter)
 {
   switch(program_counter[0]) {
   case 0xcd: return ID_alloc_trap_instruction;
-  /* 0x7f is jg, which we used to use here instead of ja */
-  case 0x7f:
   case 0x77: return ID_branch_around_alloc_trap_instruction;
   case 0x0f: return ID_set_allocptr_header_instruction;
   case 0x64: 
@@ -2567,11 +2563,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       /* Fall thru */
     case ID_clear_tcr_save_allocptr_tag_instruction:
       tcr->save_allocptr = (void *)(((LispObj)tcr->save_allocptr) & ~fulltagmask);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-      if (((pc)(xpPC(xp)))[2] == 0x24) {
-        xpPC(xp) += 1;
-      }
-#endif
       xpPC(xp) += sizeof(clear_tcr_save_allocptr_tag_instruction);
 
       break;
@@ -2589,23 +2580,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
         *interrupt_displacement = disp;
         xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
         tcr->save_allocptr += disp;
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-        /* This assumes that TCR_SEG_PREFIX can't appear 
-           anywhere but at the beginning of one of these
-           magic allocation-sequence instructions. */
-        xpPC(xp) -= (sizeof(branch_around_alloc_trap_instruction)+
-                     sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction));
-        if (*((pc)(xpPC(xp))) == TCR_SEG_PREFIX) {
-          xpPC(xp) -= sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction);
-        } else {
-          xpPC(xp) -= (sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction) + 2);
-        }
-        
-#else
         xpPC(xp) -= (sizeof(branch_around_alloc_trap_instruction)+
                      sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction) +
                      sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction));
-#endif
       }
       break;
     case ID_branch_around_alloc_trap_instruction:
@@ -2631,22 +2608,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
             xpPC(xp) += sizeof(set_allocptr_header_instruction);
           }
           tcr->save_allocptr = (void *)(((LispObj)tcr->save_allocptr) & ~fulltagmask);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-          if (((pc)xpPC(xp))[2] == 0x24) {
-            xpPC(xp) += 1;
-          }
-#endif
           xpPC(xp) += sizeof(clear_tcr_save_allocptr_tag_instruction);
         } else {
           /* Back up */
           xpPC(xp) -= (sizeof(compare_allocptr_reg_to_tcr_save_allocbase_instruction) +
                        sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction));
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-          if (*((pc)(xpPC(xp))) != TCR_SEG_PREFIX) {
-            /* skipped two instructions with extra SIB byte */
-            xpPC(xp) -= 2;
-          }
-#endif
           xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
           if (interrupt_displacement) {
             *interrupt_displacement = disp;
@@ -2660,11 +2626,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
     case ID_compare_allocptr_reg_to_tcr_save_allocbase_instruction:
       xpGPR(xp,Iallocptr) = VOID_ALLOCPTR;
       xpPC(xp) -= sizeof(load_allocptr_reg_from_tcr_save_allocptr_instruction);
-#ifdef LISP_ASSEMBLER_EXTRA_SIB_BYTE
-      if (*((pc)xpPC(xp)) != TCR_SEG_PREFIX) {
-        xpPC(xp) -= 1;
-      }
-#endif
       /* Fall through */
     case ID_load_allocptr_reg_from_tcr_save_allocptr_instruction:
       if (interrupt_displacement) {

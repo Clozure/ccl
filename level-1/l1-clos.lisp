@@ -306,8 +306,13 @@
   (loop for obj in (gethash class *optimized-dependents*)
         do (etypecase obj
              (standard-generic-function
-	      (clear-gf-dispatch-table (%gf-dispatch-table obj))
-	      (compute-dcode obj)))))
+              (let* ((dt (%gf-dispatch-table obj))
+                     (argnum (%gf-dispatch-table-argnum dt)))
+                (when (< argnum 0)
+                  (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
+                        (%gf-dcode obj) (%gf-dispatch-table-gf dt)
+                        (%gf-dispatch-table-gf dt) obj)
+                  (clear-gf-dispatch-table dt)))))))
 
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
@@ -2135,7 +2140,11 @@ changing its name to ~s may have serious consequences." class new))
                   (loop for (c . nil) in alist
                         do (note-class-dependent c f)))
                 (clear-gf-dispatch-table dt)
-                (setf (%gf-dispatch-table-argnum dt) -1) ;mark as non-standard
+                (let* ((argnum (%gf-dispatch-table-argnum dt)))
+                  (unless (< argnum 0)
+                    (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
+                          (%gf-dispatch-table-gf dt) (%gf-dcode f))))
+                    
                 (cond ((null (cdr alist))
                        ;; Method is only applicable to a single class.
                        (destructuring-bind (class . location) (car alist)
@@ -2529,9 +2538,14 @@ changing its name to ~s may have serious consequences." class new))
 	   %find-classes%)
   ;; Un-snap reader methods, undo other GF optimizations.
   (dolist (f (population-data %all-gfs%))
-    (let* ((dt (%gf-dispatch-table f)))
-      (clear-gf-dispatch-table dt)
-      (compute-dcode f))))
+    (let* ((dt (%gf-dispatch-table f))
+           (argnum (%gf-dispatch-table-argnum dt)))
+      (when (< argnum 0)
+        (let* ((dcode (%gf-dispatch-table-gf dt)))
+          (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
+                (%gf-dispatch-table-gf dt) f
+                (%gf-dcode f) dcode)
+        (clear-gf-dispatch-table dt))))))
 
 ;;; If there's a single method (with standard method combination) on
 ;;; GF and all of that method's arguments are specialized to the T
