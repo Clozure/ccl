@@ -58,20 +58,53 @@
 (defconstant $totally-covered-style 2)
 (defconstant $partially-covered-style 3)
 
+;; These global values are for use in debugging only.  Exported functions always shadow these with thread-local tables.
 (defparameter *file-coverage* ())
-(defparameter *coverage-subnotes* (make-hash-table :test #'eq))
-(defparameter *emitted-code-notes* (make-hash-table :test #'eq))
-(defparameter *entry-code-notes* (make-hash-table :test #'eq))
-(defparameter *source-coverage* (make-hash-table :test #'eq))
+(defparameter *coverage-tags* nil)
+(defparameter *code-note-tags* nil)
 
-(defmacro with-decoded-coverage ((&key (cover '*code-covered-functions*) (precompute t)) &body body)
-  `(let* ((*file-coverage* nil)
-          (*coverage-subnotes* (make-hash-table :test #'eq :shared nil))
-          (*emitted-code-notes* (make-hash-table :test #'eq :shared nil))
-          (*entry-code-notes* (make-hash-table :test #'eq :shared nil))
-          (*source-coverage* ,(and precompute `(make-hash-table :test #'eq :shared nil))))
-     (decode-coverage :cover ,cover :precompute ,precompute)
+(defparameter *code-note-subnotes* (make-hash-table :test #'eq))
+(defparameter *code-note-function* (make-hash-table :test #'eq))
+(defparameter *entry-note-function* (make-hash-table :test #'eq))
+(defparameter *code-note-index* (make-hash-table :test #'eq))
+(defparameter *emitted-code-notes* (make-array 10 :adjustable t :fill-pointer 0))
+
+(defparameter *source-note-index* (make-hash-table :test #'eq))
+(defparameter *source-code-notes* (make-hash-table :test #'eq))
+(defparameter *covered-source-notes* (make-array 10 :adjustable t :fill-pointer 0))
+
+
+(defmacro with-coverage-decoding ((&key tags (precompute t)) &body body)
+  ;; Set up thread-local environment, and decode tags, since those aren't file-specific
+  `(let* ((*coverage-tags* nil)
+          (*code-note-tags* nil)
+          (*file-coverage* nil)
+          (*code-note-subnotes* (make-hash-table :test #'eq :shared nil))
+          (*code-note-function* (make-hash-table :test #'eq :shared nil))
+          (*entry-note-function* (make-hash-table :test #'eq :shared nil))
+          (*code-note-index* ,(when precompute `(make-hash-table :test #'eq :shared nil)))
+          (*emitted-code-notes* ,(when precompute `(make-array 100 :adjustable t :fill-pointer 0)))
+          (*source-note-index* ,(when precompute `(make-hash-table :test #'eq :shared nil)))
+          (*source-code-notes* ,(when precompute `(make-hash-table :test #'eq :shared nil)))
+          (*covered-source-notes* ,(when precompute `(make-array 100 :adjustable t :fill-pointer 0))))
+     ,@(when tags `((decode-coverage-tags ,tags)))
      ,@body))
+
+
+(defmacro with-decoded-file-coverage ((coveragevar data &key) &body body)
+  `(progn
+     ;; Wonder if it'd be faster to make new tables instead of clrhash...
+     (clrhash *code-note-subnotes*)
+     (clrhash *code-note-function*)
+     (clrhash *entry-note-function*)
+     (when *code-note-index* (clrhash *code-note-index*))
+     (when *emitted-code-notes* (setf (fill-pointer *emitted-code-notes*) 0))
+     (when *source-note-index* (clrhash *source-note-index*))
+     (when *covered-source-notes* (setf (fill-pointer *covered-source-notes*) 0))
+     (when *source-code-notes* (clrhash *source-code-notes*))
+     (let ((,coveragevar (decode-file-coverage ,data)))
+       (push ,coveragevar *file-coverage*)
+       ,@body)))
 
 
 (defstruct (coverage-state (:conc-name "%COVERAGE-STATE-"))
@@ -112,55 +145,70 @@
 (defun file-coverage-statistics (entry)
   (cdddr entry))
 
-(defun coverage-subnotes (note) ;; reversed parent chain
-  (gethash note *coverage-subnotes*))
+(defun file-coverage-index (entry)
+  (position entry *file-coverage*))
+
+(defun code-note-subnotes (note) ;; reversed parent chain
+  (gethash note *code-note-subnotes*))
 
 (defun emitted-code-note-p (note)
-  (gethash note *emitted-code-notes*))
+  (gethash note *code-note-function*))
+
+(defun code-note-function (note)
+  (gethash note *code-note-function*))
 
 (defun entry-code-note-p (note)
-  (gethash note *entry-code-notes*))
+  (gethash note *entry-note-function*))
 
-(defun source-coverage (source-note)
-  (gethash source-note *source-coverage*))
+(defun code-note-index (code-note)
+  (gethash code-note *code-note-index*))
+
+(defun code-note-tags (code-note)
+  (gethash code-note *code-note-tags*))
+
+(defun source-code-notes (source-note)
+  (gethash source-note *source-code-notes*))
+
+(defun source-note-index (source-note)
+  (gethash source-note *source-note-index*))
+
+(defun source-coverage (source)
+  (loop with entered = nil and covered = t
+        for note in  (source-code-notes source)
+        do (case (code-note-code-coverage note)
+             ((nil) (setq covered nil))
+             ((full) (setq entered t))
+             (t (setq entered t covered nil)))
+        finally (return (and entered (if covered 'full t)))))
 
 (defun map-function-coverage (lfun fn &optional refs)
   (let ((refs (cons lfun refs))
         (source (function-outermost-entry-source lfun)))
     (declare (dynamic-extent refs))
     (lfunloop for imm in lfun
-	      when (code-note-p imm)
-	      do (funcall fn imm)
-	      when (and (functionp imm)
-			(not (memq imm refs))
-                        ;; Make sure this fn is in the source we're currently looking at.
+              when (code-note-p imm)
+              do (funcall fn imm)
+              when (and (functionp imm)
+                        (not (memq imm refs))
+                        ;; Make sure this fn is in the source we're currently looking at.
                         ;; It might not be, if it is referenced via (load-time-value (foo))
                         ;; where (foo) returns an lfun from some different source entirely.
                         ;; CL-PPCRE does that.
                         (or (null source) (eq source (function-outermost-entry-source imm))))
-	      do (map-function-coverage imm fn refs))))
+              do (map-function-coverage imm fn refs))))
 
-(defun decode-coverage-subfunctions (lfun refs)
+(defun collect-coverage-subfunctions (lfun refs)
   (let ((refs (cons lfun refs))
         (source (function-outermost-entry-source lfun)))
     (declare (dynamic-extent refs))
+    (assert source) ;; all source-less functions have been eliminated.
     (nconc
      (and (function-entry-code-note lfun) (list lfun))
      (lfunloop for imm in lfun
                when (and (functionp imm)
                          (not (memq imm refs))
-                         (or (null source)
-                             (eq source (function-outermost-entry-source imm))))
-               nconc (decode-coverage-subfunctions imm refs)))))
-
-(defun decode-function-coverage (fn)
-  (let ((all (decode-coverage-subfunctions fn nil)))
-    (loop for fn in all as entry = (function-entry-code-note fn)
-      do (assert (eq fn (gethash entry *entry-code-notes* fn)))
-      do (setf (gethash entry *entry-code-notes*) fn)
-      do (lfunloop for imm in fn
-                   when (code-note-p imm) do (setf (gethash imm *emitted-code-notes*) t)))
-    all))
+                         (eq source (function-outermost-entry-source imm)))
+               nconc (collect-coverage-subfunctions imm refs)))))
 
 (defun code-covered-info.file (data) (and (consp data) (car data)))
 (defun code-covered-info.fns (data) (and (consp data) (if (consp (cdr data)) (cadr data) (cdr data))))
@@ -175,85 +223,76 @@
       new)
     (cons (car data) new-fns)))
 
-(defun decode-coverage (&key (cover *code-covered-functions*) (precompute t))
-  (setq *file-coverage* nil)
-  (clrhash *coverage-subnotes*)
-  (clrhash *emitted-code-notes*)
-  (clrhash *entry-code-notes*)
-  (when precompute (clrhash *source-coverage*))
-  (loop for data in cover
-    do (let* ((file (code-covered-info.file data))
-              (toplevel-functions (code-covered-info.fns data)))
-         (when file
-           (let* ((all-functions (delete-duplicates
-                                  ;; Duplicates are possible if you have multiple instances of
-                                  ;; (load-time-value (foo)) where (foo) returns an lfun.
-                                  ;; CL-PPCRE does that.
-                                  (loop for fn across toplevel-functions
-                                    nconc (decode-coverage-subfunctions fn nil))))
-                  (coverage (list* file
-                                   all-functions
-                                   toplevel-functions
-                                   (make-coverage-statistics :source-file file))))
-             (push coverage *file-coverage*)
-             ;; record emitted notes
-             (loop for fn in all-functions as entry = (function-entry-code-note fn)
-               do (assert (eq fn (gethash entry *entry-code-notes* fn)))
-               do (setf (gethash entry *entry-code-notes*) fn)
-               do (lfunloop for imm in fn
-                            when (code-note-p imm)
-                            do (setf (gethash imm *emitted-code-notes*) t)))))))
-  ;; Now get subnotes, including un-emitted ones.
-  (loop for note being the hash-key of *emitted-code-notes*
-    do (loop for n = note then parent as parent = (code-note-parent-note n)
-         while parent
-         do (pushnew n (gethash parent *coverage-subnotes*))
-         until (emitted-code-note-p parent)))
-  ;; Now get source mapping
-  (when precompute
-    (loop for coverage in *file-coverage*
-      do (precompute-source-coverage coverage)
-      ;; bit of overkill, but we end up always wanting them.
-      do (compute-file-coverage-statistics coverage))))
 
-(defun file-coverage-acode-queue (coverage)
-  (loop with hash = (make-hash-table :test #'eq :shared nil)
-        for fn in (file-coverage-functions coverage)
-        as acode = (%function-acode-string fn)
-        as entry = (function-entry-code-note fn)
-        as sn = (entry-note-unambiguous-source entry)
-        as toplevel-sn = (function-outermost-entry-source fn)
-        do (when sn
-             (assert toplevel-sn)
-             (let* ((pos (source-note-end-pos sn))
-                    (cell (assq acode (gethash toplevel-sn hash))))
-               (if cell
-                 (setf (cdr cell) (max (cdr cell) pos))
-                 (push (cons acode pos) (gethash toplevel-sn hash)))))
-        finally (return (sort (loop for sn being the hash-key of hash using (hash-value alist)
-                                    collect (cons (source-note-end-pos sn)
-                                                  (mapcar #'car (sort alist #'< :key #'cdr))))
-                              #'< :key #'car))))
+(defun decode-file-coverage (data &key (precompute t))
+  (let ((file (code-covered-info.file data)))
+    (when file
+      (let* ((file-name (pathname-name file))
+             (file-type (pathname-type file))
+             (toplevel-functions (loop for fn across (code-covered-info.fns data)
+                                       nconc (iterate flatten ((fn fn))
+                                               (let* ((entry (function-entry-code-note fn))
+                                                      (source (and entry (nearest-source-note entry))))
+                                                 (if source
+                                                   (let ((source-file (source-note-filename source)))
+                                                     ;; ignore fns from other files, as could happen through '#.(fun).
+                                                     ;; Unfortunately, can't do this reliably since source-note-filename can involve
+                                                     ;; a logical host not defined in this image, use a heuristic.
+                                                     (when (and (equalp (pathname-name source-file) file-name)
+                                                                (equalp (pathname-type source-file) file-type))
+                                                       (list fn)))
+                                                   ;; A top level function without source must be a compiler-generated toplevel
+                                                   ;; form, ignore it and treat its subfunctions as top level.
+                                                   (lfunloop for imm in fn
+                                                     when (functionp imm) nconc (flatten imm)))))))
+             (all-functions (delete-duplicates
+                             ;; Duplicates are possible if you have multiple instances of
+                             ;; (load-time-value (foo)) where (foo) returns an lfun.
+                             ;; CL-PPCRE does that.
+                             (loop for fn in toplevel-functions
+                                   nconc (collect-coverage-subfunctions fn nil))))
+             (coverage (list* file
+                              all-functions
+                              toplevel-functions
+                              (make-coverage-statistics :source-file file))))
+        ;; record emitted notes
+        (loop for fn in all-functions as entry = (function-entry-code-note fn)
+              do (assert (eq fn (gethash entry *entry-note-function* fn)))
+              do (setf (gethash entry *entry-note-function*) fn)
+              do (lfunloop for imm in fn
+                   when (code-note-p imm)
+                   do (setf (gethash imm *code-note-function*) fn)))
+        ;; Now get the emitted subnotes of any note (including emitted subnotes of unemitted notes)
+        (loop for note being the hash-key of *code-note-function*
+              do (loop for n = note then parent as parent = (code-note-parent-note n)
+                       do (push note (gethash parent *code-note-subnotes*));; parent = nil collects toplevel notes
+                       while (and parent (not (gethash parent *code-note-function*)))))
+        ;; Now get source mapping
+        (when precompute
+          (precompute-source-coverage coverage)
+          ;; bit of overkill, but we end up always wanting them.
+          (compute-file-coverage-statistics coverage))
+        coverage))))
 
 #+debug
 (defun show-notes (note)
   (when (functionp note)
     (setq note (function-entry-code-note note)))
   (labels ((show (note indent label)
-	     (dotimes (i indent) (write-char #\space))
-	     (format t "~a ~a" label note)
-	     (unless (emitted-code-note-p note)
-	       (format t " [Not Emitted]"))
-	     (when (entry-code-note-p note)
-	       (format t " (Entry to ~s)" (entry-code-note-p note)))
+             (dotimes (i indent) (write-char #\space))
+             (format t "~a ~a" label note)
+             (unless (emitted-code-note-p note)
+               (format t " [Not Emitted]"))
+             (when (entry-code-note-p note)
+               (format t " (Entry to ~s)" (entry-code-note-p note)))
              (when (code-note-acode-range note)
                (multiple-value-bind (s e) (decode-file-range (code-note-acode-range note))
                  (format t " [acode ~a:~a]" s e)))
-	     (format t "~%")
-	     (when (code-note-p note)
-	       (loop with subindent = (+ indent 3)
-		     for sub in (coverage-subnotes note) as i upfrom 1
-		     do (show sub subindent (format nil "~a~d." label i))))))
+             (format t "~%")
+             (when (code-note-p note)
+               (loop with subindent = (+ indent 3)
+                     for sub in (code-note-subnotes note) as i upfrom 1
+                     do (show sub subindent (format nil "~a~d." label i))))))
     (show note 0 "")))
 
 (defun assoc-by-filename (path alist)
@@ -284,8 +323,8 @@ image."
   (loop for data in *code-covered-functions*
         do (typecase data
              (cons
-		(loop for fn across (code-covered-info.fns data)
-		      do (reset-function-coverage fn)))
+                (loop for fn across (code-covered-info.fns data)
+                      do (reset-function-coverage fn)))
              (function (reset-function-coverage data)))))
 
 
@@ -293,11 +332,11 @@ image."
   "Mark a starting point for recording incremental coverage.
    Has no effect on regular coverage recording."
   (loop for data in *code-covered-functions*
-    do (typecase data
-         (cons
-          (loop for fn across (code-covered-info.fns data)
-            do (reset-function-incremental-coverage fn)))
-         (function (reset-function-incremental-coverage data)))))
+        do (typecase data
+             (cons
+                (loop for fn across (code-covered-info.fns data)
+                      do (reset-function-incremental-coverage fn)))
+             (function (reset-function-incremental-coverage data)))))
 
 
 ;; Name used for consistency checking across file save/restore
@@ -476,10 +515,32 @@ image."
                  (when reset (setf (code-note-code-coverage note) :prior))
                  (push note covered)))))
       (loop for data in *code-covered-functions*
-        when (consp data)
-        do (loop for fn across (code-covered-info.fns data)
-             do (map-function-coverage fn #'get-fn)))
+            when (consp data)
+              do (loop for fn across (code-covered-info.fns data)
+                       do (map-function-coverage fn #'get-fn)))
       (make-incremental-coverage :list covered))))
+
+(defun decode-coverage-tags (tags)
+  (when tags
+    (let ((note->tags (make-hash-table :test #'eq :shared nil)))
+      (flet ((register (i delta)
+               (loop for note in (incremental-coverage-list delta) do (push i (gethash note note->tags)))))
+        (etypecase tags
+          (hash-table
+           (let* ((count (hash-table-count tags))
+                  (tags-vector (make-array count)))
+             (enumerate-hash-keys-and-values tags tags-vector nil)
+             (loop for i from 0 below count
+                   do (register i (gethash (aref tags-vector i) tags)))
+             (setq *coverage-tags* tags-vector)))
+        (list
+         (loop for i upfrom 0 as delta in tags do (register i delta)
+               finally (setq *coverage-tags* i)))
+        (vector
+         (loop for i from 0 below (length tags) do (register i (aref tags i))
+               finally (setq *coverage-tags* i)))))
+      (setq *code-note-tags* note->tags))))
+
 
 (defun ccl:incremental-coverage-svn-matches (collection &key (directory (current-directory)) (revision :base))
   "Given a hash table COLLECTION whose values are incremental coverage deltas, return a list
@@ -493,27 +554,30 @@ image."
   "Given a hash table COLLECTION whose values are incremental coverage delta, return a list
   of all keys corresponding to deltas that intersect any region in SOURCES.  SOURCES
   should be a list of source notes and/or pathnames"
-  (let ((coverages (remove-duplicates
-                    (mapcar (lambda (file)
-                              (or (assoc-by-filename file *code-covered-functions*)
-                                  (error "There is no coverage info for ~s" file)))
-                            ;; remove dups for efficiency, since assoc-by-filename can be expensive,
-                            ;; and the filenames will typically be EQ since all created at once.
-                            ;; But don't bother with EQUAL testing, since assoc-by-filename will do that.
-                            ;; Note - source-note-filename accepts pathnames and just returns them.
-                            (remove-duplicates (mapcar #'source-note-filename sources))))))
-    (with-decoded-coverage (:cover coverages :precompute nil)
-      (loop for sn in sources
-        do (let* ((coverage (assoc-by-filename (source-note-filename sn) coverages))
-                  (matches (code-notes-for-region coverage
-                                                  (source-note-start-pos sn)
-                                                  (source-note-end-pos sn))))
-             (flet ((matches (delta)
-                      (loop for note in (incremental-coverage-list delta) thereis (memq note matches))))
-               (typecase collection
-                 (hash-table (loop for key being the hash-key of collection using (hash-value delta)
-                               when (matches delta) collect key))
-                 (sequence (remove-if-not #'matches collection)))))))))
+  (let ((alist ()))
+    (loop for source in sources
+          as file = (source-note-filename source)
+          ;; Typically source notes will have eq filenames since created all at once, so the
+          ;; assq will find it after the first time.
+          as cell = (or (assq file alist)
+                        (assoc-by-filename file alist)
+                        (let* ((data (or (assoc-by-filename file *code-covered-functions*)
+                                         (error "There is no coverage info for ~s" file)))
+                               (cell (list* file data nil)))
+                          (push cell alist)
+                          cell))
+          do (push source (cddr cell)))
+    (with-coverage-decoding (:precompute nil)
+      (loop for (nil data . sources) in alist
+            do (with-decoded-file-coverage (coverage data)
+                 (loop for sn in sources
+                       as matches = (code-notes-for-region coverage (source-note-start-pos sn) (source-note-end-pos sn))
+                       nconc (flet ((matches (delta)
+                                      (loop for note in (incremental-coverage-list delta) thereis (memq note matches))))
+                               (typecase collection
+                                 (hash-table (loop for key being the hash-key of collection using (hash-value delta)
+                                                   when (matches delta) collect key))
+                                 (sequence (coerce (remove-if-not #'matches collection) 'list))))))))))
 
 
 
@@ -522,32 +586,35 @@ image."
   (loop for n = note then (code-note-parent-note n)
         thereis (and n (code-note-source-note n))))
 
+(defun code-note-emitted-parent (note)
+  (loop while (setq note (code-note-parent-note note))
+        when (emitted-code-note-p note) return note))
+
 ;; Given a region of a file, find a set of code notes that completely covers it, i.e.
 ;; a set such that if none of the code notes in the set have been executed, then it's guaranteed
 ;; that modifying the region is not going to affect execution.  Try to make that set as small
 ;; as possible.
 (defun code-notes-for-region (coverage start-pos end-pos)
-  (let* ((notes (loop for fn across (file-coverage-toplevel-functions coverage)
-                  as note = (function-entry-code-note fn) as source = (nearest-source-note note)
-                  when (and source
-                            (or (null end-pos) (< (source-note-start-pos source) end-pos))
-                            (or (null start-pos) (< start-pos (source-note-end-pos source))))
-                  ;; This function intersects the region.  Find the smallest subnote that contains all
-                  ;; of this function's part of the region.
-                  collect (let ((start (max start-pos (source-note-start-pos source)))
-                                (end (min end-pos (source-note-end-pos source))))
-                            (iterate tighten ((note note))
-                              (loop for subnote in (coverage-subnotes note)
-                                as subsource = (nearest-source-note subnote)
-                                do (when (and (<= (source-note-start-pos subsource) start)
-                                              (<= end (source-note-end-pos subsource)))
-                                     (return (tighten subnote)))
-                                finally (return note))))))
+  (let* ((notes (loop for fn in (file-coverage-toplevel-functions coverage)
+                      as note = (function-entry-code-note fn) as source = (nearest-source-note note)
+                      when (and (or (null end-pos) (< (source-note-start-pos source) end-pos))
+                                (or (null start-pos) (< start-pos (source-note-end-pos source))))
+                        ;; This function intersects the region.  Find the smallest subnote that contains all
+                        ;; of this function's part of the region.
+                        collect (let ((start (max start-pos (source-note-start-pos source)))
+                                      (end (min end-pos (source-note-end-pos source))))
+                                  (iterate tighten ((note note))
+                                    (loop for subnote in (code-note-subnotes note)
+                                          as subsource = (nearest-source-note subnote)
+                                          do (when (and (<= (source-note-start-pos subsource) start)
+                                                        (<= end (source-note-end-pos subsource)))
+                                               (return (tighten subnote)))
+                                          finally (return note))))))
          (emitted-notes (iterate splat ((notes notes))
                           (loop for note in notes
-                            nconc (if (emitted-code-note-p note)
-                                    (list note)
-                                    (splat (coverage-subnotes note)))))))
+                                nconc (if (emitted-code-note-p note)
+                                        (list note)
+                                        (splat (code-note-subnotes note)))))))
     emitted-notes))
 
 
@@ -586,41 +653,46 @@ image."
 
 (defun common-coverage-directory ()
   (let* ((host :unknown)
-	 (rev-dir ()))
+         (rev-dir ()))
     (loop for data in *code-covered-functions*
-       when (consp data)
-       do (let ((file (probe-file (code-covered-info.file data))))
-	    (when file
-	      (cond ((eq host :unknown)
-		     (setq host (pathname-host file)
-			   rev-dir (reverse (pathname-directory file))))
-		    ((not (equalp host (pathname-host file)))
-		     (return-from common-coverage-directory nil))
-		    (t
-		     (let* ((path (pathname-directory file))
-			    (dir-len (length rev-dir))
-			    (len (length path)))
-		       (if (< len dir-len)
-			 (setq rev-dir (nthcdr (- dir-len len) rev-dir))
-			 (setq path (subseq path 0 dir-len)))
-		       (loop for pp on (reverse path) until (equalp pp rev-dir)
-			  do (pop rev-dir))))))))
+          when (consp data)
+            do (let ((file (probe-file (code-covered-info.file data))))
+                 (when file
+                   (cond ((eq host :unknown)
+                          (setq host (pathname-host file)
+                                rev-dir (reverse (pathname-directory file))))
+                         ((not (equalp host (pathname-host file)))
+                          (return-from common-coverage-directory nil))
+                         (t
+                          (let* ((path (pathname-directory file))
+                                 (dir-len (length rev-dir))
+                                 (len (length path)))
+                            (if (< len dir-len)
+                              (setq rev-dir (nthcdr (- dir-len len) rev-dir))
+                              (setq path (subseq path 0 dir-len)))
+                            (loop for pp on (reverse path) until (equalp pp rev-dir)
+                                  do (pop rev-dir))))))))
     (unless (eq host :unknown)
       (make-pathname :host host :directory (reverse rev-dir)))))
 
 
 (defun ccl:coverage-statistics ()
-  (with-decoded-coverage ()
-    (mapcar #'file-coverage-statistics *file-coverage*)))
+  (with-coverage-decoding ()
+    (loop for data in *code-covered-functions*
+          do (with-decoded-file-coverage (coverage data)
+               (file-coverage-statistics coverage)))))
 
 (defun compute-file-coverage-statistics (coverage)
-  (count-covered-sexps coverage)
   (count-unreached-branches coverage)
   (count-covered-aexps coverage)
-  (count-covered-entry-notes coverage))
+  (count-covered-sexps coverage))
+
+(defun native-file-namestring (file)
+  (native-translated-namestring (make-pathname :name (pathname-name file)
+                                               :type (pathname-type file))))
 
 
-(defun ccl:report-coverage (output-file &key (external-format :default) (statistics t) (html t))
+(defun ccl:report-coverage (output-file &key (external-format :default) (statistics t) (html t) (tags nil))
   "If :HTML is non-nil, generate an HTML report, consisting of an index file in OUTPUT-FILE
 and, in the same directory, one html file for each instrumented source file that has been
 loaded in the current session.
@@ -628,44 +700,39 @@ The external format of the source files can be specified with the EXTERNAL-FORMA
 If :STATISTICS is non-nil, a CSV file is generated with a table.  If
 :STATISTICS is a filename, that file is used, else 'statistics.csv' is
 written to the output directory.
-"
+If :TAGS is non-nil, it must be a hash table whose values are incremental coverage snapshots. This
+causes the HTML report to include incremental coverage information"
+  ;; TODO: *** How to present incremental coverage info in statistics file?
   (let* ((paths)
          (directory (make-pathname :name nil :type nil :defaults output-file))
          (coverage-dir (common-coverage-directory))
          (index-file (and html (merge-pathnames output-file "index.html")))
          (stats-file (and statistics (merge-pathnames (if (or (stringp statistics)
                                                               (pathnamep statistics))
-                                                        (merge-pathnames statistics "statistics.csv")
-                                                        "statistics.csv")
+                                                          (merge-pathnames statistics "statistics.csv")
+                                                          "statistics.csv")
                                                       output-file))))
     (ensure-directories-exist directory)
-    (with-decoded-coverage ()
-      (loop for coverage in *file-coverage*
-        as truename = (or (probe-file (file-coverage-file coverage))
-                          (progn (warn "Cannot find ~s, won't report coverage" (file-coverage-file coverage))
-                            nil))
-        do (when truename
-             (let* ((src-name (enough-namestring truename coverage-dir))
-                    (html-name (substitute
-                                #\_ #\: (substitute
-                                         #\_ #\. (substitute
-                                                  #\_ #\/ (namestring-unquote src-name)))))
-                    (file (file-coverage-file coverage)))
-               (when html
-                 (with-coverage-mismatch-catch (file)
-                   (let* ((data (assoc-by-filename file *code-covered-functions*))
-                          (checksum (fcomp-file-checksum (code-covered-info.file data)
-                                                         :external-format (code-covered-info.ef data))))
-                     (unless (eql checksum (code-covered-info.id data))
-                       (cerror "Try coloring anyway"
-                               "File ~s has changed since coverage source location info was recorded."
-                               (code-covered-info.file data))))
-                   (with-open-file (stream (make-pathname :name html-name :type "html" :defaults directory)
-                                           :direction :output
-                                           :if-exists :supersede
-                                           :if-does-not-exist :create)
-                     (report-file-coverage index-file coverage stream external-format))))
-               (push (list* src-name html-name coverage) paths))))
+    (with-coverage-decoding (:tags tags)
+      (loop for data in *code-covered-functions* as file = (code-covered-info.file data)
+            as truename =  (and file (or (probe-file file)
+                                         (progn (warn "Cannot find ~s, won't report coverage" file)
+                                                nil)))
+            do (when truename
+                 (let* ((src-name (enough-namestring truename coverage-dir))
+                        (html-name (substitute
+                                    #\_ #\: (substitute
+                                             #\_ #\. (substitute
+                                                      #\_ #\/ (namestring-unquote src-name))))))
+                   (with-decoded-file-coverage (coverage data)
+                     (when html
+                       (let* ((checksum (fcomp-file-checksum file :external-format (code-covered-info.ef data))))
+                         (unless (eql checksum (code-covered-info.id data))
+                           (cerror "Try coloring anyway"
+                                   "File ~s has changed since coverage source location info was recorded."
+                                   file)))
+                       (report-file-coverage index-file coverage directory html-name external-format))
+                     (push (list* src-name html-name coverage) paths)))))
       (when (null paths)
         (error "No code coverage data available"))
       (setq paths (sort paths #'(lambda (path1 path2)
@@ -695,29 +762,33 @@ written to the output directory.
                                         :if-exists :supersede
                                         :if-does-not-exist :create)
             (report-coverage-to-streams paths nil stats-stream))
-          (error "One of :HTML or :STATISTICS must be non-nil")))
-      (values index-file stats-file))))
+          (error "One of :HTML or :STATISTICS must be non-nil"))))
+    (values index-file stats-file)))
+
 
 (defun report-coverage-to-streams (paths html-stream stats-stream)
-  (when html-stream (write-coverage-styles html-stream))
+  (when html-stream
+    (format html-stream "<html><head>~%")
+    (write-coverage-styles html-stream)
+    (format html-stream "~%</head>~%<body>"))
   (unless paths
     (warn "No coverage data found for any file, producing an empty report. Maybe you forgot to (SETQ CCL::*COMPILE-CODE-COVERAGE* T) before compiling?")
     (when html-stream (format html-stream "<h3>No code coverage data found.</h3>~%"))
     (when stats-stream (format stats-stream "No code coverage data found.~%"))
     (return-from report-coverage-to-streams))
   (when html-stream (format html-stream "<table class='summary'>"))
-  (coverage-stats-head html-stream stats-stream)
+  (coverage-stats-head html-stream stats-stream t)
   (loop for prev = nil then src-name
-	for (src-name report-name . coverage) in paths
-	for even = nil then (not even)
-	do (when (or (null prev)
-		     (not (equal (pathname-directory (pathname src-name))
-				 (pathname-directory (pathname prev)))))
-	     (let ((dir (namestring (make-pathname :name nil :type nil :defaults src-name))))
-	       (when html-stream (format html-stream "<tr class='subheading'><td colspan='17'>~A</td></tr>~%" dir))
-	       (when stats-stream (format stats-stream "~a~%" dir))))
-	do (coverage-stats-data html-stream stats-stream coverage even report-name src-name))
-  (when html-stream (format html-stream "</table>")))
+        for (src-name report-name . coverage) in paths
+        for even = nil then (not even)
+        do (when (or (null prev)
+                     (not (equal (pathname-directory (pathname src-name))
+                                 (pathname-directory (pathname prev)))))
+             (let ((dir (namestring (make-pathname :name nil :type nil :defaults src-name))))
+               (when html-stream (format html-stream "<tr class='subheading'><td colspan='17'>~A</td></tr>~%" dir))
+               (when stats-stream (format stats-stream "~a~%" dir))))
+        do (coverage-stats-data html-stream stats-stream coverage even report-name src-name))
+  (when html-stream (format html-stream "</table></body></html>")))
 
 (defun style-for-coverage (coverage)
   (case coverage
@@ -725,170 +796,131 @@ written to the output directory.
     ((nil) $not-executed-style)
     (t $partially-covered-style)))
   
-(defun fill-with-text-style (source-note styles)
-  (fill styles (style-for-coverage (source-coverage source-note))
-        :start (source-note-start-pos source-note)
-        :end (source-note-end-pos source-note)))
-
-(defun update-text-styles (note styles)
-  (let ((source (code-note-source-note note)))
-    (when source
-      (fill-with-text-style source styles))
-    (unless (and (emitted-code-note-p note)
-                 (memq (code-note-code-coverage note) '(nil full))
-                 ;; If not a source note, descend in case have some subnotes
-                 ;; that can be shown
-                 source)
-      (loop for sub in (coverage-subnotes note)
-            unless (entry-code-note-p sub)
-            do (update-text-styles sub styles)))))
-
-(defun entry-note-unambiguous-source (entry-note)
-  ;; Return the nearest containing source note provided it can be done unambiguously.
-  (loop for n = entry-note then parent until (code-note-source-note n)
-	as parent = (code-note-parent-note n)
-	do (unless (and parent
-			(labels ((no-other-entry-subnotes (n refs)
-				   (let ((subs (coverage-subnotes n))
-					 (refs (cons n refs)))
-				     (declare (dynamic-extent refs))
-				     (loop for sub in subs
-					   always (or (memq sub refs)
-						      (eq sub entry-note)
-						      (and (not (entry-code-note-p sub))
-							   (no-other-entry-subnotes sub refs)))))))
-			  (no-other-entry-subnotes parent ())))
-	     (return nil))
-	finally (return (code-note-source-note n))))
-
-;; In some cases, a single source form may be claimed by multiple code notes.  Precompute
-;; per-source coverage info so coloring can reflect aggregated info for all coverage points.
-;; This also changes coverage flag to 'full if all subforms are called.
 (defun precompute-source-coverage (coverage)
-  (labels
-      ((record-1 (source note)
-         (when source
-           (let ((old (gethash source *source-coverage* :default))
-                 (new (code-note-code-coverage note)))
-             (unless (eq old new)
-               (setf (gethash source *source-coverage*) (if (eq old :default) new t))))))
-       (record* (note)
-         (loop with full = (or (code-note-code-coverage note)
-                               (not (emitted-code-note-p note)))
-               for sub in (coverage-subnotes note)
-               unless (entry-code-note-p sub)
-                 do (progn
-                      (record* sub)
-                      (unless (eq (code-note-code-coverage sub) 'full)
-                        (setq full nil)))
-               finally (when full
-                         (setf (code-note-code-coverage note) 'full)))
-         (record-1 (code-note-source-note note) note))
-       (record-entry (note)
-         (record* note)
-         ;; A special kludge for entry notes:
-         ;; In cases like (setq foo (function (lambda (x) x))), we can colorize "(setq foo (function "
-         ;; based on whether the setq got executed, and "(lambda (x) x)" on whether the inner
-         ;; function got executed.  However, suppose have a macro "(setq-fun foo (x) x)" that
-         ;; expanded into the above, there isn't a clear way to show the distinction between
-         ;; just referencing the inner fn and executing it.  In practice, the colorization
-         ;; based on the inner function is more interesting -- consider for example DEFUN,
-         ;; nobody cares whether the defun form itself got executed.
-         ;; So when showing the colorization of an inner function, we usurp the whole nearest source
-         ;; form, provided it can be done unambiguously.
-         (record-1 (entry-note-unambiguous-source note) note)))
-    (map-coverage-entry-notes coverage #'record-entry)))
+  ;; linearize emitted notes with children preceding parents, and mark up fully covered ones.
+  ;; This assumes code notes are never individually reset, so once something is fully
+  ;; covered, it stays fully covered, so no need to reinit the setting, just update.
+  (let ((subnotes *code-note-subnotes*)
+        (vector *emitted-code-notes*)
+        (index-hash *code-note-index*))
+    (iterate descend ((note nil))
+      (let ((full-p (and note (code-note-code-coverage note))))
+        (loop for subnote in (gethash note subnotes)
+              do (unless (descend subnote) (setq full-p nil))
+              do (setf (gethash subnote index-hash) (vector-push-extend subnote vector)))
+        (when full-p         ;; return true if full, nil if not.
+          (setf (code-note-code-coverage note) 'full)))))
+  ;; Find all source notes
+  ;; Note that can't compute a source hierarchy because the reader flattens the backpointers
+  ;; so each subnote points directly to the toplevel note.
+  (labels ((subnotep (a b)
+             (or (eq a b) (and a (subnotep (code-note-parent-note a) b))))
+           (register (source emitted-notes)
+             (assert emitted-notes)
+             (let ((prior-notes (gethash source *source-code-notes*)))
+               (if prior-notes
+                 ;; In some cases, a single source form may be claimed by multiple code notes,
+                 (setq emitted-notes
+                       (nconc
+                        (setq emitted-notes
+                              (remove-if (lambda (new)
+                                           (some (lambda (old) (subnotep new old)) prior-notes))
+                                         emitted-notes))
+                        (if emitted-notes
+                          (remove-if (lambda (old)
+                                       (some (lambda (new) (subnotep old new)) emitted-notes))
+                                     prior-notes)
+                          prior-notes)))
+                 ;; Else this is the first time, record it
+                 (vector-push-extend source *covered-source-notes*)))
+             (setf (gethash source *source-code-notes*) emitted-notes)))
+    (loop for note across *emitted-code-notes*
+          as source = (code-note-source-note note)
+          when source do (register source (list note))
+            ;; want to look at all notes, even unemitted, so can get all source forms
+            do (loop while (and (setq note (code-note-parent-note note))
+                                (not (emitted-code-note-p note)))
+                     when (setq source (code-note-source-note note))
+                       do (register source (code-note-subnotes note))))
+    (setf *covered-source-notes*
+          (sort *covered-source-notes* #'< :key #'source-note-start-pos)) ;; this puts parents before children
+    (loop for source across *covered-source-notes* as index upfrom 0
+          do (setf (gethash source *source-note-index*) index)))
+  (assert (eql (length *covered-source-notes*) (hash-table-count *source-code-notes*)))
+  coverage)
 
-(defun colorize-source-note (note styles)
-  ;; See comment in precompute-source-coverage
-  (let ((source (entry-note-unambiguous-source note)))
-    (when source
-      (fill-with-text-style source styles)))
-  (update-text-styles note styles))
+(defun file-coverage-html-queue (coverage)
+  (declare (ignore coverage)) ;; turns out everything we need is already in global variables
+  ;; Collect top-level sources.  *covered-source-notes* is sorted by start address.
+  (let ((queue (loop with vector = *covered-source-notes* with len = (length vector)
+                     for start = 0 then end while (< start len)
+                     as sn = (aref vector start)
+                     as end = (loop with limit = (source-note-end-pos sn)
+                                    for i from (1+ start) below len
+                                    until (<= limit (source-note-start-pos (aref vector i)))
+                                    finally (return i))
+                     collect (list* end nil (source-note-end-pos sn)))));; (end-index acodes . end-pos)
+    ;; Find all acode strings, assign them to appropriate toplevel source form, and collect
+    ;; all code notes for each acode.
+    (loop for note across *emitted-code-notes*
+          when (code-note-acode-range note)
+            do (let* ((source (nearest-source-note note))
+                      (pos (source-note-start-pos source))
+                      (cell (loop for cell in queue while (<= (cddr cell) pos) finally (return cell)))
+                      (acode (%function-acode-string (code-note-function note)))
+                      (acell (or (assq acode (cadr cell))
+                                 (car (push (list* acode nil 0) (cadr cell))))));; (acode notes . src-pos)
+                 (assert (and cell acode))
+                 (setf (cddr acell) (min (cddr acell) pos));; earliest known source for this acode
+                 (push note (cadr acell))))
+    ;; Sort acode by source position within source form, sort notes by position within the acode,
+    ;; get rid of the end-pos/src-pos fields since no longer needed.
+    (loop for cell in queue
+          do (setf (cdr cell) (sort (cadr cell) #'< :key #'cddr));; (end-index . acodes)
+          do (loop for acell in (cdr cell)
+                   do (setf (cdr acell) (sort (cadr acell) #'< :key #'code-note-acode-start-pos)))) ; (acode . notes)
+    queue))
+
 
 (defun function-outermost-entry-source (fn)
   ;; Find the outermost source form containing the fn.
   (loop with sn = nil
         for n = (function-entry-code-note fn) then (code-note-parent-note n)
-	do (when (null n) (return nil))
-	do (when (setq sn (code-note-source-note n))
-	     (loop for s = (source-note-source sn) while (source-note-p s)
-		   do (setq sn s))
-	     (return sn))))
+        do (when (null n) (return nil))
+        do (when (setq sn (code-note-source-note n))
+             (loop for s = (source-note-source sn) while (source-note-p s)
+                   do (setq sn s))
+             (return sn))))
 
-(defun colorize-acode (fn acode-styles)
-  (let* ((acode (%function-acode-string fn))
-         (note (function-entry-code-note fn))
-         (range (and note (code-note-acode-range note))))
-    (when (and acode range)
-      (let* ((cell (or (gethash acode acode-styles)
-                       (setf (gethash acode acode-styles)
-                             (let ((string (decode-string-from-octets acode :external-format :utf-8)))
-                               (cons string
-                                     (make-array (length string)
-                                                 :initial-element $no-style
-                                                 :element-type '(unsigned-byte 2)))))))
-             (styles (cdr cell)))
-        (iterate update ((note note))
-          (multiple-value-bind (start end) (decode-file-range (code-note-acode-range note))
-            (when (and start
-                       (setq start (position-if-not #'whitespacep acode :start start :end end :key #'code-char)))
-              (fill styles (style-for-coverage (code-note-code-coverage note))
-                    :start start
-                    :end end)))
-          (loop for sub in (coverage-subnotes note)
-            unless (entry-code-note-p sub)
-            do (update sub)))))))
 
-(defun colorize-function (fn styles acode-styles &optional refs)
-  (let* ((note (function-entry-code-note fn))
-	 (source (function-outermost-entry-source fn))
-	 (refs (cons fn refs)))
-    (declare (dynamic-extent refs))
-    ;; Colorize the body of the function
-    (when note
-      (colorize-source-note note styles)
-      (colorize-acode fn acode-styles))
-    ;; And now any subfunction references
-    (lfunloop for imm in fn
-	      when (and (functionp imm)
-			(not (memq imm refs))
-                        ;; See note in decode-function-coverage
-			(or (null source)
-			    (eq source (function-outermost-entry-source imm))
-			    #+debug (progn
-				      (warn "Ignoring ref to ~s from ~s" imm fn)
-				      nil)))
-	      do (colorize-function imm styles acode-styles refs))))
+(defun report-file-coverage (index-file coverage directory html-name external-format)
+  (with-open-file (js-stream (make-pathname :name html-name :type "js" :defaults directory)
+                             :direction :output
+                             :if-exists :supersede
+                             :if-does-not-exist :create)
+    (write-coverage-js-file js-stream coverage))
+  (with-open-file (html-stream (make-pathname :name html-name :type "html" :defaults directory)
+                               :direction :output
+                               :if-exists :supersede
+                               :if-does-not-exist :create)
+    (write-coverage-html-file index-file html-name html-stream coverage external-format)))
 
-(defun report-file-coverage (index-file coverage html-stream external-format)
-  "Print a code coverage report of FILE into the stream HTML-STREAM."
-  (format html-stream "<html><head>")
-  (write-coverage-styles html-stream)
-  (format html-stream "</head><body>")
-  (let* ((source (with-open-file (s (file-coverage-file coverage) :external-format external-format)
-                   (let ((string (make-string (file-length s))))
-                     (read-sequence string s)
-                     string)))
-         (styles (make-array (length source)
-                             :initial-element $no-style
-                             :element-type '(unsigned-byte 2)))
-         (acode-styles (make-hash-table :test #'eq)))
-    (map nil #'(lambda (fn) (colorize-function fn styles acode-styles))
-         (file-coverage-toplevel-functions coverage))
-    (print-file-coverage-report index-file html-stream coverage styles acode-styles source)
-    (format html-stream "</body></html>")))
-
-(defun print-file-coverage-report (index-file html-stream coverage styles acode-styles source)
+(defun write-coverage-html-file (index-file html-name html-stream coverage source-external-format)
   (let ((*print-case* :downcase))
+
+    (format html-stream "<html><head>")
+    (write-coverage-styles html-stream)
+    (format html-stream "<script src='~a.js'></script>~%" html-name)
+    (format html-stream "</head><body onload='colorize(true)'>")
+
     (format html-stream "<h3><a href=~s>Coverage report</a>: ~a <br />~%</h3>~%"
-            (native-translated-namestring (make-pathname :name (pathname-name index-file)
-							 :type (pathname-type index-file)))
+            (native-file-namestring index-file)
             (file-coverage-file coverage))
     (format html-stream "<table class='summary'>")
-    (coverage-stats-head html-stream nil)
-    (coverage-stats-data html-stream nil coverage)
+    (file-coverage-stats-html html-stream)
     (format html-stream "</table>")
+
+    ;;(format html-stream "~2%<a href='javascript:DEBUG_OUT(CodeParents)'>Doit</a><div id='foo'>Debug output here</div>")
 
     (format html-stream "<div class='key'><b>Key</b><br />~%")
     (format html-stream "<div class='st~a'>Fully covered - every single instruction executed</div>" $totally-covered-style)
@@ -897,105 +929,370 @@ written to the output directory.
     (format html-stream "<div class='stsource'>Uninstrumented - a form whose coverage was not measured</div>")
     (format html-stream "</div><p></p>~%")
 
-    ;; Output source intertwined with acode
-    (iterate output ((start 0) (line 0) (queue (file-coverage-acode-queue coverage)))
-      (format html-stream "<div class='source'><code>")
-      (let ((next (car queue)))
-        (multiple-value-bind (end last-line)
-            (output-styled html-stream source styles
-                           :start start
-                           :line line
-                           :limit (car next))
-          (format html-stream "</code></div>~%")
-          (when (and next end (<= (car next) end))
-            (destructuring-bind (pos . strings) next
-              (format html-stream "<a href=javascript:swap('~d')><span class='toggle' id='p~:*~d'>Show expansion</span></a>~%~
-                                   <div class='acode' id='a~:*~d'><code>" pos)
-              (loop for acode in strings as (string . styles) = (gethash acode acode-styles)
-                    do (output-styled html-stream string styles)
-                    do (fresh-line html-stream))
-              (format html-stream "</code></div><hr/>~%")
-              (output (1+ end) last-line (cdr queue)))))))))
+    (output-spanned-html html-stream coverage source-external-format)
 
-(defun output-styled (html-stream source styles &key (start 0) line limit)
-  (let ((last-style $no-style)
-        (col 0)
-        (line line))
-    (labels ((outch (char)
-               (if (eql char #\Tab)
-                 (dotimes (i (- 8 (mod col 8)))
-                   (incf col)
-                   (write-string " " html-stream))
-                 (progn
-                   (incf col)
-                   (if (or (alphanumericp char) (find char "()+-:* ")) ;; common and safe
-                     (write-char char html-stream)
-                     (format html-stream "&#~D;" (char-code char))))))
-             (start-line ()
-               (when line
-                 (incf line)
-                 (format html-stream "<span class='line'>~A</span>" line))
-               (write-char #\space html-stream)
-               (setq col 0))
-             (set-style (new)
-               (unless (eq last-style new)
-                 (unless (eq last-style $no-style) (format html-stream "</span>"))
-                 (unless (eq new $no-style) (format html-stream "<span class='st~a'>" new))
-                 (setq last-style new)))
-             (end-line ()
-               (set-style $no-style)
-               (format html-stream "~%")))
-      (declare (inline outch start-line end-line))
-      (unless limit (setq limit (length source)))
-      (start-line)
-      (loop
-        for pos from start below (length source)
-        as char = (aref source pos) as style = (aref styles pos)
-        do (set-style style)
-        do (case char
-             ((#\Newline)
-              (end-line)
-              (when (<= limit pos)
-                (return (values pos line)))
-              (start-line))
-             (t
-              (outch char)))
-        finally (end-line)))))
+    (format html-stream "</body></html>")))
+
+#|
+var COV = ['unknown', 'not', 'all', 'some'];
+function DEBUG_OUT(text) {
+  var msg = document.getElementById('foo');
+  msg.innerHTML = msg.innerHTML + '<br />' + text;
+}
+|#
+
+;; This goes in each file.
+(defparameter $coverage-javascript "
+
+function tags_intersect (tags1, tags2) {   // tags2 = true means all tags.
+  if (tags2 === true)
+    return (tags1.length > 0);
+  for (var i = 0; i < tags1.length; i++) {
+    var tag1 = tags1[i];
+    for (var j = 0; j < tags2.length; j++)
+      if (tag1 == tags2[j]) return true;
+  }
+  return false;
+}
+
+function is_member (elt, vec) {
+  for (var i = 0; i < vec.length; i++) {
+    if (vec[i] == elt) return true;
+  }
+  return false;
+}
+
+function set_stats_with_pct(name, count, total) {
+  var pct;
+
+  if (total > 0) {
+    var pct = (count * 100) / total;
+    pct = pct.toFixed(1) + '&#37;';
+  }
+  else {
+    pct = '--';
+  }
+  
+  document.getElementById(name).innerHTML = count;
+
+  document.getElementById(name + 'Pct').innerHTML =  pct;
+}
+
+function colorize (tags_to_show) {
+  var style;
+
+  // Compute acode coverage and colorize acode
+  var total = (CodeTags ? CodeTags.length : CodeCoverage.length) - 1;
+  var num_entered = 0;
+  var coverage = new Array(total);
+
+  for (var cn = 0; cn < total; cn++) {
+    var covered = (CodeTags ? tags_intersect(CodeTags[cn], tags_to_show) : CodeCoverage[cn]);
+    style = (covered ? ALL_COVERED : NOT_COVERED);
+
+    var sub_style = coverage[cn];
+    if (sub_style && (style != sub_style)) style = PARTLY_COVERED;
+
+    coverage[cn] = style; // save for source coloring use below
+    if (style != NOT_COVERED) num_entered++;
+    var parent = CodeParents[cn];
+    if (parent) {
+      var sibs_style = coverage[parent];
+      if (sibs_style != style) coverage[parent] = (!sibs_style ? style : PARTLY_COVERED);
+    }
+
+  var elt = document.getElementById('f~dc' + cn);  // some notes don't have a matched up source.
+  if (elt) elt.className = 'st' + style;
+  }
 
 
-(defun coverage-stats-head (html-stream stats-stream)
+  document.getElementById('acodeTotal').innerHTML = total;
+  set_stats_with_pct('acodeCovered', num_entered, total);
+
+  // Count unreached branches (aka maximal unentered forms)
+  var total = coverage.length;
+  var num_branches = 0;
+  var parent;
+  for (var cn = 0; cn < total; cn++) {
+    if ((coverage[cn] == NOT_COVERED) && // not covered
+        (parent = CodeParents[cn]) &&  // has a parent
+        (coverage[parent] != NOT_COVERED) &&  // that's covered
+        (!is_member(cn, FunctionNotes))) // and not an entry note
+      num_branches++;
+  }
+
+  document.getElementById('branchUnreached').innerHTML = num_branches;
+
+
+  // Colorize Source
+  var total = (SourceCodeNotes ? SourceCodeNotes.length : SourceCoverage.length) - 1;
+  var num_all = 0, num_partly = 0;
+
+  for (var sn = 0; sn < total; sn++) {
+    if (SourceCodeNotes) {
+      var notes = SourceCoverage[sn];
+      for (var i = 0, style = NO_DATA; i < notes.length; i++) {
+        var note_style = coverage[notes[i]];
+        if (style != note_style) style = (style == NO_DATA ? note_style : PARTLY_COVERED);
+      }
+    }
+    else {
+      style = SourceCoverage[sn];
+    }
+
+    switch (style) {
+      case ALL_COVERED: num_all++; break;
+      case PARTLY_COVERED: num_partly++; break;
+    }
+
+   document.getElementById('f~:*~ds' + sn).className = 'st' + style;
+
+  }
+  document.getElementById('srcTotal').innerHTML = total;
+  set_stats_with_pct('srcEntered', num_all + num_partly, total);
+  set_stats_with_pct('srcCovered', num_all, total);
+
+  var total = FunctionNotes.length - 1;
+  var num_all = 0, num_partly = 0, num_not = 0;
+
+  for (var i = 0; i < total; i++) {
+    var cn = FunctionNotes[i];
+    switch (coverage[FunctionNotes[i]]) {
+      case ALL_COVERED: num_all++; break;
+      case PARTLY_COVERED: num_partly++; break;
+      case NOT_COVERED: num_not++; break;
+    }
+  }
+
+  document.getElementById('fnTotal').innerHTML = total;
+  set_stats_with_pct('fnCovered', num_all, total);
+  set_stats_with_pct('fnPartly', num_partly, total);
+  set_stats_with_pct('fnUnentered', num_not, total);
+
+
+}
+")
+
+
+(defmacro write-js-array (js-stream-expr var-expr data-expr writer)
+  (let ((js-stream (gensym))
+        (var (gensym))
+        (data (gensym)))
+    `(let ((,js-stream ,js-stream-expr)
+           (,var ,var-expr)
+           (,data ,data-expr))
+       (when ,var (format ,js-stream "~2&var ~a = " ,var))
+       (format ,js-stream "[")
+       (loop with len = (and (vectorp ,data) (length ,data))
+             for index upfrom 0
+             while (if len (< index len) ,data)
+             as note = (if len (aref ,data index) (pop ,data))
+             do (funcall ,writer ,js-stream note)
+             do (write-string (if (eql 0 (mod index 50)) #.(format nil ",~% ") ", ") ,js-stream))
+       ;; Add an element at the end because otherwise get the wrong length if last element is empty
+       (format ,js-stream "'end']")
+       (when ,var (format ,js-stream ";~%")))))
+
+;; output with a line break every 100 entries
+(defun write-coverage-js-file (js-stream coverage)
+  (flet ((write-code-parent (js-stream cn)
+           (let* ((parent (code-note-emitted-parent cn)))
+             (when parent
+               (format js-stream "~a" (code-note-index parent)))))
+         (write-function-note (js-stream fn)
+           (format js-stream "~a" (code-note-index (function-entry-code-note fn))))
+         (write-source-coverage (js-stream sn)
+           (format js-stream "~a" (style-for-coverage (source-coverage sn))))
+         (write-code-coverage (js-stream cn)
+           (when (code-note-code-coverage cn) (format js-stream "1")))
+         (write-source-notes (js-stream sn)
+           (write-js-array js-stream nil (source-code-notes sn)
+                           (lambda (js-stream cn) (format js-stream "~a" (code-note-index cn)))))
+         (write-code-tags (js-stream cn)
+           (write-js-array js-stream nil (code-note-tags cn)
+                           (lambda (js-stream tag) (format js-stream "~a" tag)))))
+
+    (format js-stream "~&var NO_DATA = ~d, NOT_COVERED = ~d, ALL_COVERED = ~d, PARTLY_COVERED = ~d;~2%"
+            $not-executed-style $not-executed-style $totally-covered-style $partially-covered-style)
+    (write-js-array js-stream "CodeParents" *emitted-code-notes* #'write-code-parent)
+    (write-js-array js-stream "FunctionNotes" (file-coverage-functions coverage) #'write-function-note)
+    (cond (*coverage-tags*
+           (write-js-array js-stream "CodeTags" *emitted-code-notes* #'write-code-tags)
+           (write-js-array js-stream "SourceCodeNotes" *covered-source-notes* #'write-source-notes)
+           (format js-stream "~&var CodeCoverage;")
+           (format js-stream "~&var SourceCoverage;"))
+          (t
+           (format js-stream "~&var CodeTags;")
+           (format js-stream "~&var SourceCodeNotes;")
+           (write-js-array js-stream "CodeCoverage" *emitted-code-notes* #'write-code-coverage)
+           (write-js-array js-stream "SourceCoverage" *covered-source-notes* #'write-source-coverage)))
+    (format js-stream $coverage-javascript (file-coverage-index coverage))
+    (terpri js-stream)))
+
+(defstruct coverage-html-state
+  input
+  output
+  prefix
+  (file-pos 0)
+  (line-no 0)
+  (column 0))
+
+(defun coverage-html-start-line (s)
+  (let ((line-no (coverage-html-state-line-no s))
+        (output (coverage-html-state-output s)))
+    (when line-no
+      (setf (coverage-html-state-line-no s) (incf line-no))
+      (format output "<span class='line'>~a</span>" line-no))
+    (write-char #\space output)))
+
+(defun coverage-html-copy-to (s end &optional end-at-newline-p whitespace-only-p)
+  (let ((input (coverage-html-state-input s))
+        (output (coverage-html-state-output s))
+        (file-pos (coverage-html-state-file-pos s)))
+    (assert (<= file-pos end))
+    (loop until (eql file-pos end)
+          as ch = (read-char input)
+          do (when (and whitespace-only-p (not (whitespacep ch)))
+               (unread-char ch input)
+               (return))
+             ;; Source note positions are file positions, not character positions, but assume
+             ;; non-control ascii chars are 1 byte so don't have to call stream-position all the time.
+          do (setq file-pos (if (< 31 (char-code ch) 127)
+                              (1+ file-pos)
+                              (let ((newpos (stream-position input)))
+                                (assert (<= newpos end))
+                                newpos)))
+          do (when (eql (coverage-html-state-column s) 0) (coverage-html-start-line s))
+          do (case ch
+               (#\newline
+                  (write-char #\Newline output)
+                  (setf (coverage-html-state-column s) 0)
+                  (when end-at-newline-p (return)))
+               (#\tab
+                  (let ((count (- 8 (mod (coverage-html-state-column s) 8))))
+                    (write-string "        " output :end count)
+                    (incf (coverage-html-state-column s) count)))
+               (t
+                  (incf (coverage-html-state-column s))
+                  (if (or (alphanumericp ch)  (find ch "()+-:* "));; common and safe
+                    (write-char ch output)
+                    (format output "&#~D;" (char-code ch))))))
+    (assert (eql file-pos (stream-position input)))
+    (setf (coverage-html-state-file-pos s) file-pos)))
+
+(defun output-coverage-html-acode (s note-queue)
+  (let* ((output (coverage-html-state-output s))
+         (input (coverage-html-state-input s))
+         (prefix (coverage-html-state-prefix s))
+         (end (stream-length input)))
+    (when (< (coverage-html-state-file-pos s) end)
+      (iterate output-subnotes ((limit end))
+        (loop while (and note-queue (<= (code-note-acode-end-pos (car note-queue)) limit))
+              do (let ((note (pop note-queue)))
+                   (coverage-html-copy-to s (code-note-acode-start-pos note))
+                   ;; skip leading whitespace -- this is necessary for acode, else looks weird.
+                   (coverage-html-copy-to s (code-note-acode-end-pos note) nil t)
+                   (format output "<span id='~a~d'>" prefix (code-note-index note))
+                   (output-subnotes (code-note-acode-end-pos note))
+                   (format output "</span>")))
+        (coverage-html-copy-to s limit)))))
+
+(defun output-coverage-html-source (s start end)
+  (let* ((output (coverage-html-state-output s))
+         (input (coverage-html-state-input s))
+         (prefix (coverage-html-state-prefix s))
+         (vector *covered-source-notes*)
+         (len (length vector))
+         (outer-note (and (< start end) (aref vector start)))
+         (nextpos (if (< end len) (source-note-start-pos (aref vector end)) (stream-length input))))
+    (when (< (coverage-html-state-file-pos s) nextpos)
+      (format output "<div class='source'><code>")
+      (when outer-note
+        ;; The first time through this will just do the first note, because that's all that fits.
+        (iterate output-subnotes ((outer-note outer-note))
+          (loop with outer-end = (source-note-end-pos outer-note)
+                as note = (and (< start end) (aref vector start))
+                while (and note (<= (source-note-end-pos note) outer-end))
+                do (progn
+                     (coverage-html-copy-to s (source-note-start-pos note))
+                     (format output "<span id='~a~d'>" prefix start)
+                     (incf start)
+                     (output-subnotes note)
+                     (format output "</span>"))
+                finally (coverage-html-copy-to s outer-end))))
+      ;; Copy the rest of the last line, or to end if called without a note.
+      (coverage-html-copy-to s nextpos outer-note)
+      (format output "</code></div>~%"))))
+
+(defun output-spanned-html (html-stream coverage external-format)
+  (with-open-file (source-stream (file-coverage-file coverage) :external-format external-format)
+    (let* ((queue (file-coverage-html-queue coverage))
+           (prefix (format nil "f~d" (file-coverage-index coverage)))
+           (s (make-coverage-html-state :input source-stream
+                                        :output html-stream
+                                        :prefix (%str-cat prefix "s"))))
+      (loop 
+        for start = 0 then end as (end . acodes) in queue
+        do (output-coverage-html-source s start end)
+        do (format html-stream "<a href=javascript:swap('~at~d')><span class='toggle' id='p~2:*~at~d'>Show expansion</span></a>~%~
+                                        <div class='acode' id='a~2:*~at~d'><code>" prefix start)
+        do (loop for (acode . notes) in acodes
+                 do (with-input-from-vector (astream acode :external-format :utf-8)
+                      (let ((cs (make-coverage-html-state :input astream
+                                                          :output html-stream
+                                                          :prefix (%str-cat prefix "c")
+                                                          :line-no nil)))
+                        (output-coverage-html-acode cs notes)
+                        (fresh-line html-stream))))
+        do (format html-stream "</code></div><hr/>~%")
+           ;; output the rest of file, no notes.
+        finally (output-coverage-html-source s start start)))))
+
+(defun coverage-stats-head (html-stream stats-stream include-source-p)
   (when html-stream
-    (format html-stream "<tr class='head-row'><td></td>")
+    (format html-stream "<tr class='head-row'>")
+    (when include-source-p (format html-stream "<td></td>"))
     (format html-stream "<td class='main-head' colspan='5'>Expressions</td>")
     (format html-stream "<td class='main-head' colspan='1'>Branches</td>")
     (format html-stream "<td class='main-head' colspan='3'>Code Forms</td>")
     (format html-stream "<td class='main-head' colspan='7'>Functions</td></tr>")
-    (format html-stream "<tr class='head-row'>~{<td width='60px'>~A</td>~}</tr>"
-            '("Source file"
-              ;; Expressions
-              "Total" "Entered" "% entered" "Fully covered" "% fully covered"
-              ;; Branches
-              "total unreached"
-              ;; Code forms
-              "Total" "Covered" "% covered"
-              ;; Functions
-              "Total" "Fully covered" "% fully covered" "Partly covered" "% partly covered" "Not entered" "% not entered")))
+    (format html-stream "<tr class='head-row'>")
+    (let ((fields '(;; Expressions
+                    "Total" "Entered" "% entered" "Fully covered" "% fully covered"
+                    ;; Branches
+                    "total unreached"
+                    ;; Code forms
+                    "Total" "Covered" "% covered"
+                    ;; Functions
+                    "Total" "Fully covered" "% fully covered" "Partly covered" "% partly covered" "Not entered" "% not entered")))
+      (when include-source-p (push "Source file" fields))
+      (format html-stream "~{<td width='60px'>~A</td>~}" fields))
+    (format html-stream "</tr>"))
   (when stats-stream
     (format stats-stream "~{~a~^,~}"
-	    `("Source file"
+            `("Source file"
               "Expressions Total" "Expressions Entered" "% Expressions Entered"
               "Unreached Branches"
               "Code Forms Total" "Code Forms Covered" "% Code Forms Covered"
               "Functions Total" "Functions Fully Covered" "% Functions Fully Covered"
-	      "Functions Partly Covered" "% Functions Partly Covered"
-	      "Functions Not Entered" "% Functions Not Entered"))))
+              "Functions Partly Covered" "% Functions Partly Covered"
+              "Functions Not Entered" "% Functions Not Entered"))))
 
-(defun coverage-stats-data (html-stream stats-stream coverage &optional evenp report-name src-name)
+(defun file-coverage-stats-html (html-stream)
+  (format html-stream "<table class='summary'>")
+  (coverage-stats-head html-stream nil nil)
+  (format html-stream "<tr class='odd'>")
+  (format html-stream "~{<td id='~a'></td>~}"
+          '("srcTotal" "srcEntered" "srcEnteredPct" "srcCovered" "srcCoveredPct"
+            "branchUnreached"
+            "acodeTotal" "acodeCovered" "acodeCoveredPct"
+            "fnTotal" "fnCovered" "fnCoveredPct" "fnPartly" "fnPartlyPct" "fnUnentered" "fnUnenteredPct"))
+  (format html-stream "</table>"))
+  
+(defun coverage-stats-data (html-stream stats-stream coverage evenp report-name src-name)
   (when html-stream
     (format html-stream "<tr class='~:[odd~;even~]'>" evenp)
-    (if report-name
-      (format html-stream "<td class='text-cell'><a href='~a.html'>~a</a></td>" report-name src-name)
-      (format html-stream "<td class='text-cell'>~a</td>" (file-coverage-file coverage))))
+    (format html-stream "<td class='text-cell'><a href='~a.html'>~a</a></td>" report-name src-name))
   (when stats-stream
     (format stats-stream "~a," (file-coverage-file coverage)))
 
@@ -1042,89 +1339,48 @@ written to the output directory.
     (when stats-stream
       (format stats-stream "~:[~;~:*~a~],~{~:[~;~:*~a~],~:[-~;~:*~5,1f%~]~^,~}~%" total counts))))
 
-(defun map-coverage-entry-notes (coverage fn)
-  (map nil #'(lambda (function)
-                 (let ((note (function-entry-code-note function)))
-                   (when (and note
-			      ;; Ignore toplevel functions created by the compiler.
-			      (or (code-note-source-note note)
-				  (code-note-parent-note note)))
-                     (funcall fn note))))
-       (file-coverage-functions coverage)))
-
-
-(defun count-covered-entry-notes (coverage)
-  (let ((fully 0) (partly 0) (never 0) (total 0))
-    (map-coverage-entry-notes
-     coverage
-     #'(lambda (note)
-         (incf total)
-         (case (code-note-code-coverage note)
-           ((full) (incf fully))
-           ((nil) (incf never))
-           (t (incf partly)))))
-    (let ((stats (file-coverage-statistics coverage)))
-      (setf (coverage-functions-total stats) total)
-      (setf (coverage-functions-fully-covered stats) fully)
-      (setf (coverage-functions-partly-covered stats) partly)
-      (setf (coverage-functions-not-entered stats) never))))
-
 (defun count-covered-aexps (coverage)
-  (let ((covered 0) (total 0))
-    (map-coverage-entry-notes
-     coverage
-     (lambda (note)
-       (labels ((rec (note)
-		  (when (emitted-code-note-p note)
-		    (incf total)
-		    (when (code-note-code-coverage note)
-		      (incf covered)))
-                  (loop for sub in (coverage-subnotes note)
-                        unless (entry-code-note-p sub) do (rec sub))))
-         (rec note))))
+  (let ((covered 0) (total 0)
+        (entry-full 0) (entry-part 0) (entry-never 0) (entry-total 0))
+    (loop for note across *emitted-code-notes*
+          do (incf total)
+          do (when (code-note-code-coverage note)
+               (incf covered))
+          do (when (entry-code-note-p note)
+               (incf entry-total)
+               (case (code-note-code-coverage note)
+                 ((full) (incf entry-full))
+                 ((nil) (incf entry-never))
+                 (t (incf entry-part)))))
     (let ((stats (file-coverage-statistics coverage)))
       (setf (coverage-code-forms-total stats) total)
-      (setf (coverage-code-forms-covered stats) covered))))
+      (setf (coverage-code-forms-covered stats) covered)
+      (setf (coverage-functions-total stats) entry-total)
+      (setf (coverage-functions-fully-covered stats) entry-full)
+      (setf (coverage-functions-partly-covered stats) entry-part)
+      (setf (coverage-functions-not-entered stats) entry-never))))
+
 
 (defun count-covered-sexps (coverage)
-  ;; Count the number of source expressions that have been entered (regardless
-  ;; of whether or not they are completely covered).
-  (let ((entered 0) (covered 0) (total 0)
-        (done (make-hash-table :test #'eq :shared nil)))
-    (map-coverage-entry-notes
-     coverage
-     (lambda (note)
-       (labels ((rec (note)
-                  (let ((source-note (code-note-source-note note)))
-                    (when (and source-note (not (gethash source-note done)))
-                      (setf (gethash source-note done) t)
-                      (incf total)
-                      (let ((data (source-coverage source-note)))
-                        (when data
-                          (incf entered)
-                          (when (eq data 'full)
-                            (incf covered)))))
-                    (loop for sub in (coverage-subnotes note)
-                          unless (entry-code-note-p sub) do (rec sub)))))
-         (rec note))))
+  ;; Count the number of source expressions that have been entered or covered
+  (let ((entered 0) (covered 0) (total (length *covered-source-notes*)))
+    (loop for source across *covered-source-notes* as cover = (source-coverage source)
+          do (when cover
+               (incf entered)
+               (when (eq cover 'full) (incf covered))))
     (let ((stats (file-coverage-statistics coverage)))
       (setf (coverage-expressions-total stats) total)
       (setf (coverage-expressions-entered stats) entered)
       (setf (coverage-expressions-covered stats) covered))))
 
 (defun count-unreached-branches (coverage)
-  ;; Count the number of maximal unentered forms
-  (let ((count 0))
-    (map-coverage-entry-notes
-     coverage
-     (lambda (note)
-       (labels ((rec (note parent)
-                  (case (code-note-code-coverage note)
-                    ((full) nil)
-                    ((nil) (when parent (incf count)))
-                    (t (loop for sub in (coverage-subnotes note)
-                             unless (entry-code-note-p sub) do (rec sub note))))))
-         (rec note nil))))
+  ;; Count the number of maximal unentered code forms, i.e. unentered code forms
+  ;; whose parent was entered.
+  (let ((count (loop for note across *emitted-code-notes*
+                     count (and (null (code-note-code-coverage note));; uncovered
+                                (not (entry-code-note-p note));; not entry note
+                                (setq note (code-note-emitted-parent note));; has a parent
+                                (code-note-code-coverage note)))));; that's covered
     (let ((stats (file-coverage-statistics coverage)))
       (setf (coverage-unreached-branches stats) count))))
 
