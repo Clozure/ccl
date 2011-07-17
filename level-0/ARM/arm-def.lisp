@@ -184,7 +184,7 @@
   (cmp imm1 (:$ arm::max-16-bit-ivector-subtag))
   (movls imm0 (:lsl imm0 (:$ 1)))
   (bls @align)
-  (cmp imm1 (:$ arm::subtag-double-float))
+  (cmp imm1 (:$ arm::subtag-double-float-vector))
   (moveq imm0 (:lsl imm0 (:$ 3)))
   (beq @align)
   (add imm0 imm0 (:$ 7))
