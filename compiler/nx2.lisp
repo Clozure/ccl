@@ -753,4 +753,85 @@
            (backend-use-operator (%nx1-operator %ineg) seg vreg xfer form)
            t))))
 
+(defun nx2-is-comparison-of-var-to-fixnums (form)
+  ;; Catches some cases.  May miss some.
+  (flet ((is-simple-comparison-of-var-to-fixnum (form)
+           (let* ((var nil)
+                  (fixval nil))
+             (setq form (acode-unwrapped-form form))
+             (when (acode-p form)
+               (let* ((op (acode-operator form)))
+                 (cond ((eql op (%nx1-operator eq))
+                        (destructuring-bind (cc x y) (cdr form)
+                          (when (eq :eq (acode-immediate-operand cc))
+                            (if (setq var (nx2-lexical-reference-p x))
+                              (setq fixval (acode-fixnum-form-p y))
+                              (if (setq var (nx2-lexical-reference-p y))
+                                (setq fixval (acode-fixnum-form-p x)))))))
+                       ((eql op (%nx1-operator %izerop))
+                        (destructuring-bind (cc val) (cdr form)
+                          (when (eq :eq (acode-immediate-operand cc))
+                            (setq var (nx2-lexical-reference-p val)
+                                  fixval 0)))))))
+             (if (and var fixval)
+               (values var fixval)
+               (values nil nil)))))
+    (setq form (acode-unwrapped-form form))
+    (multiple-value-bind (var val) (is-simple-comparison-of-var-to-fixnum form)
+      (if var
+        (values var (list val))
+        (if (and (acode-p form) (eql (acode-operator form) (%nx1-operator or)))
+          (collect ((vals))
+            (if (multiple-value-setq (var val) (is-simple-comparison-of-var-to-fixnum (cadr form)))
+              (progn
+                (vals val)
+                (dolist (clause (cddr form) (values var (vals)))
+                  (multiple-value-bind (var1 val1)
+                      (is-simple-comparison-of-var-to-fixnum clause)
+                    (unless (eq var var1)
+                      (return (values nil nil)))
+                    (vals val1))))
+              (values nil nil))))))))
+           
+
+
+                    
+               
+        
                 
+;;; If an IF form (in acode) appears to be the expansion of a
+;;; CASE/ECASE/CCASE where all values are fixnums, try to recover
+;;; that information and let the backend decide what to do with it.
+;;; (A backend might plausibly replace a sequence of comparisons with
+;;; a jumptable.)
+;;; Returns 4 values: a list of lists of fixnums, the corresponding true
+;;; forms for each sublist, the variable being tested, and the "otherwise"
+;;; or default form.
+;;; Something like (IF (EQL X 1) (FOO) (BAR)) will return non-nil values.
+;;; The backend -could- generate a jump table in that case, but probably
+;;; wouldn't want to.
+(defun nx2-reconstruct-case (test true false)
+  (multiple-value-bind (var vals) (nx2-is-comparison-of-var-to-fixnums test)
+    (if (not var)
+      (values nil nil nil nil)
+      (collect ((ranges)
+                (trueforms))
+        (let* ((otherwise nil))
+          (ranges vals)
+          (trueforms true)
+          (labels ((descend (original)
+                     (let* ((form (acode-unwrapped-form original)))
+                       (if (or (not (acode-p form))
+                               (not (eql (acode-operator form)
+                                         (%nx1-operator if))))
+                         (setq otherwise original)
+                         (destructuring-bind (test true false) (cdr form)
+                           (multiple-value-bind (v vals)
+                               (nx2-is-comparison-of-var-to-fixnums test)
+                             (cond ((eq v var)
+                                    (ranges vals)
+                                    (trueforms true)
+                                    (descend false))
+                                   (t (setq otherwise original)))))))))
+            (descend false))
+          (values (ranges) (trueforms) var otherwise))))))
