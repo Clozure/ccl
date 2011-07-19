@@ -2296,21 +2296,16 @@
   (let ((point (current-point)))
     (insert-character point #\Space)
     (pre-command-parse-check point)
-    (with-mark ((mark1 point)
-		(mark2 point))
-      (when (backward-up-list mark1)
-        (when (form-offset (move-mark mark2 (mark-after mark1)) 1)
-          (with-mark ((mark3 mark2))
-            (do* ()
-                 ((mark= mark3 point)
-                  (let* ((fun-name (region-to-string (region mark1 mark2)))
-                         (arglist-string
-                          (string-to-arglist fun-name (current-buffer) t)))
-                    (when arglist-string
-                      (message "~a" arglist-string))))
-              (if (ccl::whitespacep (next-character mark3))
-                (mark-after mark3)
-                (return nil)))))))))
+    (with-mark ((m point))
+      (when (backward-up-list m)
+        (when (and (scan-char m :lisp-syntax :open-paren)
+                   (mark-after m))
+          (with-mark ((n m))
+          (forward-form n)
+            (let* ((fun-name (region-to-string (region m n)))
+                   (arglist-string (string-to-arglist fun-name (current-buffer) t)))
+              (when arglist-string
+                      (message "~a" arglist-string)))))))))
 
 (hi:defcommand "Show Callers" (p)
   "Display a scrolling list of the callers of the symbol at point.
