@@ -930,10 +930,7 @@ are no Forms, OR returns NIL."
       (if (assoc atom-or-list used-keys)
         (warn "Duplicate keyform ~s in ~s statement." atom-or-list statement-type)
         (setq used-keys (nconc used-keys (list (cons atom-or-list t)))))
-      `((,(if (typep atom-or-list '(and number (not fixnum)))
-              'eql
-              'eq)
-         ,symbol ',atom-or-list)))
+      `((eql ,symbol ',atom-or-list)))
     (nconc (case-key-testers symbol used-keys (car atom-or-list) statement-type t)
            (when (cdr atom-or-list)
              (case-key-testers symbol used-keys (%cdr atom-or-list) statement-type nil)))))
