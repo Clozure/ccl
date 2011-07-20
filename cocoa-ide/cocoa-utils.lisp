@@ -72,16 +72,7 @@
       self)))
 
 (objc:defmethod (#/dealloc :void) ((self sequence-window-controller))
-  (let* ((table-view (slot-value self 'table-view))
-         (title (slot-value self 'title)))
-    (unless (%null-ptr-p table-view)
-      (setf (slot-value self 'table-view) (%null-ptr))
-      (#/release table-view))
-    (unless (%null-ptr-p title)
-      (setf (slot-value self 'title) (%null-ptr))
-      (#/release title))
-    (objc:remove-lisp-slots self)
-    (call-next-method)))
+  (call-next-method))
 
 (objc:defmethod (#/windowWillClose: :void) ((self sequence-window-controller)
 					    notification)
