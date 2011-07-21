@@ -286,6 +286,13 @@
     (arm-fprs-name (logior (ash (ldb (byte 4 16) opcode) 1)
                            (ldb (byte 1 7) opcode)))))
 
+(defun extract-arm-srcount-operand (opcodes i)
+  (let* ((opcode (adi-opcode (svref opcodes i))))
+    (ldb (byte 8 0) opcode)))
+
+(defun extract-arm-drcount-operand (opcodes i)
+  (let* ((opcode (adi-opcode (svref opcodes i))))
+    (ldb (byte 7 1) opcode)))
 
 (defparameter *arm-operand-extract-functions*
   #(extract-arm-rd-operand
@@ -314,6 +321,8 @@
     extract-arm-uuoc-operand
     extract-arm-fpux-operand
     extract-arm-imm16-operand
+    extract-arm-srcount-operand
+    extract-arm-drcount-operand
     ))
 
 (defun make-adi-vector (code-vector)
