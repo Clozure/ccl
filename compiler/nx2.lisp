@@ -299,9 +299,9 @@
           (t (values nil nil)))))
 
 (defun acode-constant-fold-binop (seg vreg xfer x y function)
-  (multiple-value-bind (x-p const-x) (acode-constant-p x)
+  (multiple-value-bind (const-x x-p) (acode-constant-p x)
     (when x-p
-      (multiple-value-bind (y-p const-y) (acode-constant-p y)
+      (multiple-value-bind (const-y y-p) (acode-constant-p y)
         (when y-p
           (let* ((result (ignore-errors (funcall function const-x const-y))))
             (when result
@@ -623,6 +623,7 @@
                  (backend-apply-acode num2 seg vreg xfer)
                  t)
                 ((and (eql (logcount f1) 1)
+                      (> f1 0)
                       (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
                  (backend-use-operator (%nx1-operator ash)
                                        seg
@@ -638,7 +639,9 @@
                       (acode-form-typep num1 'number trust-decls))
                  (backend-apply-acode num1 seg vreg xfer)
                  t)
-                ((and (eql (logcount f2) 1) (acode-form-typep num1 *nx-target-fixnum-type* trust-decls))
+                ((and (eql (logcount f2) 1)
+                      (> f2 0)
+                      (acode-form-typep num1 *nx-target-fixnum-type* trust-decls))
                  (backend-use-operator (%nx1-operator ash)
                                        seg
                                        vreg
