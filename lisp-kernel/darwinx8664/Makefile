@@ -23,7 +23,7 @@ MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic")
 VPATH = ..
 RM = /bin/rm
 LD = ld
-CC=gcc-4.0
+CC=gcc
 
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
@@ -60,7 +60,7 @@ PLATFORM_H = platform-darwinx8664.h
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< -arch x86_64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< -arch x86_64 $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) -mmacosx-version-min=10.5 -o $@
 
 SPOBJ = x86-spjump64.o x86-spentry64.o x86-subprims64.o 
 ASMOBJ = x86-asmutils64.o imports.o
