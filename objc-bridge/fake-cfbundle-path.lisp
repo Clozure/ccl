@@ -29,7 +29,11 @@
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
 		    ("OPENMCL-NAME" . ,bundle-name)
                     ("OPENMCL-IDENTIFIER" . ,bundle-id)
-		    ("OPENMCL-VERSION" . ,bundle-version)))
+		    ("OPENMCL-VERSION" . ,bundle-version)
+                    ("OPENMCL-MAJOR-VERSION" . ,(format nil "~d" *openmcl-major-version*))
+                    ("OPENMCL-MINOR-VERSION" . ,(format nil "~d" *openmcl-minor-version*))
+                    ("OPENMCL-REVISION" . ,(if *openmcl-revision* (format nil "-~a" *openmcl-revision*) ""))
+                    ("CURRENT-YEAR" . ,(format nil "~a" (nth-value 5 (decode-universal-time (get-universal-time)))))))
          (executable-dir (merge-pathnames
                            (make-pathname :directory (format nil "Contents/~a/"
                                                              #+windows-target
