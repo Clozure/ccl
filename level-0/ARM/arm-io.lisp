@@ -21,7 +21,7 @@
 ;;; not very smart yet
 
 (defarmlapfunction %get-errno ()
-  (mov temp0 ($ 0))
+  (mov temp0 (:$ 0))
   (ldr imm1 (:@ rcontext (:$ arm::tcr.errno-loc)))
   (ldr imm0 (:@ imm1 (:$ 0)))
   (str temp0 (:@ imm1 (:$ 0)))

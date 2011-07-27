@@ -23,7 +23,7 @@
 
 (defarmlapmacro set-nargs (n)
   (check-type n (unsigned-byte 8))
-  `(mov nargs ($ (ash ,n arm::fixnumshift))))
+  `(mov nargs (:$ (ash ,n arm::fixnumshift))))
 
 (defarmlapmacro check-nargs (min &optional (max min))
   (let* ((ok1 (gensym))
@@ -43,16 +43,16 @@
             ,ok1))
         (if (= min 0)
           `(progn
-            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (cmp nargs (:$ (ash ,max arm::fixnumshift)))
             (bls ,ok1)
             (uuo-error-wrong-nargs (:? hi))
             ,ok1)
           `(progn
-            (cmp nargs ($ (ash ,min arm::fixnumshift)))
+            (cmp nargs (:$ (ash ,min arm::fixnumshift)))
             (bhs ,ok1)
             (uuo-error-wrong-nargs (:? lo))
             ,ok1
-            (cmp nargs ($ (ash ,max arm::fixnumshift)))
+            (cmp nargs (:$ (ash ,max arm::fixnumshift)))
             (bls ,ok2)
             (uuo-error-wrong-nargs (:? hi))
             ,ok2))))))
@@ -71,7 +71,7 @@
 
 (defarmlapmacro build-lisp-frame (&optional (marker-reg 'imm0) (vsp 'vsp))
   `(progn
-    (mov ,marker-reg ($ arm::lisp-frame-marker))
+    (mov ,marker-reg (:$ arm::lisp-frame-marker))
     (stmdb (:! sp) (,marker-reg ,vsp fn lr))))
 
 (defarmlapmacro restore-lisp-frame (&optional (marker-reg 'imm0) (vsp 'vsp))

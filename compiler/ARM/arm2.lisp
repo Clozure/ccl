@@ -150,15 +150,16 @@
 (defvar *arm2-entry-vsp-saved-p* nil)
 
 (defvar *arm2-entry-label* nil)
-(defvar *arm2-fixed-args-label* nil)
-(defvar *arm2-fixed-args-tail-label* nil)
-(defvar *arm2-fixed-nargs* nil)
+(defvar *arm2-tail-label* nil)
+(defvar *arm2-tail-vsp* nil)
+(defvar *arm2-tail-nargs* nil)
 (defvar *arm2-tail-allow* t)
 (defvar *arm2-reckless* nil)
 (defvar *arm2-full-safety* nil)
 (defvar *arm2-float-safety* nil)
 (defvar *arm2-trust-declarations* nil)
 (defvar *arm2-entry-vstack* nil)
+(defvar *arm2-fixed-nargs* nil)
 (defvar *arm2-need-nargs* t)
 
 (defparameter *arm2-inhibit-register-allocation* nil)
@@ -398,9 +399,9 @@
            (*arm2-undo-because* (arm2-make-stack 64))
            (*backend-immediates* (arm2-make-stack 64  target::subtag-simple-vector))
            (*arm2-entry-label* nil)
-           (*arm2-fixed-args-label* nil)
-           (*arm2-fixed-args-tail-label*)
-           (*arm2-fixed-nargs* nil)
+           (*arm2-tail-label* nil)
+           (*arm2-tail-vsp* nil)
+           (*arm2-tail-nargs* nil)
            (*arm2-inhibit-register-allocation* nil)
            (*arm2-tail-allow* t)
            (*arm2-reckless* nil)
@@ -408,6 +409,7 @@
            (*arm2-float-safety* nil)
            (*arm2-trust-declarations* t)
            (*arm2-entry-vstack* nil)
+           (*arm2-fixed-nargs* nil)
            (*arm2-need-nargs* t)
            (fname (afunc-name afunc))
            (*arm2-entry-vsp-saved-p* nil)
@@ -850,22 +852,11 @@
     (let* ((nargs (length revargs))
            (reg-vars ()))
       (declare (type (unsigned-byte 16) nargs))
-      (when (and 
-             (<= nargs $numarmargregs)
-             (not (some #'null revargs)))
-        (setq *arm2-fixed-nargs* nargs)
-        ;; Self calls with valid fixed args may reference this
-        ;; label. Preserve the register map (which ordinarily
-        ;; woul be invalidated by the label.
-        (with-arm2-saved-regmap (mask map)
-          (@ (setq *arm2-fixed-args-label* (backend-get-next-label)))))
       (if (<= nargs $numarmargregs)       ; caller didn't vpush anything
         (! save-lisp-context-vsp)
         (let* ((offset (* (the fixnum (- nargs $numarmargregs)) *arm2-target-node-size*)))
           (declare (fixnum offset))
           (! save-lisp-context-offset offset)))
-      (when *arm2-fixed-args-label*
-        (@ (setq *arm2-fixed-args-tail-label* (backend-get-next-label))))
       (destructuring-bind (&optional zvar yvar xvar &rest stack-args) revargs
         (declare (ignore xvar yvar))
         (let* ((nstackargs (length stack-args)))
@@ -1173,22 +1164,7 @@
 
   
 
-(defun arm2-reg-for-var (form)
-  (let* ((var (arm2-lexical-reference-p form)))
-    (when var
-      (let* ((ea (var-ea var)))
-        (when (memory-spec-p ea)
-          (let* ((offset (memspec-frame-address-offset ea))
-                 (mask *arm2-gpr-locations-valid-mask*)
-                 (info *arm2-gpr-locations*))
-            (declare (fixnum mask) (simple-vector info))
-            (dotimes (reg 16)
-              (when (and (logbitp reg mask)
-                         (memq offset (svref info reg)))
-                (return reg)))))))))
-                 
-            
-          
+
 
 (defun arm2-stack-to-register (seg memspec reg)
   (with-arm-local-vinsn-macros (seg)
@@ -2392,17 +2368,9 @@
            (expression-p (or (typep fn 'lreg) (and (fixnump fn) (not label-p))))
            (callable (or symp lfunp label-p))
            (destreg (if symp ($ arm::fname) (if lfunp ($ arm::nfn) (unless label-p ($ arm::nfn)))))
-           (known-fixed-nargs nil)
-           (label (when label-p
-                    (if (and *arm2-fixed-args-label*
-                               (eql nargs *arm2-fixed-nargs*)
-                               (not spread-p))
-                      (progn
-                        (setq known-fixed-nargs t)
-                        (if tail-p
-                          *arm2-fixed-args-tail-label*
-                          *arm2-fixed-args-label*))
-                      1))))
+           (alternate-tail-call
+            (and tail-p label-p *arm2-tail-label* (eql nargs *arm2-tail-nargs*) (not spread-p)))
+           )
       (when expression-p
         ;;Have to do this before spread args, since might be vsp-relative.
         (if nargs
@@ -2424,7 +2392,7 @@
             (! spread-lexpr)
             (! spread-list)))
         (if nargs
-          (unless known-fixed-nargs (arm2-set-nargs seg nargs))
+          (unless alternate-tail-call (arm2-set-nargs seg nargs))
           (! pop-argument-registers)))
       (if callable
         (if (not tail-p)
@@ -2442,7 +2410,7 @@
               (if label-p
                 (progn
                   (arm2-copy-register seg ($ arm::nfn) ($  arm::fn))
-                  (! call-label (aref *backend-labels* label)))
+                  (! call-label (aref *backend-labels* 1)))
                 (progn
                   (if a-reg
                     (arm2-copy-register seg destreg a-reg)
@@ -2450,17 +2418,20 @@
                   (if symp
                     (arm2-call-symbol seg nil)
                     (! call-known-function))))))
-          (progn
+          (if alternate-tail-call
+            (progn
+              (arm2-unwind-stack seg xfer 0 0 *arm2-tail-vsp*)
+              (! jump (aref *backend-labels* *arm2-tail-label*)))
+            (progn
               (arm2-unwind-stack seg xfer 0 0 #x7fffff)
               (if (and (not spread-p) nargs (%i<= nargs $numarmargregs))
                 (progn
                   (if label-p
                     (arm2-copy-register seg arm::nfn arm::fn))
                   (unless (or label-p a-reg) (arm2-store-immediate seg func destreg))
-                  (unless known-fixed-nargs
-                    (arm2-restore-full-lisp-context seg))
+                  (arm2-restore-full-lisp-context seg)
                   (if label-p
-                    (! jump (aref *backend-labels* label))
+                    (! jump (aref *backend-labels* 1))
                     (progn
                       (if symp
                         (arm2-call-symbol seg t)
@@ -2481,7 +2452,7 @@
                          (! restore-full-lisp-context)
                          (if symp
                            (! jump-known-symbol)
-                           (! jump-known-function))))))))
+                           (! jump-known-function)))))))))
         ;; The general (funcall) case: we don't know (at compile-time)
         ;; for sure whether we've got a symbol or a (local, constant)
         ;; function.
@@ -2725,28 +2696,27 @@
   (arm2-one-lreg-form seg form (if (typep reg 'lreg) reg (make-unwired-lreg reg))))
 
 (defun arm2-one-untargeted-reg-form (seg form suggested)
-  (or (arm2-reg-for-var form)
-      (with-arm-local-vinsn-macros (seg)
-        (let* ((gpr-p (= (hard-regspec-class suggested) hard-reg-class-gpr))
-               (node-p (if gpr-p (= (get-regspec-mode suggested) hard-reg-class-gpr-mode-node))))
-          (if node-p
-            (let* ((ref (arm2-lexical-reference-ea form))
-                   (reg (backend-ea-physical-reg ref hard-reg-class-gpr)))
-              (if reg
-                ref
-                (if (nx-null form)
-                  (progn
-                    (! load-nil suggested)
-                    suggested)
-                  (if (and (acode-p form) 
-                           (eq (acode-operator form) (%nx1-operator immediate)) 
-                           (setq reg (arm2-register-constant-p (cadr form))))
-                    reg
-                    (if (and (acode-p form)
-                             (eq (acode-operator form) (%nx1-operator %current-tcr)))
-                      arm::rcontext
-                      (arm2-one-untargeted-lreg-form seg form suggested))))))
-            (arm2-one-untargeted-lreg-form seg form suggested))))))
+  (with-arm-local-vinsn-macros (seg)
+    (let* ((gpr-p (= (hard-regspec-class suggested) hard-reg-class-gpr))
+           (node-p (if gpr-p (= (get-regspec-mode suggested) hard-reg-class-gpr-mode-node))))
+      (if node-p
+        (let* ((ref (arm2-lexical-reference-ea form))
+               (reg (backend-ea-physical-reg ref hard-reg-class-gpr)))
+          (if reg
+            ref
+            (if (nx-null form)
+              (progn
+                (! load-nil suggested)
+                suggested)
+              (if (and (acode-p form) 
+                       (eq (acode-operator form) (%nx1-operator immediate)) 
+                       (setq reg (arm2-register-constant-p (cadr form))))
+                reg
+                (if (and (acode-p form)
+                         (eq (acode-operator form) (%nx1-operator %current-tcr)))
+                  arm::rcontext
+                  (arm2-one-untargeted-lreg-form seg form suggested))))))
+        (arm2-one-untargeted-lreg-form seg form suggested)))))
              
 
 (defun arm2-push-register (seg areg)
@@ -2860,29 +2830,25 @@
 
 
 (defun arm2-two-untargeted-reg-forms (seg aform areg bform breg)
-  (let* ((aalready (arm2-reg-for-var aform))
-         (balready (arm2-reg-for-var bform)))
-    (if (and aalready balready)
-      (values aalready balready)
-      (with-arm-local-vinsn-macros (seg)
-        (let* ((avar (arm2-lexical-reference-p aform))
-               (adest areg)
-               (bdest breg)
-               (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
-               (aconst (and (not atriv) (or (arm-side-effect-free-form-p aform)
-                                            (if avar (arm2-var-not-set-by-form-p avar bform)))))
-               (apushed (not (or atriv aconst))))
-          (progn
-            (unless aconst
-              (if atriv
-                (setq adest (arm2-one-untargeted-reg-form seg aform areg))
-                (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
-            (setq bdest (arm2-one-untargeted-reg-form seg bform breg))
-            (if aconst
-              (setq adest (arm2-one-untargeted-reg-form seg aform areg))
-              (if apushed
-                (arm2-elide-pushes seg apushed (arm2-pop-register seg areg)))))
-          (values adest bdest))))))
+  (with-arm-local-vinsn-macros (seg)
+    (let* ((avar (arm2-lexical-reference-p aform))
+           (adest areg)
+           (bdest breg)
+           (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
+           (aconst (and (not atriv) (or (arm-side-effect-free-form-p aform)
+                                        (if avar (arm2-var-not-set-by-form-p avar bform)))))
+           (apushed (not (or atriv aconst))))
+      (progn
+        (unless aconst
+          (if atriv
+            (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+            (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
+        (setq bdest (arm2-one-untargeted-reg-form seg bform breg))
+        (if aconst
+          (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+          (if apushed
+            (arm2-elide-pushes seg apushed (arm2-pop-register seg areg)))))
+      (values adest bdest))))
 
 
 (defun arm2-four-targeted-reg-forms (seg aform areg bform breg cform creg dform dreg)
@@ -5109,8 +5075,7 @@
                (num-fixed (length rev-fixed))
                (rev-opt (reverse (car opt))))
           (if (not (or opt rest keys))
-            (progn
-              (setq arg-regs (arm2-req-nargs-entry seg rev-fixed)))
+            (setq arg-regs (arm2-req-nargs-entry seg rev-fixed))
             (if (and (not (or hardopt rest keys))
                      (<= num-opt $numarmargregs))
               (setq arg-regs (arm2-simple-opt-entry seg rev-opt rev-fixed))
@@ -5203,7 +5168,13 @@
           ;; Caller's context is saved; *arm2-vstack* is valid.  Might still have method-var
           ;; to worry about.
 
-
+          (when (and nil
+                     (not (or opt rest keys))
+                     (<= num-fixed $numarmargregs)
+                     (not (some #'null arg-regs)))
+            (setq *arm2-tail-vsp* *arm2-vstack*
+                  *arm2-tail-nargs* num-fixed)
+            (@ (setq *arm2-tail-label* (backend-get-next-label))))
           (when method-var
             (arm2-seq-bind-var seg method-var arm::next-method-context))
           ;; If any arguments are still in arg_x, arg_y, arg_z, that's
@@ -6024,169 +5995,112 @@
                       (t (setf (vinsn-annotation next) condition)))))))))))
 
 
-(defun arm2-generate-casejump (seg vreg xfer ranges trueforms var otherwise)
-  (declare (ignorable trueforms var otherwise))
-  (with-arm-local-vinsn-macros (seg vreg xfer)
-    (unless (arm2-mvpass-p xfer)
-      (when ranges
-        (let* ((min (caar ranges))
-               (max min)
-               (count 0)
-               (all ()))
-          (declare (fixnum min max count))
-          (when ; determine min,max, count; punt on duplicate keys
-              (dolist (range ranges t)
-                (let* ((info (cons (backend-get-next-label) (pop trueforms))))
-                  (unless (dolist (val range t)
-                            (declare (fixnum val))
-                            (when (assoc val all)
-                              (return nil))
-                            (push (cons val info) all)
-                            (if (< val min)
-                              (setq min val)
-                              (if (> val max)
-                                (setq max val)))
-                            (incf count))
-                    (return nil))))
-                (let* ((span (1+ (- max min))))
-                  (declare (fixnum span))
-                  (when (and (> count 4)
-                             (> count (the fixnum (- span (the fixnum (ash span -2))))))
-                    (let* ((defaultlabel (backend-get-next-label))
-                           (endlabel (backend-get-next-label))
-                           (reg ($ arm::arg_z)))
-                      (arm2-use-operator (%nx1-operator lexical-reference)
-                                         seg reg nil var)
-                      (! cjmp reg (ash min arm::fixnumshift) (ash (- max min) arm::fixnumshift)  (aref *backend-labels* defaultlabel))
-                      (do* ((val min (1+ val)))
-                           ((> val max))
-                        (declare (fixnum val))
-                        (let* ((info (assoc val all)))
-                          (! non-barrier-jump (aref *backend-labels* (if info (cadr info) defaultlabel)))))
-                      (let* ((target (arm2-cd-merge xfer endlabel)))
-                        (dolist (case (nreverse all))
-                          (let* ((lab (cadr case))
-                                 (form (cddr case)))
-                            (@ lab)
-                            (arm2-form seg vreg target form)))
-                        (@ defaultlabel)
-                        (arm2-form seg vreg target otherwise)
-                        (@ endlabel)
-                        (when (arm2-mvpass-p xfer)
-                          (^))
-                        t))))))))))
-                        
-
 (defarm2 arm2-if if (seg vreg xfer testform true false &aux test-val)
   (if (setq test-val (nx2-constant-form-value (acode-unwrapped-form-value testform)))
     (arm2-form seg vreg xfer (if (nx-null test-val) false true))
-    (multiple-value-bind (ranges trueforms var otherwise)
-        #+notyet (nx2-reconstruct-case testform true false)
-        #-notyet (values nil nil nil nil)
-      (or (arm2-generate-casejump seg vreg xfer ranges trueforms var otherwise)
-          (let* ((cstack *arm2-cstack*)
-                 (vstack *arm2-vstack*)
-                 (top-lcell *arm2-top-vstack-lcell*)
-                 (entry-stack (arm2-encode-stack))
-                 (true-stack nil)
-                 (false-stack nil)
-                 (true-cleanup-label nil)
-                 (same-stack-effects nil)
-                 (true-is-goto (arm2-go-label true))
-                 (false-is-goto (and (not true-is-goto) (arm2-go-label false)))
-                 (endlabel (backend-get-next-label))
-                 (falselabel (backend-get-next-label))
-                 (need-else (unless false-is-goto (or (not (nx-null false)) (arm2-for-value-p vreg))))
-                 (both-single-valued (and (not *arm2-open-code-inline*)
-                                          (eq xfer $backend-return)
-                                          (arm2-for-value-p vreg)
-                                          need-else
-                                          (arm2-single-valued-form-p true) 
-                                          (arm2-single-valued-form-p false)))
-                 (saved-reg-mask 0)
-                 (saved-reg-map (make-array 16 :initial-element nil)))
-            (declare (dynamic-extent saved-reg-map))
-            (if (eq 0 xfer) 
-              (setq xfer nil))
-            (if both-single-valued      ; it's implied that we're returning
-              (let* ((result arm::arg_z))
-                (let ((merge-else-branch-label (if (nx-null false) (arm2-find-nilret-label))))
-                  (arm2-conditional-form seg (arm2-make-compound-cd 0 falselabel) testform)
-                  (arm2-copy-regmap (setq saved-reg-mask *arm2-gpr-locations-valid-mask*)
-                                    *arm2-gpr-locations*
-                                    saved-reg-map)
-                  (arm2-form seg result endlabel true)
-                  (if (and merge-else-branch-label (neq -1 (aref *backend-labels* merge-else-branch-label)))
-                    (backend-copy-label merge-else-branch-label falselabel)
-                    (progn
-                      (@ falselabel)
-                      (arm2-predicate-block falselabel)
-                      (if (nx-null false) (@ (arm2-record-nilret-label)))
-                      (let* ((*arm2-gpr-locations-valid-mask* saved-reg-mask)
-                             (*arm2-gpr-locations* saved-reg-map))
-                        (arm2-form seg result nil false))))
-                  (@ endlabel)
-                  (arm2-predicate-block endlabel)
-                  (<- result)
-                  (^)))
+    (let* ((cstack *arm2-cstack*)
+           (vstack *arm2-vstack*)
+           (top-lcell *arm2-top-vstack-lcell*)
+           (entry-stack (arm2-encode-stack))
+           (true-stack nil)
+           (false-stack nil)
+           (true-cleanup-label nil)
+           (same-stack-effects nil)
+           (true-is-goto (arm2-go-label true))
+           (false-is-goto (and (not true-is-goto) (arm2-go-label false)))
+           (endlabel (backend-get-next-label))
+           (falselabel (backend-get-next-label))
+           (need-else (unless false-is-goto (or (not (nx-null false)) (arm2-for-value-p vreg))))
+           (both-single-valued (and (not *arm2-open-code-inline*)
+                                    (eq xfer $backend-return)
+                                    (arm2-for-value-p vreg)
+                                    need-else
+                                    (arm2-single-valued-form-p true) 
+                                    (arm2-single-valued-form-p false)))
+           (saved-reg-mask 0)
+           (saved-reg-map (make-array 16 :initial-element nil)))
+      (declare (dynamic-extent saved-reg-map))
+      (if (eq 0 xfer) 
+        (setq xfer nil))
+      (if both-single-valued            ; it's implied that we're returning
+        (let* ((result arm::arg_z))
+          (let ((merge-else-branch-label (if (nx-null false) (arm2-find-nilret-label))))
+            (arm2-conditional-form seg (arm2-make-compound-cd 0 falselabel) testform)
+            (arm2-copy-regmap (setq saved-reg-mask *arm2-gpr-locations-valid-mask*)
+                              *arm2-gpr-locations*
+                              saved-reg-map)
+            (arm2-form seg result endlabel true)
+            (if (and merge-else-branch-label (neq -1 (aref *backend-labels* merge-else-branch-label)))
+              (backend-copy-label merge-else-branch-label falselabel)
               (progn
-                (if (and need-else (arm2-mvpass-p xfer))
-                  (setq true-cleanup-label (backend-get-next-label)))         
-                (arm2-conditional-form 
-                 seg
-                 (arm2-make-compound-cd 
-                  (or true-is-goto 0)
-                  (or false-is-goto 
-                      (if need-else 
-                        (if true-is-goto 0 falselabel) 
-                        (if true-is-goto xfer (arm2-cd-merge xfer falselabel))))) 
-                 testform)
-                (arm2-copy-regmap (setq saved-reg-mask *arm2-gpr-locations-valid-mask*)
-                                  *arm2-gpr-locations*
-                                  saved-reg-map)
-                (if true-is-goto
-                  (arm2-unreachable-store)
+                (@ falselabel)
+                (arm2-predicate-block falselabel)
+                (if (nx-null false) (@ (arm2-record-nilret-label)))
+                (let* ((*arm2-gpr-locations-valid-mask* saved-reg-mask)
+                       (*arm2-gpr-locations* saved-reg-map))
+                  (arm2-form seg result nil false))))
+            (@ endlabel)
+            (arm2-predicate-block endlabel)
+            (<- result)
+            (^)))
+        (progn
+          (if (and need-else (arm2-mvpass-p xfer))
+            (setq true-cleanup-label (backend-get-next-label)))         
+          (arm2-conditional-form 
+           seg
+           (arm2-make-compound-cd 
+            (or true-is-goto 0)
+            (or false-is-goto 
+                (if need-else 
+                  (if true-is-goto 0 falselabel) 
+                  (if true-is-goto xfer (arm2-cd-merge xfer falselabel))))) 
+           testform)
+          (arm2-copy-regmap (setq saved-reg-mask *arm2-gpr-locations-valid-mask*)
+                            *arm2-gpr-locations*
+                            saved-reg-map)
+          (if true-is-goto
+            (arm2-unreachable-store)
+            (if true-cleanup-label
+              (progn
+                (arm2-open-undo $undomvexpect)
+                (arm2-form seg vreg (logior $backend-mvpass-mask true-cleanup-label) true))
+              (arm2-form seg vreg (if need-else (arm2-cd-merge xfer endlabel) xfer) true)))
+          (setq true-stack (arm2-encode-stack))
+          (setq *arm2-cstack* cstack)
+          (arm2-set-vstack vstack)
+          (setq *arm2-top-vstack-lcell* top-lcell)
+          (if false-is-goto (arm2-unreachable-store))
+          (let ((merge-else-branch-label (if (and (nx-null false) (eq xfer $backend-return)) (arm2-find-nilret-label))))
+            (if (and merge-else-branch-label (neq -1 (aref *backend-labels* merge-else-branch-label)))
+              (backend-copy-label merge-else-branch-label falselabel)
+              (progn
+                (@ falselabel)
+                (arm2-predicate-block falselabel)
+                (when need-else
                   (if true-cleanup-label
-                    (progn
-                      (arm2-open-undo $undomvexpect)
-                      (arm2-form seg vreg (logior $backend-mvpass-mask true-cleanup-label) true))
-                    (arm2-form seg vreg (if need-else (arm2-cd-merge xfer endlabel) xfer) true)))
-                (setq true-stack (arm2-encode-stack))
-                (setq *arm2-cstack* cstack)
-                (arm2-set-vstack vstack)
-                (setq *arm2-top-vstack-lcell* top-lcell)
-                (if false-is-goto (arm2-unreachable-store))
-                (let ((merge-else-branch-label (if (and (nx-null false) (eq xfer $backend-return)) (arm2-find-nilret-label))))
-                  (if (and merge-else-branch-label (neq -1 (aref *backend-labels* merge-else-branch-label)))
-                    (backend-copy-label merge-else-branch-label falselabel)
-                    (progn
-                      (@ falselabel)
-                      (arm2-predicate-block falselabel)
-                      (when need-else
-                        (if true-cleanup-label
-                          (arm2-mvpass seg false)
-                          (let* ((*arm2-gpr-locations-valid-mask* saved-reg-mask)
-                                 (*arm2-gpr-locations* saved-reg-map)) 
-                            (arm2-form seg vreg xfer false)))
-                        (setq false-stack (arm2-encode-stack))))))
-                (when true-cleanup-label
-                  (if (setq same-stack-effects (arm2-equal-encodings-p true-stack false-stack)) ; can share cleanup code
-                    (@ true-cleanup-label))
-                  (let* ((*arm2-returning-values* :pass))
-                    (arm2-nlexit seg xfer 1)
-                    (arm2-branch seg (if (and xfer (neq xfer $backend-mvpass-mask)) xfer (if (not same-stack-effects) endlabel)) vreg))
-                  (unless same-stack-effects
-                    (@ true-cleanup-label)
-                    (multiple-value-setq (true *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*)
-                      (arm2-decode-stack true-stack))
-                    (let* ((*arm2-returning-values* :pass))
-                      (arm2-nlexit seg xfer 1)
-                      (^)))
-                  (arm2-close-undo)
-                  (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*) 
-                    (arm2-decode-stack entry-stack)))
-                (@ endlabel)
-                (arm2-predicate-block endlabel))))))))
+                    (arm2-mvpass seg false)
+                    (let* ((*arm2-gpr-locations-valid-mask* saved-reg-mask)
+                           (*arm2-gpr-locations* saved-reg-map)) 
+                      (arm2-form seg vreg xfer false)))
+                  (setq false-stack (arm2-encode-stack))))))
+          (when true-cleanup-label
+            (if (setq same-stack-effects (arm2-equal-encodings-p true-stack false-stack)) ; can share cleanup code
+              (@ true-cleanup-label))
+            (let* ((*arm2-returning-values* :pass))
+              (arm2-nlexit seg xfer 1)
+              (arm2-branch seg (if (and xfer (neq xfer $backend-mvpass-mask)) xfer (if (not same-stack-effects) endlabel)) vreg))
+            (unless same-stack-effects
+              (@ true-cleanup-label)
+              (multiple-value-setq (true *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*)
+                (arm2-decode-stack true-stack))
+              (let* ((*arm2-returning-values* :pass))
+                (arm2-nlexit seg xfer 1)
+                (^)))
+            (arm2-close-undo)
+            (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*) 
+              (arm2-decode-stack entry-stack)))
+          (@ endlabel)
+          (arm2-predicate-block endlabel))))))
 
 (defarm2 arm2-or or (seg vreg xfer forms)
   (let* ((mvpass (arm2-mvpass-p xfer))
@@ -6533,7 +6447,7 @@
                (arm2-lri seg vreg (ash (+ fix1 fix2) *arm2-target-fixnum-shift*))
                (if other
                  (let* ((constant (ash (or fix1 fix2) *arm2-target-fixnum-shift*))
-                        (reg (arm2-one-untargeted-reg-form seg other (if (and vreg (node-reg-p vreg)) vreg arm::arg_z))))
+                        (reg (arm2-one-untargeted-reg-form seg other arm::arg_z)))
                    (if (zerop constant)
                      (<- reg)
                      (ensuring-node-target (target vreg)
