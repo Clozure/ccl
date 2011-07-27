@@ -80,7 +80,7 @@
 	<key>CFBundleVersion</key>
 	<string>OPENMCL-VERSION</string>
         <key>CFBundleShortVersionString</key>
-        <string>OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSION.OPENMCL-REVISION</string>
+        <string>OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSIONOPENMCL-REVISION</string>
         <key>CFBundleGetInfoString</key>
         <string>Clozure Common Lisp version OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSION, Copyright 2002-CURRENT-YEAR Clozure Associates and contributors."</string>
         <key>NSHumanReadableCopyright</key>
