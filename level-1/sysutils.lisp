@@ -706,6 +706,7 @@
 
 (defparameter *suppress-compiler-warnings* nil)
 
+
 (defun signal-compiler-warning (w init-p last-w-file harsh-p any-p &optional eval-p)
   (let ((muffled *suppress-compiler-warnings*)
         (w-file (compiler-warning-file-name w))
@@ -726,8 +727,8 @@
         (format s "~&;~A warnings " (if (null eval-p) "Compiler" "Interpreter"))
         (if w-file (format s "for ~S :" w-file) (princ ":" s)))
       (let* ((indenting-stream (make-indenting-string-output-stream #\; 4)))
-        (format indenting-stream "~%~a" w)
-        (format s "~a~&" (get-output-stream-string indenting-stream))))
+        (format indenting-stream ";~4t~a" w)
+        (format s "~&~a~&" (get-output-stream-string indenting-stream))))
     (values harsh-p any-p w-file)))
 
 ;;;; Assorted mumble-P type predicates. 

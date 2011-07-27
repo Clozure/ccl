@@ -426,7 +426,7 @@ done
 
 (defun nthcdr-no-overflow (count list)
   (if (or (> count (list-length list)) (< count 0))
-    (format-error "non-existent target for ~*")
+    (format-error "non-existent target for ~~*")
     (nthcdr count list)))
 
 ;Redefined later
