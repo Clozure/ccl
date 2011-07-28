@@ -233,6 +233,7 @@
     ;;asdf
     defsystem
     jp-encode
+    cn-encode
     ))
 
 

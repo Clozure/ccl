@@ -357,6 +357,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "CCL-EXPORT-SYMS" "ccl-export-syms")
       (l1-load-provide "VERSION" "version")
       (require "JP-ENCODE")
+      (require "CN-ENCODE")
       (require "LISPEQU") ; Shouldn't need this at load time ...
       )
     (setq *%fasload-verbose* nil)

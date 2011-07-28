@@ -1401,6 +1401,20 @@ implementation-dependent keyword arguments:</para>
      encoded in 2 bytes.</para>
      <para>Alias: <literal>:EUCJP</literal></para></listitem>
      </varlistentry>
+     <varlistentry><term><literal>:GB2312</literal></term>
+     <listitem><para>An 8-bit, variable-length character encoding in which
+     character code points in the range #x00-#x80 can be encoded in a
+     single octet; characters with larger code values can be encoded
+     in 2 bytes.</para>
+     <para>Alias: <literal>:GB2312-80 :GB2312-1980 :EUC-CN :EUCCN</literal></para></listitem>
+     </varlistentry>
+     <varlistentry><term><literal>:CP936</literal></term>
+     <listitem><para>An 8-bit, variable-length character encoding in which
+     character code points in the range #x00-#x80 can be encoded in a
+     single octet; characters with larger code values can be encoded
+     in 2 bytes.</para>
+     <para>Alias: <literal>:GBK :MS936 :WINDOWS-936</literal></para></listitem>
+     </varlistentry>
    </variablelist>
  </sect3>
 
