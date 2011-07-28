@@ -607,7 +607,8 @@ between the region's start and end, and if there are no ill-formed expressions i
                     (current-region)
                     (defun-region (current-point)))))
          (form (when *echo-expression-to-listener* (region-to-string region)))
-         (buf (gui::hemlock-buffer (#/topListener gui::hemlock-listener-document))))
+         (doc (gui::top-listener-document))
+         (buf (when doc (gui::hemlock-buffer doc))))
     (when buf
       (let ((HI::*CURRENT-BUFFER* buf))
         (move-mark (current-point) (region-end (buffer-region buf)))))
@@ -619,7 +620,8 @@ between the region's start and end, and if there are no ill-formed expressions i
   (declare (ignore p))
   (let* ((region (copy-region (current-form-region)))
          (form (when *echo-expression-to-listener* (region-to-string region)))
-         (buf (gui::hemlock-buffer (#/topListener gui::hemlock-listener-document))))
+         (doc (gui::top-listener-document))
+         (buf (when doc (gui::hemlock-buffer doc))))
     (when buf
       (let ((HI::*CURRENT-BUFFER* buf))
         (move-mark (current-point) (region-end (buffer-region buf)))))

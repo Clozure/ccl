@@ -305,14 +305,15 @@
 
 (objc:defmethod (#/windowShouldClose: #>BOOL) ((w hemlock-listener-frame)
                                                sender)
+  (declare (ignorable sender))
   (let* ((doc (#/document (#/windowController w))))
     (if (or (%null-ptr-p doc)
-            (and (hemlock-document-process doc)
-                 (perform-close-kills-process-p doc)))
+            (null (hemlock-document-process doc)) 
+            (perform-close-kills-process-p doc))
       t
       (progn
-        ;(#/orderOut: w sender)
-        (#/close w)
+        (#/orderOut: w sender)
+        ;(#/close w)
         nil))))
 
 
@@ -383,15 +384,15 @@
               (ccl:process-whostate proc)))))
 
 (objc:defmethod #/topListener ((self +hemlock-listener-document))
-  (let* ((all-windows (#/orderedWindows *NSApp*)))
-    (dotimes (i (#/count all-windows) +null-ptr+)
-      (let* ((w (#/objectAtIndex: all-windows i)))
-        (when (#/isVisible w)
-          (let* ((wc (#/windowController w))
-                 (doc (#/document wc)))
-            (unless (%null-ptr-p doc)
-              (when (#/isKindOfClass: doc self)
-                (return doc)))))))))
+  (let* ((w (car (active-listener-windows))))
+    (if w
+      (#/document (#/windowController w))
+      +null-ptr+)))
+
+(defun top-listener-document ()
+  (let* ((doc (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p doc) doc)))
+
 
 (defun symbol-value-in-top-listener-process (symbol)
   (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
