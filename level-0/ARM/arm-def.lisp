@@ -112,11 +112,11 @@
   (uuo-error-reg-not-xtype new-value (:$ arm::xtype-u32))
   @ok2
   (bne @one)
-  (cmp imm1 ($ 0))
+  (cmp imm1 (:$ 0))
   (beq @store)
   (uuo-error-reg-not-xtype new-value (:$ arm::xtype-u32))
   @one
-  (cmp imm2 ($ 0))
+  (cmp imm2 (:$ 0))
   (bge @store)
   (uuo-error-reg-not-xtype new-value (:$ arm::xtype-u32))
   @store

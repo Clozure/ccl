@@ -60,7 +60,7 @@
   (bx lr)
   @win
   (mov arg_z 'nil)
-  (add arg_z arg_z ($ arm::t-offset))
+  (add arg_z arg_z (:$ arm::t-offset))
   (bx lr)
   @macptr
   (extract-lowbyte imm0 imm0)

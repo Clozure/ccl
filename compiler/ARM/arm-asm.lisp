@@ -80,7 +80,7 @@
           (ash quoted arm::fixnumshift)
           (arm-constant-index quoted))))
     (progn
-      (unless (and (consp form) (eq (keywordize (car form)) :$))
+      (unless (and (consp form) (eq (car form) :$))
         (error "Invalid constant syntax in ~s" form))
       (destructuring-bind (val) (cdr form)
         (eval val)))))
@@ -123,6 +123,8 @@
     :uuoC
     :fpux
     :imm16
+    :srcount                            ;single register count
+    :drcount
     ))
 
 (defun %encode-arm-operand-type (name)
@@ -786,6 +788,14 @@
      #x0d000a00
      #x0f300f00
      ())
+   (define-arm-instruction fstmdbs (:sd :rnw :srcount)
+     #x0d200a00
+     #x0fb00f00
+     ())
+   (define-arm-instruction fstmdbd (:dd :rnw :drcount)
+     #x0d200b00
+     #x0fb00f00
+     ())
    (define-arm-instruction fldd (:dd :fpaddr)
      #x0d100b00
      #x0f700f00
@@ -794,6 +804,14 @@
      #x0d100a00
      #x0f300f00
      ())
+   (define-arm-instruction fldmias (:sd :rnw :srcount)
+     #x0cb00a00
+     #x0fb00f00
+     ())
+   (define-arm-instruction fldmiad (:dd :rnw :srcount)
+     #x0cb00b00
+     #x0fb00f00
+     ())     
    (define-arm-instruction ftosid (:sd :dm)
      #x0ebd0b40
      #x0fbf0fc0
@@ -872,10 +890,7 @@
             (values nil nil nil)))
         (values nil nil nil)))))
 
-(defun keywordize (name)
-  (if (typep name 'keyword)
-    name
-    (intern (string-upcase (string name)) "KEYWORD")))
+
 
 (defun arm-rotate-left (u32 nbits)
   (assert (and (evenp nbits)
@@ -1111,7 +1126,7 @@
     (set-field-value instruction (byte 12 0) (need-arm-gpr form))
     (if (ccl::quoted-form-p form)
       (insert-shifter-constant (need-constant form) instruction)
-      (let* ((op (keywordize (car form))))
+      (let* ((op (car form)))
         (ecase op
           (:$ (destructuring-bind (value) (cdr form)
                 (insert-shifter-constant (eval value) instruction)))
@@ -1127,7 +1142,7 @@
                                         (ash 1 4)
                                         (ash (encode-arm-shift-type op) 5)
                                         (ash (need-arm-gpr count) 8)))
-               (ecase (keywordize (car count))
+               (ecase (car count)
                  (:$ (destructuring-bind (countval) (cdr count)
                        (set-field-value instruction (byte 12 0)
                                         (logior (need-arm-gpr reg)
@@ -1196,7 +1211,7 @@
 (defun parse-m12-operand (form instruction)
   (if (atom form)
     (error "Invalid memory operand ~s" form)    
-    (let* ((mode (keywordize (car form))))
+    (let* ((mode (car form)))
       (if (eq mode :=)
         (destructuring-bind (label) (cdr form)
           (when (arm::arm-subprimitive-address label)
@@ -1210,7 +1225,7 @@
             (error "missing index in memory operand ~s." form))
           (set-field-value instruction (byte 4 16) (need-arm-gpr rn))
           (let* ((quoted (ccl::quoted-form-p index))
-                 (index-op (if quoted :quote (and (consp index) (keywordize (car index)))))
+                 (index-op (if quoted :quote (and (consp index) (car index))))
                  (constant-index (or quoted (eq index-op :$))))
             (cond (constant-index
                    (destructuring-bind (val) (cdr index)
@@ -1237,7 +1252,7 @@
                      
                        (destructuring-bind (rm shift-expr) (cdr index)
                          (unless (and (consp shift-expr)
-                                      (eq (keywordize (car shift-expr)) :$))
+                                      (eq (car shift-expr) :$))
                            (error "Shift count must be immediate : ~s" shift-expr))
                          (destructuring-bind (count-expr) (cdr shift-expr)
                            (set-field-value instruction (byte 12 0)
@@ -1262,7 +1277,7 @@
 (defun parse-rnw-operand (form instruction)
   (if (atom form)
     (set-field-value instruction (byte 4 16) (need-arm-gpr form))
-    (if (eq (keywordize (car form)) :!)
+    (if (eq (car form) :!)
       (destructuring-bind (rn) (cdr form)
         (set-field-value instruction (byte 1 21) 1)
         (set-field-value instruction (byte 4 16) (need-arm-gpr rn)))
@@ -1283,7 +1298,7 @@
 (defun parse-fpux-operand (form instruction)
   (let* ((regno (if (typep form '(unsigned-byte 4))
                   form
-                  (ecase (keywordize form)
+                  (ecase form
                     (:fpsid 0)
                     (:fpscr 1)
                     (:fpexc 8)))))
@@ -1291,7 +1306,7 @@
 
 (defun parse-imm16-operand (form instruction)
   (unless (and (consp form)
-               (eq (keywordize (car form)) :$)
+               (eq (car form) :$)
                (consp (cdr form))
                (null (cddr form)))
     (error "Bad 16-bit immediate operand: ~s" form))
@@ -1299,6 +1314,21 @@
     (set-field-value instruction (byte 12 0) (ldb (byte 12 0) val))
     (set-field-value instruction (byte 4 16) (ldb (byte 4 12) val))))
     
+(defun parse-srcount-operand (form instruction)
+  (let* ((val (eval form)))
+    (unless (and (typep val 'fixnum)
+                 (> (the fixnum val) 0)
+                 (< (the fixnum val) 33))
+      (ccl::report-bad-arg form `(integer (0) (33))))
+    (set-field-value instruction (byte 8 0) val)))
+
+(defun parse-drcount-operand (form instruction)
+  (let* ((val (eval form)))
+    (unless (and (typep val 'fixnum)
+                 (> (the fixnum val) 0)
+                 (< (the fixnum val) 33))
+      (ccl::report-bad-arg form `(integer (0) (33))))
+    (set-field-value instruction (byte 7 1) val)))
 
 (defun parse-rm-operand (form instruction)
   (set-field-value instruction (byte 4 0) (need-arm-gpr form)))
@@ -1325,13 +1355,13 @@
 (defun parse-m8-operand (form instruction)
   (if (atom form)
     (error "Invalid memory operand ~s." form)
-    (let* ((mode (keywordize (car form)))
+    (let* ((mode (car form))
            (constant-index nil))
       (destructuring-bind (rn index) (cdr form)
         (set-field-value instruction (byte 4 16) (need-arm-gpr rn))
         (cond ((atom index)
                (set-field-value instruction (byte 4 0) (need-arm-gpr index)))
-              (t (unless (eq (keywordize (car index)) :$)
+              (t (unless (eq (car index) :$)
                    (error "Invalid index: ~s." index))
                  (destructuring-bind (val) (cdr index)
                    (let* ((value (eval val)))
@@ -1381,10 +1411,10 @@
   (if (atom form)
     (error "Invalid FP address: ~s" form)
     (destructuring-bind (op rn offset) form
-      (unless (eq (keywordize op) :@)
+      (unless (eq op :@)
         (error "Invalid FP addressing mode ~s in ~s." op form))
       (set-field-value instruction (byte 4 16) (need-arm-gpr rn))
-      (unless (and (consp offset) (eq (keywordize (car offset)) :$))
+      (unless (and (consp offset) (eq (car offset) :$))
         (error "Invalid FP address offset ~s in ~s." offset form))
       (destructuring-bind (offset-form) (cdr offset)
         (let* ((offset-val (eval offset-form)))
@@ -1397,7 +1427,7 @@
 
 (defun parse-@rn-operand (form instruction)
   (when (or (atom form)
-          (not (eq (keywordize (car form)) :@)))
+          (not (eq (car form) :@)))
     (error "Invalid register indirect operand: ~s" form))
   (destructuring-bind (rn) (cdr form)
     (set-field-value instruction (byte 4 16) (need-arm-gpr rn))))
@@ -1429,6 +1459,8 @@
       parse-uuoc-operand
       parse-fpux-operand
       parse-imm16-operand
+      parse-srcount-operand
+      parse-drcount-operand
       ))
 
 
@@ -1463,7 +1495,7 @@
         (unless template
           (error "Unknown ARM instruction - ~s" form))
         (let* ((cond-indicator (and (consp (car opvals))
-                                    (keywordize (caar opvals)))))
+                                    (caar opvals))))
           (when (or (eq cond-indicator :?)
                     (eq cond-indicator :~))
             (let* ((condform (pop opvals)))
@@ -1723,6 +1755,8 @@
     :fpaddr-offset
     :uuoC
     :imm16
+    :srcount
+    :drcount
     )))
 
 (defmacro encode-vinsn-field-type (name)
@@ -1756,6 +1790,8 @@
       vinsn-parse-uuoc-operand
       vinsn-parse-fpux-operand
       vinsn-parse-imm16-operand
+      vinsn-parse-srcount-operand
+      vinsn-parse-drcount-operand
       ))
 
 (defun vinsn-arg-or-gpr (avi form vinsn-params encoded-type bytespec)
@@ -1951,7 +1987,7 @@
   (declare (ignore vinsn-params))
   (let* ((regno (if (typep value '(unsigned-byte 4))
                   value
-                  (ecase (keywordize value)
+                  (ecase value
                     (:fpsid 0)
                     (:fpscr 1)
                     (:fpexc 8)))))
@@ -2076,6 +2112,17 @@
       (set-avi-opcode-field avi (byte 12 0) (ldb (byte 12 0) val))
       (set-avi-opcode-field avi (byte 4 16) (ldb (byte 4 12) val)))))
 
+(defun vinsn-parse-srcount-operand (avi value vinsn-params)
+  (let* ((val (vinsn-arg-or-constant avi value vinsn-params (encode-vinsn-field-type :srcount) nil)))
+    (when val
+      (check-type val (integer 1 32))
+      (set-avi-opcode-field avi (byte 8 0) val))))
+
+(defun vinsn-parse-drcount-operand (avi value vinsn-params)
+  (let* ((val (vinsn-arg-or-constant avi value vinsn-params (encode-vinsn-field-type :drcount) nil)))
+    (when val
+      (check-type val (integer 1 32))
+      (set-avi-opcode-field avi (byte 7 1) val))))
 
 (defun vinsn-simplify-instruction (form vinsn-params)
   (destructuring-bind (name . opvals) form
@@ -2089,7 +2136,7 @@
          (unless template
            (error "Unknown ARM instruction - ~s" form))
          (let* ((cond-indicator (and (consp (car opvals))
-                                     (keywordize (caar opvals))))
+                                     (caar opvals)))
                 (avi (make-arm-vinsn-instruction (arm-instruction-template-val template))))
            (when (or (eq cond-indicator :?)
                      (eq cond-indicator :~))
@@ -2154,6 +2201,8 @@
     vinsn-insert-fpaddr-offset-operand
     vinsn-insert-uuoc-operand
     vinsn-insert-imm16-operand
+    vinsn-insert-srcount-operand
+    vinsn-insert-drcount-operand
     ))
 
 (defun vinsn-insert-cond-operand (instruction value)
@@ -2267,6 +2316,12 @@
 (defun vinsn-insert-imm16-operand (instruction value)
   (set-field-value instruction (byte 12 0) (ldb (byte 12 0) value))
   (set-field-value instruction (byte 4 16) (ldb (byte 4 12) value)))
+
+(defun vinsn-insert-srcount-operand (instruction value)
+  (set-field-value instruction (byte 8 0) value))
+
+(defun vinsn-insert-drcount-operand (instruction value)
+  (set-field-value instruction (byte 7 1) value))  
 
 
 
