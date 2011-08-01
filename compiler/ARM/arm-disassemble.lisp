@@ -439,11 +439,22 @@
               (if *hide-spjump-internals*
                 (return)
                 (format-spname labeled stream))))
-          (let* ((name (adi-mnemonic info)))
+          (let* ((name (adi-mnemonic info))
+                 (use-fixnum-syntax nil))            
             (when name
               (let* ((condition-name (or (adi-condition-name info) "")))
                 (format stream "~&  (~a~a" name condition-name))
-              (labels ((format-operand (operand)
+              (let* ((ngpr 0)
+                     (nnode 0))
+                (declare (fixnum ngpr nnode))
+                (dolist (op (adi-operands info))
+                  (when (and (consp op) (eq (car op) :gpr))
+                    (incf ngpr)
+                    (when (logbitp (cadr op) arm-node-regs)
+                      (incf nnode))))
+                (unless (zerop ngpr)
+                  (setq use-fixnum-syntax (eql nnode ngpr))))
+              (labels ((format-operand (operand &optional toplevel)
                          (write-char #\space stream)
                          (if (atom operand)
                            (if (and (typep operand 'integer)
@@ -472,12 +483,22 @@
                              (:spname
                               (format-spname (cadr operand) stream))
                              (:$
-                              (if (eql (cadr operand) arm::nil-value)
-                                (format stream "'nil")
-                                (progn
-                                  (format stream "(:$")
-                                  (format-operand (cadr operand))
-                                  (write-char #\) stream))))
+                              (let* ((val (cadr operand)))
+                                (cond ((eql val arm::nil-value)
+                                       (format stream "'nil"))
+                                      ((and toplevel
+                                           use-fixnum-syntax
+                                           (typep val 'integer)
+                                           (not (logtest arm::fixnummask val)))
+                                       (let* ((unboxed (ash val (- arm::fixnumshift))))
+                                         (if (> (abs unboxed) 100)
+                                           (format stream "'#x~x" unboxed)
+                                           (format stream "'~d" unboxed))))
+                                      (t
+                                       (progn
+                                         (format stream "(:$")
+                                         (format-operand val)
+                                         (write-char #\) stream))))))
                              (:? (format stream "(:? ~a)" (cadr operand)))
                              (:gpr (format stream "~a" (svref *arm-gpr-names* (cadr operand))))
                              (:single (format stream "s~d" (cadr operand)))
@@ -496,7 +517,7 @@
                               (format-operand (cadr operand))
                               (write-char #\) stream))))))
                 (dolist (op (adi-operands info))
-                  (format-operand op))
+                  (format-operand op t))
                 (write-char #\) stream)
                 (when (eql (incf pc-counter) 4)
                   (setq pc-counter 0)
