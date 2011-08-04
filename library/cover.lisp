@@ -62,6 +62,7 @@
 (defparameter *file-coverage* ())
 (defparameter *coverage-tags* nil)
 (defparameter *code-note-tags* nil)
+(defparameter *coverage-frame-name* "FF0")
 
 (defparameter *code-note-subnotes* (make-hash-table :test #'eq))
 (defparameter *code-note-function* (make-hash-table :test #'eq))
@@ -79,6 +80,7 @@
   `(let* ((*coverage-tags* nil)
           (*code-note-tags* nil)
           (*file-coverage* nil)
+          (*coverage-frame-name* (format nil "FF~x" (random most-positive-fixnum)))
           (*code-note-subnotes* (make-hash-table :test #'eq :shared nil))
           (*code-note-function* (make-hash-table :test #'eq :shared nil))
           (*entry-note-function* (make-hash-table :test #'eq :shared nil))
@@ -706,7 +708,11 @@ causes the HTML report to include incremental coverage information"
   (let* ((paths)
          (directory (make-pathname :name nil :type nil :defaults output-file))
          (coverage-dir (common-coverage-directory))
-         (index-file (and html (merge-pathnames output-file "index.html")))
+         (frame-file (and html (merge-pathnames output-file "index.html")))
+         (index-file (and html (make-pathname :name (%str-cat (pathname-name frame-file) "_html")
+                                              :defaults frame-file)))
+         (tags-file (and tags (make-pathname :name (%str-cat (pathname-name frame-file) "_tags")
+                                             :defaults frame-file)))
          (stats-file (and statistics (merge-pathnames (if (or (stringp statistics)
                                                               (pathnamep statistics))
                                                           (merge-pathnames statistics "statistics.csv")
@@ -731,8 +737,115 @@ causes the HTML report to include incremental coverage information"
                            (cerror "Try coloring anyway"
                                    "File ~s has changed since coverage source location info was recorded."
                                    file)))
-                       (report-file-coverage index-file coverage directory html-name external-format))
+                       (report-file-coverage frame-file coverage directory html-name external-format))
                      (push (list* src-name html-name coverage) paths)))))
+      (when html
+        (when tags-file
+          (with-open-file (tags-stream tags-file
+                                       :direction :output
+                                       :if-exists :supersede
+                                       :if-does-not-exist :create)
+	    ;; have to create a style else changing style.width has no effect
+            (format tags-stream "<html><head><style type='text/css'>
+#tagsselect {  width: *; }
+</style><script type='text/javascript'>
+function tags_changed() {
+  var file_frame = top.frames.T~a;
+  if (file_frame) {
+    var sel = document.getElementById('tagsselect');
+    var len = sel.length;
+    var tags = new Array();
+    for (var i = 0; i < len; i++)
+      if (sel[i].selected) tags.push(sel[i].value);
+    file_frame.colorize(tags);
+  }
+}
+
+function resize_tags() {
+  var sel = document.getElementById('tagsselect');
+  sel.style.width = sel.offsetParent.scrollWidth + 'px';
+}
+
+function init_tags () {
+  var sel = document.getElementById('tagsselect');
+  var len = sel.length;
+  for (var i = 0; i < len; i++) sel[i].selected = true;
+  sel.focus();
+  sel.onchange = tags_changed;
+  sel.style.width = sel.offsetWidth + 'px';
+
+  var fs = top.document.getElementById('tagsframeset');
+  fs.cols = (sel.offsetLeft + sel.offsetWidth) + 'px,*';
+
+}
+</script></head><body onload='init_tags()' onresize='resize_tags()'>"
+		    *coverage-frame-name*)
+            (write-coverage-tag-table tags-stream)
+            (format tags-stream "</body></html>")))
+        (with-open-file (html-stream frame-file
+                                     :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+          (format html-stream "<html><head><script type='text/javascript'>~%~
+function show_in_target_frame (w, elt) {
+  var page_top = w.pageYOffset || w.document.documentElement.scrollTop || w.document.body.scrollTop;
+  var page_height = w.innerHeight || w.document.documentElement.clientHeight || w.document.body.clientHeight;
+  var elt_bottom = elt.offsetHeight;
+  for (var p = elt; p && p.tagName != 'BODY'; p = p.offsetParent) elt_bottom += p.offsetTop;
+  //  page height may or may not include the scroll bar, scroll a little extra just in case it does.
+  var min_top = elt_bottom - (page_height - 20);
+  if (page_top <= min_top) w.scrollTo(0, Math.ceil(min_top));
+}
+
+function ensure_target_frame (e) {
+  var link = (e ? (e.target ? e.target : e.srcElement) : false);
+  if (window.frames.length == 1) {
+    var new_frame;~0@*~:[
+      new_frame = document.createElement('frame');
+      new_frame.name = 'T~1@*~a';
+      if (link) new_frame.src = link.href;
+~;
+      new_frame = document.createElement('frameset');
+      new_frame.id = 'tagsframeset';
+      var tags_frame = document.createElement('frame');
+      tags_frame.src = '~0@*~a';
+      file_frame = document.createElement('frame');
+      file_frame.name = 'T~1@*~a';
+      if (link) file_frame.src = link.href;
+      new_frame.appendChild(tags_frame);
+      new_frame.appendChild(file_frame);
+      // new_frame.cols = '20%,*';
+    ~]
+    var frameset = document.getElementById('topframeset');
+    frameset.appendChild(new_frame);
+    frameset.rows = '30%,*';
+
+    if (link) show_in_target_frame(window.frames[0], link);
+  }
+  return true;
+}
+
+function send_links_to_frame (w) {
+  for (var i = 0; i < w.document.links.length; i++) {
+    var link = w.document.links[i];
+    link.target = 'T~1@*~a';
+    link.onclick = ensure_target_frame;
+  }
+}
+
+function close_target_frame () {
+  if (window.frames.length > 1) {
+    var frameset = document.getElementById('topframeset');
+    frameset.removeChild(frameset.childNodes[1]);
+    frameset.rows = '*';
+  }
+  return false;
+}
+</script></head>
+<frameset id='topframeset' rows='*'><frame src='~2@*~a' /></frameset></html>"
+                  (and tags-file (native-file-namestring tags-file))
+                  *coverage-frame-name*
+                  (native-file-namestring index-file))))
       (when (null paths)
         (error "No code coverage data available"))
       (setq paths (sort paths #'(lambda (path1 path2)
@@ -763,14 +876,14 @@ causes the HTML report to include incremental coverage information"
                                         :if-does-not-exist :create)
             (report-coverage-to-streams paths nil stats-stream))
           (error "One of :HTML or :STATISTICS must be non-nil"))))
-    (values index-file stats-file)))
+    (values frame-file stats-file)))
 
 
 (defun report-coverage-to-streams (paths html-stream stats-stream)
   (when html-stream
     (format html-stream "<html><head>~%")
     (write-coverage-styles html-stream)
-    (format html-stream "~%</head>~%<body>"))
+    (format html-stream "~%</head>~%<body onload='if (top.send_links_to_frame) top.send_links_to_frame(self)'>"))
   (unless paths
     (warn "No coverage data found for any file, producing an empty report. Maybe you forgot to (SETQ CCL::*COMPILE-CODE-COVERAGE* T) before compiling?")
     (when html-stream (format html-stream "<h3>No code coverage data found.</h3>~%"))
@@ -905,15 +1018,39 @@ causes the HTML report to include incremental coverage information"
                                :if-does-not-exist :create)
     (write-coverage-html-file index-file html-name html-stream coverage external-format)))
 
+(defun write-char-to-html (ch stream)
+  (if (or (alphanumericp ch) (find ch "()+-:* ")) ;; common and safe
+    (write-char ch stream)
+    (format stream "&#~D;" (char-code ch))))
+
+
+(defun write-coverage-tag-table (html-stream)
+  (let* ((tags *coverage-tags*)
+         (named-p (not (fixnump tags)))
+         (count (if named-p (length tags) tags)))
+    (format html-stream "~&<form width='*'><select multiple size='~d' width='*' id='tagsselect' onchange='tags_changed();'>~%" count)
+    (loop for i from 0 below count
+          do (format html-stream "<option value='~d'>" i)
+          do (if named-p
+               (let* ((tag (aref tags i))
+                      (name (typecase tag
+                              (string tag)
+                              (symbol (symbol-name tag))
+                              (t (princ-to-string tag)))))
+                 (loop for ch across name do (write-char-to-html ch html-stream)))
+               (format html-stream "[~d]" i))
+          do (format html-stream "</option>~%"))
+    (format html-stream "</select></form>~%")))
+
 (defun write-coverage-html-file (index-file html-name html-stream coverage source-external-format)
   (let ((*print-case* :downcase))
 
     (format html-stream "<html><head>")
     (write-coverage-styles html-stream)
     (format html-stream "<script src='~a.js'></script>~%" html-name)
-    (format html-stream "</head><body onload='colorize(true)'>")
+    (format html-stream "</head><body onload='init_file()'>")
 
-    (format html-stream "<h3><a href=~s>Coverage report</a>: ~a <br />~%</h3>~%"
+    (format html-stream "<h3><a id='backlink' href=~s>Coverage report:</a> ~a <br />~%</h3>~%"
             (native-file-namestring index-file)
             (file-coverage-file coverage))
     (format html-stream "<table class='summary'>")
@@ -944,10 +1081,20 @@ function DEBUG_OUT(text) {
 ;; This goes in each file.
 (defparameter $coverage-javascript "
 
+function init_file () {
+  if (top.close_target_frame) {
+    var backlink = document.getElementById('backlink');
+    backlink.innerHTML = '[Close]<p>';
+    backlink.onclick = top.close_target_frame;
+  }
+  colorize (true);
+}
+
 function tags_intersect (tags1, tags2) {   // tags2 = true means all tags.
+  var ntags = tags1.length - 1;
   if (tags2 === true)
-    return (tags1.length > 0);
-  for (var i = 0; i < tags1.length; i++) {
+    return (ntags > 0);
+  for (var i = 0; i < ntags; i++) {
     var tag1 = tags1[i];
     for (var j = 0; j < tags2.length; j++)
       if (tag1 == tags2[j]) return true;
@@ -1030,8 +1177,8 @@ function colorize (tags_to_show) {
 
   for (var sn = 0; sn < total; sn++) {
     if (SourceCodeNotes) {
-      var notes = SourceCoverage[sn];
-      for (var i = 0, style = NO_DATA; i < notes.length; i++) {
+      var notes = SourceCodeNotes[sn];
+      for (var i = 0, style = NO_DATA; i < (notes.length - 1); i++) {
         var note_style = coverage[notes[i]];
         if (style != note_style) style = (style == NO_DATA ? note_style : PARTLY_COVERED);
       }
@@ -1088,7 +1235,7 @@ function colorize (tags_to_show) {
              while (if len (< index len) ,data)
              as note = (if len (aref ,data index) (pop ,data))
              do (funcall ,writer ,js-stream note)
-             do (write-string (if (eql 0 (mod index 50)) #.(format nil ",~% ") ", ") ,js-stream))
+             do (write-string (if (eql 49 (mod index 50)) #.(format nil ",~% ") ", ") ,js-stream))
        ;; Add an element at the end because otherwise get the wrong length if last element is empty
        (format ,js-stream "'end']")
        (when ,var (format ,js-stream ";~%")))))
@@ -1174,9 +1321,7 @@ function colorize (tags_to_show) {
                     (incf (coverage-html-state-column s) count)))
                (t
                   (incf (coverage-html-state-column s))
-                  (if (or (alphanumericp ch)  (find ch "()+-:* "));; common and safe
-                    (write-char ch output)
-                    (format output "&#~D;" (char-code ch))))))
+                  (write-char-to-html ch output))))
     (assert (eql file-pos (stream-position input)))
     (setf (coverage-html-state-file-pos s) file-pos)))
 
@@ -1435,4 +1580,3 @@ function swap (id) {
           $partially-covered-style
           $totally-covered-style
           ))
-
