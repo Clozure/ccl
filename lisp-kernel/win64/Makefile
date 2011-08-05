@@ -1,5 +1,5 @@
 #
-#   Copyright (C) 2007 Clozure Associates
+#   Copyright (C) 2007-2011 Clozure Associates
 #   This file is part of Clozure CL.  
 #
 #   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
@@ -13,10 +13,24 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+# This makefile is written to be used with the mingw toolchain
+# running in the Cygwin environment.
+#
+# Install the following Cygwin packages:
+# * make
+# * m4
+# * mingw64-x86_64-binutils
+# * mingw64-x86_64-gcc-core
+# * mingw64-x86_64-headers
+# * mingw64-x86_64-pthreads
+# * mingw64-x86_64-runtime
+#
+# Accept the dependencies the installation tool may add.
+
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
 VPATH = ../
-RM = /bin/rm
+RM = rm
 # gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
 # are installed under these names
 CC = x86_64-w64-mingw32-gcc

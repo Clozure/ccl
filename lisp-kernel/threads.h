@@ -51,7 +51,7 @@
 #ifdef WINDOWS
 #define USE_WINDOWS_SEMAPHORES 1
 #undef USE_POSIX_SEMAPHORES
-#ifdef WIN_32
+#ifdef NEED_TIMESPEC
 struct timespec {
   int tv_sec;
   int tv_nsec;

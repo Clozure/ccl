@@ -381,7 +381,6 @@ lisp-kernel/static-linuxppc/ccl-platform.h -text
 lisp-kernel/unix-calls.c -text
 lisp-kernel/win32/.gdbinit -text
 lisp-kernel/win32/Makefile -text
-lisp-kernel/win32/Makefile.mingw -text
 lisp-kernel/win32/pei-ia32.x -text
 lisp-kernel/win64/.gdbinit -text
 lisp-kernel/win64/Makefile -text

@@ -1,5 +1,5 @@
 #
-#   Copyright (C) 2008 Clozure Associates
+#   Copyright (C) 2008-2011 Clozure Associates
 #   This file is part of Clozure CL.  
 #
 #   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
@@ -13,14 +13,28 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
+# This makefile is written to be used with the mingw toolchain
+# running in the Cygwin environment.
+#
+# Install the following Cygwin packages:
+# * make
+# * m4
+# * mingw64-i686-binutils
+# * mingw64-i686-gcc-core
+# * mingw64-i686-headers
+# * mingw64-i686-pthreads
+# * mingw64-i686-runtime
+#
+# Accept the dependencies the installation tool may add.
+
 SVN_REVISION=$(shell svnversion || echo "unknown")
 
 VPATH = ../
-RM = /bin/rm
-CC = gcc
-AS = as
+RM = rm
+CC = i686-w64-mingw32-gcc
+AS = i686-w64-mingw32-as
 M4 = m4
-LD = ld
+LD = i686-w64-mingw32-ld
 ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632
 CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DSVN_REVISION=$(SVN_REVISION)
@@ -41,8 +55,6 @@ else
 HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
-CRT2 = $(shell $(CC) -mno-cygwin -print-file-name=crt2.o)
-
 # There may be some confusion about whether or not C symbols have
 # leading underscores or not.  The assembler sources seem to
 # expect them to and mingw import libs seem to use them, but
@@ -57,7 +69,7 @@ SUPPRESS_UNDERSCORES=#-fno-leading-underscore
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -mno-cygwin -o $@
+	$(CC) -m32 -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) ${SUPPRESS_UNDERSCORES} -o $@
 
 # order matters: x86-spjump32.o must be first.
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
@@ -81,22 +93,13 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 KSPOBJ = $(SPOBJ)
 all:	../../wx86cl.exe
 
-# Order matters: libs that provide definitions must follow libs that
-# reference them.  (It's legal to use -lfoo multiple times to try to
-# work around this.)
-LIBGCC = $(shell $(CC) -mno-cygwin -print-libgcc-file-name)
-OSLIBS =  -L/usr/lib/w32api -L/mingw/lib -L/usr/lib/mingw\
-	-lm -lpsapi -lws2_32 -lmingw32 $(LIBGCC) -lmoldname -lmingwex \
-	-lmsvcrt -luser32 -lkernel32 -ladvapi32 -lshell32  $(GCCLIB) \
-	-lmoldname -lmingwex -lmsvcrt
-
-
+OSLIBS = -lpsapi -lws2_32
 
 IMAGE_BASE =--image-base=0x10000
 
 ../../wx86cl.exe: $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
-	ld -o ../../wx86cl.exe  $(IMAGE_BASE) --enable-auto-import \
-	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(CRT2) $(OSLIBS) $(LIBGCC) $(LATELIBS)
+	$(CC) -m32 -o ../../wx86cl.exe  $(IMAGE_BASE) --enable-auto-import \
+	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
