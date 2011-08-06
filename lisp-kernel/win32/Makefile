@@ -95,10 +95,9 @@ all:	../../wx86cl.exe
 
 OSLIBS = -lpsapi -lws2_32
 
-IMAGE_BASE =--image-base=0x10000
-
 ../../wx86cl.exe: $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
-	$(CC) -m32 -o ../../wx86cl.exe  $(IMAGE_BASE) --enable-auto-import \
+	$(CC) -m32 -o ../../wx86cl.exe  -Wl,--image-base=0x10000 \
+	-Wl,--enable-auto-import \
 	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
