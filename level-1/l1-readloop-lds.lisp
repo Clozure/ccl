@@ -85,7 +85,7 @@ whose name or ID matches <p>, or to any process if <p> is null"
 	(dolist (proc (all-processes) (values))
 	  (show-process-info proc)))))
 
-(define-toplevel-command :global cd (dir) "Change to directory DIR" (setf (current-directory) dir) (toplevel-print (list (current-directory))))
+(define-toplevel-command :global cd (dir) "Change to directory DIR (e.g., #p\"ccl:\" or \"/some/dir\")" (setf (current-directory) dir) (toplevel-print (list (current-directory))))
 
 (define-toplevel-command :global pwd () "Print the pathame of the current directory" (toplevel-print (list (current-directory))))
 
