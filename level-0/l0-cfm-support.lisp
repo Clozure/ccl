@@ -162,6 +162,14 @@
 #+(or linux-target freebsd-target solaris-target)
 (progn
 
+;; (pref ptr :link_map.l_addr) is an integer on Linux and a Pointer on FreeBSD
+;; This macro returns a pointer on all platforms
+(defmacro link_map.l_addr (ptr)
+  (let* ((record (%find-foreign-record :link_map))
+         (field (%find-foreign-record-type-field record :l_addr))
+         (offset (/ (foreign-record-field-offset field) 8)))
+    `(%get-ptr ,ptr ,offset)))
+
 (defun soname-ptr-from-link-map (map)
   (let* ((path (pref map :link_map.l_name)))
     (if (%null-ptr-p path)
@@ -240,7 +248,7 @@
 
 
 (defun shlib-from-map-entry (m)
-  (let* ((base (%int-to-ptr (pref m :link_map.l_addr))))
+  (let* ((base (link_map.l_addr m)))
     ;; On relatively modern Linux systems, this is often NULL.
     ;; I'm not sure what (SELinux ?  Pre-binding ?  Something else ?)
     ;; counts as being "relatively modern" in this case.
@@ -350,9 +358,9 @@
 	       lib)
 	(%walk-shared-libraries
 	 #'(lambda (map)
-             (let* ((addr (pref map :link_map.l_addr)))
-               (unless (or (eql addr 0)
-                           (shared-library-at (%int-to-ptr addr)))
+             (let* ((addr (link_map.l_addr map)))
+               (unless (or (%null-ptr-p addr)
+                           (shared-library-at addr))
                  (let* ((new (shlib-from-map-entry map)))
                    (%dlopen-shlib new))))))))))
 
@@ -855,7 +863,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 		       :address soname
 		       :unsigned-fullword *dlopen-flags*
 		       :void)
-	      (setf (shlib.base lib) (%int-to-ptr (pref map :link_map.l_addr))
+	      (setf (shlib.base lib) (link_map.l_addr map)
 		    (shlib.pathname lib) (%get-cstring
 					  (pref map :link_map.l_name))
                     (shlib.soname lib) (%get-cstring (soname-ptr-from-link-map map))
@@ -899,7 +907,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 		  (setf (shlib.pathname lib)
 			(%get-cstring (pref map :link_map.l_name))
 			(shlib.base lib)
-			(%int-to-ptr (pref map :link_map.l_addr))
+			(link_map.l_addr map)
 			(shlib.map lib) map
                         (shlib.handle lib) handle
 			win t))))))
