@@ -783,6 +783,7 @@ function select_tags (tags) {
   for (var i = 0; i < sel.length; i++) sel[i].selected = false;
   var len = tags.length;
   for (var i = 0; i < len; i++) sel[tags[i]].selected = true;
+  tags_changed();
 }
 
 </script></head><body onload='init_tags()' onresize='resize_tags()'>"
