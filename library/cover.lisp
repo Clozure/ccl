@@ -772,12 +772,19 @@ function init_tags () {
   for (var i = 0; i < len; i++) sel[i].selected = true;
   sel.focus();
   sel.onchange = tags_changed;
-  sel.style.width = sel.offsetWidth + 'px';
 
   var fs = top.document.getElementById('tagsframeset');
-  fs.cols = (sel.offsetLeft + sel.offsetWidth) + 'px,*';
-
+  fs.cols = Math.min(sel.offsetLeft + sel.offsetWidth, 0.3 * fs.scrollWidth) + 'px,*';
+  resize_tags();
 }
+
+function select_tags (tags) {
+  var sel = document.getElementById('tagsselect');
+  for (var i = 0; i < sel.length; i++) sel[i].selected = false;
+  var len = tags.length;
+  for (var i = 0; i < len; i++) sel[tags[i]].selected = true;
+}
+
 </script></head><body onload='init_tags()' onresize='resize_tags()'>"
 		    *coverage-frame-name*)
             (write-coverage-tag-table tags-stream)
@@ -809,6 +816,7 @@ function ensure_target_frame (e) {
       new_frame.id = 'tagsframeset';
       var tags_frame = document.createElement('frame');
       tags_frame.src = '~0@*~a';
+      tags_frame.name = 'tagsframe';
       file_frame = document.createElement('frame');
       file_frame.name = 'T~1@*~a';
       if (link) file_frame.src = link.href;
@@ -1218,6 +1226,28 @@ function colorize (tags_to_show) {
 
 
 }
+
+function show_tags (sn) {
+  tags_frame = top.frames.tagsframe;
+  if (tags_frame && tags_frame.select_tags) {
+    var tags = new Array();
+    var outer_notes = SourceCodeNotes[sn].slice(0);
+    var total = CodeTags.length - 1;
+    for (cn = total - 1; cn >= 0; cn--) {
+      if (is_member(CodeParents[cn], outer_notes)) {
+         outer_notes.push(cn);
+         var new_tags = CodeTags[cn];
+         var n = new_tags.length - 1;
+         for (i = 0; i < n; i++) {
+           var tag = new_tags[i];
+           if (!is_member(tag, tags)) tags.push(tag);
+         }
+      }
+    }
+    tags_frame.select_tags(tags);
+  }
+}
+
 ")
 
 
@@ -1379,8 +1409,10 @@ function colorize (tags_to_show) {
       (loop 
         for start = 0 then end as (end . acodes) in queue
         do (output-coverage-html-source s start end)
-        do (format html-stream "<a href=javascript:swap('~at~d')><span class='toggle' id='p~2:*~at~d'>Show expansion</span></a>~%~
-                                        <div class='acode' id='a~2:*~at~d'><code>" prefix start)
+        do (format html-stream "<a href=javascript:swap('~at~d')><span class='toggle' id='p~2:*~at~d'>Show expansion</span></a>~%" prefix start)
+        do (when *coverage-tags*
+             (format html-stream "&nbsp;&nbsp;&nbsp;<a href=javascript:show_tags(~d)><span class='toggle'>Show tags</span></a>~%" start))
+        do (format html-stream "<div class='acode' id='a~at~d'><code>" prefix start)
         do (loop for (acode . notes) in acodes
                  do (with-input-from-vector (astream acode :external-format :utf-8)
                       (let ((cs (make-coverage-html-state :input astream
