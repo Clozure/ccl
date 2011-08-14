@@ -375,6 +375,24 @@
     ,@(unless (zerop high)
        `((movt ,reg (:$ ,high)))))))
 
+(defarmlapmacro push-fprs (n)
+  "Save N fprs starting at d8 on the control stack.
+   (This actually loads a vector header into d7 and
+   stores n+1 FPRs, starting at d7.  Clobbers imm0 and
+   imm1."
+  `(progn
+    (movw imm0 (:$ (logior (ash (1+ ,n) arm::num-subtag-bits)
+                            arm::subtag-double-float-vector)))
+    (mov imm1 (:$ 0))
+    (fmdrr d7 imm0 imm1)
+    (fstmdbd d7 (:! sp) ,(1+ n))))
+
+(defarmlapmacro pop-fprs (n)
+  "Restore N fprs starting at d8 from the top of the control
+   stack.  (This actually restores N+1 fprs starting at d7;
+   on exit, d7 will contain the vector header that had been
+   on top of the stack.)"
+  `(fldmiad d7 (:! sp) ,(1+ n)))
 
 
 
