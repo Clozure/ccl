@@ -143,30 +143,31 @@
   (str val (:+@ v scaled-idx)))
 
                               
-(define-arm-vinsn (misc-ref-single-float :predicatable)
+(define-arm-vinsn (misc-ref-single-float :predicatable :sets-lr)
     (((dest :single-float))
      ((v :lisp)
-      (scaled-idx :u32))
-     ((temp :u32)))
-  (ldr temp (:@ v scaled-idx))
-  (fmsr dest temp))
+      (scaled-idx :u32)))
+  (add lr v scaled-idx)
+  (flds dest (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
-(define-arm-vinsn (misc-ref-c-single-float :predicatable)
+(define-arm-vinsn (misc-ref-c-single-float :predicatable :sets-lr)
     (((dest :single-float))
      ((v :lisp)
       (idx :u32const))
-     ((temp :u32)))
-  (ldr temp (:@ v (:$ (:apply + arm::misc-data-offset (:apply ash idx 2)))))
-  (fmsr dest temp))
+     ())
+  (add lr v (:$ arm::misc-data-offset))
+  (flds dest (:@ lr (:$ (:apply ash idx 2))))
+  (mov lr (:$ 0)))
 
-(define-arm-vinsn (misc-ref-double-float :predicatable)
+(define-arm-vinsn (misc-ref-double-float :predicatable :sets-lr)
     (((dest :double-float))
      ((v :lisp)
-      (scaled-idx :u32))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (ldrd low (:@ v scaled-idx))
-  (fmdrr dest low high))
+      (unscaled-idx :imm)))
+  (add arm::lr v (:$ arm::misc-dfloat-offset))
+  (add arm::lr arm::lr (:lsl unscaled-idx (:$ 1)))
+  (fldd dest (:@ arm::lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 
 
@@ -175,34 +176,37 @@
     (((dest :double-float))
      ((v :lisp)
       (idx :u32const)))
-  (add lr v (:$ arm::double-float.pad))
-  (fldd dest (:@ lr (:$ (:apply + (:apply ash idx 3) (- arm::double-float.value arm::double-float.pad))))))
+  (add lr v (:$ arm::double-float.value))
+  (fldd dest (:@ lr (:$ (:apply ash idx 3))))
+  (mov lr (:$ 0)))
 
-(define-arm-vinsn (misc-set-c-double-float :predicatable)
+(define-arm-vinsn (misc-set-c-double-float :predicatable :sets-lr)
     (((val :double-float))
      ((v :lisp)
       (idx :u32const)))
-  (add lr v (:$ arm::double-float.pad))
-  (fstd val (:@ lr (:$ (:apply + (:apply ash idx 3) (- arm::double-float.value arm::double-float.pad))))))
+  (add lr v (:$ arm::double-float.value))
+  (fstd val (:@ lr (:$ (:apply ash idx 3))))
+  (mov lr (:$ 0)))
 
-(define-arm-vinsn (misc-set-double-float :predicatable)
+(define-arm-vinsn (misc-set-double-float :predicatable :sets-lr)
     (()
      ((val :double-float)
       (v :lisp)
-      (scaled-idx :u32))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (fmrrd low high val)
-  (strd low (:@ v scaled-idx)))
+      (unscaled-idx :imm)))             ; a fixnum
+  (add lr v (:$ arm::misc-dfloat-offset))
+  (add lr lr (:lsl unscaled-idx (:$ 1)))
+  (fstd val (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 (define-arm-vinsn (misc-set-c-single-float :predicatable)
     (()
      ((val :single-float)
       (v :lisp)
-      (idx :u32const))
-     ((temp :u32)))
-  (fmrs temp val)
-  (str temp (:@ v (:$ (:apply + arm::misc-data-offset (:apply ash idx 2))))))
+      (idx :u32const)))
+  (add lr v (:$ arm::misc-data-offset))
+  (fsts val (:@ lr (:$ (:apply ash idx 2))))
+  (mov lr (:$ 0)))
+
 
 
 
@@ -2427,7 +2431,7 @@
 
 ;;; Heap-cons a double-float to store contents of FPREG.  Hope that we don't do
 ;;; this blindly.
-(define-arm-vinsn double->heap (((result :lisp)) ; tagged as a double-float
+(define-arm-vinsn (double->heap :sets-lr) (((result :lisp)) ; tagged as a double-float
                                 ((fpreg :double-float)) 
                                 ((header-temp (:u32 #.arm::imm0))
                                  (high (:u32 #.arm::imm1))))
@@ -2441,8 +2445,9 @@
   (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
-  (add lr result (:$ arm::double-float.pad))
-  (fstd fpreg (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
+  (add lr result (:$ arm::double-float.value))
+  (fstd fpreg (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 
 ;;; This is about as bad as heap-consing a double-float.  (In terms of
@@ -2462,26 +2467,27 @@
   (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
+  (add lr result (:$ arm::single-float.value))
   (fmrs header-temp fpreg)
   (str header-temp (:@ result (:$ arm::single-float.value))))
 
 
 
 ;;; "dest" is preallocated, presumably on a stack somewhere.
-(define-arm-vinsn (store-double :predicatable)
+(define-arm-vinsn (store-double :predicatable :sets-lr)
     (()
      ((dest :lisp)
-      (source :double-float))
-     ((low (:u32 #.arm::imm0))
-      (high (:u32 #.arm::imm1))))
-  (fmrrd low high source)
-  (strd low (:@ dest (:$ arm::double-float.value))))
+      (source :double-float)))
+  (add lr dest (:$ arm::double-float.value))
+  (fstd source (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 (define-arm-vinsn (get-double :predicatable :sets-lr)
     (((target :double-float))
      ((source :lisp)))
-  (add lr source (:$ arm::double-float.pad))
-  (fldd target (:@ lr (:$ (- arm::double-float.value arm::double-float.pad)))))
+  (add lr source (:$ arm::double-float.value))
+  (fldd target (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,

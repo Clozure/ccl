@@ -1581,9 +1581,10 @@
                     (! misc-ref-c-double-float fp-val src index-known-fixnum)
                     (with-imm-target () idx-reg
                       (if index-known-fixnum
-                        (arm2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-double-float fp-val src idx-reg)))
+                        (unless unscaled-idx
+                          (setq unscaled-idx idx-reg)
+                          (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                      (! misc-ref-double-float fp-val src unscaled-idx)))
                   (if (eq vreg-class hard-reg-class-fpr)
                     (<- fp-val)
                     (ensuring-node-target (target vreg)
@@ -2153,9 +2154,10 @@
                     (! misc-set-c-double-float unboxed-val-reg src index-known-fixnum)
                     (progn
                       (if index-known-fixnum
-                        (arm2-absolute-natural seg scaled-idx nil (+ (arch::target-misc-dfloat-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index scaled-idx unscaled-idx))
-                      (! misc-set-double-float unboxed-val-reg src scaled-idx)))))
+                        (unless unscaled-idx
+                          (setq unscaled-idx scaled-idx)
+                          (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                      (! misc-set-double-float unboxed-val-reg src unscaled-idx)))))
                  (t
                   (with-imm-target (unboxed-val-reg) scaled-idx
                     (cond
