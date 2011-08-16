@@ -4003,6 +4003,34 @@
   (orr temp src (:$ arm::fixnummask))
   (mvn dest temp))
 
+(define-arm-vinsn fixnum-ref-c-double-float (((dest :double-float))
+                                             ((base :imm)
+                                              (idx :u32const)))
+  (fldd dest (:@ base (:$ (:apply ash idx 3)))))
+
+(define-arm-vinsn fixnum-ref-double-float (((dest :double-float))
+                                           ((base :imm)
+                                            (idx :imm))
+                                           ((temp :imm)))
+  (add temp base (:lsl idx (:$ 1)))
+  (fldd dest (:@ temp (:$ 0))))
+
+(define-arm-vinsn fixnum-set-c-double-float (()
+                                             ((base :imm)
+                                              (idx :u32const)
+                                              (val :double-float)))
+  (fstd val (:@ base (:$ (:apply ash idx 3)))))
+
+
+(define-arm-vinsn fixnum-set-double-float (()
+                                           ((base :imm)
+                                            (idx :imm)
+                                            (val :double-float))
+                                           ((temp :imm)))
+  (add temp base (:lsl idx (:$ 1)))
+  (fstd val (:@ temp (:$ 0))))
+                                             
+
 ;;; In case arm::*arm-opcodes* was changed since this file was compiled.
 #+maybe-never
 (queue-fixup

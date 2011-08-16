@@ -6199,8 +6199,7 @@
   (if (setq test-val (nx2-constant-form-value (acode-unwrapped-form-value testform)))
     (arm2-form seg vreg xfer (if (nx-null test-val) false true))
     (multiple-value-bind (ranges trueforms var otherwise)
-        #+notyet (nx2-reconstruct-case testform true false)
-        #-notyet (values nil nil nil nil)
+        (nx2-reconstruct-case testform true false)
       (or (arm2-generate-casejump seg vreg xfer ranges trueforms var otherwise)
           (let* ((cstack *arm2-cstack*)
                  (vstack *arm2-vstack*)
@@ -6933,8 +6932,10 @@
              (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg f0 r1 f1 r2)
                (if (= (hard-regspec-class vreg) hard-reg-class-fpr)
                  (if *arm2-float-safety*
-                     (! ,safe-vinsn vreg r1 r2)
-                     (! ,vinsn vreg r1 r2))
+                   (with-fp-target (r1 r2) (result :double-float)
+                     (! ,safe-vinsn result r1 r2)
+                     (<- result))
+                   (! ,vinsn vreg r1 r2))
                  (with-fp-target (r1 r2) (result :double-float)
                    (if *arm2-float-safety*
                      (! ,safe-vinsn result r1 r2)
@@ -6954,7 +6955,9 @@
              (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg f0 r1 f1 r2)
                (if (= (hard-regspec-class vreg) hard-reg-class-fpr)
                  (if *arm2-float-safety*
-                   (! ,safe-vinsn vreg r1 r2)
+                   (with-fp-target (r1 r2) (result :single-float)
+                     (! ,safe-vinsn result r1 r2)
+                     (<- result))
                    (! ,vinsn vreg r1 r2))
                  (with-fp-target (r1 r2) (result :single-float)
                    (if *arm2-float-safety*
@@ -8836,3 +8839,60 @@
       (progn
         (arm2-two-targeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
         (arm2-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))))
+
+(defarm2 arm2-fixnum-ref-double-float %fixnum-ref-double-float (seg vreg xfer base index)
+  (if (null vreg)
+    (progn
+      (arm2-form base seg nil nil)
+      (arm2-form index seg nil xfer))
+    (let* ((fix (acode-fixnum-form-p index)))
+      (unless (typep fix '(integer 0 (128)))
+        (setq fix nil))
+      (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+               (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double) )
+        (cond (fix
+               (! fixnum-ref-c-double-float vreg (arm2-one-untargeted-reg-form seg base arm::arg_z) fix))
+              (t
+               (multiple-value-bind (rbase rindex) (arm2-two-untargeted-reg-forms seg base arm::arg_y index arm::arg_z)
+                 (! fixnum-ref-double-float vreg rbase rindex))))
+        (with-fp-target () (target :double-float)
+        (cond (fix
+               (! fixnum-ref-c-double-float target (arm2-one-untargeted-reg-form seg base arm::arg_z) fix))
+              (t
+               (multiple-value-bind (rbase rindex) (arm2-two-untargeted-reg-forms seg base arm::arg_y index arm::arg_z)
+                 (! fixnum-ref-double-float target rbase rindex))))
+        (<- target)))
+      (^))))
+
+(defarm2 arm2-fixnum-set-double-float %fixnum-set-double-float (seg vreg xfer base index val)
+  (let* ((fix (acode-fixnum-form-p index)))
+    (unless (typep fix '(integer 0 (128)))
+      (setq fix nil))
+    (cond ((or (null vreg)
+               (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                    (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double)))
+           (let* ((fhint (or vreg ($ arm::d0 :class :fpr :mode :double-float))))
+             (if fix
+               (multiple-value-bind (rbase rval)
+                   (arm2-two-untargeted-reg-forms seg base ($ arm::arg_z) val fhint)
+                 (! fixnum-set-c-double-float rbase fix rval)
+                 (<- rval))
+               (multiple-value-bind (rbase rindex rval)
+                   (arm2-three-untargeted-reg-forms seg base ($ arm::arg_y) index ($ arm::arg_z) val fhint)
+                 (! fixnum-set-double-float rbase rindex rval)
+                 (<- rval)))))
+          (t
+           (if fix
+             (multiple-value-bind (rbase rboxed)
+                 (arm2-two-untargeted-reg-forms seg base ($ arm::arg_y) val ($ arm::arg_z))
+               (with-fp-target () (rval :double-float)
+                 (arm2-copy-register seg rval rboxed)
+                 (! fixnum-set-c-double-float rbase fix rval))
+               (<- rboxed))
+             (multiple-value-bind (rbase rindex rboxed)
+                 (arm2-three-untargeted-reg-forms seg base ($ arm::arg_x) index ($ arm::arg_y) val ($ arm::arg_z))
+               (with-fp-target () (rval :double-float)
+                 (arm2-copy-register seg rval rboxed)
+                 (! fixnum-set-double-float rbase rindex rval))
+               (<- rboxed)))))
+    (^)))

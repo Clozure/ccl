@@ -222,6 +222,24 @@
               (nx1-form base)
               (nx1-form offset)))
 
+(defnx1 nx1-fixnum-ref-double-float ((%fixnum-ref-double-float)) (base &optional (index 0))
+  (make-acode (%nx1-operator typed-form)
+               'double-float
+               (make-acode (%nx1-operator %fixnum-ref-double-float)
+                           (nx1-form base)
+                           (nx1-form index))))
+
+(defnx1 nx2-fixnum-set-double-float ((%fixnum-set-double-float)) (base index-or-val &optional (val nil val-p))
+  (unless val-p
+    (setq val index-or-val index-or-val 0))
+  (make-acode (%nx1-operator typed-form)
+               'double-float
+               (make-acode (%nx1-operator %fixnum-set-double-float)
+                           (nx1-form base)
+                           (nx1-form index-or-val)
+                           (nx1-form val))))
+               
+
 (defnx1 nx1-type-unaryop ((typecode) (lisptag) (fulltag))
   (arg)
   (let* ((operator

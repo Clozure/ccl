@@ -206,8 +206,8 @@
      (make-list . #.(logior operator-assignment-free-mask operator-single-valued-mask))	; exists only so we can stack-cons
      (%badarg1 . 0)
      (%badarg2 . 0)
-     (newblocktag . 0)
-     (newgotag . 0)
+     (%fixnum-ref-double-float . #.(logior operator-acode-subforms-mask  operator-single-valued-mask))
+     (%fixnum-set-double-float . #.(logior operator-acode-subforms-mask  operator-single-valued-mask))
      (flet . 0)				; may not be necessary - for dynamic-extent, mostly
 					; for dynamic-extent, forward refs, etc.
      (labels . 0)			; removes 75% of LABELS bogosity
