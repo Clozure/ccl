@@ -4575,6 +4575,28 @@
   :const
   (:long #x80000000))
 
+(define-x8664-vinsn fixnum-ref-c-double-float (((dest :double-float))
+                                               ((base :imm)
+                                                (idx :u32const)))
+  (movsd (:@ (:apply ash idx 3) (:%q base)) (:%xmm dest)))
+
+(define-x8664-vinsn fixnum-ref-double-float  (((dest :double-float))
+                                               ((base :imm)
+                                                (idx :imm)))
+  (movsd (:@ (:%q base) (:%q idx)) (:%xmm dest)))
+
+(define-x8664-vinsn fixnum-set-c-double-float (()
+                                               ((base :imm)
+                                                (idx :u32const)
+                                                (val :double-float)))
+  (movsd (:%xmm val) (:@ (:apply ash idx 3) (:%q base))))
+
+(define-x8664-vinsn fixnum-set-double-float  (()
+                                               ((base :imm)
+                                                (idx :imm)
+                                                (val :double-float)))
+  (movsd (:%xmm val) (:@ (:%q base) (:%q idx))))
+
 (queue-fixup
  (fixup-x86-vinsn-templates
   *x8664-vinsn-templates*

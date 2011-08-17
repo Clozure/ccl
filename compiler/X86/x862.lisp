@@ -10321,6 +10321,67 @@
                 (list nil (list clear-p size))
                 nil))
 
+(defx862 x862-fixnum-ref-double-float %fixnum-ref-double-float (seg vreg xfer base index)
+  (if (null vreg)
+    (progn
+      (x862-form base seg nil nil)
+      (x862-form index seg nil xfer))
+    (let* ((fix (acode-fixnum-form-p index)))
+      (unless (typep fix '(unsigned-byte 28))
+        (setq fix nil))
+      (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+               (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double) )
+        (cond (fix
+               (! fixnum-ref-c-double-float vreg (x862-one-untargeted-reg-form seg base *x862-arg-z*) fix))
+              (t
+               (multiple-value-bind (rbase rindex) (x862-two-untargeted-reg-forms seg base *x862-arg-y* index *x862-arg-z*)
+                 (! fixnum-ref-double-float vreg rbase rindex))))
+        (with-fp-target () (target :double-float)
+        (cond (fix
+               (! fixnum-ref-c-double-float target (x862-one-untargeted-reg-form seg base *x862-arg-z*) fix))
+              (t
+               (multiple-value-bind (rbase rindex) (x862-two-untargeted-reg-forms seg base *x862-arg-y* index *x862-arg-z*)
+                 (! fixnum-ref-double-float target rbase rindex))))
+        (<- target)))
+      (^))))
+
+(defx862 x862-fixnum-set-double-float %fixnum-set-double-float (seg vreg xfer base index val)
+  (let* ((fix (acode-fixnum-form-p index)))
+    (unless (typep fix '(unsigned-byte 28))
+      (setq fix nil))
+    (cond ((or (null vreg)
+               (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                    (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double)))
+           (let* ((fhint (or vreg ($ *x862-fp1* :class :fpr :mode :double-float))))
+             (if fix
+               (multiple-value-bind (rbase rval)
+                   (x862-two-untargeted-reg-forms seg base ($ *x862-arg-z*) val fhint)
+                 (! fixnum-set-c-double-float rbase fix rval)
+                 (<- rval))
+               (multiple-value-bind (rbase rindex rval)
+                   (x862-three-untargeted-reg-forms seg base (target-word-size-case
+                                                              (32 ($ x8632::temp0))
+                                                              (64 ($ x8664::arg_x))) index ($ *x862-arg-z*) val fhint)
+                 (! fixnum-set-double-float rbase rindex rval)
+                 (<- rval)))))
+          (t
+           (if fix
+             (multiple-value-bind (rbase rboxed)
+                 (x862-two-untargeted-reg-forms seg base ($ *x862-arg-y*) val ($ *x862-arg-z*))
+               (with-fp-target () (rval :double-float)
+                 (x862-copy-register seg rval rboxed)
+                 (! fixnum-set-c-double-float rbase fix rval))
+               (<- rboxed))
+             (multiple-value-bind (rbase rindex rboxed)
+                 (x862-three-untargeted-reg-forms seg base (target-word-size-case
+                                                              (32 ($ x8632::temp0))
+                                                              (64 ($ x8664::arg_x))) index ($ *x862-arg-y*) val ($ *x862-arg-z*))
+               (with-fp-target () (rval :double-float)
+                 (x862-copy-register seg rval rboxed)
+                 (! fixnum-set-double-float rbase rindex rval))
+               (<- rboxed)))))
+    (^)))
+
 
 
 
