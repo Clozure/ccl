@@ -4041,6 +4041,33 @@
                                          ((src :single-float)))
   (fneg dest src))
 
+(define-ppc32-vinsn fixnum-ref-c-double-float (((dest :double-float))
+                                               ((base :imm)
+                                                (idx :u16const)))
+  (lfd dest (:apply ash idx 3) base))
+
+(define-ppc32-vinsn fixnum-ref-double-float (((dest :double-float))
+                                               ((base :imm)
+                                                (idx :imm))
+                                               ((temp :imm)))
+  (add temp idx idx)
+  (lfdx dest base temp))
+
+
+(define-ppc32-vinsn fixnum-set-c-double-float (()
+                                               ((base :imm)
+                                                (idx :u16const)
+                                                (val :double-float)))
+  (stfd val (:apply ash idx 3) base))
+
+(define-ppc32-vinsn fixnum-set-c-double-float (()
+                                               ((base :imm)
+                                                (idx :imm)
+                                                (val :double-float))
+                                               ((temp :imm)))
+  (add temp idx idx)
+  (stfdx val base temp))
+
 ;;; In case ppc32::*ppc-opcodes* was changed since this file was compiled.
 (queue-fixup
  (fixup-vinsn-templates *ppc32-vinsn-templates* ppc::*ppc-opcode-numbers*))
