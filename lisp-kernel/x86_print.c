@@ -163,7 +163,14 @@ sprint_specializers_list(LispObj o, int depth)
 	unsigned subtag = header_subtag(header);
 
 	if (subtag == subtag_instance) {
-	  sprint_lisp_object(deref(deref(the_car,3), 4), depth);
+          if (unbox_fixnum(deref(the_car,1)) < (1<<20)) {
+            sprint_lisp_object(deref(deref(the_car,3), 4), depth);
+          } else {
+            /* An EQL specializer */
+            add_c_string("(EQL ");
+            sprint_lisp_object(deref(deref(the_car,3), 3), depth);
+            add_char(')');
+          }
 	} else {
 	  sprint_lisp_object(the_car, depth);
 	}
