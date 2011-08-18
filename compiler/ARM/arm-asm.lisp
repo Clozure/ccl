@@ -739,6 +739,12 @@
      #x0e800a00
      #x0ff00f50
      ())
+
+   (define-arm-instruction fmacd (:dd :dn :dm)
+     #x0e000b00
+     #x0fb00f50
+     ())
+
    (define-arm-instruction fcpyd (:dd :dm)
      #x0eb00b40
      #x0fb00ff0
