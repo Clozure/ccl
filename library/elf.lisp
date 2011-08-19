@@ -374,13 +374,15 @@
          (symbols-section (new-elf-section object))
          (strings-section (new-elf-section object))
          (shstrtab-section (new-elf-section object))
+         (prelink-id-section (new-elf-section object))
          (section-names (make-elf-string-table))
          (lisp-section-index (elf-section-index lisp-section))
          (symbols (register-elf-functions lisp-section-index))
          (lisp-section-header (elf-section-header-for-section object lisp-section))
          (symbols-section-header (elf-section-header-for-section object symbols-section))
          (strings-section-header (elf-section-header-for-section object strings-section))
-         (shstrtab-section-header (elf-section-header-for-section object shstrtab-section)))
+         (shstrtab-section-header (elf-section-header-for-section object shstrtab-section))
+         (prelink-id-section-header (elf-section-header-for-section object prelink-id-section)))
     
     (setf (pref file-header #+64-bit-target :<E>lf64_<E>hdr.e_shstrndx
                 #+32-bit-target :<E>lf32_<E>hdr.e_shstrndx) (elf-section-index shstrtab-section))
@@ -419,10 +421,18 @@
                 #+32-bit-target :<E>lf32_<S>hdr.sh_type) #$SHT_STRTAB
           (pref shstrtab-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_flags
                 #+32-bit-target :<E>lf32_<S>hdr.sh_flags) (logior #$SHF_STRINGS #$SHF_ALLOC))
+    ;; The perf profiler recognizes prelinked libraries by the presence of
+    ;; some section with this exact name; it doesn't care about the section's
+    ;; contents or other attributes, currently.
+    ;; We want that profiler to treat the lisp section as if it was prelinked.
+    (setf (pref prelink-id-section-header #+64-bit-target :<E>lf64_<S>hdr.sh_name
+                #+32-bit-target :<E>lf32_<S>hdr.sh_name) (elf-register-string ".gnu.prelink_undo" section-names))
+    
     (elf-make-empty-data-for-section object lisp-section (ash (- (%fixnum-ref *readonly-area* target::area.active) (%fixnum-ref *readonly-area* target::area.low) )target::fixnumshift))
     (elf-init-section-data-from-string-table object strings-section (elf-symbol-table-strings symbols))
     (elf-init-section-data-from-string-table object shstrtab-section section-names)
     (elf-init-symbol-section-from-symbol-table object symbols-section symbols)
+    (elf-make-empty-data-for-section object prelink-id-section 0)
     ;; Prepare in-memory data structures.
     (elf-update object #$ELF_C_NULL)
     ;; Fix up the program header.
