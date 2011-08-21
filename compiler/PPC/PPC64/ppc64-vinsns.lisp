@@ -4050,10 +4050,10 @@
                                                 (val :double-float)))
   (stfd val (:apply ash idx 3) base))
 
-(define-ppc64-vinsn fixnum-set-c-double-float (()
-                                               ((base :imm)
-                                                (idx :imm)
-                                                (val :double-float)))
+(define-ppc64-vinsn fixnum-set-double-float (()
+                                             ((base :imm)
+                                              (idx :imm)
+                                              (val :double-float)))
   (stfdx val base idx))
 
 ;;; In case ppc64::*ppc-opcodes* was changed since this file was compiled.

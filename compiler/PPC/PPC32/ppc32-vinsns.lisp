@@ -4060,11 +4060,11 @@
                                                 (val :double-float)))
   (stfd val (:apply ash idx 3) base))
 
-(define-ppc32-vinsn fixnum-set-c-double-float (()
-                                               ((base :imm)
-                                                (idx :imm)
-                                                (val :double-float))
-                                               ((temp :imm)))
+(define-ppc32-vinsn fixnum-set-double-float (()
+                                             ((base :imm)
+                                              (idx :imm)
+                                              (val :double-float))
+                                             ((temp :imm)))
   (add temp idx idx)
   (stfdx val base temp))
 
