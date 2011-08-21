@@ -419,6 +419,10 @@
   (%eval-redef %set-single-float (p o &optional (new (prog1 o (setq o 0))))
 	       (%set-single-float p o new))
   (%eval-redef assq (item list))
+  (%eval-redef %fixnum-ref-double-float (base &optional (index 0))
+               (%fixnum-ref-double-float base index))
+  (%eval-redef %fixnum-set-double-float (base index &optional (new (prog1 index (setq index 0))))
+               (%fixnum-set-double-float base index new))
 )
 
 ; In the spirit of eval-redef ...

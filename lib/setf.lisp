@@ -462,6 +462,7 @@ decremented by the second argument, DELTA, which defaults to 1."
 (defsetf cddddr set-cddddr)
 
 (defsetf %fixnum-ref %fixnum-set)
+(defsetf %fixnum-ref-double-float %fixnum-set-double-float)
 
 (define-setf-method the (typespec expr &environment env)
   (multiple-value-bind (dummies vals newval setter getter)
