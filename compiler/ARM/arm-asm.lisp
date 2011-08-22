@@ -196,7 +196,12 @@
      #xf57ff04f
      #xffffffff
      (:non-conditional))   
-   
+
+   (define-arm-instruction vmul.f32 (:dd :dn :dm)
+     #xf3000d10
+     #xffa00f10
+     (:non-conditional))
+
 ;;; UUOs.
 
 ;;; Nullary UUOs
@@ -681,11 +686,11 @@
      ())
    (define-arm-instruction fmsr (:sn :rd)
      #x0e000a10
-     #x0ff00f90
+     #x0ff00f7f
      ())
    (define-arm-instruction fmrs (:rd :sn)
      #x0e100a10
-     #x0ff00f90
+     #x0ff00f7f
      ())
    (define-arm-instruction fmrrd (:rd :rn :dm)
      #x0c500b10
@@ -717,11 +722,11 @@
      ())
    (define-arm-instruction fsubd (:dd :dn :dm)
      #x0e300b40
-     #x0ff00fc0
+     #x0fb00f50
      ())
    (define-arm-instruction fsubs (:sd :sn :sm)
      #x0e300a40
-     #x0ff00fc0
+     #x0fb00f50
      ())
    (define-arm-instruction fmuld (:dd :dn :dm)
      #x0e200b00
@@ -729,7 +734,7 @@
      ())
    (define-arm-instruction fmuls (:sd :sn :sm)
      #x0e200a00
-     #x0ff00f50
+     #x0fb00f50
      ())
    (define-arm-instruction fdivd (:dd :dn :dm)
      #x0e800b00
@@ -742,6 +747,10 @@
 
    (define-arm-instruction fmacd (:dd :dn :dm)
      #x0e000b00
+     #x0fb00f50
+     ())
+   (define-arm-instruction fmacs (:sd :sn :sm)
+     #x0e000a00
      #x0fb00f50
      ())
 
