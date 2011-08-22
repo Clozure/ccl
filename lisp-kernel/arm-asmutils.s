@@ -89,7 +89,7 @@ _endfn
 _exportfn(C(atomic_swap))
         __(mov r2,r0)
 0:      __(ldrex r0,[r2])
-        __(strex r3,r1,[r2]
+        __(strex r3,r1,[r2])
         __(cmp r3,#0)
         __(bne 0b)        
         __(bx lr)
