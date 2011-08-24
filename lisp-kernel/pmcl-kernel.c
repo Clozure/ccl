@@ -1895,31 +1895,36 @@ main
 #endif
   tcr_area_lock = (void *)new_recursive_lock();
 
-  program_name = argv[0];
-  if ((argc == 2) && (*argv[1] != '-')) {
-#ifdef WINDOWS
-    image_name = utf_16_argv[1];
-#else
-    image_name = argv[1];
-#endif
-    argv[1] = NULL;
-#ifdef WINDOWS
-    utf_16_argv[1] = NULL;
-#endif
-  } else {
-    process_options(argc,argv,utf_16_argv);
+  if (check_for_embedded_image(real_executable_name)) {
+    image_name = real_executable_name;
   }
+
+  program_name = argv[0];
+
+  if ( image_name == NULL ) {
+    if ((argc == 2) && (*argv[1] != '-')) {
+#ifdef WINDOWS
+      image_name = utf_16_argv[1];
+#else
+      image_name = argv[1];
+#endif
+      argv[1] = NULL;
+#ifdef WINDOWS
+      utf_16_argv[1] = NULL;
+#endif
+    } else {
+      process_options(argc,argv,utf_16_argv);
+    }
+  }
+
   if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
     lisp_heap_threshold_set_from_command_line = true;
   }
 
   initial_stack_size = ensure_stack_limit(initial_stack_size);
+  
   if (image_name == NULL) {
-    if (check_for_embedded_image(real_executable_name)) {
-      image_name = real_executable_name;
-    } else {
-      image_name = default_image_name(real_executable_name);
-    }
+    image_name = default_image_name(real_executable_name);
   }
 
   while (1) {
