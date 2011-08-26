@@ -3155,7 +3155,7 @@
   (add sp sp (:$ (* 2 arm::dnode-size))))
 
 
-(define-arm-vinsn (temp-push-single-float :push :word :tsp :predicatable)
+(define-arm-vinsn (temp-push-single-float :push :word :csp :predicatable)
     
     (()
      ((s :single-float))
