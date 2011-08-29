@@ -409,7 +409,7 @@
     `(progn
       (movq (% rbp) (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)))
       (leaq (@ ,(* (1+ nstackargs) x8664::node-size) (% rsp)) (% rbp))
-      (popq (@ x8632::node-size (% rbp)))))))
+      (popq (@ x8664::node-size (% rbp)))))))
 
 (defx86lapmacro save-frame-variable-arg-count ()
   (let* ((push (gensym))
