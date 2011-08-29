@@ -62,7 +62,7 @@
 
 
 (defun arm-constant-index (form)
-  (let* ((idx (or (assoc form *arm-constants* :test 'equal)
+  (let* ((idx (or (cdr (assoc form *arm-constants* :test 'equal))
                   (let* ((n (length *arm-constants*)))
                     (push (cons form n) *arm-constants*)
                     n))))
