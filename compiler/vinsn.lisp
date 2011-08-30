@@ -493,8 +493,8 @@
       (if (typep element 'vinsn)
 	(if (vinsn-attribute-p element :call)
 	  (return (values #xffffffff #xffffffff))
-	  (setq gprs-set (logior (vinsn-gprs-set element))
-		fprs-set (logior (vinsn-fprs-set element))))))))
+	  (setq gprs-set (logior gprs-set (vinsn-gprs-set element))
+		fprs-set (logior fprs-set (vinsn-fprs-set element))))))))
       
 ;;; Return T if any vinsn between START and END (exclusive) sets REG.
 (defun vinsn-sequence-sets-reg-p (start end reg)
