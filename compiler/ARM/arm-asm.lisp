@@ -823,7 +823,7 @@
      #x0cb00a00
      #x0fb00f00
      ())
-   (define-arm-instruction fldmiad (:dd :rnw :srcount)
+   (define-arm-instruction fldmiad (:dd :rnw :drcount)
      #x0cb00b00
      #x0fb00f00
      ())     
@@ -1321,11 +1321,14 @@
 
 (defun parse-imm16-operand (form instruction)
   (unless (and (consp form)
-               (eq (car form) :$)
+               (or (eq (car form) :$)
+                   (eq (car form) 'quote))
                (consp (cdr form))
                (null (cddr form)))
     (error "Bad 16-bit immediate operand: ~s" form))
   (let* ((val (eval (cadr form))))
+    (when (eq (car form) 'quote)
+      (setq val (ash val arm::fixnumshift)))
     (set-field-value instruction (byte 12 0) (ldb (byte 12 0) val))
     (set-field-value instruction (byte 4 16) (ldb (byte 4 12) val))))
     
