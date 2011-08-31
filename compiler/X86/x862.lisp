@@ -499,6 +499,9 @@
            (*x86-current-context-annotation* nil)
            (*x862-woi* nil)
            (*next-lcell-id* -1)
+           (*encoded-reg-value-byte* (target-arch-case
+                                      (:x8632 (byte 3 0))
+                                      (:x8664 (byte 4 0))))
            (*x862-open-code-inline* nil)
            (*x862-register-restore-count* nil)
            (*x862-compiler-register-save-label* nil)

@@ -65,14 +65,14 @@
                              x8664::imm1
                              x8664::imm2))
 
-(defconstant x8664-temp-fp-regs (make-mask x8664::fp0
-                                           x8664::fp1
-                                           x8664::fp2
-                                           x8664::fp3
-                                           x8664::fp4
-                                           x8664::fp5
-                                           x8664::fp6
-                                           x8664::fp7))
+(defconstant x8664-temp-fp-regs (make-mask (logand x8664::fp0 15)
+                                           (logand x8664::fp1 15)
+                                           (logand x8664::fp2 15)
+                                           (logand x8664::fp3 15)
+                                           (logand x8664::fp4 15)
+                                           (logand x8664::fp5 15)
+                                           (logand x8664::fp6 15)
+                                           (logand x8664::fp7 15)))
                                
 
 

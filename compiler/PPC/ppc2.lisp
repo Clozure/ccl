@@ -382,6 +382,7 @@
            (*ppc-current-context-annotation* nil)
            (*ppc2-woi* nil)
            (*next-lcell-id* -1)
+           (*encoded-reg-value-byte* (byte 5 0))           
            (*ppc2-open-code-inline* nil)
            (*ppc2-register-restore-count* nil)
            (*ppc2-compiler-register-save-label* nil)

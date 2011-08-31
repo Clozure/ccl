@@ -154,13 +154,18 @@
       (lreg-class regspec)
       (error "bad regspec: ~s" regspec))))
 
+(defparameter *encoded-reg-value-byte*
+  #+x8664-target (byte 4 0)
+  #+x8632-target (byte 3 0)
+  #+(or arm-target ppc-target) (byte 5 0))
+
 ; Return physical regspec's value:
 (defmacro hard-regspec-value (regspec)
   `(%hard-regspec-value ,regspec))
 
 (defun %hard-regspec-value (regspec)
   (if (typep regspec 'fixnum)
-    (the fixnum (ldb regspec-hard-reg-type-value-byte (the fixnum regspec)))
+    (the fixnum (ldb *encoded-reg-value-byte* (the fixnum regspec)))
     (if (typep regspec 'lreg)
       (lreg-value regspec)
       (error "bad regspec: ~s" regspec))))

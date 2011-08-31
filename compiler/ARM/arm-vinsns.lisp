@@ -3252,7 +3252,7 @@
                                          ((min :u16const))
                                          ((preserve (:u32 #.arm::nargs))
                                           (temp :u32)))
-  (movw temp (:$ (:apply ash min 2)))
+  (movw temp (:$ (:apply ash min 2)))
   (cmp nargs temp)
   (bhs :ok)
   (uuo-error-wrong-nargs (:? lo))
@@ -3289,7 +3289,8 @@
 
 (define-arm-vinsn save-lisp-context-offset (()
                                             ((nbytes-vpushed :u16const))
-                                            ((imm (:u32 #.arm::imm1))))
+                                            ((imm (:u32 #.arm::imm1))
+                                             (clobbered (:u32 #.arm::imm0))))
   ((:pred arm::encode-arm-immediate nbytes-vpushed)
    (add imm vsp (:$ nbytes-vpushed)))
   ((:not (:pred arm::encode-arm-immediate nbytes-vpushed))

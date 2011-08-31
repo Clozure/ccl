@@ -373,6 +373,7 @@
            (*arm-current-context-annotation* nil)
            (*arm2-woi* nil)
            (*next-lcell-id* -1)
+           (*encoded-reg-value-byte* (byte 5 0))           
            (*arm2-open-code-inline* nil)
            (*arm2-optimize-for-space* nil)
            (*arm2-register-restore-count* nil)

@@ -301,7 +301,7 @@
 
 (define-x8632-vinsn check-min-max-nargs (()
                                          ((min :u16const)
-                                          (max :u16)))
+                                          (max :u16const)))
   :resume
   ((:pred = min 1)
    (testl (:%l x8632::nargs) (:%l x8632::nargs))

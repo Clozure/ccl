@@ -51,14 +51,14 @@
                              x8632::imm0))
 
 ;;; Fine if we assume SSE support;  not so hot when using x87
-(defconstant x8632-temp-fp-regs (make-mask x8632::fp0
-                                           x8632::fp1
-                                           x8632::fp2
-                                           x8632::fp3
-                                           x8632::fp4
-                                           x8632::fp5
-                                           x8632::fp6
-                                           x8632::fp7))
+(defconstant x8632-temp-fp-regs (make-mask (logand x8632::fp0 7)
+                                           (logand x8632::fp1 7)
+                                           (logand x8632::fp2 7)
+                                           (logand x8632::fp3 7)
+                                           (logand x8632::fp4 7)
+                                           (logand x8632::fp5 7)
+                                           (logand x8632::fp6 7)
+                                           (logand x8632::fp7 7)))
                                
 
 
