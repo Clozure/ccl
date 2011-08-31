@@ -55,6 +55,55 @@ char *kernel_svn_revision = xstr(SVN_REVISION);
 char *kernel_svn_revision = "unknown";
 #endif
 
+#ifdef ARM
+#ifdef LINUX
+
+/* This stuff is buried in kernel headers.  Why ? */
+
+/* The uc_regspace field of a ucontext can contain coprocessor
+   info in structures whose first word is one of these magic
+   values; the structure list is terminated by something that's
+   not one of these magic values.
+
+   Good thinking! That'll make the mechanism easy to extend!
+   (In practice, a word of 0 seems to terminate the structure
+   list.)
+*/
+#define VFP_MAGIC		0x56465001
+#define IWMMXT_MAGIC		0x12ef842a
+#define CRUNCH_MAGIC		0x5065cf03
+
+
+struct user_vfp {
+	unsigned long long fpregs[32];
+	unsigned long fpscr;
+};
+
+struct user_vfp *
+find_vfp_info(ExceptionInformation *xp)
+{
+  char *p = (char *)(xp->uc_regspace);
+  unsigned *q, magic;
+
+  while (1) {
+    q = (unsigned *)p;                        
+    magic = *q;
+    if (magic == VFP_MAGIC) {
+      return (struct user_vfp *)(q+2);
+    }
+    if ((magic == CRUNCH_MAGIC) ||
+        (magic == IWMMXT_MAGIC)) {
+      p += q[1];
+    }
+    else {
+      return NULL;
+    }
+  }
+}
+
+#endif
+#endif
+
 Boolean
 open_debug_output(int fd)
 {
@@ -742,6 +791,19 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
       show_lisp_register(xp, "temp0", temp0);
       show_lisp_register(xp, "temp1/fname/next_method_context", temp1);
       show_lisp_register(xp, "temp2/nfn", temp2);
+#ifdef LINUX
+      {
+        LispObj *nvrs = (LispObj *)find_vfp_info(xp);
+
+        if (nvrs != NULL) {
+          int r;
+
+          for(r=save0;r<=save3;r++) {
+            fprintf(dbgout,"s%02d (save%d) = %s\n",r,r-save0,print_lisp_object(nvrs[r]));
+          }
+        }
+      }
+#endif
     }
 #endif
   }
@@ -1050,59 +1112,23 @@ debug_show_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 	    a, xpGPR(xp, a),
 	    b, xpGPR(xp, b));
   }
+#ifdef LINUX
+  {
+    LispObj *nvrs = (LispObj *)find_vfp_info(xp);
+    
+    if (nvrs != NULL) {
+      for(a=save0,b=save2;a<save2;a++,b++) {
+        fprintf(dbgout,"s%02d = 0x%08lX    s%02d = 0x%08lX\n",
+                a, nvrs[a], b, nvrs[b]);
+      }
+    }
+  }
+#endif
 #endif
 
   return debug_continue;
 }
 
-#ifdef ARM
-#ifdef LINUX
-
-/* This stuff is buried in kernel headers.  Why ? */
-
-/* The uc_regspace field of a ucontext can contain coprocessor
-   info in structures whose first word is one of these magic
-   values; the structure list is terminated by something that's
-   not one of these magic values.
-
-   Good thinking! That'll make the mechanism easy to extend!
-   (In practice, a word of 0 seems to terminate the structure
-   list.)
-*/
-#define VFP_MAGIC		0x56465001
-#define IWMMXT_MAGIC		0x12ef842a
-#define CRUNCH_MAGIC		0x5065cf03
-
-
-struct user_vfp {
-	unsigned long long fpregs[32];
-	unsigned long fpscr;
-};
-
-struct user_vfp *
-find_vfp_info(ExceptionInformation *xp)
-{
-  char *p = (char *)(xp->uc_regspace);
-  unsigned *q, magic;
-
-  while (1) {
-    q = (unsigned *)p;                        
-    magic = *q;
-    if (magic == VFP_MAGIC) {
-      return (struct user_vfp *)(q+2);
-    }
-    if ((magic == CRUNCH_MAGIC) ||
-        (magic == IWMMXT_MAGIC)) {
-      p += q[1];
-    }
-    else {
-      return NULL;
-    }
-  }
-}
-
-#endif
-#endif
 
 debug_command_return
 debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
@@ -1202,7 +1228,8 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
     unsigned long long *llp = (unsigned long long *)vfp;
     int dn,fn;
 
-    for (dn=0,fn=0;dn<16;dn++) {
+
+    for (dn=0,fn=0;dn<14;dn++) { /* d14/d15 (s28-s31) contain lisp values */
       fprintf(dbgout, "s%02d = %10e (0x%08x)        s%02d = %10e (0x%08x)\n",fn,fp[fn],up[fn],fn+1,fp[fn+1],up[fn+1]);
       fn+=2;
       fprintf(dbgout, "d%02d = %10e (0x%015llx)\n",dn,dp[dn],llp[dn]);

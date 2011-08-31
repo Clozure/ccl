@@ -609,6 +609,7 @@ restore_soft_stack_limit(unsigned stkreg)
 void
 reset_lisp_process(ExceptionInformation *xp)
 {
+#if 0
   TCR *tcr = get_tcr(true);
   catch_frame *last_catch = (catch_frame *) ptr_from_lispobj(untag(tcr->catch_top));
 
@@ -617,6 +618,7 @@ reset_lisp_process(ExceptionInformation *xp)
   tcr->save_vsp = (LispObj *) ptr_from_lispobj(((lisp_frame *)ptr_from_lispobj(last_catch->csp))->savevsp);
 
   start_lisp(tcr, 1);
+#endif
 }
 
 /*

@@ -40,6 +40,12 @@
 #define nargs imm2
 #define allocbase temp0         /* while consing */
 
+/* Non-volatile pseudo node regs kept in s28-s31 */
+#define save0 28
+#define save1 29
+#define save2 30
+#define save3 31
+
 #define nbits_in_word 32
 #define log2_nbits_in_word 5
 #define nbits_in_byte 8
@@ -219,24 +225,6 @@ typedef struct single_float {
 } single_float;
 
 
-/*
-  The GC also needs to know what a catch_frame looks like.
-*/
-
-typedef struct catch_frame {
-  LispObj header;
-  LispObj catch_tag;
-  LispObj link;
-  LispObj mvflag;
-  LispObj csp;
-  LispObj db_link;
-  LispObj regs[8];
-  LispObj xframe;
-  LispObj tsp_segment;
-} catch_frame;
-
-#define catch_frame_element_count ((sizeof(catch_frame)/sizeof(LispObj))-1)
-#define catch_frame_header make_header(subtag_catch_frame,catch_frame_element_count)
 
 typedef struct lisp_frame {
   LispObj marker;

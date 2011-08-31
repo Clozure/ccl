@@ -332,37 +332,54 @@ define(`funcall_nfn',`
    floats (we effectively load a vector header into d7.)
 */        
    
-define(`push_fprs',`
+define(`push_foreign_fprs',`
         __(movc16(imm0,make_header(8,subtag_double_float_vector)))
         __(mov imm1,#0)
         __(fmdrr d7,imm0,imm1)
         __(fstmfdd sp!,{d7-d15})
 ')
 
+/* Save the lisp non-volatile FPRs. */
+define(`push_lisp_fprs',`
+        __(movc16(imm0,make_header(6,subtag_double_float_vector)))
+        __(mov imm1,#0)
+        __(fmdrr d7,imm0,imm1)
+        __(fstmfdd sp!,{d7-d13})
+')
+        
 /* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
    on top of the stack.  This loads the vector header
    into d7 as a side-effect. */
-define(`pop_fprs',`
+define(`pop_foreign_fprs',`
         __(fldmfdd sp!,{d7-d15})
 ')
 
-/* Reload the non-volatile FPRs (d8-d15) from the stack-consed vector
+/* Pop the lisp non-volatile FPRs */        
+define(`pop_lisp_fprs',`
+        __(fldmfdd sp!,{d7-d13})
+')
+
+/* Reload the non-volatile lisp FPRs (d8-d13) from the stack-consed vector
    on top of the stack, leaving the vector in place.  d7 winds up with
    a denormalized float in it, if anything cares. */
-define(`restore_fprs',`
-        __(fldmfdd $1,{d7-d15})
+define(`restore_lisp_fprs',`
+        __(fldmfdd $1,{d7-d13})
 ')                
 
 /* discard the stack-consed vector which contains a set of 8 non-volatile
    FPRs. */
-define(`discard_fprs',`
-        __(add sp,sp,#9*8)
+define(`discard_lisp_fprs',`
+        __(add sp,sp,#7*8)
 ')                        
         
 define(`mkcatch',`
         new_macro_labels()
-        __(push_fprs())
+        __(push_lisp_fprs())
 	__(build_lisp_frame(imm0))
+        __(movc16(imm0,make_header(catch_frame.element_count,subtag_u32_vector)))
+        __(mov imm1,#catch_frame.element_count<<word_shift)
+        __(dnode_align(imm1,imm1,node_size))
+        __(stack_allocate_zeroed_ivector(imm0,imm1))
         __(movc16(imm0,make_header(catch_frame.element_count,subtag_catch_frame)))
         __(movs temp2,fn)
         __(ldrne temp2,[temp2,_function.codevector])
@@ -372,9 +389,11 @@ define(`mkcatch',`
         /* arg_z is tag */
         __(ldr arg_x,[rcontext,#tcr.db_link])
         __(ldr temp0,[rcontext,#tcr.xframe])
-        __(stmdb sp!,{imm0,imm1,imm2,arg_z,arg_x,temp0,temp1,temp2})
+        __(stmia sp,{imm0,imm1,imm2,arg_z,arg_x,temp0,temp1,temp2})
         __(add imm0,sp,#fulltag_misc)
         __(str imm0,[rcontext,#tcr.catch_top])
+        __(add imm0,imm0,#catch_frame.nvrs)
+        __(fstmias imm0,{save0-save3})
         __(add lr,lr,#4)
 ')	
 
