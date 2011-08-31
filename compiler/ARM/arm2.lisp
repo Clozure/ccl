@@ -2875,21 +2875,47 @@
                                       pushed-reg-is-set
                                       (vinsn-sequence-sets-reg-p
                                        push-vinsn pop-vinsn popped-reg))))
-            (unless (and pushed-reg-is-set popped-reg-is-set)
-              (unless same-reg
-                (let* ((copy (if (eq (hard-regspec-class pushed-reg)
-                                     hard-reg-class-fpr)
-                               (if (eql (get-regspec-mode pushed-reg)
-                                        hard-reg-class-fpr-mode-single)
-                                 (! single-to-single popped-reg pushed-reg)
-                                 (! double-to-double popped-reg pushed-reg))
-                               (! copy-gpr popped-reg pushed-reg))))
-                  (remove-dll-node copy)
-                  (if pushed-reg-is-set
-                    (insert-dll-node-after copy push-vinsn)
-                    (insert-dll-node-before copy push-vinsn))))
-              (elide-vinsn push-vinsn)
-              (elide-vinsn pop-vinsn))))))))
+            (cond
+	      ((not (and pushed-reg-is-set popped-reg-is-set))
+	       (unless same-reg
+		 (let* ((copy (if (eq (hard-regspec-class pushed-reg)
+				      hard-reg-class-fpr)
+				(if (eql (get-regspec-mode pushed-reg)
+					 hard-reg-class-fpr-mode-single)
+				  (! single-to-single popped-reg pushed-reg)
+				  (! double-to-double popped-reg pushed-reg))
+				(! copy-gpr popped-reg pushed-reg))))
+		   (remove-dll-node copy)
+		   (if pushed-reg-is-set
+		     (insert-dll-node-after copy push-vinsn)
+		     (insert-dll-node-before copy push-vinsn))))
+	       (elide-vinsn push-vinsn)
+	       (elide-vinsn pop-vinsn))
+	      ((and (eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
+		    (eql (get-regspec-mode pushed-reg)
+			 hard-reg-class-fpr-mode-double))
+	       ;; If we're pushing a double-float register that gets
+	       ;; set by the intervening vinsns, try to copy it to and
+	       ;; from a free FPR instead.
+	       (multiple-value-bind (used-gprs used-fprs)
+		   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
+		 (declare (ignore used-gprs))
+		 (let* ((nfprs 16)
+			(free-fpr
+			 (dotimes (r nfprs nil)
+			   (unless (logtest (target-fpr-mask r :double-float)
+					    used-fprs)
+			     (return r)))))
+		   (when free-fpr
+		     (let* ((reg ($ free-fpr :class :fpr :mode :double-float))
+			    (save (! double-to-double reg pushed-reg))
+			    (restore (! double-to-double popped-reg reg)))
+		       (remove-dll-node save)
+		       (insert-dll-node-after save push-vinsn)
+		       (remove-dll-node restore)
+		       (insert-dll-node-before restore pop-vinsn)
+		       (elide-vinsn push-vinsn)
+		       (elide-vinsn pop-vinsn)))))))))))))
                 
         
 ;;; we never leave the first form pushed (the 68K compiler had some subprims that
