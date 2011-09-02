@@ -473,7 +473,13 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
     relative_pc = (abs_pc - (LispObj)&(deref(containing_uvector,1))) << fixnumshift;
   } else {
     containing_uvector = lisp_nil;
-    relative_pc = abs_pc << fixnumshift;
+#if WORD_SIZE == 64
+    relative_pc = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
+    tra = (abs_pc & 0xffffffff) << fixnumshift;
+#else
+    relative_pc = ((abs_pc >> 16) & 0xffff) << fixnumshift;
+    tra = (abs_pc & 0xffff) << fixnumshift;
+#endif
   }
   push_on_lisp_stack(xp,(LispObj)(tcr->xframe->prev));
   push_on_lisp_stack(xp,(LispObj)(tcr->foreign_sp));
