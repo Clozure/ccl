@@ -2900,7 +2900,9 @@
 	       (multiple-value-bind (used-gprs used-fprs)
 		   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
 		 (declare (ignore used-gprs))
-		 (let* ((nfprs 16)
+                 ;; We have 16 non-volatile single-floats or 8
+                 ;; non-volatile double-floats
+		 (let* ((nfprs 8)
 			(free-fpr
 			 (dotimes (r nfprs nil)
 			   (unless (logtest (target-fpr-mask r :double-float)
