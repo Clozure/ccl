@@ -1780,8 +1780,8 @@
 ;;; It'd be good to have a variant that deals with a known function
 ;;; as well as this. 
 (define-x8664-vinsn (pass-multiple-values :jumplr) (()
-						  ()
-						  ((tag :u8)))
+                                                    ()
+                                                    ((tag :u8)))
   :resume
   (movl (:%l x8664::temp0) (:%l tag))
   (andl (:$b x8664::fulltagmask) (:%l tag))
@@ -1796,6 +1796,10 @@
   :bad
   (:anchored-uuo (uuo-error-not-callable)))
 
+(define-x8664-vinsn (pass-multiple-values-known-function :jumplr) (((fnreg :lisp))
+                                                                    ())
+  (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr)))) 
+  (jmp (:%q fnreg)))
 
 
 (define-x8664-vinsn reserve-outgoing-frame (()
@@ -4596,6 +4600,36 @@
                                                 (idx :imm)
                                                 (val :double-float)))
   (movsd (:%xmm val) (:@ (:%q base) (:%q idx))))
+
+
+(define-x8664-vinsn pop-outgoing-arg (((n :u16const))
+                                      ())
+  (popq (:@ (:apply * n (- x8664::node-size)) (:%q x8664::rbp))))
+
+(define-x8664-vinsn slide-nth-arg (()
+                                   ((n :u16const)
+                                    (nstackargs :u16const)
+                                    (temp :lisp)))
+  (movq (:@ (:apply * (:apply - nstackargs (:apply + 1 n)) x8664::node-size) (:%q x8664::rsp)) (:%q temp))
+  (movq (:%q temp) (:@ (:apply * (:apply + n 1) (- x8664::node-size)) (:%q x8664::rbp))))
+                                   
+
+(define-x8664-vinsn set-tail-vsp (((nargs :u16const))
+                                  ())
+  ((:pred = 0 nargs)
+   (movq (:%q x8664::rbp) (:%q x8664::rsp)))
+  ((:not (:pred = 0 nargs))
+   (leaq (:@ (:apply * nargs (- x8664::node-size)) (:%q x8664::rbp)) (:%q x8664::rsp))))
+
+
+;;; If we've used one of the fixed-stack-args !slideN vinsns above
+;;; and are calling some function (rather than jumping to an internal
+;;; entry point), we need to push the caller's return address and unlink
+;;; its frame pointer.
+(define-x8664-vinsn prepare-tail-call (()
+                                       ())
+  (pushq (:@ x8664::node-size (:%q x8664::rbp)))
+  (movq (:@ (:%q x8664::rbp)) (:%q x8664::rbp)))
 
 (queue-fixup
  (fixup-x86-vinsn-templates

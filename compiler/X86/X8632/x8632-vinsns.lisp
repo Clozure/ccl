@@ -1625,6 +1625,11 @@
   (:anchored-uuo (uuo-error-not-callable))
 )
 
+(define-x8632-vinsn (pass-multiple-values-known-function :jumplr) (((fnreg :lisp))
+                                                                    ())
+  (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
+  (jmp (:%l fnreg)))
+
 
 (define-x8632-vinsn reserve-outgoing-frame (()
                                             ())
@@ -4177,6 +4182,33 @@
                                                 (idx :imm)
                                                 (val :double-float)))
   (movsd (:%xmm val) (:@ (:%l base) (:%l idx) 2)))
+
+(define-x8632-vinsn pop-outgoing-arg (((n :u16const))
+                                      ())
+  (popl (:@ (:apply * n (- x8632::node-size)) (:%l x8632::ebp))))
+
+(define-x8632-vinsn slide-nth-arg (()
+                                   ((n :u16const)
+                                    (nstackargs :u16const)
+                                    (temp :lisp)))
+  (movl (:@ (:apply * (:apply - nstackargs (:apply + 1 n)) x8632::node-size) (:%l x8632::esp)) (:%l temp))
+  (movl (:%l temp) (:@ (:apply * (:apply + n 1) (- x8632::node-size)) (:%l x8632::ebp))))
+
+(define-x8632-vinsn set-tail-vsp (((n :u16const))
+                                  ())
+  ((:pred = 0 n)
+   (movl (:%l x8632::ebp) (:%l x8632::esp)))
+  ((:not (:pred = 0 n))
+   (leal (:@ (:apply * n (- x8632::node-size)) (:%l x8632::ebp)) (:%l x8632::esp))))
+
+;;; If we've have outgoing arguments in a tail call and are calling
+;;; some function (rather than jumping to an internal entry point), we
+;;; need to push the caller's return address and unlink its frame
+;;; pointer.
+(define-x8632-vinsn prepare-tail-call (()
+                                       ())
+  (pushl (:@ x8632::node-size (:%l x8632::ebp)))
+  (movl (:@ (:% x8632::ebp)) (:% x8632::ebp)))
 
 (queue-fixup
  (fixup-x86-vinsn-templates
