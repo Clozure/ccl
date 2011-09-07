@@ -339,12 +339,13 @@ define(`push_foreign_fprs',`
         __(fstmfdd sp!,{d7-d15})
 ')
 
-/* Save the lisp non-volatile FPRs. */
+/* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
+   FPRs. */
 define(`push_lisp_fprs',`
-        __(movc16(imm0,make_header(6,subtag_double_float_vector)))
+        __(movc16(imm0,make_header(8,subtag_double_float_vector)))
         __(mov imm1,#0)
         __(fmdrr d7,imm0,imm1)
-        __(fstmfdd sp!,{d7-d13})
+        __(fstmfdd sp!,{d7-d15})
 ')
         
 /* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
@@ -356,20 +357,20 @@ define(`pop_foreign_fprs',`
 
 /* Pop the lisp non-volatile FPRs */        
 define(`pop_lisp_fprs',`
-        __(fldmfdd sp!,{d7-d13})
+        __(fldmfdd sp!,{d7-d15})
 ')
 
-/* Reload the non-volatile lisp FPRs (d8-d13) from the stack-consed vector
+/* Reload the non-volatile lisp FPRs (d8-d15) from the stack-consed vector
    on top of the stack, leaving the vector in place.  d7 winds up with
    a denormalized float in it, if anything cares. */
 define(`restore_lisp_fprs',`
-        __(fldmfdd $1,{d7-d13})
+        __(fldmfdd $1,{d7-d15})
 ')                
 
 /* discard the stack-consed vector which contains a set of 8 non-volatile
    FPRs. */
 define(`discard_lisp_fprs',`
-        __(add sp,sp,#7*8)
+        __(add sp,sp,#9*8)
 ')                        
         
 define(`mkcatch',`
@@ -392,8 +393,6 @@ define(`mkcatch',`
         __(stmia sp,{imm0,imm1,imm2,arg_z,arg_x,temp0,temp1,temp2})
         __(add imm0,sp,#fulltag_misc)
         __(str imm0,[rcontext,#tcr.catch_top])
-        __(add imm0,imm0,#catch_frame.nvrs)
-        __(fstmias imm0,{save0-save3})
         __(add lr,lr,#4)
 ')	
 

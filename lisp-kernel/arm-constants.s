@@ -64,13 +64,6 @@ define(`sp',`r13')
 define(`lr',`r14')
 define(`pc',`r15')
 
-/* We can keep node values in some single-float registers.  By definition,
-   those registers aren't general-purpose, but copying between them and
-   GPRs may be faster than using the stack would be. */
-define(`save0',`s28')
-define(`save1',`s29')
-define(`save2',`s30')
-define(`save3',`s31')
                                                 
 nargregs = 3
                 
@@ -328,7 +321,6 @@ max_non_array_node_subtag = (18<<ntagbits)|fulltag_immheader
 	 _node(xframe)		/* exception frame chain */
          _node(last_lisp_frame) /* from TCR */
          _node(code_vector)     /* of fn in lisp_frame, or 0 */
-         _field(nvrs,4*node_size)
 	_endstructf
 
 	_structf(macptr)

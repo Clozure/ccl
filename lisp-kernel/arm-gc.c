@@ -1071,20 +1071,6 @@ mark_xp(ExceptionInformation *xp)
   for (r = arg_z; r <= Rfn; r++) {
     mark_root((regs[r]));
   }
-#ifdef LINUX
-  {
-    LispObj *vfp_info = (LispObj *)find_vfp_info(xp);
-    int nvr;
-
-    if (vfp_info == NULL) {
-      Bug(NULL, "No VFP info in exception context!");
-    }
-    
-    for (nvr = save0;nvr <= save3;nvr++) {
-      mark_root(vfp_info[nvr]);
-    }
-  }
-#endif
 
 
   mark_pc_root(ptr_to_lispobj(xpPC(xp)));
@@ -1366,16 +1352,6 @@ forward_xp(ExceptionInformation *xp)
     update_noderef((LispObj*) (&(regs[r])));
   }
 
-#ifdef LINUX
-  {
-    void *find_vfp_info(ExceptionInformation *);
-    LispObj* nvrs = (LispObj *)find_vfp_info(xp);
-
-    for (r=save0;r<=save3;r++) {
-      update_noderef(&nvrs[r]);
-    }
-  }
-#endif
 
   update_locref((LispObj*) (&(xpPC(xp))));
   update_locref((LispObj*) (&(xpLR(xp))));

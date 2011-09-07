@@ -40,11 +40,6 @@
 #define nargs imm2
 #define allocbase temp0         /* while consing */
 
-/* Non-volatile pseudo node regs kept in s28-s31 */
-#define save0 28
-#define save1 29
-#define save2 30
-#define save3 31
 
 #define nbits_in_word 32
 #define log2_nbits_in_word 5
