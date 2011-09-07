@@ -35,8 +35,9 @@
                                         (ash 1 $vbitpuntable)
                                         (ash -1 $vbitspecial)
                                         (ash 1 $vbitnoreg))))
-                 (if (eql (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))
-                          (logand bits (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))))
+                 (if (or (var-nvr var)  ; already assiged a register via other means
+                         (eql (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))
+                              (logand bits (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq)))))
                    0
                    (var-refs var))
                  0)))
@@ -52,7 +53,7 @@
                    nil
                    t)))))
     (dolist (iv inherited-vars)
-      (dolist (v vars) (push iv (var-binding-info v)))
+      (dolist (v vars) (pushnew iv (var-binding-info v) :test #'eq))
       (push iv vars))
     (setq vars (%sort-list-no-key
                 ;;(delete-if #'(lambda (v) (eql (var-weight v) 0)) vars) 
@@ -123,6 +124,35 @@
 (defun nx2-assign-register-var (v)
   (var-nvr v))
 
+(defun nx2-select-fpr-candidates (vars &optional restricted)
+  (let* ((fvars ()))
+    (dolist (v vars (%sort-list-no-key (nx2-partition-vars fvars nil)
+                                       #'nx2-bigger-cdr-than))
+      (unless (member v restricted :test #'eq)
+        (let* ((bits (nx-var-bits v)))
+          (declare (fixnum bits))
+          (when (eql 0 (logand bits (logior 
+                                     (ash 1 $vbitpuntable)
+                                     (ash -1 $vbitspecial)
+                                     (ash 1 $vbitnoreg)
+                                     (ash 1 $vbitdynamicextent)
+                                     (ash 1 $vbitclosed))))
+            (if (logbitp $vbitsetq bits)
+              (setf (var-refs v) (ash (var-refs v) 2))
+              (unless (var-declared-unboxed-type v)
+                (let* ((inittype (var-inittype v)))
+                  (when inittype
+                    (if (subtypep inittype 'double-float)
+                      (setf (var-declared-unboxed-type v) 'double-float)
+                      (if (subtypep inittype 'single-float)
+                        (setf (var-declared-unboxed-type v) 'single-float)))))))
+            (let* ((type (var-declared-unboxed-type v)))
+              (when (or (eq type 'single-float)
+                        (eq type 'double-float))
+                (push v fvars)))))))))
+          
+                
+              
 
 (defun nx2-constant-form-p (form)
   (setq form (nx-untyped-form form))

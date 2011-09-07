@@ -122,6 +122,7 @@
 (defvar *arm2-optimize-for-space* nil)
 (defvar *arm2-register-restore-count* 0)
 (defvar *arm2-register-restore-ea* nil)
+(defvar *arm2-non-volatile-fpr-count* 0)
 (defvar *arm2-compiler-register-save-label* nil)
 
 (defparameter *arm2-tail-call-aliases*
@@ -167,6 +168,9 @@
 (defvar *arm2-emitted-source-notes* nil)
 
 (defvar *arm2-result-reg* arm::arg_z)
+(defparameter *arm2-nvrs* nil)
+(defparameter *arm2-first-nvr* -1)
+
 (defvar *arm2-gpr-locations* nil)
 (defvar *arm2-gpr-locations-valid-mask* 0)
 (defvar *arm2-gpr-constants* nil)
@@ -378,6 +382,7 @@
            (*arm2-optimize-for-space* nil)
            (*arm2-register-restore-count* nil)
            (*arm2-compiler-register-save-label* nil)
+           (*arm2-non-volatile-fpr-count* 0)
            (*arm2-register-restore-ea* nil)
            (*arm2-vstack* 0)
            (*arm2-cstack* 0)
@@ -541,16 +546,19 @@
             *arm2-gpr-constants-valid-mask* (logandc2 *arm2-gpr-constants-valid-mask* clobbered-regs))))
     vinsn)
 
+(defun arm2-invalidate-regmap-entry (i loc)
+  (when (and (logbitp i *arm2-gpr-locations-valid-mask*)
+             (memq loc (svref *arm2-gpr-locations* i)))
+    (when (null (setf (svref *arm2-gpr-locations* i)
+                      (delete loc (svref *arm2-gpr-locations* i))))
+      (setq *arm2-gpr-locations-valid-mask* (logandc2 *arm2-gpr-locations-valid-mask* (ash 1 i)))))  )
+
 (defun arm2-regmap-note-store (gpr loc)
   (let* ((gpr (%hard-regspec-value gpr)))
     ;; Any other GPRs that had contained loc no longer do so.
     (dotimes (i 16)
       (unless (eql i gpr)
-        (when (and (logbitp i *arm2-gpr-locations-valid-mask*)
-                   (memq loc (svref *arm2-gpr-locations* i)))
-          (when (null (setf (svref *arm2-gpr-locations* i)
-                            (delete loc (svref *arm2-gpr-locations* i))))
-            (setq *arm2-gpr-locations-valid-mask* (logandc2 *arm2-gpr-locations-valid-mask* (ash 1 i)))))))
+        (arm2-invalidate-regmap-entry i loc)))
     (if (logbitp gpr *arm2-gpr-locations-valid-mask*)
       (push loc (svref *arm2-gpr-locations* gpr))
       (setf (svref *arm2-gpr-locations* gpr) (list loc)))
@@ -701,22 +709,32 @@
 
           
     
-;;; Vpush the last N non-volatile-registers.
-;;; Could use a STM here, especially if N is largish or optimizing for space.
-#+maybe-someday
+;;; Vpush the first N non-volatile-registers.
 (defun arm2-save-nvrs (seg n)
   (declare (fixnum n))
   (when (> n 0)
     (setq *arm2-compiler-register-save-label* (arm2-emit-note seg :regsave))
     (with-arm-local-vinsn-macros (seg)
-      (if *arm2-open-code-inline*
-	(! save-nvrs-individually (- 32 n))
-	(! save-nvrs (- 32 n))))
+      (! save-nvrs n))
     (dotimes (i n)
-      (arm2-new-vstack-lcell :regsave *arm2-target-lcell-size* 0 (- arm::save0 i)))
+      (arm2-new-vstack-lcell :regsave *arm2-target-lcell-size* 0 (+ *arm2-first-nvr* i)))
     (incf *arm2-vstack* (the fixnum (* n *arm2-target-node-size*)))
     (setq *arm2-register-restore-ea* *arm2-vstack*
           *arm2-register-restore-count* n)))
+
+(defun arm2-save-non-volatile-fprs (seg n)
+  (unless (eql n 0)
+    (with-arm-local-vinsn-macros (seg)
+      (! push-nvfprs n))
+    (setq *arm2-non-volatile-fpr-count* n)))
+
+(defun arm2-restore-non-volatile-fprs (seg)
+  (let* ((n *arm2-non-volatile-fpr-count*))
+    (unless (eql n 0)
+    (with-arm-local-vinsn-macros (seg)
+      (! pop-nvfprs n)))))
+
+      
 
 
 ;;; If there are an indefinite number of args/values on the vstack,
@@ -728,15 +746,33 @@
 ;;; saved vsp may belong to a different stack segment.  (It's cheaper
 ;;; to compute/copy than to load it, anyway.)
 
-#+maybe-later-that-same-day
-(defun arm2-restore-nvrs (seg ea nregs &optional from-fp)
-  (when (null from-fp)
-    (setq from-fp arm::vsp))
-  (when (and ea nregs)
-    (with-arm-local-vinsn-macros (seg)
-      (let* ((first (- 32 nregs)))
-        (declare (fixnum first))
-        (! restore-nvrs first from-fp (- *arm2-vstack* ea))))))
+(defun arm2-restore-nvrs (seg multiple-values-on-stack)
+  (let* ((ea *arm2-register-restore-ea*)
+         (n *arm2-register-restore-count*))
+    (when (and ea n)
+      (with-arm-local-vinsn-macros (seg)
+        (let* ((diff (- *arm2-vstack* ea)))
+          (if (and (eql 0 diff)
+                   (not multiple-values-on-stack))
+            (! restore-nvrs n arm::vsp)
+            (let* ((reg (make-unwired-lreg
+                         (if (= *available-backend-imm-temps* 0)
+                           (select-node-temp)
+                           (select-imm-temp))
+                         :class hard-reg-class-gpr
+                         :mode hard-reg-class-gpr-mode-node)))
+              (if (eql 0 diff)
+                (! fixnum-add reg arm::vsp arm::nargs)
+                (progn
+                  (if (arm::encode-arm-immediate diff)
+                    (! add-immediate reg arm::vsp diff)
+                    (progn
+                      (arm2-lri seg reg diff)
+                      (! fixnum-add reg arm::vsp reg)))
+                  (when multiple-values-on-stack
+                    (! fixnum-add reg reg arm::nargs))))
+              (! restore-nvrs n reg))))))))
+
 
 
 
@@ -859,15 +895,12 @@
             (arm2-bind-var seg spvar sploc sp-lcell))))
       (setq vloc (%i+ vloc (* 2 *arm2-target-node-size*))))))
 
-;;; Vpush register r, unless var gets a globally-assigned register.
-;;; Return NIL if register was vpushed, else var.
-(defun arm2-vpush-arg-register (seg reg var)
-  (when var
-    (if (var-nvr var)
-      var
-      (progn 
-        (arm2-vpush-register seg reg :reserved)
-        nil))))
+;;; Return NIL if arg register should be vpushed, else var.
+(defun arm2-retain-arg-register (var)
+  (if var
+    (when (var-nvr var)
+      var)
+    (compiler-bug "Missing var!")))
 
 
 ;;; nargs has been validated, arguments defaulted and canonicalized.
@@ -892,30 +925,40 @@
       (when *arm2-fixed-args-label*
         (@ (setq *arm2-fixed-args-tail-label* (backend-get-next-label))))
       (destructuring-bind (&optional zvar yvar xvar &rest stack-args) revargs
-        (declare (ignore xvar yvar))
         (let* ((nstackargs (length stack-args)))
           (arm2-set-vstack (* nstackargs *arm2-target-node-size*))
           (dotimes (i nstackargs)
             (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil))
-          (if (>= nargs 3)
-            (progn
-              (! vpush-xyz)
-              (arm2-regmap-note-store arm::arg_x *arm2-vstack*)
-              (arm2-regmap-note-store arm::arg_y (+ *arm2-target-node-size* *arm2-vstack*))
-              (arm2-regmap-note-store arm::arg_z (+ (* 2 *arm2-target-node-size*) *arm2-vstack*))
-              (dotimes (i 3)
-                (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil))
-              (arm2-adjust-vstack (* 3 *arm2-target-node-size*)))
-            (if (= nargs 2)
-              (progn
-                (! vpush-yz)
-                (arm2-regmap-note-store arm::arg_y *arm2-vstack*)
-                (arm2-regmap-note-store arm::arg_z (+ *arm2-target-node-size* *arm2-vstack*))
-                (dotimes (i 2)
-                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil))
-                (arm2-adjust-vstack (* 2 *arm2-target-node-size*)))
-              (if (= nargs 1)
-                (push (arm2-vpush-arg-register seg ($ arm::arg_z) zvar) reg-vars))))))
+          (let* ((mask 0))
+            (declare (fixnum mask))
+            (when (>= nargs 3)
+              (let* ((retain-x (arm2-retain-arg-register xvar)))
+                (push retain-x reg-vars)
+                (unless retain-x
+                  (setq mask (logior (ash 1 arm::arg_x) mask))
+                  (arm2-regmap-note-store arm::arg_x *arm2-vstack*)
+                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
+                  (arm2-adjust-vstack *arm2-target-node-size*))))
+            (when (>= nargs 2)
+              (let* ((retain-y (arm2-retain-arg-register yvar)))
+                (push retain-y reg-vars)
+                (unless retain-y
+                  (setq mask (logior (ash 1 arm::arg_y) mask))
+                  (arm2-regmap-note-store arm::arg_y *arm2-vstack*)
+                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
+                  (arm2-adjust-vstack *arm2-target-node-size*))))
+            (when (>= nargs 1)
+              (let* ((retain-z (arm2-retain-arg-register zvar)))
+                (push retain-z reg-vars)
+                (unless retain-z
+                  (setq mask (logior (ash 1 arm::arg_z) mask))
+                  (arm2-regmap-note-store arm::arg_z *arm2-vstack*)
+                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
+                  (arm2-adjust-vstack *arm2-target-node-size*))))
+            (unless (eql 0 mask)
+              (if (eql (logcount mask) 1)
+                (! vpush-register ($ (1- (integer-length mask))))
+                (! vpush-multiple-registers mask))))))
       reg-vars)))
 
 ;;; Just required args.
@@ -1215,53 +1258,66 @@
   
 
 (defun arm2-reg-for-form (form hint)
-  (when (node-reg-p hint)
-    (let* ((var (arm2-lexical-reference-p form)))
-      (if var
-        (let* ((ea (var-ea var)))
-          (when (and (memory-spec-p ea)
-                     (not (addrspec-vcell-p ea)))
-            (let* ((offset (memspec-frame-address-offset ea))
-                   (mask *arm2-gpr-locations-valid-mask*)
-                   (info *arm2-gpr-locations*))
-              (declare (fixnum mask) (simple-vector info))
-              (dotimes (reg 16)
-                (when (and (logbitp reg mask)
-                           (memq offset (svref info reg)))
-                  (return reg))))))
-        (multiple-value-bind (value constantp) (acode-constant-p form)
-          (when constantp
-            (let* ((regs (arm2-gprs-containing-constant value))
-                   (regno (hard-regspec-value hint)))
-              (if (logbitp regno regs)
-                hint
-                (unless (eql 0 regs)
-                  (1- (integer-length regs)))))))))))
+  (let* ((var (arm2-lexical-reference-p form)))
+    (cond ((node-reg-p hint)
+           (if var
+             (let* ((ea (var-ea var)))
+               (when (and (memory-spec-p ea)
+                          (not (addrspec-vcell-p ea)))
+                 (let* ((offset (memspec-frame-address-offset ea))
+                        (mask *arm2-gpr-locations-valid-mask*)
+                        (info *arm2-gpr-locations*))
+                   (declare (fixnum mask) (simple-vector info))
+                   (dotimes (reg 16)
+                     (when (and (logbitp reg mask)
+                                (memq offset (svref info reg)))
+                       (return reg))))))
+             (multiple-value-bind (value constantp) (acode-constant-p form)
+               (when constantp
+                 (let* ((regs (arm2-gprs-containing-constant value))
+                        (regno (hard-regspec-value hint)))
+                   (if (logbitp regno regs)
+                     hint
+                     (unless (eql 0 regs)
+                       (1- (integer-length regs)))))))))
+          ((eql (hard-regspec-class hint) hard-reg-class-fpr)
+           (when var
+             (let* ((ea (var-ea var)))
+               (when (register-spec-p ea)
+                 (and (eql (hard-regspec-class ea) hard-reg-class-fpr)
+                      (eql (get-regspec-mode ea) (get-regspec-mode hint))
+                      ea))))))))
+         
+    
                  
             
           
 
 (defun arm2-stack-to-register (seg memspec reg)
   (with-arm-local-vinsn-macros (seg)
-    (let* ((offset (memspec-frame-address-offset memspec))
-           (mask *arm2-gpr-locations-valid-mask*)
-           (info *arm2-gpr-locations*)
-           (regno (%hard-regspec-value reg))
-           (other (arm2-register-for-frame-offset offset regno)))
-      (unless (eql regno other)
-        (cond (other
-                 (let* ((vinsn (! copy-node-gpr reg other)))
-                   (setq *arm2-gpr-locations-valid-mask*
-                         (logior mask (ash 1 regno)))
-                   (setf (svref info regno)
-                         (copy-list (svref info other)))
-                   vinsn))
-                (t
-                 (let* ((vinsn (! vframe-load reg offset *arm2-vstack*)))
-                   (setq *arm2-gpr-locations-valid-mask*
-                         (logior mask (ash 1 regno)))
-                   (setf (svref info regno) (list offset))
-                   vinsn)))))))
+    (let* ((offset (memspec-frame-address-offset memspec)))
+      (if (eql (hard-regspec-class reg) hard-reg-class-fpr)
+        (with-node-target () temp
+          (arm2-stack-to-register seg memspec temp)
+          (arm2-copy-register seg reg temp))
+        (let*((mask *arm2-gpr-locations-valid-mask*)
+              (info *arm2-gpr-locations*)
+              (regno (%hard-regspec-value reg))
+              (other (arm2-register-for-frame-offset offset regno)))
+          (unless (eql regno other)
+            (cond (other
+                   (let* ((vinsn (! copy-node-gpr reg other)))
+                     (setq *arm2-gpr-locations-valid-mask*
+                           (logior mask (ash 1 regno)))
+                     (setf (svref info regno)
+                           (copy-list (svref info other)))
+                     vinsn))
+                  (t
+                   (let* ((vinsn (! vframe-load reg offset *arm2-vstack*)))
+                     (setq *arm2-gpr-locations-valid-mask*
+                           (logior mask (ash 1 regno)))
+                     (setf (svref info regno) (list offset))
+                     vinsn)))))))))
 
 (defun arm2-lcell-to-register (seg lcell reg)
   (with-arm-local-vinsn-macros (seg)
@@ -2484,13 +2540,18 @@
         #-no-compiler-bugs
         (unless (or immp symp lfunp (typep fn 'lreg) (fixnump fn)) (compiler-bug "Well, well, well.  How could this have happened ?"))
         (when a-reg
-          (arm2-copy-register seg destreg a-reg)))
+          (arm2-copy-register seg destreg a-reg))
+        (unless spread-p
+          (arm2-restore-nvrs seg (null nargs))
+          (arm2-restore-non-volatile-fprs seg)))
       (if spread-p
         (progn
           (arm2-set-nargs seg (%i- nargs 1))
           (if (eq spread-p 0)
             (! spread-lexpr)
-            (! spread-list)))
+            (! spread-list))
+          (arm2-restore-nvrs seg nil)
+          (arm2-restore-non-volatile-fprs seg))
         (if nargs
           (unless known-fixed-nargs (arm2-set-nargs seg nargs))
           (! pop-argument-registers)))
@@ -3508,6 +3569,14 @@
       (setq *arm2-top-vstack-lcell* (lcell-parent *arm2-top-vstack-lcell*))
       (arm2-adjust-vstack (- *arm2-target-node-size*)))))
 
+
+
+     
+        
+
+  
+      
+      
 (defun arm2-copy-register (seg dest src)
   (with-arm-local-vinsn-macros (seg)
     (when dest
@@ -3645,11 +3714,12 @@
                 (if dest-gpr
                   (case dest-mode
                     (#.hard-reg-class-gpr-mode-node
-                     (case src-mode
-                       (#.hard-reg-class-fpr-mode-double
-                        (! double->heap dest src))
-                       (#.hard-reg-class-fpr-mode-single
-                        (! single->node dest src)))))
+                     (if src-fpr
+                       (case src-mode
+                         (#.hard-reg-class-fpr-mode-double
+                          (! double->heap dest src))
+                         (#.hard-reg-class-fpr-mode-single
+                          (! single->node dest src))))))
                   (if (and src-fpr dest-fpr)
                     (unless (eql dest-fpr src-fpr)
                       (case src-mode
@@ -3790,7 +3860,7 @@
     (arm2-stack-to-register seg addrspec reg)
     (arm2-copy-register seg reg addrspec)))
   
-(defun arm2-seq-bind-var (seg var val)
+(defun arm2-seq-bind-var (seg var val)  
   (with-arm-local-vinsn-macros (seg)
     (let* ((sym (var-name var))
            (bits (nx-var-bits var))
@@ -3823,7 +3893,7 @@
               (progn
                 (let* ((vloc *arm2-vstack*)
                        (reg (let* ((r (nx2-assign-register-var var)))
-                              (if r ($ r)))))
+                              (if r (make-wired-lreg r :class (hard-regspec-class r) :mode (get-regspec-mode r))))))
                   (if (arm2-load-ea-p val)
                     (if reg
                       (arm2-addrspec-to-reg seg val reg)
@@ -4734,9 +4804,13 @@
                 (t
                  (@ (setq label (backend-get-next-label)))
                  (push (cons vstack label) *arm2-valret-labels*)
-
+                 (arm2-restore-nvrs seg t)
+                 (arm2-restore-non-volatile-fprs seg)                 
                  (! nvalret)))
-          (! popj))))
+          (progn
+            (arm2-restore-nvrs seg nil)
+            (arm2-restore-non-volatile-fprs seg)            
+            (! popj)))))
     nil))
 
 
@@ -4832,7 +4906,7 @@
 (defun arm2-init-regvar (seg var reg addr)
   (with-arm-local-vinsn-macros (seg)
     (arm2-stack-to-register seg addr reg)
-    (arm2-set-var-ea seg var ($ reg))))
+    (arm2-set-var-ea seg var (make-wired-lreg reg :class (hard-regspec-class reg) :mode (get-regspec-mode reg)))))
 
 (defun arm2-bind-structured-var (seg var vloc lcell &optional context)
   (declare (ignore context))
@@ -5162,6 +5236,8 @@
                           (compiler-bug "Unknown builtin subprim index for ~s" name))))
            (tail-p (arm2-tailcallok xfer)))
       (when tail-p
+        (arm2-restore-nvrs seg nil)
+        (arm2-restore-non-volatile-fprs seg)
         (arm2-restore-full-lisp-context seg))
       (if tail-p
         (! jump-subprim subprim)
@@ -5200,7 +5276,49 @@
            (record-source-file ',name 'function)
            (svset *arm2-specials* (%ilogand #.operator-id-mask (%nx1-operator ,locative)) ,fun))))))
 )
-  
+
+(defun arm2-allocate-global-fprs (varsets)
+  (do* ((done nil)
+        (mask (1- (ash 1 16)))
+        (last-allocated-double -1)
+        (varsets varsets (cdr varsets))
+        (varset (caar varsets) (caar varsets)))
+       ((or done (null varsets)) (1+ last-allocated-double))
+    (let* ((need-double
+            (dolist (var varset)
+              (when (eq (var-declared-unboxed-type var) 'double-float)
+                (return t)))))
+      (if need-double
+        (do* ((i 0 (1+ i))
+              (regmask (target-fpr-mask i :double-float)
+                       (target-fpr-mask i :double-float)))
+             ((> regmask mask) (setq done t))
+          (when (eql regmask (logand mask regmask))
+            (setq mask (logandc2 mask regmask))
+            (let* ((double (make-hard-fp-reg (+ (hard-regspec-value arm::d8) i) hard-reg-class-fpr-mode-double))
+                   (single (make-hard-fp-reg (+ (hard-regspec-value arm::s16) (ash i -1)) hard-reg-class-fpr-mode-single)))
+              (dolist (var varset)
+                (if (eq 'double-float (var-declared-unboxed-type var))
+                  (setf (var-nvr var) double)
+                  (setf (var-nvr var) single)))
+              (setq last-allocated-double i)
+              (return))))
+        (do* ((i 0 (1+ i))
+              (regmask (target-fpr-mask i :single-float)
+                       (target-fpr-mask i :single-float)))
+             ((> regmask mask) (setq done t))
+          (when (eql regmask (logand mask regmask))
+            (setq mask (logandc2 mask regmask))
+            (let* ((single (make-hard-fp-reg (+ (hard-regspec-value arm::s16) i) hard-reg-class-fpr-mode-single))
+                   )
+              (dolist (var varset)
+                (setf (var-nvr var) single))
+              (let* ((idx (ash (1+ i) -1)))
+                (when (> idx last-allocated-double)
+                  (setq last-allocated-double idx)))
+              (return))))))))
+        
+
 (defarm2 arm2-lambda lambda-list (seg vreg xfer req opt rest keys auxen body p2decls &optional code-note)
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((stack-consed-rest nil)
@@ -5224,12 +5342,23 @@
            (num-opt (length (%car opt)))
            (arg-regs nil)
            optsupvloc
+           reglocatives
+           pregs
+           no-regs
+           (nsaved-fprs 0)
            (reserved-lcells nil)
            (*arm2-vstack* 0))
       (declare (type (unsigned-byte 16) num-req num-opt num-inh))
       (with-arm-p2-declarations p2decls
-        ;; Need to do this for effect here.
-        (nx2-allocate-global-registers *arm2-fcells* *arm2-vcells* nil nil nil)
+        (setq *arm2-inhibit-register-allocation*
+              (setq no-regs (%ilogbitp $fbitnoregs fbits)))
+        (unless no-regs
+          (let* ((fp-vars (nx2-select-fpr-candidates (afunc-all-vars afunc))))
+            (when fp-vars
+              (setq nsaved-fprs (arm2-allocate-global-fprs fp-vars)))))
+        (multiple-value-setq (pregs reglocatives) 
+         
+          (nx2-allocate-global-registers *arm2-fcells* *arm2-vcells* (afunc-all-vars afunc) inherited-vars (unless no-regs *arm2-nvrs*)))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
         (when keys ;; Ensure keyvect is the first immediate
           (backend-immediate-index (%cadr (%cdddr keys))))
@@ -5249,9 +5378,9 @@
                      (<= num-opt $numarmargregs))
               (setq arg-regs (arm2-simple-opt-entry seg rev-opt rev-fixed))
               (progn
-                ; If the minumum acceptable number of args is non-zero, ensure
-                ; that at least that many were received.  If there's an upper bound,
-                ; enforce it.
+                ;; If the minumum acceptable number of args is
+                ;; non-zero, ensure that at least that many were
+                ;; received.  If there's an upper bound, enforce it.
                 
                 (when rev-fixed
                   (arm2-reserve-vstack-lcells num-fixed)
@@ -5337,7 +5466,21 @@
           ;; Caller's context is saved; *arm2-vstack* is valid.  Might still have method-var
           ;; to worry about.
 
+          (arm2-save-non-volatile-fprs seg nsaved-fprs)
+          (unless (= 0 pregs)
+            ;; Save NVRs; load constants into any that get constants.
+            (arm2-save-nvrs seg pregs)
+            
 
+            (dolist (pair reglocatives)
+              (declare (cons pair))
+              (let* ((constant (car pair))
+                     (reg (cdr pair))
+                     (temp ($ arm::temp2)))
+                (declare (cons constant))
+                (rplacd constant reg)
+                (! ref-constant temp (backend-immediate-index (car constant)))
+                (arm2-copy-register seg reg temp))))
           (when method-var
             (arm2-seq-bind-var seg method-var arm::next-method-context))
           ;; If any arguments are still in arg_x, arg_y, arg_z, that's
@@ -5348,7 +5491,7 @@
           ;; argument registers.
           (when arg-regs
             (do* ((vars arg-regs (cdr vars))
-                  (arg-reg-num arm::arg_z (1- arg-reg-num)))
+                  (arg-reg-num arm::arg_z (1+ arg-reg-num)))
                  ((null vars))
               (declare (list vars) (fixnum arg-reg-num))
               (let* ((var (car vars)))
@@ -6106,6 +6249,8 @@
                 (3 (arm::arm-subprimitive-address '.SPcallbuiltin3))
                 (t (arm::arm-subprimitive-address '.SPcallbuiltin))))))
     (when tail-p
+      (arm2-restore-nvrs seg nil)
+      (arm2-restore-non-volatile-fprs seg)
       (arm2-restore-full-lisp-context seg))
     #+nil
     (unless idx-subprim
@@ -8660,6 +8805,8 @@
 
 (defarm2 arm2-%current-frame-ptr %current-frame-ptr (seg vreg xfer)
   (cond ((arm2-tailcallok xfer)
+         (arm2-restore-nvrs seg nil)
+         (arm2-restore-non-volatile-fprs seg)
 	 (arm2-restore-full-lisp-context seg)
 	 (! %current-frame-ptr ($ arm::arg_z))
 	 (! jump-return-pc))

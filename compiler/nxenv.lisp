@@ -30,6 +30,19 @@
 #+x8632-target (require "X8632ENV")
 #+x8664-target (require "X8664ENV")
 
+(def-accessors (var) %svref
+  nil                                   ; 'var
+  var-name                              ; symbol
+  (var-bits var-parent)                 ; fixnum or ptr to parent
+  (var-ea  var-expansion)               ; p2 address (or symbol-macro expansion)
+  var-ref-forms                         ; in intermediate-code
+  var-inittype
+  var-binding-info
+  var-refs
+  var-nvr
+  var-declared-unboxed-type             ; NIL or float or natural-integer type
+)
+
 (defconstant $vbittemporary 16)    ; a compiler temporary
 (defconstant $vbitreg 17)          ; really wants to live in a register.
 (defconstant $vbitnoreg 18)        ; something inhibits register allocation
@@ -528,7 +541,14 @@
         (special (setq bits (%ilogior bits (ash -1 $vbitspecial) (%ilsl $vbitparameter 1))))
         (ignore (setq bits (%ilogior bits (%ilsl $vbitignore 1))))
         ((ignorable ignore-if-unused) (setq bits (%ilogior bits (%ilsl $vbitignoreunused 1))))
-        (dynamic-extent (setq bits (%ilogior bits (%ilsl $vbitdynamicextent 1))))))
+        (dynamic-extent (setq bits (%ilogior bits (%ilsl $vbitdynamicextent 1))))
+        (type (let* ((type (cdr decl)))
+                (cond ((or (eq type 'double-float)
+                           (subtypep type 'double-float))
+                       (setf (var-declared-unboxed-type node) 'double-float))
+                      ((or (eq type 'single-float)
+                           (subtypep type 'single-float))
+                       (setf (var-declared-unboxed-type node) 'single-float)))))))
     node))
 
 (defun nx-decl-set-fbit (bit)
@@ -554,7 +574,7 @@
     ;;    is also updated.
     (when catchp
       (nx-set-var-bits var (%ilogior2 bits (%ilsl $vbitnoreg 1))))
-    (setf (var-refs var) (+ (the fixnum (var-refs var)) by))
+    (setf (var-refs var) (+ (the fixnum (var-refs var)) scaled-by))
     new))
 
 

@@ -29,6 +29,26 @@
   (%define-vinsn *arm-backend* vinsn-name results args temps body))
 
 
+;;; Non-volatile FPRs.
+(define-arm-vinsn (push-nvfprs :push :multiple :doubleword :csp :predicatable)
+    (()
+     ((n :u16const))
+     ((imm0 (:u32 #.arm::imm0))
+      (imm1 (:u32 #.arm::imm1))
+      (d7 (:double-float #.arm::d7))))
+  (movw imm0 (:$ (:apply logior (:apply ash n arm::num-subtag-bits) arm::subtag-double-float-vector)))
+  (mov imm1 (:$ 0))
+  (fmdrr d7 imm0 imm1)
+  (fstmdbd d7 (:! arm::sp) (:apply + n 1)))
+
+(define-arm-vinsn (pop-nvfprs :push :multiple :doubleword :csp :predicatable)
+    (()
+     ((n :u16const))
+     ((d7 (:double-float #.arm::d7))))
+  (fldmiad d7 (:! arm::sp) (:apply + n 1)))
+
+
+
 ;;; Index "scaling" and constant-offset misc-ref vinsns.
 
 (define-arm-vinsn (scale-node-misc-index :predicatable)
@@ -210,14 +230,14 @@
 
 
 
-(define-arm-vinsn (misc-set-single-float :predicatable)
+(define-arm-vinsn (misc-set-single-float :predicatable :sets-lr)
     (()
      ((val :single-float)
       (v :lisp)
-      (scaled-idx :u32))
-     ((temp :u32)))
-  (fmrs temp val)
-  (str temp (:@ v scaled-idx)))
+      (scaled-idx :u32)))
+  (add arm::lr v scaled-idx)
+  (fsts val (:@ arm::lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 
 (define-arm-vinsn (misc-ref-u16 :predicatable)
@@ -697,23 +717,22 @@
   (add src  src (:asr index (:$ arm::fixnumshift)))
   (flds dest (:@ src (:$ 0))))
 
+;;; The caller should check that the index is kosher
 (define-arm-vinsn (mem-set-c-single-float :predicatable)
     (()
      ((val :single-float)
       (src :address)
-      (index :s16const))
-     ((temp :u32)))
-  (fmrs temp val)
-  (str temp (:@ src (:$ index))))
+      (index :s16const)))
+  (fsts val (:@ src (:$ index))))
 
 (define-arm-vinsn (mem-set-single-float :predicatable)
     (()
      ((val :single-float)
       (src :address)
       (index :s32))
-     ((temp :u32)))
-  (fmrs temp val)
-  (str temp (:@ src  index)))
+     ((temp :address)))
+  (add temp src index)
+  (fsts val (:@ temp (:$ 0))))
 
 
 (define-arm-vinsn (mem-set-c-address :predicatable)
@@ -1771,8 +1790,17 @@
      ((reg :lisp)))
   (str reg (:@! vsp (:$ (- arm::node-size)))))
 
+(define-arm-vinsn (vpush-multiple-registers :push :node :multiple :vsp :predicatable)
+    (()
+     ((mask :u16const)))
+  (stmdb (:! arm::vsp) (:$ mask)))
+
 (define-arm-vinsn (vpush-register-arg :push :node :vsp :outgoing-argument :predicatable)
-    
+    (()
+     ((reg :lisp)))
+  (str reg (:@! vsp (:$ (- arm::node-size)))))
+
+(define-arm-vinsn (vpush-register-arg :push :node :vsp :outgoing-argument :predicatable)
     (()
      ((reg :lisp)))
   (str reg (:@! vsp (:$ (- arm::node-size)))))
@@ -2112,7 +2140,7 @@
      ())
   (ldr sp (:@ sp (:$ 4))))
 
-
+;;; Soft-float return.
 (define-arm-vinsn (gpr-to-single-float :predicatable)
     (((dest :single-float))
      ((src :u32)))
@@ -2454,9 +2482,10 @@
 ;;; verbosity).  Wouldn't kill us to do either/both out-of-line, but
 ;;; need to make visible to compiler so unnecessary heap-consing can
 ;;; be elided.
-(define-arm-vinsn single->node (((result :lisp)) ; tagged as a single-float
-                                ((fpreg :single-float))
-                                ((header-temp :u32)))
+(define-arm-vinsn (single->node :sets-lr)
+    (((result :lisp)) ; tagged as a single-float
+     ((fpreg :single-float))
+     ((header-temp :u32)))
   (movw header-temp (:$ arm::single-float-header))
   (sub allocptr allocptr (:$ (- arm::single-float.size arm::fulltag-misc)))
   (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
@@ -2468,8 +2497,8 @@
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
   (add lr result (:$ arm::single-float.value))
-  (fmrs header-temp fpreg)
-  (str header-temp (:@ result (:$ arm::single-float.value))))
+  (fsts fpreg (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 
 
@@ -2522,24 +2551,34 @@
   (fcvtsd result arg)
   (bla .SPcheck-fpu-exception))
 
-(define-arm-vinsn double-to-single (((result :double-float))
+(define-arm-vinsn single-to-double (((result :double-float))
                                     ((arg :single-float)))
   (fcvtds result arg))
 
-(define-arm-vinsn (store-single :predicatable)
+(define-arm-vinsn (single-to-double-safe :call :subprim-call)
+    (((result :double-float))
+     ((arg :single-float))
+     ((imm :u32)))
+  (fmrx imm :fpscr)
+  (bic imm imm (:$ #xff))
+  (fmxr :fpscr imm)
+  (fcvtds result arg)
+  (bla .SPcheck-fpu-exception))
+
+(define-arm-vinsn (store-single :predicatable :sets-lr)
     (()
      ((dest :lisp)
-      (source :single-float))
-     ((temp :u32)))
-  (fmrs temp source)
-  (str temp (:@ dest (:$ arm::single-float.value))))
+      (source :single-float)))
+  (add arm::lr dest (:$ arm::single-float.value))
+  (fsts source (:@ arm::lr (:$ 0)))
+  (mov lr (:$ 0)))
 
-(define-arm-vinsn (get-single :predicatable)
+(define-arm-vinsn (get-single :predicatable :sets-lr)
     (((target :single-float))
-     ((source :lisp))
-     ((temp :u32)))
-  (ldr temp (:@ source (:$ arm::single-float.value)))
-  (fmsr target temp))
+     ((source :lisp)))
+  (add arm::lr source (:$ arm::single-float.value))
+  (flds target (:@ arm::lr (:$ 0)))
+  (mov lr (:$ 0)))
 
 ;;; ... of characters ...
 
@@ -3196,7 +3235,7 @@
 (define-arm-vinsn (zero-double-float-register :predicatable)
     (((dest :double-float))
      ()
-     ((low (:u32 #.arm::imm0))))
+     ((low :u32)))
   (mov low (:$ 0))
   (fmdrr dest low low))
 

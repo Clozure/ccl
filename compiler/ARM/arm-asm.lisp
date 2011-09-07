@@ -820,12 +820,12 @@
      #x0f300f00
      ())
    (define-arm-instruction fldmias (:sd :rnw :srcount)
-     #x0cb00a00
-     #x0fb00f00
+     #x0c900a00
+     #x0f900f00
      ())
    (define-arm-instruction fldmiad (:dd :rnw :drcount)
-     #x0cb00b00
-     #x0fb00f00
+     #x0c900b00
+     #x0f900f00
      ())     
    (define-arm-instruction ftosid (:sd :dm)
      #x0ebd0b40
@@ -1280,11 +1280,13 @@
 
 (defun parse-reglist-operand (form instruction)
   (let* ((mask 0))
-    (dolist (r form)
-      (let* ((regno (need-arm-gpr r)))
-        (when (logbitp regno mask)
-          (warn "Duplicate register ~s in ~s." r form))
-        (setq mask (logior mask (ash 1 regno)))))
+    (if (eq (car form) :$)
+      (setq mask (cadr form))
+      (dolist (r form)
+        (let* ((regno (need-arm-gpr r)))
+          (when (logbitp regno mask)
+            (warn "Duplicate register ~s in ~s." r form))
+          (setq mask (logior mask (ash 1 regno))))))
     (if (zerop mask)
       (error "Empty register list ~s." form)
       (set-field-value instruction (byte 16 0) mask))))
@@ -1775,6 +1777,7 @@
     :imm16
     :srcount
     :drcount
+    :reglist
     )))
 
 (defmacro encode-vinsn-field-type (name)
@@ -1968,12 +1971,18 @@
                  constant-index)))))))
 
 (defun vinsn-parse-reglist-operand (avi value vinsn-params)
-  (dolist (r value)
-    (let* ((p (position r vinsn-params)))
+  (if (eq (car value) :$)
+    (let* ((mask (cadr value))
+           (p (position mask vinsn-params)))
       (if p
-        (add-avi-operand avi (encode-vinsn-field-type :reglist-bit) (list p))
-        (let* ((bit (need-arm-gpr r)))
-          (set-avi-opcode-field avi (byte 1 bit) 1))))))
+        (add-avi-operand avi (encode-vinsn-field-type :reglist) (list p))
+        (set-avi-opcode-field avi (byte 16 0) mask)))
+    (dolist (r value)
+      (let* ((p (position r vinsn-params)))
+        (if p
+          (add-avi-operand avi (encode-vinsn-field-type :reglist-bit) (list p))
+          (let* ((bit (need-arm-gpr r)))
+            (set-avi-opcode-field avi (byte 1 bit) 1)))))))
 
 (defun vinsn-parse-rnw-operand (avi value vinsn-params)
   (let* ((rn (if (atom value)
@@ -2221,6 +2230,7 @@
     vinsn-insert-imm16-operand
     vinsn-insert-srcount-operand
     vinsn-insert-drcount-operand
+    vinsn-insert-reglist-operand
     ))
 
 (defun vinsn-insert-cond-operand (instruction value)
@@ -2341,6 +2351,8 @@
 (defun vinsn-insert-drcount-operand (instruction value)
   (set-field-value instruction (byte 7 1) value))  
 
+(defun vinsn-insert-reglist-operand (instruction value)
+  (set-field-value instruction (byte 16 0) value))
 
 
 (provide "ARM-ASM")

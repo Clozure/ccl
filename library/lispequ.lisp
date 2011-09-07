@@ -194,18 +194,7 @@
   defenv.symbol-macros			; compile-time SYMBOL-MACROS.
 )
 
-(def-accessors (var) %svref
-  nil                                   ; 'var
-  var-name                              ; symbol
-  (var-bits var-parent)                 ; fixnum or ptr to parent
-  (var-ea  var-expansion)               ; p2 address (or symbol-macro expansion)
-  var-ref-forms                         ; in intermediate-code
-  var-inittype
-  var-binding-info
-  var-refs
-  var-nvr
-  var-declared-type
-)
+
 
 (def-accessors (package) %svref
   pkg.itab

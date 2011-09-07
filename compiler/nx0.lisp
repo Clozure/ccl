@@ -36,7 +36,9 @@
 
 (defvar *compile-code-coverage* nil "True to instrument for code coverage")
 
-
+(defmethod print-object ((v var) stream)
+  (print-unreadable-object (v stream :type t :identity t)
+    (format stream "~s" (var-name v))))
 
 
 (defvar *nx-blocks* nil)

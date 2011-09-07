@@ -510,7 +510,8 @@
 
  
 (defun nx-cons-var (name &optional (bits 0))
-  (%istruct 'var name bits nil nil nil nil 0 nil))
+  (%istruct 'var name bits nil nil nil nil 0 nil nil))
+
 
 
 (defun augment-environment (env &key variable symbol-macro function macro declare)
