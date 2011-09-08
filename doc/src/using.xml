@@ -2991,7 +2991,7 @@ Then you can see the coverage information in the definition of
       do (run-test test)
       do (setf (gethash test coverage) (ccl:get-incremental-coverage))
       finally (return coverage))</programlisting>creates a hash table mapping a test to a representation of all coverage recorded while running the
-   test.  This hash table can then be passed to <literal>ccl:incremental-coverage-svn-matches</literal>
+   test.  This hash table can then be passed to <literal>ccl:report-coverage</literal>, <literal>ccl:incremental-coverage-svn-matches</literal>
    or <literal>ccl:incremental-coverage-source-matches</literal>.
 </para>
 </sect2>
@@ -3014,7 +3014,7 @@ Then you can see the coverage information in the definition of
 
   <refsynopsisdiv>
     <synopsis><function>report-coverage</function> output-file &key;
-    (external-format :default) (statistics t) (html t)
+    (tags nil) (external-format :default) (statistics t) (html t)
     </synopsis>
   </refsynopsisdiv>
 
@@ -3037,6 +3037,16 @@ Then you can see the coverage information in the definition of
 	  an index file in <varname>output-file</varname> and, in the same directory,
           one html file for each instrumented source file that has been loaded in the
           current session.
+	</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>tags</term>
+      <listitem>
+	<para>
+	  If non-nil, this should be a hash table mapping arbitrary keys (tags) to incremental coverage deltas.  The
+          HTML report will show a list of tags, and allow selection of an arbitrary subset of them to show the
+          coloring and statistics for coverage by that subset.
 	</para>
       </listitem>
     </varlistentry>
