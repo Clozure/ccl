@@ -668,7 +668,8 @@ return a fixnum representation of that address, else return NIL."
         (let* ((lib (shared-library-with-handle handle)))
           (unless lib
             (setq lib (%cons-shlib name name nil nil))
-            (setf (shlib.handle lib) handle))
+            (setf (shlib.handle lib) handle)
+	    (push lib *shared-libraries*))
           (incf (shlib.opencount lib))
           (values lib nil))))))
 
