@@ -386,7 +386,9 @@
                                          (make-acode (%nx1-operator fixnum)
                                                    (- const-amt)))
                    (progn
-                     (backend-use-operator (%nx1-operator require-fixnum)
+                     (backend-use-operator (target-word-size-case
+                                            (32 (%nx1-operator require-u32))
+                                            (64 (%nx1-operator require-u64)))
                                            seg
                                            nil
                                            nil
