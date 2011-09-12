@@ -449,7 +449,8 @@ function to the indicated name is true.")
 (defparameter *numeric-acode-ops*
   (list (%nx1-operator add2)
         (%nx1-operator sub2)
-        (%nx1-operator mul2)))
+        (%nx1-operator mul2)
+        (%nx1-operator div2)))
 
 
 
@@ -483,7 +484,8 @@ function to the indicated name is true.")
                                   (%cadr form))
                                 (if (eq op (%nx1-operator lexical-reference))
                                   (locally (declare (special *nx-in-frontend*))
-                                    (unless *nx-in-frontend*
+                                    (if *nx-in-frontend*
+                                      (setq assert nil)
                                       (let* ((var (cadr form))
                                              (bits (nx-var-bits var))
                                              (punted (logbitp $vbitpunted bits)))
@@ -1043,8 +1045,8 @@ function to the indicated name is true.")
 ;;; setq'ed, and the old guy wasn't setq'ed in the body, the binding
 ;;; can be punted.
 (defun nx1-note-var-binding (var initform)
-  (let* ((init (nx-untyped-form initform))
-         (inittype (nx-acode-form-type initform *nx-lexical-environment*))
+  (let* ((inittype (nx-acode-form-type initform *nx-lexical-environment*))
+         (init (nx-untyped-form initform))
          (bits (nx-var-bits var)))
     (when (%ilogbitp $vbitspecial bits) (nx-record-xref-info :binds (var-name var)))
     (when inittype (setf (var-inittype var) inittype))
