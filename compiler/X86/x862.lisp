@@ -3468,8 +3468,8 @@
 		   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
 		 (declare (ignore used-gprs))
 		 (let* ((nfprs (target-arch-case
-				(:x8632 6)
-				(:x8664 14))) ;xmm7 (or xmm15) is fpzero.
+				(:x8632 (1- 8))
+				(:x8664 (1- 16)))) ;xmm7 (or xmm15) is fpzero.
 			(free-fpr
 			 (dotimes (r nfprs nil)
 			   (unless (logtest (target-fpr-mask r :double-float)
@@ -9124,13 +9124,13 @@
   (def-x862-require x862-require-number require-number)
   (def-x862-require x862-require-symbol require-symbol)
   (def-x862-require x862-require-s8 require-s8)
-  (def-x862-require x862-require-s8 require-u8)
-  (def-x862-require x862-require-s8 require-s16)
-  (def-x862-require x862-require-s8 require-u16)
-  (def-x862-require x862-require-s8 require-s32)
-  (def-x862-require x862-require-s8 require-u32)
-  (def-x862-require x862-require-s8 require-s64)
-  (def-x862-require x862-require-s8 require-u64))
+  (def-x862-require x862-require-u8 require-u8)
+  (def-x862-require x862-require-s16 require-s16)
+  (def-x862-require x862-require-u16 require-u16)
+  (def-x862-require x862-require-s32 require-s32)
+  (def-x862-require x862-require-u32 require-u32)
+  (def-x862-require x862-require-s64 require-s64)
+  (def-x862-require x862-require-u64 require-u64))
 
 (defun x862-typechecked-form (seg vreg xfer typespec form)
   (with-x86-local-vinsn-macros (seg vreg xfer)

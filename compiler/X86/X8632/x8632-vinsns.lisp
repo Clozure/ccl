@@ -2538,9 +2538,15 @@
 )
 
 (define-x8632-vinsn require-character (()
-				       ((object :lisp)))
+				       ((object :lisp))
+                                       ((tag (:u8 #.x8632::imm0))))
   :again
-  (cmpb (:$b x8632::subtag-character) (:%b object))
+  ((:pred < (:apply %hard-regspec-value object) 4)
+   (cmpb (:$b x8632::subtag-character) (:%b object)))
+  ((:not (:pred < (:apply %hard-regspec-value object) 4))
+   (movl (:%l object) (:%l tag))
+   (cmpb (:$b x8632::subtag-character) (:%b tag)))
+  
   (jne :bad)
 
   (:anchored-uuo-section :again)
