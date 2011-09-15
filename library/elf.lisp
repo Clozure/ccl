@@ -165,8 +165,13 @@
 
 
 (defun elf-lisp-function-name (f)
-  (let* ((name (format nil "~s" f)))
-    (subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space name)) 1)))
+  (let* ((name (function-name f)))
+    (if (and (symbolp name)
+	     (eq f (fboundp name)))
+      (with-standard-io-syntax
+	(format nil "~s" name))
+      (let ((str (format nil "~s" f)))
+	(subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space str)) 1)))))
 
 
 #+x86-target
