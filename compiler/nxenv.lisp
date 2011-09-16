@@ -565,7 +565,7 @@
          (scaled-by (if (%ilogbitp $vbittemporary bits)
                       by
                       (expt 4 *nx-loop-nesting-level*)))
-         (new (%i+ nsetqs scaled-by)))
+         (new (+ (var-refs var) scaled-by)))
     (nx-set-var-root-nsetqs var (1+ nsetqs))
     ;; If a variable is setq'ed from a catch nested within the construct that
     ;; bound it, it can't be allocated to a register. *

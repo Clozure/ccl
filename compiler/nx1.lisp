@@ -1428,11 +1428,15 @@
     (dolist (tag (setq newtags (nreverse newtags)))
       (push tag *nx-tags*))
     (let* ((body nil)
-           (*nx-loop-nesting-level* (1+ *nx-loop-nesting-level*)))
+           (level *nx-loop-nesting-level*)
+           (*nx-loop-nesting-level* level))
+           
       (dolist (form args (setq body (nreverse body)))
         (push 
          (if (atom form)
            (let ((info (nx-tag-info form)))
+             (when (eql level *nx-loop-nesting-level*)
+               (setq *nx-loop-nesting-level* (1+ level)))
              (%rplaca (%cdr (%cdr (%cdr (%cdr info)))) t)
              (cons (%nx1-operator tag-label) info))
            (nx1-form form))

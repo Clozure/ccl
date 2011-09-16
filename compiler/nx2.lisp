@@ -21,7 +21,7 @@
 
 (defun nx2-bigger-cdr-than (x y)
   (declare (cons x y))
-  (> (the fixnum (cdr x)) (the fixnum (cdr y))))
+  (> (cdr x) (cdr y)))
 
 ;;; Return an unordered list of "varsets": each var in a varset can be
 ;;; assigned a register and all vars in a varset can be assigned the
