@@ -354,7 +354,11 @@
     (#.arm::arm-cond-lt arm::arm-cond-gt)
     (#.arm::arm-cond-le arm::arm-cond-ge)
     (#.arm::arm-cond-gt arm::arm-cond-lt)
-    (#.arm::arm-cond-ge arm::arm-cond-le)))
+    (#.arm::arm-cond-ge arm::arm-cond-le)
+    (#.arm::arm-cond-lo arm::arm-cond-hi)
+    (#.arm::arm-cond-ls arm::arm-cond-hs)
+    (#.arm::arm-cond-hi arm::arm-cond-lo)
+    (#.arm::arm-cond-hs arm::arm-cond-ls)))
 
     
     
@@ -2365,7 +2369,7 @@
 (defun arm2-eliminate-&rest (body rest key-p auxen rest-values)
   (when (and rest (not key-p) (not (cadr auxen)) rest-values)
     (when (eq (logand (the fixnum (nx-var-bits rest))
-                      (logior $vsetqmask (ash -1 $vbitspecial)
+                      (logior (ash -1 $vbitspecial)
                               (ash 1 $vbitclosed) (ash 1 $vbitsetq) (ash 1 $vbitcloseddownward)))
               0)               ; Nothing but simple references
       (do* ()
@@ -3019,7 +3023,8 @@
     (if (and aalready balready)
       (values aalready balready)
       (with-arm-local-vinsn-macros (seg)
-        (let* ((avar (arm2-lexical-reference-p aform))
+        (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
+               (avar (arm2-lexical-reference-p aform))
                (adest areg)
                (bdest breg)
                (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
@@ -3031,6 +3036,8 @@
               (if atriv
                 (progn
                   (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+                  (when (imm-reg-p adest)
+                    (use-imm-temp (%hard-regspec-value adest)))
                   (when (same-arm-reg-p adest breg)
                     (setq breg areg)))
                 (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
@@ -3039,7 +3046,10 @@
                 (setq areg breg))
               (setq bdest (arm2-one-untargeted-reg-form seg bform breg)))
             (if aconst
-              (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+              (progn
+                (if (imm-reg-p bdest)
+                  (use-imm-temp (%hard-regspec-value bdest)))
+                (setq adest (arm2-one-untargeted-reg-form seg aform areg)))
               (if apushed
                 (arm2-elide-pushes seg apushed (arm2-pop-register seg areg)))))
           (values adest bdest))))))
@@ -3357,12 +3367,14 @@
         (%rplaca arglist stkargs)))) 
   arglist)
 
-(defun arm2-constant-for-compare-p (form)
+(defun arm2-constant-for-compare-p (form &optional unboxed)
   (setq form (acode-unwrapped-form form))
   (when (acode-p form)
     (let* ((op (acode-operator form)))
       (if (eql op (%nx1-operator fixnum))
-        (let* ((val (ash (cadr form) arm::fixnumshift)))
+        (let* ((val (if unboxed
+                      (cadr form)
+                      (ash (cadr form) arm::fixnumshift))))
           (if (or (arm::encode-arm-immediate val)
                   (arm::encode-arm-immediate (- val)))
             (logand val #xffffffff)))
@@ -3439,6 +3451,33 @@
                (or jconst iconst))
               (multiple-value-bind (ireg jreg) (arm2-two-untargeted-reg-forms seg i arm::arg_y j arm::arg_z)
                 (arm2-compare-registers seg vreg xfer ireg jreg cr-bit true-p)))))))))
+
+(defun arm2-natural-compare (seg vreg xfer i j cr-bit true-p)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (let* ((jconst (arm2-constant-for-compare-p j t))
+           (iconst (arm2-constant-for-compare-p i t))
+           (boolean (backend-crf-p vreg)))
+          (if (and boolean (or iconst jconst))
+            (let* ((reg (arm2-one-untargeted-reg-form seg (if jconst i j) ($ arm::imm0 :mode :u32))))
+              (! compare-immediate vreg reg (or jconst iconst))
+              (unless (or jconst (eq cr-bit arm::arm-cond-eq))
+                (setq cr-bit (arm2-cr-bit-for-reversed-comparison cr-bit)))
+              (^ cr-bit true-p))
+            (if (and (eq cr-bit arm::arm-cond-eq) 
+                     (or jconst iconst))
+              (arm2-test-reg-%izerop 
+               seg 
+               vreg 
+               xfer 
+               (arm2-one-untargeted-reg-form 
+                seg 
+                (if jconst i j) 
+                ($ arm::imm0 :mode :u32))
+               cr-bit 
+               true-p 
+               (or jconst iconst))
+              (multiple-value-bind (ireg jreg) (arm2-two-untargeted-reg-forms seg i ($ arm::imm0 :mode :u32)  j ($ arm::imm1 :mode :u32))
+                (arm2-compare-registers seg vreg xfer ireg jreg cr-bit true-p)))))))
 
 
 
@@ -3888,7 +3927,13 @@
                      (setq puntval (arm2-puntable-binding-p var val)))
               (progn
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
-                (nx2-replace-var-refs var puntval)
+                (let* ((type (var-inittype var)))
+                  (if (and type (not (eq t type)))
+                    (nx2-replace-var-refs var
+                                          (make-acode (%nx1-operator typed-form)
+                                                      type
+                                                      puntval))
+                    (nx2-replace-var-refs var puntval)))
                 (arm2-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *arm2-vstack*)
@@ -6013,6 +6058,7 @@
   (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm-cr-bit cc)
     (arm2-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
+
 (defarm2 arm2-numcmp numcmp (seg vreg xfer cc form1 form2)
   (or (acode-optimize-numcmp seg vreg xfer cc form1 form2 *arm2-trust-declarations*)
       (let* ((name (ecase (cadr cc)
@@ -7079,7 +7125,7 @@
 (defarm2 arm2-%natural<> %natural<> (seg vreg xfer cc form1 form2)
   (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm-cr-bit cc)
     (setq cr-bit (arm-cr-bit-to-arm-unsigned-cr-bit cr-bit))
-    (arm2-compare seg vreg xfer form1 form2 cr-bit true-p)))
+    (arm2-natural-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
 (defarm2 arm2-double-float-compare double-float-compare (seg vreg xfer cc form1 form2)
   (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm-cr-bit cc)

@@ -2200,7 +2200,7 @@
 (defun ppc2-eliminate-&rest (body rest key-p auxen rest-values)
   (when (and rest (not key-p) (not (cadr auxen)) rest-values)
     (when (eq (logand (the fixnum (nx-var-bits rest))
-                      (logior $vsetqmask (ash -1 $vbitspecial)
+                      (logior (ash -1 $vbitspecial)
                               (ash 1 $vbitclosed) (ash 1 $vbitsetq) (ash 1 $vbitcloseddownward)))
               0)               ; Nothing but simple references
       (do* ()

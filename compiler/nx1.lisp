@@ -1600,7 +1600,7 @@
     (%rplacd thisblock nil)
     (let ((tagbits (nx-var-bits tagvar)))
       (if (not (%ilogbitp $vbitclosed tagbits))
-        (if (neq 0 (%ilogand $vrefmask tagbits))
+        (if (neq 0 (nx-var-root-nrefs tagvar))
           (make-acode 
            (%nx1-operator local-block)
            thisblock
@@ -2194,12 +2194,13 @@
               (unless (eq type t)
                 (let ((old-bits (nx-var-bits var)))
                   (push (nx1-form `(the ,type ,sym)) typechecks)
-                  (when (%izerop (%ilogand2 old-bits
-                                            (%ilogior (%ilsl $vbitspecial 1)
-                                                      (%ilsl $vbitreffed 1)
-                                                      (%ilsl $vbitclosed 1)
-                                                      $vrefmask
-                                                      $vsetqmask)))
+                  (when (%izerop (logior
+                                  (%ilogand2 old-bits
+                                             (%ilogior (%ilsl $vbitspecial 1)
+                                                       (%ilsl $vbitreffed 1)
+                                                       (%ilsl $vbitclosed 1)))
+                                  (nx-var-root-nrefs var)
+                                  (nx-var-root-nsetqs var)))
                     (nx-set-var-bits var (%ilogand2 (nx-var-bits var)
                                                     (%ilognot (%ilsl $vbitignore 1))))))))))))))
 

@@ -41,6 +41,9 @@
   var-refs
   var-nvr
   var-declared-unboxed-type             ; NIL or float or natural-integer type
+  var-root-nrefs                        ; reference count of "root" var
+  var-root-nsetqs                       ; setq count of root var
+  var-initform                          ; initial value acode or NIL.
 )
 
 (defconstant $vbittemporary 16)    ; a compiler temporary
@@ -58,8 +61,6 @@
 (defconstant $vbitignore 26)
 (defconstant $vbitreffed 27)
 (defconstant $vbitspecial 28)
-(defconstant $vsetqmask #xff00)
-(defconstant $vrefmask #xff)
 
 (defconstant $decl_optimize (%ilsl 16 0))  ; today's chuckle
 (defconstant $decl_tailcalls (ash 1 16))
@@ -560,12 +561,12 @@
 
 (defun nx-adjust-setq-count (var &optional (by 1) catchp)
   (let* ((bits (nx-var-bits var))
+         (nsetqs (nx-var-root-nsetqs var))
          (scaled-by (if (%ilogbitp $vbittemporary bits)
                       by
                       (expt 4 *nx-loop-nesting-level*)))
-         (new (%i+ (%ilsr 8 (%ilogand2 $vsetqmask bits)) scaled-by)))
-    (if (%i> new 255) (setq new 255))
-    (setq bits (nx-set-var-bits var (%ilogior (%ilogand (%ilognot $vsetqmask) bits) (%ilsl 8 new))))
+         (new (%i+ nsetqs scaled-by)))
+    (nx-set-var-root-nsetqs var (1+ nsetqs))
     ;; If a variable is setq'ed from a catch nested within the construct that
     ;; bound it, it can't be allocated to a register. *
     ;; * unless it can be proved that the variable isn't referenced
@@ -574,7 +575,7 @@
     ;;    is also updated.
     (when catchp
       (nx-set-var-bits var (%ilogior2 bits (%ilsl $vbitnoreg 1))))
-    (setf (var-refs var) (+ (the fixnum (var-refs var)) scaled-by))
+    (setf (var-refs var) new)
     new))
 
 

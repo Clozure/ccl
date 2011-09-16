@@ -490,7 +490,7 @@ function to the indicated name is true.")
                                              (bits (nx-var-bits var))
                                              (punted (logbitp $vbitpunted bits)))
                                         (if (or punted
-                                                (eql 0 (%ilogand $vsetqmask bits)))
+                                                (eql 0 (nx-var-root-nsetqs var)))
                                           (var-inittype var)))))
                                   (if (or (eq op (%nx1-operator %aref1))
                                           (eq op (%nx1-operator simple-typed-aref2))
@@ -1006,7 +1006,7 @@ function to the indicated name is true.")
         (if (and setqed ignored) (nx1-whine :ignore sym))
         (or ignored ignoreunused 
             (progn (and (consp expansion) (eq (car expansion) :symbol-macro) (setq sym (list :symbol-macro sym))) (nx1-whine :unused sym)))
-        (when (%izerop (%ilogand bits (%ilogior $vrefmask $vsetqmask)))
+        (when (eql 0 (logior (nx-var-root-nrefs var) (nx-var-root-nsetqs var)))
           (nx-set-var-bits var (%ilogior (%ilsl $vbitignore 1) bits)))))))
 
 ; if an inherited var isn't setqed, it gets no vcell.  If it -is- setqed, but
@@ -1044,6 +1044,7 @@ function to the indicated name is true.")
 ;;; variable has been closed over, the new variable hasn't been
 ;;; setq'ed, and the old guy wasn't setq'ed in the body, the binding
 ;;; can be punted.
+
 (defun nx1-note-var-binding (var initform)
   (let* ((inittype (nx-acode-form-type initform *nx-lexical-environment*))
          (init (nx-untyped-form initform))
@@ -1055,9 +1056,8 @@ function to the indicated name is true.")
       (let* ((op (acode-operator init)))
         (if (eq op (%nx1-operator lexical-reference))
           (let* ((target (%cadr init))
-                 (setq-count (%ilsr 8 (%ilogand $vsetqmask (nx-var-bits target)))))
-            (unless (eq setq-count (%ilsr 8 $vsetqmask))
-              (cons var (cons setq-count target))))
+                 (setq-count (nx-var-root-nsetqs var)))
+            (cons var (cons setq-count target)))
           (if (and (%ilogbitp $vbitdynamicextent bits)
                    (or (eq op (%nx1-operator closed-function))
                        (eq op (%nx1-operator simple-function))))
@@ -1098,14 +1098,14 @@ function to the indicated name is true.")
                (eq (%ilogior (%ilsl $vbitsetq 1) (%ilsl $vbitclosed 1)) 
                    (%ilogand
                      (%ilogior (%ilsl $vbitsetq 1) (%ilsl $vbitclosed 1))
-                     target-bits))
-               (neq (%ilsr 8 (%ilogand $vsetqmask target-bits)) (cadr pair)))
+                     target-bits))               
+               (neq (nx-var-root-nsetqs target) (cadr pair)))
              (push (cons var target) *nx-punted-vars*)))))
 
 (defun nx1-punt-var (var initform)
   (let* ((bits (nx-var-bits var))
          (mask (%ilogior (%ilsl $vbitsetq 1) (ash -1 $vbitspecial) (%ilsl $vbitclosed 1)))
-         (nrefs (%ilogand $vrefmask bits))
+         (nrefs (nx-var-root-nrefs var))
          (val (nx-untyped-form initform))
          (op (if (acode-p val) (acode-operator val))))
     (when (%izerop (%ilogand mask bits))
@@ -1206,10 +1206,6 @@ function to the indicated name is true.")
         (dolist (fn intervening-functions result)
           (setf (lexenv.lambda (setq result (new-lexical-environment result))) fn))))))
 
-(defun nx-root-var (v)
-  (do* ((v v bits)
-        (bits (var-bits v) (var-bits v)))
-       ((fixnump bits) v)))
 
 (defun nx-reconcile-inherited-vars (more)
   (let ((last nil)) ; Bop 'til ya drop.
@@ -1344,31 +1340,29 @@ function to the indicated name is true.")
            (boundtobits (nx-var-bits boundto)))
       (declare (fixnum varbits boundtobits))
       (unless (eq (%ilogior
+                   (%ilsl $vbitsetq 1)
+                   (%ilsl $vbitclosed 1))
+                  (%ilogand
+                   (%ilogior
                     (%ilsl $vbitsetq 1)
                     (%ilsl $vbitclosed 1))
-                  (%ilogand
-                    (%ilogior
-                      (%ilsl $vbitsetq 1)
-                      (%ilsl $vbitclosed 1))
-                    boundtobits))
+                   boundtobits))
         ;; Can't happen -
         (unless (%izerop (%ilogand (%ilogior
-                                     (%ilsl $vbitsetq 1) 
-                                     (ash -1 $vbitspecial)
-                                     (%ilsl $vbitclosed 1)) varbits))
+                                    (%ilsl $vbitsetq 1) 
+                                    (ash -1 $vbitspecial)
+                                    (%ilsl $vbitclosed 1)) varbits))
           (error "Bug-o-rama - \"punted\" var had bogus bits. ~
 Or something. Right? ~s ~s" var varbits))
-        (let* ((varcount     (%ilogand $vrefmask varbits)) 
-               (boundtocount (%ilogand $vrefmask boundtobits)))
+        (let* ((varcount     (nx-var-root-nrefs var))
+               (boundtocount (nx-var-root-nrefs boundto)))
           (nx-set-var-bits var (%ilogior
-                                 (%ilsl $vbitpuntable 1)
-                                 (%i- varbits varcount)))
-          (setf (var-refs var) (+ (var-refs var) (var-refs boundto)))
-          (nx-set-var-bits
-           boundto
-           (%i+ (%i- boundtobits boundtocount)
-                (%ilogand $vrefmask
-                          (%i+ (%i- boundtocount 1) varcount)))))))))
+                                (%ilsl $vbitpuntable 1)
+                                varbits))
+          (setf (var-refs var) 0
+                (var-refs boundto) (+ (var-refs var) (var-refs boundto)))
+          (nx-set-var-root-nrefs boundto
+                                 (+ (1- boundtocount) varcount)))))))
 
 ;;; Home-baked handler-case replacement.  About 10 times as fast as full handler-case.
 ;;;(LET ((S 0)) (DOTIMES (I 1000000) (INCF S))) took 45,678 microseconds
@@ -2630,6 +2624,11 @@ Or something. Right? ~s ~s" var varbits))
       (values nil nil))))
 
 
+(defun nx-root-var (var)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((typep bits 'fixnum) var)))
+
 (defun nx-var-bits (var)
   (do* ((var var bits)
         (bits (var-bits var) (var-bits var)))
@@ -2640,6 +2639,27 @@ Or something. Right? ~s ~s" var varbits))
         (bits (var-bits var) (var-bits var)))
        ((fixnump bits) (setf (var-bits var) newbits))))
 
+(defun nx-var-root-nrefs (var)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((fixnump bits) (var-root-nrefs var))))
+
+
+(defun nx-set-var-root-nrefs (var new)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((fixnump bits) (setf (var-root-nrefs var) new))))
+
+(defun nx-var-root-nsetqs (var)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((fixnump bits) (var-root-nsetqs var))))
+
+(defun nx-set-var-root-nsetqs (var new)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((fixnump bits) (setf (var-root-nsetqs var) new))))
+
 (defun nx-make-lexical-reference (var)
   (let* ((ref (make-acode (%nx1-operator lexical-reference) var)))
     (push ref (var-ref-forms var))
@@ -2649,9 +2669,9 @@ Or something. Right? ~s ~s" var varbits))
   (let* ((bits (nx-var-bits var))
          (temp-p (%ilogbitp $vbittemporary bits))
          (by (if temp-p 1 (expt  4 *nx-loop-nesting-level*)))
-         (new (%imin (%i+ (%ilogand2 $vrefmask bits) by) 255)))
-    (setf (var-refs var) (+ (var-refs var) by))
-    (nx-set-var-bits var (%ilogior (%ilogand (%ilognot $vrefmask) bits) new))
+         (new (+ (var-refs var) by)))
+    (setf (var-refs var) new)
+    (nx-set-var-root-nrefs var (+ (nx-var-root-nrefs var) 1))
     new))
 
 ;;; Treat (VALUES x . y) as X if it appears in a THE form

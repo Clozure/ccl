@@ -150,6 +150,10 @@
   (and (= (hard-regspec-class reg) hard-reg-class-gpr)
        (= (get-regspec-mode reg) hard-reg-class-gpr-mode-node)))
 
+(defun imm-reg-p (reg)
+  (and (= (hard-regspec-class reg) hard-reg-class-gpr)
+       (/= (get-regspec-mode reg) hard-reg-class-gpr-mode-node))) 
+
 (defun node-reg-value (reg)
   (if (node-reg-p reg)
     (hard-regspec-value reg)))
