@@ -1280,7 +1280,7 @@ arg_y) (borrow-in arg_z))
   (vpush1 imm0)
   (vpush1 imm0)
   (set-nargs 2)
-  (bx temp1)
+  (ba .SPnvalret)
   @more
   (add imm1 xidx (:$ (- arm::misc-data-offset arm::node-size)))
   (ldr imm0 (:@ temp0 imm1))
