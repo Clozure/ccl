@@ -1359,8 +1359,8 @@ Or something. Right? ~s ~s" var varbits))
           (nx-set-var-bits var (%ilogior
                                 (%ilsl $vbitpuntable 1)
                                 varbits))
-          (setf (var-refs var) 0
-                (var-refs boundto) (+ (var-refs var) (var-refs boundto)))
+          (setf (var-refs boundto) (+ (var-refs var) (var-refs boundto))
+                (var-refs var) 0)
           (nx-set-var-root-nrefs boundto
                                  (+ (1- boundtocount) varcount)))))))
 
