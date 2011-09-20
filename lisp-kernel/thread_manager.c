@@ -1558,7 +1558,7 @@ create_stack(natural size)
     return p;
   }
   allocation_failure(true, size);
-
+  return NULL;
 }
 
 void *
@@ -2290,7 +2290,7 @@ suspend_other_threads(Boolean for_gc)
   if (dead_tcr_count) {
     for (other = TCR_AUX(current)->next; other != current; other = next) {
       next = TCR_AUX(other)->next;
-      if ((TCR_AUX(other)->osid == 0))  {
+      if (TCR_AUX(other)->osid == 0)  {
         normalize_dead_tcr_areas(other);
 	dequeue_tcr(other);
 	enqueue_freed_tcr(other);

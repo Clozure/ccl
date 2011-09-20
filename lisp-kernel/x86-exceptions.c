@@ -1078,6 +1078,8 @@ get_lisp_string(LispObj lisp_string, char *c_string, natural max)
   c_string[n] = 0;
 }
 
+Boolean handle_watch_trap(ExceptionInformation *xp, TCR *tcr);
+
 Boolean
 handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence)
 {
@@ -1261,6 +1263,7 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
   default:
     return false;
   }
+  return false;
 }
 
 
@@ -3476,7 +3479,8 @@ kern_return_t
 restore_foreign_exception_ports(TCR *tcr)
 {
   exception_mask_t m = (exception_mask_t) tcr->foreign_exception_status;
-  
+  kern_return_t kret;
+
   if (m) {
     MACH_foreign_exception_state *fxs  = 
       (MACH_foreign_exception_state *) tcr->native_thread_info;
@@ -3485,14 +3489,16 @@ restore_foreign_exception_ports(TCR *tcr)
 
     for (i = 0; i < n; i++) {
       if ((tm = fxs->masks[i]) & m) {
-	thread_set_exception_ports((mach_port_t)((natural)tcr->native_thread_id),
+	kret = thread_set_exception_ports((mach_port_t)((natural)tcr->native_thread_id),
 				   tm,
 				   fxs->ports[i],
 				   fxs->behaviors[i],
 				   fxs->flavors[i]);
+	MACH_CHECK_ERROR("restoring thread exception ports", kret);
       }
     }
   }
+  return KERN_SUCCESS;
 }
 				   
 

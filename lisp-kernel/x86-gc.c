@@ -373,6 +373,9 @@ check_all_areas(TCR *tcr)
         }
       }
       break;
+
+    default:
+      break;
     }
     a = a->succ;
     code = (a->code);
@@ -1197,7 +1200,7 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (lenient_this_dnode) {
         lenient_this_dnode = false;
       } else {
-        if ((intergen_ref == false)) {        
+        if (intergen_ref == false) {        
           x1 = start[1];
           tag = fulltag_of(x1);
           if (is_node_fulltag(tag)) {        
