@@ -17,6 +17,7 @@
 #include "lisp.h"
 #include "lisp-exceptions.h"
 #include "lisp_globals.h"
+#include "x86-utils.h"
 #include "threads.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -408,49 +409,13 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 
   f = xpGPR(xp,Ifn);
   tra = *(LispObj*)(xpGPR(xp,Isp));
-
-#ifdef X8664
-  if (tag_of(tra) == tag_tra) {
-    if ((*((unsigned short *)tra) == RECOVER_FN_FROM_RIP_WORD0) &&
-        (*((unsigned char *)(tra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
-      int sdisp = (*(int *) (tra+3));
-      tra_f = RECOVER_FN_FROM_RIP_LENGTH+tra+sdisp;
-    }
-    if (fulltag_of(tra_f) != fulltag_function) {
-      tra_f = 0;
-    }
-  } else {
-    tra = 0;
-  }
-#endif
-#ifdef X8632
-  if (fulltag_of(tra) == fulltag_tra) {
-    if (*(unsigned char *)tra == RECOVER_FN_OPCODE) {
-      tra_f = (LispObj)*(LispObj *)(tra + 1);
-    }
-    if (tra_f && header_subtag(header_of(tra_f)) != subtag_function) {
-      tra_f = 0;
-    }
-  } else {
-    tra = 0;
-  }
-#endif
-
+  tra_f = tra_function(tra);
   abs_pc = (LispObj)xpPC(xp);
 
-#ifdef X8664
-  if (fulltag_of(f) == fulltag_function) 
-#else
-    if (fulltag_of(f) == fulltag_misc &&
-        header_subtag(header_of(f)) == subtag_function) 
-#endif
-      {
-        nominal_function = f;
-      } else {
-      if (tra_f) {
-        nominal_function = tra_f;
-      }
-    }
+  if (functionp(f))
+    nominal_function = f;
+  else if (tra_f)
+    nominal_function = tra_f;
   
   f = xpGPR(xp,Ifn);
   if (object_contains_pc(f, abs_pc)) {
@@ -473,6 +438,10 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
     relative_pc = (abs_pc - (LispObj)&(deref(containing_uvector,1))) << fixnumshift;
   } else {
     containing_uvector = lisp_nil;
+    /*
+     * An absolute PC will not necessarily fit into a fixnum,
+     * so encode it as two fixnums and let lisp reassemble it.
+     */
 #if WORD_SIZE == 64
     relative_pc = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
     tra = (abs_pc & 0xffffffff) << fixnumshift;

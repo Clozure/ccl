@@ -15,83 +15,9 @@
 */
 
 #include "lispdcmd.h"
+#include "x86-utils.h"
 #include <stdio.h>
 #include <signal.h>
-
-static LispObj
-function_to_function_vector(LispObj f)
-{
-#ifdef X8664
-  return f - fulltag_function + fulltag_misc;
-#else
-  return f;
-#endif
-}
-
-static Boolean
-functionp(LispObj f)
-{
-#ifdef X8664
-  return fulltag_of(f) == fulltag_function;
-#else
-  return fulltag_of(f) == fulltag_misc &&
-    header_subtag(header_of(f)) == subtag_function;
-#endif
-}
-
-static LispObj
-tra_function(LispObj tra)
-{
-  LispObj f = 0;
-
-#ifdef X8664
-  if (tag_of(tra) == tag_tra) {
-    if ((*((unsigned short *)tra) == RECOVER_FN_FROM_RIP_WORD0) &&
-        (*((unsigned char *)(tra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
-      int sdisp = (*(int *) (tra+3));
-      f = RECOVER_FN_FROM_RIP_LENGTH+tra+sdisp;
-    }
-  }
-#else
-  if (fulltag_of(tra) == fulltag_tra) {
-    if (*((unsigned char *)tra) == RECOVER_FN_OPCODE) {
-      natural n = *((natural *)(tra + 1));
-      f = (LispObj)n;
-    }
-  }
-#endif
-  return f;
-}
-
-#if 0
-/* untested */
-static int
-tra_offset(LispObj tra)
-{
-#ifdef X8664
-  if (tag_of(tra) == tag_tra) {
-    if ((*((unsigned short *)tra) == RECOVER_FN_FROM_RIP_WORD0) &&
-        (*((unsigned char *)(tra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
-      int sdisp = (*(int *) (tra+3));
-
-      sdisp = - sdisp;
-      sdisp -= RECOVER_FN_FROM_RIP_LENGTH;
-      return sdisp;
-    }
-  }
-#else
-  if (fulltag_of(tra) == fulltag_tra) {
-    if (*((unsigned char *)tra) == RECOVER_FN_OPCODE) {
-      int n = *((int *)(tra + 1));
-      n = n - tra;
-      n = -n;
-      return n;
-    }
-  }
-#endif
-  return 0;
-}
-#endif
 
 natural
 pc_from_xcf(xcf *xcf)

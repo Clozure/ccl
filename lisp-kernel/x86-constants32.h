@@ -215,6 +215,12 @@
 #define subtag_function_boundary_marker SUBTAG(fulltag_imm,31)
 #define function_boundary_marker subtag_function_boundary_marker
 
+/* The 32-bit immediate value in the instruction
+ * "(mov ($ 0x12345678) (% fn))" at a tagged return address
+ * refers to the associated function.
+ */
+#define RECOVER_FN_OPCODE 0xbf
+#define RECOVER_FN_LENGTH 5
 
 
 typedef struct double_float {

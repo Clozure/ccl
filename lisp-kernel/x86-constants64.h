@@ -253,6 +253,17 @@
 
 #define function_boundary_marker SUBTAG(fulltag_imm_1,15)	
 
+/*
+ * To determine the function associated with a tagged return
+ * address, we attempt to recognize an the instruction
+ * (lea (@ disp (% rip)) (% fn)) at the tra.
+ */
+#define RECOVER_FN_FROM_RIP_LENGTH 7 /* the instruction is 7 bytes long */
+#define RECOVER_FN_FROM_RIP_DISP_OFFSET 3 /* displacement word is 3 bytes in */
+#define RECOVER_FN_FROM_RIP_WORD0 0x8d4c /* 0x4c 0x8d, little-endian */
+#define RECOVER_FN_FROM_RIP_BYTE2 0x2d  /* third byte of opcode */
+
+
 /* The objects themselves look something like this: */
 
 
