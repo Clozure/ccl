@@ -100,9 +100,6 @@ _exportfn(C(start_lisp))
         __ifdef(`TCR_IN_GPR')
 	__(movq %carg0,%rcontext_reg)
 	__endif
-        __ifdef(`DARWIN_GS_HACK')
-         __(set_gs_base())
-        __endif
 	__(sub $8,%rsp)	/* %rsp is now 16-byte aligned  */
 	/* Put harmless values in lisp node registers  */
 	__(clr %arg_z)
@@ -138,9 +135,6 @@ _exportfn(C(start_lisp))
 	__(pop %csave1)
 	__(pop %csave0)
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
-        __ifdef(`DARWIN_GS_HACK')
-         __(set_foreign_gs_base)
-        __endif
 	__(movl $nil_value,%eax)
 	__(leave)
 	__(ret)

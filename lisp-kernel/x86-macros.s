@@ -646,37 +646,6 @@ define(`check_pending_interrupt',`
 macro_label(done):
 ')
 
-/* This should only be called from a foreign context; it should be */
-/* assumed to bash all non-volatile C registers.  And of course it is */
-/* ugly, awful, non-portable, and slow.  %rdi should point to the */
-/* linear address that %gs should be made to address (tcr or pthread data) */
-        			
-ifdef(`DARWIN_GS_HACK',`
-define(`set_gs_base',`
-        ifelse($1,`',`
-        ',`
-        __(movq $1,%rdi)
-        ')
-        __(movl `$'0x3000003,%eax)
-        __(syscall)
-')
-
-/* %gs addresses the tcr.  Make it address pthread data before running */
-/* foreign code */        
-        
-define(`set_foreign_gs_base',`
-        set_gs_base(`rcontext(tcr.osid)')
-')
-
-/* %gs addresses the tcr.  Get the linear address of the tcr and */
-/* copy it to $1 */
-
-define(`save_tcr_linear',`
-        __(movq rcontext(tcr.linear),$1)
-') 
-	
-')
-
 /*  On AMD hardware (at least), a one-byte RET instruction should be */
 /*  prefixed with a REP prefix if it (a) is the target of a  */
 /*  branch or (b) immediately follows a conditional branch not taken. */

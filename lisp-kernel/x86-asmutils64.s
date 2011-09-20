@@ -186,37 +186,7 @@ _exportfn(C(darwin_sigreturn))
 	__(ret)
 _endfn
 	__endif
-
-	
         
-        __ifdef(`DARWIN_GS_HACK')
-/* Check (in an ugly, non-portable way) to see if %gs is addressing
-   pthreads data.  If it was, return 0; otherwise, assume that it's
-   addressing a lisp tcr and set %gs to point to the tcr's tcr.osid,
-   then return 1. */
-	
-thread_signature = 0x54485244 /* 'THRD' */
-	
-_exportfn(C(ensure_gs_pthread))
-        __(cmpl $thread_signature,%gs:0)
-        __(movl $0,%eax)
-        __(je 9f)
-        __(movq %gs:tcr.osid,%rdi)
-        __(movl $0x3000003,%eax)
-        __(syscall)
-        __(movl $1,%eax)
-9:      __(repret)
-_endfn
-
-        /* Ensure that %gs addresses the linear address in %rdi */
-        /* This incidentally returns the segment selector .*/
-_exportfn(C(set_gs_address))
-        __(movl $0x3000003,%eax)
-        __(syscall)
-        __(ret)
-_endfn
-        __endif
-
         __ifdef(`WIN_64')
 /* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
    much has to be uninterruptible */        

@@ -64,17 +64,6 @@ typedef enum {
   ID_clear_tcr_save_allocptr_tag_instruction
 } alloc_instruction_id;
 
-
-
-
-
-/* Please go away. */
-#ifdef DARWIN_GS_HACK
-extern Boolean ensure_gs_pthread(void);
-extern void set_gs_address(void *);
-#endif
-
-
 /* sigaltstack isn't thread-specific on The World's Most Advanced OS */
 #ifdef DARWIN
 #undef USE_SIGALTSTACK

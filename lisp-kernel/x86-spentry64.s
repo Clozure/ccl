@@ -4000,25 +4000,6 @@ LocalLabelPrefix`'ffcall:
 	__(ldmxcsr rcontext(tcr.foreign_mxcsr))
         __endif
 	__(movq (%rsp),%rbp)
-        __ifdef(`DARWIN_GS_HACK')
-         /* At this point, %imm1=%rdx is live (contains
-            the entrypoint) and %imm0.b=%al contains
-            info about xmm register arguments; the lisp registers are
-            all saved, and the foreign arguments are
-            on the foreign stack (about to be popped
-            off).  Save the linear TCR address in %save0/%r15
-            so that we can restore it later, and preserve
-            the entrypoint somewhere where C won't bash it.
-            Note that dereferencing the entrypoint from
-            foreign code has never been safe (unless it's
-            a fixnum */
-         __(save_tcr_linear(%csave0))
-         __(movq %imm1,%csave1)
-         __(movq %imm0,%csave2)
-         __(set_foreign_gs_base())
-         __(movq %csave1,%imm1)
-         __(movq %csave2,%imm0)
-        __endif
 	__ifdef(`TCR_IN_GPR')
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave0)
@@ -4048,15 +4029,6 @@ LocalLabelPrefix`'ffcall_call_end:
 	__(add $0x20,%rsp)
 	__endif
 	__(movq %rbp,%rsp)
-        __ifdef(`DARWIN_GS_HACK')
-         /* %rax/%rdx contains the return value (maybe), %csave1 still
-            contains the linear tcr address.  Preserve %rax/%rdx here. */
-         __(movq %rax,%csave1)
-         __(movq %rdx,%csave2)
-         __(set_gs_base(%csave0))
-         __(movq %csave1,%rax)
-         __(movq %csave2,%rdx)
-        __endif
 	__ifdef(`TCR_IN_GPR')
 	__(movq %csave0, %rcontext_reg)
 	__endif
@@ -4232,25 +4204,6 @@ LocalLabelPrefix`'ffcall_return_registers:
         __(movq rcontext(tcr.foreign_sp),%rsp)
 	__(emms)
 	__(movq (%rsp),%rbp)
-        __ifdef(`DARWIN_GS_HACK')
-         /* At this point, %imm1=%rdx is live (contains
-            the entrypoint) and %imm0.b=%al contains
-            xmm argument info; the lisp registers are
-            all saved, and the foreign arguments are
-            on the foreign stack (about to be popped
-            off).  Save the linear TCR address in %csave1/%r12
-            so that we can restore it later, and preserve
-            the entrypoint somewhere where C won't bash it.
-            Note that dereferencing the entrypoint from
-            foreign code has never been safe (unless it's
-            a fixnum */
-         __(save_tcr_linear(%csave1))
-         __(movq %imm0,%csave2)
-         __(movq %imm1,%csave3)
-         __(set_foreign_gs_base())
-         __(movq %csave2,%imm0)
-         __(movq %csave3,%imm1)
-        __endif
 	__ifdef(`TCR_IN_GPR')
 	/* Preserve TCR pointer */
 	__(movq %rcontext_reg, %csave1)
@@ -4280,15 +4233,6 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
         __(movsd %xmm0,16(%csave0))
         __(movsd %xmm1,24(%csave0))
 	__(movq %rbp,%rsp)
-        __ifdef(`DARWIN_GS_HACK')
-         /* %rax/%rdx contains the return value (maybe), %save0 still
-            contains the linear tcr address.  Preserve %rax/%rdx here. */
-         __(set_gs_base(%csave1))
-         __(movq (%csave0),%rax)
-         __(movq 8(%csave0),%rdx)
-         __(movsd 16(%csave0),%xmm0)
-         __(movsd 24(%csave0),%xmm1)
-        __endif
 	__ifdef(`TCR_IN_GPR')
 	__(movq %csave1, %rcontext_reg)
 	__endif
@@ -4652,11 +4596,6 @@ _spentry(callback)
         __ifdef(`TCR_IN_GPR')
 	__(movq %rax, %rcontext_reg)
 	__endif	
-        __ifdef(`DARWIN_GS_HACK')
-         /* linear TCR address in now in %rax; callback index was
-            saved in %r12 a moment ago. */
-         __(set_gs_base(%rax))
-        __endif
 1:	/* Align foreign stack for lisp   */
         __(pushq rcontext(tcr.save_rbp)) /* mark cstack frame's "owner" */
 	__(pushq rcontext(tcr.foreign_sp))
@@ -4704,10 +4643,6 @@ __(tra(local_label(back_from_callback)))
 	__(pop rcontext(tcr.foreign_sp))
         __(addq $node_size,%rsp)
         __(ldmxcsr rcontext(tcr.foreign_mxcsr))
-        __ifdef(`DARWIN_GS_HACK')
-         /* Lucky us; nothing is live here */
-         __(set_foreign_gs_base())
-        __endif
 	__(pop %rbp)
 	__ifdef(`WINDOWS')
 	__(pop %csave6)

@@ -574,9 +574,6 @@ get_interrupt_tcr(Boolean create)
 void
 suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context)
 {
-#ifdef DARWIN_GS_HACK
-  Boolean gs_was_tcr = ensure_gs_pthread();
-#endif
   TCR *tcr = get_interrupt_tcr(false);
   
   if (tcr == NULL) {
@@ -598,11 +595,6 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
     SEM_WAIT_FOREVER(TCR_AUX(tcr)->resume);
     TCR_AUX(tcr)->suspend_context = NULL;
   }
-#ifdef DARWIN_GS_HACK
-  if (gs_was_tcr) {
-    set_gs_address(tcr);
-  }
-#endif
   SIGRETURN(context);
 }
 
@@ -882,7 +874,13 @@ setup_tcr_extra_segment(TCR *tcr)
   arch_prctl(ARCH_SET_GS, (natural)tcr);
 #endif
 #ifdef DARWIN
-  /* There's no way to do this yet.  See DARWIN_GS_HACK */
+  /*
+   * There's apparently no way to do this.  We used to use a horrible
+   * and slow kludge conditionalized on DARWIN_GS_HACK (which involved
+   * sharing gs between lisp and pthreads), hoping that Apple would
+   * eventually provide a way to set fsbase.  We got tired of waiting,
+   * and have now resigned ourselves to keeping the TCR in a GPR.
+   */
   /* darwin_set_x8664_fs_reg(tcr); */
 #endif
 #ifdef SOLARIS

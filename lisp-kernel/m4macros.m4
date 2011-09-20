@@ -327,8 +327,6 @@ equate_if_defined(`WIN_32')
 equate_if_defined(`WINDOWS')
 
 equate_if_defined(`HAVE_TLS')
-/* DARWIN_GS_HACK is hopefully short-lived */
-equate_if_defined(`DARWIN_GS_HACK')
 
 equate_if_defined(`TCR_IN_GPR')
 
