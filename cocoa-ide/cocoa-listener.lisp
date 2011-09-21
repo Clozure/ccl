@@ -247,52 +247,50 @@
 (defloadvar *cocoa-listener-count* 0)
 
 (defclass cocoa-listener-process (process)
-    ((input-stream :reader cocoa-listener-process-input-stream)
-     (output-stream :reader cocoa-listener-process-output-stream)
+    ((input-stream :initarg :listener-input-stream :reader cocoa-listener-process-input-stream)
+     (output-stream :initarg :listener-output-stream :reader cocoa-listener-process-output-stream)
      (backtrace-contexts :initform nil
                          :accessor cocoa-listener-process-backtrace-contexts)
-     (window :reader cocoa-listener-process-window :initform nil)))
+     (window :initarg :listener-window :reader cocoa-listener-process-window)))
   
 (defloadvar *first-listener* t)
 
-(defun new-cocoa-listener-process (procname window)
+(defun new-cocoa-listener-process (procname window &key (class 'cocoa-listener-process) initargs)
   (declare (special *standalone-cocoa-ide*))
   (let* ((input-stream (make-instance 'cocoa-listener-input-stream))
          (output-stream (make-instance 'cocoa-listener-output-stream
-                          :hemlock-view (hemlock-view window)))
-         
-         (proc
-          (ccl::make-mcl-listener-process 
-           procname
-           input-stream
-           output-stream
-           ;; cleanup function
-           #'(lambda ()
-               (mapcar #'(lambda (buf)
-                           (when (eq (buffer-process buf) *current-process*)
-                             (let ((doc (hi::buffer-document buf)))
-                               (when doc
-                                 (setf (hemlock-document-process doc) nil) ;; so #/close doesn't kill it.
-                                 (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                                  doc
-                                  (@selector #/close)
-                                  +null-ptr+
-                                  nil)))))
-                       hi:*buffer-list*))
-           :initial-function
-           #'(lambda ()
-               (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
-               (when (and *standalone-cocoa-ide*
-                          (prog1 *first-listener* (setq *first-listener* nil)))
-                 (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
-                 (ui-object-note-package *nsapp* *package*))
-               (ccl::listener-function))
-           :echoing nil
-           :class 'cocoa-listener-process)))
-    (setf (slot-value proc 'input-stream) input-stream)
-    (setf (slot-value proc 'output-stream) output-stream)
-    (setf (slot-value proc 'window) window)
-    proc))
+                          :hemlock-view (hemlock-view window))))
+    (ccl::make-mcl-listener-process 
+     procname
+     input-stream
+     output-stream
+     ;; cleanup function
+     #'(lambda ()
+         (mapcar #'(lambda (buf)
+                     (when (eq (buffer-process buf) *current-process*)
+                       (let ((doc (hi::buffer-document buf)))
+                         (when doc
+                           (setf (hemlock-document-process doc) nil) ;; so #/close doesn't kill it.
+                           (#/performSelectorOnMainThread:withObject:waitUntilDone:
+                            doc
+                            (@selector #/close)
+                            +null-ptr+
+                            nil)))))
+                 hi:*buffer-list*))
+     :initial-function
+     #'(lambda ()
+         (setq ccl::*listener-autorelease-pool* (create-autorelease-pool))
+         (when (and *standalone-cocoa-ide*
+                    (prog1 *first-listener* (setq *first-listener* nil)))
+           (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
+           (ui-object-note-package *nsapp* *package*))
+         (ccl::listener-function))
+     :echoing nil
+     :class class
+     :initargs `(:listener-input-stream ,input-stream
+                 :listener-output-stream ,output-stream
+                 :listener-window ,window
+                 ,@initargs))))
   
 (defclass hemlock-listener-frame (hemlock-frame)
     ()
