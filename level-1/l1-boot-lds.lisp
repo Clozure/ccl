@@ -81,14 +81,15 @@
                                   (value-stack-size *default-value-stack-size*)
                                   (temp-stack-size *default-temp-stack-size*)
                                   (echoing t)
-                                  (process))
+                                  (process)
+                                  (initargs nil))
   (let ((p (if (typep process class)
              (progn
                (setf (process-thread process)
                      (new-thread procname control-stack-size value-stack-size  temp-stack-size))
                process)
              (make-process procname
-                           :class class
+                           :class class :initargs initargs
                            :stack-size control-stack-size
                            :vstack-size value-stack-size
                            :tstack-size temp-stack-size))))

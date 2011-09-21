@@ -167,10 +167,11 @@
                           (initial-bindings ())
 			  (use-standard-initial-bindings t)
                           (class (find-class 'process))
+                          (initargs nil)
                           (termination-semaphore ())
                           (allocation-quantum (default-allocation-quantum)))
   "Create and return a new process."
-  (let* ((p (make-instance
+  (let* ((p (apply #'make-instance
 	     class
 	     :name name
 	     :priority priority
@@ -181,7 +182,8 @@
 					initial-bindings))
              :termination-semaphore (or termination-semaphore
                                         (make-semaphore))
-             :allocation-quantum allocation-quantum)))
+             :allocation-quantum allocation-quantum
+             initargs)))
     (with-slots ((lisp-thread thread)) p
       (unless lisp-thread
         (setq lisp-thread
