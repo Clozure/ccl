@@ -2172,7 +2172,7 @@
            (unscaled-j)
            (unscaled-k)
            (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum k-known-fixnum
+            (and dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (>= k-known-fixnum 0)
