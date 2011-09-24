@@ -4230,7 +4230,6 @@
   (cmpl (:$l maxval) (:%l reg))
   (ja default)
   (movl (:%l reg) (:%l temp))
-  (shrl (:%l temp))
   (movl (:@ (:^ :jtab) (:%l x8632::fn) (:%l temp)) (:%l temp))
   (leal (:@ (:%l x8632::fn) (:%l temp)) (:%l rjmp))
   (jmp (:%l rjmp))

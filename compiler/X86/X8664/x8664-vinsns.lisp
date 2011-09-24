@@ -4631,6 +4631,42 @@
   (pushq (:@ x8664::node-size (:%q x8664::rbp)))
   (movq (:@ (:%q x8664::rbp)) (:%q x8664::rbp)))
 
+(define-x8664-vinsn (cjmp :branch) (((reg :lisp))
+                                    ((reg :lisp)
+                                     (minval :s32const)
+                                     (maxval :u32const)
+                                     (default :label))
+                                    ((temp :s32)
+                                    (rjmp :lisp)))
+  (testl (:$l x8664::fixnummask) (:%l reg))
+  (jne default)
+  ((:not (:pred zerop minval))
+   (subq (:$l minval) (:%q reg)))
+  (cmpq (:$l maxval) (:%q reg))
+  (ja default)
+  (movl (:%l reg) (:%l temp))
+  (shrl (:%l temp))
+  (movl (:@ (:^ :jtab) (:%q x8664::fn) (:%q temp)) (:%l temp))
+  (leaq (:@ (:%q x8664::fn) (:%q temp)) (:%q rjmp))
+  (jmp (:%q rjmp))
+  (:uuo-section)
+  (:align 2)
+  (:long (:apply 1+ (:apply ash maxval (- x8664::fixnumshift))))
+  :jtab)
+
+
+
+(define-x8664-vinsn jtabentry (()
+                               ((label :label)))
+  (:uuo-section)
+  (:long (:^ label)))
+
+
+  
+  
+  
+  
+
 (queue-fixup
  (fixup-x86-vinsn-templates
   *x8664-vinsn-templates*
