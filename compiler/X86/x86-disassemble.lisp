@@ -139,6 +139,19 @@
          (high (x86-ds-next-s32 ds)))
     (logior (ash high 32) low)))
 
+(defun x86-ds-u8-ref (ds idx)
+  (aref (x86-ds-code-vector ds) (+ idx (x86-ds-entry-point ds))))
+
+(defun x86-ds-u16-ref (ds idx)
+  (logior (x86-ds-u8-ref ds idx)
+          (ash (x86-ds-u8-ref ds (1+ idx)) 8)))
+
+(defun x86-ds-u32-ref (ds idx)
+  (logior (x86-ds-u16-ref ds idx)
+          (ash (x86-ds-u16-ref ds (+ idx 2)) 16)))
+
+
+
 (defun used-rex (ds value)
   (if (not (zerop value))
     (setf (x86-ds-rex-used ds)
@@ -2410,6 +2423,14 @@
                       (or (null scale) (eql 0 scale)))
                     (let* ((disp (x86::x86-memory-operand-disp thing)))
                       (and disp (early-x86-lap-expression-value disp)))))
+             (is-jump-table-ref (thing)
+               (and (typep thing 'x86::x86-memory-operand)
+                    (is-fn (x86::x86-memory-operand-base thing))
+                    (x86::x86-memory-operand-index thing)
+                    (let* ((scale (x86::x86-memory-operand-scale thing)))
+                      (or (null scale) (eql 0 scale)))
+                    (let* ((disp (x86::x86-memory-operand-disp thing)))
+                      (and disp (early-x86-lap-expression-value disp)))))
              (is-ra0-ea (thing)
                (and (typep thing 'x86::x86-memory-operand)
                     (is-ra0 (x86::x86-memory-operand-base thing))
@@ -2432,7 +2453,7 @@
           (:lea
            (let* ((disp ))
              (if (or (and (setq disp (is-fn-ea op0)) (> disp 0))
-                       (and (setq disp (is-ra0-ea op0)) (< disp 0) (is-fn op1)))
+                     (and (setq disp (is-ra0-ea op0)) (< disp 0) (is-fn op1)))
                (let* ((label-ea (+ entry-ea (abs disp))))
                  (when (< label-ea (x86-ds-code-limit ds))
                    (setf (x86::x86-memory-operand-disp op0)
@@ -2457,16 +2478,24 @@
                  (when info (setf (x86::x86-memory-operand-disp op0)
                                   (subprimitive-info-name info)))))))
           (t
-           (unless (x86-ds-mode-64 ds)
-             (when (and (is-fn op1)
-                        (typep op0 'x86::x86-immediate-operand)
-                        ;; Not sure what else would have an
-                        ;; immediate source and %fn as destination,
-                        ;; but check for this.
-                        (equal (x86-di-mnemonic instruction) "movl"))
-               (setf (x86-di-mnemonic instruction) "recover-fn"
-                     (x86-di-op0 instruction) nil
-                     (x86-di-op0 instruction) nil))))
+           (let* ((jtab (is-jump-table-ref op0)))
+             (if (and jtab (> jtab 0))
+               (let* ((count (x86-ds-u32-ref ds (- jtab 4))))
+                 (dotimes (i count)
+                   (push (+ (x86-ds-u32-ref ds jtab)
+                            (x86-ds-entry-point ds))
+                         (x86-ds-pending-labels ds))
+                   (incf jtab 4)))
+               (unless (x86-ds-mode-64 ds)
+                 (when (and (is-fn op1)
+                            (typep op0 'x86::x86-immediate-operand)
+                            ;; Not sure what else would have an
+                            ;; immediate source and %fn as destination,
+                            ;; but check for this.
+                            (equal (x86-di-mnemonic instruction) "movl"))
+                   (setf (x86-di-mnemonic instruction) "recover-fn"
+                         (x86-di-op0 instruction) nil
+                         (x86-di-op0 instruction) nil))))))
 
           )))
     instruction))

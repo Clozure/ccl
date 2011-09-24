@@ -4216,6 +4216,34 @@
   (pushl (:@ x8632::node-size (:%l x8632::ebp)))
   (movl (:@ (:% x8632::ebp)) (:% x8632::ebp)))
 
+(define-x8632-vinsn (cjmp :branch) (((reg :lisp))
+                                    ((reg :lisp)
+                                     (minval :s32const)
+                                     (maxval :u32const)
+                                     (default :label))
+                                    ((temp :s32)
+                                    (rjmp :lisp)))
+  (testl (:$l x8664::fixnummask) (:%l reg))
+  (jne default)
+  ((:not (:pred zerop minval))
+   (subl (:$l minval) (:%l reg)))
+  (cmpl (:$l maxval) (:%l reg))
+  (ja default)
+  (movl (:%l reg) (:%l temp))
+  (shrl (:%l temp))
+  (movl (:@ (:^ :jtab) (:%l x8632::fn) (:%l temp)) (:%l temp))
+  (leal (:@ (:%l x8632::fn) (:%l temp)) (:%l rjmp))
+  (jmp (:%l rjmp))
+  (:uuo-section)
+  (:align 2)
+  (:long (:apply 1+ (:apply ash maxval (- x8632::fixnumshift))))
+  :jtab)
+
+(define-x8632-vinsn jtabentry (()
+                               ((label :label)))
+  (:uuo-section)
+  (:long (:^ label)))
+
 (queue-fixup
  (fixup-x86-vinsn-templates
   *x8632-vinsn-templates*
