@@ -403,14 +403,23 @@ LispObj
 create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 {
   LispObj containing_uvector = 0, 
-    relative_pc, 
+    relative_pc = lisp_nil,
     nominal_function = lisp_nil, 
     f, tra, tra_f = 0, abs_pc;
+  LispObj pc_low, pc_high;
 
   f = xpGPR(xp,Ifn);
   tra = *(LispObj*)(xpGPR(xp,Isp));
   tra_f = tra_function(tra);
   abs_pc = (LispObj)xpPC(xp);
+#if WORD_SIZE == 64
+  pc_high = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
+  pc_low = (abs_pc & 0xffffffff) << fixnumshift;
+#else
+  pc_high = ((abs_pc >> 16) & 0xffff) << fixnumshift;
+  pc_low = (abs_pc & 0xffff) << fixnumshift;
+#endif
+
 
   if (functionp(f))
     nominal_function = f;
@@ -438,18 +447,9 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
     relative_pc = (abs_pc - (LispObj)&(deref(containing_uvector,1))) << fixnumshift;
   } else {
     containing_uvector = lisp_nil;
-    /*
-     * An absolute PC will not necessarily fit into a fixnum,
-     * so encode it as two fixnums and let lisp reassemble it.
-     */
-#if WORD_SIZE == 64
-    relative_pc = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
-    tra = (abs_pc & 0xffffffff) << fixnumshift;
-#else
-    relative_pc = ((abs_pc >> 16) & 0xffff) << fixnumshift;
-    tra = (abs_pc & 0xffff) << fixnumshift;
-#endif
   }
+  push_on_lisp_stack(xp, pc_high);
+  push_on_lisp_stack(xp, pc_low);
   push_on_lisp_stack(xp,(LispObj)(tcr->xframe->prev));
   push_on_lisp_stack(xp,(LispObj)(tcr->foreign_sp));
   push_on_lisp_stack(xp,tra);

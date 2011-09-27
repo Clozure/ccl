@@ -288,13 +288,14 @@ typedef struct exception_callback_frame {
   struct lisp_frame *backlink;
   LispObj tra;                  /* ALWAYS 0 FOR AN XCF */
   LispObj nominal_function;     /* the current function at the time of the exception */
-  LispObj relative_pc;          /* Boxed byte offset within actual
-                                   function or absolute address */
+  LispObj relative_pc;          /* Boxed byte offset within actual function */
   LispObj containing_uvector;   /* the uvector that contains the relative PC or NIL */
   LispObj xp;                   /* exception context */
   LispObj ra0;                  /* value of ra0 from context */
   LispObj foreign_sp;           /* foreign sp at the time that exception occurred */
   LispObj prev_xframe;          /* so %apply-in-frame can unwind it */
+  LispObj pc_low;		/* fixnum low half of absolute pc */
+  LispObj pc_high;		/* and the high half */
 } xcf;
 
 
