@@ -38,7 +38,7 @@ pc_from_xcf(xcf *xcf)
       LispObj f = tra_function(tra);
 
       if (f && f == xcf->nominal_function)
-	return 0; /* punt for now */
+	return tra_offset(tra);
     }
   }
   return 0;
