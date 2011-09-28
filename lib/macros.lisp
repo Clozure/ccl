@@ -409,7 +409,7 @@
           ((signal error warn)
            (destructuring-bind
              (cond &rest args) expansion
-             (setq condform `(condition-arg ,cond (list ,@args) ,(if (eq head 'warning)
+             (setq condform `(condition-arg ,cond (list ,@args) ,(if (eq head 'warn)
                                                                    ''simple-warning
                                                                    (if (eq head 'error)
                                                                      ''simple-error
