@@ -710,16 +710,15 @@
 (defmethod reinitialize-instance :before ((class std-class)  &key direct-superclasses)
   (remove-accessor-methods class (%class-direct-slots class))
   (remove-direct-subclasses class (%class-direct-superclasses class) direct-superclasses))
-   
-(defmethod shared-initialize :after
-  ((class slots-class)
-   slot-names &key
-   (direct-superclasses nil direct-superclasses-p)
-   (direct-slots nil direct-slots-p)
-   (direct-default-initargs nil direct-default-initargs-p)
-   (documentation nil doc-p)
-   (primary-p nil primary-p-p))
-  (if (or direct-superclasses-p (eq slot-names t))
+
+(defmethod ensure-class-initialized ((class slots-class) &key
+                                     (direct-superclasses nil direct-superclasses-p)
+                                     (direct-slots nil direct-slots-p)
+                                     (direct-default-initargs nil direct-default-initargs-p)
+                                     (documentation nil doc-p)
+                                     (primary-p nil primary-p-p)
+                                     &allow-other-keys)
+  (if direct-superclasses-p
     (progn
       (setq direct-superclasses
             (or direct-superclasses
@@ -769,9 +768,31 @@
   (update-class class nil)
   (add-accessor-methods class direct-slots))
 
+(defmethod shared-initialize :after
+  ((class slots-class)
+   slot-names &key
+   direct-superclasses
+   direct-slots
+   direct-default-initargs
+   documentation
+   primary-p)
+  (declare (ignorable slot-names direct-superclasses 
+                      direct-slots 
+                      direct-default-initargs 
+                      documentation 
+                      primary-p))
+)
+
+
 (defmethod initialize-instance :before ((class class) &key &allow-other-keys)
   (setf (%class-ordinal class) (%next-class-ordinal))
   (setf (%class.ctype class) (make-class-ctype class)))
+
+(defmethod initialize-instance :after ((class slots-class) &rest keys &key)
+  (apply #'ensure-class-initialized class keys))
+
+(defmethod reinitialize-instance :after ((class slots-class) &rest keys &key )
+  (apply #'ensure-class-initialized class keys))
 
 (defun ensure-class-metaclass-and-initargs (class args)
   (let* ((initargs (copy-list args))
