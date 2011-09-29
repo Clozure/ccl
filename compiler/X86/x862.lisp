@@ -7307,7 +7307,7 @@
         (<- *x862-arg-z*)
         (^)))))
 
-(defparameter *x862-generate-casejump* t)
+(defparameter *x862-generate-casejump* nil)
 
 (defun x862-generate-casejump (seg vreg xfer ranges trueforms var otherwise)
   (when *x862-generate-casejump*
