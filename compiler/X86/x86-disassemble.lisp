@@ -2480,12 +2480,29 @@
           (t
            (let* ((jtab (is-jump-table-ref op0)))
              (if (and jtab (> jtab 0))
-               (let* ((count (x86-ds-u32-ref ds (- jtab 4))))
+               (let* ((count (x86-ds-u32-ref ds (- jtab 4)))
+                      (block (make-x86-dis-block :start-address jtab
+                                                 :end-address (+ jtab (* 4 count))))
+                      (instructions (x86-dis-block-instructions block))
+                      (labeled t))
+                 (setf (x86::x86-memory-operand-disp op0)
+                       (parse-x86-lap-expression `(:^ ,jtab)))
                  (dotimes (i count)
-                   (push (+ (x86-ds-u32-ref ds jtab)
-                            (x86-ds-entry-point ds))
-                         (x86-ds-pending-labels ds))
-                   (incf jtab 4)))
+                   (let* ((target (+ (x86-ds-u32-ref ds jtab)
+                                     (x86-ds-entry-point ds)))
+                          (start (+ jtab (x86-ds-entry-point ds)))
+                          (instruction (make-x86-disassembled-instruction
+                                        :address jtab
+                                        :labeled labeled
+                                        :mnemonic ":long"
+                                        :op0 (parse-x86-lap-expression `(:^ ,target))
+                                        :start start
+                                        :end (+ start 4))))
+                     (append-dll-node instruction instructions)
+                     (setq labeled nil)
+                     (push target (x86-ds-pending-labels ds))
+                     (incf jtab 4)))
+                 (insert-x86-block block (x86-ds-blocks ds)))
                (unless (x86-ds-mode-64 ds)
                  (when (and (is-fn op1)
                             (typep op0 'x86::x86-immediate-operand)
@@ -2718,6 +2735,10 @@
          (entrypoint (x86-ds-entry-point ds)))
     (format nil "L~d" (- addr entrypoint))))
 
+(defmethod unparse-x86-lap-operand ((op label-x86-lap-expression)
+                                    ds)
+  (unparse-x86-lap-expression op ds))
+
 
 (defmethod x86-lap-operand-constant-offset (op ds)
   (declare (ignore op ds))
@@ -2811,7 +2832,7 @@
 
 (defvar *previous-source-note*)
 
-(defun x86-print-di-lap (ds instruction &optional tab-stop)
+(defun x86-print-di-lap (ds instruction tab-stop pc)
   (dolist (p (x86-di-prefixes instruction))
     (when tab-stop
       (format t "~vt" tab-stop))
@@ -2828,7 +2849,8 @@
 	(write-x86-lap-operand t op1 ds)
 	(when op2
 	  (write-x86-lap-operand t op2 ds)))))
-  (format t ")~%"))
+  (format t ")~vt;~8<[~D]~>" (+ 40 tab-stop) pc)  
+  (format t "~%"))
 
 (defun x86-print-disassembled-instruction (ds instruction seq function)
   (let* ((addr (x86-di-address instruction))
@@ -2846,7 +2868,7 @@
     (when (x86-di-labeled instruction)
       (format t "~&L~d~%" pc)
       (setq seq 0))
-    (format t "~&~8<[~D]~>" pc)
+    (format t "~&")
     (let* ((istart (x86-di-start instruction))
 	   (iend (x86-di-end instruction))
 	   (nbytes (- iend istart))
@@ -2858,7 +2880,7 @@
 	  (format t " ~(~2,'0x~)" (aref code-vector byteidx))
 	  (incf byteidx))
 	(decf nbytes 4))
-      (x86-print-di-lap ds instruction tab-stop)
+      (x86-print-di-lap ds instruction tab-stop pc)
       (when *disassemble-verbose*
 	(while (plusp nbytes)
 	  (format t "~8t")
