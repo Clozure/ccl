@@ -2427,8 +2427,6 @@
                (and (typep thing 'x86::x86-memory-operand)
                     (is-fn (x86::x86-memory-operand-base thing))
                     (x86::x86-memory-operand-index thing)
-                    (let* ((scale (x86::x86-memory-operand-scale thing)))
-                      (or (null scale) (eql 0 scale)))
                     (let* ((disp (x86::x86-memory-operand-disp thing)))
                       (and disp (early-x86-lap-expression-value disp)))))
              (is-ra0-ea (thing)
@@ -2481,8 +2479,8 @@
            (let* ((jtab (is-jump-table-ref op0)))
              (if (and jtab (> jtab 0))
                (let* ((count (x86-ds-u32-ref ds (- jtab 4)))
-                      (block (make-x86-dis-block :start-address jtab
-                                                 :end-address (+ jtab (* 4 count))))
+                      (block (make-x86-dis-block :start-address (+ jtab (x86-ds-entry-point ds))
+                                                 :end-address (+ jtab (x86-ds-entry-point ds) (* 4 count))))
                       (instructions (x86-dis-block-instructions block))
                       (labeled t))
                  (setf (x86::x86-memory-operand-disp op0)
@@ -2492,7 +2490,7 @@
                                      (x86-ds-entry-point ds)))
                           (start (+ jtab (x86-ds-entry-point ds)))
                           (instruction (make-x86-disassembled-instruction
-                                        :address jtab
+                                        :address start
                                         :labeled labeled
                                         :mnemonic ":long"
                                         :op0 (parse-x86-lap-expression `(:^ ,target))

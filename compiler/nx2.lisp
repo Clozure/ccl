@@ -817,16 +817,17 @@
         (values var (list val))
         (if (and (acode-p form) (eql (acode-operator form) (%nx1-operator or)))
           (collect ((vals))
-            (if (multiple-value-setq (var val) (is-simple-comparison-of-var-to-fixnum (cadr form)))
-              (progn
-                (vals val)
-                (dolist (clause (cddr form) (values var (vals)))
-                  (multiple-value-bind (var1 val1)
-                      (is-simple-comparison-of-var-to-fixnum clause)
-                    (unless (eq var var1)
-                      (return (values nil nil)))
-                    (vals val1))))
-              (values nil nil))))))))
+            (let* ((clauselist (cadr form)))
+              (if (multiple-value-setq (var val) (is-simple-comparison-of-var-to-fixnum (car clauselist)))
+                (progn
+                  (vals val)
+                  (dolist (clause (cdr clauselist) (values var (vals)))
+                    (multiple-value-bind (var1 val1)
+                        (is-simple-comparison-of-var-to-fixnum clause)
+                      (unless (eq var var1)
+                        (return (values nil nil)))
+                      (vals val1))))
+                (values nil nil)))))))))
            
 
 
