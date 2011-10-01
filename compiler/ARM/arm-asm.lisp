@@ -202,6 +202,7 @@
      #xffa00f10
      (:non-conditional))
 
+
 ;;; UUOs.
 
 ;;; Nullary UUOs
@@ -332,6 +333,11 @@
    (define-arm-instruction movt (:rd :imm16)
      #x03400000
      #x0ff00000
+     ())
+   ;; This canonical NOP also requires ARMv6T2 or later.
+   (define-arm-instruction nop ()
+     #x0320f000
+     #x0fffffff
      ())
 
    (define-arm-instruction and (:rd :rn :shifter)
