@@ -1512,18 +1512,6 @@ itself, by setting the status and exit-code fields.")
                         (t
                          (when (zerop (car (external-process-token proc)))
                            t))))))
-
-
-
-
-
-  (defun external-process-error-stream (proc)
-    "Return the stream which is used to read error output from a given OS
-subprocess, if it has one."
-    (require-type proc 'external-process)
-    (external-process-error proc))
-
-
   
   (defun signal-external-process (proc signal)
     "Send the specified signal to the specified external process.  (Typically,
@@ -1942,6 +1930,11 @@ subprocess, if there is one."
   (require-type proc 'external-process)
   (external-process-output proc))
 
+(defun external-process-error-stream (proc)
+  "Return the stream which is used to read error output from a given OS
+subprocess, if it has one."
+  (require-type proc 'external-process)
+  (external-process-error proc))
 
 (defun external-process-id (proc)
   "Return the process id of an OS subprocess, a positive integer which
