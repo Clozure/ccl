@@ -1600,7 +1600,7 @@ to open."
            (*print-gensym* t)
            (*print-length* nil)
            (*print-level* nil)
-           (*print-lines* nil) ; This doesn't exist as of 5/15/90 - does now
+           (*print-lines* nil)
            (*print-miser-width* nil)
            (*print-pprint-dispatch* nil)
            (*print-pretty* nil)
@@ -1609,11 +1609,11 @@ to open."
            (*print-right-margin* nil)
            (*read-base* 10.)
            (*read-default-float-format* 'single-float)
-           (*read-eval* t) ; Also MIA as of 5/15/90
+           (*read-eval* t)
            (*read-suppress* nil)
            (*readtable* %standard-readtable%)
-	   ; ccl extensions (see l1-io.lisp)
-	   (*print-abbreviate-quote* t)
+	   ;; ccl extensions (see l1-io.lisp)
+	   (*print-abbreviate-quote* nil)
 	   (*print-structure* t)
 	   (*print-simple-vector* nil)
 	   (*print-simple-bit-vector* nil)
