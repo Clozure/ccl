@@ -202,7 +202,7 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
 void
 load_image_section(int fd, openmcl_image_section_header *sect)
 {
-  extern area* allocate_dynamic_area(unsigned);
+  extern area* allocate_dynamic_area(natural);
   off_t
     pos = seek_to_next_page(fd), advance;
   natural
