@@ -976,12 +976,12 @@ of the shell itself."
 )
         
 (defun %probe-shared-library (shlib)
-  #-(or windows-target freebsd-target)
+  #-(or windows-target android-target freebsd-target)
   (with-cstrs ((name (shlib.pathname shlib)))
     (not (%null-ptr-p (#_dlopen name (logior #$RTLD_NOW #$RTLD_NOLOAD)))))
   ;; FreeBSD may support #$RTLD_NOLOAD in 8.0, and that support may
   ;; have been backported to 7.2.  Until then ...
-  #+freebsd-target                      
+  #+(or freebsd-target android-target)
   (rlet ((info #>Dl_info))
     (not (eql 0 (#_dladdr (shlib.base shlib) info))))
   #+windows-target

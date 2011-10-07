@@ -1568,33 +1568,29 @@ check_arm_cpu()
    ELF architecture is "v7l".)
 */
   FILE *f = fopen("/proc/cpuinfo", "r");
-  char *procline = NULL, *cpuline = NULL, **lineptr, *line = NULL;
+  char *procline = NULL, *cpuline = NULL, line[129], *workline;
   size_t n;
-  ssize_t result;
 
   if (f) {
     while (1) {
-      n = 0;
-      line = NULL;
-      lineptr = &line;
-      result = getline(lineptr, &n, f);
-      if (result < 0) {
+      if (fgets(line,128,f)==NULL) {
         break;
       }
-      line = *lineptr;
+      n = strlen(line);
       if (strncmp(line,"Processor",sizeof("Processor")-1) == 0) {
-        procline = line;
+        procline = malloc(n+1);
+        strcpy(procline,line);
+        procline[n]='\0';
       } else if (strncmp(line, "CPU architecture",sizeof("CPU architecture")-1) == 0) {
-        cpuline = line;
-      } else {
-        free(line);
+        cpuline = malloc(n+1);
+        strcpy(cpuline,line);
+        cpuline[n] = '\0';
       }
     }
-    line = NULL;
     if (cpuline) {
-      line = index(cpuline,':');
-      if (line) {
-        n = strtol(line+1,lineptr,0);
+      workline = index(cpuline,':');
+      if (workline) {
+        n = strtol(workline+1,NULL,0);
         if (n >= 7) {
           if (n == 7) {
             if (procline) {
