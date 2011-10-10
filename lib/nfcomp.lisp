@@ -1153,7 +1153,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (some *fasl-warnings-signalled-p*)
         (harsh *fasl-non-style-warnings-signalled-p*))
     (dolist (w warnings)
-      (unless (compiler-warning-source-note w)
+      (when (and (not (compiler-warning-source-note w)) *fcomp-stream-position*)
         (setf (compiler-warning-source-note w)
               (make-source-note :source nil
                                 :filename *fasl-source-file*

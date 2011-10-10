@@ -591,10 +591,13 @@
                                  (eq (compiler-warning-source-note w)
                                      (compiler-warning-source-note w1))))
                     (let ((nrefs (compiler-warning-nrefs w1)))
-                      (setf (compiler-warning-nrefs w1)
-                            (cons (compiler-warning-source-note w)
-                                  (or nrefs
-                                      (list (compiler-warning-source-note w1)))))
+                      (when (null nrefs)
+                        (let ((s1 (compiler-warning-source-note w1)))
+                          (when s1
+                            (setq nrefs (list s1)))))
+                      (let ((s (compiler-warning-source-note w)))
+                        (when s (push s nrefs)))
+                      (setf (compiler-warning-nrefs w1) nrefs)
                       (return nil))))))
           (push w warnings))))
     warnings))
