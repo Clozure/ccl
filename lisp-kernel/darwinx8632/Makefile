@@ -32,7 +32,7 @@ AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
 ASFLAGS = -arch i386 -g
-CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -D_DARWIN_NO_64_BIT_INODE
+CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
@@ -44,7 +44,9 @@ PLATFORM_H = platform-darwinx8632.h
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c -arch i386 $< $(CDEFINES) $(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
+	$(CC) -include ../$(PLATFORM_H) -c -arch i386 $< $(CDEFINES) \
+	$(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) \
+	-I. -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
 
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
@@ -90,9 +92,11 @@ OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
-$(COBJ): $(CHEADERS)
+$(COBJ): $(CHEADERS) probes.h
 $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
+probes.h: probes.d
+	dtrace -h -s $<
 
 
 thread_manager.o: thread_manager.c 

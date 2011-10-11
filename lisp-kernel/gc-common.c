@@ -1446,6 +1446,21 @@ gc(TCR *tcr, signed_natural param)
     fprintf(dbgout, ", %s bytes allocated.\n", buf);
   }
 
+#ifdef USE_DTRACE
+  if (GCephemeral_low) {
+    if (CCL_EGC_START_ENABLED()) {
+      natural bytes_used = area_dnode(oldfree, a->low) << dnode_shift;
+      unsigned generation = (from == g2_area) ? 2 : (from == g1_area) ? 1 : 0;
+      CCL_EGC_START(bytes_used, generation);
+    }
+  } else {
+    if (CCL_GC_START_ENABLED()) {
+      natural bytes_used = area_dnode(oldfree, a->low) << dnode_shift;
+      CCL_GC_START(bytes_used);
+    }
+  }
+#endif
+
   get_time(start);
 
   /* The link-inverting marker might need to write to watched areas */
@@ -1766,6 +1781,22 @@ gc(TCR *tcr, signed_natural param)
         (header_subtag(header_of(val)) == subtag_macptr)) {
       long long justfreed = oldfree - a->active;
       *( (long long *) ptr_from_lispobj(((macptr *) ptr_from_lispobj(untag(val)))->address)) += justfreed;
+
+#ifdef USE_DTRACE
+      if (note == tenured_area) {
+	if (CCL_GC_FINISH_ENABLED()) {
+	  natural bytes_freed = justfreed <= heap_segment_size ? 0 : justfreed;
+	  CCL_GC_FINISH(bytes_freed);
+	}
+      } else {
+	if (CCL_EGC_FINISH_ENABLED()) {
+	  natural bytes_freed = justfreed <= heap_segment_size ? 0 : justfreed;
+	  unsigned generation = (from == g2_area) ? 2 : (from == g1_area) ? 1 : 0;
+	  CCL_EGC_FINISH(bytes_freed, generation);
+	}
+      }
+#endif
+
       if (GCverbose) {
         char buf[16];
         paging_info paging_info_stop;

@@ -1737,6 +1737,13 @@ xNewThread(natural control_stack_size,
     SEM_WAIT_FOREVER(activation.created);	/* Wait until thread's entered its initial function */
   }
   destroy_semaphore(&activation.created);  
+
+#ifdef USE_DTRACE
+  if (CCL_CREATE_THREAD_ENABLED() && activation.tcr) {
+    CCL_CREATE_THREAD(activation.tcr->osid);
+  }
+#endif
+
   return TCR_TO_TSD(activation.tcr);
 }
 

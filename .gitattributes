@@ -373,6 +373,7 @@ lisp-kernel/platform-solarisx64.h -text
 lisp-kernel/platform-solarisx86.h -text
 lisp-kernel/platform-win32.h -text
 lisp-kernel/platform-win64.h -text
+lisp-kernel/probes.d -text
 lisp-kernel/solaris-inttypes.h -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/solarisx86/Makefile -text

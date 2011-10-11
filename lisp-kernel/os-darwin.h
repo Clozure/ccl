@@ -20,3 +20,8 @@
 #define SIG_SUSPEND_THREAD SIGUSR2
 
 #define SIG_KILL_THREAD SIGEMT
+
+#ifdef USE_DTRACE
+#include "probes.h"
+#endif
+

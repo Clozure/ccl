@@ -52,7 +52,7 @@ M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
 ASFLAGS = -arch x86_64 -g
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
-	   -D_DARWIN_NO_64_BIT_INODE
+	   -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
@@ -65,7 +65,7 @@ PLATFORM_H = platform-darwinx8664.h
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< -arch x86_64 $(CDEFINES) \
 	$(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) \
-	 -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
+	 -I. -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
 
 SPOBJ = x86-spjump64.o x86-spentry64.o x86-subprims64.o 
 ASMOBJ = x86-asmutils64.o imports.o
@@ -112,9 +112,11 @@ OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
-$(COBJ): $(CHEADERS)
+$(COBJ): $(CHEADERS) probes.h
 $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
+probes.h: probes.d
+	dtrace -h -s $<
 
 thread_manager.o: thread_manager.c 
 
