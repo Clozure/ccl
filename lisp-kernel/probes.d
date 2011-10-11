@@ -1,17 +1,15 @@
 provider ccl {
-    probe gc__start(uint64_t);
-    probe gc__finish(uint64_t);
-    probe egc__start(uint64_t, unsigned);
-    probe egc__finish(uint64_t, unsigned);
+    probe gc__start(unsigned long);
+    probe gc__finish(unsigned long);
+    probe egc__start(unsigned long, unsigned);
+    probe egc__finish(unsigned long, unsigned);
     probe create__thread(unsigned long);
 };
 
 /*
-
-gc-start(uint64_t bytes_allocated)
-gc-finish(uint64_t bytes-freed)
-egc-start(uint64_t bytes-allocated, unsigned generation)
-egc-finish(uint64_t bytes-freed, unsigned generation)
-create-thread(unsigned-long thread-id)
-
+gc-start(bytes_allocated)
+gc-finish(bytes-freed)
+egc-start(bytes-allocated, generation)
+egc-finish(bytes-freed, generation)
+create-thread(thread-id)
 */
