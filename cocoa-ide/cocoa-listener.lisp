@@ -255,7 +255,9 @@
   
 (defloadvar *first-listener* t)
 
-(defun new-cocoa-listener-process (procname window &key (class 'cocoa-listener-process) initargs)
+(defun new-cocoa-listener-process (procname window &key (class 'cocoa-listener-process)
+                                                        (initial-function 'ccl::listener-function)
+                                                        initargs)
   (declare (special *standalone-cocoa-ide*))
   (let* ((input-stream (make-instance 'cocoa-listener-input-stream))
          (output-stream (make-instance 'cocoa-listener-output-stream
@@ -284,7 +286,7 @@
                     (prog1 *first-listener* (setq *first-listener* nil)))
            (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
            (ui-object-note-package *nsapp* *package*))
-         (ccl::listener-function))
+         (funcall initial-function))
      :echoing nil
      :class class
      :initargs `(:listener-input-stream ,input-stream
