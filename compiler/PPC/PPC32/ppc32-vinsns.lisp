@@ -280,14 +280,14 @@
                                     ((v :lisp)
                                      (idx :u32const))
                                     ())
-  (lwz dest (:apply + ppc32::misc-data-offset (:apply ash idx -5)) v)
+  (lwz dest (:apply + ppc32::misc-data-offset (:apply ash (:apply ash idx -5) 2)) v)
   (rlwinm dest dest (:apply 1+ (:apply logand idx #x1f)) 31 31))
 
 (define-ppc32-vinsn misc-ref-c-bit-fixnum (((dest :imm))
                                            ((v :lisp)
                                             (idx :u32const))
                                            ((temp :u32)))
-  (lwz temp (:apply + ppc32::misc-data-offset (:apply ash idx -5)) v)
+  (lwz temp (:apply + ppc32::misc-data-offset (:apply ash (:apply ash idx -5) 2)) v)
   (rlwinm dest 
           temp
           (:apply + 1 ppc32::fixnumshift (:apply logand idx #x1f)) 
