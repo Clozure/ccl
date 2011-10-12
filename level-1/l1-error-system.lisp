@@ -669,8 +669,9 @@
 	    (t				; with-simple-restart
 	     (throw tag (values nil t)))))))
 
-(defun invoke-restart-no-return (restart)
-  (invoke-restart restart)
+(defun invoke-restart-no-return (restart &rest values)
+  (declare (dynamic-extent values))
+  (apply #'invoke-restart restart values)
   (error 'restart-failure :restart restart))
 
 (defun invoke-restart-interactively (restart)
