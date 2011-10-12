@@ -54,6 +54,12 @@
    (target-column :initform 0 :accessor hemlock-target-column)
    ))
 
+(defmethod print-object ((view hemlock-view) stream)
+  (print-unreadable-object (view stream :type t :identity t)
+    (if (slot-boundp view 'buffer)
+      (prin1 (buffer-name (hemlock-view-buffer view)) stream)
+      (princ "???" stream))))
+
 (defun hemlock-view-p (object)
   (typep object 'hemlock-view))
 
