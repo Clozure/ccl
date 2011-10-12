@@ -1841,7 +1841,11 @@
 
           (when safe      
             (when (typep safe 'fixnum)
-              (with-node-target (src unscaled-i unscaled-j unscaled-k val-reg) expected
+              (let* ((expected (if constidx
+                                 (with-node-target (src val-reg) expected
+                                   expected)
+                                 (with-node-target (src unscaled-i unscaled-j unscaled-k val-reg) expected
+                                   expected))))
                 (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                                           (ash 1 $arh_simple_bit))
                                      arm::fixnumshift))
@@ -1948,7 +1952,11 @@
                                            k arm::arg_z)))
       (when safe        
         (when (typep safe 'fixnum)
-          (with-node-target (src unscaled-i unscaled-j unscaled-k) expected
+          (let* ((expected (if constidx
+                             (with-node-target (src) expected
+                               expected)
+                             (with-node-target (src unscaled-i unscaled-j unscaled-k) expected
+                               expected))))
             (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                                       (ash 1 $arh_simple_bit))
                                  arm::fixnumshift))
