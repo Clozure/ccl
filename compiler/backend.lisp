@@ -170,15 +170,21 @@
 (defun backend-crf-p (vreg)
   (backend-ea-physical-reg vreg hard-reg-class-crf))
 
+(defun %available-node-temp (mask)
+  (unless (eql 0 mask)
+    (if *backend-allocate-high-node-temps*
+      (do* ((bit 31 (1- bit)))
+           ((< bit 0))
+        (when (logbitp bit mask)
+          (return bit)))    
+      (dotimes (bit 32)
+        (when (logbitp bit mask)
+          (return bit))))))
+
 (defun available-node-temp (mask)
-  (if *backend-allocate-high-node-temps*
-    (do* ((bit 31 (1- bit)))
-	 ((< bit 0) (error "Bug: ran out of node temp registers."))
-      (when (logbitp bit mask)
-	(return bit)))    
-    (dotimes (bit 32 (error "Bug: ran out of node temp registers."))
-      (when (logbitp bit mask)
-	(return bit)))))
+  (or (%available-node-temp mask)
+      (error "Bug: ran out of node temp registers.")))
+
 
 (defun ensure-node-target (reg)
   (if (node-reg-p reg)

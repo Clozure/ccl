@@ -76,6 +76,8 @@
   annotation
   (gprs-set 0)
   (fprs-set 0)
+  (gprs-read 0)
+  (fprs-read 0)
 )
 
 (def-standard-initial-binding *vinsn-freelist* (make-dll-node-freelist))
@@ -83,8 +85,12 @@
 (defun make-vinsn (template)
   (let* ((vinsn (alloc-dll-node *vinsn-freelist*)))
     (loop
-      ; Sometimes, the compiler seems to return its node list
-      ; to the freelist without first removing the vinsn-labels in it.
+      ;; Sometimes, the compiler seems to return its node list
+      ;; to the freelist without first removing the vinsn-labels in it.
+      #-bootstrapped (when (and (typep vinsn 'vinsn)
+                                (not (> (uvsize vinsn) 8)))
+                       (setf (pool.data *vinsn-freelist*) nil)
+                       (setq vinsn nil))
       (if (or (null vinsn) (typep vinsn 'vinsn)) (return))
       (setq vinsn (alloc-dll-node *vinsn-freelist*)))
     (if vinsn
@@ -93,7 +99,9 @@
               (vinsn-variable-parts vinsn) nil
               (vinsn-annotation vinsn) nil
 	      (vinsn-gprs-set vinsn) 0
-	      (vinsn-fprs-set vinsn) 0)
+	      (vinsn-fprs-set vinsn) 0
+              (vinsn-gprs-read vinsn) 0
+              (vinsn-fprs-read vinsn) 0)
         vinsn)
       (%make-vinsn template))))
 
@@ -358,7 +366,10 @@
                (declare (ignore name))
                (fixup-vinsn-template template opcode-hash-table))
            templates))
-                                       
+
+
+
+
 ;;; Could probably split this up and do some arg checking at macroexpand time.
 (defun match-template-vregs (template vinsn supplied-vregs)
   (declare (list supplied-vregs))
@@ -481,6 +492,19 @@
 	 (memq spec '(:u32 :s32 :u16 :s16 :u8 :s8 :lisp :address :imm))))
    (eq (hard-regspec-value varpart-value) regval)))
 
+(defun vinsn-refs-reg-p (element reg)
+  (if (typep element 'vinsn)
+    (if (vinsn-attribute-p element :call)
+      t
+      (let* ((class (hard-regspec-class reg))
+	     (value (hard-regspec-value reg)))
+	(if (eq class hard-reg-class-gpr)
+	  (logbitp value (vinsn-gprs-read element))
+	  (if (eq class hard-reg-class-fpr)
+            ;; The FPR is logically read in the vinsn if it or any
+            ;; conflicting FPR is physically read in the vinsn.
+            (logtest (fpr-mask-for-vreg reg) (vinsn-fprs-read element))))))))
+
 (defun vinsn-sets-reg-p (element reg)
   (if (typep element 'vinsn)
     (if (vinsn-attribute-p element :call)
@@ -507,14 +531,25 @@
 	  (return (values #xffffffff #xffffffff))
 	  (setq gprs-set (logior gprs-set (vinsn-gprs-set element))
 		fprs-set (logior fprs-set (vinsn-fprs-set element))))))))
+
+
       
-;;; Return T if any vinsn between START and END (exclusive) sets REG.
+;;; If any vinsn between START and END (exclusive) sets REG, return
+;;; that vinsn; otherwise, return NIL.
 (defun vinsn-sequence-sets-reg-p (start end reg)
   (do* ((element (dll-node-succ start) (dll-node-succ element)))
        ((eq element end))
     (if (vinsn-sets-reg-p element reg)
-      (return t))))
+      (return element))))
 	
+;;; If any vinsn between START and END (exclusive) refs REG, return
+;;; the last such vinsn; otherwise, return NIL.
+(defun vinsn-sequence-refs-reg-p (start end reg)
+  (do* ((element (dll-node-pred end) (dll-node-pred element)))
+       ((eq element start))
+    (if (vinsn-refs-reg-p element reg)
+      (return element))))
+
 
 ;;; Return T if any vinsn between START and END (exclusive) has all
 ;;; attributes set in MASK set.
@@ -522,13 +557,27 @@
   (do* ((element (dll-node-succ start) (dll-node-succ element)))
        ((eq element end))
     (when (typep element 'vinsn)
-      (when (eql attr (logand (vinsn-template-attributes (vinsn-template element))))
+      (when (eql attr (logand (vinsn-template-attributes (vinsn-template element)) attr))
         (return t)))))
 
 (defmacro vinsn-sequence-has-attribute-p (start end &rest attrs)
   `(%vinsn-sequence-has-attribute-p ,start ,end ,(encode-vinsn-attributes attrs)))
 
-                               
+;;; Return T iff vinsn is between START and END (exclusive).
+(defun vinsn-in-sequence-p (vinsn start end)
+  (do* ((element (dll-node-succ start) (dll-node-succ element)))
+       ((eq element end))
+    (when (eq vinsn element)
+      (return t))))
+
+(defun last-vinsn (seg)
+  ;; Try to find something that isn't a SOURCE-NOTE.  Go ahead.  I dare you.
+  (do* ((element (dll-header-last seg) (dll-node-pred element)))
+       ((eq element seg))               ;told ya!
+    (when (typep element 'vinsn)
+      (return element))))
+
+
 ;;; Flow-graph nodes (FGNs)
 
 (defstruct (fgn (:include dll-header))

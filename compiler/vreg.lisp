@@ -25,6 +25,7 @@
 
 (def-standard-initial-binding *lreg-freelist* (%cons-pool))
 
+  
 (defstruct (lreg
             (:print-function print-lreg)
             (:constructor %make-lreg))
@@ -252,9 +253,6 @@
 (defun note-vinsn-sets-gpr (vinsn gpr)
   (setf (vinsn-gprs-set vinsn) (logior (vinsn-gprs-set vinsn) (ash 1 gpr))))
 
-(defun note-vinsn-sets-fpr (vinsn fpr)
-  (setf (vinsn-fprs-set vinsn) (logior (vinsn-fprs-set vinsn) (ash 1 fpr))))
-
 (defun note-vinsn-sets-fpr-lreg (vinsn fpr)
   (setf (vinsn-fprs-set vinsn) (logior (vinsn-fprs-set vinsn)
                                        (target-fpr-mask (hard-regspec-value fpr)
@@ -262,6 +260,21 @@
                                                                  hard-reg-class-fpr-mode-single)
                                                           :single-float
                                                           :double-float)))))
+
+(defun note-vinsn-refs-gpr (vinsn gpr)
+  (when (and (fboundp 'vinsn-gprs-read)
+             (> (uvsize vinsn) 8))
+    (setf (vinsn-gprs-read vinsn) (logior (vinsn-gprs-read vinsn) (ash 1 gpr)))))
+
+(defun note-vinsn-refs-fpr-lreg (vinsn fpr)
+  (when (and (fboundp 'vinsn-gprs-read)
+             (> (uvsize vinsn) 8))
+    (setf (vinsn-fprs-read vinsn) (logior (vinsn-fprs-read vinsn)
+                                       (target-fpr-mask (hard-regspec-value fpr)
+                                                        (if (eql (get-regspec-mode fpr)
+                                                                 hard-reg-class-fpr-mode-single)
+                                                          :single-float
+                                                          :double-float))))))
 
 
 (defun match-vreg (vreg spec vinsn vp n)
@@ -284,19 +297,27 @@
 	    (case class
 	      (:crf (use-crf-temp vreg-value))
 	      ((:u8 :s8 :u16 :s16 :u32 :s32 :u64 :s64 :address)
-	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value))
+	       (if result-p
+                 (note-vinsn-sets-gpr vinsn vreg-value)
+                 (note-vinsn-refs-gpr vinsn vreg-value))
 	       (use-imm-temp vreg-value))
 	      ((:single-float :double-float)
 	       (use-fp-reg vreg)
-	       (when result-p (note-vinsn-sets-fpr-lreg vinsn vreg)))
+	       (if result-p
+                 (note-vinsn-sets-fpr-lreg vinsn vreg)
+                 (note-vinsn-refs-fpr-lreg vinsn vreg)))
 	      ((:imm t)
-	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value))
+	       (if result-p
+                 (note-vinsn-sets-gpr vinsn vreg-value)
+                 (note-vinsn-refs-gpr vinsn vreg-value))
 	       (if (logbitp vreg-value *backend-imm-temps*)
 		 (use-imm-temp vreg-value)
 		 (use-node-temp vreg-value)))
 	      (:lisp
 	       (use-node-temp vreg-value)
-	       (when result-p (note-vinsn-sets-gpr vinsn vreg-value)))
+	       (if result-p
+                 (note-vinsn-sets-gpr vinsn vreg-value)
+                 (note-vinsn-refs-gpr vinsn vreg-value)))
               (:extended)))
           (unless (or (eq class 't) (vreg-ok-for-storage-class vreg class))
             (warn "~s was expected to have storage class matching specifier ~s" vreg class))

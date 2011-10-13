@@ -547,6 +547,23 @@
                                                    (cur-vsp :u16const)))
   (cmpb (:$b x8664::fulltag-nil) (:@ (:apply - (:apply + frame-offset x8664::word-size-in-bytes)) (:%q x8664::rbp))))
 
+(define-x8664-vinsn compare-vframe-offset-to-fixnum (()
+                                                     ((frame-offset :u16const)
+                                                      (fixval :s32const)))
+  ((:and (:pred < fixval 128) (:pred >= fixval -128))
+   (cmpq (:$b fixval) (:@ (:apply - (:apply + frame-offset x8664::word-size-in-bytes)) (:%q x8664::rbp))))
+  ((:not (:and (:pred < fixval 128) (:pred >= fixval -128)))
+   (cmpq (:$l fixval) (:@ (:apply - (:apply + frame-offset x8664::word-size-in-bytes)) (:%q x8664::rbp)))))
+
+
+(define-x8664-vinsn add-constant-to-vframe-offset (()
+                                                   ((frame-offset :u16const)
+                                                    (constant :s32const)))
+  ((:and (:pred < constant 128) (:pred >= constant -128))
+   (addq (:$b constant) (:@ (:apply - (:apply + frame-offset x8664::word-size-in-bytes)) (:%q x8664::rbp))))
+  ((:not (:and (:pred < constant 128) (:pred >= constant -128)))
+   (addq (:$l constant) (:@ (:apply - (:apply + frame-offset x8664::word-size-in-bytes)) (:%q x8664::rbp)))))
+  
 
 (define-x8664-vinsn compare-value-cell-to-nil (()
                                                ((vcell :lisp)))
@@ -969,7 +986,8 @@
   (andb (:$b (lognot x8664::fulltagmask)) (:rcontext x8664::tcr.save-allocptr))
   (movq (:%q car) (:@ x8664::cons.car (:%q allocptr)))
   (movq (:%q cdr) (:@ x8664::cons.cdr (:%q allocptr)))
-  (movq (:%q allocptr) (:%q dest)))
+  ((:pred /= (:apply %hard-regspec-value dest) (:apply %hard-regspec-value x8664::allocptr)) 
+   (movq (:%q allocptr) (:%q dest))))
 
 (define-x8664-vinsn unbox-u8 (((dest :u8))
 			      ((src :lisp)))
@@ -3522,8 +3540,9 @@
   (movq (:%q src) (:%q dest))
   (sarq (:$ub x8664::charcode-shift) (:%q  dest)))
 
-(define-x8664-vinsn adjust-vsp (()
-				((amount :s32const)))
+(define-x8664-vinsn (adjust-vsp :vsp :pop :discard)
+    (()
+     ((amount :s32const)))
   ((:and (:pred >= amount -128) (:pred <= amount 127))
    (addq (:$b amount) (:%q x8664::rsp)))
   ((:not (:and (:pred >= amount -128) (:pred <= amount 127)))

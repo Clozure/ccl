@@ -251,7 +251,8 @@
   (jmp (:@ x8632::symbol.fcell (:% x8632::fname))))
 
 (define-x8632-vinsn set-nargs (()
-			       ((n :u16const)))
+			       ((n :u16const))
+                               ((casualty (:lisp #.x8632::nargs))))
   ((:pred = n 0)
    (xorl (:%l x8632::nargs) (:%l x8632::nargs)))
   ((:not (:pred = n 0))
@@ -444,6 +445,23 @@
                                                   ((frame-offset :u16const)
                                                    (cur-vsp :u16const)))
   (cmpl (:$l (:apply target-nil-value)) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
+
+
+(define-x8632-vinsn compare-vframe-offset-to-fixnum (()
+                                                     ((frame-offset :u16const)
+                                                      (fixval :s32const)))
+  ((:and (:pred < fixval 128) (:pred >= fixval -128))
+   (cmpl (:$b fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
+  ((:not (:and (:pred < fixval 128) (:pred >= fixval -128)))
+   (cmpl (:$l fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
+
+(define-x8632-vinsn add-constant-to-vframe-offset (()
+                                                   ((frame-offset :u16const)
+                                                    (constant :s32const)))
+  ((:and (:pred < constant 128) (:pred >= constant -128))
+   (addl (:$b constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
+  ((:not (:and (:pred < constant 128) (:pred >= constant -128)))
+   (addl (:$l constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
 
 (define-x8632-vinsn compare-value-cell-to-nil (()
                                                ((vcell :lisp)))
@@ -1012,7 +1030,12 @@
 
 (define-x8632-vinsn zero-extend-u8 (((dest :s32))
                                     ((src :u8)))
-  (movzbl (:%b src) (:%l dest)))
+  ((:pred < (:apply %hard-regspec-value src) 4)
+   (movzbl (:%b src) (:%l dest)))
+  ((:pred >= (:apply %hard-regspec-value src) 4)
+   (movl (:%l src) (:%l dest))
+   (movzbl (:%b dest) (:%l dest))))
+  
 
 (define-x8632-vinsn zero-extend-u16 (((dest :s32))
                                      ((src :u16)))
@@ -1941,7 +1964,12 @@
 
 (define-x8632-vinsn u8->u32 (((dest :u32))
 			     ((src :u8)))
-  (movzbl (:%b src) (:%l dest)))
+  ((:pred < (:apply %hard-regspec-value src) 4)
+   (movzbl (:%b src) (:%l dest)))
+  ((:pred >= (:apply %hard-regspec-value src) 4)
+   (movl (:%l src) (:%l dest))
+   (movzbl (:%b dest) (:%l dest))))
+   
 
 (define-x8632-vinsn s16->s32 (((dest :s32))
 			      ((src :s16)))
@@ -2710,7 +2738,13 @@
 
 (define-x8632-vinsn mask-base-char (((dest :u8))
                                     ((src :lisp)))
-  (movzbl (:%b src) (:%l dest)))
+  ((:pred < (:apply %hard-regspec-value src) 4)
+   (movzbl (:%b src) (:%l dest)))
+  ((:pred >= (:apply %hard-regspec-value src) 4)
+   (movl (:%l src) (:%l dest))
+   (movzbl (:%b dest) (:%l dest))))
+   
+   
 
 (define-x8632-vinsn event-poll (()
                                 ())
@@ -2818,8 +2852,9 @@
   (movl (:%l src) (:%l dest))
   (sarl (:$ub x8632::charcode-shift) (:%l dest)))
 
-(define-x8632-vinsn adjust-vsp (()
-				((amount :s32const)))
+(define-x8632-vinsn (adjust-vsp :vsp :pop :discard)
+    (()
+     ((amount :s32const)))
   ((:and (:pred >= amount -128) (:pred <= amount 127))
    (addl (:$b amount) (:%l x8632::esp)))
   ((:not (:and (:pred >= amount -128) (:pred <= amount 127)))
@@ -4026,7 +4061,7 @@
 				 ((reg :imm)))
   (btrl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask)))
 
-(define-x8632-vinsn mark-as-node (()
+(define-x8632-vinsn mark-as-node (((reg :imm))
 				  ((reg :imm)))
   (xorl (:%l reg) (:%l reg))
   (btsl (:$ub (:apply %hard-regspec-value reg)) (:@ (:%seg :rcontext) x8632::tcr.node-regs-mask)))
