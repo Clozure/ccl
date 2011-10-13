@@ -312,6 +312,7 @@ library/leaks.lisp -text
 library/mach-o-symbols.lisp -text
 library/mach-o.lisp -text
 library/oprofile.txt -text
+library/remote-lisp.lisp -text
 library/sequence-utils.lisp -text
 library/serial-streams.lisp -text
 library/x86-win64-syscalls.lisp -text

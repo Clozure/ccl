@@ -142,8 +142,7 @@
 (objc:defmethod (#/startSwankListener: :void) ((self preferences-window-controller)
 					 sender)
   (declare (ignore sender))
-  (unless (or *ccl-swank-active-p* 
-              (maybe-start-swank-listener :override-user-preference t))
+  (unless (maybe-start-swank-listener :override-user-preference t)
     (alert-window :message "Unable to start the Swank server.")))
 
 ;;; This message is sent to the first responder, which is why

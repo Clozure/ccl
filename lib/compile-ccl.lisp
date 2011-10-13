@@ -229,6 +229,7 @@
     leaks
     core-files
     dominance
+    remote-lisp
     ;; asdf has peculiar compile-time side-effects
     ;;asdf
     defsystem
