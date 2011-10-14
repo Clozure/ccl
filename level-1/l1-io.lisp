@@ -1069,7 +1069,8 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
                                      (return t))
                                    (setq last-slash-pos i)))))
                         ;; or could be read as a number
-                        (%parse-number-token name 0 len *print-base*)
+                        (handler-case (%parse-number-token name 0 len *print-base*)
+                          (arithmetic-error (c) (declare (ignore c)) t))
                         ;; or symbol consisting entirely of .'s
                         (dotimes (i len t)
                           (declare (fixnum i))
