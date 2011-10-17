@@ -15,10 +15,34 @@
 */
 
 #include "lispdcmd.h"
+#include "x86-utils.h"
 #include <stdio.h>
 #include <signal.h>
 
+natural
+pc_from_xcf(xcf *xcf)
+{
+  if (functionp(xcf->nominal_function)) {
+    LispObj fv = function_to_function_vector(xcf->nominal_function);
+    if (fv == xcf->containing_uvector) {
+      unsigned tag;
 
+#ifdef X8664
+      tag = tag_function;
+#else
+      tag = fulltag_misc;
+#endif
+      return unbox_fixnum(xcf->relative_pc) - tag;
+    } else {
+      LispObj tra = xcf->ra0;
+      LispObj f = tra_function(tra);
+
+      if (f && f == xcf->nominal_function)
+	return tra_offset(tra);
+    }
+  }
+  return 0;
+}
 
 void
 print_lisp_frame(lisp_frame *frame)
@@ -42,8 +66,15 @@ print_lisp_frame(lisp_frame *frame)
     }
   }
   if (pc == 0) {
+    natural rpc = pc_from_xcf((xcf *)frame);
+
     fun = ((xcf *)frame)->nominal_function;
-    Dprintf("(#x%08X) #x%08X : %s + ??", frame, pc, print_lisp_object(fun));
+    fprintf(dbgout, "(#x%08X) #x%08X : %s + ", frame, pc,
+	    print_lisp_object(fun));
+    if (rpc)
+      fprintf(dbgout, "%d\n", rpc);
+    else
+      fprintf(dbgout, "??\n", rpc);
     return;
   }
 #else
@@ -60,8 +91,15 @@ print_lisp_frame(lisp_frame *frame)
     }
   }
   if (pc == 0) {
+    natural rpc = pc_from_xcf((xcf *)frame);
+
     fun = ((xcf *)frame)->nominal_function;
-    Dprintf("(#x%016lX) #x%016lX : %s + ??", frame, pc, print_lisp_object(fun));
+    fprintf(dbgout, "(#x%016lX) #x%016lX : %s + ", frame, pc,
+	    print_lisp_object(fun));
+    if (rpc)
+      fprintf(dbgout, "%d\n", rpc);
+    else
+      fprintf(dbgout, "??\n");
     return;
   }
 #endif

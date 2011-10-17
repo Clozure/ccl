@@ -253,6 +253,17 @@
 
 #define function_boundary_marker SUBTAG(fulltag_imm_1,15)	
 
+/*
+ * To determine the function associated with a tagged return
+ * address, we attempt to recognize an the instruction
+ * (lea (@ disp (% rip)) (% fn)) at the tra.
+ */
+#define RECOVER_FN_FROM_RIP_LENGTH 7 /* the instruction is 7 bytes long */
+#define RECOVER_FN_FROM_RIP_DISP_OFFSET 3 /* displacement word is 3 bytes in */
+#define RECOVER_FN_FROM_RIP_WORD0 0x8d4c /* 0x4c 0x8d, little-endian */
+#define RECOVER_FN_FROM_RIP_BYTE2 0x2d  /* third byte of opcode */
+
+
 /* The objects themselves look something like this: */
 
 
@@ -277,13 +288,14 @@ typedef struct exception_callback_frame {
   struct lisp_frame *backlink;
   LispObj tra;                  /* ALWAYS 0 FOR AN XCF */
   LispObj nominal_function;     /* the current function at the time of the exception */
-  LispObj relative_pc;          /* Boxed byte offset within actual
-                                   function or absolute address */
+  LispObj relative_pc;          /* Boxed byte offset within actual function */
   LispObj containing_uvector;   /* the uvector that contains the relative PC or NIL */
   LispObj xp;                   /* exception context */
   LispObj ra0;                  /* value of ra0 from context */
   LispObj foreign_sp;           /* foreign sp at the time that exception occurred */
   LispObj prev_xframe;          /* so %apply-in-frame can unwind it */
+  LispObj pc_low;		/* fixnum low half of absolute pc */
+  LispObj pc_high;		/* and the high half */
 } xcf;
 
 

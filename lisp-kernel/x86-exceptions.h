@@ -90,27 +90,9 @@ extern void set_gs_address(void *);
 void setup_sigaltstack(area *);
 #endif
 
-/* recognizing the function associated with a tagged return address */
-/* now involves recognizinig an "(lea (@ disp (% rip)) (% rn))" */
-/* instruction at the tra */
-
-#define RECOVER_FN_FROM_RIP_LENGTH 7 /* the instruction is 7 bytes long */
-#define RECOVER_FN_FROM_RIP_DISP_OFFSET 3 /* displacement word is 3 bytes in */
-#define RECOVER_FN_FROM_RIP_WORD0 0x8d4c /* 0x4c 0x8d, little-endian */
-#define RECOVER_FN_FROM_RIP_BYTE2 0x2d  /* third byte of opcode */
-
 extern natural get_mxcsr();
 extern void set_mxcsr(natural);
 void enable_fp_exceptions(void);
-
-#ifdef X8632
-/* The 32-bit immediate value in the instruction
- * "(mov ($ 0x12345678) (% fn))" at a tagged return address
- * refers to the associated function.
- */
-#define RECOVER_FN_OPCODE 0xbf
-#define RECOVER_FN_LENGTH 5
-#endif
 
 void callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr);
 
