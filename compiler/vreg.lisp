@@ -95,7 +95,7 @@
         (progn
           (format s (if (lreg-wired l) "[~s]" "{~s}") value)
           (when mode-name
-            (format t "/~a" mode-name)))
+            (format s "/~a" mode-name)))
 	(progn
 	  (if mode-name
 	    (format s "{?/~a}" mode-name)

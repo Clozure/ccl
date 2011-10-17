@@ -1,4 +1,4 @@
-;;;-*- Mode: Lisp; Package: (X86 :use CL) -*-
+;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 2005-2009 Clozure Associates and contributors.
 ;;;   This file is part of Clozure CL.
@@ -1779,9 +1779,10 @@
 
 
 (define-x8664-vinsn (vpush-label :push :node :vsp) (()
-                                                 ((label :label)))
-  (leaq (:@ (:^ label) (:%q x8664::fn)) (:%q x8664::ra0))
-  (pushq (:%q x8664::ra0)))
+                                                    ((label :label))
+                                                    ((temp :lisp)))
+  (leaq (:@ (:^ label) (:%q x8664::fn)) (:%q temp))
+  (pushq (:%q temp)))
 
 ;; ????
 (define-x8664-vinsn emit-aligned-label (()

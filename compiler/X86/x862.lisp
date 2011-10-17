@@ -3601,14 +3601,13 @@
     (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted)))
   (with-x86-local-vinsn-macros (seg)
     (let* ((avar (nx2-lexical-reference-p aform))
-           (adest areg)
-           (bdest breg)
+           (adest nil)
+           (bdest nil)
            (atriv (and (x862-trivial-p bform) (nx2-node-gpr-p breg)))
            (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
                                         (if avar (nx2-var-not-set-by-form-p avar bform)))))
            (apushed (not (or atriv aconst))))
-      (progn
-        (unless aconst
+      (unless aconst
           (if atriv
             (progn
               (setq adest (x862-one-untargeted-reg-form seg aform areg restricted)
@@ -3621,14 +3620,13 @@
                            t))))
         (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
               restricted (x862-restrict-node-target bdest restricted))
-        (when (same-x86-reg-p bdest areg)          
-          (setq areg breg)
-          (when apushed
-            (setq adest areg)))
+        (unless adest
+          (when (same-x86-reg-p bdest areg)          
+            (setq areg breg))
         (if aconst
           (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
           (when apushed
-            (x862-elide-pushes seg apushed (x862-pop-register seg areg)))))
+            (x862-elide-pushes seg apushed (x862-pop-register seg (setq adest areg))))))
       (values adest bdest))))
 
 
@@ -3770,12 +3768,12 @@
                          (x86-side-effect-free-form-p bform)
                          (let ((bvar (nx2-lexical-reference-p bform)))
                            (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
-           (adest areg)
-           (bdest breg)
-           (cdest creg)
+           (adest nil)
+           (bdest nil)
+           (cdest nil)
            (apushed nil)
            (bpushed nil))
-      (if (and aform (not aconst))
+      (when (and aform (not aconst))
         (if atriv
           (progn
             (setq adest (x862-one-untargeted-reg-form seg aform ($ areg) restricted)
@@ -3787,41 +3785,36 @@
           (setq apushed (x862-push-register
                          seg
                          (x862-one-untargeted-reg-form seg aform areg)))))
-      (if (and bform (not bconst))
+      (when (and bform (not bconst))
         (if btriv
           (progn
             (setq bdest (x862-one-untargeted-reg-form seg bform ($ breg) restricted)
                   restricted (x862-restrict-node-target bdest restricted))
+            (unless adest
+              (when (same-x86-reg-p bdest areg)
+                (setq areg breg)))
             (when (same-x86-reg-p bdest creg)
-              (setq creg breg))
-            (when (same-x86-reg-p bdest areg)
-              (setq areg breg)))
+              (setq creg breg)))
           (setq bpushed (x862-push-register
                          seg (x862-one-untargeted-reg-form seg bform breg)))))
       (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted)
             restricted (x862-restrict-node-target cdest restricted))
       (when (same-x86-reg-p cdest areg)
-        (setq areg creg)
-        (when apushed
-          (setq adest areg)))
+        (setq areg creg))
       (when (same-x86-reg-p cdest breg)
-        (setq breg creg)
-        (when bpushed
-          (setq bdest breg)))
+        (setq breg creg))
       (unless btriv 
         (if bconst
           (progn
             (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
                   restricted (x862-restrict-node-target bdest restricted))
             (when (same-x86-reg-p bdest areg)
-              (setq areg breg)
-              (when apushed
-                (setq adest areg))))
-          (x862-elide-pushes seg bpushed (x862-pop-register seg breg))))
+              (setq areg breg)))
+          (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg)))))
       (unless atriv
         (if aconst
           (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
-          (x862-elide-pushes seg apushed (x862-pop-register seg areg))))
+          (x862-elide-pushes seg apushed (x862-pop-register seg (setq adest areg)))))
       (values adest bdest cdest))))
 
 (defun x862-four-untargeted-reg-forms (seg aform areg bform breg cform creg dform dreg &optional (restricted 0))
@@ -3862,81 +3855,88 @@
                        (let ((cvar (nx2-lexical-reference-p cform)))
                          (and cvar
                               (nx2-var-not-set-by-form-p cvar dform))))))
-         (adest areg)
-         (bdest breg)
-         (cdest creg)
-         (ddest dreg)
+         (adest nil)
+         (bdest nil)
+         (cdest nil)
+         (ddest nil)
          (apushed nil)
          (bpushed nil)
-         (cpushed nil))
-    (if (and aform (not aconst))
+         (cpushed nil))         
+    (when (and aform (not aconst))
       (if atriv
         (progn
           (setq adest (x862-one-untargeted-reg-form seg aform areg restricted)
                 restricted (x862-restrict-node-target adest restricted))
-          (when (same-x86-reg-p adest breg)
+          (when (same-x86-reg-p breg adest)
             (setq breg areg))
-          (when (same-x86-reg-p adest creg)
+          (when (same-x86-reg-p creg adest)
             (setq creg areg))
-          (when (same-x86-reg-p adest dreg)
+          (when (same-x86-reg-p dreg adest)
             (setq dreg areg)))
         (setq apushed (x862-push-register seg (x862-one-untargeted-reg-form seg aform areg)))))
-    (if (and bform (not bconst))
+    (when (and bform (not bconst))
       (if btriv
         (progn
           (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
                 restricted (x862-restrict-node-target bdest restricted))
-          (when (same-x86-reg-p bdest creg)
+          (unless adest
+            (when (same-x86-reg-p areg bdest)
+              (setq areg breg)))
+          (when (same-x86-reg-p creg bdest)
             (setq creg breg))
-          (when (same-x86-reg-p bdest dreg)
+          (when (same-x86-reg-p dreg bdest)
             (setq dreg breg)))
         (setq bpushed (x862-push-register seg (x862-one-untargeted-reg-form seg bform breg)))))
-    (if (and cform (not cconst))
+    (when (and cform (not cconst))
       (if ctriv
         (progn
           (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted)
                 restricted (x862-restrict-node-target cdest restricted))
+          (unless adest
+            (when (same-x86-reg-p cdest areg)
+              (setq areg creg)))
+          (unless bdest
+            (when (same-x86-reg-p cdest breg)
+              (setq breg creg)))
           (when (same-x86-reg-p cdest dreg)
             (setq dreg creg)))
         (setq cpushed (x862-push-register seg (x862-one-untargeted-reg-form seg cform creg)))))
     (setq ddest (x862-one-untargeted-reg-form seg dform dreg restricted)
           restricted (x862-restrict-node-target ddest restricted))
-    (when (same-x86-reg-p ddest areg)
-      (setq areg dreg)
-      (when apushed
-        (setq adest areg)))
-    (when (same-x86-reg-p ddest breg)
-      (setq breg dreg)
-      (when bpushed
-        (setq bdest breg)))
-    (when (same-x86-reg-p ddest creg)
-      (setq creg dreg)
-      (when cpushed
-        (setq cdest creg)))
-    (unless ctriv 
+    (unless adest
+      (when (same-x86-reg-p ddest areg)
+        (setq areg dreg)))
+    (unless bdest
+      (when (same-x86-reg-p ddest breg)
+        (setq breg dreg)))
+    (unless cdest
+      (when (same-x86-reg-p ddest creg)
+        (setq creg dreg)))
+    (unless ctriv
       (if cconst
         (progn
           (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted)
                 restricted (x862-restrict-node-target cdest restricted))
-          (when (same-x86-reg-p cdest breg)
-            (setq breg creg)
-            (when bpushed
-              (setq bdest breg))))
-        (x862-elide-pushes seg cpushed (x862-pop-register seg creg))))
-    (unless btriv 
+          (unless adest
+            (when (same-x86-reg-p cdest areg)
+              (setq areg creg)))
+          (unless bdest
+            (when (same-x86-reg-p cdest breg)
+              (setq breg creg))))
+        (x862-elide-pushes seg cpushed (x862-pop-register seg (setq cdest creg)))))
+    (unless btriv
       (if bconst
         (progn
           (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
                 restricted (x862-restrict-node-target bdest restricted))
-          (when (same-x86-reg-p bdest areg)
-            (setq areg bdest)
-            (when apushed
-              (setq adest areg))))
-        (x862-elide-pushes seg bpushed (x862-pop-register seg breg))))
+          (unless adest
+            (when (same-x86-reg-p bdest areg)
+              (setq areg breg))))
+        (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg)))))
     (unless atriv
       (if aconst
         (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
-        (x862-elide-pushes seg apushed (x862-pop-register seg areg))))
+        (x862-elide-pushes seg apushed (x862-pop-register seg (setq adest areg)))))
     (values adest bdest cdest ddest)))
 
 (defun x862-lri (seg reg value)
