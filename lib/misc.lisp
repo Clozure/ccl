@@ -461,19 +461,33 @@ are running on, or NIL if we can't find any useful information."
           (ecase internal-time-units-per-second
             (1000000 "microseconds")
             (1000  "milliseconds")))
-         (width
+         (iwidth (max (length (format nil "~:D" elapsed-time))
+                          (length (format nil "~:D" user-time))
+                          (length (format nil "~:D" system-time))
+                          (length (format nil "~:D" gc-time))))
+                      
+         (fwidth
           (ecase internal-time-units-per-second
             (1000000 6)
             (1000  3)))
+         (elapsed-seconds (/ elapsed-time internal-time-units-per-second))
+         (user-seconds (/ user-time internal-time-units-per-second))
+         (system-seconds (/ system-time internal-time-units-per-second))
+         (gc-seconds  (/ gc-time internal-time-units-per-second))
+         (ffield-width (max (length (format nil "~,vF" fwidth elapsed-seconds))
+                                (length (format nil "~,vF" fwidth user-seconds))
+                                (length (format nil "~,vF" fwidth system-seconds))
+                                (length (format nil "~,vF" fwidth gc-seconds))))
          (cpu-count (cpu-count)))
-    (format s "~&~S took ~:D ~a (~,vF seconds) to run ~%~20twith ~D available CPU core~P."
-            form elapsed-time units width (/ elapsed-time internal-time-units-per-second) cpu-count cpu-count)
-    (format s "~&During that period, ~:D ~a (~,vF seconds) were spent in user mode" user-time units width (/ user-time internal-time-units-per-second))
-    (format s "~&                    ~:D ~a (~,vF seconds) were spent in system mode" system-time units width(/ system-time internal-time-units-per-second))
+    (format s "~&~S" form)
+    (format s "~&took ~v:D ~a (~v,vF seconds) to run." iwidth elapsed-time units ffield-width fwidth elapsed-seconds )
     (unless (eql gc-time 0)
       (format s
-              "~%~:D ~a (~,vF seconds) was spent in GC."
-              gc-time units width (/ gc-time internal-time-units-per-second)))
+              "~%~5t~v:D ~a (~v,vF seconds, ~,2f%) of which was spent in GC." iwidth
+              gc-time units ffield-width fwidth gc-seconds (* 100.0 (/ gc-seconds elapsed-seconds))))
+    (format s "~&During that period, and with ~D available CPU core~P," cpu-count cpu-count)
+    (format s "~&~5t~v:D ~a (~v,vF seconds) were spent in user mode" iwidth user-time units ffield-width fwidth user-seconds)
+    (format s "~&~5t~v:D ~a (~v,vF seconds) were spent in system mode" iwidth system-time units ffield-width fwidth system-seconds)
     (unless (eql 0 bytes-allocated)
       (format s "~% ~:D bytes of memory allocated." bytes-allocated))
     (when (or (> minor-page-faults 0)
