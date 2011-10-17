@@ -1873,7 +1873,7 @@ install_signal_handler(int signo, void *handler, unsigned flags)
   sa.sa_flags = SA_SIGINFO;
 
 #ifdef ANDROID
-  sa.sa_flags |= SA_NODEFER
+  sa.sa_flags |= SA_NODEFER;
 #endif
 #ifdef USE_SIGALTSTACK
   if (flags & ON_ALTSTACK)

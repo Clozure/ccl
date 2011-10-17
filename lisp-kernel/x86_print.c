@@ -17,6 +17,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <setjmp.h>
+#ifndef WINDOWS
+#include <dlfcn.h>
+#endif
 
 #include "lisp.h"
 #include "area.h"
@@ -145,6 +148,34 @@ sprint_list(LispObj o, int depth)
   add_char(')');
 }
 
+typedef
+char *(*class_name_lookup)(LispObj);
+
+
+
+char *
+foreign_class_name(LispObj ptr)
+{
+#ifdef DARWIN
+#if (WORD_SIZE == 64) 
+  static tried_to_resolve_hook = false;
+  static class_name_lookup class_name_lookup_hook = NULL;
+
+  if (!tried_to_resolve_hook) {
+    tried_to_resolve_hook = true;
+    class_name_lookup_hook = dlsym(RTLD_DEFAULT, "class_getName");
+  }
+  if (class_name_lookup_hook) {
+    return(class_name_lookup_hook(ptr));
+  }
+#else
+  return (char *)deref(ptr,2);
+#endif
+#endif
+  return NULL;
+}
+      
+
 /* 
   Print a list of method specializers, using the class name instead of the class object.
 */
@@ -171,9 +202,17 @@ sprint_specializers_list(LispObj o, int depth)
             sprint_lisp_object(deref(deref(the_car,3), 3), depth);
             add_char(')');
           }
-	} else {
+	} else if (subtag == subtag_macptr) {
+          char *class_name = foreign_class_name(deref(the_car,1));
+          
+          if (class_name) {
+            add_c_string(class_name);
+          } else {
+            sprint_lisp_object(the_car, depth);
+          }
+        } else {
 	  sprint_lisp_object(the_car, depth);
-	}
+        }
       } else {
         sprint_lisp_object(the_car, depth);
       }
