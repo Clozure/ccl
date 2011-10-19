@@ -79,6 +79,8 @@
     "cocoa-backtrace"
     "inspector"
     "project"
+    "cocoa-remote-lisp"
+    "swank-listener"
     "preferences"
     "processes-window"
     "apropos-window"

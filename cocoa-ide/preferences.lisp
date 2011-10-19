@@ -82,9 +82,6 @@
 
   self)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-    (require :swank-listener))
-
 (objc:defmethod (#/windowDidLoad :void) ((self preferences-window-controller))
   (let* ((window (#/window self))
          (port-field (swank-listener-port self))

@@ -22,6 +22,9 @@
   (def-cocoa-default *default-font-size* :float 12.0f0 "Size of font to use in editor windows, as a positive SINGLE-FLOAT")
   (def-cocoa-default *tab-width* :int 8 "Width of editor tab stops, in characters"))
 
+(defclass cocoa-application (application)
+  ())
+
 (defun init-cocoa-application ()
   (with-autorelease-pool
       (#/standardUserDefaults ns:ns-user-defaults)

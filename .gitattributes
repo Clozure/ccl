@@ -24,6 +24,7 @@ cocoa-ide/build-application.lisp -text
 cocoa-ide/builder-utilities.lisp -text
 cocoa-ide/cocoa-doc.lisp -text
 cocoa-ide/cocoa-grep.lisp -text
+cocoa-ide/cocoa-remote-lisp.lisp -text
 cocoa-ide/cocoa-utils.lisp -text
 cocoa-ide/console-window.lisp -text
 cocoa-ide/constants.lisp -text

@@ -72,13 +72,8 @@
 
 ;;; Support for saving a stand-alone IDE
 
-
-(defclass cocoa-application (application)
-  ())
-
 (defmethod ccl::application-error ((a cocoa-application) condition error-pointer)
   (ccl::break-loop-handle-error condition error-pointer))
-
 
 (defmethod ccl::application-init-file ((a cocoa-application))
   (unless (shift-key-now-p)
@@ -91,9 +86,6 @@
 ;;; bit better ... I'd tend to agree.)
 (defmethod ccl::parse-application-arguments ((a cocoa-application))
   (values nil nil nil nil))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-    (require :swank-listener))
 
 (defmethod toplevel-function ((a cocoa-application) init-file)
   (declare (ignore init-file))
