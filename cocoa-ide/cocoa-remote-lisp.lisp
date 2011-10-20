@@ -1,6 +1,6 @@
 ;;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
-;;;   Copyright (C) 2011 Clozureremote- Associates
+;;;   Copyright (C) 2011 Clozure Associates
 ;;;   This file is part of Clozure CL.  
 ;;;
 ;;;   Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
@@ -17,14 +17,28 @@
 ;;  Use the IDE to debug a remote ccl.
 ;;  **** THIS IS NOT COMPLETE AND NOT HOOKED UP TO ANYTHING YET *****
 ;;
-;; For testing, start a ccl running swank, then in the IDE create a second listener and:
-;; (setq conn (ccl::connect-to-swank "localhost" 4025)) ;; or wherever your swank lisp is
-;; (setq thread (ccl::make-rrepl-thread conn "IDE Listener"))
-;; (gui::connect-listener-to-remote (cadr (gui::active-listener-windows)) thread)
 
 (in-package "GUI")
 
-;; In the future, there should be something like a "New Remote Listener" command
+#+debug ;; For testing, start a ccl running swank, then call this in the ide.
+(defun cl-user::rlisp-test (port &optional host)
+  (declare (special conn thread))
+  (when (boundp 'conn) (close conn))
+  (setq conn (ccl::connect-to-swank (or host "localhost") port))
+  (setq thread (ccl::make-rrepl-thread conn "IDE Listener"))
+  (let* ((old ccl::*inhibit-greeting*)
+         (listener (unwind-protect
+                       (progn
+                         (setq ccl::*inhibit-greeting* t)
+                         (new-listener))
+                     (setq ccl::*inhibit-greeting* old))))
+    (connect-listener-to-remote listener thread)))
+
+
+(defclass remote-cocoa-listener-process (cocoa-listener-process)
+  ((remote-thread :initarg :remote-thread :reader process-remote-thread)))
+
+;; in the future, there should be something like a "New Remote Listener" command
 ;; which should pass relevant info through to new-cocoa-listener-process.
 ;; But this will do for testing: take an existing normal listener and convert it.
 (defmethod connect-listener-to-remote (object rthread)
@@ -48,7 +62,8 @@
           (new-cocoa-listener-process (format nil "~a [Remote ~a(~a)]"
                                               name (ccl::rlisp-host-description rthread) (ccl::rlisp-thread-id rthread))
                                       window
-                                      :class 'cocoa-listener-process
+                                      :class 'remote-cocoa-listener-process
+                                      :initargs  `(:remote-thread ,rthread)
                                       :initial-function
                                       (lambda ()
                                         (setf (hemlock-document-process doc) *current-process*)
@@ -56,6 +71,9 @@
 
 (defmethod ccl::output-stream-for-remote-lisp ((app cocoa-application))
   (hemlock-ext:top-listener-output-stream))
+
+(defmethod ccl::input-stream-for-remote-lisp ((app cocoa-application))
+  (hemlock-ext:top-listener-input-stream))
 
 (defmethod ccl::toplevel-form-text ((stream cocoa-listener-input-stream))
   (with-slots (read-lock queue-lock queue queue-semaphore text-semaphore) stream

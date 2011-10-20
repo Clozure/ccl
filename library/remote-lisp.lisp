@@ -28,8 +28,8 @@
 (defclass remote-lisp-connection ()
   ((lock :initform (make-lock) :reader rlisp-lock)
    (server-process :initform nil :accessor rlisp-server-process)
-   (callback-counter :initform most-negative-fixnum :accessor rlisp-callback-counter)
-   (callbacks :initform () :accessor rlisp-callbacks)
+   (object-counter :initform most-negative-fixnum :accessor rlisp-object-counter)
+   (objects :initform () :accessor rlisp-objects)
    (threads :initform () :accessor rlisp-threads)
 
    (features :initform nil :accessor rlisp-features)
@@ -57,28 +57,33 @@
     (when lisp-implementation-version
       (setf (rlisp-lisp-implementation-version conn) lisp-implementation-version))))
 
-(defun register-rlisp-callback (conn callback)
+(defun register-rlisp-object (conn object)
   (with-rlisp-lock (conn)
-    (let* ((id (incf (rlisp-callback-counter conn))))
-      (push (list* id callback *current-process*) (rlisp-callbacks conn))
+    (let* ((id (incf (rlisp-object-counter conn))))
+      (push (cons id object) (rlisp-objects conn))
       id)))
+
+(defun find-rlisp-object (conn id)
+  (with-rlisp-lock (conn)
+    (let ((cell (assoc id (rlisp-objects conn))))
+      (unless cell
+        (warn "Missing remote object ~s" id))
+      (setf (rlisp-objects conn) (delq cell (rlisp-objects conn)))
+      (cdr cell))))
+
+(defun remove-rlisp-object (conn id)
+  (with-rlisp-lock (conn)
+    (setf (rlisp-objects conn) (delete id (rlisp-objects conn) :key #'car))))
+
+(defun register-rlisp-callback (conn callback)
+  (register-rlisp-object conn (cons callback *current-process*)))
 
 ;; Invoke callback in the process that registered it.
 (defun invoke-rlisp-callback (conn id &rest values)
   (declare (dynamic-extent values))
-  (destructuring-bind (callback . process)
-                      (with-rlisp-lock (conn)
-                        (let ((cell (assoc id (rlisp-callbacks conn))))
-                          (unless cell
-                            (warn "Missing swank callback ~s" id))
-                          (setf (rlisp-callbacks conn) (delq cell (rlisp-callbacks conn)))
-                          (or (cdr cell) '(nil . nil))))
+  (destructuring-bind (callback . process) (or (find-rlisp-object conn id) '(nil . nil))
     (when callback
       (apply #'process-interrupt process callback values))))
-
-(defun remove-rlisp-callback (conn id)
-  (with-rlisp-lock (conn)
-    (setf (rlisp-callbacks conn) (delete id (rlisp-callbacks conn) :key #'car))))
 
 (defclass remote-lisp-thread ()
   ((conn :initarg :connection :reader rlisp-thread-connection)
@@ -100,15 +105,17 @@
 
 (defmethod rlisp-thread-id ((thread-id symbol)) (or thread-id t))
 
-(defmethod rlisp-thread ((conn remote-lisp-connection) (thread remote-lisp-thread))
+(defmethod rlisp-thread ((conn remote-lisp-connection) (thread remote-lisp-thread) &key (create t))
+  (declare (ignore create))
   thread)
 
-(defmethod rlisp-thread ((conn remote-lisp-connection) (id integer))
+(defmethod rlisp-thread ((conn remote-lisp-connection) (id integer) &key (create t))
   (with-rlisp-lock (conn)
     (or (find id (rlisp-threads conn) :key #'rlisp-thread-id)
-        (let ((rthread (make-instance 'remote-lisp-thread :connection conn :thread-id id)))
-          (push rthread (rlisp-threads conn))
-          rthread))))
+        (and create
+             (let ((rthread (make-instance 'remote-lisp-thread :connection conn :thread-id id)))
+               (push rthread (rlisp-threads conn))
+               rthread)))))
 
 (defmethod rlisp/invoke-restart ((rthread remote-lisp-thread) name &key)
   (rlisp/invoke-restart (rlisp-thread-connection rthread) name :thread rthread))
@@ -218,6 +225,9 @@
 (defmethod output-stream-for-remote-lisp ((app application))
   *standard-output*)
 
+(defmethod input-stream-for-remote-lisp ((app application))
+  *standard-input*)
+
 (defmethod handle-swank-event ((conn swank-rlisp-connection) event args)
   (case event
     (:return
@@ -225,9 +235,9 @@
        (when id (invoke-rlisp-callback conn id value))))
     (:invalid-rpc
      (destructuring-bind (id message) args
-       (when id (remove-rlisp-callback conn id))
+       (when id (remove-rlisp-object conn id))
        (error "Invalid swank rpc: ~s" message)))
-    ((:debug :debug-activate :debug-return :debug-condition)
+    ((:debug :debug-activate :debug-return :debug-condition :read-aborted)
      (destructuring-bind (thread-id &rest event-args) args
        (let ((rthread (rlisp-thread conn thread-id)))
          (unless (rlisp-thread-process rthread)
@@ -245,13 +255,45 @@
      (destructuring-bind (string) args
        (let ((stream (output-stream-for-remote-lisp *application*)))
          (if (> (length string) 500)
-           (process-run-function "Long Swank Output" #'write-string string stream)
+           (process-run-function "Long Remote Output" #'write-string string stream)
            (write-string string stream)))))
+    (:read-string
+     (destructuring-bind (thread-id tag) args
+       (let ((rthread (rlisp-thread conn thread-id :create nil)))
+         (if (and rthread (rlisp-thread-process rthread))
+           (process-interrupt (rlisp-thread-process rthread)
+                              #'handle-swank-event
+                              rthread event `(,tag))
+           ;; not a listener thread.
+           ;; TODO: this needs to be wrapped in some error handling.
+           (process-run-function (format nil "Remote Input (~s)" thread-id)
+                                 #'rlisp-read-string
+                                 conn
+                                 (input-stream-for-remote-lisp *application*)
+                                 thread-id
+                                 tag)))))
     (t (warn "Received unknown event ~s with args ~s" event args))))
+
+(define-condition rlisp-read-aborted ()
+  ((tag :initarg :tag :reader rlisp-read-aborted-tag)))
+
+(defun rlisp-read-string (conn stream thread-id tag)
+  (handler-bind ((rlisp-read-aborted (lambda (c)
+                                       (when (eql tag (rlisp-read-aborted-tag c))
+                                         (return-from rlisp-read-string)))))
+    (let ((text (and (peek-char t stream nil) ;; wait for first one, nil means eof
+		     (read-available-text stream))))
+      (send-sexp-to-swank conn `(:emacs-return-string ,thread-id ,tag ,text)))))
 
 (defmethod handle-swank-event ((rthread remote-lisp-thread) event args)
   (assert (eq (rlisp-thread-process rthread) *current-process*))
   (ecase event
+    (:read-string
+     (destructuring-bind (tag) args
+       (rlisp-read-string (rlisp-thread-connection rthread) *standard-input* (rlisp-thread-id rthread) tag)))
+    (:read-aborted
+     (destructuring-bind (tag) args
+       (signal 'rlisp-read-aborted :tag tag)))
     (:debug     ;; SLDB-SETUP
      (destructuring-bind (level (condition-text condition-type extras)
                                 ;; list of (restart-name restart-description)
@@ -398,14 +440,17 @@
 ;;(defmethod swank/remote-return ((conn swank-rlisp-connection) tag value &key thread)
 ;;  (send-sexp-to-swank conn `(:emacs-return ,(thread-id-for-execute thread) ,tag ,value)))
 
+(defun read-available-text (stream)
+  (loop with buffer = (make-array 100 :element-type 'character :adjustable t :fill-pointer 0)
+    for ch = (stream-read-char-no-hang stream)
+    until (or (eq ch :eof) (null ch))
+    do (vector-push-extend ch buffer)
+    finally (return buffer)))
+  
+;; Return text for remote evaluation.
 (defmethod toplevel-form-text ((stream input-stream))
-  ;; Return text for remote evaluation.
   (when (peek-char t stream nil) ;; wait for the first one.
-    (loop with buffer = (make-array 100 :element-type 'character :adjustable t :fill-pointer 0)
-      for ch = (stream-read-char-no-hang stream)
-      until (or (eq ch :eof) (null ch))
-      do (vector-push-extend ch buffer)
-      finally (return buffer))))
+    (read-available-text stream)))
 
 (defmethod toplevel-form-text ((stream synonym-stream))
   (toplevel-form-text (symbol-value (synonym-stream-symbol stream))))
