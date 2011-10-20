@@ -157,6 +157,16 @@
 (defun first-window-with-controller-type (controller-type)
   (first-window-satisfying-predicate #'(lambda (w) (typep (#/windowController w) controller-type))))
 
+
+(defun new-listener ()
+  (let ((wptr (execute-in-gui (lambda ()
+                                (declare (special hemlock-listener-document))
+                                (#/newListener: (#/delegate *NSApp*) (%null-ptr))
+                                (let ((doc (#/topListener hemlock-listener-document)))
+                                  (unless (%null-ptr-p doc)
+                                    (#/window (#/lastObject (#/windowControllers doc)))))))))
+    (when wptr (hemlock-view wptr))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
