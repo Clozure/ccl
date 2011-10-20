@@ -3805,12 +3805,11 @@
         (setq breg creg))
       (unless btriv 
         (if bconst
-          (progn
-            (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
-                  restricted (x862-restrict-node-target bdest restricted))
-            (when (same-x86-reg-p bdest areg)
-              (setq areg breg)))
-          (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg)))))
+          (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted))
+          (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg))))
+        (setq restricted (x862-restrict-node-target bdest restricted))
+        (when (same-x86-reg-p bdest areg)
+          (setq areg breg)))
       (unless atriv
         (if aconst
           (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
@@ -3914,25 +3913,24 @@
         (setq creg dreg)))
     (unless ctriv
       (if cconst
-        (progn
-          (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted)
-                restricted (x862-restrict-node-target cdest restricted))
-          (unless adest
-            (when (same-x86-reg-p cdest areg)
-              (setq areg creg)))
-          (unless bdest
-            (when (same-x86-reg-p cdest breg)
-              (setq breg creg))))
-        (x862-elide-pushes seg cpushed (x862-pop-register seg (setq cdest creg)))))
+        (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted))
+
+        (x862-elide-pushes seg cpushed (x862-pop-register seg (setq cdest creg))))
+      (setq restricted (x862-restrict-node-target cdest restricted))
+      (unless adest
+        (when (same-x86-reg-p cdest areg)
+          (setq areg creg)))
+      (unless bdest
+        (when (same-x86-reg-p cdest breg)
+          (setq breg creg))))
     (unless btriv
       (if bconst
-        (progn
-          (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
-                restricted (x862-restrict-node-target bdest restricted))
-          (unless adest
-            (when (same-x86-reg-p bdest areg)
-              (setq areg breg))))
-        (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg)))))
+        (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted))
+        (x862-elide-pushes seg bpushed (x862-pop-register seg (setq bdest breg))))
+      (setq restricted (x862-restrict-node-target bdest restricted))
+      (unless adest
+        (when (same-x86-reg-p bdest areg)
+          (setq areg breg))))
     (unless atriv
       (if aconst
         (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
