@@ -102,7 +102,7 @@
 (define-condition interrupt-signal-condition (condition) ()
   (:report "interrupt signal"))
 
-(defun force-break-in-listener (p)
+(defmethod force-break-in-listener ((p process))
   (process-interrupt p
 		     #'(lambda ()
                          (multiple-value-bind (vars inits old-vals) (%check-error-globals)
