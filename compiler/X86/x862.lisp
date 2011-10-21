@@ -3597,37 +3597,42 @@
 
  
 (defun x862-two-untargeted-reg-forms (seg aform areg bform breg &optional (restricted 0))
-  (unless (eql restricted 0)
-    (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted)))
-  (with-x86-local-vinsn-macros (seg)
-    (let* ((avar (nx2-lexical-reference-p aform))
-           (adest nil)
-           (bdest nil)
-           (atriv (and (x862-trivial-p bform) (nx2-node-gpr-p breg)))
-           (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
-                                        (if avar (nx2-var-not-set-by-form-p avar bform)))))
-           (apushed (not (or atriv aconst))))
-      (unless aconst
+  (let* ((restricted-by-caller restricted))
+    (with-x86-local-vinsn-macros (seg)
+      (let* ((avar (nx2-lexical-reference-p aform))
+             (adest nil)
+             (bdest nil)
+             (atriv (and (x862-trivial-p bform) (nx2-node-gpr-p breg)))
+             (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
+                                          (if avar (nx2-var-not-set-by-form-p avar bform)))))
+             (apushed (not (or atriv aconst))))
+        (unless aconst
           (if atriv
             (progn
+              (unless (eql restricted-by-caller 0)
+                (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted-by-caller)))
               (setq adest (x862-one-untargeted-reg-form seg aform areg restricted)
                     restricted (x862-restrict-node-target adest restricted))
               (when (same-x86-reg-p adest breg)
                 (setq breg areg)))
             (setq apushed (x862-push-register
                            seg
-                           (x862-one-untargeted-reg-form seg aform areg)
+                           (x862-one-untargeted-reg-form seg aform areg restricted)
                            t))))
+        (unless (eql restricted-by-caller 0)
+          (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted-by-caller)))
         (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
               restricted (x862-restrict-node-target bdest restricted))
         (unless adest
+          (unless (eql restricted-by-caller 0)
+            (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted-by-caller)))
           (when (same-x86-reg-p bdest areg)          
             (setq areg breg))
-        (if aconst
-          (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
-          (when apushed
-            (x862-elide-pushes seg apushed (x862-pop-register seg (setq adest areg))))))
-      (values adest bdest))))
+          (if aconst
+            (setq adest (x862-one-untargeted-reg-form seg aform areg restricted))
+            (when apushed
+              (x862-elide-pushes seg apushed (x862-pop-register seg (setq adest areg))))))
+        (values adest bdest)))))
 
 
 (defun x862-three-targeted-reg-forms (seg aform areg bform breg cform creg)
@@ -4353,7 +4358,14 @@
             (if (and dest-gpr src-gpr)
               (if (eq src-mode dest-mode)
                 (unless (eq src-gpr dest-gpr)
-                  (! copy-gpr dest src))
+                  (! copy-gpr dest src)
+                  (when (eql src-mode hard-reg-class-gpr-mode-node)
+                    (when (logbitp src-gpr *x862-gpr-locations-valid-mask*)
+                        (setf (svref *x862-gpr-locations* dest-gpr)
+                              (copy-list (svref *x862-gpr-locations* src-gpr))
+                              *x862-gpr-locations-valid-mask*
+                              (logior *x862-gpr-locations-valid-mask*
+                                      (ash 1 dest-gpr))))))
                 ;; This is the "GPR <- GPR" case.  There are
                 ;; word-size dependencies, but there's also
                 ;; lots of redundancy here.
