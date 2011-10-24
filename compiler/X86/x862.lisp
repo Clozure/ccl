@@ -1476,24 +1476,26 @@
                    (memq offset (svref info reg)))
           (return reg))))))
 
+(defun x862-existing-reg-for-var (var)
+  (let* ((ea (var-ea var)))
+    (if (and (memory-spec-p ea)
+             (not (addrspec-vcell-p ea)))
+      (let* ((offset (memspec-frame-address-offset ea))
+             (mask *x862-gpr-locations-valid-mask*)
+             (info *x862-gpr-locations*))
+        (declare (fixnum mask) (simple-vector info))
+        (dotimes (reg 16)
+          (when (and (logbitp reg mask)
+                     (memq offset (svref info reg)))
+            (return reg))))
+      (if (register-spec-p ea)
+        ea))))
 
 (defun x862-reg-for-form (form hint)
   (let* ((var (nx2-lexical-reference-p form)))
     (cond ((node-reg-p hint)
            (if var
-             (let* ((ea (var-ea var)))
-               (if (and (memory-spec-p ea)
-                          (not (addrspec-vcell-p ea)))
-                 (let* ((offset (memspec-frame-address-offset ea))
-                        (mask *x862-gpr-locations-valid-mask*)
-                        (info *x862-gpr-locations*))
-                   (declare (fixnum mask) (simple-vector info))
-                   (dotimes (reg 16)
-                     (when (and (logbitp reg mask)
-                                (memq offset (svref info reg)))
-                       (return reg))))
-                 (if (register-spec-p ea)
-                   ea)))
+             (x862-existing-reg-for-var var)
              (if (acode-p (setq form (acode-unwrapped-form form)))
                (let* ((op (acode-operator form)))
                  (if (eql op (%nx1-operator immediate))
@@ -3349,6 +3351,12 @@
                               form 
                               address-reg))
 
+(defun x862-push-reg-for-form (seg form suggested)
+  (let* ((reg (if (and (node-reg-p suggested)
+                         (nx2-acode-call-p form))     ;probably ...
+                (x862-one-targeted-reg-form seg form *x862-arg-z*)
+                (x862-one-untargeted-reg-form seg form suggested))))
+    (x862-push-register seg reg)))
 
 (defun x862-one-lreg-form (seg form lreg)
   (let ((is-float (= (hard-regspec-class lreg) hard-reg-class-fpr)))
@@ -3585,9 +3593,7 @@
       (unless aconst
         (if atriv
           (x862-one-targeted-reg-form seg aform areg)
-          (setq apushed (x862-push-register
-                         seg
-                         (x862-one-untargeted-reg-form seg aform areg)))))
+          (setq apushed (x862-push-reg-for-form seg aform areg))))
       (x862-one-targeted-reg-form seg bform breg)
       (if aconst
         (x862-one-targeted-reg-form seg aform areg)
@@ -3615,10 +3621,7 @@
                     restricted (x862-restrict-node-target adest restricted))
               (when (same-x86-reg-p adest breg)
                 (setq breg areg)))
-            (setq apushed (x862-push-register
-                           seg
-                           (x862-one-untargeted-reg-form seg aform areg restricted)
-                           t))))
+            (setq apushed (x862-push-reg-for-form seg aform areg))))
         (unless (eql restricted-by-caller 0)
           (setq *x862-gpr-locations-valid-mask* (logandc2 *x862-gpr-locations-valid-mask* restricted-by-caller)))
         (setq bdest (x862-one-untargeted-reg-form seg bform breg restricted)
@@ -3662,15 +3665,11 @@
     (if (and aform (not aconst))
       (if atriv
         (x862-one-targeted-reg-form seg aform areg)
-        (setq apushed (x862-push-register
-                       seg
-                       (x862-one-targeted-reg-form seg aform areg)))))
+        (setq apushed (x862-push-reg-for-form seg aform areg))))
     (if (and bform (not bconst))
       (if btriv
         (x862-one-targeted-reg-form seg bform breg)
-        (setq bpushed (x862-push-register
-                       seg
-                       (x862-one-targeted-reg-form seg bform breg)))))
+        (setq bpushed (x862-push-reg-for-form seg bform breg))))
     (x862-one-targeted-reg-form seg cform creg)
     (unless btriv 
       (if bconst
@@ -3726,15 +3725,15 @@
     (if (and aform (not aconst))
       (if atriv
         (x862-one-targeted-reg-form seg aform areg)
-        (setq apushed (x862-push-register seg (x862-one-targeted-reg-form seg aform areg)))))
+        (setq apushed (x862-push-reg-for-form seg aform areg))))
     (if (and bform (not bconst))
       (if btriv
         (x862-one-targeted-reg-form seg bform breg)
-        (setq bpushed (x862-push-register seg (x862-one-targeted-reg-form seg bform breg)))))
+        (setq bpushed (x862-push-reg-for-form seg bform breg))))
     (if (and cform (not cconst))
       (if ctriv
         (x862-one-targeted-reg-form seg cform creg)
-        (setq cpushed (x862-push-register seg (x862-one-targeted-reg-form seg cform creg)))))
+        (setq cpushed (x862-push-reg-for-form seg cform creg))))
     (x862-one-targeted-reg-form seg dform dreg)
     (unless ctriv
       (if cconst
@@ -3787,9 +3786,7 @@
               (setq breg areg))
             (when (same-x86-reg-p adest creg)
               (setq creg areg)))
-          (setq apushed (x862-push-register
-                         seg
-                         (x862-one-untargeted-reg-form seg aform areg)))))
+          (setq apushed (x862-push-reg-for-form seg aform areg))))
       (when (and bform (not bconst))
         (if btriv
           (progn
@@ -3800,8 +3797,7 @@
                 (setq areg breg)))
             (when (same-x86-reg-p bdest creg)
               (setq creg breg)))
-          (setq bpushed (x862-push-register
-                         seg (x862-one-untargeted-reg-form seg bform breg)))))
+          (setq bpushed (x862-push-reg-for-form seg bform breg))))
       (setq cdest (x862-one-untargeted-reg-form seg cform creg restricted)
             restricted (x862-restrict-node-target cdest restricted))
       (when (same-x86-reg-p cdest areg)
@@ -3877,7 +3873,7 @@
             (setq creg areg))
           (when (same-x86-reg-p dreg adest)
             (setq dreg areg)))
-        (setq apushed (x862-push-register seg (x862-one-untargeted-reg-form seg aform areg)))))
+        (setq apushed (x862-push-reg-for-form seg aform areg))))
     (when (and bform (not bconst))
       (if btriv
         (progn
@@ -3890,7 +3886,7 @@
             (setq creg breg))
           (when (same-x86-reg-p dreg bdest)
             (setq dreg breg)))
-        (setq bpushed (x862-push-register seg (x862-one-untargeted-reg-form seg bform breg)))))
+        (setq bpushed (x862-push-reg-for-form seg  bform breg))))
     (when (and cform (not cconst))
       (if ctriv
         (progn
@@ -3904,7 +3900,7 @@
               (setq breg creg)))
           (when (same-x86-reg-p cdest dreg)
             (setq dreg creg)))
-        (setq cpushed (x862-push-register seg (x862-one-untargeted-reg-form seg cform creg)))))
+        (setq cpushed (x862-push-reg-for-form seg cform creg))))
     (setq ddest (x862-one-untargeted-reg-form seg dform dreg restricted)
           restricted (x862-restrict-node-target ddest restricted))
     (unless adest
@@ -4051,8 +4047,14 @@
         (if u8-operator
           (x862-compare-u8 seg vreg xfer u8-operand u8 (if (and iu8 (not (eq cr-bit x86::x86-e-bits))) (logxor 1 cr-bit) cr-bit) true-p u8-operator)
           (if (and boolean (or js32 is32))
-            (let* ((ea (x862-lexical-reference-ea (if js32 i j)))
-                   (offset (and ea (memory-spec-p ea) (memspec-frame-address-offset ea)))
+            (let* ((form (if js32 i j))
+                   (var (nx2-lexical-reference-p form))
+                   (ea (when var
+                         (unless (x862-existing-reg-for-var var) (var-ea var))))
+                   (offset (and ea
+                                (memory-spec-p ea)
+                                (not (addrspec-vcell-p ea))
+                                (memspec-frame-address-offset ea)))
                    (reg (unless offset (x862-one-untargeted-reg-form seg (if js32 i j) *x862-arg-z*)))
                    (constant (or js32 is32)))
               (if offset
@@ -6502,11 +6504,8 @@
         (setq *x862-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
         (multiple-value-setq (pregs reglocatives) 
-          (nx2-allocate-global-registers
-           *x862-fcells*
-           *x862-vcells*
-           (afunc-all-vars afunc)
-           inherited-vars
+          (nx2-afunc-allocate-global-registers
+           afunc
            (unless no-regs
              (target-arch-case
               (:x8664
