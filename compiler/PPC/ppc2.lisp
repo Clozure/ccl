@@ -5272,7 +5272,7 @@
         (setq *ppc2-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
         (multiple-value-setq (pregs reglocatives) 
-          (nx2-allocate-global-registers *ppc2-fcells* *ppc2-vcells* (afunc-all-vars afunc) inherited-vars (unless no-regs *ppc2-nvrs*)))
+          (nx2-afunc-allocate-global-registers (unless no-regs *ppc2-nvrs*)))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
         (when keys ;; Ensure keyvect is the first immediate
           (backend-immediate-index (%cadr (%cdddr keys))))

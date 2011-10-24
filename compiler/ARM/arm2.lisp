@@ -5411,7 +5411,7 @@
               (setq nsaved-fprs (arm2-allocate-global-fprs fp-vars)))))
         (multiple-value-setq (pregs reglocatives) 
          
-          (nx2-allocate-global-registers *arm2-fcells* *arm2-vcells* (afunc-all-vars afunc) inherited-vars (unless no-regs *arm2-nvrs*)))
+          (nx2-afunc-allocate-global-registers afunc (unless no-regs *arm2-nvrs*)))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
         (when keys ;; Ensure keyvect is the first immediate
           (backend-immediate-index (%cadr (%cdddr keys))))

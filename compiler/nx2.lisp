@@ -23,11 +23,13 @@
   (declare (cons x y))
   (> (cdr x) (cdr y)))
 
+
 ;;; Return an unordered list of "varsets": each var in a varset can be
 ;;; assigned a register and all vars in a varset can be assigned the
 ;;; same register (e.g., no scope conflicts.)
 
-(defun nx2-partition-vars (vars inherited-vars)
+(defun nx2-partition-vars (vars inherited-vars &optional (afunc-flags 0))
+  (declare (ignorable afunc-flags))
   (labels ((var-weight (var)
              (let* ((bits (nx-var-bits var)))
                (declare (fixnum bits))
@@ -92,34 +94,41 @@
 
 ;;; Maybe globally allocate registers to symbols naming functions & variables,
 ;;; and to simple lexical variables.
-(defun nx2-allocate-global-registers (fcells vcells all-vars inherited-vars nvrs)
-  (if (null nvrs)
-    (progn
-      (dolist (c fcells) (%rplacd c nil))
-      (dolist (c vcells) (%rplacd c nil))
-      (values 0 nil))
-    (let* ((maybe (nx2-partition-vars all-vars inherited-vars)))
-      (dolist (c fcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (dolist (c vcells) 
-        (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
-      (do* ((things (%sort-list-no-key maybe #'nx2-bigger-cdr-than) (cdr things))
-            (n 0 (1+ n))
-            (registers nvrs)
-            (regno (pop registers) (pop registers))
-            (constant-alist ()))
-           ((or (null things) (null regno))
-            (dolist (cell fcells) (%rplacd cell nil))
-            (dolist (cell vcells) (%rplacd cell nil))
-            (values n constant-alist))
-        (declare (list things)
-                 (fixnum n regno))
-        (let* ((thing (car things)))
-          (if (or (memq thing fcells)
-                  (memq thing vcells))
-            (push (cons thing regno) constant-alist)
-            (dolist (var (car thing))
-              (setf (var-nvr var) regno))))))))
+(defun nx2-afunc-allocate-global-registers (afunc nvrs)
+  (let* ((vcells (afunc-vcells afunc))
+         (fcells (afunc-fcells afunc))
+         (all-vars (afunc-all-vars afunc))
+         (inherited-vars (afunc-inherited-vars afunc)))
+    (if (null nvrs)
+      (progn
+        (dolist (c fcells) (%rplacd c nil))
+        (dolist (c vcells) (%rplacd c nil))
+        (values 0 nil))
+      (let* ((maybe (nx2-partition-vars
+                     all-vars
+                     inherited-vars
+                     (afunc-bits afunc))))
+        (dolist (c fcells) 
+          (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
+        (dolist (c vcells) 
+          (if (>= (the fixnum (cdr c)) 3) (push c maybe)))
+        (do* ((things (%sort-list-no-key maybe #'nx2-bigger-cdr-than) (cdr things))
+              (n 0 (1+ n))
+              (registers nvrs)
+              (regno (pop registers) (pop registers))
+              (constant-alist ()))
+             ((or (null things) (null regno))
+              (dolist (cell fcells) (%rplacd cell nil))
+              (dolist (cell vcells) (%rplacd cell nil))
+              (values n constant-alist))
+          (declare (list things)
+                   (fixnum n regno))
+          (let* ((thing (car things)))
+            (if (or (memq thing fcells)
+                    (memq thing vcells))
+              (push (cons thing regno) constant-alist)
+              (dolist (var (car thing))
+                (setf (var-nvr var) regno)))))))))
 
 (defun nx2-assign-register-var (v)
   (var-nvr v))
@@ -170,6 +179,17 @@
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
         (%cadr form)))))
+
+(defun nx2-acode-call-p (form)
+  (when (acode-p form)
+    (let ((op (acode-operator (acode-unwrapped-form-value form))))
+      (or (eq op (%nx1-operator multiple-value-call))
+          (eq op (%nx1-operator call))
+          (eq op (%nx1-operator lexical-function-call))
+          (eq op (%nx1-operator self-call))
+          (eq op (%nx1-operator builtin-call))))))
+          
+  
 
 ;;; Returns true iff lexical variable VAR isn't setq'ed in FORM.
 ;;; Punts a lot ...
