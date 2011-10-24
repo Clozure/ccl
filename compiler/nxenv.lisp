@@ -44,8 +44,12 @@
   var-root-nrefs                        ; reference count of "root" var
   var-root-nsetqs                       ; setq count of root var
   var-initform                          ; initial value acode or NIL.
+  var-local-bits
 )
 
+(defconstant $vlocalbitiveacrosscall 0) ;
+(defconstant $vlocalbitargument 1)
+(defconstant $vlocalbitregisterarg 2)   ;
 (defconstant $vbittemporary 16)    ; a compiler temporary
 (defconstant $vbitreg 17)          ; really wants to live in a register.
 (defconstant $vbitnoreg 18)        ; something inhibits register allocation
@@ -397,24 +401,7 @@
 (defmacro %nx1-default-operator ()
   `(nx1-default-operator))
 
-(defmacro defnx1 (name sym arglist &body forms)
-  (let ((fn `(nfunction ,name ,(parse-macro name arglist forms)))
-        (theprogn ())
-        (ysym (gensym)))
-    `(let ((,ysym ,fn))
-       ,(if (symbolp sym)
-          `(progn
-             (setf (gethash ',sym *nx1-alphatizers*) ,ysym)
-             ;(proclaim '(inline ,sym))
-             (pushnew ',sym *nx1-compiler-special-forms*))
-          (dolist (x sym `(progn ,@(nreverse theprogn)))
-            (if (consp x)
-              (setq x (%car x))
-              (push `(pushnew ',x *nx1-compiler-special-forms*) theprogn))
-            ;(push `(proclaim '(inline ,x)) theprogn)
-            (push `(setf (gethash ',x *nx1-alphatizers*) ,ysym) theprogn)))
-       (record-source-file ',name 'function)
-       ,ysym)))
+
 
 (defmacro next-nx-num-ops ()
   (length *next-nx-operators*))
@@ -444,6 +431,7 @@
 (defconstant $fbitruntimedef 8)
 (defconstant $fbitnonnullenv 9)
 (defconstant $fbitccoverage 10)
+(defconstant $fbittailcallsself 11)
 
 (defconstant $eaclosedbit 24)
 
@@ -475,8 +463,6 @@
 (defmacro make-acode (operator &rest args)
   `(%temp-list ,operator ,@args))
 
-(defmacro make-acode* (operator &rest args)
-  `(%temp-cons ,operator (mapcar #'nx1-form ,@args)))
 
 ; More Bootstrapping Shit.
 (defmacro acode-operator (form)
@@ -517,11 +503,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
-(declaim (inline 
-          nx-decl-set-fbit
-          nx-adjust-setq-count
-          nx-init-var
-          ))
+
 
 (defun nx-init-var (state node)
   (let* ((sym (var-name node))
@@ -575,7 +557,7 @@
     ;;    is also updated.
     (when catchp
       (nx-set-var-bits var (%ilogior2 bits (%ilsl $vbitnoreg 1))))
-    (setf (var-refs var) new)
+    (setf (var-refs var) new)    
     new))
 
 
