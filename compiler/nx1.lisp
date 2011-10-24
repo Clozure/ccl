@@ -17,6 +17,50 @@
 
 (in-package "CCL")
 
+    
+(defmacro defnx1 (name sym contextvar arglist &body forms &environment env)
+  (unless (verify-lambda-list arglist t t t)
+    (error "Invalid lambda list ~s" arglist))
+  (multiple-value-bind (lambda-list whole environment)
+      (normalize-lambda-list arglist t t)
+    (multiple-value-bind (body local-decs) (parse-body forms env)
+      (let ((whole-var (gensym "WHOLE"))
+            (env-var (gensym "ENVIRONMENT")))
+        (multiple-value-bind (bindings binding-decls)
+            (%destructure-lambda-list lambda-list whole-var nil nil
+                                      :cdr-p t
+                                      :whole-p nil
+                                      :use-whole-var t
+                                      :default-initial-value nil)
+          (when environment
+            (setq bindings (nconc bindings (list `(,environment ,env-var)))))
+          (when whole
+            (setq bindings (nconc bindings (list `(,whole ,whole-var)))))
+          (let ((fn `(nfunction ,name
+                      (lambda (,contextvar ,whole-var ,env-var)
+                        (declare (ignorable ,contextvar ,whole-var ,env-var))
+                        (block ,name
+                          (let* ,(nreverse bindings)
+                            ,@(when binding-decls `((declare ,@binding-decls)))
+                            ,@local-decs
+                            ,@body)))))
+                (theprogn ())
+                (ysym (gensym)))
+            `(let ((,ysym ,fn))
+              ,(if (symbolp sym)
+                   `(progn
+                     (setf (gethash ',sym *nx1-alphatizers*) ,ysym)
+                                        ;(proclaim '(inline ,sym))
+                     (pushnew ',sym *nx1-compiler-special-forms*))
+                   (dolist (x sym `(progn ,@(nreverse theprogn)))
+                     (if (consp x)
+                       (setq x (%car x))
+                       (push `(pushnew ',x *nx1-compiler-special-forms*) theprogn))
+                                        ;(push `(proclaim '(inline ,x)) theprogn)
+                     (push `(setf (gethash ',x *nx1-alphatizers*) ,ysym) theprogn)))
+              (record-source-file ',name 'function)
+              ,ysym)))))))
+
 (defun nx1-typespec-for-typep (typespec env &key (whine t))
   ;; Allow VALUES types here (or user-defined types that
   ;; expand to VALUES types).  We could do a better job
@@ -66,7 +110,7 @@
            (new (ctype-spec ctype)))
       (nx-target-type (type-specifier (if new (specifier-type new) ctype))))))
 
-(defnx1 nx1-the the (&whole call typespec form &environment env)
+(defnx1 nx1-the the context (&whole call typespec form &environment env)
   (let* ((typespec (nx1-typespec-for-typep typespec env))
          (*nx-form-type* typespec)
          (transformed (nx-transform form env)))
@@ -107,47 +151,60 @@
        (%nx1-operator typed-form)
        typespec
        (let* ((*nx-form-type* typespec))
-         (nx1-transformed-form transformed env))
+         (nx1-transformed-form context transformed env))
        (nx-declarations-typecheck env)))))
 
-(defnx1 nx1-struct-ref struct-ref (&whole whole structure offset)
+(defnx1 nx1-struct-ref struct-ref context (&whole whole structure offset)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
-    (nx1-treat-as-call whole)
+    (nx1-treat-as-call context whole)
     (make-acode (%nx1-operator struct-ref)
-                (nx1-form structure)
-                (nx1-form offset))))
+                (nx1-form :value structure)
+                (nx1-form :value offset))))
 
-(defnx1 nx1-struct-set struct-set (&whole whole structure offset newval)
+(defnx1 nx1-struct-set struct-set context (&whole whole structure offset newval)
   (if (not (fixnump (setq offset (nx-get-fixnum offset))))
-    (nx1-treat-as-call whole)
+    (nx1-treat-as-call context whole)
     (make-acode
      (%nx1-operator struct-set)
-     (nx1-form structure)
-     (nx1-form offset)
-     (nx1-form newval))))
+     (nx1-form :value structure)
+     (nx1-form :value offset)
+     (nx1-form :value newval))))
 
-(defnx1 nx1-istruct-typep ((istruct-typep)) (&whole whole thing type &environment env)
+(defnx1 nx1-istruct-typep ((istruct-typep)) context (&whole whole thing type &environment env)
   (if (and (nx-form-constant-p type env) (non-nil-symbol-p (nx-form-constant-value type env)))
-    (make-acode (%nx1-operator istruct-typep)
-                (nx1-immediate :eq)
-                (nx1-form thing)
-                (nx1-form `(register-istruct-cell ,type)))
-    (nx1-treat-as-call whole)))
+    (let* ((inner :value))
+      (make-acode (%nx1-operator istruct-typep)
+                  (nx1-immediate inner :eq)
+                  (nx1-form inner thing)
+                  (nx1-form inner `(register-istruct-cell ,type))))
+    (nx1-treat-as-call context whole)))
 
-(defnx1 nx1-make-list make-list (&whole whole size &rest keys &environment env)
+(defnx1 nx1-make-list make-list context (&whole whole size &rest keys &environment env)
   (if (and keys 
              (or 
               (neq (list-length keys) 2)
               (neq (nx-transform (%car keys) env) :initial-element)))
-    (nx1-treat-as-call whole)
+    (nx1-treat-as-call context whole)
     (make-acode
      (%nx1-operator make-list)
-     (nx1-form size)
-     (nx1-form (%cadr keys)))))
+     (nx1-form :value size)
+     (nx1-form :value (%cadr keys)))))
+
+(defun nx1-progn-body (context args)
+  (if (null (cdr args))
+    (nx1-form context (%car args))
+    (make-acode (%nx1-operator progn)
+                (collect ((forms))
+                  (do* ()
+                       ((null (cdr args))
+                        (forms (nx1-form context (car args)))
+                        (forms))
+                    (forms (nx1-form nil (car args)))
+                    (setq args (cdr args)))))))
 
 ;;; New semantics: expansion functions are defined in current lexical environment
 ;;; vice null environment.  May be meaningless ...
-(defnx1 nx1-macrolet macrolet (defs &body body)
+(defnx1 nx1-macrolet macrolet context (defs &body body)
   (let* ((old-env *nx-lexical-environment*)
          (new-env (new-lexical-environment old-env)))
     (dolist (def defs)
@@ -166,10 +223,10 @@
       (with-nx-declarations (pending)
         (multiple-value-bind (body decls) (parse-body body new-env)
           (nx-process-declarations pending decls)
-          (nx1-progn-body body))))))
+          (nx1-progn-body context body))))))
 
 ;;; Does SYMBOL-MACROLET allow declarations ?  Yes ...
-(defnx1 nx1-symbol-macrolet symbol-macrolet (defs &body forms)
+(defnx1 nx1-symbol-macrolet symbol-macrolet context (defs &body forms)
   (let* ((old-env *nx-lexical-environment*))
     (with-nx-declarations (pending)
       (multiple-value-bind (body decls)
@@ -186,61 +243,58 @@
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitignoreunused 1) bits))
                 (setf (var-ea var) (cons :symbol-macro expansion)))))
           (nx-effect-other-decls pending env)
-          (nx1-env-body body old-env))))))
+          (nx1-env-body context body old-env))))))
 
-(defnx1 nx1-progn progn (&body args)
-  (nx1-progn-body args))
+(defnx1 nx1-progn progn context (&body args)
+  (nx1-progn-body context args))
 
-(defnx1 nx1-with-c-frame with-c-frame (var &body body)
+(defnx1 nx1-with-c-frame with-c-frame context (var &body body)
   (make-acode (%nx1-operator with-c-frame)
-              (nx1-form `(let* ((,var (%foreign-stack-pointer)))
+              (nx1-form context `(let* ((,var (%foreign-stack-pointer)))
                           ,@body))))
 
-(defnx1 nx1-with-variable-c-frame with-variable-c-frame (size var &body body)
+(defnx1 nx1-with-variable-c-frame with-variable-c-frame context (size var &body body)
   (make-acode (%nx1-operator with-variable-c-frame)
-              (nx1-form size)
-              (nx1-form `(let* ((,var (%foreign-stack-pointer)))
-                          ,@body))))
+              (nx1-form :value size)
+              (nx1-form context `(let* ((,var (%foreign-stack-pointer)))
+                                  ,@body))))
 
 
-(defun nx1-progn-body (args)
-  (if (null (cdr args))
-    (nx1-form (%car args))
-    (make-acode (%nx1-operator progn) (nx1-formlist args))))
+
 
 (defnx1 nx1-unaryop ((%word-to-int) (uvsize)  (%reference-external-entry-point)
-                     (%symbol->symptr))
+                     (%symbol->symptr)) context
         (arg)
   (make-acode
-   (%nx1-default-operator) (nx1-form arg)))
+   (%nx1-default-operator) (nx1-form :value arg)))
 
-(defnx1 nx1-nullaryop ((%current-tcr) (%interrupt-poll) (%foreign-stack-pointer) (%current-frame-ptr)) ()
+(defnx1 nx1-nullaryop ((%current-tcr) (%interrupt-poll) (%foreign-stack-pointer) (%current-frame-ptr)) context ()
   (make-acode (%nx1-default-operator)))
 
-(defnx1 nx1-fixnum-ref ((%fixnum-ref) (%fixnum-ref-natural)) (base &optional (offset 0))
+(defnx1 nx1-fixnum-ref ((%fixnum-ref) (%fixnum-ref-natural)) context (base &optional (offset 0))
   (make-acode (%nx1-default-operator)
-              (nx1-form base)
-              (nx1-form offset)))
+              (nx1-form :value base)
+              (nx1-form :value offset)))
 
-(defnx1 nx1-fixnum-ref-double-float ((%fixnum-ref-double-float)) (base &optional (index 0))
+(defnx1 nx1-fixnum-ref-double-float ((%fixnum-ref-double-float)) context (base &optional (index 0))
   (make-acode (%nx1-operator typed-form)
                'double-float
                (make-acode (%nx1-operator %fixnum-ref-double-float)
-                           (nx1-form base)
-                           (nx1-form index))))
+                           (nx1-form :value base)
+                           (nx1-form :value index))))
 
-(defnx1 nx2-fixnum-set-double-float ((%fixnum-set-double-float)) (base index-or-val &optional (val nil val-p))
+(defnx1 nx2-fixnum-set-double-float ((%fixnum-set-double-float)) context (base index-or-val &optional (val nil val-p))
   (unless val-p
     (setq val index-or-val index-or-val 0))
   (make-acode (%nx1-operator typed-form)
                'double-float
                (make-acode (%nx1-operator %fixnum-set-double-float)
-                           (nx1-form base)
-                           (nx1-form index-or-val)
-                           (nx1-form val))))
+                           (nx1-form :value  base)
+                           (nx1-form :value index-or-val)
+                           (nx1-form :value val))))
                
 
-(defnx1 nx1-type-unaryop ((typecode) (lisptag) (fulltag))
+(defnx1 nx1-type-unaryop ((typecode) (lisptag) (fulltag)) context
   (arg)
   (let* ((operator
 	  (case *nx-sfname*
@@ -248,32 +302,32 @@
 	    ((lisptag) (%nx1-operator lisptag))
 	    (( fulltag) (%nx1-operator fulltag)))))
     (make-acode
-     operator (nx1-form arg))))
+     operator (nx1-form :value arg))))
         
 
-(defnx1 nx1-code-char ((code-char)) (arg &environment env)
+(defnx1 nx1-code-char ((code-char)) context (arg &environment env)
   (make-acode (if (nx-form-typep arg '(unsigned-byte 8) env)
                 (%nx1-operator %code-char)
                 (if (nx-form-typep arg 'valid-char-code env)
                   (%nx1-operator %valid-code-char)
                   (%nx1-operator code-char)))
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-char-code ((char-code)) (arg &environment env)
+(defnx1 nx1-char-code ((char-code)) context (arg &environment env)
   (make-acode (if (nx-form-typep arg 'character env)
                 (%nx1-operator %char-code)
                 (%nx1-operator char-code))
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-cXr ((car) (cdr)) (arg &environment env)
+(defnx1 nx1-cXr ((car) (cdr)) context (arg &environment env)
   (let* ((op (if (eq *nx-sfname* 'car) (%nx1-operator car) (%nx1-operator cdr)))
          (inline-op (if (eq op (%nx1-operator car)) (%nx1-operator %car) (%nx1-operator %cdr))))
     (make-acode (if (or (nx-inline-car-cdr env) (nx-form-typep arg 'list env))
                   inline-op
                   op)
-                (nx1-prefer-areg arg env))))
+                (nx1-form :value arg env))))
 
-(defnx1 nx1-rplacX ((rplaca) (rplacd)) (pairform valform &environment env)
+(defnx1 nx1-rplacX ((rplaca) (rplacd)) context (pairform valform &environment env)
   (let* ((op (if (eq *nx-sfname* 'rplaca) (%nx1-operator rplaca) (%nx1-operator rplacd)))
          (inline-op (if (eq op (%nx1-operator rplaca)) (%nx1-operator %rplaca) (%nx1-operator %rplacd))))
     (make-acode (if (or (nx-inline-car-cdr env)
@@ -282,10 +336,10 @@
                                           (nx-form-typep pairform 'cons env))))
                   inline-op
                   op)
-                (nx1-prefer-areg pairform env)
-                (nx1-form valform))))
+                (nx1-form :value pairform env)
+                (nx1-form :value valform env))))
 
-(defnx1 nx1-set-cXr ((set-car) (set-cdr)) (pairform valform &environment env)
+(defnx1 nx1-set-cXr ((set-car) (set-cdr)) context (pairform valform &environment env)
   (let* ((op (if (eq *nx-sfname* 'set-car) (%nx1-operator set-car) (%nx1-operator set-cdr)))
          (inline-op (if (eq op (%nx1-operator set-car)) (%nx1-operator %rplaca) (%nx1-operator %rplacd)))
          (inline-p (or (nx-inline-car-cdr env)
@@ -293,69 +347,80 @@
                                  (or (subtypep *nx-form-type* 'cons)
                                      (nx-form-typep pairform 'cons env)))))
          (acode (make-acode (if inline-p inline-op op)
-                            (nx1-prefer-areg pairform env)
-                            (nx1-form valform))))
+                            (nx1-form :value pairform env)
+                            (nx1-form :value valform))))
     (if inline-p
       (make-acode (if (eq op (%nx1-operator set-car)) (%nx1-operator %car) (%nx1-operator %cdr)) acode)
       acode)))
 
-(defun nx1-cc-binaryop (op cc form1 form2)
-  (make-acode op (nx1-immediate cc) (nx1-form form1) (nx1-form form2)))
+(defun nx1-cc-binaryop (context op cc form1 form2)
+  (declare (ignorable context))
+  (make-acode op
+              (nx1-immediate :value cc)
+              (nx1-form :value form1) (nx1-form :value form2)))
 
-(defnx1 nx1-ccEQ-unaryop ((characterp)  (endp) (consp) (base-char-p)) (arg)
-  (make-acode (%nx1-default-operator) (nx1-immediate :EQ) (nx1-form arg)))
+(defnx1 nx1-ccEQ-unaryop ((characterp)  (endp) (consp) (base-char-p)) context (arg)
+  (make-acode (%nx1-default-operator)
+              (nx1-immediate :value :EQ)
+              (nx1-form :value arg)))
 
 
 
-(defnx1 nx1-ccEQ-binaryop ( (%ptr-eql) (eq))
+(defnx1 nx1-ccEQ-binaryop ( (%ptr-eql) (eq)) context
         (form1 form2)
-  (nx1-cc-binaryop (%nx1-default-operator) :eq form1 form2))
+  (nx1-cc-binaryop context (%nx1-default-operator) :eq form1 form2))
 
 
-(defnx1 nx1-ccNE-binaryop ((neq))
+(defnx1 nx1-ccNE-binaryop ((neq)) context
         (form1 form2)
-  (nx1-cc-binaryop (%nx1-default-operator) :ne form1 form2))
+  (nx1-cc-binaryop context (%nx1-default-operator) :ne form1 form2))
 
-(defnx1 nx1-logbitp ((logbitp)) (bitnum int &environment env)
+(defnx1 nx1-logbitp ((logbitp)) context (bitnum int &environment env)
   (if (and (nx-form-typep bitnum
                           (target-word-size-case (32 '(integer 0 29))
                                                  (64 '(integer 0 60))) env)
            (nx-form-typep int 'fixnum env))
-    (nx1-cc-binaryop (%nx1-operator %ilogbitp) :ne bitnum int)
-    (make-acode (%nx1-operator logbitp) (nx1-form bitnum) (nx1-form int))))
+    (nx1-cc-binaryop context (%nx1-operator %ilogbitp) :ne bitnum int)
+    (make-acode (%nx1-operator logbitp)
+                (nx1-form :value bitnum)
+                (nx1-form :value int))))
 
 
   
-(defnx1 nx1-ccGT-unaryop ((int>0-p)) (arg)
-  (make-acode (%nx1-default-operator) (nx1-immediate :gt) (nx1-form arg)))
+(defnx1 nx1-ccGT-unaryop ((int>0-p)) context (arg)
+  (make-acode (%nx1-default-operator)
+              (nx1-immediate :value :gt)
+              (nx1-form :value arg)))
 
-(defnx1 nx1-macro-unaryop (multiple-value-list) (arg)
+(defnx1 nx1-macro-unaryop (multiple-value-list) context (arg)
   (make-acode
-   (%nx1-default-operator) (nx1-form arg)))
+   (%nx1-default-operator) (nx1-form :value arg)))
 
-(defnx1 nx1-atom ((atom)) (arg)
-  (nx1-form `(not (consp ,arg))))
+(defnx1 nx1-atom ((atom)) context (arg)
+  (nx1-form context `(not (consp ,arg))))
 
-(defnx1 nx1-locally locally (&body forms)
+(defnx1 nx1-locally locally context (&body forms)
   (with-nx-declarations (pending)
     (let ((env *nx-lexical-environment*))
       (multiple-value-bind (body decls) (parse-body forms env  nil)
         (nx-process-declarations pending decls)
         (nx-effect-other-decls pending env)
-         (setq body (nx1-progn-body body))
+         (setq body (nx1-progn-body context body))
          (if decls
            (make-acode (%nx1-operator %decls-body) body *nx-new-p2decls*)
            body)))))
 
-(defnx1 nx1-%new-ptr (%new-ptr) (size &optional clear-p)
-  (make-acode (%nx1-operator %new-ptr) (nx1-form size) (nx1-form clear-p)))
+(defnx1 nx1-%new-ptr (%new-ptr) context (size &optional clear-p)
+  (make-acode (%nx1-operator %new-ptr)
+              (nx1-form :value size)
+              (nx1-form :value clear-p)))
 
 ;;; This might also want to look at, e.g., the last form in a progn:
 ;;;  (not (progn ... x)) => (progn ... (not x)), etc.
-(defnx1 nx1-negation ((not) (null)) (arg)
-  (if (nx1-negate-form (setq arg (nx1-form arg)))
+(defnx1 nx1-negation ((not) (null)) context (arg)
+  (if (nx1-negate-form (setq arg (nx1-form context arg)))
     arg
-    (make-acode (%nx1-operator not) (nx1-immediate :eq) arg)))
+    (make-acode (%nx1-operator not) (nx1-immediate context :eq) arg)))
 
 (defun nx1-negate-form (form)
   (let* ((subform (nx-untyped-form form)))
@@ -380,7 +445,7 @@
 
 
 
-(defnx1 nx1-cxxr ((caar) (cadr) (cdar) (cddr)) (form)
+(defnx1 nx1-cxxr ((caar) (cadr) (cdar) (cddr)) context (form)
   (let* ((op *nx-sfname*))
     (let* ((inner (case op 
                        ((cdar caar) 'car)
@@ -388,94 +453,96 @@
               (outer (case op
                        ((cdar cddr) 'cdr)
                        (t 'car))))
-         (nx1-form `(,outer (,inner ,form))))))      
+         (nx1-form :value `(,outer (,inner ,form))))))      
 
-(defnx1 nx1-%int-to-ptr ((%int-to-ptr)) (int)
+(defnx1 nx1-%int-to-ptr ((%int-to-ptr)) context (int)
   (make-acode 
    (%nx1-operator %consmacptr%)
    (make-acode (%nx1-operator %immediate-int-to-ptr) 
-               (nx1-form int))))
+               (nx1-form :value int))))
 
-(defnx1 nx1-%ptr-to-int ((%ptr-to-int)) (ptr)
+(defnx1 nx1-%ptr-to-int ((%ptr-to-int)) context (ptr)
   (make-acode 
    (%nx1-operator %immediate-ptr-to-int)
    (make-acode (%nx1-operator %macptrptr%) 
-               (nx1-form ptr))))
+               (nx1-form :value ptr))))
 
-(defnx1 nx1-%null-ptr-p ((%null-ptr-p)) (ptr)
-  (nx1-form `(%ptr-eql ,ptr (%int-to-ptr 0))))
+(defnx1 nx1-%null-ptr-p ((%null-ptr-p)) context (ptr)
+  (nx1-form :value `(%ptr-eql ,ptr (%int-to-ptr 0))))
 
 (defnx1 nx1-binop ( (%ilsl) (%ilsr) (%iasr)
-                   (cons) (%temp-cons))
+                   (cons) (%temp-cons)) context
         (arg1 arg2)
-  (make-acode (%nx1-default-operator) (nx1-form arg1) (nx1-form arg2)))
+  (make-acode (%nx1-default-operator) (nx1-form :value arg1) (nx1-form :value arg2)))
 
 
 
-(defnx1 nx1-%misc-ref ((%misc-ref)) (v i)
-  (make-acode (%nx1-operator uvref) (nx1-form v) (nx1-form i)))
+(defnx1 nx1-%misc-ref ((%misc-ref)) context (v i)
+  (make-acode (%nx1-operator uvref) (nx1-form :value v) (nx1-form :value i)))
 
 
 
 
-(defnx1 nx1-schar ((schar)) (s i &environment env)
-  (make-acode (%nx1-operator %sbchar) (nx1-form s env) (nx1-form i env)))
+(defnx1 nx1-schar ((schar)) context (s i &environment env)
+  (make-acode (%nx1-operator %sbchar) (nx1-form :value s env) (nx1-form :value i env)))
 
 
 ;;; This has to be ultra-bizarre because %schar is a macro.
 ;;; %schar shouldn't be a macro.
-(defnx1 nx1-%schar ((%schar)) (arg idx &environment env)
-  (let* ((arg (nx-transform arg env))
-         (idx (nx-transform idx env))
-         (argvar (make-symbol "STRING"))
-         (idxvar (make-symbol "INDEX")))
-    (nx1-form `(let* ((,argvar ,arg)
-                      (,idxvar ,idx))
-                 (declare (optimize (speed 3) (safety 0)))
-                 (declare (simple-base-string ,argvar))
-                 (schar ,argvar ,idxvar)) env)))
+(defnx1 nx1-%schar ((%schar)) context (arg idx &environment env)
+        (let* ((arg (nx-transform arg env))
+               (idx (nx-transform idx env))
+               (argvar (make-symbol "STRING"))
+               (idxvar (make-symbol "INDEX")))
+          (nx1-form context
+                    `(let* ((,argvar ,arg)
+                            (,idxvar ,idx))
+                      (declare (optimize (speed 3) (safety 0)))
+                      (declare (simple-base-string ,argvar))
+                      (schar ,argvar ,idxvar)) env)))
         
-(defnx1 nx1-%scharcode ((%scharcode)) (arg idx)
-  (make-acode (%nx1-operator %scharcode) (nx1-form arg)(nx1-form idx)))
+(defnx1 nx1-%scharcode ((%scharcode)) context (arg idx)
+  (make-acode (%nx1-operator %scharcode) (nx1-form :value arg)(nx1-form :value idx)))
 
 
-(defnx1 nx1-svref ((svref) (%svref)) (&environment env v i)
+(defnx1 nx1-svref ((svref) (%svref)) context (&environment env v i)
   (make-acode (if (nx-inhibit-safety-checking env)
                 (%nx1-operator %svref)
                 (%nx1-default-operator))
-              (nx1-prefer-areg v env)
-              (nx1-form i)))
+              (nx1-form :value v env)
+              (nx1-form :value i)))
 
-(defnx1 nx1-%slot-ref ((%slot-ref)) (instance idx)
+(defnx1 nx1-%slot-ref ((%slot-ref)) context (instance idx)
   (make-acode (%nx1-default-operator)
-              (nx1-form instance)
-              (nx1-form idx)))
+              (nx1-form :value instance)
+              (nx1-form :value idx)))
 
 
-(defnx1 nx1-%err-disp ((%err-disp)) (&rest args)
+(defnx1 nx1-%err-disp ((%err-disp)) context (&rest args)
   (make-acode (%nx1-operator %err-disp)
               (nx1-arglist args)))                       
               
-(defnx1 nx1-macro-binop ((nth-value)) (arg1 arg2)
-  (make-acode (%nx1-default-operator) (nx1-form arg1) (nx1-form arg2)))
+(defnx1 nx1-macro-binop ((nth-value)) context (arg1 arg2)
+  (make-acode (%nx1-default-operator) (nx1-form :value arg1) (nx1-form :value arg2)))
 
-(defnx1 nx1-%typed-miscref ((%typed-miscref) (%typed-misc-ref)) (subtype uvector index)
+(defnx1 nx1-%typed-miscref ((%typed-miscref) (%typed-misc-ref)) context (subtype uvector index)
   (make-acode (%nx1-operator %typed-uvref) 
-                (nx1-form subtype) 
-                (nx1-form uvector) 
-                (nx1-form index)))
+                (nx1-form :value subtype) 
+                (nx1-form :value uvector) 
+                (nx1-form :value index)))
 
 
 
-(defnx1 nx1-%typed-miscset ((%typed-miscset) (%typed-misc-set)) (subtype uvector index newvalue)
+(defnx1 nx1-%typed-miscset ((%typed-miscset) (%typed-misc-set)) context (subtype uvector index newvalue)
   (make-acode (%nx1-operator %typed-uvset) 
-                (nx1-form subtype) 
-                (nx1-form uvector) 
-                (nx1-form index) 
-                (nx1-form newvalue)))
+                (nx1-form :value subtype) 
+                (nx1-form :value uvector) 
+                (nx1-form :value index) 
+                (nx1-form :value newvalue)))
 
-(defnx1 nx1-logior-2 ((logior-2)) (&whole w &environment env arg-1 arg-2)
-  (nx-binary-boole-op w
+(defnx1 nx1-logior-2 ((logior-2)) context (&whole w &environment env arg-1 arg-2)
+  (nx-binary-boole-op context
+                      w
                       env
                       arg-1
                       arg-2
@@ -483,8 +550,9 @@
                       (%nx1-operator logior2)
 		      (%nx1-operator %natural-logior)))
 
-(defnx1 nx1-logxor-2 ((logxor-2)) (&whole w &environment env arg-1 arg-2)
-  (nx-binary-boole-op w 
+(defnx1 nx1-logxor-2 ((logxor-2)) context (&whole w &environment env arg-1 arg-2)
+  (nx-binary-boole-op context
+                      w 
                       env 
                       arg-1 
                       arg-2 
@@ -492,7 +560,7 @@
                       (%nx1-operator logxor2)
 		      (%nx1-operator %natural-logxor)))
 
-(defnx1 nx1-logand-2 ((logand-2)) (&environment env arg-1 arg-2)
+(defnx1 nx1-logand-2 ((logand-2)) context (&environment env arg-1 arg-2)
   (let* ((nat1 (nx-form-typep arg-1 *nx-target-natural-type* env))
          (nat2 (nx-form-typep arg-2 *nx-target-natural-type* env)))
     (cond ((and (nx-form-typep arg-1 *nx-target-fixnum-type* env)
@@ -500,14 +568,14 @@
            (make-acode (%nx1-operator typed-form)
                        *nx-target-fixnum-type*
                        (make-acode (%nx1-operator %ilogand2)
-                                   (nx1-form arg-1 env)
-                                   (nx1-form arg-2 env))))
+                                   (nx1-form :value arg-1 env)
+                                   (nx1-form :value arg-2 env))))
           ((and nat1 (typep arg-2 'integer))
            (make-acode (%nx1-operator typed-form)
                        *nx-target-natural-type*
                        (make-acode (%nx1-operator %natural-logand)
-                                   (nx1-form arg-1 env)
-                                   (nx1-form (logand arg-2
+                                   (nx1-form :value arg-1 env)
+                                   (nx1-form :value (logand arg-2
                                                      (1- (ash 1 (target-word-size-case
                                                                  (32 32)
                                                                  (64 64)))))
@@ -516,8 +584,8 @@
            (make-acode (%nx1-operator typed-form)
                        *nx-target-natural-type*
                        (make-acode (%nx1-operator %natural-logand)
-                                   (nx1-form arg-2 env)
-                                   (nx1-form (logand arg-1
+                                   (nx1-form :value arg-2 env)
+                                   (nx1-form :value (logand arg-1
                                                      (1- (ash 1 (target-word-size-case
                                                                  (32 32)
                                                                  (64 64)))))
@@ -526,14 +594,14 @@
            (make-acode (%nx1-operator typed-form)
                        *nx-target-natural-type*
                        (make-acode (%nx1-operator %natural-logand)
-                                   (nx1-form arg-1 env)
-                                   (nx1-form arg-2 env))))
+                                   (nx1-form :value arg-1 env)
+                                   (nx1-form :value arg-2 env))))
           (t
            (make-acode (%nx1-operator typed-form)
                        'integer
                        (make-acode (%nx1-operator logand2)
-                                   (nx1-form arg-1 env)
-                                   (nx1-form arg-2 env)))))))
+                                   (nx1-form :value arg-1 env)
+                                   (nx1-form :value arg-2 env)))))))
 
 
 (defnx1 nx1-require ((require-simple-vector)
@@ -552,7 +620,7 @@
                      (require-s32)
                      (require-u32)
                      (require-s64)
-                     (require-u64))
+                     (require-u64)) context
         (arg &environment env)
 
   (if (nx-inhibit-safety-checking env)
@@ -575,14 +643,14 @@
 		   (require-u32 '(unsigned-byte 32))
 		   (require-s64 '(signed-byte 64))
 		   (require-u64 '(unsigned-byte 64)))))
-      (nx1-form `(the ,type ,arg)))
-    (make-acode (%nx1-default-operator) (nx1-form arg))))
+      (nx1-form context `(the ,type ,arg)))
+    (make-acode (%nx1-default-operator) (nx1-form :value arg))))
 
-(defnx1 nx1-%marker-marker ((%unbound-marker) (%slot-unbound-marker) (%illegal-marker)) ()
+(defnx1 nx1-%marker-marker ((%unbound-marker) (%slot-unbound-marker) (%illegal-marker)) context ()
   (make-acode (%nx1-default-operator)))
 
-(defnx1 nx1-throw (throw) (tag valuesform)
-  (make-acode (%nx1-operator throw) (nx1-form tag) (nx1-form valuesform)))
+(defnx1 nx1-throw (throw) context (tag valuesform)
+  (make-acode (%nx1-operator throw) (nx1-form :value tag) (nx1-form :value valuesform)))
 
 
 ;;; This is still used in inlining/lambda application.
@@ -599,10 +667,10 @@
 ;;; not present in the current environment (and which does -not- generally
 ;;; contain whatever randomness is floating around at the point of
 ;;; application.)
-(defun nx1-destructure (lambda-list bindform cdr-p &whole-allowed-p forms &optional (body-env *nx-lexical-environment*))
+(defun nx1-destructure (context lambda-list bindform cdr-p &whole-allowed-p forms &optional (body-env *nx-lexical-environment*))
   (let* ((old-env body-env)
          (*nx-bound-vars* *nx-bound-vars*)
-         (bindform (nx1-form bindform)))
+         (bindform (nx1-form :value bindform)))
     (if (not (verify-lambda-list lambda-list t &whole-allowed-p))
       (nx-error "Invalid lambda-list ~s" lambda-list)
       (let* ((*nx-lexical-environment* body-env))
@@ -623,15 +691,15 @@
                keys
                auxen
                whole
-               (nx1-env-body body old-env)
+               (nx1-env-body context body old-env)
                *nx-new-p2decls*
                cdr-p))))))))
 
 
 
-(defnx1 nx1-%setf-macptr ((%setf-macptr)) (ptr newval)
-  (let* ((arg1 (nx1-form ptr))
-         (arg2 (nx1-form newval)))
+(defnx1 nx1-%setf-macptr ((%setf-macptr)) context (ptr newval)
+  (let* ((arg1 (nx1-form :value ptr))
+         (arg2 (nx1-form :value newval)))
     (if (and (consp arg1) (eq (%car arg1) (%nx1-operator %consmacptr%)))
       ;e.g. (%setf-macptr (%null-ptr) <foo>)
       (make-acode (%nx1-operator %consmacptr%)
@@ -639,32 +707,32 @@
                               (list arg1 (make-acode (%nx1-operator %macptrptr%) arg2))))
       (make-acode (%nx1-operator %setf-macptr) arg1 arg2))))
 
-(defnx1 nx1-%setf-double-float ((%setf-double-float)) (double-node double-val)
-  (make-acode (%nx1-operator %setf-double-float) (nx1-form double-node) (nx1-form double-val)))
+(defnx1 nx1-%setf-double-float ((%setf-double-float)) context (double-node double-val)
+  (make-acode (%nx1-operator %setf-double-float) (nx1-form :value double-node) (nx1-form :value double-val)))
 
-(defnx1 nx1-%setf-short-float ((%setf-short-float) (%setf-single-float)) (short-node short-val)
+(defnx1 nx1-%setf-short-float ((%setf-short-float) (%setf-single-float)) context (short-node short-val)
   (target-word-size-case
    (32
-    (make-acode (%nx1-operator %setf-short-float) (nx1-form short-node) (nx1-form short-val)))
+    (make-acode (%nx1-operator %setf-short-float) (nx1-form :value short-node) (nx1-form :value short-val)))
    (64
     (error "%SETF-SHORT-FLOAT makes no sense on 64-bit platforms."))))
 
    
-(defnx1 nx1-%inc-ptr ((%inc-ptr)) (ptr &optional (increment 1))
+(defnx1 nx1-%inc-ptr ((%inc-ptr)) context (ptr &optional (increment 1))
   (make-acode (%nx1-operator %consmacptr%)
               (make-acode (%nx1-operator %immediate-inc-ptr)
-                          (make-acode (%nx1-operator %macptrptr%) (nx1-form ptr))
-                          (nx1-form increment))))
+                          (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptr))
+                          (nx1-form :value increment))))
 
-(defnx1 nx1-svset ((svset) (%svset)) (&environment env vector index value)
+(defnx1 nx1-svset ((svset) (%svset)) context (&environment env vector index value)
   (make-acode (if (nx-inhibit-safety-checking env)
                 (%nx1-operator %svset)
                 (%nx1-default-operator))
-              (nx1-prefer-areg vector env) (nx1-form index) (nx1-form value)))
+              (nx1-form :value vector env) (nx1-form :value index) (nx1-form :value value)))
 
-(defnx1 nx1-+ ((+-2)) (&environment env num1 num2)
-  (let* ((f1 (nx1-form num1))
-         (f2 (nx1-form num2)))
+(defnx1 nx1-+ ((+-2)) context (&environment env num1 num2)
+  (let* ((f1 (nx1-form :value num1))
+         (f2 (nx1-form :value num2)))
     (if (nx-binary-fixnum-op-p num1 num2 env t)
       (let* ((fixadd (make-acode (%nx1-operator %i+) f1 f2))
              (small-enough (target-word-size-case
@@ -677,10 +745,10 @@
           (make-acode (%nx1-operator typed-form) 'integer (make-acode (%nx1-operator fixnum-overflow) fixadd))))
       (if (and (nx-form-typep num1 'double-float env)
                (nx-form-typep num2 'double-float env))
-        (nx1-form `(%double-float+-2 ,num1 ,num2))
+        (nx1-form context `(%double-float+-2 ,num1 ,num2))
         (if (and (nx-form-typep num1 'short-float env)
                  (nx-form-typep num2 'short-float env))
-          (nx1-form `(%short-float+-2 ,num1 ,num2))
+          (nx1-form context `(%short-float+-2 ,num1 ,num2))
 	  (if (nx-binary-natural-op-p num1 num2 env nil)
 	    (make-acode (%nx1-operator typed-form)
                         *nx-target-natural-type*
@@ -688,35 +756,35 @@
 	    (make-acode (%nx1-operator typed-form) 'number 
 			(make-acode (%nx1-operator add2) f1 f2))))))))
   
-(defnx1 nx1-%double-float-x-2 ((%double-float+-2) (%double-float--2) (%double-float*-2) (%double-float/-2 ))
+(defnx1 nx1-%double-float-x-2 ((%double-float+-2) (%double-float--2) (%double-float*-2) (%double-float/-2 )) context
         (f0 f1)
   (make-acode (%nx1-operator typed-form) 'double-float
-              (make-acode (%nx1-default-operator) (nx1-form f0) (nx1-form f1))))
+              (make-acode (%nx1-default-operator) (nx1-form :value f0) (nx1-form :value f1))))
 
 
-(defnx1 nx1-%short-float-x-2 ((%short-float+-2) (%short-float--2) (%short-float*-2) (%short-float/-2 ))
+(defnx1 nx1-%short-float-x-2 ((%short-float+-2) (%short-float--2) (%short-float*-2) (%short-float/-2 )) context
         (f0 f1)
   (make-acode (%nx1-operator typed-form) 'short-float
-              (make-acode (%nx1-default-operator) (nx1-form f0) (nx1-form f1))))
+              (make-acode (%nx1-default-operator) (nx1-form :value f0) (nx1-form :value f1))))
 
 
-(defnx1 nx1-*-2 ((*-2)) (&environment env num1 num2)
+(defnx1 nx1-*-2 ((*-2)) context (&environment env num1 num2)
   (if (nx-binary-fixnum-op-p num1 num2 env)
-    (make-acode (%nx1-operator %i*) (nx1-form num1 env) (nx1-form num2 env))
+    (make-acode (%nx1-operator %i*) (nx1-form :value num1 env) (nx1-form :value num2 env))
     (if (and (nx-form-typep num1 'double-float env)
              (nx-form-typep num2 'double-float env))
-      (nx1-form `(%double-float*-2 ,num1 ,num2))
+      (nx1-form context `(%double-float*-2 ,num1 ,num2))
       (if (and (nx-form-typep num1 'short-float env)
                (nx-form-typep num2 'short-float env))
-        (nx1-form `(%short-float*-2 ,num1 ,num2))
-        (make-acode (%nx1-operator mul2) (nx1-form num1 env) (nx1-form num2 env))))))
+        (nx1-form context `(%short-float*-2 ,num1 ,num2))
+        (make-acode (%nx1-operator mul2) (nx1-form :value num1 env) (nx1-form :value num2 env))))))
 
-(defnx1 nx1-%negate ((%negate)) (num &environment env)
+(defnx1 nx1-%negate ((%negate)) context (num &environment env)
   (if (nx-form-typep num 'fixnum env)
     (if (subtypep *nx-form-type* 'fixnum)
-      (make-acode (%nx1-operator %%ineg)(nx1-form num))
-      (make-acode (%nx1-operator %ineg) (nx1-form num)))
-    (let* ((acode (make-acode (%nx1-operator minus1) (nx1-form num env))))
+      (make-acode (%nx1-operator %%ineg)(nx1-form :value num))
+      (make-acode (%nx1-operator %ineg) (nx1-form :value num)))
+    (let* ((acode (make-acode (%nx1-operator minus1) (nx1-form :value num env))))
       (if (nx-form-typep num 'double-float env)
         (make-acode (%nx1-operator typed-form)
                     'double-float
@@ -730,10 +798,10 @@
           
 
         
-(defnx1 nx1--2 ((--2)) (&environment env num0 num1)        
+(defnx1 nx1--2 ((--2)) context (&environment env num0 num1)        
   (if (nx-binary-fixnum-op-p num0 num1 env t)
-    (let* ((f0 (nx1-form num0))
-	   (f1 (nx1-form num1))
+    (let* ((f0 (nx1-form :value num0))
+	   (f1 (nx1-form :value num1))
 	   (fixsub (make-acode (%nx1-operator %i-) f0 f1))
 	   (small-enough (target-word-size-case
                           (32 '(signed-byte 28))
@@ -745,30 +813,30 @@
 	(make-acode (%nx1-operator fixnum-overflow) fixsub)))
     (if (and (nx-form-typep num0 'double-float env)
 	     (nx-form-typep num1 'double-float env))
-      (nx1-form `(%double-float--2 ,num0 ,num1))
+      (nx1-form context `(%double-float--2 ,num0 ,num1))
       (if (and (nx-form-typep num0 'short-float env)
 	       (nx-form-typep num1 'short-float env))
-	(nx1-form `(%short-float--2 ,num0 ,num1))
+	(nx1-form context `(%short-float--2 ,num0 ,num1))
 	(if (nx-binary-natural-op-p num0 num1 env nil)
 	  (make-acode (%nx1-operator %natural-)
-		      (nx1-form num0)
-		      (nx1-form num1))
+		      (nx1-form :value num0)
+		      (nx1-form :value num1))
           (make-acode (%nx1-operator sub2)
-                      (nx1-form num0)
-                      (nx1-form num1)))))))
+                      (nx1-form :value num0)
+                      (nx1-form :value num1)))))))
       
-(defnx1 nx1-/-2 ((/-2)) (num0 num1 &environment env)
+(defnx1 nx1-/-2 ((/-2)) context (num0 num1 &environment env)
   (if (and (nx-form-typep num0 'double-float env)
            (nx-form-typep num1 'double-float env))
-    (nx1-form `(%double-float/-2 ,num0 ,num1))
+    (nx1-form context `(%double-float/-2 ,num0 ,num1))
     (if (and (nx-form-typep num0 'short-float env)
              (nx-form-typep num1 'short-float env))
-      (nx1-form `(%short-float/-2 ,num0 ,num1))
-      (make-acode (%nx1-operator div2) (nx1-form num0) (nx1-form num1)))))
+      (nx1-form context `(%short-float/-2 ,num0 ,num1))
+      (make-acode (%nx1-operator div2) (nx1-form :value num0) (nx1-form :value num1)))))
 
 
 
-(defnx1 nx1-numcmp ((<-2) (>-2) (<=-2) (>=-2)) (&environment env num1 num2)
+(defnx1 nx1-numcmp ((<-2) (>-2) (<=-2) (>=-2)) context (&environment env num1 num2)
   (let* ((op *nx-sfname*)
          (both-fixnums (nx-binary-fixnum-op-p num1 num2 env t))
          (both-natural (nx-binary-natural-op-p num1 num2 env ))
@@ -803,8 +871,8 @@
             (if (eq op '<=-2)
               :LE
               :GT))))
-       (nx1-form num1)
-       (nx1-form num2))
+       (nx1-form :value num1)
+       (nx1-form :value num2))
       (make-acode (%nx1-operator numcmp)
                   (make-acode
                    (%nx1-operator immediate)
@@ -815,10 +883,10 @@
                        (if (eq op '<=-2)
                          :LE
                          :GT))))
-                  (nx1-form num1)
-                  (nx1-form num2)))))
+                  (nx1-form :value num1)
+                  (nx1-form :value num2)))))
 
-(defnx1 nx1-num= ((=-2) (/=-2)) (&environment env num1 num2 )
+(defnx1 nx1-num= ((=-2) (/=-2)) context (&environment env num1 num2 )
   (let* ((op *nx-sfname*)
 	 (2-fixnums (nx-binary-fixnum-op-p num1 num2 env t))
 	 (2-naturals (nx-binary-natural-op-p num1 num2 env))
@@ -843,11 +911,11 @@
 	(if (eq op '=-2)
 	  :EQ
 	  :NE))
-       (nx1-form num1)
-       (nx1-form num2))
+       (nx1-form :value num1)
+       (nx1-form :value num2))
       (if 2-rats
 	(let* ((form `(,(if 2-fixnums 'eq 'eql) ,num1 ,num2))) 
-	  (nx1-form (if (eq op '=-2) form `(not ,form))))
+	  (nx1-form context (if (eq op '=-2) form `(not ,form))))
 	(if (or  2-dfloats 2-sfloats)
 	  (make-acode 
 	   (if 2-dfloats
@@ -858,87 +926,88 @@
 	    (if (eq op '=-2)
 	      :EQ
 	      :NE))
-	   (nx1-form num1)
-	   (nx1-form num2))
+	   (nx1-form :value num1)
+	   (nx1-form :value num2))
           (make-acode (%nx1-operator numcmp)
                       (make-acode
                        (%nx1-operator immediate)     
                        (if (eq op '=-2)
                          :EQ
                          :NE))
-                      (nx1-form num1)
-                      (nx1-form num2)))))))
+                      (nx1-form :value num1)
+                      (nx1-form :value num2)))))))
              
 
-(defnx1 nx1-uvset ((uvset) (%misc-set)) (vector index value)
+(defnx1 nx1-uvset ((uvset) (%misc-set)) context (vector index value)
   (make-acode (%nx1-operator uvset)
-              (nx1-form vector)
-              (nx1-form index)
-              (nx1-form value)))
+              (nx1-form :value vector)
+              (nx1-form :value index)
+              (nx1-form :value value)))
 
-(defnx1 nx1-set-schar ((set-schar)) (s i v)
-  (make-acode (%nx1-operator %set-sbchar) (nx1-form s) (nx1-form i) (nx1-form v)))
+(defnx1 nx1-set-schar ((set-schar)) context (s i v)
+  (make-acode (%nx1-operator %set-sbchar) (nx1-form :value s) (nx1-form :value i) (nx1-form :value v)))
 
 
 
-(defnx1 nx1-%set-schar ((%set-schar)) (arg idx char &environment env)
+(defnx1 nx1-%set-schar ((%set-schar)) context (arg idx char &environment env)
   (let* ((arg (nx-transform arg env))
          (idx (nx-transform idx env))
          (char (nx-transform char env))
          (argvar (make-symbol "ARG"))
          (idxvar (make-symbol "IDX"))
          (charvar (make-symbol "CHAR")))
-    (nx1-form `(let* ((,argvar ,arg)
+    (nx1-form context
+              `(let* ((,argvar ,arg)
                       (,idxvar ,idx)
                       (,charvar ,char))
-                 (declare (optimize (speed 3) (safety 0)))
-                 (declare (simple-base-string ,argvar))
-                 (setf (schar ,argvar ,idxvar) ,charvar))
+                (declare (optimize (speed 3) (safety 0)))
+                (declare (simple-base-string ,argvar))
+                (setf (schar ,argvar ,idxvar) ,charvar))
               env)))
 
-(defnx1 nx1-%set-scharcode ((%set-scharcode)) (s i v)
+(defnx1 nx1-%set-scharcode ((%set-scharcode)) context (s i v)
     (make-acode (%nx1-operator %set-scharcode)
-                (nx1-form s)
-                (nx1-form i)
-                (nx1-form v)))
+                (nx1-form :value s)
+                (nx1-form :value i)
+                (nx1-form :value v)))
               
 
-(defnx1 nx1-list-vector-values ((list) (vector) (values) (%temp-list)) (&rest args)
-  (make-acode (%nx1-default-operator) (nx1-formlist args)))
+(defnx1 nx1-list-vector-values ((list) (vector) (values) (%temp-list)) context (&rest args)
+  (make-acode (%nx1-default-operator) (nx1-formlist context args)))
 
 
 
-(defnx1 nx1-%gvector ( (%gvector)) (&rest args)
+(defnx1 nx1-%gvector ( (%gvector)) context (&rest args)
   (make-acode (%nx1-operator %gvector) (nx1-arglist args)))
 
-(defnx1 nx1-quote quote (form)
-  (nx1-immediate form))
+(defnx1 nx1-quote quote context (form)
+  (nx1-immediate context form))
 
-(defnx1 nx1-list* ((list*)) (first &rest rest)
+(defnx1 nx1-list* ((list*)) context (first &rest rest)
   (make-acode (%nx1-operator list*) (nx1-arglist (cons first rest) 1)))
 
 
 #|
-(defnx1 nx1-append ((append)) (&rest args)
+(defnx1 nx1-append ((append)) context (&rest args)
   (make-acode (%nx1-operator append) (nx1-arglist args 2)))
 
 
 |#
 
-(defnx1 nx1-or or (&whole whole &optional (firstform nil firstform-p) &rest moreforms)
+(defnx1 nx1-or or context (&whole whole &optional (firstform nil firstform-p) &rest moreforms)
   (if (not firstform-p)
-    (nx1-form nil)
+    (nx1-form context nil)
     (if (null moreforms)
-      (nx1-form firstform)
+      (nx1-form context firstform)
       (progn
-        (make-acode (%nx1-operator or) (nx1-formlist (%cdr whole)))))))
+        (make-acode (%nx1-operator or) (nx1-formlist context (%cdr whole)))))))
 
-(defun nx1-1d-vref (env arr dim0 &optional uvref-p)
+(defun nx1-1d-vref (context env arr dim0 &optional uvref-p)
   (let* ((simple-vector-p (nx-form-typep arr 'simple-vector env))
          (string-p (unless simple-vector-p 
                      (if (nx-form-typep arr 'string env)
                        (or (nx-form-typep arr 'simple-string env)
-                           (return-from nx1-1d-vref (nx1-form `(char ,arr ,dim0)))))))
+                           (return-from nx1-1d-vref (nx1-form context `(char ,arr ,dim0)))))))
          (simple-1d-array-p (unless (or simple-vector-p string-p) 
                               (nx-form-typep arr '(simple-array * (*)) env)))
          
@@ -949,31 +1018,31 @@
                         array-type)))
     (if (and simple-1d-array-p type-keyword)
       (make-acode (%nx1-operator %typed-uvref) 
-                  (nx1-immediate type-keyword)
-                  (nx1-form arr)
-                  (nx1-form dim0))
+                  (nx1-immediate :value type-keyword)
+                  (nx1-form :value arr)
+                  (nx1-form :value dim0))
       (let* ((op (cond (simple-1d-array-p (%nx1-operator uvref))
                        (string-p (%nx1-operator %sbchar))
                        (simple-vector-p 
                         (if (nx-inhibit-safety-checking env) (%nx1-operator %svref) (%nx1-operator svref)))
                        (uvref-p (%nx1-operator uvref))
                        (t (%nx1-operator %aref1)))))
-        (make-acode op (nx1-form arr) (nx1-form dim0))))))
+        (make-acode op (nx1-form :value arr) (nx1-form :value dim0))))))
   
-(defnx1 nx1-aref ((aref)) (&whole whole &environment env arr &optional (dim0 nil dim0-p)
+(defnx1 nx1-aref ((aref)) context (&whole whole &environment env arr &optional (dim0 nil dim0-p)
                                   &rest other-dims)
    (if (and dim0-p (null other-dims))
-     (nx1-1d-vref env arr dim0)
-     (nx1-treat-as-call whole)))
+     (nx1-1d-vref context env arr dim0)
+     (nx1-treat-as-call context whole)))
 
-(defnx1 nx1-uvref ((uvref)) (&environment env arr dim0)
-  (nx1-1d-vref env arr dim0 t))
+(defnx1 nx1-uvref ((uvref)) context (&environment env arr dim0)
+  (nx1-1d-vref context env arr dim0 t))
 
-(defnx1 nx1-%aref2 ((%aref2)) (&whole whole &environment env arr i j)
+(defnx1 nx1-%aref2 ((%aref2)) context (&whole whole &environment env arr i j)
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aref2 (nx1-treat-as-call whole))))
+    (return-from nx1-%aref2 (nx1-treat-as-call context whole))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -990,22 +1059,22 @@
              (dim0 (car dims))
              (dim1 (cadr dims)))
         (make-acode (%nx1-operator simple-typed-aref2)
-                    (nx1-form type-keyword)
-                    (nx1-form arr)
-                    (nx1-form i)
-                    (nx1-form j)
-                    (nx1-form (if (typep dim0 'fixnum) dim0))
-                    (nx1-form (if (typep dim1 'fixnum) dim1))))
+                    (nx1-form :value type-keyword)
+                    (nx1-form :value arr)
+                    (nx1-form :value i)
+                    (nx1-form :value j)
+                    (nx1-form :value (if (typep dim0 'fixnum) dim0))
+                    (nx1-form :value (if (typep dim1 'fixnum) dim1))))
       (make-acode (%nx1-operator general-aref2)
-                  (nx1-form arr)
-                  (nx1-form i)
-                  (nx1-form j)))))
+                  (nx1-form :value arr)
+                  (nx1-form :value i)
+                  (nx1-form :value j)))))
 
-(defnx1 nx1-%aref3 ((%aref3)) (&whole whole &environment env arr i j k)
+(defnx1 nx1-%aref3 ((%aref3)) context (&whole whole &environment env arr i j k)
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aref3 (nx1-treat-as-call whole))))
+    (return-from nx1-%aref3 (nx1-treat-as-call context whole))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -1023,26 +1092,26 @@
              (dim1 (cadr dims))
              (dim2 (caddr dims)))
         (make-acode (%nx1-operator simple-typed-aref3)
-                    (nx1-form type-keyword)
-                    (nx1-form arr)
-                    (nx1-form i)
-                    (nx1-form j)
-                    (nx1-form k)
-                    (nx1-form (if (typep dim0 'fixnum) dim0))
-                    (nx1-form (if (typep dim1 'fixnum) dim1))
-                    (nx1-form (if (typep dim2 'fixnum) dim2))))
+                    (nx1-form :value type-keyword)
+                    (nx1-form :value arr)
+                    (nx1-form :value i)
+                    (nx1-form :value j)
+                    (nx1-form :value k)
+                    (nx1-form :value (if (typep dim0 'fixnum) dim0))
+                    (nx1-form :value (if (typep dim1 'fixnum) dim1))
+                    (nx1-form :value (if (typep dim2 'fixnum) dim2))))
       (make-acode (%nx1-operator general-aref3)
-                  (nx1-form arr)
-                  (nx1-form i)
-                  (nx1-form j)
-                  (nx1-form k)))))
+                  (nx1-form :value arr)
+                  (nx1-form :value i)
+                  (nx1-form :value j)
+                  (nx1-form :value k)))))
 
-(defun nx1-1d-vset (arr newval dim0 env)
+(defun nx1-1d-vset (context arr newval dim0 env)
   (let* ((simple-vector-p (nx-form-typep arr 'simple-vector env))
          (string-p (unless simple-vector-p 
                      (if (nx-form-typep arr 'string env)
                        (or (nx-form-typep arr 'simple-string env)
-                           (return-from nx1-1d-vset (nx1-form `(set-char ,arr ,newval ,dim0)))))))
+                           (return-from nx1-1d-vset (nx1-form context `(set-char ,arr ,newval ,dim0)))))))
          (simple-1d-array-p (unless (or simple-vector-p string-p) 
                               (nx-form-typep arr '(simple-array * (*)) env)))
          (array-type (specifier-type  (nx-form-type arr env)))
@@ -1052,10 +1121,10 @@
                         array-type)))
          (if (and type-keyword simple-1d-array-p)
              (make-acode (%nx1-operator %typed-uvset) 
-                         (nx1-immediate type-keyword)
-                         (nx1-form arr)
-                         (nx1-form newval)
-                         (nx1-form dim0))
+                         (nx1-immediate :value type-keyword)
+                         (nx1-form :value arr)
+                         (nx1-form :value newval)
+                         (nx1-form :value dim0))
              (let* ((op (cond (simple-1d-array-p (%nx1-operator uvset))
                               (string-p (%nx1-operator %set-sbchar))
                               (simple-vector-p (if (nx-inhibit-safety-checking env) (%nx1-operator %svset) (%nx1-operator svset)))
@@ -1063,25 +1132,25 @@
                (if op
                    (make-acode
                     op
-                    (nx1-form arr)
-                    (nx1-form newval)
-                    (nx1-form dim0))
-                   (nx1-form `(,(if string-p 'set-schar '%aset1) ,arr ,newval ,dim0)))))))
+                    (nx1-form :value arr)
+                    (nx1-form :value newval)
+                    (nx1-form :value dim0))
+                   (nx1-form context `(,(if string-p 'set-schar '%aset1) ,arr ,newval ,dim0)))))))
 
-(defnx1 nx1-aset ((aset)) (&whole whole 
+(defnx1 nx1-aset ((aset)) context (&whole whole 
                                   arr newval 
                                   &optional (dim0 nil dim0-p)
                                   &environment env
                                   &rest other-dims)
    (if (and dim0-p (null other-dims))
-       (nx1-1d-vset arr newval dim0 env)
-       (nx1-treat-as-call whole)))
+       (nx1-1d-vset context arr newval dim0 env)
+       (nx1-treat-as-call context whole)))
             
-(defnx1 nx1-%aset2 ((%aset2)) (&whole whole &environment env arr i j new)
+(defnx1 nx1-%aset2 ((%aset2)) context (&whole whole &environment env arr i j new)
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aset2 (nx1-treat-as-call whole))))
+    (return-from nx1-%aset2 (nx1-treat-as-call context whole))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -1099,24 +1168,24 @@
              (dim0 (car dims))
              (dim1 (cadr dims)))
         (make-acode (%nx1-operator simple-typed-aset2)
-                    (nx1-form type-keyword)
-                    (nx1-form arr)
-                    (nx1-form i)
-                    (nx1-form j)
-                    (nx1-form new)
-                    (nx1-form (if (typep dim0 'fixnum) dim0))
-                    (nx1-form (if (typep dim1 'fixnum) dim1))))
+                    (nx1-form :value type-keyword)
+                    (nx1-form :value arr)
+                    (nx1-form :value i)
+                    (nx1-form :value j)
+                    (nx1-form :value new)
+                    (nx1-form :value (if (typep dim0 'fixnum) dim0))
+                    (nx1-form :value (if (typep dim1 'fixnum) dim1))))
             (make-acode (%nx1-operator general-aset2)
-                  (nx1-form arr)
-                  (nx1-form i)
-                  (nx1-form j)
-                  (nx1-form new)))))
+                  (nx1-form :value arr)
+                  (nx1-form :value i)
+                  (nx1-form :value j)
+                  (nx1-form :value new)))))
 
-(defnx1 nx1-%aset3 ((%aset3)) (&whole whole &environment env arr i j k new)
+(defnx1 nx1-%aset3 ((%aset3)) context (&whole whole &environment env arr i j k new)
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aset3 (nx1-treat-as-call whole))))
+    (return-from nx1-%aset3 (nx1-treat-as-call context whole))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -1135,43 +1204,43 @@
              (dim1 (cadr dims))
              (dim2 (caddr dims)))
         (make-acode (%nx1-operator simple-typed-aset3)
-                    (nx1-form type-keyword)
-                    (nx1-form arr)
-                    (nx1-form i)
-                    (nx1-form j)
-                    (nx1-form k)
-                    (nx1-form new)
-                    (nx1-form (if (typep dim0 'fixnum) dim0))
-                    (nx1-form (if (typep dim1 'fixnum) dim1))
-                    (nx1-form (if (typep dim2 'fixnum) dim2))))
+                    (nx1-form :value type-keyword)
+                    (nx1-form :value arr)
+                    (nx1-form :value i)
+                    (nx1-form :value j)
+                    (nx1-form :value k)
+                    (nx1-form :value new)
+                    (nx1-form :value (if (typep dim0 'fixnum) dim0))
+                    (nx1-form :value (if (typep dim1 'fixnum) dim1))
+                    (nx1-form :value (if (typep dim2 'fixnum) dim2))))
             (make-acode (%nx1-operator general-aset3)
-                  (nx1-form arr)
-                  (nx1-form i)
-                  (nx1-form j)
-                  (nx1-form k)
-                  (nx1-form new)))))
+                  (nx1-form :value arr)
+                  (nx1-form :value i)
+                  (nx1-form :value j)
+                  (nx1-form :value k)
+                  (nx1-form :value new)))))
 
-(defnx1 nx1-prog1 (prog1 multiple-value-prog1) (save &body args 
-                                                     &aux (l (list (nx1-form save))))
-  (make-acode 
-   (%nx1-default-operator) 
-   (dolist (arg args (nreverse l))
-     (push (nx1-form arg) l))))
+(defnx1 nx1-prog1 (prog1 multiple-value-prog1) context (save &body args)
+  (let* ((l (list (nx1-form :value save))))
+    (make-acode 
+     (%nx1-default-operator) 
+     (dolist (arg args (nreverse l))
+       (push (nx1-form nil arg) l)))))
 
-(defnx1 nx1-if if (test true &optional false)
+(defnx1 nx1-if if context (test true &optional false)
   (if (null true)
     (if (null false)
-      (return-from nx1-if (nx1-form `(progn ,test nil)))
+      (return-from nx1-if (nx1-form context `(progn ,test nil)))
       (psetq test `(not ,test) true false false true)))
-  (let ((test-form (nx1-form test))
+  (let ((test-form (nx1-form :value test))
         ;; Once hit a conditional, no more duplicate warnings
         (*compiler-warn-on-duplicate-definitions* nil))
-    (make-acode (%nx1-operator if) test-form (nx1-form true) (nx1-form false))))
+    (make-acode (%nx1-operator if) test-form (nx1-form context true) (nx1-form context false))))
 
-(defnx1 nx1-%debug-trap dbg (&optional arg)
-  (make-acode (%nx1-operator %debug-trap) (nx1-form arg)))
+(defnx1 nx1-%debug-trap dbg context (&optional arg)
+  (make-acode (%nx1-operator %debug-trap) (nx1-form :value arg)))
         
-(defnx1 nx1-setq setq (&whole whole &rest args &environment env &aux res)
+(defnx1 nx1-setq setq context (&whole whole &rest args &environment env &aux res)
   (when (%ilogbitp 0 (length args))
     (nx-error "Odd number of forms in ~s ." whole))
   (while args
@@ -1185,7 +1254,7 @@
           (nx-note-source-transformation (caddr val) val)))
       (multiple-value-bind (expansion win) (macroexpand-1 sym env)
 	(if win
-            (push (nx1-form `(setf ,expansion ,val)) res)
+            (push (nx1-form context `(setf ,expansion ,val)) res)
             (multiple-value-bind (info inherited catchp)
 		(nx-lex-info sym)
 	      (push
@@ -1196,10 +1265,10 @@
 				       (%ilsl $vbitsetq 1)
 				       (%ilsl $vbitreffed 1)
 				       (nx-var-bits catchp)))
-		     (nx1-form `(setf ,inherited ,val)))
+		     (nx1-form context `(setf ,inherited ,val)))
 		   (let ((valtype (nx-form-type val env)))
 		     (let ((*nx-form-type* declared-type))
-		       (setq val (nx1-typed-form val env)))
+		       (setq val (nx1-typed-form context val env)))
 		     (if (and info (neq info :special))
 			 (progn
 			   (nx1-check-assignment sym env)
@@ -1255,7 +1324,7 @@
 ;;; something in a lexical environment, we can sort of infer that it must also be defined
 ;;; in a null lexical environment.
 
-(defnx1 nx1-load-time-value (load-time-value) (&environment env form &optional read-only-p)
+(defnx1 nx1-load-time-value (load-time-value) context (&environment env form &optional read-only-p)
   ;; Validate the "read-only-p" argument
   (if (and read-only-p (neq read-only-p t)) (require-type read-only-p '(member t nil)))
   ;; Then ignore it.
@@ -1268,51 +1337,39 @@
                           :load-time-eval-token *nx-load-time-eval-token*
                           :target (backend-name *target-backend*))
       (setq *nx-warnings* (append *nx-warnings* warnings))
-      (nx1-immediate (list *nx-load-time-eval-token* `(funcall ,function))))
-    (nx1-immediate (eval form))))
+      (nx1-immediate context (list *nx-load-time-eval-token* `(funcall ,function))))
+    (nx1-immediate context (eval form))))
 
-(defnx1 nx1-catch (catch) (operation &body body)
-  (make-acode (%nx1-operator catch) (nx1-form operation) (nx1-catch-body body)))
-
-(defnx1 nx1-%badarg ((%badarg)) (badthing right-type &environment env)
-  (make-acode (%nx1-operator %badarg2) 
-              (nx1-form badthing) 
-              (nx1-form (or (if (nx-form-constant-p right-type env) (%typespec-id (nx-form-constant-value right-type env)))
-			    right-type))))
-
-(defnx1 nx1-unwind-protect (unwind-protect) (protected-form &body cleanup-form)
-  (if cleanup-form
-    (make-acode (%nx1-operator unwind-protect) 
-                (nx1-catch-body (list protected-form))
-                (nx1-progn-body cleanup-form))
-    (nx1-form protected-form)))
-
-(defnx1 nx1-progv progv (symbols values &body body)
-  (make-acode (%nx1-operator progv) 
-              (nx1-form `(check-symbol-list ,symbols))
-              (nx1-form values) 
-              (nx1-catch-body body)))
-
-(defun nx1-catch-body (body)
+(defun nx1-catch-body (context body)
   (let* ((temp (new-lexical-environment *nx-lexical-environment*)))
     (setf (lexenv.variables temp) 'catch)
     (let* ((*nx-lexical-environment* (new-lexical-environment temp)))
-      (nx1-progn-body body))))
+      (nx1-progn-body context body))))
+
+(defnx1 nx1-catch (catch) context (operation &body body)
+  (make-acode (%nx1-operator catch) (nx1-form :value operation) (nx1-catch-body context body)))
+
+(defnx1 nx1-%badarg ((%badarg)) context (badthing right-type &environment env)
+  (make-acode (%nx1-operator %badarg2) 
+              (nx1-form :value badthing) 
+              (nx1-form :value (or (if (nx-form-constant-p right-type env) (%typespec-id (nx-form-constant-value right-type env)))
+			    right-type))))
+
+(defnx1 nx1-unwind-protect (unwind-protect) context (protected-form &body cleanup-form)
+  (if cleanup-form
+    (make-acode (%nx1-operator unwind-protect) 
+                (nx1-catch-body context (list protected-form))
+                (nx1-progn-body context cleanup-form))
+    (nx1-form context protected-form)))
+
+(defnx1 nx1-progv progv context (symbols values &body body)
+  (make-acode (%nx1-operator progv) 
+              (nx1-form :value `(check-symbol-list ,symbols))
+              (nx1-form :value values) 
+              (nx1-catch-body context body)))
 
 
-(defnx1 nx1-apply ((apply)) (&whole call fn arg &rest args &environment env)
-  (let ((last (%car (last (push arg args)))))
-    (if (and (nx-form-constant-p last env)
-	     (null (nx-form-constant-value last env)))
-      (nx1-form (let ((new `(funcall ,fn ,@(butlast args))))
-		  (nx-note-source-transformation call new)
-		  new))
-      (nx1-apply-fn fn args t))))
-
-(defnx1 nx1-%apply-lexpr ((%apply-lexpr)) (fn arg &rest args)
-  (nx1-apply-fn fn (cons arg args) 0))
-
-(defun nx1-apply-fn (fn args spread)
+(defun nx1-apply-fn (context fn args spread)
   (let* ((sym (nx1-func-name fn))
 	 (afunc (and (non-nil-symbol-p sym) (nth-value 1 (nx-lexical-finfo sym)))))
     (when (and afunc (eq afunc *nx-call-next-method-function*))
@@ -1323,20 +1380,35 @@
 		 new)
 	    sym nil
 	    args (cons (var-name *nx-next-method-var*) args)))
-    (nx1-typed-call (if (non-nil-symbol-p sym) sym (nx1-form fn)) args spread)))
+    (nx1-typed-call context (if (non-nil-symbol-p sym) sym (nx1-form :value fn)) args spread)))
 
 
-(defnx1 nx1-%defun %defun (&whole w def &optional (doc nil doc-p) &environment env)
+(defnx1 nx1-apply ((apply)) context (&whole call fn arg &rest args &environment env)
+  (let ((last (%car (last (push arg args)))))
+    (if (and (nx-form-constant-p last env)
+	     (null (nx-form-constant-value last env)))
+      (nx1-form context (let ((new `(funcall ,fn ,@(butlast args))))
+		  (nx-note-source-transformation call new)
+		  new))
+      (nx1-apply-fn context fn args t))))
+
+(defnx1 nx1-%apply-lexpr ((%apply-lexpr)) context (fn arg &rest args)
+  (nx1-apply-fn context fn (cons arg args) 0))
+
+
+
+
+(defnx1 nx1-%defun %defun context (&whole w def &optional (doc nil doc-p) &environment env)
   (declare (ignorable doc doc-p))
-  ; Pretty bogus.
+  ;; Pretty bogus.
   (if (and (consp def)
            (eq (%car def) 'nfunction)
            (consp (%cdr def))
            (or (symbolp (%cadr def)) (setf-function-name-p (%cadr def))))
     (note-function-info (%cadr def) (caddr def) env))
-  (nx1-treat-as-call w))
+  (nx1-treat-as-call context w))
 
-(defnx1 nx1-function function (arg &aux fn afunc)
+(defnx1 nx1-function function context (arg &aux fn afunc)
   (cond ((symbolp arg)
 	 (when (macro-function arg *nx-lexical-environment*)
 	   (nx-error
@@ -1348,19 +1420,19 @@
 	       (incf (afunc-fn-refcount afunc))
 	       (when (%ilogbitp $fbitbounddownward (afunc-bits afunc))
 		 (incf (afunc-fn-downward-refcount afunc))))
-	     (nx1-symbol (%cddr fn)))
+	     (nx1-symbol context (%cddr fn)))
 	   (progn
 	     (while (setq fn (assq arg *nx-synonyms*))
 	       (setq arg (%cdr fn)))
-	     (nx1-form `(%function ',arg)))))
+	     (nx1-form context `(%function ',arg)))))
 	((setf-function-name-p arg)
-	 (nx1-form `(function ,(nx-need-function-name arg))))
+	 (nx1-form context `(function ,(nx-need-function-name arg))))
 	((lambda-expression-p arg)
 	 (nx1-ref-inner-function nil arg))
 	(t
 	 (nx-error "~S is not a function name or lambda expression" arg))))
 
-(defnx1 nx1-nfunction nfunction (name def)
+(defnx1 nx1-nfunction nfunction context (name def)
  (nx1-ref-inner-function name def))
 
 (defun nx1-ref-inner-function (name def &optional afunc)
@@ -1395,8 +1467,8 @@
              op
              afunc)))))
     
-(defnx1 nx1-%function %function (form &aux symbol)
-  (let ((sym (nx1-form form)))
+(defnx1 nx1-%function %function context (form &aux symbol)
+  (let ((sym (nx1-form :value form)))
     (if (and (eq (car sym) (%nx1-operator immediate))
              (setq symbol (cadr sym))
              (symbolp symbol))
@@ -1406,9 +1478,9 @@
 		    (eq symbol *nx-global-function-name*))
 	  (nx1-whine :undefined-function symbol))
         (make-acode (%nx1-default-operator) symbol))
-      (make-acode (%nx1-operator call) (nx1-immediate '%function) (list nil (list sym))))))
+      (make-acode (%nx1-operator call) (nx1-immediate context '%function) (list nil (list sym))))))
 
-(defnx1 nx1-tagbody tagbody (&rest args)
+(defnx1 nx1-tagbody tagbody context (&rest args)
   (let* ((newtags nil)
          (*nx-lexical-environment* (new-lexical-environment *nx-lexical-environment*))
 	 (pending (make-pending-declarations))
@@ -1439,7 +1511,7 @@
                (setq *nx-loop-nesting-level* (1+ level)))
              (%rplaca (%cdr (%cdr (%cdr (%cdr info)))) t)
              (cons (%nx1-operator tag-label) info))
-           (nx1-form form))
+           (nx1-form nil form))
          body))
       (if (eq 0 (%car counter))
         (make-acode (%nx1-operator local-tagbody) newtags body)
@@ -1450,7 +1522,7 @@
           (dolist (tag (reverse newtags))
             (when (%cadr tag)
               (push  
-               (nx1-form `(if (eql ,(var-name indexvar) ,(%cadr tag)) (go ,(%car tag))))
+               (nx1-form context `(if (eql ,(var-name indexvar) ,(%cadr tag)) (go ,(%car tag))))
                body)))
           (make-acode
            (%nx1-operator let*)
@@ -1468,7 +1540,7 @@
                indexvar
                (make-acode 
                 (%nx1-operator catch)
-                (nx1-form (var-name catchvar)) 
+                (nx1-form :value (var-name catchvar)) 
                 (make-acode
                  (%nx1-operator local-tagbody)
                  newtags
@@ -1479,7 +1551,7 @@
 
 
 
-(defnx1 nx1-go go (tag)
+(defnx1 nx1-go go context (tag)
   (multiple-value-bind (info closed)
                        (nx-tag-info tag)
     (unless info (nx-error "Can't GO to tag ~S." tag))
@@ -1491,7 +1563,7 @@
       (progn
 
         (make-acode
-         (%nx1-operator throw) (nx1-symbol (var-name (cadddr info))) (nx1-form closed))))))
+         (%nx1-operator throw) (nx1-symbol :value (var-name (cadddr info))) (nx1-form :value closed))))))
 
 
 
@@ -1511,38 +1583,8 @@
     :signed-halfword :unsigned-halfword :signed-byte :unsigned-byte
     :hybrid-int-float :hybrid-float-int :hybrid-float-float))
 
-
-(defnx1 nx1-ff-call ((%ff-call)) (address-expression &rest arg-specs-and-result-spec)
-   (nx1-ff-call-internal
-    address-expression arg-specs-and-result-spec
-    (ecase (backend-name *target-backend*)
-      ((:linuxppc32 :linuxarm :darwinarm :androidarm) (%nx1-operator eabi-ff-call))
-      ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
-      ((:darwinx8632 :linuxx8632 :win32 :solarisx8632 :freebsdx8632) (%nx1-operator i386-ff-call))
-      ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator ff-call)))))
-
-(defnx1 nx1-syscall ((%syscall)) (idx &rest arg-specs-and-result-spec)
-  (flet ((map-to-representation-types (list)
-           (collect ((out))
-             (do* ((l list (cddr l)))
-                  ((null (cdr l))
-                   (if l
-                     (progn
-                       (out (foreign-type-to-representation-type (car l)))
-                       (out))
-                     (error "Missing result type in ~s" list)))
-               (out (foreign-type-to-representation-type (car l)))
-               (out (cadr l))))))
-          (nx1-ff-call-internal	
-           idx (map-to-representation-types arg-specs-and-result-spec)
-           (ecase (backend-name *target-backend*)
-             (:linuxppc32 (%nx1-operator eabi-syscall))
-             ((:darwinppc32 :darwinppc64 :linuxppc64)
-              (%nx1-operator poweropen-syscall))
-	     ((:darwinx8632 :linuxx632 :win32) (%nx1-operator i386-syscall))
-             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator syscall))))))
-
-(defun nx1-ff-call-internal (address-expression arg-specs-and-result-spec operator )
+(defun nx1-ff-call-internal (context address-expression arg-specs-and-result-spec operator )
+  (declare (ignorable context))
   (let* ((specs ())         
          (vals ())
          (register-spec-seen nil)
@@ -1585,22 +1627,55 @@
                   (:unsigned-byte '(unsigned-byte 8))
                   (t t))
                 (make-acode operator
-                            (nx1-form address-expression)
+                            (nx1-form :value address-expression)
                             (nreverse specs)
-                            (mapcar #'nx1-form (nreverse vals))
+                            (mapcar (lambda (val) (nx1-form :value val)) (nreverse vals))
                             result-spec
                             nil)
                 nil)))
+
+(defnx1 nx1-ff-call ((%ff-call)) context (address-expression &rest arg-specs-and-result-spec)
+   (nx1-ff-call-internal
+    context address-expression arg-specs-and-result-spec
+    (ecase (backend-name *target-backend*)
+      ((:linuxppc32 :linuxarm :darwinarm :androidarm) (%nx1-operator eabi-ff-call))
+      ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
+      ((:darwinx8632 :linuxx8632 :win32 :solarisx8632 :freebsdx8632) (%nx1-operator i386-ff-call))
+      ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator ff-call)))))
+
+(defnx1 nx1-syscall ((%syscall)) context (idx &rest arg-specs-and-result-spec)
+  (flet ((map-to-representation-types (list)
+           (collect ((out))
+             (do* ((l list (cddr l)))
+                  ((null (cdr l))
+                   (if l
+                     (progn
+                       (out (foreign-type-to-representation-type (car l)))
+                       (out))
+                     (error "Missing result type in ~s" list)))
+               (out (foreign-type-to-representation-type (car l)))
+               (out (cadr l))))))
+          (nx1-ff-call-internal
+           context
+           idx (map-to-representation-types arg-specs-and-result-spec)
+           (ecase (backend-name *target-backend*)
+             (:linuxppc32 (%nx1-operator eabi-syscall))
+             ((:darwinppc32 :darwinppc64 :linuxppc64)
+              (%nx1-operator poweropen-syscall))
+	     ((:darwinx8632 :linuxx632 :win32) (%nx1-operator i386-syscall))
+             ((:linuxx8664 :freebsdx8664 :darwinx8664 :solarisx8664 :win64) (%nx1-operator syscall))))))
+
+
   
-(defnx1 nx1-block block (blockname &body forms)
+(defnx1 nx1-block block context (blockname &body forms)
   (let* ((*nx-blocks* *nx-blocks*)
          (*nx-lexical-environment* (new-lexical-environment *nx-lexical-environment*))
          (*nx-bound-vars* *nx-bound-vars*)
          (tagvar (nx-new-temp-var (make-pending-declarations)))
-         (thisblock (cons (setq blockname (nx-need-sym blockname)) tagvar))
+         (thisblock (cons (setq blockname (nx-need-sym blockname)) (cons tagvar context)))
          (body nil))
     (push thisblock *nx-blocks*)
-    (setq body (nx1-progn-body forms))
+    (setq body (nx1-progn-body context forms))
     (%rplacd thisblock nil)
     (let ((tagbits (nx-var-bits tagvar)))
       (if (not (%ilogbitp $vbitclosed tagbits))
@@ -1619,61 +1694,62 @@
            (make-acode
             (%nx1-operator let)
             (list tagvar)
-            (list (make-acode (%nx1-operator cons) (nx1-form nil) (nx1-form nil)))
+            (list (make-acode (%nx1-operator cons) (nx1-form :value nil) (nx1-form :value nil)))
             (make-acode
              (%nx1-operator catch)
              (nx-make-lexical-reference tagvar)
              body)
             0)))))))
 
-(defnx1 nx1-return-from return-from (blockname &optional value)
+(defnx1 nx1-return-from return-from context (blockname &optional value)
   (multiple-value-bind (info closed)
-                       (nx-block-info (setq blockname (nx-need-sym blockname)))
+      (nx-block-info (setq blockname (nx-need-sym blockname)))
     (unless info (nx-error "Can't RETURN-FROM block : ~S." blockname))
-    (unless closed (nx-adjust-ref-count (cdr info)))
-    (make-acode 
-     (if closed
-       (%nx1-operator throw)
-       (%nx1-operator local-return-from))
-     (if closed
-       (nx1-symbol (var-name (cdr info)))
-       info)
-     (nx1-form value))))
+    (destructuring-bind (var . block-context) (cdr info)
+      (unless closed (nx-adjust-ref-count var))
+      (make-acode 
+       (if closed
+         (%nx1-operator throw)
+         (%nx1-operator local-return-from))
+       (if closed
+         (nx1-symbol context (var-name var ))
+         info)
+     (nx1-form (if closed :value block-context) value)))))
 
-(defnx1 nx1-funcall ((funcall)) (&whole call func &rest args &environment env)
+(defnx1 nx1-funcall ((funcall)) context (&whole call func &rest args &environment env)
   (let ((name (nx1-func-name func)))
     (if (or (null name)
 	    (and (symbolp name) (macro-function name env)))
-      (nx1-typed-call (nx1-form func) args nil)
+      (nx1-typed-call context (nx1-form :value func) args nil)
       (progn
 	(when (consp name) ;; lambda expression
 	  (nx-note-source-transformation func name))
 	;; This picks up call-next-method evil.
-	(nx1-form (let ((new-form (cons name args)))
-		    (nx-note-source-transformation call new-form)
-		    new-form))))))
+	(nx1-form context (let ((new-form (cons name args)))
+                            (nx-note-source-transformation call new-form)
+                            new-form))))))
 
-(defnx1 nx1-multiple-value-call multiple-value-call (value-form &rest args)
+(defnx1 nx1-multiple-value-call multiple-value-call context (value-form &rest args)
   (make-acode (%nx1-default-operator)
-              (nx1-form value-form)
-              (nx1-formlist args)))
+              (nx1-form :value value-form)
+              (nx1-formlist context args)))
 
-(defnx1 nx1-compiler-let compiler-let (bindings &body forms)
+(defnx1 nx1-compiler-let compiler-let context (bindings &body forms)
   (let* ((vars nil)
          (varinits nil))
     (dolist (pair bindings)
       (push (nx-pair-name pair) vars)
       (push (eval (nx-pair-initform pair)) varinits))
-   (progv (nreverse vars) (nreverse varinits) (nx1-catch-body forms))))
+   (progv (nreverse vars) (nreverse varinits) (nx1-catch-body context forms))))
 
-(defnx1 nx1-fbind fbind (fnspecs &body body &environment old-env)
+(defnx1 nx1-fbind fbind context (fnspecs &body body &environment old-env)
   (let* ((fnames nil)
          (vars nil)
          (vals nil))
     (dolist (spec fnspecs (setq vals (nreverse vals)))
       (destructuring-bind (fname initform) spec
         (push (setq fname (nx-need-function-name fname)) fnames)
-        (push (nx1-form initform) vals)))
+        (push (nx1-form :value initform) vals)))
     (let* ((new-env (new-lexical-environment old-env))
            (*nx-bound-vars* *nx-bound-vars*)
            (*nx-lexical-environment* new-env)
@@ -1691,7 +1767,7 @@
        (%nx1-operator let)
        vars
        vals
-       (nx1-env-body body old-env)
+       (nx1-env-body context body old-env)
        *nx-new-p2decls*))))
 
 (defun maybe-warn-about-nx1-alphatizer-binding (funcname)
@@ -1699,7 +1775,7 @@
              (gethash funcname *nx1-alphatizers*))
     (nx1-whine :special-fbinding funcname)))
 
-(defnx1 nx1-flet flet (defs &body forms)
+(defnx1 nx1-flet flet context (defs &body forms)
   (with-nx-declarations (pending)
     (let* ((env *nx-lexical-environment*)
            (*nx-lexical-environment* env)
@@ -1743,7 +1819,7 @@
           (nx-effect-other-decls pending new-env)
           (setq body (let* ((*nx-lexical-environment* new-env))
                        (nx1-dynamic-extent-functions vars new-env)
-                       (nx1-env-body body env)))
+                       (nx1-env-body context body env)))
           (dolist (pair pairs)
             (let ((afunc (cdr pair))
                   (var (pop vars)))
@@ -1783,7 +1859,7 @@
                      (%ilsl $fbitbounddownward 1)))
               (nx-set-var-bits varinfo (%ilogior (%ilsl $vbitdynamicextent 1) (nx-var-bits varinfo))))))))))
           
-(defnx1 nx1-labels labels (defs &body forms)
+(defnx1 nx1-labels labels context (defs &body forms)
   (with-nx-declarations (pending)
     (let* ((env *nx-lexical-environment*)
            (old-env (lexenv.parent-env env))
@@ -1826,7 +1902,7 @@
           (nx1-compile-inner-function (car def) (cdr def) (setq func (pop funcs))))
         (nx-process-declarations pending decls)
         (nx-effect-other-decls pending env)
-        (setq body (nx1-env-body body old-env))
+        (setq body (nx1-env-body context body old-env))
         (nx-reconcile-inherited-vars funcrefs)
         (dolist (f funcrefs) (nx1-afunc-ref f))
         (make-acode
@@ -1838,16 +1914,16 @@
 
 
 
-(defnx1 nx1-set-bit ((%set-bit)) (ptr offset &optional (newval nil newval-p))
+(defnx1 nx1-set-bit ((%set-bit)) context (ptr offset &optional (newval nil newval-p))
   (unless newval-p (setq newval offset offset 0))
   (make-acode
    (%nx1-operator %set-bit)
-   (make-acode (%nx1-operator %macptrptr%) (nx1-form ptr))
-   (nx1-form offset)
-   (nx1-form newval)))
+   (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptr))
+   (nx1-form :value offset)
+   (nx1-form :value newval)))
                
 (defnx1 nx1-set-xxx ((%set-ptr) (%set-long)  (%set-word) (%set-byte)
-                     (%set-unsigned-long) (%set-unsigned-word) (%set-unsigned-byte))
+                     (%set-unsigned-long) (%set-unsigned-word) (%set-unsigned-byte)) context
         (ptr offset &optional (newval nil new-val-p) &aux (op *nx-sfname*))
   (unless new-val-p (setq newval offset offset 0))
   (make-acode
@@ -1860,38 +1936,38 @@
      (%set-unsigned-byte (logior 32 1))
      (%set-unsigned-long (logior 32 4))
      (t 4))
-   (make-acode (%nx1-operator %macptrptr%) (nx1-form ptr))
-   (nx1-form offset)
-   (nx1-form newval)))
+   (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptr))
+   (nx1-form :value offset)
+   (nx1-form :value newval)))
 
-(defnx1 nx1-set-64-xxx ((%%set-unsigned-longlong) (%%set-signed-longlong)) 
+(defnx1 nx1-set-64-xxx ((%%set-unsigned-longlong) (%%set-signed-longlong)) context 
         (&whole w ptr offset newval &aux (op *nx-sfname*))
   (target-word-size-case
-   (32 (nx1-treat-as-call w))
+   (32 (nx1-treat-as-call context w))
    (64
     (make-acode
      (%nx1-operator %immediate-set-xxx)
      (case op
        (%%set-signed-longlong 8)
        (t (logior 32 8)))
-     (make-acode (%nx1-operator %macptrptr%) (nx1-form ptr))
-     (nx1-form offset)
-     (nx1-form newval)))))
+     (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptr))
+     (nx1-form :value offset)
+     (nx1-form :value newval)))))
 
 
-(defnx1 nx1-get-bit ((%get-bit)) (ptrform &optional (offset 0))
+(defnx1 nx1-get-bit ((%get-bit)) context (ptrform &optional (offset 0))
   (make-acode
    (%nx1-operator typed-form)
    'bit
    (make-acode
     (%nx1-operator %get-bit)
-    (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-    (nx1-form offset))))
+    (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+    (nx1-form :value offset))))
 
-(defnx1 nx1-get-64-xxx ((%%get-unsigned-longlong) (%%get-signed-longlong))
+(defnx1 nx1-get-64-xxx ((%%get-unsigned-longlong) (%%get-signed-longlong)) context
   (&whole w ptrform offsetform)
   (target-word-size-case
-   (32 (nx1-treat-as-call w))
+   (32 (nx1-treat-as-call context w))
    (64
     (let* ((flagbits (case *nx-sfname*
                        (%%get-unsigned-longlong 8)
@@ -1904,8 +1980,8 @@
                 (make-acode 
                  (%nx1-operator immediate-get-xxx)
                  flagbits
-                 (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-                 (nx1-form offsetform)))))))
+                 (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+                 (nx1-form :value  offsetform)))))))
 
 (defnx1 nx1-get-xxx ((%get-long)  (%get-full-long)  (%get-signed-long)
                      (%get-fixnum) 
@@ -1913,7 +1989,7 @@
                      (%get-byte) (%get-unsigned-byte)
                      (%get-signed-word) 
                      (%get-signed-byte) 
-                     (%get-unsigned-long))
+                     (%get-unsigned-long)) context
   (ptrform &optional (offset 0))
   (let* ((sfname *nx-sfname*)
          (flagbits (case sfname
@@ -1943,19 +2019,19 @@
                 (make-acode 
                  (%nx1-operator immediate-get-xxx)
                  flagbits
-                 (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-                 (nx1-form offset)))))
+                 (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+                 (nx1-form :value offset)))))
 
-(defnx1 nx1-%get-ptr ((%get-ptr) ) (ptrform &optional (offset 0))
+(defnx1 nx1-%get-ptr ((%get-ptr) ) context (ptrform &optional (offset 0))
   (make-acode
    (%nx1-operator %consmacptr%)
    (make-acode
     (%nx1-operator immediate-get-ptr)
-    (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-    (nx1-form offset))))
+    (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+    (nx1-form :value offset))))
 
 (defnx1 nx1-%get-float ((%get-single-float)
-			(%get-double-float)) (ptrform &optional (offset 0))
+			(%get-double-float)) context (ptrform &optional (offset 0))
   (make-acode
    (%nx1-operator typed-form)
    (if (eq *nx-sfname* '%get-single-float)
@@ -1963,11 +2039,11 @@
      'double-float)
    (make-acode
     (%nx1-default-operator)
-    (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-    (nx1-form offset))))
+    (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+    (nx1-form :value offset))))
 
 (defnx1 nx1-%set-float ((%set-single-float)
-			(%set-double-float)) (ptrform offset &optional (newval nil newval-p))
+			(%set-double-float)) context (ptrform offset &optional (newval nil newval-p))
   (unless newval-p
     (setq newval offset
 	  offset 0))
@@ -1978,11 +2054,11 @@
        'double-float)
      (make-acode
       (%nx1-default-operator)
-      (make-acode (%nx1-operator %macptrptr%) (nx1-form ptrform))
-      (nx1-form offset)
-      (nx1-form newval))))
+      (make-acode (%nx1-operator %macptrptr%) (nx1-form :value ptrform))
+      (nx1-form :value offset)
+      (nx1-form :value newval))))
 
-(defnx1 nx1-let let (pairs &body forms &environment old-env)
+(defnx1 nx1-let let context (pairs &body forms &environment old-env)
   (collect ((vars)
             (vals)
             (varbindings))
@@ -2013,7 +2089,7 @@
                    (vals)
                    (progn
                      (nx-effect-other-decls pending *nx-lexical-environment*)
-                     (nx1-env-body body old-env))
+                     (nx1-env-body context body old-env))
                  *nx-new-p2decls*)))
           (nx1-check-var-bindings varbindings)
           (nx1-punt-bindings (vars) (vals))
@@ -2022,7 +2098,7 @@
 
 
 ;((lambda (lambda-list) . body) . args)
-(defun nx1-lambda-bind (lambda-list args body &optional (body-environment *nx-lexical-environment*))
+(defun nx1-lambda-bind (context lambda-list args body &optional (body-environment *nx-lexical-environment*))
   (let* ((old-env body-environment)
          (arg-env *nx-lexical-environment*)
          (arglist nil)
@@ -2032,7 +2108,7 @@
     (multiple-value-bind (ok req opttail resttail) (verify-lambda-list lambda-list)
       (declare (ignore req opttail))
       (when (and ok (eq (%car resttail) '&lexpr))
-        (return-from nx1-lambda-bind (nx1-call (nx1-form `(lambda ,lambda-list ,@body)) args))))
+        (return-from nx1-lambda-bind (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args))))
     (let* ((*nx-lexical-environment* body-environment)
            (*nx-bound-vars* *nx-bound-vars*))
       (with-nx-declarations (pending)
@@ -2041,9 +2117,9 @@
           (multiple-value-bind (req opt rest keys auxen)
                                (nx-parse-simple-lambda-list pending lambda-list)
             (let* ((*nx-lexical-environment* arg-env))
-              (setq arglist (nx1-formlist args)))
+              (setq arglist (nx1-formlist context args)))
             (nx-effect-other-decls pending *nx-lexical-environment*)
-            (setq body (nx1-env-body body old-env))
+            (setq body (nx1-env-body context body old-env))
             (while req
               (when (null arglist)
                 (nx-error "Not enough args ~S for (LAMBDA ~s ...)" args lambda-list))
@@ -2151,21 +2227,21 @@
 
 
 
-(defnx1 nx1-lap-function (ppc-lap-function) (name bindings &body body)
+(defnx1 nx1-lap-function (ppc-lap-function) context (name bindings &body body)
   (declare (ftype (function (t t t)) %define-ppc-lap-function))
   (require "PPC-LAP" "ccl:compiler;ppc;ppc-lap")
   (setf (afunc-lfun *nx-current-function*) 
         (%define-ppc-lap-function name `((let ,bindings ,@body))
                                   (dpb (length bindings) $lfbits-numreq 0))))
 
-(defnx1 nx1-x86-lap-function (x86-lap-function) (name bindings &body body)
+(defnx1 nx1-x86-lap-function (x86-lap-function) context (name bindings &body body)
   (declare (ftype (function (t t t)) %define-x86-lap-function))
   (require "X86-LAP")
   (setf (afunc-lfun *nx-current-function*) 
         (%define-x86-lap-function name `((let ,bindings ,@body))
 				    (dpb (length bindings) $lfbits-numreq 0))))
 
-(defnx1 nx1-arm-lap-function (arm-lap-function) (name bindings &body body)
+(defnx1 nx1-arm-lap-function (arm-lap-function) context (name bindings &body body)
   (declare (ftype (function (t t t)) %define-arm-lap-function))
   (require "ARM-LAP")
   (setf (afunc-lfun *nx-current-function*)
@@ -2176,8 +2252,8 @@
 
 
 
-(defun nx1-env-body (body old-env &optional (typecheck (nx-declarations-typecheck *nx-lexical-environment*)))
-  (do* ((form (nx1-progn-body body))
+(defun nx1-env-body (context body old-env &optional (typecheck (nx-declarations-typecheck *nx-lexical-environment*)))
+  (do* ((form (nx1-progn-body context body))
         (typechecks nil)
         (env *nx-lexical-environment* (lexenv.parent-env env)))
        ((or (eq env old-env) (null env))
@@ -2197,7 +2273,7 @@
                    (type (nx-declared-type sym)))
               (unless (eq type t)
                 (let ((old-bits (nx-var-bits var)))
-                  (push (nx1-form `(the ,type ,sym)) typechecks)
+                  (push (nx1-form :value `(the ,type ,sym)) typechecks)
                   (when (%izerop (logior
                                   (%ilogand2 old-bits
                                              (%ilogior (%ilsl $vbitspecial 1)
@@ -2209,7 +2285,7 @@
                                                     (%ilognot (%ilsl $vbitignore 1))))))))))))))
 
 
-(defnx1 nx1-let* (let*) (varspecs &body forms)
+(defnx1 nx1-let* (let*) context (varspecs &body forms)
   (let* ((vars nil)
          (vals nil)
          (val nil)
@@ -2234,20 +2310,20 @@
                  (%nx1-default-operator)
                  (setq vars (nreverse vars))
                  (setq vals (nreverse vals))
-                 (nx1-env-body body old-env)
+                 (nx1-env-body context body old-env)
                  *nx-new-p2decls*)))
           (nx1-check-var-bindings var-bound-vars)
           (nx1-punt-bindings vars vals)
           result)))))
 
-(defnx1 nx1-multiple-value-bind multiple-value-bind 
+(defnx1 nx1-multiple-value-bind multiple-value-bind context 
         (varspecs bindform &body forms)
   (if (= (length varspecs) 1)
-    (nx1-form `(let* ((,(car varspecs) ,bindform)) ,@forms))
+    (nx1-form context `(let* ((,(car varspecs) ,bindform)) ,@forms))
     (let* ((vars nil)
            (*nx-bound-vars* *nx-bound-vars*)
            (old-env *nx-lexical-environment*)
-           (mvform (nx1-form bindform)))
+           (mvform (nx1-form :value bindform)))
       (with-nx-declarations (pending)
         (multiple-value-bind (body decls)
                              (parse-body forms *nx-lexical-environment* nil)
@@ -2259,71 +2335,71 @@
            (%nx1-operator multiple-value-bind)
            (nreverse vars)
            mvform
-           (nx1-env-body body old-env)
+           (nx1-env-body context body old-env)
            *nx-new-p2decls*))))))
 
 
 ;;; This isn't intended to be user-visible; there isn't a whole lot of 
 ;;; sanity-checking applied to the subtag.
-(defnx1 nx1-%alloc-misc ((%alloc-misc)) (element-count subtag &optional (init nil init-p))
+(defnx1 nx1-%alloc-misc ((%alloc-misc)) context (element-count subtag &optional (init nil init-p))
   (if init-p                            ; ensure that "init" is evaluated before miscobj is created.
     (make-acode (%nx1-operator %make-uvector)
-                (nx1-form element-count)
-                (nx1-form subtag)
-                (nx1-form init))
+                (nx1-form :value element-count)
+                (nx1-form :value subtag)
+                (nx1-form :value init))
     (make-acode (%nx1-operator %make-uvector)
-                (nx1-form element-count)
-                (nx1-form subtag))))
+                (nx1-form :value element-count)
+                (nx1-form :value subtag))))
 
-(defnx1 nx1-%lisp-word-ref (%lisp-word-ref) (base offset)
+(defnx1 nx1-%lisp-word-ref (%lisp-word-ref) context (base offset)
   (make-acode (%nx1-operator %lisp-word-ref)
-              (nx1-form base)
-              (nx1-form offset)))
+              (nx1-form :value base)
+              (nx1-form :value offset)))
 
-(defnx1 nx1-%single-to-double ((%single-to-double)) (arg)
+(defnx1 nx1-%single-to-double ((%single-to-double)) context (arg)
   (make-acode (%nx1-operator %single-to-double)
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-%double-to-single ((%double-to-single)) (arg)
+(defnx1 nx1-%double-to-single ((%double-to-single)) context (arg)
   (make-acode (%nx1-operator %double-to-single)
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-%fixnum-to-double ((%fixnum-to-double)) (arg)
+(defnx1 nx1-%fixnum-to-double ((%fixnum-to-double)) context (arg)
   (make-acode (%nx1-operator %fixnum-to-double)
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-%fixnum-to-single ((%fixnum-to-single)) (arg)
+(defnx1 nx1-%fixnum-to-single ((%fixnum-to-single)) context (arg)
   (make-acode (%nx1-operator %fixnum-to-single)
-              (nx1-form arg)))
+              (nx1-form :value arg)))
 
-(defnx1 nx1-%double-float ((%double-float)) (&whole whole arg &optional (result nil result-p))
+(defnx1 nx1-%double-float ((%double-float)) context (&whole whole arg &optional (result nil result-p))
   (declare (ignore result))
   (if result-p
-    (nx1-treat-as-call whole)
-    (make-acode (%nx1-operator %double-float) (nx1-form arg))))
+    (nx1-treat-as-call context whole)
+    (make-acode (%nx1-operator %double-float) (nx1-form :value arg))))
 
-(defnx1 nx1-%short-float ((%short-float)) (&whole whole arg &optional (result nil result-p))
+(defnx1 nx1-%short-float ((%short-float)) context (&whole whole arg &optional (result nil result-p))
   (declare (ignore result))        
   (if result-p
-    (nx1-treat-as-call whole)
-    (make-acode (%nx1-operator %single-float) (nx1-form arg))))
+    (nx1-treat-as-call context whole)
+    (make-acode (%nx1-operator %single-float) (nx1-form :value arg))))
 
 
-(defnx1 nx1-symvector ((%symptr->symvector) (%symvector->symptr)) (arg)
-  (make-acode (%nx1-default-operator) (nx1-form arg)))
+(defnx1 nx1-symvector ((%symptr->symvector) (%symvector->symptr)) context (arg)
+  (make-acode (%nx1-default-operator) (nx1-form :value arg)))
 
-(defnx1 nx1-%ilognot (%ilognot) (n)
+(defnx1 nx1-%ilognot (%ilognot) context (n)
   ;; Bootstrapping nonsense.
   (if (aref (backend-p2-dispatch *target-backend*)
             (logand operator-id-mask (%nx1-operator %ilognot)))
     (make-acode (%nx1-operator typed-form)
                 'fixnum
                 (make-acode (%nx1-operator %ilognot)
-                            (nx1-form n)))
-    (nx1-form (macroexpand `(%ilognot ,n)))))
+                            (nx1-form :value n)))
+    (nx1-form context (macroexpand `(%ilognot ,n)))))
 
     
-(defnx1 nx1-ash (ash) (&whole call &environment env num amt)
+(defnx1 nx1-ash (ash) context (&whole call &environment env num amt)
   (flet ((defer-to-backend ()
              ;; Bootstrapping nonsense
              (if (svref (backend-p2-dispatch *target-backend*)
@@ -2332,29 +2408,29 @@
                            'integer
                            (make-acode
                             (%nx1-operator ash)
-                            (nx1-form num)
-                            (nx1-form amt)))
-               (nx1-treat-as-call call))))
+                            (nx1-form :value num)
+                            (nx1-form :value amt)))
+               (nx1-treat-as-call context call))))
     (let* ((unsigned-natural-type *nx-target-natural-type*) 
            (max (target-word-size-case (32 32) (64 64)))
            (maxbits (target-word-size-case
                      (32 29)
                      (64 60))))
-      (cond ((eq amt 0) (nx1-form `(require-type ,num 'integer) env))
+      (cond ((eq amt 0) (nx1-form context `(require-type ,num 'integer) env))
             ((and (fixnump amt)
                   (< amt 0))
              (if (nx-form-typep num 'fixnum env)
                (make-acode (%nx1-operator %iasr)
                            (make-acode (%nx1-operator fixnum)
                                        (- amt))
-                           (nx1-form num))
+                           (nx1-form :value num))
                (if (nx-form-typep num unsigned-natural-type env)
                  (if (< (- amt) max)
                    (make-acode (%nx1-operator natural-shift-right)
-                               (nx1-form num)
+                               (nx1-form :value num)
                                (make-acode (%nx1-operator fixnum)
                                            (- amt)))
-                   (nx1-form `(progn (require-type ,num 'integer) 0) env))
+                   (nx1-form context `(progn (require-type ,num 'integer) 0) env))
                  (defer-to-backend))))
             ((and (fixnump amt)
                   (<= 0 amt maxbits)
@@ -2362,21 +2438,21 @@
                       (and (nx-form-typep num 'fixnum env)
                            (nx-trust-declarations env)
                            (subtypep *nx-form-type* 'fixnum))))
-             (nx1-form `(%ilsl ,amt ,num)))
+             (nx1-form context `(%ilsl ,amt ,num)))
             ((and (fixnump amt)
                   (< 0 amt max)
                   (nx-form-typep num unsigned-natural-type env)
                   (nx-trust-declarations env)
                   (subtypep *nx-form-type* unsigned-natural-type))
              (make-acode (%nx1-operator natural-shift-left)
-                         (nx1-form num)
-                         (nx1-form amt)))
+                         (nx1-form :value num)
+                         (nx1-form :value amt)))
             ((fixnump num)
              (let* ((field-width (1+ (integer-length num)))
                     ;; num fits in a `(signed-byte ,field-width)
                     (max-shift (- (1+ maxbits) field-width)))
                (if (nx-form-typep amt `(mod ,(1+ max-shift)) env)
-                 (nx1-form `(%ilsl ,amt ,num))
+                 (nx1-form context `(%ilsl ,amt ,num))
                  (defer-to-backend))))
             (t (defer-to-backend))))))
 
@@ -2385,9 +2461,9 @@
 (defun nx-badformat (&rest args)
  (nx-error "Bad argument format in ~S ." args))
 
-(defnx1 nx1-eval-when eval-when (when &body body)
-  (nx1-progn-body (if (or (memq 'eval when) (memq :execute when)) body)))
+(defnx1 nx1-eval-when eval-when context (when &body body)
+  (nx1-progn-body context (if (or (memq 'eval when) (memq :execute when)) body)))
 
-(defnx1 nx1-misplaced (declare) (&rest args)
+(defnx1 nx1-misplaced (declare) context (&rest args)
   (nx-error "~S not expected in ~S." *nx-sfname* (cons *nx-sfname* args)))
 

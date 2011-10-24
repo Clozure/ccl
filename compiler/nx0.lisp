@@ -274,6 +274,20 @@
     (remhash name *compiler-macros*))
   def)
 
+
+;;; Note that all lexical variables bound at this time are live across
+;;; a non-tail call by setting a bit in each such var.  This may not
+;;; be exactt (for many reasons), but it may help the register allocator:
+;;; if a variable is unlikely to be live across a call, there's less 
+;;; reason to keep it in a register that's preserved across calls.
+
+(defun nx-note-bound-vars-live-across-call ()
+  (dolist (var *nx-bound-vars*)
+    (let* ((local-bits (var-local-bits var)))
+      (declare (fixnum local-bits))
+      (unless (logbitp $vbitspecial (nx-var-bits var))
+        (setf (var-local-bits var) (logior (ash 1 $vlocalbitiveacrosscall) local-bits))))))
+
 (defsetf compiler-macro-function set-compiler-macro-function)
 
 (defparameter *nx-add-xref-entry-hook* nil
@@ -408,14 +422,7 @@ function to the indicated name is true.")
     own))
 
 
-(defun nx1-typed-var-initform (pending sym form &optional (env *nx-lexical-environment*))
-  (let* ((type t)
-         (*nx-form-type* (if (nx-trust-declarations env)
-                           (dolist (decl (pending-declarations-vdecls pending) type)
-                             (when (and (eq (car decl) sym) (eq (cadr decl) 'type))
-                               (setq type (nx1-type-intersect sym (nx-target-type type) (cddr decl)))))
-                           t)))
-    (nx1-typed-form form env)))
+
 
 ; Guess.
 (defun nx-effect-fdecls (pending var env)
@@ -1294,21 +1301,14 @@ function to the indicated name is true.")
         (values nil nil nil)))))
 
 
-(defun nx-block-info (blockname &optional (afunc *nx-current-function*) &aux
-  blocks
-  parent
-  (toplevel (eq afunc *nx-current-function*))
-  blockinfo)
- (when afunc
-  (setq
-   blocks (if toplevel *nx-blocks* (afunc-blocks afunc))
-   blockinfo (assq blockname blocks)
-   parent (afunc-parent afunc))
-  (if blockinfo
-   (values blockinfo nil)
-   (when parent
-    (when (setq blockinfo (nx-block-info blockname parent))
-     (values blockinfo t))))))
+(defun nx-block-info (blockname)
+  (do* ((toplevel t nil)
+        (afunc *nx-current-function*(afunc-parent afunc)))
+       ((null afunc) (values nil nil))
+    (let* ((info (assq blockname (if toplevel *nx-blocks* (afunc-blocks afunc)))))
+      (if info
+        (return-from nx-block-info (values info (not toplevel)))))))
+
 
 (defun nx-tag-info (tagname &optional (afunc *nx-current-function*) &aux
                             tags
@@ -1503,7 +1503,7 @@ Or something. Right? ~s ~s" var varbits))
                         nil
                         nil
                         nil
-                        (nx1-env-body body old-env)
+                        (nx1-env-body :value body old-env)
                         *nx-new-p2decls*))))
       (when (eq (car l) '&method)
         (setf (afunc-bits *nx-current-function*)
@@ -1523,7 +1523,7 @@ Or something. Right? ~s ~s" var varbits))
       (multiple-value-bind (req opt rest keys auxen lexpr)
                            (nx-parse-simple-lambda-list pending ll)
         (nx-effect-other-decls pending *nx-lexical-environment*)
-        (setq body (nx1-env-body body old-env))
+        (setq body (nx1-env-body :return body old-env))
         (nx1-punt-bindings (%car auxen) (%cdr auxen))
         (when methvar
           (push methvar req)
@@ -1659,7 +1659,7 @@ Or something. Right? ~s ~s" var varbits))
                  (spvar nil))
             (when (consp var)
               (setq sym (pop var) initform (pop var) spvar (%car var)))
-            (push (if no-acode initform (nx1-form initform)) optinits)
+            (push (if no-acode initform (nx1-form :value initform)) optinits)
             (push (if (symbolp sym)
                           (nx-new-structured-var pending sym)
                           (nx-structured-lambda-form pending sym no-acode))
@@ -1697,7 +1697,7 @@ Or something. Right? ~s ~s" var varbits))
                   (progn
                     (setq kvar (%car sym))
                     (setq kkey (make-keyword kvar))))
-                (setq kinit (if no-acode (%cadr sym) (nx1-form (%cadr sym))))
+                (setq kinit (if no-acode (%cadr sym) (nx1-form :value (%cadr sym))))
                 (setq ksupp (%caddr sym))))
             (push (if (symbolp kvar)
                           (nx-new-structured-var pending kvar)
@@ -1718,7 +1718,7 @@ Or something. Right? ~s ~s" var varbits))
       (dolist (pair (%cdr auxtail))
         (let ((auxvar (nx-pair-name pair))
               (auxval (nx-pair-initform pair)))
-          (push (if no-acode auxval (nx1-form auxval)) auxvals)
+          (push (if no-acode auxval (nx1-form :value auxval)) auxvals)
           (push (nx-new-var pending auxvar) auxvars)))
       (values
        (nreverse req) 
@@ -1733,31 +1733,79 @@ Or something. Right? ~s ~s" var varbits))
                        (nx-parse-structured-lambda-list pending l no-acode t)
     (list (%nx1-operator lambda-list) whole req opt rest keys auxen)))
 
-(defun nx1-form (form &optional (*nx-lexical-environment* *nx-lexical-environment*))
-  (let* ((*nx-form-type* (if (and (consp form) (eq (car form) 'the))
-                           (nx-target-type (cadr form))
-                           t)))
-    (nx1-typed-form form *nx-lexical-environment*)))
 
-(defun nx1-typed-form (original env)
-  (with-program-error-handler
-      (lambda (c)
-        (let ((replacement (runtime-program-error-form c)))
-          (nx-note-source-transformation original replacement)
-          (nx1-transformed-form (nx-transform replacement env) env)))
-    (multiple-value-bind (form changed source) (nx-transform original env)
-      (declare (ignore changed))
-      ;; Bind this for cases where the transformed form is an atom, so it doesn't remember the source it came from.
-      (let ((*nx-current-note* (or source *nx-current-note*)))
-	(nx1-transformed-form form env)))))
+(defun nx1-immediate (context form)
+  (declare (ignorable context))
+  (cond ((eq form t) (make-acode (%nx1-operator t)))
+          ((null form) (make-acode (%nx1-operator nil)))
+          ((nx1-target-fixnump form)
+           (make-acode (%nx1-operator fixnum) form))
+          (t (make-acode (%nx1-operator immediate) form))))
 
-(defun nx1-transformed-form (form env)
+;;; Note that "simple lexical refs" may not be; that's the whole problem ...
+(defun nx1-symbol (context form &optional (env *nx-lexical-environment*))
+  (let* ((type (nx-declared-type form))
+         (form
+          (multiple-value-bind (info inherited-p more)
+                               (nx-lex-info form)
+            (if (and info (neq info :special))
+              (if (eq info :symbol-macro)
+                (progn
+                  (nx-set-var-bits more (%ilogior (%ilsl $vbitreffed 1) (nx-var-bits more)))
+                  (if (eq type t)
+                    (nx1-form context inherited-p)
+                    (nx1-form context `(the ,(prog1 type (setq type t)) ,inherited-p))))
+                (progn
+                  (when (not inherited-p)
+                    (nx-set-var-bits info (%ilogior2 (%ilsl $vbitreffed 1) (nx-var-bits info))))
+                  (when context
+                    (nx-adjust-ref-count info))
+                  (nx-make-lexical-reference info)))
+              (make-acode
+	       (if (nx1-check-special-ref form info)
+		   (progn
+		     (nx-record-xref-info :references form)
+		     (if (nx-global-p form env)
+			 (%nx1-operator global-ref)
+		         (if (and (not (nx-force-boundp-checks form env))
+				  (or (nx-proclaimed-parameter-p form)
+				  (assq form *nx-compile-time-types*)
+				  (assq form *nx-proclaimed-types*)
+				  (nx-open-code-in-line env)))
+			     (%nx1-operator bound-special-ref)
+			     (%nx1-operator special-ref))))
+		   (%nx1-operator free-reference))
+               (nx1-note-vcell-ref form))))))
+    (if (eq type t)
+	form
+      (make-acode (%nx1-operator typed-form) type form))))
+
+(defun nx1-combination (context form env)
+  (destructuring-bind (sym &rest args) form
+    (if (symbolp sym)
+      (let* ((*nx-sfname* sym) special)
+        (if (and (setq special (gethash sym *nx1-alphatizers*))
+                 (or (not (functionp (fboundp sym)))
+                     (memq sym '(apply funcall ;; see bug #285
+                                 %defun        ;; see bug #295
+                                 ))
+                     (< (safety-optimize-quantity env) 3))
+                 ;;(not (nx-lexical-finfo sym env))
+                 (not (nx-declared-notinline-p sym *nx-lexical-environment*)))
+          (funcall special context form env) ; pass environment arg ...
+          (progn            
+            (nx1-typed-call context sym args))))
+      (if (lambda-expression-p sym)
+        (nx1-lambda-bind context (%cadr sym) args (%cddr sym))
+	(nx-error "In the form ~S, ~S is not a symbol or lambda expression." form sym)))))
+
+(defun nx1-transformed-form (context form env)
   (let* ((*nx-current-note* (or (nx-source-note form) *nx-current-note*))
          (*nx-current-code-note*  (and *nx-current-code-note*
                                        (or (nx-ensure-code-note form *nx-current-code-note*)
                                            (compiler-bug "No source note for ~s" form))))
          (acode (if (consp form)
-                  (nx1-combination form env)
+                  (nx1-combination context form env)
                   (let* ((symbolp (non-nil-symbol-p form))
                          (constant-value (unless symbolp form))
                          (constant-symbol-p nil))
@@ -1765,8 +1813,8 @@ Or something. Right? ~s ~s" var varbits))
                       (multiple-value-setq (constant-value constant-symbol-p) 
                         (nx-transform-defined-constant form env)))
                     (if (and symbolp (not constant-symbol-p))
-                      (nx1-symbol form env)
-                      (nx1-immediate (nx-unquote constant-value)))))))
+                      (nx1-symbol context form env)
+                      (nx1-immediate context (nx-unquote constant-value)))))))
     (unless (acode-note acode) ;; leave it with most specific note
       (cond (*nx-current-code-note*
              (setf (acode-note acode) *nx-current-code-note*))
@@ -1774,8 +1822,39 @@ Or something. Right? ~s ~s" var varbits))
              (setf (acode-note acode) (nx-source-note form)))))
     acode))
 
-(defun nx1-prefer-areg (form env)
-  (nx1-form form env))
+(defun nx1-typed-form (context original env)
+  (with-program-error-handler
+      (lambda (c)
+        (let ((replacement (runtime-program-error-form c)))
+          (nx-note-source-transformation original replacement)
+          (nx1-transformed-form context (nx-transform replacement env) env)))
+    (multiple-value-bind (form changed source) (nx-transform original env)
+      (declare (ignore changed))
+      ;; Bind this for cases where the transformed form is an atom, so it doesn't remember the source it came from.
+      (let ((*nx-current-note* (or source *nx-current-note*)))
+	(nx1-transformed-form context form env)))))
+
+(defun nx1-form (context form &optional (*nx-lexical-environment* *nx-lexical-environment*))
+  #-bootstrapped
+  (unless (member context '(nil :return :value))
+    (break "bad context ~s" context))
+  (let* ((*nx-form-type* (if (and (consp form) (eq (car form) 'the))
+                           (nx-target-type (cadr form))
+                           t)))
+    (nx1-typed-form context form *nx-lexical-environment*)))
+
+(defun nx1-typed-var-initform (pending sym form &optional (env *nx-lexical-environment*))
+  (let* ((type t)
+         (*nx-form-type* (if (nx-trust-declarations env)
+                           (dolist (decl (pending-declarations-vdecls pending) type)
+                             (when (and (eq (car decl) sym) (eq (cadr decl) 'type))
+                               (setq type (nx1-type-intersect sym (nx-target-type type) (cddr decl)))))
+                           t)))
+    (nx1-typed-form :value form env)))
+
+
+
+
 
 (defun nx1-target-fixnump (form)
   (when (typep form 'integer)
@@ -1785,12 +1864,7 @@ Or something. Right? ~s ~s" var varbits))
        (<= form (arch::target-most-positive-fixnum target))))))
 
 
-(defun nx1-immediate (form)
-  (cond ((eq form t) (make-acode (%nx1-operator t)))
-        ((null form) (make-acode (%nx1-operator nil)))
-        ((nx1-target-fixnump form)
-         (make-acode (%nx1-operator fixnum) form))
-        (t (make-acode (%nx1-operator immediate) form))))
+
 
 (defun nx2-constant-form-value (form)
   (setq form (nx-untyped-form form))
@@ -1844,42 +1918,7 @@ Or something. Right? ~s ~s" var varbits))
       (push (cons sym count) *nx1-fcells*))
     sym))
 
-; Note that "simple lexical refs" may not be; that's the whole problem ...
-(defun nx1-symbol (form &optional (env *nx-lexical-environment*))
-  (let* ((type (nx-declared-type form))
-         (form
-          (multiple-value-bind (info inherited-p more)
-                               (nx-lex-info form)
-            (if (and info (neq info :special))
-              (if (eq info :symbol-macro)
-                (progn
-                  (nx-set-var-bits more (%ilogior (%ilsl $vbitreffed 1) (nx-var-bits more)))
-                  (if (eq type t)
-                    (nx1-form inherited-p)
-                    (nx1-form `(the ,(prog1 type (setq type t)) ,inherited-p))))
-                (progn
-                  (when (not inherited-p)
-                    (nx-set-var-bits info (%ilogior2 (%ilsl $vbitreffed 1) (nx-var-bits info))))
-                  (nx-adjust-ref-count info)
-                  (nx-make-lexical-reference info)))
-              (make-acode
-	       (if (nx1-check-special-ref form info)
-		   (progn
-		     (nx-record-xref-info :references form)
-		     (if (nx-global-p form env)
-			 (%nx1-operator global-ref)
-		         (if (and (not (nx-force-boundp-checks form env))
-				  (or (nx-proclaimed-parameter-p form)
-				  (assq form *nx-compile-time-types*)
-				  (assq form *nx-proclaimed-types*)
-				  (nx-open-code-in-line env)))
-			     (%nx1-operator bound-special-ref)
-			     (%nx1-operator special-ref))))
-		   (%nx1-operator free-reference))
-               (nx1-note-vcell-ref form))))))
-    (if (eq type t)
-	form
-      (make-acode (%nx1-operator typed-form) type form))))
+
 
 (defun nx1-check-special-ref (form auxinfo)
   (or (eq auxinfo :special) 
@@ -1943,29 +1982,58 @@ Or something. Right? ~s ~s" var varbits))
 
 
 
-(defun nx1-combination (form env)
-  (destructuring-bind (sym &rest args) form
-    (if (symbolp sym)
-      (let* ((*nx-sfname* sym) special)
-        (if (and (setq special (gethash sym *nx1-alphatizers*))
-                 (or (not (functionp (fboundp sym)))
-                     (memq sym '(apply funcall ;; see bug #285
-                                 %defun        ;; see bug #295
-                                 ))
-                     (< (safety-optimize-quantity env) 3))
-                 ;;(not (nx-lexical-finfo sym env))
-                 (not (nx-declared-notinline-p sym *nx-lexical-environment*)))
-          (funcall special form env) ; pass environment arg ...
-          (progn            
-            (nx1-typed-call sym args))))
-      (if (lambda-expression-p sym)
-        (nx1-lambda-bind (%cadr sym) args (%cddr sym))
-	(nx-error "In the form ~S, ~S is not a symbol or lambda expression." form sym)))))
+;;; If "sym" is an expression (not a symbol which names a function),
+;;; the caller has already alphatized it.
+(defun nx1-call (context sym args &optional spread-p global-only inhibit-inline)
+  (nx1-verify-length args 0 nil)
+  (when (and (acode-p sym) (eq (acode-operator sym) (%nx1-operator immediate)))
+    (multiple-value-bind (valid name) (valid-function-name-p (%cadr sym))
+      (when valid
+	(setq global-only t sym name))))
+  (let ((args-in-regs (if spread-p 1 (backend-num-arg-regs *target-backend*))))
+    (if (nx-self-call-p sym global-only)
+      ;; Should check for downward functions here as well.
+      (multiple-value-bind (deftype reason)
+                           (nx1-check-call-args *nx-current-function* args spread-p)
+        (when deftype
+          (nx1-whine deftype sym reason args spread-p))
+        (if (eq context :return)
+          ;; Could check policy, note things that interfere with
+          ;; tail call, and try to better estimate whether or not
+          ;; this will be a real tail call.
+          (setf (afunc-bits *nx-current-function*)
+                (logior (ash 1 $fbittailcallsself) (afunc-bits *nx-current-function*)))
+          (nx-note-bound-vars-live-across-call))
+        (make-acode (%nx1-operator self-call) (nx1-arglist args args-in-regs) spread-p))
+      (multiple-value-bind (lambda-form containing-env token) (nx-inline-expansion sym *nx-lexical-environment* global-only)
+        (or (and (not inhibit-inline)
+		 (nx1-expand-inline-call context lambda-form containing-env token args spread-p *nx-lexical-environment*))
+            (multiple-value-bind (info afunc) (if (and  (symbolp sym) (not global-only)) (nx-lexical-finfo sym))
+              (when (eq 'macro (car info))
+                (nx-error "Can't call macro function ~s" sym))
+	      (nx-record-xref-info :direct-calls sym)
+              (if (and afunc (%ilogbitp $fbitruntimedef (afunc-bits afunc)))
+                (let ((sym (var-name (afunc-lfun afunc))))
+                  (nx1-form
+                   context
+                   (if spread-p
+                     `(,(if (eql spread-p 0) 'applyv 'apply) ,sym ,args)
+                     `(funcall ,sym ,@args))))
+                (let* ((val (nx1-call-form context sym afunc args spread-p)))
+                    (when afunc
+                      (let ((callers (afunc-callers afunc))
+                            (self *nx-current-function*))
+                        (unless (or (eq self afunc) (memq self callers))
+                          (setf (afunc-callers afunc) (cons self callers)))))
+                    (if (and (null afunc) (memq sym *nx-never-tail-call*))
+                      (make-acode (%nx1-operator values) (list val))
+                      val)))))))))
 
-(defun nx1-treat-as-call (args)
-  (nx1-typed-call (car args) (%cdr args)))
 
-(defun nx1-typed-call (fn args &optional spread-p)
+(defun nx1-treat-as-call (context args)
+  (nx1-typed-call context (car args) (%cdr args)))
+
+(defun nx1-typed-call (context fn args &optional spread-p)
   (let ((global-only nil)
 	(errors-p nil)
 	(result-type t))
@@ -1977,7 +2045,7 @@ Or something. Right? ~s ~s" var varbits))
       (multiple-value-setq (errors-p args result-type)
 	(nx1-check-typed-call fn args spread-p global-only)))
     (setq result-type (nx1-type-intersect fn *nx-form-type* result-type))
-    (let ((form (nx1-call fn args spread-p global-only errors-p)))
+    (let ((form (nx1-call context fn args spread-p global-only errors-p)))
       (if (eq result-type t)
 	form
 	(make-acode (%nx1-operator typed-form) result-type form)))))
@@ -2273,7 +2341,9 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx1-builtin-function-offset (name)
    (arch::builtin-function-name-offset name))
 
-(defun nx1-call-form (global-name afunc arglist spread-p  &optional (env *nx-lexical-environment*))
+(defun nx1-call-form (context global-name afunc arglist spread-p  &optional (env *nx-lexical-environment*))
+  (unless (eq context :return)
+    (nx-note-bound-vars-live-across-call))
   (if afunc
     (make-acode (%nx1-operator lexical-function-call) afunc (nx1-arglist arglist (if spread-p 1 (backend-num-arg-regs *target-backend*))) spread-p)
     (let* ((builtin (unless (or spread-p
@@ -2290,51 +2360,14 @@ Or something. Right? ~s ~s" var varbits))
                     (nx1-arglist arglist))
         (make-acode (%nx1-operator call)
                      (if (symbolp global-name)
-                       (nx1-immediate (nx1-note-fcell-ref global-name))
+                       (nx1-immediate context (if context (nx1-note-fcell-ref global-name) global-name))
                        global-name)
                      (nx1-arglist arglist (if spread-p 1 (backend-num-arg-regs *target-backend*)))
                      spread-p)))))
   
-;;; If "sym" is an expression (not a symbol which names a function),
-;;; the caller has already alphatized it.
-(defun nx1-call (sym args &optional spread-p global-only inhibit-inline)
-  (nx1-verify-length args 0 nil)
-  (when (and (acode-p sym) (eq (acode-operator sym) (%nx1-operator immediate)))
-    (multiple-value-bind (valid name) (valid-function-name-p (%cadr sym))
-      (when valid
-	(setq global-only t sym name))))
-  (let ((args-in-regs (if spread-p 1 (backend-num-arg-regs *target-backend*))))
-    (if (nx-self-call-p sym global-only)
-      ;; Should check for downward functions here as well.
-      (multiple-value-bind (deftype reason)
-                           (nx1-check-call-args *nx-current-function* args spread-p)
-        (when deftype
-          (nx1-whine deftype sym reason args spread-p))
-        (make-acode (%nx1-operator self-call) (nx1-arglist args args-in-regs) spread-p))
-      (multiple-value-bind (lambda-form containing-env token) (nx-inline-expansion sym *nx-lexical-environment* global-only)
-        (or (and (not inhibit-inline)
-		 (nx1-expand-inline-call lambda-form containing-env token args spread-p *nx-lexical-environment*))
-            (multiple-value-bind (info afunc) (if (and  (symbolp sym) (not global-only)) (nx-lexical-finfo sym))
-              (when (eq 'macro (car info))
-                (nx-error "Can't call macro function ~s" sym))
-	      (nx-record-xref-info :direct-calls sym)
-              (if (and afunc (%ilogbitp $fbitruntimedef (afunc-bits afunc)))
-                (let ((sym (var-name (afunc-lfun afunc))))
-                  (nx1-form 
-                   (if spread-p
-                     `(,(if (eql spread-p 0) 'applyv 'apply) ,sym ,args)
-                     `(funcall ,sym ,@args))))
-                (let* ((val (nx1-call-form sym afunc args spread-p)))
-                    (when afunc
-                      (let ((callers (afunc-callers afunc))
-                            (self *nx-current-function*))
-                        (unless (or (eq self afunc) (memq self callers))
-                          (setf (afunc-callers afunc) (cons self callers)))))
-                    (if (and (null afunc) (memq sym *nx-never-tail-call*))
-                      (make-acode (%nx1-operator values) (list val))
-                      val)))))))))
 
-(defun nx1-expand-inline-call (lambda-form env token args spread-p old-env)
+
+(defun nx1-expand-inline-call (context lambda-form env token args spread-p old-env)
   (if (and (or (null spread-p) (eq (length args) 1)))
     (if (and token (not (memq token *nx-inline-expansions*)))
       (with-program-error-handler (lambda (c) (declare (ignore c)) nil)
@@ -2349,8 +2382,8 @@ Or something. Right? ~s ~s" var varbits))
 		  (compilation-speed . ,(compilation-speed-optimize-quantity old-env))
 		  (debug . ,(debug-optimize-quantity old-env))))
 	  (if spread-p
-	    (nx1-destructure lambda-list (car args) nil nil body new-env)
-	    (nx1-lambda-bind lambda-list args body new-env)))))))
+	    (nx1-destructure context lambda-list (car args) nil nil body new-env)
+	    (nx1-lambda-bind context lambda-list args body new-env)))))))
              
 ; note that regforms are reversed: arg_z is always in the car
 (defun nx1-arglist (args &optional (nregargs (backend-num-arg-regs *target-backend*)))
@@ -2362,15 +2395,15 @@ Or something. Right? ~s ~s" var varbits))
       (list
        (dotimes (i nstkargs (nreverse stkforms))
          (declare (fixnum i))
-         (push (nx1-form (%car args)) stkforms)
+         (push (nx1-form :value (%car args)) stkforms)
          (setq args (%cdr args)))
        (dolist (arg args regforms)
-         (push (nx1-form arg) regforms)))))
+         (push (nx1-form :value arg) regforms)))))
 
-(defun nx1-formlist (args)
+(defun nx1-formlist (context args)
   (let* ((a nil))
     (dolist (arg args)
-      (push (nx1-form arg) a))
+      (push (nx1-form (if context :value) arg) a))
     (nreverse a)))
 
 (defun nx1-verify-length (forms min max &aux (len (list-length forms)))
@@ -2778,7 +2811,7 @@ Or something. Right? ~s ~s" var varbits))
        (and (nx-trust-declarations env)
             (subtypep *nx-form-type* *nx-target-natural-type*)))))
 
-(defun nx-binary-boole-op (whole env arg-1 arg-2 fixop intop naturalop)
+(defun nx-binary-boole-op (context whole env arg-1 arg-2 fixop intop naturalop)
   (let* ((use-fixop (nx-binary-fixnum-op-p arg-1 arg-2 env t))
 	 (use-naturalop (nx-binary-natural-op-p arg-1 arg-2 env)))
     (if (or use-fixop use-naturalop intop)
@@ -2786,9 +2819,9 @@ Or something. Right? ~s ~s" var varbits))
                   (if use-fixop *nx-target-fixnum-type*
                     (if use-naturalop *nx-target-natural-type* 'integer))
                   (make-acode (if use-fixop fixop (if use-naturalop naturalop intop))
-                              (nx1-form arg-1)
-                              (nx1-form arg-2)))
-      (nx1-treat-as-call whole))))
+                              (nx1-form :value arg-1)
+                              (nx1-form :value arg-2)))
+      (nx1-treat-as-call context whole))))
 
 (defun nx-global-p (sym &optional (env *nx-lexical-environment*))
   (or 
