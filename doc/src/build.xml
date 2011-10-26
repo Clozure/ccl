@@ -249,40 +249,73 @@
     <para>All versions are available for download from svn.clozure.com via
     the Subversion source control system.</para>
     <para>
-      For example, to get a released version (1.3 in this example),
+      For example, to get a released version (1.7 in this example),
       use a command like:
-      <programlisting>
-	svn co http://svn.clozure.com/publicsvn/openmcl/release/1.3/xxx/ccl
-      </programlisting>
+      <programlisting>svn co http://svn.clozure.com/publicsvn/openmcl/release/1.7/<replaceable>xxx</replaceable>/ccl</programlisting>
     </para>
     <para>
       To get the trunk version, use:
-      <programlisting>
-	svn co http://svn.clozure.com/publicsvn/openmcl/trunk/xxx/ccl
-      </programlisting>
+      <programlisting>svn co http://svn.clozure.com/publicsvn/openmcl/trunk/<replaceable>xxx</replaceable>/ccl</programlisting>
     </para>
     <para>
-      Change the "xxx" to one of the following names:
+      Change the <emphasis><literal>xxx</literal></emphasis> to one of the following names:
       <literal>darwinx86</literal>,
       <literal>linuxx86</literal>,
       <literal>freebsdx86</literal>,
       <literal>solarisx86</literal>,
-      <literal>window</literal>,
+      <literal>windows</literal>,
       <literal>linuxppc</literal>,
       or 
       <literal>darwinppc</literal>.
     </para>
     <para>
-      In the case of released versions, there may also be tar archives
-      available.  See the <ulink url="http://trac.clozure.com/ccl/">Clozure CL
-      Trac</ulink> for details.
+      Tarball distributions of released versions are also available for download via ftp from:
+      <ulink url="ftp://clozure.com/pub/release/"/>.
+      For additional information about availability of source and distributions see the
+      <ulink url="http://trac.clozure.com/ccl/">Clozure CL Trac</ulink>.
     </para>
     <para>Subversion client programs are pre-installed on Mac OS X 10.5 and
       later and are typically either pre-installed or readily available
-      on Linux and FreeBSD platforms.  The <ulink url="http://subversion.tigris.org">Subversion web page</ulink> contains links to subversion client programs
-      for many platforms; users of Mac OS X 10.4 can also
-      install Subversion clients via Fink or MacPorts.</para>
+      on Linux and FreeBSD platforms.  The <ulink url="http://subversion.tigris.org">Subversion web page</ulink> contains links to Subversion client programs
+      for many platforms.
+      Users of Mac OS X 10.4 or later can also
+      install Subversion clients via Fink or MacPorts.
+      On Debian Linux (and on related Linux distros such as Ubuntu) run
+      <literal>apt-get install subversion</literal> or equivalent in the command-line or interactive package manager.
+    </para>
     
+  </sect1>
+
+  
+  <!-- ******************************************************** -->
+  <sect1 id="Kernel-build-prerequisites">
+    <title>Kernel Build Prerequisites</title>
+        <para>The &CCL; kernel can be built with the following widely
+          available tools:</para>
+    <itemizedlist>
+      <listitem><para>cc or gcc &mdash; the GNU C compiler</para></listitem>
+      <listitem><para>ld &mdash; the GNU linker</para></listitem>
+      <listitem><para>m4 or gm4 &mdash; the GNU m4 macro processor</para></listitem>
+      <listitem><para>as &mdash; the GNU assembler (version 2.10.1 or later)</para></listitem>
+      <listitem><para>make &mdash; either GNU make or, on FreeBSD, the default BSD make program</para></listitem>
+        </itemizedlist>
+        <para> In general, the more recent the versions of those
+          tools, the better; some versions of gcc 3.x on Linux have
+          difficulty compiling some of the kernel source code correctly
+          (so gcc 4.0 should be used, if possible.)  On Mac OS X, the
+          versions of the tools distributed with Xcode should work fine;
+          on Linux, the versions of the tools installed with the OS (or
+          available through its package management system) should work
+          fine if they're "recent enough".  On FreeBSD, the installed
+          version of the <literal>m4</literal> program doesn't support
+          some features that the kernel build process depends on; the
+          GNU version of the m4 macroprocessor (called
+          <literal>gm4</literal> on FreeBSD) should be installed.
+        </para>
+        <note><para>In order to build the lisp kernel on Mac OS X
+        10.6 Snow Leopard, you must install the optional 10.4
+        support when installing Xcode.</para>
+        </note>
   </sect1>
 
   <!-- =========================================================== -->
@@ -326,7 +359,7 @@
       <listitem>
 	    <para>Runs another external process, which causes the newly
 	      compiled lisp kernel to load the new bootstrapping image.
-	      The bootsrtrapping image then loads the &ldquo;higher
+	      The bootstrapping image then loads the &ldquo;higher
 	      level&rdquo; fasl files and a new copy of the platform's
 	      full heap image is then saved.</para>
 	  </listitem>
@@ -344,7 +377,7 @@
 
   <!-- =========================================================== -->
   <sect1 id="Building-the-kernel">
-    <title>Building the kernel</title>
+    <title>Building the Kernel</title>
     <para>The Lisp kernel is the executable that you run to use
       Lisp.  It doesn't actually contain the entire Lisp
       implementation; rather, it loads a heap image which contains the
@@ -370,38 +403,6 @@
       </programlisting>
     </para>
 
-
-    <!-- ******************************************************** -->
-    <sect2 id="Kernel-build-prerequisites">
-      <title>Kernel build prerequisites</title>
-	  <para>The &CCL; kernel can be bult with the following widely
-	    available tools:</para>
-      <itemizedlist>
-        <listitem><para>cc or gcc- the GNU C compiler</para></listitem>
-        <listitem><para>ld - the GNU linker</para></listitem>
-        <listitem><para>m4 or gm4- the GNU m4 macro processor</para></listitem>
-        <listitem><para>as - the GNU assembler (version 2.10.1 or later)</para></listitem>
-	    <listitem><para>make - either GNU make or, on FreeBSD, the default BSD make program</para></listitem>
-	  </itemizedlist>
-	  <para> In general, the more recent the versions of those
-	    tools, the better; some versions of gcc 3.x on Linux have
-	    difficulty compiling some of the kernel source code correctly
-	    (so gcc 4.0 should be used, if possible.)  On Mac OS X, the
-	    versions of the tools distributed with Xcode should work fine;
-	    on Linux, the versions of the tools installed with the OS (or
-	    available through its package management system) should work
-	    fine if they're "recent enough".  On FreeBSD, the installed
-	    version of the <literal>m4</literal> program doesn't support
-	    some features that the kernel build process depends on; the
-	    GNU version of the m4 macroprocessor (called
-	    <literal>gm4</literal> on FreeBSD) should be installed.
-	  </para>
-	  <note><para>In order to build the lisp kernel on Mac OS X
-	  10.6 Snow Leopard, you must install the optional 10.4
-	  support when installing Xcode.</para>
-	  </note>
-    </sect2>
-
     <!-- ******************************************************** -->
     <sect2 id="kernel-build-command">
 	  <title>Using "make" to build the lisp kernel</title>
@@ -420,7 +421,7 @@ shell> make
 
   <!-- =========================================================== -->
   <sect1 id="Building-the-heap-image">
-    <title>Building the heap image</title>
+    <title>Building the Heap Image</title>
     <para>The initial heap image is loaded by the Lisp kernel, and
       provides most of the language implementation The heap image
       captures the entire state of a running Lisp (except for external
@@ -486,7 +487,7 @@ shell> make
 	  </itemizedlist>
       <para>Given a bootstrapping image and a set of up-to-date fasl
         files, the development cycle usually involves editing lisp
-        sources (or updating those sources via cvs update),
+        sources (or updating those sources via <literal>svn update</literal>),
         recompiling modified files, and using the bootstrapping image
         to produce a new heap image.</para>
     </sect2>
@@ -517,11 +518,11 @@ Welcome to &CCL; .... !
 ?
 	  </programlisting>
 	  <para>then calling <literal>ccl:xload-level-0</literal> at the
-	    lisp prompt</para>
+	    lisp prompt:</para>
 	  <programlisting>
 ? (ccl:xload-level-0)
 	  </programlisting>
-      <para>This function compiles the lisp sources in the ccl/level-0
+      <para>This function compiles the lisp sources in the <literal>ccl/level-0</literal>
         directory if they're newer than the corresponding fasl files
         and then loads the resulting fasl files into a simulated lisp
         heap contained in data structures inside the running
@@ -530,7 +531,7 @@ Welcome to &CCL; .... !
       <para><literal>xload-level-0</literal> should be called
         whenever your existing boot image is out-of-date with respect
         to the source files in <literal>ccl:level-0;</literal>
-        :</para>
+        &mdash; For example:</para>
       <programlisting>
 ? (ccl:xload-level-0 :force)
       </programlisting>
@@ -574,7 +575,7 @@ Welcome to &CCL; .... !
 	    argument</para>
       <programlisting>
 $ cd ccl                        # wherever your ccl directory is
-$ ./KERNEL BOOT_IMAGE
+$ ./<replaceable>KERNEL</replaceable> <replaceable>BOOT_IMAGE</replaceable>
 	  </programlisting>
       <para>Where <replaceable>KERNEL</replaceable> and
         <replaceable>BOOT_IMAGE</replaceable> are the names of
@@ -586,7 +587,7 @@ $ ./KERNEL BOOT_IMAGE
         able to do essentially everything in that environment that you
         can in the environment provided by a "real" heap image. If
         you're confident that things loaded OK, you can save that
-        image.</para>
+        image:</para>
       <programlisting>
 ? (ccl:save-application "<replaceable>image_name</replaceable>") ; Overwiting the existing heap image
 	  </programlisting>
