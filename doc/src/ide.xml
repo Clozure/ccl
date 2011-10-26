@@ -504,7 +504,7 @@ ccl -b -e "(require :cocoa)" -e "(require :build-application)" -e "(ccl::build-a
         "another system-definition facility", a sort
         of <literal>make</literal> for Lisp, and is included in the
         &CCL; distribution. You can read more about ASDF at the ASDF
-        <ulink url="http://constantly.at/lisp/asdf/">home
+        <ulink url="http://common-lisp.net/project/asdf/">home
         page</ulink>.</para>
 
       <para>Alternatively, you could use the standard features of
