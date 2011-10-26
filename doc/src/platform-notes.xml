@@ -335,20 +335,45 @@
     <variablelist>
 	  <varlistentry>
 	    <term>
-	      <ulink url="http://developer.apple.com/documentation/Cocoa/">Cocoa Documentation</ulink>
+	      <ulink url="http://developer.apple.com/technologies/mac/cocoa.html">Mac OS X - Cocoa</ulink>
 	    </term>
-
+            <term>
+              <ulink url="http://developer.apple.com/library/mac/#documentation/General/Conceptual/DevPedia-CocoaCore/Cocoa.html">
+                Cocoa Core Competencies
+              </ulink>
+            </term>
+            <term>
+              <ulink url="http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/CocoaFundamentals/WhatIsCocoa/WhatIsCocoa.html">
+                Cocoa Fundamentals Guide
+              </ulink>
+            </term>
 	    <listitem>
 	      <para>
-	        This is the top page for all of Apple's documentation on
-	        Cocoa.  If you are unfamiliar with Cocoa, it is a good
-	        place to start.
+	        These are top-level pages pertaining to Cocoa in Apple's Mac OS X Developer Library.
+	        If you are unfamiliar with Cocoa, these links are good places to start.
 	      </para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
 	    <term>
-	      <ulink url="http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html">Foundation Reference for Objective-C</ulink>
+              <ulink url="http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjectiveC/Introduction/introObjectiveC.html">
+                The Objective-C Programming Language
+              </ulink>
+            </term>
+            <term>
+              <ulink url="http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Introduction/Introduction.html">
+                Objective-C Runtime Programming Guide
+              </ulink>
+            </term>
+            <listitem>
+              <para>These provide a conceptual overview and programming guide to Objective-C the language and runtime, respectively.</para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>
+              <ulink url="http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/ObjCRuntimeRef/Reference/reference.html">
+                Objective-C Runtime Reference
+              </ulink>
 	    </term>
 
 	    <listitem>
@@ -362,31 +387,40 @@
 
 	  <varlistentry>
 	    <term>
-	      <ulink url="http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html">Application Kit Reference for Objective-C</ulink>
+	      <ulink url="http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html">Application Kit Framework Reference</ulink>
 	    </term>
 
 	    <listitem>
 	      <para>
-	        This is the other; it covers GUI programming with Cocoa
+	        This is the other very important Cocoa reference; it covers GUI programming with Cocoa / Application Kit Framework
 	        in considerable depth.  This is a reference, not a tutorial.
 	      </para>
 	    </listitem>
 	  </varlistentry>
 
 	  <varlistentry>
-	    <term>
-	      <ulink url="http://developer.apple.com/documentation/index.html">Apple Developer Documentation</ulink>
+            <term>
+              <ulink url="http://developer.apple.com/library/mac/navigation/">Mac OS X Developer Library</ulink>
 	    </term>
-
 	    <listitem>
 	      <para>
-	        This is the site which the above two documents are found on;
-	        go here to find the documentation on any other Apple API.
+	        This is the top page for Mac OS X developer documentation.
+	        Go here to find the documentation on any other Mac OS X API.
 	        Also go here if you need general guidance about OS X, Carbon,
-	        Cocoa, Core Foundation, or Objective C.
+	        Cocoa, Core Foundation, or Objective-C.
 	      </para>
 	    </listitem>
 	  </varlistentry>
+          <varlistentry>
+            <term>
+              <ulink url="http://developer.apple.com/">Resources for Apple Developers</ulink>
+	    </term>
+            <listitem>
+              <para>
+                This is the top page for all Apple developer documentation.
+              </para>
+            </listitem>
+          </varlistentry>
     </variablelist>
 
   </sect1>
