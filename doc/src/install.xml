@@ -139,7 +139,7 @@ will be addressed.
     </sect2>
     <sect2 id="windows"><title>Microsoft Windows</title>
     <para>
-      At the moment, the 32-bit &CCL; does not run under 64-bit Windows.
+      For &CCL; versions prior to 1.7, the 32-bit executable does not run under 64-bit Windows.
     </para>
     </sect2>
   </sect1>
@@ -329,7 +329,7 @@ Type 'svn help' for usage]]>
 
     <programlisting>
 joe&gt; cd <replaceable>/path/to/installed/ccl</replaceable>
-joe:ccl&gt; ./<replaceable>kernel-filename</replaceable> --no-init
+joe:ccl&gt; ./<replaceable>kernel-filename</replaceable>
 <![CDATA[Welcome to Clozure Common Lisp Version [...]
 ? (rebuild-ccl :full t)
 <...lots of compilation output...>
@@ -385,7 +385,8 @@ joe:ccl&gt;
 
     <para>For Mac OS X, Xcode 4 is available from the App Store.</para>
 
-    <para>For Windows, follow the procedure outlined in the &CCL; Wiki
+    <para>For Windows, install Cygwin and the MinGW toolchain for the 32- or 64-bit OS.
+    More information about installing &CCL; on Windows is available in the &CCL; Wiki
     at URL: <ulink url="http://trac.clozure.com/ccl/wiki/WindowsNotes"/>
     </para>
 
@@ -430,7 +431,7 @@ joe:ccl&gt;
     <para>For example, to build a 64-bit &CCL; on Mac OS X: 
 
     <programlisting><![CDATA[
-joe:ccl> ./dx86cl64 --no-init
+joe:ccl> ./dx86cl64
 Welcome to Clozure Common Lisp Version 1.7  (DarwinX8664)!
 ? (rebuild-ccl :full t)
 Rebuilding Clozure Common Lisp using Version 1.7  (DarwinX8664)
@@ -457,7 +458,7 @@ joe:ccl>]]>
 joe:ccl> rm dx86cl*
 joe:ccl> svn update
 <... lots of Subversion output...>
-joe:ccl> ./dx86cl64 --no-init
+joe:ccl> ./dx86cl64
 Welcome to Clozure Common Lisp Version 1.7  (DarwinX8664)!
 ? (rebuild-ccl :full t)
 <... lots of compilation output...>
@@ -465,9 +466,6 @@ Welcome to Clozure Common Lisp Version 1.7  (DarwinX8664)!
 joe:ccl> 
 ]]>
     </programlisting>
-    Follow this same procedure to perform the fuil rebuild from scratch, for example
-    in the case where the saved Lisp image contains code that was loaded inadvertently.
-    (Classic mistake: forgetting to specify the <literal>--no-init</literal> command option.)
     </para>
 
     <para>Once the full rebuild is completed, you can run the new Lisp kernel from the command shell.
