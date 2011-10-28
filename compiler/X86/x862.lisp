@@ -94,6 +94,9 @@
 		    `(progn
 		       (x862-invalidate-regmap)
 		       (backend-gen-label ,',segvar ,,labelnum-var)))
+                  (@+ (,labelnum-var)
+                    `(progn             ;keep regmap
+		       (backend-gen-label ,',segvar ,,labelnum-var)))
                   (@= (,labelnum-var)
                     `(progn
 		       (x862-invalidate-regmap)
@@ -187,6 +190,7 @@
 (defvar *x862-tail-label* nil)
 (defvar *x862-tail-vsp* nil)
 (defvar *x862-tail-nargs* nil)
+(defvar *x862-tail-arg-vars* nil)
 (defvar *x862-tail-allow* t)
 (defvar *x862-reckless* nil)
 (defvar *x862-full-safety* nil)
@@ -610,6 +614,7 @@
            (*x862-tail-label* nil)
            (*x862-tail-vsp* nil)
            (*x862-tail-nargs* nil)
+           (*x862-tail-arg-vars* nil)
            (*x862-inhibit-register-allocation* nil)
            (*x862-tail-allow* t)
            (*x862-reckless* nil)
@@ -2898,7 +2903,7 @@
       (! jump-known-symbol)
       (! call-known-symbol *x862-arg-z*))))
 
-(defun x862-self-call (seg nargs tail-p)
+(defun x862-do-self-call (seg nargs tail-p)
   (with-x86-local-vinsn-macros (seg)
     (cond ((and tail-p
                 (eql nargs *x862-fixed-nargs*)
@@ -2941,12 +2946,10 @@
            (expression-p (or (typep fn 'lreg) (and (fixnump fn) (not label-p))))
            (callable (or symp lfunp label-p))
            (destreg (if symp ($ *x862-fname*) (unless label-p ($ *x862-temp0*))))
-           (alternate-tail-call
-            (and tail-p label-p *x862-tail-label* (eql nargs *x862-tail-nargs*) (not spread-p)))
+
            (set-nargs-vinsn nil))
       (or (and label-p nargs (not spread-p) (not (x862-mvpass-p xfer))
-               (not alternate-tail-call)
-               (x862-self-call seg nargs tail-p))
+               (x862-do-self-call seg nargs tail-p))
           (progn
             (when expression-p
               ;;Have to do this before spread args, since might be vsp-relative.
@@ -2964,8 +2967,7 @@
               (when a-reg
                 (x862-copy-register seg destreg a-reg))
               (unless spread-p
-                (unless alternate-tail-call
-                  (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* (and nargs (<= nargs *x862-target-num-arg-regs*))))))
+                (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* (and nargs (<= nargs *x862-target-num-arg-regs*)))))
             (if spread-p
               (progn
                 (x862-set-nargs seg (%i- nargs 1))
@@ -2983,8 +2985,7 @@
                 (when (and tail-p *x862-register-restore-count*)
                   (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* nil)))
               (if nargs
-                (unless alternate-tail-call
-                  (setq set-nargs-vinsn (x862-set-nargs seg nargs)))
+                (setq set-nargs-vinsn (x862-set-nargs seg nargs))
                 (! pop-argument-registers)))
             (if callable
               (if (not tail-p)
@@ -3013,11 +3014,7 @@
                         (if symp
                           (x862-call-symbol seg nil)
                           (! call-known-function))))))
-                (if alternate-tail-call
-                  (progn
-                    (x862-unwind-stack seg xfer 0 0 *x862-tail-vsp*)
-                    (! jump (aref *backend-labels* *x862-tail-label*)))
-                  (progn
+                (progn
                     (x862-unwind-stack seg xfer 0 0 #x7fffff)
                     (if (and (not spread-p) nargs (%i<= nargs *x862-target-num-arg-regs*))
                       (progn
@@ -3079,7 +3076,7 @@
                                (! restore-full-lisp-context)
                                (if symp
                                  (! jump-known-symbol)
-                                 (! jump-known-function)))))))))
+                                 (! jump-known-function))))))))
               ;; The general (funcall) case: we don't know (at compile-time)
               ;; for sure whether we've got a symbol or a (local, constant)
               ;; function.
@@ -3351,11 +3348,13 @@
                               form 
                               address-reg))
 
-(defun x862-push-reg-for-form (seg form suggested)
+(defun x862-push-reg-for-form (seg form suggested &optional targeted)
   (let* ((reg (if (and (node-reg-p suggested)
                          (nx2-acode-call-p form))     ;probably ...
                 (x862-one-targeted-reg-form seg form *x862-arg-z*)
-                (x862-one-untargeted-reg-form seg form suggested))))
+                (if targeted
+                  (x862-one-targeted-reg-form seg form suggested)
+                  (x862-one-untargeted-reg-form seg form suggested)))))
     (x862-push-register seg reg)))
 
 (defun x862-one-lreg-form (seg form lreg)
@@ -3593,7 +3592,7 @@
       (unless aconst
         (if atriv
           (x862-one-targeted-reg-form seg aform areg)
-          (setq apushed (x862-push-reg-for-form seg aform areg))))
+          (setq apushed (x862-push-reg-for-form seg aform areg t))))
       (x862-one-targeted-reg-form seg bform breg)
       (if aconst
         (x862-one-targeted-reg-form seg aform areg)
@@ -3665,11 +3664,11 @@
     (if (and aform (not aconst))
       (if atriv
         (x862-one-targeted-reg-form seg aform areg)
-        (setq apushed (x862-push-reg-for-form seg aform areg))))
+        (setq apushed (x862-push-reg-for-form seg aform areg t))))
     (if (and bform (not bconst))
       (if btriv
         (x862-one-targeted-reg-form seg bform breg)
-        (setq bpushed (x862-push-reg-for-form seg bform breg))))
+        (setq bpushed (x862-push-reg-for-form seg bform breg t))))
     (x862-one-targeted-reg-form seg cform creg)
     (unless btriv 
       (if bconst
@@ -3725,15 +3724,15 @@
     (if (and aform (not aconst))
       (if atriv
         (x862-one-targeted-reg-form seg aform areg)
-        (setq apushed (x862-push-reg-for-form seg aform areg))))
+        (setq apushed (x862-push-reg-for-form seg aform areg t))))
     (if (and bform (not bconst))
       (if btriv
         (x862-one-targeted-reg-form seg bform breg)
-        (setq bpushed (x862-push-reg-for-form seg bform breg))))
+        (setq bpushed (x862-push-reg-for-form seg bform breg t))))
     (if (and cform (not cconst))
       (if ctriv
         (x862-one-targeted-reg-form seg cform creg)
-        (setq cpushed (x862-push-reg-for-form seg cform creg))))
+        (setq cpushed (x862-push-reg-for-form seg cform creg t))))
     (x862-one-targeted-reg-form seg dform dreg)
     (unless ctriv
       (if cconst
@@ -4050,12 +4049,13 @@
             (let* ((form (if js32 i j))
                    (var (nx2-lexical-reference-p form))
                    (ea (when var
-                         (unless (x862-existing-reg-for-var var) (var-ea var))))
+                         (unless (x862-existing-reg-for-var var)
+                           (when (eql 1 (var-refs var)) (var-ea var)))))
                    (offset (and ea
                                 (memory-spec-p ea)
                                 (not (addrspec-vcell-p ea))
                                 (memspec-frame-address-offset ea)))
-                   (reg (unless offset (x862-one-untargeted-reg-form seg (if js32 i j) *x862-arg-z*)))
+                   (reg (unless (and offset nil) (x862-one-untargeted-reg-form seg (if js32 i j) *x862-arg-z*)))
                    (constant (or js32 is32)))
               (if offset
                 (! compare-vframe-offset-to-fixnum offset constant)
@@ -6514,10 +6514,10 @@
                  *x8664-nvrs*))
               (:x8632
                *x8632-nvrs*)))))
-        (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
+        (@ (backend-get-next-label))    ; generic self-reference label, should be label #1
         (! establish-fn)
         (@ (backend-get-next-label))    ; self-call label
-	(when keys ;; Ensure keyvect is the first immediate
+	(when keys;; Ensure keyvect is the first immediate
 	  (x86-immediate-label (%cadr (%cdddr keys))))
         (when code-note
 	  (x862-code-coverage-entry seg code-note))
@@ -6647,12 +6647,26 @@
                 (declare (cons pair constant))
                 (rplacd constant reg)
                 (! ref-constant reg (x86-immediate-label (car constant))))))
-          (when (and (not (or opt rest keys))
-                     (<= max-args *x862-target-num-arg-regs*)
-                     (not (some #'null arg-regs)))
-            (setq *x862-tail-vsp* *x862-vstack*
-                  *x862-tail-nargs* max-args)
-            (@ (setq *x862-tail-label* (backend-get-next-label))))
+          (when (and (not (or opt rest keys method-var))
+                     (logbitp $fbittailcallsself (afunc-bits *x862-cur-afunc*))
+                     (<= max-args (1+ *x862-target-num-arg-regs*))
+                     (dolist (var rev-fixed t)
+                       (let* ((bits (nx-var-bits var)))
+                         (declare (fixnum bits))
+                         (when (or (logbitp $vbitspecial bits)
+                                   (eql (logior (ash 1 $vbitclosed)
+                                                (ash 1 $vbitsetq))
+                                        (logand bits (logior (ash 1 $vbitclosed)
+                                                             (ash 1 $vbitsetq)))))
+                           (return)))))
+            (setq *x862-tail-nargs* max-args
+                  *x862-tail-arg-vars* (reverse rev-fixed)
+                  *x862-tail-vsp* *x862-vstack*)
+            (let* ((stack-arg-var (if (> max-args *x862-target-num-arg-regs*)
+                                    (car *x862-tail-arg-vars*))))
+              (when (and stack-arg-var (not (var-nvr stack-arg-var)))
+                (x862-stack-to-register seg (x862-vloc-ea 0) *x862-temp0*)))
+            (setq *x862-tail-label* (backend-get-next-label)))
           (when method-var
 	    (target-arch-case
 	     (:x8632
@@ -6689,6 +6703,8 @@
           (setq *x862-entry-vstack* *x862-vstack*)
           (setq reserved-lcells (x862-collect-lcells :reserved))
           (x862-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars)
+          (when *x862-tail-label*
+            (@+ *x862-tail-label*))
           (when next-method-var-scope-info
             (push next-method-var-scope-info *x862-recorded-symbols*)))
         (when method-var (x862-heap-cons-next-method-var seg method-var))
@@ -7499,7 +7515,42 @@
 
 (defx862 x862-self-call self-call (seg vreg xfer arglist &optional spread-p)
   (setq arglist (x862-augment-arglist *x862-cur-afunc* arglist (if spread-p 1 *x862-target-num-arg-regs*)))
-  (x862-call-fn seg vreg xfer -2 arglist spread-p))
+  (let* ((nargs *x862-tail-nargs*))
+    (if (and nargs (x862-tailcallok xfer) (not spread-p)
+             (eql nargs (+ (length (car arglist))
+                           (length (cadr arglist)))))
+      (let* ((forms (append (car arglist) (reverse (cadr arglist))))
+             (vars *x862-tail-arg-vars*)
+             (regs (ecase nargs
+                     (0 ())
+                     (1 (list ($ *x862-arg-z*)))
+                     (2 (list ($ *x862-arg-y*) ($ *x862-arg-z*)))
+                     (3 (list (target-arch-case
+                               (:x8632 ($ x8632::temp0))
+                               (:x8664 ($ x8664::arg_x)))
+                              ($ *x862-arg-y*) ($ *x862-arg-z*)))
+                     (4 (target-arch-case
+                         (:x8632 (compiler-bug "4 tail-call args on x8632"))
+                         (:x8664 (list ($ x8664::temp0)
+                                       ($ x8664::arg_x)
+                                       ($ x8664::arg_y)
+                                       ($ x8664::arg_z))))))))
+        (case nargs
+          (1 (x862-one-targeted-reg-form seg (car forms) (car regs)))
+          (2 (x862-two-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)))
+          (3 (x862-three-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs) (caddr forms) (caddr regs)))
+          (4 (x862-four-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)  (caddr forms) (caddr regs) (cadddr forms) (cadddr regs))))
+        (do* ((vars vars (cdr vars))
+              (regs regs (cdr regs)))
+             ((null vars))
+          (let* ((var (car vars))
+                 (reg (car regs)))
+            (x862-do-lexical-setq seg nil (var-ea var) reg)))
+        (let* ((diff (- *x862-vstack* *x862-tail-vsp*)))
+          (unless (eql 0 diff)
+            (! adjust-vsp diff))
+          (! jump (aref *backend-labels* *x862-tail-label*))))
+      (x862-call-fn seg vreg xfer -2 arglist spread-p))))
 
 
 (defx862 x862-lexical-function-call lexical-function-call (seg vreg xfer afunc arglist &optional spread-p)

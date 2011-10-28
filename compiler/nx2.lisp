@@ -29,7 +29,6 @@
 ;;; same register (e.g., no scope conflicts.)
 
 (defun nx2-partition-vars (vars inherited-vars &optional (afunc-flags 0))
-  (declare (ignorable afunc-flags))
   (labels ((var-weight (var)
              (let* ((bits (nx-var-bits var)))
                (declare (fixnum bits))
@@ -41,7 +40,10 @@
                          (eql (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq))
                               (logand bits (logior (ash 1 $vbitclosed) (ash 1 $vbitsetq)))))
                    0
-                   (var-refs var))
+                   (let* ((w (var-refs var)))
+                     (if (logbitp $fbittailcallsself afunc-flags)
+                       (ash w 2)
+                       w)))
                  0)))
            (sum-weights (varlist) 
              (let ((sum 0))
