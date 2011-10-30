@@ -1000,7 +1000,15 @@
             *x862-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
             *x862-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
-
+(defun x862-nvr-p (reg)
+  (target-arch-case
+   (:x8664
+    ;; For the sake of argument, x8664::save3 is always an nvr (even though
+    ;; we have to keep the TCR in it on some platforms.)
+    (and (node-reg-p reg) (logbitp (hard-regspec-value reg) x8664-nonvolatile-registers-mask)))
+   (:x8632
+    ;; We might have some caller-save NVRs on x8632 someday, but for now:
+    nil)))
     
 ;;; Vpush the last N non-volatile-registers.
 (defun x862-save-nvrs (seg n)
@@ -7535,6 +7543,40 @@
                                        ($ x8664::arg_x)
                                        ($ x8664::arg_y)
                                        ($ x8664::arg_z))))))))
+        ;; A form that's a lexical reference to X that's ultimately going
+        ;; to be stored in X is a noop.
+        (collect ((new-forms)
+                  (new-vars)
+                  (new-regs))
+          (do* ((xforms forms (cdr xforms))
+                (xvars vars (cdr xvars))
+                (xregs regs (cdr xregs))
+                (new-nargs 0))
+               ((null xforms)
+                (setq nargs new-nargs
+                      forms (new-forms)
+                      vars (new-vars)
+                      regs (new-regs)))
+            (declare (fixnum new-nargs))
+            (let* ((var (car xvars))
+                   (form (car xforms)))
+              (unless (and (eq var (nx2-lexical-reference-p form))
+                           (not (logbitp $vbitsetq (nx-var-bits var))))
+                (incf new-nargs)
+                (new-vars var)
+                (new-forms form)
+                (new-regs (car xregs))))))
+        (dotimes (i nargs)
+          (let* ((var (nth i vars))
+                 (nvr (var-nvr var)))
+            (when nvr
+              (when (dotimes (j nargs t)
+                      (unless (= i j)
+                        (let* ((form (nth j forms)))
+                          (unless (and (nx2-var-not-set-by-form-p var form)
+                                       (nx2-var-not-reffed-by-form-p var form))
+                            (return)))))
+                (setf (nth i regs) nvr)))))
         (case nargs
           (1 (x862-one-targeted-reg-form seg (car forms) (car regs)))
           (2 (x862-two-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)))

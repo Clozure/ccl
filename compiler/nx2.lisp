@@ -226,6 +226,33 @@
                         (not-set-in-formlist (car subforms))
                         (not-set-in-formlist (cadr subforms))))))))))
 
+(defun nx2-var-not-reffed-by-form-p (var form &optional closed)
+  (setq form (acode-unwrapped-form form))
+  (unless (eq var (nx2-lexical-reference-p form))
+    (or (atom form)
+        (nx2-lexical-reference-p form)  ;not us
+        (nx2-constant-form-p form)
+        (let ((op (acode-operator form))
+              (subforms nil))
+          (if (eq op (%nx1-operator setq-lexical))
+            (and (neq var (cadr form))
+                 (nx2-var-not-reffed-by-form-p var (caddr form)))
+            (and (or (not closed)
+                     (logbitp operator-side-effect-free-bit op))
+                 (flet ((not-reffed-in-formlist (formlist)
+                          (dolist (subform formlist t)
+                            (unless (nx2-var-not-reffed-by-form-p var subform closed) (return)))))
+                   (if
+                     (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
+                           ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
+                     (not-reffed-in-formlist subforms)
+                     (and (or (eq op (%nx1-operator call))
+                              (eq op (%nx1-operator lexical-function-call)))
+                          (nx2-var-not-reffed-by-form-p var (cadr form))
+                          (setq subforms (caddr form))
+                          (not-reffed-in-formlist (car subforms))
+                          (not-reffed-in-formlist (cadr subforms)))))))))))
+
 (defun nx2-node-gpr-p (reg)
   (and reg
        (eql (hard-regspec-class reg) hard-reg-class-gpr)
