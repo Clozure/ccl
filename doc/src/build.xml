@@ -575,7 +575,7 @@ Welcome to &CCL; .... !
 	    argument</para>
       <programlisting>
 $ cd ccl                        # wherever your ccl directory is
-$ ./<replaceable>KERNEL</replaceable> <replaceable>BOOT_IMAGE</replaceable>
+$ ./<replaceable>KERNEL</replaceable> --image-name <replaceable>BOOT_IMAGE</replaceable> --no-init
 	  </programlisting>
       <para>Where <replaceable>KERNEL</replaceable> and
         <replaceable>BOOT_IMAGE</replaceable> are the names of
@@ -589,7 +589,7 @@ $ ./<replaceable>KERNEL</replaceable> <replaceable>BOOT_IMAGE</replaceable>
         you're confident that things loaded OK, you can save that
         image:</para>
       <programlisting>
-? (ccl:save-application "<replaceable>image_name</replaceable>") ; Overwiting the existing heap image
+? (ccl:save-application "<replaceable>image_name</replaceable>") ; Overwriting the existing heap image
 	  </programlisting>
 	  <para>Where <replaceable>image_name</replaceable> is the name of
         the full heap image for your platform. See
