@@ -134,8 +134,8 @@ typedef struct area_list {
 #endif
 
 #define MIN_TSTACK_SIZE (1<<18)
-#define TSTACK_HARDPROT 0
-#define TSTACK_SOFTPROT (1<<16)
+#define TSTACK_HARDPROT ((1<<16)+(1<<12))
+#define TSTACK_SOFTPROT ((1<<16)+(1<<12))
 
 #ifdef PPC
 #define CS_OVERFLOW_FORCE_LIMIT ((natural)(-(sizeof(lisp_frame))))

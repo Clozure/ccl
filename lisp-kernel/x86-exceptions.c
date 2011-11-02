@@ -756,7 +756,8 @@ reset_lisp_process(ExceptionInformation *xp)
 Boolean
 do_hard_stack_overflow(ExceptionInformation *xp, protected_area_ptr area, BytePtr addr)
 {
-  reset_lisp_process(xp);
+  /*  reset_lisp_process(xp); */
+  Bug(xp, "Unrecoverable stack overflow.");
   return false;
 }
 
