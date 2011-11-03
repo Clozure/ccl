@@ -2,6 +2,10 @@
 
 (in-package "CCL")
 
+#+darwin-target
+(unless (>= (parse-integer (software-version) :junk-allowed t) 10)
+  (error "the Objective-C bridge needs at least Mac OS X 10.6"))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "BRIDGE"))
 
