@@ -7291,7 +7291,9 @@
                                   (- 31 *x862-target-fixnum-shift*))))
            (otherform (when fiximm (if fix1 form2 form1)))
            (out-of-line (backend-get-next-label))
-           (done (backend-get-next-label)))
+           (done (backend-get-next-label))
+           (continue (backend-get-next-label)))
+        
       (if otherform
         (x862-one-targeted-reg-form seg otherform ($ *x862-arg-y*))
         (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*)))
@@ -7312,10 +7314,13 @@
         (when otherform
           (unless (or (and fix2 (not fix1)) (eq cr-bit x86::x86-e-bits))
             (setq cr-bit (x862-reverse-cr-bit cr-bit))))
-        (if (not true-p)
-          (setq cr-bit (logxor 1 cr-bit)))
-        (! cr-bit->boolean ($ *x862-arg-z*) cr-bit)
-        (-> done)
+        (if (and vreg (eq (hard-regspec-class vreg) hard-reg-class-crf))
+          (x862-branch seg (x862-cd-merge xfer continue) cr-bit true-p)
+          (progn
+            (if (not true-p)
+              (setq cr-bit (logxor 1 cr-bit)))
+            (! cr-bit->boolean ($ *x862-arg-z*) cr-bit)
+            (-> done)))
         (@ out-of-line)
         (when otherform
           (x862-lri seg ($ *x862-arg-z*) (ash fixval *x862-target-fixnum-shift*))
@@ -7326,7 +7331,8 @@
           (! call-subprim-2 ($ *x862-arg-z*) idx-subprim ($ *x862-arg-y*) ($ *x862-arg-z*)))
         (@ done)
         (<- ($ *x862-arg-z*))
-        (^)))))
+        (^)
+        (@ continue)))))
          
         
     
