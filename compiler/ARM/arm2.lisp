@@ -4692,6 +4692,7 @@
 
       
 (defun arm2-branch (seg xfer crf &optional cr-bit true-p)
+  (declare (notinline arm2-branch))
   (let* ((*arm2-vstack* *arm2-vstack*)
          (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
     (with-arm-local-vinsn-macros (seg)
@@ -4702,10 +4703,10 @@
           (arm2-vpush-register seg arm::arg_z)
           (arm2-set-nargs seg 1)))
       (if (neq 0 xfer)
-        (if (eq xfer $backend-return)    ;; xfer : RETURN ==> popj
+        (if (eq xfer $backend-return);; xfer : RETURN ==> popj
           (arm2-do-return seg)
           (if (not (arm2-cd-compound-p xfer))
-            (-> xfer)  ;; xfer : label# ==> BRA label#
+            (-> xfer);; xfer : label# ==> BRA label#
             ;; cd is compound : (<true> / <false>)
             (let* ((truebranch (arm2-cd-true xfer))
                    (falsebranch (arm2-cd-false xfer))
@@ -4720,8 +4721,8 @@
               (unless cr-bit (setq cr-bit arm::arm-cond-eq))
               (if (and tn0 tnret nn0 nnret)
                 (progn
-                  (! cbranch-true tlabel crf cr-bit )    ;; (label# /  label#)
-                  (-> nbranch)))
+                  (! cbranch-true tlabel crf cr-bit );; (label# /  label#)
+                  (-> nbranch))
                 (if (and nnret tnret)
                   (if nn0
                     (! cbranch-false nlabel crf cr-bit)
@@ -4732,7 +4733,7 @@
                       (! cbranch-true auxl crf cr-bit)
                       (! cbranch-false auxl crf cr-bit))
                     (arm2-do-return seg)
-                    (@ aux-label))))))))))
+                    (@ aux-label)))))))))))
 
 (defun arm2-cd-merge (cd label)
   (setq cd (or cd 0))
@@ -6093,7 +6094,8 @@
           (arm2-one-targeted-reg-form seg otherform ($ arm::arg_z))
           (arm2-two-targeted-reg-forms seg  form1 ($ arm::arg_y) form2 ($ arm::arg_z)))
         (let* ((out-of-line (backend-get-next-label))
-               (done (backend-get-next-label)))
+               (done (backend-get-next-label))
+               (continue (backend-get-next-label)))
           (if otherform
             (unless (acode-fixnum-form-p otherform)
               (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line)))
@@ -6103,11 +6105,14 @@
                 (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
                 (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
           (with-crf-target () crf
-          (if otherform
-            (! compare-immediate crf ($ arm::arg_z) 0)
-            (! compare crf ($ arm::arg_y) ($ arm::arg_z)))
-          (! cond->boolean ($ arm::arg_z) (if true-p cr-bit (logxor cr-bit 1))))
-          (-> done)
+                           (if otherform
+                             (! compare-immediate crf ($ arm::arg_z) 0)
+                             (! compare crf ($ arm::arg_y) ($ arm::arg_z)))
+                           (if (and vreg (eql (hard-regspec-class vreg) hard-reg-class-crf))
+                             (arm2-branch seg (arm2-cd-merge xfer continue) crf cr-bit true-p)
+                             (progn
+                               (! cond->boolean ($ arm::arg_z) (if true-p cr-bit (logxor cr-bit 1)))
+                               (-> done))))
           (@ out-of-line)
           (if otherform
             (arm2-lri seg ($ arm::arg_y) 0))
@@ -6116,7 +6121,8 @@
             (! call-subprim-2 ($ arm::arg_z) idx-subprim ($ arm::arg_y) ($ arm::arg_z)))
           (@ done)
           (<- ($ arm::arg_z))
-          (^))))))
+          (^)
+          (@ continue))))))
     
 (defarm2 arm2-%word-to-int %word-to-int (seg vreg xfer form)
   (if (null vreg)
