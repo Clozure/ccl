@@ -158,10 +158,16 @@
   (first-window-satisfying-predicate #'(lambda (w) (typep (#/windowController w) controller-type))))
 
 
-(defun new-listener ()
+(defun new-listener (&key (inhibit-greeting ccl::*inhibit-greeting*))
   (let ((wptr (execute-in-gui (lambda ()
                                 (declare (special hemlock-listener-document))
-                                (#/newListener: (#/delegate *NSApp*) (%null-ptr))
+                                ;; TODO: fix this.
+                                (let ((old ccl::*inhibit-greeting*))
+                                  (unwind-protect
+                                      (progn
+                                        (setq ccl::*inhibit-greeting* inhibit-greeting)
+                                        (#/newListener: (#/delegate *NSApp*) (%null-ptr)))
+                                    (setq ccl::*inhibit-greeting* old)))
                                 (let ((doc (#/topListener hemlock-listener-document)))
                                   (unless (%null-ptr-p doc)
                                     (#/window (#/lastObject (#/windowControllers doc)))))))))
