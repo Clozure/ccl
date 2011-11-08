@@ -1221,6 +1221,7 @@
 (defindent "iterate" 2)
 (defindent "rlet" 1)
 (defindent "rletz" 1)
+(defindent "let-globally" 1)
 
 ;;; Error/condition system forms.
 ;;; 
@@ -1293,7 +1294,7 @@
 
 ;;; Multiprocessing forms.
 (defindent "process-wait" 1)
-
+(defindent "process-run-function" 1)
 
 
 ;;;; Indentation.
