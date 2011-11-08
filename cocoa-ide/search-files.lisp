@@ -74,7 +74,7 @@
 
 (defmethod folder-valid-p ((wc search-files-window-controller))
   (let* ((nsstr (folder-string-value wc)))
-    (when (and (typep nsstr ns:ns-string) (#/length nsstr))
+    (when (and (typep nsstr ns:ns-string) (plusp (#/length nsstr)))
       (let ((lstr (lisp-string-from-nsstring nsstr)))
         (when (valid-host-p lstr)
           (probe-file (get-full-dir-string lstr)))))))
