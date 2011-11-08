@@ -20,11 +20,16 @@
 (in-package "CCL")
 
 
+(defvar *read-loop-function* 'read-loop)
+
+(defun run-read-loop (&rest args)
+  (declare (dynamic-extent args))
+  (apply *read-loop-function* args))
 
 (defun toplevel-loop ()
   (loop
     (if (eq (catch :toplevel 
-              (read-loop :break-level 0 )) $xstkover)
+              (run-read-loop :break-level 0 )) $xstkover)
       (format t "~&;[Stacks reset due to overflow.]")
       (when (eq *current-process* *initial-process*)
         (toplevel)))))
@@ -480,19 +485,22 @@ commands but aren't")
     (quit -1))
   (#__exit -1))
 
+;; Make these available to debugger hook
 (defvar *top-error-frame* nil)
+(defvar *break-loop-type* nil) ;; e.g. "Debug", "Signal", "Error".
 
 (defun break-loop-handle-error (condition *top-error-frame*)
   (multiple-value-bind (bogus-globals newvals oldvals) (%check-error-globals)
     (dolist (x bogus-globals)
       (set x (funcall (pop newvals))))
-    (when (and *debugger-hook* *break-on-errors* (not *batch-flag*))
-      (let ((hook *debugger-hook*)
-            (*debugger-hook* nil))
-        (funcall hook condition hook)))
     (let ((msg (if *batch-flag* ;; Give a little more info if exiting
                  (format nil "Error of type ~s" (type-of condition))
                  "Error")))
+      (when (and *debugger-hook* *break-on-errors* (not *batch-flag*))
+        (let ((hook *debugger-hook*)
+              (*debugger-hook* nil)
+              (*break-loop-type* msg))
+          (funcall hook condition hook)))
       (%break-message msg condition))
     (let* ((s *error-output*))
       (dolist (bogusness bogus-globals)
@@ -538,12 +546,14 @@ commands but aren't")
 
 (defun invoke-debugger (condition &aux (*top-error-frame* (%get-frame-ptr)))
   "Enter the debugger."
-  (let ((c (require-type condition 'condition)))
+  (let ((c (require-type condition 'condition))
+        (msg "Debug"))
     (when *debugger-hook*
       (let ((hook *debugger-hook*)
-            (*debugger-hook* nil))
+            (*debugger-hook* nil)
+            (*break-loop-type* msg))
         (funcall hook c hook)))
-    (%break-message "Debug" c)
+    (%break-message msg c)
     (break-loop c)))
 
 (defun %break-message (msg condition &optional (error-pointer *top-error-frame*) (prefixchar #\>))
@@ -562,7 +572,7 @@ commands but aren't")
         (s (make-indenting-string-output-stream prefixchar nil))
         (sub (make-string-output-stream))
         (indent 0))
-    (format s "~A ~A: " prefixchar msg)
+    (format s "~A~@[ ~A:~] " prefixchar msg)
     (setf (indenting-string-output-stream-indent s) (setq indent (column s)))
     (decf (stream-line-length sub) indent)
     ;(format s "~A" condition) ; evil if circle
@@ -586,16 +596,17 @@ commands but aren't")
   (let* ((*print-readably* nil)
          (hook *break-hook*))
     (restart-case (progn
-                    (when hook
-                      (let ((*break-hook* nil))
-                        (funcall hook condition hook))
-                      (setq hook nil))
-                    (%break-message msg condition)
                     (when (and (eq (type-of condition) 'simple-condition)
                                (equal (simple-condition-format-control condition) ""))
                       (setq condition (make-condition 'simple-condition
                                         :format-control "~a"
                                         :format-arguments (list msg))))
+                    (when hook
+                      (let ((*break-hook* nil)
+                            (*break-loop-type* msg))
+                        (funcall hook condition hook))
+                      (setq hook nil))
+                    (%break-message msg condition)
                     (break-loop condition))
       (continue () :report (lambda (stream) (write-string cont-string stream))))
     (unless hook
@@ -650,8 +661,6 @@ commands but aren't")
           (t (bug "Error reporting error")))))
 
 
-
-
 (defvar %last-continue% nil)
 (defun break-loop (condition &optional (frame-pointer *top-error-frame*))
   "Never returns"
@@ -692,7 +701,7 @@ commands but aren't")
           (let* ((*print-circle* *error-print-circle*)
                  (*print-level* *error-print-level*)
                  (*print-length* *error-print-length*)
-					;(*print-pretty* nil)
+                 ;(*print-pretty* nil)
                  (*print-array* nil))
             (format t (or (application-ui-operation *application* :break-options-string t)
                           "~&> Type :GO to continue, :POP to abort, :R for a list of available restarts."))
@@ -710,9 +719,9 @@ commands but aren't")
                (progn
                  (application-ui-operation *application*
                                            :enter-backtrace-context context)
-                 (read-loop :break-level (1+ *break-level*)
-                            :input-stream *debug-io*
-                            :output-stream *debug-io*))
+                 (run-read-loop :break-level (1+ *break-level*)
+                                :input-stream *debug-io*
+                                :output-stream *debug-io*))
             (application-ui-operation *application* :exit-backtrace-context
                                       context)))))))
 
