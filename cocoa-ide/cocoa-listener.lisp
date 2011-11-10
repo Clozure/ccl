@@ -105,24 +105,25 @@
                   do (incf cur-string-pos)))
           (return (values (call-next-method) nil t)))
         (wait-on-semaphore queue-semaphore nil "Toplevel Read")
-        (let ((val (with-lock-grabbed (queue-lock) (pop queue))))
-          (cond ((stringp val)
-                 (assert (timed-wait-on-semaphore text-semaphore 0) () "text/queue mismatch!")
-                 (setq cur-string val cur-string-pos 0))
-                (t
-                 (destructuring-bind (string package-name pathname offset) val
-                   ;; This env is used both for read and eval.
-                   (let ((env (cons '(*loading-file-source-file* *load-pathname* *load-truename* *loading-toplevel-location*
-				      ccl::*nx-source-note-map*)
-                                    (list pathname pathname (and pathname (or (probe-file pathname) pathname)) nil
-					  source-map))))
-                     (when package-name
-                       (push '*package* (car env))
-                       (push (ccl::pkg-arg package-name) (cdr env)))
-                     (if source-map
-                       (clrhash source-map)
-                       (setf source-map (make-hash-table :test 'eq :shared nil)))
-                     (setf cur-sstream (make-string-input-stream string) cur-env env cur-offset offset))))))))))
+        (without-interrupts
+         (let ((val (with-lock-grabbed (queue-lock) (pop queue))))
+           (cond ((stringp val)
+                  (assert (timed-wait-on-semaphore text-semaphore 0) () "text/queue mismatch!")
+                  (setq cur-string val cur-string-pos 0))
+                 (val
+                  (destructuring-bind (string package-name pathname offset) val
+                    ;; This env is used both for read and eval.
+                    (let ((env (cons '(*loading-file-source-file* *load-pathname* *load-truename* *loading-toplevel-location*
+                                                                  ccl::*nx-source-note-map*)
+                                     (list pathname pathname (and pathname (or (probe-file pathname) pathname)) nil
+                                           source-map))))
+                      (when package-name
+                        (push '*package* (car env))
+                        (push (ccl::pkg-arg package-name) (cdr env)))
+                      (if source-map
+                        (clrhash source-map)
+                        (setf source-map (make-hash-table :test 'eq :shared nil)))
+                      (setf cur-sstream (make-string-input-stream string) cur-env env cur-offset offset)))))))))))
 
 (defmethod enqueue-toplevel-form ((stream cocoa-listener-input-stream) string &key package-name pathname offset)
   (with-slots (queue-lock queue queue-semaphore) stream
@@ -444,8 +445,9 @@
   (if (zerop (decf *cocoa-listener-count*))
     (setq *next-listener-x-pos* nil
           *next-listener-y-pos* nil))
-  (let* ((p (shiftf (hemlock-document-process self) nil)))
+  (let* ((p (hemlock-document-process self)))
     (when p
+      (setf (hemlock-document-process self) nil)
       (process-kill p)))
   (call-next-method))
 
