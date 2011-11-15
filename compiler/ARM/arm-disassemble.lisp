@@ -563,4 +563,7 @@
       (opvals))))
     
     
-  
+#+arm-target
+(defun disassemble-lines (function)
+  (declare (ignore function))
+  (error "DISASSEMBLE-LINES isn't implemented yet for ARM."))

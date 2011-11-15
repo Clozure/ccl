@@ -169,3 +169,10 @@
                (%i>= pc (uvref ptrs (%i+ j 1)))
                (%i< pc (uvref ptrs (%i+ j 2)))
                (return (aref syms i))))))))
+
+(defun apply-in-frame (frame function arglist &optional context)
+  (declare (ignore frame function arglist context))
+  (error "APPLY-IN-FRAME isn't implemented on ARM."))
+
+(defun return-from-frame (frame &rest values)
+  (apply-in-frame frame #'values values nil))

@@ -870,6 +870,26 @@
   (dmb)
   (box-fixnum arg_z imm1)
   (bx lr))
-                          
+
+(defarmlapfunction %atomic-pop-static-cons ()
+  (load-global-address imm0 arm::static-conses)
+  (load-global-address imm2 arm::free-static-conses)
+  @again
+  (ldrex arg_z (:@ imm0))
+  (cmp arg_z 'nil)
+  (bxeq lr)
+  (%cdr temp0 arg_z)
+  (strex imm1 temp0 (:@ imm0))
+  (cmp imm1 (:$ 0))
+  (bne @again)
+  @dec
+  (ldrex imm0 (:@ imm2))
+  (sub imm0 imm0 '1)
+  (strex imm1 imm0 (:@ imm2))
+  (cmp imm1 (:$ 0))
+  (bne @dec)
+  (dmb)
+  (bx lr))
+  
 
 ; end of arm-misc.lisp

@@ -259,7 +259,10 @@
       (mov ,temp (:$ (- arm::nil-value arm::fulltag-nil)))
       (str ,reg (:@ ,temp (:$ ,offset))))))
 
+(defarmlapmacro load-global-address (reg sym)
+  `(lri ,reg ,(+ (- arm::nil-value arm::fulltag-nil) (arm::%kernel-global sym))))
 
+  
 
 
 
