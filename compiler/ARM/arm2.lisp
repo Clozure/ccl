@@ -293,7 +293,8 @@
            (arm2-copy-register seg arm::arg_z valreg)
            (arm2-stack-to-register seg ea arm::arg_x)
            (arm2-lri seg arm::arg_y 0)
-           (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-address  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z))
+           (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-address  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z)
+           (setq valreg arm::arg_z))
           ((memory-spec-p ea)    ; vstack slot
            (arm2-register-to-stack seg valreg ea))
           (t
@@ -2852,6 +2853,14 @@
                               form 
                               address-reg))
 
+(defun arm2-push-reg-for-form (seg form suggested &optional targeted)
+  (let* ((reg (if (and (node-reg-p suggested)
+                         (nx2-acode-call-p form))     ;probably ...
+                (arm2-one-targeted-reg-form seg form  arm::arg_z)
+                (if targeted
+                  (arm2-one-targeted-reg-form seg form suggested)
+                  (arm2-one-untargeted-reg-form seg form suggested)))))
+    (arm2-push-register seg reg)))
 
 (defun arm2-one-lreg-form (seg form lreg)
   (let ((is-float (= (hard-regspec-class lreg) hard-reg-class-fpr)))
@@ -2874,17 +2883,31 @@
                   (eq (%get-regspec-mode x)
                       (%get-regspec-mode y)))))))
 
-(defun arm2-one-untargeted-reg-form (seg form suggested)
+;;; If REG is a node reg, add it to the bitmask.
+(defun arm2-restrict-node-target (reg mask)
+  (if (node-reg-p reg)
+    (logior mask (ash 1 (hard-regspec-value reg)))
+    mask))
+
+;;; If suggested reg is a node reg that contains a stack location,
+;;; try to use some other node temp.
+(defun arm2-try-non-conflicting-reg (suggested reserved)
+  (let* ((mask *arm2-gpr-locations-valid-mask*))
+    (or (when (and (node-reg-p suggested)
+                   (logbitp (hard-regspec-value suggested) mask))
+          (setq mask (logior mask reserved))
+          (%available-node-temp (logand *available-backend-node-temps*
+                                        (lognot mask))))
+        suggested)))
+
+(defun arm2-one-untargeted-reg-form (seg form suggested &optional (reserved 0))
   (or (arm2-reg-for-form form suggested)
-      (with-arm-local-vinsn-macros (seg)
-        (let* ((gpr-p (= (hard-regspec-class suggested) hard-reg-class-gpr))
-               (node-p (if gpr-p (= (get-regspec-mode suggested) hard-reg-class-gpr-mode-node))))
-          (if node-p
-            (if (and (acode-p form)
-                     (eq (acode-operator form) (%nx1-operator %current-tcr)))
-              arm::rcontext
-              (arm2-one-untargeted-lreg-form seg form suggested))
-            (arm2-one-untargeted-lreg-form seg form suggested))))))
+      (if (and (acode-p form)
+               (eq (acode-operator form) (%nx1-operator %current-tcr)))
+        arm::rcontext
+        (if (node-reg-p suggested)
+          (arm2-one-untargeted-lreg-form seg form (arm2-try-non-conflicting-reg suggested reserved))
+          (arm2-one-untargeted-lreg-form seg form suggested)))))
              
 
 (defun arm2-push-register (seg areg)
@@ -2940,7 +2963,7 @@
            (same-reg (eq (hard-regspec-value pushed-reg)
                          (hard-regspec-value popped-reg)))
            (sp-p (vinsn-attribute-p push-vinsn :csp)))
-      (when (and sp-p t)               ; vsp case is harder.
+      (when sp-p               ; vsp case is harder.
         (unless (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :csp :discard)
           (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
                                      push-vinsn pop-vinsn pushed-reg))
@@ -2990,7 +3013,73 @@
 		       (remove-dll-node restore)
 		       (insert-dll-node-before restore pop-vinsn)
 		       (elide-vinsn push-vinsn)
-		       (elide-vinsn pop-vinsn)))))))))))))
+		       (elide-vinsn pop-vinsn))))))))))
+      (when (and (vinsn-attribute-p push-vinsn :vsp))
+        (unless (or
+                 (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :push)
+                 (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :pop)
+                 (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
+                                            push-vinsn pop-vinsn pushed-reg))
+                        (popped-reg-is-set (if same-reg
+                                             pushed-reg-is-set
+                                             (vinsn-sequence-sets-reg-p
+                                              push-vinsn pop-vinsn popped-reg)))
+                        (popped-reg-is-reffed (unless same-reg
+                                                (vinsn-sequence-refs-reg-p
+                                                 push-vinsn pop-vinsn popped-reg))))
+                   (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
+                               (or (null popped-reg-is-reffed)
+                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)))
+                          ;; We don't try this if anything's pushed on
+                          ;; or popped from the vstack in the
+                          ;; sequence, but there can be references to
+                          ;; other things that were pushed earlier.
+                          ;; Those references use the vstack depth at
+                          ;; the time of the reference and the
+                          ;; canonical frame offset to address
+                          ;; relative to the vsp.  If we elide the
+                          ;; push, the vstack depth will be 4 bytes
+                          ;; less than when the reference was
+                          ;; generated.  Fix that up ...  There was
+                          ;; (once) a notion of modeling the vstack as
+                          ;; a list of "lcells"; lcells had a width
+                          ;; attribute that was usually the native
+                          ;; word size.  Eliding a push involved
+                          ;; setting the width of the lcell
+                          ;; representing the pushed word to 0.
+                          ;; That whole idea was never fully implemented,
+                          ;; though we generally try to maintain the model.
+                          ;; If it ever is implemented, we need to dtrt
+                          ;; here.
+                          (do* ((element (dll-node-succ push-vinsn) (dll-node-succ element)))
+                               ((eq element pop-vinsn))
+                            (when (typep element 'vinsn)
+                              (let* ((template (vinsn-template element))
+                                     (opidx (case (vinsn-template-name template)
+                                              (vframe-store 2)
+                                              (vframe-load 2))))
+                                (when opidx
+                                  (let* ((operands (vinsn-variable-parts element)))
+                                    (declare (simple-vector operands))
+                                    (setf (svref operands opidx)
+                                          (the fixnum
+                                            (- (the fixnum (svref operands opidx))
+                                               arm::node-size))))))))
+                                             
+                                       
+                                     
+                          (unless same-reg
+                            (let* ((copy (! copy-gpr popped-reg pushed-reg)))
+                              (remove-dll-node copy)
+                              (if popped-reg-is-reffed
+                                (insert-dll-node-after copy popped-reg-is-reffed)
+                                (if pushed-reg-is-set
+                                  (insert-dll-node-after copy push-vinsn)
+                                  (insert-dll-node-before copy push-vinsn)))))
+                          (elide-vinsn push-vinsn)
+                          (elide-vinsn pop-vinsn))
+                   (t                   ; maybe allocate a node temp
+                    )))))))))
                 
         
 ;;; we never leave the first form pushed (the 68K compiler had some subprims that
@@ -3005,7 +3094,7 @@
       (unless aconst
         (if atriv
           (arm2-one-targeted-reg-form seg aform areg)
-          (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
+          (setq apushed (arm2-push-reg-for-form seg aform areg t))))
       (arm2-one-targeted-reg-form seg bform breg)
       (if aconst
         (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
@@ -3033,33 +3122,36 @@
       (with-arm-local-vinsn-macros (seg)
         (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
                (avar (arm2-lexical-reference-p aform))
-               (adest areg)
-               (bdest breg)
+               (adest nil)
+               (bdest nil)
                (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
                (aconst (and (not atriv) (or (arm-side-effect-free-form-p aform)
                                             (if avar (arm2-var-not-set-by-form-p avar bform)))))
-               (apushed (not (or atriv aconst))))
+               (apushed nil)
+               (restricted 0))
           (progn
             (unless aconst
               (if atriv
                 (progn
-                  (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+                  (setq adest (arm2-one-untargeted-reg-form seg aform areg)
+                        restricted (arm2-restrict-node-target adest 0))
                   (when (imm-reg-p adest)
                     (use-imm-temp (%hard-regspec-value adest)))
                   (when (same-arm-reg-p adest breg)
                     (setq breg areg)))
-                (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
-            (if (setq bdest (arm2-reg-for-form bform breg))
-              (when (same-arm-reg-p bdest areg)
-                (setq areg breg))
-              (setq bdest (arm2-one-untargeted-reg-form seg bform breg)))
+                (setq apushed (arm2-push-reg-for-form seg aform areg))))
+            (setq bdest (arm2-one-untargeted-reg-form seg bform breg restricted)
+                  restricted (arm2-restrict-node-target bdest restricted))
+            (unless adest
+              (if (same-arm-reg-p areg bdest)
+                (setq areg breg)))
             (if aconst
               (progn
                 (if (imm-reg-p bdest)
                   (use-imm-temp (%hard-regspec-value bdest)))
-                (setq adest (arm2-one-untargeted-reg-form seg aform areg)))
+                (setq adest (arm2-one-untargeted-reg-form seg aform areg restricted)))
               (if apushed
-                (arm2-elide-pushes seg apushed (arm2-pop-register seg areg)))))
+                (arm2-elide-pushes seg apushed (arm2-pop-register seg (setq adest areg))))))
           (values adest bdest))))))
 
 
@@ -3106,15 +3198,15 @@
     (if (and aform (not aconst))
       (if atriv
         (arm2-one-targeted-reg-form seg aform areg)
-        (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
+        (setq apushed (arm2-push-reg-for-form seg aform areg t))))
     (if (and bform (not bconst))
       (if btriv
         (arm2-one-targeted-reg-form seg bform breg)
-        (setq bpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg bform (arm2-acc-reg-for breg))))))
+        (setq bpushed (arm2-push-reg-for-form seg bform breg t))))
     (if (and cform (not cconst))
       (if ctriv
         (arm2-one-targeted-reg-form seg cform creg)
-        (setq cpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg cform (arm2-acc-reg-for creg))))))
+        (setq cpushed (arm2-push-reg-for-form seg cform creg t))))
     (arm2-one-targeted-reg-form seg dform dreg)
     (unless ctriv
       (if cconst
@@ -3157,11 +3249,11 @@
     (if (and aform (not aconst))
       (if atriv
         (arm2-one-targeted-reg-form seg aform areg)
-        (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
+        (setq apushed (arm2-push-reg-for-form seg aform areg t))))
     (if (and bform (not bconst))
       (if btriv
         (arm2-one-targeted-reg-form seg bform breg)
-        (setq bpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg bform (arm2-acc-reg-for breg))))))
+        (setq bpushed (arm2-push-reg-for-form seg bform breg t))))
     (arm2-one-targeted-reg-form seg cform creg)
     (unless btriv 
       (if bconst
@@ -3196,42 +3288,49 @@
                          (arm-side-effect-free-form-p bform)
                          (let ((bvar (arm2-lexical-reference-p bform)))
                            (and bvar (arm2-var-not-set-by-form-p bvar cform))))))
-           (adest areg)
-           (bdest breg)
-           (cdest creg)
+           (adest nil)
+           (bdest nil)
+           (cdest nil)
            (apushed nil)
-           (bpushed nil))
-      (if (and aform (not aconst))
+           (bpushed nil)
+           (restricted 0))
+      (when (and aform (not aconst))
         (if atriv
           (progn
-            (setq adest (arm2-one-untargeted-reg-form seg aform ($ areg)))
+            (setq adest (arm2-one-untargeted-reg-form seg aform ($ areg))
+                  restricted (arm2-restrict-node-target adest 0))
             (when (same-arm-reg-p adest breg)
               (setq breg areg))
             (when (same-arm-reg-p adest creg)
               (setq creg areg)))
-          (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
-      (if (and bform (not bconst))
+          (setq apushed (arm2-push-reg-for-form seg aform areg ))))
+      (when (and bform (not bconst))
         (if btriv
           (progn
-            (setq bdest (arm2-one-untargeted-reg-form seg bform ($ breg)))
+            (setq bdest (arm2-one-untargeted-reg-form seg bform ($ breg) restricted)
+                  restricted (arm2-restrict-node-target bdest restricted))
             (when (same-arm-reg-p bdest creg)
               (setq creg breg))
             (when (same-arm-reg-p bdest areg)
               (setq areg breg)))
-          (setq bpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg bform (arm2-acc-reg-for breg))))))
-      (setq cdest (arm2-one-untargeted-reg-form seg cform creg))
+          (setq bpushed (arm2-push-reg-for-form seg bform breg))))
+      (setq cdest (arm2-one-untargeted-reg-form seg cform creg restricted)
+            restricted (arm2-restrict-node-target cdest restricted))
       (when (same-arm-reg-p cdest areg)
         (setq areg creg))
       (when (same-arm-reg-p cdest breg)
         (setq breg creg))
       (unless btriv 
         (if bconst
-          (setq bdest (arm2-one-untargeted-reg-form seg bform breg))
-          (arm2-elide-pushes seg bpushed (arm2-pop-register seg breg))))
+          (setq bdest (arm2-one-untargeted-reg-form seg bform breg restricted))
+          (arm2-elide-pushes seg bpushed (arm2-pop-register seg (setq bdest breg))))
+        (setq restricted (arm2-restrict-node-target bdest restricted))
+        (when (same-arm-reg-p bdest areg)
+          (setq areg breg)))
       (unless atriv
         (if aconst
-          (setq adest (arm2-one-untargeted-reg-form seg aform areg))
-          (arm2-elide-pushes seg apushed (arm2-pop-register seg areg))))
+          (setq adest (arm2-one-untargeted-reg-form seg aform areg restricted))
+          (arm2-elide-pushes seg apushed (arm2-pop-register seg (setq adest areg)))))
       (values adest bdest cdest))))
 
 (defun arm2-four-untargeted-reg-forms (seg aform areg bform breg cform creg dform dreg)
@@ -3272,58 +3371,86 @@
                        (let ((cvar (arm2-lexical-reference-p cform)))
                          (and cvar
                               (arm2-var-not-set-by-form-p cvar dform))))))
-         (adest areg)
-         (bdest breg)
-         (cdest creg)
-         (ddest dreg)
+         (adest nil)
+         (bdest nil)
+         (cdest nil)
+         (ddest nil)
          (apushed nil)
          (bpushed nil)
-         (cpushed nil))
+         (cpushed nil)
+         (restricted 0))
     (if (and aform (not aconst))
       (if atriv
         (progn
-          (setq adest (arm2-one-targeted-reg-form seg aform areg))
+          (setq adest (arm2-one-untargeted-reg-form seg aform areg)
+                restricted (arm2-restrict-node-target adest restricted))
           (when (same-arm-reg-p adest breg)
             (setq breg areg))
           (when (same-arm-reg-p adest creg)
             (setq creg areg))
           (when (same-arm-reg-p adest dreg)
             (setq dreg areg)))
-        (setq apushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg aform (arm2-acc-reg-for areg))))))
+        (setq apushed (arm2-push-reg-for-form seg aform areg))))
     (if (and bform (not bconst))
       (if btriv
         (progn
-          (setq bdest (arm2-one-untargeted-reg-form seg bform breg))
+          (setq bdest (arm2-one-untargeted-reg-form seg bform breg restricted)
+                restricted (arm2-restrict-node-target bdest restricted))
+          (unless adest
+            (when (same-arm-reg-p areg bdest)
+              (setq areg breg)))
           (when (same-arm-reg-p bdest creg)
             (setq creg breg))
           (when (same-arm-reg-p bdest dreg)
             (setq dreg breg)))
-        (setq bpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg bform (arm2-acc-reg-for breg))))))
+        (setq bpushed (arm2-push-reg-for-form seg bform breg))))
     (if (and cform (not cconst))
       (if ctriv
         (progn
-          (setq cdest (arm2-one-untargeted-reg-form seg cform creg))
+          (setq cdest (arm2-one-untargeted-reg-form seg cform creg restricted)
+                restricted (arm2-restrict-node-target bdest restricted))
+          (unless adest
+            (when (same-arm-reg-p areg cdest)
+              (setq areg creg)))
+          (unless bdest
+            (when (same-arm-reg-p breg cdest)
+              (setq breg creg)))          
           (when (same-arm-reg-p cdest dreg)
             (setq dreg creg)))
-        (setq cpushed (arm2-push-register seg (arm2-one-untargeted-reg-form seg cform (arm2-acc-reg-for creg))))))
-    (setq ddest (arm2-one-untargeted-reg-form seg dform dreg))
-    (when (same-arm-reg-p ddest areg)
-      (setq areg dreg))
-    (when (same-arm-reg-p ddest breg)
-      (setq breg dreg))
-    (when (same-arm-reg-p ddest creg)
-      (setq creg dreg))
+        (setq cpushed (arm2-push-reg-for-form seg cform creg))))
+    (setq ddest (arm2-one-untargeted-reg-form seg dform dreg restricted)
+          restricted (arm2-restrict-node-target ddest restricted))
+    (unless adest
+      (when (same-arm-reg-p ddest areg)
+        (setq areg dreg)))
+    (unless bdest
+      (when (same-arm-reg-p ddest breg)
+        (setq breg dreg)))
+    (unless cdest
+      (when (same-arm-reg-p ddest creg)
+        (setq creg dreg)))
     (unless ctriv 
       (if cconst
-        (setq cdest (arm2-one-untargeted-reg-form seg cform creg))
-        (arm2-elide-pushes seg cpushed (arm2-pop-register seg creg))))
+        (setq cdest (arm2-one-untargeted-reg-form seg cform creg restricted))
+        (arm2-elide-pushes seg cpushed (arm2-pop-register seg (setq cdest creg))))
+      (setq restricted (arm2-restrict-node-target cdest restricted))
+      (unless adest
+        (when (same-arm-reg-p cdest areg)
+          (setq areg creg)))
+      (unless bdest
+        (when (same-arm-reg-p ddest breg)
+          (setq breg creg))))
     (unless btriv 
       (if bconst
-        (setq bdest (arm2-one-untargeted-reg-form seg bform breg))
-        (arm2-elide-pushes seg bpushed (arm2-pop-register seg breg))))
+        (setq bdest (arm2-one-untargeted-reg-form seg bform breg restricted))
+        (arm2-elide-pushes seg bpushed (arm2-pop-register seg breg)))
+      (setq restricted (arm2-restrict-node-target bdest restricted))
+      (unless adest
+        (when (same-arm-reg-p bdest areg)
+          (setq areg breg))))
     (unless atriv
       (if aconst
-        (setq adest (arm2-one-untargeted-reg-form seg aform areg))
+        (setq adest (arm2-one-untargeted-reg-form seg aform areg restricted))
         (arm2-elide-pushes seg apushed (arm2-pop-register seg areg))))
     (values adest bdest cdest ddest)))
 

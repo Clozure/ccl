@@ -862,7 +862,7 @@
     (((tag :imm))
      ((object :lisp)))
   (mov tag (:lsl object (:$ arm::fixnumshift)))
-  (and tag object (:$ (ash arm::tagmask arm::fixnumshift))))
+  (and tag tag (:$ (ash arm::tagmask arm::fixnumshift))))
 
 (define-arm-vinsn (extract-fulltag :predicatable)
     (((tag :u8))
@@ -2684,13 +2684,9 @@
 
 
   
-(define-arm-vinsn (adjust-stack-register :predicatable)
-    (()
-     ((reg t)
-      (amount :s16const)))
-  (add reg reg (:$ amount)))
 
-(define-arm-vinsn (adjust-vsp :predicatable)
+
+(define-arm-vinsn (adjust-vsp :predicatable :vsp :pop :discard)
     (()
      ((amount :s16const)))
   (add vsp vsp (:$ amount)))
@@ -3646,7 +3642,7 @@
 
 ;;; Clobbers LR
 (define-arm-vinsn %debug-trap (()
-                                                     ())
+                               ())
   (uuo-debug-trap))
 
 
