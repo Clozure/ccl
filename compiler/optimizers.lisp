@@ -2269,6 +2269,7 @@
 (define-compiler-macro float (&whole call number &optional (other 0.0f0 other-p) &environment env)
 
   (cond ((and (typep other 'single-float)
+              other-p
               (nx-form-typep number 'double-float env))
          `(the single-float (%double-to-single ,number)))
         ((and (typep other 'double-float)
