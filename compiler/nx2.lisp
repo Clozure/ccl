@@ -158,8 +158,9 @@
                       (if (subtypep inittype 'single-float)
                         (setf (var-declared-unboxed-type v) 'single-float)))))))
             (let* ((type (var-declared-unboxed-type v)))
-              (when (or (eq type 'single-float)
-                        (eq type 'double-float))
+              (when (and (or (eq type 'single-float)
+                             (eq type 'double-float))
+                         (logbitp $vbitsetq bits))
                 (push v fvars)))))))))
           
                 
