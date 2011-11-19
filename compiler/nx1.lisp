@@ -462,10 +462,12 @@
                (nx1-form :value int))))
 
 (defnx1 nx1-%ptr-to-int ((%ptr-to-int)) context (ptr)
-  (make-acode 
-   (%nx1-operator %immediate-ptr-to-int)
-   (make-acode (%nx1-operator %macptrptr%) 
-               (nx1-form :value ptr))))
+   (make-acode (%nx1-operator typed-form)
+               *nx-target-natural-type*
+               (make-acode 
+                (%nx1-operator %immediate-ptr-to-int)
+                (make-acode (%nx1-operator %macptrptr%) 
+                            (nx1-form :value ptr)))))
 
 (defnx1 nx1-%null-ptr-p ((%null-ptr-p)) context (ptr)
   (nx1-form :value `(%ptr-eql ,ptr (%int-to-ptr 0))))
