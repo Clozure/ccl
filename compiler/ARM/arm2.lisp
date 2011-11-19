@@ -74,6 +74,9 @@
                     `(progn
                       (arm2-invalidate-regmap)
                       (backend-gen-label ,',segvar ,,labelnum-var)))
+                  (@+ (,labelnum-var)
+                    `(progn             ;keep regmap
+                      (backend-gen-label ,',segvar ,,labelnum-var)))
                   (-> (,label-var)
                     `(! jump (aref *backend-labels* ,,label-var)))
                   (^ (&rest branch-args)
@@ -279,7 +282,10 @@
     (with-arm-local-vinsn-macros (seg vreg) 
       (if (memory-spec-p ea)
         (ensuring-node-target (target vreg)
-          (progn
+          (let* ((reg (unless (node-reg-p vreg)
+                        (or (arm2-reg-for-ea ea)
+                            (arm2-try-non-conflicting-reg target 0)))))
+            (when reg (setq target reg))
             (arm2-stack-to-register seg ea target)
             (if (addrspec-vcell-p ea)
               (! vcell-ref target target))))
@@ -542,6 +548,7 @@
 (defun arm2-invalidate-regmap ()
   (setq *arm2-gpr-locations-valid-mask* 0
         *arm2-gpr-constants-valid-mask* 0))
+
 
 (defun arm2-update-regmap (vinsn)
   (if (vinsn-attribute-p vinsn :call)
@@ -1260,23 +1267,23 @@
                    (memq offset (svref info reg)))
           (return reg))))))
 
-  
+(defun arm2-reg-for-ea (ea)
+  (when (and (memory-spec-p ea)
+             (not (addrspec-vcell-p ea)))
+    (let* ((offset (memspec-frame-address-offset ea))
+           (mask *arm2-gpr-locations-valid-mask*)
+           (info *arm2-gpr-locations*))
+      (declare (fixnum mask) (simple-vector info))
+      (dotimes (reg 16)
+        (when (and (logbitp reg mask)
+                   (memq offset (svref info reg)))
+          (return reg))))))
 
 (defun arm2-reg-for-form (form hint)
   (let* ((var (arm2-lexical-reference-p form)))
     (cond ((node-reg-p hint)
            (if var
-             (let* ((ea (var-ea var)))
-               (when (and (memory-spec-p ea)
-                          (not (addrspec-vcell-p ea)))
-                 (let* ((offset (memspec-frame-address-offset ea))
-                        (mask *arm2-gpr-locations-valid-mask*)
-                        (info *arm2-gpr-locations*))
-                   (declare (fixnum mask) (simple-vector info))
-                   (dotimes (reg 16)
-                     (when (and (logbitp reg mask)
-                                (memq offset (svref info reg)))
-                       (return reg))))))
+             (arm2-reg-for-ea (var-ea var))
              (multiple-value-bind (value constantp) (acode-constant-p form)
                (when constantp
                  (let* ((regs (arm2-gprs-containing-constant value))
@@ -3029,7 +3036,21 @@
                                                  push-vinsn pop-vinsn popped-reg))))
                    (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
                                (or (null popped-reg-is-reffed)
-                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)))
+                                   (null pushed-reg-is-set)
+                                   ;; If the popped register is
+                                   ;; referenced and the pushed
+                                   ;; register is set, we want to be
+                                   ;; sure that the last reference
+                                   ;; happens before the first
+                                   ;; assignent.  We can't be sure
+                                   ;; that either of these things
+                                   ;; actually happened or happen
+                                   ;; unconditionally, and can't
+                                   ;; be sure of the order in which
+                                   ;; they might happen if the sequence
+                                   ;; contains jumps or branches.
+                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)
+                                   (not (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump))))
                           ;; We don't try this if anything's pushed on
                           ;; or popped from the vstack in the
                           ;; sequence, but there can be references to
@@ -3065,17 +3086,12 @@
                                           (the fixnum
                                             (- (the fixnum (svref operands opidx))
                                                arm::node-size))))))))
-                                             
-                                       
-                                     
                           (unless same-reg
                             (let* ((copy (! copy-gpr popped-reg pushed-reg)))
                               (remove-dll-node copy)
-                              (if popped-reg-is-reffed
-                                (insert-dll-node-after copy popped-reg-is-reffed)
-                                (if pushed-reg-is-set
+                              (if pushed-reg-is-set
                                   (insert-dll-node-after copy push-vinsn)
-                                  (insert-dll-node-before copy push-vinsn)))))
+                                  (insert-dll-node-before copy pop-vinsn))))
                           (elide-vinsn push-vinsn)
                           (elide-vinsn pop-vinsn))
                    (t                   ; maybe allocate a node temp
@@ -3408,7 +3424,7 @@
       (if ctriv
         (progn
           (setq cdest (arm2-one-untargeted-reg-form seg cform creg restricted)
-                restricted (arm2-restrict-node-target bdest restricted))
+                restricted (arm2-restrict-node-target cdest restricted))
           (unless adest
             (when (same-arm-reg-p areg cdest)
               (setq areg creg)))
@@ -3443,7 +3459,7 @@
     (unless btriv 
       (if bconst
         (setq bdest (arm2-one-untargeted-reg-form seg bform breg restricted))
-        (arm2-elide-pushes seg bpushed (arm2-pop-register seg breg)))
+        (arm2-elide-pushes seg bpushed (arm2-pop-register seg (setq bdest breg))))
       (setq restricted (arm2-restrict-node-target bdest restricted))
       (unless adest
         (when (same-arm-reg-p bdest areg)
@@ -3766,9 +3782,11 @@
             (! load-nil dest-gpr)
             (if dest-crf
               (! set-eq-bit dest-crf)))
-          (if (and dest-crf src-gpr)
-            ;; "Copying" a GPR to a CR field means comparing it to rnil
-            (! compare-to-nil dest src)
+          (if dest-crf
+            ;; "Copying" a GPR to a CR field means comparing it to nil
+            (if src-gpr
+              (! compare-to-nil dest src)
+              (! compare-to-nil dest arm::sp))
             (if (and dest-gpr src-gpr)
               (case dest-mode
                 (#.hard-reg-class-gpr-mode-node ; boxed result.
@@ -6667,7 +6685,9 @@
                   (if (and merge-else-branch-label (neq -1 (aref *backend-labels* merge-else-branch-label)))
                     (backend-copy-label merge-else-branch-label falselabel)
                     (progn
-                      (@ falselabel)
+                      (if (and (not need-else) nil)
+                        (@+ falselabel)
+                        (@ falselabel))
                       (arm2-predicate-block falselabel)
                       (when need-else
                         (if true-cleanup-label
@@ -6694,7 +6714,9 @@
                   (arm2-close-undo)
                   (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*) 
                     (arm2-decode-stack entry-stack)))
-                (@ endlabel)
+                (if (and (not need-else) (backend-crf-p vreg) nil)
+                  (@+ endlabel)
+                  (@ endlabel)) 
                 (arm2-predicate-block endlabel))))))))
 
 (defarm2 arm2-or or (seg vreg xfer forms)
@@ -6777,9 +6799,9 @@
     (if (and vreg
              (= (hard-regspec-class vreg) hard-reg-class-fpr)
              (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
-      (! double-float-negate vreg r1)
+      (! single-float-negate vreg r1)
       (with-fp-target (r1) (r2 :single-float)
-        (! double-float-negate r2 r1)
+        (! single-float-negate r2 r1)
         (ensuring-node-target (target vreg)
           (arm2-copy-register seg target r2))))
     (^)))
@@ -8970,7 +8992,10 @@
               (with-imm-target () (other-reg :natural)
                 (arm2-one-targeted-reg-form seg other other-reg)
                 (! logand-immediate other-reg other-reg (logand constant #xffffffff))
-                (<- other-reg))))
+                (if (and (typep constant '(unsigned-byte 29))
+                         (node-reg-p vreg))
+                  (! box-fixnum vreg other-reg)
+                  (<- other-reg)))))
           (^))))))
 
 (defarm2 arm2-natural-shift-right natural-shift-right (seg vreg xfer num amt)
