@@ -1,4 +1,4 @@
-;;;-*- Mode: Lisp; Package: (ARM :use CL) -*-
+;;-*- Mode: Lisp; Package: (ARM :use CL) -*-
 ;;;
 ;;;   Copyright (C) 2005-2009 Clozure Associates and contributors.
 ;;;   This file is part of Clozure CL.
@@ -525,7 +525,10 @@
       (#x01f00000 . #x0ff00010)
       (#x01f00010 . #x0ff00090))
      ())
-
+   (define-arm-instruction vpop1 (:rd)
+     #x049a0004
+     #x0fff0fff
+     ())
    (define-arm-instruction ldr (:rd :mem12)
      #x04100000
      #x0c500000
@@ -533,6 +536,10 @@
    (define-arm-instruction ldrb (:rd :mem12)
      #x04500000
      #x0c500000
+     ())
+   (define-arm-instruction vpush1 (:rd)
+     #x052a0004
+     #x0fff0fff
      ())
    (define-arm-instruction str (:rd :mem12)
      #x04000000
@@ -813,9 +820,17 @@
      #x0d200a00
      #x0fb00f00
      ())
+   (define-arm-instruction fstmias (:sd :rnw :srcount)
+     #x0c800a00
+     #x0fd00f00
+     ())
    (define-arm-instruction fstmdbd (:dd :rnw :drcount)
      #x0d200b00
-     #x0fb00f00
+     #x0ff00f00
+     ())
+   (define-arm-instruction fstmiad (:sd :rnw :srcount)
+     #x0c800b00
+     #x0fd00f00
      ())
    (define-arm-instruction fldd (:dd :fpaddr)
      #x0d100b00
@@ -1019,6 +1034,7 @@
                      (dpb (ldb (byte low-width 0) value)
                         (byte low-width pos)
                         low)))))))
+
 
 (defun set-field-value (instruction bytespec value)
   (let* ((low (lap-instruction-opcode-low instruction))

@@ -87,15 +87,13 @@
 (defarmlapmacro push1 (src stack)
   `(str ,src (:+@! ,stack (:$ (- arm::node-size)))))
 
-(defarmlapmacro vpush1 (src)
-  `(push1 ,src vsp))
+
 
 
 (defarmlapmacro pop1 (dest stack)
   `(ldr ,dest (:@+ ,stack (:$ arm::node-size))))
 
-(defarmlapmacro vpop1 (dest)
-  `(pop1 ,dest vsp))
+
 
 (defarmlapmacro %cdr (dest node)
   `(ldr ,dest (:@ ,node (:$ arm::cons.cdr))))
