@@ -552,7 +552,7 @@
 
 
 ;;; Return T if any vinsn between START and END (exclusive) has all
-;;; attributes set in MASK set.
+;;; attributes set in ATTR set.
 (defun %vinsn-sequence-has-attribute-p (start end attr)
   (do* ((element (dll-node-succ start) (dll-node-succ element)))
        ((eq element end))
@@ -560,8 +560,20 @@
       (when (eql attr (logand (vinsn-template-attributes (vinsn-template element)) attr))
         (return t)))))
 
+;;; Return T if any vinsn between START and END (exclusive) has some
+;;; some attributes set in attr set.
+(defun %vinsn-sequence-has-some-attribute-p (start end attr)
+  (do* ((element (dll-node-succ start) (dll-node-succ element)))
+       ((eq element end))
+    (when (typep element 'vinsn)
+      (when (logtest attr (vinsn-template-attributes (vinsn-template element)))
+        (return t)))))
+
 (defmacro vinsn-sequence-has-attribute-p (start end &rest attrs)
   `(%vinsn-sequence-has-attribute-p ,start ,end ,(encode-vinsn-attributes attrs)))
+
+(defmacro vinsn-sequence-has-some-attribute-p (start end &rest attrs)
+  `(%vinsn-sequence-has-some-attribute-p ,start ,end ,(encode-vinsn-attributes attrs)))
 
 ;;; Return T iff vinsn is between START and END (exclusive).
 (defun vinsn-in-sequence-p (vinsn start end)
