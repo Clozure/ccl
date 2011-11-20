@@ -330,34 +330,65 @@
       (%str-cat device ":" dir subdir)
     (%str-cat dir subdir)))
 
-(defmacro with-open-dir ((dirent device dir) &body body)
-  `(let ((,dirent (%open-dir (native-translated-namestring (make-pathname :device ,device :directory ,dir :defaults nil)))))
-     (when ,dirent
-       (unwind-protect
-	   (progn ,@body)
-	 (close-dir ,dirent)))))
+(defmacro with-open-dir ((dirent device dir state follow-links) &body body)
+  (let* ((namestring (gensym)))
+    `(let* ((,namestring (native-translated-namestring (make-pathname :device ,device :directory ,dir :defaults nil))))
+      (when (%new-directory-p ,namestring ,follow-links ,state)
+        (let* ((,dirent (%open-dir (native-translated-namestring (make-pathname :device ,device :directory ,dir :defaults nil)))))
+          (when ,dirent
+            (unwind-protect
+                 (progn ,@body)
+              (close-dir ,dirent))))))))
 
 (defun path-is-link (path)
   "Returns T if PATH is a (hard or symbolic) link, NIL otherwise."
+  ;; Actually, it's a bit more subtle than that; it basically
+  ;; returns information about the last component of PATH.  If
+  ;; some enclosing directory name is a link but the last component
+  ;; isn't, this'll return false.
   (eq (%unix-file-kind (native-translated-namestring path) t) :link))
 
+(defstruct (directory-result (:constructor %make-directory-result))
+  (truenames (make-hash-table :shared nil :test 'string= :hash-function 'sxhash))
+  (directories-seen ()))
 
-(defun %add-directory-result (path result follow-links)
-  (let* ((resolved (and follow-links (path-is-link path) (probe-file path))))
-    (if resolved
-      (push (namestring resolved) (cdr result)) ; may introduce duplicates.
-      (push (namestring path) (car result)))
-    path))
 
-(defun %make-directory-result ()
-  (cons nil nil))
+;;; If no component of the pathname involves a link we could avoid the call to
+;;; TRUENAME here.  Later ...
+(defun %add-directory-result (path result follow-links &optional followed-some-links)
+  (declare (ignore followed-some-links))
+  (let* ((truename (if follow-links (truename path) path))
+         (namestring (namestring truename))
+         (truenames (directory-result-truenames result)))
+    (or (gethash namestring truenames)
+        (setf (gethash namestring truenames) truename))))
+    
 
 (defun %process-directory-result (result)
-  (dolist (resolved (cdr result) (mapcar #'parse-namestring (sort (car result)  #'string<)))
-    (pushnew resolved (car result) :test #'string=)))
+  (collect ((pairs))
+    (maphash (lambda (namestring truename) (pairs (cons namestring truename))) (directory-result-truenames result))
+    (mapcar #'cdr (sort (pairs) #'string< :key #'car))))
+
+(defun %new-directory-p (namestring follow-links result)
+  (multiple-value-bind (win mode size mtime inode uid blocksize rmtime  gid dev)
+      (%stat namestring (not follow-links))
+    (declare (ignore size mtime uid blocksize rmtime gid #+windows-target inode #+windows-target dev))
+    (when (and win (= (logand mode #$S_IFMT) #$S_IFDIR))
+      #+windows-target
+      (let* ((dirname (namestring (truename (pathname namestring)))))
+        (unless (member dirname (directory-result-directories-seen result) :test #'string=)
+          (push dirname (directory-result-directories-seen result))
+          t))
+      #-windows-target
+      (when (dolist (pair (directory-result-directories-seen result) t)
+              (when (and (eql inode (car pair))
+                         (eql dev (cdr pair)))
+                (return)))
+        (push (cons inode dev) (directory-result-directories-seen result))
+        t))))
 
   
-(defun directory (path &key (directories nil) ;; include subdirectories
+(defun directory (path &key (directories t) ;; include subdirectories
                             (files t)         ;; include files
 			    (all t)           ;; include Unix dot files (other than dot and dot dot)
 			    (directory-pathnames t) ;; return directories as directory-pathname-p's.
@@ -409,14 +440,15 @@
 (defun %one-wild (dir wild rest path so-far keys result)
   (let ((device (pathname-device path))
 	(all (getf keys :all))
+        (follow-links (getf keys :follow-links))
 	name)
-    (with-open-dir (dirent device dir)
+    (with-open-dir (dirent device dir result follow-links)
       (while (setq name (%read-dir dirent))
 	(when (and (or all (neq (%schar name 0) #\.))
 		   (not (string= name "."))
 		   (not (string= name ".."))
 		   (%path-pstr*= wild name)
-		   (eq (%unix-file-kind (%path-cat device dir name) t) :directory))
+		   (eq (%unix-file-kind (%path-cat device dir name) (not follow-links)) :directory))
 	  (let ((subdir (%path-cat nil dir name))
                 (so-far (cons (%path-std-quotes name nil "/;:*") so-far)))
 	    (declare (dynamic-extent so-far))
@@ -440,13 +472,13 @@
       (let (full-path)
 	(when (and directories
 		   (eq (%unix-file-kind (namestring (setq full-path (%cons-pathname (reverse so-far) nil nil nil device)))
-					t)
+					(not follow-links))
 		       :directory))
 	  (setq ans (if directory-pathnames full-path
 		      (%cons-pathname (reverse (cdr so-far)) (car so-far) nil nil device)))
 	  (when (and ans (or (null test) (funcall test ans)))
             (%add-directory-result ans result follow-links))))
-      (with-open-dir (dirent (pathname-device path) dir)
+      (with-open-dir (dirent (pathname-device path) dir result follow-links)
 	(while (setq sub (%read-dir dirent))
 	  (when (and (or all (neq (%schar sub 0) #\.))
                      (or include-emacs-lockfiles
@@ -456,7 +488,7 @@
 		     (not (string= sub ".."))
 		     (%file*= name type sub))
 	    (setq ans
-		  (if (eq (%unix-file-kind (%path-cat device dir sub) t) :directory)
+		  (if (eq (%unix-file-kind (%path-cat device dir sub) (not follow-links)) :directory)
 		    (when directories
 		      (let* ((std-sub (%path-std-quotes sub nil "/;:*")))
 			(if directory-pathnames
@@ -502,12 +534,12 @@
                    (%add-directory-result sub result follow-links))))))
     ;; now descend doing %all-dirs on dirs and collecting files & dirs
     ;; if do-x is t
-    (with-open-dir (dirent device (%path-std-quotes dir nil "*;:"))
+    (with-open-dir (dirent device (%path-std-quotes dir nil "*;:") result follow-links)
       (while (setq sub (%read-dir dirent))
 	(when (and (or all (neq (%schar sub 0) #\.))
 		   (not (string= sub "."))
 		   (not (string= sub "..")))
-	  (if (eq (%unix-file-kind (%path-cat device dir sub) t) :directory)
+	  (if (eq (%unix-file-kind (%path-cat device dir sub) (not follow-links)) :directory)
 	    (let* ((subfile (%path-cat nil dir sub))
 		   (std-sub (%path-std-quotes sub nil "/;:*"))
 		   (so-far (cons std-sub so-far))
