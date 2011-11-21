@@ -170,6 +170,12 @@
          (offset (/ (foreign-record-field-offset field) 8)))
     `(%get-ptr ,ptr ,offset)))
 
+(defmacro link_map.l_ld (ptr)
+  (let* ((record (%find-foreign-record :link_map))
+         (field (%find-foreign-record-type-field record :l_ld))
+         (offset (/ (foreign-record-field-offset field) 8)))
+    `(%get-ptr ,ptr ,offset)))
+
 (defun soname-ptr-from-link-map (map)
   (let* ((path (pref map :link_map.l_name)))
     (if (%null-ptr-p path)
@@ -179,7 +185,7 @@
       (if (eql (%get-unsigned-byte path 0) 0)
         path
         (with-macptrs ((dyn-strings)
-                       (dynamic-entries (pref map :link_map.l_ld)))
+                       (dynamic-entries (link_map.l_ld map)))
           (if (%null-ptr-p dynamic-entries)
             (%null-ptr)
             (let* ((soname-offset nil))
@@ -256,7 +262,7 @@
     ;; section, and #_dladdr seems to recognize that as being an
     ;; address within the library and returns a reasonable "base address".
     (when (%null-ptr-p base)
-      (let* ((addr (%library-base-containing-address (pref m :link_map.l_ld))))
+      (let* ((addr (%library-base-containing-address (link_map.l_ld m))))
         (if addr (setq base addr))))
     (unless (%null-ptr-p base)
       (or (let* ((existing-lib (shared-library-at base)))
