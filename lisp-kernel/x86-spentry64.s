@@ -2838,10 +2838,28 @@ local_label(misc_alloc_64):
 	__(movq %arg_y,%imm1)
 local_label(misc_alloc_alloc_vector):	
 	__(dnode_align(%imm1,node_size,%imm1))
+        __(ref_global(tenured_area,%arg_x))
+        __(cmpq area.low(%arg_x),%imm1)
+        __(ja local_label(misc_alloc_large))
 	__(Misc_Alloc(%arg_z))
 	__(ret)
 local_label(misc_alloc_not_u56):
 	__(uuo_error_reg_not_type(Rarg_y,error_object_not_unsigned_byte_56))
+local_label(misc_alloc_large):
+        /* If we tried to subtract %imm1 from tcr.allocptr, it
+           might become negative ; we treat addresses as being unsigned,
+           so that negative value would look like a very large unsigned
+           value and we'd think that the allocation succeeded.
+           If we reach this point, we're trying to allocate something
+           very large indeed.  Depending on the platform, that's anywhere
+           from hundreds of GB to hundreds of TB.  Someday, it might be
+           worth trying that (using a special "large allocation" UUO);
+           for now, it's probably safe to just report that a memory
+           allocation attempt failed.
+        */
+        __(movq $XMEMFULL,%arg_z)
+        __(set_nargs(1))
+        __(jmp _SPksignalerr)
 _endsubp(misc_alloc)
 
 
