@@ -3467,7 +3467,7 @@
     (unless atriv
       (if aconst
         (setq adest (arm2-one-untargeted-reg-form seg aform areg restricted))
-        (arm2-elide-pushes seg apushed (arm2-pop-register seg areg))))
+        (arm2-elide-pushes seg apushed (arm2-pop-register seg (setq adest areg)))))
     (values adest bdest cdest ddest)))
 
 (defun arm2-lri (seg reg value)
