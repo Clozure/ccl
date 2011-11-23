@@ -5708,7 +5708,7 @@
                 (! logxor-high target other-reg high)
                 (! logxor-low target other-reg low)))))
         (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
-          (if vreg (ensuring-node-target (target vreg) (! %logxor2 vreg r1 r2)))))
+          (if vreg (ensuring-node-target (target vreg) (! %logxor2 target r1 r2)))))
       (^)))))
 
 (defppc2 ppc2-%ineg %ineg (seg vreg xfer n)
