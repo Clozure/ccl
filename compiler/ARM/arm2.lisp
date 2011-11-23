@@ -5976,7 +5976,7 @@
             (ensuring-node-target (target vreg)
               (! logxor-immediate target other-reg (logand unboxed-fixval #xffffffff)))))
         (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)
-          (if vreg (ensuring-node-target (target vreg) (! %logxor2 vreg r1 r2)))))
+          (if vreg (ensuring-node-target (target vreg) (! %logxor2 target r1 r2)))))
       (^)))))
 
 (defarm2 arm2-%ineg %ineg (seg vreg xfer n)
