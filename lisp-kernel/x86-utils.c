@@ -51,3 +51,28 @@ tra_offset(LispObj tra)
     disp = tra - f;
   return disp;
 }
+
+int
+ptr_in_area(char *p, area *a)
+{
+  return a->low <= p && a->high > p;
+}
+
+area *
+in_any_consing_area(LispObj thing)
+{
+  area *a = all_areas->succ;
+  char *p = (char *)thing;
+
+  while (a != all_areas) {
+    area_code code = a->code;
+    if (code == AREA_READONLY || code == AREA_WATCHED ||
+	code == AREA_MANAGED_STATIC || code == AREA_STATIC ||
+	code == AREA_DYNAMIC) {
+      if (a->low <= p && p < a->high)
+	return a;
+    }
+    a = a->succ;
+  }
+  return NULL;
+}

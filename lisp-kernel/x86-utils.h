@@ -19,6 +19,8 @@
 
 extern LispObj tra_function(LispObj tra);
 extern int tra_offset(LispObj tra);
+extern int ptr_in_area(char *p, area* a);
+extern area *in_any_consing_area(LispObj thing);
 
 static inline LispObj
 function_to_function_vector(LispObj f)
