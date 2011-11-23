@@ -410,7 +410,17 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 
   f = xpGPR(xp,Ifn);
   tra = *(LispObj*)(xpGPR(xp,Isp));
-  tra_f = tra_function(tra);
+  if (tra_p(tra)) {
+    char *p = (char *)tra;
+    extern char *spentry_start, *spentry_end;
+
+    if (ptr_in_area(p, tcr->ts_area) ||
+	(p > spentry_start && p < spentry_end) ||
+	in_any_consing_area(tra))
+      tra_f = tra_function(tra);
+    else
+      Bug(xp, "martian tra %p\n", tra);
+  }
   abs_pc = (LispObj)xpPC(xp);
 #if WORD_SIZE == 64
   pc_high = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
