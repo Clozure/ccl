@@ -23,7 +23,7 @@
     (4 . "Too few arguments.")
     (5 . "Argument ~S is not of the required type.")
     (6 . "Undefined function: ~S .")
-    (7 . "Invalid assignnnt of ~s at index ~s, to ~s.")
+    (7 . "Invalid assignment of ~s at index ~s, to ~s.")
     (8 . "Can't coerce ~S to ~S")
     (9 . "Funcallable instance ~S was called with args ~s, but has no FUNCALLABLE-INSTANCE-FUNCTION")
     (10 . "Out of memory.")

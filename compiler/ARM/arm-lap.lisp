@@ -63,19 +63,23 @@
 
 (defun %define-arm-lap-function (name body &optional (bits 0))
   (with-dll-node-freelist (primary arm::*lap-instruction-freelist*)
+    (with-dll-node-freelist (data arm::*lap-instruction-freelist*)
+    
       (let* ((arm::*lap-labels* ())
-             (arm::*called-subprim-jmp-labels* ())
              (name-cell (list name))
              (arm::*arm-constants* ())
              (*arm-lap-lfun-bits* bits)
-             (arm::*arm-register-names* arm::*standard-arm-register-names*))
+             (current primary)
+             (arm::*arm-register-names* arm::*standard-arm-register-names*)
+             (sections (vector primary data)))
+        (declare (dynamic-extent primary))
         (dolist (form body)
-          (arm-lap-form form primary))
+          (setq current (arm-lap-form form current sections)))
         (rplacd name-cell (length arm::*arm-constants*))
         (push name-cell arm::*arm-constants*)
         (arm-lap-generate-code primary
-                               (arm::arm-finalize primary)
-                               *arm-lap-lfun-bits*))))
+                               (arm::arm-finalize primary (arm-drain-constant-pool primary data))
+                               *arm-lap-lfun-bits*)))))
 
 
 
@@ -130,38 +134,95 @@
           (setf (uvref constants-vector (+ 2 k)) imm)))
       (setf (uvref constants-vector (1- constants-size)) bits ; lfun-bits
             (uvref constants-vector 1) code-vector
-            (uvref constants-vector 0) (ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift)))
-      #+arm-target (%make-code-executable code-vector)
+            (uvref constants-vector 0) 0)
+      #+arm-target (progn
+                     (%fix-fn-entrypoint constants-vector)
+                     (%make-code-executable code-vector))
       constants-vector)))
 
-(defun arm-lap-pseudo-op (directive arg)
-  (ecase directive
-    (:arglist (setq *arm-lap-lfun-bits* (encode-lambda-list arg)))))
+;;; This can be called as a result of a :DRAIN-CONSTANT-POOL directive
+;;; or at the end of a function. In either case, it shouldn't be possible
+;;; for code to reach the point where the constants are appended to
+;;; the primary section.
+(defun arm-drain-constant-pool (primary constants &optional force)
+  (let* ((constants-size (arm::section-size constants)))
+    (unless (= constants-size 0)
+      (let* ((force-label-name (when force (gensym))))
+        (when force
+          (arm::assemble-instruction primary `(b ,force-label-name)))
+        (when (logtest 7 (arm::section-size primary))
+          (arm::assemble-instruction primary '(nop)))
+        (let* ((marker (arm::make-lap-instruction nil))
+               (code-count (arm::make-lap-instruction nil))
+               (constant-count (arm::make-lap-instruction nil)))
+          (arm::emit-lap-instruction-element marker primary)
+          (arm::emit-lap-instruction-element code-count primary)
+          (arm::set-field-value code-count (byte 32 0) (ash (arm::section-size primary) -2))
+          (arm::emit-lap-instruction-element constant-count primary)
+          (arm::set-field-value constant-count (byte 32 0) (ash (arm::section-size constants) -2))
+          (do-dll-nodes (element constants)
+            (remove-dll-node element)
+            (arm::emit-lap-instruction-element element primary))
+          (when force (arm::emit-lap-label primary force-label-name))
+          t)))))
+
+  
+(defun arm-lap-pseudo-op (directive arg current sections)
+  (flet ((check-data-section (directive)
+           (unless (eq current (svref sections 1))
+             (error "~s directive should only be used inside :data section"
+                    directive))))
+    (ecase directive
+      (:arglist (setq *arm-lap-lfun-bits* (encode-lambda-list arg)))
+      ((:code :text) (setq current (svref sections 0)))
+      (:data (setq current (svref sections 1))
+             (when (logtest 7 (arm::section-size current))
+               (arm-lap-pseudo-op :word 0 current sections)))
+      (:word (check-data-section :word)
+             (let* ((val (logand #xffffffff (eval arg)))
+                    (instruction (arm::make-lap-instruction nil)))
+               (setf (arm::lap-instruction-opcode-low instruction)
+                     (ldb (byte 16 0) val)
+                     (arm::lap-instruction-opcode-high instruction)
+                     (ldb (byte 16 16) val))
+               (arm::emit-lap-instruction-element instruction current)))
+      (:single (check-data-section :single)
+               (arm-lap-pseudo-op :word (single-float-bits (float (eval arg) 0.0)) current sections))
+      (:double (check-data-section :double)
+               (multiple-value-bind (high low)
+                   (double-float-bits (float (eval arg) 0.0d0))
+                 (arm-lap-pseudo-op :word low current sections)
+                 (arm-lap-pseudo-op :word high current sections)))
+      (:drain-constant-pool
+       (setq current (svref sections 0))
+       (arm-drain-constant-pool current (svref sections 1))))
+  current))
        
 
        
-(defun arm-lap-form (form seg)
+(defun arm-lap-form (form current sections)
   (if (and form (symbolp form))
-    (arm::emit-lap-label seg form)
+    (arm::emit-lap-label current form)
     (if (or (atom form) (not (symbolp (car form))))
       (error "~& unknown ARM-LAP form: ~S ." form)
       (multiple-value-bind (expansion expanded)
                            (arm-lap-macroexpand-1 form)
         (if expanded
-          (arm-lap-form expansion seg)
+          (setq current (arm-lap-form expansion current sections))
           (let* ((name (car form)))
             (if (keywordp name)
-              (arm-lap-pseudo-op name (cadr form))
+              (setq current (arm-lap-pseudo-op name (cadr form) current sections))
               (case name
-                ((progn) (dolist (f (cdr form)) (arm-lap-form f seg)))
-                ((let) (arm-lap-equate-form (cadr form) (cddr form) seg))
+                ((progn) (dolist (f (cdr form)) (setq current (arm-lap-form f current sections))))
+                ((let) (setq current (arm-lap-equate-form (cadr form) (cddr form) current sections)))
                 (t
-                 (arm::assemble-instruction seg form))))))))))
+                 (arm::assemble-instruction current form)))))))))
+  current)
 
 ;;; (let ((name val) ...) &body body)
 ;;; each "val" gets a chance to be treated as a ARM register name
 ;;; before being evaluated.
-(defun arm-lap-equate-form (eqlist body seg)
+(defun arm-lap-equate-form (eqlist body current sections)
   (collect ((symbols)
             (values))
     (let* ((arm::*arm-register-names* arm::*arm-register-names*))
@@ -181,10 +242,9 @@
               (progn
                 (symbols symbol)
                 (values (eval value)))))))
-
     (progv (symbols) (values)
-      (dolist (form body)
-        (arm-lap-form form seg))))))
+      (dolist (form body current)
+        (setq current (arm-lap-form form current sections)))))))
 
 
 

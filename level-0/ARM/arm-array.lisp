@@ -143,7 +143,8 @@
   @bad
   (mov arg_x  '#.$xnotelt)
   (set-nargs 3)
-  (bla .SPksignalerr)
+  (sploadlr .SPksignalerr)
+  (blx lr)
   @fixnum
   (tst val (:$ arm::fixnum-mask))
   (unbox-fixnum imm0 val)
@@ -261,7 +262,7 @@
     (vpush1 a)
     (vpush1 offset)
     (set-nargs 2)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 (defarmlapfunction %boole-clr ((len 0) (b0 arg_x) (b1 arg_y) (dest arg_z))
   (vpop1 temp0)
@@ -529,23 +530,23 @@
 
 (defarmlapfunction %aref2 ((array arg_x) (i arg_y) (j arg_z))
   (check-nargs 3)
-  (ba .SParef2))
+  (spjump .SParef2))
 
 (defarmlapfunction %aref3 ((array 0) (i arg_x) (j arg_y) (k arg_z))
   (check-nargs 4)
   (vpop1 temp0)
-  (ba .SParef3))
+  (spjump .SParef3))
 
 
 (defarmlapfunction %aset2 ((array 0) (i arg_x) (j arg_y) (newval arg_z))
   (check-nargs 4)
   (vpop1 temp0)
-  (ba .SPaset2))
+  (spjump .SPaset2))
 
 (defarmlapfunction %aset3 ((array #.target::node-size) (i 0) (j arg_x) (k arg_y)  (newval arg_z))
   (check-nargs 5)
   (vpop1 temp0)
   (vpop1 temp1)
-  (ba .SPaset3))
+  (spjump .SPaset3))
   
 

@@ -35,7 +35,7 @@
   (vpush1 temp1)
   (add temp0 vsp (:$ 8))                  
   (set-nargs 2)                         
-  (ba .SPvalues))
+  (spjump .SPvalues))
 
 
 ;;; Set the 0th element of DEST (a bignum or some other 32-bit ivector)
@@ -160,7 +160,7 @@
     (vpush1 temp1)
     (add temp0 vsp '2)
     (set-nargs 2)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 
 
@@ -295,7 +295,7 @@
     (vpush temp1)
     (add temp0 vsp (:$ 8))
     (set-nargs 2)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 
 
@@ -332,7 +332,7 @@ arg_y) (borrow-in arg_z))
     (vpush1 c)
     (add temp0 vsp (:$ 20))
     (set-nargs 3)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 
 (defarmlapfunction %subtract-one ((a-h arg_y)(a-l arg_z))
@@ -345,7 +345,7 @@ arg_y) (borrow-in arg_z))
     (vpush1 temp0)
     (add temp0 vsp (:$ 8))
     (set-nargs 2)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 
 
@@ -395,7 +395,7 @@ arg_y) (borrow-in arg_z))
     (vpush1 arg_z)
     (set-nargs 4)
     (add temp0 vsp (:$ 16))
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 
 (defarmlapfunction %logcount-complement ((bignum arg_y) (idx arg_z))
@@ -935,7 +935,7 @@ arg_y) (borrow-in arg_z))
     (add temp0 vsp (:$ 20))
     (add sp sp (:$ 32))
     (set-nargs 2)
-    (ba .SPvalues)))
+    (spjump .SPvalues)))
 
 (defarmlapfunction normalize-bignum-loop ((sign arg_x)(res arg_y)(len arg_z))
   (let ((idx imm0)
@@ -1122,7 +1122,8 @@ arg_y) (borrow-in arg_z))
     (ldr imm0 (:@ bignum imm0))
     (mov imm1 imm2)
     (compose-digit imm2 yhi ylo)
-    (bla .SPudiv64by32)
+    (sploadlr .SPudiv64by32)
+    (blx lr)
     (add imm1 len (:$ arm::misc-data-offset))
     (str imm0 (:@ res imm1))
     @next
@@ -1133,7 +1134,7 @@ arg_y) (borrow-in arg_z))
     (vpush1 yhi)
     (vpush1 ylo)
     (set-nargs 2)
-    (ba .SPnvalret)))
+    (spjump .SPnvalret)))
 
 ;;; For TRUNCATE-BY-FIXNUM et al.
 ;;; Doesn't store quotient: just returns rem in 2 halves.
@@ -1148,7 +1149,8 @@ arg_y) (borrow-in arg_z))
     (ldr imm0 (:@ x imm0))
     (mov imm1 imm2)
     (compose-digit imm2 yhi ylo)
-    (bla .SPudiv64by32)
+    (sploadlr .SPudiv64by32)
+    (blx lr)
     @next
     (subs len len '1)
     (bge @loop)
@@ -1157,7 +1159,7 @@ arg_y) (borrow-in arg_z))
     (vpush1 yhi)
     (vpush1 ylo)
     (set-nargs 2)
-    (ba .SPnvalret)))
+    (spjump .SPnvalret)))
     
     
 
@@ -1280,13 +1282,14 @@ arg_y) (borrow-in arg_z))
   (vpush1 imm0)
   (vpush1 imm0)
   (set-nargs 2)
-  (ba .SPnvalret)
+  (spjump .SPnvalret)
   @more
   (add imm1 xidx (:$ (- arm::misc-data-offset arm::node-size)))
   (ldr imm0 (:@ temp0 imm1))
   (add imm1 imm1 (:$ arm::node-size))
   (ldr imm1 (:@ temp0 imm1))
-  (bla .SPudiv64by32)
+  (sploadlr .SPudiv64by32)
+  (blx lr)
   (mov arg_y '-1)
   (and arg_y arg_y (:lsr imm0 (:$ (- 16 arm::fixnumshift))))
   (mov imm0 (:lsl imm0 (:$ 16)))
@@ -1294,7 +1297,7 @@ arg_y) (borrow-in arg_z))
   (and arg_z arg_z (:lsr imm0 (:$ (- 16 arm::fixnumshift))))
   (stmdb (:! vsp) (arg_z arg_y))
   (set-nargs 2)
-  (ba .SPnvalret))
+  (spjump .SPnvalret))
 
 ;;; Karatsuba multiplication stuff. NYI.
 ;;; Copy the limb SRC points to to where DEST points.

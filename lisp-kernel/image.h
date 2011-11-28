@@ -90,8 +90,5 @@ Boolean find_openmcl_image_file_header(int fd, openmcl_image_file_header *h);
 
 
 
-#define ABI_VERSION_MIN 1037
-#define ABI_VERSION_CURRENT 1037
-#define ABI_VERSION_MAX 1037
 
 #define NUM_IMAGE_SECTIONS 5    /* used to be 3 */

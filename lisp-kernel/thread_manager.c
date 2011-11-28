@@ -182,6 +182,21 @@ raise_thread_interrupt(TCR *target)
 }
 #endif
 
+void
+set_thread_affinity(TCR *target, unsigned cpuno)
+{
+#ifdef LINUX
+  pthread_t thread = (pthread_t)(target->osid);
+  cpu_set_t mask;
+  
+  CPU_ZERO(&mask);
+  CPU_SET(cpuno,&mask);
+  pthread_setaffinity_np(thread,sizeof(mask),&mask);
+#endif
+}
+
+
+
 signed_natural
 atomic_incf_by(signed_natural *ptr, signed_natural by)
 {
@@ -1225,6 +1240,25 @@ free_tcr_extra_segment(TCR *tcr)
 #endif
 #endif
 
+#ifdef ARM
+void
+init_arm_tcr_sptab(TCR *tcr)
+{
+  extern LispObj *sptab;
+  extern LispObj *sptab_end;
+  LispObj *p, *q;
+
+  for (p=sptab,q = tcr->sptab;
+       p<sptab_end;
+       p++,q++) {
+    *q = *p;
+  }
+}
+#endif       
+  
+  
+
+
 /*
   Caller must hold the area_lock.
 */
@@ -1250,6 +1284,9 @@ new_tcr(natural vstack_size, natural tstack_size)
   TCR *tcr = allocate_tcr();
 #endif
 
+#ifdef ARM
+  init_arm_tcr_sptab(tcr);
+#endif
 #ifdef X86
   setup_tcr_extra_segment(tcr);
   tcr->linear = tcr;

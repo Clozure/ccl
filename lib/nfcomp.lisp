@@ -1196,7 +1196,6 @@ Will differ from *compiling-file* during an INCLUDE")
 ;;;;
 ;These should be constants, but it's too much trouble when need to change 'em.
 (defparameter FASL-FILE-ID #xFF00)  ;Overall file format, shouldn't change much
-(defparameter FASL-VERSION #xFF5f)  ;Fasl block format. ($fasl-vers)
 
 (defvar *fasdump-hash*)
 (defvar *fasdump-read-package*)
@@ -1486,9 +1485,16 @@ Will differ from *compiling-file* during an INCLUDE")
       (when (and opened? (not finished?))
         (delete-file filename)))))
 
+(defun target-fasl-version ()
+  (let* ((package (find-package "TARGET"))
+         (sym (find-symbol "FASL-VERSION" package)))
+    (unless (and sym (boundp sym))
+      (error "FASL-VERSION not defined in target package ~s." package))
+    (logior #xff00 (logand #xff (symbol-value sym)))))
+
 (defun fasl-dump-block (gnames goffsets forms hash)
   (let ((etab-size (hash-table-count hash)))
-    (fasl-out-word FASL-VERSION)          ; Word 0
+    (fasl-out-word (target-fasl-version))          ; Word 0
     (fasl-out-long  0)
     (fasl-out-byte $fasl-vetab-alloc)
     (fasl-out-count etab-size)
@@ -1734,12 +1740,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (dotimes (i n)
         (if (= i 0)
           (target-arch-case
-           (:arm
-	    (let ((arm-subprimitive-address
-		   (find-symbol "ARM-SUBPRIMITIVE-ADDRESS" "ARM")))
-	      (fasl-dump-form
-	       (ash (funcall arm-subprimitive-address '.SPfix-nfn-entrypoint)
-		    (- target::fixnumshift))))) ; host's fixnumshift
+           (:arm (fasl-dump-form 0))
            (t (fasl-dump-form (%svref f i))))
           (fasl-dump-form (%svref f i)))))))
 

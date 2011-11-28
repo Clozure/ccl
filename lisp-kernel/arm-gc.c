@@ -102,7 +102,7 @@ void
 check_range(LispObj *start, LispObj *end, Boolean header_allowed)
 {
   LispObj node, *current = start, *prev = NULL;
-  int tag;
+  int tag,subtag;
   natural elements;
 
   while (current < end) {
@@ -118,7 +118,9 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
       if (! header_allowed) {
         Bug(NULL, "Header not expected at 0x%lx\n", prev);
       }
-      if (header_subtag(node) == subtag_function) {
+      subtag = header_subtag(node);
+      if ((subtag == subtag_function) ||
+          (subtag == subtag_pseudofunction)) {
         if (fulltag_of(current[0]) == fulltag_odd_fixnum) {
           if (untag(current[0]) != untag(current[1])) {
             Bug(NULL, "In function at 0x%lx, entrypoint (0x%lx) and codevector (0x%lx) don't match\n", (LispObj)prev,current[0],current[1]);
@@ -1207,7 +1209,7 @@ void
 forward_range(LispObj *range_start, LispObj *range_end)
 {
   LispObj *p = range_start, node, new;
-  int tag_n;
+  int tag_n,subtag;
   natural nwords;
   hash_table_vector_header *hashp;
 
@@ -1246,7 +1248,9 @@ forward_range(LispObj *range_start, LispObj *range_end)
         *p++ = 0;
       } else {
         p++;
-        if (header_subtag(node) == subtag_function) {
+        subtag = header_subtag(node);
+        if ((subtag == subtag_function) ||
+            (subtag == subtag_pseudofunction)) {
           update_locref(p);
           p++;
           nwords--;
@@ -1299,6 +1303,7 @@ forward_cstack_area(area *a)
   LispObj *current = (LispObj *)(a->active)
     , *limit = (LispObj*)(a->high), header;
   lisp_frame *frame;
+  unsigned subtag;
 
   while (current < limit) {
     header = *current;
@@ -1315,7 +1320,9 @@ forward_cstack_area(area *a)
       natural elements = header_element_count(header);
 
       current++;
-      if (header_subtag(header) == subtag_function) {
+      subtag = header_subtag(header);
+      if ((subtag == subtag_function) ||
+          (subtag == subtag_pseudofunction)) {
         update_locref(current);
         current++;
         elements--;
@@ -1358,6 +1365,33 @@ forward_xp(ExceptionInformation *xp)
 
 }
 
+void
+flush_code_vectors_in_range(LispObj *start,LispObj *end)
+{
+  LispObj *current = start,header;
+  unsigned tag,subtag;
+  natural nbytes, nwords;
+  char *range_start;
+
+  while (current != end) {
+    header = *current;
+    tag = fulltag_of(header);
+    if (immheader_tag_p(tag)) {
+      subtag = header_subtag(header);
+      if (subtag == subtag_code_vector) {
+        range_start = (char *)(current+1);
+        nbytes = header_element_count(header)<<2;
+        flush_cache_lines(range_start,nbytes);
+      }
+      current = skip_over_ivector((LispObj)current,header);
+    } else if (nodeheader_tag_p(tag)) {
+      nwords = header_element_count(header)+1;
+      current += (nwords+(nwords&1));
+    } else {
+      current += 2;
+    }
+  }
+}
 
 void
 forward_tcr_xframes(TCR *tcr)
@@ -1398,7 +1432,7 @@ compact_dynamic_heap()
     bits, 
     nextbit, 
     diff;
-  int tag;
+  int tag, subtag;
   bitvector markbits = GCmarkbits;
     /* keep track of whether or not we saw any
        code_vector headers, and only flush cache if so. */
@@ -1474,7 +1508,9 @@ compact_dynamic_heap()
             src++;
           } else {
             *dest++ = node;
-            if (header_subtag(node) == subtag_function) {
+            subtag = header_subtag(node);
+            if ((subtag == subtag_function) ||
+                (subtag == subtag_pseudofunction)) {
               *dest++ = locative_forwarding_address(*src++);
             } else {
               *dest++ = node_forwarding_address(*src++);
@@ -1525,7 +1561,8 @@ compact_dynamic_heap()
     {
       natural nbytes = (natural)ptr_to_lispobj(dest) - (natural)GCfirstunmarked;
       if ((nbytes != 0) && GCrelocated_code_vector) {
-        xMakeDataExecutable((LogicalAddress)ptr_from_lispobj(GCfirstunmarked), nbytes);
+        flush_code_vectors_in_range((LispObj *)GCfirstunmarked,
+                                    (LispObj *)dest);
       }
     }
   }
@@ -1690,7 +1727,7 @@ void
 purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
 {
   LispObj header;
-  unsigned tag;
+  unsigned tag, subtag;
 
   while (start < end) {
     header = *start;
@@ -1705,7 +1742,9 @@ purify_range(LispObj *start, LispObj *end, BytePtr low, BytePtr high, area *to)
           copy_ivector_reference(start, low, high, to);
         }
         start++;
-        if (header_subtag(header) == subtag_function) {
+        subtag = header_subtag(header);
+        if ((subtag == subtag_function) ||
+            (subtag == subtag_pseudofunction)) {
           LispObj entrypt = *start;
           if ((entrypt > (LispObj)low) && 
               (entrypt < (LispObj)high) &&
@@ -1748,6 +1787,7 @@ purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to)
   LispObj *current = (LispObj *)(a->active)
     , *limit = (LispObj*)(a->high), header;
   lisp_frame *frame;
+  unsigned subtag;
 
 
   while(current < limit) {
@@ -1766,7 +1806,9 @@ purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to)
       natural elements = header_element_count(header);
 
       current++;
-      if (header_subtag(header) == subtag_function) {
+      subtag = header_subtag(header);
+      if ((subtag == subtag_function) ||
+          (subtag == subtag_pseudofunction)) {
         purify_locref(current, low, high, to);
         current++;
         elements--;
@@ -1962,6 +2004,8 @@ impurify_cstack_area(area *a, LispObj low, LispObj high, int delta)
   LispObj *current = (LispObj *)(a->active)
     , *limit = (LispObj*)(a->high), header;
   lisp_frame *frame;
+  unsigned subtag;
+
   while(current < limit) {
     header = *current;
 
@@ -1978,7 +2022,9 @@ impurify_cstack_area(area *a, LispObj low, LispObj high, int delta)
       natural elements = header_element_count(header);
 
       current++;
-      if (header_subtag(header) == subtag_function) {
+      subtag = header_subtag(header);
+      if ((subtag == subtag_function) || 
+          (subtag == subtag_pseudofunction)) {
         impurify_locref(current, low, high, delta);
         current++;
         elements--;
@@ -2024,7 +2070,7 @@ void
 impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delta)
 {
   LispObj header;
-  unsigned tag;
+  unsigned tag, subtag;
 
   while (start < end) {
     header = *start;
@@ -2036,7 +2082,9 @@ impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delt
         impurify_noderef(start, low, high, delta);
       }
       start++;
-      if (header_subtag(header) == subtag_function) {
+      subtag = header_subtag(header);
+      if ((subtag == subtag_function) ||
+          (subtag == subtag_pseudofunction)) {
         LispObj entrypt = *start;
         if ((entrypt > (LispObj)low) && 
             (entrypt < (LispObj)high) &&

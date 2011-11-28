@@ -369,12 +369,16 @@
 
 ;;; Load the low 32 bits of the integer constant VAL into REG, using movw/movt.
 (defarmlapmacro lri (reg val)
-  (let* ((high (ldb (byte 16 16) val))
-         (low (ldb (byte 16 0) val)))
-  `(progn
-    (movw ,reg (:$ ,low))
-    ,@(unless (zerop high)
-       `((movt ,reg (:$ ,high)))))))
+  (setq val (eval val))
+  (if (or (arm::encode-arm-immediate val)
+          (arm::encode-arm-immediate (lognot val)))
+    `(mov ,reg (:$ ,val))
+    (let* ((high (ldb (byte 16 16) val))
+           (low (ldb (byte 16 0) val)))
+      `(progn
+        (movw ,reg (:$ ,low))
+        ,@(unless (zerop high)
+          `((movt ,reg (:$ ,high))))))))
 
 (defarmlapmacro push-fprs (n)
   "Save N fprs starting at d8 on the control stack.

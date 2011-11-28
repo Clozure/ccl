@@ -26,7 +26,7 @@
   (tst imm0 (:$ #xc0000000))            ; see if result fits in a fixnum, sorta
   (box-fixnum arg_z imm0)               ; assume it did
   (bxeq lr)                             ; else arg_z tagged ok, but missing bits
-  (ba .SPmakeu32)         ; put all bits in bignum.
+  (spjump .SPmakeu32)         ; put all bits in bignum.
 )
 
 
@@ -111,7 +111,8 @@
     (set-nargs 1)
     (stmdb (:! vsp) (fun obj limit))
     (mov nfn fun)
-    (bla .SPfuncall)
+    (sploadlr .SPfuncall)
+    (blx lr)
     (ldmia (:! vsp) (fun obj limit))
     (add obj obj (:$ arm::cons.size))
     (b @test)
@@ -120,7 +121,8 @@
     (stmdb (:! vsp) (fun obj limit))
     (set-nargs 1)
     (mov nfn fun)
-    (bla .SPfuncall)
+    (sploadlr .SPfuncall)
+    (blx lr)
     (ldmia (:! vsp) (fun obj limit))
     (ldr header (:@ obj (:$ 0)))
     (extract-fulltag tag header)
@@ -211,7 +213,8 @@
     (set-nargs 1)
     (stmdb (:! vsp) (arg_z fun sentinel))
     (mov nfn fun)
-    (bla .SPfuncall)
+    (sploadlr .SPfuncall)
+    (blx lr)
     (ldmia (:! vsp) (obj fun sentinel))
     (add obj obj (:$ (- arm::cons.size arm::fulltag-cons)))
     (b @test)
@@ -220,7 +223,8 @@
     (stmdb (:! vsp) (arg_z fun sentinel))
     (set-nargs 1)
     (mov nfn fun)
-    (bla .SPfuncall)
+    (sploadlr .SPfuncall)
+    (blx lr)
     (ldmia (:! vsp) (obj fun sentinel))
     (sub obj obj (:$ arm::fulltag-misc))
     (ldr header (:@ obj (:$ 0)))
@@ -333,7 +337,7 @@
   (vpush1 arg_z)
   (vpush1 arg_y)
   (set-nargs 2)
-  (ba .SPnvalret))
+  (spjump .SPnvalret))
 
 
 
@@ -377,7 +381,7 @@ of free space to leave in the heap after full GC."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-get-lisp-heap-threshold))
   (uuo-gc-trap)
-  (ba .SPmakeu32))
+  (spjump .SPmakeu32))
 
 (defarmlapfunction set-lisp-heap-gc-threshold ((new arg_z))
   "Set the value of the kernel variable that specifies the amount of free
@@ -386,12 +390,13 @@ non-negative fixnum. Returns the value of that kernel variable (which may
 be somewhat larger than what was specified)."  
   (check-nargs 1)
   (build-lisp-frame)
-  (bla .SPgetu32)
+  (sploadlr .SPgetu32)
+  (blx lr)
   (mov imm1 imm0)
   (mov imm0 (:$ arch::gc-trap-function-set-lisp-heap-threshold))
   (uuo-gc-trap)
   (restore-lisp-frame imm1)
-  (ba .SPmakeu32))
+  (spjump .SPmakeu32))
 
 
 (defarmlapfunction use-lisp-heap-gc-threshold ()
@@ -408,14 +413,14 @@ be somewhat larger than what was specified)."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-freeze))
   (uuo-gc-trap)
-  (ba .SPmakeu32))
+  (spjump .SPmakeu32))
 
 (defarmlapfunction flash-freeze ()
   "Like FREEZE, but don't GC first."
   (check-nargs 0)
   (mov imm0 (:$ arch::gc-trap-function-flash-freeze))
   (uuo-gc-trap)
-  (ba .SPmakeu32))
+  (spjump .SPmakeu32))
 
 (defarmlapfunction allow-heap-allocation ((arg arg_z))
   "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts

@@ -198,12 +198,14 @@
 ;;; This can't reference any of the function's constants.
 (defarmlapfunction unset-fin-trampoline ()
   (build-lisp-frame)
-  (bla .SPheap-rest-arg)                 ; cons up an &rest arg, vpush it
+  (sploadlr .SPheap-rest-arg)                 ; cons up an &rest arg, vpush it
+  (blx lr)
   (vpop1 arg_z)                          ; whoops, didn't really want to
   (mov arg_x '#.$XNOFINFUNCTION)
   (mov arg_y nfn)
   (set-nargs 3)
-  (bla .SPksignalerr)
+  (sploadlr .SPksignalerr)
+  (blx lr)
   (mov arg_z 'nil)
   (return-lisp-frame))
 

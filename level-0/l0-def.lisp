@@ -209,7 +209,9 @@
     
 (defun %macro-have (symbol macro-function)
   (declare (special %macro-code%))      ; magically set by xloader.
-  (%fhave symbol (vector %macro-code% macro-function)))
+  (%fhave symbol
+          #-arm-target (vector %macro-code% macro-function)
+          #+arm-target (%fix-fn-entrypoint (gvector :pseudofunction 0 %macro-code% macro-function))))
 
 
 (defun special-operator-p (symbol)
@@ -233,8 +235,8 @@
    environment only."
   (setq form (require-type form 'symbol))
   (when env
-    ; A definition-environment isn't a lexical environment, but it can
-    ; be an ancestor of one.
+    ;; A definition-environment isn't a lexical environment, but it can
+    ;; be an ancestor of one.
     (unless (istruct-typep env 'lexical-environment)
         (report-bad-arg env 'lexical-environment))
       (let ((cell nil))
@@ -245,7 +247,7 @@
               (if (eq (car cell) 'macro) (%cdr cell))))
           (unless (listp (setq env (lexenv.parent-env env)))
             (go top)))))
-      ; Not found in env, look in function cell.
+      ;; Not found in env, look in function cell.
   (%global-macro-function form))
 
 (defun %fixnum-ref-macptr (fixnum &optional (offset 0))

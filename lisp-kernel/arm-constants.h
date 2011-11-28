@@ -118,11 +118,13 @@
 #define t_value (lisp_nil+t_offset)
 
 /*  The order in which various header values are defined is significant in several ways: */
-/*  1) Numeric subtags precede non-numeric ones; there are further orderings among numeric subtags. */
+/*  1) Numeric subtags are small enough that we can implement things like
+       NUMBERP via LOGBITP. There can be other (non-numeric) typecodes whose
+       value is smaller than that of some numeric typecodes. */
 /*  2) All subtags which denote CL arrays are preceded by those that don't, */
 /*     with a further ordering which requires that (< header-arrayH header-vectorH ,@all-other-CL-vector-types) */
 /*  3) The element-size of ivectors is determined by the ordering of ivector subtags. */
-/*  4) All subtags are >= fulltag-immheader . */
+
 
 #define SUBTAG(tag,subtag) ((tag) | ((subtag) << ntagbits))
 #define IMM_SUBTAG(subtag) SUBTAG(fulltag_immheader,(subtag))
@@ -132,19 +134,10 @@
 /* Numeric subtags. */
 
 #define subtag_bignum IMM_SUBTAG(0)
-#define min_numeric_subtag subtag_bignum
-
 #define subtag_ratio NODE_SUBTAG(1)
-#define max_rational_subtag subtag_ratio
-
 #define subtag_single_float IMM_SUBTAG(1)
 #define subtag_double_float IMM_SUBTAG(2)
-#define min_float_subtag subtag_single_float
-#define max_float_subtag subtag_double_float
-#define max_real_subtag subtag_double_float
-
 #define subtag_complex NODE_SUBTAG(3)
-#define max_numeric_subtag subtag_complex
 
 
 /*  CL array types.  There are more immediate types than node types; all CL array subtags must be > than */
@@ -179,18 +172,17 @@
 #define min_vector_subtag subtag_vectorH
 #define min_array_subtag subtag_arrayH
 
-/*  So, we get the remaining subtags (n: (n > max-numeric-subtag) & (n < min-array-subtag)) */
+/*  So, we get the remaining subtags (n:  (n < min-array-subtag)) */
 /*  for various immediate/node object types. */
 
 #define subtag_macptr IMM_SUBTAG(3)
-#define min_non_numeric_imm_subtag subtag_macptr
-
 #define subtag_dead_macptr IMM_SUBTAG(4)
 #define subtag_code_vector IMM_SUBTAG(5)
 #define subtag_creole IMM_SUBTAG(6)
 
 #define max_non_array_imm_subtag ((19<<ntagbits)|fulltag_immheader)
 
+#define subtag_pseudofunction NODE_SUBTAG(0)
 #define subtag_catch_frame NODE_SUBTAG(4)
 #define subtag_function NODE_SUBTAG(5)
 #define subtag_basic_stream NODE_SUBTAG(6)
@@ -204,7 +196,9 @@
 #define subtag_instance NODE_SUBTAG(14)
 #define subtag_struct NODE_SUBTAG(15)
 #define subtag_istruct NODE_SUBTAG(16)
-#define max_non_array_node_subtag ((19<<ntagbits)|fulltag_immheader)
+#define subtag_value_cell NODE_SUBTAG(17)
+#define subtag_xfunction NODE_SUBTAG(18)
+#define max_non_array_node_subtag ((18<<ntagbits)|fulltag_immheader)
 	
 
 typedef struct double_float {
@@ -301,6 +295,8 @@ typedef struct tcr {
   LispObj *tlb_pointer;
   unsigned shutdown_count;
   void *safe_ref_address;
+  LispObj spare[22];            /* allocate new things here */
+  LispObj sptab[256];           /* subprims table */
 } TCR;
 
 /* 
@@ -327,3 +323,7 @@ typedef struct tcr {
 #define FPSCR_OFE_BIT 10                    /* overflow enable */
 #define FPSCR_UFE_BIT 11                    /* underflow enable */
 #define FPSCR_IXE_BIT 12                    /* inexact enable */
+
+#define ABI_VERSION_MIN 1038
+#define ABI_VERSION_CURRENT 1038
+#define ABI_VERSION_MAX 1038

@@ -1679,6 +1679,9 @@ to replace that class with ~s" name old-class new-class)
 
 (defstatic *function-class* (make-built-in-class 'function))
 
+#+arm-target
+(make-built-in-class 'pseudofunction)
+
 (defun alias-class (name class)
   (setf (find-class name) class
         (info-type-kind name) :instance)
@@ -2348,6 +2351,8 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag ppc32::subtag-creole-object creole-object)
           (map-subtag target::subtag-xcode-vector xcode-vector)
           (map-subtag target::subtag-xfunction xfunction)
+          #+arm-target
+          (map-subtag arm::subtag-pseudofunction pseudofunction)
           (map-subtag target::subtag-single-float-vector simple-short-float-vector)
           #+64-bit-target
           (map-subtag target::subtag-u64-vector simple-unsigned-doubleword-vector)
@@ -2612,13 +2617,15 @@ to replace that class with ~s" name old-class new-class)
    nil				;method-function name
    (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit)))
   #+arm-target
-  (gvector :function
-           #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
+  (%fix-fn-entrypoint
+   (gvector :function
+           0
            (uvref *reader-method-function-proto* 1)
            (ensure-slot-id (%slot-definition-name dslotd))
            'slot-id-value
            nil				;method-function name
            (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit))))
+  )
 
 (defmethod create-writer-method-function ((class slots-class)
 					  (writer-method-class standard-writer-method)
@@ -2638,13 +2645,14 @@ to replace that class with ~s" name old-class new-class)
      nil
      (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit)))
     #+arm-target
-    (gvector :function
-             #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
+    (%fix-fn-entrypoint
+     (gvector :function
+             0
              (uvref *writer-method-function-proto* 1)
              (ensure-slot-id (%slot-definition-name dslotd))
              'set-slot-id-value
              nil
-             (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit)))
+             (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit))))
   )
 
 

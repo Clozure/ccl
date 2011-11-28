@@ -36,7 +36,8 @@ _exportfn(C(flush_cache_lines))
         __(mov r3,#0)
         __(mov r12,#0x80000000)
         __(svc #0)
-        __endif                
+        __endif   
+        __(isb sy)             
 	__(bx lr)
 
 _exportfn(C(touch_page))

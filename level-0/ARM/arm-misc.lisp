@@ -530,48 +530,30 @@
     (restore-lisp-frame imm0)
     (bx lr)))
 
-(defarmlapfunction %copy-gvector-to-gvector ((src (* 1 arm::node-size))
-					     (src-element 0)
-					     (dest arg_x)
-					     (dest-element arg_y)
-					     (nelements arg_z))
-  (ldr temp2 (:@ vsp (:$ src-element)))
-  (ldr temp0 (:@ vsp (:$ src)))
-  (add vsp vsp '2)
-  (cmp temp0 dest)
-  (add imm0 temp2 (:$ arm::misc-data-offset))
-  (add imm1 dest-element (:$ arm::misc-data-offset))
-  (bne @test)
-  ;; Maybe overlap, or maybe nothing to do.
-  (cmp temp2 dest-element)
-  (beq @done)                       ; same vectors, same offsets
-  (blt @back)                       ; copy backwards, avoid overlap
-  (b @test)
-  @loop
-  (ldr temp1 (:@ temp0 imm0))
-  (add imm0 imm0 '1)
-  (str temp1 (:@ dest imm1))
-  (add imm1 imm1 '1)
-  @test
-  (subs nelements nelements '1)
-  (bge @loop)
-  @done
-  (mov arg_z dest)
-  (bx lr)
-  @back
-  (add imm1 nelements imm1)
-  (add imm0 nelements imm0)
-  (b @back-test)
-  @back-loop
-  (sub imm0 imm0 '1)
-  (ldr temp1 (:@ temp0 imm0))
-  (sub imm1 imm1 '1)
-  (str temp1 (:@ dest imm1))
-  @back-test
-  (subs nelements nelements '1)
-  (bge @back-loop)
-  (mov arg_z dest)
-  (bx lr))
+;;; Unless we're sure that DEST is newly-created, we have to do this
+;;; in a way that honors the write barrier.
+(defun %copy-gvector-to-gvector (src src-element dest dest-element nelements)
+  (declare (fixnum src-element dest-element nelements)
+           (optimize (speed 3) (safety 0)))
+  (if (or (not (eq src dest))
+          (< dest-element src-element)
+          (>= dest-element (the fixnum (+ src-element nelements))))
+    (do* ()
+         ((<= nelements 0) dest)
+      (setf (%svref dest dest-element)
+            (%svref src src-element))
+      (incf dest-element)
+      (incf src-element)
+      (decf nelements))
+    (do* ((src-element (+ src-element nelements))
+          (dest-element (+ dest-element nelements)))
+         ((<= nelements 0) dest)
+      (declare (fixnum src-element dest-element))
+      (decf src-element)
+      (decf dest-element)
+      (setf (%svref dest dest-element)
+            (%svref src src-element))
+      (decf nelements))))
   
   
 
@@ -587,7 +569,7 @@
   (adds imm0 imm0 imm2)
   (adc imm1 imm1 (:$ 0))
   @go
-  (ba .SPmakeu64))
+  (spjump .SPmakeu64))
 
 
 
@@ -596,7 +578,7 @@
   (:arglist (&rest values))
   (vpush-argregs)
   (add temp0 nargs vsp)
-  (ba .SPvalues))
+  (spjump .SPvalues))
 
 ;; It would be nice if (%setf-macptr macptr (ash (the fixnum value)
 ;; ash::fixnumshift)) would do this inline.
@@ -621,7 +603,7 @@
   (add imm2 imm2 imm1)
   (ldr imm0 (:@ imm2 (:$ 0)))
   (ldr imm1 (:@ imm2 (:$ 4)))
-  (ba .SPmakeu64))
+  (spjump .SPmakeu64))
 
 
 
@@ -632,7 +614,7 @@
   (add imm2 imm2 imm1)
   (ldr imm0 (:@ imm2 (:$ 0)))           ;low
   (ldr imm1 (:@ imm2 (:$ 4)))           ;high
-  (ba .SPmakes64))
+  (spjump .SPmakes64))
 
 
 
@@ -642,7 +624,8 @@
   (build-lisp-frame imm0)
   (mov fn nfn)
   (trap-unless-xtype= ptr arm::subtag-macptr) 
-  (bla .SPgetu64)
+  (sploadlr .SPgetu64)
+  (blx lr)
   (macptr-ptr imm2 ptr)
   (add imm2 imm2 (:asr offset (:$ arm::fixnumshift)))
   (str imm0 (:@ imm2 (:$ 0)))
@@ -657,7 +640,8 @@
   (build-lisp-frame imm0)
   (mov fn nfn)
   (trap-unless-xtype= ptr arm::subtag-macptr)
-  (bla .SPgets64)
+  (sploadlr .SPgets64)
+  (blx lr)
   (macptr-ptr imm2 ptr)
   (add imm2 imm2 (:asr offset (:$ arm::fixnumshift)))
   (str imm0 (:@ imm2 (:$ 0)))
@@ -715,7 +699,7 @@
 
 ;;; This needs to be done out-of-line, to handle EGC memoization.
 (defarmlapfunction %store-node-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
-  (ba .SPstore-node-conditional))
+  (spjump .SPstore-node-conditional))
 
 #+notyet                                ; needs a subprim on ARM
 (defarmlapfunction %store-immediate-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
@@ -789,7 +773,7 @@
 
 
 (defarmlapfunction %atomic-incf-node ((by arg_x) (node arg_y) (disp arg_z))
-  (ba .SPatomic-incf-node))
+  (spjump .SPatomic-incf-node))
 
 (defarmlapfunction %atomic-incf-ptr ((ptr arg_z))
   (macptr-ptr imm1 ptr)
@@ -911,7 +895,8 @@
   (vpush parent)
   (vpush function)
   (vpush arglist)
-  (bla .SPnthrowvalues)
+  (sploadlr .SPnthrowvalues)
+  (blx lr)
 
   ; Pop tsp-count TSP frames
   (lwz tsp-count 16 vsp)
@@ -929,7 +914,8 @@
   (lwz imm1 arm::tcr.db-link arm::rcontext)
   (cmp cr0 imm0 imm1)
   (beq cr0 @restore-regs)               ; .SPunbind-to expects there to be something to do
-  (bla .SPunbind-to)
+  (sploadlr .SPunbind-to)
+  (blx lr)
 
 @restore-regs
   ; restore the saved registers from srv
@@ -1005,8 +991,9 @@
     ;; Parent is a real stack frame
     (mov sp parent))
   (set-nargs 0)
-  (bla .SPspreadargz)
-  (ba .SPtfuncallgen))
+  (sploadlr .SPspreadargz)
+  (blx lr)
+  (spjump .SPtfuncallgen))
 
 
 

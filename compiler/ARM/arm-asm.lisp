@@ -43,20 +43,20 @@
 
 (defvar *arm-constants* ())
 (defvar *lap-labels* ())
-(defvar *called-subprim-jmp-labels* ())
 
 
 
 
-(defun arm-subprimitive-address (x)
+
+
+(defun arm-subprimitive-offset (x)
   (if (and x (or (symbolp x) (stringp x)))
     (let* ((info (find x arm::*arm-subprims* :test #'string-equal :key #'ccl::subprimitive-info-name)))
       (when info
-        (+ (ccl::backend-real-subprims-bias ccl::*target-backend*)
-           (ccl::subprimitive-info-offset info))))))
+        (ccl::subprimitive-info-offset info)))))
 
 (defun arm-subprimitive-name (addr)
-  (let* ((info (find (- addr (ccl::backend-real-subprims-bias ccl::*target-backend*)) arm::*arm-subprims* :key #'ccl::subprimitive-info-offset)))
+  (let* ((info (find addr arm::*arm-subprims* :key #'ccl::subprimitive-info-offset)))
     (when info
       (string (ccl::subprimitive-info-name info)))))
 
@@ -125,6 +125,7 @@
     :imm16
     :srcount                            ;single register count
     :drcount
+    :spentry
     ))
 
 (defun %encode-arm-operand-type (name)
@@ -529,6 +530,14 @@
      #x049a0004
      #x0fff0fff
      ())
+   (define-arm-instruction spjump (:spentry)
+     #x0593f000
+     #x0ffff000
+     ())
+   (define-arm-instruction sploadlr (:spentry)
+     #x0593e000
+     #x0ffff000
+     ())
    (define-arm-instruction ldr (:rd :mem12)
      #x04100000
      #x0c500000
@@ -645,16 +654,7 @@
      #x0b000000
      #x0f000000
      ())
-   ;; BA and BLA are indistinguishable from B/BL in their
-   ;; generated code; they branch to/call subprim glue.
-   (define-arm-instruction ba (:subprim)
-     #x0a000000
-     #x0f000000
-     ())     
-      (define-arm-instruction bla (:subprim)
-     #x0b000000
-     #x0f000000
-     ())   
+  
    (define-arm-instruction bx (:rm)
      #x012fff10
      #x0ffffff0
@@ -1251,7 +1251,7 @@
     (let* ((mode (car form)))
       (if (eq mode :=)
         (destructuring-bind (label) (cdr form)
-          (when (arm::arm-subprimitive-address label)
+          (when (arm::arm-subprimitive-offset label)
             (error "Invalid label in ~s." form))
           (set-field-value instruction (byte 4 16) arm::pc)
           (set-field-value instruction (byte 1 24) 1) ;P bit
@@ -1379,18 +1379,19 @@
   (lap-note-label-reference form instruction :b))
 
 (defun parse-subprim-operand (form instruction)
+  (declare (ignore form instruction))
+  (ccl::compiler-bug "Obsolete operand type :SUBPRIM."))
+
+(defun parse-spentry-operand (form instruction)
   (multiple-value-bind (addr name)
       (if (typep form 'fixnum)
         (values form
                 (arm-subprimitive-name form))
-        (values (arm-subprimitive-address form)
+        (values (arm-subprimitive-offset form)
                 form))
     (unless (and name addr)
       (error "~s is not the name or address of an ARM subprimitive." form))
-    (let* ((lab (or (find-lap-label name)
-                    (make-lap-label name))))
-      (pushnew lab *called-subprim-jmp-labels*)
-      (push (cons instruction :b) (lap-label-refs lab)))))
+    (set-field-value instruction (byte 12 0) addr)))
 
 
     
@@ -1452,20 +1453,24 @@
 (defun parse-fpaddr-operand (form instruction)
   (if (atom form)
     (error "Invalid FP address: ~s" form)
-    (destructuring-bind (op rn offset) form
-      (unless (eq op :@)
-        (error "Invalid FP addressing mode ~s in ~s." op form))
-      (set-field-value instruction (byte 4 16) (need-arm-gpr rn))
-      (unless (and (consp offset) (eq (car offset) :$))
-        (error "Invalid FP address offset ~s in ~s." offset form))
-      (destructuring-bind (offset-form) (cdr offset)
-        (let* ((offset-val (eval offset-form)))
-          (when (logtest offset-val 3)
-            (error "FP address offset ~s must be a multiple of 4 in ~s." offset form))
-          (if (< offset-val 0)
-            (setq offset-val (- offset-val))
-            (set-field-value instruction (byte 1 23) 1))
-          (set-field-value instruction (byte 8 0) (ash offset-val -2)))))))
+    (if (eq (car form) :=)
+      (destructuring-bind (label) (cdr form)
+        (set-field-value instruction (byte 4 16) pc)
+        (lap-note-label-reference label instruction :fpmem))
+      (destructuring-bind (op rn offset) form
+        (unless (eq op :@)
+          (error "Invalid FP addressing mode ~s in ~s." op form))
+        (set-field-value instruction (byte 4 16) (need-arm-gpr rn))
+        (unless (and (consp offset) (eq (car offset) :$))
+          (error "Invalid FP address offset ~s in ~s." offset form))
+        (destructuring-bind (offset-form) (cdr offset)
+          (let* ((offset-val (eval offset-form)))
+            (when (logtest offset-val 3)
+              (error "FP address offset ~s must be a multiple of 4 in ~s." offset form))
+            (if (< offset-val 0)
+              (setq offset-val (- offset-val))
+              (set-field-value instruction (byte 1 23) 1))
+            (set-field-value instruction (byte 8 0) (ash offset-val -2))))))))
 
 (defun parse-@rn-operand (form instruction)
   (when (or (atom form)
@@ -1503,6 +1508,7 @@
       parse-imm16-operand
       parse-srcount-operand
       parse-drcount-operand
+      parse-spentry-operand
       ))
 
 
@@ -1642,9 +1648,8 @@
             
     
   
-(defun arm-finalize (seg)
-  (let* ((data-labels ())
-         (removed nil))
+(defun arm-finalize (seg &optional drained)
+  (let* ((removed nil))
     (do-lap-labels (lab)
       (loop
         (when (dolist (ref (lap-label-refs lab) t)              
@@ -1658,27 +1663,16 @@
           (return))))
     (when removed
       (set-element-addresses 0 seg))
-    (dolist (jmp-label *called-subprim-jmp-labels*)
-      (let* ((spname (lap-label-name jmp-label))
-             (data-label-name (cons spname (arm-subprimitive-address spname)))
-             (data-label (make-lap-label data-label-name)))
-        (push data-label data-labels)
-        (emit-lap-label seg spname)
-        (assemble-instruction seg `(ldr pc (:= ,data-label-name)))))
+
     
-    (let* ((marker (make-lap-instruction nil))
-           (code-count (make-lap-instruction nil)))
-      (emit-lap-instruction-element marker seg)
-      (emit-lap-instruction-element code-count seg)
-      (set-field-value code-count (byte 32 0) (ash (section-size seg) -2)))
+    (unless drained
+      (let* ((marker (make-lap-instruction nil))
+             (code-count (make-lap-instruction nil)))
+        (emit-lap-instruction-element marker seg)
+        (emit-lap-instruction-element code-count seg)
+        (set-field-value code-count (byte 32 0) (ash (section-size seg) -2))))
     
-    (dolist (data-label (nreverse data-labels))
-      (let* ((name (lap-label-name data-label))
-             (addr (cdr name)))
-        (emit-lap-label seg name)
-        (let* ((insn (make-lap-instruction nil)))
-          (set-field-value insn (byte 32 0) addr)
-          (emit-lap-instruction-element insn seg))))
+
           
     
     ;; Now fix up label references.  Recall that the PC value at some
@@ -1691,13 +1685,15 @@
               (let* ((diff-in-bytes (- labaddr (+ 8 (lap-instruction-address insn)))))
                 (case reftype
                   (:b (set-field-value insn (byte 24 0) (ash diff-in-bytes -2)))
-                  (:mem12
+                  ((:mem12 :fpmem)
                    (if (>= diff-in-bytes 0)
                      (set-field-value insn (byte 1 23) 1)
                      (setq diff-in-bytes (- diff-in-bytes)))
                    (when (> (integer-length diff-in-bytes) 12)
                      (error "PC-relative displacement can't be encoded."))
-                   (set-field-value insn (byte 12 0) diff-in-bytes))
+                   (if (eq reftype :fpmem)
+                     (set-field-value insn (byte 8 0) (ash diff-in-bytes -2))
+                     (set-field-value insn (byte 12 0) diff-in-bytes)))
                   (:offset
                    (set-field-value insn (byte 32 0)(1+ (ash (lap-instruction-address insn) (- arm::word-shift)))))
                   (t
@@ -1800,6 +1796,8 @@
     :srcount
     :drcount
     :reglist
+    :spentry
+    :fplabel
     )))
 
 (defmacro encode-vinsn-field-type (name)
@@ -1835,6 +1833,7 @@
       vinsn-parse-imm16-operand
       vinsn-parse-srcount-operand
       vinsn-parse-drcount-operand
+      vinsn-parse-spentry-operand
       ))
 
 (defun vinsn-arg-or-gpr (avi form vinsn-params encoded-type bytespec)
@@ -2060,10 +2059,22 @@
          (addr nil))
     (cond (p
            (add-avi-operand avi (encode-vinsn-field-type :subprim) (list p)))
-          ((setq addr (arm-subprimitive-address value))
+          ((setq addr (arm-subprimitive-offset value))
            (add-avi-operand avi (encode-vinsn-field-type :subprim) addr))
           ((arm-subprimitive-name value)
            (add-avi-operand avi (encode-vinsn-field-type :subprim) value))  
+          (t
+           (error "Unknown subprimitive name or address: ~s." value)))))
+
+(defun vinsn-parse-spentry-operand (avi value vinsn-params)
+  (let* ((p (position value vinsn-params))
+         (addr nil))
+    (cond (p
+           (add-avi-operand avi (encode-vinsn-field-type :spentry) (list p)))
+          ((setq addr (arm-subprimitive-offset value))
+           (add-avi-operand avi (encode-vinsn-field-type :spentry) addr))
+          ((arm-subprimitive-name value)
+           (add-avi-operand avi (encode-vinsn-field-type :spentry) value))  
           (t
            (error "Unknown subprimitive name or address: ~s." value)))))
 
@@ -2136,19 +2147,28 @@
   (vinsn-arg-or-gpr avi value vinsn-params (encode-vinsn-field-type :rs) (byte 4 8)))
 
 (defun vinsn-parse-fpaddr-operand (avi value vinsn-params)
-  (destructuring-bind (op rn offset) value
-    (unless (eq op :@) (error "Bad FP address operand: ~s." value))
-    (vinsn-arg-or-gpr avi rn vinsn-params (encode-vinsn-field-type :rn) (byte 4 16))
-    (destructuring-bind (marker offform) offset
-      (unless (eq marker :$) (error "Bad FP offset: ~s" offset))
-      (let* ((offval (vinsn-arg-or-constant avi offform vinsn-params (encode-vinsn-field-type :fpaddr-offset) nil)))
-        (when offval
-          (if (< offval 0)
-            (setq offval (- offval))
-            (set-avi-opcode-field avi (byte 1 23) 1))
-          (when (logtest 3 offval)
-            (error "Memory offset ~s must be a multiple of 4." offval))
-          (set-avi-opcode-field avi (byte 8 0) (ash offval -2)))))))
+  (if (and (consp value) (eq (car value) :=))
+    (destructuring-bind (label) (cdr value)
+      (set-avi-opcode-field avi (byte 4 16) arm::pc)
+      (let* ((p (position value vinsn-params)))
+        (cond (p
+               (add-avi-operand avi (encode-vinsn-field-type :fplabel) (list p)))
+              ((typep label 'keyword)
+               (add-avi-operand avi (encode-vinsn-field-type :fplabel) label))
+              (t (error "Unknown label: ~s" label)))))
+    (destructuring-bind (op rn offset) value
+      (unless (eq op :@) (error "Bad FP address operand: ~s." value))
+      (vinsn-arg-or-gpr avi rn vinsn-params (encode-vinsn-field-type :rn) (byte 4 16))
+      (destructuring-bind (marker offform) offset
+        (unless (eq marker :$) (error "Bad FP offset: ~s" offset))
+        (let* ((offval (vinsn-arg-or-constant avi offform vinsn-params (encode-vinsn-field-type :fpaddr-offset) nil)))
+          (when offval
+            (if (< offval 0)
+              (setq offval (- offval))
+              (set-avi-opcode-field avi (byte 1 23) 1))
+            (when (logtest 3 offval)
+              (error "Memory offset ~s must be a multiple of 4." offval))
+            (set-avi-opcode-field avi (byte 8 0) (ash offval -2))))))))
 
 (defun vinsn-parse-imm16-operand (avi value vinsn-params)
   (unless (and (consp value)
@@ -2253,6 +2273,8 @@
     vinsn-insert-srcount-operand
     vinsn-insert-drcount-operand
     vinsn-insert-reglist-operand
+    vinsn-insert-spentry-operand
+    vinsn-insert-fplabel-operand
     ))
 
 (defun vinsn-insert-cond-operand (instruction value)
@@ -2320,13 +2342,27 @@
                        (make-lap-label value))))))
     (push (cons instruction :b) (lap-label-refs label))))
 
+(defun vinsn-insert-fplabel-operand (instruction value)
+  (let* ((label (etypecase value
+                  (cons (or (find-lap-label value)
+                            (error "No LAP label for ~s." (car value))))
+                  (lap-label value)
+                  (ccl::vinsn-label
+                   (or (find-lap-label value)
+                       (make-lap-label value))))))
+    (push (cons instruction :fpmem) (lap-label-refs label))))
+
 (defun vinsn-insert-subprim-operand (instruction value)
-  (let* ((name (or (arm-subprimitive-name value)
-                   (arm-subprimitive-name (+ value (ccl::backend-real-subprims-bias ccl::*target-backend*)))))
-         (label (or (find-lap-label name)
-                    (make-lap-label name))))
-    (pushnew label *called-subprim-jmp-labels*)
-    (push (cons instruction :b) (lap-label-refs label))))
+  (declare (ignorable instruction value))
+  (ccl::compiler-bug "Obsolete SUBPRIM vinsn operand."))
+
+(defun vinsn-insert-spentry-operand (instruction value)
+  (unless (and (typep value 'fixnum)
+               (>= value arm::tcr.sptab)
+               (< value (+ arm::tcr.sptab (* 256 4)))
+               (not (logtest value 3)))
+    (error "Bad subprim index: ~s" value))
+  (set-field-value instruction (byte 12 0) value))
 
 
 
@@ -2335,6 +2371,8 @@
     (unless label
       (error "Mystery data label: ~s" value))
     (push (cons instruction :mem12) (lap-label-refs label))))
+
+
 
 (defun vinsn-insert-dd-operand (instruction value)
   (set-field-value instruction (byte 4 12) value) )

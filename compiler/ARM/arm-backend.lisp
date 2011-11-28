@@ -106,7 +106,7 @@
                      (declare (list pair))
                      (if pair
                        (cdr pair)
-                       (or (subprim-name->offset n backend)
+                       (or (arm::arm-subprimitive-offset n)
                            (error "Unknown name ~s" n))))))
             (labels ((simplify-operand (op)
                        (if (atom op)
@@ -167,7 +167,7 @@
                                      (mapcar #'simplify-form opvals))
                                (if (keywordp opname)
                                  (ecase opname
-                                   ((:code :data)  form)
+                                   ((:code :data :drain-constant-pool)  form)
                                    (:word (destructuring-bind (val) opvals
                                             (list opname
                                                   (let* ((p (position val name-list)))
@@ -271,8 +271,7 @@
 		:name :androidarm
 		:target-arch-name :arm
 		:target-foreign-type-data nil
-                :target-arch arm::*arm-target-arch*
-                :lowmem-bias (cons 0 (- #x04002000 #x9000))))
+                :target-arch arm::*arm-target-arch*))
 
 #+(or linuxarm-target (not arm-target))
 (pushnew *linuxarm-backend* *known-arm-backends* :key #'backend-name)

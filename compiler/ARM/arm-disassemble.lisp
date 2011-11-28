@@ -69,10 +69,17 @@
 
 (defun extract-arm-fpaddr-operand (opcodes i)
   (let* ((opcode (adi-opcode (svref opcodes i)))
-         (offset (ash (ldb (byte 8 0) opcode) 2)))
+         (offset (ash (ldb (byte 8 0) opcode) 2))
+         (rn (ldb (byte 4 16) opcode)))
     (unless (logbitp 23 opcode)
       (setq offset (- offset)))
-    `(:@ ,(arm-gpr-name (ldb (byte 4 16) opcode)) (:$ ,offset))))
+    (cond ((eql rn arm::pc)
+           (let* ((target (+ i 2 (ash offset -2))))
+             (when (and (>= target 0)
+                        (< target (uvsize opcodes)))
+               (setf (adi-labeled (uvref opcodes target)) t))
+             `(:= (:label ,target))))
+          (t `(:@ ,(arm-gpr-name rn) (:$ ,offset))))))
 
 (defun extract-arm-@rn-operand (opcodes i)
   (let* ((opcode (adi-opcode (svref opcodes i))))
@@ -294,6 +301,13 @@
   (let* ((opcode (adi-opcode (svref opcodes i))))
     (ldb (byte 7 1) opcode)))
 
+(defun extract-arm-spentry-operand (opcodes i)
+  (let* ((opcode (adi-opcode (svref opcodes i)))
+         (val (ldb (byte 12 0) opcode)))
+    `(:spname ,(or (arm::arm-subprimitive-name val)
+                   (format nil "??? subprim ~d" val)))))
+  
+
 (defparameter *arm-operand-extract-functions*
   #(extract-arm-rd-operand
     extract-arm-rn-operand
@@ -323,6 +337,7 @@
     extract-arm-imm16-operand
     extract-arm-srcount-operand
     extract-arm-drcount-operand
+    extract-arm-spentry-operand
     ))
 
 (defun make-adi-vector (code-vector)
@@ -335,34 +350,22 @@
 
 (defun process-adi-vector (adi-vector)
   (let* ((n (length adi-vector))
-         (data nil))
+         (data nil)
+         (data-count 0))
     (declare (fixnum n))
-    (do* ((i (1- n) (1- i)))
-         ((< i 0))
-      (declare (fixnum i))
-      (let* ((adi (svref adi-vector i))
-             (opcode (adi-opcode adi)))
-        (when (= opcode 0)
-          (do* ((w (1- n) (1- w))
-                (j (1- i) (1- j))
-                (ndata (- n (1+ i)) (1- ndata)))
-               ((zerop ndata))
-            (let* ((addr (adi-opcode (svref adi-vector w)))
-                   (jmp (svref adi-vector j)))
-              (setf (adi-labeled jmp)
-                    (arm::arm-subprimitive-name addr))))
-          (return))))
     (do* ((i 0 (1+ i)))
          ((= i n) adi-vector)
       (declare (fixnum i))
       (let* ((adi (svref adi-vector i))
              (opcode (adi-opcode adi)))
-        (cond ((= opcode 0)
+        (cond (data (setq data-count opcode data nil))
+              ((> data-count 0)
+               (setf (adi-mnemonic adi) ":word"
+                     (adi-operands adi) (list (adi-opcode adi)))
+               (decf data-count))
+              ((= opcode 0)
                (setq data t)
                (incf i))
-              (data
-               (setf (adi-mnemonic adi) ":word"
-                     (adi-operands adi) (list (adi-opcode adi))))
               (t
                (let* ((template (find-arm-instruction-template opcode)))
                  (if (null template)

@@ -65,7 +65,7 @@
   (vpush1 temp1)
   (add temp0 vsp '2)
   (set-nargs 2)
-  (ba .SPvalues))
+  (spjump .SPvalues))
 
 
 ; (integer-length arg) = (- 32 (clz (if (>= arg 0) arg (lognot arg))))
@@ -143,12 +143,13 @@
     (unbox-fixnum unboxed-dividend dividend)
     (unbox-fixnum unboxed-divisor divisor)
     (beq @neg)
-    (bla .SPsdiv32)
+    (sploadlr .SPsdiv32)
+    (blx lr)
     (box-fixnum quotient unboxed-quotient)
     (box-fixnum remainder unboxed-remainder)
     (stmdb (:! vsp) (quotient remainder))
     (set-nargs 2)
-    (ba .SPnvalret)
+    (spjump .SPnvalret)
     @neg
     (ldr arg_z (:@ fn '*least-positive-bignum*))
     (rsbs dividend dividend (:$ 0))
@@ -158,7 +159,7 @@
     (vpush1 dividend)
     (vpush1 temp0)
     (set-nargs 2)
-    (ba .SPnvalret)))
+    (spjump .SPnvalret)))
 
 
 

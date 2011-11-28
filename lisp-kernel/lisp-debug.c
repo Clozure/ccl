@@ -1438,6 +1438,8 @@ extern pid_t main_thread_pid;
 #endif
 
 
+static Boolean in_postmortem = false;
+
 OSStatus
 lisp_Debugger(ExceptionInformation *xp, 
 	      siginfo_t *info, 
@@ -1449,7 +1451,17 @@ lisp_Debugger(ExceptionInformation *xp,
   va_list args;
   debug_command_return state = debug_continue;
 
-
+  if (in_postmortem) {
+    /* If we get reentered trying to print crash info, just exit
+       as quickly and quietly as possible.  Don't even print a
+       message: stdio may be hosed.
+    */
+#ifdef ANDROID
+    _exit(1);
+#else
+    abort();
+#endif
+  }
   if (stdin_is_dev_null()) {
     return -1;
   }
@@ -1481,6 +1493,7 @@ lisp_Debugger(ExceptionInformation *xp,
     debug_identify_function(xp, info);
   }
   if (lisp_global(BATCH_FLAG)) {
+    in_postmortem = true;
 #ifdef WINDOWS
     fprintf(dbgout, "Current Process Id %d\n", (int)GetCurrentProcessId());
 #else
@@ -1495,7 +1508,12 @@ lisp_Debugger(ExceptionInformation *xp,
     debug_memory_areas(xp, info, 0);
     debug_show_lisp_version(xp, info, 0);
     debug_backtrace(xp, info, 0);
+#ifdef ANDROID
+    /* Android crashes when abort() is called */
+    _exit(1);
+#else
     abort();
+#endif
   }
 
   fprintf(dbgout, "? for help\n");

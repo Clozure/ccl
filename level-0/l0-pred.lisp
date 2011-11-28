@@ -86,15 +86,14 @@
 
 (defun rationalp (x)
   "Return true if OBJECT is a RATIONAL, and NIL otherwise."
-  (or (fixnump x)
-      (let* ((typecode (typecode x)))
-        (declare (fixnum typecode))
-        #+(or ppc32-target x8632-target arm-target)
-        (and (>= typecode target::min-numeric-subtag)
-             (<= typecode target::max-rational-subtag))
-        #+(or ppc64-target x8664-target)
-        (cond ((= typecode target::subtag-bignum) t)
-              ((= typecode target::subtag-ratio) t)))))
+  (let* ((typecode (typecode x)))
+    (declare (fixnum typecode))
+    (and (< typecode (- target::nbits-in-word target::fixnumshift))
+         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
+                    typecode)
+                  (logior (ash 1 target::tag-fixnum)
+                          (ash 1 target::subtag-bignum)
+                          (ash 1 target::subtag-ratio))))))
 
 (defun short-float-p (x)
   (= (the fixnum (typecode x)) target::subtag-single-float))
@@ -374,7 +373,7 @@
 #+(or ppc32-target arm-target)
 (progn
 (defparameter *nodeheader-types*
-  #(bogus                               ; 0
+  #(#+arm-target pseudofunction #+ppc32-target bogus ; 0
     ratio                               ; 1
     bogus                               ; 2
     complex                             ; 3

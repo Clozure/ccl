@@ -115,24 +115,19 @@
 
 
 (eval-when (:compile-toplevel :execute)
-  #+32-bit-target
   (defmacro need-use-eql-macro (key)
     `(let* ((typecode (typecode ,key)))
        (declare (fixnum typecode))
        (or (= typecode target::subtag-macptr)
-           (and (>= typecode target::min-numeric-subtag)
-                (<= typecode target::max-numeric-subtag)))))
-  #+64-bit-target
-  (defmacro need-use-eql-macro (key)
-    `(let* ((typecode (typecode ,key)))
-       (declare (fixnum typecode))
-      (cond ((= typecode target::tag-fixnum) t)
-            ((= typecode target::subtag-single-float) t)
-            ((= typecode target::subtag-bignum) t)
-            ((= typecode target::subtag-double-float) t)
-            ((= typecode target::subtag-ratio) t)
-            ((= typecode target::subtag-complex) t)
-            ((= typecode target::subtag-macptr) t))))
+            (and (< typecode (- target::nbits-in-word target::fixnumshift))
+         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
+                    typecode)
+                  (logior (ash 1 target::tag-fixnum)
+                          (ash 1 target::subtag-bignum)
+                          (ash 1 target::subtag-single-float)
+                          (ash 1 target::subtag-double-float)
+                          (ash 1 target::subtag-ratio)
+                          (ash 1 target::subtag-complex)))))))
 
 )
 

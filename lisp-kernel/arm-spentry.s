@@ -21,16 +21,7 @@
 	.syntax unified
 
 local_label(start):
-        .set delta,256
-        .set spnum,0
-        .set sporg,0
 define(`_spentry',`ifdef(`__func_name',`_endfn',`')
-	.org sporg
-        .set sporg,sporg+delta
-        .set spnum,spnum+1
-        .if spnum >= 112
-        .set delta,1024
-        .endif
 	_startfn(_SP$1)
 L__SP$1:                        
 	.line  __line__
@@ -66,18 +57,6 @@ _spentry(fix_nfn_entrypoint)
         __(restore_lisp_frame(imm0))
         __(jump_nfn())
 
-        /* This isn't a subprim - we never have to MOV this address
-        to the PC, but it gets LDRed into the PC as part of the
-        standard calling sequence.  Ensuring that that happens -
-        without having to deal with updating the entrypoint associated
-        with a relocatable code-vector stored in a non-function -
-        is easiest if we use a fixed address here. */
-        
-        .org sporg-delta+0x40
-_startfn(udfcall)
-        __(uuo_error_udf_call(al,fname))
-        __(jump_fname)
-_endfn                
         
 _spentry(builtin_plus)
 	__(test_two_fixnums(arg_y,arg_z,imm0))
@@ -2186,14 +2165,22 @@ _spentry(getu64)
         __(uuo_error_reg_not_xtype(al,arg_z,xtype_u64))
 2:      __(movc16(imm1,three_digit_bignum_header))
         __(cmp imm0,imm1)
-        __(uuo_error_reg_not_xtype(ne,arg_z,xtype_u64))
+        __(bne 3f)
         __(vrefr(imm2,arg_z,2))
         __(cmp imm2,#0)
         __(vrefr(imm1,arg_z,1))
         __(vrefr(imm0,arg_z,0))
         __(bxeq lr)
         __(uuo_error_reg_not_xtype(al,arg_z,xtype_u64))
-
+3:      __(movc16(imm1,one_digit_bignum_header))
+        __(cmp imm0,imm1)
+        __(bne 0b)
+        __(vrefr(imm0,arg_z,0))
+        __(mov imm1,#0)
+        __(cmp imm0,#0)
+        __(bxgt lr)
+        __(b 0b)
+        __
          
 /* arg_z should be of type (SIGNED-BYTE 64);  */
 /*    return high 32 bits  in imm1, low 32 bits in imm0  */
@@ -2206,7 +2193,14 @@ _spentry(gets64)
         __(mov imm2,#0)
         __(extract_lisptag(imm0,arg_z))
         __(cmp imm0,#tag_misc)
+        __(movc16(imm1,one_digit_bignum_header))
         __(ldreq imm2,[arg_z,#misc_header_offset])
+        __(cmp imm1,imm2)
+        __(bne 0f)
+        __(vrefr(imm0,arg_z,0))
+        __(mov imm1,imm0,asr #31)
+        __(bx lr)
+0:     
         __(movc16(imm1,two_digit_bignum_header))
         __(cmp imm1,imm2)
         __(beq 1f)
@@ -3173,7 +3167,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* 00 even_fixnum  */
 	
 	__(b local_label(misc_ref_invalid)) /* 01 cons  */
-	__(b local_label(misc_ref_invalid)) /* 02 nodeheader  */
+	__(b local_label(misc_ref_node))    /* 02 pseudofunction */
 	__(b local_label(misc_ref_invalid)) /* 03 imm  */
 	__(b local_label(misc_ref_invalid)) /* 04 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 05 nil  */
@@ -3539,7 +3533,7 @@ local_label(misc_set_jmp):
 	/* 00-0f  */
 	__(b local_label(misc_set_invalid)) /* 00 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 01 cons  */
-	__(b local_label(misc_set_invalid)) /* 02 nodeheader  */
+	__(b _SPgvset)                      /* 02 pseudofunction  */
 	__(b local_label(misc_set_invalid)) /* 03 imm  */
 	__(b local_label(misc_set_invalid)) /* 04 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 05 nil  */
@@ -4416,6 +4410,143 @@ _exportfn(C(start_lisp))
         __(ldmia sp!,{r4,r5,r6,r7,r8,r9,r10,r11,r12,lr})
         __(bx lr)
 
-_exportfn(_SPsp_end)
-        __(nop)
+        .data
+        .global C(sptab)
+        .global C(sptab_end)
+        new_local_labels()
+C(sptab):
+        .long local_label(start)
+C(sptab_end):   
+        .long local_label(end)
+local_label(start):                     
+        .long _SPfix_nfn_entrypoint /* must be first */
+        .long _SPbuiltin_plus
+        .long _SPbuiltin_minus
+        .long _SPbuiltin_times
+        .long _SPbuiltin_div
+        .long _SPbuiltin_eq
+        .long _SPbuiltin_ne
+        .long _SPbuiltin_gt
+        .long _SPbuiltin_ge
+        .long _SPbuiltin_lt
+        .long _SPbuiltin_le
+        .long _SPbuiltin_eql
+        .long _SPbuiltin_length
+        .long _SPbuiltin_seqtype
+        .long _SPbuiltin_assq
+        .long _SPbuiltin_memq
+        .long _SPbuiltin_logbitp
+        .long _SPbuiltin_logior
+        .long _SPbuiltin_logand
+        .long _SPbuiltin_ash
+        .long _SPbuiltin_negate
+        .long _SPbuiltin_logxor
+        .long _SPbuiltin_aref1
+        .long _SPbuiltin_aset1
+        .long _SPfuncall
+        .long _SPmkcatch1v
+        .long _SPmkcatchmv
+        .long _SPmkunwind
+        .long _SPbind
+        .long _SPconslist
+        .long _SPconslist_star
+        .long _SPmakes32
+        .long _SPmakeu32
+        .long _SPfix_overflow
+        .long _SPmakeu64
+        .long _SPmakes64
+        .long _SPmvpass
+        .long _SPvalues
+        .long _SPnvalret
+        .long _SPthrow
+        .long _SPnthrowvalues
+        .long _SPnthrow1value
+        .long _SPbind_self
+        .long _SPbind_nil
+        .long _SPbind_self_boundp_check
+        .long _SPrplaca
+        .long _SPrplacd
+        .long _SPgvset
+        .long _SPset_hash_key
+        .long _SPstore_node_conditional
+        .long _SPset_hash_key_conditional
+        .long _SPstkconslist
+        .long _SPstkconslist_star
+        .long _SPmkstackv
+        .long _SPsetqsym
+        .long _SPprogvsave
+        .long _SPstack_misc_alloc
+        .long _SPgvector
+        .long _SPfitvals
+        .long _SPnthvalue
+        .long _SPdefault_optional_args
+        .long _SPopt_supplied_p
+        .long _SPheap_rest_arg
+        .long _SPreq_heap_rest_arg
+        .long _SPheap_cons_rest_arg
+        .long _SPcheck_fpu_exception
+        .long _SPdiscard_stack_object
+        .long _SPksignalerr
+        .long _SPstack_rest_arg
+        .long _SPreq_stack_rest_arg
+        .long _SPstack_cons_rest_arg
+        .long _SPcall_closure        
+        .long _SPspreadargz
+        .long _SPtfuncallgen
+        .long _SPtfuncallslide
+        .long _SPjmpsym
+        .long _SPtcallsymgen
+        .long _SPtcallsymslide
+        .long _SPtcallnfngen
+        .long _SPtcallnfnslide
+        .long _SPmisc_ref
+        .long _SPsubtag_misc_ref
+        .long _SPmakestackblock
+        .long _SPmakestackblock0
+        .long _SPmakestacklist
+        .long _SPstkgvector
+        .long _SPmisc_alloc
+        .long _SPatomic_incf_node
+        .long _SPunused1
+        .long _SPunused2
+        .long _SPrecover_values
+        .long _SPinteger_sign
+        .long _SPsubtag_misc_set
+        .long _SPmisc_set
+        .long _SPspread_lexprz
+        .long _SPreset
+        .long _SPmvslide
+        .long _SPsave_values
+        .long _SPadd_values
+        .long _SPmisc_alloc_init
+        .long _SPstack_misc_alloc_init
+        .long _SPpopj
+        .long _SPudiv64by32
+        .long _SPgetu64
+        .long _SPgets64
+        .long _SPspecref
+        .long _SPspecrefcheck
+        .long _SPspecset
+        .long _SPgets32
+        .long _SPgetu32
+        .long _SPmvpasssym
+        .long _SPunbind
+        .long _SPunbind_n
+        .long _SPunbind_to
+        .long _SPprogvrestore
+        .long _SPbind_interrupt_level_0
+        .long _SPbind_interrupt_level_m1
+        .long _SPbind_interrupt_level
+        .long _SPunbind_interrupt_level
+        .long _SParef2
+        .long _SParef3
+        .long _SPaset2
+        .long _SPaset3
+        .long _SPkeyword_bind
+        .long _SPudiv32
+        .long _SPsdiv32
+        .long _SPeabi_ff_call
+        .long _SPdebind
+        .long _SPeabi_callback
+local_label(end):       
         	_endfile

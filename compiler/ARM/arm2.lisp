@@ -299,7 +299,7 @@
            (arm2-copy-register seg arm::arg_z valreg)
            (arm2-stack-to-register seg ea arm::arg_x)
            (arm2-lri seg arm::arg_y 0)
-           (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-address  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z)
+           (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-offset  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z)
            (setq valreg arm::arg_z))
           ((memory-spec-p ea)    ; vstack slot
            (arm2-register-to-stack seg valreg ea))
@@ -475,10 +475,12 @@
                  (format t "~%~%"))
             
                (with-dll-node-freelist (code arm::*lap-instruction-freelist*)
+                 (with-dll-node-freelist (data arm::*lap-instruction-freelist*)
                    (let* ((arm::*lap-labels* nil)
-                          (arm::*called-subprim-jmp-labels* nil)
+                          (sections (vector code data))
                           debug-info)
-                     (arm2-expand-vinsns vinsns code)
+                     (declare (dynamic-extent sections))
+                     (arm2-expand-vinsns vinsns code sections)
                      (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
                        (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
                      (setq debug-info (afunc-lfun-info afunc))
@@ -503,21 +505,22 @@
                            (arm2-xmake-function
                             code
                             *backend-immediates*
-                            bits))
+                            bits
+                            data))
                      (when (getf debug-info 'pc-source-map)
                        (setf (getf debug-info 'pc-source-map) (arm2-generate-pc-source-map debug-info)))
                      (when (getf debug-info 'function-symbol-map)
-                       (setf (getf debug-info 'function-symbol-map) (arm2-digest-symbols))))))
+                       (setf (getf debug-info 'function-symbol-map) (arm2-digest-symbols)))))))
           (backend-remove-labels))))
     afunc))
 
-(defun arm2-xmake-function (code imms bits)
+(defun arm2-xmake-function (code imms bits &optional data)
   (collect ((lap-imms))
     (dotimes (i (length imms))
       (lap-imms (cons (aref imms i) i)))
     (let* ((arm::*arm-constants* (lap-imms)))
       (arm-lap-generate-code code
-                             (arm::arm-finalize code)
+                             (arm::arm-finalize code (if data (arm-drain-constant-pool code data)))
                              bits))))
 
 
@@ -737,7 +740,7 @@
 (defun arm2-save-non-volatile-fprs (seg n)
   (unless (eql n 0)
     (with-arm-local-vinsn-macros (seg)
-      (! push-nvfprs n))
+      (! push-nvfprs n (logior (ash n arm::num-subtag-bits) arm::subtag-double-float)))
     (setq *arm2-non-volatile-fpr-count* n)))
 
 (defun arm2-restore-non-volatile-fprs (seg)
@@ -1383,10 +1386,7 @@
                 (! load-single-float-constant vreg bitsreg)))
             (multiple-value-bind (high low) (arm2-double-float-bits form)
               (declare (integer high low))
-              (with-imm-temps () ((highreg :u32) (lowreg :u32))
-                (! lri highreg high)
-                (! lri lowreg low)
-                (! load-double-float-constant vreg highreg lowreg)))))
+              (! load-double-float-constant-from-data vreg high low))))
         (if (and (typep form '(unsigned-byte 32))
                  (= (hard-regspec-class vreg) hard-reg-class-gpr)
                  (= (get-regspec-mode vreg)
@@ -1470,7 +1470,7 @@
       (let* ((arg_z ($ arm::arg_z))
              (imm0 ($ arm::imm0 :mode :s32)))
         (arm2-copy-register seg imm0 s32-src)
-        (! call-subprim (arm::arm-subprimitive-address '.SPmakes32))
+        (! call-subprim (arm::arm-subprimitive-offset '.SPmakes32))
         (arm2-copy-register seg node-dest arg_z)))))
 
 
@@ -1482,7 +1482,7 @@
       (let* ((arg_z ($ arm::arg_z))
              (imm0 ($ arm::imm0 :mode :u32)))
         (arm2-copy-register seg imm0 u32-src)
-        (! call-subprim (arm::arm-subprimitive-address '.SPmakeu32))
+        (! call-subprim (arm::arm-subprimitive-offset '.SPmakeu32))
         (arm2-copy-register seg node-dest arg_z)))))
 
 
@@ -2210,7 +2210,7 @@
                           (eql (hard-regspec-value unscaled-idx) arm::arg_y)
                           (eql (hard-regspec-value val-reg) arm::arg_z))
                (compiler-bug "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
-             (! call-subprim-3 val-reg (arm::arm-subprimitive-address '.SPgvset) src unscaled-idx val-reg))
+             (! call-subprim-3 val-reg (arm::arm-subprimitive-offset '.SPgvset) src unscaled-idx val-reg))
             (is-node
              (if (and index-known-fixnum (<= index-known-fixnum
                                              (arch::target-max-32-bit-constant-index arch)))
@@ -2697,7 +2697,7 @@
             (let* ((*arm2-vstack* *arm2-vstack*)
                    (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
               (arm2-lri seg arm::arg_x (ash (nx-lookup-target-uvector-subtag :function) *arm2-target-fixnum-shift*))
-              (arm2-lri seg arm::temp0 (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint))
+              (arm2-lri seg arm::temp0 0)
               (! %closure-code% arm::arg_y)
               (arm2-store-immediate seg (arm2-afunc-lfun-ref afunc) arm::arg_z)
               (arm2-vpush-register-arg seg arm::arg_x)
@@ -2712,7 +2712,7 @@
               (arm2-lri seg arm::arg_z (ash (ash 1 $lfbits-trampoline-bit) *arm2-target-fixnum-shift*))
               (arm2-vpush-register-arg seg arm::arg_z)
               (arm2-set-nargs seg (1+ vsize)) ; account for subtag
-              (! make-stack-gvector))
+              (! make-stack-closure))
             (arm2-open-undo $undostkblk))
           (let* ((cell 1))
             (declare (fixnum cell))
@@ -2722,9 +2722,9 @@
                         (arch::make-vheader vsize (nx-lookup-target-uvector-subtag :function)))
               (! %alloc-misc-fixed dest arm::imm0 (ash vsize (arch::target-word-shift arch)))
               )
-            (! lri arm::arg_x (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint))
-            (! misc-set-c-node arm::arg_x dest 0)
             (! %closure-code% arm::arg_x)
+            (! %codevector-entry arm::lr arm::arg_x)
+            (! misc-set-c-node arm::lr dest 0)
             (arm2-store-immediate seg (arm2-afunc-lfun-ref afunc) arm::arg_y)
             (with-node-temps (arm::arg_z) (t0 t1 t2 t3)
               (do* ((ccode arm::arg_x nil)
@@ -4771,8 +4771,8 @@
       (when safe
         (! trap-unless-cons ptr-vreg))
       (if setcdr
-        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPrplacd) ptr-vreg val-vreg)
-        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPrplaca) ptr-vreg val-vreg))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPrplacd) ptr-vreg val-vreg)
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPrplaca) ptr-vreg val-vreg))
       (if returnptr
         (<- ptr-vreg)
         (<- val-vreg))
@@ -5301,15 +5301,16 @@
        (setf (vinsn-label-info lab) (arm::emit-lap-label header lab))))))
 
 
-(defun arm2-expand-vinsns (header seg)
+(defun arm2-expand-vinsns (header current &optional sections)
+  (declare (ignorable sections))
   (do-dll-nodes (v header)
     (if (%vinsn-label-p v)
       (let* ((id (vinsn-label-id v)))
         (if (or (typep id 'fixnum) (null id))
           (when (or t (vinsn-label-refs v) (null id))
-            (setf (vinsn-label-info v) (arm::emit-lap-label seg v)))
-          (arm2-expand-note seg id)))
-      (arm2-expand-vinsn v seg)))
+            (setf (vinsn-label-info v) (arm::emit-lap-label current v)))
+          (arm2-expand-note current id)))
+      (arm2-expand-vinsn v current sections)))
   ;;; This doesn't have too much to do with anything else that's
   ;;; going on here, but it needs to happen before the lregs
   ;;; are freed.  There really shouldn't be such a thing as a
@@ -5330,8 +5331,11 @@
 ;;; For now, we replace lregs in the operand vector with their values
 ;;; on entry, but it might be reasonable to make PARSE-OPERAND-FORM
 ;;; deal with lregs ...
-(defun arm2-expand-vinsn (vinsn seg)
+(defun arm2-expand-vinsn (vinsn current &optional sections)
+  (declare (ignorable sections))
   (let* ((template (vinsn-template vinsn))
+         (code (svref sections 0))
+         (data (svref sections 1))
          (vp (vinsn-variable-parts vinsn))
          (nvp (vinsn-template-nvp template))
          (predicate (vinsn-annotation vinsn))
@@ -5347,7 +5351,7 @@
         (push unique unique-labels)
         (arm::make-lap-label unique)))
     (labels ((parse-operand-form (valform)
-                                        ;(break "valform = ~s" valform)
+               ;;(break "valform = ~s" valform)
                (cond ((typep valform 'keyword)
                       (or (assq valform unique-labels)
                           (compiler-bug "unknown vinsn label ~s" valform)))
@@ -5363,19 +5367,48 @@
                           (dolist (op op-vals (apply (car valform) parsed-ops))
                             (setq tail (cdr (rplaca tail (parse-operand-form op)))))))))
              (expand-insn-form (f)
-               (let* ((insn (arm::make-lap-instruction nil))
-                      (opcode (car f))
-                      (operands (cdr f)))
-                 (setf (arm::lap-instruction-opcode-high insn) (car opcode)
-                       (arm::lap-instruction-opcode-low insn) (cdr opcode))
-                 (when predicate
-                   (funcall (svref operand-insert-functions
-                                   (arm::encode-vinsn-field-type :cond))
-                            insn
-                            predicate))
-                 (dolist (op operands (arm::emit-lap-instruction-element insn seg))
-                   (let* ((insert-function (svref operand-insert-functions (car op))))
-                     (funcall insert-function insn (parse-operand-form (cdr op)))))))
+               (case (car f)
+                 (:code (setq current code))
+                 (:data (setq current data)
+                        (when (logtest 7 (arm::section-size data))
+                          (expand-insn-form '((0 . 0)))))
+                 (:word (let* ((val (parse-operand-form (cadr f))))
+                          (expand-insn-form (list (cons (ldb (byte 16 16) val)
+                                                        (ldb (byte 16 0) val))))))
+                 (:drain-constant-pool
+                  (arm-drain-constant-pool code data t))
+                 (t
+                  
+                  (let* ((insn (arm::make-lap-instruction nil))
+                         (opcode (car f))
+                         (operands (cdr f)))
+                    (setf (arm::lap-instruction-opcode-high insn) (car opcode)
+                          (arm::lap-instruction-opcode-low insn) (cdr opcode))
+                    (when predicate
+                      (funcall (svref operand-insert-functions
+                                      (arm::encode-vinsn-field-type :cond))
+                               insn
+                               predicate))
+                    (dolist (op operands (arm::emit-lap-instruction-element insn current))
+                      (let* ((insert-function (svref operand-insert-functions (car op))))
+                        (funcall insert-function insn (parse-operand-form (cdr op)))))
+                    ;; If we just emitted an unconditional control transfer
+                    ;; and we have data in the constant pool, drain the pool.
+                    (when (and (eql current code)
+                               (not (eq (dll-header-succ data) data)))
+                      (let* ((high (arm::lap-instruction-opcode-high insn)))
+                        (declare (type (unsigned-byte 16) high))
+                        (when (>= high #xe000)
+                          (let* ((low (arm::lap-instruction-opcode-low insn)))
+                            (declare (type (unsigned-byte 16) low))
+                            (when (or (eql #x0a00 (logand high #x0f00)) ;b
+                                      (and (eql #x012f (logand high #x0fff))
+                                           (eql #xff10 (logand low #xfff0))) ;bx
+                                      (and (eql #x0890 (logand high #x0fd0))
+                                           (logbitp 15 low)) ;ldm w/PC
+                                      (and (eql #x0590 (logand #x0ff0 high))
+                                           (eql #xf000 (logand #xf000 low)))) ;ldr pc
+                              (arm-drain-constant-pool code data))))))))))
              (eval-predicate (f)
                (case (car f)
                  (:pred (let* ((op-vals (cddr f))
@@ -5395,7 +5428,7 @@
                  (t (compiler-bug "Unknown predicate: ~s" f))))
              (expand-form (f)
                (if (keywordp f)
-                 (arm::emit-lap-label seg (assq f unique-labels))
+                 (arm::emit-lap-label current (assq f unique-labels))
                  (if (atom f)
                    (compiler-bug "Invalid form in vinsn body: ~s" f)
                    (if (or (atom (car f))
@@ -5410,7 +5443,8 @@
         (expand-form form ))
       (setf (vinsn-variable-parts vinsn) nil)
       (when vp
-        (free-varparts-vector vp)))))
+        (free-varparts-vector vp))))
+  current)
 
 
 
@@ -5431,7 +5465,7 @@
     (let* ((index (arch::builtin-function-name-offset name))
            (subprim (if index
                       (arm2-builtin-index-subprim index)
-                      (or (arm::arm-subprimitive-address name)
+                      (or (arm::arm-subprimitive-offset name)
                           (compiler-bug "Unknown builtin subprim index for ~s" name))))
            (tail-p (arm2-tailcallok xfer)))
       (when tail-p
@@ -6448,11 +6482,11 @@
               (compiler-bug "Isn't this code long since unused ?")
               #+nil
               (case nargs
-                (0 (arm::arm-subprimitive-address '.SPcallbuiltin0))
-                (1 (arm::arm-subprimitive-address '.SPcallbuiltin1))
-                (2 (arm::arm-subprimitive-address '.SPcallbuiltin2))
-                (3 (arm::arm-subprimitive-address '.SPcallbuiltin3))
-                (t (arm::arm-subprimitive-address '.SPcallbuiltin))))))
+                (0 (arm::arm-subprimitive-offset '.SPcallbuiltin0))
+                (1 (arm::arm-subprimitive-offset '.SPcallbuiltin1))
+                (2 (arm::arm-subprimitive-offset '.SPcallbuiltin2))
+                (3 (arm::arm-subprimitive-offset '.SPcallbuiltin3))
+                (t (arm::arm-subprimitive-offset '.SPcallbuiltin))))))
     (when tail-p
       (arm2-restore-nvrs seg nil)
       (arm2-restore-non-volatile-fprs seg)
@@ -6460,7 +6494,7 @@
     #+nil
     (unless idx-subprim
       (! lri arm::imm0 (ash idx *arm2-target-fixnum-shift*))
-      (when (eql subprim (arm::arm-subprimitive-address '.SPcallbuiltin))
+      (when (eql subprim (arm::arm-subprimitive-offset '.SPcallbuiltin))
         (arm2-set-nargs seg nargs)))
     (if tail-p
       (! jump-subprim subprim)
@@ -6823,7 +6857,7 @@
             (! fixnum-add-overflow-ool ($ arm::arg_z) ($ arm::arg_y) ($ arm::arg_z))
             (-> done)))
         (@ out-of-line)
-        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-plus) ($ arm::arg_y) ($ arm::arg_z))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-plus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
         (arm2-copy-register seg target ($ arm::arg_z)))
       (^))))
@@ -6845,7 +6879,7 @@
             (! fixnum-sub-overflow-ool ($ arm::arg_z)($ arm::arg_y) ($ arm::arg_z))
             (-> done)))
         (@ out-of-line)
-        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-minus) ($ arm::arg_y) ($ arm::arg_z))
+        (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-minus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
         (arm2-copy-register seg target ($ arm::arg_z)))
       (^))))
@@ -6919,7 +6953,7 @@
             (@ out-of-line)
             (if otherform
               (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
-            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-logior) ($ arm::arg_y) ($ arm::arg_z))
+            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-logior) ($ arm::arg_y) ($ arm::arg_z))
             (@ done)
             (arm2-copy-register seg target ($ arm::arg_z)))
           (^))))))
@@ -6968,7 +7002,7 @@
           (@ out-of-line)
           (if otherform
             (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
-            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-address '.SPbuiltin-logand) ($ arm::arg_y) ($ arm::arg_z))          
+            (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-logand) ($ arm::arg_y) ($ arm::arg_z))          
             (@ done)
             (arm2-copy-register seg target ($ arm::arg_z)))
         (^))))))

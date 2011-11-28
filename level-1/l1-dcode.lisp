@@ -427,8 +427,12 @@
 		 (dt (make-gf-dispatch-table))
 		 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
 		 (fn #+(or ppc-target arm-target)
-                   (gvector :function
-                            #+arm-target #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
+                     (#+arm-target
+                      %fix-fn-entrypoint
+                      #-arm-target
+                      progn
+                      (gvector :function
+                            #+arm-target 0
 			      *gf-proto-code*
 			      wrapper
 			      slots
@@ -436,7 +440,7 @@
 			      #'%%0-arg-dcode
 			      0
 			      (%ilogior (%ilsl $lfbits-gfn-bit 1)
-					(%ilogand $lfbits-args-mask 0)))
+					(%ilogand $lfbits-args-mask 0))))
                    #+x86-target
                    (%clone-x86-function *gf-proto*
                                         wrapper
@@ -475,14 +479,18 @@
 (defun %cons-combined-method (gf thing dcode)
   ;; set bits and name = gf
   #+(or ppc-target arm-target)
-  (gvector :function
-           #+arm-target #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
+  (#+arm-target
+   %fix-fn-entrypoint
+   #-arm-target
+   progn
+   (gvector :function          
+           #+arm-target 0
            *cm-proto-code*
            thing
            dcode
            gf
            (%ilogior (%ilsl $lfbits-cm-bit 1)
-                            (%ilogand $lfbits-args-mask (lfun-bits gf))))
+                            (%ilogand $lfbits-args-mask (lfun-bits gf)))))
   #+x86-target
   (%clone-x86-function *cm-proto*
                        thing

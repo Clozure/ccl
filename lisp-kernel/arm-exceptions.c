@@ -1398,7 +1398,7 @@ exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
   sigset_t mask;
   sigfillset(&mask);
 #else
-  int mask [] = {0,0};
+  int mask [] = {-1,-1};
 #endif
   
   pthread_sigmask(SIG_SETMASK,(sigset_t *)&mask, NULL);
@@ -1409,13 +1409,16 @@ exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
 
 
 void
-signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR *tcr, int old_valence, natural old_last_lisp_frame)
+signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
+#ifdef DARWIN
+, TCR *tcr, int old_valence, natural old_last_lisp_frame
+#endif
+)
 {
   xframe_list xframe_link;
-
-  if (!use_mach_exception_handling) {
+#ifndef DARWIN
     
-    tcr = (TCR *) get_interrupt_tcr(false);
+    TCR *tcr = (TCR *) get_interrupt_tcr(false);
   
     /* The signal handler's entered with all signals (notably the
        thread_suspend signal) blocked.  Don't allow any other signals
@@ -1424,10 +1427,12 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
        context.
     */
     
-    old_last_lisp_frame = tcr->last_lisp_frame;
+    natural  old_last_lisp_frame = tcr->last_lisp_frame;
+    int old_valence;
+
     tcr->last_lisp_frame = xpGPR(context,Rsp);
     old_valence = prepare_to_wait_for_exception_lock(tcr, context);
-  }
+#endif
 
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
@@ -1439,7 +1444,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context, TCR 
   if ((!handle_exception(signum, context, tcr, info, old_valence))) {
     char msg[512];
     snprintf(msg, sizeof(msg), "Unhandled exception %d at 0x%lx, context->regs at #x%lx", signum, xpPC(context), (natural)xpGPRvector(context));
-    if (lisp_Debugger(context, info, signum, false, msg)) {
+    if (lisp_Debugger(context, info, signum, (old_valence != TCR_STATE_LISP), msg)) {
       SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
     }
   }
@@ -1509,7 +1514,7 @@ sigill_handler(int signum, siginfo_t *info, ExceptionInformation  *xp)
       return;
     }
   }
-  signal_handler(signum,info,xp, NULL, 0, 0);
+  signal_handler(signum,info,xp);
 }
 
 
@@ -1921,6 +1926,7 @@ install_pmcl_exception_handlers()
 			 (void *)interrupt_handler, RESERVE_FOR_LISP);
   signal(SIGPIPE, SIG_IGN);
 }
+
 
 #ifdef USE_SIGALTSTACK
 void

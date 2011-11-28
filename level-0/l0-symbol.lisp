@@ -218,9 +218,10 @@
 
 (defun %global-macro-function (symbol)
   (let* ((fbinding (fboundp symbol)))
-    (if (and (typep fbinding 'simple-vector)
-             (= (the fixnum (uvsize fbinding)) 2))
-      (let* ((fun (%svref fbinding 1)))
+    (if (and #-arm-target (typep fbinding 'simple-vector)
+             #+arm-target (= (typecode fbinding) arm::subtag-pseudofunction)
+             (= (the fixnum (uvsize fbinding)) #-arm-target 2 #+arm-target 3))
+      (let* ((fun (%svref fbinding #-arm-target 1 #+arm-target 2)))
         (if (functionp fun) fun)))))
 
 (defun %symbol-binding-address (sym)

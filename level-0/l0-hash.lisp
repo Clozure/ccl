@@ -95,14 +95,15 @@
   (let* ((typecode (typecode key)))
     (declare (fixnum typecode))
     (or (= typecode target::subtag-macptr)
-        #+(or ppc32-target x8632-target arm-target)
-        (and (>= typecode target::min-numeric-subtag)
-             (<= typecode target::max-numeric-subtag))
-        #+64-bit-target
-        (or (= typecode target::subtag-bignum)
-            (= typecode target::subtag-double-float)
-            (= typecode target::subtag-ratio)
-            (= typecode target::subtag-complex)))))
+        (and (< typecode (- target::nbits-in-word target::fixnumshift))
+             (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
+                        typecode)
+                      (logior (ash 1 target::tag-fixnum)
+                              (ash 1 target::subtag-bignum)
+                              (ash 1 target::subtag-single-float)
+                              (ash 1 target::subtag-double-float)
+                              (ash 1 target::subtag-ratio)
+                              (ash 1 target::subtag-complex)))))))
 
 ;;; Don't rehash at all, unless some key is address-based (directly or
 ;;; indirectly.)

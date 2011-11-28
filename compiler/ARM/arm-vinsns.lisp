@@ -32,14 +32,16 @@
 ;;; Non-volatile FPRs.
 (define-arm-vinsn (push-nvfprs :push :multiple :doubleword :csp :predicatable)
     (()
-     ((n :u16const))
-     ((imm0 (:u32 #.arm::imm0))
-      (imm1 (:u32 #.arm::imm1))
-      (d7 (:double-float #.arm::d7))))
-  (movw imm0 (:$ (:apply logior (:apply ash n arm::num-subtag-bits) arm::subtag-double-float-vector)))
-  (mov imm1 (:$ 0))
-  (fmdrr d7 imm0 imm1)
-  (fstmdbd d7 (:! arm::sp) (:apply + n 1)))
+     ((n :u16const)
+      (header :u16const))
+     ((d7 (:double-float #.arm::d7))))
+  (fldd d7 (:= :header))
+  (fstmdbd d7 (:! arm::sp) (:apply + n 1))
+  (:data)
+  :header
+  (:word header)
+  (:word 0)
+  (:code))
 
 (define-arm-vinsn (pop-nvfprs :push :multiple :doubleword :csp :predicatable)
     (()
@@ -1315,7 +1317,8 @@
   (mov imm (:asr src (:$ arm::fixnumshift)))
   (fmsr dest imm)
   (fsitos dest dest)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (shift-left-variable-word :predicatable)
     (((dest :u32))
@@ -1547,7 +1550,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (faddd result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (double-float--2 :predicatable)
     (((result :double-float))
@@ -1564,7 +1568,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fsubd result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (double-float*-2 :predicatable)
     (((result :double-float))
@@ -1581,7 +1586,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fmuld result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (double-float/-2 :predicatable)
     (((result :double-float))
@@ -1598,7 +1604,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fdivd result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (double-float-negate :predicatable) (((dest :double-float))
                                                        ((src :double-float)))
@@ -1629,7 +1636,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fadds result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (single-float--2 :predicatable)
     (((result :single-float))
@@ -1646,7 +1654,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fsubs result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (single-float*-2 :predicatable)
     (((result :single-float))
@@ -1663,7 +1672,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fmuls result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (single-float/-2 :predicatable)
     (((result :single-float))
@@ -1680,7 +1690,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fdivs result x y)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (single-float-negate :predicatable) (((dest :single-float))
                                                        ((src :single-float)))
@@ -1938,6 +1949,11 @@
   (mov dest (:$ arm::nil-value))
   (ldr dest (:@ dest (:$ (:apply + arm::symbol.vcell (arm::nrs-offset %closure-code%))))))
 
+;;; DEST pretty much has to be the LR, which won't stay alive very long.
+(define-arm-vinsn %codevector-entry (((dest t))
+                                     ((cv :lisp)))
+  (add dest cv (:$ arm::misc-data-offset)))
+
 
 (define-arm-vinsn (single-float-bits :predicatable)
     (((dest :u32))
@@ -1946,35 +1962,40 @@
 
 (define-arm-vinsn (call-subprim :call :subprim-call) (()
                                                       ((spno :s32const)))
-  (bla spno))
+  (sploadlr spno)
+  (blx lr))
 
 (define-arm-vinsn (jump-subprim :jumpLR) (()
                                           ((spno :s32const)))
-  (ba spno))
+  (spjump spno))
 
 ;;; Same as "call-subprim", but gives us a place to 
 ;;; track args, results, etc.
 (define-arm-vinsn (call-subprim-0 :call :subprim-call) (((dest t))
                                                         ((spno :s32const)))
-  (bla spno))
+  (sploadlr spno)
+  (blx lr))
 
 (define-arm-vinsn (call-subprim-1 :call :subprim-call) (((dest t))
                                                         ((spno :s32const)
                                                          (z t)))
-  (bla spno))
+  (sploadlr spno)
+  (blx lr))
   
 (define-arm-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
                                                         ((spno :s32const)
                                                          (y t)
                                                          (z t)))
-  (bla spno))
+  (sploadlr spno)
+  (blx lr))
 
 (define-arm-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
                                                         ((spno :s32const)
                                                          (x t)
                                                          (y t)
                                                          (z t)))
-  (bla spno))
+  (sploadlr spno)
+  (blx lr))
 
 
 
@@ -2559,7 +2580,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fcvtsd result arg)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn single-to-double (((result :double-float))
                                     ((arg :single-float)))
@@ -2573,7 +2595,8 @@
   (bic imm imm (:$ #xff))
   (fmxr :fpscr imm)
   (fcvtds result arg)
-  (bla .SPcheck-fpu-exception))
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr))
 
 (define-arm-vinsn (store-single :predicatable :sets-lr)
     (()
@@ -2738,7 +2761,8 @@
      ((src :imm))
      )
   (rsbs arm::arg_z src (:$ 0))
-  (blavs .SPfix-overflow))
+  (sploadlrvs .SPfix-overflow)
+  (blxvs lr))
   
                                                   
                                        
@@ -2951,7 +2975,8 @@
                                             (y :imm))
                                            ())
   (adds arm::arg_z x y)
-  (blavs .SPfix-overflow))
+  (sploadlrvs .SPfix-overflow)
+  (blxvs lr))
 
 (define-arm-vinsn fixnum-add-overflow-inline (((dest :lisp))
                                               ((x :imm)
@@ -3022,7 +3047,8 @@
      ((x :imm)
       (y :imm)))
   (subs arm::arg_z x y)
-  (blavs .SPfix-overflow))
+  (sploadlrvs .SPfix-overflow)
+  (blxvs lr))
 
 (define-arm-vinsn fixnum-sub-overflow-inline (((dest :lisp))
                                               ((x :imm)
@@ -3110,7 +3136,8 @@
 (define-arm-vinsn (ref-symbol-value :call :subprim-call)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
-  (bla .SPspecrefcheck))
+  (sploadlr .SPspecrefcheck)
+  (blx lr))
 
 (define-arm-vinsn ref-symbol-value-inline (((dest :lisp))
                                            ((src (:lisp (:ne dest))))
@@ -3132,7 +3159,8 @@
 (define-arm-vinsn (%ref-symbol-value :call :subprim-call)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
-  (bla .SPspecref))
+  (sploadlr .SPspecref)
+  (blx lr))
 
 (define-arm-vinsn %ref-symbol-value-inline (((dest :lisp))
                                             ((src (:lisp (:ne dest))))
@@ -3151,7 +3179,8 @@
     (()
      ((sym :lisp)
       (val :lisp)))
-  (bla .SPspecset))
+  (sploadlr .SPspecset)
+  (blx lr))
 
 
 (define-arm-vinsn symbol-function (((val :lisp))
@@ -3234,29 +3263,40 @@
                                                   ((temp (:u32 #.arm::imm0))))
   ((:pred > n 1)
    (mov temp (:$ n))
-   (bla .SPunbind-n))
+   (sploadlr .SPunbind-n))
   ((:pred = n 1)
-   (bla .SPunbind)))
+   (sploadlr .SPunbind))
+  (blx lr))
 
 (define-arm-vinsn (zero-double-float-register :predicatable)
     (((dest :double-float))
-     ()
-     ((low :u32)))
-  (mov low (:$ 0))
-  (fmdrr dest low low))
+     ())
+  (fldd dest (:= :zero))
+  (:data)
+  :zero
+  (:word 0)
+  (:word 0)
+  (:code))
 
 (define-arm-vinsn (zero-single-float-register :predicatable)
     (((dest :single-float))
-     ()
-     ((temp :imm)))
-  (mov temp (:$ 0))
-  (fmsr dest temp))
+     ())
+  (flds dest (:= :zero))
+  (:data)
+  :zero
+  (:word 0)
+  (:code))
 
-(define-arm-vinsn (load-double-float-constant :predicatable)
+(define-arm-vinsn (load-double-float-constant-from-data :predicatable)
     (((dest :double-float))
-     ((high :u32)
-      (low :u32)))
-  (fmdrr dest low high))
+     ((high :u32const)
+      (low :u32const)))
+  (fldd dest (:= :x))
+  (:data)
+  :x
+  (:word low)
+  (:word high)
+  :code)
 
 (define-arm-vinsn (load-single-float-constant :predicatable)
     (((dest :single-float))
@@ -3529,7 +3569,8 @@
 (define-arm-vinsn (default-optionals :call :subprim-call) (()
                                                            ((n :u16const)))
   (mov imm0 (:$ (:apply ash n 2)))
-  (bla .SPdefault-optional-args))
+  (sploadlr .SPdefault-optional-args)
+  (blx lr))
 
 ;;; fname contains a known symbol
 (define-arm-vinsn (call-known-symbol :call) (((result (:lisp arm::arg_z)))
@@ -3764,11 +3805,12 @@
 ;;; Subprim calls.  Done this way for the benefit of VINSN-OPTIMIZE.
 (defmacro define-arm-subprim-call-vinsn ((name &rest other-attrs) spno)
   `(define-arm-vinsn (,name :call :subprim-call ,@other-attrs) (() ())
-    (bla ,spno)))
+    (sploadlr ,spno)
+    (blx lr)))
 
 (defmacro define-arm-subprim-jump-vinsn ((name &rest other-attrs) spno &optional)
   `(define-arm-vinsn (,name  :jumpLR ,@other-attrs) (() ())
-    (ba ,spno)))
+    (spjump ,spno)))
 
 
 (define-arm-subprim-call-vinsn (save-values) .SPsave-values)
@@ -3804,7 +3846,7 @@
 
 (define-arm-vinsn (tail-funcall-vsp :jumpLR :predicatable) (() ())
   (ldmia (:! sp) (imm0 vsp fn lr))
-  (ba .SPfuncall))
+  (spjump .SPfuncall))
 
 (define-arm-subprim-call-vinsn (spread-lexpr)  .SPspread-lexprz)
 
@@ -3833,6 +3875,13 @@
 (define-arm-subprim-call-vinsn (make-stack-vector)  .SPmkstackv)
 
 (define-arm-subprim-call-vinsn (make-stack-gvector)  .SPstkgvector)
+(define-arm-vinsn (make-stack-closure :call :subprim-call) (() ())
+  (sploadlr .SPstkgvector)
+  (blx lr)
+  (ldr lr (:@ arg_z (:$ arm::function.codevector)))
+  (add lr lr (:$ arm::misc-data-offset))
+  (str lr (:@ arg_z (:$ arm::function.entrypoint))))
+                  
 
 (define-arm-subprim-call-vinsn (stack-misc-alloc)  .SPstack-misc-alloc)
 
@@ -3880,7 +3929,8 @@
 
 (define-arm-vinsn (nth-value :call :subprim-call) (((result :lisp))
                                                    ())
-  (bla .SPnthvalue))
+  (sploadlr .SPnthvalue)
+  (blx lr))
 
 (define-arm-subprim-call-vinsn (fitvals) .SPfitvals)
 
@@ -3896,7 +3946,8 @@
 ;;; transfer & jump ...)
 (define-arm-vinsn (throw :jump-unknown) (()
                                          ())
-  (bla .SPthrow))
+  (sploadlr .SPthrow)
+  (blx lr))
 
 (define-arm-subprim-call-vinsn (mkcatchmv) .SPmkcatchmv)
 

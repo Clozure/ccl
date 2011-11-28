@@ -1050,17 +1050,21 @@
     ;; then fill in the nilreg-relative symbols in static space.
     ;; Then start consing ..
     (if *xload-target-use-code-vectors*
-      ;; The undefined-function object is a 1-element simple-vector (not
-      ;; a function vector).  The code-vector in its 0th element should
-      ;; report the appropriate error.
-      ;; On the ARM: make a two-element vector: entrypoint, code-vector.
-      (let* ((udf-object (xload-make-gvector :simple-vector 1)))
-        (target-arch-case
-         (:arm
-          (setf (xload-%svref udf-object 0)
-                (+ (subprim-name->offset '.SPfix-nfn-entrypoint *target-backend*)
-                   #x40)))
-         (otherwise
+      (target-arch-case
+       (:arm
+        ;; On the ARM: make a two-element vector: entrypoint, code-vector.
+        (let* ((udf-object (xload-make-gvector :pseudofunction 2)))
+          (setf (xload-%svref udf-object 1)
+                (xload-save-code-vector
+                 (backend-xload-info-udf-code
+                  *xload-target-backend*)))
+          (locally (declare (ftype (function (t) t) xload-arm-set-entrypoint))
+            (xload-arm-set-entrypoint udf-object))))
+       (otherwise
+        ;; The undefined-function object is a 1-element simple-vector (not
+        ;; a function vector).  The code-vector in its 0th element should
+        ;; report the appropriate error.
+        (let* ((udf-object (xload-make-gvector :simple-vector 1)))
           (setf (xload-%svref udf-object 0)
                 (xload-save-code-vector
                  (backend-xload-info-udf-code
@@ -1603,8 +1607,14 @@
   (let* ((n (%fasl-read-count s))
          (vector (xload-make-gvector subtype n)))
     (%epushval s vector)
-    (dotimes (i n (setf (faslstate.faslval s) vector))
-      (setf (xload-%svref vector i) (%fasl-expr s)))))
+    (dotimes (i n )
+      (setf (xload-%svref vector i) (%fasl-expr s)))
+    (target-arch-case
+     (:arm
+      (when (= subtype (xload-target-subtype :function))
+        (locally (declare (ftype (function (t) t) xload-arm-set-entrypoint))
+          (xload-arm-set-entrypoint vector)))))
+    (setf (faslstate.faslval s) vector)))
   
 (defxloadfaslop $fasl-vgvec (s)
   (let* ((subtype (%fasl-read-byte s)))

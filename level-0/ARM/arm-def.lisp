@@ -16,6 +16,13 @@
 
 (in-package "CCL")
 
+(defarmlapfunction %fix-fn-entrypoint ((func arg_z))
+  (build-lisp-frame imm0)
+  (ldr temp0 (:@ func (:$  arm::function.codevector)))
+  (add lr temp0 (:$ arm::misc-data-offset))
+  (str lr (:@ func (:$ arm::function.entrypoint)))
+  (return-lisp-frame imm0))
+
 ;;; Do an FF-CALL to MakeDataExecutable so that the data cache gets flushed.
 ;;; If the GC moves this function while we're trying to flush the cache,
 ;;; it'll flush the cache: no harm done in that case.
@@ -74,7 +81,7 @@
   (moveq offset (:$ 0))
   (unbox-fixnum imm0 offset)
   (ldr imm0 (:@ imm0 fixnum))
-  (ba .SPmakeu32))
+  (spjump .SPmakeu32))
 
 
 
@@ -222,7 +229,7 @@
   (vpush1 imm1)
   @go
   (set-nargs 2)
-  (ba .SPnvalret)
+  (spjump .SPnvalret)
   @no
   (mov imm0 'nil)
   (vpush1 imm0)
@@ -299,7 +306,8 @@
 
 (defarmlapfunction %do-ff-call ((tag arg_x) (result arg_y) (entry arg_z))
   (stmdb (:! vsp) (tag result))
-  (bla .SPeabi-ff-call)
+  (sploadlr .SPeabi-ff-call)
+  (blx lr)
   (ldmia (:! vsp) (tag result))
   (macptr-ptr imm2 result)
   (str imm0 (:@ imm2 (:$ 0)))
@@ -308,7 +316,8 @@
   (mov arg_z 'nil)
   (vpush1 arg_z)
   (set-nargs 1)
-  (bla .SPthrow))
+  (sploadlr .SPthrow)
+  (blx lr))
   
 (defun %ff-call (entry &rest specs-and-vals)
   (declare (dynamic-extent specs-and-vals))
@@ -450,7 +459,8 @@
   (mov arm::nfn function)
   (set-nargs 0)
   (build-lisp-frame)
-  (bla .SPspread-lexprz)
+  (sploadlr .SPspread-lexprz)
+  (blx lr)
   (ldr lr (:@ sp (:$ arm::lisp-frame.savelr)))
   ;; Nothing's changed FN.
   ;;(ldr fn (:@ sp (:$ arm::lisp-frame.savefn)))
@@ -471,7 +481,8 @@
   (mov arm::nfn function)
   (set-nargs 0)
   (build-lisp-frame)
-  (bla .SPspreadargZ)
+  (sploadlr .SPspreadargZ)
+  (blx lr)
   (ldr lr (:@ sp (:$ arm::lisp-frame.savelr)))
   ;; Nothing's changed FN.
   ;; (ldr fn (:@ sp (:$ arm::lisp-frame.savefn)))
@@ -522,14 +533,16 @@
       (unless (eql total-size (uvsize target))
         (error "Wrong size target ~s" target)))
     (%copy-gvector-to-gvector proto 0 new 0 total-size)
-    (setf (%svref new 0) #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift)))
-    new))
+    (%fix-fn-entrypoint new)))
 
 (defun replace-function-code (target-fn proto-fn)
   (if (typep target-fn 'function)
     (if (typep proto-fn 'function)
-      (setf (uvref target-fn 0) #.(ash (arm::arm-subprimitive-address '.SPfix-nfn-entrypoint) (- arm::fixnumshift))
-            (uvref target-fn 1) (uvref proto-fn 1))
+      (progn
+        (setf (uvref target-fn 0) (%lookup-subprim-address
+                                   #.(arm::arm-subprimitive-offset '.SPfix-nfn-entrypoint))
+              (uvref target-fn 1) (uvref proto-fn 1))
+        (%fix-fn-entrypoint target-fn))
       (report-bad-arg proto-fn 'function))
     (report-bad-arg target-fn 'function)))
 
@@ -551,7 +564,8 @@
   (mov arg_z arg_y)                     ; butlast
   (sub nargs nargs '2)                  ; remove count for butlast & last
   (build-lisp-frame)
-  (bla .SPspreadargz)
+  (sploadlr .SPspreadargz)
+  (blx lr)
   (cmp nargs '3)
   (ldr lr (:@ sp (:$ arm::lisp-frame.savelr)))
   (discard-lisp-frame)
@@ -561,8 +575,11 @@
   (mov arg_y arg_z)
   (mov arg_z temp0)
   (ldr nfn (:@ nfn 'funcall))
-  (ba .SPfuncall))
+  (spjump .SPfuncall))
 
-
+(defarmlapfunction %lookup-subprim-address ((subp arg_z))
+  (ldr imm0 (:@ rcontext (:lsr subp (:$ arm::fixnumshift))))
+  (box-fixnum arg_z imm0)
+  (bx lr))
 
 ;;; end of arm-def.lisp

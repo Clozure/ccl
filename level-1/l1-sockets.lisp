@@ -1265,7 +1265,7 @@ unsigned IP address."
     (> (#_select 1 (%null-ptr) writefds exceptfds (if timeout-in-milliseconds tv (%null-ptr))) 0)))
       
       
-;;; If attempts to connnect are interrupted, we basically have to
+;;; If attempts to connect are interrupted, we basically have to
 ;;; wait in #_select (or the equivalent).  There's a good rant
 ;;; about these issues in:
 ;;; <http://www.madore.org/~david/computers/connect-intr.html>

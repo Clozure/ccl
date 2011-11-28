@@ -81,7 +81,8 @@ relocate_area_contents(area *a, LispObj bias)
       }
 #endif
 #ifdef ARM
-      if (header_subtag(w0) == subtag_function) {
+      if ((header_subtag(w0) == subtag_function) ||
+          (header_subtag(w0) == subtag_pseudofunction)) {
         w1 = start[1];
         if ((w1 >= low) && (w1 < high)) {
           start[1]=(w1+bias);

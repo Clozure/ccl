@@ -1008,5 +1008,10 @@
       ,@body)))
 
 (defconstant arg-check-trap-pc-limit 8)
-                              
+
+(defconstant fasl-version #x5f)
+(defconstant fasl-max-version #x5f)
+(defconstant fasl-min-version #x5e)
+(defparameter *image-abi-version* 1037)
+
 (provide "PPC64-ARCH")

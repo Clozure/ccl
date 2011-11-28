@@ -211,22 +211,19 @@ lisp_frame_marker = subtag_lisp_frame_marker
 stack_alloc_marker = subtag_stack_alloc_marker        
 	
 
-/*Numeric subtags. */
+/*Numeric subtags. We want to keep these small, so that things like
+  NUMBERP can do LOGBITP of a bitmask that fits in a machine word/fixnum,
+  but we don't want to assume that all small typecodes are numbers.
+  Trying to enforce that assumption has wasted a few typecodes, and it's
+  not like we have so many that we can afford to do that.
+*/        
 
 	define_imm_subtag(bignum,0)
-min_numeric_subtag = subtag_bignum
-
 	define_node_subtag(ratio,1)
-max_rational_subtag = subtag_ratio
-
 	define_imm_subtag(single_float,1)
 	define_imm_subtag(double_float,2)
-min_float_subtag = subtag_single_float
-max_float_subtag = subtag_double_float
-max_real_subtag = subtag_double_float
-
 	define_node_subtag(complex,3)
-max_numeric_subtag = subtag_complex
+
 
 
 /* CL array types.  There are more immediate types than node types; all CL array subtags must be > than */
@@ -263,14 +260,12 @@ min_array_subtag = subtag_arrayH
 /* for various immediate/node object types. */
 
 	define_imm_subtag(macptr,3)
-min_non_numeric_imm_subtag = subtag_macptr
-
 	define_imm_subtag(dead_macptr,4)
 	define_imm_subtag(code_vector,5)
 	define_imm_subtag(creole,6)
 
 max_non_array_imm_subtag = (18<<ntagbits)|fulltag_immheader
-
+        define_node_subtag(pseudofunction,0)
 	define_node_subtag(catch_frame,4)
 	define_node_subtag(function,5)
 	define_node_subtag(basic_stream,6)

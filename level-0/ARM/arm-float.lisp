@@ -113,7 +113,7 @@
   (vpush1 temp0)  ; sign
   (set-nargs 4)
   (add temp0 vsp '4)
-  (ba .SPvalues))
+  (spjump .SPvalues))
 
 
 ;;; hi is 25 bits lo is 28 bits
@@ -534,7 +534,8 @@
   (bic imm0 imm0 (:$ #xff))
   (fmxr :fpscr imm0)
   (fsqrts s1 s0)
-  (bla .SPcheck-fpu-exception)
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr)
   (put-single-float s1 dest imm0)
   (return-lisp-frame))
 
@@ -547,7 +548,8 @@
   (bic imm0 imm0 (:$ #xff))
   (fmxr :fpscr imm0)
   (fsqrtd d1 d0)
-  (bla .SPcheck-fpu-exception)
+  (sploadlr .SPcheck-fpu-exception)
+  (blx lr)
   (put-double-float d1 dest)
   (return-lisp-frame))
 

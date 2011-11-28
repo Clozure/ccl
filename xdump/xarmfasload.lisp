@@ -24,6 +24,10 @@
   (require "XFASLOAD" "ccl:xdump;xfasload"))
 
 
+(defun xload-arm-set-entrypoint (xload-fn)
+  (setf (xload-%svref xload-fn 0)
+        (logandc2 (xload-%svref xload-fn 1) arm::fixnummask)))
+
 (defun xload-arm-lap-word (instruction-form)
   (if (listp instruction-form)
     (uvref (uvref (compile nil
@@ -36,19 +40,19 @@
 
 (defparameter *arm-macro-apply-code*
   (let* ((code-vector (uvref (compile nil
-          '(lambda (&lap 0)
-            (arm-lap-function () ()
-             (build-lisp-frame imm0)
-             (bla .SPheap-rest-arg)
-             (vpop1 arg_z)
-             (mov arg_y fname)
-             (mov arg_x '#.$xnotfun)
-             (set-nargs 3)
-             (ba .SPksignalerr))))
+                                      '(lambda (&lap 0)
+                                        (arm-lap-function () ()
+                                         (build-lisp-frame imm0)
+                                         (sploadlr .SPheap-rest-arg)
+                                         (blx lr)
+                                         (vpop1 arg_z)
+                                         (mov arg_y fname)
+                                         (mov arg_x '#.$xnotfun)
+                                         (set-nargs 3)
+                                         (spjump .SPksignalerr))))
                              1))
          (n (uvsize code-vector))
-         (u32-vector (make-array n
-                                 :element-type '(unsigned-byte 32))))
+         (u32-vector (make-array n :element-type '(unsigned-byte 32))))
     (declare (fixnum n))
     (dotimes (i n u32-vector)
       (setf (uvref u32-vector i)
@@ -60,25 +64,19 @@
 
 
 (defparameter *arm-closure-trampoline-code*
-  (let* ((code0 (xload-arm-lap-word '(ldr pc (:@ pc (:$ 4))))))
-    (make-array 4
+  (let* ((code0 (xload-arm-lap-word `(ldr pc (:@ rcontext (:$ ,(arm::arm-subprimitive-offset '.SPcall-closure)))))))
+    (make-array 1
                 :element-type '(unsigned-byte 32)
                 :initial-contents
-                (list code0 0 3 (arm::arm-subprimitive-address '.SPcall-closure)))))
+                (list code0))))
 
-(defun adjust-closure-trampoline-for-subprims-bias (backend-name)
-  (let* ((backend (find-backend backend-name))
-         (bias (if backend (backend-real-subprims-bias backend) 0))
-         (code *arm-closure-trampoline-code*))
-    (if (eql bias 0)
-      code
-      (let* ((new (copy-seq code)))
-        (incf (aref new (1- (length new))) bias)
-        new))))
+
 
 ;;; For now, do this with a UUO so that the kernel can catch it.
 (defparameter *arm-udf-code*
-  (let* ((code '((uuo-error-udf-call (:? al) fname))))
+  (let* ((code '((uuo-error-udf-call (:? al) fname)
+                 (ldr nfn (:@ fname (:$ arm::symbol.fcell)))
+                 (ldr pc (:@ nfn (:$ arm::function.entrypoint))))))
     (make-array (length code)
                 :element-type '(unsigned-byte 32)
                 :initial-contents
@@ -136,7 +134,7 @@
   (make-backend-xload-info
    :name :androidarm
    :macro-apply-code-function 'arm-fixup-macro-apply-code
-   :closure-trampoline-code (adjust-closure-trampoline-for-subprims-bias :androidarm)
+   :closure-trampoline-code *arm-closure-trampoline-code*
    :udf-code *arm-udf-code*
    :default-image-name "ccl:aarm-boot"
    :default-startup-file-name "level-1.aafsl"

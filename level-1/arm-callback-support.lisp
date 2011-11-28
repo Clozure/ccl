@@ -30,7 +30,7 @@
             (%get-unsigned-long p 4)
             (arm-lap-word (ldr pc (:@ pc (:$ -4))))
             (%get-unsigned-long p 8)
-             #.(subprim-name->offset '.SPeabi-callback))
+            (%lookup-subprim-address #.(subprim-name->offset '.SPeabi-callback)))
       (ff-call (%kernel-import #.arm::kernel-import-makedataexecutable) 
                :address p 
                :unsigned-fullword 12

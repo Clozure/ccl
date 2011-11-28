@@ -31,7 +31,8 @@
   (build-lisp-frame imm0)
   (mov imm0 (:lsr number (:$ arm::fixnumshift)))
   (mov imm1 (:lsr divisor (:$ arm::fixnumshift)))
-  (bla .SPudiv32)
+  (sploadlr .SPudiv32)
+  (blx lr)
   (box-fixnum arg_z imm1)
   (return-lisp-frame imm0))
 
@@ -104,10 +105,10 @@
 ;;; Setting a key in a hash-table vector needs to 
 ;;; ensure that the vector header gets memoized as well
 (defarmlapfunction %set-hash-table-vector-key ((vector arg_x) (index arg_y) (value arg_z))
-  (ba .SPset-hash-key))
+  (spjump .SPset-hash-key))
 
 (defarmlapfunction %set-hash-table-vector-key-conditional ((offset 0) (vector arg_x) (old arg_y) (new arg_z))
-  (ba .SPset-hash-key-conditional))
+  (spjump .SPset-hash-key-conditional))
 
 ;;; Strip the tag bits to turn x into a fixnum
 (defarmlapfunction strip-tag-to-fixnum ((x arg_z))

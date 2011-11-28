@@ -68,10 +68,10 @@
   (bx lr))
 
 (defarmlapfunction %symptr-value ((symptr arg_z))
-  (ba .SPspecref))
+  (spjump .SPspecref))
 
 (defarmlapfunction %set-symptr-value ((symptr arg_y) (val arg_z))
-  (ba .SPspecset))
+  (spjump .SPspecset))
 
 (defarmlapfunction %symptr-binding-address ((symptr arg_z))
   (ldr imm0 (:@ symptr (:$ arm::symbol.binding-index)))
@@ -87,14 +87,14 @@
   (vpush1 imm0)
   (set-nargs 2)
   (add temp0 vsp '2)
-  (ba .SPvalues)
+  (spjump .SPvalues)
   @sym
   (mov arg_y '#.arm::symbol.vcell)
   (vpush1 arg_z)
   (vpush1 arg_y)
   (set-nargs 2)
   (add temp0 vsp '2)
-  (ba .SPvalues))
+  (spjump .SPvalues))
 
 (defarmlapfunction %tcr-binding-location ((tcr arg_y) (sym arg_z))
   (ldr imm1 (:@ sym (:$ arm::symbol.binding-index)))

@@ -288,21 +288,20 @@
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-(defparameter *arm-subprims-shift* 8)
-(defparameter *arm-subprims-base* (ash 9 12) )
+(defparameter *arm-subprims-shift* 2)
+(defconstant tcr.sptab 256)
+(defparameter *arm-subprims-base* tcr.sptab )
 )
 (defvar *arm-subprims*)
 
-;;; For now, nothing's nailed down and we don't say anything about
-;;; registers clobbered.
+
 (let* ((origin *arm-subprims-base*)
        (step (ash 1 *arm-subprims-shift*)))
   (flet ((define-arm-subprim (name)
              (ccl::make-subprimitive-info :name (string name)
-                                          :offset (prog1 origin
-                                                    (when (= origin #x10000)
-                                                      (setq step (ash 1 10)))
-                                                    (incf origin step)))))
+                                          :offset
+                                          (prog1 origin
+                                            (incf origin step)))))
     (macrolet ((defarmsubprim (name)
                    `(define-arm-subprim ',name)))
       (setq *arm-subprims*
@@ -566,18 +565,10 @@
 
 ;;; Numeric subtags.
 (define-imm-subtag bignum 0)
-(defconstant min-numeric-subtag subtag-bignum)
 (define-node-subtag ratio 1)
-(defconstant max-rational-subtag subtag-ratio)
-
 (define-imm-subtag single-float 1)          ; "SINGLE" float, aka short-float in the new order.
 (define-imm-subtag double-float 2)
-(defconstant min-float-subtag subtag-single-float)
-(defconstant max-float-subtag subtag-double-float)
-(defconstant max-real-subtag subtag-double-float)
-
 (define-node-subtag complex 3)
-(defconstant max-numeric-subtag subtag-complex)
 
 ;;; CL array types.  There are more immediate types than node types; all CL array subtags must be > than
 ;;; all non-CL-array subtags.  So we start by defining the immediate subtags in decreasing order, starting
@@ -613,12 +604,11 @@
 (defconstant min-vector-subtag subtag-vectorH)
 (defconstant min-array-subtag subtag-arrayH)
 
-;;; So, we get the remaining subtags (n: (n > max-numeric-subtag) & (n < min-array-subtag))
+;;; So, we get the remaining subtags (n: (n < min-array-subtag))
 ;;; for various immediate/node object types.
 
+(define-node-subtag pseudofunction 0)
 (define-imm-subtag macptr 3)
-(defconstant min-non-numeric-imm-subtag subtag-macptr)
-(assert (> min-non-numeric-imm-subtag max-numeric-subtag))
 (define-imm-subtag dead-macptr 4)
 (define-imm-subtag code-vector 5)
 (define-imm-subtag creole-object 6)
@@ -628,7 +618,6 @@
 
 (define-node-subtag catch-frame 4)
 (defconstant min-non-numeric-node-subtag subtag-catch-frame)
-(assert (> min-non-numeric-node-subtag max-numeric-subtag))
 (define-node-subtag function 5)
 (define-node-subtag basic-stream 6)
 (define-node-subtag symbol 7)
@@ -879,6 +868,7 @@
   safe-ref-address
 )
 
+
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
 
 (define-storage-layout lockptr 0
@@ -1074,7 +1064,9 @@
     (:double-float-vector . ,subtag-double-float-vector )
     (:simple-vector . ,subtag-simple-vector )
     (:vector-header . ,subtag-vectorH)
-    (:array-header . ,subtag-arrayH)))
+    (:array-header . ,subtag-arrayH)
+    (:xfunction . ,subtag-xfunction)
+    (:pseudofunction . ,subtag-pseudofunction)))
 
 
 ;;; This should return NIL unless it's sure of how the indicated
@@ -1162,7 +1154,8 @@
                                              :pool :population :hash-vector
                                              :package :value-cell :instance
                                              :lock :slot-vector
-                                             :simple-vector)
+                                             :simple-vector :xfunction
+                                             :pseudofunction)
                             :1-bit-ivector-types '(:bit-vector)
                             :8-bit-ivector-types '(:signed-8-bit-vector
                                                    :unsigned-8-bit-vector)
@@ -1391,9 +1384,7 @@
 (defconstant ufe 11)                    ;underflow enable
 (defconstant ixe 12)                    ;inexact enable
 
-;;; A function's entrypoint should initially reference .SPfix-nfn-entrypoint,
-;;; which will set it to a locative to the function's code-vector.
-(defconstant *function-initial-entrypoint* (ash *arm-subprims-base* (- arm::fixnumshift)))
+
 
 ;;; These are always stack-allocated, "near" where the missing lisp frame
 ;;; that they represent would be.
@@ -1419,5 +1410,9 @@
 (defconstant numeric-tags-mask (logior real-tags-mask (ash 1 subtag-complex)))
 
   
+(defconstant fasl-version #x60)
+(defconstant fasl-max-version #x60)
+(defconstant fasl-min-version #x60)
+(defparameter *image-abi-version* 1038)
 
 (provide "ARM-ARCH")

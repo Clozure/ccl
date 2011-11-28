@@ -2060,6 +2060,14 @@ main
     lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
   }
   atexit(lazarus);
+#ifdef ARM
+#ifdef LINUX
+#ifdef SET_INITIAL_THREAD_AFFINITY
+  /* Maybe work around an apparent cache coherency problem */
+  set_thread_affinity(tcr,0);
+#endif
+#endif
+#endif
   start_lisp(TCR_TO_TSD(tcr), 0);
   _exit(0);
 }
