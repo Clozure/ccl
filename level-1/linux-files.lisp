@@ -362,8 +362,9 @@ given is that of a group to which the current user belongs."
                          #+android-target :stat.st_mtime_nsec) 1000)
        #-(or linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
-       (pref stat :stat.st_gid))
-      (values nil nil nil nil nil nil nil)))
+       (pref stat :stat.st_gid)
+       (pref stat :stat.st_dev))
+      (values nil nil nil nil nil nil nil nil nil nil)))
 
 #+win64-target
 (defun %stat-values (result stat)
@@ -377,8 +378,9 @@ given is that of a group to which the current user belongs."
        (pref stat :_stat64.st_uid)
        #$BUFSIZ
        (pref stat :_stat64.st_mtime)     ; ???
-       (pref stat :_stat64.st_gid))
-      (values nil nil nil nil nil nil nil nil nil)))
+       (pref stat :_stat64.st_gid)
+       (pref stat :_stat64.st_dev))
+      (values nil nil nil nil nil nil nil nil nil nil)))
 
 #+win32-target
 (defun %stat-values (result stat)
@@ -392,8 +394,9 @@ given is that of a group to which the current user belongs."
        (pref stat :__stat64.st_uid)
        #$BUFSIZ
        (pref stat :__stat64.st_mtime)     ; ???
-       (pref stat :__stat64.st_gid))
-      (values nil nil nil nil nil nil nil nil nil)))
+       (pref stat :__stat64.st_gid)
+       (pref stat :__stat64.st_dev))
+      (values nil nil nil nil nil nil nil nil nil nil)))
 
 #+windows-target
 (defun windows-strip-trailing-slash (namestring)
