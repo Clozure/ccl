@@ -1491,7 +1491,8 @@ Will differ from *compiling-file* during an INCLUDE")
     (unless (and sym (boundp sym))
       (error "~a not defined in target package ~s." name package))
     (logior #xff00 (logand #xff (symbol-value sym)))))
-  
+
+;;; This is an exported, public interface.
 (defun target-fasl-version ()
   (target-symbol-value "FASL-VERSION"))
 
