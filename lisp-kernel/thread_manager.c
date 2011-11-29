@@ -186,12 +186,14 @@ void
 set_thread_affinity(TCR *target, unsigned cpuno)
 {
 #ifdef LINUX
+#ifndef ANDROID                 /* too useful to be in Android ... */
   pthread_t thread = (pthread_t)(target->osid);
   cpu_set_t mask;
   
   CPU_ZERO(&mask);
   CPU_SET(cpuno,&mask);
   pthread_setaffinity_np(thread,sizeof(mask),&mask);
+#endif
 #endif
 }
 

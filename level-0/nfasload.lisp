@@ -918,6 +918,16 @@
 (defun %fasl-read-n-bytes (s ivector byte-offset n)
   (funcall (faslapi.fasl-read-n-bytes *fasl-api*) s ivector byte-offset n))
 
+(defun bootstrapping-fasl-min-version ()
+  (logior #xff00 (logand #xff target::fasl-min-version)))
+
+(%fhave 'target-fasl-min-version #'bootstrapping-fasl-min-version)
+
+(defun bootstrapping-fasl-max-version ()
+  (logior #xff00 (logand #xff target::fasl-max-version)))
+
+(%fhave 'target-fasl-max-version #'bootstrapping-fasl-max-version)
+
 (defun %fasload (string &optional (table *fasl-dispatch-table*))
   ;;(dbg string) 
   (when (and *%fasload-verbose*
@@ -962,8 +972,8 @@
                        (incf pos 8)
                        (let* ((version (%fasl-read-word s)))
                          (declare (fixnum version))
-                         (if (or (> version (+ #xff00 target::fasl-max-version))
-                                 (< version (+ #xff00 target::fasl-min-version)))
+                         (if (or (> version (target-fasl-max-version))
+                                 (< version (target-fasl-min-version)))
                            (%err-disp (if (>= version #xff00) $xfaslvers $xnotfasl))
                            (progn
                              (setf (faslstate.faslversion s) version)

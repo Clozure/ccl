@@ -1485,12 +1485,23 @@ Will differ from *compiling-file* during an INCLUDE")
       (when (and opened? (not finished?))
         (delete-file filename)))))
 
-(defun target-fasl-version ()
-  (let* ((package (find-package "TARGET"))
-         (sym (find-symbol "FASL-VERSION" package)))
+(defun target-symbol-value (name)  
+  (let* ((package (arch::target-package-name (backend-target-arch *target-backend*)))
+         (sym (find-symbol name package)))
     (unless (and sym (boundp sym))
-      (error "FASL-VERSION not defined in target package ~s." package))
+      (error "~a not defined in target package ~s." name package))
     (logior #xff00 (logand #xff (symbol-value sym)))))
+  
+(defun target-fasl-version ()
+  (target-symbol-value "FASL-VERSION"))
+
+;; Redefine the versions of these functions used by the fasloader.
+
+(defun target-fasl-min-version ()
+  (target-symbol-value "FASL-MIN-VERSION"))
+
+(defun target-fasl-max-version ()
+  (target-symbol-value "FASL-MAX-VERSION"))
 
 (defun fasl-dump-block (gnames goffsets forms hash)
   (let ((etab-size (hash-table-count hash)))
