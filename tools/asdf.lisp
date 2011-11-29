@@ -2882,7 +2882,7 @@ located."
      (format nil "~d.~d-f~d" ; shorten for windows
 	     ccl::*openmcl-major-version*
 	     ccl::*openmcl-minor-version*
-	     (logand ccl::fasl-version #xFF))
+	     (logand (ccl:target-fasl-version) #xFF))
      #+cmu (substitute #\- #\/ s)
      #+ecl (format nil "~A~@[-~A~]" s
 		   (let ((vcs-id (ext:lisp-implementation-vcs-id)))
