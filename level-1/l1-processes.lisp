@@ -591,9 +591,11 @@ some point in the near future, and then return to what it was doing."
 			    (stack-size *default-control-stack-size*)
 			    (vstack-size *default-value-stack-size*)
 			    (tstack-size *default-temp-stack-size*)
-			    (initial-bindings ())
                             (persistent nil)
+			    (initial-bindings ())
 			    (use-standard-initial-bindings t)
+                            (class (find-class 'process))
+                            (initargs nil)
                             (termination-semaphore nil)
                             (allocation-quantum (default-allocation-quantum)))
                       keywords
@@ -606,6 +608,8 @@ some point in the near future, and then return to what it was doing."
                                   :persistent persistent
 				  :use-standard-initial-bindings use-standard-initial-bindings
 				  :initial-bindings initial-bindings
+                                  :class class
+                                  :initargs initargs
                                   :termination-semaphore termination-semaphore
                                   :allocation-quantum allocation-quantum)))
       (process-preset process #'(lambda () (apply function args)))
