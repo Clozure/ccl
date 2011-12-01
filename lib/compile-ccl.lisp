@@ -186,7 +186,9 @@
   '(streams pathnames backtrace
     apropos
     numbers 
-    dumplisp   source-files))
+    dumplisp
+    source-files
+    swink))
 
 (defun target-other-lib-modules (&optional (target
 					    (backend-target-arch-name

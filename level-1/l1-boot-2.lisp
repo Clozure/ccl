@@ -272,6 +272,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "ARRAYS-FRY" "arrays-fry")
       (bin-load-provide "APROPOS" "apropos")
       (bin-load-provide "SOURCE-FILES" "source-files")
+      (bin-load-provide "SWINK" "swink")
       
       #+ppc-target
       (progn

@@ -222,6 +222,7 @@
     (loop             "ccl:library;loop"         ("ccl:library;loop.lisp"))
     (linux-files      "ccl:l1f;linux-files"      ("ccl:level-1;linux-files.lisp"))
     (source-files     "ccl:bin;source-files"     ("ccl:lib;source-files.lisp"))
+    (swink            "ccl:bin;swink"            ("ccl:lib;swink.lisp"))
     (cover            "ccl:bin;cover"            ("ccl:library;cover.lisp"))
     (leaks            "ccl:bin;leaks"            ("ccl:library;leaks.lisp"))
     (core-files       "ccl:bin;core-files"       ("ccl:library;core-files.lisp"))
