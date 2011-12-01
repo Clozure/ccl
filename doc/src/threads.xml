@@ -661,7 +661,7 @@ Type :? for other options.
 	    <synopsis>
 	      <function>make-process</function>
 	      name &amp;key
-	      persistent priority class stack-size vstack-size
+	      persistent priority class initargs stack-size vstack-size
 	      tstack-size initial-bindings use-standard-initial-bindings
 	      => process
 	    </synopsis>
@@ -710,6 +710,14 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      
+	      <varlistentry>
+	        <term>initargs</term>
+	        
+	        <listitem>
+		      <para>Any additional initargs to pass to MAKE-INSTANCE. The default is ().</para>
+	        </listitem>
+	      </varlistentry>
+
 	      <varlistentry>
 	        <term>stack-size</term>
 	        
@@ -1231,6 +1239,7 @@ Type :? for other options.
 		        <varname>persistent</varname>
 		        <varname>priority</varname>
 		        <varname>class</varname>
+			<varname>initargs</varname>
 		        <varname>stack-size</varname>
 		        <varname>vstack-size</varname>
 		        <varname>tstack-size</varname>)
@@ -1287,6 +1296,15 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
+	        <term>initargs</term>
+	        
+	        <listitem>
+		      <para>a list of any additional initargs to pass to
+		        <function>make-process</function>.</para>
+	        </listitem>
+	      </varlistentry>
+
+	      <varlistentry>
 	        <term>stack-size</term>
 	        
 	        <listitem>
@@ -1312,6 +1330,7 @@ Type :? for other options.
 		        <function>make-process</function>.</para>
 	        </listitem>
 	      </varlistentry>
+
 	      <varlistentry>
 	        <term>process</term>
 	        <listitem>
