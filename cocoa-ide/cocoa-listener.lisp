@@ -57,13 +57,12 @@
 
 
 
-
-(defmethod dequeue-listener-char ((stream cocoa-listener-input-stream) wait-p)
+(defmethod queued-listener-char ((stream cocoa-listener-input-stream) wait-p dequeue-p)
   (with-slots (queue queue-lock read-lock queue-semaphore text-semaphore cur-string cur-string-pos) stream
     (with-lock-grabbed (read-lock)
       (or (with-lock-grabbed (queue-lock)
             (when (< cur-string-pos (length cur-string))
-              (prog1 (aref cur-string cur-string-pos) (incf cur-string-pos))))
+              (prog1 (aref cur-string cur-string-pos) (and dequeue-p (incf cur-string-pos)))))
           (loop
             (unless (if wait-p
                       (wait-on-semaphore text-semaphore nil "Listener Input")
@@ -75,7 +74,7 @@
                 (assert s () "queue/semaphore mismatch!")
                 (setq queue (delq s queue 1))
                 (when (< 0 (length s))
-                  (setf cur-string s cur-string-pos 1)
+                  (setf cur-string s cur-string-pos (if dequeue-p 1 0))
                   (return (aref s 0))))))))))
 
 (defmethod ccl::read-toplevel-form ((stream cocoa-listener-input-stream) &key eof-value)
@@ -132,17 +131,25 @@
       (signal-semaphore queue-semaphore))))
 
 (defmethod enqueue-listener-input ((stream cocoa-listener-input-stream) string)
-  (with-slots (queue-lock queue queue-semaphore text-semaphore) stream
-    (with-lock-grabbed (queue-lock)
-      (setq queue (nconc queue (list string)))
-      (signal-semaphore queue-semaphore)
-      (signal-semaphore text-semaphore))))
+  (when (> (length string) 0)
+    (with-slots (queue-lock queue queue-semaphore text-semaphore) stream
+      (with-lock-grabbed (queue-lock)
+        (setq queue (nconc queue (list string)))
+        (signal-semaphore queue-semaphore)
+        (signal-semaphore text-semaphore)))))
 
 (defmethod stream-read-char-no-hang ((stream cocoa-listener-input-stream))
-  (dequeue-listener-char stream nil))
+  (queued-listener-char stream nil t))
 
 (defmethod stream-read-char ((stream cocoa-listener-input-stream))
-  (dequeue-listener-char stream t))
+  (queued-listener-char stream t t))
+
+;; The default implementation of peek-char will lose the character if aborted. This won't.
+(defmethod stream-peek-char ((stream cocoa-listener-input-stream))
+  (queued-listener-char stream t nil))
+
+(defmethod stream-listen ((stream cocoa-listener-input-stream))
+  (queued-listener-char stream nil nil))
 
 (defmethod stream-unread-char ((stream cocoa-listener-input-stream) char)
   ;; Can't guarantee the right order of reads/unreads, just make sure not to
