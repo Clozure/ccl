@@ -215,12 +215,6 @@
 #define subtag_function_boundary_marker SUBTAG(fulltag_imm,31)
 #define function_boundary_marker subtag_function_boundary_marker
 
-/* The 32-bit immediate value in the instruction
- * "(mov ($ 0x12345678) (% fn))" at a tagged return address
- * refers to the associated function.
- */
-#define RECOVER_FN_OPCODE 0xbf
-#define RECOVER_FN_LENGTH 5
 
 
 typedef struct double_float {
@@ -246,14 +240,12 @@ typedef struct exception_callback_frame {
     struct lisp_frame *backlink;
     LispObj tra;		/* ALWAYS 0 FOR AN XCF */
     LispObj nominal_function;   /* the current function at the time of the exception */
-    LispObj relative_pc;        /* Boxed byte offset within actual function */
+    LispObj relative_pc;        /* Boxed byte offset within actual function or absolute address */
     LispObj containing_uvector;	/* the uvector that contains the relative PC or NIL */
     LispObj xp;			/* exception context */
     LispObj ra0;		/* value of ra0 from context */
     LispObj foreign_sp;		/* foreign sp at the time that exception occurred */
     LispObj prev_xframe;	/* so %apply-in-frame can unwind it */
-    LispObj pc_low;		/* fixnum low half of absolute pc */
-    LispObj pc_high;		/* and the high half */
 } xcf;
 
 

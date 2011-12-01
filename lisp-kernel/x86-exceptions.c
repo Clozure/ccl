@@ -17,7 +17,6 @@
 #include "lisp.h"
 #include "lisp-exceptions.h"
 #include "lisp_globals.h"
-#include "x86-utils.h"
 #include "threads.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -403,28 +402,55 @@ LispObj
 create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
 {
   LispObj containing_uvector = 0, 
-    relative_pc = lisp_nil,
+    relative_pc, 
     nominal_function = lisp_nil, 
     f, tra, tra_f = 0, abs_pc;
-  LispObj pc_low, pc_high;
 
   f = xpGPR(xp,Ifn);
   tra = *(LispObj*)(xpGPR(xp,Isp));
-  tra_f = tra_function(tra);
-  abs_pc = (LispObj)xpPC(xp);
-#if WORD_SIZE == 64
-  pc_high = ((abs_pc >> 32) & 0xffffffff) << fixnumshift;
-  pc_low = (abs_pc & 0xffffffff) << fixnumshift;
-#else
-  pc_high = ((abs_pc >> 16) & 0xffff) << fixnumshift;
-  pc_low = (abs_pc & 0xffff) << fixnumshift;
+
+#ifdef X8664
+  if (tag_of(tra) == tag_tra) {
+    if ((*((unsigned short *)tra) == RECOVER_FN_FROM_RIP_WORD0) &&
+        (*((unsigned char *)(tra+2)) == RECOVER_FN_FROM_RIP_BYTE2)) {
+      int sdisp = (*(int *) (tra+3));
+      tra_f = RECOVER_FN_FROM_RIP_LENGTH+tra+sdisp;
+    }
+    if (fulltag_of(tra_f) != fulltag_function) {
+      tra_f = 0;
+    }
+  } else {
+    tra = 0;
+  }
+#endif
+#ifdef X8632
+  if (fulltag_of(tra) == fulltag_tra) {
+    if (*(unsigned char *)tra == RECOVER_FN_OPCODE) {
+      tra_f = (LispObj)*(LispObj *)(tra + 1);
+    }
+    if (tra_f && header_subtag(header_of(tra_f)) != subtag_function) {
+      tra_f = 0;
+    }
+  } else {
+    tra = 0;
+  }
 #endif
 
+  abs_pc = (LispObj)xpPC(xp);
 
-  if (functionp(f))
-    nominal_function = f;
-  else if (tra_f)
-    nominal_function = tra_f;
+#ifdef X8664
+  if (fulltag_of(f) == fulltag_function) 
+#else
+    if (fulltag_of(f) == fulltag_misc &&
+        header_subtag(header_of(f)) == subtag_function) 
+#endif
+      {
+        nominal_function = f;
+      } else {
+      if (tra_f) {
+        nominal_function = tra_f;
+      }
+    }
   
   f = xpGPR(xp,Ifn);
   if (object_contains_pc(f, abs_pc)) {
@@ -447,9 +473,8 @@ create_exception_callback_frame(ExceptionInformation *xp, TCR *tcr)
     relative_pc = (abs_pc - (LispObj)&(deref(containing_uvector,1))) << fixnumshift;
   } else {
     containing_uvector = lisp_nil;
+    relative_pc = abs_pc << fixnumshift;
   }
-  push_on_lisp_stack(xp, pc_high);
-  push_on_lisp_stack(xp, pc_low);
   push_on_lisp_stack(xp,(LispObj)(tcr->xframe->prev));
   push_on_lisp_stack(xp,(LispObj)(tcr->foreign_sp));
   push_on_lisp_stack(xp,tra);

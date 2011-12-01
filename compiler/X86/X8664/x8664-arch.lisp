@@ -634,8 +634,6 @@
   foreign-sp                            ; value of tcr.foreign_sp
   prev-xframe                           ; tcr.xframe before exception
                                         ; (last 2 needed by apply-in-frame)
-  pc-low				;fixnum low half of absolute pc
-  pc-high				;and the high half
   )
 
 ;;; The kernel uses these (rather generically named) structures

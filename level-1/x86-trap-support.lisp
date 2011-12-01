@@ -341,10 +341,9 @@
       (locally (declare (optimize (speed 3) (safety 0))
                         (type (simple-array (unsigned-byte 8) (*)) containing-object))
         (aref containing-object (the fixnum (+ byte-offset delta))))
-      (let* ((high-half (%get-object xcf-ptr target::xcf.pc-high))
-             (low-half (%get-object xcf-ptr target::xcf.pc-low))
-	     (pc #+64-bit-target (dpb high-half (byte 32 32) low-half)
-                 #+32-bit-target (dpb high-half (byte 16 16) low-half)))
+      ;; xcf.relative-pc is a fixnum, but it might be negative.
+      (let* ((encoded-pc (%get-ptr xcf-ptr target::xcf.relative-pc))
+	     (pc (ash (%ptr-to-int encoded-pc) (- target::fixnumshift))))
 	(%get-unsigned-byte (%int-to-ptr pc) delta)))))
 
 ;;; If the byte following a uuo (which is "skip" bytes long, set
