@@ -227,7 +227,8 @@
     (leaks            "ccl:bin;leaks"            ("ccl:library;leaks.lisp"))
     (core-files       "ccl:bin;core-files"       ("ccl:library;core-files.lisp"))
     (dominance        "ccl:bin;dominance"        ("ccl:library;dominance.lisp"))
-    (remote-lisp      "ccl:bin;remote-lisp"    ("ccl:library;remote-lisp.lisp"))
+    (swank-loader     "ccl:bin;swank-loader"     ("ccl:library;swank-loader.lisp"))    
+    (remote-lisp      "ccl:bin;remote-lisp"      ("ccl:library;remote-lisp.lisp" "ccl:lib;swink.lisp"))
  
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))

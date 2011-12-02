@@ -24,7 +24,7 @@
 (defun cl-user::rlisp-test (port &optional host)
   (declare (special cl-user::conn))
   (when (boundp 'cl-user::conn) (close cl-user::conn))
-  (setq cl-user::conn (ccl::connect-to-swank (or host "localhost") port))
+  (setq cl-user::conn (ccl::connect-to-swink (or host "localhost") port))
   (ccl::make-rrepl-thread cl-user::conn "IDE Listener"))
 
 (defclass remote-listener-hemlock-view (hi:hemlock-view)
@@ -73,7 +73,7 @@
           (new-cocoa-listener-process (format nil "~a [Remote ~a(~a)]"
                                               name
                                               (ccl::rlisp-host-description rthread)
-                                              (ccl::rlisp-thread-id rthread))
+                                              (swink:thread-id rthread))
                                       (#/window (hi::hemlock-view-pane view))
                                       :class 'remote-cocoa-listener-process
                                       :initargs  `(:remote-thread ,rthread)
@@ -106,33 +106,43 @@
   ;; Cause the other side to enter a breakloop, which it will inform us of when it happens.
   (ccl::rlisp/interrupt (process-remote-thread p)))
 
-(defmethod ccl::output-stream-for-remote-lisp ((app cocoa-application))
-  (hemlock-ext:top-listener-output-stream))
-
-(defmethod ccl::input-stream-for-remote-lisp ((app cocoa-application))
-  (hemlock-ext:top-listener-input-stream))
+(defmethod ccl::wait-for-toplevel-form ((stream cocoa-listener-input-stream))
+  (with-slots (read-lock queue-lock queue queue-semaphore text-semaphore) stream
+    (with-lock-grabbed (read-lock)
+      (assert (with-slots (cur-sstream) stream (null cur-sstream)))
+      (loop
+        (wait-on-semaphore queue-semaphore nil "Toplevel Read")
+        (without-interrupts ;; yes, we're screwed if an interrupt happens just before, oh well.
+         (with-lock-grabbed (queue-lock)
+           (let ((val (car queue)))
+             (unless (and (stringp val) (every #'whitespacep val))
+               (signal-semaphore queue-semaphore) ;; return it.
+               (return t)))
+           (pop queue)))))))
 
 (defmethod ccl::toplevel-form-text ((stream cocoa-listener-input-stream))
   (with-slots (read-lock queue-lock queue queue-semaphore text-semaphore) stream
     (with-lock-grabbed (read-lock)
       (assert (with-slots (cur-sstream) stream (null cur-sstream)))
-      (wait-on-semaphore queue-semaphore nil "Toplevel Read")
-      (let ((val (with-lock-grabbed (queue-lock) (pop queue))))
-        (cond ((stringp val) ;; listener input
-               (assert (with-slots (text-semaphore) stream
-                         (timed-wait-on-semaphore text-semaphore 0))
-                       ()
-                       "text/queue mismatch!")
-               (values val nil t))
-              (t
-               ;; TODO: this is bogus, the package may not exist on this side, so must be a string,
-               ;; but we can't bind *package* to a string.  So this assumes the caller will know
-               ;; not to progv the env.
-               (destructuring-bind (string package-name pathname offset) val ;; queued form
-                 (declare (ignore offset))
-                 (let ((env (cons '(*loading-file-source-file*)
-                                  (list pathname))))
-                   (when package-name
-                     (push '*package* (car env))
-                     (push package-name (cdr env)))
-                   (values string env)))))))))
+      (loop
+        (wait-on-semaphore queue-semaphore nil "Toplevel Read")
+        (let ((val (with-lock-grabbed (queue-lock) (pop queue))))
+          (cond ((stringp val) ;; listener input
+                 (assert (with-slots (text-semaphore) stream
+                           (timed-wait-on-semaphore text-semaphore 0))
+                         ()
+                         "text/queue mismatch!")
+                 (unless (every #'whitespacep val)
+                   (return (values val nil t))))
+                (t
+                 ;; TODO: this is bogus, the package may not exist on this side, so must be a string,
+                 ;; but we can't bind *package* to a string.  So this assumes the caller will know
+                 ;; not to progv the env.
+                 (destructuring-bind (string package-name pathname offset) val ;; queued form
+                   (declare (ignore offset))
+                   (let ((env (cons '(*loading-file-source-file*)
+                                    (list pathname))))
+                     (when package-name
+                       (push '*package* (car env))
+                       (push package-name (cdr env)))
+                     (return (values string env)))))))))))

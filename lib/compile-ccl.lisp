@@ -231,6 +231,7 @@
     leaks
     core-files
     dominance
+    swank-loader
     remote-lisp
     ;; asdf has peculiar compile-time side-effects
     ;;asdf

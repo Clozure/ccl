@@ -290,7 +290,7 @@ corresponding values in the CDR of VALUE."
 
 (defmethod make-new-thread ((conn connection) &optional (process *current-process*))
   (with-connection-lock (conn)
-    (assert (not (find-thread conn process)))
+    (assert (not (find-thread conn process :key #'thread-process)))
     (let ((thread (make-instance (thread-class conn) :connection conn :process process)))
       (push thread (connection-threads conn))
       thread)))
@@ -423,7 +423,7 @@ non-swink process PROCESS."
                   (close socket :abort t)
                   (with-swink-lock ()
                     (remf *listener-sockets* info)))))))
-    (log-event "Swink awaiting ~s instructions on ~s" external-format socket)
+    (log-event "Swink awaiting ~s instructions on port ~s ~s" external-format local-port socket)
     local-port))
 
 (defun stop-server (port)
@@ -516,11 +516,13 @@ non-swink process PROCESS."
                                            (setq returned-string string)
                                            (signal-semaphore return-signal))))
             (send-event conn `(:read-string ,thread ,tag))
-            (let ((current-thread (find-thread conn *current-process*)))
-              (if current-thread ;; we're running in a repl, process events while waiting.
-                (with-event-handling (current-thread)
-                  (wait-on-semaphore return-signal))
-                (wait-on-semaphore return-signal)))
+
+            (let ((current-thread (find-thread conn *current-process* :key #'thread-process)))
+              (with-interrupts-enabled
+                  (if current-thread ;; we're running in a repl, process events while waiting.
+                    (with-event-handling (current-thread)
+                      (wait-on-semaphore return-signal))
+                    (wait-on-semaphore return-signal))))
             returned-string)
         (unless returned-string
           ;; Something interrupted us and aborted, tell client to stop reading as well.
