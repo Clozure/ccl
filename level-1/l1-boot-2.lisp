@@ -98,9 +98,30 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
 (defglobal *interactive-streams-initialized* nil)
 
+#+windows-target
+(progn
+
+
+(defun validate-standard-io-handles ()
+  (let* ((in (#_GetStdHandle #$STD_INPUT_HANDLE))
+         (out (#_GetStdHandle #$STD_OUTPUT_HANDLE)))
+    (when (or (%null-ptr-p in)
+              (%null-ptr-p out))
+      (let* ((nulldevice (open-null-device)))
+        (when nulldevice
+          (when (%null-ptr-p in)
+            (#_SetStdHandle #$STD_INPUT_HANDLE nulldevice))
+          (when (%null-ptr-p out)
+            (#_SetStdHandle #$STD_OUTPUT_HANDLE nulldevice)
+            (ff-call (ccl::%kernel-import target::kernel-import-open-debug-output)
+                     :int (%ptr-to-int nulldevice)
+                     :int)))))))
+)
+
 (defun initialize-interactive-streams ()
   (let* ((encoding (lookup-character-encoding *terminal-character-encoding-name*))
          (encoding-name (if encoding (character-encoding-name encoding))))
+    #+windows-target (validate-standard-io-handles)
     (setq *stdin* (make-fd-stream #-windows-target 0
                                   #+windows-target (%ptr-to-int
                                                     (#_GetStdHandle #$STD_INPUT_HANDLE))

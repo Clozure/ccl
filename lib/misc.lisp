@@ -1619,3 +1619,20 @@ are running on, or NIL if we can't find any useful information."
         (incf end offset)
         (setq vector data)))
     (%parse-signed-integer vector start end)))
+
+#+windows-target
+(defun open-null-device ()
+  (rlet ((sa #>SECURITY_ATTRIBUTES
+           #>nLength (record-length #>SECURITY_ATTRIBUTES)
+           #>lpSecurityDescriptor +null-ptr+
+           #>bInheritHandle #$TRUE))
+    (with-filename-cstrs ((name "\\Device\\Null"))
+      (let* ((handle (#_CreateFileW name
+                                    (logior #$GENERIC_READ #$GENERIC_WRITE)
+                                    (logior #$FILE_SHARE_READ #$FILE_SHARE_WRITE)
+                                    sa
+                                    #$OPEN_EXISTING
+                                    #$FILE_ATTRIBUTE_NORMAL
+                                    +null-ptr+)))
+        (unless (eql handle #$INVALID_HANDLE_VALUE)
+          handle)))))
