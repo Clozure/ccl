@@ -632,12 +632,15 @@ commands but aren't")
     (%break-message (if (typep c 'compiler-warning) "Compiler warning" "Warning") c fp #\;)
     ))
 
-(declaim (notinline select-backtrace))
-
 (defmacro new-backtrace-info (dialog youngest oldest tcr condition current fake db-link level)
   (let* ((cond (gensym)))
   `(let* ((,cond ,condition))
     (vector ,dialog ,youngest ,oldest ,tcr (cons nil (compute-restarts ,cond)) (%catch-top ,tcr) ,cond ,current ,fake ,db-link ,level))))
+
+(defmethod backtrace-context-continuable-p ((context vector))
+  (not (null (find 'continue (cdr (bt.restarts context)) :key #'restart-name))))
+
+(declaim (notinline select-backtrace))
 
 (defun select-backtrace ()
   (declare (notinline select-backtrace))
@@ -677,8 +680,7 @@ commands but aren't")
          (*signal-printing-errors* nil)
          (*read-suppress* nil)
          (*print-readably* nil)
-	 (*default-integer-command* `(:c 0 ,(1- (length (compute-restarts condition)))))
-         (context (new-backtrace-info nil
+	 (context (new-backtrace-info nil
                                       frame-pointer
                                       (if *backtrace-contexts*
                                         (or (child-frame
@@ -694,6 +696,7 @@ commands but aren't")
                                       #+arm-target (or (current-fake-stack-frame) (%current-frame-ptr))
                                       (db-link)
                                       (1+ *break-level*)))
+         (*default-integer-command* `(:c 0 ,(1- (length (cdr (bt.restarts context))))))
          (*backtrace-contexts* (cons context *backtrace-contexts*)))
     (with-terminal-input
       (with-toplevel-commands :break

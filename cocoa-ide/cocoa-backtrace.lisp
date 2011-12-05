@@ -387,31 +387,46 @@
   #-cocotron
   (#/autorelease self))
 
+
+(defmethod backtrace-context-backtrace-window ((context vector))
+  (ccl::bt.dialog context))
+(defmethod (setf backtrace-context-backtrace-window) (obj (context vector))
+  (setf (ccl::bt.dialog context) obj))
+
+(defmethod backtrace-context-restarts-window ((context vector))
+  (car (ccl::bt.restarts context)))
+(defmethod (setf backtrace-context-restarts-window) (obj (context vector))
+  (setf (car (ccl::bt.restarts context)) obj))
+
 ;; Called when current process is about to enter a breakloop
-(defmethod ui-object-enter-backtrace-context ((app ns:ns-application)
-                                              context)
-  (let* ((proc *current-process*))
-    (when (typep proc 'cocoa-listener-process)
-      (push context (cocoa-listener-process-backtrace-contexts proc)))))
+(defmethod ui-object-enter-backtrace-context ((app ns:ns-application) context)
+  (enter-backtrace-context *current-process* context))
 
-(defmethod ui-object-exit-backtrace-context ((app ns:ns-application)
-                                              context)
-  (let* ((proc *current-process*))
-    (when (typep proc 'cocoa-listener-process)
-      (when (eq context (car (cocoa-listener-process-backtrace-contexts proc)))
-        (setf (cocoa-listener-process-backtrace-contexts proc)
-              (cdr (cocoa-listener-process-backtrace-contexts proc)))
-        (let* ((btwindow (prog1 (ccl::bt.dialog context)
-                           (setf (ccl::bt.dialog context) nil)))
-               (restartswindow
-                (prog1 (car (ccl::bt.restarts context))
-                           (setf (ccl::bt.restarts context) nil))))
-          (when btwindow
-            (#/performSelectorOnMainThread:withObject:waitUntilDone: btwindow (@selector #/close)  +null-ptr+ t))
-          (when restartswindow
-            (#/performSelectorOnMainThread:withObject:waitUntilDone: restartswindow (@selector #/close)  +null-ptr+ t)))))))
+(defmethod ui-object-exit-backtrace-context ((app ns:ns-application) context)
+  (exit-backtrace-context *current-process* context))
 
-  
+(defmethod enter-backtrace-context ((process process) context)
+  (declare (ignore context)))
+
+(defmethod exit-backtrace-context ((process process) context)
+  (declare (ignore context)))
+
+(defmethod enter-backtrace-context ((process cocoa-listener-process) context)
+  (push context (cocoa-listener-process-backtrace-contexts process)))
+
+(defmethod exit-backtrace-context ((process cocoa-listener-process) context)
+  (when (eq context (car (cocoa-listener-process-backtrace-contexts process)))
+    (pop (cocoa-listener-process-backtrace-contexts process))
+    (let ((w (backtrace-context-backtrace-window context)))
+      (when w
+        (setf (backtrace-context-backtrace-window context) nil)
+        (cocoa-close w t)))
+    (let ((w (backtrace-context-restarts-window context)))
+      (when w
+        (setf (backtrace-context-restarts-window context) nil)
+        (cocoa-close w t)))))
+
+
 (objc:defmethod (#/validateToolbarItem: #>BOOL) ((self backtrace-window-controller)
                                                  toolbar-item)
   (let* ((outline-view (backtrace-controller-outline-view self))

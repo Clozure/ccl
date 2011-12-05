@@ -173,6 +173,15 @@
                                     (#/window (#/lastObject (#/windowControllers doc)))))))))
     (when wptr (hemlock-view wptr))))
 
+(defun cocoa-close (object &optional wait-p)
+  (if (eq *current-process* ccl::*initial-process*)
+    (#/close object)
+    (#/performSelectorOnMainThread:withObject:waitUntilDone:
+     object
+     (@selector #/close)
+     +null-ptr+
+     wait-p)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 

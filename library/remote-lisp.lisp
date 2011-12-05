@@ -174,6 +174,13 @@
           (wait-on-semaphore semaphore)))
       (apply #'values return-values))))
 
+(defclass remote-backtrace-context ()
+  ((process :initform *current-process* :reader backtrace-context-process)
+   (break-level :initarg :break-level :reader backtrace-context-break-level)
+   (continuable-p :initarg :continuable-p :reader backtrace-context-continuable-p)))
+
+(defmethod remote-context-class ((application application)) 'remote-backtrace-context)
+
 (defmethod swink:handle-event ((rthread remote-lisp-thread) event)
   (assert (eq (swink:thread-control-process rthread) *current-process*))
   (swink::log-event "Handle-event in thread ~s: ~s" (swink:thread-id rthread) event)
@@ -184,18 +191,27 @@
      (signal 'rlisp-read-aborted :tag remote-tag))
     ((:write-string string)
      (write-string string))
-    ((:read-loop level) ;; enter (or re-enter after an abort) a break loop.
-     (when (eql level *break-level*) ;; restart at same level, aborted current expression.
-       (invoke-restart 'debug-restart level))
-     (unless (eql level (1+ *break-level*))
+    ((:read-loop level)
+     (unless (eql level *break-level*)
        (warn ":READ-LOOP level confusion got ~s expected ~s" level (1+ *break-level*)))
+     (invoke-restart 'debug-restart level)) ;; restart at same level, aborted current expression.
+    ((:enter-break level continuablep)
+     (unless (or (eql level 0) (eql level (1+ *break-level*)))
+       (warn ":ENTER-BREAK level confusion got ~s expected ~s" level (1+ *break-level*)))
      ;(format t "~&Error: ~a" condition-text)
      ;(when *show-restarts-on-break*
      ;  (format t "~&Remote restarts:")
      ;  (loop for (name description) in restarts
      ;    do (format t "~&~a ~a" name description))
      ;  (fresh-line))
-     (rlisp-read-loop rthread :break-level level))
+     (let ((rcontext (make-instance (remote-context-class *application*)
+                       :break-level level
+                       :continuable-p continuablep)))
+       (unwind-protect
+           (progn
+             (application-ui-operation *application* :enter-backtrace-context rcontext)
+             (rlisp-read-loop rthread :break-level level))
+         (application-ui-operation *application* :exit-backtrace-context rcontext))))
     ((:debug-return level) ;; return from level LEVEL read loop
      (invoke-restart 'debug-return level))))
 

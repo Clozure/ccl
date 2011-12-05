@@ -281,11 +281,7 @@
                        (let ((doc (hi::buffer-document buf)))
                          (when doc
                            (setf (hemlock-document-process doc) nil) ;; so #/close doesn't kill it.
-                           (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                            doc
-                            (@selector #/close)
-                            +null-ptr+
-                            nil)))))
+                           (cocoa-close doc nil)))))
                  hi:*buffer-list*))
      :initial-function
      #'(lambda ()
@@ -621,11 +617,6 @@
         (when context
           (process-interrupt process #'invoke-restart-interactively 'continue))))))
 
-
-
-
-
-
 ;;; Menu item action validation.  It'd be nice if we could distribute this a
 ;;; bit better, so that this method didn't have to change whenever a new
 ;;; action was implemented in this class.  For now, we have to do so.
@@ -648,8 +639,7 @@
              (values
               t
               (and context
-                   (find 'continue (cdr (ccl::bt.restarts context))
-                         :key #'restart-name)))))
+                   (ccl::backtrace-context-continuable-p context)))))
           ((or (eql action (@selector #/backtrace:))
                (eql action (@selector #/exitBreak:))
                (eql action (@selector #/restarts:)))
@@ -954,11 +944,7 @@
                                 (cond ((#/isVisible w)
                                        (format output-stream "~%~%{process ~s exiting}~%" *current-process*))
                                       (t
-                                       (#/performSelectorOnMainThread:withObject:waitUntilDone:
-                                        w
-                                        (@selector #/close)
-                                        +null-ptr+
-                                        t)))
+                                       (cocoa-close w t)))
                                 (close input-stream)
                                 (close output-stream)))))))
       (process-enable process))))

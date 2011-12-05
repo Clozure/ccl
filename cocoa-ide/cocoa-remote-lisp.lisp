@@ -146,3 +146,9 @@
                        (push '*package* (car env))
                        (push package-name (cdr env)))
                      (return (values string env)))))))))))
+
+(defclass cocoa-remote-backtrace-context (ccl::remote-backtrace-context)
+  ((backtrace-window :initform nil :accessor backtrace-context-backtrace-window)
+   (restarts-window :initform nil :accessor backtrace-context-restarts-window)))
+
+(defmethod ccl::remote-context-class ((application cocoa-application)) 'cocoa-remote-backtrace-context)

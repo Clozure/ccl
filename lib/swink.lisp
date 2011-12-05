@@ -232,23 +232,36 @@ corresponding values in the CDR of VALUE."
                          (let ((*package* +swink-io-package+))
                            (prin1-to-string sexp)))))
 
-(defun send-event (target event)
-  (let ((conn (etypecase target
-                (connection target)
-                (thread (thread-connection target)))))
-    (log-event "Send-event ~s to ~s" event target)
-    (write-sexp conn (cons (thread-id target) (marshall-event conn event)))))
+(defun send-event (target event &key ignore-errors)
+  (let* ((conn (etypecase target
+		 (connection target)
+		 (thread (thread-connection target))))
+	 (encoded-event (marshall-event conn event)))
+    (log-event "Send-event ~s to ~a" encoded-event (if (eq target conn)
+						       "connection"
+						       (princ-to-string (thread-id target))))
+    (handler-bind ((stream-error (lambda (c)
+				   (when (eq (stream-error-stream c) (connection-control-stream conn))
+				     (unless ignore-errors
+				       (log-event "send-event error: ~a" c)
+				       (close-connection conn))
+				     (return-from send-event)))))
+      (write-sexp conn (cons (thread-id target) encoded-event)))))
+
+(defun send-event-if-open (target event)
+  (send-event target event :ignore-errors t))
 
 ;;This assumes only one process reads from the command stream or the read-buffer, so don't need locking.
 (defun read-sexp (conn)
-  ;; Returns the sexp or (:end-connection)
+  ;; Returns the sexp or :end-connection event
   (let* ((stream (connection-control-stream conn))
          (buffer (connection-buffer conn))
          (count (stream-read-vector stream buffer 0 6)))
     (handler-bind ((stream-error (lambda (c)
                                    ;; This includes parse errors as well as i/o errors
                                    (when (eql (stream-error-stream c) stream)
-                                     (log-event "Error: ~a" c)
+                                     (log-event "read-sexp error: ~a" c)
+				     ; (setf (connection-io-error conn) t)
                                      (return-from read-sexp
                                        `(nil . (:end-connection ,c)))))))
       (when (< count 6) (ccl::signal-eof-error stream))
@@ -455,15 +468,15 @@ non-swink process PROCESS."
     (setf (connection-control-process conn)
           (process-run-function (format nil "swink-event-loop@~s" (local-port stream))
             (lambda ()
-              (with-simple-restart (close-connection "Exit server")
-                (setf (connection-control-process conn) *current-process*)
-                (unwind-protect
-                    (handler-bind ((error (lambda (c)
-                                            (log-event "Error: ~a" c)
-                                            (invoke-restart 'close-connection))))
-                      (when startup-signal (signal-semaphore startup-signal))
-                      (server-event-loop conn))
-                  (control-process-cleanup conn))))))
+	      (unwind-protect
+		   (with-simple-restart (close-connection "Exit server")
+		     (setf (connection-control-process conn) *current-process*)
+		     (handler-bind ((error (lambda (c)
+					     (log-event "Error: ~a" c)
+					     (invoke-restart 'close-connection))))
+		       (when startup-signal (signal-semaphore startup-signal))
+		       (server-event-loop conn)))
+		(control-process-cleanup conn)))))
     (wait-on-semaphore startup-signal)
     (with-swink-lock () (push conn *server-connections*))
     (when *global-debugger*
@@ -476,11 +489,16 @@ non-swink process PROCESS."
   (with-swink-lock ()
     (setq *server-connections* (delq conn *server-connections*))
     (when (null *server-connections*) (use-swink-globally nil)))
-
-  (loop for thread in (with-connection-lock (conn)
-                        (copy-list (connection-threads conn)))
-        do (process-interrupt (thread-process thread) 'invoke-restart-if-active 'exit-repl))
-
+  (flet ((exit-repl ()
+	   ;; While exiting, threads may attempt to write to the connection.  That's good, if the
+	   ;; connection is still alive and we're attempting an orderly exit.  Don't go into a spiral
+	   ;; if the connection is dead.  Once we get any kind of error, just punt.
+	   (log-event "Start exit-repl in ~s" (thread-id *current-process*))
+	   (handler-case  (invoke-restart-if-active 'exit-repl)
+	     (error (c) (log-event "Exit repl error ~a in ~s" c (thread-id *current-process*))))))
+    (loop for thread in (with-connection-lock (conn)
+			  (copy-list (connection-threads conn)))
+       do (process-interrupt (thread-process thread) #'exit-repl)))
   (let* ((timeout 0.05)
          (end (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
     (process-wait "closing connection"
@@ -506,34 +524,36 @@ non-swink process PROCESS."
   ;; any other process, so we could be running anywhere.  Thread is the thread of the stream.
   (with-simple-restart (abort-read "Abort reading")
     (let* ((conn (thread-connection thread))
+	   (returned nil)
            (returned-string nil)
            (return-signal (make-semaphore))
            (tag nil))
       (force-output (thread-io thread))
       (unwind-protect
-          (progn
-            (setq tag (tag-callback conn (lambda (string)
-                                           (setq returned-string string)
-                                           (signal-semaphore return-signal))))
-            (send-event conn `(:read-string ,thread ,tag))
-
-            (let ((current-thread (find-thread conn *current-process* :key #'thread-process)))
-              (with-interrupts-enabled
-                  (if current-thread ;; we're running in a repl, process events while waiting.
-                    (with-event-handling (current-thread)
-                      (wait-on-semaphore return-signal))
-                    (wait-on-semaphore return-signal))))
-            returned-string)
-        (unless returned-string
-          ;; Something interrupted us and aborted, tell client to stop reading as well.
-          (send-event conn `(:abort-read ,thread ,tag))
-          ;; ignore response if sent anyway.
-          (when tag
-            (remove-tag conn tag)))))))
+	   (progn
+	     (setq tag (tag-callback conn (lambda (string)
+					    (setq returned t)
+					    (setq returned-string string)
+					    (signal-semaphore return-signal))))
+	     (send-event conn `(:read-string ,thread ,tag))
+	     (let ((current-thread (find-thread conn *current-process* :key #'thread-process)))
+	       (with-interrupts-enabled
+		 (if current-thread ;; we're running in a repl, process events while waiting.
+		     (with-event-handling (current-thread)
+		       (wait-on-semaphore return-signal))
+		     (wait-on-semaphore return-signal))))
+	     returned-string)
+        (unless returned
+          ;; Something interrupted us and aborted
+          ;; ignore response if sent
+          (when tag (remove-tag conn tag))
+	  ;; tell client to stop reading as well.
+          (send-event-if-open conn `(:abort-read ,thread ,tag)))))))
 
 
 (defmethod send-remote-user-output ((thread server-thread) string start end)
-  (send-event (thread-connection thread) `(:write-string ,thread ,(string-segment string start end))))
+  (let ((conn (thread-connection thread)))
+    (send-event conn `(:write-string ,thread ,(string-segment string start end)))))
 
 (defun swink-repl (conn break-level toplevel-loop)
   (let* ((thread (make-new-thread conn))
@@ -559,7 +579,7 @@ non-swink process PROCESS."
             (send-event conn `(:start-repl ,break-level))
             (funcall toplevel-loop))
         ;; Do we need this?  We've already exited from the outermost level...
-        (send-event conn `(:exit-repl))
+	(send-event-if-open conn `(:exit-repl))
         (ccl:remove-auto-flush-stream out)
         (setf (ccl::process-ui-object *current-process*) ui-object)
         (setf (thread-io thread) nil)
@@ -599,9 +619,14 @@ non-swink process PROCESS."
          (ccl::*break-level* break-level)
          (*loading-file-source-file* nil)
          (ccl::*loading-toplevel-location* nil)
+         (context (find break-level ccl::*backtrace-contexts* :key (lambda (bt) (ccl::bt.break-level bt))))
          *** ** * +++ ++ + /// // / -)
+    (when context
+      ;; TODO: neither :GO nor cmd-/ pay attention to the break condition, whereas bt.restarts does...
+      (let ((continuable (ccl::backtrace-context-continuable-p context)))
+        (send-event conn `(:enter-break ,break-level ,(and continuable t)))))
+
     (flet ((repl-until-abort ()
-             (send-event conn `(:read-loop ,break-level))
              (restart-case
                  (catch :abort
                    (catch-cancel
@@ -619,8 +644,9 @@ non-swink process PROCESS."
           (loop
             (repl-until-abort)
             (clear-input)
-            (terpri))
-        (send-event conn `(:debug-return ,break-level))))))
+            (terpri)
+            (send-event conn `(:read-loop ,break-level)))
+	(send-event-if-open conn `(:debug-return ,break-level))))))
 
 (defmacro with-return-values ((conn remote-tag &body abort-forms) &body body)
   (let ((ok-var (gensym))
@@ -631,7 +657,7 @@ non-swink process PROCESS."
                                        ,@(unwind-protect
                                              (prog1 (progn ,@body) (setq ,ok-var t))
                                            (unless ,ok-var
-                                             (send-event ,conn-var `(:cancel-return ,,tag-var))
+                                             (send-event-if-open ,conn-var `(:cancel-return ,,tag-var))
                                              ,@abort-forms)))))))
 
 
@@ -735,6 +761,7 @@ non-swink process PROCESS."
 
 (let (using-swink-globally select-hook debugger-hook break-hook ui-object)
   (defun use-swink-globally (yes-or-no)
+    (log-event "use-swink-globally: ~s" yes-or-no)
     (if yes-or-no
       (unless using-swink-globally
         (setq select-hook *select-interactive-process-hook*)
@@ -797,10 +824,21 @@ non-swink process PROCESS."
 (defun make-output-stream (thread output-fn)
   (make-instance 'swink-output-stream :thread thread :output-fn output-fn))
 
+(defun output-stream-output (stream string start end)
+  (with-slots (output-fn thread) stream
+    (let ((conn (thread-connection thread)))
+      (handler-bind ((stream-error (lambda (c)
+				     (when (eql (stream-error-stream c)
+						(connection-control-stream conn))
+				       (with-slots (ccl::stream) c
+					 (setf ccl::stream stream))))))
+	(funcall output-fn thread string start end)))))
+
+
 (defmethod flush-buffer ((stream swink-output-stream)) ;; called with lock hold
-  (with-slots (output-fn buffer index) stream
+  (with-slots (buffer index) stream
     (unless (eql index 0)
-      (funcall output-fn (stream-thread stream) buffer 0 index)
+      (output-stream-output stream buffer 0 index)
       (setf index 0))))
 
 (defmethod stream-write-char ((stream swink-output-stream) char)
@@ -826,8 +864,7 @@ non-swink process PROCESS."
       (cond ((< count len)
              (replace buffer string :start1 index :start2 start :end2 end)
              (incf index count))
-            (t (with-slots (output-fn) stream
-                 (funcall output-fn (stream-thread stream) string start end))))
+            (t (output-stream-output stream string start end)))
       (let ((last-newline (position #\newline string :from-end t
                                     :start start :end end)))
         (setf column (if last-newline 
@@ -848,10 +885,20 @@ non-swink process PROCESS."
 (defun make-input-stream (thread input-fn)
   (make-instance 'swink-input-stream :thread thread :input-fn input-fn))
 
+(defun input-stream-input (stream)
+  (with-slots (input-fn thread) stream
+    (let ((conn (thread-connection thread)))
+      (handler-bind ((stream-error (lambda (c)
+				     (when (eql (stream-error-stream c)
+						(connection-control-stream conn))
+				       (with-slots (ccl::stream) c
+					 (setf ccl::stream stream))))))
+	(funcall input-fn thread)))))
+
 (defmethod stream-read-char ((stream swink-input-stream))
-  (with-swink-stream (input-fn buffer index column) stream
+  (with-swink-stream (buffer index column) stream
     (unless (< index (length buffer))
-      (let ((string (funcall input-fn (stream-thread stream))))
+      (let ((string (input-stream-input stream)))
         (cond ((eql (length string) 0)
                (return-from stream-read-char :eof))
               (t
