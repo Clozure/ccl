@@ -1296,12 +1296,19 @@
                      (unless (eql 0 regs)
                        (1- (integer-length regs)))))))))
           ((eql (hard-regspec-class hint) hard-reg-class-fpr)
-           (when var
+           (if var
              (let* ((ea (var-ea var)))
                (when (register-spec-p ea)
                  (and (eql (hard-regspec-class ea) hard-reg-class-fpr)
                       (eql (get-regspec-mode ea) (get-regspec-mode hint))
-                      ea))))))))
+                      ea)))
+             (let* ((val (acode-constant-p form)))
+               (if (and (= (get-regspec-mode hint) hard-reg-class-fpr-mode-single)
+                        (eql val 0.0f0))
+                 arm::single-float-zero
+                 (if (and (= (get-regspec-mode hint) hard-reg-class-fpr-mode-double)
+                          (eql val 0.0d0))
+                   arm::double-float-zero))))))))
          
     
                  
@@ -3005,7 +3012,7 @@
 		 (declare (ignore used-gprs))
                  ;; We have 16 non-volatile single-floats or 8
                  ;; non-volatile double-floats
-		 (let* ((nfprs 8)
+		 (let* ((nfprs 7)
 			(free-fpr
 			 (dotimes (r nfprs nil)
 			   (unless (logtest (target-fpr-mask r :double-float)

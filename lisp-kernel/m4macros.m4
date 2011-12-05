@@ -37,6 +37,7 @@ ifdef(`DARWIN',`define(`SYSstabs',`BSDstabs')
 		define(`DarwinAssembler',`')
                 define(`CNamesNeedUnderscores',`')
 	        define(`LocalLabelPrefix',`L')
+                define(`MacroLabelPrefix',`L__')
 	        define(`StartTextLabel',`Ltext0')
 	        define(`EndTextLabel',`Letext')
                 ifdef(`PPC',`
@@ -49,6 +50,7 @@ ifdef(`DARWIN',`define(`SYSstabs',`BSDstabs')
 ifdef(`LINUX',`define(`SYSstabs',`ELFstabs')
 	       define(`HaveWeakSymbols',`')
 	       define(`LocalLabelPrefix',`.L')
+	       define(`MacroLabelPrefix',`.L__')
 	       define(`StartTextLabel',`.Ltext0')
 	       define(`EndTextLabel',`.Letext')
                ifdef(`PPC64',`
@@ -59,6 +61,7 @@ ifdef(`LINUX',`define(`SYSstabs',`ELFstabs')
 ifdef(`FREEBSD',`define(`SYSstabs',`ELFstabs')
 	       define(`HaveWeakSymbols',`')
 	       define(`LocalLabelPrefix',`.L')
+	       define(`MacroLabelPrefix',`.L__')
 	       define(`StartTextLabel',`.Ltext0')
 	       define(`EndTextLabel',`.Letext')'
                 ifdef(`X86',`
@@ -68,12 +71,14 @@ ifdef(`FREEBSD',`define(`SYSstabs',`ELFstabs')
 ifdef(`SOLARIS',`define(`SYSstabs',`ELFstabs')
 	       define(`HaveWeakSymbols',`')
 	       define(`LocalLabelPrefix',`.L')
+	       define(`MacroLabelPrefix',`.L__')
 	       define(`StartTextLabel',`.Ltext0')
 	       define(`EndTextLabel',`.Letext')')
 
 ifdef(`WINDOWS',`define(`SYSstabs',`COFFstabs')
         ifdef(`WIN_32',`define(`CNamesNeedUnderscores',`')')
                define(`LocalLabelPrefix',`L')
+               define(`MacroLabelPrefix',`L__')
 	       define(`StartTextLabel',`Ltext0')
 	       define(`EndTextLabel',`Letext')')
 
@@ -292,10 +297,11 @@ define(`new_macro_labels',
   `define(`__macro_label_counter__',incr(__macro_label_counter__))')
 
 define(`_local_label',`LocalLabelPrefix()`'$1')
+define(`_macro_label',`MacroLabelPrefix()`'$1')
 
 define(`local_label',`_local_label($1`'__local_label_counter__)')
 
-define(`macro_label',`_local_label($1`'__macro_label_counter__)')
+define(`macro_label',`_macro_label($1`'__macro_label_counter__)')
 
 
 /* The Darwin assembler doesn't seem to support .ifdef/.ifndef, but  */

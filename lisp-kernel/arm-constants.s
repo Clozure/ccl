@@ -73,6 +73,9 @@ define(`next_method_context',`temp1')
 define(`nargs',`imm2')
 define(`allocbase',`temp0')     /* while consing */
 
+define(`double_float_zero',`d7')
+define(`single_float_zero',`s14')
+                        
 /* ARM conditions */
 eq = 0
 ne = 1

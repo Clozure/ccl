@@ -155,6 +155,7 @@
 (defarmsfpr s29 61)
 (defarmsfpr s30 62)
 (defarmsfpr s31 63)
+(defarmsfpr single-float-zero s14)
 
 ;;; The first 16 double-float registers overlap pairs of single-float
 ;;; registers (d0 overlaps s0-s1, d15 overlaps s30-s31, etc.)
@@ -178,6 +179,8 @@
 (defarmdfpr d13 77)
 (defarmdfpr d14 78)
 (defarmdfpr d15 79)
+
+(defarmdfpr double-float-zero d7)
 )
 
 
@@ -1410,9 +1413,9 @@
 (defconstant numeric-tags-mask (logior real-tags-mask (ash 1 subtag-complex)))
 
   
-(defconstant fasl-version #x60)
-(defconstant fasl-max-version #x60)
-(defconstant fasl-min-version #x60)
-(defparameter *image-abi-version* 1038)
+(defconstant fasl-version #x61)
+(defconstant fasl-max-version #x61)
+(defconstant fasl-min-version #x61)
+(defparameter *image-abi-version* 1039)
 
 (provide "ARM-ARCH")

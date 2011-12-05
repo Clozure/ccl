@@ -3128,6 +3128,8 @@ _spentry(eabi_callback)
         __(orr imm0,imm0,#subtag_u32_vector)
         __(stmdb sp!,{imm0,imm2})
         __(push_foreign_fprs())
+        __(adr imm0,1f)
+        __(fldd double_float_zero,[imm0])
         __(mov arg_x,#0)
         __(mov temp0,#0)
         __(mov temp1,#0)
@@ -3155,7 +3157,11 @@ _spentry(eabi_callback)
         __(ldmia sp!,{r0,r1})
         __(add sp,sp,#4*node_size)
         __(bx lr)
-       
+        .align 3
+1:      
+        .long 0
+        .long 0        
+                       
 /*  EOF, basically  */
 	
 _startfn(C(misc_ref_common))
@@ -4395,6 +4401,8 @@ _exportfn(C(start_lisp))
         __(orr imm0,imm0,#subtag_u32_vector)
         __(stmdb sp!,{imm0,imm2})
         __(push_foreign_fprs())
+        __(adr imm0,1f)
+        __(fldd double_float_zero,[imm0])
         __(mov imm0,#TCR_STATE_LISP)
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
@@ -4409,7 +4417,11 @@ _exportfn(C(start_lisp))
         __(ldr sp,[sp])
         __(ldmia sp!,{r4,r5,r6,r7,r8,r9,r10,r11,r12,lr})
         __(bx lr)
-
+        .align 3
+1:
+        .long 0
+        .long 0
+        .ltorg
         .data
         .global C(sptab)
         .global C(sptab_end)

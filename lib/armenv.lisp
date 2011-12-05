@@ -60,7 +60,7 @@
                             arm::imm1
                             arm::imm2))
 
-(defconstant arm-temp-fp-regs (1- (ash 1 16)))
+(defconstant arm-temp-fp-regs (1- (ash 1 14)))
 
 (defconstant arm-cr-fields (make-mask 0))
 

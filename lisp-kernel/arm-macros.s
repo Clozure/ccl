@@ -328,24 +328,32 @@ define(`funcall_nfn',`
 ')
 
 /* Save the non-volatile FPRs (d8-d15) in a stack-allocated vector.
-   Clobber d7,r0,r1.  Note that d7/s14 wind up looking like denormalized
+   Clobber d7.  Note that d7/s14 wind up looking like denormalized
    floats (we effectively load a vector header into d7.)
 */        
    
 define(`push_foreign_fprs',`
-        __(movc16(imm0,make_header(8,subtag_double_float_vector)))
-        __(mov imm1,#0)
-        __(fmdrr d7,imm0,imm1)
+        __(b macro_label(next))
+        .align 3
+macro_label(data):      
+        .long make_header(8,subtag_double_float_vector)
+        .long 0
+macro_label(next):
+        __(fldd d7,[pc,#-16])
         __(fstmfdd sp!,{d7-d15})
 ')
 
 /* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
    FPRs. */
 define(`push_lisp_fprs',`
-        __(movc16(imm0,make_header(8,subtag_double_float_vector)))
-        __(mov imm1,#0)
-        __(fmdrr d7,imm0,imm1)
+        new_macro_labels()
+        __(b macro_label(next))
+macro_label(data):      
+        .long make_header(8,subtag_double_float_vector)
+macro_label(next):
+        __(flds single_float_zero,[pc,#-12])
         __(fstmfdd sp!,{d7-d15})
+        __(fcpys single_float_zero,s15)
 ')
         
 /* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
@@ -358,6 +366,7 @@ define(`pop_foreign_fprs',`
 /* Pop the lisp non-volatile FPRs */        
 define(`pop_lisp_fprs',`
         __(fldmfdd sp!,{d7-d15})
+        __(fcpys single_float_zero,s15)
 ')
 
 /* Reload the non-volatile lisp FPRs (d8-d15) from the stack-consed vector
@@ -365,6 +374,7 @@ define(`pop_lisp_fprs',`
    a denormalized float in it, if anything cares. */
 define(`restore_lisp_fprs',`
         __(fldmfdd $1,{d7-d15})
+        __(fcpys single_float_zero,s15)
 ')                
 
 /* discard the stack-consed vector which contains a set of 8 non-volatile

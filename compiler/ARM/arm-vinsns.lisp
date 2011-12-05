@@ -35,20 +35,28 @@
      ((n :u16const)
       (header :u16const))
      ((d7 (:double-float #.arm::d7))))
-  (fldd d7 (:= :header))
+  (flds s14 (:= :header))
   (fstmdbd d7 (:! arm::sp) (:apply + n 1))
+  (fcpys single-float-zero s15)
   (:data)
   :header
   (:word header)
-  (:word 0)
   (:code))
 
 (define-arm-vinsn (pop-nvfprs :push :multiple :doubleword :csp :predicatable)
     (()
      ((n :u16const))
      ((d7 (:double-float #.arm::d7))))
-  (fldmiad d7 (:! arm::sp) (:apply + n 1)))
+  (fldmiad d7 (:! arm::sp) (:apply + n 1))
+  (fcpys single-float-zero s15))
 
+(define-arm-vinsn data-section (()
+                                ())
+  (:data))
+
+(define-arm-vinsn code-section (()
+                                ())
+  (:code))
 
 
 ;;; Index "scaling" and constant-offset misc-ref vinsns.
@@ -3271,21 +3279,12 @@
 (define-arm-vinsn (zero-double-float-register :predicatable)
     (((dest :double-float))
      ())
-  (fldd dest (:= :zero))
-  (:data)
-  :zero
-  (:word 0)
-  (:word 0)
-  (:code))
+  (fcpyd dest arm::double-float-zero))
 
 (define-arm-vinsn (zero-single-float-register :predicatable)
     (((dest :single-float))
      ())
-  (flds dest (:= :zero))
-  (:data)
-  :zero
-  (:word 0)
-  (:code))
+  (fcpys dest arm::single-float-zero))
 
 (define-arm-vinsn (load-double-float-constant-from-data :predicatable)
     (((dest :double-float))

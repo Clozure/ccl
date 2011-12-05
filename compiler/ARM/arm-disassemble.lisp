@@ -504,8 +504,16 @@
                                          (write-char #\) stream))))))
                              (:? (format stream "(:? ~a)" (cadr operand)))
                              (:gpr (format stream "~a" (svref *arm-gpr-names* (cadr operand))))
-                             (:single (format stream "s~d" (cadr operand)))
-                             (:double (format stream "d~d" (cadr operand)))
+                             (:single
+                              (if (eql (cadr operand)
+                                       (hard-regspec-value arm::single-float-zero))
+                                (format stream "single-float-zero")
+                                (format stream "s~d" (cadr operand))))
+                              (:double
+                              (if (eql (cadr operand)
+                                       (hard-regspec-value arm::double-float-zero))
+                                (format stream "double-float-zero")
+                                (format stream "d~d" (cadr operand))))
                              (:reglist (format stream "~a"
                                                (mapcar (lambda (r)
                                                          (svref *arm-gpr-names* r))

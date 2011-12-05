@@ -1096,7 +1096,7 @@ are no Forms, OR returns NIL."
       (push val sets)
       (push var sets)
       `(progn
-         (let ,let-list
+         (let* ,let-list
            (setq ,@sets))
          nil))))
 
