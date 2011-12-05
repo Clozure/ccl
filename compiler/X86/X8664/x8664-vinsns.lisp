@@ -1257,17 +1257,18 @@
       (no-overflow :label))
      ((header (:u64 #.x8664::imm0))
       (scaled-size (:u64 #.x8664::imm1))
+      (bigits (:u64 #.x8664::imm2))
       (freeptr (:lisp #.x8664::allocptr))))
   (jo :overflow)
   (:uuo-section)
   :overflow
-  (movq (:%q val) (:%q scaled-size))
-  (btcq (:$ub 63) (:%q scaled-size))
-  (sarq (:$ub x8664::fixnumshift) (:%q scaled-size))
-  (btcq (:$ub 60) (:%q scaled-size))
-  (movd (:%q scaled-size) (:%mmx x8664::mm0))
-  (movq (:$l x8664::two-digit-bignum-header) (:%q header))
-  (movq (:$l (- 16 x8664::fulltag-misc)) (:%q scaled-size))
+  (movq (:%q val) (:%q bigits))
+  (btcq (:$ub 63) (:%q bigits))
+  (sarq (:$ub x8664::fixnumshift) (:%q bigits))
+  (btcq (:$ub 60) (:%q bigits))
+  (movl (:$l x8664::two-digit-bignum-header) (:%l header))
+  (xorl (:%l scaled-size) (:%l scaled-size))
+  (movb (:$b (- 16 x8664::fulltag-misc)) (:%b scaled-size))
   (subq (:%q scaled-size) (:rcontext x8664::tcr.save-allocptr))
   (movq (:rcontext x8664::tcr.save-allocptr) (:%q freeptr))
   (rcmpq (:%q freeptr) (:rcontext x8664::tcr.save-allocbase))
@@ -1279,26 +1280,8 @@
   ((:not (:pred = freeptr
                 (:apply %hard-regspec-value val)))
    (movq (:%q freeptr) (:%q val)))
-  (movq (:%mmx x8664::mm0) (:@ x8664::misc-data-offset (:%q val)))
+  (movq (:%q bigits) (:@ x8664::misc-data-offset (:%q val)))
   (jmp no-overflow))
-
-    
-;;; This handles the 1-bit overflow from addition/subtraction/unary negation
-(define-x8664-vinsn set-bigits-and-header-for-fixnum-overflow
-    (()
-     ((val :lisp)
-      (no-overflow
-       :label))
-     ((header (:u64 #.x8664::imm0))
-      (scaled-size (:u64 #.x8664::imm1))))
-  (jno no-overflow)
-  (movq (:%q val) (:%q scaled-size))
-  (sarq (:$ub x8664::fixnumshift) (:%q scaled-size))
-  (movq (:$q #xe000000000000000) (:%q header))
-  (xorq (:%q header) (:%q scaled-size))
-  (movd (:%q scaled-size) (:%mmx x8664::mm0))
-  (movq (:$l x8664::two-digit-bignum-header) (:%q header))
-  (movq (:$l (- 16 x8664::fulltag-misc)) (:%q scaled-size)))
 
 (define-x8664-vinsn %set-z-flag-if-s64-fits-in-fixnum (((dest :imm))
                                                        ((src :s64))
@@ -1323,7 +1306,7 @@
 
 (define-x8664-vinsn setup-bignum-alloc-for-s64-overflow (()
                                                          ((src :s64)))
-  (movd (:%q src) (:%mmx x8664::mm0))
+  (movq (:%q src) (:%q x8664::imm2))
   (movl (:$l x8664::two-digit-bignum-header) (:%l x8664::imm0.l))
   (movl (:$l (- 16 x8664::fulltag-misc)) (:%l x8664::imm1.l)))
 
@@ -1333,7 +1316,7 @@
 (define-x8664-vinsn setup-bignum-alloc-for-u64-overflow (()
                                                          ((src :s64)))
   (testq (:%q src) (:%q src))
-  (movd (:%q src) (:%mmx x8664::mm0))
+  (movq (:%q src) (:%q x8664::imm2))
   (movl (:$l x8664::two-digit-bignum-header) (:%l x8664::imm0.l))
   (movl (:$l (- 16 x8664::fulltag-misc)) (:%l x8664::imm1.l))
   (jns :done)
@@ -1361,7 +1344,7 @@
 
 (define-x8664-vinsn set-bigits-after-fixnum-overflow (()
                                                       ((bignum :lisp)))
-  (movq (:%mmx x8664::mm0) (:@ x8664::misc-data-offset (:%q bignum))))
+  (movq (:%q x8664::imm2) (:@ x8664::misc-data-offset (:%q bignum))))
   
                                                        
 (define-x8664-vinsn box-fixnum (((dest :imm))
@@ -2442,13 +2425,13 @@
 
 (define-x8664-vinsn setup-macptr-allocation (()
                                              ((src :address)))
-  (movd (:%q src) (:%mmx x8664::mm0))
+  (movq (:%q src) (:%q x8664::imm2))
   (movl (:$l x8664::macptr-header) (:%l x8664::imm0.l))
   (movl (:$l (- x8664::macptr.size x8664::fulltag-misc)) (:%l x8664::imm1.l)))
 
 (define-x8664-vinsn %set-new-macptr-value (()
                                            ((ptr :lisp)))
-  (movq (:%mmx x8664::mm0) (:@ x8664::macptr.address (:%q ptr))))
+  (movq (:%q x8664::imm2) (:@ x8664::macptr.address (:%q ptr))))
 
 (define-x8664-vinsn mem-ref-c-fullword (((dest :u32))
 					((src :address)
