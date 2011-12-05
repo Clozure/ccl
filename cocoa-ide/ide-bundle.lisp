@@ -9,48 +9,8 @@
 ;;; at some bundle very early in the process, so do that before anything
 ;;; else.
 
-(defvar *ibtool-program* "/Developer/usr/bin/ibtool")
-
-(defun compile-xib (xib &optional output-nib)
-  (unless output-nib
-    (setq output-nib (make-pathname :type "nib" :defaults xib)))
-  (with-output-to-string (s)
-    (let* ((nib-namestring (native-translated-namestring output-nib))
-	   (xib-namestring (native-translated-namestring xib))
-	   (p (run-program *ibtool-program*
-			   (list "--errors" "--warnings" "--notices"
-				 "--output-format" "human-readable-text"
-				 "--compile" nib-namestring
-				 xib-namestring)
-			   :output s
-			   :error :output)))
-      (multiple-value-bind (status exit-code)
-	  (external-process-status p)
-	(unless (and (eq :exited status)
-		     (zerop exit-code))
-	  (error "Error compiling xib file ~s:~%~a" xib
-		 (or (describe-external-process-failure p "no ibtool?")
-		     (get-output-stream-string s))))))))
-
-(defun process-nibs (src-contents-path dest-contents-path)
-  (let* ((dest-dir (ensure-directory-pathname dest-contents-path))
-	 (src-dir (ensure-directory-pathname src-contents-path))
-	 (dest-nib-dir (merge-pathnames #p"Resources/en.lproj/"
-					dest-dir))
-	 (src-nib-dir (merge-pathnames #p"Resources/en.lproj/"
-				       src-dir)))
-    ;; process xib files
-    (ensure-directories-exist dest-nib-dir)
-    (format t "~&;building nib files...")
-    (dolist (x (directory (merge-pathnames #p"*.xib" src-nib-dir)))
-      (let ((dest (make-pathname :name (pathname-name x)
-				 :type "nib"
-				 :defaults dest-nib-dir)))
-	(compile-xib x dest)))
-    (format t "done.~%")))
-
 (defun create-ide-bundle (bundle-path &key (source "ccl:cocoa-ide;ide-contents;")
-				           (source-ignore '(".svn" "cvs" ".cvsignore" "English.lproj" ".nib"))
+				           (source-ignore '(".svn" "cvs" ".cvsignore"))
 					   (copy-headers *cocoa-application-copy-headers-p*)
                                            (install-altconsole *cocoa-application-install-altconsole*)
 					   (if-exists :overwrite))
@@ -65,24 +25,14 @@
 			 (let ((len (length name)))
 			   (and (> len 0)
 				(or (eql (aref name (1- len)) #\~)
-				    (eql (aref name 0) #\#))))))
-		  (nib-p (p)
-		    (let* ((s (car (last (pathname-directory p))))
-			   (len (length s)))
-		      (and (> len 4)
-			   (string= ".nib" (subseq s (- len 4)))))))
-	     
+				    (eql (aref name 0) #\#)))))))
 	     (not (or (member (car (last (pathname-directory p))) source-ignore :test #'equalp)
 		      (backup-p (file-namestring p))
-		      (nib-p p)
-		      (equalp (pathname-type p) "xib")
-		      (equalp (pathname-type p) "nib")
 		      (member (file-namestring p) source-ignore :test #'equalp))))))
     (let* ((source-dir (ensure-directory-pathname source))
 	   (target-dir (ensure-directory-pathname bundle-path))
 	   (contents-dir (subdir target-dir "Contents")))
       (recursive-copy-directory source-dir contents-dir :if-exists if-exists :test #'ignore-test)
-      (process-nibs source-dir contents-dir)
       (when copy-headers
 	(let* ((subdirs (ccl::cdb-subdirectory-path))
 	       (ccl-headers (make-pathname :host "ccl" :directory `(:absolute ,@subdirs)))

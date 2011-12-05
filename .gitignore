@@ -33,6 +33,7 @@ cocoa-ide/hemlock/unused/archive/tty/*~.*
 cocoa-ide/hemlock/unused/archive/wire/*~.*
 cocoa-ide/hemlock/website/*~.*
 cocoa-ide/ide-contents/Info.plist
+cocoa-ide/ide-contents/Resources/English.lproj/*~.nib
 compiler/*~.*
 compiler/PPC/*~.*
 compiler/PPC/PPC32/*~.*
