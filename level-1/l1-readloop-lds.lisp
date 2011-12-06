@@ -640,6 +640,66 @@ commands but aren't")
 (defmethod backtrace-context-continuable-p ((context vector))
   (not (null (find 'continue (cdr (bt.restarts context)) :key #'restart-name))))
 
+;;; Each of these stack ranges defines the entire range of (control/value/temp)
+;;; addresses; they can be used to addresses of stack-allocated objects
+;;; for printing.
+#-arm-target
+(defun make-tsp-stack-range (tcr bt-info)
+  (list (cons (%catch-tsp (bt.top-catch bt-info))
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.ts-area)
+                                target::area.high))))
+
+#+ppc-target
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (%fixnum-ref
+               (%svref (bt.top-catch bt-info) target::catch-frame.csp-cell)
+               target::lisp-frame.savevsp)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.vs-area) target::area.high))))
+#+x8632-target
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.esp-cell)
+              (%fixnum-ref
+               (%fixnum-ref tcr (- target::tcr.vs-area target::tcr-bias))
+               target::area.high))))
+
+#+x8664-target
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.rsp-cell)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.vs-area) target::area.high))))
+
+#+arm-target 
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (%fixnum-ref (catch-frame-sp (bt.top-catch bt-info)) target::lisp-frame.savevsp)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.vs-area) target::area.high))))
+
+#+ppc-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.csp-cell)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area) target::area.high))))
+
+#+x8632-target
+(defun make-csp-stack-range (tcr bt-info)
+  (let ((cs-area nil))
+    #+windows-target
+    (let ((aux (%fixnum-ref tcr (- target::tcr.aux target::tcr-bias))))
+      (setq cs-area (%fixnum-ref aux target::tcr-aux.cs-area)))
+    #-windows-target
+    (setq cs-area (%fixnum-ref tcr target::tcr.cs-area))
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.foreign-sp-cell)
+              (%fixnum-ref cs-area target::area.high)))))
+
+#+x8664-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.foreign-sp-cell)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area) target::area.high))))
+
+#+arm-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (catch-frame-sp (bt.top-catch bt-info))
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area) target::area.high))))
+
+
+
 (declaim (notinline select-backtrace))
 
 (defun select-backtrace ()
