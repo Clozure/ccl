@@ -613,18 +613,32 @@ non-swink process PROCESS."
                              (when (eq *current-process* ccl::*initial-process*)
                                (toplevel))))))))
 
+(defun marshall-debugger-context (context)
+  ;; TODO: neither :GO nor cmd-/ pay attention to the break condition, whereas bt.restarts does...
+  (let* ((continuable (ccl::backtrace-context-continuable-p context))
+         (restarts (ccl::backtrace-context-restarts context))
+         (tcr (ccl::bt.tcr context))
+         ;; Context for printing stack-consed refs
+         (ccl::*aux-tsp-ranges* (ccl::make-tsp-stack-range tcr context))
+         (ccl::*aux-vsp-ranges* (ccl::make-vsp-stack-range tcr context))
+         (ccl::*aux-csp-ranges* (ccl::make-csp-stack-range tcr context))
+         (break-level (ccl::bt.break-level context)))
+    (list :break-level break-level
+          :continuable-p (and continuable t)
+          :restarts (mapcar #'princ-to-string restarts))))
+  
+(defvar *bt-context* nil)
+
 (defun swink-read-loop (&key (break-level 0) &allow-other-keys)
   (let* ((thread *current-server-thread*)
          (conn (thread-connection thread))
          (ccl::*break-level* break-level)
          (*loading-file-source-file* nil)
          (ccl::*loading-toplevel-location* nil)
-         (context (find break-level ccl::*backtrace-contexts* :key (lambda (bt) (ccl::bt.break-level bt))))
+         (*bt-context* (find break-level ccl::*backtrace-contexts* :key #'ccl::backtrace-context-break-level))
          *** ** * +++ ++ + /// // / -)
-    (when context
-      ;; TODO: neither :GO nor cmd-/ pay attention to the break condition, whereas bt.restarts does...
-      (let ((continuable (ccl::backtrace-context-continuable-p context)))
-        (send-event conn `(:enter-break ,break-level ,(and continuable t)))))
+    (when *bt-context*
+      (send-event conn `(:enter-break ,(marshall-debugger-context *bt-context*))))
 
     (flet ((repl-until-abort ()
              (restart-case
@@ -756,6 +770,9 @@ non-swink process PROCESS."
       ((:invoke-restart restart-name)
        (invoke-restart restart-name))
       
+      ((:invoke-restart-in-context index)
+       (invoke-restart-interactively (nth index (ccl::backtrace-context-restarts *bt-context*))))
+
       ((:toplevel)
        (toplevel)))))
 

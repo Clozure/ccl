@@ -152,3 +152,19 @@
    (restarts-window :initform nil :accessor backtrace-context-restarts-window)))
 
 (defmethod ccl::remote-context-class ((application cocoa-application)) 'cocoa-remote-backtrace-context)
+
+(defmethod restarts-dialog ((context cocoa-remote-backtrace-context))
+  (let ((restarts (ccl::backtrace-context-restarts context))
+        (thread (ccl::backtrace-context-thread context)))
+    (make-instance 'sequence-window-controller
+      :sequence (loop for i from 0 below (length restarts) collect i)
+      :display (lambda (index stream) (princ (nth index restarts) stream))
+      :result-callback (lambda (index)
+                         (ccl::rlisp/invoke-restart-in-context thread index))
+      :title (format nil "Restarts for ~a, break level ~d"
+                     (ccl::rlisp-thread-description thread)
+                     (ccl::backtrace-context-break-level context)))))
+
+
+
+

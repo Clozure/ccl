@@ -640,6 +640,13 @@ commands but aren't")
 (defmethod backtrace-context-continuable-p ((context vector))
   (not (null (find 'continue (cdr (bt.restarts context)) :key #'restart-name))))
 
+(defmethod backtrace-context-break-level ((context vector))
+  (bt.break-level context))
+
+(defmethod backtrace-context-restarts ((context vector))
+  (cdr (bt.restarts context)))
+
+
 ;;; Each of these stack ranges defines the entire range of (control/value/temp)
 ;;; addresses; they can be used to addresses of stack-allocated objects
 ;;; for printing.

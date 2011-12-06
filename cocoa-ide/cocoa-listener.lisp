@@ -578,30 +578,32 @@
           (#/showWindow: (backtrace-controller-for-context context) sender))))))
 
 (defun restarts-controller-for-context (context)
-  (or (car (ccl::bt.restarts context))
-      (setf (car (ccl::bt.restarts context))
-            (let* ((tcr (ccl::bt.tcr context))
-                   (tsp-range (inspector::make-tsp-stack-range tcr context))
-                   (vsp-range (inspector::make-vsp-stack-range tcr context))
-                   (csp-range (inspector::make-csp-stack-range tcr context))
-                   (process (ccl::tcr->process tcr)))
-              (make-instance 'sequence-window-controller
-                             :sequence (cdr (ccl::bt.restarts context))
-                             :result-callback #'(lambda (r)
-                                                  (process-interrupt
-                                                   process
-                                                   #'invoke-restart-interactively
-                                                   r))
-                             :display #'(lambda (item stream)
-                                          (let* ((ccl::*aux-vsp-ranges* vsp-range)
-                                                 (ccl::*aux-tsp-ranges* tsp-range)
-                                                 (ccl::*aux-csp-ranges* csp-range))
-                                          (princ item stream)))
-                             :title (format nil "Restarts for ~a(~d), break level ~d"
-                                            (process-name process)
-                                            (process-serial-number process)
-                                            (ccl::bt.break-level context)))))))
-                            
+  (or (backtrace-context-restarts-window context)
+      (setf (backtrace-context-restarts-window context) (restarts-dialog context))))
+
+(defmethod restarts-dialog ((context vector))
+  (let* ((tcr (ccl::bt.tcr context))
+         (tsp-range (ccl::make-tsp-stack-range tcr context))
+         (vsp-range (ccl::make-vsp-stack-range tcr context))
+         (csp-range (ccl::make-csp-stack-range tcr context))
+         (process (ccl::tcr->process tcr)))
+    (make-instance 'sequence-window-controller
+      :sequence (cdr (ccl::bt.restarts context))
+      :result-callback #'(lambda (r)
+                           (process-interrupt
+                            process
+                            #'invoke-restart-interactively
+                            r))
+      :display #'(lambda (item stream)
+                   (let* ((ccl::*aux-vsp-ranges* vsp-range)
+                          (ccl::*aux-tsp-ranges* tsp-range)
+                          (ccl::*aux-csp-ranges* csp-range))
+                     (princ item stream)))
+      :title (format nil "Restarts for ~a(~d), break level ~d"
+                     (process-name process)
+                     (process-serial-number process)
+                     (ccl::backtrace-context-break-level context)))))
+
 (objc:defmethod (#/restarts: :void) ((self hemlock-listener-document) sender)
   (let* ((process (hemlock-document-process self)))
     (when process

@@ -59,14 +59,18 @@
 (defmethod rlisp-host-description ((rthread remote-lisp-thread))
   (rlisp-host-description (swink:thread-connection rthread)))
 
+(defmethod rlisp-thread-description ((rthread remote-lisp-thread))
+  (format nil "~a thread ~a" (rlisp-host-description rthread) (swink:thread-id rthread)))
+
 (defmethod print-object ((rthread remote-lisp-thread) stream)
   (print-unreadable-object (rthread stream :type t :identity t)
-    (format stream "~a thread ~a"
-            (rlisp-host-description rthread)
-            (swink:thread-id rthread))))
+    (princ (rlisp-thread-description rthread) stream)))
 
 (defmethod rlisp/invoke-restart ((rthread remote-lisp-thread) name)
   (swink:send-event rthread `(:invoke-restart ,name)))
+
+(defmethod rlisp/invoke-restart-in-context ((rthread remote-lisp-thread) index)
+  (swink:send-event rthread `(:invoke-restart-in-context ,index)))
 
 (defmethod rlisp/toplevel ((rthread remote-lisp-thread))
   (swink:send-event rthread `(:toplevel)))
@@ -175,9 +179,10 @@
       (apply #'values return-values))))
 
 (defclass remote-backtrace-context ()
-  ((process :initform *current-process* :reader backtrace-context-process)
+  ((thread :initarg :thread :reader backtrace-context-thread)
    (break-level :initarg :break-level :reader backtrace-context-break-level)
-   (continuable-p :initarg :continuable-p :reader backtrace-context-continuable-p)))
+   (continuable-p :initarg :continuable-p :reader backtrace-context-continuable-p)
+   (restarts :initarg :restarts :reader backtrace-context-restarts)))
 
 (defmethod remote-context-class ((application application)) 'remote-backtrace-context)
 
@@ -195,18 +200,19 @@
      (unless (eql level *break-level*)
        (warn ":READ-LOOP level confusion got ~s expected ~s" level (1+ *break-level*)))
      (invoke-restart 'debug-restart level)) ;; restart at same level, aborted current expression.
-    ((:enter-break level continuablep)
-     (unless (or (eql level 0) (eql level (1+ *break-level*)))
-       (warn ":ENTER-BREAK level confusion got ~s expected ~s" level (1+ *break-level*)))
-     ;(format t "~&Error: ~a" condition-text)
-     ;(when *show-restarts-on-break*
-     ;  (format t "~&Remote restarts:")
-     ;  (loop for (name description) in restarts
-     ;    do (format t "~&~a ~a" name description))
-     ;  (fresh-line))
-     (let ((rcontext (make-instance (remote-context-class *application*)
-                       :break-level level
-                       :continuable-p continuablep)))
+    ((:enter-break context-plist)
+     (let* ((rcontext (apply #'make-instance (remote-context-class *application*)
+                             :thread rthread
+                             context-plist))
+            (level (backtrace-context-break-level rcontext)))
+       (unless (or (eql level 0) (eql level (1+ *break-level*)))
+         (warn ":ENTER-BREAK level confusion got ~s expected ~s" level (1+ *break-level*)))
+       ;(format t "~&Error: ~a" condition-text)
+       ;(when *show-restarts-on-break*
+       ;  (format t "~&Remote restarts:")
+       ;  (loop for (name description) in restarts
+       ;    do (format t "~&~a ~a" name description))
+       ;  (fresh-line))
        (unwind-protect
            (progn
              (application-ui-operation *application* :enter-backtrace-context rcontext)
