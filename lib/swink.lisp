@@ -412,7 +412,8 @@ non-swink process PROCESS."
   connections, otherwise it will be closed after the first."
   (let* ((stream-args (and external-format `(:external-format ,external-format)))
          (socket (make-socket :connect :passive
-                              :local-host "127.0.0.1" :local-port port
+                              ;; :local-host "127.0.0.1"
+                              :local-port port
                               :reuse-address t))
          (info (cons socket nil))
          (local-port (local-port socket)))
