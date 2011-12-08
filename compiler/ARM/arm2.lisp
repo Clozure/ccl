@@ -3920,14 +3920,17 @@
                          (#.hard-reg-class-fpr-mode-single
                           (! single->node dest src))))))
                   (if (and src-fpr dest-fpr)
-                    (unless (eql dest-fpr src-fpr)
+                    (unless (and (eql dest-fpr src-fpr)
+                                 (eql dest-mode src-mode))
                       (case src-mode
                         (#.hard-reg-class-fpr-mode-single
                          (case dest-mode
                            (#.hard-reg-class-fpr-mode-single
                             (! single-to-single dest src))
                            (#.hard-reg-class-fpr-mode-double
-                            (! single-to-double dest src))))
+                            (if *arm2-float-safety*
+                              (! single-to-double-safe dest src)
+                              (! single-to-double dest src)))))
                         (#.hard-reg-class-fpr-mode-double
                          (case dest-mode
                            (#.hard-reg-class-fpr-mode-single
@@ -9154,19 +9157,15 @@
 (defarm2 arm2-%single-to-double %single-to-double (seg vreg xfer arg)
   (if (null vreg)
     (arm2-form seg vreg xfer arg)
-    (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
-             (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
-      (progn
-        (arm2-one-untargeted-reg-form 
-         seg arg
-         (make-wired-lreg (hard-regspec-value vreg)
-                          :class hard-reg-class-fpr
-                          :mode hard-reg-class-fpr-mode-single))
-        (^))
-      (with-fp-target () (sreg :single-float)
-        (arm2-one-targeted-reg-form seg arg sreg)
-        (<- (set-regspec-mode sreg hard-reg-class-fpr-mode-double))
-        (^)))))
+    (with-fp-target () (sreg :single-float)
+      (setq sreg (arm2-one-untargeted-reg-form seg arg sreg))
+      (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+               (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (<- sreg)
+        (with-fp-target (sreg) (dreg :double-float)
+          (arm2-copy-register seg dreg sreg)
+          (<- dreg)))
+      (^))))
 
 (defarm2 arm2-%symptr->symvector %symptr->symvector (seg vreg xfer arg)
   (arm2-identity seg vreg xfer arg))
