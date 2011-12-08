@@ -16,16 +16,15 @@
 
 ;;  Use the IDE to debug a remote ccl.
 ;;  **** THIS IS NOT COMPLETE AND NOT HOOKED UP TO ANYTHING YET *****
+;; To try it, do (swink:start-server :port <port>) in the remote ccl,
+;;  then call (ccl::rlisp-test <port> <remote-host>) in the IDE.
 ;;
 
 (in-package "GUI")
 
-#+debug ;; For testing, start a ccl running swank, then call this in the ide.
-(defun cl-user::rlisp-test (port &optional host)
-  (declare (special cl-user::conn))
-  (when (boundp 'cl-user::conn) (close cl-user::conn))
-  (setq cl-user::conn (ccl::connect-to-swink (or host "localhost") port))
-  (ccl::make-rrepl-thread cl-user::conn "IDE Listener"))
+(defun ccl::rlisp-test (port &optional host)
+  (let ((conn  (ccl::connect-to-swink (or host "localhost") port)))
+    (ccl::make-rrepl-thread conn "IDE Listener")))
 
 (defclass remote-listener-hemlock-view (hi:hemlock-view)
   ((remote-thread :initarg :remote-thread :accessor listener-remote-thread)))
