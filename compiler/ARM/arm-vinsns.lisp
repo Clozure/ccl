@@ -376,7 +376,8 @@
       (idx :u32const))
      ((temp :u32)))
   (ldr temp (:@ v (:$ (:apply + arm::misc-data-offset (:apply ash (:apply ash idx -5) arm::word-shift)))))
-  (mov temp (:ror temp (:$ (:apply logand #x1f (:apply - (:apply logand idx #x1f) arm::fixnumshift)))))
+  ((:not (:pred = 0 (:apply logand #x1f (:apply - (:apply logand idx #x1f) arm::fixnumshift))))
+   (mov temp (:ror temp (:$ (:apply logand #x1f (:apply - (:apply logand idx #x1f) arm::fixnumshift))))))
   (and dest temp (:$ arm::fixnumone)))
 
 
@@ -3776,7 +3777,7 @@
     (((dest :lisp))
      ((code :u32const)))
   (movw dest (:$ (:apply logior (:apply ash (:apply logand code #xff) arm::charcode-shift) arm::subtag-character)))
-  ((:pred > code 256)
+  ((:pred >= code 256)
    (movt dest (:$ (:apply ash code -8)))))
 
 
