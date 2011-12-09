@@ -620,6 +620,7 @@ non-swink process PROCESS."
          (restarts (ccl::backtrace-context-restarts context))
          (tcr (ccl::bt.tcr context))
          ;; Context for printing stack-consed refs
+         #-arm-target                   ;no TSP on ARM
          (ccl::*aux-tsp-ranges* (ccl::make-tsp-stack-range tcr context))
          (ccl::*aux-vsp-ranges* (ccl::make-vsp-stack-range tcr context))
          (ccl::*aux-csp-ranges* (ccl::make-csp-stack-range tcr context))
