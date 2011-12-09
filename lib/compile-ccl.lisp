@@ -858,7 +858,7 @@ the lisp and run REBUILD-CCL again.")
         (prog1
             (time (funcall do-tests :verbose verbose :compile t
                            :catch-errors catch-errors
-                           :optimization-settings (or optimization-settings '((safety 2)))))
+                           :optimization-settings (or optimization-settings '((speed 1) (space 1) (safety 1) (debug 1) (compilation-speed 1)))))
           ;; Clean up a little
           (map nil #'delete-file
                (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
