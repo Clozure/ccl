@@ -462,7 +462,9 @@
 		      *available-backend-imm-temps* 
 		      (lognot (logior ,@(mapcar
 					 #'(lambda (r)
-					     `(ash 1 (hard-regspec-value ,r)))
+                                             `(if ,r
+                                               (ash 1 (hard-regspec-value ,r))
+                                               0))
 					 reserved))))
 		     ',mode-name))))
        ,@body)))
@@ -474,7 +476,9 @@
                     *available-backend-node-temps* 
                     (lognot (logior ,@(mapcar
                                        #'(lambda (r)
-                                           `(ash 1 (hard-regspec-value ,r)))
+                                           `(if ,r
+                                             (ash 1 (hard-regspec-value ,r))
+                                             0))
                                        reserved))))))))
     ,@body))
 
