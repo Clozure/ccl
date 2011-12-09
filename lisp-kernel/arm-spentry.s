@@ -2907,7 +2907,9 @@ _spentry(eabi_ff_call)
         __(mov r4,imm1)
         __(add sp,sp,#dnode_size)
         __(ldmia sp!,{r0,r1,r2,r3})
-        __(blx r4) 
+        __(blx r4)
+        __(adr temp1,1f)
+        __(fldd double_float_zero,[temp1])
         __(mov temp1,#0)
         __(mov temp2,#0)
         __(mov arg_z,#0)
@@ -2924,7 +2926,9 @@ _spentry(eabi_ff_call)
         __(str arg_y,[rcontext,#tcr.last_lisp_frame])
         __(check_pending_interrupt(temp2))
         __(bx lr)
-        
+        .align 3
+1:      .long 0
+        .long 0                
         
 
 _spentry(debind)
