@@ -217,8 +217,10 @@
 (defun special-operator-p (symbol)
   "If the symbol globally names a special form, return T, otherwise NIL."
   (let ((def (fboundp symbol)))
-    (and (typep def 'simple-vector)
-         (not (lfunp (svref def 1))))))
+    (and #-arm-target (typep def 'simple-vector)
+         #+arm-target (= (typecode def) arm::subtag-pseudofunction)
+         (not (lfunp #-arm-target (svref def 1)
+                     #+arm-target (uvref def 2))))))
 
 (defun special-form-p (x) (special-operator-p x))
 
