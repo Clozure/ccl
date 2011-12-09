@@ -1733,7 +1733,41 @@
       (arm2-vref1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum))))
 
 
-
+(defun arm2-aset2-via-gvset (seg vreg xfer  array i j new safe type-keyword  constval)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (let* ((i-known-fixnum (acode-fixnum-form-p i))
+           (j-known-fixnum (acode-fixnum-form-p j))
+           (src ($ arm::temp0))
+           (unscaled-i ($ arm::arg_x))
+           (unscaled-j ($ arm::arg_y))
+           (val-reg ($ arm::arg_z)))
+      (arm2-four-targeted-reg-forms seg
+                                    array src
+                                    i unscaled-i
+                                    j unscaled-j
+                                    new val-reg)
+      (when safe
+        (when (typep safe 'fixnum)
+          (with-node-target (src unscaled-i unscaled-j val-reg) expected 
+            (! lri expected
+               (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                         (ash 1 $arh_simple_bit))
+                    arm::fixnumshift))
+            (! trap-unless-simple-array-2 src expected)))
+        (unless i-known-fixnum
+          (! trap-unless-fixnum unscaled-i))
+        (unless j-known-fixnum
+          (! trap-unless-fixnum unscaled-j)))
+      (with-imm-target () dim1
+        (let* ((idx-reg ($ arm::arg_y)))
+          (if safe                  
+            (! check-2d-bound dim1 unscaled-i unscaled-j src)
+            (! 2d-dim1 dim1 src))
+          (let* ((v ($ arm::arg_x)))
+            (! array-data-vector-ref v src)
+            (arm2-vset1 seg vreg xfer type-keyword v idx-reg nil val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval t)))))))
+      
+  
 (defun arm2-aset2 (seg vreg xfer  array i j new safe type-keyword dim0 dim1)
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
@@ -1741,68 +1775,62 @@
            (arch (backend-target-arch *target-backend*))
            (is-node (member type-keyword (arch::target-gvector-types arch)))
            (constval (arm2-constant-value-ok-for-type-keyword type-keyword new))
-           (needs-memoization (and is-node (arm2-acode-needs-memoization new)))
-           (src)
-           (unscaled-i)
-           (unscaled-j)
-           (val-reg (arm2-target-reg-for-aset vreg type-keyword))
-           (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum
-                 (>= i-known-fixnum 0)
-                 (>= j-known-fixnum 0)
-                 (< i-known-fixnum dim0)
-                 (< j-known-fixnum dim1)
-                 (+ (* i-known-fixnum dim1) j-known-fixnum))))
-      (progn
-        (if constidx
-          (multiple-value-setq (src val-reg)
-            (arm2-two-targeted-reg-forms seg array ($ arm::temp0) new val-reg))
-          (multiple-value-setq (src unscaled-i unscaled-j val-reg)
-            (if needs-memoization
-              (progn
-                (arm2-four-targeted-reg-forms seg
-                                              array ($ arm::temp0)
-                                              i ($ arm::arg_x)
-                                              j ($ arm::arg_y)
-                                              new val-reg)
-                (values ($ arm::temp0) ($ arm::arg_x) ($ arm::arg_y) ($ arm::arg_z)))
-              (arm2-four-untargeted-reg-forms seg
-                                              array ($ arm::temp0)
-                                              i ($ arm::arg_x)
-                                              j ($ arm::arg_y)
-                                              new val-reg))))
-        (let* ((*available-backend-imm-temps* *available-backend-imm-temps*))
-          (when (and (= (hard-regspec-class val-reg) hard-reg-class-gpr)
-                     (logbitp (hard-regspec-value val-reg)
-                              *backend-imm-temps*))
-            (use-imm-temp (hard-regspec-value val-reg)))
-          (when safe      
-            (when (typep safe 'fixnum)
-              (let* ((*available-backend-node-temps* *available-backend-node-temps*))
-                (when unscaled-i
-                  (use-node-temp (hard-regspec-value unscaled-i)))
-                (when unscaled-j
-                  (use-node-temp (hard-regspec-value unscaled-j)))
-                (with-node-target (src val-reg) expected
-                  (! lri expected
-                     (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                               (ash 1 $arh_simple_bit))
-                          arm::fixnumshift))
-                  (! trap-unless-simple-array-2 src expected))))
-            (unless i-known-fixnum
-              (! trap-unless-fixnum unscaled-i))
-            (unless j-known-fixnum
-              (! trap-unless-fixnum unscaled-j)))
-          (with-imm-target () dim1
-            (let* ((idx-reg ($ arm::arg_y)))
-              (unless constidx
-                (if safe                  
-                  (! check-2d-bound dim1 unscaled-i unscaled-j src)
-                  (! 2d-dim1 dim1 src))
-                (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
-              (let* ((v ($ arm::arg_x)))
-                (! array-data-vector-ref v src)
-                (arm2-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))
+           (needs-memoization (and is-node (arm2-acode-needs-memoization new))))
+      (if needs-memoization
+        (arm2-aset2-via-gvset seg vreg xfer array i j new safe type-keyword constval)
+        (let* ((constidx
+                (and *arm2-reckless*
+                     dim0 dim1 i-known-fixnum j-known-fixnum
+                     (>= i-known-fixnum 0)
+                     (>= j-known-fixnum 0)
+                     (< i-known-fixnum dim0)
+                     (< j-known-fixnum dim1)
+                     (+ (* i-known-fixnum dim1) j-known-fixnum)))
+               (val-reg (arm2-target-reg-for-aset vreg type-keyword))
+               (node-val (if (node-reg-p val-reg) val-reg))
+               (imm-val (if (imm-reg-p val-reg) val-reg)))
+          (with-node-target (node-val) src
+            (with-node-target (node-val src) unscaled-i
+              (with-node-target (node-val src unscaled-i) unscaled-j
+                (if constidx
+                  (multiple-value-setq (src val-reg)
+                    (arm2-two-untargeted-reg-forms seg array ($ arm::temp0) new val-reg))
+                  (multiple-value-setq (src unscaled-i unscaled-j val-reg)
+                    (arm2-four-untargeted-reg-forms seg
+                                                    array src
+                                                    i unscaled-i
+                                                    j unscaled-j
+                                                    new val-reg)))
+                (if (node-reg-p val-reg) (setq node-val val-reg))
+                (if (imm-reg-p val-reg) (setq imm-val val-reg))
+                (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
+                       )
+                  (when (and (= (hard-regspec-class val-reg) hard-reg-class-gpr)
+                             (logbitp (hard-regspec-value val-reg)
+                                      *backend-imm-temps*))
+                    (use-imm-temp (hard-regspec-value val-reg)))
+                  (when safe      
+                    (when (typep safe 'fixnum)
+                      (with-node-target (src node-val unscaled-i unscaled-j) expected
+                        (! lri expected
+                           (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                                     (ash 1 $arh_simple_bit))
+                                arm::fixnumshift))
+                        (! trap-unless-simple-array-2 src expected)))
+                    (unless i-known-fixnum
+                      (! trap-unless-fixnum unscaled-i))
+                    (unless j-known-fixnum
+                      (! trap-unless-fixnum unscaled-j)))
+                  (with-imm-target (imm-val) dim1
+                    (with-node-target (src node-val) idx-reg
+                      (unless constidx
+                        (if safe                  
+                          (! check-2d-bound dim1 unscaled-i unscaled-j src)
+                          (! 2d-dim1 dim1 src))
+                        (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
+                      (with-node-target (idx-reg node-val) v
+                        (! array-data-vector-ref v src)
+                        (arm2-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))))))
 
 
 (defun arm2-aset3 (seg vreg xfer  array i j k new safe type-keyword  dim0 dim1 dim2)
@@ -1820,7 +1848,8 @@
            (unscaled-k)
            (val-reg (arm2-target-reg-for-aset vreg type-keyword))
            (constidx
-            (and dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
+            (and *arm2-reckless*
+                 (not needs-memoization) dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (>= k-known-fixnum 0)
@@ -1893,7 +1922,8 @@
            (unscaled-i)
            (unscaled-j)
            (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum
+            (and *arm2-reckless*
+                 dim0 dim1 i-known-fixnum j-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (< i-known-fixnum dim0)
@@ -1931,7 +1961,7 @@
               (! check-2d-bound dim1 unscaled-i unscaled-j src)
               (! 2d-dim1 dim1 src))
             (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
-          (with-node-target (idx-reg) v
+          (with-node-target (idx-reg src) v
             (! array-data-vector-ref v src)
             (arm2-vref1 seg vreg xfer typekeyword v idx-reg constidx)))))))
 
@@ -1947,7 +1977,8 @@
            (unscaled-j)
            (unscaled-k)
            (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum k-known-fixnum
+            (and *arm2-reckless*
+                 dim0 dim1 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (>= k-known-fixnum 0)
@@ -3355,6 +3386,7 @@
           (setq adest (arm2-one-untargeted-reg-form seg aform areg restricted))
           (arm2-elide-pushes seg apushed (arm2-pop-register seg (setq adest areg)))))
       (values adest bdest cdest))))
+
 
 (defun arm2-four-untargeted-reg-forms (seg aform areg bform breg cform creg dform dreg)
   (let* ((bnode (nx2-node-gpr-p breg))
