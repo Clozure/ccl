@@ -715,11 +715,11 @@
      ())
    (define-arm-instruction fsitod (:dd :sm)
      #x0eb80bc0
-     #x0fff0fc0
+     #x0fbf0fc0
      ())
    (define-arm-instruction fsitos (:sd :sm)
      #x0eb80ac0
-     #x0fff0fc0
+     #x0fbf0fc0
      ())
    (define-arm-instruction fcmped (:dd :dm)
      #x0eb40bc0
@@ -751,11 +751,11 @@
      ())
    (define-arm-instruction fdivd (:dd :dn :dm)
      #x0e800b00
-     #x0ff00ff0
+     #x0fb00ff0
      ())
    (define-arm-instruction fdivs (:sd :sn :sm)
      #x0e800a00
-     #x0ff00f50
+     #x0fb00f50
      ())
 
    (define-arm-instruction fmacd (:dd :dn :dm)
@@ -769,11 +769,11 @@
 
    (define-arm-instruction fcpyd (:dd :dm)
      #x0eb00b40
-     #x0fb00ff0
+     #x0fbf0ff0
      ())
    (define-arm-instruction fcpys (:sd :sm)
      #x0eb00a40
-     #x0fb00fc0
+     #x0fbf0fc0
      ())
    (define-arm-instruction fcvtsd (:sd :dm)
      #x0eb70bc0
