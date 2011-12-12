@@ -147,8 +147,10 @@ _exportfn(C(cpuid))
 	__(popq %ctemp0)		/* recover pecx */
 	__(movq %rcx,(%ctemp0))
 	__(ret)
+        __ifndef(`DARWIN')
         .globl C(exp)
         .quad C(exp)
+	__endif
 _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2, arg_3)  */

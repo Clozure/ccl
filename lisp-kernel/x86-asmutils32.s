@@ -132,8 +132,10 @@ _exportfn(C(cpuid))
 	__(pop %esi)
 	__(pop %ebx)
 	__(ret)
+        __ifndef(`DARWIN')
         .globl C(exp)
         .long C(exp)
+        __endif
 _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2)  */
