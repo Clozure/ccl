@@ -60,9 +60,9 @@ _exportfn(C(flush_cache_lines))
         __ifndef(`DARWIN')
         .data
         __ifdef(`PPC64')
-        .quad exp
+        .quad C(exp)
         __else
-        .long exp
+        .long C(exp)
         __endif
         .text        
         __endif

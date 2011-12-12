@@ -132,6 +132,8 @@ _exportfn(C(cpuid))
 	__(pop %esi)
 	__(pop %ebx)
 	__(ret)
+        .globl C(exp)
+        .long C(exp)
 _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2)  */

@@ -193,6 +193,8 @@ _exportfn(call_handler_on_main_stack)
         __(mov lr,r3)
         __(mov sp,r1)
         __(bx ip)
+        .globl C(sin)
+        .long C(sin)
 _endfn                
 
                                 

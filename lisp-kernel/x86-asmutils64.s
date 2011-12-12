@@ -147,6 +147,8 @@ _exportfn(C(cpuid))
 	__(popq %ctemp0)		/* recover pecx */
 	__(movq %rcx,(%ctemp0))
 	__(ret)
+        .globl C(exp)
+        .quad C(exp)
 _endfn
 
 /* switch_to_foreign_stack(new_sp, func, arg_0, arg_1, arg_2, arg_3)  */
@@ -176,6 +178,7 @@ _endfn
 	__ifdef(`DARWIN')
 _exportfn(C(darwin_sigreturn))
         .globl C(sigreturn)
+	
 /* Need to set the sigreturn 'infostyle' argument, which is mostly
    undocumented.  On x8664 Darwin, sigtramp() sets it to 0x1e, and
    since we're trying to do what sigtramp() would do if we'd returned
