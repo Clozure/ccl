@@ -1017,7 +1017,7 @@
                               ((object :lisp))
                               ((tag :u32)))
   (mov tag (:lsl object (:$ (- arm::nbits-in-word (+ 8 arm::fixnumshift)))))
-  (mov tag (:asr tag (:$ (- arm::nbits-in-word (+ 8 arm::fixnumshift)))))
+  (mov tag (:asr tag (:$ (- arm::nbits-in-word 8))))
   (cmp object (:lsl tag (:$ arm::fixnumshift)))
   (beq :ok)
   (uuo-cerror-reg-not-xtype object (:$ arm::xtype-s8))
