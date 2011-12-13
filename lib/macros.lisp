@@ -1979,8 +1979,7 @@ to open."
     (setq superclasses (mapcar #'(lambda (s) (require-type s 'symbol)) superclasses))
     (let* ((options-seen ())
            (signatures ())
-           (slot-names ())
-           (slot-initargs ()))
+           (slot-names ()))
       (flet ((canonicalize-defclass-option (option)
                (let* ((option-name (car option)))
                  (if (member option-name options-seen :test #'eq)
@@ -2055,12 +2054,7 @@ to open."
                           (push (cons (setf-function-name name) writer-info) signatures)
                           (push setf-name writers))))
                      (:initarg
-                      (let* ((initarg (require-type (cadr options) 'symbol))
-                             (other (position initarg slot-initargs :test #'memq)))
-                        (when other
-                          (warn "Initarg ~s occurs in both ~s and ~s slots"
-                                initarg (nth (1+ other) slot-names) slot-name))
-                        (push initarg initargs)))
+		      (push (require-type (cadr options) 'symbol) initargs))
                      (:type
                       (if type-p
 			(duplicate-options slot)
@@ -2094,7 +2088,6 @@ to open."
                       (let* ((pair (or (assq (car options) other-options)
                                        (car (push (list (car options)) other-options)))))
                         (push (cadr options) (cdr pair))))))
-                 (push initargs slot-initargs)
                  `(list :name ',slot-name
 		   ,@(when allocation `(:allocation ',allocation))
 		   ,@(when initform-p `(:initform ,initform
