@@ -813,8 +813,8 @@ is :UNIX.")
 					      (:output #$O_WRONLY)
 					      (:io #$O_RDWR)))))
 	  (when (< fd 0)  (signal-file-error fd filename))
-	  (let* ((fd-kind (%unix-fd-kind fd)))
-	    (if (not (eq fd-kind :file))
+	  (let* ((pos (fd-lseek fd 0 #$SEEK_CUR)))
+	    (if (not (>= pos 0))
 	      (make-fd-stream fd :direction direction
 			      :element-type element-type
 			      :sharing sharing
