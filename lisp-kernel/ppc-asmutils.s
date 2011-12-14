@@ -53,19 +53,6 @@ _exportfn(C(flush_cache_lines))
         __(sync)
 	__(isync)
 	__(blr)
-/* The strange reference to "exp" is supposed to force the kernel to */
-/* load libm, so lisp code can use it.   Under Darwin, the functionality */
-/* of libm is contained in libsystem, along with libc & everything else. */
-
-        __ifndef(`DARWIN')
-        .data
-        __ifdef(`PPC64')
-        .quad C(exp)
-        __else
-        .long C(exp)
-        __endif
-        .text        
-        __endif
 _endfn
 
 _exportfn(C(touch_page))
