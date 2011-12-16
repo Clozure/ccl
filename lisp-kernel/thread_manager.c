@@ -86,7 +86,7 @@ raise_thread_interrupt(TCR *target)
   }
   /* What if the suspend count is > 1 at this point ?  I don't think
      that that matters, but I'm not sure */
-  pcontext->ContextFlags = CONTEXT_FULL;
+  pcontext->ContextFlags = CONTEXT_ALL;
   rc = GetThreadContext(hthread, pcontext);
   if (rc == 0) {
     return ESRCH;
@@ -2019,18 +2019,13 @@ suspend_tcr(TCR *tcr)
       /* If the thread's simply dead, we should handle that here */
       return false;
     }
-    pcontext->ContextFlags = CONTEXT_FULL;
+    pcontext->ContextFlags = CONTEXT_ALL;
     rc = GetThreadContext(hthread, pcontext);
     if (rc == 0) {
       return false;
     }
     where = (pc)(xpPC(pcontext));
 
-    if ((where >= restore_windows_context_start) &&
-        (where < restore_windows_context_end) &&
-        (tcr->valence != TCR_STATE_LISP)) {
-      Bug(NULL, "Forgot about this case ...");
-    }
     if (tcr->valence == TCR_STATE_LISP) {
       if ((where >= restore_windows_context_start) &&
           (where < restore_windows_context_end)) {
@@ -2065,7 +2060,13 @@ suspend_tcr(TCR *tcr)
           SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
           ResumeThread(hthread);
           SEM_WAIT_FOREVER(TCR_AUX(tcr)->suspend);
-          pcontext = NULL;
+          SuspendThread(hthread);
+          /* The thread is either waiting for its resume semaphore to
+             be signaled or is about to wait.  Signal it now, while
+             the thread's suspended. */
+          SEM_RAISE(TCR_AUX(tcr)->resume);
+          pcontext->ContextFlags = CONTEXT_ALL;
+          GetThreadContext(hthread, pcontext);
         }
       }
 #if 0
@@ -2192,24 +2193,15 @@ resume_tcr(TCR *tcr)
     CONTEXT *context = TCR_AUX(tcr)->suspend_context;
     HANDLE hthread = (HANDLE)(TCR_AUX(tcr)->osid);
 
-
-    TCR_AUX(tcr)->suspend_context = NULL;
     if (context) {
-      if (tcr->valence == TCR_STATE_LISP) {
-        rc = SetThreadContext(hthread,context);
-        if (! rc) {
-          Bug(NULL,"SetThreadContext");
-          return false;
-        }
-      }
+      context->ContextFlags = CONTEXT_ALL;
+      TCR_AUX(tcr)->suspend_context = NULL;
+      SetThreadContext(hthread,context);
       rc = ResumeThread(hthread);
       if (rc == -1) {
-        Bug(NULL,"ResumeThread");
+        wperror("ResumeThread");
         return false;
       }
-      return true;
-    } else {
-      SEM_RAISE(TCR_AUX(tcr)->resume);
       return true;
     }
   }
