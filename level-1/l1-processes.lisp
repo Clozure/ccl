@@ -135,6 +135,7 @@
                          :initarg :allocation-quantum
                          :reader process-allocation-quantum
                          :type (satisfies valid-allocation-quantum-p))
+     (plist :initform nil :accessor process-plist)
      (dribble-stream :initform nil)
      (dribble-saved-terminal-io :initform nil)
      (result :initform (cons nil nil)

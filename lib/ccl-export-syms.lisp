@@ -497,6 +497,7 @@
      process-kill
      process-interrupt
      process-name
+     process-plist
      process-run-function
      make-process
      process-suspend-count
