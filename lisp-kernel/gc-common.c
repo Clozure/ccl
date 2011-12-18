@@ -472,7 +472,7 @@ mark_weak_alist(LispObj weak_alist, int weak_type)
     pair = car(alist);
     pair_tag = fulltag_of(pair);
     if ((is_node_fulltag(pair_tag)) &&
-        ((dnode = gc_area_dnode(pair_tag)) < GCndnodes_in_area) &&
+        ((dnode = gc_area_dnode(pair)) < GCndnodes_in_area) &&
         (! ref_bit(markbits,dnode))) {
       if (pair_tag == fulltag_cons) {
         key = car(pair);
