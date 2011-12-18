@@ -1020,6 +1020,23 @@ termination-function object
 
 (defvar *enable-automatic-termination* t)
 
+(defstatic  *termination-functions-lock* (make-lock))
+(defstatic *termination-functions* (make-hash-table :test #'eq :lock-free nil))
+
+(defun register-termination-function (f)
+  (with-lock-grabbed (*termination-functions-lock*)
+    (without-interrupts
+     (incf (gethash f *termination-functions* 0)))))
+
+(defun deregister-termination-function (f) 
+  (with-lock-grabbed (*termination-functions-lock*)
+    (without-interrupts
+     (let* ((count (gethash f *termination-functions*)))
+       (when count
+         (if (eql 0 (decf count))
+           (remhash f *termination-functions*)
+           (setf (gethash f *termination-functions*) count)))))))
+
 (defun terminate-when-unreachable (object &optional (function 'terminate))
   "The termination mechanism is a way to have the garbage collector run a
 function right before an object is about to become garbage. It is very
@@ -1031,6 +1048,7 @@ no longer being used."
   (let ((new-cell (cons object function))
         (population *termination-population*))
     (without-interrupts
+     (register-termination-function function)
      (with-lock-grabbed (*termination-population-lock*)
        (atomic-push-uvector-cell population population.data new-cell)))
     function))
@@ -1046,7 +1064,9 @@ no longer being used."
             (atomic-pop-uvector-cell population population.termination-list)
           (if (not existed)
             (return)
-          (funcall (cdr cell) (car cell))))))))
+            (let* ((f (cdr cell)))
+              (deregister-termination-function f)
+              (funcall f (car cell)))))))))
 
 (defun cancel-terminate-when-unreachable (object &optional (function nil function-p))
   (let* ((found nil))
@@ -1065,6 +1085,7 @@ no longer being used."
               (when (and (eq o object)
                          (or (null function-p)
                              (eq function f)))
+                (deregister-termination-function f)
                 (if prev
                   (setf (cdr prev) (cdr spine))
                   (setf (population.data population) (cdr spine)))
