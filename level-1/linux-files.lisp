@@ -233,18 +233,52 @@ atomically decremented, or until a timeout expires."
 	(when (eql 0 (%get-byte buf i))
 	  (return i))))))
 
+(defparameter *trust-paths-from-environment* t
+  "When true (as it is by default), environment variables can be used
+to initialize CCL's notion of some filesystem paths.  This may expose
+CCL or your application to greater security risks in some cases; if you're
+concerned about that, you may want to save an image with this variable
+set to NIL.")
+
+
 (defun temp-pathname ()
   "Return a suitable pathname for a temporary file.  A different name is returned
 each time this is called in a session.  No file by that name existed when last
 checked, though no guarantee is given that one hasn't been created since."
   (native-to-pathname
-     #-windows-target (get-foreign-namestring (#_tmpnam (%null-ptr)))
+     #-windows-target
+     #-android-target (get-foreign-namestring (#_tmpnam (%null-ptr)))
+     #+android-target
+     ;; Android dutifully implements #_tmpnam and returns a namestring
+     ;; in /tmp, but of course they don't usually provide /tmp .
+     (let* ((s (get-foreign-namestring (#_tmpnam (%null-ptr)))))
+       (if (probe-file (make-pathname :directory (pathname-directory s) :defaults nil))
+         s
+         (let* ((dirname (or (and *trust-paths-from-environment*
+                                  (let* ((p (getenv "TMPDIR")))
+                                    (and p
+                                         (eq (nth-value 1 (%probe-file-x p))
+                                             :directory)
+                                         p)))
+                             "/data/local/tmp"))
+                (filename (make-string 8)))
+           (loop
+             (flet ((random-char ()
+                      (let* ((n (random 62)))
+                        (cond ((< n 10) (code-char (+ (char-code #\0) n)))
+                              ((< n 36) (code-char (+ (char-code #\A) (- n 10))))
+                              (t (code-char (+ (char-code #\a) (- n 36))))))))
+               (dotimes (i (length filename))
+                 (setf (schar filename i) (random-char)))
+               (let* ((path (make-pathname :name filename :directory dirname :defaults nil)))
+                 (unless (probe-file path)
+                   (return (namestring path)))))))))
      #+windows-target (rlet ((buffer (:array :wchar_t #.#$MAX_PATH)))
                         (#_GetTempPathW #$MAX_PATH buffer)
                         (with-filename-cstrs ((c-prefix "ccl")) 
                             (#_GetTempFileNameW buffer c-prefix 0 buffer)
                               (#_DeleteFileW buffer)
-                                (%get-native-utf-16-cstring buffer)))))
+                              (%get-native-utf-16-cstring buffer)))))
 
 (defun current-directory-name ()
   "Look up the current working directory of the Clozure CL process; unless
@@ -901,32 +935,37 @@ environment variable. Returns NIL if there is no user with the ID uid."
         (unless (%null-ptr-p p)
           (return (get-foreign-namestring p))))))
   #-windows-target
-  #+android-target "/data/local" ; for now
-  #-android-target
-  (rlet ((pwd :passwd)
-         (result :address pwd))
-    (do* ((buflen 512 (* 2 buflen)))
-         ()
-      (%stack-block ((buf buflen))
-        (let* ((err
-                #-solaris-target
-                 (#_getpwuid_r userid pwd buf buflen result)
-                 #+solaris-target
-                 (external-call "__posix_getpwuid_r"
-                                :uid_t userid
-                                :address pwd
-                                :address buf
-                                :int buflen
-                                :address result
-                                :int)))
-          (if (eql 0 err)
-	    (let* ((rp (%get-ptr result))
-		   (dir (and (not (%null-ptr-p rp))
-			     (get-foreign-namestring (pref rp :passwd.pw_dir)))))
-	      (return (if (and dir (eq (%unix-file-kind dir) :directory))
-			dir)))
-            (unless (eql err #$ERANGE)
-              (return nil))))))))
+  (or (and *trust-paths-from-environment*
+           (let* ((p (getenv "HOME")))
+             (and p
+                  (eq (nth-value 1 (%probe-file-x p)) :directory)
+                  p)))
+      #+android-target "/data/local" ; for now
+      #-android-target
+      (rlet ((pwd :passwd)
+             (result :address pwd))
+        (do* ((buflen 512 (* 2 buflen)))
+             ()
+          (%stack-block ((buf buflen))
+            (let* ((err
+                    #-solaris-target
+                     (#_getpwuid_r userid pwd buf buflen result)
+                     #+solaris-target
+                     (external-call "__posix_getpwuid_r"
+                                    :uid_t userid
+                                    :address pwd
+                                    :address buf
+                                    :int buflen
+                                    :address result
+                                    :int)))
+              (if (eql 0 err)
+                (let* ((rp (%get-ptr result))
+                       (dir (and (not (%null-ptr-p rp))
+                                 (get-foreign-namestring (pref rp :passwd.pw_dir)))))
+                  (return (if (and dir (eq (%unix-file-kind dir) :directory))
+                            dir)))
+                (unless (eql err #$ERANGE)
+                  (return nil)))))))))
 
 (defun %delete-file (name)
   (with-filename-cstrs ((n name))

@@ -322,6 +322,7 @@
      file-locked-p
      directoryp
      delete-directory
+     *trust-paths-from-environment*
 
 
      *module-search-path*
