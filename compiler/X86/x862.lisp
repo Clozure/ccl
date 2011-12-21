@@ -5029,6 +5029,14 @@
       (x862-lri seg vreg value))
     (^)))
 
+(defun x862-natural-constant (seg vreg xfer value)
+  (x862-use-operator 
+   (if (typep value *nx-target-fixnum-type*)
+     (%nx1-operator fixnum)
+     (%nx1-operator immediate))
+   seg vreg xfer value))
+
+
 
 
 (defun x862-store-macptr (seg vreg address-reg)
@@ -10472,7 +10480,7 @@
     (let* ((fix-x (acode-fixnum-form-p x))
            (fix-y (acode-fixnum-form-p y)))
       (if (and fix-x fix-y)
-        (x862-absolute-natural seg vreg xfer (+ fix-x fix-y))
+        (x862-natural-constant seg vreg xfer (+ fix-x fix-y))
         (let* ((u31x (and (typep fix-x '(unsigned-byte 31)) fix-x))
                (u31y (and (typep fix-y '(unsigned-byte 31)) fix-y)))
           (if (not (or u31x u31y))
@@ -10497,7 +10505,7 @@
     (let* ((fix-x (acode-fixnum-form-p x))
            (fix-y (acode-fixnum-form-p y)))
       (if (and fix-x fix-y)
-        (x862-absolute-natural seg vreg xfer (- fix-x fix-y))
+        (x862-natural-constant seg vreg xfer (- fix-x fix-y))
         (let* ((u31y (and (typep fix-y '(unsigned-byte 31)) fix-y)))
           (if (not u31y)
 	    (with-imm-target () (xreg :natural)
@@ -10521,7 +10529,7 @@
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
       (if (and naturalx naturaly) 
-        (x862-absolute-natural seg vreg xfer (logior naturalx naturaly))
+        (x862-natural-constant seg vreg xfer (logior naturalx naturaly))
         (let* ((u31x (nx-u31-constant-p x))
                (u31y (nx-u31-constant-p y))
                (constant (or u31x u31y)))
@@ -10547,7 +10555,7 @@
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
       (if (and naturalx naturaly) 
-        (x862-absolute-natural seg vreg xfer (logxor naturalx naturaly))
+        (x862-natural-constant seg vreg xfer (logxor naturalx naturaly))
         (let* ((u32x (nx-u32-constant-p x))
                (u32y (nx-u32-constant-p y))
                (constant (or u32x u32y)))
@@ -10572,8 +10580,8 @@
       (x862-form seg nil xfer y))
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
-      (if (and naturalx naturaly) 
-        (x862-absolute-natural seg vreg xfer (logand naturalx naturaly))
+      (if (and naturalx naturaly)        
+        (x862-natural-constant seg vreg xfer (logand naturalx naturaly))
         (let* ((u31x (nx-u31-constant-p x))
                (u31y (nx-u31-constant-p y))
                (constant (or u31x u31y)))
