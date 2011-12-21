@@ -2026,6 +2026,18 @@ suspend_tcr(TCR *tcr)
     }
     where = (pc)(xpPC(pcontext));
 
+    if ((where >= restore_windows_context_start) &&
+        (where < restore_windows_context_end) &&
+        (tcr->valence != TCR_STATE_LISP)) {
+#ifdef WIN_64
+      tcr->valence = xpGPR(pcontext,REG_R8);
+#else
+      tcr->valence = ((LispObj *)(xpGPR(pcontext,Isp)))[3];
+#endif
+      pcontext = tcr->pending_exception_context;
+      tcr->pending_exception_context = NULL; 
+      where = (pc)(xpPC(pcontext));
+    }
     if (tcr->valence == TCR_STATE_LISP) {
       if ((where >= restore_windows_context_start) &&
           (where < restore_windows_context_end)) {
@@ -2060,26 +2072,29 @@ suspend_tcr(TCR *tcr)
           SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
           ResumeThread(hthread);
           SEM_WAIT_FOREVER(TCR_AUX(tcr)->suspend);
-          SuspendThread(hthread);
-          /* The thread is either waiting for its resume semaphore to
-             be signaled or is about to wait.  Signal it now, while
-             the thread's suspended. */
-          SEM_RAISE(TCR_AUX(tcr)->resume);
-          pcontext->ContextFlags = CONTEXT_ALL;
-          GetThreadContext(hthread, pcontext);
+          pcontext = NULL;
         }
       }
-#if 0
-    } else {
-      if (tcr->valence == TCR_STATE_EXCEPTION_RETURN) {
-        if (!tcr->pending_exception_context) {
-          FBug(pcontext, "we're confused here.");
-        }
-        *pcontext = *tcr->pending_exception_context;
-        tcr->pending_exception_context = NULL;
-        tcr->valence = TCR_STATE_LISP;
-      }
-#endif
+    }
+    /* If we're really running lisp code, there's some reason to
+       suspect that Windows is lying about that; the thread may have
+       already committed to processing an exception and just not have
+       reentered user mode.  If there's a way to determine that more
+       reliably, I don't know what it is.  We can catch some cases of
+       that by looking at whether the PC is at a UUO or other
+       "intentional" illegal instruction and letting the thread enter
+       exception handling, treating this case just like the case
+       above.  
+
+       When people say that Windows sucks, they aren't always just
+       talking about all of the other ways that it sucks.
+    */
+    if ((*where == INTN_OPCODE) ||
+        ((*where == XUUO_OPCODE_0) && (where[1] == XUUO_OPCODE_1))) {
+      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
+      ResumeThread(hthread);
+      SEM_WAIT_FOREVER(TCR_AUX(tcr)->suspend);
+      pcontext = NULL;
     }
     TCR_AUX(tcr)->suspend_context = pcontext;
     return true;
@@ -2193,15 +2208,24 @@ resume_tcr(TCR *tcr)
     CONTEXT *context = TCR_AUX(tcr)->suspend_context;
     HANDLE hthread = (HANDLE)(TCR_AUX(tcr)->osid);
 
+
+    TCR_AUX(tcr)->suspend_context = NULL;
     if (context) {
-      context->ContextFlags = CONTEXT_ALL;
-      TCR_AUX(tcr)->suspend_context = NULL;
-      SetThreadContext(hthread,context);
+      if (tcr->valence == TCR_STATE_LISP) {
+        rc = SetThreadContext(hthread,context);
+        if (! rc) {
+          Bug(NULL,"SetThreadContext");
+          return false;
+        }
+      }
       rc = ResumeThread(hthread);
       if (rc == -1) {
-        wperror("ResumeThread");
+        Bug(NULL,"ResumeThread");
         return false;
       }
+      return true;
+    } else {
+      SEM_RAISE(TCR_AUX(tcr)->resume);
       return true;
     }
   }
@@ -2353,6 +2377,7 @@ void
 resume_other_threads(Boolean for_gc)
 {
   TCR *current = get_tcr(true), *other;
+
   for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
     if ((TCR_AUX(other)->osid != 0)) {
       resume_tcr(other);
