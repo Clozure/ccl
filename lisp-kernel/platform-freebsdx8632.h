@@ -31,6 +31,19 @@ typedef struct __ucontext ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants32.h"
 
+#define REG_EDI 5
+#define REG_ESI 6
+#define REG_EBP 7
+#define REG_ISP 8
+#define REG_EBX 9
+#define REG_EDX 10
+#define REG_ECX 11
+#define REG_EAX 12
+#define REG_EIP 15
+#define REG_EFL 17
+#define REG_ESP 18
+
+
 #include "freebsdx8632/fpu.h"
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])

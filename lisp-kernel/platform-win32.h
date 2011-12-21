@@ -32,6 +32,18 @@ typedef CONTEXT ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants32.h"
 
+/* Offsets relative to _CONTEXT.Edi */
+#define REG_EDI 0
+#define REG_ESI 1
+#define REG_EBX 2
+#define REG_EDX 3
+#define REG_ECX 4
+#define REG_EAX 5
+#define REG_EBP 6
+#define REG_EIP 7
+#define REG_EFL 9
+#define REG_ESP 10
+
 #define xpGPRvector(x) ((DWORD *)(&(x)->Edi))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define xpPC(x) xpGPR(x,Iip)

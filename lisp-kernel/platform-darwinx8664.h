@@ -37,6 +37,25 @@ typedef ucontext_t ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants64.h"
 
+#define REG_RAX 0
+#define REG_RBX 1
+#define REG_RCX 2
+#define REG_RDX 3
+#define REG_RDI 4
+#define REG_RSI 5
+#define REG_RBP 6
+#define REG_RSP 7
+#define REG_R8 8
+#define REG_R9 9
+#define REG_R10 10
+#define REG_R11 11
+#define REG_R12 12
+#define REG_R13 13
+#define REG_R14 14
+#define REG_R15 15
+#define REG_RIP 16
+#define REG_RFL 17
+
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 extern int darwin_sigreturn(ExceptionInformation *context);

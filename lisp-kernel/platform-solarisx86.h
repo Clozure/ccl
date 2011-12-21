@@ -30,6 +30,19 @@ typedef struct ucontext ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants32.h"
 
+#include <sys/regset.h>
+#include <limits.h>
+#define REG_EAX EAX
+#define REG_EBX EBX
+#define REG_ECX ECX
+#define REG_EDX EDX
+#define REG_ESI ESI
+#define REG_EDI EDI
+#define REG_EBP EBP
+#define REG_ESP UESP    /* Maybe ... ESP is often 0, but who knows why ? */
+#define REG_EFL EFL
+#define REG_EIP EIP
+
 #define xpGPRvector(x) ((x)->uc_mcontext.gregs)
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)

@@ -36,6 +36,19 @@ typedef ucontext_t ExceptionInformation;
 #include "lisptypes.h"
 #include "x86-constants32.h"
 
+/* offsets into uc_mcontext.ss */
+
+#define REG_EAX 0
+#define REG_EBX 1
+#define REG_ECX 2
+#define REG_EDX 3
+#define REG_EDI 4
+#define REG_ESI 5
+#define REG_EBP 6
+#define REG_ESP 7
+#define REG_EFL 9
+#define REG_EIP 10
+
 
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1

@@ -16,68 +16,6 @@
 
 #include "x86-constants.h"
 
-#ifdef DARWIN
-#define REG_RAX 0
-#define REG_RBX 1
-#define REG_RCX 2
-#define REG_RDX 3
-#define REG_RDI 4
-#define REG_RSI 5
-#define REG_RBP 6
-#define REG_RSP 7
-#define REG_R8 8
-#define REG_R9 9
-#define REG_R10 10
-#define REG_R11 11
-#define REG_R12 12
-#define REG_R13 13
-#define REG_R14 14
-#define REG_R15 15
-#define REG_RIP 16
-#define REG_RFL 17
-#endif
-
-#ifdef FREEBSD
-#define REG_RDI 1
-#define REG_RSI 2
-#define REG_RDX 3
-#define REG_RCX 4
-#define REG_R8 5
-#define REG_R9 6
-#define REG_RAX 7
-#define REG_RBX 8
-#define REG_RBP 9
-#define REG_R10 10
-#define REG_R11 11
-#define REG_R12 12
-#define REG_R13 13
-#define REG_R14 14
-#define REG_R15 15
-#define REG_RIP 20
-#define REG_RFL 22
-#define REG_RSP 23
-#endif
-
-#ifdef WIN_64
-/* DWORD64 indices in &(CONTEXT->Rax) */
-#define REG_RAX     0
-#define REG_RCX     1
-#define REG_RDX     2
-#define REG_RBX     3
-#define REG_RSP     4
-#define REG_RBP     5
-#define REG_RSI     6
-#define REG_RDI     7
-#define REG_R8      8
-#define REG_R9      9
-#define REG_R10     10
-#define REG_R11     11
-#define REG_R12     12
-#define REG_R13     13
-#define REG_R14     14
-#define REG_R15     15
-#define REG_RIP     16
-#endif
 
 /* Define indices of the GPRs in the mcontext component of a ucontext */
 #define Itemp0      REG_RBX
@@ -88,7 +26,7 @@
 #define Isave2      REG_R12
 #define Isave1      REG_R14
 #define Isave0      REG_R15
-#define Itemp2        REG_R10
+#define Itemp2      REG_R10
 #define Ifn         REG_R13
 #define Irbp        REG_RBP
 #define Iimm0       REG_RAX

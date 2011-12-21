@@ -17,63 +17,6 @@
 
 #include "x86-constants.h"
 
-/* offsets into uc_mcontext.ss */
-#ifdef DARWIN
-#define REG_EAX 0
-#define REG_EBX 1
-#define REG_ECX 2
-#define REG_EDX 3
-#define REG_EDI 4
-#define REG_ESI 5
-#define REG_EBP 6
-#define REG_ESP 7
-#define REG_EFL 9
-#define REG_EIP 10
-#endif
-
-#ifdef WINDOWS
-/* Offsets relative to _CONTEXT.Edi */
-#define REG_EDI 0
-#define REG_ESI 1
-#define REG_EBX 2
-#define REG_EDX 3
-#define REG_ECX 4
-#define REG_EAX 5
-#define REG_EBP 6
-#define REG_EIP 7
-#define REG_EFL 9
-#define REG_ESP 10
-#endif
-
-#ifdef FREEBSD
-#define REG_EDI 5
-#define REG_ESI 6
-#define REG_EBP 7
-#define REG_ISP 8
-#define REG_EBX 9
-#define REG_EDX 10
-#define REG_ECX 11
-#define REG_EAX 12
-#define REG_EIP 15
-#define REG_EFL 17
-#define REG_ESP 18
-#endif
-
-#ifdef SOLARIS
-#include <sys/regset.h>
-#include <limits.h>
-#define REG_EAX EAX
-#define REG_EBX EBX
-#define REG_ECX ECX
-#define REG_EDX EDX
-#define REG_ESI ESI
-#define REG_EDI EDI
-#define REG_EBP EBP
-#define REG_ESP UESP    /* Maybe ... ESP is often 0, but who knows why ? */
-#define REG_EFL EFL
-#define REG_EIP EIP
-#endif
-
 /* Indicies of GPRs in the mcontext component of a ucontext */
 #define Iimm0  REG_EAX
 #define Iarg_z REG_EBX
