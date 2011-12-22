@@ -3913,6 +3913,14 @@
       (ppc2-lri seg vreg value))
     (^)))
 
+(defun ppc2-natural-constant (seg vreg xfer value)
+  (ppc2-use-operator
+   (if (typep value *nx-target-fixnum-type*)
+     (%nx1-operator fixnum)
+     (%nx1-operator immediate))
+   seg vreg xfer value))
+
+
 
 
 (defun ppc2-store-macptr (seg vreg address-reg)
@@ -8855,7 +8863,7 @@
     (let* ((fix-x (acode-fixnum-form-p x))
            (fix-y (acode-fixnum-form-p y)))
       (if (and fix-x fix-y)
-        (ppc2-absolute-natural seg vreg xfer (+ fix-x fix-y))
+        (ppc2-natural-constant seg vreg xfer (+ fix-x fix-y))
         (let* ((u15x (and (typep fix-x '(unsigned-byte 15)) fix-x))
                (u15y (and (typep fix-y '(unsigned-byte 15)) fix-y)))
           (if (not (or u15x u15y))
@@ -8879,7 +8887,7 @@
     (let* ((fix-x (acode-fixnum-form-p x))
            (fix-y (acode-fixnum-form-p y)))
       (if (and fix-x fix-y)
-        (ppc2-absolute-natural seg vreg xfer (- fix-x fix-y))
+        (ppc2-natural-constant seg vreg xfer (- fix-x fix-y))
         (let* ((u15y (and (typep fix-y '(unsigned-byte 15)) fix-y)))
           (if (not u15y)
             (with-imm-target () (xreg :natural)
@@ -8902,7 +8910,7 @@
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
       (if (and naturalx naturaly) 
-        (ppc2-absolute-natural seg vreg xfer (logior naturalx naturaly))
+        (ppc2-natural-constant seg vreg xfer (logior naturalx naturaly))
         (let* ((u32x (nx-u32-constant-p x))
                (u32y (nx-u32-constant-p y))
                (constant (or u32x u32y)))
@@ -8929,7 +8937,7 @@
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
       (if (and naturalx naturaly) 
-        (ppc2-absolute-natural seg vreg xfer (logxor naturalx naturaly))
+        (ppc2-natural-constant seg vreg xfer (logxor naturalx naturaly))
         (let* ((u32x (nx-u32-constant-p x))
                (u32y (nx-u32-constant-p y))
                (constant (or u32x u32y)))
@@ -8956,7 +8964,7 @@
     (let* ((naturalx (nx-natural-constant-p x))
            (naturaly (nx-natural-constant-p y)))
       (if (and naturalx naturaly) 
-        (ppc2-absolute-natural seg vreg xfer (logand naturalx naturaly))
+        (ppc2-natural-constant seg vreg xfer (logand naturalx naturaly))
         (let* ((u32x (nx-u32-constant-p x))
                (u32y (nx-u32-constant-p y))
                (constant (or u32x u32y)))
