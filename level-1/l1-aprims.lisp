@@ -55,8 +55,6 @@
 
 (def-standard-initial-binding *package*)
 (def-standard-initial-binding *random-state* (initial-random-state))
-(def-standard-initial-binding *whostate* "Reset")
-(setq *whostate* "Reset")
 (def-standard-initial-binding *error-print-length* 20)
 (def-standard-initial-binding *error-print-level* 8)
 

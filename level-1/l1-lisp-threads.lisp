@@ -1189,10 +1189,9 @@ no longer being used."
         (when (eql 0 (%fixnum-ref catch target::catch-frame.db-link))
           (setf (%fixnum-ref catch target::catch-frame.db-link) bsp)))))
   (let* ((thread (new-lisp-thread-from-tcr (%current-tcr) "foreign")))
-    (setq *current-lisp-thread* thread
-	  *current-process*
-	  (make-process "foreign" :thread thread)
-          *whostate* "Foreign thread callback")))
+    (setf *current-lisp-thread* thread
+	  *current-process* (make-process "foreign" :thread thread)
+          (car (process-whostate-cell *current-process*)) "Foreign thread callback")))
     
 ;;; Remove the foreign thread's lisp-thread and lisp process from
 ;;; the global lists.

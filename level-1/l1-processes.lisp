@@ -139,7 +139,9 @@
      (dribble-stream :initform nil)
      (dribble-saved-terminal-io :initform nil)
      (result :initform (cons nil nil)
-             :reader process-result))
+             :reader process-result)
+     (whostate-cell :initform (list "Reset")
+                    :reader process-whostate-cell))
   (:primary-p t))
 
 (defparameter *print-process-whostate* t "make it optional")
@@ -227,34 +229,10 @@
 ;;; here.
 (defun process-whostate (p)
   "Return a string which describes the status of a specified process."
-    (let* ((ip *initial-process*))
-      (cond ((eq p *current-process*)
-             (if (%tcr-binding-location (%current-tcr) '*whostate*)
-               *whostate*
-               (if (eq p ip)
-                 "Active"
-                 "Reset")))
-            (t
-             (without-interrupts
-              (with-lock-grabbed (*kernel-exception-lock*)
-               (with-lock-grabbed (*kernel-tcr-area-lock*)
-                 (let* ((tcr (process-tcr p)))
-                   (if tcr
-                     (unwind-protect
-                          (let* ((loc nil))
-                            (%suspend-tcr tcr)
-                            (setq loc (%tcr-binding-location tcr '*whostate*))
-                            (if loc
-                              (%fixnum-ref loc)
-                              (if (eq p ip)
-                                "Active"
-                                "Reset")))
-                       (%resume-tcr tcr))
-                     "Exhausted")))))))))
+  (car (process-whostate-cell p)))
 
 (defun (setf process-whostate) (new p)
-  (unless (process-exhausted-p p)
-    (setf (symbol-value-in-process '*whostate* p) new)))
+  (setf (car (process-whostate-cell p)) new))
 
 
 
@@ -378,8 +356,8 @@ a given process."
 	  (let* ((*current-process* process))
 	    (add-to-all-processes process)
             (with-initial-bindings (process-initial-bindings process)
-              (setq *whostate* "Active")
-              (run-process-initial-form process initial-form))))
+              (with-process-whostate ("Active")
+                (run-process-initial-form process initial-form)))))
       process
       initial-form)
      process))
@@ -418,7 +396,7 @@ a given process."
   (without-interrupts
    (if (eq kill :shutdown)
      (progn
-       (setq *whostate* "Shutdown")
+       (setf (car (process-whostate-cell process)) "Shutdown")
        (add-to-shutdown-processes process)))
    (let* ((semaphore (process-termination-semaphore process)))
      (when semaphore (signal-semaphore semaphore)))

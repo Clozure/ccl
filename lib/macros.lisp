@@ -3240,8 +3240,15 @@ Return the pointer."
 
 
 (defmacro with-process-whostate ((whostate) &body body)
-  `(let* ((*whostate* ,whostate))
-    ,@body))
+  (let* ((cell (gensym))
+         (old (gensym)))
+    `(let* ((,cell (process-whostate-cell *current-process*))
+            (,old (car ,cell)))
+      (unwind-protect
+           (progn
+             (setf (car ,cell) ,whostate)
+             ,@body)
+        (setf (car ,cell) ,old)))))
 
 
 (defmacro with-read-lock ((lock) &body body)
