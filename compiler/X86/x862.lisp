@@ -10596,7 +10596,10 @@
               (with-imm-target () (other-reg :natural)
                 (x862-one-targeted-reg-form seg other other-reg)
                 (! %natural-logand-c  other-reg constant)
-                (<- other-reg))))
+                (if (and (typep constant *nx-target-fixnum-type*)
+                         (node-reg-p vreg))
+                  (! box-fixnum vreg other-reg)
+                  (<- other-reg)))))
           (^))))))
 
 (defx862 x862-natural-shift-right natural-shift-right (seg vreg xfer num amt)

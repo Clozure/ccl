@@ -20,6 +20,57 @@
 ;;; Depending on alignment, it might make sense to move more than
 ;;; a byte at a time.
 ;;; Does no arg checking of any kind.  Really.
+(defun %copy-ptr-to-ivector (src src-byte-offset dest dest-byte-offset nbytes)
+  (declare (fixnum src-byte-offset dest-byte-offset nbytes)
+           (optimize (speed 3) (safety 0)))
+  (let* ((ptr-align (logand 7 (%ptr-to-int src))))
+    (declare (type (mod 8) ptr-align))
+    (if (and (= 0 (logand nbytes 3))
+             (= 0 (logand dest-byte-offset 3))
+             (= 0 (logand (the fixnum (+ ptr-align src-byte-offset)) 3)))
+      (%copy-ptr-to-ivector-32bit src src-byte-offset dest dest-byte-offset nbytes)
+      (%copy-ptr-to-ivector-8bit src src-byte-offset dest dest-byte-offset nbytes))
+    dest))
+
+;;; We can exploit the fact that SRC-BYTE-OFFSET and DEST-BYTE-OFFSET
+;;; are both multiples of 4 (and therefore still fixnums when unboxed).
+(defx8632lapfunction %copy-ptr-to-ivector-32bit ((psrc 12)
+                                                 (psrc-byte-offset 8)
+                                                 (pdest 4)
+                                                 #|(ra 0)|#
+                                                 (dest-byte-offset arg_y)
+                                                 (nbytes arg_z))
+
+  (let ((foreign-ptr imm0)		;raw foreign pointer
+	(ivector temp1))                ;destination ivector
+    (movl (@ psrc (% esp)) (% temp1))
+    (movl (@ psrc-byte-offset (% esp)) (% foreign-ptr))
+    (sarl ($ x8632::word-shift)(% foreign-ptr))
+    (addl (@ x8632::macptr.address (% temp1)) (% foreign-ptr))
+    (movl (@ pdest (% esp)) (% ivector))
+    (sarl ($ x8632::word-shift) (% dest-byte-offset))
+    (jmp @test16)
+    @loop16
+    (movdqu (@ (% foreign-ptr)) (% xmm0))
+    (movdqu (% xmm0) (@ x8632::misc-data-offset (% ivector) (% dest-byte-offset)))
+    (addl ($ 16) (% foreign-ptr))
+    (addl ($ 16) (% dest-byte-offset))
+    (subl ($ '16) (% nbytes))
+    @test16
+    (cmpl ($ '16) (% nbytes))
+    (jge @loop16)
+    (testl (% nbytes) (% nbytes))
+    (je @done)
+    @loop4
+    (movd (@ (% foreign-ptr)) (% mm0))
+    (movd (% mm0) (@ x8632::misc-data-offset (% ivector) (% dest-byte-offset)))
+    (addl ($ 4) (% foreign-ptr))
+    (addl ($ 4) (% dest-byte-offset))
+    (subl ($ '4) (% nbytes))
+    (jne @loop4)
+    @done
+    (movl (% ivector) (% arg_z))
+    (single-value-return 5)))
 
 ;;; I went ahead and used the INC and DEC instructions here, since
 ;;; they're shorter than the equivalent ADD/SUB.  Intel's optimization
@@ -28,12 +79,12 @@
 ;;; these functions end up being hot, replacing the inc/dec insns
 ;;; might be worth a try.
 
-(defx8632lapfunction %copy-ptr-to-ivector ((src 12)
-					   (src-byte-offset 8)
-					   (dest 4)
-					   #|(ra 0)|#
-					   (dest-byte-offset arg_y)
-					   (nbytes arg_z))
+(defx8632lapfunction %copy-ptr-to-ivector-8bit ((src 12)
+                                                (src-byte-offset 8)
+                                                (dest 4)
+                                                #|(ra 0)|#
+                                                (dest-byte-offset arg_y)
+                                                (nbytes arg_z))
   (mark-as-imm temp0)
   (mark-as-imm arg_y)
   (let ((foreign-ptr temp0)		;raw foreign pointer

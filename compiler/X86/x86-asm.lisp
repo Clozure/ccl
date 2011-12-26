@@ -1852,12 +1852,20 @@
      #x0f7e #o000 #x0 #x66)
 
    ;; movdqa
-   (def-x86-opcode (movdqa :cpu64)  ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+   (def-x86-opcode movdqa  ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
      #x0f7f #o300 #x0 #x66)
-   (def-x86-opcode (movdqa :cpu64) ((:anymem :insert-memory) (:regxmm :insert-xmm-reg)) 
+   (def-x86-opcode movdqa ((:anymem :insert-memory) (:regxmm :insert-xmm-reg)) 
      #x0f6f #o000 #x0 #x66)
     
+   (def-x86-opcode movdqu  ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+     #x0f7f #o300 #x0 #xf3)
+   (def-x86-opcode movdqu ((:anymem :insert-memory) (:regxmm :insert-xmm-reg)) 
+     #x0f6f #o000 #x0 #xf3)
+    
 
+   ;; sign-extending mov
+   (def-x86-opcode movsbl ((:reg8 :insert-modrm-rm) (:reg32 :insert-modrm-reg))
+     #x0fbe #o300 0)
    ;; sign-extending mov
    (def-x86-opcode movsbl ((:reg8 :insert-modrm-rm) (:reg32 :insert-modrm-reg))
      #x0fbe #o300 0)
