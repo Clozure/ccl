@@ -1862,10 +1862,6 @@
    (def-x86-opcode movdqu ((:anymem :insert-memory) (:regxmm :insert-xmm-reg)) 
      #x0f6f #o000 #x0 #xf3)
     
-
-   ;; sign-extending mov
-   (def-x86-opcode movsbl ((:reg8 :insert-modrm-rm) (:reg32 :insert-modrm-reg))
-     #x0fbe #o300 0)
    ;; sign-extending mov
    (def-x86-opcode movsbl ((:reg8 :insert-modrm-rm) (:reg32 :insert-modrm-reg))
      #x0fbe #o300 0)
