@@ -481,12 +481,14 @@
   (ldr dim (:@ header (:$ (+ arm::misc-data-offset (* 4 arm::arrayH.dim0-cell)))))
   (cmp i dim)
   (blo :ok1)
-  (uuo-error-array-bounds  i header)
+  (mov dim (:$ 0))
+  (uuo-error-array-axis-bounds  i dim header)
   :ok1
   (ldr dim (:@ header (:$ (+ arm::misc-data-offset (* 4 (1+ arm::arrayH.dim0-cell))))))
   (cmp j dim)
   (blo :ok2)
-  (uuo-error-array-bounds  j header)
+  (mov dim (:$ arm::fixnumone))
+  (uuo-error-array-axis-bounds j dim header)
   :ok2
   (mov dim (:asr dim (:$ arm::fixnumshift))))
 
@@ -499,17 +501,20 @@
   (ldr dim1 (:@ header (:$ (+ arm::misc-data-offset (* 4 arm::arrayH.dim0-cell)))))
   (cmp i dim1)
   (blo :ok1)
-  (uuo-error-array-bounds  i header)
+  (mov dim1 (:$ 0))
+  (uuo-error-array-axis-bounds  i dim1  header)
   :ok1
   (ldr dim1 (:@ header (:$ (+ arm::misc-data-offset (* 4 (1+ arm::arrayH.dim0-cell))))))
   (cmp j dim1)
   (blo :ok2)
-  (uuo-error-array-bounds  i header)
+  (mov dim1 (:$ arm::fixnumone))
+  (uuo-error-array-axis-bounds  i dim1 header)
   :ok2
   (ldr dim2 (:@ header (:$ (+ arm::misc-data-offset (* 4 (+ 2 arm::arrayH.dim0-cell))))))
   (cmp k dim2)
   (blo :ok3)
-  (uuo-error-array-bounds  i header)
+  (mov dim2 (:$ (ash 2 arm::fixnumshift)))
+  (uuo-error-array-axis-bounds  i dim2 header)
   :ok3
   (mov dim1 (:asr dim1 (:$ arm::fixnumshift)))
   (mov dim2 (:asr dim2 (:$ arm::fixnumshift))))

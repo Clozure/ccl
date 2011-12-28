@@ -598,7 +598,8 @@ minimum number of elements to add if it must be extended."
                      (< (the fixnum index) dim))
           (if no-error
             (return-from %array-index nil)
-            (%err-disp $XARROOB index a)))
+            (error "Index value ~d is out of bounds for axis ~d of ~s."
+                   index axis a)))
         (incf result (the fixnum (* chunk-size (the fixnum index))))
         (setq chunk-size (* chunk-size dim))))))
 

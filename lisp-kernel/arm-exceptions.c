@@ -1193,6 +1193,7 @@ handle_uuo(ExceptionInformation *xp, siginfo_t *info, opcode the_uuo)
   case uuo_format_unary_error:
   case uuo_format_binary_error:
   case uuo_format_ternary:
+  case uuo_format_ternary2:
     handled = handle_error(xp,0,the_uuo, &bump);
     break;
 

@@ -28,6 +28,7 @@
 #define uuo_format_error_fulltag    3 /* 3 bits of fulltag info, 4 bit reg */
 
 #define uuo_format_error_xtype      4 /* 8 bits of extended type/subtag info, 4 bit reg */
+#define uuo_format_ternary2         5 /* r0,r1,r2 */
 #define uuo_format_binary           7 /* 4 bits of code, r1, r0 */
 #define uuo_format_nullary_error    8 /* nullary, call out to lisp */
 #define uuo_format_unary_error      9 /* like unary, but call out to lisp */

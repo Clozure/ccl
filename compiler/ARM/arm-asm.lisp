@@ -319,7 +319,11 @@
    (define-arm-instruction uuo-error-array-flags (:uuoA :uuoB)
      #x07f700ff
      #x0fff00ff
-     (:prefer-separate-cond))     
+     (:prefer-separate-cond))
+   (define-arm-instruction uuo-error-array-axis-bounds (:uuoC :uuoB :uuoA)
+     #x07f000f5
+     #x0ff000ff
+     (:prefer-separate-cond))
    ;; Kernel services.
    (define-arm-instruction uuo-kernel-service (:uuo-unary)
      #x07f000fd

@@ -280,6 +280,13 @@
                                    frame-ptr)))                        
                         (t
                          (error "Unknown code in binary UUO: ~d" code)))))
+                   (5
+                    (%error "Index value ~s is out of bounds for axis ~s of ~s."
+                            (list
+                             (xp-gpr-lisp xp (ldb (byte 4 16) uuo))
+                             (xp-gpr-lisp xp (ldb (byte 4 12) uuo))
+                             (xp-gpr-lisp xp (ldb (byte 4 8) uuo)))
+                            frame-ptr))
                    (t
                     (error "Unknown UUO, format ~d" format))))))
             ((eql error-number arch::error-stack-overflow)

@@ -38,6 +38,7 @@ uuo_format_error_lisptag = 2    /* 2 bits of lisptag info, 4-bit reg */
 uuo_format_error_fulltag = 3    /* 3 bits of fulltag info, 4 bit reg */
 
 uuo_format_error_xtype = 4      /* 8 bits of extended type/subtag info, 4 bit reg */
+uuo_format_ternary_error2 = 5   /* array index invalid for specified dimension */
 uuo_format_binary = 7           /* 4 bits of code, r1, r0 */
 uuo_format_nullary_error = 8    /* nullary, call out to lisp */
 uuo_format_unary_error = 9      /* like unary, but call out to lisp */
@@ -101,6 +102,8 @@ define(`uuo_error_eep_unresolved',`binary_errorUUO($1,$2,$3,4)')
 define(`uuo_error_fpu_exception',`binary_errorUUO($1,$2,$3,5)')
 define(`uuo_error_array_rank',`binary_errorUUO($1,$2,$3,6)')
 define(`uuo_error_array_flags',`binary_errorUUO($1,$2,$3,7)')
+
+define(`uuo_error_array_axis_bounds',`UUO($1,uuo_format_ternary_error2,($2<<8)|($3<<4)|$4)')
         
 /* This should never be generated (never be a legal instruction in a code
    vector); it should only be used by purify/impurify. */
