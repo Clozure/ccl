@@ -1086,7 +1086,9 @@ usage_exit(char *herald, int exit_status, char* other_args)
     fprintf(dbgout, "%s\n", herald);
   }
   fprintf(dbgout, "usage: %s <options>\n", program_name);
+#ifdef SINGLE_ARG_SHORTHAND
   fprintf(dbgout, "\t or %s <image-name>\n", program_name);
+#endif
   fprintf(dbgout, "\t where <options> are one or more of:\n");
   if (other_args && *other_args) {
     fputs(other_args, dbgout);
@@ -1892,6 +1894,7 @@ main
   tcr_area_lock = (void *)new_recursive_lock();
 
   program_name = argv[0];
+#ifdef SINGLE_ARG_SHORTHAND
   if ((argc == 2) && (*argv[1] != '-')) {
 #ifdef WINDOWS
     image_name = utf_16_argv[1];
@@ -1903,8 +1906,11 @@ main
     utf_16_argv[1] = NULL;
 #endif
   } else {
+#endif  /* SINGLE_ARG_SHORTHAND */
     process_options(argc,argv,utf_16_argv);
+#ifdef SINGLE_ARG_SHORTHAND
   }
+#endif
   if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
     lisp_heap_threshold_set_from_command_line = true;
   }
