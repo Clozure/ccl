@@ -125,10 +125,12 @@ current_stack_pointer(void)
   register natural _sp __asm__("r1");
 #endif
 #ifdef X8664
-  register natural _sp __asm__("%rsp");
+  natural _sp;
+  __asm__("movq %%rsp,%0" : "=r" (_sp));
 #endif
 #ifdef X8632
-  register natural _sp __asm__("%esp");
+  natural _sp;
+  __asm__("movl %%esp,%0" : "=r" (_sp));
 #endif
 #ifdef ARM
   register natural _sp __asm__("sp");
