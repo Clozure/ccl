@@ -14,7 +14,7 @@
 #   http://opensource.franz.com/preamble.html
 
 
-SVN_REVISION=$(shell svnversion || echo "unknown")
+SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 SDKROOT=/
 OSVERSION=10.5

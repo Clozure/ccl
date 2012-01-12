@@ -13,7 +13,7 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
-SVN_REVISION=$(shell svnversion || echo "unknown")
+SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 VPATH = ..
 RM = /bin/rm

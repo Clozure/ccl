@@ -27,7 +27,7 @@
 #
 # Accept the dependencies the installation tool may add.
 
-SVN_REVISION=$(shell svnversion || echo "unknown")
+SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 VPATH = ../
 RM = rm
