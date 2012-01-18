@@ -1847,6 +1847,10 @@ CALLBACK ControlEventHandler(DWORD event)
     lisp_global(INTFLAG) = (1 << fixnumshift);
     return TRUE;
     break;
+  case CTRL_BREAK_EVENT:
+    lisp_global(INTFLAG) = (2 << fixnumshift);
+    return TRUE;
+    break;
   default:
     return FALSE;
   }
