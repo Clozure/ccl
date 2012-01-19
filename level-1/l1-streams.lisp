@@ -101,13 +101,19 @@
 
 ;; From Shannon Spires, slightly modified.
 (defun generic-read-line (s)
-  (let* ((str (make-array 20 :element-type 'base-char
-			  :adjustable t :fill-pointer 0))
+  (let* ((len 20)
+         (pos 0)
+         (str (make-array len :element-type 'base-char))
 	 (eof nil))
+    (declare (fixnum pos len) (simple-string str))
     (do* ((ch (read-char s nil :eof) (read-char s nil :eof)))
 	 ((or (eq ch #\newline) (setq eof (eq ch :eof)))
-	  (values (ensure-simple-string str) eof))
-      (vector-push-extend ch str))))
+	  (values (subseq str 0 pos) eof))
+      (when (= pos len)
+        (setq len (* len 2)
+              str (%extend-vector 0 str len)))
+      (setf (schar str pos) ch
+            pos (1+ pos)))))
 
 (defun generic-character-read-list (stream list count)
   (declare (fixnum count))
@@ -2294,8 +2300,10 @@
     (let* ((string "")
            (len 0)
            (eof nil)
+           (filled-buf 0)
            (buf (io-buffer-buffer inbuf))
            (newline (char-code #\newline)))
+      (declare (fixnum filled-buf))
       (let* ((ch (ioblock-untyi-char ioblock)))
         (when ch
           (setf (ioblock-untyi-char ioblock) nil)
@@ -2310,12 +2318,13 @@
         (let* ((more 0)
                (idx (io-buffer-idx inbuf))
                (count (io-buffer-count inbuf)))
-          (declare (fixnum idx count more))
+          (declare (fixnum idx count more filled-buf))
           (if (= idx count)
             (if eof
               (return (values string t))
               (progn
                 (setq eof t)
+                (incf filled-buf)
                 (%ioblock-advance ioblock t)))
             (progn
               (setq eof nil)
@@ -2339,20 +2348,51 @@
                               0 string (the fixnum (+ len more))))
                 (%copy-u8-to-string
                  buf idx string len more)
-                (incf len more)))))))))
+                (incf len more))
+              (when (> filled-buf 1)
+                (let* ((pos len))
+                  (loop
+                    (%ioblock-advance ioblock t)
+                    (setq count (io-buffer-count inbuf))
+                    (when (zerop count)                        
+                      (return-from %ioblock-unencoded-read-line
+                        (values (if (= pos len)
+                                  string
+                                  (subseq string 0 pos))
+                                t)))
+                    (let* ((p (position newline buf :end count))
+                           (n (or p count))
+                           (room (- len pos)))
+                      (declare (fixnum n room))
+                      (when (< room n)
+                        (setq len (+ len (the fixnum (or p len)))
+                              string (%extend-vector 0 string len)))
+                      (%copy-u8-to-string buf 0 string pos n)
+                      (incf pos n)
+                      (when p
+                        (return-from %ioblock-unencoded-read-line
+                          (values (if (= pos len)
+                                    string
+                                    (subseq string 0 pos)) nil)))
+                      (setf (io-buffer-idx inbuf) count))))))))))))
 
 ;;; There are lots of ways of doing better here, but in the most general
 ;;; case we can't tell (a) what a newline looks like in the buffer or (b)
 ;;; whether there's a 1:1 mapping between code units and characters.
 (defun %ioblock-encoded-read-line (ioblock)
-  (let* ((str (make-array 20 :element-type 'base-char
-			  :adjustable t :fill-pointer 0))
+  (let* ((pos 0)
+         (len 20)
+         (str (make-string len))
          (rcf (ioblock-read-char-when-locked-function ioblock))
 	 (eof nil))
+    (declare (fixnum pos len) (simple-string str))
     (do* ((ch (funcall rcf ioblock) (funcall rcf ioblock)))
 	 ((or (eq ch #\newline) (setq eof (eq ch :eof)))
-	  (values (ensure-simple-string str) eof))
-      (vector-push-extend ch str))))
+	  (values (subseq str 0 pos) eof))
+      (when (= pos len)
+        (setq len (* len 2) str (%extend-vector 0 str len)))
+      (setf (schar str pos) ch
+            pos (1+ pos)))))
 	 
 (defun %ioblock-unencoded-character-read-vector (ioblock vector start end)
   (do* ((i start)
@@ -3339,7 +3379,7 @@
 	     (4 (ash octets -2))
 	     (8 (ash octets -3)))))
     #+windows-target
-    (let ((octets #$BUFSIZ))
+    (let ((octets 4096))
       (scale-buffer-size octets))
     #-windows-target
     (let* ((nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))

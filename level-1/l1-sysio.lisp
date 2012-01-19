@@ -772,7 +772,7 @@ is :UNIX.")
 	(:input (setq if-exists :ignored))
 	((:io :output) nil)
 	(t (report-bad-arg direction '(member :input :output :io :probe))))
-      (check-pathname-not-wild filename) ;; probe-file-x misses wild versions....
+      (check-pathname-not-wild filename) ; probe-file-x misses wild versions....
       (multiple-value-bind (native-truename kind) (probe-file-x filename)
 	(tagbody retry
 	   (if native-truename
@@ -803,7 +803,7 @@ is :UNIX.")
 		   ;; Somebody else created the file while we're trying to create it.
 		   (when (null if-exists) (return-from open nil))
 		   (multiple-value-setq (native-truename kind) (probe-file-x filename))
-		   (unless native-truename ;; huh?  Perhaps it disappeared again?
+		   (unless native-truename ; huh?  Perhaps it disappeared again?
 		     (error "Attempt to create ~s failed unexpectedly" filename))
 		   (go retry))
 		 (setq created t))
@@ -828,7 +828,7 @@ is :UNIX.")
                        (io-p (eq direction :io))
                        (char-p (or (eq element-type 'character)
                                    (subtypep element-type 'character)))
-                       (elements-per-buffer (optimal-buffer-size fd element-type))
+                       (elements-per-buffer (optimal-buffer-size fd (if char-p '(unsigned-byte 8) element-type)))
                        (real-external-format
                         (if char-p
                           (normalize-external-format :file external-format)

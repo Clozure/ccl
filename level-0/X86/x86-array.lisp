@@ -195,16 +195,7 @@
 ;;; Blast the contents of the old vector into the new one as quickly as
 ;;; possible; leave remaining elements of new vector undefined (0).
 ;;; Return new-vector.
-(defun %extend-vector (start oldv newsize)
-  (declare (fixnum start))
-  (let* ((new (%alloc-misc newsize (typecode oldv)))
-         (oldsize (uvsize oldv)))
-    (declare (fixnum oldsize))
-    (do* ((i 0 (1+ i))
-          (j start (1+ j)))
-         ((= i oldsize) new)
-      (declare (fixnum i j))
-      (setf (uvref new j) (uvref oldv i)))))
+
     
 
 
