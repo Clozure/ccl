@@ -397,21 +397,26 @@
   (let* ((doc (#/topListener hemlock-listener-document)))
     (unless (%null-ptr-p doc) doc)))
 
+(defun top-listener-process ()
+  (let* ((doc (#/topListener hemlock-listener-document)))
+    (unless (%null-ptr-p doc)
+      (hemlock-document-process doc))))
+
 
 (defun symbol-value-in-top-listener-process (symbol)
-  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
+  (let* ((process (top-listener-process)))
      (if process
        (ignore-errors (symbol-value-in-process symbol process))
        (values nil t))))
   
 (defun hemlock-ext:top-listener-output-stream ()
-  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
+  (let* ((process (top-listener-process)))
     (when process
       (setq process (require-type process 'cocoa-listener-process))
       (cocoa-listener-process-output-stream process))))
 
 (defun hemlock-ext:top-listener-input-stream ()
-  (let* ((process (hemlock-document-process (#/topListener hemlock-listener-document))))
+  (let* ((process (top-listener-process)))
     (when process
       (setq process (require-type process 'cocoa-listener-process))
       (cocoa-listener-process-input-stream process))))
@@ -548,8 +553,8 @@
                  (and (>= range-end prot-start)
                       (< range-end prot-end)))))
       t)))
-    
-    
+
+
 ;;; Action methods
 (objc:defmethod (#/interrupt: :void) ((self hemlock-listener-document) sender)
   (declare (ignore sender))
@@ -699,7 +704,7 @@
    (@selector #/ensureListener:)
    +null-ptr+
    #$YES)
-  (hemlock-document-process (#/topListener hemlock-listener-document)))
+  (top-listener-process))
 
 (defmethod ui-object-eval-selection ((app ns:ns-application)
 				     selection)

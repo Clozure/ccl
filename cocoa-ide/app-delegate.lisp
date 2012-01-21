@@ -210,8 +210,7 @@
 				     (pathname-type *.fasl-pathname*)))))
     (when filename
       (#/ensureListener: self nil)
-      (let* ((doc (#/topListener hemlock-listener-document))
-	     (process (hemlock-document-process doc)))
+      (let ((process (top-listener-process)))
 	(process-interrupt process #'(lambda ()
 				       (load filename)
 				       (fresh-line)))))))
@@ -223,8 +222,7 @@
 		   :file-types (list (pathname-type *.lisp-pathname*)))))
     (when filename
       (#/ensureListener: self nil)
-      (let* ((doc (#/topListener hemlock-listener-document))
-	     (process (hemlock-document-process doc)))
+      (let ((process (top-listener-process)))
 	(process-interrupt process #'(lambda ()
 				       (compile-file filename)
 				       (fresh-line)))))))
