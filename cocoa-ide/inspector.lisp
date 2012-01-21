@@ -39,10 +39,6 @@ Maybe get rid of contextual menus when main menu handles everything
 Make preferences for fonts, key commands
 |#
 
-(defvar @ nil)
-(defvar @@ nil)
-(defvar @@@ nil)
-
 (defclass ninspector-window-controller (ns:ns-window-controller)
   ((table-view :foreign-type :id :accessor table-view) ;IBOutlet set by nib file
    (property-column :foreign-type :id :accessor property-column) ;IBOutlet
@@ -178,13 +174,7 @@ Make preferences for fonts, key commands
            (inspector::inspector-line-count li)))))
 
 (defun inspector-object-nsstring (li)
-  (let ((ob (inspector::inspector-object li))
-	(*print-readably* nil)
-        (*signal-printing-errors* nil)
-        (*print-circle* t)
-        (*print-length* 20)
-        (*print-pretty* nil))
-    (%make-nsstring (prin1-to-string ob))))
+  (%make-nsstring (inspector::inspector-object-string li)))
 
 (defun make-inspector-item (li &optional label-string value-string)
   (let* ((item (make-instance 'inspector-item)))
@@ -206,6 +196,9 @@ Make preferences for fonts, key commands
     (#/showWindow: wc nil)
     wc))
 
+(defmethod ccl::spawn-inspector ((app cocoa-application) inspector)
+  (queue-for-gui (lambda () (make-inspector-window inspector))))
+
 (defmethod push-inspector-item ((wc ninspector-window-controller) (ii inspector-item))
   (with-slots (next-index viewed-inspector-items) wc
     (when (< next-index (fill-pointer viewed-inspector-items))
@@ -216,9 +209,10 @@ Make preferences for fonts, key commands
   (setf (inspector-item wc) ii))
 
 (defmethod (setf inspector-item) ((ii inspector-item) (wc ninspector-window-controller))
-  (setf @@@ @@
-        @@ @
-        @ (inspector-object ii))
+  (let ((proc (top-listener-process))
+        (li (lisp-inspector ii)))
+    (when proc
+      (process-interrupt proc #'inspector::note-inspecting-item li)))
   (setf (slot-value wc 'inspector-item) ii)
   (let* ((w (#/window wc))
          (title (inspector-object-nsstring (lisp-inspector ii))))

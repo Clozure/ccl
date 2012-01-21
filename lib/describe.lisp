@@ -29,7 +29,9 @@
 
 (in-package "INSPECTOR")
 
-(defvar ccl::@)
+(defvar ccl::@ nil)
+(defvar ccl::@@ nil)
+(defvar ccl::@@@ nil)
 
 ;;; The basic inspector object.
 ;;; Note that this knows nothing about windows.
@@ -66,6 +68,15 @@
     (multiple-value-bind (label-string value-string) (line-n-strings i index)
       (values line-i label-string value-string))))
 
+(defmethod inspector-object-string ((i inspector))
+  (let ((ob (inspector-object i))
+	(*print-readably* nil)
+        (*signal-printing-errors* nil)
+        (*print-circle* t)
+        (*print-length* 20)
+        (*print-pretty* nil))
+    (prin1-to-string ob)))
+
 ;; for a comment value = nil, label = "the comment" type = :comment
 ;;; => line-i = nil
 
@@ -79,7 +90,9 @@
 
 ;;; Return the type of inspector for an object
 (defmethod inspector-class (object)
-  (cond ((method-exists-p #'line-n object 0) 'usual-inspector)
+  (cond ((or (method-exists-p #'line-n object 0)
+             (method-exists-p #'inspector-line 0))
+         'usual-inspector)
         ((and (uvectorp object)
               (find-class 'uvector-inspector nil))
          'uvector-inspector)
@@ -1900,10 +1913,20 @@
                                        :inspector (make-inspector thing)
 					 :level 0)))
 
-(defparameter *default-inspector-ui-creation-function* 'tty-inspect)
-       
+(defparameter *default-inspector-ui-creation-function* (lambda (thing)
+                                                         (ccl::application-ui-operation *application* :inspect thing)))
+
+(defmethod ccl::ui-object-do-operation ((o ccl::ui-object) (operation (eql :inspect)) &rest args)
+  (apply #'tty-inspect args))
 
 (defun inspect (thing)
-  (let* ((ccl::@ thing))
+  (let* ((ccl::@@@ nil)
+         (ccl::@@ nil)
+         (ccl::@ thing))
     (restart-case (funcall *default-inspector-ui-creation-function* thing)
       (end-inspect () thing))))
+
+(defmethod note-inspecting-item ((i inspector))
+  (setq ccl::@@@ ccl::@@
+        ccl::@@ ccl::@
+        ccl::@ (inspector-object i)))
