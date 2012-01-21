@@ -22,7 +22,8 @@
 
 (in-package "GUI")
 
-(defun ccl::rlisp-test (port &optional host)
+
+(defun ccl::rlisp-test (&optional (port swink::*default-server-port*) host)
   (let ((conn  (ccl::connect-to-swink (or host "localhost") port)))
     (ccl::make-rrepl-thread conn "IDE Listener")))
 
