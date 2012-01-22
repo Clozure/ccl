@@ -32,7 +32,6 @@
      "MAKE-NEW-THREAD"
 
      "CONNECTION"
-     "CONNECTION-THREADS"
      "FIND-THREAD"
      "CONNECTION-CONTROL-STREAM"
      "CONNECTION-CONTROL-PROCESS"
@@ -41,12 +40,14 @@
      "TAGGED-OBJECT"
      "TAG-CALLBACK"
      "INVOKE-CALLBACK"
+     "ABORT-CALLBACK"
 
      "DESTRUCTURE-CASE"
 
      "WITH-CONNECTION-LOCK"
      "WITH-EVENT-HANDLING"
      "SEND-EVENT"
+     "SEND-EVENT-FOR-VALUE"
      "SIGNAL-EVENT"
      "HANDLE-EVENT"
      "READ-SEXP"
@@ -118,14 +119,21 @@ corresponding values in the CDR of VALUE."
       (apply #'invoke-restart restart values)
     (ccl::inactive-restart () nil)))
 
+(defmethod marshall-argument (conn (process process))
+  (declare (ignore conn))
+  (process-serial-number process))
+
+(defmethod marshall-argument (conn (condition condition))
+  (declare (ignore conn))
+  (safe-condition-string condition))
+
+(defmethod marshall-argument (conn thing)
+  (declare (ignore conn))
+  thing)
+
 (defun marshall-event (conn event)
   (flet ((marshall (thing)           ;; Only check the top level
-           (typecase thing
-             (process (process-serial-number thing))
-             (thread (thread-id thing))
-             (condition (safe-condition-string thing))
-             (function (tag-callback conn thing))
-             (t thing))))
+           (marshall-argument conn thing)))
     (mapcar #'marshall event)))
 
 (defvar *log-events* nil)
@@ -136,7 +144,7 @@ corresponding values in the CDR of VALUE."
   (defun log-event (format-string &rest format-args)
     (when *log-events*
       (ignore-errors
-	(let* ((string (apply #'format nil format-string format-args)))
+	(let* ((string (format nil "[~d] ~?" (process-serial-number *current-process*) format-string format-args)))
 	  ;; This kludge is so don't have to disable interrupts while printing.
 	  ;; There is a tiny timing screw at end of loop; who cares, it's just for debugging...
 	  (if (boundp '*log-queue*) ;; recursive call
@@ -151,12 +159,17 @@ corresponding values in the CDR of VALUE."
 		       do (terpri stream))))
 		(force-output stream))))))))
 
+(defun warn-and-log (format-string &rest format-args)
+  (declare (dynamic-extent format-args))
+  (apply #'log-event format-string format-args)
+  (apply #'warn format-string format-args))
+
 (defclass connection ()
   ((control-process :initform nil :accessor connection-control-process)
    (control-stream :initarg :control-stream :reader connection-control-stream)
    (buffer :initform (make-string 1024) :accessor connection-buffer)
    (lock :initform (make-lock) :reader connection-lock)
-   (threads :initform nil :accessor connection-threads)
+   (threads :initform nil :accessor %connection-threads)
    (object-counter :initform most-negative-fixnum :accessor connection-object-counter)
    (objects :initform nil :accessor connection-objects)))
 
@@ -177,34 +190,36 @@ corresponding values in the CDR of VALUE."
       (push (cons id object) (connection-objects conn))
       id)))
 
-(defun tagged-object (conn id)
+(defun object-tag (conn object)
   (with-connection-lock (conn)
-    (let ((cell (assoc id (connection-objects conn))))
-      (unless cell
-        (warn "Missing object for remote reference ~s" id))
-      (setf (connection-objects conn) (delq cell (connection-objects conn)))
-      (cdr cell))))
+    (car (rassoc object (connection-objects conn)))))
+
+(defun tagged-object (conn id &key keep-tagged)
+  (if keep-tagged
+    (cdr (assoc id (connection-objects conn)))
+    (with-connection-lock (conn)
+      (let ((cell (assoc id (connection-objects conn))))
+        (unless cell
+          (warn-and-log "Missing object for remote reference ~s" id))
+        (setf (connection-objects conn) (delq cell (connection-objects conn)))
+        (cdr cell)))))
 
 (defun remove-tag (conn id)
   (with-connection-lock (conn)
     (setf (connection-objects conn) (delete id (connection-objects conn) :key #'car))))
 
 (defun tag-callback (conn function)
-  (tag-object conn (cons function *current-process*)))
+  (tag-object conn function))
 
 (defun invoke-callback (conn id &rest values)
   (declare (dynamic-extent values))
-  (destructuring-bind (function . process) (or (tagged-object conn id) '(nil . nil))
-    (when function
-      (apply #'process-interrupt process function values))))
-
-(define-condition abort-call ()
-  ((tag :initarg :tag :reader abort-call-tag)))
+  (let ((function (tagged-object conn id)))
+    (when function (apply function t values))))
 
 (defun abort-callback (conn id)
-  (destructuring-bind (function . process) (or (tagged-object conn id) '(nil . nil))
+  (let ((function (tagged-object conn id)))
     (when function
-      (process-interrupt process (lambda () (signal 'abort-call :tag id))))))
+      (funcall function nil))))
 
 (defun write-packet (conn string)
   (let ((stream (connection-control-stream conn)))
@@ -233,9 +248,7 @@ corresponding values in the CDR of VALUE."
                            (prin1-to-string sexp)))))
 
 (defun send-event (target event &key ignore-errors)
-  (let* ((conn (etypecase target
-		 (connection target)
-		 (thread (thread-connection target))))
+  (let* ((conn (thread-connection target))
 	 (encoded-event (marshall-event conn event)))
     (log-event "Send-event ~s to ~a" encoded-event (if (eq target conn)
 						       "connection"
@@ -251,8 +264,10 @@ corresponding values in the CDR of VALUE."
 (defun send-event-if-open (target event)
   (send-event target event :ignore-errors t))
 
+#-bootstrapped (fmakunbound 'read-sexp)
+
 ;;This assumes only one process reads from the command stream or the read-buffer, so don't need locking.
-(defun read-sexp (conn)
+(defmethod read-sexp ((conn connection))
   ;; Returns the sexp or :end-connection event
   (let* ((stream (connection-control-stream conn))
          (buffer (connection-buffer conn))
@@ -276,6 +291,8 @@ corresponding values in the CDR of VALUE."
                   (*read-eval* nil))
               (read-from-string buffer t nil :end count)))))))
 
+(defmethod thread-connection ((conn connection)) conn)
+
 ;; Data for processes with swink event handling.
 (defclass thread ()
   ((connection :initarg :connection :reader thread-connection)
@@ -297,15 +314,23 @@ corresponding values in the CDR of VALUE."
 (defmethod thread-id ((id integer))
   id)
 
+(defmethod marshall-argument (conn (thread thread))
+  (declare (ignore conn))
+  (thread-id thread))
+
+(defun connection-threads (conn)
+  (with-connection-lock (conn)
+    (copy-list (%connection-threads conn))))
+
 (defun find-thread (conn id &key (key #'thread-id))
   (with-connection-lock (conn)
-    (find id (connection-threads conn) :key key)))
+    (find id (%connection-threads conn) :key key)))
 
 (defmethod make-new-thread ((conn connection) &optional (process *current-process*))
   (with-connection-lock (conn)
     (assert (not (find-thread conn process :key #'thread-process)))
     (let ((thread (make-instance (thread-class conn) :connection conn :process process)))
-      (push thread (connection-threads conn))
+      (push thread (%connection-threads conn))
       thread)))
 
 
@@ -337,7 +362,8 @@ corresponding values in the CDR of VALUE."
          (loop
            (handler-case (return (let ((*signal-events* *signal-events*))
                                    (enable-event-handling ,thread-var)
-                                   ,@body))
+                                   (with-interrupts-enabled
+                                       ,@body)))
              (events-available () (let ((*signal-events* nil))
                                    (handle-events ,thread-var))))))
       `(let ((,thread-var ,thread))
@@ -346,7 +372,8 @@ corresponding values in the CDR of VALUE."
                                             (handle-events ,thread-var))))
            (let ((*signal-events* *signal-events*))
              (enable-event-handling ,thread-var)
-             ,@body))))))
+             (with-interrupts-enabled
+                 ,@body)))))))
 
 (defun signal-event (thread event)
   (queue-event thread event)
@@ -372,12 +399,12 @@ corresponding values in the CDR of VALUE."
 ;; and sends output to the connection.  We can also spawn a process that does nothing else.
 
 (defvar *global-debugger* t
-  "Use remote debugger on errors even in non-repl threads")
+  "Use remote debugger on errors and user events even in non-repl threads")
 
 (defclass server-ui-object (ccl::ui-object) ())
 
 (defclass server-connection (connection)
-  ())
+  ((internal-requests :initform nil :accessor connection-internal-requests)))
 
 (defclass server-thread (thread server-ui-object)
   ((io :initform nil :accessor thread-io)))
@@ -392,12 +419,15 @@ corresponding values in the CDR of VALUE."
 
 (defvar *current-server-thread* nil)
 
-;; TODO: if this process talked to a connection before, we should reuse it...
-(defun connection-for-break (process)
+;; TODO: if this process talked to a connection before, we should reuse it
+;;  even if not talking to it now.
+(defun connection-for-process (process)
   "Return the 'default' connection for implementing a break in a
 non-swink process PROCESS."
-  (declare (ignore process))
-  (car *server-connections*))
+  (let ((data (ccl::process-ui-object process)))
+    (if (typep data 'server-thread)     ;; process is in a swink repl.
+      (thread-connection data)
+      (car *server-connections*))))
 
 (defmethod thread-id ((conn server-connection))
   (process-serial-number *current-process*))
@@ -452,11 +482,22 @@ non-swink process PROCESS."
           (remf *listener-sockets* info)))
       t)))
 
+(defun enqueue-internal-request (conn event)
+  (with-connection-lock (conn)
+    (push (cons nil event) (connection-internal-requests conn))))
+
+(defmethod read-sexp ((conn server-connection))
+  (if (and (connection-internal-requests conn)
+           ;; Remote always takes priority
+           (not (stream-listen (connection-control-stream conn))))
+      (with-connection-lock (conn) (pop (connection-internal-requests conn)))
+      (call-next-method)))
+
 (defun server-event-loop (conn)
   (loop
     (let ((thread.event (read-sexp conn)))
       (log-event "received: ~s" thread.event)
-      (destructuring-bind (thread-id . event) thread.event  ;; TODO: make send-client-event prepend nil if send to conn
+      (destructuring-bind (thread-id . event) thread.event
         (if thread-id
           (let ((thread (find-thread conn thread-id)))
             (when thread
@@ -474,6 +515,10 @@ non-swink process PROCESS."
 		     (setf (connection-control-process conn) *current-process*)
 		     (handler-bind ((error (lambda (c)
 					     (log-event "Error: ~a" c)
+                                             (log-event "Backtrace: ~%~a"
+                                                        (ignore-errors
+                                                         (with-output-to-string (s)
+                                                           (print-call-history :detailed-p nil :stream s :print-length 20 :print-level 4))))
 					     (invoke-restart 'close-connection))))
 		       (when startup-signal (signal-semaphore startup-signal))
 		       (server-event-loop conn)))
@@ -497,16 +542,15 @@ non-swink process PROCESS."
 	   (log-event "Start exit-repl in ~s" (thread-id *current-process*))
 	   (handler-case  (invoke-restart-if-active 'exit-repl)
 	     (error (c) (log-event "Exit repl error ~a in ~s" c (thread-id *current-process*))))))
-    (loop for thread in (with-connection-lock (conn)
-			  (copy-list (connection-threads conn)))
+    (loop for thread in  (connection-threads conn)
        do (process-interrupt (thread-process thread) #'exit-repl)))
   (let* ((timeout 0.05)
          (end (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
     (process-wait "closing connection"
       (lambda ()
-        (or (null (connection-threads conn)) (> (get-internal-real-time) end)))))
-  (when (connection-threads conn)
-    (warn "Wasn't able to close these threads: ~s" (connection-threads conn)))
+        (or (null (%connection-threads conn)) (> (get-internal-real-time) end)))))
+  (when (%connection-threads conn)
+    (warn-and-log "Wasn't able to close these threads: ~s" (connection-threads conn)))
 
   (close (connection-control-stream conn)))
 
@@ -515,41 +559,45 @@ non-swink process PROCESS."
 (defun select-interactive-process ()
   (when *global-debugger*
     (loop for conn in (with-swink-lock () (copy-list *server-connections*))
-      do (with-connection-lock (conn)
-           (loop for thread in (connection-threads conn)
-             when (thread-io thread) ;; still active
-             do (return-from select-interactive-process (thread-process thread)))))))
+      do (loop for thread in (connection-threads conn)
+           when (thread-io thread) ;; still active
+           do (return-from select-interactive-process (thread-process thread))))))
+
+(defun send-event-for-value (target event &key abort-event (semaphore (make-semaphore)))
+  (let* ((returned nil)
+         (return-values nil)
+         (tag nil)
+         (conn (thread-connection target)))
+    (unwind-protect
+        (progn
+          (setq tag (tag-callback conn (lambda (completed? &rest values)
+                                         (setq returned t)
+                                         (when completed?
+                                           ;; Just return 0 values if cancelled.
+                                           (setq return-values values))
+                                         (signal-semaphore semaphore))))
+          ;; In server case, :target is nil, 
+          (send-event target `(,@event ,tag))
+          (let ((current-thread (find-thread conn *current-process* :key #'thread-control-process)))
+            (if current-thread ;; if in repl thread, handle thread events while waiting.
+              (with-event-handling (current-thread)
+                (wait-on-semaphore semaphore))
+              (wait-on-semaphore semaphore)))
+          (apply #'values return-values))
+      (when (and tag (not returned))
+        (remove-tag conn tag)
+        (when (and abort-event (not returned))
+          ;; inform the other side that not waiting any more.
+          (send-event-if-open conn `(,@abort-event ,tag)))))))
+
 
 (defmethod get-remote-user-input ((thread server-thread))
   ;; Usually this is called from a repl evaluation, but the user could have passed the stream to
   ;; any other process, so we could be running anywhere.  Thread is the thread of the stream.
   (with-simple-restart (abort-read "Abort reading")
-    (let* ((conn (thread-connection thread))
-	   (returned nil)
-           (returned-string nil)
-           (return-signal (make-semaphore))
-           (tag nil))
+    (let ((conn (thread-connection thread)))
       (force-output (thread-io thread))
-      (unwind-protect
-	   (progn
-	     (setq tag (tag-callback conn (lambda (string)
-					    (setq returned t)
-					    (setq returned-string string)
-					    (signal-semaphore return-signal))))
-	     (send-event conn `(:read-string ,thread ,tag))
-	     (let ((current-thread (find-thread conn *current-process* :key #'thread-process)))
-	       (with-interrupts-enabled
-		 (if current-thread ;; we're running in a repl, process events while waiting.
-		     (with-event-handling (current-thread)
-		       (wait-on-semaphore return-signal))
-		     (wait-on-semaphore return-signal))))
-	     returned-string)
-        (unless returned
-          ;; Something interrupted us and aborted
-          ;; ignore response if sent
-          (when tag (remove-tag conn tag))
-	  ;; tell client to stop reading as well.
-          (send-event-if-open conn `(:abort-read ,thread ,tag)))))))
+      (send-event-for-value conn `(:read-string ,thread) :abort-event `(:abort-read ,thread)))))
 
 
 (defmethod send-remote-user-output ((thread server-thread) string start end)
@@ -587,7 +635,7 @@ non-swink process PROCESS."
         (close in :abort t)
         (close out :abort t)
         (with-connection-lock (conn)
-          (setf (connection-threads conn) (delq thread (connection-threads conn))))))))
+          (setf (%connection-threads conn) (delq thread (%connection-threads conn))))))))
 
 
 (defclass repl-process (process) ())
@@ -602,7 +650,7 @@ non-swink process PROCESS."
   (declare (ignore hook))
   (when (eq ccl::*read-loop-function* 'swink-read-loop)
     (return-from swink-debugger-hook nil))
-  (let ((conn (connection-for-break *current-process*)))
+  (let ((conn (connection-for-process *current-process*)))
     ;; TODO: set up a restart to pick a different connection, if there is more than one.
     (when conn
       (swink-repl conn 1 (lambda ()
@@ -677,6 +725,128 @@ non-swink process PROCESS."
                                              ,@abort-forms)))))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; inspector support.
+
+(defmethod ccl::ui-object-do-operation ((o server-ui-object) (operation (eql :inspect)) &rest args)
+  (let ((conn (connection-for-process *current-process*)))
+    (if conn
+      (apply #'remote-inspect conn args)
+      (call-next-method))))
+
+(defvar $inspector-segment-size 100)
+
+(defstruct (icell (:constructor %make-icell))
+  inspector
+  string
+  count
+  (segments nil) ;; line inspectors, in equal-sized segments.
+  (process *current-process*))
+
+(defmethod marshall-argument ((conn connection) (icell icell))
+  ;; Send the count and string since they need that right away anyhow.
+  (list* (tag-object conn icell) (icell-count icell) (icell-string icell)))
+
+(defun make-icell (inspector)
+  (let* ((count (or (inspector::inspector-line-count inspector)
+                    (inspector::update-line-count inspector)))
+         (seg-size (min count $inspector-segment-size)))
+    (%make-icell :inspector inspector
+		 :count count
+		 :string (inspector::inspector-object-string inspector)
+		 :segments (and (> seg-size 0) ;; pre-reserve the initial segment.
+				(list (cons 0 seg-size))))))
+
+(defun icell-seg-size (icell)
+  (length (cdar (icell-segments icell))))
+
+(defun iseg-end (seg)
+  (destructuring-bind (start . ln) seg
+    (+ start (if (integerp ln) ln (length ln)))))
+
+(defun compute-lines (icell seg)
+  (let* ((inspector::*inspector-disassembly* t)
+         (inspector (icell-inspector icell))
+         (start-index (car seg))
+         (seg-count (cdr seg)))
+    (unless (integerp seg-count)
+      (warn-and-log "Duplicate request for ~s line ~s" icell seg)
+      (setq seg-count (length seg-count)))
+    (let ((strings (make-array seg-count))
+          (lines (make-array seg-count)))
+      (loop for index from 0 below seg-count
+            do (multiple-value-bind (line-inspector label-string value-string)
+                                    (inspector::inspector-line inspector (+ start-index index))
+                 (setf (aref lines index) line-inspector)
+                 (setf (aref strings index) (cons label-string value-string))))
+      (setf (cdr seg) lines)
+      strings)))
+
+(defmethod remote-inspect ((conn server-connection) thing)
+  (let* ((inspector (let ((inspector::*inspector-disassembly* t))
+                      (inspector::make-inspector thing)))
+         (icell (make-icell inspector)))
+    (send-event conn `(:inspect ,icell))
+    (when (icell-segments icell)
+      (send-inspector-data conn icell))
+    thing))
+
+(defun send-inspector-data (conn icell &optional (seg (car (icell-segments icell))))
+  (let ((strings (compute-lines icell seg)))
+    (send-event conn `(:inspector-data ,(object-tag conn icell) (,(car seg) . ,strings))))
+  ;; arrange to send the rest later
+  (enqueue-internal-request conn `(maybe-send-inspector-data ,icell)))
+
+;; Segment management.
+;; Only the control process messes with icell-segments, so don't need to lock.
+(defun reserve-next-segment (icell)
+  (let* ((segments (icell-segments icell))
+         (count (icell-count icell))
+         (gapptr nil))
+    (loop for last = nil then segs as segs = segments then (cdr segs) while segs
+      when (and last (> (caar last) (iseg-end (car segs)))) do (setq gapptr last))
+    (when gapptr
+      (setq count (caar gapptr) segments (cdr gapptr)))
+    (let* ((start-index (iseg-end (car segments)))
+           (seg-size (min (icell-seg-size icell) (- count start-index)))
+           (new (and (> seg-size 0) (cons start-index seg-size))))
+      ;; gapptr = ((5000 . line) (200 . line) ... (0 . line))
+      (when new
+        (if (null gapptr)
+          (setf (icell-segments icell) (cons new segments))
+          (setf (cdr gapptr) (cons new segments)))
+        new))))
+
+;; Returns NIL if already reserved
+(defun reserve-segment-for-index (icell index)
+  (let* ((seg-size (icell-seg-size icell))
+         (seg-start (- index (mod index seg-size))))
+    (loop for last = nil then segs as segs = (icell-segments icell) then (cdr segs)
+      while (< seg-start (caar segs)) ;; last seg is always 0.
+      finally (return (unless (eql seg-start (caar segs)) ;; already exists.
+                        (let ((this-end (iseg-end (car segs)))
+                              (new (cons seg-start seg-size)))
+                          (assert (>= seg-start this-end))
+                          (if (null last)
+                            (push new (icell-segments icell))
+                            (push new (cdr last)))
+                          new))))))
+
+(defun icell-line-inspector (icell index)
+  (loop for seg in (icell-segments icell)
+    when (and (<= (car seg) index) (< index (iseg-end seg)))
+    return (and (vectorp (cdr seg)) (aref (cdr seg) (- index (car seg))))))
+
+(defun maybe-send-inspector-data (conn icell &optional (seg (car (icell-segments icell))))
+  (when seg
+    (let* ((process (icell-process icell))
+           (thread (ccl::process-ui-object process)))
+      (if (typep thread 'server-thread)
+        ;; Why not just interrupt like any random process?
+        (signal-event thread `(send-inspector-data ,icell ,seg))
+        (process-interrupt process #'send-inspector-data conn icell seg)))))
+
 (defmethod handle-event ((conn server-connection) event)
   (log-event "handle-event (global): ~s" event)
   (destructure-case event
@@ -700,12 +870,50 @@ non-swink process PROCESS."
                     :machine-type ,(machine-type)
                     :machine-version ,(machine-version)))))
 
+    ((:describe-more icell-tag index)
+     (let* ((icell (tagged-object conn icell-tag :keep-tagged t))
+            (seg (reserve-segment-for-index icell index)))
+       (when seg
+         (maybe-send-inspector-data conn icell seg))))
+
+    ((:line-inspector icell-tag index return-tag)
+     (let ((new-icell nil))
+       (with-return-values (conn return-tag)
+         (let* ((icell (tagged-object conn icell-tag :keep-tagged t))
+                (line-inspector  (or (icell-line-inspector icell index)
+                                     (error "Requesting undescribed line ~s ~s" icell index))))
+           (setq new-icell (make-icell line-inspector))
+           (list new-icell)))
+       (maybe-send-inspector-data conn new-icell)))
+
+    ((:refresh-inspector icell-tag return-tag)
+     (let ((new-icell nil))
+       (with-return-values (conn return-tag)
+         (let* ((icell (tagged-object conn icell-tag :keep-tagged t))
+                (new-inspector (inspector::refresh-inspector (icell-inspector icell))))
+           (setq new-icell (make-icell new-inspector))
+           (list new-icell)))
+       (maybe-send-inspector-data conn new-icell)))
+
+    ((:inspecting-item icell-tag)
+     (loop with icell = (tagged-object conn icell-tag :keep-tagged t)
+       for thread in (connection-threads conn)
+       when (thread-io thread)
+       do (signal-event thread `(inspecting-item ,icell))))
+
+    ;; Internal event to send data in segments so it's interruptible
+    ((maybe-send-inspector-data icell)
+     (let ((seg (reserve-next-segment icell)))
+       (when seg
+         (maybe-send-inspector-data conn icell seg))))
+
     #+remote-eval
     ((:eval form)
        ;; It's the caller's responsibility to make this quick...  If they want return values
        ;; or whatever, they can put that in the form.
        (eval form))))
   
+
 ;; TODO: toplevel-eval checks package change and invokes application-ui-operation, need to send that back.
 
 
@@ -766,6 +974,12 @@ non-swink process PROCESS."
          (with-return-values (conn remote-tag (close sstream))
            (read-eval-print-one conn sstream package))))
 
+      ;; Internal events
+      ((send-inspector-data icell seg)
+       (send-inspector-data conn icell seg))
+      ((inspecting-item icell)
+       (inspector::note-inspecting-item (icell-inspector icell)))
+
       ((:interrupt)
        (ccl::force-break-in-listener *current-process*))
 
@@ -802,6 +1016,8 @@ non-swink process PROCESS."
                   (swink-debugger-hook condition hook)
                   (funcall break-hook condition hook))
                 'swink-debugger-hook))
+        ;; This probably should be controlled by something other than use-swink-globally because
+        ;; might want to use gui inspector even if not using global debugger.
         (setq ui-object (ccl::application-ui-object *application*))
         (setf (ccl::application-ui-object *application*) (make-instance 'server-ui-object))
         (setq using-swink-globally t))

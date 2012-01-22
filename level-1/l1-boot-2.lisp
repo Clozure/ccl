@@ -293,7 +293,6 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "ARRAYS-FRY" "arrays-fry")
       (bin-load-provide "APROPOS" "apropos")
       (bin-load-provide "SOURCE-FILES" "source-files")
-      (bin-load-provide "SWINK" "swink")
       
       #+ppc-target
       (progn
@@ -370,6 +369,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "ARGLIST" "arglist")
       (bin-load-provide "EDIT-CALLERS" "edit-callers")
       (bin-load-provide "DESCRIBE" "describe")
+      (bin-load-provide "SWINK" "swink")
       (bin-load-provide "COVER" "cover")
       (bin-load-provide "LEAKS" "leaks")
       (bin-load-provide "CORE-FILES" "core-files")

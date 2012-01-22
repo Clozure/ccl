@@ -27,7 +27,8 @@
   ((features :initform nil :accessor rlisp-features)
    (lisp-implementation-type :initform "???" :accessor rlisp-lisp-implementation-type)
    (lisp-implementation-version :initform "???" :accessor rlisp-lisp-implementation-version)
-   (machine-instance :initform "???" :accessor rlisp-machine-instance)))
+   (machine-instance :initform "???" :accessor rlisp-machine-instance)
+   (proxies :initform (make-hash-table :test 'eql :weak :value) :reader connection-proxies)))
 
 (defmethod swink:thread-id ((conn remote-lisp-connection)) nil)
 
@@ -99,7 +100,7 @@
             (setf (swink:connection-control-process conn) *current-process*)
             (with-simple-restart (swink:close-connection "Close connection")
               (loop (dispatch-event conn (swink:read-sexp conn)))))))
-  (let ((info (send-event-for-value conn `(:connection-info))))
+  (let ((info (swink:send-event-for-value conn `(:connection-info))))
     (when info
       (apply #'update-rlisp-connection-info conn info)))
   conn)
@@ -127,9 +128,7 @@
          (apply #'swink:invoke-callback conn local-tag values)))
       ((:cancel-return local-tag)
        (when local-tag
-         (let ((process (cdr (swink:tagged-object conn local-tag)))) ;; this removes the tag.
-           (when process
-             (process-interrupt process (lambda () (signal 'rlisp-cancel-return :tag local-tag)))))))
+         (swink:abort-callback conn local-tag)))
       (((:read-string :abort-read :write-string) stream-thread-id &rest args)
        ;; Do I/O stuff in the stream listener process, not the caller's listener
        ;; process (which might not even exist)
@@ -137,12 +136,16 @@
          (if stream-listener
            (swink:signal-event stream-listener (cons (car event) args))
            (warn "Missing listener for ~s" event))))
+      ((:inspect remote-inspector)
+       (let ((proxy (new-inspector-proxy conn remote-inspector)))
+         (spawn-inspector *application* proxy)))
+      ((:inspector-data tag segment)
+       (let ((proxy (inspector-proxy-for-tag conn tag)))
+         (register-inspector-proxy-segment proxy segment)))
       (t (let ((thread (swink:find-thread conn sender-id)))
            (when thread
-             (swink:signal-event thread event)))))))
-
-(define-condition rlisp-cancel-return ()
-  ((tag :initarg :tag :reader rlisp-cancel-return-tag)))
+             (swink:signal-event thread event))))))
+  (swink::log-event "Dispatch-event done"))
 
 (define-condition rlisp-read-aborted ()
   ((tag :initarg :tag :reader rlisp-read-aborted-tag)))
@@ -156,27 +159,6 @@
 		     (read-available-text *standard-input*))))
       (swink:send-event (swink:thread-connection rthread) `(:return ,tag ,text)))))
 
-(defun send-event-for-value (target event &key (semaphore (make-semaphore)))
-  (let* ((return-values nil)
-         (conn (etypecase target
-                 (remote-lisp-connection target)
-                 (remote-lisp-thread (swink:thread-connection target))))
-         (tag (swink:tag-callback conn
-                                  (lambda (&rest values)
-                                    (setq return-values values)
-                                    (signal-semaphore semaphore))))
-         (event-with-callback `(,@event ,tag)))
-    (handler-bind ((rlisp-cancel-return
-                    ;; This is called if the call got aborted for any reason, so we can clean up.
-                    (lambda (c)
-                      (when (eq (rlisp-cancel-return-tag c) tag)
-                        (signal-semaphore semaphore)))))
-      (swink:send-event target event-with-callback)
-      (if (eq target conn)
-        (wait-on-semaphore semaphore)
-        (swink:with-event-handling (target)
-          (wait-on-semaphore semaphore)))
-      (apply #'values return-values))))
 
 (defclass remote-backtrace-context ()
   ((thread :initarg :thread :reader backtrace-context-thread)
@@ -370,10 +352,136 @@
             (let* ((package-name (loop for sym in (car env) for val in (cdr env)
                                    when (eq sym '*package*) do (return val))))
               (if *verbose-eval-selection*
-                (let ((state (send-event-for-value rthread `(:read-eval-print-one ,text ,package-name) :semaphore sem)))
+                (let ((state (swink:send-event-for-value rthread
+                                                         `(:read-eval-print-one ,text ,package-name)
+                                                         :semaphore sem)))
                   (loop while state
                     do (force-output)
                     do (print-listener-prompt *standard-output* t)
-                    do (send-event-for-value rthread `(:read-eval-print-next ,state) :semaphore sem)))
-                (send-event-for-value rthread `(:read-eval-all-print-last ,text ,package-name) :semaphore sem)))))))))
+                    do (swink:send-event-for-value rthread
+                                                   `(:read-eval-print-next ,state)
+                                                   :semaphore sem)))
+                (swink:send-event-for-value rthread
+                                            `(:read-eval-all-print-last ,text ,package-name)
+                                            :semaphore sem)))))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; inspector support
+
+;; TODO: tell server no longer need tag when the proxy gets gc'd.
+(defclass remote-inspector-proxy (inspector::inspector)
+  ((connection :initarg :connection :reader remote-inspector-proxy-connection)
+   (tag :initarg :tag :reader remote-inspector-proxy-tag)
+   (string :initarg :string :reader inspector::inspector-object-string)
+   (count :initarg :count :reader inspector::inspector-line-count)
+   ;; This is accumulating strings info from remote.
+   (segments :initform nil)))
+
+(defmethod initialize-instance :after ((proxy remote-inspector-proxy) &rest args)
+  (declare (ignore args))
+  (let ((conn (remote-inspector-proxy-connection proxy))
+        (tag (remote-inspector-proxy-tag proxy)))
+    (swink:with-connection-lock (conn)
+      (assert (null (gethash tag (connection-proxies conn))))
+      (setf (gethash tag (connection-proxies conn)) proxy))))
+
+(defmethod spawn-inspector ((application application) (proxy remote-inspector-proxy))
+  ;; Artist conception... we don't really support non-GUI client side, but it would
+  ;; go something like this.
+  (let* ((conn (remote-inspector-proxy-connection proxy))
+         (thread (swink:find-thread conn t :key #'true))) ;; any thread.
+    (when thread
+      (process-interrupt (swink:thread-control-process thread) 'inspect proxy))))
+
+(defmethod inspector::note-inspecting-item ((proxy remote-inspector-proxy))
+  (let ((conn (remote-inspector-proxy-connection proxy))
+        (tag (remote-inspector-proxy-tag proxy)))
+    (swink:send-event conn `(:inspecting-item ,tag))))
+
+(defmethod inspector::refresh-inspector ((proxy remote-inspector-proxy))
+  (let ((conn (remote-inspector-proxy-connection proxy))
+        (tag (remote-inspector-proxy-tag proxy)))
+    (let ((remote-inspector (swink:send-event-for-value conn `(:refresh-inspector ,tag))))
+      (new-inspector-proxy conn remote-inspector))))
+
+(defmethod new-inspector-proxy ((conn remote-lisp-connection) remote-inspector)
+  (destructuring-bind (remote-tag new-count . new-string) remote-inspector
+    (let ((i (inspector-proxy-for-tag conn remote-tag)))
+      (with-slots (string count) i
+        ;; The proxy might have already existed, if received some segments for it before we got
+        ;; here, but it better be uninitialized.
+        (when count (error "Duplicate proxy for ~s" remote-tag))
+        (setf string new-string count new-count))
+      i)))
+
+(defmethod inspector-proxy-for-tag ((conn remote-lisp-connection) remote-tag)
+  (or (gethash remote-tag (connection-proxies conn))
+      ;; Make a blank proxy to catch any segments that come in while we're initializing.
+      (setf (gethash remote-tag (connection-proxies conn))
+            (make-instance 'remote-inspector-proxy
+              :connection conn
+              :tag remote-tag
+              :count nil))))
+
+(defmethod register-inspector-proxy-segment ((proxy remote-inspector-proxy) segment)
+  (with-slots (connection segments) proxy
+    (swink:with-connection-lock (connection)
+      (push segment segments))))
+
+;; Get the strings for given line, pinging server if we don't already have it.
+(defmethod remote-inspector-proxy-strings ((proxy remote-inspector-proxy) index)
+  (with-slots (connection tag segments) proxy
+    ;; No need to lock because we only ever push onto segments.
+    (let ((last-segments nil)
+          (result nil))
+      (flet ((lookup (index segs)
+               (loop for tail on segs until (eq tail last-segments)
+                 as (start-index . strings) = (car tail) as pos = (- index start-index)
+                 when (and (<= 0 pos) (< pos (length strings)))
+                 do (progn
+                      (setq result (aref strings pos))
+                      (return t))
+                 finally (setq last-segments segs))))
+        (unless (lookup index segments)
+          (swink:send-event connection `(:describe-more ,tag ,index))
+          (process-wait "Remote Describe" (lambda ()
+                                            (and (neq segments last-segments)
+                                                 ;; something new has arrived
+                                                 (lookup index segments)))))
+        result))))
+
+
+(defclass remote-inspector-line (inspector::inspector)
+  ((parent :initarg :parent :reader remote-inspector-line-parent)
+   (index :initarg :index :reader remote-inspector-line-index)
+   ;; Lazily computed remote inspector proxy
+   (proxy :initform nil)))
+
+(defmethod inspector::inspector-line ((proxy remote-inspector-proxy) index)
+  (destructuring-bind (label-string . value-string)
+                      (remote-inspector-proxy-strings proxy index)
+    (values (make-instance 'remote-inspector-line :parent proxy :index index)
+            label-string
+            value-string)))
+
+(defmethod remote-inspector-line-proxy ((line remote-inspector-line))
+  (with-slots (parent index proxy) line
+    (or proxy
+        (setf proxy
+              (with-slots (connection tag) parent
+                (let ((remote-inspector
+                       (swink:send-event-for-value connection
+                                                   `(:line-inspector ,tag ,index))))
+                  (new-inspector-proxy connection remote-inspector)))))))
+
+(defmethod inspector::inspector-line-count ((line remote-inspector-line))
+  (inspector::inspector-line-count (remote-inspector-line-proxy line)))
+
+(defmethod inspector::inspector-object-string ((line remote-inspector-line))
+  (inspector::inspector-object-string (remote-inspector-line-proxy line)))
+
+(defmethod inspector::inspector-line ((line remote-inspector-line) index)
+  (inspector::inspector-line (remote-inspector-line-proxy line) index))
+
+(defmethod inspector::note-inspecting-item ((line remote-inspector-line))
+  (inspector::note-inspecting-item (remote-inspector-line-proxy line)))
