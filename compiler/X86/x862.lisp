@@ -3293,7 +3293,7 @@
       (declare (fixnum n))
       (dolist (arg stkargs)
         (let* ((pushform (x862-acode-operator-supports-push arg)))
-en          (if pushformne
+          (if pushform
             (progn
               (x862-form seg :push nil pushform)
               (x862-new-vstack-lcell :outgoing-argument *x862-target-lcell-size* 0 nil)
