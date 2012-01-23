@@ -864,7 +864,7 @@
       (push loc (svref *x862-gpr-locations* gpr))
       (setf (svref *x862-gpr-locations* gpr) (list loc)))
     (setq *x862-gpr-locations-valid-mask*
-	  (logior *x862-gpr-locations-valid-mask* (ash 1 gpr)))))
+          (logior *x862-gpr-locations-valid-mask* (ash 1 gpr)))))
   
 ;;; For vpush: nothing else should claim to contain loc.
 (defun x862-regmap-note-reg-location (gpr loc)
@@ -1962,18 +1962,18 @@
                     (! box-fixnum target s64-reg)
                     (x862-box-s64 seg target s64-reg)))))
              (t
-                (with-imm-target () (u64-reg :u64)
-                  (if (eql vreg-mode hard-reg-class-gpr-mode-u64)
-                    (setq u64-reg vreg))
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-u64 u64-reg src index-known-fixnum)
-                    (progn
-                      (if index-known-fixnum
-                        (x862-absolute-natural seg unscaled-idx nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3))))
-                      (! misc-ref-u64 u64-reg src unscaled-idx)))
-                  (unless (eq u64-reg vreg)
-                    (ensuring-node-target (target vreg)
-                      (x862-box-u64 seg target u64-reg)))))))
+              (with-imm-target () (u64-reg :u64)
+                (if (eql vreg-mode hard-reg-class-gpr-mode-u64)
+                  (setq u64-reg vreg))
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-u64 u64-reg src index-known-fixnum)
+                  (progn
+                    (if index-known-fixnum
+                      (x862-absolute-natural seg unscaled-idx nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3))))
+                    (! misc-ref-u64 u64-reg src unscaled-idx)))
+                (unless (eq u64-reg vreg)
+                  (ensuring-node-target (target vreg)
+                    (x862-box-u64 seg target u64-reg)))))))
           (t
            (unless is-1-bit
              (nx-error "~& unsupported vector type: ~s"
@@ -5422,6 +5422,7 @@
     (if (null vreg)
       (dolist (f initforms) (x862-form seg nil nil f))
       (let* ((*x862-vstack* *x862-vstack*)
+             (entry-vstack *x862-vstack*)
              (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
              (arch (backend-target-arch *target-backend*))
              (n (length initforms))
@@ -5480,7 +5481,8 @@
                              (x862-stack-to-register seg (x862-vloc-ea pushed-cell) nodetemp)))
                          (! misc-set-c-node reg target index)))))
                  (! vstack-discard nntriv))
-               ))))
+               ))
+        (x862-regmap-note-vstack-delta entry-vstack *x862-vstack*)))
      (^)))
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
