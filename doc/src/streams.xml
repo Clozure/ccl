@@ -1086,4 +1086,28 @@
       </refentry>
     </sect2>
   </sect1>
+  <sect1>
+    <title>Lisp Standard Streams and OS Standard Streams</title>
+    <para>
+      In normal interactive usage, the input and output sides of the
+      bidirectional stream <literal>*terminal-io*</literal> are hooked
+      up to the the operating system's standard input and standard
+      output.  The lisp streams <literal>*standard-input*</literal>,
+      <literal>*standard-output*</literal>, and
+      <literal>*error-output*</literal> are synonym streams for
+      <literal>*terminal-io*</literal>.
+    </para>
+    <para>
+      In batch mode, this arrangement is modified slightly.  The lisp
+      streams <literal>*standard-input*</literal>,
+      <literal>*standard-output*</literal>, and
+      <literal>*standard-error*</literal> correspond directly to the
+      operating system's standard input, standard output, and standard
+      error.  If the lisp can determine that it has access to an
+      operating system tty, then <literal>*terminal-io*</literal> will
+      be hooked up to that.  Otherwise, the input and output streams
+      of <literal>*terminal-io*</literal> will correspond to the
+      operating system's standard input and standard output.
+    </para>
+  </sect1>
 </chapter>
