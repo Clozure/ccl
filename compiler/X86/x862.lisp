@@ -850,7 +850,7 @@
   vinsn)
 
 (defun x862-regmap-note-store (gpr loc)
-  (let* ((gpr (%hard-regspec-value gpr)))
+  (let* ((gpr (if gpr (%hard-regspec-value gpr))))
     ;; Any other GPRs that had contained loc no longer do so.
     (dotimes (i 16)
       (unless (eql i gpr)
@@ -860,11 +860,12 @@
                             (delete loc (svref *x862-gpr-locations* i))))
             (setq *x862-gpr-locations-valid-mask*
 		  (logandc2 *x862-gpr-locations-valid-mask* (ash 1 i)))))))
-    (if (logbitp gpr *x862-gpr-locations-valid-mask*)
-      (push loc (svref *x862-gpr-locations* gpr))
-      (setf (svref *x862-gpr-locations* gpr) (list loc)))
-    (setq *x862-gpr-locations-valid-mask*
-          (logior *x862-gpr-locations-valid-mask* (ash 1 gpr)))))
+    (when gpr
+      (if (logbitp gpr *x862-gpr-locations-valid-mask*)
+        (push loc (svref *x862-gpr-locations* gpr))
+        (setf (svref *x862-gpr-locations* gpr) (list loc)))
+      (setq *x862-gpr-locations-valid-mask*
+            (logior *x862-gpr-locations-valid-mask* (ash 1 gpr))))))
   
 ;;; For vpush: nothing else should claim to contain loc.
 (defun x862-regmap-note-reg-location (gpr loc)
@@ -1367,7 +1368,10 @@
          (args (if code-note `(,@(%cdr form) ,code-note) (%cdr form))))
     (apply (x862-acode-operator-function form) seg vreg xfer args)))
 
+
 (defun x862-form (seg vreg xfer form)
+  (when (eq vreg :push)
+    (x862-regmap-note-store nil *x862-vstack*))
   (with-note (form seg)
     (if (nx-null form)
       (x862-nil seg vreg xfer)
@@ -3289,7 +3293,7 @@
       (declare (fixnum n))
       (dolist (arg stkargs)
         (let* ((pushform (x862-acode-operator-supports-push arg)))
-          (if pushform
+en          (if pushformne
             (progn
               (x862-form seg :push nil pushform)
               (x862-new-vstack-lcell :outgoing-argument *x862-target-lcell-size* 0 nil)
@@ -5422,7 +5426,6 @@
     (if (null vreg)
       (dolist (f initforms) (x862-form seg nil nil f))
       (let* ((*x862-vstack* *x862-vstack*)
-             (entry-vstack *x862-vstack*)
              (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
              (arch (backend-target-arch *target-backend*))
              (n (length initforms))
@@ -5481,8 +5484,7 @@
                              (x862-stack-to-register seg (x862-vloc-ea pushed-cell) nodetemp)))
                          (! misc-set-c-node reg target index)))))
                  (! vstack-discard nntriv))
-               ))
-        (x862-regmap-note-vstack-delta entry-vstack *x862-vstack*)))
+               ))))
      (^)))
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
