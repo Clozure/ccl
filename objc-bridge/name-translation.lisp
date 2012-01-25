@@ -45,6 +45,7 @@
 (define-special-objc-word "ATS")
 (define-special-objc-word "BMP")
 (define-special-objc-word "CA")
+(define-special-objc-word "CCL")
 (define-special-objc-word "CF")
 (define-special-objc-word "CG")
 (define-special-objc-word "CMYK")
