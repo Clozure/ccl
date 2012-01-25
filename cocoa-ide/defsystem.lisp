@@ -65,6 +65,7 @@
   '(;"ide-bundle" - loaded by hand above
     "constants"
     "cocoa-utils"
+    "cf-utils"
     "cocoa-defaults"
     "cocoa-prefs"
     "cocoa-typeout"

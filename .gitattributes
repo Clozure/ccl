@@ -22,6 +22,7 @@ cocoa-ide/app-delegate.lisp -text
 cocoa-ide/apropos-window.lisp -text
 cocoa-ide/build-application.lisp -text
 cocoa-ide/builder-utilities.lisp -text
+cocoa-ide/cf-utils.lisp -text
 cocoa-ide/cocoa-doc.lisp -text
 cocoa-ide/cocoa-grep.lisp -text
 cocoa-ide/cocoa-remote-lisp.lisp -text
