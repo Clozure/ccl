@@ -765,7 +765,7 @@
     (when info
       (unless (deferred-cocoa-listener-stream-info-window info)
         (with-autorelease-pool
-            (let* ((doc (make-instance 'hemlock-background-listener-document))
+            (let* ((doc (execute-in-gui (lambda () (make-instance 'hemlock-background-listener-document))))
                    (buffer (hemlock-buffer doc))
                    (process (deferred-cocoa-listener-stream-info-process info)))
               (setf (hi::buffer-name buffer)
