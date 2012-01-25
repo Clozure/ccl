@@ -112,42 +112,42 @@
 
 
 
-  (defun build-ide (bundle-path)
-    (setq bundle-path (ensure-directory-pathname bundle-path))
+(defun build-ide (bundle-path)
+  (setq bundle-path (ensure-directory-pathname bundle-path))
 
-    ;; The bundle is expected to exist, we'll just add the executable into it.
-    (assert (probe-file bundle-path))
+  ;; The bundle is expected to exist, we'll just add the executable into it.
+  (assert (probe-file bundle-path))
 
-    ;; Wait until we're sure that the Cocoa event loop has started.
-    (wait-on-semaphore *cocoa-application-finished-launching*)
+  ;; Wait until we're sure that the Cocoa event loop has started.
+  (wait-on-semaphore *cocoa-application-finished-launching*)
 
-    #-cocotron                          ;needs conditionalization
-    (require :easygui)
+  #-cocotron				;needs conditionalization
+  (require :easygui)
 
-    (ccl::maybe-map-objc-classes t)
-    (let* ((missing ()))
-      (ccl::do-interface-dirs (d)
-        (ccl::cdb-enumerate-keys
-         (ccl::db-objc-classes d)
-         (lambda (name)
-           (let* ((class (ccl::lookup-objc-class name nil)))
-             (unless (ccl::objc-class-id  class) (push name missing))))))
-      (when missing
-        (break "ObjC classes ~{~&~a~} are declared but not defined." missing)))
+  (ccl::maybe-map-objc-classes t)
+  (let* ((missing ()))
+    (ccl::do-interface-dirs (d)
+      (ccl::cdb-enumerate-keys
+       (ccl::db-objc-classes d)
+       (lambda (name)
+	 (let* ((class (ccl::lookup-objc-class name nil)))
+	   (unless (ccl::objc-class-id  class) (push name missing))))))
+    (when missing
+      (break "ObjC classes ~{~&~a~} are declared but not defined." missing)))
 
-    #-cocotron
-    (ccl::touch bundle-path)
+  #-cocotron
+  (ccl::touch bundle-path)
 
-    (let ((image-file (make-pathname :name (ccl::standard-kernel-name) :type nil :version nil
-                                     :defaults (merge-pathnames (format nil";Contents;~a;" #+darwin-target "MacOS" #+cocotron "Windows")  bundle-path))))
-      (format *error-output* "~2%Saving application to ~a~2%" (truename bundle-path))
-      (force-output *error-output*)
-      (ensure-directories-exist image-file)
-      (save-application image-file
-                        :prepend-kernel t
-                        :application-class 'cocoa-application
-                        #+windows-target #+windows-target
-                        :application-type :gui)))
+  (let ((image-file (make-pathname :name (ccl::standard-kernel-name) :type nil :version nil
+				   :defaults (merge-pathnames (format nil";Contents;~a;" #+darwin-target "MacOS" #+cocotron "Windows")  bundle-path))))
+    (format *error-output* "~2%Saving application to ~a~2%" (truename bundle-path))
+    (force-output *error-output*)
+    (ensure-directories-exist image-file)
+    (save-application image-file
+		      :prepend-kernel t
+		      :application-class 'cocoa-application
+		      #+windows-target #+windows-target
+		      :application-type :gui)))
 
 ;;; If we're running as a standalone .app, try to see if a bundle named
 ;;; AltConsole.app exists in our Resources directory.  If so, execute
