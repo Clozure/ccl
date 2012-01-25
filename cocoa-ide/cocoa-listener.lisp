@@ -259,7 +259,7 @@
      (output-stream :initarg :listener-output-stream :reader cocoa-listener-process-output-stream)
      (backtrace-contexts :initform nil
                          :accessor cocoa-listener-process-backtrace-contexts)
-     (window :initarg :listener-window :reader cocoa-listener-process-window)))
+     (window :initarg :listener-window :initform nil :reader cocoa-listener-process-window)))
   
 (defloadvar *first-listener* t)
 
