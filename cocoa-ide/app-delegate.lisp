@@ -258,4 +258,11 @@
                (#/validateMenuItem: top-listener item))))
           (t t))))
 
+(objc:defmethod (#/showManual: :void) ((self lisp-application-delegate) sender)
+  (declare (ignore sender))
+  (let* ((p (merge-pathnames "doc/ccl-documentation.html" #p"ccl:"))
+	 (workspace (#/sharedWorkspace ns:ns-workspace)))
+    (with-cfstring (s (native-translated-namestring p))
+      (#/openFile: workspace s))))
+
 

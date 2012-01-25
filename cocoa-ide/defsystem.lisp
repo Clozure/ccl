@@ -5,7 +5,7 @@
 
 (in-package "CCL")
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (use-interface-dir :cocoa))
 
 ;; These are used to communicate with ide-bundle, which must be loaded before objc-support.
