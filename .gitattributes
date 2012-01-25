@@ -243,6 +243,10 @@ examples/cocoa/qtvidcapture/qtvidcapture.lisp -text
 examples/cocoa/ui-elements/HOWTO.html -text
 examples/cocoa/ui-elements/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
+examples/code-cover-test/README.txt -text
+examples/code-cover-test/code-cover-server.lisp -text
+examples/code-cover-test/code-cover-test.lisp -text
+examples/code-cover-test/package.lisp -text
 examples/jfli/CPL.TXT -text
 examples/jfli/com/richhickey/jfli/LispInvocationHandler.java -text
 examples/jfli/docs/bullet.gif -text
