@@ -97,6 +97,7 @@ Boolean use_mach_exception_handling =
 #undef undefined
 #include <mach-o/dyld.h>
 #include <dlfcn.h>
+#include <libgen.h>
 #endif
 
 #if defined(FREEBSD) || defined(SOLARIS)
@@ -957,7 +958,18 @@ default_image_name(char *orig)
 }
 #endif
 
+#ifdef DARWIN
+char *
+bundle_image_name(char *orig)
+{
+  char *base = basename(orig);
+  char *dir = dirname(orig);
+  char path[MAXPATHLEN];
 
+  snprintf(path, MAXPATHLEN, "%s/../Resources/ccl/%s", dir, base);
+  return path_by_appending_image(path);
+}
+#endif
 
 char *program_name = NULL;
 #ifdef WINDOWS
@@ -1921,6 +1933,11 @@ main
       image_name = real_executable_name;
     } else {
       image_name = default_image_name(real_executable_name);
+#ifdef DARWIN
+      if (!probe_file(image_name)) {
+	image_name = bundle_image_name(real_executable_name);
+      }
+#endif
     }
   }
 
