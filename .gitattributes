@@ -61,8 +61,7 @@ cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/keyedobjects.nib -text svneol=unset#application/octet-stream
 cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/keyedobjects.nib -text
-cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/classes.nib -text
-cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/info.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/info.nib -text
@@ -91,8 +90,6 @@ cocoa-ide/processes-window.lisp -text
 cocoa-ide/project.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
-cocoa-ide/swank-ccl-ide.el -text
-cocoa-ide/swank-listener.lisp -text
 cocoa-ide/xapropos.lisp -text
 cocoa-ide/xinspector.lisp -text
 compiler/ARM/arm-arch.lisp -text

@@ -63,7 +63,6 @@
    (general-prefs :foreign-type :id :accessor general-prefs)
    (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
    (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
-   (swank-listener-port :foreign-type :id :accessor swank-listener-port)
    (tab-view :foreign-type :id :accessor tab-view)
    (toolbar :foreign-type :id :accessor toolbar))
   (:metaclass ns:+ns-object))
@@ -83,9 +82,7 @@
   self)
 
 (objc:defmethod (#/windowDidLoad :void) ((self preferences-window-controller))
-  (let* ((window (#/window self))
-         (port-field (swank-listener-port self))
-         (listener-port (or (preference-swank-listener-port) *default-swank-listener-port*)))
+  (let* ((window (#/window self)))
     (with-slots (toolbar) self
       (setf toolbar (make-instance 'ns:ns-toolbar
 				   :with-identifier #@"preferences-window-toolbar"))
@@ -95,8 +92,6 @@
       ;; for some reason, setting this in IB doesn't work on Tiger/PPC32
       (#/setShowsToolbarButton: window nil)
       (#/release toolbar))
-    (ccl::with-autoreleased-nsstring (port-string (format nil "~A" (or listener-port "")))
-      (#/setStringValue: port-field port-string))
     (#/showAppearancePrefs: self +null-ptr+)))
   
 (objc:defmethod (#/showWindow: :void) ((self preferences-window-controller)
@@ -135,12 +130,6 @@
     (#/makeFirstResponder: panel panel)
     (#/setSelectedFont:isMultiple: font-manager font nil)
     (#/orderFrontFontPanel: font-manager self)))
-
-(objc:defmethod (#/startSwankListener: :void) ((self preferences-window-controller)
-					 sender)
-  (declare (ignore sender))
-  (unless (maybe-start-swank-listener :override-user-preference t)
-    (alert-window :message "Unable to start the Swank server.")))
 
 ;;; This message is sent to the first responder, which is why
 ;;; we do the *listener-or-editor* thing.

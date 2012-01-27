@@ -94,7 +94,6 @@
     (#_NSLog #@"This application requires features introduced in OSX 10.4.")
     (#_ _exit -1))
   (setq *standalone-cocoa-ide* t)
-  (maybe-start-swank-listener)
   (with-slots  (have-interactive-terminal-io) ccl::*current-process*
     (when (and (eql (nth-value 4 (ccl::%stat "/dev/null"))
                     (nth-value 4 (ccl::%fstat 0)))
