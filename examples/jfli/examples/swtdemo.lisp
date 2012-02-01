@@ -1,6 +1,6 @@
 ;Just load this from LispWorks menu
 ;note works on Windows, some issues on OS X due to windowing conflict w/IDE
-(load "ccl:examples;jfli;jni")
+(require "JNI")
 (load "ccl:examples;jfli;jfli")
 (use-package :jfli)
 (create-jvm

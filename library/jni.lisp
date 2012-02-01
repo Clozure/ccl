@@ -160,8 +160,7 @@ if necessary."
         ;; -is- total nonsense.
         (unless (eql jni-ok
                      (ff-call
-                      (ccl::%kernel-import target::kernel-import-jvm-init)
-                      :address (pref jvm #>JavaVM.AttachCurrentThread)
+                      (pref jvm #>JavaVM.AttachCurrentThread)
                       :address jvm
                       :address pjnienv
                       :address (ccl::%null-ptr)
@@ -1152,8 +1151,7 @@ The option strings can be used to control the JVM, esp. the classpath:
            ;; restores the thread's exception ports after calling
            ;; JNI_CreateJavaVM for us.
            (let* ((result
-                   (ff-call (ccl::%kernel-import target::kernel-import-jvm-init)
-                            :address (foreign-symbol-address "JNI_CreateJavaVM")
+                   (ff-call (foreign-symbol-address "JNI_CreateJavaVM")
                             :address vm
                             :address env
                             :address initargs

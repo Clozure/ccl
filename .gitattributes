@@ -259,7 +259,6 @@ examples/jfli/jfli-lw.lisp -text
 examples/jfli/jfli.jar -text
 examples/jfli/jfli.lisp -text
 examples/jfli/jni-lw.lisp -text
-examples/jfli/jni.lisp -text
 examples/mswin.lisp -text
 level-0/ARM/arm-array.lisp -text
 level-0/ARM/arm-bignum.lisp -text
@@ -311,6 +310,7 @@ library/darwinx8632-syscalls.lisp -text
 library/dominance.lisp -text
 library/elf.lisp -text
 library/intel-io.lisp -text
+library/jni.lisp -text
 library/jp-encode.lisp -text
 library/leaks.lisp -text
 library/mach-o-symbols.lisp -text
