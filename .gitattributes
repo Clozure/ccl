@@ -243,6 +243,7 @@ examples/cocoa/ui-elements/HOWTO_files/images/bosco.jpg -text
 examples/cocoa/ui-elements/HOWTO_files/stylesheets/styles.css -text
 examples/code-cover-test/README.txt -text
 examples/code-cover-test/code-cover-server.lisp -text
+examples/code-cover-test/code-cover-test.asd -text
 examples/code-cover-test/code-cover-test.lisp -text
 examples/code-cover-test/package.lisp -text
 examples/jfli/CPL.TXT -text
