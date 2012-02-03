@@ -62,6 +62,10 @@ I have tried to limit LispWorks FLI code to this file.
 (defclass java-object (ccl::foreign-standard-object)
     ())
 
+(defmethod print-object ((object java-object) stream)
+  (print-unreadable-object (object stream :type t :identity t)
+    (format stream "@#x~x" (ccl::%ptr-to-int object))))
+
 (ccl::defloadvar *java-object-domain* nil)
 
 (or *java-object-domain*
@@ -105,6 +109,9 @@ I have tried to limit LispWorks FLI code to this file.
 (defvar *jni-lib-path*
 #+:darwin-target "/System/Library/Frameworks/JavaVM.framework/JavaVM"
 #+:win32-target "C:/Program Files/Java/jre6/bin/client/jvm.dll"
+#+android-target "libdvm.so"
+#-(or darwin-target win32-target android-target)
+"need to define *jni-lib-path*"
 "Set this to point to your jvm dll prior to calling create-jvm")
 
 (ccl::defloadvar *pvm* nil)
@@ -140,6 +147,7 @@ I have tried to limit LispWorks FLI code to this file.
 (defun load-jni-lib (&optional (libpath *jni-lib-path*))
   (ccl:open-shared-library libpath))
 
+
 (defun current-env ()
   "return a pointer to the current thread's JNIEnv, creating that environment
 if necessary."
@@ -151,13 +159,6 @@ if necessary."
                             :address pjnienv
                             :jint jni-version-1-4
                             :jint))
-        ;; On Darwin, attaching the current thread to a JVM instance
-        ;; overwrites the thread's Mach exception ports, which CCL
-        ;; happens to be using.  We can work around this by calling
-        ;; a function in the CCL kernel and having that function
-        ;; call the vm's AttachCurrentThread function and then restore
-        ;; the thread's exception ports before returning.  Yes, that
-        ;; -is- total nonsense.
         (unless (eql jni-ok
                      (ff-call
                       (pref jvm #>JavaVM.AttachCurrentThread)
@@ -165,10 +166,10 @@ if necessary."
                       :address pjnienv
                       :address (ccl::%null-ptr)
                       :jint))
-          (error "Can't attach thread to JVM ~s" jvm)))
-      (let* ((result (pref pjnienv :address)))
-        (ccl::%set-macptr-type result (load-time-value (ccl::foreign-type-ordinal (ccl::foreign-pointer-type-to (ccl::parse-foreign-type #>JNIEnv)))))
-        result))))
+          (error "Can't attach thread to JVM ~s" jvm))))
+    (let* ((result (pref pjnienv :address)))
+      (ccl::%set-macptr-type result (load-time-value (ccl::foreign-type-ordinal (ccl::foreign-pointer-type-to (ccl::parse-foreign-type #>JNIEnv)))))
+      result)))
 
 
 ;;; JNIEnv functions.
@@ -227,7 +228,6 @@ if necessary."
   (jnienv-call ("FromReflectedField" #>jfieldID) :jobject field))
 
 (defun to-reflected-method (cls method-id is-static)
-  
   (jnienv-call ("ToReflectedMethod" :jobject)
                :jclass cls
                #>jmethodID method-id
@@ -240,8 +240,7 @@ if necessary."
   
   (jnienv-call ("IsAssignableFrom" :jboolean) :jclass sub :jclass sup))
 
-(defun to-reflected-field (cls field-id is-static)
-  
+(defun to-reflected-field (cls field-id is-static)  
   (jnienv-call ("ToReflectedField" :jobject)
                :jclass cls
                #>jfieldID field-id
@@ -1151,7 +1150,9 @@ The option strings can be used to control the JVM, esp. the classpath:
            ;; restores the thread's exception ports after calling
            ;; JNI_CreateJavaVM for us.
            (let* ((result
-                   (ff-call (foreign-symbol-address "JNI_CreateJavaVM")
+                   (ff-call #+darwin-target (ccl::%kernel-import target::kernel-import-jvm-init)
+                            #+darwin-target :address
+                            (foreign-symbol-address "JNI_CreateJavaVM")
                             :address vm
                             :address env
                             :address initargs

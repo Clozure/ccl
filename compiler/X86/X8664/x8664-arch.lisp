@@ -850,6 +850,7 @@
   lisp-pipe
   lisp-gettimeofday
   lisp-sigexit
+  jvm-init
 )
 
 (defmacro nrs-offset (name)

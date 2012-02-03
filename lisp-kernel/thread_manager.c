@@ -1546,7 +1546,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
 #endif
 #endif
-  TCR_AUX(tcr)->errno_loc = &errno;
+  TCR_AUX(tcr)->errno_loc = (int *)(&errno);
   tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
 #ifdef DARWIN
   extern Boolean use_mach_exception_handling;

@@ -2302,7 +2302,28 @@ set_errno(int val)
   return -1;
 }
 
+/* A horrible hack to allow us to initialize a JVM instance from lisp.
+   On Darwin, creating a JVM instance clobbers the thread's existing
+   Mach exception infrastructure, so we save and restore it here.
+*/
 
+typedef int (*jvm_initfunc)(void*,void*,void*);
+
+int
+jvm_init(jvm_initfunc f,void*arg0,void*arg1,void*arg2)
+{
+  int result = -1;
+  TCR *tcr = get_tcr(1);
+#ifdef DARWIN
+  extern kern_return_t tcr_establish_lisp_exception_port(TCR *);
+#endif
+  
+  result = f(arg0,arg1,arg2);
+#ifdef DARWIN
+  tcr_establish_lisp_exception_port(tcr);
+#endif
+  return result;
+}
 
 
 void *
