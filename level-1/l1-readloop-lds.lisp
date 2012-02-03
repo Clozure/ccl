@@ -63,7 +63,7 @@ whose name or ID matches <p>, or to any process if <p> is null"
 (define-toplevel-command 
     :global proc (&optional p) "Show information about specified process <p>/all processes"
     (flet ((show-process-info (proc)
-	     (format t "~&~d : ~a ~a ~20t[~a] "
+	     (format t "~&~d : ~a ~a ~25t[~a] "
 		     (process-serial-number proc)
 		     (if (eq proc *current-process*)
 		       "->"
