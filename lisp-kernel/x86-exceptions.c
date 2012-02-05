@@ -49,6 +49,65 @@
 #endif
 #endif
 
+/*
+  We do all kinds of funky things to avoid handling a signal on the lisp
+  stack.  One of those funky things involves using the  __builtin_return_address()
+  intrinsic so that the real handler returns to the right place when it exits,
+  even if it returns on a different stack.  Code at "the right place" is presumed
+  to just do a sigrereturn, however the OS does that.
+
+  Sadly, some JVMs (at least) do what they call "signal chaining": they install
+  their own handlers for signals that we expect to handle, and call our handler
+  when they realize that they don't know how to handle what we raise.  They
+  don't observe sigaltstack, and they don't necessarily do call our handler
+  tail-recursively (so our stack-switching code would cause our handler to
+  return to the JVM's, running on the wrong stack.
+
+  Try to work around this by setting up an "early" signal handler (before any
+  of this JVM nonsense can take effect) and noting the address it'd return to.
+*/
+
+pc
+real_sigreturn = (pc)0;
+
+#define SIGRETURN_ADDRESS() (real_sigreturn ? real_sigreturn : __builtin_return_address(0))
+
+#ifndef WINDOWS
+#ifndef DARWIN
+void
+early_intn_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
+{
+  real_sigreturn = (pc) __builtin_return_address(0);
+  xpPC(xp) += 2;
+}
+
+#endif
+#endif
+
+void
+do_intn()
+{
+  __asm volatile("int $0xcd");
+}
+
+void
+x86_early_exception_init()
+{
+#ifndef WINDOWS
+#ifndef DARWIN
+  struct sigaction action, oaction;
+
+  action.sa_sigaction = (void *) early_intn_handler;
+  sigfillset(&action.sa_mask);
+  action.sa_flags = SA_SIGINFO;
+  sigaction(SIGNUM_FOR_INTN_TRAP,&action,&oaction);
+  
+  do_intn();
+  sigaction(SIGNUM_FOR_INTN_TRAP,&oaction, NULL);
+#endif
+#endif
+}
+
 int
 page_size = 4096;
 
@@ -1666,6 +1725,8 @@ void
 altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   TCR* tcr = get_tcr(true);
+  Boolean do_stack_switch = false;
+  stack_t ss;
 
 #if WORD_SIZE==64
   if ((signum == SIGFPE) && (tcr->valence != TCR_STATE_LISP)) {
@@ -1675,8 +1736,34 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
   }
 #endif
      
-  handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)__builtin_return_address(0)
-);
+  /* Because of signal chaining - and the possibility that libaries
+     that use it ignore sigaltstack-related issues - we have to check
+     to see if we're actually on the altstack.
+
+     When OpenJDK VMs overwrite preinstalled signal handlers (that're
+     there for a reason ...), they're also casual about SA_RESTART.
+     We care about SA_RESTART (mostly) in the PROCESS-INTERRUPT case,
+     and whether a JVM steals the signal used for PROCESS-INTERRUPT
+     is platform-dependent.  On those platforms where the same signal
+     is used, we should strongly consider trying to use another one.
+  */
+  sigaltstack(NULL, &ss);
+  if (ss.ss_flags == SS_ONSTACK) {
+    do_stack_switch = true;
+  } else {
+    area *vs = tcr->vs_area;
+    BytePtr current_sp = (BytePtr) current_stack_pointer();
+
+    if ((current_sp >= vs->low) &&
+        (current_sp < vs->high)) {
+      do_stack_switch = true;
+    }
+  }
+  if (do_stack_switch) {
+    handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)SIGRETURN_ADDRESS());
+  } else {
+    signal_handler(signum,info,context);
+  }
 }
 #endif
 #endif
@@ -1792,7 +1879,12 @@ arbstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 }
 
 #else /* altstack works */
-  
+
+/* 
+   There aren't likely any JVM-related signal-chaining issues here, since
+   on platforms where that could be an issue we use either an RT signal
+   or an unused synchronous hardware signal to raise interrupts. 
+*/
 void
 altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
@@ -2096,6 +2188,7 @@ arbstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformatio
 
 
 #else /* altstack works */
+
 void
 altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
@@ -2233,6 +2326,7 @@ enable_fp_exceptions()
 void
 exception_init()
 {
+  x86_early_exception_init();
   install_pmcl_exception_handlers();
 }
 
