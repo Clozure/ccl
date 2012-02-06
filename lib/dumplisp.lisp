@@ -203,7 +203,8 @@
 	    (if (not (= 16 (the fixnum (fd-read in-fd trailer 16))))
 	      len
 	      (if (not (dotimes (i 12 t)
-			 (unless (eql (char-code (schar "OpenMCLImage" i))
+			 (unless (eql (char-code (schar #+big-endian-target "OpenMCLImage"
+                                                        #+little-endian-target "nepOILCMegam" i))
 				      (%get-unsigned-byte trailer i))
 			   (return nil))))
 		len
@@ -214,7 +215,21 @@
 					     #$SEEK_CUR)))
 		  (if (< header-pos 0)
 		    len
-		    header-pos))))))))))
+                    #+32-bit-target
+		    header-pos
+                    #-32-bit-target
+                    (%stack-block ((header 64))
+                      (if (or (/= (fd-read in-fd header 64) 64)
+                              (not (dotimes (i 12 t)
+                                     (unless (eql (%get-unsigned-byte trailer i)
+                                                  (%get-unsigned-byte header i))
+                                       (return)))))
+                        len
+                        (+ header-pos
+                           (logior (ash (%get-signed-long header 36) 32)
+                                   (%get-unsigned-long header 40)))))))))))))))
+                        
+
 		  
 ;;; Note that Windows executable files are in what they call "PE"
 ;;; (= "Portable Executable") format, not to be confused with the "PEF"
