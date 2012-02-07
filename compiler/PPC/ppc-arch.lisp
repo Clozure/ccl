@@ -298,7 +298,7 @@
     ccl::%toplevel-catch%
     ccl::%toplevel-function%
     ccl::%pascal-functions%    
-    ccl::*all-metered-functions*
+    ccl::*heap-init-function*
     ccl::*total-gc-microseconds*
     ccl::%builtin-functions%
     ccl::%unbound-function%
@@ -311,7 +311,7 @@
     ccl::%handlers%
     ccl::%all-packages%
     ccl::*keyword-package* 
-    ccl::%finalization-alist%
+    ccl::%os-init-function%
     ccl::%foreign-thread-control
     ))
 

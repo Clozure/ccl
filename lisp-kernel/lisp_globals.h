@@ -143,7 +143,7 @@ extern LispObj lisp_nil;
 #define nrs_TOPLCATCH			(nrs_symbol(15))	/* %toplevel-catch% */
 #define nrs_TOPLFUNC			(nrs_symbol(16))	/* %toplevel-function% */
 #define nrs_CALLBACKS			(nrs_symbol(17))	/* %pascal-functions% */
-#define nrs_ALLMETEREDFUNS		(nrs_symbol(18))	/* *all-metered-functions* */
+#define nrs_HEAP_INIT_FUNCTION		(nrs_symbol(18))	/* *heap-init-function* */
 #define nrs_TOTAL_GC_MICROSECONDS       (nrs_symbol(19))        /* *total-gc-microseconds* */
 #define nrs_BUILTIN_FUNCTIONS           (nrs_symbol(20))        /* %builtin-functions% */
 #define nrs_UDF				(nrs_symbol(21))	/* %unbound-function% */
@@ -156,7 +156,7 @@ extern LispObj lisp_nil;
 #define nrs_HANDLERS			(nrs_symbol(28))	/* %handlers% */
 #define nrs_ALL_PACKAGES		(nrs_symbol(29))	/* %all-packages% */
 #define nrs_KEYWORD_PACKAGE		(nrs_symbol(30))	/* *keyword-package* */
-#define nrs_FINALIZATION_ALIST		(nrs_symbol(31))	/* %finalization-alist% */
+#define nrs_OS_INIT_FUNCTION		(nrs_symbol(31))	/* %os-init-function% */
 #define nrs_FOREIGN_THREAD_CONTROL      (nrs_symbol(32))        /* %foreign-thread-control */
 #define num_nilreg_symbols 33
 #define nilreg_symbols_end ((BytePtr) &(nrs_symbol(num_nilreg_symbols)))

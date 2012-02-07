@@ -377,8 +377,8 @@ symbol_extra = symbol.size-fulltag_misc
          _struct_pad(symbol_extra)      /* %pascal-functions% */
 
          _struct_pad(fulltag_misc)
-         _struct_label(allmeteredfuns)
-         _struct_pad(symbol_extra)      /* *all-metered-functions* */
+         _struct_label(heap_init_function)
+         _struct_pad(symbol_extra)      /* *heap-init-function* */
 
          _struct_pad(fulltag_misc)
          _struct_label(total_gc_microseconds)
@@ -429,8 +429,8 @@ symbol_extra = symbol.size-fulltag_misc
          _struct_pad(symbol_extra)      /* *keyword-package* */
 
          _struct_pad(fulltag_misc)
-         _struct_label(finalization_alist)
-         _struct_pad(symbol_extra)      /* %finalization-alist% */
+         _struct_label(os_init_function)
+         _struct_pad(symbol_extra)      /* %os-init-function% */
 
          _struct_pad(fulltag_misc)
          _struct_label(foreign_thread_control)
