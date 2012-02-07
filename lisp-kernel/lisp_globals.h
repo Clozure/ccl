@@ -143,7 +143,7 @@ extern LispObj lisp_nil;
 #define nrs_TOPLCATCH			(nrs_symbol(15))	/* %toplevel-catch% */
 #define nrs_TOPLFUNC			(nrs_symbol(16))	/* %toplevel-function% */
 #define nrs_CALLBACKS			(nrs_symbol(17))	/* %pascal-functions% */
-#define nrs_HEAP_INIT_FUNCTION		(nrs_symbol(18))	/* *heap-init-function* */
+#define nrs_RESTORE_LISP_POINTERS	(nrs_symbol(18))	/* restore-lisp-pointers */
 #define nrs_TOTAL_GC_MICROSECONDS       (nrs_symbol(19))        /* *total-gc-microseconds* */
 #define nrs_BUILTIN_FUNCTIONS           (nrs_symbol(20))        /* %builtin-functions% */
 #define nrs_UDF				(nrs_symbol(21))	/* %unbound-function% */

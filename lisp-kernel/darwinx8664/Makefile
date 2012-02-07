@@ -54,7 +54,7 @@ ASFLAGS = -arch x86_64 -g
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
 	   -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
 CDEBUG = -g
-COPT = -O2
+COPT = #-O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
@@ -79,7 +79,7 @@ DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
 KERNELOBJ= imports.o $(COBJ) x86-asmutils64.o 
 
 SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s \
-	x86-constants64.s
+	x86-constants64.s lisp_globals.s
 
 CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
@@ -87,16 +87,10 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	x86-utils.h \
 	$(PLATFORM_H) constants.h os-darwin.h
 
-# Subprims linked into the kernel ?
-# Yes:
-
 KSPOBJ= $(SPOBJ)
 all:	../../dx86cl64
 
 
-# No:
-
-# KSPOBJ=
 
 OSEARLYLIBS = -lcrt1.o
 OSLATELIBS = -lSystem

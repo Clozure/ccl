@@ -59,7 +59,7 @@ COBJ  = pmcl-kernel.o gc-common.o bits.o  \
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o x86_print.o xlbt.o
 KERNELOBJ= imports.o $(COBJ) x86-asmutils32.o 
 
-SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s x86-constants32.s
+SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s x86-constants32.s lisp_globals.s
 
 CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \

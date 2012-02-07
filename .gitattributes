@@ -359,6 +359,7 @@ lisp-kernel/linuxarm/Makefile -text
 lisp-kernel/linuxarm/armlinux.x -text
 lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
+lisp-kernel/lisp_globals.s -text
 lisp-kernel/mach-o-image.c -text
 lisp-kernel/os-darwin.h -text
 lisp-kernel/os-freebsd.h -text
