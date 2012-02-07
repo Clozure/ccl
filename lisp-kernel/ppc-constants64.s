@@ -332,7 +332,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 
 
 nrs_origin = (0x3000+(LOWMEM_BIAS))
-nrs_symbol_fulltag = fulltag_symbol        
+nrs_symbol_fulltag = fulltag_misc        
 define(`nilsym',`nil')        
 
         include(lisp_globals.s)
