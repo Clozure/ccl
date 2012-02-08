@@ -211,57 +211,105 @@
                                      (abort)))))
            ,@body)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; utilities for executing in the cocoa event thread
 
-(defstatic *cocoa-thread-arg-id-map* (make-id-map))
-
-;; This is for debugging, it's preserved across queue-for-gui and bound
-;; so it can be seen in backtraces.
-(defvar *invoking-event-context* "unknown")
-(defvar *invoking-event-process* nil)
-
-(defun register-cocoa-thread-function (thunk result-handler context)
-  (assign-id-map-id *cocoa-thread-arg-id-map* (list* thunk
-						     result-handler
-						     (or context *invoking-event-context*)
-						     *current-process*)))
-
-(objc:defmethod (#/invokeLispFunction: :void) ((self ns:ns-application) id)
-  (invoke-lisp-function self id))
-
-(defmethod invoke-lisp-function ((self ns:ns-application) id)
-  (destructuring-bind (thunk result-handler context . invoking-process)
-		      (id-map-free-object *cocoa-thread-arg-id-map* (if (numberp id) id (#/longValue id)))
-    (handle-invoking-lisp-function thunk result-handler context invoking-process)))
-
-(defun execute-in-gui (thunk &key context)
-  "Execute thunk in the main cocoa thread, return whatever values it returns"
-  (if (typep *current-process* 'appkit-process)
-    (handle-invoking-lisp-function thunk nil context)
-    (if (or (not *nsapp*) (not (#/isRunning *nsapp*)))
-      (error "cocoa thread not available")
-      (with-autorelease-pool 
-          (let* ((return-values nil)
-                 (result-handler #'(lambda (&rest values) (setq return-values values)))
-                 (arg (make-instance 'ns:ns-number
-                                     :with-long (register-cocoa-thread-function thunk result-handler context))))
-            (#/performSelectorOnMainThread:withObject:waitUntilDone:
-             *nsapp*
-             (@selector #/invokeLispFunction:)
-             arg
-             t)
-            (#/release arg)
-            (apply #'values return-values))))))
-
-
-(defconstant $lisp-function-event-subtype 17)
+;;; Usually, one does not sublass NSApplication.  We do it mainly
+;;; because we use a user-defined event to signal the event loop to
+;;; invoke a lisp function, and the only way I know of to respond to a
+;;; user-defined event is to override -[NSApplication sendEvent:].
 
 (defclass lisp-application (ns:ns-application)
     ((termp :foreign-type :<BOOL>)
      (console :foreign-type :id :accessor console))
   (:metaclass ns:+ns-object))
+
+(defconstant $lisp-function-event-subtype 17)
+
+(objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
+  (declare (dynamic-extent self e))
+  (if (and (eql (#/type e) #$NSApplicationDefined)
+	   (eql (#/subtype e) $lisp-function-event-subtype))
+    (deregister-and-invoke-epf-id (#/data1 e))
+    (call-next-method e)))
+
+;;; Large parts of Cocoa are not thread safe.  Many calls must be made
+;;; only on the "main" (i.e., the initial) thread.  As mentioned
+;;; above, we use a user-defined event to provide a way for this to
+;;; happen.
+;;;
+;;; For historical reasons, CCL calls threads "processes".  So,
+;;; instead of speaking of the "main thread" or "event thread", we
+;;; will use the term "event process".  Note that in the following
+;;; functions, "epf" means "event process function".
+
+(defstatic *epf-id-map* (make-id-map))
+
+(defun register-epf (f)
+  (assign-id-map-id *epf-id-map* f))
+
+(defun deregister-and-invoke-epf-id (id)
+  (let ((f (id-map-free-object *epf-id-map* id)))
+    (funcall f)))
+
+(defun queue-for-event-process (f &key at-start)
+  "Place a special event on the event process's event queue that will
+cause the zero-argument function F to be invoked when the event is
+processed.  Any return values from F are ignored.  If AT-START is
+true, the event will be placed at the front of the event queue."
+  (if (and *nsapp* (#/isRunning *nsapp*))
+    ;; It's possible that the event loop will go away after we check,
+    ;; but in that case the application is probably in the process of
+    ;; exiting.
+    (let ((id (register-epf f)))
+      (rletz ((pt #>NSPoint))
+	(objc:with-autorelease-pool
+	  (with-macptrs ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
+			     ns:ns-event
+			     #$NSApplicationDefined ;type
+			     pt			    ;location
+			     0			    ;modifierFlags
+			     0d0		    ;timestamp
+			     0			    ;windowNumber
+			     +null-ptr+		    ;context
+			     $lisp-function-event-subtype ;subtype
+			     id			    ;data1
+			     0)))		    ;data2
+	      ;; It's explicitly OK to do this from any thread.
+	      (#/postEvent:atStart: *nsapp* e (if at-start #$YES #$NO))))))
+    (error "The event process does not seem to be running an event loop")))
+
+(defun epf-semaphore ()
+  (or (getf (process-plist *current-process*) :epf-semaphore)
+      (setf (getf (process-plist *current-process*) :epf-semaphore)
+	    (make-semaphore))))
+
+(defun call-in-event-process (f)
+  "Arrange to invoke the zero-argument function F in the event
+process, and return whatever values F returns.  If called from the
+event process, invoke F immediately.  Otherwise, place a special event
+at the front of the event process's queue, and block until the event
+process has processed that event and invoked F."
+  (if (eq *current-process* ccl::*initial-process*)
+    (funcall f)
+    (let ((return-values nil)
+	  (done (epf-semaphore)))
+      (flet ((epf-wrapper ()
+	       (unwind-protect
+		    (setq return-values (multiple-value-list (funcall f)))
+		 (signal-semaphore done))))
+	(declare (dynamic-extent #'epf-wrapper)) ;careful with this
+	(queue-for-event-process #'epf-wrapper :at-start t)
+	(wait-on-semaphore done nil "epf semaphore wait")
+	(apply #'values return-values)))))
+
+;;; previously used names
+(defun execute-in-gui (thunk &key context)
+  (declare (ignore context))
+  (call-in-event-process thunk))
+
+(defun queue-for-gui (thunk &key result-handler context at-start)
+  (declare (ignore result-handler context))
+  (queue-for-event-process thunk :at-start at-start))
+
 
 (defmethod current-event-modifier-p (modifier-mask)
   (let* ((event (#/currentEvent *nsapp*))
@@ -270,43 +318,6 @@
 
 (defun current-event-command-key-p ()
   (current-event-modifier-p #$NSCommandKeyMask))
-
-;;; I'm not sure if there's another way to recognize events whose
-;;; type is #$NSApplicationDefined.
-(objc:defmethod (#/sendEvent: :void) ((self lisp-application) e)
-  (declare (dynamic-extent self e))
-  (if (and (eql (#/type e) #$NSApplicationDefined)
-	   (eql (#/subtype e) $lisp-function-event-subtype))
-    (invoke-lisp-function self (#/data1 e))
-    (call-next-method e)))
-
-;; This queues an event rather than just doing performSelectorOnMainThread, so that the
-;; action is deferred until the event thread is idle.
-(defun queue-for-gui (thunk &key result-handler context at-start)
-  "Queue thunk for execution in main cocoa thread and return immediately."
-  (execute-in-gui
-   #'(lambda () 
-       (let* ((e (#/otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:
-		  ns:ns-event
-		  #$NSApplicationDefined
-		  (ns:make-ns-point 0 0)
-		  0
-		  0.0d0
-		  0
-		  +null-ptr+
-		  $lisp-function-event-subtype
-		  (register-cocoa-thread-function thunk result-handler context)
-		  0)))
-	 ;(#/retain e)
-	 (#/postEvent:atStart: *nsapp* e (not (null at-start)))))))
-
-(defun handle-invoking-lisp-function (thunk result-handler context &optional (invoking-process *current-process*))
-  ;; TODO: the point is to execute result-handler in the original process, but this will do for now.
-  (let* ((*invoking-event-process* invoking-process)
-	 (*invoking-event-context* context))
-    (if result-handler
-      (multiple-value-call result-handler (funcall thunk))
-      (funcall thunk))))
 
 (defun choose-directory-dialog ()
   (execute-in-gui #'(lambda ()
