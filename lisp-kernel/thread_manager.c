@@ -384,7 +384,7 @@ destroy_recursive_lock(RECURSIVE_LOCK m)
 #ifndef USE_FUTEX
   destroy_semaphore((void **)&m->signal);
 #endif
-  postGCfree((void *)(m->malloced_ptr));
+  free((void *)(m->malloced_ptr));
 }
 
 /*
@@ -734,11 +734,7 @@ destroy_semaphore(void **s)
   if (*s) {
 #ifdef USE_POSIX_SEMAPHORES
     sem_destroy((sem_t *)*s);
-    if (lisp_global(IN_GC)) {
-      postGCfree(*s);
-    } else {
-      free(*s);
-    }
+    free(*s);    
 #endif
 #ifdef USE_MACH_SEMAPHORES
     semaphore_destroy(mach_task_self(),((semaphore_t)(natural) *s));
@@ -2741,7 +2737,7 @@ rwlock_destroy(rwlock *rw)
   destroy_semaphore((void **)&rw->reader_signal);
   destroy_semaphore((void **)&rw->writer_signal);
 #endif
-  postGCfree((void *)(rw->malloced_ptr));
+  free((void *)(rw->malloced_ptr));
 }
 
 

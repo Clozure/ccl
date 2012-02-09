@@ -713,21 +713,14 @@ mark_tcr_xframes(TCR *tcr)
 }
       
 
-void *postGCptrs = NULL;
 struct xmacptr *user_postGC_macptrs = NULL;
 
 
-void
-postGCfree(void *p)
-{
-  *(void **)p = postGCptrs;
-  postGCptrs = p;
-}
 
 void
 postGCfreexmacptr(struct xmacptr *p)
 {
-  p->class = (LispObj) user_postGC_macptrs;
+  p->link = (LispObj) user_postGC_macptrs;
   user_postGC_macptrs = p;
 }
 
@@ -744,23 +737,41 @@ freeGCptrs()
   int flags;
   xmacptr_dispose_fn dfn;
 
-  for (p = postGCptrs; p; p = next) {
-    next = *((void **)p);
-    free(p);
-  }
-  postGCptrs = NULL;
   
   for (x = user_postGC_macptrs; x; x = xnext) {
-    xnext = (xmacptr *) (x->class);
-    flags = x->flags - xmacptr_flag_user_first;
-    dfn = xmacptr_dispose_functions[flags];
-    addr = (void *) x->address;
+    xnext = (xmacptr *) (x->link);
+    flags = x->flags;
+    addr = (void *)x->address;
     x->address = 0;
     x->flags = 0;
     x->link = 0;
     x->class = 0;
-    if (dfn && addr) {
-      dfn(addr);
+    if (addr) {
+      switch(flags) {
+      case xmacptr_flag_recursive_lock:
+        destroy_recursive_lock((RECURSIVE_LOCK)addr);
+        break;
+      case xmacptr_flag_ptr:
+        free(addr);
+        break;
+      case xmacptr_flag_none:   /* ?? */
+        break;
+      case xmacptr_flag_rwlock:
+        rwlock_destroy((rwlock *)addr);
+        break;
+      case xmacptr_flag_semaphore:
+        destroy_semaphore((void **)&addr);
+        break;
+      default:
+        if ((flags >= xmacptr_flag_user_first) &&
+            (flags < xmacptr_flag_user_last)) {
+          flags -= xmacptr_flag_user_first;
+          dfn = xmacptr_dispose_functions[flags];
+          if (dfn && addr) {
+            dfn(addr);
+          }
+        }
+      }
     }
   }
 
@@ -788,7 +799,6 @@ void
 reap_gcable_ptrs()
 {
   LispObj *prev = &(lisp_global(GCABLE_POINTERS)), next, ptr;
-  xmacptr_flag flag;
   natural dnode;
   xmacptr *x;
 
@@ -801,40 +811,11 @@ reap_gcable_ptrs()
       prev = &(x->link);
     } else {
       *prev = x->link;
-      flag = (xmacptr_flag)(x->flags);
       ptr = x->address;
 
       if (ptr) {
-        switch (flag) {
-        case xmacptr_flag_recursive_lock:
-	  destroy_recursive_lock((RECURSIVE_LOCK)ptr_from_lispobj(ptr));
-          break;
-
-        case xmacptr_flag_ptr:
-	  postGCfree((void *)ptr_from_lispobj(ptr));
-          break;
-
-        case xmacptr_flag_rwlock:
-          rwlock_destroy((rwlock *)ptr_from_lispobj(ptr));
-          break;
-
-        case xmacptr_flag_semaphore:
-	  destroy_semaphore((void**)&(x->address));
-          break;
-
-        default:
-          if ((flag >= xmacptr_flag_user_first) &&
-              (flag < xmacptr_flag_user_last)) {
-            set_n_bits(GCmarkbits,dnode,3);
-            postGCfreexmacptr(x);
-            break;
-          }
-          /* (warn "unknown xmacptr_flag: ~s" flag) */
-          /* Unknowd, and perhaps unknowdable. */
-          /* Fall in: */
-        case xmacptr_flag_none:
-          break;
-        }
+        set_n_bits(GCmarkbits,dnode,3);
+        postGCfreexmacptr(x);
       }
     }
   }
@@ -1105,7 +1086,7 @@ forward_gcable_ptrs()
     if (xnew != xnext) {
       *xprev = xnew;
     }
-    xprev = (struct xmacptr **)(&(xnext->class));
+    xprev = (struct xmacptr **)(&(xnext->link));
   }
 }
 

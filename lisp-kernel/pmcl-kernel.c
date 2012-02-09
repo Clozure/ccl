@@ -2356,20 +2356,20 @@ xFindSymbol(void* handle, char *name)
 }
 #if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
 #if WORD_SIZE == 64
-typedef Elf64_Dyn Elf_Dyn;
-typedef Elf64_Ehdr Elf_Ehdr;
-typedef Elf64_Shdr Elf_Shdr;
+typedef Elf64_Dyn Elf_Dyn_thing;
+typedef Elf64_Ehdr Elf_Ehdr_thing;
+typedef Elf64_Shdr Elf_Shdr_thing;
 #else
-typedef Elf32_Dyn Elf_Dyn;
-typedef Elf32_Ehdr Elf_Ehdr;
-typedef Elf32_Shdr Elf_Shdr;
+typedef Elf32_Dyn Elf_Dyn_thing;
+typedef Elf32_Ehdr Elf_Ehdr_thing;
+typedef Elf32_Shdr Elf_Shdr_thing;
 #endif
 
-Elf_Dyn *
+Elf_Dyn_thing *
 get_executable_dynamic_entries()
 {
 #ifndef CCLSHARED
-  extern Elf_Dyn _DYNAMIC[];
+  extern Elf_Dyn_thing _DYNAMIC[];
   return _DYNAMIC;
 #else
 #ifdef ANDROID
@@ -2423,7 +2423,7 @@ void *
 get_r_debug()
 {
   int tag;
-  Elf_Dyn *dp;
+  Elf_Dyn_thing *dp;
 
   if (cached_r_debug == NULL) {
     for (dp = get_executable_dynamic_entries(); (tag = dp->d_tag) != 0; dp++) {

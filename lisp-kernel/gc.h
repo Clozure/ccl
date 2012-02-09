@@ -73,7 +73,6 @@ void mark_root(LispObj);
 void mark_pc_root(LispObj);
 void mark_locative_root(LispObj);
 void rmark(LispObj);
-void postGCfree(void *);
 LispObj *skip_over_ivector(LispObj, LispObj);
 void mark_simple_area_range(LispObj *,LispObj *);
 LispObj calculate_relocation();
