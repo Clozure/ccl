@@ -100,7 +100,7 @@
     ccl::%toplevel-catch%
     ccl::%toplevel-function%
     ccl::%pascal-functions%    
-    ccl::*heap-init-function*
+    ccl::restore-lisp-pointers
     ccl::*total-gc-microseconds*
     ccl::%builtin-functions%
     ccl::%unbound-function%
