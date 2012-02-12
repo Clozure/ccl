@@ -2383,24 +2383,24 @@ get_executable_dynamic_entries()
   /* Woe unto us - and lots of it - if the executable is mapped
      at an address other than 0x8000.  Todo: parse /proc/self/maps. */
   char *p;
-  Elf_Ehdr *elf_header;
-  Elf_Shdr *section_header;
+  Elf_Ehdr_thing *elf_header;
+  Elf_Shdr_thing *section_header;
   int i,fd;
   struct stat _stat;
-  Elf_Dyn *result = NULL;
+  Elf_Dyn_thing *result = NULL;
   
   fd = open("/proc/self/exe",O_RDONLY);
   if (fd >= 0) {
     if (fstat(fd,&_stat) == 0) {
       p = (char *)mmap(NULL,_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
       if (p != MAP_FAILED) {
-        elf_header = (Elf_Ehdr *)p;
-        for (section_header = (Elf_Shdr *)(p+elf_header->e_shoff),
+        elf_header = (Elf_Ehdr_thing *)p;
+        for (section_header = (Elf_Shdr_thing *)(p+elf_header->e_shoff),
                i = 0;
              i < elf_header->e_shnum;
              i++,section_header++) {
           if (section_header->sh_type == SHT_DYNAMIC) {
-            result = (Elf_Dyn *)section_header->sh_addr;
+            result = (Elf_Dyn_thing *)section_header->sh_addr;
             break;
           }
         }
@@ -2586,3 +2586,28 @@ ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
 #endif
 }
       
+#ifdef ANDROID
+#include <jni.h>
+#include "android_native_app_glue.h"
+
+jint
+JNI_OnLoad(JavaVM *vm, void *unused)
+{
+  return -1;
+}
+
+
+/* 
+   This runs on a secondary thread that isn't bound to the JVM.
+   Splitting the event loop in two like this is supposed to
+   weaken timing constraints somehow.  It's not clear that it
+   actually does so, but Android NDK examples generally use
+   this mechanism.
+*/
+   
+void 
+android_main(struct android_app* state) 
+{
+}
+#endif
+

@@ -4435,10 +4435,9 @@ _exportfn(C(start_lisp))
 1:
         .long 0
         .long 0
-        .ltorg
         .data
-        .global C(sptab)
-        .global C(sptab_end)
+        .globl C(sptab)
+        .globl C(sptab_end)
         new_local_labels()
 C(sptab):
         .long local_label(start)

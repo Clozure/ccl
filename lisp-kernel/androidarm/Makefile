@@ -63,7 +63,8 @@ SPOBJ = pad.o  arm-spentry.o
 ASMOBJ = arm-asmutils.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm-gc.o bits.o  arm-exceptions.o \
-	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
+	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o \
+	android_native_app_glue.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o albt.o arm_print.o
 KERNELOBJ= $(COBJ) arm-asmutils.o  imports.o
@@ -79,23 +80,19 @@ CHEADERS = area.h bits.h arm-constants.h lisp-errors.h gc.h lisp.h \
 # Yes:
 
 KSPOBJ = $(SPOBJ)
-all:	../../aarmcl.so ../../aarmcl
+all:	../../libaarmcl.so ../../aarmcl
 
 aarmcl.o: aarmcl.c
 	$(CC) -g -I$(NDKINC) -c $< -fpic -o $@
 
-# No:
 
-# KSPOBJ=
-# all:	../../armcl ../../subprims.so
-
-OSLIBS = -ldl -lm -lc 
+OSLIBS = -ldl -lm -lc -landroid -llog
 APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o
 
 
-../../aarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
-	$(LD) --shared -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o $(OSLIBS) -T ./armandroid.x
-	./fixlib $(LIBBASE) >> ../../aarmcl.so
+../../libaarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
+	$(LD) --shared -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../libaarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o android_native_app_glue.o --no-as-needed $(OSLIBS) -T ./armandroid.x
+	./fixlib $(LIBBASE) >> ../../libaarmcl.so
 
 ../../aarmcl:	aarmcl.o
 		$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl -L $(NDKLIB) aarmcl.o $(APPLIBS)
@@ -110,7 +107,7 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../aarmcl ../../aarmcl.so ./fixlib
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../aarmcl ../../libaarmcl.so ./fixlib
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)

@@ -11,15 +11,26 @@ int
 int
 main(int argc, char *argv[], char *envp, void *auxv)
 {
-  char buf[PATH_MAX], *path;
-  int n;
+  char buf[PATH_MAX], *path, *lastslash;
+  int n, prefixlen;
   void *libhandle;
 
   if ((n = readlink("/proc/self/exe", buf, PATH_MAX)) > 0) {
-    path = malloc(n+4);
-    memmove(path,buf,n);
-    memmove(path+n,".so",3);
-    path[n+3] = 0;
+    path = malloc(n+4+3);
+    lastslash = strrchr(buf,'/');
+    if (lastslash) {
+      lastslash++;
+      prefixlen = lastslash-buf;
+      strncpy(path,buf,prefixlen);
+      strcat(path,"lib");
+      strcat(path,lastslash);
+      strcat(path,".so");
+    } else {
+      memmove(path,"lib",3);
+      memmove(path+3,buf,n);
+      memmove(path+3+n,".so",3);
+      path[n+3+3] = 0;
+    }
     libhandle = dlopen(path,RTLD_GLOBAL|RTLD_NOW);
     if (libhandle != NULL) {
       cclmain = dlsym(libhandle, "cclmain");
