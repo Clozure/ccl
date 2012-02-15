@@ -17,11 +17,13 @@ main(int argc, char *argv[], char *envp, void *auxv)
 
   if ((n = readlink("/proc/self/exe", buf, PATH_MAX)) > 0) {
     path = malloc(n+4+3);
+    buf[n] = 0;
     lastslash = strrchr(buf,'/');
     if (lastslash) {
       lastslash++;
       prefixlen = lastslash-buf;
       strncpy(path,buf,prefixlen);
+      path[prefixlen] = 0;
       strcat(path,"lib");
       strcat(path,lastslash);
       strcat(path,".so");
