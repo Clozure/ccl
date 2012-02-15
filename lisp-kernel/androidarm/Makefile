@@ -15,7 +15,16 @@
 
 LIBBASE = 0x04001000
 NDK = /usr/local/android-ndk-r7
+UNAME_S = $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+HOST = linux-x86
+else
+ifeq ($(UNAME_S),Darwin)
 HOST = darwin-x86
+else
+HOST = unknown
+endif
+endif
 ANDROIDVERSION = android-9
 SYSROOT = $(NDK)/platforms/$(ANDROIDVERSION)/arch-arm
 NDKLIB = $(SYSROOT)/usr/lib
