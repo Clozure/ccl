@@ -1745,8 +1745,53 @@ wide_argv_to_utf_8(wchar_t *wide_argv[], int argc)
 }
 #endif
 
+natural default_g0_threshold = G0_AREA_THRESHOLD;
+natural default_g1_threshold = G1_AREA_THRESHOLD;
+natural default_g2_threshold = G2_AREA_THRESHOLD;
+natural lisp_heap_threshold_from_image = 0;
 
+void
+init_consing_areas()
+{
+  area *a;
+  a = active_dynamic_area;
 
+  if (nilreg_area != NULL) {
+    BytePtr lowptr = (BytePtr) a->low;
+
+    /* Create these areas as AREA_STATIC, change them to AREA_DYNAMIC */
+    g1_area = new_area(lowptr, lowptr, AREA_STATIC);
+    g2_area = new_area(lowptr, lowptr, AREA_STATIC);
+    tenured_area = new_area(lowptr, lowptr, AREA_STATIC);
+    add_area_holding_area_lock(tenured_area);
+    add_area_holding_area_lock(g2_area);
+    add_area_holding_area_lock(g1_area);
+
+    g1_area->code = AREA_DYNAMIC;
+    g2_area->code = AREA_DYNAMIC;
+    tenured_area->code = AREA_DYNAMIC;
+
+/*    a->older = g1_area; */ /* Not yet: this is what "enabling the EGC" does. */
+    g1_area->younger = a;
+    g1_area->older = g2_area;
+    g2_area->younger = g1_area;
+    g2_area->older = tenured_area;
+    tenured_area->younger = g2_area;
+    tenured_area->refbits = dynamic_mark_ref_bits;
+    managed_static_area->refbits = global_mark_ref_bits;
+    a->markbits = dynamic_mark_ref_bits;
+    tenured_area->static_dnodes = a->static_dnodes;
+    a->static_dnodes = 0;
+    tenured_area->static_used = a->static_used;
+    a->static_used = 0;
+    lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
+    lisp_global(STATIC_CONS_AREA) = ptr_to_lispobj(static_cons_area);
+    lisp_global(REFBITS) = ptr_to_lispobj(global_mark_ref_bits);
+    g2_area->threshold = default_g2_threshold;
+    g1_area->threshold = default_g1_threshold;
+    a->threshold = default_g0_threshold;
+  }
+}
 
 int
 #ifdef CCLSHARED
@@ -1761,10 +1806,6 @@ main
 )
 {
   extern int page_size;
-  natural default_g0_threshold = G0_AREA_THRESHOLD,
-    default_g1_threshold = G1_AREA_THRESHOLD,
-    default_g2_threshold = G2_AREA_THRESHOLD,
-    lisp_heap_threshold_from_image = 0;
   Boolean egc_enabled =
 #ifdef DISABLE_EGC
     false
@@ -2010,44 +2051,7 @@ main
 
   lisp_global(BATCH_FLAG) = (batch_flag << fixnumshift);
 
-  a = active_dynamic_area;
-
-  if (nilreg_area != NULL) {
-    BytePtr lowptr = (BytePtr) a->low;
-
-    /* Create these areas as AREA_STATIC, change them to AREA_DYNAMIC */
-    g1_area = new_area(lowptr, lowptr, AREA_STATIC);
-    g2_area = new_area(lowptr, lowptr, AREA_STATIC);
-    tenured_area = new_area(lowptr, lowptr, AREA_STATIC);
-    add_area_holding_area_lock(tenured_area);
-    add_area_holding_area_lock(g2_area);
-    add_area_holding_area_lock(g1_area);
-
-    g1_area->code = AREA_DYNAMIC;
-    g2_area->code = AREA_DYNAMIC;
-    tenured_area->code = AREA_DYNAMIC;
-
-/*    a->older = g1_area; */ /* Not yet: this is what "enabling the EGC" does. */
-    g1_area->younger = a;
-    g1_area->older = g2_area;
-    g2_area->younger = g1_area;
-    g2_area->older = tenured_area;
-    tenured_area->younger = g2_area;
-    tenured_area->refbits = dynamic_mark_ref_bits;
-    managed_static_area->refbits = global_mark_ref_bits;
-    a->markbits = dynamic_mark_ref_bits;
-    tenured_area->static_dnodes = a->static_dnodes;
-    a->static_dnodes = 0;
-    tenured_area->static_used = a->static_used;
-    a->static_used = 0;
-    lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
-    lisp_global(STATIC_CONS_AREA) = ptr_to_lispobj(static_cons_area);
-    lisp_global(REFBITS) = ptr_to_lispobj(global_mark_ref_bits);
-    g2_area->threshold = default_g2_threshold;
-    g1_area->threshold = default_g1_threshold;
-    a->threshold = default_g0_threshold;
-  }
-
+  init_consing_areas();
   tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
   stack_base = initial_stack_bottom()-xStackSpace();
   init_threads((void *)(stack_base), tcr);
@@ -2588,11 +2592,120 @@ ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
       
 #ifdef ANDROID
 #include <jni.h>
+#include <android/log.h>
 #include "android_native_app_glue.h"
+
+extern int init_lisp(TCR *);
+
+JavaVM *android_vm = NULL;
 
 jint
 JNI_OnLoad(JavaVM *vm, void *unused)
 {
+  extern int page_size;
+  Boolean egc_enabled =
+#ifdef DISABLE_EGC
+    false
+#else
+    true
+#endif
+    ;
+  TCR *tcr;
+  BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
+  
+#if 1
+  sleep(100);
+#endif
+  android_vm = vm;
+
+  page_size = getpagesize();
+  
+  if (!check_arm_cpu()) {
+    __android_log_print(ANDROID_LOG_FATAL,"nativeCCL","CPU doesn't support required features");
+      return -1;
+  }
+  main_thread_pid = getpid();
+  tcr_area_lock = (void *)new_recursive_lock();
+  image_name = "/data/local/ccl/android.image"; /* need something better. */
+  while (1) {
+    if (create_reserved_area(reserved_area_size)) {
+      break;
+    }
+    reserved_area_size = reserved_area_size *.9;
+  }
+
+  gc_init();
+
+  set_nil(load_image(image_name));
+  lisp_heap_notify_threshold = GC_NOTIFY_THRESHOLD;
+  lisp_heap_threshold_from_image = lisp_global(LISP_HEAP_THRESHOLD);
+  
+  if (lisp_heap_threshold_from_image) {
+    if (lisp_heap_threshold_from_image != lisp_heap_gc_threshold) {
+      lisp_heap_gc_threshold = lisp_heap_threshold_from_image;
+      resize_dynamic_heap(active_dynamic_area->active,lisp_heap_gc_threshold);
+    }
+    /* If lisp_heap_threshold_from_image was set, other image params are
+       valid. */
+    default_g0_threshold = lisp_global(G0_THRESHOLD);
+    default_g1_threshold = lisp_global(G1_THRESHOLD);
+    default_g2_threshold = lisp_global(G2_THRESHOLD);
+    egc_enabled = lisp_global(EGC_ENABLED);
+  }
+  lisp_global(TCR_AREA_LOCK) = ptr_to_lispobj(tcr_area_lock);
+#ifdef ARM
+  lisp_global(SUBPRIMS_BASE) = (LispObj)(9<<12);
+#endif
+  lisp_global(RET1VALN) = (LispObj)&ret1valn;
+  lisp_global(LEXPR_RETURN) = (LispObj)&nvalret;
+  lisp_global(LEXPR_RETURN1V) = (LispObj)&popj;
+  lisp_global(ALL_AREAS) = ptr_to_lispobj(all_areas);
+  lisp_global(DEFAULT_ALLOCATION_QUANTUM) = log2_heap_segment_size << fixnumshift;
+  lisp_global(STACK_SIZE) = thread_stack_size<<fixnumshift;
+
+
+  exception_init();
+
+  lisp_global(IMAGE_NAME) = ptr_to_lispobj(ensure_real_path(image_name));
+  lisp_global(KERNEL_PATH) = ptr_to_lispobj(real_executable_name);
+  lisp_global(ARGV) = (LispObj)NULL;
+  lisp_global(KERNEL_IMPORTS) = (LispObj)import_ptrs_base;
+
+  lisp_global(GET_TCR) = (LispObj) get_tcr;
+  *(double *) &(lisp_global(DOUBLE_FLOAT_ONE)) = (double) 1.0;
+
+  lisp_global(HOST_PLATFORM) = (LispObj) PLATFORM << fixnumshift;
+
+  lisp_global(BATCH_FLAG) = (batch_flag << fixnumshift);
+
+  init_consing_areas();
+  tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
+  stack_base = initial_stack_bottom()-xStackSpace();
+  init_threads((void *)(stack_base), tcr);
+  thread_init_tcr(tcr, current_sp, current_sp-stack_base);
+
+  if (lisp_global(STATIC_CONSES) == 0) {
+    lisp_global(STATIC_CONSES) = lisp_nil;
+  }
+
+
+  lisp_global(EXCEPTION_LOCK) = ptr_to_lispobj(new_recursive_lock());
+  enable_fp_exceptions();
+  register_user_signal_handler();
+  TCR_AUX(tcr)->prev = TCR_AUX(tcr)->next = tcr;
+  lisp_global(INTERRUPT_SIGNAL) = (LispObj) box_fixnum(SIGNAL_FOR_PROCESS_INTERRUPT);
+#ifdef GC_INTEGRITY_CHECKING
+  (nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit);
+#endif
+  if (egc_enabled) {
+    egc_control(true, NULL);
+  } else {
+    lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
+  }
+
+  if (init_lisp(TCR_TO_TSD(tcr)) == 0) {
+    return JNI_VERSION_1_6;
+  }
   return -1;
 }
 
@@ -2608,6 +2721,14 @@ JNI_OnLoad(JavaVM *vm, void *unused)
 void 
 android_main(struct android_app* state) 
 {
+  TCR *tcr = new_tcr(DEFAULT_INITIAL_STACK_SIZE, MIN_TSTACK_SIZE);
+  JNIEnv *env;
+
+  thread_init_tcr(tcr, current_stack_pointer,DEFAULT_INITIAL_STACK_SIZE);
+  (*android_vm)->AttachCurrentThread(android_vm, &env, NULL);
+
+  os_main(tcr, state);
+  (*android_vm)->DetachCurrentThread(android_vm);
 }
 #endif
 

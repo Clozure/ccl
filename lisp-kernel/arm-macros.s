@@ -171,6 +171,11 @@ define(`ref_nrs_value',`
 	__(ldr $1,[$1,#((nrs.$2)+(symbol.vcell))])
 ')
 
+define(`ref_nrs_function',`
+        __(mov $1,#nil_value)
+	__(ldr $1,[$1,#((nrs.$2)+(symbol.fcell))])
+')
+        
 define(`ref_nrs_symbol',`
         __(movc16($3,nrs.$2))
         __(add $1,$3,#nil_value)
