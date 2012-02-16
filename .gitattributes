@@ -162,6 +162,7 @@ doc/src/xsl/parameters.xsl -text
 doc/src/xsl/refentry.xsl -text
 doc/src/xsl/site-navigator.xsl -text
 doc/src/xsl/toc-at-end.xsl -text
+examples/android/native-activity.lisp -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/designable.nib -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/keyedobjects.nib -text
 examples/cocoa/currency-converter/HOWTO.html -text
