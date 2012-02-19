@@ -396,16 +396,11 @@
   (let ((expansion (macroexpand form env))
         (head nil))
     (if (and (listp expansion)          ; already an ugly hack, made uglier by %error case ...
-             (memq (setq head (pop expansion)) '(signal error cerror warn %error)))
+             (memq (setq head (pop expansion)) '(signal error warn %error)))
       (let ((condform nil)
             (signalform nil)
             (cname (gensym)))
         (case head
-          (cerror
-           (destructuring-bind 
-             (continue cond &rest args) expansion
-             (setq condform `(condition-arg ,cond (list ,@args) 'simple-error)
-                   signalform `(cerror ,continue ,cname))))
           ((signal error warn)
            (destructuring-bind
              (cond &rest args) expansion
