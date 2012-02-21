@@ -2599,8 +2599,20 @@ extern int init_lisp(TCR *);
 
 JavaVM *android_vm = NULL;
 
-jint
-JNI_OnLoad(JavaVM *vm, void *unused)
+void
+wait_for_debugger()
+{ 
+  volatile Boolean ready = false;
+
+  __android_log_print(ANDROID_LOG_INFO,"nativeCCL","waiting for debugger");
+  do {
+    sleep(1);
+  } while(!ready);
+}  
+ 
+
+Boolean
+init_ccl_for_android(ANativeActivity *activity)
 {
   extern int page_size;
   Boolean egc_enabled =
@@ -2611,18 +2623,18 @@ JNI_OnLoad(JavaVM *vm, void *unused)
 #endif
     ;
   TCR *tcr;
-  BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
-  
-#if 1
-  sleep(100);
-#endif
-  android_vm = vm;
+  BytePtr stack_base, current_sp;
+  char **argv;
 
+  wait_for_debugger();
+  android_vm = activity->vm;
+
+  current_sp = (BytePtr) current_stack_pointer();
   page_size = getpagesize();
   
   if (!check_arm_cpu()) {
     __android_log_print(ANDROID_LOG_FATAL,"nativeCCL","CPU doesn't support required features");
-      return -1;
+    return false;
   }
   main_thread_pid = getpid();
   tcr_area_lock = (void *)new_recursive_lock();
@@ -2665,10 +2677,11 @@ JNI_OnLoad(JavaVM *vm, void *unused)
 
 
   exception_init();
-
+  argv = (char**)(malloc (sizeof (char *)));
+  argv[0] = NULL;
   lisp_global(IMAGE_NAME) = ptr_to_lispobj(ensure_real_path(image_name));
   lisp_global(KERNEL_PATH) = ptr_to_lispobj(real_executable_name);
-  lisp_global(ARGV) = (LispObj)NULL;
+  lisp_global(ARGV) = ptr_to_lispobj(argv);
   lisp_global(KERNEL_IMPORTS) = (LispObj)import_ptrs_base;
 
   lisp_global(GET_TCR) = (LispObj) get_tcr;
@@ -2704,9 +2717,9 @@ JNI_OnLoad(JavaVM *vm, void *unused)
   }
 
   if (init_lisp(TCR_TO_TSD(tcr)) == 0) {
-    return JNI_VERSION_1_6;
+    return true;
   }
-  return -1;
+  return false;
 }
 
 
@@ -2721,9 +2734,10 @@ JNI_OnLoad(JavaVM *vm, void *unused)
 void 
 android_main(struct android_app* state) 
 {
-  TCR *tcr = new_tcr(DEFAULT_INITIAL_STACK_SIZE, MIN_TSTACK_SIZE);
+  TCR *tcr;
   JNIEnv *env;
 
+  tcr = new_tcr(DEFAULT_INITIAL_STACK_SIZE, MIN_TSTACK_SIZE);
   thread_init_tcr(tcr, current_stack_pointer,DEFAULT_INITIAL_STACK_SIZE);
   (*android_vm)->AttachCurrentThread(android_vm, &env, NULL);
 
