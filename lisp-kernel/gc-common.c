@@ -1352,6 +1352,8 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
   }
 }
 
+extern void zero_dnodes(void *,natural);
+
 void 
 gc(TCR *tcr, signed_natural param)
 {
@@ -1704,7 +1706,7 @@ gc(TCR *tcr, signed_natural param)
     } else {
       last_zeroed_addr = a->high;
     }
-    zero_memory_range(a->active, last_zeroed_addr);
+    zero_dnodes(a->active, area_dnode(last_zeroed_addr,a->active));
 
     /*
       If the EGC is enabled: If there's no room for the youngest

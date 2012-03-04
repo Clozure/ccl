@@ -275,4 +275,16 @@ _exportfn(C(ensure_safe_for_string_operations))
         __(ret)
 _endfn                                       
         __endif
+
+/* zero N (%rsi) dnodes, starting at the dnode-aligned address in %rdi */
+_exportfn(C(zero_dnodes))
+        __(pxor %xmm0,%xmm0)
+        __(cmpq $0,%rsi)
+        __(jmp 1f)
+0:      __(movdqa %xmm0,(%rdi))
+        __(lea 16(%rdi),%rdi)
+        __(subq $1,%rsi)
+1:      __(jne 0b)
+        __(repret)
+_endfn        
 	_endfile
