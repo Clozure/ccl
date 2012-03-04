@@ -2196,8 +2196,8 @@ not, why not; and what its result code was if it completed."
              (eql (nth 4 a-stat)
                   (nth 4 b-stat))))
       #+windows-target
-      (rlet ((a-info #>BY_HANDLE_FILE_INFORMATION)
-             (b-info #>BY_HANDLE_FILE_INFORMATION))
+      (%stack-block ((a-info (record-length #>BY_HANDLE_FILE_INFORMATION))
+                     (b-info (record-length #>BY_HANDLE_FILE_INFORMATION)))
         (unless (or (eql 0 (#_GetFileInformationByHandle (%int-to-ptr a) a-info))
                     (eql 0 (#_GetFileInformationByHandle (%int-to-ptr b) b-info)))
           (and (eql (pref a-info #>BY_HANDLE_FILE_INFORMATION.dwVolumeSerialNumber)
