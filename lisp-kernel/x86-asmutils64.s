@@ -276,14 +276,14 @@ _exportfn(C(ensure_safe_for_string_operations))
 _endfn                                       
         __endif
 
-/* zero N (%rsi) dnodes, starting at the dnode-aligned address in %rdi */
+/* zero N (%carg1) dnodes, starting at the dnode-aligned address in %carg0 */
 _exportfn(C(zero_dnodes))
         __(pxor %xmm0,%xmm0)
-        __(cmpq $0,%rsi)
+        __(cmpq $0,%carg1)
         __(jmp 1f)
-0:      __(movdqa %xmm0,(%rdi))
-        __(lea 16(%rdi),%rdi)
-        __(subq $1,%rsi)
+0:      __(movdqa %xmm0,(%carg0))
+        __(lea 16(%carg0),%carg0)
+        __(subq $1,%carg1)
 1:      __(jne 0b)
         __(repret)
 _endfn        
