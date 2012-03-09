@@ -2183,31 +2183,6 @@ not, why not; and what its result code was if it completed."
 
 ;;(assert (= (logcount *host-page-size*) 1))
 
-
-(defun same-fd-p (a b)
-  (or (eql a b)
-      #-windows-target
-      (let* ((a-stat (multiple-value-list (%fstat a)))
-             (b-stat (multiple-value-list (%fstat b))))
-        (declare (dynamic-extent a-stat b-stat))
-        (and (car a-stat) (car b-stat)
-             (eql (nth 9 a-stat)
-                  (nth 9 b-stat))
-             (eql (nth 4 a-stat)
-                  (nth 4 b-stat))))
-      #+windows-target
-      (%stack-block ((a-info (record-length #>BY_HANDLE_FILE_INFORMATION))
-                     (b-info (record-length #>BY_HANDLE_FILE_INFORMATION)))
-        (unless (or (eql 0 (#_GetFileInformationByHandle (%int-to-ptr a) a-info))
-                    (eql 0 (#_GetFileInformationByHandle (%int-to-ptr b) b-info)))
-          (and (eql (pref a-info #>BY_HANDLE_FILE_INFORMATION.dwVolumeSerialNumber)
-                    (pref b-info #>BY_HANDLE_FILE_INFORMATION.dwVolumeSerialNumber))
-               (eql (pref a-info #>BY_HANDLE_FILE_INFORMATION.nFileIndexHigh)
-                    (pref b-info #>BY_HANDLE_FILE_INFORMATION.nFileIndexHigh))
-               (eql (pref a-info #>BY_HANDLE_FILE_INFORMATION.nFileIndexLow)
-                    (pref b-info #>BY_HANDLE_FILE_INFORMATION.nFileIndexLow)))))))
-
-  
 (defun get-universal-time ()
   "Return a single integer for the current time of
    day in universal time format."

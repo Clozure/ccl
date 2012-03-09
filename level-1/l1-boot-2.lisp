@@ -175,9 +175,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
                              *terminal-input* *terminal-output*))
         (setq *standard-input* (make-synonym-stream '*terminal-io*)
               *standard-output* (make-synonym-stream '*terminal-io*))))
-    (setq *error-output* (if (or *batch-flag*
-                                 (not (same-fd-p (stream-device *stderr* :output)
-                                                 (stream-device *stdout* :output))))
+    (setq *error-output* (if *batch-flag*
                            (make-synonym-stream '*stderr*)
                            (make-synonym-stream '*terminal-io*)))
     (setq *query-io* (make-synonym-stream '*terminal-io*))

@@ -153,42 +153,6 @@
   (print-unreadable-object (ce stream :type t :identity t)
     (format stream "~a" (character-encoding-name ce))))
 
-(defun note-stream-decoding-problem (stream)
-  (let* ((source (if (typep stream 'ioblock)
-                   (ioblock-stream stream)
-                   stream))
-         (position (stream-position source))
-         (encoding-name
-          (character-encoding-name
-           (external-format-character-encoding (stream-external-format source)))))
-    (signal (make-condition 'decoding-problem
-                            :source source
-                            :position position
-                            :encoding-name encoding-name))
-    #\Replacement_Character))
-
-(defun note-vector-decoding-problem (vector index encoding)
-  (signal (make-condition 'decoding-problem
-                          :source vector
-                          :position index
-                          :encoding-name (let* ((enc (if (typep encoding 'character-encoding)
-                                                       encoding
-                                                       (lookup-character-encoding encoding))))
-                                           (if enc (character-encoding-name enc) encoding))))
-  #\Replacement_Character)
-
-(defun note-encoding-problem (char destination encoding code)
-  (signal (make-condition 'encoding-problem
-                          :character char
-                          :destination (if (typep destination 'ioblock)
-                                         (ioblock-stream destination)
-                                         destination)
-                          :encoding-name (let* ((enc (if (typep encoding 'character-encoding)
-                                                       encoding
-                                                       (lookup-character-encoding encoding))))
-                                           (if enc (character-encoding-name enc) encoding))))
-  code)
-                          
 ;;; N.B.  (ccl:nfunction <name> (lambda (...) ...)) is just  like
 ;;;       (cl:function (lambda (...) ...)), except that the resulting
 ;;; function will have "name" <name> (this is often helpful when debugging.)
@@ -240,7 +204,7 @@ characters used in most Western European languages."
      (let* ((code (char-code char)))
        (declare (type (mod #x110000) code))
        (if (>= code 256)
-         (setq code (note-encoding-problem char stream :iso-8859-1 (char-code #\Sub))))
+         (setq code (char-code #\Sub)))
        (funcall write-function stream code)
        1)))
   :stream-decode-function
@@ -262,7 +226,7 @@ characters used in most Western European languages."
               (code (char-code char)))
          (declare (type (mod #x110000) code))
          (if (>= code 256)
-           (setq code (note-encoding-problem char vector :iso-8859-1 (char-code #\Sub))))
+           (setq code (char-code #\Sub)))
          (progn
            (setf (aref vector idx) code)
            (incf idx))))))
@@ -282,11 +246,10 @@ characters used in most Western European languages."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char)))
+       (let* ((code (char-code (schar string i))))
          (declare (type (mod #x110000) code))
          (if (>= code 256)
-           (setq code (note-encoding-problem char pointer :iso-8859-1 (char-code #\Sub))))
+           (setq code (char-code #\Sub)))
          (setf (%get-unsigned-byte pointer idx) code)
          (incf idx)))))
   :memory-decode-function
@@ -306,7 +269,6 @@ characters used in most Western European languages."
   #'8-bit-fixed-width-length-of-memory-encoding
   :decode-literal-code-unit-limit 256
   :encode-literal-char-code-limit 256
-
   )
 
 (define-character-encoding :us-ascii
@@ -321,18 +283,18 @@ codes map to their Unicode equivalents."
      (let* ((code (char-code char)))
        (declare (type (mod #x110000) code))
        (when (>= code 128)
-         (setq code (note-encoding-problem char stream :us-ascii (char-code #\Sub))))
+         (setq code (char-code #\Sub)))
        (funcall write-function stream code)
        1)))
   :stream-decode-function
   (nfunction
    ascii-stream-decode
    (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function)
+     (declare (ignore next-unit-function stream)
               (type (unsigned-byte 8) 1st-unit))
      (if (< 1st-unit 128)
        (code-char 1st-unit)
-       (note-stream-decoding-problem stream))))
+       #\Replacement_Character)))
   :vector-encode-function
   (nfunction
    ascii-vector-encode
@@ -345,7 +307,7 @@ codes map to their Unicode equivalents."
               (code (char-code char)))
          (declare (type (mod #x110000) code))
          (if (>= code 128)
-           (setq code (note-encoding-problem char vector :us-ascii (char-code #\Sub))))
+           (setq code (char-code #\Sub)))
          (setf (aref vector idx) code)
          (incf idx)))))
   :vector-decode-function
@@ -358,20 +320,19 @@ codes map to their Unicode equivalents."
           ((>= i noctets) index)
        (let* ((code (aref vector index)))
          (declare (type (unsigned-byte 8) code))
-         (setf (schar string i) (if (< code 128)
-                                  (code-char code)
-                                  (note-vector-decoding-problem vector index :us-ascii)))))))
+         (when (>= code 128)
+           (setq code (char-code #\Sub)))
+         (setf (schar string i) (code-char code))))))
   :memory-encode-function
   (nfunction
    ascii-memory-encode
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char)))
+       (let* ((code (char-code (schar string i))))
          (declare (type (mod #x110000) code))
          (if (>= code 128)
-           (setq code (note-encoding-problem char pointer :us-ascii (char-code #\Sub))))
+           (setq code (char-code #\Sub)))
          (setf (%get-unsigned-byte pointer idx) code)
          (incf idx)))))
   :memory-decode-function
@@ -384,7 +345,7 @@ codes map to their Unicode equivalents."
        (let* ((code (%get-unsigned-byte pointer index)))
          (declare (type (unsigned-byte 8) code))
          (if (>= code 128)
-           (setf (schar string i) (note-vector-decoding-problem pointer index :us-ascii))
+           (setf (schar string i) #\sub)
            (setf (schar string i) (code-char code)))))))
   :octets-in-string-function
   #'8-bit-fixed-width-octets-in-string
@@ -486,7 +447,7 @@ languages used in Central/Eastern Europe."
                                       (the fixnum (- code #x2c0)))))))
                       
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-2 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -505,8 +466,7 @@ languages used in Central/Eastern Europe."
               (fixnum idx))
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                           ((< code #x180)
                            (svref *unicode-00a0-0180-to-iso-8859-2*
@@ -515,7 +475,7 @@ languages used in Central/Eastern Europe."
                            (svref *unicode-00c0-00e0-to-iso-8859-2*
                                   (the fixnum (- code #x2c0)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-2 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -537,8 +497,7 @@ languages used in Central/Eastern Europe."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                         ((< code #x180)
                          (svref *unicode-00a0-0180-to-iso-8859-2*
@@ -547,7 +506,7 @@ languages used in Central/Eastern Europe."
                          (svref *unicode-00c0-00e0-to-iso-8859-2*
                                 (the fixnum (- code #x2c0)))))))
        (declare (type (mod #x110000) code))
-       (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-2 (char-code #\Sub))))
+       (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
        (1+ idx)))))
   :memory-decode-function
   (nfunction
@@ -659,9 +618,7 @@ languages used in Southern Europe."
                        (svref *unicode-2d8-2e0-to-iso-8859-3*
                               (the fixnum (- code #x2d8)))))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2
-                                          (note-encoding-problem
-                                           char stream :iso-8859-3 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -694,7 +651,7 @@ languages used in Southern Europe."
                  
                (the fixnum (- code #x2d8)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-3 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -716,8 +673,7 @@ languages used in Southern Europe."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                         ((< code #x100)
                          (svref *unicode-a0-100-to-iso-8859-3*
@@ -729,7 +685,7 @@ languages used in Southern Europe."
                          (svref *unicode-2d8-2e0-to-iso-8859-3*
                                 (the fixnum (- code #x2d8)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-3 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -841,7 +797,7 @@ languages used in Northern Europe."
                               (the fixnum (- code #x2c0)))))))
                       
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-4 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -870,7 +826,7 @@ languages used in Northern Europe."
                          (svref *unicode-2c0-2e0-to-iso-8859-4*
                                 (the fixnum (- code #x2c0)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-4 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -892,8 +848,7 @@ languages used in Northern Europe."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                         ((< code #x180)
                          (svref *unicode-a0-180-to-iso-8859-4*
@@ -902,7 +857,7 @@ languages used in Northern Europe."
                          (svref *unicode-2c0-2e0-to-iso-8859-4*
                                 (the fixnum (- code #x2c0)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-4 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -994,7 +949,7 @@ Cyrillic alphabet."
                               (the fixnum (- code #x400)))))))
                       
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-5 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1023,7 +978,7 @@ Cyrillic alphabet."
                          (svref *unicode-400-460-to-iso-8859-5*
                                 (the fixnum (- code #x400)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-5 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1045,8 +1000,7 @@ Cyrillic alphabet."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                         ((< code #xb0)
                          (svref *unicode-a0-b0-to-iso-8859-5*
@@ -1055,7 +1009,7 @@ Cyrillic alphabet."
                          (svref *unicode-400-460-to-iso-8859-5*
                                 (the fixnum (- code #x400)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-5 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1144,7 +1098,7 @@ Arabic alphabet."
                               (the fixnum (- code #x608)))))))
                       
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-6 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1173,7 +1127,7 @@ Arabic alphabet."
                          (svref *unicode-608-658-to-iso-8859-6*
                                 (the fixnum (- code #x608)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-6 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1195,8 +1149,7 @@ Arabic alphabet."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                         ((< code #xb0)
                          (svref *unicode-a0-b0-to-iso-8859-6*
@@ -1205,7 +1158,7 @@ Arabic alphabet."
                          (svref *unicode-608-658-to-iso-8859-6*
                                 (the fixnum (- code #x608)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-6 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1313,7 +1266,7 @@ Greek alphabet."
                               (the fixnum (- code #x20ac)))))))
               
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-7 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1348,7 +1301,7 @@ Greek alphabet."
                        (svref *unicode-20ac-20b0-to-iso-8859-7*
                               (the fixnum (- code #x20ac)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-7 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1370,8 +1323,7 @@ Greek alphabet."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #xc0)
                        (svref *unicode-a0-c0-to-iso-8859-7*
@@ -1386,7 +1338,7 @@ Greek alphabet."
                        (svref *unicode-20ac-20b0-to-iso-8859-7*
                               (the fixnum (- code #x20ac)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-7 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1486,7 +1438,7 @@ Hebrew alphabet."
                               (the fixnum (- code #x2008)))))))
               
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-8 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1518,7 +1470,7 @@ Hebrew alphabet."
                        (svref *unicode-2008-2018-to-iso-8859-8*
                               (the fixnum (- code #x2008)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-8 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1540,8 +1492,7 @@ Hebrew alphabet."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #xf8)
                        (svref *unicode-a0-f8-to-iso-8859-8*
@@ -1553,7 +1504,7 @@ Hebrew alphabet."
                        (svref *unicode-2008-2018-to-iso-8859-8*
                               (the fixnum (- code #x2008)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-8 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1636,7 +1587,7 @@ Turkish alphabet."
                               (the fixnum (- code #x118)))))))
               
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-9 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1665,7 +1616,7 @@ Turkish alphabet."
                        (svref *unicode-118-160-to-iso-8859-9*
                               (the fixnum (- code #x118)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-9 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1687,8 +1638,7 @@ Turkish alphabet."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xd0) code)
                       ((< code #x100)
                        (svref *unicode-d0-100-to-iso-8859-9*
@@ -1697,7 +1647,7 @@ Turkish alphabet."
                        (svref *unicode-118-160-to-iso-8859-9*
                               (the fixnum (- code #x118)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-9 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1793,7 +1743,7 @@ alphabets."
                        (svref *unicode-a0-180-to-iso-8859-10*
                               (the fixnum (- code #xa0)))))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-10 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -1819,7 +1769,7 @@ alphabets."
                        (svref *unicode-a0-180-to-iso-8859-10*
                               (the fixnum (- code #xa0)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-10 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1841,14 +1791,13 @@ alphabets."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #x180)
                        (svref *unicode-a0-180-to-iso-8859-10*
                               (the fixnum (- code #xa0)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-10 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1889,13 +1838,13 @@ alphabet."
                             (not (and (>= code #xdb) (<= code #xde))))
                        (+ code #x0d60)))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-11 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
    iso-8859-11-stream-decode
    (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function)
+     (declare (ignore next-unit-function stream)
               (type (unsigned-byte 8) 1st-unit))
      (if (< 1st-unit #xa1)
        (code-char 1st-unit)
@@ -1904,7 +1853,7 @@ alphabet."
                 (not (and (>= 1st-unit #xe3b)
                           (<= 1st-unit #xe3e))))
          (code-char (- 1st-unit #xd60))
-         (note-stream-decoding-problem stream)))))
+         #\Replacement_Character))))
   :vector-encode-function
   (nfunction
    iso-8859-11-vector-encode
@@ -1920,7 +1869,7 @@ alphabet."
                             (not (and (>= code #xdb) (<= code #xde))))
                        (+ code #x0d60)))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-11 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -1940,21 +1889,20 @@ alphabet."
                           (not (and (>= 1st-unit #xe3b)
                                     (<= 1st-unit #xe3e))))
                    (code-char (- 1st-unit #xd60))
-                   (note-vector-decoding-problem vector index :iso-8859-11))))))))
+                   #\Replacement_Character)))))))
   :memory-encode-function
   (nfunction
    iso-8859-11-memory-encode
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa1) code)
                       ((and (<= code #xfb)
                             (not (and (>= code #xdb) (<= code #xde))))
                        (+ code #x0d60)))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-11 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -1973,7 +1921,7 @@ alphabet."
                           (not (and (>= 1st-unit #xe3b)
                                     (<= 1st-unit #xe3e))))
                    (code-char (- 1st-unit #xd60))
-                   (note-vector-decoding-problem pointer index :iso-8859-11))))))))
+                   #\Replacement_Character)))))))
   :octets-in-string-function
   #'8-bit-fixed-width-octets-in-string
   :length-of-vector-encoding-function
@@ -2067,7 +2015,7 @@ alphabets."
                        (svref *unicode-2018-2020-to-iso-8859-13*
                               (the fixnum (- code #x2018)))))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-13 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -2097,7 +2045,7 @@ alphabets."
                        (svref *unicode-2018-2020-to-iso-8859-13*
                               (the fixnum (- code #x2018)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-13 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -2119,8 +2067,7 @@ alphabets."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #x180)
                        (svref *unicode-a0-180-to-iso-8859-13*
@@ -2130,7 +2077,7 @@ alphabets."
                        (svref *unicode-2018-2020-to-iso-8859-13*
                               (the fixnum (- code #x2018)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-13 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -2261,7 +2208,7 @@ languages."
                        (svref *unicode-1ef0-1ef8-to-iso-8859-14*
                               (the fixnum (- code #x1ef0)))))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-14 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -2299,7 +2246,7 @@ languages."
                        (svref *unicode-1ef0-1ef8-to-iso-8859-14*
                               (the fixnum (- code #x1ef0)))))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-14 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -2321,8 +2268,7 @@ languages."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #x100)
                        (svref *unicode-a0-100-to-iso-8859-14*
@@ -2340,7 +2286,7 @@ languages."
                        (svref *unicode-1ef0-1ef8-to-iso-8859-14*
                               (the fixnum (- code #x1ef0)))))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-14 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -2438,7 +2384,7 @@ missing from ISO-8859-1."
                               (the fixnum (- code #x150))))
                       ((= code #x20ac) #xa4))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-15 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -2468,7 +2414,7 @@ missing from ISO-8859-1."
                               (the fixnum (- code #x150))))
                       ((= code #x20ac) #xa4))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-15 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -2490,8 +2436,7 @@ missing from ISO-8859-1."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #x100)
                        (svref *unicode-a0-100-to-iso-8859-15*
@@ -2501,7 +2446,7 @@ missing from ISO-8859-1."
                               (the fixnum (- code #x150))))
                       ((= code #x20ac) #xa4))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-15 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -2614,7 +2559,7 @@ European languages."
                               (the fixnum (- code #x2018))))
                       ((= code #x20ac) #xa4))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-16 (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -2647,7 +2592,7 @@ European languages."
                               (the fixnum (- code #x2018))))
                       ((= code #x20ac) #xa4))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-16 (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -2669,8 +2614,7 @@ European languages."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
+       (let* ((code (char-code (schar string i)))
               (c2 (cond ((< code #xa0) code)
                       ((< code #x180)
                        (svref *unicode-a0-180-to-iso-8859-16*
@@ -2683,7 +2627,7 @@ European languages."
                               (the fixnum (- code #x2018))))
                       ((= code #x20ac) #xa4))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-16 (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -2854,7 +2798,7 @@ used in western languages."
                               (the fixnum (- code #xfb00))))
                       ((= code #xf8ff) #xf0))))
        (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :macintosh (char-code #\Sub))))
+       (funcall write-function stream (or c2 (char-code #\Sub)))
        1)))
   :stream-decode-function
   (nfunction
@@ -2901,7 +2845,7 @@ used in western languages."
                               (the fixnum (- code #xfb00))))
                       ((= code #xf8ff) #xf0))))
          (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :macintosh (char-code #\Sub))))
+         (setf (aref vector idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :vector-decode-function
   (nfunction
@@ -2923,9 +2867,8 @@ used in western languages."
    (lambda (string pointer idx start end)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #x80) code)
+       (let* ((code (char-code (schar string i)))
+            (c2 (cond ((< code #x80) code)
                       ((and (>= code #xa0) (< code #x100)
                        (svref *unicode-a0-100-to-macintosh*
                               (the fixnum (- code #xa0)))))
@@ -2951,7 +2894,7 @@ used in western languages."
                               (the fixnum (- code #xfb00))))
                       ((= code #xf8ff) #xf0))))
          (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :macintosh (char-code #\Sub))))
+         (setf (%get-unsigned-byte pointer idx) (or c2 (char-code #\Sub)))
          (incf idx)))))
   :memory-decode-function
   (nfunction
@@ -3040,7 +2983,7 @@ bytes."
                       (logior
                        (the fixnum (ash (the fixnum (logand #x1f 1st-unit)) 6))
                        (the fixnum (logxor s1 #x80))))
-                     (note-stream-decoding-problem stream))
+                     #\Replacement_Character)
                    (let* ((s2 (funcall next-unit-function stream)))
                      (if (eq s2 :eof)
                        s2
@@ -3061,8 +3004,8 @@ bytes."
                                                        (ash (the fixnum (logand s1 #x3f))
                                                             6))
                                                      (the fixnum (logand s2 #x3f)))))))
-                                 (note-stream-decoding-problem stream))
-                             (note-stream-decoding-problem stream))
+                                 #\Replacement_Character)
+                             #\Replacement_Character)
                            (if (< 1st-unit #xf8)
                              (let* ((s3 (funcall next-unit-function stream)))
                                (if (eq s3 :eof)
@@ -3087,11 +3030,9 @@ bytes."
                                           (the fixnum
                                             (ash (the fixnum (logxor s2 #x80)) 6))
                                           (the fixnum (logxor s3 #x80))))))
-
-
-                                     (note-stream-decoding-problem stream)))))
-                             (note-stream-decoding-problem stream))))))))))
-           (note-stream-decoding-problem stream)))))
+                                     #\Replacement_Character))))
+                             #\Replacement_Character)))))))))
+           #\Replacement_Character))))
     :vector-encode-function
     (nfunction
      utf-8-vector-encode
@@ -3192,7 +3133,7 @@ bytes."
                                             (the fixnum
                                               (ash (the fixnum (logxor 3rd-unit #x80)) 6))
                                             (the fixnum (logxor 4th-unit #x80))))))))))))))))
-               (setf (schar string i) (or char (note-vector-decoding-problem vector index :utf-8))))))))
+               (setf (schar string i) (or char #\Replacement_Character)))))))
     :memory-encode-function
     #'utf-8-memory-encode
     :memory-decode-function
@@ -3283,8 +3224,8 @@ bytes."
             (if (and (>= 2nd-unit #xdc00)
                      (< 2nd-unit #xe000))
               (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)
-              (note-stream-decoding-problem stream)))))
-      (note-stream-decoding-problem stream))))
+              #\Replacement_Character))))
+      #\Replacement_Character)))
 
 
 
@@ -3417,7 +3358,7 @@ interpreted on input or prepended to output."
                          (if (and (>= 2nd-unit #xdc00)
                                   (< 2nd-unit #xe000))
                            (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-             (setf (schar string i) (or char (note-vector-decoding-problem vector index #+big-endian-target :utf-16be #-big-endian-target :utf-16le))))))))
+             (setf (schar string i) (or char #\Replacement_Character)))))))
     :memory-encode-function
     (nfunction
      native-utf-16-memory-encode
@@ -3461,7 +3402,7 @@ interpreted on input or prepended to output."
                            (if (and (>= 2nd-unit #xdc00)
                                     (< 2nd-unit #xe000))
                              (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-            (setf (schar string i) (or char (note-vector-decoding-problem pointer index #+big-endian-target :utf-16be #-big-endian-target :utf-16le))))))))
+            (setf (schar string i) (or char #\Replacement_Character)))))))
     :octets-in-string-function
     #'utf-16-octets-in-string
     :length-of-vector-encoding-function
@@ -3582,7 +3523,7 @@ interpreted on input or prepended to output."
                        (if (and (>= 2nd-unit #xdc00)
                                 (< 2nd-unit #xe000))
                          (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-           (setf (schar string i) (or char (note-vector-decoding-problem vector index #+big-endian-target :utf-16le #-big-endian-target :utf-16be))))))))
+           (setf (schar string i) (or char #\Replacement_Character)))))))
   :memory-encode-function
   (nfunction
    reversed-utf-16-memory-encode
@@ -3626,7 +3567,7 @@ interpreted on input or prepended to output."
                        (if (and (>= 2nd-unit #xdc00)
                                 (< 2nd-unit #xe000))
                          (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-           (setf (schar string i) (or char (note-vector-decoding-problem pointer index #+big-endian-target :utf-16le #-big-endian-target :utf-16be))))))))
+           (setf (schar string i) (or char #\Replacement_Character)))))))
   :octets-in-string-function
   #'utf-16-octets-in-string
   :length-of-vector-encoding-function
@@ -3767,7 +3708,7 @@ in native byte-order with a leading byte-order mark."
                          (if (and (>= 2nd-unit #xdc00)
                                   (< 2nd-unit #xe000))
                            (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-             (setf (schar string i) (or char (note-vector-decoding-problem vector index :utf-16)))))))))
+             (setf (schar string i) (or char #\Replacement_Character))))))))
   :memory-encode-function
   (nfunction
    utf-16-memory-encode
@@ -3827,7 +3768,7 @@ in native byte-order with a leading byte-order mark."
                          (if (and (>= 2nd-unit #xdc00)
                                   (< 2nd-unit #xe000))
                            (utf-16-combine-surrogate-pairs 1st-unit 2nd-unit)))))))
-             (setf (schar string i) (or char (note-vector-decoding-problem pointer index :utf-16)))))))))
+             (setf (schar string i) (or char #\Replacement_Character))))))))
   :octets-in-string-function
   (nfunction
    utf-16-bom-octets-in-string
@@ -3918,16 +3859,16 @@ in native byte-order with a leading byte-order mark."
   (let* ((code (char-code char)))
     (declare (type (mod #x110000) code))
     (if (>= code #x10000)
-      (setq code (note-encoding-problem char stream :ucs-2 (char-code #\Replacement_Character))))
+      (setq code (char-code #\Replacement_Character)))
     (funcall write-function stream code)
     1))
 
 (defun ucs-2-stream-decode (1st-unit next-unit-function stream)
   (declare (type (unsigned-byte 16) 1st-unit)
-           (ignore next-unit-function))
+           (ignore next-unit-function stream))
   ;; CODE-CHAR returns NIL on either half of a surrogate pair.
   (or (code-char 1st-unit)
-      (note-stream-decoding-problem stream)))
+      #\Replacement_Character))
 
 
 (defun ucs-2-octets-in-string (string start end)
@@ -3980,7 +3921,7 @@ to output."
               (code (char-code char)))
          (declare (type (mod #x110000) code))
          (when (>= code #x10000)
-           (setq code (note-encoding-problem char vector #+big-endian-target :ucs-2be #-big-endian-target :ucs-2le (char-code #\Replacement_Character))))
+           (setq code (char-code #\Replacement_Character)))
          (setf (%native-u8-ref-u16 vector idx) code)
          (incf idx 2)))))
   :vector-decode-function
@@ -3996,7 +3937,7 @@ to output."
        (declare (fixnum i end index))
        (setf (schar string i)
              (or (code-char (%native-u8-ref-u16 vector index))
-                 (note-vector-decoding-problem vector index  #+big-endian-target :ucs-2be #-big-endian-target :ucs-2le))))))
+                 #\Replacement_Character)))))
   :memory-encode-function
   (nfunction
    native-ucs-2-memory-encode
@@ -4004,12 +3945,11 @@ to output."
      (declare (fixnum idx))
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char)))
+       (let* ((code (char-code (schar string i))))
          (declare (type (mod #x110000) code))
          (setf (%get-unsigned-word pointer idx)
                       (if (>= code #x10000)
-                        (note-encoding-problem char pointer #+big-endian-target :ucs-2be #-big-endian-target :ucs-2le (char-code #\Replacement_Character))
+                        (char-code #\Replacement_Character)
                         code))
          (incf idx 2)))))
   :memory-decode-function
@@ -4023,7 +3963,7 @@ to output."
        (declare (fixnum i index))
        (let* ((1st-unit (%get-unsigned-word pointer index)))
          (declare (type (unsigned-byte 16) 1st-unit))
-         (setf (schar string i) (or (char-code 1st-unit) (note-vector-decoding-problem pointer index  #+big-endian-target :ucs-2be #-big-endian-target :ucs-2le)))))))
+         (setf (schar string i) (or (char-code 1st-unit) #\Replacement_Character))))))
   :octets-in-string-function
   #'ucs-2-octets-in-string
   :length-of-vector-encoding-function
@@ -4070,7 +4010,7 @@ to output."
               (code (char-code char)))
          (declare (type (mod #x110000) code))
          (when (>= code #x10000)
-           (setq code (note-encoding-problem char vector #+big-endian-target :ucs-2le #-big-endian-target :ucs-2be (char-code #\Replacement_Character))))
+           (setq code (char-code #\Replacement_Character)))
          (setf (%reversed-u8-ref-u16 vector idx) code)
          (incf idx 2)))))
   :vector-decode-function
@@ -4086,7 +4026,7 @@ to output."
        (declare (fixnum i end index))
        (setf (schar string i)
              (or (code-char (%reversed-u8-ref-u16 vector index))
-                 (note-vector-decoding-problem vector index #+big-endian-target :ucs-2le #-big-endian-target :ucs-2be))))))
+                 #\Replacement_Character)))))
   :memory-encode-function
   (nfunction
    reversed-ucs-2-memory-encode
@@ -4094,12 +4034,11 @@ to output."
      (declare (fixnum idx))
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char)))
+       (let* ((code (char-code (schar string i))))
          (declare (type (mod #x110000) code))
          (setf (%get-unsigned-word pointer idx)
                (if (>= code #x10000)
-                 (%swap-u16 (note-encoding-problem char pointer #+big-endian-target :ucs-2le #-big-endian-target :ucs-2be (char-code #\Replacement_Character)))
+                 (%swap-u16 (char-code #\Replacement_Character))
                  (%swap-u16 code)))
          (incf idx 2)))))
   :memory-decode-function
@@ -4113,7 +4052,7 @@ to output."
        (declare (fixnum i index))
        (let* ((1st-unit (%swap-u16 (%get-unsigned-word pointer index))))
          (declare (type (unsigned-byte 16) 1st-unit))
-         (setf (schar string i) (or (code-char 1st-unit) (note-vector-decoding-problem pointer index #+big-endian-target :ucs-2le #-big-endian-target :ucs-2be)))))))
+         (setf (schar string i) (or (code-char 1st-unit) #\Replacement_Character))))))
   :octets-in-string-function
   #'ucs-2-octets-in-string
   :length-of-vector-encoding-function
@@ -4154,7 +4093,7 @@ big-endian order."
               (code (char-code char)))
          (declare (type (mod #x110000) code))
          (when (>= code #x10000)
-           (setq code (note-encoding-problem char vector :ucs-2 (char-code #\Replacement_Character))))
+           (setq code (char-code #\Replacement_Character)))
          (setf (%native-u8-ref-u16 vector idx) code)
          (incf idx 2)))))
   :vector-decode-function
@@ -4181,8 +4120,7 @@ big-endian order."
                             (%reversed-u8-ref-u16 vector index)
                             (%native-u8-ref-u16 vector index))))
              (declare (type (unsigned-byte 16) 1st-unit))
-             (setf (schar string i) (or (code-char 1st-unit)
-                                        (note-vector-decoding-problem vector index :ucs-2))))))))
+             (setf (schar string i) (or (code-char 1st-unit) #\Replacement_Character)))))))
   :memory-encode-function
   (nfunction
    ucs-2-memory-encode
@@ -4192,12 +4130,11 @@ big-endian order."
      (incf idx 2)
      (do* ((i start (1+ i)))
           ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char)))
+       (let* ((code (char-code (schar string i))))
          (declare (type (mod #x110000) code))
          (setf (%get-unsigned-word pointer idx)
                       (if (>= code #x10000)
-                        (note-encoding-problem char pointer :ucs-2 (char-code #\Replacement_Character))
+                        (char-code #\Replacement_Character)
                         code))
          (incf idx 2)))))
   :memory-decode-function
@@ -4223,8 +4160,7 @@ big-endian order."
        (let* ((1st-unit (%get-unsigned-word pointer index)))
          (declare (type (unsigned-byte 16) 1st-unit))
          (if swap (setq 1st-unit (%swap-u16 1st-unit)))
-         (setf (schar string i) (or (code-char 1st-unit)
-                                    (note-vector-decoding-problem pointer index :ucs-2))))))))
+         (setf (schar string i) (or (code-char 1st-unit) #\Replacement_Character)))))))
   :octets-in-string-function
   (nfunction
    ucs-2-bom-octets-in-string
@@ -4405,7 +4341,7 @@ or prepended to output."
          (setf (schar string i)
                (or (if (< code char-code-limit)
                       (code-char code))
-                   (note-vector-decoding-problem vector index #+big-endian-target :utf-32be #-big-endian-target :utf-32le)))))))
+                   #\Replacement_Character))))))
   :memory-encode-function
   (nfunction
    native-ucs-4-memory-encode
@@ -4430,8 +4366,7 @@ or prepended to output."
          (declare (type (unsigned-byte 32) 1st-unit))
          (setf (schar string i) (or (if (< 1st-unit char-code-limit)
                                       (code-char 1st-unit))
-                                    (note-vector-decoding-problem
-                                     pointer index #+big-endian-target :utf-32be #-big-endian-target :utf-32le)))))))
+                                    #\Replacement_Character))))))
   :octets-in-string-function
   #'ucs-4-octets-in-string
   :length-of-vector-encoding-function
@@ -4504,7 +4439,7 @@ or prepended to output."
          (setf (schar string i)
                (or (if (< code char-code-limit)
                      (code-char code))
-                   (note-vector-decoding-problem vector index #+big-endian-target :utf-32le #-big-endian-target :utf-32be)))))))
+                   #\Replacement_Character))))))
   :memory-encode-function
   (nfunction
    native-ucs-4-memory-encode
@@ -4529,7 +4464,7 @@ or prepended to output."
          (declare (type (unsigned-byte 32) 1st-unit))
          (setf (schar string i) (or (if (< 1st-unit char-code-limit)
                                       (code-char 1st-unit))
-                                    (note-vector-decoding-problem pointer index #+big-endian-target :utf-32le #-big-endian-target :utf-32be)))))))
+                                    #\Replacement_Character))))))
 
   :octets-in-string-function
   #'ucs-4-octets-in-string
@@ -4612,8 +4547,7 @@ mark."
              (declare (type (unsigned-byte 32) 1st-unit))
              (setf (schar string i) (or (if (< 1st-unit char-code-limit)
                                           (code-char 1st-unit))
-                                        (note-vector-decoding-problem
-                                         vector index :utf-32))))))))
+                                        #\Replacement_Character)))))))
   :memory-encode-function
   (nfunction
    utf-32-memory-encode
@@ -4652,8 +4586,7 @@ mark."
          (if swap (setq 1st-unit (%swap-u32 1st-unit)))
          (setf (schar string i) (or (if (< 1st-unit char-code-limit)
                                       (code-char 1st-unit))
-                                    (note-vector-decoding-problem
-                                     pointer index :utf-32))))))))
+                                    #\Replacement_Character)))))))
   :octets-in-string-function
   (nfunction
    utf-32-bom-octets-in-string

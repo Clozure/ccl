@@ -195,21 +195,6 @@ _exportfn(call_handler_on_main_stack)
         __(bx ip)
 _endfn                
 
-/* zero N (r1) dnodes, starting at the dnode-aligned address in r0 */
-_exportfn(C(zero_dnodes))
-        __(cmp r1,#0)
-        __(adr r2,2f)
-        __(fldd d0,[r2,#0])
-        __(b 1f)
-0:      __(subs r1,r1,#1)
-        __(fstd d0,[r0])
-        __(add r0,r0,#dnode_size)        
-1:      __(bne 0b)
-        __(bx lr)
-        .align 3
-2:      .long 0
-        .long 0        
-_endfn                        
                                 
 	_endfile
 

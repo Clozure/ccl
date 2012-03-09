@@ -1061,7 +1061,7 @@
 		   (decf ea *x862-target-node-size*))))))))))
 
 
-(defun x862-bind-lambda (seg lcells req opt rest keys auxen optsupvloc passed-in-regs lexpr inherited tail-label
+(defun x862-bind-lambda (seg lcells req opt rest keys auxen optsupvloc passed-in-regs lexpr &optional inherited
                              &aux (vloc 0) (numopt (list-length (%car opt)))
                              (nkeys (list-length (%cadr keys))) 
                              reg)
@@ -1104,19 +1104,16 @@
           (progn
             (x862-copy-register seg reg *x862-arg-z*)
             (x862-set-var-ea seg rest reg))
-          (let* ((loc *x862-vstack*))
-            (x862-vpush-register seg *x862-arg-z* :reserved)
-            (x862-note-top-cell rest)
-            (x862-bind-var seg rest loc *x862-top-vstack-lcell*))))
+            (let* ((loc *x862-vstack*))
+              (x862-vpush-register seg *x862-arg-z* :reserved)
+              (x862-note-top-cell rest)
+              (x862-bind-var seg rest loc *x862-top-vstack-lcell*))))
       (let* ((rvloc (+ vloc (* 2 *x862-target-node-size* nkeys))))
         (if (setq reg (nx2-assign-register-var rest))
           (x862-init-regvar seg rest reg (x862-vloc-ea rvloc))
           (x862-bind-var seg rest rvloc (pop lcells))))))
-  (when keys
-    (apply #'x862-init-keys seg vloc lcells keys))
-  (when tail-label
-    (with-x86-local-vinsn-macros (seg)
-      (@+ tail-label)))
+    (when keys
+      (apply #'x862-init-keys seg vloc lcells keys))
   (x862-seq-bind seg (%car auxen) (%cadr auxen)))
 
 
@@ -6725,7 +6722,9 @@
             (x862-open-undo $undostkblk))
           (setq *x862-entry-vstack* *x862-vstack*)
           (setq reserved-lcells (x862-collect-lcells :reserved))
-          (x862-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars *x862-tail-label*)
+          (x862-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars)
+          (when *x862-tail-label*
+            (@+ *x862-tail-label*))
           (when next-method-var-scope-info
             (push next-method-var-scope-info *x862-recorded-symbols*)))
         (when method-var (x862-heap-cons-next-method-var seg method-var))

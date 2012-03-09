@@ -312,7 +312,7 @@ for compiling files that are not expected to change.")
 
 
 
-(defvar *terminal-character-encoding-name* :utf-8
+(defvar *terminal-character-encoding-name* nil
   "NIL (implying :ISO-8859-1), or a keyword which names a defined
 character encoding to be used for *TERMINAL-IO* and other predefined
 initial streams.  The value of *TERMINAL-CHARACTER-ENCODING-NAME*

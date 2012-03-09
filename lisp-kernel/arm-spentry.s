@@ -4370,7 +4370,7 @@ _startfn(toplevel_loop)
 	__(b local_label(test))
 local_label(loop):
 	__(ref_nrs_value(arg_z,toplcatch))
-	__(bl _SPmkcatch1v)
+	__(bl _SPmkcatch1v)     /* preserves nfn, at the moment */
 	__(b local_label(test))	/* cleanup address, not really a branch */
         __(ldr nfn,[vsp,#0])
 	__(set_nargs(0))
@@ -4473,13 +4473,12 @@ _exportfn(C(init_lisp))
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
         __(ref_nrs_function(nfn,restore_lisp_pointers))
-        __(extract_subtag(imm0,nfn))
+        __(extract_fulltag(imm0,nfn))
         __(cmp imm0,#subtag_function)
         __(bne local_label(fail))
         __(ref_nrs_value(arg_z,toplcatch))
         __(bl _SPmkcatch1v)
         __(b local_label(fail)) /* cleanup address */
-        __(ref_nrs_function(nfn,restore_lisp_pointers))
         __(set_nargs(0))
         __(bl _SPfuncall)
         __(mov arg_z,#0)

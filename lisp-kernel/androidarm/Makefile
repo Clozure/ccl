@@ -14,7 +14,7 @@
 #   http://opensource.franz.com/preamble.html
 
 LIBBASE = 0x04001000
-NDK = /usr/local/android-ndk-r7b
+NDK = /usr/local/android-ndk-r7
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 HOST = linux-x86

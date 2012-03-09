@@ -712,15 +712,7 @@
   (single-value-return))
 
 (defx8632lapfunction %vect-data-to-macptr ((vect arg_y) (ptr arg_z))
-  (cmpb ($ x8632::subtag-double-float-vector) (@ x8632::misc-subtag-offset (% vect)))
-  (je @dfloat)
-  (cmpb ($ x8632::subtag-double-float) (@ x8632::misc-subtag-offset (% vect)))
-  (je @dfloat)
   (lea (@ x8632::misc-data-offset (% vect)) (% imm0))
-  (jmp @common)
-  @dfloat
-  (lea (@ x8632::misc-dfloat-offset (% vect)) (% imm0))
-  @common
   (movl (% imm0) (@ x8632::macptr.address (% ptr)))
   (single-value-return))
 
