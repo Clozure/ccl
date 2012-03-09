@@ -70,7 +70,7 @@
              (with-slots (source position encoding-name) c
                (format stream "Contents of ~a" source)
                (when position
-                 (format stream ", near ~a ~d," (if (typep source 'stream) "positition" "index") position))
+                 (format stream ", near ~a ~d," (if (typep source 'stream) "position" "index") position))
                (format stream " don't represent a valid character in ~s." encoding-name)))))
 
 
