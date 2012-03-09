@@ -405,7 +405,7 @@
            (destructuring-bind 
              (continue cond &rest args) expansion
              (setq condform `(condition-arg ,cond (list ,@args) 'simple-error)
-                   signalform `(cerror ,continue ,cname))))
+                   signalform `(cerror ,continue ,cname ,@args))))
           ((signal error warn)
            (destructuring-bind
              (cond &rest args) expansion
