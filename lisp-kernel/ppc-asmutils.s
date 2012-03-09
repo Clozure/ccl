@@ -427,5 +427,18 @@ _exportfn(C(get_vector_registers))
 	__(blr)
 _endfn
 
-
+/* zero N (r4) dnodes, starting at the dnode-aligned address in r3 */
+_exportfn(C(zero_dnodes))
+        __(cmpri(r4,0))
+        __(li r5,0)
+        __(li r6,0)
+        __(b 1f)
+0:      __(subi r4,r4,1)
+        __(str(r5,0(r3)))
+        __(cmpri(r4,0))
+        __(str(r6,node_size(r3)))
+        __(la r3,dnode_size(r3))
+1:      __(bne 0b)
+        __(blr)
+_endfn                
 	_endfile

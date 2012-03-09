@@ -405,7 +405,7 @@
            (destructuring-bind 
              (continue cond &rest args) expansion
              (setq condform `(condition-arg ,cond (list ,@args) 'simple-error)
-                   signalform `(cerror ,continue ,cname))))
+                   signalform `(cerror ,continue ,cname ,@args))))
           ((signal error warn)
            (destructuring-bind
              (cond &rest args) expansion
@@ -1768,6 +1768,14 @@ to open."
             (native-utf-16-memory-encode ,data ,sym 0 ,offset ,end)
             (setf (%get-unsigned-word ,sym ,noctets) 0)
             ,@body))))))
+
+(defmacro with-encoding-problems-as-errors (&body body)
+  `(handler-bind ((encoding-problem #'error))
+    ,@body))
+
+(defmacro with-decoding-problems-as-errors (&body body)
+  `(handler-bind ((decoding-problem #'error))
+    ,@body))
 
 (defmacro with-pointers (speclist &body body)
    (with-specs-aux 'with-pointer speclist body))

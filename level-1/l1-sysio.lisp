@@ -84,7 +84,7 @@
 
 (defvar *default-external-format* :unix)
 
-(defvar *default-file-character-encoding* nil)
+(defvar *default-file-character-encoding* :utf-8)
 
 (defmethod default-character-encoding ((domain (eql :file)))
   *default-file-character-encoding*)
@@ -930,7 +930,8 @@ is :UNIX.")
                 (* (count #\Newline object :start start :end end)
                    (file-string-length stream #\Return))
                 0))
-           (if (eql (file-position stream) 0)
-             0
-             (length (character-encoding-bom-encoding encoding)))))))))
+           (if (and (eql (file-position stream) 0)
+                    (character-encoding-use-byte-order-mark encoding))
+             (length (character-encoding-bom-encoding encoding))
+             0)))))))
   

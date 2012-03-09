@@ -279,5 +279,20 @@ _exportfn(C(ensure_safe_for_string_operations))
         __endif
 _endfn                                       
         __endif
+
+/* zero arg1 dnodes,starting at the dnode-aligned address in arg0 */
+_exportfn(C(zero_dnodes))  
+        __(xorl %eax,%eax)
+        __(mov 4(%esp),%edx)
+        __(mov 8(%esp),%ecx)
+        __(testl %ecx,%ecx)
+        __(jmp 1f)
+0:      __(mov %eax,0(%edx))
+        __(mov %eax,4(%edx))
+        __(lea dnode_size(%edx),%edx)
+        __(subl $1,%ecx)
+1:      __(jne 0b)
+        __(repret)
+_endfn        
         _endfile
 

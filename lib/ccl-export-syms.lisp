@@ -342,6 +342,10 @@
      set-event-ticks
      event-dispatch
      *ticks-per-second*
+     encoding-problem
+     decoding-problem
+     with-encoding-problems-as-errors
+     with-decoding-problems-as-errors
 
      *application*
      arglist

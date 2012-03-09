@@ -3502,8 +3502,14 @@
 (defun hemlock-ext:execute-in-file-view (pathname thunk)
   (execute-in-gui #'(lambda ()
                       (assume-cocoa-thread)
-                      (let ((view (find-or-make-hemlock-view pathname)))
-                        (hi::handle-hemlock-event view thunk)))))
+                      (handler-case
+                          (let ((view (find-or-make-hemlock-view pathname)))
+                            (hi::handle-hemlock-event view thunk))
+                        (error (c)
+                          (alert-window :title "Error in Hemlock command processing"
+                                        :message (or (ignore-errors (princ-to-string c))
+                                                     "#<error printing error message>")
+                                        :default-button "Ok"))))))
 
 (defun hemlock-ext:open-sequence-dialog (&key title sequence action (printer #'prin1))
   (make-instance 'sequence-window-controller
