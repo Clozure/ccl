@@ -50,6 +50,31 @@
 (define-condition process-reset (thread-condition)
   ((kill :initarg :kill :initform nil :reader process-reset-kill)))
 
+(define-condition encoding-problem (condition)
+  ((character :initarg :character :reader encoding-problem-character)
+   (destination :initarg :destination :reader encoding-problem-destination)
+   (encoding-name :initarg :encoding-name :reader encoding-problem-encoding-name))
+  (:report
+   (lambda (c s)
+     (with-slots (character destination encoding-name) c
+       (format s "Character ~c can't be written to ~a in encoding ~a."
+               character destination encoding-name)))))
+
+
+
+(define-condition decoding-problem (condition)
+  ((source :initarg :source :reader decoding-problem-source)
+   (position :initarg :position :reader decoding-problem-position)
+   (encoding-name :initarg :encoding-name :reader decoding-problem-encoding-name))
+  (:report (lambda (c stream)
+             (with-slots (source position encoding-name) c
+               (format stream "Contents of ~a" source)
+               (when position
+                 (format stream ", near ~a ~d," (if (typep source 'stream) "positition" "index") position))
+               (format stream " don't represent a valid character in ~s." encoding-name)))))
+
+
+             
 
 (define-condition print-not-readable (error)
   ((object :initarg :object :reader print-not-readable-object)

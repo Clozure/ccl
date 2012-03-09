@@ -161,7 +161,7 @@
                                           (the fixnum
                                             (ash (the fixnum (logxor 3rd-unit #x80)) 6))
                                           (the fixnum (logxor 4th-unit #x80)))))))))))))))))
-        (setf (schar string i) (or char #\Replacement_Character))))))
+        (setf (schar string i) (or char (note-vector-decoding-problem pointer index :utf-8)))))))
 
 (defun utf-8-length-of-memory-encoding (pointer noctets start)
   (do* ((i start)

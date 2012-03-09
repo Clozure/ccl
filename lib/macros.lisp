@@ -1769,6 +1769,14 @@ to open."
             (setf (%get-unsigned-word ,sym ,noctets) 0)
             ,@body))))))
 
+(defmacro with-encoding-problems-as-errors (&body body)
+  `(handler-bind ((encoding-problem #'error))
+    ,@body))
+
+(defmacro with-decoding-problems-as-errors (&body body)
+  `(handler-bind ((decoding-problem #'error))
+    ,@body))
+
 (defmacro with-pointers (speclist &body body)
    (with-specs-aux 'with-pointer speclist body))
 
