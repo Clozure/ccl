@@ -18,7 +18,7 @@
 (in-package "CCL")
 
 (defparameter *openmcl-major-version* 1)
-(defparameter *openmcl-minor-version* 8)
+(defparameter *openmcl-minor-version* 9)
 (defparameter *openmcl-revision* "dev")
 ;;; May be set by xload-level-0
 (defvar *openmcl-svn-revision* nil)
