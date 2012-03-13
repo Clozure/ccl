@@ -504,7 +504,7 @@
               (incf req-idx))
              (&whole
               (names arg)
-              (vals `,args-form)
+              (vals (list 'quote `,args-form))
               (setq state :required))
              (&optional
               (let* ((var arg)
@@ -522,7 +522,7 @@
                 (when spvar
                   (names spvar)
                   (vals (list 'quote 
-                         `(nth-opt-gf-arg-present-p ,gf-form ,args-form ,opt-idx))))
+                              `(nth-opt-gf-arg-present-p ,gf-form ,args-form ,opt-idx))))
                 (incf opt-idx)))
              (&rest
               (names arg)
