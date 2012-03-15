@@ -160,7 +160,7 @@
          (position (stream-position source))
          (encoding-name
           (character-encoding-name
-           (external-format-character-encoding (stream-external-format source)))))
+           (lookup-character-encoding (external-format-character-encoding (stream-external-format source))))))
     (signal (make-condition 'decoding-problem
                             :source source
                             :position position
