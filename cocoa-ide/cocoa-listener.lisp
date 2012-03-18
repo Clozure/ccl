@@ -426,7 +426,14 @@
 (objc:defmethod (#/isDocumentEdited :<BOOL>) ((self hemlock-listener-document))
   nil)
 
-
+(defun listener-window-count ()
+  (let ((count 0)
+        (all-windows (#/windows *NSApp*)))
+    (dotimes (i (#/count all-windows) count)
+      (let* ((w (#/objectAtIndex: all-windows i))
+             (wc (#/windowController w)))
+        (when (typep wc 'hemlock-listener-window-controller)
+          (incf count))))))
 
 (objc:defmethod #/init ((self hemlock-listener-document))
   (let* ((doc (call-next-method)))
@@ -442,7 +449,7 @@
         (hi::set-buffer-modeline-fields buffer hemlock::*listener-modeline-fields*)))
     doc))
 
-(def-cocoa-default *initial-listener-x-pos* :float -100.0f0 "X position of upper-left corner of initial listener")
+(def-cocoa-default *initial-listener-x-pos* :float 100.0f0 "X position of upper-left corner of initial listener")
 
 (def-cocoa-default *initial-listener-y-pos* :float 100.0f0 "Y position of upper-left corner of initial listener")
 
@@ -450,9 +457,10 @@
 (defloadvar *next-listener-y-pos* nil) ; likewise
 
 (objc:defmethod (#/dealloc :void) ((self hemlock-listener-document))
-  (if (zerop (decf *cocoa-listener-count*))
+  (when (zerop (listener-window-count))
     (setq *next-listener-x-pos* nil
-          *next-listener-y-pos* nil))
+          *next-listener-y-pos* nil
+          *cocoa-listener-count* 0))
   (let* ((p (hemlock-document-process self)))
     (when p
       (setf (hemlock-document-process self) nil)
