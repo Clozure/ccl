@@ -580,7 +580,7 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!! */
 	 _node(gcable_pointers)         /* linked-list of weak macptrs. */
 	 _node(gc_num)                  /* fixnum: GC call count. */
 	 _node(fwdnum)                  /* fixnum: GC "forwarder" call count. */
-	 _node(altivec_present)         /* non-zero when AltiVec available */
+	 _node(float_abi)         /* non-zero when hard-float */
 	 _node(oldspace_dnode_count) 	/* dynamic dnodes older than g0 start */
 	 _node(refbits) 		/* EGC refbits */
 	 _node(gc_inhibit_count)

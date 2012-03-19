@@ -212,7 +212,7 @@
     refbits                             ; oldspace refbits
     oldspace-dnode-count                ; number of dnodes in dynamic space that are older than
                                         ; youngest generation
-    altivec-present                     ; non-zero if cpu supports AltiVec 
+    float-abi                           ; non-zero if using hard float abi
     fwdnum                              ; fixnum: GC "forwarder" call count.
     gc-count                            ; fixnum: GC call count.
     gcable-pointers                     ; linked-list of weak macptrs.

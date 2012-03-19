@@ -39,7 +39,12 @@ extern LispObj lisp_nil;
 #define GC_INHIBIT_COUNT (-16)
 #define REFBITS (-17)
 #define OLDSPACE_DNODE_COUNT (-18) /* count of dynamic dnodes older than generation 0 */
+#ifdef PPC
 #define ALTIVEC_PRESENT (-19)   /* non-zero if AltiVec present. */
+#endif
+#ifdef ARM
+#define FLOAT_ABI (-19)         /* non zero when hard-float ABI in effect */
+#endif
 #define FWDNUM (-20)            /* fixnum: GC "forwarder" call count. */
 #define GC_NUM (-21)            /* fixnum: GC call count. */
 #define GCABLE_POINTERS (-22)   /* linked-list of weak macptrs. */
