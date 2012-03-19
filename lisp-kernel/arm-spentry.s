@@ -3489,9 +3489,9 @@ local_label(misc_ref_u32):
 	__(ldr imm0,[arg_y,imm0])
 	__(b _SPmakeu32)
 local_label(misc_ref_double_float_vector):      
-	__(mov imm0,arg_z,lsl #1)
-	__(add imm0,imm0,#misc_dfloat_offset)
-	__(ldrd imm0,imm1,[arg_y,imm0])
+	__(mov imm2,arg_z,lsl #1)
+	__(add imm2,imm2,#misc_dfloat_offset)
+	__(ldrd imm0,imm1,[arg_y,imm2])
 	__(movc16(imm2,double_float_header))
 	__(Misc_Alloc_Fixed(arg_z,imm2,double_float.size))
 	__(strd imm0,imm1,[arg_z,#double_float.value])
