@@ -44,6 +44,13 @@
   (declaim (inline set-hash-key-conditional set-hash-value-conditional))
   (declaim (inline hash-lock-free-p lock-free-gethash)))
 
+#+eq-hash-monitor
+(progn
+(defparameter eq-hash-find-calls 0)
+(defparameter eq-hash-find-probes 0)
+(defparameter eq-hash-find-for-put-calls 0)
+(defparameter eq-hash-find-for-put-probes 0)
+)
 
 
 (defun %cons-hash-table (keytrans-function compare-function vector
@@ -98,8 +105,8 @@
         (and (< typecode (- target::nbits-in-word target::fixnumshift))
              (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
                         typecode)
-                      (logior (ash 1 target::tag-fixnum)
-                              (ash 1 target::subtag-bignum)
+                      (logior (ash 1 target::subtag-bignum)
+                              #-64-bit-target
                               (ash 1 target::subtag-single-float)
                               (ash 1 target::subtag-double-float)
                               (ash 1 target::subtag-ratio)
@@ -140,6 +147,9 @@
 #+32-bit-target
 (defun mixup-hash-code (fixnum)
   (declare (fixnum fixnum))
+  #+mixup-hash-code-nop
+  fixnum
+  #-mixup-hash-code-nop
   (the fixnum
     (+ fixnum
        (the fixnum (%ilsl (- 32 8)
@@ -148,6 +158,9 @@
 #+64-bit-target
 (defun mixup-hash-code (fixnum)
   (declare (fixnum fixnum))
+  #+mixup-hash-code-nop
+  fixnum
+  #-mixup-hash-code-nop
   (the fixnum
     (+ fixnum
        (the fixnum (%ilsl 50
@@ -1276,6 +1289,9 @@ before doing so.")
 
 (defun eq-hash-find (hash key)
   (declare (optimize (speed 3) (safety 0)))
+  #+eq-hash-monitor (progn
+                      (incf eq-hash-find-calls)
+                      (incf eq-hash-find-probes))
   (let* ((vector (nhash.vector hash))
          (hash-code
           (let* ((typecode (typecode key)))
@@ -1301,6 +1317,7 @@ before doing so.")
                (length (+ count $nhash.vector_overhead)))
           (declare (fixnum secondary-hash initial-index count length))
           (loop
+            #+eq-hash-monitor (incf eq-hash-find-probes)
             (incf vector-index secondary-hash)
             (when (>= vector-index length)
               (decf vector-index count))
@@ -1318,6 +1335,9 @@ before doing so.")
 ;;; to be done if we're adding a new key.
 (defun eq-hash-find-for-put (hash key)
   (declare (optimize (speed 3) (safety 0)))
+  #+eq-hash-monitor (progn
+                      (incf eq-hash-find-for-put-calls)
+                      (incf eq-hash-find-for-put-probes))
   (let* ((vector (nhash.vector hash))
          (hash-code
           (let* ((typecode (typecode key)))
@@ -1349,6 +1369,7 @@ before doing so.")
              (length (+ count $nhash.vector_overhead)))
         (declare (fixnum secondary-hash initial-index count length))
         (loop
+          #+eq-hash-monitor (incf eq-hash-find-for-put-probes)
           (incf vector-index secondary-hash)
           (when (>= vector-index length)
             (decf vector-index count))

@@ -109,6 +109,26 @@
 (defparameter *x86-xdev-modules* '(x86-lapmacros ))
 (defparameter *arm-xdev-modules* '(arm-lapmacros ))
 
+(defmacro with-global-optimization-settings ((&key speed
+                                                   space
+                                                   safety
+                                                   debug
+                                                   compilation-speed)
+                                             &body body
+                                             &environment env)
+  (flet ((check-quantity (val default)
+           (if val
+             (require-type val '(mod 4))
+             default)))
+    (multiple-value-bind (body decls) (parse-body body env)
+      `(let* ((*nx-speed* ,(check-quantity speed '*nx-speed*))
+              (*nx-space* ,(check-quantity space '*nx-space*))
+              (*nx-safety* ,(check-quantity safety '*nx-safety*))
+              (*nx-debug* ,(check-quantity debug '*nx-debug*))
+              (*nx-cspeed* ,(check-quantity compilation-speed '*nx-cspeed*)))
+        ,@decls
+        ,@body))))
+  
 (defun target-xdev-modules (&optional (target
 				       (backend-target-arch-name
 					*host-backend*)))
@@ -329,13 +349,7 @@
   (target-compile-modules modules (backend-name *host-backend*) force-compile)
 )
 
-(defmacro with-global-optimization-settings ((&rest override) &body body)
-  `(let* ((*nx-speed* ,(or (cadr (assoc 'speed override)) 1))
-          (*nx-space* ,(or (cadr (assoc 'space override)) 1))
-          (*nx-cspeed* ,(or (cadr (assoc 'compilation-speed override)) 1))
-          (*nx-safety* ,(or (cadr (assoc 'safety override)) 1))
-          (*nx-debug* ,(or (cadr (assoc 'debug override)) 1)))
-    ,@body))
+
 
 (defun compile-ccl (&optional force-compile)
   (with-compilation-unit ()
@@ -561,7 +575,7 @@ not runtime errors reported by a successfully created process."
       (when string
         (format nil "Error executing ~a: ~a~&~a" procname string reminder)))))
 
-(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode :qres-ccl))
+(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode :qres-ccl :eq-hash-monitor :mixup-hash-code-nop))
 (defvar *build-time-optional-features* nil)
 (defvar *ccl-save-source-locations* :no-text)
 
@@ -850,7 +864,8 @@ the lisp and run REBUILD-CCL again.")
                       optimization-settings exit)
   (with-preserved-working-directory ()
     (let* ((*package* (find-package "CL-USER")))
-      (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
+      (with-global-optimization-settings ()
+        (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl))
       (cwd "ccl:tests;ansi-tests;")
       (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
             (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
