@@ -3401,13 +3401,15 @@
                                    ((closure :lisp)))
   (movb (:$b 6) (:@ x8632::misc-data-offset (:%l closure))) ;imm word count
   (movb (:$b #xbf) (:@ (+ x8632::misc-data-offset 2) (:%l closure))) ;movl $self, %fn
-  (movl (:%l closure) (:@ (+ x8632::misc-data-offset 3) (:%l closure)))
   (movb (:$b #xff) (:@ (+ x8632::misc-data-offset 7) (:%l closure))) ;jmp
   (movl (:$l #x0150b425) (:@ (+ x8632::misc-data-offset 8) (:%l closure))) ;.SPcall-closure
   ;; already aligned
   ;; (movl ($ 0) (:@ (+ x8632::misc-data-offset 12))) ;"end" of self-references
   (movb (:$b 7) (:@ (+ x8632::misc-data-offset 16) (:%l closure))) ;self-reference offset
-  (movb (:$b x8632::function-boundary-marker) (:@ (+ x8632::misc-data-offset 20) (:%l closure))))
+  (movb (:$b x8632::function-boundary-marker) (:@ (+ x8632::misc-data-offset 20) (:%l closure)))
+  ;; If the GC moved the closure before we finished creating its
+  ;; self-reference table, it wouldn't have updated this self-reference
+  (movl (:%l closure) (:@ (+ x8632::misc-data-offset 3) (:%l closure))))
 
 (define-x8632-vinsn finalize-closure (((closure :lisp))
                                       ((closure :lisp)))
