@@ -1991,7 +1991,7 @@ changing its name to ~s may have serious consequences." class new))
                   (progn (update-obsolete-instance instance)
                          (eq (instance.class-wrapper instance) wrapper)))
              (%slot-ref (instance.slots instance) location))
-            (t (no-applicable-method (car (%gf-dispatch-table-gf dt)) instance))))))
+            (t (no-applicable-method (method-generic-function (car (%gf-dispatch-table-methods dt))) instance))))))
 (register-dcode-proto #'singleton-reader-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
@@ -2003,7 +2003,7 @@ changing its name to ~s may have serious consequences." class new))
               (%class-of-instance instance))
               (%svref dt %gf-dispatch-table-first-data))
       (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
-      (no-applicable-method (car (%gf-dispatch-table-gf dt)) instance)))
+      (no-applicable-method (method-generic-function (car (%gf-dispatch-table-methods dt))) instance)))
 (register-dcode-proto #'reader-constant-location-dcode *gf-proto-one-arg*)
 
 ;;; Dcode for a GF whose methods are all reader-methods which access a
@@ -2025,7 +2025,7 @@ changing its name to ~s may have serious consequences." class new))
              (< defining-class-ordinal (the fixnum (uvsize bits)))
              (not (eql 0 (sbit bits defining-class-ordinal))))
       (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
-      (no-applicable-method (car (%gf-dispatch-table-gf dt)) instance))))
+      (no-applicable-method (method-generic-function (car (%gf-dispatch-table-methods dt))) instance))))
 (register-dcode-proto #'reader-constant-location-inherited-from-single-class-dcode *gf-proto-one-arg*)
 
 ;;; It may be faster to make individual functions that take their
@@ -2082,7 +2082,7 @@ changing its name to ~s may have serious consequences." class new))
                      (not (eql 0 (sbit bits ordinal))))
             (return t)))
       (%slot-ref (instance.slots instance) (%svref dt (1+ %gf-dispatch-table-first-data)))
-      (no-applicable-method (car (%gf-dispatch-table-gf dt)) instance))))
+      (no-applicable-method (method-generic-function (car (%gf-dispatch-table-methods dt))) instance))))
 (register-dcode-proto #'reader-constant-location-inherited-from-multiple-classes-dcode *gf-proto-one-arg*)
 
 
@@ -2098,7 +2098,7 @@ changing its name to ~s may have serious consequences." class new))
                      alist))))
     (if location
       (%slot-ref (instance.slots instance) location)
-      (no-applicable-method (car (%gf-dispatch-table-gf dt)) instance))))
+      (no-applicable-method (method-generic-function (car (%gf-dispatch-table-methods dt))) instance))))
 (register-dcode-proto #'reader-variable-location-dcode *gf-proto-one-arg*)
 
 (defun class-and-slot-location-alist (classes slot-name)
@@ -2168,7 +2168,7 @@ changing its name to ~s may have serious consequences." class new))
                 (let* ((argnum (%gf-dispatch-table-argnum dt)))
                   (unless (< argnum 0)
                     (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
-                          (%gf-dispatch-table-gf dt) (cons f (%gf-dcode f)))))
+                          (%gf-dispatch-table-gf dt) (%gf-dcode f))))
                     
                 (cond ((null (cdr alist))
                        ;; Method is only applicable to a single class.
@@ -2566,7 +2566,7 @@ changing its name to ~s may have serious consequences." class new))
     (let* ((dt (%gf-dispatch-table f))
            (argnum (%gf-dispatch-table-argnum dt)))
       (when (< argnum 0)
-        (let* ((dcode (cdr (%gf-dispatch-table-gf dt))))
+        (let* ((dcode (%gf-dispatch-table-gf dt)))
           (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
                 (%gf-dispatch-table-gf dt) f
                 (%gf-dcode f) dcode)
