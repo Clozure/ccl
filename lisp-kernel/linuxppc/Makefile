@@ -91,7 +91,7 @@ OSLIBS = -ldl -lm -lpthread
 
 
 ../../ppccl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(CC) $(PPC32) $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ -T ./elf32ppclinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) --no-as-needed $(OSLIBS)
+	$(CC) $(PPC32) $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ -T ./elf32ppclinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)

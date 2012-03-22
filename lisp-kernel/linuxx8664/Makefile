@@ -72,7 +72,7 @@ LINK_MAP = ./elf_x86_64.x
 USE_LINK_MAP = # -T ./elf_x86_64.x
 
 ../../lx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile  $(LINK_MAP)
-	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) --no-as-needed $(OSLIBS)
+	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
