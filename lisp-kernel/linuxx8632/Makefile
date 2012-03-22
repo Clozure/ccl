@@ -72,7 +72,7 @@ LINK_SCRIPT = # ./elf_x86_32.x
 USE_LINK_SCRIPT = # -T $(LINK_SCRIPT)
 
 ../../lx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile  $(LINK_SCRIPT)
-	$(CC)  -m32 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	$(CC)  -m32 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) --no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
