@@ -575,7 +575,7 @@ not runtime errors reported by a successfully created process."
       (when string
         (format nil "Error executing ~a: ~a~&~a" procname string reminder)))))
 
-(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode :qres-ccl :eq-hash-monitor :mixup-hash-code-nop))
+(defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode :qres-ccl :eq-hash-monitor))
 (defvar *build-time-optional-features* nil)
 (defvar *ccl-save-source-locations* :no-text)
 

@@ -144,29 +144,26 @@
     (when (logbitp $nhash_track_keys_bit flags)
       (setf (nhash.vector.flags vector) (logior (ash 1 $nhash_key_moved_bit) flags)))))
 
-#+32-bit-target
+;;;
+;;; This is a fairly straightforward translation of the "one-at-a-time"
+;;; hash function described at:
+;;; http://www.burtleburtle.net/bob/hash/doobs.html
+;;;
 (defun mixup-hash-code (fixnum)
-  (declare (fixnum fixnum))
-  #+mixup-hash-code-nop
-  fixnum
-  #-mixup-hash-code-nop
-  (the fixnum
-    (+ fixnum
-       (the fixnum (%ilsl (- 32 8)
-                          (logand (1- (ash 1 (- 8 3))) fixnum))))))
-
-#+64-bit-target
-(defun mixup-hash-code (fixnum)
-  (declare (fixnum fixnum))
-  #+mixup-hash-code-nop
-  fixnum
-  #-mixup-hash-code-nop
-  (the fixnum
-    (+ fixnum
-       (the fixnum (%ilsl 50
-                          (logand (1- (ash 1 (- 8 3))) fixnum))))))
-
-
+  (declare (fixnum fixnum)
+           (optimize (speed 3) (safety 0)))
+  (setq fixnum (logand fixnum target::most-positive-fixnum))
+  (do* ((hash 0))
+       ((zerop fixnum)
+        (setq hash (+ hash (the fixnum (ash hash 3)))
+              hash (logxor hash (the fixnum (ash hash -11))))
+        (the fixnum (+ hash (the fixnum (ash hash 15)))))
+    (declare (fixnum hash))
+    (setq hash (+ hash (the fixnum (logand fixnum #xff)))
+          fixnum (ash fixnum -8)
+          hash (+ hash (the fixnum (ash hash 10)))
+          hash (logxor hash (the fixnum (ash hash -6))))))
+          
 (defun rotate-hash-code (fixnum)
   (declare (fixnum fixnum))
   (let* ((low-3 (logand 7 fixnum))
