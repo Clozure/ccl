@@ -2153,12 +2153,7 @@ xGetSharedLibrary(char *path, int mode)
 void *
 xGetSharedLibrary(char *path, int mode)
 {
-#ifdef ANDROID
-  /* Hopefully temporary bug workaround */
-  return NULL;
-#else
   return dlopen(path, mode);
-#endif
 }
 #endif
 #else

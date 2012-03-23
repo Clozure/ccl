@@ -895,7 +895,11 @@ return that address encapsulated in a MACPTR, else returns NIL."
                        :address soname
                        :unsigned-fullword *dlopen-flags*
                        :address))
-                #-(or freebsd-target solaris-target) (setq map handle)
+                #-(or freebsd-target solaris-target android-target) (setq map handle)
+                #+android-target (setq map
+                                       (if (%null-ptr-p handle)
+                                         handle
+                                         (pref handle :soinfo.linkmap)))
                 #+(or freebsd-target solaris-target)
                 (setq map
                       (if (%null-ptr-p handle)
