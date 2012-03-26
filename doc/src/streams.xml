@@ -57,7 +57,10 @@
 	      <term><literal>:PRIVATE</literal></term>
 	      <listitem>
 		<para>Specifies that the stream can only be accessed
-		by the thread that created it.  This is the default.
+		by the thread that first tries to do I/O to it; that
+                thread becomes the "owner" of the stream and
+                is not necessarily the same thread as the one which
+                created the stream.  This is the default.
 		(There was some discussion on openmcl-devel about the
 		idea of "transferring ownership" of a stream; this has
 		not yet been implemented.)  Attempts to do I/O on a

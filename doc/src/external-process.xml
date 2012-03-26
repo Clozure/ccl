@@ -252,6 +252,14 @@
 
 	    <para>Runs the specified program in an external (Unix) process,
 	    returning an object of type EXTERNAL-PROCESS if successful.</para>
+            <para>The implementation involves a lisp process/thread which
+            monitors the status of this external process and arranges for
+            the standard I/O descriptors for the external process to be
+            connected to the specified lisp streams.  Since this may require
+            the monitoring thread to do I/O on lisp streams in some cases,
+            streams provided as the values of the <literal>:INPUT</literal>,
+            <literal>:OUTPUT</literal>, and <literal>:ERROR</literal> arguments
+            should not be private to some other lisp thread.</para>
 	  </refsect1>
 	</refentry>
 
