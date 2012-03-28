@@ -22424,7 +22424,8 @@ Type :? for other options.
 	    program args <em xmlns="http://www.w3.org/1999/xhtml" class="varname">&amp;key</em> (wait t) pty sharing input
 	    if-input-does-not-exist output (if-output-exists :error) (error
 	    :output) (if-error-exists :error) status-hook
-	    external-format</code>
+	    external-format env (silently-ignore-catastrophic-failures
+                      *silently-ignore-catastrophic-failure-in-run-program*)</code>
             </div>
             <div class="refentrytitle">Invokes an external program as an OS subprocess
 	    of lisp.</div>
@@ -22480,6 +22481,24 @@ Type :? for other options.
 		    The external format (see <a xmlns="http://www.w3.org/1999/xhtml" class="xref" href="#External-Formats" title="4.5.2. External Formats">Section 4.5.2, “External Formats”</a>) for all of the
 		    streams (input, output, and error) used to
 		    communicate with the external process.
+		  </p>
+                <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">env</span></i>---
+                    New OS environment variable bindings for the
+                      external process.  By default the external process
+                      inherits the environment of the running Lisp
+                      process.  Env is an association list with
+                      elements (&lt;Environment Variable
+                      Name&gt;&nbsp;.&nbsp&lt;Value&gt;). Name and
+                      value are case sensitive strings. See
+                      <a href="#f_setenv">setenv</a>.
+		  </p>
+                <p><i><span xmlns="http://www.w3.org/1999/xhtml" class="term">silently-ignore-catastrophic-failures</span></i>---
+                    If NIL, signal an error if run-program is unable
+                      to start the program. If non-NIL, treat failure
+                      to start the same as failure from the program
+                      itself, by setting the status and exit-code
+                      fields. Default is
+                      *silently-ignore-catastrophic-failure-in-run-program*.
 		  </p>
               </div>
               <div class="refsect1" lang="en" xml:lang="en">
