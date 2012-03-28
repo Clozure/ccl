@@ -25,7 +25,8 @@
      (sequence :initform nil :initarg :sequence :type sequence :reader sequence-window-controller-sequence)
      (result-callback :initarg :result-callback)
      (display :initform #'(lambda (item stream) (prin1 item stream)) :initarg :display)
-     (title :initform "Sequence dialog" :initarg :title))
+     (title :initform "Sequence dialog" :initarg :title)
+     (before-close-function :initarg :before-close-function :initform nil))
   (:metaclass ns:+ns-object))
 
 
@@ -36,6 +37,7 @@
          (contentframe (#/frame contentview))
          (scrollview (make-instance 'ns:ns-scroll-view :with-frame contentframe)))
     (#/setWindow: self w)
+    (#/release w)
     (#/setDelegate: w self)
     (#/setWindowController: w self)
     (#/setHasVerticalScroller: scrollview t)
@@ -72,12 +74,16 @@
       self)))
 
 (objc:defmethod (#/dealloc :void) ((self sequence-window-controller))
+  (objc:remove-lisp-slots self)
   (call-next-method))
 
 (objc:defmethod (#/windowWillClose: :void) ((self sequence-window-controller)
 					    notification)
   (declare (ignore notification))
   (#/setDataSource: (slot-value self 'table-view) +null-ptr+)
+  (with-slots (before-close-function) self
+    (when (functionp before-close-function)
+      (funcall before-close-function self)))
   (#/autorelease self))
 
 (objc:defmethod (#/sequenceDoubleClick: :void)

@@ -602,7 +602,12 @@
          (process (ccl::tcr->process tcr)))
     (make-instance 'sequence-window-controller
       :sequence (cdr (ccl::bt.restarts context))
+      :before-close-function #'(lambda (wc)
+                                 (declare (ignore wc))
+                                 (setf (car (ccl::bt.restarts context)) nil))
       :result-callback #'(lambda (r)
+                           (execute-in-gui #'(lambda ()
+                                               (#/close (car (ccl::bt.restarts context)))))
                            (process-interrupt
                             process
                             #'invoke-restart-interactively
