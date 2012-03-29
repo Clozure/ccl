@@ -69,7 +69,7 @@ KSPOBJ = $(SPOBJ)
 all:	../../lx86cl
 
 
-OSLIBS = -ldl -lm -lpthread
+OSLIBS = -ldl -lm -lpthread -lrt
 LINK_SCRIPT = # ./elf_x86_32.x
 USE_LINK_SCRIPT = # -T $(LINK_SCRIPT)
 

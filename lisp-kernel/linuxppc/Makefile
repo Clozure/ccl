@@ -87,7 +87,7 @@ all:	../../ppccl
 # KSPOBJ=
 # all:	../../ppccl ../../subprims.so
 
-OSLIBS = -ldl -lm -lpthread
+OSLIBS = -ldl -lm -lpthread -lrt
 
 
 ../../ppccl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)

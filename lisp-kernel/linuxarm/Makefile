@@ -82,7 +82,7 @@ all:	../../armcl
 # KSPOBJ=
 # all:	../../ppccl ../../subprims.so
 
-OSLIBS = -ldl -lm -lpthread
+OSLIBS = -ldl -lm -lpthread -lrt
 
 
 ../../armcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)

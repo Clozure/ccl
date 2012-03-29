@@ -454,17 +454,13 @@ sem_wait_forever(SEMAPHORE s)
 
   do {
 #ifdef USE_MACH_SEMAPHORES
-    mach_timespec_t q = {1,0};
-    status = SEM_TIMEDWAIT(s,q);
+    status = SEM_WAIT(s);
 #endif
 #ifdef USE_POSIX_SEMAPHORES
-    struct timespec q;
-    gettimeofday((struct timeval *)&q, NULL);
-    q.tv_sec += 1;
-    status = SEM_TIMEDWAIT(s,&q);
+    status = SEM_WAIT(s);
 #endif
 #ifdef USE_WINDOWS_SEMAPHORES
-    status = (WaitForSingleObject(s,1000L) == WAIT_TIMEOUT) ? 1 : 0;
+    status = (WaitForSingleObject(s,INFINITE) == WAIT_OBJECT_0) ? 0 : 1;
 #endif
   } while (status != 0);
 }
@@ -477,8 +473,7 @@ wait_on_semaphore(void *s, int seconds, int millis)
   int status;
 
   struct timespec q;
-  gettimeofday((struct timeval *)&q, NULL);
-  q.tv_nsec *= 1000L;  /* microseconds -> nanoseconds */
+  clock_gettime(CLOCK_REALTIME,&q);
     
   q.tv_nsec += nanos;
   if (q.tv_nsec >= 1000000000L) {

@@ -69,7 +69,7 @@ KSPOBJ = $(SPOBJ)
 all:	../../lx86cl64
 
 
-OSLIBS = -ldl -lm -lpthread
+OSLIBS = -ldl -lm -lpthread -lrt
 LINK_MAP = ./elf_x86_64.x
 USE_LINK_MAP = # -T ./elf_x86_64.x
 
