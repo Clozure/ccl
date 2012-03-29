@@ -77,7 +77,8 @@
 	    program args &key; (wait t) pty sharing input
 	    if-input-does-not-exist output (if-output-exists :error) (error
 	    :output) (if-error-exists :error) status-hook
-	    external-format</synopsis>
+	    external-format env (silently-ignore-catastrophic-failures
+            *silently-ignore-catastrophic-failure-in-run-program*)</synopsis>
 	  </refsynopsisdiv>
 
 	  <refsect1>
@@ -241,6 +242,34 @@
 		    linkend="External-Formats"/>) for all of the
 		    streams (input, output, and error) used to
 		    communicate with the external process.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term>env</term>
+		<listitem>
+		  <para>
+		    New OS environment variable bindings for the
+		    external process.  By default the external process
+		    inherits the environment of the running Lisp
+		    process.  Env is an association list with elements
+		    (&lt;Environment Variable
+		    Name&gt;&nbsp;.&nbsp;&lt;Value&gt;). Name and
+		    value are case sensitive strings. See <xref
+		    linkend="f_setenv"/>.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term>>silently-ignore-catastrophic-failures</term>
+		<listitem>
+		  <para>
+		    If NIL, signal an error if run-program is unable
+		    to start the program. If non-NIL, treat failure to
+		    start the same as failure from the program itself,
+		    by setting the status and exit-code
+		    fields. Default is
+		    *silently-ignore-catastrophic-failure-in-run-program*.
 		  </para>
 		</listitem>
 	      </varlistentry>
