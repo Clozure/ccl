@@ -914,7 +914,9 @@
      (paren-highlight-right-pos :foreign-type #>NSUInteger :accessor text-view-paren-highlight-right-pos)
      (paren-highlight-color-attribute :foreign-type :id :accessor text-view-paren-highlight-color)
      (paren-highlight-enabled :foreign-type #>BOOL :accessor text-view-paren-highlight-enabled)
-     (peer :foreign-type :id))
+     (peer :foreign-type :id)
+     (hemlock-view :initform nil)
+     (selection-info :initform nil :accessor view-selection-info))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-textstorage-text-view))
 
@@ -968,9 +970,8 @@
 |#
 
 (defmethod hemlock-view ((self hemlock-textstorage-text-view))
-  (let ((frame (#/window self)))
-    (unless (%null-ptr-p frame)
-      (hemlock-view frame))))
+  (slot-value self 'hemlock-view))
+
 
 (defmethod activate-hemlock-view ((self hemlock-textstorage-text-view))
   (assume-cocoa-thread)
@@ -1031,10 +1032,23 @@
                  (hi::handle-hemlock-event view hemlock-key))
 	       (call-next-method event)))))))
 
+
+(defmacro with-view-selection-info ((text-view buffer) &body body)
+  (let* ((old (gensym)))
+    `(let* ((,old (hi::buffer-selection-info ,buffer)))
+      (unwind-protect
+           (progn
+             (setf (hi::buffer-selection-info ,buffer)
+                   (view-selection-info ,text-view))
+             ,@body)
+        (setf (hi::buffer-selection-info ,buffer) ,old)))))
+      
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
   (declare (ignore event))
-  (with-autorelease-pool
-   (call-next-method)))
+  (with-view-selection-info ((text-pane-text-view (hi::hemlock-view-pane view))
+                             (hi::hemlock-view-buffer view))
+    (with-autorelease-pool
+        (call-next-method))))
 
 (defconstant +shift-event-mask+ (hi:key-event-modifier-mask "Shift"))
 
@@ -1265,23 +1279,24 @@
   (when (eql length 0)
     (update-paren-highlight self))
   (let* ((buffer (hemlock-buffer self)))
-    (setf (hi::buffer-selection-set-by-command buffer) (> length 0)))
-  (rlet ((range :ns-range :location pos :length length))
-    (ccl::%call-next-objc-method self
-				 hemlock-textstorage-text-view
-				 (@selector #/setSelectedRange:affinity:stillSelecting:)
-				 '(:void :<NSR>ange :<NSS>election<A>ffinity :<BOOL>)
-				 range
-				 affinity
-				 nil)
-    (assume-not-editing self)
-    (when (> length 0)
-      (let* ((ts (#/textStorage self)))
-	(with-slots (selection-set-by-search) ts
-	  (when (prog1 (eql #$YES selection-set-by-search)
-		  (setq selection-set-by-search #$NO))
-	    (highlight-search-selection self pos length)))))
-    ))
+    (with-view-selection-info (self buffer)
+      (setf (hi::buffer-selection-set-by-command buffer) (> length 0))
+      (rlet ((range :ns-range :location pos :length length))
+        (ccl::%call-next-objc-method self
+                                     hemlock-textstorage-text-view
+                                     (@selector #/setSelectedRange:affinity:stillSelecting:)
+                                     '(:void :<NSR>ange :<NSS>election<A>ffinity :<BOOL>)
+                                     range
+                                     affinity
+                                     nil)
+        (assume-not-editing self)
+        (when (> length 0)
+          (let* ((ts (#/textStorage self)))
+            (with-slots (selection-set-by-search) ts
+              (when (prog1 (eql #$YES selection-set-by-search)
+                      (setq selection-set-by-search #$NO))
+                (highlight-search-selection self pos length)))))
+    ))))
 
 (defloadvar *can-use-show-find-indicator-for-range*
     (#/instancesRespondToSelector: ns:ns-text-view (@selector "showFindIndicatorForRange:")))
@@ -1301,6 +1316,9 @@
      (line-height :foreign-type :<CGF>loat :accessor text-view-line-height))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-text-view))
+
+(objc:defmethod (#/duplicate: :void) ((self hemlock-text-view) sender)
+  (#/duplicate: (#/window self) sender))
 
 
 (defloadvar *lisp-string-color* (#/blueColor ns:ns-color))
@@ -1360,10 +1378,9 @@
   (call-next-method  rect))
 
 
-(defmethod hemlock-view ((self hemlock-text-view))
-  (let ((pane (text-view-pane self)))
-    (when pane (hemlock-view pane))))
 
+(defmethod hemlock-view ((self hemlock-text-view))
+  (slot-value self 'hemlock-view))
 
 (objc:defmethod (#/evalSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
@@ -1420,7 +1437,10 @@
                 menu #@"Background Color ..." (@selector #/changeBackgroundColor:) #@"")
                (#/addItemWithTitle:action:keyEquivalent:
                 menu #@"Text Color ..." (@selector #/changeTextColor:) #@"")
-
+               ;; Separator
+               (#/addItem: menu (#/separatorItem ns:ns-menu-item))
+               (#/addItemWithTitle:action:keyEquivalent:
+                menu #@"Duplicate this window" (@selector #/duplicate:) #@"")
                menu)))))
 
 
@@ -1623,56 +1643,57 @@
            (location (pref r :<NSR>ange.location))
            (len (pref r :<NSR>ange.length)))
       (setf (hi::buffer-selection-set-by-command buffer) nil)
-      (cond ((eql len 0)
-             #+debug
-             (#_NSLog #@"Moving point to absolute position %d" :int location)
-             ;; Do this even if still-selecting, in order to enable the heuristic below.
-             (move-point-for-click buffer location)
-             (update-paren-highlight self))
-            (t
-             ;; We don't get much information about which end of the
-             ;; selection the mark's at and which end point is at, so
-             ;; we have to sort of guess.  In every case I've ever seen,
-             ;; selection via the mouse generates a sequence of calls to
-             ;; this method whose parameters look like:
-             ;; a: range: {n0,0} still-selecting: false  [ rarely repeats ] (this doesn't actually happen)
-             ;; b: range: {n0,0) still-selecting: true   [ rarely repeats ]
-             ;; c: range: {n1,m} still-selecting: true   [ often repeats ]
-             ;; d: range: {n1,m} still-selecting: false  [ rarely repeats ] (mouse up)
-             ;;
-             ;; (Sadly, "affinity" doesn't tell us anything interesting.)
-             ;; We've handled a and b in the clause above; after handling
-             ;; b, point references buffer position n0 and the
-             ;; region is inactive.
-             ;; Let's ignore c, and wait until the selection's stabilized.
-             ;; Make a new mark, a copy of point (position n0).
-             ;; At step d (here), we should have either
-             ;; d1) n1=n0.  Mark stays at n0, point moves to n0+m.
-             ;; d2) n1+m=n0.  Mark stays at n0, point moves to n0-m.
-             ;; If neither d1 nor d2 apply, arbitrarily assume forward
-             ;; selection: mark at n1, point at n1+m.
-             ;; In all cases, activate Hemlock selection.
-             (unless still-selecting
-               (let* ((point (hi::buffer-point buffer))
-                      (pointpos (hi:mark-absolute-position point))
-                      (selection-end (+ location len))
-                      (mark (hi::copy-mark point :right-inserting)))
-                 (cond ((eql pointpos location)
-                        (move-hemlock-mark-to-absolute-position point
-                                                                d
-                                                                selection-end))
-                       ((eql pointpos selection-end)
-                        (move-hemlock-mark-to-absolute-position point
-                                                                d
-                                                                location))
-                       (t
-                        (move-hemlock-mark-to-absolute-position mark
-                                                                d
-                                                                location)
-                        (move-hemlock-mark-to-absolute-position point
-                                                                d
-                                                                selection-end)))
-                 (hemlock::%buffer-push-buffer-mark buffer mark t)))))))
+      (with-view-selection-info (self buffer)
+        (cond ((eql len 0)
+               #+debug
+               (#_NSLog #@"Moving point to absolute position %d" :int location)
+               ;; Do this even if still-selecting, in order to enable the heuristic below.
+               (move-point-for-click buffer location)
+               (update-paren-highlight self))
+              (t
+               ;; We don't get much information about which end of the
+               ;; selection the mark's at and which end point is at, so
+               ;; we have to sort of guess.  In every case I've ever seen,
+               ;; selection via the mouse generates a sequence of calls to
+               ;; this method whose parameters look like:
+               ;; a: range: {n0,0} still-selecting: false  [ rarely repeats ] (this doesn't actually happen)
+               ;; b: range: {n0,0) still-selecting: true   [ rarely repeats ]
+               ;; c: range: {n1,m} still-selecting: true   [ often repeats ]
+               ;; d: range: {n1,m} still-selecting: false  [ rarely repeats ] (mouse up)
+               ;;
+               ;; (Sadly, "affinity" doesn't tell us anything interesting.)
+               ;; We've handled a and b in the clause above; after handling
+               ;; b, point references buffer position n0 and the
+               ;; region is inactive.
+               ;; Let's ignore c, and wait until the selection's stabilized.
+               ;; Make a new mark, a copy of point (position n0).
+               ;; At step d (here), we should have either
+               ;; d1) n1=n0.  Mark stays at n0, point moves to n0+m.
+               ;; d2) n1+m=n0.  Mark stays at n0, point moves to n0-m.
+               ;; If neither d1 nor d2 apply, arbitrarily assume forward
+               ;; selection: mark at n1, point at n1+m.
+               ;; In all cases, activate Hemlock selection.
+               (unless still-selecting
+                 (let* ((point (hi::buffer-point buffer))
+                        (pointpos (hi:mark-absolute-position point))
+                        (selection-end (+ location len))
+                        (mark (hi::copy-mark point :right-inserting)))
+                   (cond ((eql pointpos location)
+                          (move-hemlock-mark-to-absolute-position point
+                                                                  d
+                                                                  selection-end))
+                         ((eql pointpos selection-end)
+                          (move-hemlock-mark-to-absolute-position point
+                                                                  d
+                                                                  location))
+                         (t
+                          (move-hemlock-mark-to-absolute-position mark
+                                                                  d
+                                                                  location)
+                          (move-hemlock-mark-to-absolute-position point
+                                                                  d
+                                                                  selection-end)))
+                   (hemlock::%buffer-push-buffer-mark buffer mark t))))))))
   (call-next-method r affinity still-selecting))
 
 
@@ -1911,6 +1932,14 @@
 
     (#/autorelease menu)))
 
+(defun init-selection-info-for-textview (tv buffer)
+  (let* ((buffer-info (hi::buffer-selection-info buffer))
+         (view-info (hi::make-selection-info :point (hi::copy-mark (hi::selection-info-point buffer-info))
+                                             :%mark (let* ((mark (hi::selection-info-%mark buffer-info)))
+                                                      (if mark (hi::copy-mark mark)))
+                                             :view tv)))
+    (setf (view-selection-info tv) view-info)))
+                                                      
 (defun make-scrolling-text-view-for-textstorage (textstorage x y width height tracks-width color style)
   (let* ((scrollview (#/autorelease
                       (make-instance
@@ -1942,6 +1971,7 @@
               (let* ((tv (#/autorelease (make-instance 'hemlock-text-view
                                                        :with-frame tv-frame
                                                        :text-container container))))
+                (init-selection-info-for-textview tv (hemlock-buffer textstorage))
                 (setf (text-view-paren-highlight-color tv) (paren-highlight-background-color))
                 (#/setDelegate: layout tv)
                 (#/setMinSize: tv (ns:make-ns-size 0 (ns:ns-size-height contentsize)))
@@ -2045,9 +2075,7 @@
 )
 
 (defmethod hemlock-view ((self echo-area-view))
-  (let ((text-view (slot-value self 'peer)))
-    (when text-view
-      (hemlock-view text-view))))
+  (slot-value self 'hemlock-view))
 
 ;;; The "document" for an echo-area isn't a real NSDocument.
 (defclass echo-area-document (ns:ns-object)
@@ -2108,7 +2136,10 @@
         (#/release layout)
         (let* ((echo (make-instance 'echo-area-view
                                     :with-frame box-frame
-                                    :text-container container)))
+                                    :text-container container))
+               (info (hi::buffer-selection-info (hemlock-buffer textstorage))))
+          (setf (view-selection-info echo) info
+                (hi::selection-info-view info) echo)
           (#/setMinSize: echo (pref box-frame :<NSR>ect.size))
           (#/setMaxSize: echo (ns:make-ns-size large-number-for-text large-number-for-text))
           (#/setRichText: echo nil)
@@ -2320,13 +2351,19 @@
       (setq peer tv))
     (setf (slot-value frame 'echo-area-view) echo-area
           (slot-value frame 'pane) pane)
-    (setf (slot-value pane 'hemlock-view)
-	  (make-instance 'hi:hemlock-view
-	    :buffer buffer
-	    :pane pane
-	    :echo-area-buffer echo-buffer))
+    (let* ((hemlock-view
+            (make-instance 'hi:hemlock-view
+                           :buffer buffer
+                           :pane pane
+                           :echo-area-buffer echo-buffer)))
+      (setf (slot-value pane 'hemlock-view)
+            hemlock-view
+            (slot-value tv 'hemlock-view)
+            hemlock-view
+            (slot-value echo-area 'hemlock-view)
+            hemlock-view))
     (activate-hemlock-view tv)
-   frame))
+    frame))
 
 (defun hemlock-ext:invoke-modifying-buffer-storage (buffer thunk)
   (assume-cocoa-thread)
@@ -2349,7 +2386,7 @@
       (when document
 	(setq *buffer-being-edited* nil)
 	(let ((ts (slot-value document 'textstorage)))
-	  (#/endEditing ts)
+          (#/endEditing ts)
 	  (update-hemlock-selection ts))))))
 
 (defun buffer-document-begin-editing (buffer)
@@ -2547,8 +2584,15 @@
 				    
   
 (defclass hemlock-editor-window-controller (ns:ns-window-controller)
-  ()
+  ((sequence :foreign-type :int))
   (:metaclass ns:+ns-object))
+
+(objc:defmethod #/windowTitleForDocumentDisplayName: ((self hemlock-editor-window-controller) docname)
+  (let* ((seq (slot-value self 'sequence)))
+    (if (zerop seq)
+      docname
+      (#/stringWithFormat: ns:ns-string #@"%@ <%d>" docname seq))))
+  
 
 ;;; This is borrowed from emacs.  The first click on the zoom button will
 ;;; zoom vertically.  The second will zoom completely.  The third will
@@ -2619,7 +2663,8 @@
 
 (defclass hemlock-editor-document (ns:ns-document)
     ((textstorage :foreign-type :id)
-     (encoding :foreign-type :<NSS>tring<E>ncoding))
+     (encoding :foreign-type :<NSS>tring<E>ncoding)
+     (dupcount :foreign-type :int))
   (:metaclass ns:+ns-object))
 
 (defmethod hemlock-buffer ((self hemlock-editor-document))
@@ -2710,6 +2755,13 @@
            (let* ((text (#/string self))
                   (selection (#/substringWithRange: text (#/selectedRange self))))
              (pathname-for-namestring-fragment (lisp-string-from-nsstring selection))))
+          ((eql action (@selector #/duplicate:))
+           ;; Duplicating a listener "works", but listeners have all kinds
+           ;; of references to the original window and text view and get
+           ;; confused if the original is closed before all duplicates are.
+           (let* ((doc (#/document (#/windowController (#/window self)))))
+             (not (typep doc 'hemlock-listener-document))))
+           
 	  (t (call-next-method item)))))
 
 (defmethod user-input-style ((doc hemlock-editor-document))
@@ -3027,6 +3079,7 @@
                     nil
                     (textview-background-color self)
                     (user-input-style self)))
+           (dupcount (slot-value self 'dupcount))
            (controller (make-instance
                            'hemlock-editor-window-controller
                          :with-window window))
@@ -3034,12 +3087,13 @@
            (path (unless (%null-ptr-p url) (#/path url))))
       ;;(#/setDelegate: window self)
       (#/setDelegate: window controller)
+      (setf (slot-value controller 'sequence) dupcount)
       (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
       (#/addWindowController: self controller)
       (#/release controller)
       (#/setShouldCascadeWindows: controller nil)
       (when path
-        (unless (#/setFrameAutosaveName: window path)
+        (unless (and (eql dupcount 0) (#/setFrameAutosaveName: window path))
           (setq path nil)))
       (unless (and path
                    (#/setFrameUsingName: window path))
@@ -3061,11 +3115,45 @@
                                               *initial-editor-y-pos*))))
                 (setq *editor-cascade-point* pt)))))
         (#/cascadeTopLeftFromPoint: window *editor-cascade-point*))
-      (let ((view (hemlock-view window)))
-        (hi::handle-hemlock-event view #'(lambda ()
-                                           (hi::process-file-options))))
+      (when (eql dupcount 0)
+        (let ((view (hemlock-view window)))
+          (hi::handle-hemlock-event view #'(lambda ()
+                                             (hi::process-file-options)))))
       (#/synchronizeWindowTitleWithDocumentName controller)))
 
+(objc:defmethod (#/duplicate: :void) ((self hemlock-frame) sender)
+  (declare (ignorable sender))
+  (let* ((self-controller (#/windowController self))
+         (doc (#/document self-controller)))
+    (when (typep doc 'hemlock-editor-document
+      (let* ((sequence-number (incf (slot-value doc 'dupcount))))
+        (#/makeWindowControllers doc)
+        ;; Now we have to find the window controller that was just made ...
+        (let* ((controllers (#/windowControllers doc))
+               (count (#/count controllers))
+               (controller (dotimes (i count)
+                             (let* ((c (#/objectAtIndex: controllers i)))
+                               (when (eql sequence-number (slot-value c 'sequence))
+                                 (return c))))))
+
+          (when controller
+            (let* ((window (#/window controller))
+                   (new-text-view (text-pane-text-view (slot-value window 'pane)))
+                   (new-selection-info (view-selection-info new-text-view))
+                   (old-selection-info (view-selection-info (text-pane-text-view (slot-value self 'pane))))
+                   (old-mark (hi::selection-info-%mark old-selection-info)))
+              (hi::move-mark (hi::selection-info-point new-selection-info)
+                             (hi::selection-info-point old-selection-info))
+              (setf (hi::selection-info-%mark new-selection-info)
+                    (if old-mark (hi::copy-mark old-mark))
+                    (hi::selection-info-region-active new-selection-info)
+                    (hi::selection-info-region-active old-selection-info))
+              (update-hemlock-selection (#/textStorage new-text-view))
+              (#/scrollRangeToVisible: new-text-view
+                                       (#/selectedRange new-text-view))
+              (#/makeKeyAndOrderFront: window +null-ptr+)))))))))
+              
+      
 
 (objc:defmethod (#/close :void) ((self hemlock-editor-document))
   #+debug
@@ -3073,12 +3161,6 @@
   (let* ((textstorage (slot-value self 'textstorage)))
     (unless (%null-ptr-p textstorage)
       (setf (slot-value self 'textstorage) (%null-ptr))
-      #+huh?
-      (for-each-textview-using-storage
-       textstorage
-       #'(lambda (tv)
-           (let* ((layout (#/layoutManager tv)))
-             (#/setBackgroundLayoutEnabled: layout nil))))
       (close-hemlock-textstorage textstorage)))
   (call-next-method))
 
@@ -3309,57 +3391,39 @@
    self (@selector #/saveDocumentTo:) +null-ptr+ t))
 
 
-(defun maybe-fixup-application-menu ()
-  ;; If the CFBundleName isn't #@"Clozure CL", then set the
-  ;; title of any menu item on the application menu that ends
-  ;; in #@"Clozure CL" to the CFBundleName.
-  (let* ((bundle (#/mainBundle ns:ns-bundle))
-         (dict (#/infoDictionary bundle))
-         (cfbundlename (#/objectForKey: dict #@"CFBundleName"))
-         (targetname #@"Clozure CL"))
-    (unless (#/isEqualToString: cfbundlename targetname)
-      (let* ((appmenu (#/submenu (#/itemAtIndex: (#/mainMenu *nsapp*)  0)))
-             (numitems (#/numberOfItems appmenu)))
-        (dotimes (i numitems)
-          (let* ((item (#/itemAtIndex: appmenu i))
-                 (title (#/title item)))
-            (unless (%null-ptr-p title)
-              (when (#/hasSuffix: title targetname)
-                (let ((new-title (#/mutableCopy title)))
-                  (ns:with-ns-range (r 0 (#/length new-title))
-                    (#/replaceOccurrencesOfString:withString:options:range:
-                     new-title targetname cfbundlename #$NSLiteralSearch r))
-                  (#/setTitle: item new-title)
-                  (#/release new-title))))))))))
+
+
+    
 
 (defun initialize-user-interface ()
   ;; The first created instance of an NSDocumentController (or
   ;; subclass thereof) becomes the shared document controller.  So it
   ;; may look like we're dropping this instance on the floor, but
   ;; we're really not.
-  (maybe-fixup-application-menu)
   (make-instance 'hemlock-document-controller)
   ;(#/sharedPanel lisp-preferences-panel)
   (make-editor-style-map))
+  
 
 ;;; This needs to run on the main thread.  Sets the cocoa selection from the
 ;;; hemlock selection.
 (defmethod update-hemlock-selection ((self hemlock-text-storage))
   (assume-cocoa-thread)
-  (let ((buffer (hemlock-buffer self)))
-    (multiple-value-bind (start end) (hi:buffer-selection-range buffer)
-      #+debug
-      (#_NSLog #@"update Hemlock selection: charpos = %d, abspos = %d"
-               :int (hi::mark-charpos (hi::buffer-point buffer)) :int start)
-      (for-each-textview-using-storage
-       self
-       #'(lambda (tv)
+  (let* ((buffer (hemlock-buffer self)))
+    (for-each-textview-using-storage
+     self
+     (lambda (tv)
+       (with-view-selection-info (tv buffer)
+         (multiple-value-bind (start end) (hi:buffer-selection-range buffer)
+           #+debug
+           (#_NSLog #@"update Hemlock selection: charpos = %d, abspos = %d"
+                    :int (hi::mark-charpos (hi::buffer-point buffer)) :int start)
            (#/updateSelection:length:affinity: tv
                                                start
                                                (- end start)
                                                (if (eql start 0)
                                                  #$NSSelectionAffinityUpstream
-                                                 #$NSSelectionAffinityDownstream)))))))
+                                                 #$NSSelectionAffinityDownstream))))))))
 
 ;; This should be invoked by any command that modifies the buffer, so it can show the
 ;; user what happened...  This ensures the Cocoa selection is made visible, so it

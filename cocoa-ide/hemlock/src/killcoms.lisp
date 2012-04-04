@@ -112,8 +112,8 @@
   "Pops the current buffer's mark stack, returning the mark.  If the stack
    becomes empty, a mark is push on the stack pointing to the buffer's start.
    This always makes the current region not active."
-  (let* ((ring (value buffer-mark-ring))
-         (buffer (current-buffer))
+  (let* ((buffer (current-buffer))
+         (ring (hi::buffer-mark-ring buffer))
 	 (mark (buffer-mark buffer)))
     (deactivate-region)
     (setf (hi::buffer-%mark buffer)
@@ -129,7 +129,7 @@
          (setf (mark-kind mark) :right-inserting)
          (let* ((old-mark (hi::buffer-%mark b)))
            (when old-mark
-             (ring-push old-mark (variable-value 'buffer-mark-ring :buffer b))))
+             (ring-push old-mark (hi::buffer-mark-ring b))))
          (setf (hi::buffer-%mark b) mark))
         (t (error "Mark not in the current buffer.")))
   (when activate-region (%buffer-activate-region b))
@@ -255,7 +255,7 @@
    they are saved on the kill ring -- for example, \"Delete Next Character\",
    \"Delete Previous Character\", or \"Delete Previous Character Expanding
    Tabs\"."
-  :value 5)
+  :value most-positive-fixnum)
 
 (defvar *delete-char-region* nil)
 (defvar *delete-char-count* 0)

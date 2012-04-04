@@ -54,9 +54,33 @@
   (with-simple-restart (continue "Skip loading IDE init file.")
     (load *ccl-ide-init-file* :if-does-not-exist nil :verbose nil)))
 
+(defun maybe-fixup-application-menu ()
+  ;; If the CFBundleName isn't #@"Clozure CL", then set the
+  ;; title of any menu item on the application menu that ends
+  ;; in #@"Clozure CL" to the CFBundleName.
+  (let* ((bundle (#/mainBundle ns:ns-bundle))
+         (dict (#/infoDictionary bundle))
+         (cfbundlename (#/objectForKey: dict #@"CFBundleName"))
+         (targetname #@"Clozure CL"))
+    (unless (#/isEqualToString: cfbundlename targetname)
+      (let* ((appmenu (#/submenu (#/itemAtIndex: (#/mainMenu *nsapp*)  0)))
+             (numitems (#/numberOfItems appmenu)))
+        (dotimes (i numitems)
+          (let* ((item (#/itemAtIndex: appmenu i))
+                 (title (#/title item)))
+            (unless (%null-ptr-p title)
+              (when (#/hasSuffix: title targetname)
+                (let ((new-title (#/mutableCopy title)))
+                  (ns:with-ns-range (r 0 (#/length new-title))
+                    (#/replaceOccurrencesOfString:withString:options:range:
+                     new-title targetname cfbundlename #$NSLiteralSearch r))
+                  (#/setTitle: item new-title)
+                  (#/release new-title))))))))))
+
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
+  (maybe-fixup-application-menu)
   (initialize-user-interface)
   (unless (shift-key-now-p)
     (load-ide-init-file)))

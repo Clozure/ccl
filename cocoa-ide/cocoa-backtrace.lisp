@@ -46,8 +46,8 @@
 (defmethod count-stack-descriptor-frames ((sd stack-descriptor))
   (let ((count 0))
     (map-stack-frames sd (lambda (fp context)
-                           (declare (ignore fp context))
-                           (incf count)))
+                           (when (ccl::function-frame-p fp context)
+                             (incf count))))
     count))
 
 ;; Function must be side-effect free, it may be restarted or aborted.

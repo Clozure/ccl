@@ -360,7 +360,7 @@ i-search, and prompted input (e.g. m-x)"
    current region."
   "Transpose two regions with endpoints defined by the mark stack and point."
   (declare (ignore p))
-  (unless (>= (ring-length (value buffer-mark-ring)) 3)
+  (unless (>= (ring-length (hi::buffer-mark-ring (current-buffer))) 3)
     (editor-error "Need two marked regions to do Transpose Regions."))
   (let* ((region (current-region))
 	 (end2 (region-end region))

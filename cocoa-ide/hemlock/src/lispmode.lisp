@@ -554,6 +554,7 @@
                                            (or :close-paren :open-paren :newline))
                (return nil))
              (let ((ch (direction-char ,mark ,forwardp)))
+               (unless ch (return nil))
                (case (character-attribute :lisp-syntax ch)
                  (:close-paren
                   (decf paren-count)
@@ -1662,7 +1663,7 @@
       (let ((point (current-point-collapsing-selection))
             (count (or p 1)))
         (pre-command-parse-check point)
-        (unless (list-offset point count) (editor-error)))))
+        (unless (list-offset point count) (editor-error "No next list.")))))
 
 (defcommand "Select Forward List" (p)
   "Skip over the next Lisp list, extending the selection.
@@ -1671,7 +1672,7 @@
   (let ((point (current-point-for-selection-end))
 	(count (or p 1)))
     (pre-command-parse-check point)
-    (unless (list-offset point count) (editor-error))))
+    (unless (list-offset point count) (editor-error "No next list."))))
 
 (defcommand "Backward List" (p)
   "Skip over the previous Lisp list, collapsing the selection.
@@ -1681,7 +1682,7 @@
    (let ((point (current-point-collapsing-selection))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
-    (unless (list-offset point count) (editor-error)))))
+    (unless (list-offset point count) (editor-error "No previous list.")))))
 
 (defcommand "Select Backward List" (p)
   "Skip over the previous Lisp list, extending the selection.
@@ -1690,7 +1691,7 @@
   (let ((point (current-point-for-selection-start))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
-    (unless (list-offset point count) (editor-error))))
+    (unless (list-offset point count) (editor-error "No previous list."))))
 
 (defcommand "Forward Form" (p)
     "Skip over the next Form, collapsing the selection.
@@ -1700,7 +1701,7 @@
       (let ((point (current-point-collapsing-selection))
             (count (or p 1)))
         (pre-command-parse-check point)
-        (unless (form-offset point count) (editor-error)))))
+        (unless (form-offset point count) (editor-error "No next form.")))))
 
 (defcommand "Select Forward Form" (p)
   "Skip over the next Form, extending the selection.
@@ -1709,7 +1710,7 @@
   (let ((point (current-point-for-selection-end))
 	(count (or p 1)))
     (pre-command-parse-check point)
-    (unless (form-offset point count) (editor-error))))
+    (unless (form-offset point count) (editor-error "No next form."))))
 
 (defcommand "Backward Form" (p)
     "Skip over the previous Form, collapsing the selection.
@@ -1719,7 +1720,7 @@
       (let ((point (current-point-collapsing-selection))
             (count (- (or p 1))))
         (pre-command-parse-check point)
-        (unless (form-offset point count) (editor-error)))))
+        (unless (form-offset point count) (editor-error "No previous form.")))))
 
 (defcommand "Select Backward Form" (p)
   "Skip over the previous Form, extending the selection.
@@ -1728,7 +1729,7 @@
   (let ((point (current-point-for-selection-start))
 	(count (- (or p 1))))
     (pre-command-parse-check point)
-    (unless (form-offset point count) (editor-error))))
+    (unless (form-offset point count) (editor-error "No previous form."))))
 
 (defcommand "Mark Form" (p)
   "Set the mark at the end of the next Form.
@@ -1742,7 +1743,7 @@
 	  (mark (push-new-buffer-mark m t)))
       (if (form-offset m count)
 	  (move-mark mark m)
-	  (editor-error)))))
+	  (editor-error "No next form.")))))
 
 (defcommand "Mark Defun" (p)
   "Puts the region around the next or containing top-level form.
@@ -1769,7 +1770,7 @@
 	      (m2 (current-point)))
     (pre-command-parse-check m1)
     (let ((count (or p 1)))
-      (unless (form-offset m1 count) (editor-error))
+      (unless (form-offset m1 count) (editor-error "No ~a form." (if (minusp count) "previous" "next")))
       (if (minusp count)
 	  (kill-region (region m1 m2) :kill-backward)
 	  (kill-region (region m2 m1) :kill-forward)))))
@@ -1792,14 +1793,14 @@
     (pre-command-parse-check point)
     (with-mark ((form-start point :right-inserting)
 		(form-end point))
-      (unless (form-offset form-end 1) (editor-error))
+      (unless (form-offset form-end 1) (editor-error "No next form."))
       (form-offset (move-mark form-start form-end) -1)
       (with-mark ((containing-start form-start :left-inserting)
 		  (containing-end form-end :left-inserting))
 	(dotimes (i (or p 1))
 	  (unless (and (forward-up-list containing-end)
 		       (backward-up-list containing-start))
-	    (editor-error)))
+	    (editor-error "No containing list.")))
 	(let ((r (copy-region (region form-start form-end))))
 	  (ring-push (delete-and-save-region
 		      (region containing-start containing-end))
@@ -1820,8 +1821,8 @@
       (if (eq (character-attribute :lisp-syntax (next-character lstart))
 	      :open-paren)
 	  (mark-after lend)
-	  (unless (backward-up-list lstart) (editor-error)))
-      (unless (forward-up-list lend) (editor-error))
+	  (unless (backward-up-list lstart) (editor-error "No containing list.")))
+      (unless (forward-up-list lend) (editor-error "No containing list."))
       (with-mark ((rstart lstart)
 		  (rend lend))
 	(dotimes (i (or p 1))
@@ -1851,8 +1852,8 @@
 	    (scan-char s2 :whitespace nil)
 	    (with-mark ((e1 s1 :right-inserting)
 			(e2 s2 :right-inserting))
-	      (unless (form-offset e1 1) (editor-error))
-	      (unless (form-offset e2 1) (editor-error))
+	      (unless (form-offset e1 1) (editor-error "No next form."))
+	      (unless (form-offset e2 1) (editor-error "No next form."))
 	      (ninsert-region s1 (delete-and-save-region (region s2 e2)))
 	      (ninsert-region s2 (delete-and-save-region (region s1 e1))))))
 	(let ((fcount (if (plusp count) count 1))
@@ -1860,9 +1861,9 @@
 	  (with-mark ((s1 point :left-inserting)
 		      (e2 point :right-inserting))
 	    (dotimes (i bcount)
-	      (unless (form-offset s1 -1) (editor-error)))
+	      (unless (form-offset s1 -1) (editor-error "No previous form.")))
 	    (dotimes (i fcount)
-	      (unless (form-offset e2 1) (editor-error)))
+	      (unless (form-offset e2 1) (editor-error "No next form.")))
 	    (with-mark ((e1 s1 :right-inserting)
 			(s2 e2 :left-inserting))
 	      (unless (form-offset e1 1) (editor-error))
@@ -1946,7 +1947,7 @@
             (backward-up-list-command (- count))
             (with-mark ((m point))
               (dotimes (i count (move-mark point m))
-                (unless (forward-up-list m) (editor-error))))))))
+                (unless (forward-up-list m) (editor-error "No containing list."))))))))
 
 (defcommand "Backward Up List" (p)
     "Move backward past a one containing (."
@@ -1959,7 +1960,7 @@
             (forward-up-list-command (- count))
             (with-mark ((m point))
               (dotimes (i count (move-mark point m))
-                (unless (backward-up-list m) (editor-error))))))))
+                (unless (backward-up-list m) (editor-error "No containing list."))))))))
 
 
 (defcommand "Down List" (p)
@@ -1975,11 +1976,11 @@
 	     (loop repeat count
                    do (unless (and (scan-char m :lisp-syntax :open-paren)
                                    (mark-after m))
-                        (editor-error))))
+                        (editor-error "No embedded list."))))
 	    (t
 	     (unless (and (rev-scan-char m :lisp-syntax :close-paren)
 			  (mark-before m))
-	       (editor-error))))
+	       (editor-error "No embedded list."))))
       (move-mark point m))))
 
 

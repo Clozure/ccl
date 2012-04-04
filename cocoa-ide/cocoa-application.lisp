@@ -38,6 +38,17 @@
 (load "ccl:cocoa-ide;defsystem.lisp")
 (load-ide *cocoa-ide-force-compile*)
 
+#+darwin-target
+;;; Nuke any command-line arguments, to keep the Cocoa runtime from
+;;; trying to process them.
+(let* ((argv (foreign-symbol-address "NXArgv"))
+       (argc (foreign-symbol-address "NXArgc")))
+  (when argc
+    (setf (pref argc :int) 1))
+  (when argv
+    (setf (paref (%get-ptr argv) (:* :char) 1) +null-ptr+)))
+  
+
 ;;; If things go wrong, you might see some debugging information via
 ;;; the OSX console (/Applications/Utilities/Console.app.)  Standard
 ;;; and error output for the initial lisp process will be directed

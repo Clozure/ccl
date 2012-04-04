@@ -35,12 +35,7 @@
 ;;; Make a mark for buffers as they're consed:
 
 (defun hcmd-new-buffer-hook-fun (buff)
-  (let ((ring (make-ring 10 #'delete-mark)))
-    (defhvar "Buffer Mark Ring" 
-      "This variable holds this buffer's mark ring."
-      :buffer buff
-      :value ring)
-    (setf (hi::buffer-%mark buff) (copy-mark (buffer-point buff) :right-inserting))))
+  (setf (hi::buffer-%mark buff) (copy-mark (buffer-point buff) :right-inserting)))
 
 (add-hook make-buffer-hook #'hcmd-new-buffer-hook-fun)
 (dolist (buff *buffer-list*) (hcmd-new-buffer-hook-fun buff))

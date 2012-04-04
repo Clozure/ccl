@@ -78,6 +78,16 @@
                         (:constructor internal-make-font-region (start end)))
   node)
 
+;;; swappable selection info
+(defstruct (selection-info (:copier nil))
+  point			      ; current position in buffer
+  %mark                       ; a saved buffer position
+  (mark-ring (make-ring 10 #'delete-mark))                 ; per-view
+  region-active               ; modified-tick when region last activated
+  view                        ; hemlock-text-view or NIL
+)
+
+  
 ;;; The buffer object:
 ;;;
 (defstruct (buffer (:constructor internal-make-buffer)
@@ -92,9 +102,14 @@
   minor-mode-objects	      ; list of buffer's minor mode objects, reverse precedence order
   bindings		      ; buffer's command table
   (shadow-syntax nil)         ; buffer's changes to syntax attributes.
+  #-clozure
   point			      ; current position in buffer
+  #-clozure
   %mark                       ; a saved buffer position
+  #-clozure
   region-active               ; modified-tick when region last activated
+  #+clozure
+  (selection-info (make-selection-info))
   (%writable t)		      ; t => can alter buffer's region
   (modified-tick -2)	      ; The last time the buffer was modified.
   (unmodified-tick -1)	      ; The last time the buffer was unmodified
@@ -119,7 +134,33 @@
   (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
   (%lines (make-array 10 :adjustable t :fill-pointer 0)) ;; all lines in the buffer
   (plist ())                  ; plist for users
+  #+clozure
+  textstorage
   )
+
+(defun buffer-point (buffer)
+  (selection-info-point (buffer-selection-info buffer)))
+
+(defun (setf buffer-point) (new buffer)
+  (setf (selection-info-point (buffer-selection-info buffer)) new))
+
+(defun buffer-%mark (buffer)
+  (selection-info-%mark (buffer-selection-info buffer)))
+
+(defun (setf buffer-%mark) (new buffer)
+  (setf (selection-info-%mark (buffer-selection-info buffer)) new))
+
+(defun buffer-region-active (buffer)
+  (selection-info-region-active (buffer-selection-info buffer)))
+
+(defun (setf buffer-region-active) (new buffer)
+  (setf (selection-info-region-active (buffer-selection-info buffer)) new))
+
+(defun buffer-mark-ring (buffer)
+  (selection-info-mark-ring (buffer-selection-info buffer)))
+
+(defun (setf buffer-mark-ring) (new buffer)
+  (setf (selection-info-mark-ring (buffer-selection-info buffer)) new))
 
 (defun set-buffer-charprops (buffer charprops)
   (setf (buffer-charprops buffer) charprops))

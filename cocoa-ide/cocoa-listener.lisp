@@ -328,7 +328,7 @@
   )
 (declaim (special hemlock-listener-window-controller))
 
-;;; Listener documents are never (or always) ediited.  Don't cause their
+;;; Listener documents are never (or always) edited.  Don't cause their
 ;;; close boxes to be highlighted.
 (objc:defmethod (#/setDocumentEdited: :void)
     ((self hemlock-listener-window-controller) (edited :<BOOL>))
@@ -344,7 +344,11 @@
       (let* ((buffer (hemlock-buffer doc))
              (bufname (if buffer (hi::buffer-name buffer))))
         (if bufname
-          (%make-nsstring bufname)
+          (let* ((bufname (%make-nsstring bufname))
+                 (seq (slot-value self 'sequence)))
+            (if (zerop seq)
+              bufname
+              (#/stringWithFormat: ns:ns-string #@"%@ <%d>" bufname seq)))
           (call-next-method name))))))
 
 
@@ -508,6 +512,8 @@
           (#/setBackgroundLayoutEnabled: layout nil))))
     (#/setDelegate: window controller)
     (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
+    (setf (slot-value controller 'sequence)
+          (slot-value self 'dupcount))
     (#/setShouldCascadeWindows: controller nil)
     (#/addWindowController: self controller)
     (#/release controller)
@@ -822,7 +828,7 @@
       (ccl::stream-is-closed s))))
 
 (defmethod ccl:stream-write-char ((s deferred-cocoa-listener-output-stream)
-                                   char)
+                                  char)
   (with-autorelease-pool
       (stream-write-char (underlying-output-stream s) char)))
 

@@ -16,7 +16,7 @@
      (unwind-protect
 	  (progn ,@body)
        (unless (%null-ptr-p ,sym)
-	 (#_CFRelease ,sym)))))
+         (external-call "CFRelease" :address ,sym :void)))))
 
 (defun %get-cfstring (cfstring)
   (let* ((len (#_CFStringGetLength cfstring))
@@ -47,4 +47,4 @@
      (unwind-protect
 	  (progn ,@body)
        (unless (%null-ptr-p ,sym)
-	 (#_CFRelease ,sym)))))
+	 (external-call "CFRelease" :address ,sym :void)))))
