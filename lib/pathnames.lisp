@@ -57,8 +57,11 @@
     (when (or (null hosts) (member (car host) hosts :test 'string-equal))
       (dolist (trans (cdr host))
         (when (pathname-match-p path (cadr trans))
-          (let* (newpath)          
-            (setq newpath (translate-pathname path (cadr trans) (car trans) :reversible t))
+          (let* ((src (car trans)) newpath)
+            ;; Force host in backtranslated path
+            (when (null (pathname-host src))
+              (setq src (make-pathname :host (car host) :defaults src)))
+            (setq newpath (translate-pathname path (cadr trans) src :reversible t))
             (return-from back-translate-pathname-1 
               (if  (equalp path newpath) path (back-translate-pathname-1 newpath hosts))))))))
   path)
