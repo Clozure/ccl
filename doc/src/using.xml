@@ -1172,7 +1172,7 @@ implementation-dependent keyword arguments:</para>
        other codes map to other Unicode character values.  Intended to
        provide most characters found in most languages used in
        Central/Eastern Europe.</para>
-       <para>Aliases: <literal>:ISO_8859-2, :LATIN-2, :L2,
+       <para>Aliases: <literal>:ISO_8859-2, :LATIN2, :L2,
        :CSISOLATIN2</literal></para></listitem>
      </varlistentry>
     <varlistentry><term><literal>:ISO-8859-3</literal></term>
@@ -1181,7 +1181,7 @@ implementation-dependent keyword arguments:</para>
        other codes map to other Unicode character values.  Intended to
        provide most characters found in most languages used in
        Southern Europe.</para>
-       <para>Aliases: <literal>:ISO_8859-3, :LATIN,3 :L3,
+       <para>Aliases: <literal>:ISO_8859-3, :LATIN3 :L3,
        :CSISOLATIN3</literal></para></listitem>
      </varlistentry>
     <varlistentry><term><literal>:ISO-8859-4</literal></term>
@@ -1323,7 +1323,7 @@ implementation-dependent keyword arguments:</para>
        <listitem><para>An 7-bit, fixed-width character encoding in
        which all character codes map to their Unicode
        equivalents. </para>
-       <para>Aliases: <literal>:CSASCII, :CP63,7 :IBM637, :US,
+       <para>Aliases: <literal>:CSASCII, :CP637, :IBM637, :US,
        :ISO646-US, :ASCII, :ISO-IR-6</literal></para></listitem>
      </varlistentry>
     <varlistentry><term><literal>:UTF-16</literal></term>
