@@ -1351,8 +1351,8 @@
 
 
 (flet ((io-stream-p (x) (and (streamp x) (eq (stream-direction x) :io)))
-       (input-stream-p (x) (and (streamp x) (input-stream-p x)))
-       (output-stream-p (x) (and (streamp x) (output-stream-p x)))
+       (is-input-stream-p (x) (and (streamp x) (input-stream-p x)))
+       (is-output-stream-p (x) (and (streamp x) (output-stream-p x)))
        (default-terminal-io () (make-echoing-two-way-stream *stdin* *stdout*))
        (terminal-io () *terminal-io*)
        (standard-output () *standard-output*))
@@ -1362,8 +1362,8 @@
   (check-error-global '*terminal-io* #'io-stream-p #'default-terminal-io)
   (check-error-global '*query-io* #'io-stream-p #'terminal-io)
   (check-error-global '*debug-io* #'io-stream-p #'terminal-io)
-  (check-error-global '*standard-input* #'input-stream-p #'terminal-io)
-  (check-error-global '*standard-output* #'output-stream-p #'terminal-io)
-  (check-error-global '*error-output* #'output-stream-p #'standard-output)
-  (check-error-global '*trace-output* #'output-stream-p #'standard-output))
+  (check-error-global '*standard-input* #'is-input-stream-p #'terminal-io)
+  (check-error-global '*standard-output* #'is-output-stream-p #'terminal-io)
+  (check-error-global '*error-output* #'is-output-stream-p #'standard-output)
+  (check-error-global '*trace-output* #'is-output-stream-p #'standard-output))
 

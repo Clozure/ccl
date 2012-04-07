@@ -443,7 +443,7 @@
               (return-from ,error-return
                 (handler-case (return-from ,normal-return ,form)
                   ,@(remove no-error-clause clauses)))))))
-      (flet ((handler-case (type var &rest body)
+      (flet ((handler-case-aux (type var &rest body)
                (when (eq type :no-error)
                  (signal-program-error "Duplicate :no-error clause. "))
            (values type var body)))
@@ -452,7 +452,7 @@
            (let ((block   (gensym))
                  (cluster (gensym)))
              (multiple-value-bind (type var body)
-                                  (apply #'handler-case (car clauses))
+                                  (apply #'handler-case-aux (car clauses))
                (if var
                  `(block ,block
                     ((lambda ,var ,@body)
@@ -475,7 +475,7 @@
                (while clauses
                  (setq index (1+ index))
                  (multiple-value-bind (type var body)
-                                      (apply #'handler-case (pop clauses))                   
+                                      (apply #'handler-case-aux (pop clauses))                   
                    (push `',type handlers)
                    (push index handlers)
                    (when (null clauses) (setq index t))
@@ -2224,26 +2224,9 @@ to open."
 ;;; which tests *print-escape* ?  Scary if so ...
 
 (defmacro define-condition (name (&rest supers) (&rest slots) &body options)
-  "DEFINE-CONDITION Name (Parent-Type*) (Slot-Spec*) Option*
-   Define NAME as a condition type. This new type inherits slots and its
-   report function from the specified PARENT-TYPEs. A slot spec is a list of:
-     (slot-name :reader <rname> :initarg <iname> {Option Value}*
-
-   The DEFINE-CLASS slot options :ALLOCATION, :INITFORM, [slot] :DOCUMENTATION
-   and :TYPE and the overall options :DEFAULT-INITARGS and
-   [type] :DOCUMENTATION are also allowed.
-
-   The :REPORT option is peculiar to DEFINE-CONDITION. Its argument is either
-   a string or a two-argument lambda or function name. If a function, the
-   function is called with the condition and stream to report the condition.
-   If a string, the string is printed.
-
-   Condition types are classes, but (as allowed by ANSI and not as described in
-   CLtL2) are neither STANDARD-OBJECTs nor STRUCTURE-OBJECTs. WITH-SLOTS and
-   SLOT-VALUE may not be used on condition objects."
-  ; If we could tell what environment we're being expanded in, we'd
-  ; probably want to check to ensure that all supers name conditions
-  ; in that environment.
+  ;; If we could tell what environment we're being expanded in, we'd
+  ;; probably want to check to ensure that all supers name conditions
+  ;; in that environment.
   (let ((classopts nil)
         (duplicate nil)
         (docp nil)
