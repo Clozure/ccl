@@ -661,20 +661,24 @@
    name. If CONDITION is specified and not NIL, then only restarts
    associated with that condition (or with no condition) will be
    returned."
-  (dolist (cluster %restarts%)
-    (dolist (restart cluster)
-      (when (and (or (eq restart name) (eq (restart-name restart) name))
-                 (applicable-restart-p restart condition))
-	(return-from find-restart restart)))))
+  (if (typep name 'restart)
+    (dolist (cluster %restarts%)
+      (dolist (restart cluster)
+        (if (eq restart name)
+          (return-from find-restart restart))))
+    (dolist (cluster %restarts%)
+      (dolist (restart cluster)
+        (when (and (eq (restart-name restart) name)
+                   (applicable-restart-p restart condition))
+          (return-from find-restart restart))))))
 
 (defun %active-restart (name)
   (dolist (cluster %restarts%)
     (dolist (restart cluster)
       (when (or (eq restart name)
-                (let* ((rname (%restart-name restart))
-                       (rtest (%restart-test restart)))
+                (let* ((rname (%restart-name restart)))
                   (and (eq rname name)
-                       (or (null rtest) (funcall rtest nil)))))
+                       (applicable-restart-p restart nil))))
                 (return-from %active-restart (values restart cluster)))))
   (error 'inactive-restart :restart-name name))
 
@@ -703,7 +707,7 @@
   "Calls the function associated with the given restart, prompting for any
    necessary arguments. If the argument restart is not a restart or a
    currently active non-NIL restart name, then a CONTROL-ERROR is signalled."
-  (let* ((restart (find-restart restart)))
+  (let* ((restart (%active-restart restart)))
     (format *error-output* "~&Invoking restart: ~a~&" restart)
     (let* ((argfn (%restart-interactive restart))
            (values (when argfn (funcall argfn))))
