@@ -822,9 +822,9 @@ the lisp and run REBUILD-CCL again.")
                        into ccl:tests;~%" *svn-program* url)
 	    (cwd "ccl:")
 	    (multiple-value-bind (status exit-code)
-	      (external-process-status
-	       (run-program *svn-program* (list "checkout" url "tests")
-			    :output s :error s))
+                (external-process-status
+                 (run-program *svn-program* (list "checkout" url "tests")
+                              :output s :error s))
 	      (unless (and (eq status :exited)
 			   (eql exit-code 0))
 		(error "Failed to check out test suite: ~%~a"
@@ -835,20 +835,24 @@ the lisp and run REBUILD-CCL again.")
     ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
     ;; it without making the test suite non-portable across platforms...
     (handler-bind ((warning (lambda (c)
-			      (when (let ((w (or (and (typep c 'compiler-warning)
-                                                      (eq (compiler-warning-warning-type c) :program-error)
-                                                      (car (compiler-warning-args c)))
-                                                 c)))
-                                      (and (typep w 'simple-warning)
-                                           (or 
-                                            (string-equal
-                                             (simple-condition-format-control w)
-                                             "Clause ~S ignored in ~S form - shadowed by ~S .")
-                                            ;; Might as well ignore these as well, they're intentional.
-                                            (string-equal
-                                             (simple-condition-format-control w)
-                                             "Duplicate keyform ~s in ~s statement."))))
-				(muffle-warning c)))))
+                              (if (typep c 'shadowed-typecase-clause)
+                                (muffle-warning c)
+                                (when (let ((w (or (and (typep c 'compiler-warning)
+                                                        (eq (compiler-warning-warning-type c) :program-error)
+                                                        (car (compiler-warning-args c)))
+                                                   c)))
+                                        (or (typep (car (compiler-warning-args c))
+                                                        'shadowed-typecase-clause)
+                                            (and (typep w 'simple-warning)
+                                                 (or 
+                                                  (string-equal
+                                                   (simple-condition-format-control w)
+                                                   "Clause ~S ignored in ~S form - shadowed by ~S .")
+                                                  ;; Might as well ignore these as well, they're intentional.
+                                                  (string-equal
+                                                   (simple-condition-format-control w)
+                                                   "Duplicate keyform ~s in ~s statement.")))))
+                                  (muffle-warning c))))))
       ;; This loads the infrastructure
       (load "ccl:tests;ansi-tests;gclload1.lsp")
       ;; This loads the actual tests
