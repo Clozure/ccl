@@ -5,15 +5,18 @@
 
 (in-package code-cover-test.system)
 
-(defsystem code-cover-test-loader
-  :depends-on ( cl-ppcre cl-ppcre-test hunchentoot )
-  :serial t
-  :components
-  ((:file "package")))
+(defpackage code-cover-test
+  (:use #:cl)
+  (:export #:init-test-code-coverage
+           #:run-all-tests-with-code-coverage
+           #:report-code-coverage-test))
 
 (defsystem code-cover-test
-  :depends-on ( code-cover-test-loader )
-  :serial t
   :components
-  ((:file "code-cover-test")
-   (:file "code-cover-server")))
+  ((:file "compile-with-code-coverage")
+   (:file "code-cover-test" :depends-on ("compile-with-code-coverage"))))
+
+(defsystem code-cover-tests
+  :depends-on (code-cover-test cl-ppcre cl-ppcre-test)
+  :components
+  ((:file "cl-ppcre-tests")))

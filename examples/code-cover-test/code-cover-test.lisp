@@ -1,17 +1,21 @@
 ;; -*- Mode:Lisp; tab-width:2; indent-tabs-mode:nil -*-
 
+;; Run tests and generate code coverage results 
+
 #-ccl (error "This code uses the Clozure CL code coverage tool")
 
 (in-package :code-cover-test)
 
-(require :cl-ppcre-test)
+;; Output files
 
 (defparameter *output-directory-path* #P"~/tmp/code-cover-test/")
 (defparameter *state-file-name*  #P"covstate.dat")
 (defparameter *index-file-path* #P"html/index.html")
 
 (defun output-path (filename)
-  (merge-pathnames filename *output-directory-path*))
+  (let ((path (merge-pathnames filename *output-directory-path*)))
+    (ensure-directories-exist path)
+    path))
 
 (defun state-file-path ()
   (output-path *state-file-name*))
@@ -22,57 +26,90 @@
 (defvar *code-coverage-table* nil "Collect incremental data from compiler code coverage tool")
 
 ;; Wild guess at expected # of table entries (??)
+
 (defvar *code-coverage-entry-size* 1800.)
 
 (defun init-code-coverage-table (&key (size *code-coverage-entry-size*))
   (make-hash-table :size size))
 
-(defun compile-code-coverage (&optional undo)
-  (let ((ccl:*compile-code-coverage* (not undo))
+;; Base class for tests
+
+(defclass code-cover-test ()
+  ((systems :initform nil :initarg :systems :accessor systems-of)))
+
+;; Compile unit tests with code coverage analysis (maybe) enabled
+
+(defmethod compile-code-coverage ((test code-cover-test) &key (compile-code-coverage-p t))
+  (let ((ccl:*compile-code-coverage* compile-code-coverage-p)
         (*load-verbose* t)
         (*compile-verbose* t))
-    (asdf:oos 'asdf:load-op ':cl-ppcre-test :force '(:cl-ppcre-test :cl-ppcre))
-    (unless undo (ccl:save-coverage-in-file (state-file-path)))
-    t))
+    (with-slots (systems) test
+      (if (and systems (atom systems))
+          (setq systems (list systems)))
+      (asdf:operate 'asdf:compile-op (first systems) :force systems)
+      (ccl:save-coverage-in-file (state-file-path))
+      t)))
 
-(let ((tests-compile-p-default t))
-  (defun init-code-coverage (&key (compile-p tests-compile-p-default))
-    (setf tests-compile-p-default compile-p) ;save flag for next time
-    (setf *code-coverage-table* (init-code-coverage-table))
-    ;; Compile sources files or restore coverage data from file
-    (if compile-p
-        (compile-code-coverage)
-        (ccl:restore-coverage-from-file (state-file-path)))
-    ;; Returns
-    t))
+(defmethod init-code-coverage ((test code-cover-test) &key
+                               (compile-p t) (reset-p compile-p) (restore-p (not compile-p)))
+  (setf *code-coverage-table* (init-code-coverage-table))
+  ;; Maybe reset code coverage data
+  (if reset-p
+      (ccl:reset-coverage))
+  ;; Maybe restore coverage data from file
+  (if restore-p
+      (ccl:restore-coverage-from-file (state-file-path)))
+  ;; Maybe compile source files
+  (if compile-p
+      (compile-code-coverage test))
+  ;; Returns
+  nil)
+
+;; Tags for results display
+
+(defvar *verbose-tag-names* nil)
 
 (let ((counter 0.))
-  (defun make-code-coverage-tag (sym)
-    (intern (format nil "CODE-COVER-TEST-~d-~a"  (incf counter) sym) ':keyword)))
+  (defun make-code-coverage-tag (sym &key (verbose *verbose-tag-names*))
+    (intern (format nil "~:[~*~;CODE-COVER-TEST-~d-~]~a"
+                    verbose (incf counter)
+                    sym) ':keyword)))
 
-(defun run-all-tests-with-code-coverage (&key (compile-p nil compile-p-supplied-p) verbose (iterations 25.))
-  (apply #'init-code-coverage
-         (and compile-p-supplied-p (list :compile-p compile-p)))
-  (let ((successp t))
-    (macrolet ((run-test-suite (&body body)
-                 (let ((tag (caar body)))
-                   `(prog1
-                        (unless (progn ,@body)
-                          (setq successp nil))
-                      (setf (gethash (make-code-coverage-tag ',tag)
-                                     *code-coverage-table*)
-                            (ccl:get-incremental-coverage))))))
-      ;; run the automatically generated Perl tests
-      (run-test-suite (perl-test :verbose verbose))
-      (run-test-suite (test-optimized-test-functions :verbose verbose))
-      (dotimes (n iterations)
-        (run-test-suite (simple-tests :verbose verbose)))
-      ;; Returns
-      successp)))
+;; Running tests
+
+(defvar *current-test*)
+
+(defmacro do-test (tag &body body)
+  (let ((tag-form
+         (etypecase tag
+           (null (gentemp "TEST"))
+           (symbol (list 'quote tag))
+           (t tag))))
+    `(do-test-body *current-test* ,tag-form
+                   (lambda () ,@body))))
+
+(defmethod do-test-body ((test code-cover-test) tag fcn)
+  (funcall fcn)
+  (setf (gethash (make-code-coverage-tag tag)
+                 *code-coverage-table*)
+        (ccl:get-incremental-coverage)))
+
+(defmethod do-tests :around ((test code-cover-test) &rest args)
+  (let ((*current-test* test)
+        (*compile-code-coverage* t))
+    (apply #'call-next-method test args)))
+
+(defmethod do-tests :before ((test code-cover-test) &rest args)
+  (apply #'init-code-coverage test args))
+
+;; Generating formatted results
 
 (defun report-code-coverage-test (&optional (state *code-coverage-table*))
   ;; Delete code coverage report output files *.html, *.js
   (dolist (type '("js" "html"))
-    (dolist (file (directory (output-path (make-pathname :name ':wild :type type))))
+    (dolist (file
+              (directory
+               (output-path
+                (make-pathname :directory '(:relative "html") :name ':wild :type type))))
       (delete-file file)))
   (ccl:report-coverage (index-file-path) :tags state))
