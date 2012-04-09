@@ -19,12 +19,7 @@
 
 
                          
-(define-condition simple-reader-error (reader-error simple-error) ()
-  (:report (lambda (c output-stream)
-             (format output-stream "Reader error ~a:~%~?"
-                     (stream-error-context c)
-                     (simple-condition-format-control c)
-                     (simple-condition-format-arguments c)))))
+
 
 (defun signal-reader-error (input-stream format-string &rest format-args)
   (error 'simple-reader-error :stream input-stream

@@ -21,13 +21,6 @@
 
 
 
-;;; This condition is signalled whenever we make a UNKNOWN-TYPE so that
-;;; compiler warnings can be emitted as appropriate.
-;;;
-(define-condition parse-unknown-type (condition)
-  ((specifier :reader parse-unknown-type-specifier :initarg :specifier))
-  (:report (lambda (c s) (print-unreadable-object (c s :type t)
-			   (format s "unknown type ~A" (parse-unknown-type-specifier c))))))
 
 (defun parse-lambda-list (list)
   (let* ((required)

@@ -30,6 +30,16 @@
 (defclass serious-condition (condition) ())
 (defclass error (serious-condition) ())
 
+(defun check-condition-superclasses (cond supers)
+  (let* ((bad nil))
+    (dolist (s supers)
+      (let* ((class (find-class s nil)))
+        (unless (and class (subtypep class 'condition))
+          (push s bad))))
+    (when bad
+      (error "Parent types of condition named ~s being defined aren't known subtypes of CONDITION: ~s." cond bad))))
+
+
 (define-condition simple-condition (condition)
   ((format-control :initarg :format-control
                   :reader simple-condition-format-control)
@@ -606,7 +616,22 @@
                (let* ((code (external-process-%exit-code proc)))
                  (format stream "Fork failed in ~s: ~a. " proc (if (eql code -1) "random lisp error" (%strerror code))))))))
    
-                         
+
+(define-condition simple-reader-error (reader-error simple-error) ()
+  (:report (lambda (c output-stream)
+             (format output-stream "Reader error ~a:~%~?"
+                     (stream-error-context c)
+                     (simple-condition-format-control c)
+                     (simple-condition-format-arguments c)))))
+
+;;; This condition is signalled whenever we make a UNKNOWN-TYPE so that
+;;; compiler warnings can be emitted as appropriate.
+;;;
+(define-condition parse-unknown-type (condition)
+  ((specifier :reader parse-unknown-type-specifier :initarg :specifier))
+  (:report (lambda (c s) (print-unreadable-object (c s :type t)
+			   (format s "unknown type ~A" (parse-unknown-type-specifier c))))))
+
 (defun restartp (thing) 
   (istruct-typep thing 'restart))
 (setf (type-predicate 'restart) 'restartp)

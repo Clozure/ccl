@@ -206,9 +206,11 @@
 ;;; vice null environment.  May be meaningless ...
 (defnx1 nx1-macrolet macrolet context (defs &body body)
   (let* ((old-env *nx-lexical-environment*)
-         (new-env (new-lexical-environment old-env)))
+         (new-env (new-lexical-environment old-env))
+         (names ()))
     (dolist (def defs)
       (destructuring-bind (name arglist &body mbody) def
+        (push name names)
         (push 
          (cons 
           name
@@ -219,6 +221,7 @@
              (setq *nx-warnings* (append *nx-warnings* warnings))
              function)))
          (lexenv.functions new-env))))
+    (nx1-check-duplicate-bindings names 'macrolet)
     (let* ((*nx-lexical-environment* new-env))
       (with-nx-declarations (pending)
         (multiple-value-bind (body decls) (parse-body body new-env)
@@ -234,14 +237,19 @@
         (nx-process-declarations pending decls)
         (let ((env *nx-lexical-environment*)
               (*nx-bound-vars* *nx-bound-vars*))
-          (dolist (def defs)
-            (destructuring-bind (sym expansion) def
-              (let* ((var (nx-new-var pending sym))
-                     (bits (nx-var-bits var)))
-                (when (%ilogbitp $vbitspecial bits)
-                  (nx-error "SPECIAL declaration applies to symbol macro ~s" sym))
-                (nx-set-var-bits var (%ilogior (%ilsl $vbitignoreunused 1) bits))
-                (setf (var-ea var) (cons :symbol-macro expansion)))))
+          (collect ((vars)
+                    (symbols))
+            (dolist (def defs)
+              (destructuring-bind (sym expansion) def
+                (let* ((var (nx-new-var pending sym))
+                       (bits (nx-var-bits var)))
+                  (symbols sym)
+                  (when (%ilogbitp $vbitspecial bits)
+                    (nx-error "SPECIAL declaration applies to symbol macro ~s" sym))
+                  (nx-set-var-bits var (%ilogior (%ilsl $vbitignoreunused 1) bits))
+                  (setf (var-ea var) (cons :symbol-macro expansion))
+                  (vars var))))
+            (nx1-check-duplicate-bindings (symbols) 'symbol-macrolet))
           (nx-effect-other-decls pending env)
           (nx1-env-body context body old-env))))))
 
@@ -1772,10 +1780,20 @@
        (nx1-env-body context body old-env)
        *nx-new-p2decls*))))
 
-(defun maybe-warn-about-nx1-alphatizer-binding (funcname)
+(defun maybe-warn-about-shadowing-cl-function-name (funcname)
   (when (and (symbolp funcname)
-             (gethash funcname *nx1-alphatizers*))
-    (nx1-whine :special-fbinding funcname)))
+             (fboundp funcname)
+             (eq (symbol-package funcname) (find-package "CL")))
+    (nx1-whine :shadow-cl-package-definition funcname)
+    t))
+
+(defun maybe-warn-about-nx1-alphatizer-binding (funcname)
+  (or (maybe-warn-about-shadowing-cl-function-name funcname)
+      (when (and (symbolp funcname)
+                 (gethash funcname *nx1-alphatizers*))
+        (nx1-whine :special-fbinding funcname))))
+
+
 
 (defnx1 nx1-flet flet context (defs &body forms)
   (with-nx-declarations (pending)
@@ -1787,12 +1805,14 @@
            (funcs nil)
            (pairs nil)
            (fname nil)
-           (name nil))
+           (name nil)
+           (fnames ()))
       (multiple-value-bind (body decls) (parse-body forms env nil)
         (nx-process-declarations pending decls)
         (dolist (def defs (setq names (nreverse names) funcs (nreverse funcs)))
           (destructuring-bind (funcname lambda-list &body flet-function-body) def
             (setq fname (nx-need-function-name funcname))
+            (push fname fnames)
             (maybe-warn-about-nx1-alphatizer-binding funcname)
             (multiple-value-bind (body decls)
                                  (parse-body flet-function-body env)
@@ -1814,6 +1834,7 @@
                   (setq funcname fname))
                 (push (setq name (make-symbol (symbol-name funcname))) names)
                 (push (cons funcname (cons 'function (cons func name))) (lexenv.functions new-env))))))
+        (nx1-check-duplicate-bindings fnames 'flet)
         (let ((vars nil)
               (rvars nil)
               (rfuncs nil))
@@ -1873,7 +1894,8 @@
            (vars nil)
            (blockname nil)
            (fname nil)
-           (name nil))
+           (name nil)
+           (fnames ()))
       (multiple-value-bind (body decls) (parse-body forms env nil)
         (dolist (def defs (setq funcs (nreverse funcs) bodies (nreverse bodies)))
           (destructuring-bind (funcname lambda-list &body labels-function-body) def
@@ -1881,6 +1903,7 @@
             (push (setq func (make-afunc)) funcs)
             (setq blockname funcname)
             (setq fname (nx-need-function-name funcname))
+            (push fname fnames)
             (when (consp funcname)
               (setq blockname (%cadr funcname) funcname fname))
             (let ((var (nx-new-var pending (setq name (make-symbol (symbol-name funcname))))))
@@ -1907,6 +1930,7 @@
         (setq body (nx1-env-body context body old-env))
         (nx-reconcile-inherited-vars funcrefs)
         (dolist (f funcrefs) (nx1-afunc-ref f))
+        (nx1-check-duplicate-bindings fnames 'labels)
         (make-acode
          (%nx1-operator labels)
          (nreverse vars)
@@ -2466,6 +2490,11 @@
 (defnx1 nx1-eval-when eval-when context (when &body body)
   (nx1-progn-body context (if (or (memq 'eval when) (memq :execute when)) body)))
 
-(defnx1 nx1-misplaced (declare) context (&rest args)
-  (nx-error "~S not expected in ~S." *nx-sfname* (cons *nx-sfname* args)))
+(defnx1 nx1-misplaced (declare) context (&whole w &rest args)
+  (declare (ignore args))
+  (nx-error "The DECLARE expression ~s is being treated as a form,
+possibly because it's the result of macroexpansion. DECLARE expressions
+can only appear in specified contexts and must be actual subexressions
+of the containing forms." w))
+
 

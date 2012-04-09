@@ -2265,9 +2265,11 @@ to open."
                                 (funcall ,reporter c s))))))))
       (if duplicate (signal-program-error "Duplicate option ~s ." option)))
     `(progn
-       (defclass ,name ,(or supers '(condition)) ,slots ,@classopts)
-       ,@reporter
-       ',name)))
+      ,@(when supers `((eval-when (:load-toplevel :execute)
+                         (check-condition-superclasses ',name ',supers))))
+      (defclass ,name ,(or supers '(condition)) ,slots ,@classopts)
+      ,@reporter
+      ',name)))
 
 (defmacro with-condition-restarts (&environment env condition restarts &body body)
   "Evaluates the BODY in a dynamic environment where the restarts in the list
