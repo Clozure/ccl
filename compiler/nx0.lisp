@@ -1110,26 +1110,6 @@ function to the indicated name is true.")
                (neq (nx-var-root-nsetqs target) (cadr pair)))
              (push (cons var target) *nx-punted-vars*)))))
 
-;;; Someone might be able to come up with a case where (perhaps through
-;;; use of (DECLAIM (IGNORE ...))) it might make some sense to bind
-;;; the same variable more than once in a parallel binding construct.
-;;; Even if that's done intentionally, there's probably some value
-;;; in warning about it (and it's hard to guess whether it's done
-;;; intentionally.
-;;; Something like (LET* ((X 1) (X (1+ X))) ...) is well-defined (even
-;;; if it's a bit unaesthetic.
-;;; We error if there are duplicate required args in a lambda list,
-;;; but let things like (LAMBDA (A &OPTIONAL A) ...) slide.  (Those
-;;; cases generally generate an unused-variable warning, so we don't
-
-(defun nx1-check-duplicate-bindings (syms context)
-  (do* ()
-       ((null syms))
-    (let* ((sym (pop syms)))
-      (when (member sym syms :test #'eq)
-        (nx1-whine :duplicate-binding (maybe-setf-name sym) context)))))
-              
-
 (defun nx1-punt-var (var initform)
   (let* ((bits (nx-var-bits var))
          (mask (%ilogior (%ilsl $vbitsetq 1) (ash -1 $vbitspecial) (%ilsl $vbitclosed 1)))
@@ -1952,23 +1932,12 @@ Or something. Right? ~s ~s" var varbits))
 
 
 (defun nx1-whine (about &rest forms)
-  ;; Don't turn STYLE-WARNINGs generated during compilation into
-  ;; vanilla COMPILER-WARNINGs.
-  (let* ((c (if (and (eq about :program-error)
-                     (typep (car forms) 'style-warning))
-              (let* ((c (car forms)))
-                (with-slots (source-note function-name) c
-                  (setq source-note *nx-current-note*
-                        function-name (list *nx-cur-func-name*))
-                  c))
-              (make-condition (or (cdr (assq about *compiler-whining-conditions*))
-                                  'compiler-warning)
-                              :function-name (list *nx-cur-func-name*)
-                              :source-note *nx-current-note*
-                              :warning-type about
-                              :args (or forms (list nil))))))
-
-    (push c *nx-warnings*)))
+  (push (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)
+			:function-name (list *nx-cur-func-name*)
+			:source-note *nx-current-note*
+			:warning-type about
+			:args (or forms (list nil)))
+	*nx-warnings*))
 
 (defun p2-whine (afunc about &rest forms)
   (let* ((warning (make-condition (or (cdr (assq about *compiler-whining-conditions*)) 'compiler-warning)

@@ -231,8 +231,7 @@
     (:lambda . style-warning)
     (:format-error . style-warning)
     (:unused . style-warning)
-    (:type-conflict . style-warning)
-    (:duplicate-binding . style-warning)))
+    (:type-conflict . style-warning)))
 
 
 
