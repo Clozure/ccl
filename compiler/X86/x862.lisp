@@ -10726,7 +10726,7 @@
                     seg arg
                     (make-wired-lreg (hard-regspec-value vreg)
                                      :class hard-reg-class-fpr
-                                     :mode hard-reg-class-fpr-mode-double))))
+                                     :mode hard-reg-class-fpr-mode-single))))
         (! single-to-double vreg sreg)
         (^))
       (with-fp-target () (sreg :single-float)
