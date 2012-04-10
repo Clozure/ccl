@@ -471,6 +471,7 @@
      get-gc-notification-threshold
      set-gc-notification-threshold
      *pending-gc-notification-hook*
+     current-time-in-nanoseconds
      
      population
      make-population
