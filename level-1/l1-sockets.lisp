@@ -183,7 +183,8 @@
 (define-condition socket-creation-error (simple-error)
   ((code :initarg :code :reader socket-creation-error-code)
    (identifier :initform :unknown :initarg :identifier :reader socket-creation-error-identifier)
-   (situation :initarg :situation :reader socket-creation-error-situation)))
+   (situation :initarg :situation :reader socket-creation-error-situation)
+   (remote-address :initform nil :initarg :remote-address :accessor socket-creation-error-remote-address)))
 
 (defparameter *gai-error-identifiers*
   (list #$EAI_AGAIN :try-again
@@ -233,7 +234,7 @@
 (declaim (inline socket-call))
 (defun socket-call (stream where res)
   (if (< res 0)
-    (socket-error stream where res)
+    (socket-error stream where res nil)
     res))
 
 #-windows-target
@@ -243,7 +244,22 @@
       (format nil "Unknown nameserver error ~d" err)
       (%get-cstring p))))
 
-(defun socket-error (stream where errno &optional nameserver-p)
+(defun get-error-address-info (info)
+  (let* ((sockaddr (getf info :sockaddr)))
+    (when sockaddr
+      (if (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
+        (list (ntohl (pref sockaddr
+                            #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
+                            #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr))
+              (ntohs (pref sockaddr :sockaddr_in.sin_port)))
+        (if (= #$AF_UNIX (pref sockaddr :sockaddr_un.sun_family))
+          (path-from-unix-address sockaddr))))))
+               
+
+        
+
+                         
+(defun socket-error (stream where errno nameserver-p &rest info)
   "Creates and signals (via error) one of two socket error 
 conditions, based on the state of the arguments."
   (unless nameserver-p
@@ -261,22 +277,42 @@ conditions, based on the state of the arguments."
 					      #-windows-target
 					      (%strerror errno)
 					      errno where)))
-    (let ((identifiers (if nameserver-p
-			 *gai-error-identifiers*
-			 *socket-error-identifiers*)))
+    (let* ((identifiers (if nameserver-p
+                          *gai-error-identifiers*
+                          *socket-error-identifiers*))
+           (connect-address (get-error-address-info info))
+           (format-control (if nameserver-p
+                             "~a (error #~d) during nameserver operation in ~a"
+                             (if connect-address
+                               "~a (error #~d) during attempt to connect to ~a"
+                               "~a (error #~d) during socket creation operation in ~a")))
+           (format-arguments (if connect-address
+                               (list
+                                #+windows-target
+                                (%windows-error-string errno)
+                                #-windows-target
+                                (if nameserver-p
+                                  (%gai-strerror errno)
+                                  (%strerror errno))
+                                errno (if (atom connect-address)
+                                        connect-address
+                                        (format nil "~a:~d" (ipaddr-to-dotted (car connect-address)) (cadr connect-address))))
+                               (list
+                                #+windows-target
+                                (%windows-error-string errno)
+                                #-windows-target
+                                (if nameserver-p
+                                  (%gai-strerror errno)
+                                  (%strerror errno))
+                                errno where))))
+                              
       (error (make-condition 'socket-creation-error
 			     :code errno
 			     :identifier (getf identifiers errno :unknown)
 			     :situation where
-			     :format-control "~a (error #~d) during socket creation or nameserver operation in ~a"
-			     :format-arguments (list
-						#+windows-target
-						(%windows-error-string errno)
-						#-windows-target
-						(if nameserver-p
-						  (%gai-strerror errno)
-						  (%strerror errno))
-						errno where))))))
+			     :format-control format-control
+			     :format-arguments format-arguments
+                             :remote-address connect-address)))))
 
 ;; If true, this will try to allow other cooperative processes to run
 ;; while socket io is happening.  Since CCL threads are preemptively
@@ -512,7 +548,7 @@ safer to mess with directly as there is less magic going on."))
 	  (setf (pref namelen :signed) (record-length :sockaddr_in))
 	  (let ((err (c_getpeername fd sockaddr namelen)))
 	    (cond ((eql err (- #+windows-target #$WSAENOTCONN #-windows-target #$ENOTCONN)) nil)
-		  ((< err 0) (socket-error socket "getpeername" err))
+		  ((< err 0) (socket-error socket "getpeername" err nil))
 		  (t
 		   (when (= #$AF_INET (pref sockaddr :sockaddr_in.sin_family))
 		     (ecase type
@@ -529,7 +565,7 @@ safer to mess with directly as there is less magic going on."))
 	  (setf (pref namelen :signed) (record-length :sockaddr_un))
 	  (let* ((err (c_getsockname fd addr namelen)))
 	    (cond ((eql err (- #$ENOTCONN)) nil)
-		  ((< err 0) (socket-error socket "getpeername" err))
+		  ((< err 0) (socket-error socket "getpeername" err nil))
 		  (t (path-from-unix-address addr)))))))
 
 (defgeneric local-port (socket)
@@ -743,7 +779,7 @@ the socket is not connected."))
 (defun %socket-connect (fd addr addrlen &optional timeout-in-milliseconds)
   (let* ((err (c_connect fd addr addrlen timeout-in-milliseconds)))
     (declare (fixnum err))
-    (unless (eql err 0) (fd-close fd) (socket-error nil "connect" err))))
+    (unless (eql err 0) (fd-close fd) (socket-error nil "connect" err nil :sockaddr addr))))
     
 (defun inet-connect (fd host-n port-n &optional timeout-in-milliseconds)
   (rlet ((sockaddr :sockaddr_in))
@@ -912,7 +948,7 @@ the socket is not connected."))
 	       (prog1 (apply stream-create-function fd keys)
 		 (setq fd -1)))
 	      ((eql fd (- #$EAGAIN)) nil)
-	      (t (socket-error socket "accept" fd))))
+	      (t (socket-error socket "accept" fd nil))))
       (when (>= fd 0)
 	(fd-close fd)))))
 
@@ -1049,7 +1085,7 @@ you need to read responses after sending an end-of-file signal."))
 	(fixnum (htons port))
 	(string (_getservbyname port proto))
 	(symbol (_getservbyname (string-downcase (symbol-name port)) proto)))
-      (socket-error nil "getservbyname" (- #$ENOENT))))
+      (socket-error nil "getservbyname" (- #$ENOENT) nil)))
 
 (defun lookup-port (port proto)
   "Find the port number for the specified port and protocol."
@@ -1108,7 +1144,7 @@ unsigned IP address."
       (if (and (eql 0 err)
                (eql 4 (pref vallen :signed)))
         (pref valptr :signed)
-	(socket-error socket "getsockopt" err)))))
+	(socket-error socket "getsockopt" err nil)))))
 
 (defun timeval-setsockopt (socket level optname timeout)
     (multiple-value-bind (seconds micros)
@@ -1516,7 +1552,7 @@ unsigned IP address."
 	  
 	  
 (defmethod stream-io-error ((stream socket) errno where)
-  (socket-error stream where errno))
+  (socket-error stream where errno nil))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
