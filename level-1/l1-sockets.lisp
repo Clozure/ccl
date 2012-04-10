@@ -252,6 +252,7 @@
                             #-(or solaris-target windows-target) :sockaddr_in.sin_addr.s_addr
                             #+(or solaris-target windows-target) #>sockaddr_in.sin_addr.S_un.S_addr))
               (ntohs (pref sockaddr :sockaddr_in.sin_port)))
+        #-windows-target
         (if (= #$AF_UNIX (pref sockaddr :sockaddr_un.sun_family))
           (path-from-unix-address sockaddr))))))
                
