@@ -277,6 +277,7 @@
      optimize-generic-function-dispatching
 
      ;; Not MOP
+     no-applicable-method-exists
      string-studlify			;** DO NOT REMOVE, DO NOT DOCUMENT
      nstring-studlify			;** DO NOT REMOVE, DO NOT DOCUMENT
 

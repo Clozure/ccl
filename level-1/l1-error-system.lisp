@@ -632,6 +632,13 @@
   (:report (lambda (c s) (print-unreadable-object (c s :type t)
 			   (format s "unknown type ~A" (parse-unknown-type-specifier c))))))
 
+(define-condition no-applicable-method-exists (error)
+  ((gf :initarg :gf)
+   (args :initarg :args))
+  (:report (lambda (c s)
+             (with-slots (gf args) c
+               (format s "There is no applicable method for the generic function:~%  ~s~%when called with arguments:~%  ~s" gf args)))))
+
 (defun restartp (thing) 
   (istruct-typep thing 'restart))
 (setf (type-predicate 'restart) 'restartp)

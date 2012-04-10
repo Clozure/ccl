@@ -3616,7 +3616,7 @@ to replace that class with ~s" name old-class new-class)
 
 (defmethod no-applicable-method (gf &rest args)
   (cerror "Try calling it again"
-          "There is no applicable method for the generic function:~%  ~s~%when called with arguments:~%  ~s" gf args)
+          (make-condition 'no-applicable-method-exists :gf gf :args args))
   (apply gf args))
 
 
