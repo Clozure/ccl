@@ -340,13 +340,13 @@
       (let ((full-text (ccl:source-note-text source))
             (pattern nil)
             (offset 0))
-        (flet ((search (mark string direction)
+        (flet ((ssearch (mark string direction)
                  (find-pattern mark
                                (setq pattern (new-search-pattern :string-insensitive
                                                                  direction
                                                                  string
                                                                  pattern)))))
-          (declare (inline search))
+          (declare (inline ssearch))
           (with-mark ((temp-mark (current-point)))
             (unless full-text
               ;; Someday, might only store a snippet for toplevel, so inner notes
@@ -365,13 +365,13 @@
               (buffer-end temp-mark))
 
             (when (or (null full-text)
-                      (or (search temp-mark full-text :forward)
-                          (search temp-mark full-text :backward))
+                      (or (ssearch temp-mark full-text :forward)
+                          (ssearch temp-mark full-text :backward))
                       ;; Maybe body changed, try at least to match the start of it
                       (let ((snippet (and (> (length full-text) 60) (subseq full-text 0 60))))
                         (and snippet
-                             (or (search temp-mark snippet :forward)
-                                 (search temp-mark snippet :backward)))))
+                             (or (ssearch temp-mark snippet :forward)
+                                 (ssearch temp-mark snippet :backward)))))
               (let ((point (move-point-leaving-mark temp-mark)))
                 (or (character-offset point offset)
                     (buffer-end point))))))))))
