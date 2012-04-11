@@ -1240,6 +1240,13 @@
 ;;; This is for DEFGENERIC method formatting
 (defindent "method" 1)
 
+;;; Common library extensions
+(defindent "if-let" 1)
+(defindent "if-let*" 1)
+(defindent "when-let" 1)
+(defindent "when-let*" 1)
+
+#|
 ;;; Debug-internals forms.
 ;;;
 (defindent "do-debug-function-blocks" 1)
@@ -1280,7 +1287,7 @@
 (defindent "di:invalid-control-stack-pointer" 1)
 (defindent "frame-function-mismatch" 1)
 (defindent "di:frame-function-mismatch" 1)
-
+|#
 
 ;;; CLOS forms.
 ;;; 
