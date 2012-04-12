@@ -432,7 +432,7 @@ codes map to their Unicode equivalents."
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in most
 languages used in Central/Eastern Europe."
-  :aliases '(:iso_8859-2 :latin-2 :l2 :csISOLatin2)
+  :aliases '(:iso_8859-2 :latin2 :l2 :csISOLatin2)
   :stream-encode-function
   (nfunction
    iso-8859-2-stream-encode
