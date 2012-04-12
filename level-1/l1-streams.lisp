@@ -1375,22 +1375,21 @@
 ;;; :iso-8859-1 only.
 (defun %ioblock-peek-char (ioblock)
   (or (ioblock-untyi-char ioblock)
-      (let* ((buf (ioblock-inbuf ioblock))
-             (idx (io-buffer-idx buf))
-             (limit (io-buffer-count buf)))
-        (declare (fixnum idx limit))
-        (when (= idx limit)
-          (unless (%ioblock-advance ioblock t)
-            (return-from %ioblock-peek-char :eof))
-          (setq idx (io-buffer-idx buf)
-                limit (io-buffer-count buf)))
-        (%code-char (aref (the (simple-array (unsigned-byte 8) (*)) (io-buffer-buffer buf)) idx)))))
+      (let* ((b (%ioblock-read-u8-byte ioblock)))
+        (if (eq b :eof)
+          b
+          (let* ((ch (%code-char b))
+                 (buf (ioblock-inbuf ioblock))
+                 (idx (io-buffer-idx buf)))
+            (declare (fixnum idx))
+            (setf (io-buffer-idx buf) (the fixnum (1- idx)))
+            ch)))))
 
 (defun %encoded-ioblock-peek-char (ioblock)
   (or (ioblock-untyi-char ioblock)
       (let* ((ch (funcall (ioblock-read-char-when-locked-function ioblock) ioblock)))
         (unless (eq ch :eof)
-          (setf (ioblock-untyi-char ioblock) ch))
+          (funcall (ioblock-unread-char-function ioblock) ioblock ch))
         ch)))
 
 
