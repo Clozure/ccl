@@ -313,14 +313,6 @@
       last-modified time of the bundle.  In Terminal:</para>
     <programlisting>> touch &CCL;.app
     </programlisting>
-    <para>There is one important caveat.</para>
-    <para>Because of the way that the ObjC bridge currently works, a saved
-      image is dependent upon the <emphasis>exact</emphasis> versions of
-      the Cocoa libraries which were present when it was saved.
-      Specifically, the interface database is.  So, for example, an
-      application produced under OS X 10.3.5 will not work under
-      OS X 10.3.6.  This is inconvenient when you wish to distribute an
-      application you have built this way.</para>
     <para>When an image which had contained ObjC classes (which are also
       CLOS classes) is re-launched, those classes are "revived": all
       preexisting classes have their addresses updated destructively, so that
