@@ -1521,6 +1521,7 @@
 (defmethod text-view-string-cache ((self hemlock-textstorage-text-view))
   (hemlock-buffer-string-cache (#/hemlockString (#/textStorage self))))
 
+
 (objc:defmethod (#/selectionRangeForProposedRange:granularity: :ns-range)
     ((self hemlock-textstorage-text-view)
      (proposed :ns-range)
@@ -1528,66 +1529,67 @@
   #+debug
   (#_NSLog #@"Granularity = %d" :int g)
   (objc:returning-foreign-struct (r)
-     (block HANDLED
-       (let* ((index (ns:ns-range-location proposed))
-              (length (ns:ns-range-length proposed))
-              (textstorage (#/textStorage self))
-              (event (#/currentEvent (#/window self)))
-              (event-type (#/type event)))
-         ;; Workaround for bug #150
-         (when (and (eql g #$NSSelectByCharacter)
-                    (eql index (#/length textstorage))
-                    (or (eql event-type #$NSLeftMouseDown) (eql event-type #$NSLeftMouseUp)))
-           (setq g (case (#/clickCount event)
-                     ((0 1) #$NSSelectByCharacter)
-                     (2 #$NSSelectByWord)
-                     (t #$NSSelectByParagraph))))
-         (unless (eql g #$NSSelectByCharacter)
-           (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
-                  (buffer (buffer-cache-buffer cache))
-                  (hi::*current-buffer* buffer)
-                  (point (hi:buffer-point buffer))
-                  (atom-mode (eql g #$NSSelectByParagraph)))
-             (hi:with-mark ((mark point))
-               (when (or (= length 0) (hi:move-to-absolute-position mark index))
-                 (let* ((region (selection-for-click mark atom-mode))
-                        (other-region (and (< 0 length)
-                                           (hi:character-offset mark length)
-                                           (selection-for-click mark atom-mode))))
-                   (when (null region) (setq region other-region other-region nil))
-                   (when region
-                     (let ((start-pos (min (hi:mark-absolute-position (hi:region-start region))
-                                           (if other-region
-                                             (hi:mark-absolute-position (hi:region-start other-region))
-                                             index)))
-                           (end-pos (max (hi:mark-absolute-position (hi:region-end region))
-                                         (if other-region
-                                           (hi:mark-absolute-position (hi:region-end other-region))
-                                           (+ index length)))))
-                       (assert (<= start-pos end-pos))
-                       ;; Act as if we started the selection at the other end, so the heuristic
-                       ;; in #/setSelectedRange does the right thing.  ref bug #565.
-                       ;; However, only do so at the end, so don't keep toggling during selection, ref bug #851.
-                       (when (and (eql event-type #$NSLeftMouseUp) (< start-pos end-pos))
-                         (let ((point-pos (hi:mark-absolute-position point)))
-                           (cond ((eql point-pos start-pos)
-                                  (hi:move-to-absolute-position point end-pos))
-                                 ((eql point-pos end-pos)
-                                  (hi:move-to-absolute-position point start-pos)))))
-                       (ns:init-ns-range r start-pos (- end-pos start-pos))
-                       #+debug
-                       (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-                                :address (#_NSStringFromRange r)
-                                :address (#_NSStringFromRange proposed)
-                                :<NSS>election<G>ranularity g)
-                       (return-from HANDLED r))))))))
-         (prog1
-             (call-next-method proposed g)
-           #+debug
-           (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
-                    :address (#_NSStringFromRange r)
-                    :address (#_NSStringFromRange proposed)
-                    :<NSS>election<G>ranularity g))))))
+    (block HANDLED
+      (let* ((index (ns:ns-range-location proposed))
+             (length (ns:ns-range-length proposed))
+             (textstorage (#/textStorage self))
+             (event (#/currentEvent (#/window self)))
+             (event-type (#/type event)))
+        ;; Workaround for bug #150
+        (when (and (eql g #$NSSelectByCharacter)
+                   (eql index (#/length textstorage))
+                   (or (eql event-type #$NSLeftMouseDown) (eql event-type #$NSLeftMouseUp)))
+          (setq g (case (#/clickCount event)
+                    ((0 1) #$NSSelectByCharacter)
+                    (2 #$NSSelectByWord)
+                    (t #$NSSelectByParagraph))))
+        (unless (eql g #$NSSelectByCharacter)
+          (let* ((cache (hemlock-buffer-string-cache (#/hemlockString textstorage)))
+                 (buffer (buffer-cache-buffer cache)))
+            (with-view-selection-info (self buffer)
+              (let* ((hi::*current-buffer* buffer)
+                     (point (hi:buffer-point buffer))
+                     (atom-mode (eql g #$NSSelectByParagraph)))
+                (hi:with-mark ((mark point))
+                  (when (or (= length 0) (hi:move-to-absolute-position mark index))
+                    (let* ((region (selection-for-click mark atom-mode))
+                           (other-region (and (< 0 length)
+                                              (hi:character-offset mark length)
+                                              (selection-for-click mark atom-mode))))
+                      (when (null region) (setq region other-region other-region nil))
+                      (when region
+                        (let ((start-pos (min (hi:mark-absolute-position (hi:region-start region))
+                                              (if other-region
+                                                (hi:mark-absolute-position (hi:region-start other-region))
+                                                index)))
+                              (end-pos (max (hi:mark-absolute-position (hi:region-end region))
+                                            (if other-region
+                                              (hi:mark-absolute-position (hi:region-end other-region))
+                                              (+ index length)))))
+                          (assert (<= start-pos end-pos))
+                          ;; Act as if we started the selection at the other end, so the heuristic
+                          ;; in #/setSelectedRange does the right thing.  ref bug #565.
+                          ;; However, only do so at the end, so don't keep toggling during selection, ref bug #851.
+                          (when (and (eql event-type #$NSLeftMouseUp) (< start-pos end-pos))
+                            (let ((point-pos (hi:mark-absolute-position point)))
+                              (cond ((eql point-pos start-pos)
+                                     (hi:move-to-absolute-position point end-pos))
+                                    ((eql point-pos end-pos)
+                                     (hi:move-to-absolute-position point start-pos)))))
+                          (ns:init-ns-range r start-pos (- end-pos start-pos))
+                          #+debug
+                          (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                                   :address (#_NSStringFromRange r)
+                                   :address (#_NSStringFromRange proposed)
+                                   :<NSS>election<G>ranularity g)
+                          (return-from HANDLED r))))))))))
+        (prog1
+            (call-next-method proposed g)
+          #+debug
+          (#_NSLog #@"range = %@, proposed = %@, granularity = %d"
+                   :address (#_NSStringFromRange r)
+                   :address (#_NSStringFromRange proposed)
+                   :<NSS>election<G>ranularity g))))))
 
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
 (defun selection-for-click (mark paragraph-mode-p)
