@@ -251,8 +251,8 @@ Default version returns Clozure CL version info."
 (defparameter *application*
   (make-instance 'lisp-development-system))
 
-(defvar *load-lisp-init-file* t)
-(defvar *lisp-startup-parameters* ())
+(defloadvar *load-lisp-init-file* t)
+(defloadvar *lisp-startup-parameters* ())
 
 (defmethod process-application-arguments ((a lisp-development-system)
 					  error-flag options args)
