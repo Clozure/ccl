@@ -393,6 +393,16 @@
 
 (pushnew #'load-cocoa-framework *lisp-system-pointer-functions* :key #'function-name)
 
+#+darwin-target
+;;; Nuke any command-line arguments, to keep the Cocoa runtime from
+;;; trying to process them.
+(let* ((argv (foreign-symbol-address "NXArgv"))
+       (argc (foreign-symbol-address "NXArgc")))
+  (when argc
+    (setf (pref argc :int) 1))
+  (when argv
+    (setf (paref (%get-ptr argv) (:* :char) 1) +null-ptr+)))
+
 #-cocotron
 (load-cocoa-framework)
 

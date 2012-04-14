@@ -232,6 +232,7 @@
                           (bundlep nil)
                           (document-class nil)
                           (exportable-as nil))
+  (declare (ignorable bundlep exportable-as icon-file))
   ;; certain values are required
   (assert (or ls-item-content-types extensions mime-types ostypes)
           ()
