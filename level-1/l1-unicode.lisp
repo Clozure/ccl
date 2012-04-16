@@ -4696,6 +4696,17 @@ mark."
   :character-size-in-octets-function 'four-octets-per-character
   )
 
+(defun list-character-encodings (&key include-aliases)
+  "Return a list of the names of supported character encodings."
+  (let ((names nil))
+    (maphash #'(lambda (name enc)
+		 (if (eq name (character-encoding-name enc))
+		   (push name names)
+		   (when include-aliases
+		     (push name names))))
+	     *character-encodings*)
+    names))
+
 (defun describe-character-encoding (name)
   (let* ((enc (lookup-character-encoding name)))
     (when enc
@@ -4711,11 +4722,7 @@ mark."
         (values)))))
       
 (defun describe-character-encodings ()
-  (let* ((names nil))
-    (maphash #'(lambda (name enc)
-                 (when (eq name (character-encoding-name enc))
-                   (push name names)))
-             *character-encodings*)
+  (let* ((names (list-character-encodings)))
     (dolist (name (sort names #'string<) (values))
       (describe-character-encoding name))))
 

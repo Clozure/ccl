@@ -709,6 +709,7 @@
      external-format-line-termination
      character-encoding
      define-character-encoding
+     list-character-encodings
      describe-character-encoding
      describe-character-encodings
      get-character-encoding
