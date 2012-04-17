@@ -2302,7 +2302,7 @@
   "Insert a space, then show the current function's arglist."
   "Insert a space, then show the current function's arglist."
   (declare (ignore p))
-  (let ((point (current-point)))
+  (let ((point (current-point-for-insertion)))
     (insert-character point #\Space)
     (pre-command-parse-check point)
     (with-mark ((m point))
