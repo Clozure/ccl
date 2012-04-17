@@ -798,6 +798,7 @@
                             (cheap-eval-in-environment test env)))
                (cheap-eval-in-environment (if test true false) env)))
             ((eq sym 'locally) (progn-in-env (%cdr form) env env))
+            #|
             ((eq sym 'symbol-macrolet)
 	     (multiple-value-bind (body decls) (parse-body (cddr form) env)
 	       (progn-in-env body env (augment-environment env :symbol-macro (cadr form) :declare (decl-specs-from-declarations decls)))))
@@ -806,10 +807,12 @@
                                                   :macro 
                                                   (mapcar #'(lambda (m)
                                                               (destructuring-bind (name arglist &body body) m
+                                                                (setq name (nx-need-function-name name))
                                                                 (list name (enclose (parse-macro name arglist body env)
                                                                                     env))))
                                                           (cadr form)))))
                (progn-in-env (cddr form) temp-env temp-env)))
+            |#
             ((and (symbolp sym) 
                   (compiler-special-form-p sym)
                   (not (functionp (fboundp sym))))
