@@ -102,9 +102,15 @@
 
 ;; Reverse of above, take native namestring and make a Lisp pathname.
 (defun native-to-pathname (name)
-  (pathname (%path-std-quotes name nil
-                              #+windows-target "*;"
-                              #-windows-target "*;:")))
+  ;; This assumes that NAME is absolute and fully qualified, and
+  ;; that there'd be no benefit to (and some risk involved in)
+  ;; effectively merging it with whatever random thing may be
+  ;; in *DEFAULT-PATHNAME-DEFAULTS*.
+  ;; I -think- that that's true for all callers of this function.
+  (let* ((*default-pathname-defaults* #p""))
+    (pathname (%path-std-quotes name nil
+                                   #+windows-target "*;"
+                                   #-windows-target "*;:"))))
 
 (defun native-to-directory-pathname (name)
   #+windows-target
