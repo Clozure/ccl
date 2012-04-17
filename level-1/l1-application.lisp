@@ -55,7 +55,7 @@
     ((command-line-arguments
       :initform
       (list *standard-help-argument* *standard-version-argument*))
-     (ui-object :initform nil :initarg :ui-object :accessor application-ui-object)))
+     (ui-object :initform (make-instance 'ui-object) :initarg :ui-object :accessor application-ui-object)))
        
 (defclass ui-object ()
     ())
