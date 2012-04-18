@@ -681,8 +681,12 @@ new_semaphore(int count)
   return s;
 #endif
 #ifdef USE_MACH_SEMAPHORES
+  kern_return_t kret;
   semaphore_t s = (semaphore_t)0;
-  semaphore_create(mach_task_self(),&s, SYNC_POLICY_FIFO, count);
+  kret = semaphore_create(mach_task_self(),&s, SYNC_POLICY_FIFO, count);
+  if (kret != KERN_SUCCESS) {
+    fatal_oserr("Can't create Mach semaphore.",(OSErr)kret);
+  }
   return (void *)(natural)s;
 #endif
 #ifdef USE_WINDOWS_SEMAPHORES
