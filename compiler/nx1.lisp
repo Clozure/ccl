@@ -202,6 +202,15 @@
                     (forms (nx1-form nil (car args)))
                     (setq args (cdr args)))))))
 
+(defun nx1-check-local-function-binding (funcname env)
+  (if (and (symbolp funcname) (special-operator-p funcname))
+    (nx-error "Can't lexically bind special operator ~s." funcname)
+    (unless (nx-declared-notinline-p funcname env)
+      (or (maybe-warn-about-shadowing-cl-function-name funcname)
+          (when (and (symbolp funcname)
+                     (gethash funcname *nx1-alphatizers*))
+            (nx1-whine :special-fbinding funcname))))))
+
 ;;; New semantics: expansion functions are defined in current lexical environment
 ;;; vice null environment.  May be meaningless ...
 (defnx1 nx1-macrolet macrolet context (defs &body body)
@@ -210,7 +219,9 @@
          (names ()))
     (dolist (def defs)
       (destructuring-bind (name arglist &body mbody) def
+        (setq name (nx-need-function-name name))
         (push name names)
+        (nx1-check-local-function-binding name old-env)
         (push 
          (cons 
           name
@@ -1787,11 +1798,7 @@
     (nx1-whine :shadow-cl-package-definition funcname)
     t))
 
-(defun maybe-warn-about-nx1-alphatizer-binding (funcname)
-  (or (maybe-warn-about-shadowing-cl-function-name funcname)
-      (when (and (symbolp funcname)
-                 (gethash funcname *nx1-alphatizers*))
-        (nx1-whine :special-fbinding funcname))))
+
 
 
 
@@ -1813,7 +1820,7 @@
           (destructuring-bind (funcname lambda-list &body flet-function-body) def
             (setq fname (nx-need-function-name funcname))
             (push fname fnames)
-            (maybe-warn-about-nx1-alphatizer-binding funcname)
+            (nx1-check-local-function-binding funcname env)
             (multiple-value-bind (body decls)
                                  (parse-body flet-function-body env)
               (let ((func (make-afunc))
@@ -1899,7 +1906,7 @@
       (multiple-value-bind (body decls) (parse-body forms env nil)
         (dolist (def defs (setq funcs (nreverse funcs) bodies (nreverse bodies)))
           (destructuring-bind (funcname lambda-list &body labels-function-body) def
-            (maybe-warn-about-nx1-alphatizer-binding funcname)
+            (nx1-check-local-function-binding funcname env)
             (push (setq func (make-afunc)) funcs)
             (setq blockname funcname)
             (setq fname (nx-need-function-name funcname))
