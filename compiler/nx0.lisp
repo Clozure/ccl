@@ -1806,13 +1806,9 @@ Or something. Right? ~s ~s" var varbits))
     (if (symbolp sym)
       (let* ((*nx-sfname* sym) special)
         (if (and (setq special (gethash sym *nx1-alphatizers*))
-                 (or (not (functionp (fboundp sym)))
-                     (memq sym '(apply funcall ;; see bug #285
-                                 %defun        ;; see bug #295
-                                 ))
-                     (< (safety-optimize-quantity env) 3))
-                 ;;(not (nx-lexical-finfo sym env))
-                 (not (nx-declared-notinline-p sym *nx-lexical-environment*)))
+                 (not (nx-lexical-finfo sym env))
+                 (or (special-operator-p sym)
+                     (not (nx-declared-notinline-p sym env))))
           (funcall special context form env) ; pass environment arg ...
           (progn            
             (nx1-typed-call context sym args))))
