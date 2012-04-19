@@ -301,25 +301,29 @@
 
 (defcommand "Select Next Line" (p)
   "Moves the point to the next line, extending the selection.
-   With prefix argument, moves the point that many lines down (or up if
-   the prefix is negative)."
-  "Moves the down p lines, extending the selection."
-  (let* ((p (or p 1)))
-    (if (< p 0)
-      (select-previous-line-command (- p))
-      (let* ((point (current-point-for-selection-end))
-             (target (set-target-column point)))
-        (unless (line-offset point (or p 1))
-          (when (value next-line-inserts-newlines)
-            (cond ((not p)
-                   (when (same-line-p point (buffer-end-mark (current-buffer)))
-                     (line-end point))
-                   (insert-character point #\newline))
-                  (t
-                   (buffer-end point)
-                   (when p (editor-error "No next line."))))))
-        (unless (move-to-position point target) (line-end point))
-        (setf (last-command-type) :line-motion)))))
+  With prefix argument, moves the point that many lines down (or up if
+  the prefix is negative)."
+  "Moves the down p lines, extending the selection." 
+  (if (and p (< p 0))
+    (select-previous-line-command (- p))
+    (let* ((point (current-point-for-selection-end))
+           (target (set-target-column point))
+           (count (or p 1))
+           (seek-target t))
+      (unless (line-offset point count)
+        (cond ((and (not p) (value next-line-inserts-newlines))
+               (when (same-line-p point (buffer-end-mark (current-buffer)))
+                 (line-end point))
+               (insert-character point #\newline))
+              ((minusp count)
+               (buffer-start point)
+               (setq seek-target nil))
+              (t
+               (buffer-end point)
+               (setq seek-target nil))))
+      (when seek-target
+        (unless (move-to-position point target) (line-end point)))
+      (setf (last-command-type) :line-motion))))
 
 
 (defcommand "Previous Line" (p)
@@ -339,8 +343,9 @@
       (select-next-line-command (- p))
       (let* ((point (current-point-for-selection-start))
              (target (set-target-column point)))
-        (line-offset point (- p))
-        (unless (move-to-position point target) (line-end point))
+        (if (line-offset point (- p))
+          (unless (move-to-position point target) (line-end point))
+          (buffer-start point))
         (setf (last-command-type) :line-motion)))))
 
 (defcommand "Mark to End of Buffer" (p)
