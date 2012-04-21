@@ -363,6 +363,7 @@ lisp-kernel/gc-common.c -text
 lisp-kernel/linuxarm/.gdbinit -text
 lisp-kernel/linuxarm/Makefile -text
 lisp-kernel/linuxarm/armlinux.x -text
+lisp-kernel/linuxarm/float_abi.mk -text
 lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
 lisp-kernel/lisp_globals.s -text

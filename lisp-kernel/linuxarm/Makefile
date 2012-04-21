@@ -30,7 +30,7 @@ COPT = -O2
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-linuxarm.h
-FLOAT_ABI = softfp
+include float_abi.mk
 
 # If the linker supports a "--hash-style=" option, use traditional
 # Sysv hash tables.  (If it doesn't support that option, assume
@@ -80,7 +80,7 @@ all:	../../armcl
 # No:
 
 # KSPOBJ=
-# all:	../../ppccl ../../subprims.so
+# all:	../../armcl ../../subprims.so
 
 OSLIBS = -ldl -lm -lpthread -lrt
 
@@ -96,10 +96,10 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../ppccl
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../armcl
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)
 
-strip:	../../ppccl
-	strip -g ../../ppccl
+strip:	../../armcl
+	strip -g ../../armcl
