@@ -2938,7 +2938,14 @@ _spentry(sdiv32)
         __(bx lr)
         
 
-               
+_spentry(eabi_ff_callhf)
+        __(add imm0,sp,#8)
+        __(fldmfdd imm0,{d0-d7})
+        __(ldmia sp,{imm0-imm1})
+        __(sub imm0,imm0,#(16<<num_subtag_bits))
+        __(add imm2,sp,#16<<2)
+        __(stm imm2,{imm0-imm1})
+        __(mov sp,imm2)
 _spentry(eabi_ff_call)
         __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
         __(stmdb vsp!,{arg_y,arg_x,temp0,temp1,temp2})
@@ -4745,5 +4752,6 @@ local_label(start):
         .long _SPeabi_ff_call
         .long _SPdebind
         .long _SPeabi_callback
+        .long _SPeabi_ff_callhf
 local_label(end):       
         	_endfile
