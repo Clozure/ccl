@@ -224,7 +224,7 @@
 ;;; before being evaluated.
 (defun arm-lap-equate-form (eqlist body current sections)
   (collect ((symbols)
-            (values))
+            (vals))
     (let* ((arm::*arm-register-names* arm::*arm-register-names*))
       (dolist (pair eqlist)
         (destructuring-bind (symbol value) pair
@@ -241,8 +241,8 @@
               (arm::define-arm-register symbol regval)
               (progn
                 (symbols symbol)
-                (values (eval value)))))))
-    (progv (symbols) (values)
+                (vals (eval value)))))))
+    (progv (symbols) (vals)
       (dolist (form body current)
         (setq current (arm-lap-form form current sections)))))))
 
