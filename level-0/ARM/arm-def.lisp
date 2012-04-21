@@ -327,6 +327,139 @@
     (let* ((result-spec (or (car (last specs-and-vals)) :void))
            (nargs (ash (the fixnum (1- len)) -1)))
       (declare (fixnum nargs))
+      (if (and (arm-hard-float-p)
+               (or (eq result-spec :double-float)
+                   (eq result-spec :single-float)
+                   (let* ((specs specs-and-vals))
+                     (dotimes (i nargs)
+                       (let* ((spec (car specs)))
+                         (when (or (eq spec :double-float)
+                                   (eq spec :single-float))
+                           (return t)))))))
+        (%ff-call-hard-float entry specs-and-vals)
+               
+        (ecase result-spec
+          ((:address :unsigned-doubleword :signed-doubleword
+                     :single-float :double-float
+                     :signed-fullword :unsigned-fullword
+                     :signed-halfword :unsigned-halfword
+                     :signed-byte :unsigned-byte
+                     :void)
+           (do* ((i 0 (1+ i))
+                 (specs specs-and-vals (cddr specs))
+                 (spec (car specs) (car specs)))
+                ((= i nargs))
+             (declare (fixnum i))
+             (case spec
+               ((:address :single-float
+                          :signed-fullword :unsigned-fullword
+                          :signed-halfword :unsigned-halfword
+                          :signed-byte :unsigned-byte)
+                (incf total-words))
+               ((:double-float :unsigned-doubleword :signed-doubleword)
+                #-darwin-target
+                (setq total-words (+ total-words (logand total-words 1)))
+                (incf total-words 2))
+
+               (t (if (typep spec 'unsigned-byte)
+                    (incf total-words spec)
+                    (error "unknown arg spec ~s" spec)))))
+           ;; It's necessary to ensure that the C frame is the youngest thing on
+           ;; the foreign stack here.
+           (let* ((tag (cons nil nil)))
+             (declare (dynamic-extent tag))
+             (%stack-block ((result 8))
+               (catch tag
+                 (with-macptrs ((argptr))
+                   (with-variable-c-frame
+                       total-words frame
+                       (%setf-macptr-to-object argptr frame)
+                       (let* ((arg-offset 8))
+                         (declare (fixnum arg-offset))
+                         (do* ((i 0 (1+ i))
+                               (specs specs-and-vals (cddr specs))
+                               (spec (car specs) (car specs))
+                               (val (cadr specs) (cadr specs)))
+                              ((= i nargs))
+                           (declare (fixnum i))
+                           (case spec
+                             (:address
+                              (setf (%get-ptr argptr arg-offset) val)
+                              (incf arg-offset 4))
+                             (:signed-doubleword
+                              #-darwin-target
+                              (when (logtest 7 arg-offset)
+                                (incf arg-offset 4))
+                              (setf (%%get-signed-longlong argptr arg-offset) val)
+                              (incf arg-offset 8))
+                             ((:signed-fullword :signed-halfword :signed-byte)
+                              (setf (%get-signed-long argptr arg-offset) val)
+                              (incf arg-offset 4))
+                             (:unsigned-doubleword
+                              #-darwin-target
+                              (when (logtest 7 arg-offset)
+                                (incf arg-offset 4))
+                              (setf (%%get-unsigned-longlong argptr arg-offset) val)
+                              (incf arg-offset 8))
+                             ((:unsigned-fullword :unsigned-halfword :unsigned-byte)
+                              (setf (%get-unsigned-long argptr arg-offset) val)
+                              (incf arg-offset 4))
+                             (:double-float
+                              #-darwin-target
+                              (when (logtest 7 arg-offset)
+                                (incf arg-offset 4))
+                              (setf (%get-double-float argptr arg-offset) val)
+                              (incf arg-offset 8))
+                             (:single-float
+                              (setf (%get-single-float argptr arg-offset) val)
+                              (incf arg-offset 4))
+                             (t
+                              (let* ((p 0))
+                                (declare (fixnum p))
+                                (dotimes (i (the fixnum spec))
+                                  (setf (%get-ptr argptr arg-offset) (%get-ptr val p))
+                                  (incf p 4)
+                                  (incf arg-offset 4)))))))
+                       (%do-ff-call tag result entry))))
+               (ecase result-spec
+                 (:void nil)
+                 (:address (%get-ptr result 0))
+                 (:unsigned-byte (%get-unsigned-byte result 0))
+                 (:signed-byte (%get-signed-byte result 0))
+                 (:unsigned-halfword (%get-unsigned-word result 0))
+                 (:signed-halfword (%get-signed-word result 0))
+                 (:unsigned-fullword (%get-unsigned-long result 0))
+                 (:signed-fullword (%get-signed-long result 0))
+                 (:unsigned-doubleword (%%get-unsigned-longlong result 0))
+                 (:signed-doubleword (%%get-signed-longlong result 0))
+                 (:single-float (%get-single-float result 0))
+                 (:double-float (%get-double-float result 0)))))))))))
+
+
+(defarmlapfunction %do-ff-call-hard-float ((tag arg_x) (result arg_y) (entry arg_z))
+  (stmdb (:! vsp) (tag result))
+  (sploadlr .SPeabi-ff-callhf)
+  (blx lr)
+  (ldmia (:! vsp) (tag result))
+  (macptr-ptr imm2 result)
+  (str imm0 (:@ imm2 (:$ 0)))
+  (str imm1 (:@ imm2 (:$ 4)))
+  (fstd d0 (:@ imm2 (:$ 8)))
+  (vpush1 tag)
+  (mov arg_z 'nil)
+  (vpush1 arg_z)
+  (set-nargs 1)
+  (sploadlr .SPthrow)
+  (blx lr))
+
+(defun %ff-call-hard-float (entry specs-and-vals)
+  (let* ((len (length specs-and-vals))
+         (total-words 0)
+         (fp-words 16))
+    (declare (fixnum len total-words fp-words))
+    (let* ((result-spec (or (car (last specs-and-vals)) :void))
+           (nargs (ash (the fixnum (1- len)) -1)))
+      (declare (fixnum nargs))
       (ecase result-spec
         ((:address :unsigned-doubleword :signed-doubleword
                    :single-float :double-float
@@ -340,13 +473,23 @@
               ((= i nargs))
            (declare (fixnum i))
            (case spec
-             ((:address :single-float
-                        :signed-fullword :unsigned-fullword
+             ((:address :signed-fullword :unsigned-fullword
                         :signed-halfword :unsigned-halfword
                         :signed-byte :unsigned-byte)
               (incf total-words))
-             ((:double-float :unsigned-doubleword :signed-doubleword)
-              #-darwin-target
+             (:single-float
+              (if (> fp-words 0)
+                (decf fp-words)
+                (incf total-words)))
+             (:double-float
+              (if (>= fp-words 2)
+                (if (oddp fp-words)
+                  (decf fp-words 3)
+                  (decf fp-words 2))
+                (if (oddp total-words)
+                  (incf total-words 3)
+                  (incf total-words 2))))
+             ((:unsigned-doubleword :signed-doubleword)
               (setq total-words (+ total-words (logand total-words 1)))
               (incf total-words 2))
 
@@ -357,14 +500,15 @@
          ;; the foreign stack here.
          (let* ((tag (cons nil nil)))
            (declare (dynamic-extent tag))
-           (%stack-block ((result 8))
+           (%stack-block ((result 16))
              (catch tag
                (with-macptrs ((argptr))
                  (with-variable-c-frame
-                     total-words frame
+                     (+ total-words 16) frame
                      (%setf-macptr-to-object argptr frame)
-                     (let* ((arg-offset 8))
-                       (declare (fixnum arg-offset))
+                     (let* ((fp-arg-offset 8)
+                            (arg-offset 72))
+                       (declare (fixnum arg-offset fp-arg-offset))
                        (do* ((i 0 (1+ i))
                              (specs specs-and-vals (cddr specs))
                              (spec (car specs) (car specs))
@@ -376,7 +520,6 @@
                             (setf (%get-ptr argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:signed-doubleword
-                            #-darwin-target
                             (when (logtest 7 arg-offset)
                               (incf arg-offset 4))
                             (setf (%%get-signed-longlong argptr arg-offset) val)
@@ -385,7 +528,6 @@
                             (setf (%get-signed-long argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:unsigned-doubleword
-                            #-darwin-target
                              (when (logtest 7 arg-offset)
                                (incf arg-offset 4))
                              (setf (%%get-unsigned-longlong argptr arg-offset) val)
@@ -394,14 +536,24 @@
                             (setf (%get-unsigned-long argptr arg-offset) val)
                             (incf arg-offset 4))
                            (:double-float
-                            #-darwin-target
-                            (when (logtest 7 arg-offset)
-                              (incf arg-offset 4))
-                            (setf (%get-double-float argptr arg-offset) val)
-                            (incf arg-offset 8))
+                            (cond ((<= fp-arg-offset 64)
+                                   (when (logtest 7 fp-arg-offset)
+                                     (incf fp-arg-offset 4))
+                                   (setf (%get-double-float argptr fp-arg-offset) val)
+                                   (incf fp-arg-offset 8))
+                                  (t
+                                   (when (logtest 7 arg-offset)
+                                     (incf arg-offset 4))
+                                   (setf (%get-double-float argptr arg-offset) val)
+                                   (incf arg-offset 8))))
                            (:single-float
-                            (setf (%get-single-float argptr arg-offset) val)
-                            (incf arg-offset 4))
+                            (cond ((< fp-arg-offset 72)
+                                   (incf fp-arg-offset 4)
+                                   (setf (%get-single-float argptr fp-arg-offset) val)
+                                   (incf fp-arg-offset 4))
+                                  (t
+                                   (setf (%get-single-float argptr arg-offset) val)
+                                   (incf arg-offset 4))))
                            (t
                               (let* ((p 0))
                                 (declare (fixnum p))
@@ -409,7 +561,7 @@
                                   (setf (%get-ptr argptr arg-offset) (%get-ptr val p))
                                   (incf p 4)
                                   (incf arg-offset 4)))))))
-                         (%do-ff-call tag result entry))))
+                         (%do-ff-call-hard-float tag result entry))))
              (ecase result-spec
                (:void nil)
                (:address (%get-ptr result 0))
@@ -421,8 +573,8 @@
                (:signed-fullword (%get-signed-long result 0))
                (:unsigned-doubleword (%%get-unsigned-longlong result 0))
                (:signed-doubleword (%%get-signed-longlong result 0))
-               (:single-float (%get-single-float result 0))
-               (:double-float (%get-double-float result 0))))))))))
+               (:single-float (%get-single-float result 8))
+               (:double-float (%get-double-float result 8))))))))))
 
 
 
@@ -582,4 +734,12 @@
   (box-fixnum arg_z imm0)
   (bx lr))
 
+(defarmlapfunction arm-hard-float-p ()
+  (check-nargs 0)
+  (ref-global arg_z arm::float-abi)
+  (tst arg_z arg_z)
+  (mov arg_z 'nil)
+  (addne arg_z arg_z (:$ arm::t-offset))
+  (bx lr))
+  
 ;;; end of arm-def.lisp
