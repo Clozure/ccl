@@ -438,6 +438,7 @@
              (defarmsubprim .SPeabi-ff-call)
              (defarmsubprim .SPdebind)
              (defarmsubprim .SPeabi-callback)
+             (defarmsubprim .SPeabi-ff-callhf)
              )))))
 
 

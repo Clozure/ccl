@@ -4048,6 +4048,8 @@
 
 (define-arm-subprim-call-vinsn (eabi-ff-call) .SPeabi-ff-call)
 
+(define-arm-subprim-call-vinsn (eabi-ff-callhf) .SPeabi-ff-callhf)
+
 (define-arm-vinsn unbind-interrupt-level-inline (()
                                                  ()
                                                  ((preserve (:lisp #.arm::arg_z))
@@ -4131,7 +4133,14 @@
                                            ((temp :imm)))
   (add temp base (:lsl idx (:$ 1)))
   (fstd val (:@ temp (:$ 0))))
-                                             
+
+(define-arm-vinsn (branch-if-soft-float :branch) (()
+                                                  ((lab :label))
+                                                  ((temp :imm)))
+  (mov temp (:$ (- arm::nil-value arm::fulltag-nil)))
+  (ldr temp (:@ temp (:$ (arm::%kernel-global 'arm::float-abi))))
+  (tst temp temp)
+  (beq lab))
 
 ;;; In case arm::*arm-opcodes* was changed since this file was compiled.
 #+maybe-never
