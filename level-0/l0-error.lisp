@@ -115,7 +115,7 @@
     (153 . "Incorrect keyword arguments in ~S .")
     (154 . "Two few arguments in form ~S .")
     (155 . "Too many arguments in form ~S .")
-    (157 . "value ~S is not of the expected type ~S.")
+    (157 . "The value ~S is not of the expected type ~S.")
     (158 . "~S is not a structure.")
     (159 . "Access to slot ~S of structure ~S is out of bounds.")
     (160 . "Form ~S does not match lambda list ~A .")
