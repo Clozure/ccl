@@ -1977,18 +1977,17 @@
 
 ;;; This -really- gets initialized later in the file
 (defvar %standard-readtable%
-  (let* ((ttab (make-array 256 :element-type '(unsigned-byte 8)))
+  (let* ((ttab (make-sparse-vector char-code-limit '(unsigned-byte 8) $cht_cnst))
          (macs `((#\# . (,#'read-dispatch))))
          (case :upcase))
-    (dotimes (i 256) (declare (fixnum i))(uvset ttab i $cht_cnst))
     (dotimes (ch (1+ (char-code #\Space)))
-      (uvset ttab ch $cht_wsp))
-    (uvset ttab #xa0 $cht_wsp)
-    (uvset ttab (char-code #\\) $cht_sesc)
-    (uvset ttab (char-code #\|) $cht_mesc)
-    (uvset ttab (char-code #\#) $cht_ntmac)
-    (uvset ttab (char-code #\Backspace) $cht_ill)
-    (uvset ttab (char-code #\Rubout) $cht_ill)
+      (setf (sparse-vector-ref ttab ch) $cht_wsp))
+    (setf (sparse-vector-ref ttab #xa0) $cht_wsp)
+    (setf (sparse-vector-ref ttab (char-code #\\)) $cht_sesc)
+    (setf (sparse-vector-ref ttab (char-code #\|)) $cht_mesc)
+    (setf (sparse-vector-ref ttab (char-code #\#)) $cht_ntmac)
+    (setf (sparse-vector-ref ttab (char-code #\Backspace)) $cht_ill)
+    (setf (sparse-vector-ref ttab (char-code #\Rubout)) $cht_ill)
     (%istruct 'readtable ttab macs case)))
 
 (defvar %initial-readtable%)
@@ -1998,52 +1997,30 @@
 
 (defun copy-readtable (&optional (from *readtable*) to)
   (setq from (if from (readtable-arg from)  %standard-readtable%))
-  (let* ((fttab (rdtab.ttab from))
-         (ttablen (uvsize fttab)))
-    (declare (fixnum ttablen))
+  (let* ((fttab (rdtab.ttab from)))
     (setq to (if to 
                (readtable-arg to)
                (%istruct 'readtable
-                         (make-array ttablen :element-type '(unsigned-byte 8))
+                         (copy-sparse-vector fttab)
                          nil (rdtab.case from))))
     (setf (rdtab.alist to) (copy-tree (rdtab.alist from)))
     (setf (rdtab.case to) (rdtab.case from))
-    (let* ((tttab (rdtab.ttab to)))
-      (%copy-ivector-to-ivector fttab 0 tttab 0 ttablen))
     to))
 
 (declaim (inline %character-attribute))
 
 (defun %character-attribute (char attrtab)
   (declare (character char)
-           (type (simple-array (unsigned-byte 8) (*)) attrtab)
            (optimize (speed 3) (safety 0)))
   (let* ((code (char-code char)))
     (declare (fixnum code))
-    (if (< code (uvsize attrtab))
-      (aref attrtab code)
-      $cht_cnst)))
+    (sparse-vector-ref attrtab code)))
 
 (defun %set-character-attribute (char readtable attr)
   (let* ((code (char-code char))
-         (attrtab (rdtab.ttab readtable))
-         (oldsize (uvsize attrtab)))
-    (declare (type (mod #x110000) code)
-             (type (simple-array (unsigned-byte 8) (*)) attrtab))
-    (when (>= code oldsize)
-      ;; Characters whose code is > the current size of the table
-      ;; are implicitly constituents; don't grow the table just to
-      ;; store that info explicitly.
-      (if (eql attr $cht_cnst)
-        (return-from %set-character-attribute attr)
-        (let* ((newsize (min (+ code code) char-code-limit))
-               (new (make-array newsize
-                                :element-type '(unsigned-byte 8)
-                                :initial-element $cht_cnst)))
-          (declare ((simple-array (unsigned-byte 8) (*)) new))
-          (%copy-ivector-to-ivector attrtab 0 new 0 oldsize)
-          (setf (rdtab.ttab readtable) (setq attrtab new)))))
-    (setf (aref attrtab code) attr)))
+         (attrtab (rdtab.ttab readtable)))
+    (declare (type (mod #x110000) code))
+    (setf (sparse-vector-ref attrtab code) attr)))
 
 
 ;;; returns: (values attrib <aux-info>), where

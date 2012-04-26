@@ -902,3 +902,88 @@
 );#+count-gf-calls
 
 
+;;; Sparse vectors, or at least a certain kind of sparse-vector.
+;;; This kind is oriented strongly towards maintaining character
+;;; attributes for Unicode characters (for the reader, Hemlock,etc.)
+(defstruct (sparse-vector (:constructor %make-sparse-vector)
+                          (:copier nil))
+  size
+  element-type
+  default
+  table
+  (lock (make-lock)))
+
+(defun make-sparse-vector (size element-type default)
+  (unless (and (typep size 'fixnum)
+               (locally (declare (fixnum size))
+                 (and (> size 0)
+                      (< size array-total-size-limit))))
+    (report-bad-arg size `(integer 1 ,array-total-size-limit)))
+  (setq element-type (upgraded-array-element-type element-type))
+  (unless (typep default element-type)
+    (report-bad-arg default element-type))
+  (%make-sparse-vector :size size
+                       :element-type element-type
+                       :default default
+                       :table (make-array 1
+                                          :element-type t
+                                          :initial-element nil)))
+
+(defun sparse-vector-ref (sv i)
+  (unless (and (typep i 'fixnum)
+               (>= (the fixnum i) 0)
+               (< (the fixnum i) (the fixnum (sparse-vector-size sv))))
+    (%err-disp $xarroob sv i))
+  (locally (declare (fixnum i))
+    (let* ((major (ash i -8))
+           (table (sparse-vector-table sv))
+           (v (if (< major (length table))
+                (svref table major))))
+      (declare (fixnum major))
+      (if (null v)
+        (sparse-vector-default sv)
+        (uvref v (logand i #xff))))))
+
+(defun (setf sparse-vector-ref) (new sv i)
+  (unless (and (typep i 'fixnum)
+               (>= (the fixnum i) 0)
+               (< (the fixnum i) (the fixnum (sparse-vector-size sv))))
+    (%err-disp $xarroob sv i))
+  (let* ((default (sparse-vector-default sv)))
+    (with-lock-grabbed ((sparse-vector-lock sv))
+      (locally (declare (fixnum i))
+        (let* ((major (ash i -8))
+               (minor (logand i #xff))
+               (table (sparse-vector-table sv))
+               (tablen (length table))
+               (v (if (< major tablen)
+                    (svref table major))))
+          (unless v
+            (unless (eql new default)
+              (when (< major tablen)
+                (let* ((newtab (make-array (the fixnum (1+ major)))))
+                  (%copy-gvector-to-gvector table 0 newtab 0 tablen)
+                  (setf (sparse-vector-table sv) (setq table newtab))))
+              (setq v (setf (svref table major) (make-array 256 :element-type (sparse-vector-element-type sv) :initial-element default)))))
+          (when v
+            (uvset v minor new))))))
+  new)
+
+(defun copy-sparse-vector (in)
+  (let* ((intab (sparse-vector-table in))
+         (tabsize (length intab )))
+    (declare (fixnum tabsize) (simple-vector intab))
+    (let* ((out (%make-sparse-vector :size (sparse-vector-size in)
+                                     :element-type (sparse-vector-element-type in)
+                                     :default (sparse-vector-default in)
+                                     :table (make-array tabsize :initial-element nil)))
+           (outtab (sparse-vector-table out)))
+      (declare (simple-vector outtab))
+      (dotimes (i tabsize out)
+        (let* ((v (svref intab i)))
+          (when v
+            (setf (svref outtab i) (copy-seq v))))))))
+
+(defmethod print-object ((sv sparse-vector) stream)
+  (print-unreadable-object (sv stream :type t :identity t)
+    (format stream "~d ~s" (sparse-vector-size sv) (sparse-vector-element-type sv))))
