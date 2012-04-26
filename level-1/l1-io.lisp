@@ -240,7 +240,6 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (def-standard-initial-binding *DEFAULT-RIGHT-MARGIN* 70
   "Controls default line length;  Must be a non-negative integer")
 
-(def-standard-initial-binding *PRINT-PPRINT-DISPATCH* nil) ; We have to support this.
 
 (defvar *xp-current-object* nil)  ; from xp
 

@@ -170,41 +170,72 @@
 ;                       ---- DISPATCHING ----
 
 (cl:defstruct (pprint-dispatch-table (:conc-name nil) (:copier nil))
-  (conses-with-cars (make-hash-table :test #'eq) :type hash-table)
-  (structures (make-hash-table :test #'eq) :type (or null hash-table))
+  (conses-with-cars (make-hash-table :test #'eq) :type (or null hash-table))
+  (parent-table nil)
   (others nil :type list)
   (commit-hook nil))
 
-;The list and the hash-tables contain entries of the
-;following form.  When stored in the hash tables, the test entry is 
-;the number of entries in the OTHERS list that have a higher priority.
+;;; We'd of course get finer-grained locking if each dispatch-table had
+;;; its own lock, but we want to make creation of a pprint-dispatch-table
+;;; as cheap as we can make it
+(defstatic *pprint-dispatch-table-lock* (make-lock))
+
+
+(defmethod print-object ((dispatch pprint-dispatch-table) stream)
+  (print-unreadable-object (dispatch stream :type t :identity t)))
+
+(defstatic *standard-pprint-dispatch-table* nil) ;set below
+
+;;;The list and the hash-tables contain entries of the
+;;;following form.  When stored in the hash tables, the test entry is 
+;;;the number of entries in the OTHERS list that have a higher priority.
 
 (defun make-entry (&key test fn full-spec)
   (%istruct 'entry test fn full-spec))
 
+
+(defun copy-pprint-dispatch-table-conses-with-cars (table)
+  (let* ((old (conses-with-cars table)))
+    (when old
+      (let* ((new (make-hash-table :test #'eq :size (max (hash-table-count old) 32))))
+        (maphash (lambda (key value)
+                   (setf (gethash key new)
+                         (if (istruct-typep value 'entry)(copy-uvector value) value)))
+                 old)
+        new))))
+
 (defun copy-pprint-dispatch (&optional (table *print-pprint-dispatch*))
-  (let* ((table (if (null table)
-                    *IPD*
-                    (require-type table '(or nil pprint-dispatch-table))))
-         (new-conses-with-cars
-           (make-hash-table :test #'eq
-	     :size (max (hash-table-count (conses-with-cars table)) 32)))
-	 (new-structures NIL))
-    (maphash #'(lambda (key value)
-		 (setf (gethash key new-conses-with-cars)
-                       (if (istruct-typep value 'entry)(copy-uvector value) value)))
-	     (conses-with-cars table))
+  (if (null table)
     (make-pprint-dispatch-table
-      :conses-with-cars new-conses-with-cars
-      :structures new-structures
-      :others (copy-list (others table))
-      :commit-hook (commit-hook table))))
+     :conses-with-cars nil
+     :others (copy-list (others *ipd*))
+     :parent-table *ipd*
+     :commit-hook (commit-hook *ipd*))
+    (let* ((table (require-type table 'pprint-dispatch-table)))
+      (with-lock-grabbed (*pprint-dispatch-table-lock*)
+        (make-pprint-dispatch-table
+         :others (copy-list (others table))
+         :conses-with-cars (copy-pprint-dispatch-table-conses-with-cars table)
+         :commit-hook (commit-hook table)
+         :parent-table (parent-table table)
+         :commit-hook (commit-hook table))))))
+
 
 (defun set-pprint-dispatch (type-specifier function
 			    &optional (priority 0) (table *print-pprint-dispatch*))
   (when (or (not (numberp priority)) (complexp priority))
     (error "invalid PRIORITY argument ~A to SET-PPRINT-DISPATCH" priority))
-  (set-pprint-dispatch+ type-specifier function priority table))
+  (when (eq table *standard-pprint-dispatch-table*)
+    (error "The standard pprint dispatch table must never be modified."))
+  (with-lock-grabbed (*pprint-dispatch-table-lock*)
+    (let* ((parent (parent-table table)))
+      (when parent
+        (setf (conses-with-cars table)
+              (copy-pprint-dispatch-table-conses-with-cars parent)
+              (others table) (copy-list (others parent))
+              (parent-table table) nil))
+      (set-pprint-dispatch+ type-specifier function priority table))))
+
 
 (defun set-pprint-dispatch+ (type-specifier function priority table)
   (let* ((category (specifier-category type-specifier))
@@ -226,7 +257,9 @@
     (case category
       (cons-with-car
        (let ((key (cadadr type-specifier)) ;(cons (member FOO))
-             (cons-tbl (conses-with-cars table)))
+             (cons-tbl (or (conses-with-cars table)
+                           (setf (conses-with-cars table)
+                                 (make-hash-table :test #'eq)))))
 	(cond ((null function) (remhash key cons-tbl))
 	      (T (let ((num 
 		       (count-if #'(lambda (e)
@@ -282,31 +315,35 @@
                              (if (get-*print-frob* '*print-level*)
                                (- *print-level* *current-level*))
                              nil nil)))
-    (when (null table) (setq table *IPD*))  
     (let ((fn (get-printer object table)))
       (values (or fn #'non-pretty-print) (not (null fn))))))
 
-(defun get-printer (object table)
-  (when (null table)(setq table *IPD*))
+(defun get-printer-internal (object hash others)
   (let* (entry)
-    (cond ((consp object)
-           (setq entry (gethash (%car object) (conses-with-cars table)))
-           (when (not entry)
-             (setq entry (find object (others table) :test #'fits))
-             (if entry
-               (setq entry (entry-fn entry)))))
-          (nil (setq entry (gethash (type-of object) (structures table)))))
-    (if (not entry)
-      (setq entry (find object (others table) :test #'fits))
-      (if (istruct-typep entry 'entry)
-        (let ((test (entry-test entry)))
-          (when (numberp test)
-            (do ((i test (1- i))
-                 (l (others table) (cdr l)))
-                ((zerop i))
-              (when (fits object (car l)) (setq entry (car l)) (return nil)))))))    
-    (when entry 
-      (if (istruct-typep entry 'entry)(entry-fn entry) entry))))
+      (cond ((consp object)
+             (setq entry (gethash (%car object) hash))
+             (when (not entry)
+               (setq entry (find object others :test #'fits))
+               (if entry
+                 (setq entry (entry-fn entry))))))
+      (if (not entry)
+        (setq entry (find object others :test #'fits))
+        (if (istruct-typep entry 'entry)
+          (let ((test (entry-test entry)))
+            (when (numberp test)
+              (do ((i test (1- i))
+                   (l others (cdr l)))
+                  ((zerop i))
+                (when (fits object (car l)) (setq entry (car l)) (return nil)))))))
+      (when entry
+        (if (istruct-typep entry 'entry)(entry-fn entry) entry))))
+
+(defun get-printer (object table)
+  (let* ((parent (parent-table table)))
+    (if parent
+      (get-printer-internal object (conses-with-cars parent) (others parent))
+      (with-lock-grabbed (*pprint-dispatch-table-lock*)
+        (get-printer-internal object (conses-with-cars table) (others table))))))
 
 (defun fits (obj entry) 
   (funcall (entry-test entry) obj))
@@ -2010,6 +2047,10 @@
          (return-from write-not-pretty nil))                     
         (t (stream-write-char stream #\space)))
   (write-a-frob object stream level list-kludge))
+
+(def-standard-initial-binding *PRINT-PPRINT-DISPATCH* (copy-pprint-dispatch nil)) ; We have to support this.
+
+(setq *standard-pprint-dispatch-table* (copy-pprint-dispatch nil))
 
 (eval-when (:load-toplevel :execute) 
   (setq *error-print-circle* t))

@@ -1602,7 +1602,7 @@ to open."
            (*print-level* nil)
            (*print-lines* nil)
            (*print-miser-width* nil)
-           (*print-pprint-dispatch* nil)
+           (*print-pprint-dispatch* *standard-pprint-dispatch-table*)
            (*print-pretty* nil)
            (*print-radix* nil)
            (*print-readably* t)
@@ -1618,6 +1618,7 @@ to open."
 	   (*print-simple-vector* nil)
 	   (*print-simple-bit-vector* nil)
 	   (*print-string-length* nil))
+      (declare (special *standard-pprint-dispatch-table*))
        ,@decls
        ,@body)))
 
