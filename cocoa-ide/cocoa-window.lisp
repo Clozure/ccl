@@ -345,7 +345,11 @@
                           (%make-nsstring title))
                         #@"") ))
 
-(defmethod allocate-instance ((class ns:+ns-window)
+(defclass ide-window (ns:ns-window)
+  ()
+  (:metaclass ns:+ns-object))
+
+(defmethod allocate-instance ((class +ide-window)
                               &rest initargs
                               &key
                               (with-content-rect nil content-rect-p)
@@ -386,7 +390,7 @@
     (setq initargs (cons :defer (cons t initargs))))
   (apply #'call-next-method class initargs))
 
-(defmethod initialize-instance :after ((w ns:ns-window)
+(defmethod initialize-instance :after ((w ide-window)
                                        &key
                                        (title nil)
                                        (x 200.0)
@@ -418,8 +422,11 @@
   (when activate
     (activate-window w)))
 
+(defclass ide-view (ns:ns-view)
+  ()
+  (:metaclass ns:+ns-object))
 
-(defmethod allocate-instance ((class ns:+ns-view)
+(defmethod allocate-instance ((class +ide-view)
                               &rest initargs
                               &key
                               (with-frame nil with-frame-p)
@@ -435,7 +442,7 @@
   (apply #'call-next-method class initargs))
 
 
-(defmethod initialize-instance :after ((view ns:ns-view)
+(defmethod initialize-instance :after ((view ide-view)
                                        &key
                                        (horizontally-resizable nil hrp)
                                        (vertically-resizable nil vrp)
@@ -481,7 +488,7 @@
                               
 
 (defun new-cocoa-window (&key
-                         (class (find-class 'ns:ns-window))
+                         (class (find-class 'ide-window))
                          (title nil)
                          (x 200.0)
                          (y 200.0)

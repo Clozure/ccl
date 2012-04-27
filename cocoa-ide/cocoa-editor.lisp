@@ -2177,7 +2177,7 @@
       (#/addSubview: content-view box)
       echo-area)))
                
-(defclass hemlock-frame (ns:ns-window)
+(defclass hemlock-frame (ide-window)
     ((echo-area-view :foreign-type :id)
      (pane :foreign-type :id)
      (echo-area-buffer :initform nil :accessor hemlock-frame-echo-area-buffer)
