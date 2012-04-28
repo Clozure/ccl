@@ -1200,11 +1200,6 @@
   (call (:@ spno))
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
 
-(define-x8664-vinsn fixnum-subtract-from (((dest t)
-                                           (y t))
-                                          ((y t)
-                                           (x t)))
-  (subq (:%q y) (:%q x)))
 
 (define-x8664-vinsn %logand-c (((dest t)
                                 (val t))
@@ -1428,9 +1423,16 @@
                                   ((x :imm)
                                    (y :imm))
                                   ((temp :imm)))
-  (movq (:%q x) (:%q temp))
-  (subq (:%q y) (:%q temp))
-  (movq (:%q temp) (:%q dest)))
+  ((:pred = (:apply %hard-regspec-value x) (:apply %hard-regspec-value dest))
+   (subq (:%q y) (:%q dest)))
+  ((:not (:pred = (:apply %hard-regspec-value x) (:apply %hard-regspec-value dest)))
+   ((:pred = (:apply %hard-regspec-value y) (:apply %hard-regspec-value dest)) 
+    (movq (:%q x) (:%q temp))
+    (subq (:%q y) (:%q temp))
+    (movq (:%q temp) (:%q dest)))
+   ((:not (:pred = (:apply %hard-regspec-value y) (:apply %hard-regspec-value dest)))
+    (movq (:%q x) (:%q dest))
+    (subq (:%q y) (:%q dest)))))
 
 
 
