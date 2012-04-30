@@ -126,6 +126,7 @@
                            :if-exists if-exists
                            :if-does-not-exist if-does-not-exist
                            :element-type '(unsigned-byte 8))
+        (when (null out) (return-from copy-file nil)) ;; :if-exists nil
         (loop
           as n = (stream-read-vector in buffer 0 4096) until (eql n 0)
           do (stream-write-vector out buffer 0 n))))
