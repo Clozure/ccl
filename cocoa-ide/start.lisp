@@ -72,10 +72,10 @@
 
 ;;; Support for saving a stand-alone IDE
 
-(defmethod ccl::application-error ((a cocoa-application) condition error-pointer)
+(defmethod ccl::application-error ((a cocoa-ide) condition error-pointer)
   (ccl::break-loop-handle-error condition error-pointer))
 
-(defmethod ccl::application-init-file ((a cocoa-application))
+(defmethod ccl::application-init-file ((a cocoa-ide))
   (unless (shift-key-now-p)
     '("home:ccl-init" "home:\\.ccl-init")))
 
@@ -84,10 +84,10 @@
 ;;; it's easier to pretend that we didn't get any arguments.
 ;;; (If it seems like some of this needs to be thought out a
 ;;; bit better ... I'd tend to agree.)
-(defmethod ccl::parse-application-arguments ((a cocoa-application))
+(defmethod ccl::parse-application-arguments ((a cocoa-ide))
   (values nil nil nil nil))
 
-(defmethod toplevel-function ((a cocoa-application) init-file)
+(defmethod toplevel-function ((a cocoa-ide) init-file)
   (declare (ignore init-file))
   #-cocotron
   (when (< #&NSAppKitVersionNumber 824)
@@ -104,9 +104,9 @@
       ;; It's probably reasonable to do this here: it's not really IDE-specific
       (when (try-connecting-to-altconsole)
         (setq have-interactive-terminal-io t)))
-    ;; TODO: to avoid confusion, should now reset *cocoa-application-path* to
+    ;; TODO: to avoid confusion, should now reset *cocoa-ide-path* to
     ;; actual bundle path where started up.
-    (start-cocoa-application)))
+    (start-cocoa-ide)))
 
 
 
@@ -118,7 +118,7 @@
   (assert (probe-file bundle-path))
 
   ;; Wait until we're sure that the Cocoa event loop has started.
-  (wait-on-semaphore *cocoa-application-finished-launching*)
+  (wait-on-semaphore *cocoa-ide-finished-launching*)
 
   #-cocotron				;needs conditionalization
   (require :easygui)
@@ -144,7 +144,7 @@
     (ensure-directories-exist image-file)
     (save-application image-file
 		      :prepend-kernel t
-		      :application-class 'cocoa-application
+		      :application-class 'cocoa-ide
 		      #+windows-target #+windows-target
 		      :application-type :gui)))
 
@@ -266,4 +266,4 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(start-cocoa-application)
+(start-cocoa-ide)

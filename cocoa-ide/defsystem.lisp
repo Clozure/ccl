@@ -10,8 +10,8 @@
 
 ;; These are used to communicate with ide-bundle, which must be loaded before objc-support.
 ;; They are defvar'ed so the caller can set them before loading us.
-(defvar *cocoa-application-path* nil)
-(defvar *cocoa-application-copy-headers-p* nil)
+(defvar *cocoa-ide-path* nil)
+(defvar *cocoa-ide-copy-headers-p* nil)
 (require "IDE-BUNDLE")
 
 (require "OBJC-SUPPORT")
@@ -21,8 +21,8 @@
   (:import-from
    "CCL"
    ;; symbols defined here
-   *cocoa-application-path*
-   *cocoa-application-copy-headers-p*
+   *cocoa-ide-path*
+   *cocoa-ide-copy-headers-p*
    load-ide
    build-ide
    ;; Misc symbols that perhaps should be exported from CCL but currently aren't.

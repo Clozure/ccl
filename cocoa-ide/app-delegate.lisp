@@ -207,13 +207,13 @@
 	(setq wc (#/lastObject (#/windowControllers top-listener-document)))
 	(#/orderFront: (#/window wc) +null-ptr+)))))
 
-(defvar *cocoa-application-finished-launching* (make-semaphore)
+(defvar *cocoa-ide-finished-launching* (make-semaphore)
   "Semaphore that's signaled when the application's finished launching ...")
 
 (objc:defmethod (#/applicationDidFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
-  (signal-semaphore *cocoa-application-finished-launching*))
+  (signal-semaphore *cocoa-ide-finished-launching*))
 
 (objc:defmethod (#/applicationShouldOpenUntitledFile: #>BOOL)
     ((self lisp-application-delegate) app)

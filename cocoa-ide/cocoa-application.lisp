@@ -22,17 +22,17 @@
   (pushnew :cocotron *features*))
 
 
-(defvar *cocoa-application-path*
+(defvar *cocoa-ide-path*
   (let* ((bits (nth-value 1 (host-platform))))
     (format nil "ccl:Clozure CL~a.app;" bits)))
-(defvar *cocoa-application-copy-headers-p* nil)
-(defvar *cocoa-application-install-altconsole* t)
-(defvar *cocoa-application-bundle-suffix*
+(defvar *cocoa-ide-copy-headers-p* nil)
+(defvar *cocoa-ide-install-altconsole* t)
+(defvar *cocoa-ide-bundle-suffix*
   (multiple-value-bind (os bits cpu) (host-platform)
     (declare (ignore os))
     (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
-(defvar *cocoa-application-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
-(defvar *cocoa-application-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)
+(defvar *cocoa-ide-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
+(defvar *cocoa-ide-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)
         
 (defvar *cocoa-ide-force-compile* nil)
 (load "ccl:cocoa-ide;defsystem.lisp")
@@ -45,4 +45,4 @@
 ;;; the OSX console (/Applications/Utilities/Console.app.)  Standard
 ;;; and error output for the initial lisp process will be directed
 ;;; there.
-(build-ide *cocoa-application-path*)
+(build-ide *cocoa-ide-path*)

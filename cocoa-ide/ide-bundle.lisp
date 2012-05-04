@@ -11,8 +11,8 @@
 
 (defun create-ide-bundle (bundle-path &key (source "ccl:cocoa-ide;ide-contents;")
 				           (source-ignore '(".svn" "cvs" ".cvsignore"))
-					   (copy-headers *cocoa-application-copy-headers-p*)
-                                           (install-altconsole *cocoa-application-install-altconsole*)
+					   (copy-headers *cocoa-ide-copy-headers-p*)
+                                           (install-altconsole *cocoa-ide-install-altconsole*)
 					   (if-exists :overwrite))
   ;; TODO: Right now if the bundle exists, we leave alone any files that we don't replace.
   ;; I'd like :if-exists :supersede mean to remove such files, for clean builds, but
@@ -197,5 +197,5 @@
 
 
 (progn
-  (create-ide-bundle *cocoa-application-path*)
-  (fake-cfbundle-path *cocoa-application-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-application-bundle-suffix* *cocoa-application-frameworks* *cocoa-application-libraries* #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))
+  (create-ide-bundle *cocoa-ide-path*)
+  (fake-cfbundle-path *cocoa-ide-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-ide-bundle-suffix* *cocoa-ide-frameworks* *cocoa-ide-libraries* #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))

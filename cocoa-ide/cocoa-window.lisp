@@ -22,10 +22,10 @@
   (def-cocoa-default *default-font-size* :float 12.0f0 "Size of font to use in editor windows, as a positive SINGLE-FLOAT")
   (def-cocoa-default *tab-width* :int 8 "Width of editor tab stops, in characters"))
 
-(defclass cocoa-application (application)
+(defclass cocoa-ide (application)
   ())
 
-(defun init-cocoa-application ()
+(defun init-cocoa-ide ()
   (with-autorelease-pool
       (#/standardUserDefaults ns:ns-user-defaults)
       (let* ((bundle (open-main-bundle))
@@ -194,7 +194,7 @@
 		(and ccl::*quitting* (not (#/isRunning app))))
 	(return)))))
 
-(defun start-cocoa-application (&key
+(defun start-cocoa-ide (&key
 				(application-proxy-class-name
 				 *default-ns-application-proxy-class-name*))
   
@@ -204,7 +204,7 @@
                (process-run-function "housekeeping" #'ccl::housekeeping-loop)
                (with-autorelease-pool
                    (enable-foreground)
-                 (or *NSApp* (setq *NSApp* (init-cocoa-application)))
+                 (or *NSApp* (setq *NSApp* (init-cocoa-ide)))
                  #-cocotron
                  (let* ((icon (#/imageNamed: ns:ns-image #@"NSApplicationIcon")))
                    (unless (%null-ptr-p icon)
@@ -212,9 +212,10 @@
                  (setf (ccl::application-ui-object *application*) *NSApp*)
                  (when (and application-proxy-class-name
 			    (%null-ptr-p (#/delegate *nsapp*)))
-                   (let* ((classptr (ccl::%objc-class-classptr
+                   (let* (#+nil (classptr (ccl::%objc-class-classptr
                                      (ccl::load-objc-class-descriptor application-proxy-class-name)))
-                          (instance (#/init (#/alloc classptr))))
+			  (class (#_NSClassFromString (%make-nsstring application-proxy-class-name)))
+                          (instance (#/init (#/alloc class))))
                      
                      (#/setDelegate: *NSApp* instance))))
                (run-event-loop))))

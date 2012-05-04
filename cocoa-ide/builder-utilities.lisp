@@ -374,12 +374,12 @@
 ;;; Copy any private frameworks into the bundle taking into account the
 ;;; different directory structures used by Cocoa and Cocotron (Windows).
 (defun copy-private-frameworks (private-frameworks app-path)
-  (let ((private-frameworks #+windows-target (append *cocoa-application-frameworks*
+  (let ((private-frameworks #+windows-target (append *cocoa-ide-frameworks*
                                                      private-frameworks)
                             #-windows-target private-frameworks)
         (frameworks-dir (bundle-frameworks-path app-path)))
     #+windows-target
-    (dolist (lib *cocoa-application-libraries*)
+    (dolist (lib *cocoa-ide-libraries*)
       (copy-file lib frameworks-dir :preserve-attributes t :if-exists :supersede))
     (when private-frameworks
       (flet ((subdir (framework target)

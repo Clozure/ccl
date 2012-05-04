@@ -60,7 +60,7 @@
       (activate-rlisp-listener view))
     view))
 
-(defmethod ccl::create-rlisp-listener ((app cocoa-application) (rthread ccl::remote-lisp-thread))
+(defmethod ccl::create-rlisp-listener ((app cocoa-ide) (rthread ccl::remote-lisp-thread))
   (let* ((view (or (listener-view-for-remote-thread rthread :activate t)
                    (create-remote-listener-view rthread)))
          (buffer (hi:hemlock-view-buffer view))
@@ -151,7 +151,7 @@
   ((backtrace-window :initform nil :accessor backtrace-context-backtrace-window)
    (restarts-window :initform nil :accessor backtrace-context-restarts-window)))
 
-(defmethod ccl::remote-context-class ((application cocoa-application)) 'cocoa-remote-backtrace-context)
+(defmethod ccl::remote-context-class ((application cocoa-ide)) 'cocoa-remote-backtrace-context)
 
 (defmethod restarts-dialog ((context cocoa-remote-backtrace-context))
   (let ((restarts (ccl::backtrace-context-restarts context))

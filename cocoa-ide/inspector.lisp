@@ -196,7 +196,7 @@ Make preferences for fonts, key commands
     (#/showWindow: wc nil)
     wc))
 
-(defmethod ccl::spawn-inspector ((app cocoa-application) inspector)
+(defmethod ccl::spawn-inspector ((app cocoa-ide) inspector)
   (queue-for-gui (lambda () (make-inspector-window inspector))))
 
 (defmethod push-inspector-item ((wc ninspector-window-controller) (ii inspector-item))

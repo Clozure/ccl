@@ -38,7 +38,7 @@
                           (main-nib-name) ; the name of the nib that is to be loaded
                                         ; as the app's main. this name gets written
                                         ; into the Info.plist on the "NSMainNibFile" key
-                          (application-class 'gui::cocoa-application)
+                          (application-class 'gui::cocoa-ide)
                           (private-frameworks nil)
                           (toplevel-function nil)
                           (altconsole t))
