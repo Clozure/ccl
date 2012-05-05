@@ -1804,11 +1804,15 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx1-combination (context form env)
   (destructuring-bind (sym &rest args) form
     (if (symbolp sym)
-      (let* ((*nx-sfname* sym) special)
-        (if (and (setq special (gethash sym *nx1-alphatizers*))
+      (let* ((*nx-sfname* sym)
+             (special (gethash sym *nx1-alphatizers*))
+             (def (fboundp sym)))
+        (if (and special
                  (not (nx-lexical-finfo sym env))
                  (or (special-operator-p sym)
-                     (not (nx-declared-notinline-p sym env))))
+                     (not (nx-declared-notinline-p sym env)))
+                 (or (not (functionp def))
+                     (null (nx1-check-call-args def (cdr form) nil))))
           (funcall special context form env) ; pass environment arg ...
           (progn            
             (nx1-typed-call context sym args))))
