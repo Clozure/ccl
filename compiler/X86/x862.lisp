@@ -7402,7 +7402,7 @@
              (not (addrspec-vcell-p ea))
              (acode-p (setq form (acode-unwrapped-form form))))
     (let* ((offset (memspec-frame-address-offset ea)))
-      (unless (x862-register-for-frame-offset ea)
+      (unless (x862-register-for-frame-offset offset)
         (let* ((op (acode-operator form))
                (constant nil))
           (with-x86-local-vinsn-macros (seg vreg xfer)
