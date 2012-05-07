@@ -710,8 +710,10 @@ return a fixnum representation of that address, else return NIL."
                  (shlibnamelen (length shlibname)))
           (when (%simple-string= name shlibname 0 0 namelen shlibnamelen)
             (unless (shlib.base lib)
-              (setf (shlib.base lib) addr
-                    (shlib.soname lib) (soname-from-mach-header addr)))
+              (setf (shlib.base lib) addr)
+              (let* ((soname  (soname-from-mach-header addr)))
+                (when soname
+                  (setf (shlib.soname lib) soname))))
             (return lib))))))))
 
 (defun shlib-containing-entry (entry &optional name)
@@ -745,7 +747,7 @@ return a fixnum representation of that address, else return NIL."
     (let* ((addr (ff-call *dyld-get-image-header* :unsigned-fullword i :address))
            (nameptr (ff-call *dyld-get-image-name* :unsigned-fullword i :address))
            (name (%get-cstring nameptr ))
-           (lib (%cons-shlib (soname-from-mach-header addr) name nil addr)))
+           (lib (%cons-shlib (or (soname-from-mach-header addr) name) name nil addr)))
       (setf (shlib.handle lib)
             (ff-call *dlopen-entry* :address nameptr :unsigned-fullword (logior #$RTLD_GLOBAL #$RTLD_NOLOAD)))
       (push lib *shared-libraries*))))
