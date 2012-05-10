@@ -56,16 +56,7 @@
             (declare (type (signed-byte 32) result))
             (if (and (< result 0)
                      (eql (%get-errno) (- #$EINTR)))
-              ;; x86-64 Leopard bug.
-              (let* ((asec (pref aptr :timespec.tv_sec))
-                     (bsec (pref bptr :timespec.tv_sec)))
-                (if (and (>= bsec 0)
-                         (or (< bsec asec)
-                             (and (= bsec asec)
-                                  (< (pref bptr :timespec.tv_nsec)
-                                     (pref aptr :timespec.tv_nsec)))))
-                  (psetq aptr bptr bptr aptr)
-                  (return)))
+              (psetq aptr bptr bptr aptr)
               (return))))))))
 
 
