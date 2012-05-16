@@ -61,11 +61,14 @@
    "EXECUTE-IN-GUI"
    ))
 
+(defparameter *ide-lib-files*
+  '("libdispatch"
+    "cf-utils"))
+
 (defparameter *ide-files*
   '(;"ide-bundle" - loaded by hand above
     "constants"
     "cocoa-utils"
-    "cf-utils"
     "cocoa-defaults"
     "cocoa-prefs"
     "cocoa-typeout"
@@ -96,6 +99,24 @@
   '("xinspector"
     ))
 
+(defun load-ide-lib-files (names lib-dir force-compile)
+  (let* ((bin-dir (merge-pathnames ";fasls;" lib-dir)))
+    (ensure-directories-exist bin-dir)
+    (with-compilation-unit ()
+      (dolist (name names)
+	(let* ((source (make-pathname :name name
+				      :type (pathname-type *.lisp-pathname*)
+				      :defaults lib-dir))
+	       (fasl (make-pathname :name name
+				    :type (pathname-type *.fasl-pathname*)
+				    :defaults bin-dir)))
+	  (when (or force-compile
+		    (not (probe-file fasl))
+		    (> (file-write-date source)
+		       (file-write-date fasl)))
+	    (compile-file source :output-file fasl :verbose t))
+	  (load fasl :verbose t))))))
+
 (defun load-ide-files (names src-dir force-compile)
   (declare (special *hemlock-files*)) ;; kludge
   (let* ((bin-dir (merge-pathnames ";fasls;" src-dir)))
@@ -125,5 +146,6 @@
     (#_Gestalt #$gestaltSystemVersion p)
     (when (>= (%get-long p) #x1050)
       (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
+  (load-ide-lib-files *ide-lib-files* "ccl:cocoa-ide;lib;" force-compile)
   (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
   (provide "COCOA"))
