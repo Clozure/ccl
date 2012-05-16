@@ -37,7 +37,7 @@
       (setq index (#/indexOfItemWithTitle: menu #@"Show System Console")))
     (when (> index 0)
       (ccl::external-call "_SetItemMark" :id menu-ref :integer (1+ index)
-                          :integer (if available-p #$diamondMark 0)))))
+                          :integer (if available-p 19 0))))) ;19 is diamondMark
 
 ;;; Process a chunkful of data
 (objc:defmethod (#/processData: :void) ((self console-window) data)
