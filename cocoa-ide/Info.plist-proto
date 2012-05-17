@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+        <key>LSApplicationCategoryType</key>
+        <string>public.app-category.developer-tools</string>
+        <key>LSMinimumSystemVersion</key>
+        <string>10.6.6</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDocumentTypes</key>
@@ -81,10 +85,8 @@
 	<string>OPENMCL-VERSION</string>
         <key>CFBundleShortVersionString</key>
         <string>OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSIONOPENMCL-REVISION</string>
-        <key>CFBundleGetInfoString</key>
-        <string>Clozure Common Lisp version OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSION, Copyright 2002-CURRENT-YEAR Clozure Associates and contributors."</string>
         <key>NSHumanReadableCopyright</key>
-        <string>Copyright 2002-CURRENT-YEAR Clozure Associates and contributors.</string>
+        <string>Copyright 2002-CURRENT-YEAR Clozure Associates and contributors</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

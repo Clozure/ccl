@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+        <key>LSApplicationCategoryType</key>
+        <string>public.app-category.developer-tools</string>
+        <key>LSMinimumSystemVersion</key>
+        <string>10.6.6</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDocumentTypes</key>

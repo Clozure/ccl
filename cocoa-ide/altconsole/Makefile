@@ -11,7 +11,7 @@ OBJECTS=main.o AltConsoleDocument.o AltConsoleDocumentController.o
 RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings resource/Clear.tiff
 #CC=gcc-4.0
 
-CFLAGS=-g -O -mmacosx-version-min=10.4 -m32 -Wno-protocol
+CFLAGS=-g -O -mmacosx-version-min=10.6 -Wno-protocol
 
 AltConsole: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework Cocoa
