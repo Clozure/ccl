@@ -63,6 +63,7 @@
 
 (defparameter *ide-lib-files*
   '("libdispatch"
+    "event-process"
     "cf-utils"))
 
 (defparameter *ide-files*
