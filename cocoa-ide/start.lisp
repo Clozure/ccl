@@ -31,7 +31,7 @@
 (defun find-ccl-directory ()
   (let* ((path (ccl::ccl-directory))
          (dir (pathname-directory path)))
-    (if (equalp (last dir 2) '("Contents" "MacOS"))
+    (if (equalp (last dir 3) '("Contents" "Resources" "ccl"))
         (make-pathname :directory (butlast dir 3))
         path)))
 
@@ -136,14 +136,27 @@
 
   #-cocotron
   (ccl::touch bundle-path)
-
-  (let ((image-file (make-pathname :name (ccl::standard-kernel-name) :type nil :version nil
-				   :defaults (merge-pathnames (format nil";Contents;~a;" #+darwin-target "MacOS" #+cocotron "Windows")  bundle-path))))
+  (let ((kernel-file (make-pathname :name (ccl::standard-kernel-name) 
+                                    :type nil 
+                                    :version nil 
+                                    :defaults (merge-pathnames 
+                                               #+darwin-target
+					       ";Contents;MacOS;"
+					       #+cocotron
+					       ";Contents;Windows;"
+                                               bundle-path))) 
+        (image-file (make-pathname :name (ccl::standard-kernel-name) 
+                                   :type "image" 
+                                   :version nil 
+                                   :defaults (merge-pathnames 
+                                              ";Contents;Resources;ccl;" 
+                                              bundle-path)))) 
     (format *error-output* "~2%Saving application to ~a~2%" (truename bundle-path))
     (force-output *error-output*)
     (ensure-directories-exist image-file)
+    (ccl:copy-file (ccl::kernel-path) kernel-file :if-exists :supersede 
+                   :preserve-attributes t)
     (save-application image-file
-		      :prepend-kernel t
 		      :application-class 'cocoa-ide
 		      #+windows-target #+windows-target
 		      :application-type :gui)))
