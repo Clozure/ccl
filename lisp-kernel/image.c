@@ -271,8 +271,11 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    fd)) {
         return;
       }
+      if (!CommitMemory(global_mark_ref_bits,refbits_size)) {
+        return;
+      }
       /* Need to save/restore persistent refbits. */
-      if (!MapFile(global_mark_ref_bits,
+      if (!MapFile(managed_static_refbits,
                    align_to_power_of_2(pos+mem_size,log2_page_size),
                    refbits_size,
                    MEMPROTECT_RW,
@@ -630,7 +633,7 @@ save_application_internal(unsigned fd, Boolean egc_was_enabled)
       natural nrefbytes = align_to_power_of_2((ndnodes+7)>>3,log2_page_size);
 
       seek_to_next_page(fd);
-      if (writebuf(fd,(char*)a->refbits,nrefbytes)) {
+      if (writebuf(fd,(char*)managed_static_refbits,nrefbytes)) {
         return errno;
       }
     }

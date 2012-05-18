@@ -88,7 +88,7 @@ static_dnodes_for_area(area *a)
 }
 
 Boolean GCDebug = false, GCverbose = false;
-bitvector GCmarkbits = NULL, GCdynamic_markbits = NULL;
+bitvector GCmarkbits = NULL, GCdynamic_markbits = NULL, managed_static_refbits = NULL;
 LispObj GCarealow = 0, GCareadynamiclow = 0;
 natural GCndnodes_in_area = 0, GCndynamic_dnodes_in_area = 0;
 LispObj GCweakvll = (LispObj)NULL;
@@ -1091,9 +1091,8 @@ forward_gcable_ptrs()
 }
 
 void
-forward_memoized_area(area *a, natural num_memo_dnodes)
+forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits)
 {
-  bitvector refbits = a->refbits;
   LispObj *p = (LispObj *) a->low, x1, x2, new;
 #ifdef ARM
   LispObj *p0 = p;
@@ -1102,6 +1101,8 @@ forward_memoized_area(area *a, natural num_memo_dnodes)
   int tag_x1;
   hash_table_vector_header *hashp = NULL;
   Boolean header_p;
+
+
 
   if (num_memo_dnodes) {
     if (GCDebug) {
@@ -1298,7 +1299,7 @@ mark_static_ref(LispObj n, BytePtr dynamic_start, natural ndynamic_dnodes)
 void
 mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnodes)
 {
-  bitvector refbits = a->refbits;
+  bitvector refbits = managed_static_refbits;
   LispObj *p = (LispObj *) a->low, x1, x2;
   natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0,
     num_memo_dnodes = a->ndnodes;
@@ -1547,13 +1548,13 @@ gc(TCR *tcr, signed_natural param)
         }
       }
     }
-  
+
     if (GCephemeral_low) {
       mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
+      mark_memoized_area(managed_static_area,managed_static_area->ndnodes);
+    } else {
+      mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address));
     }
-
-    mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address));
-    
     other_tcr = tcr;
     do {
       mark_tcr_xframes(other_tcr);
@@ -1685,10 +1686,11 @@ gc(TCR *tcr, signed_natural param)
     }
 
     if (GCephemeral_low) {
-      forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low));
+      forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low), tenured_area->refbits);
+      forward_memoized_area(managed_static_area,managed_static_area->ndnodes, managed_static_area->refbits);
+    } else {
+      forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low),managed_static_refbits);
     }
-  
-    forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low));
     a->active = (BytePtr) ptr_from_lispobj(compact_dynamic_heap());
 
     forward_weakvll_links();

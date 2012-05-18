@@ -63,7 +63,7 @@
 extern void zero_memory_range(BytePtr,BytePtr);
 extern LispObj GCarealow, GCareadynamiclow;
 extern natural GCndnodes_in_area, GCndynamic_dnodes_in_area;
-extern bitvector GCmarkbits, GCdynamic_markbits;
+extern bitvector GCmarkbits, GCdynamic_markbits,managed_static_refbits;
 LispObj *global_reloctab, *GCrelocptr;
 LispObj GCfirstunmarked;
 
@@ -191,7 +191,7 @@ LispObj node_forwarding_address(LispObj);
 Boolean update_noderef(LispObj *);
 void update_locref(LispObj *);
 void forward_gcable_ptrs(void);
-void forward_memoized_area(area *, natural);
+void forward_memoized_area(area *, natural, bitvector);
 void forward_tcr_tlb(TCR *);
 void reclaim_static_dnodes(void);
 Boolean youngest_non_null_area_p(area *);

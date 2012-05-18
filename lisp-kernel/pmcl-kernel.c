@@ -552,7 +552,11 @@ create_reserved_area(natural totalsize)
 
   if (start == NULL) {
     if (fatal) {
+#ifdef WINDOWS
+      wperror("minimal initial mmap");
+#else
       perror("minimal initial mmap");
+#endif
       exit(1);
     }
     return NULL;
@@ -583,6 +587,19 @@ create_reserved_area(natural totalsize)
   /* The root of all evil is initially linked to itself. */
   reserved->pred = reserved->succ = reserved;
   all_areas = reserved;
+#ifdef X86
+  {
+    managed_static_refbits = ReserveMemory((((MANAGED_STATIC_SIZE>>dnode_shift)+7)>>3));
+    if (managed_static_refbits == NULL) {
+#ifdef WINDOWS
+      wperror("allocate refbits for managed static area");
+#else
+      perror("allocate refbits for managed static area");
+#endif
+      exit(1);
+    }
+  }
+#endif
   return reserved;
 }
 
@@ -2092,6 +2109,10 @@ main
   } else {
     lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
   }
+#ifdef X86
+  lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
+  lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
+#endif
   atexit(lazarus);
 #ifdef ARM
 #ifdef LINUX

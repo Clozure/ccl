@@ -2724,13 +2724,20 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       *ea = val;
     }
     if (need_check_memo) {
-      natural  bitnumber = area_dnode(ea, lisp_global(REF_BASE));
-      if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT)) &&
-          ((LispObj)ea < val)) {
-        atomic_set_bit(refbits, bitnumber);
-        if (need_memoize_root) {
-          bitnumber = area_dnode(root, lisp_global(REF_BASE));
+      if ((LispObj)ea < val) {
+        natural  bitnumber = area_dnode(ea, lisp_global(REF_BASE)),
+          rootbitnumber = area_dnode(root, lisp_global(REF_BASE));
+        if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT))) {
           atomic_set_bit(refbits, bitnumber);
+          if (need_memoize_root) {
+            atomic_set_bit(refbits, rootbitnumber);
+          }
+        }
+        if (bitnumber < lisp_global(MANAGED_STATIC_DNODES)) {
+          atomic_set_bit(managed_static_refbits,bitnumber);
+          if (need_memoize_root) {
+            atomic_set_bit(managed_static_refbits, rootbitnumber);
+          }
         }
       }
     }

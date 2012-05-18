@@ -26,8 +26,13 @@ extern LispObj lisp_nil;
 #define INTERRUPT_SIGNAL  (-3)  /* signal to use for PROCESS-INTERRUPT */
 #define KERNEL_IMPORTS (-4)	/* some things we need to have imported for us. */
 #define OBJC_2_PERSONALITY (-5) /* A good listener.  Doesn't say much */
+#ifdef X86
+#define MANAGED_STATIC_REFBITS (-6) /* refs from managed_static to dynamic */
+#define MANAGED_STATIC_DNODES (-7) /* ndnodes in managed_static_area */
+#else
 #define SAVETOC (-6)	        /* Saved TOC register, for some platforms */
 #define SAVER13 (-7)		/* Saved (global) r13, on some platforms */
+#endif
 #define SUBPRIMS_BASE (-8)	/* where the dynamic subprims wound up */
 #define RET1VALN (-9)		/* magic multiple-values return address */
 #define TCR_KEY (-10)     	/* tsd key for per-thread tcr */

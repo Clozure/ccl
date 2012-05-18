@@ -71,7 +71,7 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	 _node(weakvll)                 /* all populations as of last GC */
 	 _node(initial_tcr)	        /* initial thread tcr */
 	 _node(image_name)	        /* --image-name argument */
-	 _node(BADfpscr_save_high)      /* high word of FP reg used to save FPSCR */
+	 _node(weak_gc_method)          /* for weak vector marking */
 	 _node(unwind_resume)           /* _Unwind_Resume */
 	 _node(batch_flag)	        /* -b */
 	 _node(host_platform)	        /* for runtime platform-specific stuff   */
@@ -110,8 +110,13 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
 	 _node(tcr_key) 		/* tsd key for per-thread tcr   */
 	 _node(ret1val_addr) 		/* address of "dynamic" subprims magic values return addr   */
 	 _node(subprims_base) 		/* address of dynamic subprims jump table   */
+        __ifdef(`X86')
+         _node(managed_static_dnodes)   /* ndnodes of managed_static_area */
+         _node(managed_static_refbits)  /* refs from managed_static to dynamic */
+        __else                
 	 _node(saveR13)			/* probably don't really need this   */
 	 _node(saveTOC)                 /* where the 68K emulator stores the  emulated regs   */
+        __endif        
 	 _node(objc_2_personality)		/* exception "personality routine" address for ObjC 2.0 */
 	 _node(kernel_imports) 		/* some things we need imported for us   */
 	 _node(interrupt_signal)	/* signal used by PROCESS-INTERRUPT   */

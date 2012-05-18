@@ -165,7 +165,7 @@ typedef struct area_list {
 #endif
 
 #define STATIC_RESERVE (2<<12)
-
+#define MANAGED_STATIC_SIZE ((natural)(PURESPACE_RESERVE/2-PURESPACE_SIZE))
 
 #define SPJUMP_TARGET_ADDRESS (STATIC_BASE_ADDRESS+0x3000)
 

@@ -265,11 +265,16 @@ UnCommitMemory (LogicalAddress start, natural len) {
 LogicalAddress
 MapMemory(LogicalAddress addr, natural nbytes, int protection)
 {
+  LogicalAddress p;
 #if DEBUG_MEMORY
   fprintf(dbgout, "Mapping memory at 0x" LISP ", size 0x" LISP "\n", addr, nbytes);
 #endif
 #ifdef WINDOWS
-  return VirtualAlloc(addr, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
+  p = VirtualAlloc(addr, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
+  if (p == NULL) {
+    wperror("MapMemory");
+  }
+  return p;
 #else
   {
     int flags = MAP_PRIVATE|MAP_ANON;
@@ -944,3 +949,23 @@ unprotect_watched_areas()
     code = a->code;
   }
 }
+
+LogicalAddress
+ReserveMemory(natural size)
+{
+  LogicalAddress p;
+#ifdef WINDOWS
+  p = VirtualAlloc(0,
+                   size,
+                   MEM_RESERVE,
+                   PAGE_NOACCESS);
+  return p;
+#else
+  p = mmap(NULL,size,PROT_NONE,MAP_PRIVATE|MAP_ANON|MAP_NORESERVE,-1,0);
+  if (p == MAP_FAILED) {
+    return NULL;
+  }
+  return p;
+#endif
+}
+

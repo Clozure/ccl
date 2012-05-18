@@ -1243,129 +1243,131 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
   hash_table_vector_header *hashp = NULL;
   int mark_method = 3;
 
-  if (GCDebug) {
-    check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
-  }
-
-  /* The distinction between "inbits" and "outbits" is supposed to help us
-     detect cases where "uninteresting" setfs have been memoized.  Storing
-     NIL, fixnums, immediates (characters, etc.) or node pointers to static
-     or readonly areas is definitely uninteresting, but other cases are
-     more complicated (and some of these cases are hard to detect.)
-
-     Some headers are "interesting", to the forwarder if not to us. 
-
-  */
-
-  /*
-    We need to ensure that there are no bits set at or beyond
-    "num_memo_dnodes" in the bitvector.  (This can happen as the EGC
-    tenures/untenures things.)  We find bits by grabbing a fullword at
-    a time and doing a cntlzw instruction; and don't want to have to
-    check for (< memo_dnode num_memo_dnodes) in the loop.
-  */
-
-  {
-    natural 
-      bits_in_last_word = (num_memo_dnodes & bitmap_shift_count_mask),
-      index_of_last_word = (num_memo_dnodes >> bitmap_shift);
-
-    if (bits_in_last_word != 0) {
-      natural mask = ~((NATURAL1<<(nbits_in_word-bits_in_last_word))- NATURAL1);
-      refbits[index_of_last_word] &= mask;
+  if (num_memo_dnodes) {
+    if (GCDebug) {
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
     }
-  }
+
+    /* The distinction between "inbits" and "outbits" is supposed to help us
+       detect cases where "uninteresting" setfs have been memoized.  Storing
+       NIL, fixnums, immediates (characters, etc.) or node pointers to static
+       or readonly areas is definitely uninteresting, but other cases are
+       more complicated (and some of these cases are hard to detect.)
+
+       Some headers are "interesting", to the forwarder if not to us. 
+
+    */
+
+    /*
+      We need to ensure that there are no bits set at or beyond
+      "num_memo_dnodes" in the bitvector.  (This can happen as the EGC
+      tenures/untenures things.)  We find bits by grabbing a fullword at
+      a time and doing a cntlzw instruction; and don't want to have to
+      check for (< memo_dnode num_memo_dnodes) in the loop.
+    */
+
+    {
+      natural 
+        bits_in_last_word = (num_memo_dnodes & bitmap_shift_count_mask),
+        index_of_last_word = (num_memo_dnodes >> bitmap_shift);
+
+      if (bits_in_last_word != 0) {
+        natural mask = ~((NATURAL1<<(nbits_in_word-bits_in_last_word))- NATURAL1);
+        refbits[index_of_last_word] &= mask;
+      }
+    }
         
-  set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
-  inbits = outbits = bits;
-  while (memo_dnode < num_memo_dnodes) {
-    if (bits == 0) {
-      int remain = nbits_in_word - bitidx;
-      memo_dnode += remain;
-      p += (remain+remain);
-      if (outbits != inbits) {
-        *bitsp = outbits;
-      }
-      bits = *++bitsp;
-      inbits = outbits = bits;
-      bitidx = 0;
-    } else {
-      nextbit = count_leading_zeros(bits);
-      if ((diff = (nextbit - bitidx)) != 0) {
-        memo_dnode += diff;
-        bitidx = nextbit;
-        p += (diff+diff);
-      }
-      x1 = *p++;
-      x2 = *p++;
-      bits &= ~(BIT0_MASK >> bitidx);
-
-
-      if (hashp) {
-        Boolean force_x1 = false;
-        if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
-          /* if vector_header_count is odd, x1 might be the last word of the header */
-          force_x1 = (hash_table_vector_header_count & 1) && (memo_dnode == hash_dnode_limit);
-          /* was marking header, switch to data */
-          hash_dnode_limit = area_dnode(((LispObj *)hashp)
-                                        + 1
-                                        + header_element_count(hashp->header),
-                                        a->low);
-          /* In traditional weak method, don't mark vector entries at all. */
-          /* Otherwise mark the non-weak elements only */
-          mark_method = ((lisp_global(WEAK_GC_METHOD) == 0) ? 0 :
-                         ((hashp->flags & nhash_weak_value_mask)
-                          ? (1 + (hash_table_vector_header_count & 1))
-                          : (2 - (hash_table_vector_header_count & 1))));
+    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
+    inbits = outbits = bits;
+    while (memo_dnode < num_memo_dnodes) {
+      if (bits == 0) {
+        int remain = nbits_in_word - bitidx;
+        memo_dnode += remain;
+        p += (remain+remain);
+        if (outbits != inbits) {
+          *bitsp = outbits;
         }
-
-        if (memo_dnode < hash_dnode_limit) {
-          /* perhaps ignore one or both of the elements */
-          if (!force_x1 && !(mark_method & 1)) x1 = 0;
-          if (!(mark_method & 2)) x2 = 0;
-        } else {
-          hashp = NULL;
+        bits = *++bitsp;
+        inbits = outbits = bits;
+        bitidx = 0;
+      } else {
+        nextbit = count_leading_zeros(bits);
+        if ((diff = (nextbit - bitidx)) != 0) {
+          memo_dnode += diff;
+          bitidx = nextbit;
+          p += (diff+diff);
         }
-      }
-
-      if (header_subtag(x1) == subtag_hash_vector) {
-        if (hashp) Bug(NULL, "header inside hash vector?");
-        hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
-        if (hp->flags & nhash_weak_mask) {
-          /* Work around the issue that seems to cause ticket:817,
-             which is that tenured hash vectors that are weak on value
-             aren't always maintained on GCweakvll.  If they aren't and
-             we process them weakly here, nothing will delete the unreferenced
-             elements. */
-          if (!(hp->flags & nhash_weak_value_mask)) {
-            /* If header_count is odd, this cuts off the last header field */
-            /* That case is handled specially above */
-            hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
-            hashp = hp;
-            mark_method = 3;
+        x1 = *p++;
+        x2 = *p++;
+        bits &= ~(BIT0_MASK >> bitidx);
 
 
+        if (hashp) {
+          Boolean force_x1 = false;
+          if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
+            /* if vector_header_count is odd, x1 might be the last word of the header */
+            force_x1 = (hash_table_vector_header_count & 1) && (memo_dnode == hash_dnode_limit);
+            /* was marking header, switch to data */
+            hash_dnode_limit = area_dnode(((LispObj *)hashp)
+                                          + 1
+                                          + header_element_count(hashp->header),
+                                          a->low);
+            /* In traditional weak method, don't mark vector entries at all. */
+            /* Otherwise mark the non-weak elements only */
+            mark_method = ((lisp_global(WEAK_GC_METHOD) == 0) ? 0 :
+                           ((hashp->flags & nhash_weak_value_mask)
+                            ? (1 + (hash_table_vector_header_count & 1))
+                            : (2 - (hash_table_vector_header_count & 1))));
+          }
 
-
-
+          if (memo_dnode < hash_dnode_limit) {
+            /* perhaps ignore one or both of the elements */
+            if (!force_x1 && !(mark_method & 1)) x1 = 0;
+            if (!(mark_method & 2)) x2 = 0;
+          } else {
+            hashp = NULL;
           }
         }
-      }
 
-      keep_x1 = mark_ephemeral_root(x1);
-      keep_x2 = mark_ephemeral_root(x2);
-      if ((keep_x1 == false) && 
-          (keep_x2 == false) &&
-          (hashp == NULL)) {
-        outbits &= ~(BIT0_MASK >> bitidx);
+        if (header_subtag(x1) == subtag_hash_vector) {
+          if (hashp) Bug(NULL, "header inside hash vector?");
+          hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
+          if (hp->flags & nhash_weak_mask) {
+            /* Work around the issue that seems to cause ticket:817,
+               which is that tenured hash vectors that are weak on value
+               aren't always maintained on GCweakvll.  If they aren't and
+               we process them weakly here, nothing will delete the unreferenced
+               elements. */
+            if (!(hp->flags & nhash_weak_value_mask)) {
+              /* If header_count is odd, this cuts off the last header field */
+              /* That case is handled specially above */
+              hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
+              hashp = hp;
+              mark_method = 3;
+
+
+
+
+
+            }
+          }
+        }
+
+        keep_x1 = mark_ephemeral_root(x1);
+        keep_x2 = mark_ephemeral_root(x2);
+        if ((keep_x1 == false) && 
+            (keep_x2 == false) &&
+            (hashp == NULL)) {
+          outbits &= ~(BIT0_MASK >> bitidx);
+        }
+        memo_dnode++;
+        bitidx++;
       }
-      memo_dnode++;
-      bitidx++;
     }
-  }
-  if (GCDebug) {
-    p = (LispObj *) a->low;
-    check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+    if (GCDebug) {
+      p = (LispObj *) a->low;
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+    }
   }
 }
 
@@ -1544,6 +1546,7 @@ mark_xp(ExceptionInformation *xp, natural node_regs_mask)
   if (node_regs_mask & (1<<0)) mark_root(regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) mark_root(regs[REG_ECX]);
   if (regs[REG_EFL] & EFL_DF) {
+    Bug(NULL, "Direction Flag set!");
     /* DF set means EDX should be treated as an imm reg */
     ;
   } else
@@ -2756,7 +2759,7 @@ update_managed_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnode
     x1, 
     *base = start, *prev = start;
   int tag;
-  bitvector refbits = a->refbits;
+  bitvector refbits = managed_static_refbits;
   natural ref_dnode, node_dnode;
   Boolean intergen_ref;
 
@@ -2903,7 +2906,9 @@ purify(TCR *tcr, signed_natural param)
           refbytes = align_to_power_of_2((managed_dnodes+7)>>3,log2_page_size);
         
         managed_static_area->ndnodes = managed_dnodes;
+        lisp_global(MANAGED_STATIC_DNODES) = managed_dnodes;
         CommitMemory(managed_static_area->refbits, refbytes); /* zeros them */
+        CommitMemory(managed_static_refbits,refbytes); /* zeroes them, too */
         update_managed_refs(managed_static_area, low_markable_address, area_dnode(a->active,low_markable_address));
       }
       managed_static_area->high = managed_static_area->active;
@@ -3250,6 +3255,7 @@ impurify(TCR *tcr, signed_natural param)
   lisp_global(IN_GC)=1;
   impurify_from_area(tcr, readonly_area);
   impurify_from_area(tcr, managed_static_area);
+  lisp_global(MANAGED_STATIC_DNODES)=0;
   lisp_global(IN_GC)=0;
   return 0;
 }
