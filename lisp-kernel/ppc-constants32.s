@@ -360,7 +360,7 @@ max_non_array_node_subtag = (18<<ntagbits)|fulltag_immheader
 
 nrs_origin = (nil_value+(16-fulltag_nil))
 nrs_symbol_fulltag = fulltag_misc        
-
+lisp_globals_limit = (0x3010+(LOWMEM_BIAS))
 
         include(lisp_globals.s)
 
@@ -546,6 +546,6 @@ define(`TCR_STATE_EXCEPTION_RETURN',4)
 
 define(`RESERVATION_DISCHARGE',0x2004)
 
-lisp_globals_limit = (0x3010+(LOWMEM_BIAS))
+
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone

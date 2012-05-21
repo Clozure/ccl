@@ -334,7 +334,8 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 nrs_origin = (0x3000+(LOWMEM_BIAS))
 nrs_symbol_fulltag = fulltag_misc        
 define(`nilsym',`nil')        
-
+lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
+        
         include(lisp_globals.s)
         
 	
@@ -459,7 +460,7 @@ nil_value = (0x3000+symbol.size+fulltag_misc+(LOWMEM_BIAS))
         	
 define(`RESERVATION_DISCHARGE',(0x2008+(LOWMEM_BIAS)))
 
-lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
+
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
         

@@ -393,6 +393,7 @@ _builtin_aset1 = 22	/* %aset1 */
 
 nrs_origin = (dnode_size-fulltag_nil)
 nrs_symbol_fulltag = fulltag_misc        
+lisp_globals_limit = -fulltag_nil
 	
         include(lisp_globals.s)
         
@@ -545,7 +546,6 @@ define(`TCR_STATE_EXCEPTION_WAIT',2)
 define(`TCR_STATE_EXCEPTION_RETURN',4)
 
 
-lisp_globals_limit = -fulltag_nil
 
 /* extended type codes, for UUOs.  Shouldn't conflict with defined subtags */
 

@@ -303,7 +303,7 @@ cons_bias = fulltag_cons
 
 nrs_origin = 0x13008+(LOWMEM_BIAS)
 nrs_symbol_fulltag = fulltag_misc        
-
+lisp_globals_limit = (0x13000+LOWMEM_BIAS)
 	
         include(lisp_globals.s)
 
@@ -540,7 +540,6 @@ target_most_positive_fixnum = 536870911
 target_most_negative_fixnum = -536870912
 call_arguments_limit = 0x10000
 
-lisp_globals_limit = (0x13000+(LOWMEM_BIAS))
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
 
