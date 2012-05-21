@@ -252,11 +252,15 @@ define(`_struct_label',`
 
 /*  _field(name,size)   */
 define(`_field',`_struct_label($1) _struct_pad($2)')
+/* predecrement */
+define(`_rfield',`_struct_pad(-$2) _struct_label($1)')
 
 define(`_halfword', `_field($1, 2)')
 define(`_word', `_field($1, 4)')
 define(`_dword',`_field($1, 8)')
 define(`_node', `_field($1, node_size)')
+define(`_rnode', `_rfield($1, node_size)')
+
 
 define(`_ends',`ifdef(`_struct_fixed_size_name',`
 	.set  __struct_name`.size',_struct_fixed_size_name

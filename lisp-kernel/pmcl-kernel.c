@@ -2107,12 +2107,10 @@ main
   if (egc_enabled) {
     egc_control(true, NULL);
   } else {
-    lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
+    lisp_global(OLDSPACE_DNODE_COUNT) = 0;
   }
-#ifdef X86
   lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
   lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
-#endif
   atexit(lazarus);
 #ifdef ARM
 #ifdef LINUX
@@ -2740,7 +2738,7 @@ init_ccl_for_android(ANativeActivity *activity)
   if (egc_enabled) {
     egc_control(true, NULL);
   } else {
-    lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
+    lisp_global(OLDSPACE_DNODE_COUNT) = 0;
   }
 
   if (init_lisp(TCR_TO_TSD(tcr)) == 0) {

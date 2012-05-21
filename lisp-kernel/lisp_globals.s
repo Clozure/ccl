@@ -152,3 +152,67 @@ nrs_symbol_extra = symbol.size-nrs_symbol_fulltag
 	 _struct_label(foreign_thread_control)
 	 _struct_pad(nrs_symbol_extra)	/* %foreign-thread-control */
         _ends
+
+num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
+	
+	_struct(lisp_globals,lisp_globals_limit)
+         _rnode(get_tcr)		/* address of get_tcr() for callbacks */
+         _rnode(tcr_count)		/* next tcr's tcr_id */
+         _rnode(interrupt_signal)  /* signal to use for PROCESS-INTERRUPT */
+         _rnode(kernel_imports)	/* some things we need to have imported for us. */
+         _rnode(objc_2_personality) /* A good listener.  Doesn't say much */
+         _rnode(savetoc)        /* Saved TOC register, for some platforms */
+         _rnode(saver13)	/* Saved (global) r13, on some platforms */
+         _rnode(subprims_base)	/* where the dynamic subprims wound up */
+         _rnode(ret1valn)		/* magic multiple-values return address */
+         _rnode(tcr_key)     	/* tsd key for per-thread tcr */
+         _rnode(tcr_area_lock)       /* all_areas/tcr queue lock */
+         _rnode(exception_lock)	/* serialize exception handling */
+         _rnode(static_conses)
+         _rnode(default_allocation_quantum)
+         _rnode(intflag)
+         _rnode(gc_inhibit_count)
+         _rnode(refbits)
+         _rnode(oldspace_dnode_count) /* count of dynamic dnodes older than generation 0 */
+         __ifdef(`PPC')
+          _rnode(altivec_present)   /* non-zero if AltiVec present. */
+         __else
+          _rnode(float_abi)         /* non zero when hard-float ABI in effect */
+         __endif
+         _rnode(fwdnum)            /* fixnum: GC "forwarder" call count. */
+         _rnode(gc_num)            /* fixnum: GC call count. */
+         _rnode(gcable_pointers)   /* linked-list of weak macptrs. */
+         _rnode(heap_start)        /* start of lisp heap */
+         _rnode(heap_end)          /* end of lisp heap */
+         _rnode(statically_linked)        /* non-zero if -static */
+         _rnode(stack_size)        /* from the command line */
+         _rnode(objc_2_begin_catch)  /* address of ObjC 2.0 objc_begin_catch() */
+         _rnode(kernel_path)       /* real executable name */
+         _rnode(all_areas)         /* doubly-linked list of stack & heap areas */
+         _rnode(lexpr_return)      /* magic &lexpr cleanup code */
+         _rnode(lexpr_return1v)    /* single-value &lexpr cleanup code */
+         _rnode(in_gc)             /* non-zero when lisp addresses may be invalid */
+         _rnode(free_static_conses)     /* length of freelist */
+         _rnode(objc_2_end_cactch)          /* address of ObjC 2.0 objc_end_catch() */
+         _rnode(short_float_zero)  /* low half of 1.0d0 */
+         _rnode(double_float_one)  /* high half of 1.0d0 */
+         _rnode(static_cons_area)	/* static_cons_area */
+         _rnode(lisp_exit_hook)	/* install foreign exception handling */
+         _rnode(oldest_ephemeral)  /* doubleword address of oldest ephemeral object or 0 */
+         _rnode(tenured_area)      /* the tenured area */
+         _rnode(ref_base)          /* start of oldest pointer-bearing area */
+         _rnode(argv)              /* pointer to &argv[0] */
+         _rnode(host_platform)	/* for platform-specific initialization */
+         _rnode(batch_flag)	/* -b arg */
+         _rnode(unwind_resume)	/* address of _Unwind_Resume from libobjc */
+         _rnode(weak_gc_method)	/* weak GC algorithm */
+         _rnode(image_name)	/* --image-name arg */
+         _rnode(initial_tcr)	/* initial thread tcr */
+         _rnode(weakvll)           /* all populations as of last GC */
+         _rnode(managed_static_refbits) /* refs from managed_static to dynamic */
+         _rnode(managed_static_dnodes) /* ndnodes in managed_static_area */
+	_ends
+
+/* Traditional name, differs from C */
+        .set lisp_globals.ret1val_addr,lisp_globals.ret1valn
+        

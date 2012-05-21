@@ -508,7 +508,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       }
       if (selector & GC_TRAP_FUNCTION_PURIFY) {
         purify_from_xp(xp, 0L);
-        lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active, managed_static_area->low);
+        lisp_global(OLDSPACE_DNODE_COUNT) = 0;
         gc_from_xp(xp, 0L);
       }
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {

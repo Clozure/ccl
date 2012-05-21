@@ -780,7 +780,7 @@ untenure_from_area(area *from)
     if (from == tenured_area) {
       /* Everything's in the dynamic area */
       lisp_global(OLDEST_EPHEMERAL) = 0;
-      lisp_global(OLDSPACE_DNODE_COUNT) = area_dnode(managed_static_area->active,managed_static_area->low);
+      lisp_global(OLDSPACE_DNODE_COUNT) = 0;
 
     }
   }
