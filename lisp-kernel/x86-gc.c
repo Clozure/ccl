@@ -1546,7 +1546,6 @@ mark_xp(ExceptionInformation *xp, natural node_regs_mask)
   if (node_regs_mask & (1<<0)) mark_root(regs[REG_EAX]);
   if (node_regs_mask & (1<<1)) mark_root(regs[REG_ECX]);
   if (regs[REG_EFL] & EFL_DF) {
-    Bug(NULL, "Direction Flag set!");
     /* DF set means EDX should be treated as an imm reg */
     ;
   } else
