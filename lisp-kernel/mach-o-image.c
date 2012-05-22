@@ -46,6 +46,9 @@ typedef struct nlist macho_nlist;
 typedef struct dylib_module macho_module;
 #endif
 
+void map_initial_reloctab(BytePtr, BytePtr);
+void map_initial_markbits(BytePtr, BytePtr);
+
 typedef struct {
   natural used;
   natural allocated;

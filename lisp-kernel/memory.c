@@ -143,6 +143,7 @@ address_unmapped_p(char *addr, natural len)
 LogicalAddress
 ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 {
+  void raise_limit(void);
   LogicalAddress start;
   Boolean fixed_map_ok = false;
 #ifdef DARWIN

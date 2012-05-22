@@ -158,7 +158,7 @@ foreign_class_name(LispObj ptr)
 {
 #ifdef DARWIN
 #if (WORD_SIZE == 64) 
-  static tried_to_resolve_hook = false;
+  static Boolean tried_to_resolve_hook = false;
   static class_name_lookup class_name_lookup_hook = NULL;
 
   if (!tried_to_resolve_hook) {

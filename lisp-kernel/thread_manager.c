@@ -1748,6 +1748,7 @@ cooperative_thread_startup(void *arg)
 #else
   tcr_cleanup(tcr);
 #endif
+  return NULL;
 }
 
 void *
