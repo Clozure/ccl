@@ -4230,11 +4230,11 @@ LocalLabelPrefix`'ffcallUnwindResume:
 LocalLabelPrefix`'ffcallUnwindResume_end:         
 1:      __(movq %save1,%rdi)
 LocalLabelPrefix`'ffcallBeginCatch:              
-        __(call *lisp_global(objc2_begin_catch))
+        __(call *lisp_global(objc_2_begin_catch))
 LocalLabelPrefix`'ffcallBeginCatch_end:          
         __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
 LocalLabelPrefix`'ffcallEndCatch:                
-        __(call *lisp_global(objc2_end_catch))
+        __(call *lisp_global(objc_2_end_catch))
 LocalLabelPrefix`'ffcallEndCatch_end:            
 	__(ref_global(get_tcr,%rax))
 	__(movq $1,%rdi)
@@ -4424,11 +4424,11 @@ LocalLabelPrefix`'ffcall_return_registersUnwindResume:
 LocalLabelPrefix`'ffcall_return_registersUnwindResume_end:         
 1:      __(movq %save1,%rdi)
 LocalLabelPrefix`'ffcall_return_registersBeginCatch:              
-        __(call *lisp_global(objc2_begin_catch))
+        __(call *lisp_global(objc_2_begin_catch))
 LocalLabelPrefix`'ffcall_return_registersBeginCatch_end:          
         __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
 LocalLabelPrefix`'ffcall_return_registersEndCatch:                
-        __(call *lisp_global(objc2_end_catch))
+        __(call *lisp_global(objc_2_end_catch))
 LocalLabelPrefix`'ffcall_return_registersEndCatch_end:            
 	__(ref_global(get_tcr,%rax))
 	__(movq $1,%rdi)

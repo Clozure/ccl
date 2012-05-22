@@ -193,7 +193,7 @@ num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
          _rnode(lexpr_return1v)    /* single-value &lexpr cleanup code */
          _rnode(in_gc)             /* non-zero when lisp addresses may be invalid */
          _rnode(free_static_conses)     /* length of freelist */
-         _rnode(objc_2_end_cactch)          /* address of ObjC 2.0 objc_end_catch() */
+         _rnode(objc_2_end_catch)          /* address of ObjC 2.0 objc_end_catch() */
          _rnode(short_float_zero)  /* low half of 1.0d0 */
          _rnode(double_float_one)  /* high half of 1.0d0 */
          _rnode(static_cons_area)	/* static_cons_area */

@@ -59,7 +59,7 @@ extern LispObj lisp_nil;
 #define LEXPR_RETURN1V (-31)    /* single-value &lexpr cleanup code */
 #define IN_GC (-32)             /* non-zero when lisp addresses may be invalid */
 #define FREE_STATIC_CONSES (-33)     /* length of freelist */
-#define OBJC_2_END_CACTCH (-34)          /* address of ObjC 2.0 objc_end_catch() */
+#define OBJC_2_END_CATCH (-34)          /* address of ObjC 2.0 objc_end_catch() */
 #define SHORT_FLOAT_ZERO (-35)  /* low half of 1.0d0 */
 #define DOUBLE_FLOAT_ONE (-36)  /* high half of 1.0d0 */
 #define STATIC_CONS_AREA (-37)	/* static_cons_area */
