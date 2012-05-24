@@ -1198,7 +1198,7 @@
               (return t)))
           (if (< length1 length2)
             n1-minusp
-            (if (< length1 length2)
+            (if (< length2 length1)
               n2-minusp))))))
 
 (defun logtest-fix-big (fix big)
