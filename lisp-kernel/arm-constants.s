@@ -393,7 +393,7 @@ _builtin_aset1 = 22	/* %aset1 */
 
 nrs_origin = (dnode_size-fulltag_nil)
 nrs_symbol_fulltag = fulltag_misc        
-lisp_globals_limit = -fulltag_nil
+lisp_globals_limit = -(fulltag_nil+dnode_size)
 	
         include(lisp_globals.s)
         
