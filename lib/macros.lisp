@@ -572,7 +572,8 @@
                         (function-information (setq accessor (car form)) ENV)
                       (if local-p
                         (if (eq ftype :function)
-                                        ;Local function, so don't use global setf definitions.
+                          ;;Local function, so don't use global setf
+                          ;;definitions.
                           (default-setf form value env)
                           `(setf ,(macroexpand-1 form env) ,value))
                         (cond
@@ -595,12 +596,17 @@
                           ((and (setq temp (structref-info accessor env))
                                 (accessor-structref-info-p temp)
                                 (not (refinfo-r/o (structref-info-refinfo temp))))
+                           (let* ((nargs (length (%cdar args))))
+                             (unless (eql nargs 1)
+                               (signal-simple-program-error
+                                "In ~s, structure accessor ~s requires exactly 1 argument but is being called with ~d arguments." `(setf ,@args) accessor nargs)))
                            (let ((form (defstruct-ref-transform temp (%cdar args) env t))
                                  (type (defstruct-type-for-typecheck (structref-info-type temp) env)))
                              (if (eq type t)
                                `(setf ,form ,value)
                                ;; strip off type, but add in a typecheck
                                `(the ,type (setf ,form (typecheck ,value ,type))))))
+
                           (t
                            (multiple-value-bind (res win)
                                (macroexpand-1 form env)
