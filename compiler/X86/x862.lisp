@@ -2013,6 +2013,9 @@
       (let* ((index-known-fixnum (acode-fixnum-form-p index))
              (unscaled-idx nil)
              (src nil))
+        (when index-known-fixnum
+          (unless (>= index-known-fixnum 0)
+            (setq index-known-fixnum nil)))
         (if (or safe (not index-known-fixnum))
           (multiple-value-setq (src unscaled-idx)
             (x862-two-untargeted-reg-forms seg vector *x862-arg-y* index *x862-arg-z*))
@@ -2285,6 +2288,8 @@
            (arch (backend-target-arch *target-backend*))
            (src nil)
            (unscaled-idx nil))
+      (when (and index-known-fixnum (< index-known-fixnum 0))
+        (setq index-known-fixnum nil))
       (with-imm-target () (target :natural)
         (if (or safe (not index-known-fixnum))
           (multiple-value-setq (src unscaled-idx target)
@@ -2718,6 +2723,8 @@
            (constval (x862-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (x862-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when (and index-known-fixnum (< index-known-fixnum 0))
+        (setq index-known-fixnum nil))
       (let* ((src (target-arch-case
 		   (:x8632 ($ x8632::temp0))
 		   (:x8664 ($ x8664::arg_x))))
