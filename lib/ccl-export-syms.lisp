@@ -41,6 +41,7 @@
      edit-definition
      edit-definition-p
      *loading-file-source-file*
+     *load-preserves-optimization-settings*
      find-definition-sources
      define-definition-type
      definition-type

@@ -322,5 +322,11 @@ the command-line argument --terminal-encoding (-K)")
 
 (defconstant +null-ptr+ (%null-ptr))
 
+(defparameter *load-preserves-optimization-settings* nil
+  "When true, the effects of (PROCLAIM (OPTIMIZE ...)) - or the
+   load-time effects of (DECLAIM (OPTIMIZE ...)) - in files being
+   loaded do not persist after the containing file has been loaded.
+   When false, those effects persist until superseded.")
+
 ;;; end of L1-init.lisp
 

@@ -137,11 +137,13 @@ Will differ from *compiling-file* during an INCLUDE")
                          (compile-file-original-buffer-offset 0)
                          (break-on-program-errors (if compile-file-original-truename
                                                     t  ;; really SLIME being interactive...
-                                                    *fasl-break-on-program-errors*)))
+                                                    *fasl-break-on-program-errors*))
+                         (load-preserves-optimization-settings *load-preserves-optimization-settings*))
   "Compile SRC, producing a corresponding fasl file and returning its filename."
   (let* ((backend *target-backend*)
          (symbols ())
-         (values ()))
+         (values ())
+         (*load-preserves-optimization-settings* load-preserves-optimization-settings))
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
       (setq target *fasl-target*  backend *target-backend*))

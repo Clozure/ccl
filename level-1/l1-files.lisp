@@ -1203,14 +1203,15 @@ a host-structure or string."
 (defun load (file-name &key (verbose *load-verbose*)
                        (print *load-print*)
                        (if-does-not-exist :error)
-		       (external-format :default))
+		       (external-format :default)
+                       (preserve-optimization-settings *load-preserves-optimization-settings*))
   "Load the file given by FILESPEC into the Lisp environment, returning
    T on success.
 
    Extension: :PRINT :SOURCE means print source as well as value"
   (loop
     (restart-case
-      (return (%load file-name verbose print if-does-not-exist external-format))
+     (return (%load file-name verbose print if-does-not-exist external-format preserve-optimization-settings))
       (retry-load ()
                   :report (lambda (stream) (format stream "Retry loading ~s" file-name)))
       (skip-load ()
@@ -1225,21 +1226,16 @@ a host-structure or string."
                          :if-does-not-exist if-does-not-exist))))))
 
 
-(defun %load (file-name verbose print if-does-not-exist external-format)
+(defun %load (file-name verbose print if-does-not-exist external-format preserve-optimization-settings)
   (let ((*load-pathname* file-name)
         (*load-truename* file-name)
         (source-file file-name)
-        ;; Don't bind these: let OPTIMIZE proclamations/declamations
-        ;; persist, unless debugging.
-        #|
-        (*nx-speed* *nx-speed*)
-        (*nx-space* *nx-space*)
-        (*nx-safety* *nx-safety*)
-        (*nx-debug* *nx-debug*)
-        (*nx-cspeed* *nx-cspeed*)
-        |#
-        )
+        (optimization-setting-vars '(*nx-speed* *nx-space* *nx-safety*
+                                     *nx-debug* *nx-cspeed*)))
     (declare (special *load-pathname* *load-truename*))
+    (progv
+        (if preserve-optimization-settings optimization-setting-vars)
+        (if preserve-optimization-settings (mapcar #'symbol-value optimization-setting-vars))
     (when (typep file-name 'string-input-stream)
       (when verbose
           (format t "~&;Loading from stream ~S..." file-name)
@@ -1316,7 +1312,7 @@ a host-structure or string."
 		    :report (lambda (s) 
 			      (format s "Load ~s instead of ~s" 
 				      (fname restart-source) (fname restart-fasl)))
-		    (%load source-file verbose print if-does-not-exist external-format))
+		    (%load source-file verbose print if-does-not-exist external-format preserve-optimization-settings))
 		   (recompile
 		    ()
 		    :test restart-test
@@ -1331,12 +1327,12 @@ a host-structure or string."
 					  "Compile ~s into ~s then load ~:*~s again")
 					(fname restart-source) (fname restart-fasl))))
 		    (compile-file restart-source :output-file restart-fasl)
-		    (%load restart-fasl verbose print if-does-not-exist external-format))))))
+		    (%load restart-fasl verbose print if-does-not-exist external-format preserve-optimization-settings))))))
 	    (t 
 	     (with-open-file (stream file-name
 				     :element-type 'base-char
 				     :external-format external-format)
-	       (load-from-stream stream print))))))
+	       (load-from-stream stream print)))))))
   file-name)
 
 (defun load-from-stream (stream print &aux (eof-val (list ())) val)
