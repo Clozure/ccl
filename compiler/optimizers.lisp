@@ -1560,7 +1560,9 @@
                                         (if (and class
                                                  (subtypep class 'standard-object)
                                                  (not (subtypep 'foreign-standard-object class))
-                                                 (not (subtypep 'funcallable-standard-object class)))
+                                                 (not (subtypep 'funcallable-standard-object class))
+                                                 (not (subtypep class 'foreign-standard-object))
+                                                 (not (subtypep class 'funcallable-standard-object)))
                                           'std-instance-class-cell-typep
                                           'class-cell-typep)))
                                   `(,fname ,thing (load-time-value (find-class-cell ',type t)))))
