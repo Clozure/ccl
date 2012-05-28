@@ -544,7 +544,7 @@ save_native_library(int fd, Boolean egc_was_enabled)
                        curpos,
                        S_REGULAR);
     managed_static_refbits_section_ordinal=++next_section_ordinal;
-    safe_write(fd,(char *)managed_static_area->refbits,nrefbytes);
+    safe_write(fd,(char *)managed_static_refbits,nrefbytes);
     curpos = align_to_power_of_2(lseek(fd,0,SEEK_CUR),12);
   }
   prepare_to_write_dynamic_space(active_dynamic_area);
@@ -839,7 +839,8 @@ load_native_library(char *path)
     
     nrefbytes = msr_end - ms_end;
     CommitMemory(global_mark_ref_bits,align_to_power_of_2(nrefbytes, 12));
-    memcpy(global_mark_ref_bits,ms_end,nrefbytes);
+    CommitMemory(managed_static_refbits,align_to_power_of_2(nrefbytes, 12));
+    memcpy(managed_static_refbits,ms_end,nrefbytes);
     memset(ms_end,0,nrefbytes);
     
     return image_nil;
