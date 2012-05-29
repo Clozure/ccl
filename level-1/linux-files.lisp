@@ -1715,9 +1715,14 @@ space, and prefixed with PREFIX."
                               env)
     "Invoke an external program as an OS subprocess of lisp."
     (declare (ignore pty))
-    (unless (every #'(lambda (a) (typep a 'simple-string)) args)
-      (error "Program args must all be simple strings : ~s" args))
     (push program args)
+    (unless (do* ((args args (cdr args)))
+                 ((atom args)
+                  (or (typep args 'simple-string)
+                      (null args)))
+              (unless (typep (car args) 'simple-string)
+                (return)))
+      (error "Program args must all be simple strings : ~s" args))
     (let* ((token (list 0))
            (in-fd nil)
            (in-stream nil)
@@ -1806,8 +1811,24 @@ space, and prefixed with PREFIX."
         (signal-semaphore (external-process-signal proc))
         (monitor-external-process proc))))
 
-  (defun join-strings (strings)
-    (reduce (lambda (left right) (concatenate 'string left " " right)) strings))
+  (defun make-windows-command-line (strings)
+    (with-output-to-string (out)
+      (do* ((strings strings (cdr strings)))
+           ((atom strings)     
+            (if strings (write-string strings out)))
+        (let* ((string (car strings)))
+          (dotimes (i (length string))
+            (let* ((c (schar string i)))
+              (case c
+                ((#\space #\tab)
+                 (write-char #\" out)
+                 (write-char c out)
+                 (write-char #\" out))
+                (#\"
+                 (write-char #\\ out)
+                 (write-char #\" out))
+                (t (write-char c out)))))
+          (when strings (write-char #\space out))))))
 
   (defun create-windows-process (new-in new-out new-err cmdstring env)
     (declare (ignore env))              ; until we can do better.
@@ -1847,7 +1868,7 @@ space, and prefixed with PREFIX."
 
   (defun exec-with-io-redirection (new-in new-out new-err args proc &optional env)
     (multiple-value-bind (win handle-to-process-or-error)
-        (create-windows-process new-in new-out new-err (join-strings args) env)
+        (create-windows-process new-in new-out new-err (make-windows-command-line args) env)
       (if win
         handle-to-process-or-error
         (progn
