@@ -942,7 +942,10 @@ are running on, or NIL if we can't find any useful information."
       (setq root (cygpath root)))
     (multiple-value-bind (status exit-code)
         (external-process-status
-         (run-program (svnversion-program)  (list  (native-translated-namestring "ccl:") (or (svn-url) "")) :output s :error :output))
+         (run-program (svnversion-program)  (list (if *use-cygwin-svn*
+                                                    (cygpath (native-translated-namestring "ccl:"))
+                                                    (native-translated-namestring "ccl:"))
+                                                    (or (svn-url) "")) :output s :error :output))
       (when (and (eq :exited status) (zerop exit-code))
         (with-input-from-string (output (get-output-stream-string s))
           (let* ((line (read-line output nil nil)))
