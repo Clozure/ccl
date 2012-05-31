@@ -1809,7 +1809,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (progn
             (dotimes (i w) (write-char ovf stream))
             (return-from format-fixed-aux))
-          (setq spaceleft nil w nil)))
+          (setq spaceleft nil w nil flonum-to-string-width nil)))
       (multiple-value-bind (str before-pt after-pt)
                            (flonum-to-string abs-number
                                              flonum-to-string-width
