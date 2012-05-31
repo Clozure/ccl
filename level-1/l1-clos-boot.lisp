@@ -1220,16 +1220,15 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
     (non-standard-instance-class-wrapper instance)))
 
 
-(defun std-instance-class-cell-typep (form class-cell)
+(defun class-cell-typep (form class-cell)
   (let* ((typecode (typecode form))
          (wrapper (cond ((= typecode target::subtag-instance)
                          (instance.class-wrapper form))
                         ((= typecode target::subtag-basic-stream)
                          (basic-stream.wrapper form))
-                        (t nil))))
+                        (t (non-standard-instance-class-wrapper form)))))
     (declare (type (unsigned-byte 8) typecode))
-    (when wrapper
-      (loop
+    (loop
         (let ((class (class-cell-class class-cell)))
           (if class
             (let* ((ordinal (%class-ordinal class))
@@ -1247,37 +1246,17 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
               (unless
                   (if (and new-cell (not (eq class-cell new-cell)))
                     (setq class-cell new-cell class (class-cell-class class-cell))
-                    (return (typep form name)))))))))))
+                    (return (typep form name))))))))))
 
-(defun class-cell-typep (form class-cell)
-  (locally (declare (type class-cell  class-cell))
-    (loop
-    (let ((class (class-cell-class class-cell)))
-      (if class
-        (let* ((ordinal (%class-ordinal class))
-               (wrapper (instance-class-wrapper form))
-               (bits (or (%wrapper-cpl-bits wrapper)
-                         (make-cpl-bits (%inited-class-cpl (%wrapper-class wrapper))))))
-          (declare (fixnum ordinal))
-          (return
-            (if bits
-              (locally (declare (simple-bit-vector bits)
-                                (optimize (speed 3) (safety 0)))
-                  (if (< ordinal (length bits))
-                    (not (eql 0 (sbit bits ordinal))))))))
-        (let* ((name (class-cell-name class-cell))
-               (new-cell (find-class-cell name nil)))
-          (unless
-              (if (and new-cell (not (eq class-cell new-cell)))
-                (setq class-cell new-cell class (class-cell-class class-cell))
-                (return (typep form name))))))))))
+
+(%fhave 'std-instance-class-cell-typep #'class-cell-typep)
 
 
 
 (defun %require-type-class-cell (arg class-cell)
   (if (class-cell-typep arg class-cell)
     arg
-    (%kernel-restart $xwrongtype arg (car class-cell))))
+    (%kernel-restart $xwrongtype arg (class-cell-class class-cell))))
 
 
 
@@ -1494,7 +1473,7 @@ to replace that class with ~s" name old-class new-class)
 
 (defun make-cpl-bits (cpl)
   (declare (optimize speed))
-  (when cpl
+  (when cpl  
     (let* ((max 0))
       (declare (fixnum max))
       (dolist (class cpl)
@@ -2499,7 +2478,7 @@ to replace that class with ~s" name old-class new-class)
 (defun subclassp (c1 c2)
   (and (classp c1)
        (classp c2)
-       (not (null (memq c2 (%inited-class-cpl c1 t))))))
+       (not (null (memq c2 (or (%class-cpl c1) (ignore-errors (%inited-class-cpl c1 t))))))))
 
 (defun %class-get (class indicator &optional default)
   (let ((cell (assq indicator (%class-alist class))))
