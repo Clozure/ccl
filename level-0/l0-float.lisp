@@ -848,11 +848,19 @@
         (t (exp (* e (log b))))))
 
 
-
+        
 (defun sqrt (x &aux a b)
   "Return the square root of NUMBER."
   (cond ((zerop x) x)
-        ((complexp x) (* (sqrt (abs x)) (cis (/ (phase x) 2))))          
+        ((complexp x)
+         (let* ((i (imagpart x)))
+           (if (zerop i)                ; has to be a float
+             (let* ((zero (if (typep i 'double-float) 0.0d0 0.0f0))
+                    (r (realpart x)))
+               (if (< r zero)
+                 (%make-complex zero (float-sign i (sqrt (- r))))
+                 (%make-complex (abs (sqrt r)) (float-sign i zero))))
+             (* (sqrt (abs x)) (cis (/ (phase x) 2))))))
         ((minusp x) (complex 0 (sqrt (- x))))
         ((floatp x)
          (fsqrt x))
