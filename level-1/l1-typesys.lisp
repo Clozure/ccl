@@ -1530,8 +1530,10 @@
                              (if ctype
                                (progn
                                  (when (cacheable-ctype-p ctype)
-                                   (setf (svref type-cache-specs idx) (copy-tree spec) ; in case it was stack-consed
-                                         (svref type-cache-ctypes idx) ctype))
+                                   (let* ((spec (copy-tree spec)))  ; in case it was stack-consed
+                                     (without-interrupts
+                                      (setf (svref type-cache-specs idx) spec
+                                            (svref type-cache-ctypes idx) ctype))))
                                  ctype)
                                (make-unknown-ctype :specifier spec)))))
                        (values-specifier-type-internal spec env)))
