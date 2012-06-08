@@ -381,6 +381,25 @@ that provided by earlier &CCL; versions.</para>
     <sect1 id="Garbage-Collection-Dictionary">
       <title>Garbage-Collection Dictionary</title>
 
+      <refentry id="f_gc">
+        <indexterm zone="f_gc">
+          <primary>gc</primary>
+        </indexterm>
+        <refnamediv>
+         <refname>GC</refname>
+         <refpurpose></refpurpose>
+         <refclass>Function</refclass>
+      </refnamediv>
+	<refsynopsisdiv>
+	  <synopsis><function>gc</function></synopsis>
+	</refsynopsisdiv>
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>Causes a full GC to occur as soon as possible. Returns NIL.</para>
+	</refsect1>
+      </refentry>
+
       <refentry id="f_lisp-heap-gc-threshold">
 	<indexterm zone="f_lisp-heap-gc-threshold">
 	  <primary>lisp-heap-gc-threshold</primary>
