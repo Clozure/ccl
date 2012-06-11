@@ -5748,7 +5748,7 @@
          (ea *x862-register-restore-ea*)
          (label nil)
          (vstack nil)
-         (foldp (not *x862-open-code-inline*)))
+         (foldp (x862-fold-popj)))
     (if (%izerop mask) (setq mask nil))
     (with-x86-local-vinsn-macros (seg)
       (progn
@@ -6082,7 +6082,16 @@
        *x862-tail-allow*
        (eq 0 *x862-undo-count*)))
 
-(defun x862-mv-p (cd)
+;;; on x86, branching to a shared exit point can sometimes be
+;;; larger than simply exiting, but it's hard to know that in
+;;; advance.  If the exit point involves restoring nvrs, then
+;;; it's likely that branching will be smaller.
+(defun x862-fold-popj ()
+  (unless *x862-open-code-inline* ;  never fold if speed>space
+    *x862-register-restore-ea*))  ;  fold if we'll need to restore nvrs.
+  
+
+(defun x862-mv-p (cd) 
   (or (eq cd $backend-return) (x862-mvpass-p cd)))
 
 (defun x862-expand-note (frag-list note)
@@ -7752,7 +7761,7 @@
                  (endlabel (backend-get-next-label))
                  (falselabel (backend-get-next-label))
                  (need-else (unless false-is-goto (or (not (nx-null false)) (x862-for-value-p vreg))))
-                 (both-single-valued (and (not *x862-open-code-inline*)
+                 (both-single-valued (and (x862-fold-popj)
                                           (eq xfer $backend-return)
                                           (x862-for-value-p vreg)
                                           need-else
@@ -7926,11 +7935,15 @@
          (not (subtypep target-fixnum-type type)))))
 
 (defun x862-inline-sub2 (seg vreg xfer form1 form2)
-  (let* ((v2 (acode-fixnum-form-p form2)))
+  (let* ((v2 (acode-fixnum-form-p form2))
+         (tailp (and (x862-tailcallok xfer) (not (x862-fold-popj)))))
     (if (and v2 (not (eql v2 most-negative-fixnum)))
       (x862-inline-add2 seg vreg xfer form1 (make-acode (%nx1-operator fixnum) (- v2)))
       (with-x86-local-vinsn-macros (seg vreg xfer)
         (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*))
+        (when tailp
+        (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* t)
+        (! restore-full-lisp-context))
     (let* ((out-of-line (backend-get-next-label))
            (done (backend-get-next-label)))
       (ensuring-node-target (target vreg)
@@ -7940,12 +7953,18 @@
             (! branch-unless-arg-fixnum ($ *x862-arg-y*) (aref *backend-labels* out-of-line))  
             (! branch-unless-both-args-fixnums ($ *x862-arg-y*) ($ *x862-arg-z*) (aref *backend-labels* out-of-line))))
         (! fixnum-sub2 ($ *x862-arg-z*) ($ *x862-arg-y*) ($ *x862-arg-z*))
-        (x862-check-fixnum-overflow seg ($ *x862-arg-z*) done)
+        (if tailp
+          (! return-or-fix-overflow)
+          (x862-check-fixnum-overflow seg ($ *x862-arg-z*) done))
         (@ out-of-line)
+        (if tailp
+          (! jump-subprim (subprim-name->offset '.SPbuiltin-minus))
+          (progn
         (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-minus) ($ *x862-arg-y*) ($ *x862-arg-z*))
         (@ done)
-        (x862-copy-register seg target ($ *x862-arg-z*)))
-      (^))))))
+        (x862-copy-register seg target ($ *x862-arg-z*)))))
+      (unless tailp
+        (^)))))))
 
 (defun x862-inline-add2 (seg vreg xfer form1 form2)
   (with-x86-local-vinsn-macros (seg vreg xfer)
@@ -7956,10 +7975,14 @@
 	   (otherform (if fix1
 			form2
 			(if fix2
-			  form1))))
+			  form1)))
+           (tailp (and (x862-tailcallok xfer) (not (x862-fold-popj)))))
       (if otherform
         (x862-one-targeted-reg-form seg otherform ($ *x862-arg-z*))
         (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*)))
+      (when tailp
+        (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* t)
+        (! restore-full-lisp-context))
       (let* ((out-of-line (backend-get-next-label))
              (done (backend-get-next-label)))
         (ensuring-node-target (target vreg)
@@ -7974,14 +7997,20 @@
           (if otherform
             (! add-constant ($ *x862-arg-z*) (ash (or fix1 fix2) *x862-target-fixnum-shift*))
             (! fixnum-add2 ($ *x862-arg-z*) ($ *x862-arg-y*)))
-          (x862-check-fixnum-overflow seg ($ *x862-arg-z*) done)
+          (if tailp
+            (! return-or-fix-overflow)
+            (x862-check-fixnum-overflow seg ($ *x862-arg-z*) done))
           (@ out-of-line)
           (if otherform
             (x862-lri seg ($ *x862-arg-y*) (ash (or fix1 fix2) *x862-target-fixnum-shift*)))
-          (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-plus) ($ *x862-arg-y*) ($ *x862-arg-z*))
-          (@ done)
-          (x862-copy-register seg target ($ *x862-arg-z*)))
-        (^)))))
+          (if tailp
+            (! jump-subprim (subprim-name->offset '.SPbuiltin-plus))
+            (progn
+              (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-plus) ($ *x862-arg-y*) ($ *x862-arg-z*))
+              (@ done)
+              (x862-copy-register seg target ($ *x862-arg-z*)))))
+        (unless tailp
+          (^))))))
            
 (defx862 x862-add2 add2 (seg vreg xfer form1 form2)
   (or (acode-optimize-add2 seg vreg xfer form1 form2 *x862-trust-declarations*)
@@ -8017,13 +8046,17 @@
         (let* ((fixval (or fix1 fix2))
                (fiximm (if fixval (<= (integer-length fixval)
                                       (- 31 *x862-target-fixnum-shift*))))
-               (otherform (when fiximm (if fix1 form2 form1))))
+               (otherform (when fiximm (if fix1 form2 form1)))
+               (tailp (and (x862-tailcallok xfer) (not (x862-fold-popj)))))
           (let* ((out-of-line (backend-get-next-label))
                  (done (backend-get-next-label)))
             (ensuring-node-target (target vreg)
               (if otherform
                 (x862-one-targeted-reg-form seg otherform ($ *x862-arg-z*))
                 (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*)))
+              (when tailp
+                (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* t)
+                (! restore-full-lisp-context))
               (if otherform
                 (unless (acode-fixnum-form-p otherform)
                   (! branch-unless-arg-fixnum ($ *x862-arg-z*) (aref *backend-labels* out-of-line)))
@@ -8035,14 +8068,20 @@
               (if otherform
                 (! %logior-c ($ *x862-arg-z*) ($ *x862-arg-z*) (ash fixval *x862-target-fixnum-shift*))
                 (! %logior2 ($ *x862-arg-z*) ($ *x862-arg-z*) ($ *x862-arg-y*)))
-              (-> done)
+              (if tailp
+                (! jump-return-pc)
+                (-> done))
               (@ out-of-line)
               (if otherform
                 (x862-lri seg ($ *x862-arg-y*) (ash fixval *x862-target-fixnum-shift*)))
-              (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-logior) ($ *x862-arg-y*) ($ *x862-arg-z*))
-              (@ done)
-              (x862-copy-register seg target ($ *x862-arg-z*)))
-            (^)))))))
+              (if tailp
+                (! jump-subprim (subprim-name->offset '.SPbuiltin-logior))
+                (progn
+                  (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-logior) ($ *x862-arg-y*) ($ *x862-arg-z*))
+                  (@ done)
+                  (x862-copy-register seg target ($ *x862-arg-z*)))))
+            (unless tailp
+              (^))))))))
 
 (defx862 x862-logior2 logior2 (seg vreg xfer form1 form2)
   (or (acode-optimize-logior2 seg vreg xfer form1 form2 *x862-trust-declarations*)
@@ -8064,13 +8103,17 @@
         (let* ((fixval (or fix1 fix2))
                (fiximm (if fixval (<= (integer-length fixval)
                                       (- 31 *x862-target-fixnum-shift*))))
-               (otherform (when fiximm (if fix1 form2 form1))))
+               (otherform (when fiximm (if fix1 form2 form1)))
+               (tailp (and (x862-tailcallok xfer) (not (x862-fold-popj)))))
           (let* ((out-of-line (backend-get-next-label))
                  (done (backend-get-next-label)))
             (ensuring-node-target (target vreg)
               (if otherform
                 (x862-one-targeted-reg-form seg otherform ($ *x862-arg-z*))
                 (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*)))
+              (when tailp
+                (x862-restore-nvrs seg *x862-register-restore-ea* *x862-register-restore-count* t)
+                (! restore-full-lisp-context))
               (if otherform
                 (unless (acode-fixnum-form-p otherform)
                   (! branch-unless-arg-fixnum ($ *x862-arg-z*) (aref *backend-labels* out-of-line)))
@@ -8082,14 +8125,19 @@
               (if otherform
                 (! %logand-c ($ *x862-arg-z*) ($ *x862-arg-z*) (ash fixval *x862-target-fixnum-shift*))
                 (! %logand2 ($ *x862-arg-z*) ($ *x862-arg-z*) ($ *x862-arg-y*)))
-              (-> done)
+              (if tailp
+                (! jump-return-pc)
+                (-> done))
               (@ out-of-line)
               (if otherform
                 (x862-lri seg ($ *x862-arg-y*) (ash fixval *x862-target-fixnum-shift*)))
-              (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-logand) ($ *x862-arg-y*) ($ *x862-arg-z*))
-              (@ done)
-              (x862-copy-register seg target ($ *x862-arg-z*)))
-            (^)))))))
+              (if tailp
+                (! jump-subprim (subprim-name->offset '.SPbuiltin-logand))
+                (progn
+                  (! call-subprim-2 ($ *x862-arg-z*) (subprim-name->offset '.SPbuiltin-logand) ($ *x862-arg-y*) ($ *x862-arg-z*))
+                  (@ done)
+                  (x862-copy-register seg target ($ *x862-arg-z*)))))
+              (^)))))))
 
 (defx862 x862-logand2 logand2 (seg vreg xfer form1 form2)
   (or (acode-optimize-logand2 seg vreg xfer form1 form2 *x862-trust-declarations*)

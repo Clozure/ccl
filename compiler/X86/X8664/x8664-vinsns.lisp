@@ -1391,6 +1391,13 @@
    (movq (:%q x8664::arg_z) (:%q val)))
   (jmp lab))
 
+(define-x8664-vinsn return-or-fix-overflow (()
+                                            ())
+  (jo :fix)
+  (:byte #xf3) (ret)
+  :fix
+  (jmp (:@ .SPfix-overflow)))
+
 (define-x8664-vinsn add-constant (((dest :imm))
                                   ((dest :imm)
                                    (const :s32const)))

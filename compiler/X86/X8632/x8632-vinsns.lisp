@@ -1259,6 +1259,12 @@
    (movl (:%l x8632::arg_z) (:%l val)))
   (jmp lab))
 
+(define-x8632-vinsn return-or-fix-overflow (()
+                                            ())
+  (jo :fix)
+  (:byte #xf3) (ret)
+  :fix
+  (jmp (:@ .SPfix-overflow)))
 
 (define-x8632-vinsn add-constant (((dest :imm))
                                   ((dest :imm)
