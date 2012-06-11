@@ -805,7 +805,7 @@ the lisp and run REBUILD-CCL again.")
 	      ,@body)
 	 (cwd ,wd)))))
 
-(defun ensure-tests-loaded (&key force update ansi ccl)
+(defun ensure-tests-loaded (&key force update ansi ccl (load t))
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file "ccl:tests;ansi-tests;")
       (when update
@@ -832,57 +832,89 @@ the lisp and run REBUILD-CCL again.")
     (cwd "ccl:tests;ansi-tests;")
     (run-program "make" '("-k" "clean") :output t)
     (map nil 'delete-file (directory "*.*fsl"))
-    ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
-    ;; it without making the test suite non-portable across platforms...
-    (handler-bind ((warning (lambda (c)
-                              (if (typep c 'shadowed-typecase-clause)
-                                (muffle-warning c)
-                                (when (let ((w (or (and (typep c 'compiler-warning)
-                                                        (eq (compiler-warning-warning-type c) :program-error)
-                                                        (car (compiler-warning-args c)))
-                                                   c)))
-                                        (or (typep (car (compiler-warning-args c))
-                                                        'shadowed-typecase-clause)
-                                            (and (typep w 'simple-warning)
-                                                 (or 
-                                                  (string-equal
-                                                   (simple-condition-format-control w)
-                                                   "Clause ~S ignored in ~S form - shadowed by ~S .")
-                                                  ;; Might as well ignore these as well, they're intentional.
-                                                  (string-equal
-                                                   (simple-condition-format-control w)
-                                                   "Duplicate keyform ~s in ~s statement.")))))
-                                  (muffle-warning c))))))
-      ;; This loads the infrastructure
-      (load "ccl:tests;ansi-tests;gclload1.lsp")
-      ;; This loads the actual tests
-      (let ((redef-var (find-symbol "*WARN-IF-REDEFINE-TEST*" :REGRESSION-TEST)))
-	(progv (list redef-var) (list (if force nil (symbol-value redef-var)))
-          (when ansi
-            (load "ccl:tests;ansi-tests;gclload2.lsp"))
-	  ;; And our own tests
-          (when ccl
-            (load "ccl:tests;ansi-tests;ccl.lsp")))))))
+    (when load
+      ;; Muffle the typecase "clause ignored" warnings, since there is really nothing we can do about
+      ;; it without making the test suite non-portable across platforms...
+      (handler-bind ((warning (lambda (c)
+                                (if (typep c 'shadowed-typecase-clause)
+                                  (muffle-warning c)
+                                  (when (let ((w (or (and (typep c 'compiler-warning)
+                                                          (eq (compiler-warning-warning-type c) :program-error)
+                                                          (car (compiler-warning-args c)))
+                                                     c)))
+                                          (or (typep (car (compiler-warning-args c))
+                                                     'shadowed-typecase-clause)
+                                              (and (typep w 'simple-warning)
+                                                   (or 
+                                                    (string-equal
+                                                     (simple-condition-format-control w)
+                                                     "Clause ~S ignored in ~S form - shadowed by ~S .")
+                                                    ;; Might as well ignore these as well, they're intentional.
+                                                    (string-equal
+                                                     (simple-condition-format-control w)
+                                                     "Duplicate keyform ~s in ~s statement.")))))
+                                    (muffle-warning c))))))
+        ;; This loads the infrastructure
+        (load "ccl:tests;ansi-tests;gclload1.lsp")
+        ;; This loads the actual tests
+        (let ((redef-var (find-symbol "*WARN-IF-REDEFINE-TEST*" :REGRESSION-TEST)))
+          (progv (list redef-var) (list (if force nil (symbol-value redef-var)))
+            (when ansi
+              (load "ccl:tests;ansi-tests;gclload2.lsp"))
+            ;; And our own tests
+            (when ccl
+              (load "ccl:tests;ansi-tests;ccl.lsp"))))))))
+
 
 (defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t)
-                      optimization-settings exit)
-  (with-preserved-working-directory ()
-    (let* ((*package* (find-package "CL-USER")))
-      (with-global-optimization-settings ()
-        (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl))
-      (cwd "ccl:tests;ansi-tests;")
-      (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
-            (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
-            (*print-catch-errors* nil))
-        (prog1
-            (time (funcall do-tests :verbose verbose :compile t
-                           :catch-errors catch-errors
-                           :optimization-settings (or optimization-settings '((speed 1) (space 1) (safety 1) (debug 1) (compilation-speed 1)))))
-          ;; Clean up a little
-          (map nil #'delete-file
-               (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
-	(let ((failed-tests (symbol-value failed)))
-	  (when exit
-	    (quit (if failed-tests 1 0)))
-	  failed-tests)))))
+                      optimization-settings exit exhaustive)
+  (if exhaustive
+    (let* ((total-failures ()))
+      (ensure-tests-loaded :update update :force nil :load nil)
+      (dotimes (speed 4)
+        (dotimes (space 4)
+          (dotimes (safety 4)
+            (dotimes (debug 4)
+              (dotimes (compilation-speed 4)
+                (let* ((optimization-settings `((speed ,speed)
+                                                (space ,space)
+                                                (safety ,safety)
+                                                (debug ,debug)
+                                                (compilation-speed ,compilation-speed))))
+                  (format t "~&;Testing ~a at optimization settings~&;~s~&"
+                          (lisp-implementation-version) optimization-settings)
+                  (let* ((failures (test-ccl :force t
+                                             :update nil
+                                             :verbose verbose
+                                             :catch-errors catch-errors
+                                             :ansi ansi
+                                             :ccl ccl
+                                             :optimization-settings optimization-settings
+                                             :exit nil)))
+                    (when failures
+                      (push (cons optimization-settings failures) total-failures)))))))))
+      (if exit
+        (quit (if total-failures 1 0))
+        total-failures))
+    (with-preserved-working-directory ()
+      (let* ((*package* (find-package "CL-USER"))
+             (*load-preserves-optimization-settings* t))
+        (with-global-optimization-settings ()
+          (proclaim `(optimize ,@optimization-settings))
+          (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
+          (cwd "ccl:tests;ansi-tests;")
+          (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
+                (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
+                (*print-catch-errors* nil))
+            (prog1
+                (time (funcall do-tests :verbose verbose :compile t
+                               :catch-errors catch-errors
+                               :optimization-settings (or optimization-settings '((speed 1) (space 1) (safety 1) (debug 1) (compilation-speed 1)))))
+              ;; Clean up a little
+              (map nil #'delete-file
+                   (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
+            (let ((failed-tests (symbol-value failed)))
+              (when exit
+                (quit (if failed-tests 1 0)))
+              failed-tests)))))))
 
