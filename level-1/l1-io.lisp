@@ -1016,99 +1016,106 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
   (declare (type simple-string name) (stream stream)
            (optimize (speed 3)(safety 0)))
   (let* ((readtable *readtable*)
-         (readcase (readtable-case (if *print-readably*
-                                       %initial-readtable%
-                                       readtable)))
-         (escape? (or *print-readably* *print-escape*)))
-      (flet ((slashify? (char)
-               (declare (type character char))
-               (and escape?
-                    (if (alpha-char-p char) 
-                      (if (eq readcase :upcase)
-                        (lower-case-p char)  ; _tolower
-                        (if (eq readcase :downcase)
-                          (upper-case-p char)))
-                      ; should be using readtable here - but (get-macro-character #\|) is nil
-                      (not (%str-member
-                            char
-                            "!$%&*0123456789.<=>?@[]^_{}~+-/")))))
+         (syntax-readtable (if *print-readably*
+                             %initial-readtable%
+                             readtable))
+         (readcase (readtable-case syntax-readtable))
+         (attrtab (rdtab.ttab syntax-readtable))
+         (escape? (or *print-readably* *print-escape*))
+         (needs-escape nil))
+    (flet ((slashify? (char)
+             (declare (type character char))
+             (and escape?                  
+                  (or (and (eq readcase :upcase) (lower-case-p char))
+                      (and (eq readcase :downcase) (upper-case-p char))
+                      (eql char #\:)
+                      (not (eql $cht_cnst (%character-attribute char attrtab))))))
              (single-case-p (name)
-               (let ((sofar nil))
-                 (dotimes (i (length name) sofar)
-                   (declare (type fixnum i))
-                   (declare (type simple-string name))
-                   (let* ((c (schar name i))
-                          (c-case (if (upper-case-p c)
-                                    :upcase
-                                    (if (lower-case-p c)
-                                      :downcase))))
-                     (when c-case
-                       (if sofar 
-                         (if (neq sofar c-case)
-                           (return nil))
-                         (setq sofar c-case))))))))
-        (declare (dynamic-extent #'slashify? #'single-case-p))
-        (block alice
-          (let ((len (length name))
-                (slash-count 0)
-                (last-slash-pos 0))
-            (declare (type fixnum len)
-                     (type fixnum slash-count last-slash-pos))                
-            (when escape?
-              (when (or (%izerop len)
-                        ;; if more than a few \, just use |...|
-                        (and (not (memq readcase '(:invert :preserve))) ; these never slashify alpha-p
-                             (let ((m (max (floor len 4) 2)))
-                               (dotimes (i (the fixnum len) nil)
-                                 (declare (type fixnum i))
-                                 (when (slashify? (schar name i))
-                                   (setq slash-count (%i+ slash-count 1))
-                                   (when (or (eql slash-count m)
-                                             (eq i (1+ last-slash-pos)))
-                                     (return t))
-                                   (setq last-slash-pos i)))))
-                        ;; or could be read as a number
-                        (handler-case (%parse-number-token name 0 len *print-base*)
-                          (arithmetic-error (c) (declare (ignore c)) t))
-                        ;; or symbol consisting entirely of .'s
-                        (dotimes (i len t)
-                          (declare (fixnum i))
-                          (unless (eql (schar name i) #\.)
-                            (return nil))))
-                (return-from alice
-                  (write-escaped-string name stream #\|))))
-            (case readcase
-              (:preserve (return-from alice  (write-string name stream :start  0 :end len)))
-              (:invert (return-from alice
-                         (cond ((single-case-p name)(write-perverted-string name stream len :invert))
-                               (t (write-string name stream :start  0 :end len)))))
-              (t 
-               (when (eql slash-count 0)
-                 (return-from alice
-                   (cond ((eq readcase case)
-                          (write-string name stream :start  0 :end len))
-                         (t (write-perverted-string name stream len case)))))))
-            (let* ((outbuf-len (+ len len))
-                   (outbuf-ptr -1)
-                   (outbuf (make-string outbuf-len)))
-              (declare (fixnum outbuf-ptr outbuf-len)
-                       (dynamic-extent outbuf)
-                       (simple-string outbuf))
-              (dotimes (pos (the fixnum len))
-                (declare (type fixnum pos))
-                (let* ((char (schar name pos))
-                       (slashify? (cond ((eql slash-count 0)
-                                         nil)
-                                        ((eql slash-count 1)
-                                         (eql pos last-slash-pos))
-                                        (t
-                                         (slashify? char)))))
-                  (declare (type character char))
-                  (when slashify?
-                    (setq slash-count (%i- slash-count 1))
-                    (setf (schar outbuf (incf outbuf-ptr)) #\\))
-                  (setf (schar outbuf (incf outbuf-ptr)) char)))
-              (write-string outbuf stream :start  0 :end (1+ outbuf-ptr))))))))
+                            (let ((sofar nil))
+                              (dotimes (i (length name) sofar)
+                                (declare (type fixnum i))
+                                (declare (type simple-string name))
+                                (let* ((c (schar name i))
+                                       (c-case (if (upper-case-p c)
+                                                 :upcase
+                                                 (if (lower-case-p c)
+                                                   :downcase))))
+                                  (when c-case
+                                    (if sofar 
+                                      (if (neq sofar c-case)
+                                        (return nil))
+                                      (setq sofar c-case))))))))
+           (declare (dynamic-extent #'slashify? #'single-case-p))
+           (block alice
+             (let ((len (length name))
+                   (slash-count 0)
+                   (last-slash-pos 0))
+               (declare (type fixnum len)
+                        (type fixnum slash-count last-slash-pos))                
+               (when escape?
+                 (when (or (%izerop len)
+                           ;; if more than a few \, just use |...|
+                           (and;;(not (memq readcase '(:invert :preserve))) ; these never slashify alpha-p
+                            (let ((m (max (floor len 4) 2)))
+                              (dotimes (i (the fixnum len) nil)
+                                (declare (type fixnum i)) 
+                                (when (slashify? (schar name i))
+                                  (setq slash-count (%i+ slash-count 1)
+                                        needs-escape t)
+                                  (when (or (eql slash-count m)
+                                            (eq i (1+ last-slash-pos)))
+                                    (return t))
+                                  (setq last-slash-pos i)))))
+                           ;; or could be read as a number
+                           (handler-case (%parse-number-token name 0 len *print-base*)
+                             (arithmetic-error (c)
+                                               (declare (ignore c))))
+                           ;; or symbol consisting entirely of .'s
+                           (dotimes (i len (setq needs-escape t))
+                             (declare (fixnum i))
+                             (unless (eql (schar name i) #\.)
+                               (return nil))))
+                   (return-from alice
+                     (write-escaped-string name stream #\|))))
+               (case readcase
+                 (:preserve (return-from alice
+                              (if needs-escape
+                                (write-escaped-string name stream #\|)
+                                (write-string name stream :start  0 :end len))))
+                           
+                 (:invert (return-from alice
+                            (cond ((single-case-p name)
+                                   (write-perverted-string name stream len :invert (if needs-escape #\|)))
+                                  (t (if needs-escape
+                                       (write-escaped-string name stream #\|)
+                                       (write-string name stream :start  0 :end len))))))
+                 (t 
+                  (when (eql slash-count 0)
+                    (return-from alice
+                      (cond ((eq readcase case)
+                             (write-string name stream :start  0 :end len))
+                            (t (write-perverted-string name stream len case)))))))
+               (let* ((outbuf-len (+ len len))
+                      (outbuf-ptr -1)
+                      (outbuf (make-string outbuf-len)))
+                 (declare (fixnum outbuf-ptr outbuf-len)
+                          (dynamic-extent outbuf)
+                          (simple-string outbuf))
+                 (dotimes (pos (the fixnum len))
+                   (declare (type fixnum pos))
+                   (let* ((char (schar name pos))
+                          (slashify? (cond ((eql slash-count 0)
+                                            nil)
+                                           ((eql slash-count 1)
+                                            (eql pos last-slash-pos))
+                                           (t
+                                            (slashify? char)))))
+                     (declare (type character char))
+                     (when slashify?
+                       (setq slash-count (%i- slash-count 1))
+                       (setf (schar outbuf (incf outbuf-ptr)) #\\))
+                     (setf (schar outbuf (incf outbuf-ptr)) char)))
+                 (write-string outbuf stream :start  0 :end (1+ outbuf-ptr))))))))
 
 #|
 (defun write-studly-string (string stream)
@@ -1145,13 +1152,16 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (setf (pool.data pool) outbuf)))
 |#
 
-(defun write-perverted-string (string stream end type)
+(defun write-perverted-string (string stream end type &optional escape)
   ; type :invert :upcase :downcase :capitalize or :studly
   (declare (fixnum end))
   (let* ((readtable *readtable*)
          (readcase (readtable-case readtable))
          (outbuf-ptr -1)
-         (outbuf (make-string end))
+         (outbuf (make-string (if escape
+                                (+ end 2 (count-if (lambda (c) (or (eql c escape)
+                                                                   (eql c #\\))) string :end end))
+                                end)))
          (word-start t)
          (offset 0))
     (declare (fixnum offset outbuf-ptr)
@@ -1161,6 +1171,8 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
           ((%i>= i end))
         (declare (type fixnum i))
         (setq offset (%i+ offset (char-int (char string i))))))
+    (when escape
+      (setf (schar outbuf (incf outbuf-ptr)) escape))
     (do ((i 0 (%i+ i 1)))
         ((%i>= i end))
       (declare (type fixnum i))
@@ -1192,10 +1204,14 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
                                              (if (eq readcase :upcase)
                                                  (char-downcase c)
                                                  c)))))))
+              ((or (eql c escape) (eql c #\\))
+               (setf (schar outbuf (incf outbuf-ptr)) #\\))
               ((digit-char-p c)(setq word-start nil))
               (t (setq word-start t)))
         (setf (schar outbuf (incf outbuf-ptr)) c)))
-    (write-string outbuf stream :start  0 :end end)))
+    (when escape
+      (setf (schar outbuf (incf outbuf-ptr)) escape))
+    (write-string outbuf stream :start  0 :end (1+ outbuf-ptr))))
 
 
 ;;;; ----------------------------------------------------------------------
