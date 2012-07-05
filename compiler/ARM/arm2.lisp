@@ -1305,10 +1305,10 @@
              (let* ((val (acode-constant-p form)))
                (if (and (= (get-regspec-mode hint) hard-reg-class-fpr-mode-single)
                         (eql val 0.0f0))
-                 arm::single-float-zero
+                 (make-hard-fp-reg (hard-regspec-value arm::single-float-zero) hard-reg-class-fpr-mode-single)
                  (if (and (= (get-regspec-mode hint) hard-reg-class-fpr-mode-double)
                           (eql val 0.0d0))
-                   arm::double-float-zero))))))))
+                   (make-hard-fp-reg (hard-regspec-value arm::double-float-zero))))))))))
          
     
                  
@@ -1540,7 +1540,10 @@
                  (if (and (eql vreg-class hard-reg-class-fpr)
                           (eql vreg-mode hard-reg-class-fpr-mode-single))
                    (setf fp-val vreg temp-is-vreg t)))
-               (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-32-bit-constant-index arch)))
+               (if (and index-known-fixnum (<= index-known-fixnum
+                                               (if (eq type-keyword :single-float-vector)
+                                                 255
+                                                 (arch::target-max-32-bit-constant-index arch))))
                  (cond ((eq type-keyword :single-float-vector)
                         (! misc-ref-c-single-float fp-val src index-known-fixnum))
                        (t
@@ -2279,7 +2282,11 @@
                       (is-32-bit
                        (if (and index-known-fixnum
                                 (<= index-known-fixnum
-                                    (arch::target-max-32-bit-constant-index arch)))
+                                    (if (and (eq type-keyword :single-float-vector)
+                                             (eq (hard-regspec-class unboxed-val-reg)
+                                                 hard-reg-class-fpr))
+                                      255
+                                      (arch::target-max-32-bit-constant-index arch))))
                          (if (eq type-keyword :single-float-vector)
                            (if (eq (hard-regspec-class unboxed-val-reg)
                                    hard-reg-class-fpr)

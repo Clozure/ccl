@@ -654,7 +654,7 @@
 (defconstant lisp-frame-marker subtag-lisp-frame-marker)
 (defconstant stack-alloc-marker subtag-stack-alloc-marker)
 
-(defconstant max-64-bit-constant-index (ash (+ #xfff arm::misc-dfloat-offset) -3))
+(defconstant max-64-bit-constant-index 127)
 (defconstant max-32-bit-constant-index (ash (+ #xfff arm::misc-data-offset) -2))
 (defconstant max-16-bit-constant-index (ash (+ #xfff arm::misc-data-offset) -1))
 (defconstant max-8-bit-constant-index (+ #xfff arm::misc-data-offset))
