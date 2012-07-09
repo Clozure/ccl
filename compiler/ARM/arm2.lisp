@@ -1388,9 +1388,7 @@
             (! zero-single-float-register vreg))
           (if (typep form 'short-float)
             (let* ((bits (arm2-single-float-bits form)))
-              (with-imm-temps () ((bitsreg :u32))
-                (! lri bitsreg bits)
-                (! load-single-float-constant vreg bitsreg)))
+              (! load-single-float-constant-from-data vreg bits))
             (multiple-value-bind (high low) (arm2-double-float-bits form)
               (declare (integer high low))
               (! load-double-float-constant-from-data vreg high low))))
@@ -3039,33 +3037,38 @@
 		     (insert-dll-node-before copy push-vinsn))))
 	       (elide-vinsn push-vinsn)
 	       (elide-vinsn pop-vinsn))
-	      ((and (eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
-		    (eql (get-regspec-mode pushed-reg)
-			 hard-reg-class-fpr-mode-double))
-	       ;; If we're pushing a double-float register that gets
-	       ;; set by the intervening vinsns, try to copy it to and
-	       ;; from a free FPR instead.
-	       (multiple-value-bind (used-gprs used-fprs)
+	      ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
+               (let* ((mode (get-regspec-mode pushed-reg))
+                      (double-p (eql mode hard-reg-class-fpr-mode-double)))
+                 ;; If we're pushing float register that gets
+                 ;; set by the intervening vinsns, try to copy it to and
+                 ;; from a free FPR instead.
+                 (multiple-value-bind (used-gprs used-fprs)
 		   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
 		 (declare (ignore used-gprs))
-                 ;; We have 16 non-volatile single-floats or 8
-                 ;; non-volatile double-floats
-		 (let* ((nfprs 7)
+                 ;; We have 14 volatile single-floats or 7
+                 ;; volatile double-floats
+		 (let* ((nfprs (if double-p 7 14))
 			(free-fpr
 			 (dotimes (r nfprs nil)
-			   (unless (logtest (target-fpr-mask r :double-float)
+			   (unless (logtest (target-fpr-mask
+                                             r (if double-p :double-float :single-float))
 					    used-fprs)
 			     (return r)))))
 		   (when free-fpr
-		     (let* ((reg ($ free-fpr :class :fpr :mode :double-float))
-			    (save (! double-to-double reg pushed-reg))
-			    (restore (! double-to-double popped-reg reg)))
+		     (let* ((reg ($ free-fpr :class :fpr :mode mode))
+			    (save (if double-p
+                                    (! double-to-double reg pushed-reg)
+                                    (! single-to-single reg pushed-reg)))
+			    (restore (if double-p
+                                       (! double-to-double popped-reg reg)
+                                       (! single-to-single popped-reg reg))))
 		       (remove-dll-node save)
 		       (insert-dll-node-after save push-vinsn)
 		       (remove-dll-node restore)
 		       (insert-dll-node-before restore pop-vinsn)
 		       (elide-vinsn push-vinsn)
-		       (elide-vinsn pop-vinsn))))))))))
+		       (elide-vinsn pop-vinsn)))))))))))
       (when (and (vinsn-attribute-p push-vinsn :vsp))
         (unless (or
                  (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :push)
@@ -6571,12 +6574,16 @@
     (if (and (vinsn-attribute-p branch :branch)
              (null (cdr refs)))
       (when (do* ((next (dll-node-succ branch) (dll-node-succ next))
+                  (count 0 (1+ count))
                   (vinsn-p nil))
                  ((eq next lab) (return vinsn-p))
+              (declare (fixnum count))
               (if (typep next 'vinsn-label)
                 (unless (typep (vinsn-label-id next) 'vinsn-note)
                   (return))
                 (progn
+                  (when (= count 2)
+                    (return))
                   (unless (and (typep next 'vinsn)
                                (null (vinsn-annotation next))
                                (vinsn-attribute-p next :predicatable)

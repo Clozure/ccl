@@ -3292,6 +3292,15 @@
      ())
   (fcpys dest arm::single-float-zero))
 
+(define-arm-vinsn (load-single-float-constant-from-data :predicatable)
+    (((dest :double-float))
+     ((val :u32const)))
+  (flds dest (:= :x))
+  (:data)
+  :x
+  (:word val)
+  :code)
+
 (define-arm-vinsn (load-double-float-constant-from-data :predicatable)
     (((dest :double-float))
      ((high :u32const)
