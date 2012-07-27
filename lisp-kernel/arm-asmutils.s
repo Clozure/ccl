@@ -37,7 +37,6 @@ _exportfn(C(flush_cache_lines))
         __(mov r12,#0x80000000)
         __(svc #0)
         __endif   
-        __(isb sy)             
 	__(bx lr)
 
 _exportfn(C(touch_page))
@@ -70,7 +69,7 @@ _endfn
 
 /* Atomically store new value (r2) in *r0, if old value == expected (r1). */
 /* Return actual old value. */
-
+        .globl C(arm_architecture_version)
 _exportfn(C(store_conditional))
 0:      __(ldrex r3,[r0])
         __(cmp r3,r1)
@@ -79,9 +78,15 @@ _exportfn(C(store_conditional))
         __(cmp ip,#0)
         __(bne 0b)
         __(b 2f)
-1:      __(clrex)
+1:      __(adr ip,3f)
+        __(ldr ip,[ip])
+        __(ldr ip,[ip])
+        __(cmp ip,#7)
+        __(blt 2f)
+        .long 0xf57ff01f
 2:      __(mov r0,r3)
-        __(bx lr)                
+        __(bx lr)   
+3:      .long C(arm_architecture_version)                     
 _endfn
 
 /* Atomically store new_value(r1) in *r0 ;  return previous contents */

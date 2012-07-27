@@ -1583,6 +1583,9 @@ check_x86_cpu()
 #endif
 
 #ifdef ARM
+int
+arm_architecture_version = 0;
+
 Boolean
 check_arm_cpu()
 {
@@ -1618,17 +1621,23 @@ check_arm_cpu()
         cpuline[n] = '\0';
       }
     }
-    if (cpuline) {
-      workline = index(cpuline,':');
-      if (workline) {
-        n = strtol(workline+1,NULL,0);
-        if (n >= 7) {
-          if (n == 7) {
-            if (procline) {
-              win = (strstr(procline, "v7l") != NULL);
+    if (procline) {
+      win = (strstr(procline, "v7l") != NULL);
+      if (win) {
+        arm_architecture_version = 7;
+      } else {
+        win = (strstr(procline, "v6l") != NULL);
+        if (win) {
+          arm_architecture_version = 6;
+        } else {
+          if (cpuline) {
+            workline = index(cpuline,':');
+            if (workline) {
+              arm_architecture_version = strtol(workline+1,NULL,0);
+              if (arm_architecture_version >= ARM_ARCHITECTURE_min) {
+                win = true;
+              }
             }
-          } else {
-            win = true;
           }
         }
       }

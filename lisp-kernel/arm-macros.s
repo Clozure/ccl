@@ -27,13 +27,19 @@ define(`make_header',`(($1<<num_subtag_bits)|($2&subtag_mask))')
         
 /* Load a 16-bit constant into $1 */
 define(`movc16',`
-        __ifdef(`DARWIN')
         __(mov $1,#$2&0xff)
         __(orr $1,$1,#$2&0xff00)
-        __else
-        __(movw $1,#$2)
-        __endif
         ')
+
+define(`_clrex',`
+       	new_macro_labels()
+        __(ldr $1,[rcontext,#tcr.architecture_version])
+        __(cmp $1,#0)
+        __(blt macro_label(skip))
+        __(.long 0xf57ff01f)
+macro_label(skip):      
+        ')        
+
         
 define(`test_fixnum',`
         __(tst $1,#fixnummask)

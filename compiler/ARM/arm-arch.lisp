@@ -870,6 +870,7 @@
   tlb-pointer
   shutdown-count
   safe-ref-address
+  architecture-version                  ;keep in each TCR for ease of access.
 )
 
 
@@ -1415,9 +1416,9 @@
 (defconstant numeric-tags-mask (logior real-tags-mask (ash 1 subtag-complex)))
 
   
-(defconstant fasl-version #x61)
-(defconstant fasl-max-version #x61)
-(defconstant fasl-min-version #x61)
-(defparameter *image-abi-version* 1039)
+(defconstant fasl-version #x62)
+(defconstant fasl-max-version #x62)
+(defconstant fasl-min-version #x62)
+(defparameter *image-abi-version* 1040)
 
 (provide "ARM-ARCH")

@@ -22,18 +22,21 @@
     (macrolet ((arm-lap-word (instruction-form)
                  (uvref (uvref (compile nil `(lambda (&lap 0) (arm-lap-function () ((?? 0)) ,instruction-form))) 1) 0)))
       (setf (%get-unsigned-long p 0)
-            (dpb (ldb (byte 12 0) index)
-                 (byte 12 0)
-                 (dpb (ldb (byte 4 12) index)
-                      (byte 4 16)
-                      (arm-lap-word (movw r12 (:$ ??)))))
+            (dpb (ldb (byte 8 0) index)
+                 (byte 8 0)
+                 (arm-lap-word (mov r12 (:$ ??))))
             (%get-unsigned-long p 4)
-            (arm-lap-word (ldr pc (:@ pc (:$ -4))))
+            (dpb (ldb (byte 8 8) index)
+                 (byte 8 0)
+                 (dpb 12 (byte 4 8)
+                      (arm-lap-word (orr r12 r12  (:$ ??)))))
             (%get-unsigned-long p 8)
+            (arm-lap-word (ldr pc (:@ pc (:$ -4))))
+            (%get-unsigned-long p 12)
             (%lookup-subprim-address #.(subprim-name->offset '.SPeabi-callback)))
       (ff-call (%kernel-import #.arm::kernel-import-makedataexecutable) 
                :address p 
-               :unsigned-fullword 12
+               :unsigned-fullword 16
                :void)
       p)))
                     

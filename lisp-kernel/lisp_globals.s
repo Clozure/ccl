@@ -153,7 +153,7 @@ nrs_symbol_extra = symbol.size-nrs_symbol_fulltag
 	 _struct_pad(nrs_symbol_extra)	/* %foreign-thread-control */
         _ends
 
-num_lisp_globals = 49		 /* MUST UPDATE THIS !!!   */
+
 	
 	_struct(lisp_globals,lisp_globals_limit)
          _rnode(get_tcr)		/* address of get_tcr() for callbacks */

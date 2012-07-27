@@ -1341,13 +1341,8 @@
                      (setf (svref info regno) (list offset))
                      vinsn)))))))))
 
-(defun arm2-lcell-to-register (seg lcell reg)
-  (with-arm-local-vinsn-macros (seg)
-    (! lcell-load reg lcell (arm2-vstack-mark-top))))
 
-(defun arm2-register-to-lcell (seg reg lcell)
-  (with-arm-local-vinsn-macros (seg)
-    (! lcell-store reg lcell (arm2-vstack-mark-top))))
+
 
 (defun arm2-register-to-stack (seg reg memspec)
   (with-arm-local-vinsn-macros (seg)
@@ -4281,9 +4276,7 @@
       (arm2-stack-to-register seg ea reg)
       (arm2-copy-register seg reg ea))
     (if (typep ea 'lreg)
-      (arm2-copy-register seg reg ea)
-      (if (typep ea 'lcell)
-        (arm2-lcell-to-register seg ea reg)))))
+      (arm2-copy-register seg reg ea))))
 
 
       

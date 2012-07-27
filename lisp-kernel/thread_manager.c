@@ -1238,6 +1238,8 @@ free_tcr_extra_segment(TCR *tcr)
 #endif
 
 #ifdef ARM
+extern int arm_architecture_version;
+
 void
 init_arm_tcr_sptab(TCR *tcr)
 {
@@ -1283,6 +1285,7 @@ new_tcr(natural vstack_size, natural tstack_size)
 
 #ifdef ARM
   init_arm_tcr_sptab(tcr);
+  tcr->architecture_version = (arm_architecture_version-ARM_ARCHITECTURE_v7) << fixnumshift;
 #endif
 #ifdef X86
   setup_tcr_extra_segment(tcr);

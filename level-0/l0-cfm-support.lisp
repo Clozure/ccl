@@ -318,12 +318,21 @@
   (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
   (when (null *shared-libraries*)
     (%walk-shared-libraries #'shlib-from-map-entry)
-      ;;; On Linux, it seems to be necessary to open each of these
-      ;;; libraries yet again, specifying the RTLD_GLOBAL flag.
-      ;;; On FreeBSD, it seems desirable -not- to do that.
+      ;; On Linux, it seems to be necessary to open each of these
+      ;; libraries yet again, specifying the RTLD_GLOBAL flag.
+      ;; On FreeBSD, it seems desirable -not- to do that.
     #+linux-target
-    (dolist (l *shared-libraries*)
-      (%dlopen-shlib l))))
+    (progn
+      ;; The "program interpreter" (aka the dynamic linker) is itself
+      ;; on *shared-libraries*; it seems to be the thing most recently
+      ;; pushed on that list.  Remove it: there's little reason for it
+      ;; to be there, and on some platforms (Linux ARM during the
+      ;; transition to hard float) the dynamic linker name/pathname
+      ;; depend on how the kernel was compiled and linked.  We -don't-
+      ;; want to later open the "other" dynamic linker.
+      (setq *shared-libraries* (cdr *shared-libraries*)) ; find a better way.
+      (dolist (l *shared-libraries*)
+        (%dlopen-shlib l)))))
 
 (init-shared-libraries)
 

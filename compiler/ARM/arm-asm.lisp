@@ -180,7 +180,9 @@
 
 (defparameter *arm-instruction-table*
   (vector
-
+   #||
+   ;; CLREX requires ARMv6T2 or later.  The memory-barrier instructions
+   ;; require ARMv7.
    (define-arm-instruction clrex ()
      #xf57ff01f
      #xffffffff
@@ -196,7 +198,8 @@
    (define-arm-instruction dsb ()
      #xf57ff04f
      #xffffffff
-     (:non-conditional))   
+     (:non-conditional))
+   ||#
 
    (define-arm-instruction vmul.f32 (:dd :dn :dm)
      #xf3000d10
@@ -330,6 +333,7 @@
      #x0fff00ff
      (:prefer-separate-cond))
 
+   #||
    ;; movw, movt require ARMv6T2 or later
    (define-arm-instruction movw (:rd :imm16)
      #x03000000
@@ -344,6 +348,7 @@
      #x0320f000
      #x0fffffff
      ())
+   ||#
 
    (define-arm-instruction and (:rd :rn :shifter)
      #x00000000
@@ -504,8 +509,11 @@
       (#x01700010 . #x0ff00090))
      ())
    
-
-  
+   (define-arm-instruction nop ()
+     #x01a00000
+     #x0fffffff
+     ())
+   
    (define-arm-instruction mov (:rd :shifter)
      #x01a00000
      ((#x03a00000 . #x0ff00000)

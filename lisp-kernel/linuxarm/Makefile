@@ -21,7 +21,7 @@ RM = /bin/rm
 # AS = gas-2.9.1
 AS = as
 M4 = m4
-ASFLAGS = -mfpu=vfp -march=armv7-a -mfloat-abi=$(FLOAT_ABI)
+ASFLAGS = -mfpu=vfp -march=armv6 -mfloat-abi=$(FLOAT_ABI)
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
@@ -52,7 +52,7 @@ A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -mfloat-abi=$(FLOAT_ABI) $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -march=armv6 -mfloat-abi=$(FLOAT_ABI) $(WFORMAT)  -o $@
 
 SPOBJ = pad.o  arm-spentry.o
 ASMOBJ = arm-asmutils.o imports.o

@@ -295,7 +295,8 @@ typedef struct tcr {
   LispObj *tlb_pointer;
   unsigned shutdown_count;
   void *safe_ref_address;
-  LispObj spare[22];            /* allocate new things here */
+  int architecture_version;
+  LispObj spare[21];            /* allocate new things here */
   LispObj sptab[256];           /* subprims table */
 } TCR;
 
@@ -325,5 +326,8 @@ typedef struct tcr {
 #define FPSCR_IXE_BIT 12                    /* inexact enable */
 
 #define ABI_VERSION_MIN 1039
-#define ABI_VERSION_CURRENT 1039
-#define ABI_VERSION_MAX 1039
+#define ABI_VERSION_CURRENT 1040
+#define ABI_VERSION_MAX 1040
+
+#define ARM_ARCHITECTURE_v7 7
+#define ARM_ARCHITECTURE_min 6

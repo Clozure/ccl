@@ -322,7 +322,8 @@
   ;; Can we assume that HIGH and LOW are boxed 16-bit fixnums ?
   ;; This code does ...
   `(progn
-    (movw ,dest (:$ #xffff))
+    (mov ,dest (:$ #xff))
+    (orr ,dest ,dest (:$ #xff00))
     (and ,dest ,dest (:lsr ,low (:$ arm::fixnumshift)))
     (orr ,dest ,dest (:lsl ,high (:$ (- 16 arm::fixnumshift))))))
 
@@ -352,7 +353,24 @@
     (str arg_z (:@! vsp (:$ (- arm::node-size))))
      ,none)))
 
+;;; ARMv7-only instructions
+(defarmlapmacro clrex (&optional (temp 'arm::imm0))
+  (let* ((skip (gensym)))
+    `(progn
+      (ldr ,temp (:@ rcontext (:$ arm::tcr.architecture-version)))
+      (cmp ,temp (:$ 0))
+      (blt ,skip)
+      (:opcode #xf57ff01f)
+      ,skip)))
 
+(defarmlapmacro dmb (&optional (temp 'arm::imm0))
+  (let* ((skip (gensym)))
+    `(progn
+      (ldr ,temp (:@ rcontext (:$ arm::tcr.architecture-version)))
+      (cmp ,temp (:$ 0))
+      (blt ,skip)
+      (:opcode #xf57ff05f)
+      ,skip)))
 
 
 
@@ -367,37 +385,31 @@
 (defarmlapmacro u32-set (new-value index vector)
   `(str ,new-value (:@ ,vector (:$ (+ (* 4 ,index) arm::misc-data-offset)))))
 
-;;; Load the low 32 bits of the integer constant VAL into REG, using movw/movt.
+;;; Load the low 32 bits of the integer constant VAL into REG,
+;;; now WITHOUT using movw/movt.
 (defarmlapmacro lri (reg val)
   (setq val (eval val))
   (if (or (arm::encode-arm-immediate val)
           (arm::encode-arm-immediate (lognot val)))
     `(mov ,reg (:$ ,val))
-    (let* ((high (ldb (byte 16 16) val))
-           (low (ldb (byte 16 0) val)))
-      `(progn
-        (movw ,reg (:$ ,low))
-        ,@(unless (zerop high)
-          `((movt ,reg (:$ ,high))))))))
-
-(defarmlapmacro push-fprs (n)
-  "Save N fprs starting at d8 on the control stack.
-   (This actually loads a vector header into d7 and
-   stores n+1 FPRs, starting at d7.  Clobbers imm0 and
-   imm1."
-  `(progn
-    (movw imm0 (:$ (logior (ash (1+ ,n) arm::num-subtag-bits)
-                            arm::subtag-double-float-vector)))
-    (mov imm1 (:$ 0))
-    (fmdrr d7 imm0 imm1)
-    (fstmdbd d7 (:! sp) ,(1+ n))))
-
-(defarmlapmacro pop-fprs (n)
-  "Restore N fprs starting at d8 from the top of the control
-   stack.  (This actually restores N+1 fprs starting at d7;
-   on exit, d7 will contain the vector header that had been
-   on top of the stack.)"
-  `(fldmiad d7 (:! sp) ,(1+ n)))
+    (let* ((b0 (logand #xff val))           
+           (b1 (logand #xff00 val))
+           (b2 (logand #xff0000 val))
+           (b3 (logand #xff000000 val)))
+      (collect ((forms))
+        (unless (zerop b0)
+          (forms `(mov ,reg (:$ ,b0))))
+        (unless (zerop b1)
+          (if (zerop b0)
+            (forms `(mov ,reg (:$ ,b1)))
+            (forms `(orr ,reg ,reg (:$ ,b1)))))
+        (unless (zerop b2)
+          (if (and (zerop b0) (zerop b1))
+            (forms `(mov ,reg (:$ ,b2)))
+            (forms `(orr ,reg ,reg (:$ ,b2)))))
+        (unless (zerop b3)
+          (forms `(orr ,reg ,reg (:$ ,b3))))
+        `(progn ,@(forms))))))
 
 
 
