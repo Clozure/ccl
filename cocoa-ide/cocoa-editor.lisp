@@ -2181,9 +2181,15 @@
     ((echo-area-view :foreign-type :id)
      (pane :foreign-type :id)
      (echo-area-buffer :initform nil :accessor hemlock-frame-echo-area-buffer)
-     (echo-area-stream :initform nil :accessor hemlock-frame-echo-area-stream))
+     (echo-area-stream :initform nil :accessor hemlock-frame-echo-area-stream)
+     (is-dup :initform nil))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
+
+(objc:defmethod (#/setFrameAutosaveName: #>BOOL) ((self hemlock-frame)
+                                                  string)
+  (unless (slot-value self 'is-dup)
+    (call-next-method string)))
 
 ;;; If a window's document's edited status changes, update the modeline.
 (objc:defmethod (#/setDocumentEdited: :void) ((w hemlock-frame)
@@ -3094,6 +3100,8 @@
       (#/addWindowController: self controller)
       (#/release controller)
       (#/setShouldCascadeWindows: controller nil)
+      (unless (eql dupcount 0)
+        (setf (slot-value window 'is-dup) t))
       (when path
         (unless (and (eql dupcount 0) (#/setFrameAutosaveName: window path))
           (setq path nil)))
