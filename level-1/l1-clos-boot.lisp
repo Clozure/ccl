@@ -28,8 +28,11 @@
 
 (defun disable-clos-optimizations (operation operand)
   (when *clos-optimizations-active*
-    (cerror "Peform the requested operation after disabling CLOS optimizations.~&To reenable CLOS optimizations, call (CCL::SNAP-READER-METHODS :KNOWN-SEALED-WORLD T :OPTIMIZE-MAKE-INSTANCE T)."
-            "CLOS optimizations are in effect, so it isn't safe to ~a ~s." operation operand)
+    (cerror "Peform the requested operation after disabling CLOS optimizations.~&To reenable CLOS optimizations, call ~s."
+            (make-condition 'simple-error
+                           :format-control "CLOS optimizations are in effect, so it isn't safe to ~a ~s."
+                           :format-arguments (list operation operand))
+            (cons 'snap-reader-methods *clos-optimizations-active*))
     (setq *clos-optimizations-active* nil)
     (pessimize-clos)
     t))

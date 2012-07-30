@@ -294,6 +294,25 @@
 
 (defvar *update-slots-preserve-existing-wrapper* nil)
 
+(defvar *optimized-dependents* (make-hash-table :test 'eq :weak :key)
+  "Hash table mapping a class to a list of all objects that have been optimized to
+   depend in some way on the layout of the class")
+
+(defun note-class-dependent (class gf)
+  (pushnew gf (gethash class *optimized-dependents*)))
+
+(defun unoptimize-dependents (class)
+  (pessimize-make-instance-for-class-name (%class-name class))
+  (loop for obj in (gethash class *optimized-dependents*)
+        do (etypecase obj
+             (standard-generic-function
+              (let* ((dt (%gf-dispatch-table obj))
+                     (argnum (%gf-dispatch-table-argnum dt)))
+                (when (< argnum 0)
+                  (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
+                        (%gf-dcode obj) (%gf-dispatch-table-gf dt)
+                        (%gf-dispatch-table-gf dt) obj)
+                  (clear-gf-dispatch-table dt)))))))
 
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
@@ -312,6 +331,7 @@
                 ((and old-wrapper *update-slots-preserve-existing-wrapper*)
                  old-wrapper)
                 (t
+                 (unoptimize-dependents class)
                  (make-instances-obsolete class)
                  (%cons-wrapper class)))))
     (setf (%class-slots class) eslotds)
@@ -2119,7 +2139,6 @@ changing its name to ~s may have serious consequences." class new))
 
 ;;; Try to replace gf dispatch with something faster in f.
 (defun %snap-reader-method (f &key (redefinable t))
-  (declare (ignore redefinable))
   (when (slot-boundp f 'methods)
     (let* ((methods (generic-function-methods f)))
       (when (and methods
@@ -2145,6 +2164,9 @@ changing its name to ~s may have serious consequences." class new))
               ;; :allocation :instance (and all locations - the CDRs
               ;; of the alist pairs - are small, positive fixnums.
               (when (every (lambda (pair) (typep (cdr pair) 'fixnum)) alist)
+                (when redefinable
+                  (loop for (c . nil) in alist
+                        do (note-class-dependent c f)))
                 (clear-gf-dispatch-table dt)
                 (let* ((argnum (%gf-dispatch-table-argnum dt)))
                   (unless (< argnum 0)
@@ -2498,7 +2520,8 @@ changing its name to ~s may have serious consequences." class new))
 ;;; Iterate over all known GFs; try to optimize their dcode in cases
 ;;; involving reader methods.
 
-(defun snap-reader-methods (&key known-sealed-world
+(defun snap-reader-methods (&rest args
+                                  &key known-sealed-world
                                  (check-conflicts t)
                                  (optimize-make-instance t))
   (declare (ignore check-conflicts)
@@ -2506,7 +2529,7 @@ changing its name to ~s may have serious consequences." class new))
   (if *clos-optimizations-active*
     (values nil nil 0)
     (progn
-      (setq *clos-optimizations-active* t)
+      (setq *clos-optimizations-active* args)
       (when optimize-make-instance
         (optimize-named-class-make-instance-methods))
       (let* ((ngf 0)
