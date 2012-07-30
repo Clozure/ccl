@@ -23,6 +23,17 @@
 
 (in-package "CCL")
 
+
+(defstatic *clos-optimizations-active* nil)
+
+(defun disable-clos-optimizations (operation operand)
+  (when *clos-optimizations-active*
+    (cerror "Peform the requested operation after disabling CLOS optimizations.~&To reenable CLOS optimizations, call (CCL::SNAP-READER-METHODS :KNOWN-SEALED-WORLD T :OPTIMIZE-MAKE-INSTANCE T)."
+            "CLOS optimizations are in effect, so it isn't safe to ~a ~s." operation operand)
+    (setq *clos-optimizations-active* nil)
+    (pessimize-clos)
+    t))
+
 ;;; Early accessors.  These functions eventually all get replaced with
 ;;; generic functions with "real", official names.
 
@@ -642,6 +653,7 @@
 		   (generic-function-class *standard-generic-function-class* gfc-p)
                    &allow-other-keys)
   (declare (dynamic-extent keys))
+  (disable-clos-optimizations 'ensure-generic-function function-name)
   (when gfc-p
     (if (symbolp generic-function-class)
       (setq generic-function-class (find-class generic-function-class)))
@@ -663,6 +675,7 @@
 	declarations
 	(lambda-list nil ll-p)
 	name)
+  (disable-clos-optimizations 'ensure-generic-function function-name)
   (when gfc-p
     (if (symbolp generic-function-class)
       (setq generic-function-class (find-class generic-function-class)))
@@ -863,11 +876,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun %add-method (gf method)
   (%add-standard-method-to-standard-gf gf method))
 
-;; Redefined in l1-clos.lisp
-(fset 'maybe-remove-make-instance-optimization
-      (nlambda bootstrapping-maybe-remove-make-instance-optimization (gfn method)
-        (declare (ignore gfn method))
-        nil))
+
 
 (defun %add-standard-method-to-standard-gf (gfn method)
   (when (%method-gf method)
@@ -878,7 +887,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 	 (specializers (%method-specializers method))
 	 (qualifiers (%method-qualifiers method)))
     (remove-obsoleted-combined-methods method dt specializers)
-    (maybe-remove-make-instance-optimization gfn method)
     (apply #'invalidate-initargs-vector-for-gf gfn specializers)
     (dolist (m methods)
       (when (and (equal specializers (%method-specializers m))

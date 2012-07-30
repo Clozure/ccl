@@ -294,25 +294,6 @@
 
 (defvar *update-slots-preserve-existing-wrapper* nil)
 
-(defvar *optimized-dependents* (make-hash-table :test 'eq :weak :key)
-  "Hash table mapping a class to a list of all objects that have been optimized to
-   depend in some way on the layout of the class")
-
-(defun note-class-dependent (class gf)
-  (pushnew gf (gethash class *optimized-dependents*)))
-
-(defun unoptimize-dependents (class)
-  (pessimize-make-instance-for-class-name (%class-name class))
-  (loop for obj in (gethash class *optimized-dependents*)
-        do (etypecase obj
-             (standard-generic-function
-              (let* ((dt (%gf-dispatch-table obj))
-                     (argnum (%gf-dispatch-table-argnum dt)))
-                (when (< argnum 0)
-                  (setf (%gf-dispatch-table-argnum dt) (lognot argnum)
-                        (%gf-dcode obj) (%gf-dispatch-table-gf dt)
-                        (%gf-dispatch-table-gf dt) obj)
-                  (clear-gf-dispatch-table dt)))))))
 
 (defun update-slots (class eslotds)
   (let* ((instance-slots (extract-slotds-with-allocation :instance eslotds))
@@ -331,7 +312,6 @@
                 ((and old-wrapper *update-slots-preserve-existing-wrapper*)
                  old-wrapper)
                 (t
-		 (unoptimize-dependents class)
                  (make-instances-obsolete class)
                  (%cons-wrapper class)))))
     (setf (%class-slots class) eslotds)
@@ -834,12 +814,14 @@
 
 ;;; This defines a new class.
 (defmethod ensure-class-using-class ((class null) name &rest keys &key &allow-other-keys)
+  (disable-clos-optimizations "define new class" name)
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (let* ((class (apply #'make-instance metaclass :name name initargs)))
       (setf (find-class name) class))))
 
 (defmethod ensure-class-using-class ((class forward-referenced-class) name &rest keys &key &allow-other-keys)
+  (disable-clos-optimizations "define new class" name)
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (apply #'change-class class metaclass initargs)
@@ -860,6 +842,7 @@
 
 ;;; Redefine an existing (not forward-referenced) class.
 (defmethod ensure-class-using-class ((class class) name &rest keys &key)
+  (disable-clos-optimizations "redefine existing class" name)  
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (unless (eq (class-of class) metaclass)
@@ -2136,6 +2119,7 @@ changing its name to ~s may have serious consequences." class new))
 
 ;;; Try to replace gf dispatch with something faster in f.
 (defun %snap-reader-method (f &key (redefinable t))
+  (declare (ignore redefinable))
   (when (slot-boundp f 'methods)
     (let* ((methods (generic-function-methods f)))
       (when (and methods
@@ -2161,9 +2145,6 @@ changing its name to ~s may have serious consequences." class new))
               ;; :allocation :instance (and all locations - the CDRs
               ;; of the alist pairs - are small, positive fixnums.
               (when (every (lambda (pair) (typep (cdr pair) 'fixnum)) alist)
-                (when redefinable
-                  (loop for (c . nil) in alist
-                        do (note-class-dependent c f)))
                 (clear-gf-dispatch-table dt)
                 (let* ((argnum (%gf-dispatch-table-argnum dt)))
                   (unless (< argnum 0)
@@ -2511,20 +2492,8 @@ changing its name to ~s may have serious consequences." class new))
                             class-name c))))
            %find-classes%))
 
-;; Redefined from bootstrapping verison in l1-clos-boot.lisp
-;; Remove the make-instance optimization if the user is adding
-;; a method on initialize-instance, allocate-instance, or shared-initialize
-(defun maybe-remove-make-instance-optimization (gfn method)
-  (when (or (eq gfn #'allocate-instance)
-            (eq gfn #'initialize-instance)
-            (eq gfn #'shared-initialize))
-    (let ((specializer (car (method-specializers method))))
-      (when (typep specializer 'class)
-	(labels ((clear (class)
-		   (pessimize-make-instance-for-class-name (class-name class))
-		   (dolist (sub (%class-direct-subclasses class))
-		     (clear sub))))
-	  (clear specializer))))))
+
+
 
 ;;; Iterate over all known GFs; try to optimize their dcode in cases
 ;;; involving reader methods.
@@ -2534,15 +2503,22 @@ changing its name to ~s may have serious consequences." class new))
                                  (optimize-make-instance t))
   (declare (ignore check-conflicts)
 	   (ignore known-sealed-world))
-  (when optimize-make-instance
-    (optimize-named-class-make-instance-methods))
-  (let* ((ngf 0)
-         (nwin 0))
-    (dolist (f (population.data %all-gfs%))
-      (incf ngf)
-      (when (%snap-reader-method f)
-        (incf nwin)))
-    (values ngf nwin 0)))
+  (if *clos-optimizations-active*
+    (values nil nil 0)
+    (progn
+      (setq *clos-optimizations-active* t)
+      (when optimize-make-instance
+        (optimize-named-class-make-instance-methods))
+      (let* ((ngf 0)
+             (nwin 0))
+        (dolist (f (population.data %all-gfs%))
+          (incf ngf)
+          (when (%snap-reader-method f)
+            (incf nwin)))
+        (values ngf nwin 0)))))
+
+
+    
 
 (defun register-non-dt-dcode-function (f)
   (flet ((symbol-or-function-name (x)
