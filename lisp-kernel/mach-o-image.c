@@ -27,6 +27,7 @@
 #include "lisp.h"
 #include "gc.h"
 #include "lisp_globals.h"
+#include "image.h"
 
 #if WORD_SIZE==64
 typedef struct mach_header_64 macho_header;

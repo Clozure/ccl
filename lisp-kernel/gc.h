@@ -234,6 +234,7 @@ LispObj compact_dynamic_heap(void);
 signed_natural purify(TCR *, signed_natural);
 signed_natural impurify(TCR *, signed_natural);
 signed_natural gc_like_from_xp(ExceptionInformation *, signed_natural(*fun)(TCR *, signed_natural), signed_natural);
+Boolean mark_ephemeral_root(LispObj);
 
 
 typedef enum {

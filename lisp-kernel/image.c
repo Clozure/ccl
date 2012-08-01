@@ -324,10 +324,6 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 LispObj
 load_openmcl_image(int fd, openmcl_image_file_header *h)
 {
-  void make_dynamic_heap_executable(BytePtr, BytePtr);
-  void xMakeDataExecutable(BytePtr, natural);
-  void lower_heap_start(BytePtr, area*);
-  void set_nil(LispObj);
   LispObj image_nil = 0;
   area *a;
   if (find_openmcl_image_file_header(fd, h)) {

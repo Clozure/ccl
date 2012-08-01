@@ -163,11 +163,9 @@ extern LispObj import_ptrs_base;
 
 
 
-void
-xMakeDataExecutable(void *, unsigned long);
 
 void
-make_dynamic_heap_executable(LispObj *p, LispObj *q)
+make_dynamic_heap_executable(void *p, void *q)
 {
   void * cache_start = (void *) p;
   natural ncacheflush = (natural) q - (natural) p;
@@ -2146,7 +2144,7 @@ set_nil(LispObj r)
 
 
 void
-xMakeDataExecutable(void *start, unsigned long nbytes)
+xMakeDataExecutable(BytePtr start, natural nbytes)
 {
 #ifdef PPC
   extern void flush_cache_lines();

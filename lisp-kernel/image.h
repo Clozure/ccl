@@ -83,10 +83,19 @@ typedef struct {
   int delta;
 } openmcl_image_file_trailer;
 
-LispObj
+extern LispObj
 load_openmcl_image(int, openmcl_image_file_header*);
 
-Boolean find_openmcl_image_file_header(int fd, openmcl_image_file_header *h);
+extern Boolean find_openmcl_image_file_header(int fd, openmcl_image_file_header *h);
+
+extern void
+prepare_to_write_dynamic_space(area *);
+
+extern void
+prepare_to_write_static_space(Boolean);
+
+extern area *
+set_nil(LispObj);
 
 
 

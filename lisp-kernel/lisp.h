@@ -99,7 +99,11 @@ extern FILE *dbgout;
 #define ON_ALTSTACK 2
 #define RESTART_SYSCALLS 4
 
-void
+extern void
 install_signal_handler(int signo, void *handler, unsigned flags);
+
+extern void make_dynamic_heap_executable(void *, void *);
+extern void xMakeDataExecutable(BytePtr, natural);
+extern void lower_heap_start(BytePtr, area*);
 
 #endif /* __lisp__ */
