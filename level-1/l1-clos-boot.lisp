@@ -23,6 +23,20 @@
 
 (in-package "CCL")
 
+
+(defstatic *clos-optimizations-active* nil)
+
+(defun disable-clos-optimizations (operation operand)
+  (when *clos-optimizations-active*
+    (cerror "Peform the requested operation after disabling CLOS optimizations.~&To reenable CLOS optimizations, call ~s."
+            (make-condition 'simple-error
+                           :format-control "CLOS optimizations are in effect, so it isn't safe to ~a ~s."
+                           :format-arguments (list operation operand))
+            (cons 'snap-reader-methods *clos-optimizations-active*))
+    (setq *clos-optimizations-active* nil)
+    (pessimize-clos)
+    t))
+
 ;;; Early accessors.  These functions eventually all get replaced with
 ;;; generic functions with "real", official names.
 
@@ -642,6 +656,7 @@
 		   (generic-function-class *standard-generic-function-class* gfc-p)
                    &allow-other-keys)
   (declare (dynamic-extent keys))
+  (disable-clos-optimizations 'ensure-generic-function function-name)
   (when gfc-p
     (if (symbolp generic-function-class)
       (setq generic-function-class (find-class generic-function-class)))
@@ -663,6 +678,7 @@
 	declarations
 	(lambda-list nil ll-p)
 	name)
+  (disable-clos-optimizations 'ensure-generic-function function-name)
   (when gfc-p
     (if (symbolp generic-function-class)
       (setq generic-function-class (find-class generic-function-class)))
@@ -878,7 +894,6 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 	 (specializers (%method-specializers method))
 	 (qualifiers (%method-qualifiers method)))
     (remove-obsoleted-combined-methods method dt specializers)
-    (maybe-remove-make-instance-optimization gfn method)
     (apply #'invalidate-initargs-vector-for-gf gfn specializers)
     (dolist (m methods)
       (when (and (equal specializers (%method-specializers m))
@@ -1277,7 +1292,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun %require-type-class-cell (arg class-cell)
   (if (class-cell-typep arg class-cell)
     arg
-    (%kernel-restart $xwrongtype arg (car class-cell))))
+    (%kernel-restart $xwrongtype arg (class-cell-class class-cell))))
 
 
 

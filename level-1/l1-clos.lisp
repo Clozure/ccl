@@ -834,12 +834,14 @@
 
 ;;; This defines a new class.
 (defmethod ensure-class-using-class ((class null) name &rest keys &key &allow-other-keys)
+  (disable-clos-optimizations "define new class" name)
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (let* ((class (apply #'make-instance metaclass :name name initargs)))
       (setf (find-class name) class))))
 
 (defmethod ensure-class-using-class ((class forward-referenced-class) name &rest keys &key &allow-other-keys)
+  (disable-clos-optimizations "define new class" name)
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (apply #'change-class class metaclass initargs)
@@ -860,6 +862,7 @@
 
 ;;; Redefine an existing (not forward-referenced) class.
 (defmethod ensure-class-using-class ((class class) name &rest keys &key)
+  (disable-clos-optimizations "redefine existing class" name)  
   (multiple-value-bind (metaclass initargs)
       (ensure-class-metaclass-and-initargs class keys)
     (unless (eq (class-of class) metaclass)
@@ -2529,20 +2532,29 @@ changing its name to ~s may have serious consequences." class new))
 ;;; Iterate over all known GFs; try to optimize their dcode in cases
 ;;; involving reader methods.
 
-(defun snap-reader-methods (&key known-sealed-world
+(defun snap-reader-methods (&rest args
+                                  &key known-sealed-world
                                  (check-conflicts t)
                                  (optimize-make-instance t))
   (declare (ignore check-conflicts)
-	   (ignore known-sealed-world))
-  (when optimize-make-instance
-    (optimize-named-class-make-instance-methods))
-  (let* ((ngf 0)
-         (nwin 0))
-    (dolist (f (population.data %all-gfs%))
-      (incf ngf)
-      (when (%snap-reader-method f)
-        (incf nwin)))
-    (values ngf nwin 0)))
+	   (ignore known-sealed-world)
+           (special *clos-optimizations-active*));bootstrapping
+  (if *clos-optimizations-active*
+    (values nil nil 0)
+    (progn
+      (setq *clos-optimizations-active* args)
+      (when optimize-make-instance
+        (optimize-named-class-make-instance-methods))
+      (let* ((ngf 0)
+             (nwin 0))
+        (dolist (f (population.data %all-gfs%))
+          (incf ngf)
+          (when (%snap-reader-method f)
+            (incf nwin)))
+        (values ngf nwin 0)))))
+
+
+    
 
 (defun register-non-dt-dcode-function (f)
   (flet ((symbol-or-function-name (x)
