@@ -548,7 +548,6 @@
                                    (incf arg-offset 8))))
                            (:single-float
                             (cond ((< fp-arg-offset 72)
-                                   (incf fp-arg-offset 4)
                                    (setf (%get-single-float argptr fp-arg-offset) val)
                                    (incf fp-arg-offset 4))
                                   (t

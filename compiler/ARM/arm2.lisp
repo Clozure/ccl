@@ -7490,21 +7490,10 @@
                      (arm2-two-untargeted-reg-forms seg
                                                     ptr ptrreg
                                                     offset offsetreg))
-                   (let* ((last (dll-node-pred seg)))
-                     (if (and (typep last 'vinsn)
-                              (eq (vinsn-template-name (vinsn-template last)) 'lri)
-                              (typep (setq fixoffset (ash (svref (vinsn-variable-parts last) 1) (- arm::fixnumshift)))
-                                     '(signed-byte 10))
-                              (not (logtest fixoffset #x3)))
-                       (progn
-                         (elide-vinsn last)
-                         (if double-p
-                           (! mem-ref-c-double-float fp-reg ptrreg fixoffset)
-                           (! mem-ref-c-single-float fp-reg ptrreg fixoffset)))
-                       (progn
+                   (progn
                          (if double-p
                            (! mem-ref-double-float fp-reg ptrreg offsetreg)
-                           (! mem-ref-single-float fp-reg ptrreg offsetreg))))))))
+                           (! mem-ref-single-float fp-reg ptrreg offsetreg))))))
              (<- fp-reg))
            (^)))))
     

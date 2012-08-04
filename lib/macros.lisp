@@ -2728,7 +2728,7 @@ defcallback returns the callback pointer, e.g., the value of name."
            (result (if struct-return-arg (gensym)))
            (body
             `(rlet ,rlets
-              (let ,lets
+              (let* ,lets
                 ,dynamic-extent-decls
                 ,@other-decls
                 ,@inits

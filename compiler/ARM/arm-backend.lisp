@@ -430,80 +430,185 @@
             `(,@enclosing-form ,call)
             call))))))
 
-(defun arm::eabi-generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
-  (declare (ignore fp-args-ptr))
+(defun arm::eabi-generate-float-callback-bindings (stack-ptr  argvars argspecs result-spec struct-result-name)
   (collect ((lets)
             (rlets)
             (dynamic-extent-names))
-    (let* ((rtype (parse-foreign-type result-spec)))
-      (when (typep rtype 'foreign-record-type)
-        (let* ((bits (ensure-foreign-type-bits rtype)))
-          (if (<= bits 64)
-            (rlets (list struct-result-name (foreign-record-type-name rtype)))
-            (setq argvars (cons struct-result-name argvars)
-                  argspecs (cons :address argspecs)
-                  rtype *void-foreign-type*))))
-          (let* ((offset 0)
-                 (nextoffset offset))
-            (do* ((argvars argvars (cdr argvars))
-                  (argspecs argspecs (cdr argspecs)))
-                 ((null argvars)
-                  (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 0 #|wrong|#))
-              (let* ((name (car argvars))
-                     (spec (car argspecs))
-                     (argtype (parse-foreign-type spec)))
-                (if (typep argtype 'foreign-record-type)
-                  (setq argtype (parse-foreign-type :address)))
-                (let* ((access-form
-                        `(,(cond
-                            ((typep argtype 'foreign-single-float-type)
-                             (setq nextoffset (+ offset 4))
-                             '%get-single-float)
-                            ((typep argtype 'foreign-double-float-type)
-                             (when (logtest offset 4)
-                               (incf offset 4))
-                             (setq nextoffset (+ offset 8))
-                             '%get-double-float)
-                            ((and (typep argtype 'foreign-integer-type)
-                                  (= (foreign-integer-type-bits argtype) 64)
-                                  (foreign-integer-type-signed argtype))
-                             (when (logtest offset 4)
-                               (incf offset 4))
-                             (setq nextoffset (+ offset 8))
-                             '%%get-signed-longlong)
-                            ((and (typep argtype 'foreign-integer-type)
-                                  (= (foreign-integer-type-bits argtype) 64)
-                                  (not (foreign-integer-type-signed argtype)))
-                             (when (logtest offset 4)
-                               (incf offset 4))
-                             (setq nextoffset (+ offset 8))
-                             '%%get-unsigned-longlong)
-                            (t
-                             (setq nextoffset (+ offset 4))
-                             (cond ((typep argtype 'foreign-pointer-type) '%get-ptr)
-                                   ((typep argtype 'foreign-integer-type)
-                                    (let* ((bits (foreign-integer-type-bits argtype))
-                                           (signed (foreign-integer-type-signed argtype)))
-                                      (cond ((<= bits 8)
-                                             (if signed
-                                               '%get-signed-byte
-                                               '%get-unsigned-byte))
-                                            ((<= bits 16)
-                                             (if signed
-                                               '%get-signed-word 
-                                               '%get-unsigned-word))
-                                            ((<= bits 32)
-                                             (if signed
-                                               '%get-signed-long 
-                                               '%get-unsigned-long))
-                                            (t
-                                             (error "Don't know how to access foreign argument of type ~s" (unparse-foreign-type argtype))))))
-                                   (t
-                                    (error "Don't know how to access foreign argument of type ~s" (unparse-foreign-type argtype))))))
-                          ,stack-ptr
-                          ,offset)))
-                  (when name (lets (list name access-form)))
-                  (setq offset nextoffset))))))))
+    (let* ((hard-float-p (gensym)))
+      (lets `(,hard-float-p (arm-hard-float-p)))
+      (let* ((rtype (parse-foreign-type result-spec)))
+        (when (typep rtype 'foreign-record-type)
+          (let* ((bits (ensure-foreign-type-bits rtype)))
+            (if (<= bits 64)
+              (rlets (list struct-result-name (foreign-record-type-name rtype)))
+              (setq argvars (cons struct-result-name argvars)
+                    argspecs (cons :address argspecs)
+                    rtype *void-foreign-type*))))
+        (let* ((reg-offset 0)
+               (gen-offset 0)
+               (fp-offset -72)
+               (stack-offset 16))
+          (do* ((argvars argvars (cdr argvars))
+                (argspecs argspecs (cdr argspecs)))
+               ((null argvars)
+                (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 0 #|wrong|#))
+            (let* ((name (car argvars))
+                   (spec (car argspecs))
+                   (argtype (parse-foreign-type spec))
+                   (accessor nil)
+                   (offsetform nil))
+              (if (typep argtype 'foreign-record-type)
+                (setq argtype (parse-foreign-type :address)))
+              (typecase argtype
+                (foreign-single-float-type
+                 (setq accessor '%get-single-float
+                       offsetform `(if ,hard-float-p
+                                    ,(if (< fp-offset -8)
+                                         (prog1 fp-offset
+                                           (incf fp-offset 4))
+                                         (prog1 stack-offset
+                                           (incf stack-offset 4)))
+                                    ,(prog1 gen-offset
+                                            (incf gen-offset 4)))))
+                (foreign-double-float-type
+                 (when (logtest 7 fp-offset)
+                   (incf fp-offset 4))
+                 (when (and (>= fp-offset -8)
+                            (logtest 7 stack-offset))
+                   (incf stack-offset 4))
+                 (when (logtest 7 gen-offset)
+                   (incf gen-offset 4))
+                 (setq accessor '%get-double-float
+                       offsetform `(if ,hard-float-p
+                                    ,(if (< fp-offset -8)
+                                         (prog1 fp-offset
+                                           (incf fp-offset 8))
+                                         (prog1 stack-offset
+                                           (incf stack-offset 8)))
+                                    ,(prog1 gen-offset
+                                            (incf gen-offset 8)))))
+                (foreign-pointer-type
+                 (setq accessor '%get-ptr
+                       offsetform `(if ,hard-float-p
+                                    ,(if (< reg-offset 16)
+                                         (prog1 reg-offset
+                                           (incf reg-offset 4))
+                                         (prog1 stack-offset
+                                           (incf stack-offset 4)))
+                                    ,(prog1 gen-offset
+                                            (incf gen-offset 4)))))
+                (foreign-integer-type
+                 (let* ((nbits (foreign-type-bits argtype))
+                        (nbytes (cond ((> nbits 32) 8)
+                                      ((> nbits 16) 4)
+                                      ((> nbits 8) 2)
+                                      (t 1)))
+                        (align (if (= nbytes 8) 8 4))
+                        (signed (foreign-integer-type-signed argtype)))
+                   (when (= align 8)
+                     (when (logtest 7 reg-offset)
+                       (incf reg-offset 4))
+                     (when (and (>= reg-offset 16)
+                                (logtest 7 stack-offset))
+                       (incf stack-offset 4))
+                     (when (logtest 7 gen-offset)
+                       (incf gen-offset 4)))
+                   (setq accessor
+                         (case nbytes
+                           (8 (if signed '%%get-signed-longlong '%%get-unsigned-longlong))
+                           (4 (if signed '%get-signed-long '%get-unsigned-long))
+                           (2 (if signed '%get-signed-word '%get-unsigned-word))
+                           (1 (if signed '%get-signed-byte '%get-unsigned-byte)))
+                         offsetform `(if ,hard-float-p
+                                      ,(if (<= (+ reg-offset nbytes) 16)
+                                           (prog1 reg-offset
+                                             (incf reg-offset nbytes))
+                                           (prog1 stack-offset
+                                             (incf stack-offset nbytes)))
+                                      ,(prog1 gen-offset
+                                              (incf gen-offset nbytes)))))))
+              (when name (lets `(,name (,accessor ,stack-ptr ,offsetform)))))))))))
+
+(defun arm::eabi-generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
+  (declare (ignore fp-args-ptr))
+  (if (dolist (argtype argspecs)
+        (let* ((ftype (parse-foreign-type argtype)))
+          (when (or (typep ftype 'foreign-single-float-type)
+                    (typep ftype 'foreign-double-float-type))
+            (return t))))
+    (arm::eabi-generate-float-callback-bindings stack-ptr argvars argspecs result-spec struct-result-name)
+    (collect ((lets)
+              (rlets)
+              (dynamic-extent-names))
+      (let* ((rtype (parse-foreign-type result-spec)))
+        (when (typep rtype 'foreign-record-type)
+          (let* ((bits (ensure-foreign-type-bits rtype)))
+            (if (<= bits 64)
+              (rlets (list struct-result-name (foreign-record-type-name rtype)))
+              (setq argvars (cons struct-result-name argvars)
+                    argspecs (cons :address argspecs)
+                    rtype *void-foreign-type*))))
+        (let* ((offset 0)
+               (nextoffset offset))
+          (do* ((argvars argvars (cdr argvars))
+                (argspecs argspecs (cdr argspecs)))
+               ((null argvars)
+                (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 0 #|wrong|#))
+            (let* ((name (car argvars))
+                   (spec (car argspecs))
+                   (argtype (parse-foreign-type spec)))
+              (if (typep argtype 'foreign-record-type)
+                (setq argtype (parse-foreign-type :address)))
+              (let* ((access-form
+                      `(,(cond
+                          ((typep argtype 'foreign-single-float-type)
+                           (setq nextoffset (+ offset 4))
+                           '%get-single-float)
+                          ((typep argtype 'foreign-double-float-type)
+                           (when (logtest offset 4)
+                             (incf offset 4))
+                           (setq nextoffset (+ offset 8))
+                           '%get-double-float)
+                          ((and (typep argtype 'foreign-integer-type)
+                                (= (foreign-integer-type-bits argtype) 64)
+                                (foreign-integer-type-signed argtype))
+                           (when (logtest offset 4)
+                             (incf offset 4))
+                           (setq nextoffset (+ offset 8))
+                           '%%get-signed-longlong)
+                          ((and (typep argtype 'foreign-integer-type)
+                                (= (foreign-integer-type-bits argtype) 64)
+                                (not (foreign-integer-type-signed argtype)))
+                           (when (logtest offset 4)
+                             (incf offset 4))
+                           (setq nextoffset (+ offset 8))
+                           '%%get-unsigned-longlong)
+                          (t
+                           (setq nextoffset (+ offset 4))
+                           (cond ((typep argtype 'foreign-pointer-type) '%get-ptr)
+                                 ((typep argtype 'foreign-integer-type)
+                                  (let* ((bits (foreign-integer-type-bits argtype))
+                                         (signed (foreign-integer-type-signed argtype)))
+                                    (cond ((<= bits 8)
+                                           (if signed
+                                             '%get-signed-byte
+                                             '%get-unsigned-byte))
+                                          ((<= bits 16)
+                                           (if signed
+                                             '%get-signed-word 
+                                             '%get-unsigned-word))
+                                          ((<= bits 32)
+                                           (if signed
+                                             '%get-signed-long 
+                                             '%get-unsigned-long))
+                                          (t
+                                           (error "Don't know how to access foreign argument of type ~s" (unparse-foreign-type argtype))))))
+                                 (t
+                                  (error "Don't know how to access foreign argument of type ~s" (unparse-foreign-type argtype))))))
+                        ,stack-ptr
+                        ,offset)))
+                (when name (lets (list name access-form)))
+                (setq offset nextoffset)))))))))
 
 (defun arm::eabi-generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore fp-args-ptr))
