@@ -1436,7 +1436,7 @@ remap_spjump()
       disp = target-(void *)work;
       *work = ((instr >> 26) << 26) | disp;
     }
-    xMakeDataExecutable(new, (void*)work-(void*)new);
+    xMakeDataExecutable((void *)new, (natural)work-(natural)new);
     ProtectMemory(new, 0x1000);
   }
 }
