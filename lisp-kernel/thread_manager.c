@@ -840,6 +840,10 @@ allocate_tcr()
   for (;;) {
 #ifdef DARWIN64
     tcr = darwin_allocate_tcr();
+#else
+    tcr = calloc(1, sizeof(TCR));
+#endif
+#ifdef DARWIN
     if (use_mach_exception_handling) {
       thread_exception_port = (mach_port_t)((natural)tcr);
       kret = mach_port_allocate_name(task_self,
@@ -854,8 +858,6 @@ allocate_tcr()
       chain = tcr;
       continue;
     }
-#else
-    tcr = calloc(1, sizeof(TCR));
 #endif
     for (;chain;chain = next) {
       next = chain->next;
