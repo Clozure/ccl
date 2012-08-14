@@ -987,10 +987,12 @@ ReserveMemory(natural size)
   unmap the memory.)  When we need to allocate TCR pointers, we try to
   allocate substantially more than we need.
 
-  The bulk allocation works by scanning the task's mapped memory regions
-  until a free region of appropriate size is found, then mapping that
-  region.  There is no way that I know of to prevent a foreign thread
-  from trying to map this region while we're doing so.
+  The bulk allocation works by scanning the task's mapped memory
+  regions until a free region of appropriate size is found, then
+  mapping that region (without the dangerous use of MAP_FIXED).  This
+  will win if OSX's mmap() tries to honor the suggested address if it
+  doesn't conflict with a mapped region (as it seems to in practice
+  since at least 10.5 and as it's documented to in 10.6.)
 */
 
 pthread_mutex_t darwin_tcr_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1000,13 +1002,15 @@ TCR _free_tcr_queue, *darwin_tcr_freelist=&_free_tcr_queue;
 #define TCR_CLUSTER_COUNT 1024   /* Enough that we allocate clusters rarely,
 but not so much that we waste lots of 32-bit memory. */
 
+#define LIMIT_32_BIT (natural)(1L<<32L)
+
 void
 map_tcr_cluster(TCR *head)
 {
   TCR *work = NULL, *prev = head;
   int i;
   vm_address_t addr = (vm_address_t)0, nextaddr;
-
+  void *p;
   vm_size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(TCR)),log2_page_size), vm_size;
   vm_region_basic_info_data_64_t vm_info;
   mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
@@ -1027,19 +1031,28 @@ map_tcr_cluster(TCR *head)
       break;
     }
     if (addr && ((nextaddr - addr) > request_size)) {
-      if ((addr + request_size) > (1L << 32L)) {
+      if ((addr + request_size) > LIMIT_32_BIT) {
         break;
       }
-      if (mmap((void *)addr,
+      p = mmap((void *)addr,
                request_size,
                PROT_READ|PROT_WRITE,
-               MAP_PRIVATE|MAP_ANON|MAP_FIXED,
+               MAP_PRIVATE|MAP_ANON,
                -1,
-               0) != (void *)addr) {
+               0);
+      if (p == MAP_FAILED) {
         break;
+      } else {
+        if (((natural)p > LIMIT_32_BIT) ||
+            ((((natural)p)+request_size) > LIMIT_32_BIT)) {
+          munmap(p, request_size);
+          nextaddr = 0;
+          vm_size = 0;
+        } else {
+          work = (TCR *) p;
+          break;
+        }
       }
-      work = (TCR *)addr;
-      break;
     }
     addr = nextaddr + vm_size;    
   }
