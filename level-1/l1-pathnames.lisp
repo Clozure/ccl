@@ -613,11 +613,11 @@
 
 (defun ccl-directory ()
   (let* ((dirpath (getenv "CCL_DEFAULT_DIRECTORY")))
-    (if dirpath
+    (if (and dirpath (not (zerop (length (namestring dirpath)))))
       (native-to-directory-pathname dirpath)
       (let* ((heap-image-path (%realpath (heap-image-name))))
-        (make-pathname :directory (pathname-directory heap-image-path)
-                       :device (pathname-device heap-image-path))))))
+	(make-pathname :directory (pathname-directory heap-image-path)
+		       :device (pathname-device heap-image-path))))))
 
 (defun user-homedir-pathname (&optional host)
   "Return the home directory of the user as a pathname."
