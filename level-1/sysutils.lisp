@@ -960,7 +960,7 @@
                     (svref table major))))
           (unless v
             (unless (eql new default)
-              (when (< major tablen)
+              (when (>= major tablen)
                 (let* ((newtab (make-array (the fixnum (1+ major)))))
                   (%copy-gvector-to-gvector table 0 newtab 0 tablen)
                   (setf (sparse-vector-table sv) (setq table newtab))))
