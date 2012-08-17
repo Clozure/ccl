@@ -613,7 +613,7 @@
 
 (defun ccl-directory ()
   (let* ((dirpath (getenv "CCL_DEFAULT_DIRECTORY")))
-    (if (and dirpath (not (zerop (length (namestring dirpath)))))
+    (if dirpath
       (native-to-directory-pathname dirpath)
       (let* ((heap-image-path (%realpath (heap-image-name))))
         (make-pathname :directory (pathname-directory heap-image-path)
