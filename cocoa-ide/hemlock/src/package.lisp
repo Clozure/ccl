@@ -150,6 +150,7 @@
    #:last-line-p
    #:kill-region
    #:kill-characters
+   #:*kill-ring-pushes-to-clipboard*
    #:*ephemerally-active-command-types*
    #:activate-region
    #:deactivate-region

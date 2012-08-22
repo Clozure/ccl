@@ -18,7 +18,7 @@
 
 (defvar *kill-ring* (make-ring 10) "The Hemlock kill ring.")
 
-
+(defvar *kill-ring-pushes-to-clipboard* t "True if kills should overwrite the system clipboard.")
 
 ;;;; Active Regions.
 
@@ -325,7 +325,7 @@
 		     :kill-backward))))))
 
 (defun kill-ring-push (region)
-  (hi::region-to-clipboard region)
+  (when *kill-ring-pushes-to-clipboard* (hi::region-to-clipboard region))
   (ring-push region *kill-ring*))
 
 
