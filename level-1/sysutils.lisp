@@ -961,7 +961,7 @@
           (unless v
             (unless (eql new default)
               (when (>= major tablen)
-                (let* ((newtab (make-array (the fixnum (1+ major)))))
+                (let* ((newtab (make-array (the fixnum (1+ major)) :initial-element nil)))
                   (%copy-gvector-to-gvector table 0 newtab 0 tablen)
                   (setf (sparse-vector-table sv) (setq table newtab))))
               (setq v (setf (svref table major) (make-array 256 :element-type (sparse-vector-element-type sv) :initial-element default)))))
