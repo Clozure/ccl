@@ -2188,30 +2188,31 @@
     (with-mark ((start mark)
                 (end mark)
                 (list-end mark))
-      (loop
-        (unless (find-pattern mark pattern)
-          (return))
-        (pre-command-parse-check mark)
-        (when (valid-spot mark t)
-          (move-mark end mark)
-          (when (form-offset end 1)
-            (move-mark start end)
-            (when (backward-up-list start)
-              (move-mark list-end start)
-              (unless (and (list-offset list-end 1)
-                           (mark<= list-end start-mark))
-                (return))
-              (when (scan-char start :lisp-syntax :constituent)
-                (unless (or (mark= mark start)
-                            (let* ((s (nstring-upcase (region-to-string (region start end))))
-                                   (*package* (find-package "CL-USER")))
-                              (eq (ignore-errors (values (read-from-string s)))
-                                  'in-package)))
-                  (return))
-                (unless (form-offset end 1) (format t "~& worse") (return 4))
-                (move-mark start end)
-                (form-offset start -1)
-                (return
+      (loop for i from 0 do
+        (tagbody ; I'm not proud of this
+         (unless (find-pattern mark pattern)
+           (return))
+         (pre-command-parse-check mark)
+         (when (valid-spot mark t)
+           (move-mark end mark)
+           (when (form-offset end 1)
+             (move-mark start end)
+             (when (backward-up-list start)
+               (move-mark list-end start)
+               (unless (and (list-offset list-end 1)
+                            (mark<= list-end start-mark))
+                 (go again))
+               (when (scan-char start :lisp-syntax :constituent)
+                 (unless (or (mark= mark start)
+                             (let* ((s (nstring-upcase (region-to-string (region start end))))
+                                    (*package* (find-package "CL-USER")))
+                               (eq (ignore-errors (values (read-from-string s)))
+                                   'in-package)))
+                   (go again))
+                 (unless (form-offset end 1) (format t "~& worse") (return 4))
+                 (move-mark start end)
+                 (form-offset start -1)
+                 (return
                   (if (eql (next-character start) #\")
                     (progn
                       (character-offset start 1)
@@ -2219,7 +2220,8 @@
                       (region-to-string (region start end)))
                     (let* ((pkgname (ignore-errors (values (read-from-string (region-to-string (region start end)))))))
                       (if pkgname
-                        (values (ignore-errors (string pkgname)))))))))))))))
+                        (values (ignore-errors (string pkgname)))))))))))
+         again)))))
 
 (defun ensure-buffer-package (buffer)
   (or (variable-value 'current-package :buffer buffer)
@@ -2318,17 +2320,18 @@
 
 (hi:defcommand "Show Callers" (p)
   "Display a scrolling list of the callers of the symbol at point.
-   Double-click a row to go to the caller's definition."
+  Double-click a row to go to the caller's definition."
   (declare (ignore p))
   (with-mark ((mark1 (current-point))
               (mark2 (current-point)))
-    (mark-symbol mark1 mark2)
-    (with-input-from-region (s (region mark1 mark2))
-      (let* ((symbol (read s)))
-	(hemlock-ext:open-sequence-dialog
-	 :title (format nil "Callers of ~a" symbol)
-	 :sequence (ccl::callers symbol)
-	 :action #'edit-definition)))))
+    (let* ((*package* (or (find-package (package-at-mark mark1)) *package*)))
+      (mark-symbol mark1 mark2)
+      (with-input-from-region (s (region mark1 mark2))
+        (let* ((symbol (read s)))
+          (hemlock-ext:open-sequence-dialog
+           :title (format nil "Callers of ~a" symbol)
+           :sequence (ccl::callers symbol)
+           :action #'edit-definition))))))
 
 #||
 (defcommand "Set Package Name" (p)
