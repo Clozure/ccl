@@ -1820,10 +1820,10 @@ C(egc_store_node_conditional_success_test):
 	__(shrl $dnode_shift,%imm0)
 	__(cmpl lisp_global(oldspace_dnode_count),%imm0)
 	__(jae 2f)
-	__(ref_global(refbits,%temp1))
+	__(ref_global(refbits,%arg_y))
 	__(xorb $31,%imm0_b)
 	__(lock)
-	__(btsl %imm0,(%temp1))
+	__(btsl %imm0,(%arg_y))
         .globl C(egc_store_node_conditional_success_end)
 C(egc_store_node_conditional_success_end):
 2:	__(movl $t_value,%arg_z)
