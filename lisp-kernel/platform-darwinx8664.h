@@ -89,3 +89,5 @@ extern int darwin_sigreturn(ExceptionInformation *context);
 pthread_mutex_t *mach_exception_lock;
 
 #include "os-darwin.h"
+
+#define DARWIN64 1

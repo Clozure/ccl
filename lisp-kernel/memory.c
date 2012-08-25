@@ -31,6 +31,9 @@
 #ifdef LINUX
 #include <strings.h>
 #endif
+#ifdef DARWIN64
+#include <pthread.h>
+#endif
 
 #ifndef WINDOWS
 #include <sys/mman.h>
@@ -944,3 +947,157 @@ unprotect_watched_areas()
     code = a->code;
   }
 }
+
+LogicalAddress
+ReserveMemory(natural size)
+{
+  LogicalAddress p;
+#ifdef WINDOWS
+  p = VirtualAlloc(0,
+                   size,
+                   MEM_RESERVE,
+                   PAGE_NOACCESS);
+  return p;
+#else
+  p = mmap(NULL,size,PROT_NONE,MAP_PRIVATE|MAP_ANON|MAP_NORESERVE,-1,0);
+  if (p == MAP_FAILED) {
+    return NULL;
+  }
+  return p;
+#endif
+}
+
+#ifdef DARWIN64
+/*
+  On 64-bit Darwin, we try to make a TCR's address serve as a Mach port
+  name, which means that it has to fit in 32 bits (and not conflict with
+  an existing port name, but that's a separate issue.)  Darwin doesn't
+  seem to offer means of mapping/allocating memory that's guaranteed to
+  return a 32-bit address on 64-bit systems, and trial-and-error doesn't
+  scale well.
+  
+  Since it's a PITA to allocate 32-bit TCR pointers, we never free them
+  once we've done so.  (We maintain a queue of "freed" TCRs but never
+  unmap the memory.)  When we need to allocate TCR pointers, we try to
+  allocate substantially more than we need.
+
+  The bulk allocation works by scanning the task's mapped memory
+  regions until a free region of appropriate size is found, then
+  mapping that region (without the dangerous use of MAP_FIXED).  This
+  will win if OSX's mmap() tries to honor the suggested address if it
+  doesn't conflict with a mapped region (as it seems to in practice
+  since at least 10.5 and as it's documented to in 10.6.)
+*/
+
+pthread_mutex_t darwin_tcr_lock = PTHREAD_MUTEX_INITIALIZER;
+
+TCR _free_tcr_queue, *darwin_tcr_freelist=&_free_tcr_queue;
+
+#define TCR_CLUSTER_COUNT 1024   /* Enough that we allocate clusters rarely,
+but not so much that we waste lots of 32-bit memory. */
+
+#define LIMIT_32_BIT (natural)(1L<<32L)
+
+void
+map_tcr_cluster(TCR *head)
+{
+  TCR *work = NULL, *prev = head;
+  int i;
+  vm_address_t addr = (vm_address_t)0, nextaddr;
+  void *p;
+  vm_size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(TCR)),log2_page_size), vm_size;
+  vm_region_basic_info_data_64_t vm_info;
+  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
+  mach_port_t vm_object_name = (mach_port_t) 0;
+  kern_return_t kret;
+
+  while (1) {
+    nextaddr = addr;
+    vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
+    kret = vm_region_64(mach_task_self(),
+                        &nextaddr,
+                        &vm_size,
+                        VM_REGION_BASIC_INFO_64,
+                        (vm_region_info_t)&vm_info,
+                        &vm_info_size,
+                        &vm_object_name);
+    if (kret != KERN_SUCCESS) {
+      break;
+    }
+    if (addr && ((nextaddr - addr) > request_size)) {
+      if ((addr + request_size) > LIMIT_32_BIT) {
+        break;
+      }
+      p = mmap((void *)addr,
+               request_size,
+               PROT_READ|PROT_WRITE,
+               MAP_PRIVATE|MAP_ANON,
+               -1,
+               0);
+      if (p == MAP_FAILED) {
+        break;
+      } else {
+        if (((natural)p > LIMIT_32_BIT) ||
+            ((((natural)p)+request_size) > LIMIT_32_BIT)) {
+          munmap(p, request_size);
+          nextaddr = 0;
+          vm_size = 0;
+        } else {
+          work = (TCR *) p;
+          break;
+        }
+      }
+    }
+    addr = nextaddr + vm_size;    
+  }
+  if (!work) {
+    Fatal("Can't allocate memory for thread-local storage.", "");
+  }
+  
+  for (i=0; i < TCR_CLUSTER_COUNT; i++, work++) {
+    prev->next = work;
+    work->prev = prev;
+    head->prev = work;
+    work->next = head;
+    prev = work;
+  }
+}
+
+void
+darwin_free_tcr(TCR *tcr)
+{
+  TCR  *head = darwin_tcr_freelist, *tail;
+
+  pthread_mutex_lock(&darwin_tcr_lock);
+  tail = head->prev;
+  tail->next = tcr;
+  head->prev = tcr;
+  tcr->prev = tail;
+  tcr->next = head;
+  pthread_mutex_unlock(&darwin_tcr_lock);
+}
+
+TCR *
+darwin_allocate_tcr()
+{
+  TCR  *head = darwin_tcr_freelist, *tail, *tcr;
+  pthread_mutex_lock(&darwin_tcr_lock);
+  if (head->next == NULL) { /* First time */
+    head->next = head->prev = head;
+  }
+
+  if (head->next == head) {
+    map_tcr_cluster(head);
+  }
+  tcr = head->next;
+  tail = tcr->next;
+  tail->prev = head;
+  head->next = tail;
+  pthread_mutex_unlock(&darwin_tcr_lock);
+  return tcr;
+}
+  
+
+
+
+#endif
