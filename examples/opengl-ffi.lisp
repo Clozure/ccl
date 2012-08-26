@@ -38,11 +38,8 @@
     (let ((command-line-strings (list "ccl")))
       (when (not glut-initialized-p)
         (ccl::with-string-vector (argv command-line-strings)
-          (rlet ((argvp (* t))    ; glutinit takes (* (:signed 32)) and (* (* (:unsigned 8)))
-		 (argcp :signed)) ; so why are these declared as (* t) and :signed?
-	    (setf (%get-long argcp) (length command-line-strings)
-		  (%get-ptr argvp) argv)
-	    (#_glutInit argcp argvp)))
+          (rlet ((argcp :int (length command-line-strings)))
+	    (#_glutInit argcp argv)))
 	(setf glut-initialized-p t))))
   ;; When a saved image is restarted, it needs to know that glut
   ;; hasn't been initialized yet.
@@ -132,6 +129,8 @@
   (if (ignore-errors (find-symbol "*NSAPP*" "GUI"))
     (error "This is a GLUT example; it can't possibly work ~
                  in a GUI environment.")))
+
+#+darwin-target
 (progn
   (ccl:process-run-function
    "housekeeping"
@@ -153,5 +152,9 @@
        (ccl::%set-toplevel nil)
        (main)))
      (ccl::toplevel))))
+
+#-darwin-target
+(process-run-function "GLUT Main" #'2dgasket::main)
+
 
 
