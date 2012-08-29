@@ -326,7 +326,7 @@ register_cstack_holding_area_lock(BytePtr bottom, natural size)
   setup_sigaltstack(a);
 #endif
 #ifdef PROTECT_CSTACK
-  if (a->softlimit != a->harlimit) {
+  if (a->softlimit != a->hardlimit) {
     a->softprot=new_protected_area(a->hardlimit,a->softlimit,kSPsoftguard,CSTACK_SOFTPROT,true);
     a->hardprot=new_protected_area(lowlimit,a->hardlimit,kSPhardguard,CSTACK_HARDPROT,true);
   }
