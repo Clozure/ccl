@@ -1545,9 +1545,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #ifdef ARM
   tcr->last_lisp_frame = (natural)(a->high);
 #endif
-  if (!(tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN))) {
-    TCR_AUX(tcr)->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
-  }
+  TCR_AUX(tcr)->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
 #ifdef LINUX
 #ifdef PPC
 #ifndef PPC64

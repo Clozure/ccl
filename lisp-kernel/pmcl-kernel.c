@@ -316,14 +316,20 @@ register_cstack_holding_area_lock(BytePtr bottom, natural size)
 {
   BytePtr lowlimit = (BytePtr) (((((natural)bottom)-size)+4095)&~4095);
   area *a = new_area((BytePtr) bottom-size, bottom, AREA_CSTACK);
-  a->hardlimit = lowlimit+CSTACK_HARDPROT;
-  a->softlimit = a->hardlimit+CSTACK_SOFTPROT;
+  if (size > (CSTACK_HARDPROT + CSTACK_SOFTPROT)) {
+    a->hardlimit = lowlimit+CSTACK_HARDPROT;
+    a->softlimit = a->hardlimit+CSTACK_SOFTPROT;
+  } else {
+    a->softlimit = a->hardlimit = lowlimit;
+  }
 #ifdef USE_SIGALTSTACK
   setup_sigaltstack(a);
 #endif
 #ifdef PROTECT_CSTACK
-  a->softprot=new_protected_area(a->hardlimit,a->softlimit,kSPsoftguard,CSTACK_SOFTPROT,true);
-  a->hardprot=new_protected_area(lowlimit,a->hardlimit,kSPhardguard,CSTACK_HARDPROT,true);
+  if (a->softlimit != a->harlimit) {
+    a->softprot=new_protected_area(a->hardlimit,a->softlimit,kSPsoftguard,CSTACK_SOFTPROT,true);
+    a->hardprot=new_protected_area(lowlimit,a->hardlimit,kSPhardguard,CSTACK_HARDPROT,true);
+  }
 #endif
   add_area_holding_area_lock(a);
   return a;
