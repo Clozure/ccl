@@ -39,6 +39,9 @@
 
 #-windows-target
 (defun %nanosleep (seconds nanoseconds)
+  #+(and darwin-target 64-bit-target)
+  (when (> seconds #x3fffffff)          ;over 30 years in seconds
+    (setq seconds #x3fffffff))
   (with-process-whostate ("Sleep")
     (rlet ((a :timespec)
            (b :timespec))
@@ -47,16 +50,19 @@
       (let* ((aptr a)
              (bptr b))
         (loop
-          (let* ((result 
-                  (external-call #+darwin-target "_nanosleep"
-                                 #-darwin-target "nanosleep"
-                                 :address aptr
-                                 :address bptr
-                                 :signed-fullword)))
+          (let* ((result (#_nanosleep aptr bptr)))
             (declare (type (signed-byte 32) result))
             (if (and (< result 0)
                      (eql (%get-errno) (- #$EINTR)))
-              (psetq aptr bptr bptr aptr)
+              (progn
+                ;; Some versions of OSX have a bug: if the call to #_nanosleep
+                ;; is interrupted near the time when the timeout would
+                ;; have occurred, the "remaining time" is computed as
+                ;; a negative value and, on 64-bit platforms, zero-extended.
+                #+(and darwin-target 64-bit-target)
+                (when (>= (pref bptr :timespec.tv_sec) #x80000000)
+                  (return))
+                (psetq aptr bptr bptr aptr))
               (return))))))))
 
 
