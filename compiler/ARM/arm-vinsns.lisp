@@ -1290,6 +1290,12 @@
   (uuo-error-reg-not-xtype src (:$ arm::xtype-s8))
   :ok)
 
+(define-arm-vinsn (%unbox-s8 :predicatable)
+    (((dest :s8))
+     ((src :lisp)))
+  (mov dest (:$ #xff))
+  (and dest dest (:asr src (:$ arm::fixnumshift))))
+
 (define-arm-vinsn unbox-base-char (((dest :u32))
                                    ((src :lisp)))
   (and dest src (:$ arm::subtag-mask))
