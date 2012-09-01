@@ -372,8 +372,8 @@
   (let ((xx mm2)
 	(yy mm3)
 	(cc mm4))
-    (movl (@ x (% esp)) (% imm0))
-    (movd (@ x8632::misc-data-offset (% imm0) (% i)) (% xx))
+    (movl (@ x (% esp)) (% temp0))
+    (movd (@ x8632::misc-data-offset (% temp0) (% i)) (% xx))
     (unbox-fixnum y imm0)
     (movd (% imm0) (% yy))
     (pmuludq (% xx) (% yy))		;64 bit product
