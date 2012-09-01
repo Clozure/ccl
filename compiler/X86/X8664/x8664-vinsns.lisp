@@ -1024,6 +1024,11 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%q src) (:$ub arch::error-object-not-signed-byte-8))))
 
+(define-x8664-vinsn %unbox-s8 (((dest :s8))
+                               ((src :lisp)))
+  (movq (:%q src) (:%q dest))
+  (sarq (:$ub x8664::fixnumshift) (:%q dest)))
+
 (define-x8664-vinsn unbox-u16 (((dest :u16))
 			      ((src :lisp)))
   :resume
