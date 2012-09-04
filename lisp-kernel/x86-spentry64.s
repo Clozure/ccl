@@ -2962,7 +2962,7 @@ local_label(default_simple_opt):
 	__(jmp local_label(rest_keys))
 local_label(opt_supp):
 	__(extract_lisptag(%arg_reg,%imm1))
-	__(compare_reg_to_nil(%arg_z))
+	__(compare_reg_to_nil(%arg_reg))
 	__(je local_label(default_hard_opt))
 	__(cmpb $tag_list,%imm1_b)
 	__(jne local_label(badlist))
