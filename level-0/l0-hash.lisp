@@ -268,7 +268,7 @@
           ((immediate-p-macro key) (mixup-hash-code (strip-tag-to-fixnum key)))
           ((and hash (neq hash key)) hash)  ; eql stuff
           (t (typecase key
-                (simple-string (%pname-hash key (length key)))
+                (simple-string (%string-hash 0 key (length key)))
                 (string
                  (let ((length (length key)))
                    (multiple-value-bind (data offset) (array-data-and-offset key)
@@ -277,16 +277,22 @@
                 (cons
                  (let ((hash 0))
                    (do* ((i 0 (1+ i))
-                         (list key (cdr list)))
-                        ((or (not (consp list)) (> i 11))) ; who figured 11?
+                         (done nil)
+                         (list key (unless done (cdr list))))
+                        ((or done (> i 11))) ; who figured 11?
                      (declare (fixnum i))
-                     (multiple-value-bind (h1 a1) (%%equalhash (%car list))
+                     (multiple-value-bind (h1 a1) (%%equalhash
+                                                   (if (atom list)
+                                                     (progn
+                                                       (setq done t)
+                                                       list)
+                                                     (%car list)))
                        (when a1 (setq addressp t))
                        ; fix the case of lists of same stuff in different order
                        ;(setq hash (%ilogxor (fixnum-rotate h1 i) hash))
                        (setq hash (%i+ (rotate-hash-code hash) h1))
                        ))
-                   (values hash addressp)))
+                   (values (mixup-hash-code hash) addressp)))
                 (pathname (%%equalphash key))
                 (t (%%eqlhash key)))))))
 
