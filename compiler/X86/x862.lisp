@@ -3412,6 +3412,8 @@
 (defun x862-one-untargeted-reg-form (seg form suggested &optional (reserved 0))
   (or (x862-reg-for-form form suggested)
       (with-x86-local-vinsn-macros (seg)
+        (when *x862-codecoverage-reg*
+          (setq reserved (logior reserved (ash 1 *x862-codecoverage-reg*))))
         (let* ((gpr-p (= (hard-regspec-class suggested) hard-reg-class-gpr))
                (node-p (if gpr-p (= (get-regspec-mode suggested) hard-reg-class-gpr-mode-node))))
           (if node-p
@@ -3629,7 +3631,7 @@
       (let* ((avar (nx2-lexical-reference-p aform))
              (adest nil)
              (bdest nil)
-             (atriv (and (x862-trivial-p bform) (nx2-node-gpr-p breg)))
+             (atriv (and (x862-trivial-p bform areg) (nx2-node-gpr-p breg)))
              (aconst (and (not atriv) (or (x86-side-effect-free-form-p aform)
                                           (if avar (nx2-var-not-set-by-form-p avar bform)))))
              (apushed (not (or atriv aconst))))
@@ -3775,12 +3777,12 @@
     (let* ((bnode (nx2-node-gpr-p breg))
            (cnode (nx2-node-gpr-p creg))
            (atriv (or (null aform) 
-                      (and (x862-trivial-p bform)
-                           (x862-trivial-p cform)
+                      (and (x862-trivial-p bform areg)
+                           (x862-trivial-p cform areg)
                            bnode
                            cnode)))
            (btriv (or (null bform)
-                      (and (x862-trivial-p cform)
+                      (and (x862-trivial-p cform breg)
                            cnode)))
            (aconst (and (not atriv) 
                         (or (x86-side-effect-free-form-p aform)
