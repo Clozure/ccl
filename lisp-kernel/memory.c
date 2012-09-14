@@ -31,7 +31,7 @@
 #ifdef LINUX
 #include <strings.h>
 #endif
-#ifdef DARWIN64
+#ifdef DARWIN
 #include <pthread.h>
 #endif
 
@@ -973,7 +973,7 @@ ReserveMemory(natural size)
 #endif
 }
 
-#ifdef DARWIN64
+#ifdef DARWIN
 /*
   On 64-bit Darwin, we try to make a TCR's address serve as a Mach port
   name, which means that it has to fit in 32 bits (and not conflict with
@@ -993,6 +993,17 @@ ReserveMemory(natural size)
   will win if OSX's mmap() tries to honor the suggested address if it
   doesn't conflict with a mapped region (as it seems to in practice
   since at least 10.5 and as it's documented to in 10.6.)
+
+  OSX 10.8 introduces new horrors that affect 32-bit CCL as well: 
+
+  mach_port_allocate_name(mach_task_self(),MACH_PORT_RIGHT_RECEIVE,n)
+  
+  returns KERN_NO_SPACE for n > ~#x09800000.  It's not known whether or
+  not this is intentional; even if it's a bug, it suggests that we should
+  probably stop trying to arrange that a TCR's address can be used as the
+  corresponding thread's exception port and maintain some sort of 
+  efficient and thread-safe mapping from port to TCR.  Soon.
+
 */
 
 pthread_mutex_t darwin_tcr_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1002,7 +1013,26 @@ TCR _free_tcr_queue, *darwin_tcr_freelist=&_free_tcr_queue;
 #define TCR_CLUSTER_COUNT 1024   /* Enough that we allocate clusters rarely,
 but not so much that we waste lots of 32-bit memory. */
 
-#define LIMIT_32_BIT (natural)(1L<<32L)
+#define LIMIT_32_BIT (natural)(0x09800000)
+
+#undef vm_region
+
+void
+link_tcr_list(TCR *head, TCR *buf, int n)
+{
+  TCR *prev = head;
+  int i;
+
+  for (i=0; i < n; i++, buf++) {
+    prev->next = buf;
+    buf->prev = prev;
+    head->prev = buf;
+    buf->next = head;
+    prev = buf;
+  }
+}
+
+TCR initial_tcrs[TCR_CLUSTER_COUNT];
 
 void
 map_tcr_cluster(TCR *head)
@@ -1012,13 +1042,19 @@ map_tcr_cluster(TCR *head)
   vm_address_t addr = (vm_address_t)0, nextaddr;
   void *p;
   vm_size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(TCR)),log2_page_size), vm_size;
+#if WORD_SIZE==64
   vm_region_basic_info_data_64_t vm_info;
   mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
+#else
+  vm_region_basic_info_data_t vm_info;
+  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT;
+#endif
   mach_port_t vm_object_name = (mach_port_t) 0;
   kern_return_t kret;
 
   while (1) {
     nextaddr = addr;
+#if WORD_SIZE==64
     vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
     kret = vm_region_64(mach_task_self(),
                         &nextaddr,
@@ -1027,6 +1063,16 @@ map_tcr_cluster(TCR *head)
                         (vm_region_info_t)&vm_info,
                         &vm_info_size,
                         &vm_object_name);
+#else
+    vm_info_size = VM_REGION_BASIC_INFO_COUNT;
+    kret = vm_region(mach_task_self(),
+                     &nextaddr,
+                     &vm_size,
+                     VM_REGION_BASIC_INFO,
+                     (vm_region_info_t)&vm_info,
+                     &vm_info_size,
+                     &vm_object_name);
+#endif
     if (kret != KERN_SUCCESS) {
       break;
     }
@@ -1060,13 +1106,7 @@ map_tcr_cluster(TCR *head)
     Fatal("Can't allocate memory for thread-local storage.", "");
   }
   
-  for (i=0; i < TCR_CLUSTER_COUNT; i++, work++) {
-    prev->next = work;
-    work->prev = prev;
-    head->prev = work;
-    work->next = head;
-    prev = work;
-  }
+  link_tcr_list(head, work, TCR_CLUSTER_COUNT);
 }
 
 void
@@ -1090,6 +1130,7 @@ darwin_allocate_tcr()
   pthread_mutex_lock(&darwin_tcr_lock);
   if (head->next == NULL) { /* First time */
     head->next = head->prev = head;
+    link_tcr_list(head,initial_tcrs,TCR_CLUSTER_COUNT);
   }
 
   if (head->next == head) {
@@ -1100,6 +1141,7 @@ darwin_allocate_tcr()
   tail->prev = head;
   head->next = tail;
   pthread_mutex_unlock(&darwin_tcr_lock);
+  memset(tcr,0,sizeof(TCR));
   return tcr;
 }
   
