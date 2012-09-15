@@ -2935,8 +2935,9 @@ typedef x86_exception_state32_t native_exception_state_t;
 #define NATIVE_EXCEPTION_STATE_FLAVOR x86_EXCEPTION_STATE32
 #endif
 
-#define TCR_FROM_EXCEPTION_PORT(p) ((TCR *)((natural)p))
-#define TCR_TO_EXCEPTION_PORT(tcr) ((mach_port_t)((natural)(tcr)))
+#define TCR_FROM_EXCEPTION_PORT(p) find_tcr_from_exception_port(p)
+#define TCR_TO_EXCEPTION_PORT(t) (mach_port_name_t)(((TCR *)t)->io_datum)
+
 
 extern void pseudo_sigreturn(void);
 
@@ -3261,6 +3262,60 @@ setup_signal_frame(mach_port_t thread,
 
 #define DARWIN_EXCEPTION_HANDLER signal_handler
 
+#define EXCEPTION_PORT_BUCKETS 109
+
+TCR *
+exception_port_map[EXCEPTION_PORT_BUCKETS];
+
+pthread_mutex_t 
+exception_port_map_lock = PTHREAD_MUTEX_INITIALIZER;
+
+TCR *
+find_tcr_from_exception_port(mach_port_t port)
+{
+  TCR *tcr = NULL;
+  pthread_mutex_lock(&exception_port_map_lock);
+
+  tcr = exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS];
+
+  while (tcr) {
+    if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
+      break;
+    }
+    tcr = (TCR *)tcr->pending_io_info;
+  }
+  pthread_mutex_unlock(&exception_port_map_lock);
+  return tcr;
+}
+
+void
+associate_tcr_with_exception_port(mach_port_t port, TCR *tcr)
+{
+  int b = (unsigned)port % EXCEPTION_PORT_BUCKETS;
+  pthread_mutex_lock(&exception_port_map_lock);
+
+  tcr->pending_io_info = (void *)(exception_port_map[b]);
+  exception_port_map[b] = tcr;
+  pthread_mutex_unlock(&exception_port_map_lock);
+}
+
+void
+disassociate_tcr_from_exception_port(mach_port_t port)
+{
+  TCR **prev = &(exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS]),
+    *tcr;
+  pthread_mutex_lock(&exception_port_map_lock);
+
+  while((tcr = *prev) != NULL) {
+    if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
+      *prev = (TCR *)tcr->pending_io_info;
+      break;
+    }
+    prev = (TCR **)&(tcr->pending_io_info);
+  }
+  pthread_mutex_unlock(&exception_port_map_lock);
+}
+  
 
 kern_return_t
 catch_exception_raise_state(mach_port_t exception_port,
@@ -3393,7 +3448,7 @@ void *
 exception_handler_proc(void *arg)
 {
   extern boolean_t exc_server();
-  mach_port_t p = TCR_TO_EXCEPTION_PORT(arg);
+  mach_port_t p = (mach_port_t)arg;
 
   mach_exception_thread = pthread_mach_thread_np(pthread_self());
   mach_msg_server(exc_server, 256, p, 0);
@@ -3597,8 +3652,12 @@ darwin_exception_cleanup(TCR *tcr)
     free(fxs);
   }
   if (use_mach_exception_handling) {
-    mach_port_deallocate(mach_task_self(),TCR_TO_EXCEPTION_PORT(tcr));
-    mach_port_destroy(mach_task_self(),TCR_TO_EXCEPTION_PORT(tcr));
+    mach_port_t task_self = mach_task_self(),
+      exception_port = TCR_TO_EXCEPTION_PORT(tcr);
+
+    disassociate_tcr_from_exception_port(exception_port);
+    mach_port_deallocate(task_self,exception_port);
+    mach_port_destroy(task_self,exception_port);
   }
 }
 

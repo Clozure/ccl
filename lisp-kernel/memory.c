@@ -1004,6 +1004,11 @@ ReserveMemory(natural size)
   corresponding thread's exception port and maintain some sort of 
   efficient and thread-safe mapping from port to TCR.  Soon.
 
+  News flash:  mach_port_allocate_name() is not only worse than we
+  imagine on 10.8, but it's worse than we can imagine.  Give up.
+  (This means that there are no longer any constraints on TCR addresses
+  and we could just use malloc here, but keep some of this code around
+  for now.)
 */
 
 pthread_mutex_t darwin_tcr_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1013,99 +1018,53 @@ TCR _free_tcr_queue, *darwin_tcr_freelist=&_free_tcr_queue;
 #define TCR_CLUSTER_COUNT 1024   /* Enough that we allocate clusters rarely,
 but not so much that we waste lots of 32-bit memory. */
 
-#define LIMIT_32_BIT (natural)(0x09800000)
 
-#undef vm_region
+
+
+/* force 16-bit alignment, just in case */
+typedef struct {
+  TCR tcr;
+}  __attribute__ ((aligned(16))) MTCR;
+
+
 
 void
-link_tcr_list(TCR *head, TCR *buf, int n)
+link_tcr_list(TCR *head, MTCR *buf, int n)
 {
-  TCR *prev = head;
+  TCR *prev = head, *tcr;
   int i;
 
   for (i=0; i < n; i++, buf++) {
-    prev->next = buf;
-    buf->prev = prev;
-    head->prev = buf;
-    buf->next = head;
-    prev = buf;
+    tcr = &(buf->tcr);
+    prev->next = tcr;
+    tcr->prev = prev;
+    head->prev = tcr;
+    tcr->next = head;
+    prev = tcr;
   }
 }
 
-TCR initial_tcrs[TCR_CLUSTER_COUNT];
+
+
 
 void
 map_tcr_cluster(TCR *head)
 {
-  TCR *work = NULL, *prev = head;
+  MTCR *work = NULL;
+  TCR *prev = head;
   int i;
-  vm_address_t addr = (vm_address_t)0, nextaddr;
-  void *p;
-  vm_size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(TCR)),log2_page_size), vm_size;
-#if WORD_SIZE==64
-  vm_region_basic_info_data_64_t vm_info;
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
-#else
-  vm_region_basic_info_data_t vm_info;
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT;
-#endif
-  mach_port_t vm_object_name = (mach_port_t) 0;
-  kern_return_t kret;
+  size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(MTCR)),log2_page_size);
 
-  while (1) {
-    nextaddr = addr;
-#if WORD_SIZE==64
-    vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
-    kret = vm_region_64(mach_task_self(),
-                        &nextaddr,
-                        &vm_size,
-                        VM_REGION_BASIC_INFO_64,
-                        (vm_region_info_t)&vm_info,
-                        &vm_info_size,
-                        &vm_object_name);
-#else
-    vm_info_size = VM_REGION_BASIC_INFO_COUNT;
-    kret = vm_region(mach_task_self(),
-                     &nextaddr,
-                     &vm_size,
-                     VM_REGION_BASIC_INFO,
-                     (vm_region_info_t)&vm_info,
-                     &vm_info_size,
-                     &vm_object_name);
-#endif
-    if (kret != KERN_SUCCESS) {
-      break;
-    }
-    if (addr && ((nextaddr - addr) > request_size)) {
-      if ((addr + request_size) > LIMIT_32_BIT) {
-        break;
-      }
-      p = mmap((void *)addr,
-               request_size,
-               PROT_READ|PROT_WRITE,
-               MAP_PRIVATE|MAP_ANON,
-               -1,
-               0);
-      if (p == MAP_FAILED) {
-        break;
-      } else {
-        if (((natural)p > LIMIT_32_BIT) ||
-            ((((natural)p)+request_size) > LIMIT_32_BIT)) {
-          munmap(p, request_size);
-          nextaddr = 0;
-          vm_size = 0;
-        } else {
-          work = (TCR *) p;
-          break;
-        }
-      }
-    }
-    addr = nextaddr + vm_size;    
-  }
+  work = (MTCR *)mmap(NULL,
+                      request_size,
+                      PROT_READ|PROT_WRITE,
+                      MAP_PRIVATE|MAP_ANON,
+                      -1,
+                      0);
+
   if (!work) {
     Fatal("Can't allocate memory for thread-local storage.", "");
   }
-  
   link_tcr_list(head, work, TCR_CLUSTER_COUNT);
 }
 
@@ -1123,6 +1082,7 @@ darwin_free_tcr(TCR *tcr)
   pthread_mutex_unlock(&darwin_tcr_lock);
 }
 
+
 TCR *
 darwin_allocate_tcr()
 {
@@ -1130,7 +1090,6 @@ darwin_allocate_tcr()
   pthread_mutex_lock(&darwin_tcr_lock);
   if (head->next == NULL) { /* First time */
     head->next = head->prev = head;
-    link_tcr_list(head,initial_tcrs,TCR_CLUSTER_COUNT);
   }
 
   if (head->next == head) {

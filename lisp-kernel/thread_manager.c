@@ -825,7 +825,7 @@ allocate_tcr()
 TCR *
 allocate_tcr()
 {
-  TCR *tcr, *chain = NULL, *next;
+  TCR *tcr,  *next;
 #ifdef DARWIN
   extern Boolean use_mach_exception_handling;
 #ifdef DARWIN
@@ -845,28 +845,17 @@ allocate_tcr()
 #endif
 #ifdef DARWIN
     if (use_mach_exception_handling) {
-      thread_exception_port = (mach_port_t)((natural)tcr);
-      kret = mach_port_allocate_name(task_self,
-                                     MACH_PORT_RIGHT_RECEIVE,
-                                     thread_exception_port);
-    } else {
-      kret = KERN_SUCCESS;
+      if (mach_port_allocate(task_self,
+                             MACH_PORT_RIGHT_RECEIVE,
+                             &thread_exception_port) == KERN_SUCCESS) {
+        tcr->io_datum = (void *)thread_exception_port;
+        associate_tcr_with_exception_port(thread_exception_port,tcr);
+      } else {
+        Fatal("Can't allocate Mach exception port for thread.", "");
+      }
     }
 
-    if (kret != KERN_SUCCESS) {
-      tcr->next = chain;
-      chain = tcr;
-      continue;
-    }
 #endif
-    for (;chain;chain = next) {
-      next = chain->next;
-#ifdef DARWIN
-      darwin_free_tcr(chain);
-#else
-      free(chain);
-#endif
-    }
     return tcr;
   }
 }
