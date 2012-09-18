@@ -1062,7 +1062,7 @@ map_tcr_cluster(TCR *head)
                       -1,
                       0);
 
-  if (!work) {
+  if (work == MAP_FAILED) {
     Fatal("Can't allocate memory for thread-local storage.", "");
   }
   link_tcr_list(head, work, TCR_CLUSTER_COUNT);

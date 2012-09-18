@@ -848,7 +848,7 @@ allocate_tcr()
       if (mach_port_allocate(task_self,
                              MACH_PORT_RIGHT_RECEIVE,
                              &thread_exception_port) == KERN_SUCCESS) {
-        tcr->io_datum = (void *)thread_exception_port;
+        tcr->io_datum = (void *)((natural)thread_exception_port);
         associate_tcr_with_exception_port(thread_exception_port,tcr);
       } else {
         Fatal("Can't allocate Mach exception port for thread.", "");
