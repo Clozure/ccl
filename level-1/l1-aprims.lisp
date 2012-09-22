@@ -144,20 +144,12 @@
 (defun copy-list (list)
   "Return a new list which is EQUAL to LIST."
   (if list
-    (let* ((len (length list)))
-      (declare (fixnum len))
-      (if (>= len (ash 1 16))
-        (do* ((result (%allocate-list 0 len))
-              (in list (%cdr in))
-              (out result (%cdr out)))
-             ((null in) result)
-          (setf (%car out) (%car in)))
-        (let ((result (cons (car list) '()) ))
-          (do ((x (cdr list) (cdr x))
-               (splice result
-                       (%cdr (%rplacd splice (cons (%car x) '() ))) ))
-              ((atom x) (unless (null x)
-                          (%rplacd splice x)) result)))))))
+    (let ((result (cons (car list) '()) ))
+      (do ((x (cdr list) (cdr x))
+           (splice result
+                   (%cdr (%rplacd splice (cons (%car x) '() ))) ))
+          ((atom x) (unless (null x)
+                      (%rplacd splice x)) result)))))
 
 (defun alt-list-length (l)
   "Detect (and complain about) cirucular lists; allow any atom to
