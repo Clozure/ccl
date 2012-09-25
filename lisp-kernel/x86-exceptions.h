@@ -85,5 +85,17 @@ void enable_fp_exceptions(void);
 
 void callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr);
 
+#ifdef DARWIN
+TCR *
+find_tcr_from_exception_port(mach_port_t);
+
+void
+associate_tcr_with_exception_port(mach_port_t, TCR *);
+
+void
+disassociate_tcr_from_exception_port(mach_port_t);
+#endif
+
+
 #endif /* X86_EXCEPTIONS_H */
 

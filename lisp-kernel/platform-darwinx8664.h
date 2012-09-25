@@ -90,4 +90,4 @@ pthread_mutex_t *mach_exception_lock;
 
 #include "os-darwin.h"
 
-#define DARWIN64 1
+
