@@ -27,7 +27,6 @@
 
 #include "macros.h"
 
-extern Boolean use_mach_exception_handling;
 
 extern int page_size, log2_page_size;
 

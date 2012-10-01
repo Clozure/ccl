@@ -34,8 +34,6 @@
 #endif
 #ifdef DARWIN
 #include <sysexits.h>
-#include <dlfcn.h>
-#include <mach/machine/vm_types.h>
 #endif
 #ifndef WINDOWS
 #include <sys/syslog.h>
@@ -92,27 +90,6 @@ do_intn()
   __asm volatile("int $0xcd");
 }
 
-#ifdef DARWIN
- typedef kern_return_t (*like_mach_port_get_context)(mach_port_t,mach_port_t,mach_vm_address_t *);
-
-typedef kern_return_t (*like_mach_port_set_context)(mach_port_t,mach_port_t,mach_vm_address_t);
-
-like_mach_port_get_context Pmach_port_get_context = NULL;
-like_mach_port_set_context Pmach_port_set_context = NULL;
-
-Boolean use_mach_port_context_functions = false;
-
-void
-darwin_early_exception_init()
-{
-  Pmach_port_get_context = dlsym(RTLD_DEFAULT, "mach_port_get_context");
-  Pmach_port_set_context = dlsym(RTLD_DEFAULT, "mach_port_set_context");
-  if ((Pmach_port_set_context != NULL) &&
-      (Pmach_port_get_context != NULL)) {
-    use_mach_port_context_functions = true;
-  }
-}
-#endif
 
 void
 x86_early_exception_init()
@@ -694,7 +671,6 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   natural saved_unboxed1 = tcr->unboxed1;
   LispObj *vsp = (LispObj *)xpGPR(xp, Isp);
 #endif
-
   set_mxcsr(0x1f80);
 
   /* Put the active stack pointers where .SPcallback expects them */
@@ -1464,18 +1440,14 @@ exit_signal_handler(TCR *tcr, int old_valence)
 }
 
 void
-signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
-#ifdef DARWIN
-               , TCR *tcr, int old_valence
-#endif
-)
+signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   xframe_list xframe_link;
-#ifndef DARWIN
   TCR *tcr = get_tcr(false);
 
+  ResetAltStack();
+
   int old_valence = prepare_to_wait_for_exception_lock(tcr, context);
-#endif
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
     pthread_kill(pthread_self(), thread_suspend_signal);
@@ -1494,13 +1466,9 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
     }
   }
   unlock_exception_lock_in_handler(tcr);
-#ifndef DARWIN_USE_PSEUDO_SIGRETURN
   exit_signal_handler(tcr, old_valence);
-#endif
   /* raise_pending_interrupt(tcr); */
-#ifndef DARWIN_USE_PSEUDO_SIGRETURN
   SIGRETURN(context);
-#endif
 }
 #endif
 
@@ -1739,7 +1707,7 @@ arbstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation *conte
 
                                      );
     } else {
-      signal_handler(signum, info, context, tcr, 0);
+      signal_handler(signum, info, context);
     }
   }
 }
@@ -1760,7 +1728,7 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
   }
 #endif
      
-  /* Because of signal chaining - and the possibility that libaries
+  /* Because of signal chaining - and the possibility that libraries
      that use it ignore sigaltstack-related issues - we have to check
      to see if we're actually on the altstack.
 
@@ -1821,7 +1789,8 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
       tcr->interrupt_pending = (((natural) 1)<< (nbits_in_word - ((natural)1)));
     } else {
       LispObj cmain = nrs_CMAIN.vcell;
-
+      
+      ResetAltStack();
       if ((fulltag_of(cmain) == fulltag_misc) &&
 	  (header_subtag(header_of(cmain)) == subtag_macptr)) {
 	/* 
@@ -2169,12 +2138,10 @@ install_pmcl_exception_handlers()
   interrupt_handler = (void *)arbstack_interrupt_handler;
 #endif
 
-#ifndef DARWIN
   install_signal_handler(SIGILL, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGBUS, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGSEGV, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGFPE, handler, RESERVE_FOR_LISP|ON_ALTSTACK);
-#endif
   
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT, interrupt_handler,
 			 RESERVE_FOR_LISP|ON_ALTSTACK);
@@ -2182,51 +2149,6 @@ install_pmcl_exception_handlers()
 }
 #endif
 
-#ifndef WINDOWS
-#ifndef USE_SIGALTSTACK
-void
-arbstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
-{
-  TCR *tcr = get_interrupt_tcr(false);
-  if (tcr != NULL) {
-    area *vs = tcr->vs_area;
-    BytePtr current_sp = (BytePtr) current_stack_pointer();
-    
-    if ((current_sp >= vs->low) &&
-        (current_sp < vs->high)) {
-      return
-        handle_signal_on_foreign_stack(tcr,
-                                       suspend_resume_handler,
-                                       signum,
-                                       info,
-                                       context,
-                                       (LispObj)__builtin_return_address(0)
-                                       );
-    } else {
-      /* If we're not on the value stack, we pretty much have to be on
-         the C stack.  Just run the handler. */
-    }
-  }
-  suspend_resume_handler(signum, info, context);
-}
-
-
-#else /* altstack works */
-
-void
-altstack_suspend_resume_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
-{
-  TCR* tcr = get_tcr(true);
-  handle_signal_on_foreign_stack(tcr,
-                                 suspend_resume_handler,
-                                 signum,
-                                 info,
-                                 context,
-                                 (LispObj)__builtin_return_address(0)
-                                 );
-}
-#endif
-#endif
 
 
 /* This should only be called when the tcr_area_lock is held */
@@ -2316,10 +2238,8 @@ altstack_thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *
 #endif
 
 #ifdef USE_SIGALTSTACK
-#define SUSPEND_RESUME_HANDLER altstack_suspend_resume_handler
 #define THREAD_KILL_HANDLER altstack_thread_kill_handler
 #else
-#define SUSPEND_RESUME_HANDLER arbstack_suspend_resume_handler
 #define THREAD_KILL_HANDLER arbstack_thread_kill_handler
 #endif
 
@@ -2335,8 +2255,8 @@ thread_signal_setup()
   thread_suspend_signal = SIG_SUSPEND_THREAD;
   thread_kill_signal = SIG_KILL_THREAD;
 
-  install_signal_handler(thread_suspend_signal, (void *)SUSPEND_RESUME_HANDLER,
-			 RESERVE_FOR_LISP|ON_ALTSTACK|RESTART_SYSCALLS);
+  install_signal_handler(thread_suspend_signal, (void *)suspend_resume_handler,
+			 RESERVE_FOR_LISP|RESTART_SYSCALLS);
   install_signal_handler(thread_kill_signal, (void *)THREAD_KILL_HANDLER,
 			 RESERVE_FOR_LISP|ON_ALTSTACK);
 }
@@ -2351,9 +2271,6 @@ void
 exception_init()
 {
   x86_early_exception_init();
-#ifdef DARWIN
-  darwin_early_exception_init();
-#endif
   install_pmcl_exception_handlers();
 }
 
@@ -2369,7 +2286,6 @@ adjust_exception_pc(ExceptionInformation *xp, int delta)
 */
 
 void
-
 adjust_soft_protection_limit(area *a)
 {
   char *proposed_new_soft_limit = a->softlimit - 4096;
@@ -2403,11 +2319,15 @@ void
 setup_sigaltstack(area *a)
 {
   stack_t stack;
+#ifdef SEPARATE_ALTSTACK
+  stack.ss_sp = mmap(NULL,SIGSTKSZ*8, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_ANON|MAP_PRIVATE,-1,0);
+#else
   stack.ss_sp = a->low;
   a->low += SIGSTKSZ*8;
+  mmap(stack.ss_sp,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_FIXED|MAP_ANON|MAP_PRIVATE,-1,0);
+#endif
   stack.ss_size = SIGSTKSZ*8;
   stack.ss_flags = 0;
-  mmap(stack.ss_sp,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_FIXED|MAP_ANON|MAP_PRIVATE,-1,0);
 #ifdef LINUX
   /* The ucontext pushed on the altstack may not contain the (largish)
      __fpregs_mem field; copy_ucontext() wants to copy what it thinks
@@ -2936,797 +2856,6 @@ gc_from_xp(ExceptionInformation *xp, signed_natural param)
   return status;
 }
 
-#ifdef DARWIN
-
-#ifdef X8664
-#define ts_pc(t) t->__rip
-typedef x86_thread_state64_t native_thread_state_t;
-#define NATIVE_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
-#define NATIVE_THREAD_STATE_FLAVOR x86_THREAD_STATE64
-typedef x86_float_state64_t native_float_state_t;
-#define NATIVE_FLOAT_STATE_COUNT x86_FLOAT_STATE64_COUNT
-#define NATIVE_FLOAT_STATE_FLAVOR x86_FLOAT_STATE64
-typedef x86_exception_state64_t native_exception_state_t;
-#define NATIVE_EXCEPTION_STATE_COUNT x86_EXCEPTION_STATE64_COUNT
-#define NATIVE_EXCEPTION_STATE_FLAVOR x86_EXCEPTION_STATE64
-#else
-#define ts_pc(t) t->__eip
-typedef x86_thread_state32_t native_thread_state_t;
-#define NATIVE_THREAD_STATE_COUNT x86_THREAD_STATE32_COUNT
-#define NATIVE_THREAD_STATE_FLAVOR x86_THREAD_STATE32
-typedef x86_float_state32_t native_float_state_t;
-#define NATIVE_FLOAT_STATE_COUNT x86_FLOAT_STATE32_COUNT
-#define NATIVE_FLOAT_STATE_FLAVOR x86_FLOAT_STATE32
-typedef x86_exception_state32_t native_exception_state_t;
-#define NATIVE_EXCEPTION_STATE_COUNT x86_EXCEPTION_STATE32_COUNT
-#define NATIVE_EXCEPTION_STATE_FLAVOR x86_EXCEPTION_STATE32
-#endif
-
-#define TCR_FROM_EXCEPTION_PORT(p) find_tcr_from_exception_port(p)
-#define TCR_TO_EXCEPTION_PORT(t) (mach_port_name_t)((natural) (((TCR *)t)->io_datum))
-
-
-extern void pseudo_sigreturn(void);
-
-
-
-#define LISP_EXCEPTIONS_HANDLED_MASK \
- (EXC_MASK_SOFTWARE | EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC)
-
-/* (logcount LISP_EXCEPTIONS_HANDLED_MASK) */
-#define NUM_LISP_EXCEPTIONS_HANDLED 4 
-
-typedef struct {
-  int foreign_exception_port_count;
-  exception_mask_t         masks[NUM_LISP_EXCEPTIONS_HANDLED];
-  mach_port_t              ports[NUM_LISP_EXCEPTIONS_HANDLED];
-  exception_behavior_t behaviors[NUM_LISP_EXCEPTIONS_HANDLED];
-  thread_state_flavor_t  flavors[NUM_LISP_EXCEPTIONS_HANDLED];
-} MACH_foreign_exception_state;
-
-
-
-
-/*
-  Mach's exception mechanism works a little better than its signal
-  mechanism (and, not incidentally, it gets along with GDB a lot
-  better.
-
-  Initially, we install an exception handler to handle each native
-  thread's exceptions.  This process involves creating a distinguished
-  thread which listens for kernel exception messages on a set of
-  0 or more thread exception ports.  As threads are created, they're
-  added to that port set; a thread's exception port is destroyed
-  (and therefore removed from the port set) when the thread exits.
-
-  A few exceptions can be handled directly in the handler thread;
-  others require that we resume the user thread (and that the
-  exception thread resumes listening for exceptions.)  The user
-  thread might eventually want to return to the original context
-  (possibly modified somewhat.)
-
-  As it turns out, the simplest way to force the faulting user
-  thread to handle its own exceptions is to do pretty much what
-  signal() does: the exception handlng thread sets up a sigcontext
-  on the user thread's stack and forces the user thread to resume
-  execution as if a signal handler had been called with that
-  context as an argument.  We can use a distinguished UUO at a
-  distinguished address to do something like sigreturn(); that'll
-  have the effect of resuming the user thread's execution in
-  the (pseudo-) signal context.
-
-  Since:
-    a) we have miles of code in C and in Lisp that knows how to
-    deal with Linux sigcontexts
-    b) Linux sigcontexts contain a little more useful information
-    (the DAR, DSISR, etc.) than their Darwin counterparts
-    c) we have to create a sigcontext ourselves when calling out
-    to the user thread: we aren't really generating a signal, just
-    leveraging existing signal-handling code.
-
-  we create a Linux sigcontext struct.
-
-  Simple ?  Hopefully from the outside it is ...
-
-  We want the process of passing a thread's own context to it to
-  appear to be atomic: in particular, we don't want the GC to suspend
-  a thread that's had an exception but has not yet had its user-level
-  exception handler called, and we don't want the thread's exception
-  context to be modified by a GC while the Mach handler thread is
-  copying it around.  On Linux (and on Jaguar), we avoid this issue
-  because (a) the kernel sets up the user-level signal handler and
-  (b) the signal handler blocks signals (including the signal used
-  by the GC to suspend threads) until tcr->xframe is set up.
-
-  The GC and the Mach server thread therefore contend for the lock
-  "mach_exception_lock".  The Mach server thread holds the lock
-  when copying exception information between the kernel and the
-  user thread; the GC holds this lock during most of its execution
-  (delaying exception processing until it can be done without
-  GC interference.)
-
-*/
-
-#ifdef PPC64
-#define	C_REDZONE_LEN		320
-#define	C_STK_ALIGN             32
-#else
-#define	C_REDZONE_LEN		224
-#define	C_STK_ALIGN		16
-#endif
-#define C_PARAMSAVE_LEN		64
-#define	C_LINKAGE_LEN		48
-
-#define TRUNC_DOWN(a,b,c)  (((((natural)a)-(b))/(c)) * (c))
-
-void
-fatal_mach_error(char *format, ...);
-
-#define MACH_CHECK_ERROR(context,x) if (x != KERN_SUCCESS) {fatal_mach_error("Mach error while %s : %d", context, x);}
-
-
-void
-restore_mach_thread_state(mach_port_t thread, ExceptionInformation *pseudosigcontext, native_thread_state_t *ts)
-{
-  kern_return_t kret;
-#if WORD_SIZE == 64
-  MCONTEXT_T mc = UC_MCONTEXT(pseudosigcontext);
-#else
-  mcontext_t mc = UC_MCONTEXT(pseudosigcontext);
-#endif
-
-  /* Set the thread's FP state from the pseudosigcontext */
-  kret = thread_set_state(thread,
-                          NATIVE_FLOAT_STATE_FLAVOR,
-                          (thread_state_t)&(mc->__fs),
-                          NATIVE_FLOAT_STATE_COUNT);
-  MACH_CHECK_ERROR("setting thread FP state", kret);
-  *ts = mc->__ss;
-}  
-
-kern_return_t
-do_pseudo_sigreturn(mach_port_t thread, TCR *tcr, native_thread_state_t *out)
-{
-  ExceptionInformation *xp;
-
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout, "doing pseudo_sigreturn for 0x%x\n",tcr);
-#endif
-  xp = tcr->pending_exception_context;
-  if (xp) {
-    tcr->pending_exception_context = NULL;
-    tcr->valence = TCR_STATE_LISP;
-    restore_mach_thread_state(thread, xp, out);
-    raise_pending_interrupt(tcr);
-  } else {
-    Bug(NULL, "no xp here!\n");
-  }
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout, "did pseudo_sigreturn for 0x%x\n",tcr);
-#endif
-  return KERN_SUCCESS;
-}  
-
-ExceptionInformation *
-create_thread_context_frame(mach_port_t thread, 
-			    natural *new_stack_top,
-                            siginfo_t **info_ptr,
-                            TCR *tcr,
-                            native_thread_state_t *ts
-                            )
-{
-  mach_msg_type_number_t thread_state_count;
-  ExceptionInformation *pseudosigcontext;
-#ifdef X8664
-  MCONTEXT_T mc;
-#else
-  mcontext_t mc;
-#endif
-  natural stackp;
-
-#ifdef X8664  
-  stackp = (LispObj) find_foreign_rsp(ts->__rsp,tcr->cs_area,tcr);
-  stackp = TRUNC_DOWN(stackp, C_REDZONE_LEN, C_STK_ALIGN);
-#else
-  stackp = (LispObj) find_foreign_rsp(ts->__esp, tcr->cs_area, tcr);
-#endif
-  stackp = TRUNC_DOWN(stackp, sizeof(siginfo_t), C_STK_ALIGN);
-  if (info_ptr) {
-    *info_ptr = (siginfo_t *)stackp;
-  }
-  stackp = TRUNC_DOWN(stackp,sizeof(*pseudosigcontext), C_STK_ALIGN);
-  pseudosigcontext = (ExceptionInformation *) ptr_from_lispobj(stackp);
-
-  stackp = TRUNC_DOWN(stackp, sizeof(*mc), C_STK_ALIGN);
-  mc = (MCONTEXT_T) ptr_from_lispobj(stackp);
-  
-  memmove(&(mc->__ss),ts,sizeof(*ts));
-
-  thread_state_count = NATIVE_FLOAT_STATE_COUNT;
-  thread_get_state(thread,
-		   NATIVE_FLOAT_STATE_FLAVOR,
-		   (thread_state_t)&(mc->__fs),
-		   &thread_state_count);
-
-  thread_state_count = NATIVE_EXCEPTION_STATE_COUNT;
-  thread_get_state(thread,
-                   NATIVE_EXCEPTION_STATE_FLAVOR,
-		   (thread_state_t)&(mc->__es),
-		   &thread_state_count);
-
-
-  UC_MCONTEXT(pseudosigcontext) = mc;
-  if (new_stack_top) {
-    *new_stack_top = stackp;
-  }
-  return pseudosigcontext;
-}
-
-/*
-  This code sets up the user thread so that it executes a "pseudo-signal
-  handler" function when it resumes.  Create a fake ucontext struct
-  on the thread's stack and pass it as an argument to the pseudo-signal
-  handler.
-
-  Things are set up so that the handler "returns to" pseudo_sigreturn(),
-  which will restore the thread's context.
-
-  If the handler invokes code that throws (or otherwise never sigreturn()'s
-  to the context), that's fine.
-
-  Actually, check that: throw (and variants) may need to be careful and
-  pop the tcr's xframe list until it's younger than any frame being
-  entered.
-*/
-
-int
-setup_signal_frame(mach_port_t thread,
-		   void *handler_address,
-		   int signum,
-                   int code,
-		   TCR *tcr,
-                   native_thread_state_t *ts,
-                   native_thread_state_t *new_ts
-                   )
-{
-  ExceptionInformation *pseudosigcontext;
-  int  old_valence = tcr->valence;
-  natural stackp, *stackpp;
-  siginfo_t *info;
-
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout,"Setting up exception handling for 0x%x\n", tcr);
-#endif
-  pseudosigcontext = create_thread_context_frame(thread, &stackp, &info, tcr,  ts);
-  bzero(info, sizeof(*info));
-  info->si_code = code;
-  info->si_addr = (void *)(UC_MCONTEXT(pseudosigcontext)->__es.__faultvaddr);
-  info->si_signo = signum;
-  pseudosigcontext->uc_onstack = 0;
-  pseudosigcontext->uc_sigmask = (sigset_t) 0;
-  pseudosigcontext->uc_stack.ss_sp = 0;
-  pseudosigcontext->uc_stack.ss_size = 0;
-  pseudosigcontext->uc_stack.ss_flags = 0;
-  pseudosigcontext->uc_link = NULL;
-  pseudosigcontext->uc_mcsize = sizeof(*UC_MCONTEXT(pseudosigcontext));
-  tcr->pending_exception_context = pseudosigcontext;
-  tcr->valence = TCR_STATE_EXCEPTION_WAIT;
-  
-
-  /* 
-     It seems like we've created a  sigcontext on the thread's
-     stack.  Set things up so that we call the handler (with appropriate
-     args) when the thread's resumed.
-  */
-
-#ifdef X8664
-  new_ts->__rip = (natural) handler_address;
-  stackpp = (natural *)stackp;
-  *--stackpp = (natural)pseudo_sigreturn;
-  stackp = (natural)stackpp;
-  new_ts->__rdi = signum;
-  new_ts->__rsi = (natural)info;
-  new_ts->__rdx = (natural)pseudosigcontext;
-  new_ts->__rcx = (natural)tcr;
-  new_ts->__r8 = (natural)old_valence;
-  new_ts->__rsp = stackp;
-  new_ts->__rflags = ts->__rflags;
-#else
-  bzero(new_ts, sizeof(*new_ts));
-  new_ts->__cs = ts->__cs;
-  new_ts->__ss = ts->__ss;
-  new_ts->__ds = ts->__ds;
-  new_ts->__es = ts->__es;
-  new_ts->__fs = ts->__fs;
-  new_ts->__gs = ts->__gs;
-
-  new_ts->__eip = (natural)handler_address;
-  stackpp = (natural *)stackp;
-  *--stackpp = 0;		/* alignment */
-  *--stackpp = 0;
-  *--stackpp = 0;
-  *--stackpp = (natural)old_valence;
-  *--stackpp = (natural)tcr;
-  *--stackpp = (natural)pseudosigcontext;
-  *--stackpp = (natural)info;
-  *--stackpp = (natural)signum;
-  *--stackpp = (natural)pseudo_sigreturn;
-  stackp = (natural)stackpp;
-  new_ts->__esp = stackp;
-  new_ts->__eflags = ts->__eflags;
-#endif
-#ifdef DEBUG_MACH_EXCEPTIONS
-  fprintf(dbgout,"Set up exception context for 0x%x at 0x%x\n", tcr, tcr->pending_exception_context);
-#endif
-  return 0;
-}
-
-
-
-
-
-
-/*
-  This function runs in the exception handling thread.  It's
-  called (by this precise name) from the library function "exc_server()"
-  when the thread's exception ports are set up.  (exc_server() is called
-  via mach_msg_server(), which is a function that waits for and dispatches
-  on exception messages from the Mach kernel.)
-
-  This checks to see if the exception was caused by a pseudo_sigreturn()
-  UUO; if so, it arranges for the thread to have its state restored
-  from the specified context.
-
-  Otherwise, it tries to map the exception to a signal number and
-  arranges that the thread run a "pseudo signal handler" to handle
-  the exception.
-
-  Some exceptions could and should be handled here directly.
-*/
-
-
-
-
-#define DARWIN_EXCEPTION_HANDLER signal_handler
-
-#define EXCEPTION_PORT_BUCKETS 109
-
-TCR *
-exception_port_map[EXCEPTION_PORT_BUCKETS];
-
-pthread_mutex_t 
-exception_port_map_lock = PTHREAD_MUTEX_INITIALIZER;
-
-TCR *
-find_tcr_from_exception_port(mach_port_t port)
-{
-  if (use_mach_port_context_functions) {
-    mach_vm_address_t addr = 0;
-    kern_return_t kret;
-
-    kret = Pmach_port_get_context(mach_task_self(),port,&addr);
-    MACH_CHECK_ERROR("finding TCR from exception port",kret);
-    return (TCR *)((natural)addr);
-  } else {
-    TCR *tcr = NULL;
-    pthread_mutex_lock(&exception_port_map_lock);
-
-    tcr = exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS];
-
-    while (tcr) {
-      if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
-        break;
-      }
-      tcr = (TCR *)tcr->pending_io_info;
-    }
-    pthread_mutex_unlock(&exception_port_map_lock);
-    return tcr;
-  }
-}
-
-void
-associate_tcr_with_exception_port(mach_port_t port, TCR *tcr)
-{
-  if (use_mach_port_context_functions) {
-    kern_return_t kret;
-    
-    kret = Pmach_port_set_context(mach_task_self(),port,(mach_vm_address_t)((natural)tcr));
-    MACH_CHECK_ERROR("associating TCR with exception port",kret);
-  } else {
-    int b = (unsigned)port % EXCEPTION_PORT_BUCKETS;
-    pthread_mutex_lock(&exception_port_map_lock);
-    
-    tcr->pending_io_info = (void *)(exception_port_map[b]);
-    exception_port_map[b] = tcr;
-    pthread_mutex_unlock(&exception_port_map_lock);
-  }
-}
-
-void
-disassociate_tcr_from_exception_port(mach_port_t port)
-{
-  if (use_mach_port_context_functions) {
-    TCR **prev = &(exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS]),
-      *tcr;
-    pthread_mutex_lock(&exception_port_map_lock);
-
-    while((tcr = *prev) != NULL) {
-      if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
-        *prev = (TCR *)tcr->pending_io_info;
-        break;
-      }
-      prev = (TCR **)&(tcr->pending_io_info);
-    }
-    pthread_mutex_unlock(&exception_port_map_lock);
-  }
-}
-  
-
-kern_return_t
-catch_exception_raise_state(mach_port_t exception_port,
-                            exception_type_t exception,
-                            exception_data_t code_vector,
-                            mach_msg_type_number_t code_count,
-                            int * flavor,
-                            thread_state_t in_state,
-                            mach_msg_type_number_t in_state_count,
-                            thread_state_t out_state,
-                            mach_msg_type_number_t * out_state_count)
-{
-  int signum = 0, code = *code_vector;
-  TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
-  mach_port_t thread = (mach_port_t)((natural)tcr->native_thread_id);
-  kern_return_t kret, call_kret;
-
-  native_thread_state_t
-    *ts = (native_thread_state_t *)in_state,
-    *out_ts = (native_thread_state_t*)out_state;
-  mach_msg_type_number_t thread_state_count;
-
-
-
-  if (1) {
-    if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-    } 
-    if ((code == EXC_I386_GPFLT) &&
-        ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
-      kret = do_pseudo_sigreturn(thread, tcr, out_ts);
-#if 0
-      fprintf(dbgout, "Exception return in 0x%x\n",tcr);
-#endif
-    } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
-      kret = 17;
-    } else {
-      switch (exception) {
-      case EXC_BAD_ACCESS:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGBUS;
-        }
-        break;
-        
-      case EXC_BAD_INSTRUCTION:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGILL;
-        }
-        break;
-          
-      case EXC_SOFTWARE:
-        signum = SIGILL;
-        break;
-        
-      case EXC_ARITHMETIC:
-        signum = SIGFPE;
-	if (code == EXC_I386_DIV)
-	  code = FPE_INTDIV;
-        break;
-        
-      default:
-        break;
-      }
-#if WORD_SIZE==64
-      if ((signum==SIGFPE) && 
-          (code != FPE_INTDIV) && 
-          (tcr->valence != TCR_STATE_LISP)) {
-        mach_msg_type_number_t thread_state_count = x86_FLOAT_STATE64_COUNT;
-        x86_float_state64_t fs;
-
-        thread_get_state(thread,
-                         x86_FLOAT_STATE64,
-                         (thread_state_t)&fs,
-                         &thread_state_count);
-        
-        if (! (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN_FPE))) {
-          tcr->flags |= (1<<TCR_FLAG_BIT_FOREIGN_FPE);
-          tcr->lisp_mxcsr = (fs.__fpu_mxcsr & ~MXCSR_STATUS_MASK);
-        }
-        fs.__fpu_mxcsr &= ~MXCSR_STATUS_MASK;
-        fs.__fpu_mxcsr |= MXCSR_CONTROL_MASK;
-        thread_set_state(thread,
-                         x86_FLOAT_STATE64,
-                         (thread_state_t)&fs,
-                         x86_FLOAT_STATE64_COUNT);
-        *out_state_count = NATIVE_THREAD_STATE_COUNT;
-        *out_ts = *ts;
-        return KERN_SUCCESS;
-      }
-#endif
-      if (signum) {
-        kret = setup_signal_frame(thread,
-                                  (void *)DARWIN_EXCEPTION_HANDLER,
-                                  signum,
-                                  code,
-                                  tcr, 
-                                  ts,
-                                  out_ts);
-        
-      } else {
-        kret = 17;
-      }
-    }
-  }
-  if (kret) {
-    *out_state_count = 0;
-    *flavor = 0;
-  } else {
-    *out_state_count = NATIVE_THREAD_STATE_COUNT;
-  }
-  return kret;
-}
-
-
-
-
-static mach_port_t mach_exception_thread = (mach_port_t)0;
-
-
-/*
-  The initial function for an exception-handling thread.
-*/
-
-void *
-exception_handler_proc(void *arg)
-{
-  extern boolean_t exc_server();
-  mach_port_t p = (mach_port_t)((natural)arg);
-
-  mach_exception_thread = pthread_mach_thread_np(pthread_self());
-  mach_msg_server(exc_server, 256, p, 0);
-  /* Should never return. */
-  abort();
-}
-
-
-
-void
-mach_exception_thread_shutdown()
-{
-  kern_return_t kret;
-
-  fprintf(dbgout, "terminating Mach exception thread, 'cause exit can't\n");
-  kret = thread_terminate(mach_exception_thread);
-  if (kret != KERN_SUCCESS) {
-    fprintf(dbgout, "Couldn't terminate exception thread, kret = %d\n",kret);
-  }
-}
-
-
-mach_port_t
-mach_exception_port_set()
-{
-  static mach_port_t __exception_port_set = MACH_PORT_NULL;
-  kern_return_t kret;  
-  if (__exception_port_set == MACH_PORT_NULL) {
-
-    kret = mach_port_allocate(mach_task_self(),
-			      MACH_PORT_RIGHT_PORT_SET,
-			      &__exception_port_set);
-    MACH_CHECK_ERROR("allocating thread exception_ports",kret);
-    create_system_thread(0,
-                         NULL,
-                         exception_handler_proc, 
-                         (void *)((natural)__exception_port_set));
-  }
-  return __exception_port_set;
-}
-
-/*
-  Setup a new thread to handle those exceptions specified by
-  the mask "which".  This involves creating a special Mach
-  message port, telling the Mach kernel to send exception
-  messages for the calling thread to that port, and setting
-  up a handler thread which listens for and responds to
-  those messages.
-
-*/
-
-/*
-  Establish the lisp thread's TCR as its exception port, and determine
-  whether any other ports have been established by foreign code for
-  exceptions that lisp cares about.
-
-  If this happens at all, it should happen on return from foreign
-  code and on entry to lisp code via a callback.
-
-  This is a lot of trouble (and overhead) to support Java, or other
-  embeddable systems that clobber their caller's thread exception ports.
-  
-*/
-kern_return_t
-tcr_establish_exception_port(TCR *tcr, mach_port_t thread)
-{
-  kern_return_t kret;
-  MACH_foreign_exception_state *fxs = (MACH_foreign_exception_state *)tcr->native_thread_info;
-  int i;
-  unsigned n = NUM_LISP_EXCEPTIONS_HANDLED;
-  mach_port_t lisp_port = TCR_TO_EXCEPTION_PORT(tcr), foreign_port;
-  exception_mask_t mask = 0;
-
-  kret = thread_swap_exception_ports(thread,
-				     LISP_EXCEPTIONS_HANDLED_MASK,
-				     lisp_port,
-				     EXCEPTION_STATE,
-#if WORD_SIZE==64
-                                     x86_THREAD_STATE64,
-#else
-                                     x86_THREAD_STATE32,
-#endif
-				     fxs->masks,
-				     &n,
-				     fxs->ports,
-				     fxs->behaviors,
-				     fxs->flavors);
-  if (kret == KERN_SUCCESS) {
-    fxs->foreign_exception_port_count = n;
-    for (i = 0; i < n; i ++) {
-      foreign_port = fxs->ports[i];
-
-      if ((foreign_port != lisp_port) &&
-	  (foreign_port != MACH_PORT_NULL)) {
-	mask |= fxs->masks[i];
-      }
-    }
-    tcr->foreign_exception_status = (int) mask;
-  }
-  return kret;
-}
-
-kern_return_t
-tcr_establish_lisp_exception_port(TCR *tcr)
-{
-  return tcr_establish_exception_port(tcr, (mach_port_t)((natural)tcr->native_thread_id));
-}
-
-/*
-  Do this when calling out to or returning from foreign code, if
-  any conflicting foreign exception ports were established when we
-  last entered lisp code.
-*/
-kern_return_t
-restore_foreign_exception_ports(TCR *tcr)
-{
-  exception_mask_t m = (exception_mask_t) tcr->foreign_exception_status;
-  kern_return_t kret;
-
-  if (m) {
-    MACH_foreign_exception_state *fxs  = 
-      (MACH_foreign_exception_state *) tcr->native_thread_info;
-    int i, n = fxs->foreign_exception_port_count;
-    exception_mask_t tm;
-
-    for (i = 0; i < n; i++) {
-      if ((tm = fxs->masks[i]) & m) {
-	kret = thread_set_exception_ports((mach_port_t)((natural)tcr->native_thread_id),
-				   tm,
-				   fxs->ports[i],
-				   fxs->behaviors[i],
-				   fxs->flavors[i]);
-	MACH_CHECK_ERROR("restoring thread exception ports", kret);
-      }
-    }
-  }
-  return KERN_SUCCESS;
-}
-				   
-
-/*
-  This assumes that a Mach port (to be used as the thread's exception port) whose
-  "name" matches the TCR's 32-bit address has already been allocated.
-*/
-
-kern_return_t
-setup_mach_exception_handling(TCR *tcr)
-{
-  mach_port_t 
-    thread_exception_port = TCR_TO_EXCEPTION_PORT(tcr),
-    task_self = mach_task_self();
-  kern_return_t kret;
-
-  kret = mach_port_insert_right(task_self,
-				thread_exception_port,
-				thread_exception_port,
-				MACH_MSG_TYPE_MAKE_SEND);
-  MACH_CHECK_ERROR("adding send right to exception_port",kret);
-
-  kret = tcr_establish_exception_port(tcr, (mach_port_t)((natural) tcr->native_thread_id));
-  if (kret == KERN_SUCCESS) {
-    mach_port_t exception_port_set = mach_exception_port_set();
-
-    kret = mach_port_move_member(task_self,
-				 thread_exception_port,
-				 exception_port_set);
-  }
-  return kret;
-}
-
-void
-darwin_exception_init(TCR *tcr)
-{
-  void tcr_monitor_exception_handling(TCR*, Boolean);
-  kern_return_t kret;
-  MACH_foreign_exception_state *fxs = 
-    calloc(1, sizeof(MACH_foreign_exception_state));
-  
-  tcr->native_thread_info = (void *) fxs;
-
-  if ((kret = setup_mach_exception_handling(tcr))
-      != KERN_SUCCESS) {
-    fprintf(dbgout, "Couldn't setup exception handler - error = %d\n", kret);
-    terminate_lisp();
-  }
-}
-
-/*
-  The tcr is the "name" of the corresponding thread's exception port.
-  Destroying the port should remove it from all port sets of which it's
-  a member (notably, the exception port set.)
-*/
-void
-darwin_exception_cleanup(TCR *tcr)
-{
-  void *fxs = tcr->native_thread_info;
-  extern Boolean use_mach_exception_handling;
-
-  if (fxs) {
-    tcr->native_thread_info = NULL;
-    free(fxs);
-  }
-  if (use_mach_exception_handling) {
-    mach_port_t task_self = mach_task_self(),
-      exception_port = TCR_TO_EXCEPTION_PORT(tcr);
-
-    disassociate_tcr_from_exception_port(exception_port);
-    mach_port_deallocate(task_self,exception_port);
-    mach_port_destroy(task_self,exception_port);
-  }
-}
-
-
-
-
-void
-fatal_mach_error(char *format, ...)
-{
-  va_list args;
-  char s[512];
- 
-
-  va_start(args, format);
-  vsnprintf(s, sizeof(s),format, args);
-  va_end(args);
-
-  Fatal("Mach error", s);
-}
-
-
-
-
-#endif
 
 /* watchpoint stuff */
 

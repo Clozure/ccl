@@ -61,100 +61,12 @@ lisp_free(void *p)
   free(p);
 }
 
-#ifdef DARWIN
-#if WORD_SIZE == 64
-#define vm_region vm_region_64
-#endif
-
-/*
-  Check to see if the specified address is unmapped by trying to get
-  information about the mapped address at or beyond the target.  If
-  the difference between the target address and the next mapped address
-  is >= len, we can safely mmap len bytes at addr.
-*/
-Boolean
-address_unmapped_p(char *addr, natural len)
-{
-  vm_address_t vm_addr = (vm_address_t)addr;
-  vm_size_t vm_size;
-#if WORD_SIZE == 64
-  vm_region_basic_info_data_64_t vm_info;
-#else
-  vm_region_basic_info_data_t vm_info;
-#endif
-#if WORD_SIZE == 64
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT_64;
-#else
-  mach_msg_type_number_t vm_info_size = VM_REGION_BASIC_INFO_COUNT;
-#endif
-  mach_port_t vm_object_name = (mach_port_t) 0;
-  kern_return_t kret;
-
-  kret = vm_region(mach_task_self(),
-		   &vm_addr,
-		   &vm_size,
-#if WORD_SIZE == 64
-                   VM_REGION_BASIC_INFO_64,
-#else
-		   VM_REGION_BASIC_INFO,
-#endif
-		   (vm_region_info_t)&vm_info,
-		   &vm_info_size,
-		   &vm_object_name);
-  if (kret != KERN_SUCCESS) {
-    return false;
-  }
-
-  return vm_addr >= (vm_address_t)(addr+len);
-}
-#endif
-
-
-
-  /*
-    Through trial and error, we've found that IMAGE_BASE_ADDRESS is
-    likely to reside near the beginning of an unmapped block of memory
-    that's at least 1GB in size.  We'd like to load the heap image's
-    sections relative to IMAGE_BASE_ADDRESS; if we're able to do so,
-    that'd allow us to file-map those sections (and would enable us to
-    avoid having to relocate references in the data sections.)
-
-    In short, we'd like to reserve 1GB starting at IMAGE_BASE_ADDRESS
-    by creating an anonymous mapping with mmap().
-
-    If we try to insist that mmap() map a 1GB block at
-    IMAGE_BASE_ADDRESS exactly (by specifying the MAP_FIXED flag),
-    mmap() will gleefully clobber any mapped memory that's already
-    there.  (That region's empty at this writing, but some future
-    version of the OS might decide to put something there.)
-
-    If we don't specify MAP_FIXED, mmap() is free to treat the address
-    we give it as a hint; Linux seems to accept the hint if doing so
-    wouldn't cause a problem.  Naturally, that behavior's too useful
-    for Darwin (or perhaps too inconvenient for it): it'll often
-    return another address, even if the hint would have worked fine.
-
-    We call address_unmapped_p() to ask Mach whether using MAP_FIXED
-    would conflict with anything.  Until we discover a need to do 
-    otherwise, we'll assume that if Linux's mmap() fails to take the
-    hint, it's because of a legitimate conflict.
-
-    If Linux starts ignoring hints, we can parse /proc/<pid>/maps
-    to implement an address_unmapped_p() for Linux.
-  */
 
 LogicalAddress
 ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
 {
   void raise_limit(void);
   LogicalAddress start;
-  Boolean fixed_map_ok = false;
-#ifdef DARWIN
-  fixed_map_ok = address_unmapped_p(want,totalsize);
-#endif
-#ifdef SOLARIS
-  fixed_map_ok = true;
-#endif
   raise_limit();
 #ifdef WINDOWS
   start = VirtualAlloc((void *)want,
@@ -177,7 +89,7 @@ ReserveMemoryForHeap(LogicalAddress want, natural totalsize)
   start = mmap((void *)want,
 	       totalsize + heap_segment_size,
 	       PROT_NONE,
-	       MAP_PRIVATE | MAP_ANON | (fixed_map_ok ? MAP_FIXED : 0) | MAP_NORESERVE,
+	       MAP_PRIVATE | MAP_ANON | MAP_NORESERVE,
 	       -1,
 	       0);
   if (start == MAP_FAILED) {

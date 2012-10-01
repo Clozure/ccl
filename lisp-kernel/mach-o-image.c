@@ -19,6 +19,7 @@
 #include <mach-o/stab.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <limits.h>
 #include <unistd.h>
 #include <sys/fcntl.h>

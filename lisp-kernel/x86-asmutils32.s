@@ -109,12 +109,6 @@ _exportfn(C(atomic_and))
 _endfn
 
 
-        __ifdef(`DARWIN')
-_exportfn(C(pseudo_sigreturn))
-        __(hlt)
-        __(jmp C(pseudo_sigreturn))
-_endfn
-        __endif    
 
 /* int cpuid (int code, int *pebx, int *pecx, int *pedx)  */
 _exportfn(C(cpuid))
@@ -176,11 +170,6 @@ _endfn
 
         __ifdef(`DARWIN')
 _exportfn(C(darwin_sigreturn))
-/* Need to set the sigreturn 'infostyle' argument, which is mostly
-   undocumented.  On x8632 Darwin, sigtramp() sets it to 0x1e, and
-   since we're trying to do what sigtramp() would do if we'd returned
-   to it ... */
-        __(movl $0x1e,8(%esp))
 	__(movl $0xb8,%eax)	/* SYS_sigreturn */
 	__(int $0x80)
 	__(ret)			/* shouldn't return */

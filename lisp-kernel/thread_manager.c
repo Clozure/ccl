@@ -170,11 +170,6 @@ int
 raise_thread_interrupt(TCR *target)
 {
   pthread_t thread = (pthread_t)TCR_AUX(target)->osid;
-#ifdef DARWIN_not_yet
-  if (use_mach_exception_handling) {
-    return mach_raise_thread_interrupt(target);
-  }
-#endif
   if (thread != (pthread_t) 0) {
     return pthread_kill(thread, SIGNAL_FOR_PROCESS_INTERRUPT);
   }
@@ -827,34 +822,14 @@ allocate_tcr()
 {
   TCR *tcr,  *next;
 #ifdef DARWIN
-  extern Boolean use_mach_exception_handling;
-#ifdef DARWIN
   extern TCR* darwin_allocate_tcr(void);
   extern void darwin_free_tcr(TCR *);
-#endif
-  kern_return_t kret;
-  mach_port_t 
-    thread_exception_port,
-    task_self = mach_task_self();
 #endif
   for (;;) {
 #ifdef DARWIN
     tcr = darwin_allocate_tcr();
 #else
     tcr = calloc(1, sizeof(TCR));
-#endif
-#ifdef DARWIN
-    if (use_mach_exception_handling) {
-      if (mach_port_allocate(task_self,
-                             MACH_PORT_RIGHT_RECEIVE,
-                             &thread_exception_port) == KERN_SUCCESS) {
-        tcr->io_datum = (void *)((natural)thread_exception_port);
-        associate_tcr_with_exception_port(thread_exception_port,tcr);
-      } else {
-        Fatal("Can't allocate Mach exception port for thread.", "");
-      }
-    }
-
 #endif
     return tcr;
   }
@@ -1357,9 +1332,6 @@ shutdown_thread_tcr(void *arg)
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
-#ifdef DARWIN
-  mach_port_t kernel_thread;
-#endif
   
   if (current == NULL) {
     current = tcr;
@@ -1375,8 +1347,6 @@ shutdown_thread_tcr(void *arg)
       tsd_set(lisp_global(TCR_KEY), NULL);
     }
 #ifdef DARWIN
-    darwin_exception_cleanup(tcr);
-    kernel_thread = (mach_port_t) (uint32_t)(natural)( TCR_AUX(tcr)->native_thread_id);
 #endif
     LOCK(lisp_global(TCR_AREA_LOCK),current);
     vs = tcr->vs_area;
@@ -1403,8 +1373,7 @@ shutdown_thread_tcr(void *arg)
        using a few pages of the thread's main stack.)  Disable and
        free that alternate stack here.
     */
-#ifdef ARM
-#if defined(LINUX)
+#ifdef SEPARATE_ALTSTACK
     {
       stack_t new, current;
       new.ss_flags = SS_DISABLE;
@@ -1412,7 +1381,6 @@ shutdown_thread_tcr(void *arg)
         munmap(current.ss_sp, current.ss_size);
       }
     }
-#endif
 #endif
     destroy_semaphore(&TCR_AUX(tcr)->suspend);
     destroy_semaphore(&TCR_AUX(tcr)->resume);
@@ -1449,18 +1417,6 @@ shutdown_thread_tcr(void *arg)
     darwin_free_tcr(tcr);
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
-#ifdef DARWIN
-    {
-      mach_port_urefs_t nrefs;
-      ipc_space_t task = mach_task_self();
-
-      if (mach_port_get_refs(task,kernel_thread,MACH_PORT_RIGHT_SEND,&nrefs) == KERN_SUCCESS) {
-        if (nrefs > 1) {
-          mach_port_mod_refs(task,kernel_thread,MACH_PORT_RIGHT_SEND,-(nrefs-1));
-        }
-      }
-    }
-#endif
   } else {
     tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
   }
@@ -1544,12 +1500,6 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
   TCR_AUX(tcr)->errno_loc = (int *)(&errno);
   tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
-#ifdef DARWIN
-  extern Boolean use_mach_exception_handling;
-  if (use_mach_exception_handling) {
-    darwin_exception_init(tcr);
-  }
-#endif
 #ifdef LINUX
   linux_exception_init(tcr);
 #endif

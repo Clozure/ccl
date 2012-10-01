@@ -76,23 +76,12 @@
 #endif
 #endif
 
-Boolean use_mach_exception_handling = 
-#ifdef DARWIN
-  true
-#else
-  false
-#endif
-;
 
 #ifdef DARWIN
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
-#include <mach/mach_types.h>
-#include <mach/message.h>
-#include <mach/vm_region.h>
-#include <mach/port.h>
 #include <sys/sysctl.h>
 #undef undefined
 #include <mach-o/dyld.h>
@@ -2356,14 +2345,8 @@ jvm_init(jvm_initfunc f,void*arg0,void*arg1,void*arg2)
 {
   int result = -1;
   TCR *tcr = get_tcr(1);
-#ifdef DARWIN
-  extern kern_return_t tcr_establish_lisp_exception_port(TCR *);
-#endif
   
   result = f(arg0,arg1,arg2);
-#ifdef DARWIN
-  tcr_establish_lisp_exception_port(tcr);
-#endif
   return result;
 }
 

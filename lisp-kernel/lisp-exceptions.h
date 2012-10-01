@@ -146,7 +146,6 @@ exception_fn_name( ExceptionInformation *, int, char *, size_t );
 
 #ifdef DARWIN
 void darwin_exception_init(TCR *tcr);
-void darwin_exception_cleanup(TCR *tcr);
 #endif
 
 void thread_signal_setup(void);

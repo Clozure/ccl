@@ -65,18 +65,43 @@ typedef enum {
 } alloc_instruction_id;
 
 /* sigaltstack isn't thread-specific on The World's Most Advanced OS */
-#ifdef DARWIN
-#undef USE_SIGALTSTACK
-#else
 #ifdef WINDOWS
 #undef USE_SIGALTSTACK
 #else
 #define USE_SIGALTSTACK 1
 #endif
-#endif
 
 #ifdef USE_SIGALTSTACK
 void setup_sigaltstack(area *);
+#ifdef DARWIN
+/* Apple's sigaltstack mechanism is still broken; a thread is considered
+to be running on the alternate signal stack until a signal handler called
+on the altstack returns.  (OSX is too advanced to look at the damned
+stack pointer ...)  We can reset a thread's notion of whether or not it's
+on the altstack by calling sigreturn with a second argument of #x80000000
+(the first argument is ignored in this case.)
+
+This is supported thru 10.8.1; hopefully, it'll be ignored if Apple ever
+fixes their sigaltstack implementation.
+
+Recall that in 10.4 and earlier, Apple's sigaltstack implementation tried
+to make all threads use the same alternate stack (whatever one was most
+recently specified in a call to sigaltstack()), so this nonsense is actually
+a step forward.  A sysctl was supported thru 10.6.8 (at least) to revert
+to this behavior, which was presumably useful to people who wanted to see
+what would happen if multiple threads ran signal handlers on the same stack
+at the same time.
+
+(Whenever I rant about this sort of thing, I feel like a political satirist
+during the Bush administration: every day new material is written for you,
+and it's much better than anything that you could invent yourself.)
+*/
+#define ResetAltStack() darwin_sigreturn(NULL, 0x80000000)
+#endif
+#endif
+
+#ifndef ResetAltStack
+#define ResetAltStack()
 #endif
 
 extern natural get_mxcsr();
@@ -85,16 +110,6 @@ void enable_fp_exceptions(void);
 
 void callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr);
 
-#ifdef DARWIN
-TCR *
-find_tcr_from_exception_port(mach_port_t);
-
-void
-associate_tcr_with_exception_port(mach_port_t, TCR *);
-
-void
-disassociate_tcr_from_exception_port(mach_port_t);
-#endif
 
 
 #endif /* X86_EXCEPTIONS_H */

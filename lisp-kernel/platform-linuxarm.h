@@ -48,3 +48,4 @@ typedef struct ucontext ExceptionInformation;
 #include "os-linux.h"
 
 #define PROTECT_CSTACK 1
+#define SEPARATE_ALTSTACK 1

@@ -107,13 +107,6 @@ void get_altivec_registers(vector_buf);
 
 int altivec_available;
 
-#ifdef DARWIN
-#include <mach/mach.h>
-#include <mach/mach_error.h>
-#include <mach/machine/thread_state.h>
-#include <mach/machine/thread_status.h>
-
-#endif
 
 
 
