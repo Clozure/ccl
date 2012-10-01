@@ -1023,6 +1023,12 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
   LispObj  xcf, cmain = nrs_CMAIN.vcell,
     save_vsp = xpGPR(xp,Isp),
     save_fp = xpGPR(xp,Ifp);
+#ifdef DARWIN /* bug in <= 10.5 */
+  void decode_vector_fp_exception(siginfo_t *, uint32_t);
+
+  decode_vector_fp_exception(info, (uint32_t)(UC_MCONTEXT(xp)->__fs.__fpu_mxcsr));
+#endif
+
 #ifdef WINDOWS
   code = info->ExceptionCode;
 #else
@@ -1098,6 +1104,8 @@ decode_vector_fp_exception(siginfo_t *info, uint32_t mxcsr)
       return;
     }
   }
+  /* Nothing enabled and set in the mxcsr, assume integer /0 */
+  info->si_code = FPE_INTDIV;
 }
 
 #ifdef FREEBSD
