@@ -2319,15 +2319,16 @@ void
 setup_sigaltstack(area *a)
 {
   stack_t stack;
+
+  stack.ss_size = SIGSTKSZ*8;
+  stack.ss_flags = 0;
 #ifdef SEPARATE_ALTSTACK
-  stack.ss_sp = mmap(NULL,SIGSTKSZ*8, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_ANON|MAP_PRIVATE,-1,0);
+  stack.ss_sp = mmap(NULL,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_ANON|MAP_PRIVATE,-1,0);
 #else
   stack.ss_sp = a->low;
   a->low += SIGSTKSZ*8;
   mmap(stack.ss_sp,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_FIXED|MAP_ANON|MAP_PRIVATE,-1,0);
 #endif
-  stack.ss_size = SIGSTKSZ*8;
-  stack.ss_flags = 0;
 #ifdef LINUX
   /* The ucontext pushed on the altstack may not contain the (largish)
      __fpregs_mem field; copy_ucontext() wants to copy what it thinks
