@@ -121,16 +121,11 @@ typedef unsigned char qnode;
 #define VOID_ALLOCPTR ((LispObj)(-dnode_size))
 #endif
 
-#ifdef DARWIN
-#include <mach/task_info.h>
-typedef struct task_events_info paging_info;
-#else
 #ifndef WINDOWS
 #include <sys/resource.h>
 typedef struct rusage paging_info;
 #else
 typedef natural paging_info;
-#endif
 #endif
 
 #undef __argv

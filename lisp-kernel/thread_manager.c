@@ -2700,18 +2700,4 @@ rwlock_destroy(rwlock *rw)
 
 
 
-#ifdef DARWIN
-/* For debugging. */
-int
-mach_port_send_refs(mach_port_t port)
-{
-  mach_port_urefs_t nrefs;
-  ipc_space_t task = mach_task_self();
-  
-  if (mach_port_get_refs(task,port,MACH_PORT_RIGHT_SEND,&nrefs) == KERN_SUCCESS) {
-    return nrefs;
-  }
-  return -1;
-}
-#endif
 

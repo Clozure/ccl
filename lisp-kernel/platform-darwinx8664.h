@@ -56,6 +56,8 @@ typedef ucontext_t ExceptionInformation;
 #define REG_RIP 16
 #define REG_RFL 17
 
+extern void darwin_sigreturn(ExceptionInformation *,unsigned);
+
 /* xp accessors, sigreturn stuff */
 #define DarwinSigReturn(context) do {\
     darwin_sigreturn(context, 0x1e);                 \

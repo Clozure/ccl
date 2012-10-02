@@ -67,6 +67,7 @@ struct timespec {
 #ifdef USE_MACH_SEMAPHORES
 /* We have to use Mach semaphores, even if we're otherwise 
    using POSIX signals, etc. */
+#include <mach/mach_init.h>
 #include <mach/task.h>
 #include <mach/semaphore.h>
 #endif

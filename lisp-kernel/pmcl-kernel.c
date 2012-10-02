@@ -2469,28 +2469,6 @@ get_r_debug()
 }
 #endif
 
-#ifdef DARWIN
-void
-sample_paging_info(paging_info *stats)
-{
-  mach_msg_type_number_t count = TASK_EVENTS_INFO_COUNT;
-
-  task_info(mach_task_self(),
-            TASK_EVENTS_INFO,
-            (task_info_t)stats,
-            &count);
-}
-
-void
-report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
-{
-  fprintf(out,";;; %d soft faults, %d faults, %d pageins\n\n",
-          stop->cow_faults-start->cow_faults,
-          stop->faults-start->faults,
-          stop->pageins-start->pageins);
-}
-
-#else
 #ifdef WINDOWS
 void
 sample_paging_info(paging_info *stats)
@@ -2517,7 +2495,6 @@ report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
           stop->ru_nswap-start->ru_nswap);
 }
 
-#endif
 #endif
 
 void
