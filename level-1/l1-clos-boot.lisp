@@ -864,6 +864,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                     (logbitp $lfbits-restv-bit mbits))
                 (not (logbitp $lfbits-keys-bit mbits)))
            (logbitp $lfbits-aok-bit mbits)
+           (logbitp $lfbits-aok-bit gbits)
            (progn
              (unless gkeys (setq gkeys (%defgeneric-keys gf)))
              (or (null gkeys)
