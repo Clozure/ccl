@@ -246,6 +246,8 @@
 (defun current-event-command-key-p ()
   (current-event-modifier-p #$NSCommandKeyMask))
 
+; Better definition in file-dialogs.lisp
+#+IGNORE
 (defun choose-directory-dialog ()
   (execute-in-gui #'(lambda ()
                       (let ((op (#/openPanel ns:ns-open-panel)))
