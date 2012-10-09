@@ -769,7 +769,9 @@
 (defmethod reinitialize-instance ((instance objc:objc-object) &rest initargs)
   (apply #'shared-initialize instance nil initargs))
 
-(defmethod initialize-instance :after ((class objc:objc-class) &key name &allow-other-keys)
+(defmethod initialize-instance :after ((class objc:objc-class)
+				       &key name objc-protocols
+					 &allow-other-keys)
   (unless (slot-value class 'foreign)
     #-(or apple-objc-2.0 cocotron-objc)
     (multiple-value-bind (ivars instance-size)
@@ -778,6 +780,9 @@
     #+(or apple-objc-2.0 cocotron-objc)
     (%add-objc-class class)
     (setf (find-class name) class)
+    (dolist (name objc-protocols)
+      (let ((p (%get-objc-protocol (objc-class-name-string name))))
+	(%add-objc-protocol class p)))
     (ensure-dealloc-method-for-class class)))
 
 (defmethod shared-initialize ((instance objc:objc-object) slot-names 

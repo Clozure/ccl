@@ -99,6 +99,17 @@
 (defun lookup-objc-protocol (name)
   (values (gethash name *objc-protocols*)))
 
+;;; I'm not sure we still need to avoid #_objc_getProtocol.
+(defun %get-objc-protocol (name)
+  (let ((p (lookup-objc-protocol name)))
+    (if p
+      (objc-protocol-address p)
+      (error "No Objective-C protocol named ~s" name))))
+
+(defun %add-objc-protocol (class protocol)
+  (when (= (#_class_addProtocol class protocol) #$YES)
+    protocol))
+
 (defun ensure-objc-classptr-resolved (classptr)
   #-gnu-objc (declare (ignore classptr))
   #+gnu-objc
