@@ -1039,7 +1039,7 @@
   (setq count (check-count count))
   (do* ((handle (cons nil list))
         (splice handle)
-        (numdeleted 0)
+v        (numdeleted 0)
         (i 0 (1+ i)))
        ((or (= i end) (null (cdr splice)) (= numdeleted count))
         (cdr handle))
@@ -1216,62 +1216,228 @@
 
 ;;; Remove:
 
+(defun list-remove (item sequence test test-not start end count from-end key)
+  (collect ((new))
+    (dotimes (i start)
+      (new (pop sequence)))
+    (let* ((i start)
+           (removed 0))
+      (declare (fixnum i removed))
+      (if key
+        (cond (test
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (funcall test item (funcall key element))
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (test-not
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (not (funcall test-not item (funcall key element)))
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (t
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (eql item (funcall key element))
+                     (incf removed)
+                     (new element)))
+                 (incf i))))
+        (cond (test
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (funcall test item element)
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (test-not
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (not (funcall test-not item element))
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (t
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (eql item element)
+                     (incf removed)
+                     (new element)))
+                 (incf i)))))
+      (do* ()
+           ((null sequence)
+            (if from-end
+              (nreverse (new))
+              (new)))
+        (new (pop sequence))))))
+
+(defun list-remove-conditional (sequence test test-not start end count from-end key)
+  (collect ((new))
+    (dotimes (i start)
+      (new (pop sequence)))
+    (let* ((i start)
+           (removed 0))
+      (declare (fixnum i removed))
+      (if key
+        (cond (test
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (funcall test (funcall key element))
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (test-not
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (not (funcall test-not (funcall key element)))
+                     (incf removed)
+                     (new element)))
+                 (incf i))))
+        (cond (test
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (funcall test element)
+                     (incf removed)
+                     (new element)))
+                 (incf i)))
+              (test-not
+               (do* ()
+                    ((or (= i end) (= removed count)))
+                 (let* ((element (pop sequence)))
+                   (if (not (funcall test-not element))
+                     (incf removed)
+                     (new element)))
+                 (incf i)))))
+      (do* ()
+           ((null sequence)
+            (if from-end
+              (nreverse (new))
+              (new)))
+        (new (pop sequence))))))
+
+
 
 
 (defun remove (item sequence &key from-end test test-not (start 0)
                     end count key)
   "Return a copy of SEQUENCE with elements satisfying the test (default is
    EQL) with ITEM removed."
+  (if (or (eq test 'identity)
+          (eq test #'identity))
+    (setq key nil))
   (setq count (check-count count))
+
   (seq-dispatch
    sequence
-   (list-delete-1 item 
-                (copy-list sequence)
-                from-end
-                test 
-                test-not
-                start 
-                end 
-                count
-                key)
-   (simple-vector-delete item
-                         sequence
-                         test
-                         test-not
-                         key
-                         start
-                         end
-                         (if from-end -1 1)
-                         count)))
+   (let* ((len (length sequence))
+          (reversed nil))
+     (setq end (check-sequence-bounds sequence start end len))
+     (when (and (< count len) from-end)
+       (psetq sequence (reverse sequence)
+              reversed t
+              start (- len end)
+              end (- len start)))
+     (if test
+       (if test-not
+         (error "Both ~s and ~s keywords supplied" :test :test-not)
+         (setq test (coerce-to-function test)))
+       (if test-not
+         (setq test-not (coerce-to-function test-not))
+         (setq test #'eql)))
+     (list-remove item
+                  sequence
+                  test 
+                  test-not
+                  start 
+                  end
+                  count
+                  reversed
+                  key))
+  (simple-vector-delete item
+                        sequence
+                        test
+                        test-not
+                        key
+                        start
+                        end
+                        (if from-end -1 1)
+                        count)))
 
 
 
 
 (defun remove-if (test sequence &key from-end (start 0)
-                         end count key)
+                       end count key)
   "Return a copy of sequence with elements such that predicate(element)
    is non-null removed"
   (setq count (check-count count))
-  (remove test sequence
-          :test #'funcall
-          :from-end from-end
-          :start start
-          :end end
-          :count count
-          :key key))
+  (seq-dispatch
+   sequence
+   (let* ((len (length sequence))
+          (reversed nil))
+     (setq end (check-sequence-bounds sequence start end len))
+     (when (and (< count len) from-end)
+       (psetq sequence (reverse sequence)
+              reversed t
+              start (- len end)
+              end (- len start)))
+     (list-remove-conditional sequence
+                              (coerce-to-function test )
+                              nil
+                              start 
+                              end
+                              count
+                              reversed
+                              key))
+   (remove test sequence
+           :test #'funcall
+           :from-end from-end
+           :start start
+           :end end
+           :count count
+           :key key)))
 
 (defun remove-if-not (test sequence &key from-end (start 0)
-                         end count key)
+                           end count key)
   "Return a copy of sequence with elements such that predicate(element)
    is null removed"
   (setq count (check-count count))
-  (remove test sequence
-          :test-not #'funcall
-          :from-end from-end
-          :start start
-          :end end
-          :count count
-          :key key))
+  (seq-dispatch
+   sequence
+   (let* ((len (length sequence))
+          (reversed nil))
+     (setq end (check-sequence-bounds sequence start end len))
+     (when (and (< count len) from-end)
+       (psetq sequence (reverse sequence)
+              reversed t
+              start (- len end)
+              end (- len start)))
+     (list-remove-conditional sequence
+                              nil
+                              (coerce-to-function test)
+                              start 
+                              end
+                              count
+                              reversed
+                              key))
+   (remove test sequence
+           :test-not #'funcall
+           :from-end from-end
+           :start start
+           :end end
+           :count count
+           :key key)))
 
 ;;; Remove-Duplicates:
 

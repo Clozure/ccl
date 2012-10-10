@@ -146,10 +146,34 @@
   (if list
     (let ((result (cons (car list) '()) ))
       (do ((x (cdr list) (cdr x))
+           (i 0 (1+ i))
+           (len)
            (splice result
                    (%cdr (%rplacd splice (cons (%car x) '() ))) ))
-          ((atom x) (unless (null x)
-                      (%rplacd splice x)) result)))))
+          ((atom x)
+           (unless (null x)
+             (%rplacd splice x))
+           result)
+        (declare (fixnum i))
+        ;; If the argument is "moderately long", check to see if it's
+        ;; "very long"; if so, it may be much faster to replace the
+        ;; elements of a list allocated in a single operation than it
+        ;; is to repeatedly CONS (since the latter tends to fight with
+        ;; the EGC.)
+        ;; The definitions of "moderately long" and "very long" are
+        ;; both somewhat arbitrary.
+        (when (and (= i 1024)
+                   (> (setq len (alt-list-length x)) (ash 1 16)))
+          (do* ((tail (setf (%cdr splice) (%allocate-list 0 len)))
+                (x x (cdr x)))
+               ((atom x)
+                (unless (null x)
+                  (%rplacd tail x))
+                (return-from copy-list result))
+            (%rplaca tail (%car x))
+            (unless (atom (%cdr x))
+              (setq tail (cdr tail)))))))))
+          
 
 (defun alt-list-length (l)
   "Detect (and complain about) cirucular lists; allow any atom to
@@ -399,15 +423,14 @@ terminate the list"
   "Return a new sequence containing the same elements but in reverse order."
   (seq-dispatch seq (list-reverse seq) (vector-reverse seq)))
 
-(defun check-sequence-bounds (seq start end)
+(defun check-sequence-bounds (seq start end &optional (length (length seq)))
+  (declare (fixnum length))
   (flet ((bad-sequence-interval (seq start end)
            (unless (typep start 'unsigned-byte)
              (report-bad-arg start 'unsigned-byte))
            (if (and end (not (typep end 'unsigned-byte)))
              (report-bad-arg end '(or null unsigned-byte)))
            (error "Bad interval for sequence operation on ~s : start = ~s, end = ~s" seq start end)))
-  (let* ((length (length seq)))
-    (declare (fixnum length))
     (if (and (typep start 'fixnum)
              (<= 0 (the fixnum start))
              (if (null end)
@@ -417,7 +440,7 @@ terminate the list"
                     (<= (the fixnum end) (the fixnum length)))))
 
       end
-      (bad-sequence-interval seq start end)))))
+      (bad-sequence-interval seq start end))))
 
   
 

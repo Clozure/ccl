@@ -2185,10 +2185,13 @@ to replace that class with ~s" name old-class new-class)
 
   (defun constantly (x)
     "Return a function that always returns VALUE."
-    #'(lambda (&rest ignore)
-        (declare (dynamic-extent ignore)
-                 (ignore ignore))
-        x))
+    (cond ((null x) #'false)
+          ((eq x t) #'true)
+          (t
+           #'(lambda (&rest ignore)
+               (declare (dynamic-extent ignore)
+                        (ignore ignore))
+               x))))
 
   (defun %register-type-ordinal-class (foreign-type class-name)
     ;; ordinal-type-class shouldn't already exist
