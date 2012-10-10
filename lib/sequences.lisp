@@ -1039,7 +1039,7 @@
   (setq count (check-count count))
   (do* ((handle (cons nil list))
         (splice handle)
-v        (numdeleted 0)
+        (numdeleted 0)
         (i 0 (1+ i)))
        ((or (= i end) (null (cdr splice)) (= numdeleted count))
         (cdr handle))
