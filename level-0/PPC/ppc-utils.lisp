@@ -686,6 +686,14 @@ be somewhat larger than what was specified)."
   (add vsp vsp imm0)
   (blr))
 
+(defppclapfunction constant-ref ()
+  (cmplri nargs '3)
+  (ldr arg_z 'constant nfn)
+  (blelr)
+  (subi imm0 nargs '3)
+  (add vsp vsp imm0)
+  (blr))
+
 (lfun-bits #'true #.(encode-lambda-list '(&lap &rest ignore)))
 (lfun-bits #'false #.(encode-lambda-list '(&lap &rest ignore)))
 
