@@ -523,7 +523,7 @@ GC notifications."
   (subl ($ '2) (% nargs))
   (leal (@ '2 (% esp) (% nargs)) (% imm0))
   (cmoval (% imm0) (% esp))
-  (movl ($ 'constant (% fn)) (% arg_z))
+  (movl (@ 'constant (% fn)) (% arg_z))
   (push (% temp0))
   (single-value-return))
 
