@@ -528,6 +528,13 @@ at heap allocation."
   (add vsp vsp imm0)
   (bx lr))
 
-
+(defarmlapfunction constant-ref ()
+  (:arglist (&rest ignore))
+  (cmp nargs '3)
+  (ldr arg_z (:@ nfn 'constant))
+  (bxls lr)
+  (sub imm0 nargs '3)
+  (add vsp vsp imm0)
+  (bx lr))
 
 ;;; end
