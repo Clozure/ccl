@@ -562,6 +562,14 @@ GC notifications."
   (push (% ra0))
   (single-value-return))
 
+(defx86lapfunction constant-ref ()
+  (pop (% ra0))
+  (subq ($ '3) (% nargs.q))
+  (leaq (@ '2 (% rsp) (% nargs.q)) (% imm0))
+  (cmovaq (% imm0) (% rsp))
+  (movq (@ 'constant (% fn)) (% arg_z))
+  (push (% ra0))
+  (single-value-return))  
 
 
 ;;; end

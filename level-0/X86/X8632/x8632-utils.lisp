@@ -518,6 +518,15 @@ GC notifications."
   (push (% temp0))
   (single-value-return))
 
+(defx8632lapfunction constant-ref ()
+  (pop (% temp0))
+  (subl ($ '2) (% nargs))
+  (leal (@ '2 (% esp) (% nargs)) (% imm0))
+  (cmoval (% imm0) (% esp))
+  (movl ($ 'constant (% fn)) (% arg_z))
+  (push (% temp0))
+  (single-value-return))
+
 (defx8632lapfunction int3 ()
   (int ($ 3))
   (single-value-return))
