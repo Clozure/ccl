@@ -1136,7 +1136,7 @@
   (beq :got-it)
   (cmp temp (:$ arm::tag-misc))
   (ldreq header (:@ src (:$ arm::misc-header-offset)))
-  (andeq temp src (:$ arm::subtag-mask))
+  (andeq temp header (:$ arm::subtag-mask))
   (moveq header (:lsr header (:$ arm::num-subtag-bits)))
   (cmpeq temp (:$ arm::subtag-bignum))
   (bne :bad-if-ne)
