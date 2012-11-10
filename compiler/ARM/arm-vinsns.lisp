@@ -2958,6 +2958,25 @@
   ((:not (:pred = count 0))
    (mov dest (:lsr src (:$ count)))))
 
+(define-arm-vinsn fixnum-ash-left (((dest :lisp))
+                                   ((num :lisp)
+                                    (amt :lisp))
+                                   ((temp :s32)))
+  (mov temp (:asr amt (:$ arm::fixnumshift)))
+  (mov dest (:lsl num temp)))
+
+(define-arm-vinsn fixnum-ash (((dest :lisp))
+                              ((num :lisp)
+                               (amt :lisp))
+                              ((temp :s32)))
+  (movs temp (:asr amt (:$ arm::fixnumshift)))
+  (movge dest (:lsl num temp))
+  (bge :done)
+  (rsb temp temp (:$ 0))
+  (mov temp (:asr num temp))
+  (bic dest temp (:$ arm::fixnummask))
+  :done)
+
 
 (define-arm-vinsn trap-unless-simple-array-2 (()
                                               ((object :lisp)

@@ -489,7 +489,34 @@
                                        (make-acode (%nx1-operator fixnum)
                                                    const-num))
                  t)))
-          (t nil))))
+          (t
+           (let* ((numtype (specifier-type (acode-form-type num trust-decls)))
+                  (amttype (specifier-type (acode-form-type amt trust-decls)))
+                  (fixtype (specifier-type target-fixnum-type)))
+             (if (and (csubtypep numtype fixtype)
+                      (csubtypep amttype fixtype))
+               (let* ((highnum (numeric-ctype-high numtype))
+                      (lownum (numeric-ctype-low numtype))
+                      (widenum (if (> (integer-length highnum)
+                                      (integer-length lownum))
+                                 highnum
+                                 lownum))
+                      (maxleft (numeric-ctype-high amttype)))
+                 (when (and (>= (numeric-ctype-low amttype)
+                                (target-word-size-case
+                                 (32 -31)
+                                 (64 -63)))
+                            (< maxleft
+                               (arch::target-nbits-in-word (backend-target-arch *target-backend*)))
+                            (typep (ignore-errors (ash widenum maxleft))
+                                   target-fixnum-type))
+                   (backend-use-operator (%nx1-operator fixnum-ash)
+                                         seg
+                                         vreg
+                                         xfer
+                                         num
+                                         amt)
+                   t))))))))
 
 
 

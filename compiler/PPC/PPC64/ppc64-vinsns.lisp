@@ -2827,6 +2827,29 @@
                                           (count :u8const)))
   (rldicr dest src (:apply - 64 count) count))
 
+
+(define-ppc64-vinsn fixnum-ash-left (((dest :lisp))
+                                     ((num :lisp)
+                                      (amt :lisp))
+                                     ((count :s64)))
+  (sradi count amt ppc64::fixnumshift)
+  (sld dest num count))
+
+(define-ppc64-vinsn fixnum-ash (((dest :lisp))
+                                ((num :lisp)
+                                 (amt :lisp))
+                                ((count :s32)
+                                 (crf0 (:crf 0))))
+  (sradi. count amt ppc64::fixnumshift)
+  (blt :right)
+  (sld dest num count)
+  (b :done)
+  :right
+  (neg count count)
+  (srad count num count)
+  (clrrdi dest count ppc64::fixnumshift)
+  :done)
+
 (define-ppc64-vinsn sign-extend-halfword (((dest :imm))
 					  ((src :imm)))
   (sldi dest src (- 48 ppc64::fixnumshift))

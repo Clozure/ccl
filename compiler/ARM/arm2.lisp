@@ -9429,6 +9429,18 @@
         (arm2-two-targeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
         (arm2-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))))
 
+
+(defarm2 arm2-fixnum-ash fixnum-ash (seg vreg xfer num amt)
+  (multiple-value-bind (rnum ramt) (arm2-two-untargeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
+    (let* ((amttype (specifier-type (acode-form-type amt *arm2-trust-declarations*))))
+      (ensuring-node-target (target vreg)
+        (if (and (typep amttype 'numeric-ctype)
+                 (>= (numeric-ctype-low amttype) 0))
+          (! fixnum-ash-left target rnum ramt)
+          (! fixnum-ash target rnum ramt)))
+      (^))))
+
+
 (defarm2 arm2-fixnum-ref-double-float %fixnum-ref-double-float (seg vreg xfer base index)
   (if (null vreg)
     (progn

@@ -9232,6 +9232,16 @@
         (ppc2-two-targeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
         (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))))
 
+(defppc2 ppc2-fixnum-ash fixnum-ash (seg vreg xfer num amt)
+  (multiple-value-bind (rnum ramt) (ppc2-two-untargeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
+    (let* ((amttype (specifier-type (acode-form-type amt *ppc2-trust-declarations*))))
+      (ensuring-node-target (target vreg)
+        (if (and (typep amttype 'numeric-ctype)
+                 (>= (numeric-ctype-low amttype) 0))
+          (! fixnum-ash-left target rnum ramt)
+          (! fixnum-ash target rnum ramt)))
+      (^))))
+
 (defun show-function-constants (f)
   (cond ((typep f 'function)
 	 (do* ((i 0 j)

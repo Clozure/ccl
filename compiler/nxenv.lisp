@@ -143,7 +143,7 @@
      (local-tagbody . #.operator-single-valued-mask)
      (%fixnum-set-natural . #.operator-single-valued-mask)
      (type-asserted-form . 0)
-     (spushp . #.operator-single-valued-mask)
+     (fixnum-ash .  #.(logior operator-single-valued-mask operator-assignment-free-mask operator-assignment-free-mask operator-acode-subforms-mask operator-side-effect-free-mask))
      (simple-function . #.operator-single-valued-mask)
      (closed-function . #.operator-single-valued-mask)
      (setq-lexical . #.operator-single-valued-mask)

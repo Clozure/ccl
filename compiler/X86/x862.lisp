@@ -10904,7 +10904,15 @@
         (x862-two-targeted-reg-forms seg num ($ *x862-arg-y*) amt ($ *x862-arg-z*))
         (x862-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))))
       
-    
+(defx862 x862-fixnum-ash fixnum-ash (seg vreg xfer num amt)
+  (multiple-value-bind (rnum ramt) (x862-two-untargeted-reg-forms seg num *x862-arg-y* amt *x862-arg-z* *x862-variable-shift-count-mask*)
+    (let* ((amttype (specifier-type (acode-form-type amt *x862-trust-declarations*))))
+      (ensuring-node-target (target vreg)
+        (if (and (typep amttype 'numeric-ctype)
+                 (>= (numeric-ctype-low amttype) 0))
+          (! fixnum-ash-left target rnum ramt)
+          (! fixnum-ash target rnum ramt)))
+      (^))))
 
 
 (defx862 x862-%new-ptr %new-ptr (seg vreg xfer size clear-p )

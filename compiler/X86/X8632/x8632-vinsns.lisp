@@ -2338,6 +2338,40 @@
    (movl (:%l src) (:%l dest)))
   (shll (:$ub count) (:%l dest)))
 
+(define-x8632-vinsn fixnum-ash-left (((dest :lisp))
+                                     ((num :lisp)
+                                      (amt :lisp))
+                                     ((shiftcount (:s32 #.x8632::ecx))))
+  (movl (:%l amt) (:%l shiftcount))
+  (sarl (:$ub x8632::fixnumshift) (:%l shiftcount))
+  ((:not (:pred =
+                (:apply %hard-regspec-value num)
+                (:apply %hard-regspec-value dest)))
+   (movl (:%l num) (:%l dest)))
+  (shll (:%shift x8632::cl) (:%l dest)))
+
+(define-x8632-vinsn fixnum-ash (((dest :lisp))
+                                ((num :lisp)
+                                 (amt :lisp))
+                                ((shiftcount (:s32 #.x8632::ecx))
+                                 (temp (:s32))))
+  (movl (:%l amt) (:%l shiftcount))
+  (sarl (:$ub x8632::fixnumshift) (:%l shiftcount))
+  (jns :left)
+  (negl (:%l shiftcount))
+  (movl (:%l num) (:%l temp))
+  (sarl (:$ub x8632::fixnumshift) (:%l temp))
+  (sarl (:%shift x8632::cl) (:%l temp))
+  (imull  (:$b x8632::fixnumone) (:%l temp)(:%l dest))
+  (jmp :done)
+  :left
+  ((:not (:pred =
+                (:apply %hard-regspec-value num)
+                (:apply %hard-regspec-value dest)))
+   (movl (:%l num) (:%l dest)))
+  (shll (:%shift x8632::cl) (:%l dest))
+  :done)
+
 ;;; In safe code, something else has ensured that the value is of type
 ;;; BIT.
 (define-x8632-vinsn set-variable-bit-to-variable-value (()

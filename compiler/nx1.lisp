@@ -2432,18 +2432,14 @@
     (nx1-form context (macroexpand `(%ilognot ,n)))))
 
     
-(defnx1 nx1-ash (ash) context (&whole call &environment env num amt)
-  (flet ((defer-to-backend ()
-             ;; Bootstrapping nonsense
-             (if (svref (backend-p2-dispatch *target-backend*)
-                        (logand operator-id-mask (%nx1-operator ash)))
-               (make-acode (%nx1-operator typed-form)
+(defnx1 nx1-ash (ash) context (&environment env num amt)
+  (flet ((generic-case ()
+             (make-acode (%nx1-operator typed-form)
                            'integer
                            (make-acode
                             (%nx1-operator ash)
                             (nx1-form :value num)
-                            (nx1-form :value amt)))
-               (nx1-treat-as-call context call))))
+                            (nx1-form :value amt)))))
     (let* ((unsigned-natural-type *nx-target-natural-type*) 
            (max (target-word-size-case (32 32) (64 64)))
            (maxbits (target-word-size-case
@@ -2464,7 +2460,7 @@
                                (make-acode (%nx1-operator fixnum)
                                            (- amt)))
                    (nx1-form context `(progn (require-type ,num 'integer) 0) env))
-                 (defer-to-backend))))
+                 (generic-case))))
             ((and (fixnump amt)
                   (<= 0 amt maxbits)
                   (or (nx-form-typep num `(signed-byte ,(- (1+ maxbits) amt)) env)
@@ -2486,8 +2482,20 @@
                     (max-shift (- (1+ maxbits) field-width)))
                (if (nx-form-typep amt `(mod ,(1+ max-shift)) env)
                  (nx1-form context `(%ilsl ,amt ,num))
-                 (defer-to-backend))))
-            (t (defer-to-backend))))))
+                 (generic-case))))
+            ((and (nx-trust-declarations env)
+                  (subtypep *nx-form-type* *nx-target-fixnum-type*)
+                  (nx-form-typep num *nx-target-fixnum-type* env)
+                  (target-word-size-case
+                   (32 (nx-form-typep amt '(signed-byte 5) env))
+                   (64 (nx-form-typep amt '(signed-byte 6) env))))
+             (make-acode (%nx1-operator typed-form)
+                         *nx-target-fixnum-type*
+                           (make-acode
+                            (%nx1-operator fixnum-ash)
+                            (nx1-form :value num)
+                            (nx1-form :value amt))))
+            (t (generic-case))))))
 
     
         

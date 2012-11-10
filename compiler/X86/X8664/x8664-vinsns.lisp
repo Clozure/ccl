@@ -2796,6 +2796,41 @@
    (movq (:%q src) (:%q dest)))
   (shlq (:$ub count) (:%q dest)))
 
+(define-x8664-vinsn fixnum-ash-left (((dest :lisp))
+                                     ((num :lisp)
+                                      (amt :lisp))
+                                     ((shiftcount (:s64 #.x8664::rcx))))
+  (movq (:%q amt) (:%q shiftcount))
+  (sarq (:$ub x8664::fixnumshift) (:%q shiftcount))
+  ((:not (:pred =
+                (:apply %hard-regspec-value num)
+                (:apply %hard-regspec-value dest)))
+   (movq (:%q num) (:%q dest)))
+  (shlq (:%shift x8664::cl) (:%q dest)))
+
+(define-x8664-vinsn fixnum-ash (((dest :lisp))
+                                ((num :lisp)
+                                 (amt :lisp))
+                                ((shiftcount (:s64 #.x8664::rcx))
+                                 (temp (:s64))))
+  (movq (:%q amt) (:%q shiftcount))
+  (sarq (:$ub x8664::fixnumshift) (:%q shiftcount))
+  (jns :left)
+  (negq (:%q shiftcount))
+  (movq (:%q num) (:%q temp))
+  (sarq (:$ub x8664::fixnumshift) (:%q temp))
+  (sarq (:%shift x8664::cl) (:%q temp))
+  (imulq  (:$b x8664::fixnumone) (:%q temp)(:%q dest))
+  (jmp :done)
+  :left
+  ((:not (:pred =
+                (:apply %hard-regspec-value num)
+                (:apply %hard-regspec-value dest)))
+   (movq (:%q num) (:%q dest)))
+  (shlq (:%shift x8664::cl) (:%q dest))
+  :done)
+                                    
+
 ;;; In safe code, something else has ensured that the value is of type
 ;;; BIT.
 (define-x8664-vinsn set-variable-bit-to-variable-value (()

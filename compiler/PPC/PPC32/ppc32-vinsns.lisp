@@ -2821,6 +2821,28 @@
                                           (count :u8const)))
   (rlwinm dest src (:apply - 32 count) count 31))
 
+(define-ppc32-vinsn fixnum-ash-left (((dest :lisp))
+                                     ((num :lisp)
+                                      (amt :lisp))
+                                     ((count :s32)))
+  (srawi count amt ppc32::fixnumshift)
+  (slw dest num count))
+
+(define-ppc32-vinsn fixnum-ash (((dest :lisp))
+                                ((num :lisp)
+                                 (amt :lisp))
+                                ((count :s32)
+                                 (crf0 (:crf 0))))
+  (srawi. count amt ppc32::fixnumshift)
+  (blt :right)
+  (slw dest num count)
+  (b :done)
+  :right
+  (neg count count)
+  (sraw count num count)
+  (clrrwi dest count ppc32::fixnumshift)
+  :done)
+  
 
 (define-ppc32-vinsn trap-unless-simple-array-2 (()
                                                 ((object :lisp)
