@@ -1555,7 +1555,7 @@ itself, by setting the status and exit-code fields.")
                          (when (zerop (car (external-process-token proc)))
                            t))))))
   
-  (defun signal-external-process (proc signal)
+  (defun signal-external-process (proc signal &key (error-if-exited t))
     "Send the specified signal to the specified external process.  (Typically,
 it would only be useful to call this function if the EXTERNAL-PROCESS was
 created with :WAIT NIL.) Return T if successful; NIL if the process wasn't
@@ -1565,7 +1565,9 @@ created successfully, and signal an error otherwise."
       (when pid
         (let ((error (int-errno-call (#_kill pid signal))))
           (or (eql error 0)
-              (%errno-disp error))))))
+              (unless (and (eql error (- #$ESRCH))
+                           (not error-if-exited))
+                (%errno-disp error)))))))
 
   )                                     ; #-windows-target (progn
 
