@@ -305,7 +305,7 @@
 
 	  <refsynopsisdiv>
 	    <synopsis><function>signal-external-process</function>
-	    proc signal-number</synopsis>
+	    proc signal-number &key; (error-if-exited t)</synopsis>
 	  </refsynopsisdiv>
 
 	  <refsect1>
@@ -327,16 +327,35 @@
 		  <para>A small integer.</para>
 		</listitem>
 	      </varlistentry>
+	      <varlistentry>
+		<term>error-if-exited</term>
+
+		<listitem>
+		  <para>A boolean, by default T.</para>
+		</listitem>
+	      </varlistentry>
 	    </variablelist>
 	  </refsect1>
 
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Sends the specified "signal" to the specified
-	    external process. (Typically, it would only be useful to call
-	    this function if the EXTERNAL-PROCESS was created with :WAIT
-	    NIL. ) Returns T if successful; signals an error otherwise.</para>
+	    <para>
+	      Sends <varname>signal</varname> to the external process
+	      <varname>proc</varname>. (Typically, it would only be
+	      useful to call this function if the EXTERNAL-PROCESS was
+	      created with :WAIT NIL.)
+	    </para>
+	    <para>
+	      If successful, the function returns T; otherwise, an
+	      error is signaled.
+	    </para>
+	    <para>
+	      However, if <varname>error-if-exited</varname> is nil,
+	      and the attempt to signal the external process fails
+	      because the external process has already exited, the
+	      function will return nil rather than signaling an error.
+	    </para>
 	  </refsect1>
 	</refentry>
 
