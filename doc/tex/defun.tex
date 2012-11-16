@@ -1,0 +1,224 @@
+% defun library.
+% Guy L. Steele Jr.
+% Copyright 1985, 1986 , 1988, 1989 Guy L. Steele Jr.
+
+%  3/18/85 12:48  Now \@defunname generates index entries.
+%  5/22/85 14:16  Use \noexpand before \tt and \rm in index entries.
+%		  This will delay their processing until the point
+%		  when the index is read back in again.
+%  5/23/85 17:01  Add special check for nil as an init value for an
+%		  &optional or &key argument; make it be \tt, not \it.
+% 12/17/85 12:56  Add "lisp" environment.
+%  1/02/86 14:15  Base "lisp" environment on tabbing instead of raggedright.
+%  1/02/86 17:00  Make \endlisp use \ignorespaces.
+%  1/03/86 17:00  Put a space into the index key to make sorting work better.
+%  1/31/86 12:32  Simplify "lisp" environment to let the tabbing environment
+%		  take care of interparagraph spacing.
+%  1/31/86 13:27  Add \smallcaps stuff.
+%  1/31/86 13:38  In \@defunkeymode et al., assume the user provides a :.
+%  1/31/86 16:03  Flush \smallcaps stuff.
+%  1/31/86 17:03  Use \addvspace in \defun et al.
+%  2/04/86 17:15  Add feature so that the syntax \begin{defun}[Frob] causes "[Frob]"
+%		  to appear at the right margin, as in the Common Lisp book, and causes
+%		  the index entry for function baz to be "baz frob".  If no square
+%		  brackets ae used, then nothing appears at the right margin, and the
+%		  index entry looks like "baz \lowercase{default}" where "default" is
+%		  the definition of \defaultdefuntype, which is initialized by this file
+%		  to {Function} but can be redefined by the user.
+%  2/07/86 17:08  Make lisp environment use \frenchspacing.
+%  3/11/86 11:42  Improve some of the breaking places in the defun headers:
+%		  Introduce \hbox around every name, and make better pseudo-hyphens.
+%		  Also fix a bug in \@defuninitvalue.
+%  3/12/86 11:47  Hair up the defunbreak stuff some more.  Now we have different
+%		  behavior depending on whether the function name is long or short.
+%  3/12/86 16:09  Fix a possible bug in \@showdefuntype.
+%  3/13/86 14:16  More fixes to hairy defunbreak stuff.
+%  5/29/86 01:47  Add \internalroutine.
+%  6/04/86 14:47  Correct spacing in \@showdefuntype.
+%  6/29/88 00:31  Remove priority-box macros.
+
+\catcode`@=11	% Make it possible to refer to some LaTeX utility macros.
+\catcode`&=11
+
+\def\lisp{\cf\tabbing}
+\let\endlisp=\endtabbing
+
+\def\@defunstart{\noindent\leavevmode     % Need this to trigger the \everypar for margin rules.
+  \begingroup
+  \samepage  \raggedright \cf \catcode`&=11
+  \hyphenpenalty=-5  \exhyphenpenalty=\@M  \brokenpenalty=\@M}
+
+% The addvspace used to be "plus 4pt" but that was not enough stretch relative to \parskip.
+\def\defun{\@ifstar{\@defunstart{}\@ifnextchar[{\@defuntyped}{\@defununtyped}}{\relax
+   \addvspace{18pt plus 12pt minus 6pt}\@defunstart    %Margin macros know this amount
+   \@ifnextchar[{\@defuntyped}{\@defununtyped}}}
+
+
+\def\@showdefuntype{\setbox0\hbox{\hskip1.5em$\lbrack$\it\@defuntype\/$\rbrack$}\relax
+		    \setbox1\hbox{\hskip\textwidth\hskip-1\wd0}\relax
+		    \leavevmode\parshape=2  0pt 1\wd1  0pt \textwidth  \relax
+		    \hbox to 0pt{\hbox to \textwidth{\hss\box0}\hss}\let\@defuntype\@defunsecondtype}
+
+\def\@defununtyped{\let\@defunshow=\relax \@defun}
+\def\@defuntyped[#1]{\def\@defuntype{#1}\let\@defunsecondtype\@defuntype
+                     \let\@defunshow=\@showdefuntype
+                     \@ifnextchar[{\@defuntypedtwice}{\@defun}}
+\def\@defuntypedtwice[#1]{\def\@defunsecondtype{#1}\let\@defunshow=\@showdefuntype
+                          \@defun}
+
+\def\@defun{\@ifnextchar?{\@defunname}{\@defunname}}	% Skips spaces before name 
+
+\def\enddefun{\par
+  %%\message{end{defun} for \currentdefun}%For debugging
+  \@ifstar{}{\addvspace{6pt plus 6pt minus 2pt}}}    %Margin macros know this amount
+% Used to be "plus 2pt" but that was not enough stretch relative to \parskip.
+
+\def\@defunname#1 {\@defunshow
+  #1\@defunindex#1:\par{\lowercase{\@defuntype}}\relax
+  %%\message{begin{defun} for #1}\global\def\defun@name{#1}%For debugging
+  \setbox0\hbox{#1}\relax
+  \ifdim 1\wd0 < 1.3in\relax
+     \def\@defunbreak{\discretionary{\hbox{}}{\setbox0\hbox{#1 }\hbox{\hskip 1\wd0}}{\hbox{ }}}\relax
+     \let\@firstdefunbreak=~\relax
+  \else
+     \def\@defunbreak{\discretionary{\hbox{}}{\hbox{\hskip2em}}{\hbox{ }}}\relax
+     \let\@firstdefunbreak=\@defunbreak
+  \fi
+  \def\@defunkeywordbreak{\@firstdefunbreak\let\@defunkeywordbreak=\@defunbreak}\relax
+  \def\@hairydefunbreak{\@firstdefunbreak
+		        \let\@defunkeywordbreak=\@defunbreak
+		        \let\@hairydefunbreak\@defunbreak}\relax
+  \@defunreqmode}
+
+\def\@defunindex#1:#2\par#3{\def\@tempa{}\def\thing{#2}\ifx\thing\@tempa
+  \@idefunindex{}#1:\par{#3}\else \@idefunindex{#1:}#2\par{#3}\fi}
+\def\@idefunindex#1#2:\par#3{\index{{#2 }{\noexpand\noexpand\noexpand\cf #1#2\ \noexpand\noexpand\noexpand\rm #3}}}
+
+
+\def\@newlinecheck#1#2{\def\@tempa{#1}\def\@tempb{\\}\ifx\@tempa\@tempb \\*\let\@tempd\@defunname
+  \else \def\@tempd{#2}\fi \@tempd}
+
+\def\@ifparnext#1#2{\def\@tempa{#1}\def\@tempb{#2}\futurelet\@tempc\@ifparnx}
+\def\@ifparnx{\ifx\@tempc\@@par \let\@tempd\@tempa \else \let\@tempd\@tempb \fi \@tempd}
+
+
+\def\@defunreqmode{\@ifparnext{\@defundone}{\@ifnextchar &{\@defunkeyword}{\@ifnextchar({\@defunparenreqarg}{\@defunreqarg}}}}
+\def\@defunreqarg#1 {\@newlinecheck{#1}{\@hairydefunbreak\hbox{\it #1\/}\@defunreqmode}}
+\def\@defunparenreqarg(#1 #2) {\@hairydefunbreak(\hbox{\it #1\/}~#2)\@defunreqmode}  %CLOS methods
+
+\def\@defunrestmode{\@ifparnext{\@defundone}{\@ifnextchar &{\@defunkeyword}{\@defunrestarg}}}
+\def\@defunrestarg#1 {\@newlinecheck{#1}{\penalty\@m\ \hbox{\it #1\/}\@defunrestmode}}
+
+\def\@defunoptionalmode{\@ifparnext{\@defundone}{\@ifnextchar &{\@defunkeyword}{\@ifnextchar({\@defunparenoptionalarg}{\@defunoptionalarg}}}}
+\def\@defunoptionalarg#1 {\@newlinecheck{#1}{\@hairydefunbreak\hbox{\it #1\/}\@defunoptionalmode}}
+\def\@defunparenoptionalarg(#1 #2) {\@hairydefunbreak(\hbox{\it #1\/}~\@defuninitvalue#2)\@defunoptionalmode}
+
+\def\@defuninitvalue#1#2){{\ifcat#1A\def\@tempa{#1#2}\def\@tempb{nil}\ifx\@tempa\@tempb
+  \cf \else \it \fi \else \cf \fi #1#2})}
+
+\def\@defunkeymode{\@ifparnext{\@defundone}{\@ifnextchar &{\@defunkeyword}{\@ifnextchar({\@defunparenkeyarg}{\@defunkeyarg}}}}
+\def\@defunkeyarg#1 {\@newlinecheck{#1}{\penalty\@m\@defunkeywordbreak\hbox{#1}\@defunkeymode}}
+\def\@defunparenkeyarg(#1 #2) {\penalty\@m~(\hbox{#1}~\@defuninitvalue#2)\@defunkeymode}
+
+\def\@defunkeyword &#1 {\@defunkeywordbreak\hbox{\&#1}\csname @defun#1mode\endcsname}
+
+\def\@defundone\par{\par\endgroup
+   %%\edef\currentdefun{\defun@name}%For debugging
+   \nobreak\addvspace{6pt}\noindent}
+
+
+
+\begingroup
+\catcode`\[=13 \catcode`\]=13 \catcode`\(=13 \catcode`\)=13
+\catcode`\<=13 \catcode`\>=13 \catcode`\|=13 \catcode`\?=13
+\global\def\@defmacstart#1{\relax
+%  \noindent\leavevmode     % Need this to trigger the \everypar for margin rules.
+  \begingroup \samepage  \topsep 0pt
+  \catcode`&=11
+  \def\@lbracehack{{$\,\lbrace$}\pushtabs\=\+\@backslashsetup\it}\relax
+  \def\@rbracehack{\-\poptabs
+       \@ifnextchar*{\@rbracesuper}{\@ifnextchar+{\@rbracesuper}{\/$\rbrace\,$\@backslashsetup\it}}}\relax
+  \def[{{$\,\lbrack$}\pushtabs\=\+\@backslashsetup\it}\relax
+  \def]{\-\poptabs$\/\rbrack\,$\@backslashsetup\it}\relax
+  \def<{{$\,\dlbrack$}\pushtabs\=\+\@backslashsetup\it}\relax
+  \def>{\-\poptabs$\/\drbrack\,$\@backslashsetup\it}\relax
+  \def({{\cf \char40}\pushtabs\=\+\@backslashsetup\it}\relax
+  \def){\-\poptabs{\cf \char41}\@backslashsetup\it}\relax
+  \def|{{$\char124$}}\relax
+  \def?{{$\downarrow$}}\relax
+  \def\@finishdefmac{\-\poptabs\end{tabbing}\endgroup\everypar{}
+       \addvspace{6pt}\noindent}\relax
+  \expandafter\def\@carret{\expandafter\@ifnextchar\@carret
+     {\@finishdefmac\@gobblecr}{\@tabcr*\@backslashsetup\it}}\relax
+  \@defunhackbraces
+  \def\@backslashsetup{\def\\{\-\poptabs\@tabcr*\@backslashsetup
+				\@dodefmacname{#1}}}\relax
+  \catcode`\[=13 \catcode`\]=13 \catcode`\(=13 \catcode`\)=13
+  \catcode`\<=13 \catcode`\>=13 \catcode`\|=13 \catcode`\?=13 \catcode`\^^M=13
+  \def\!##1!{\cd{##1}}\relax
+  \begin{tabbing}\@backslashsetup\@margineveryparguts
+  \@dodefmacname{#1}}
+\endgroup
+
+
+\def\Mopt#1{{$\,\lbrack$}{\it #1\/}{$\rbrack\,$}}
+\def\Mchoice#1{{$\,\dlbrack$}{\it #1\/}{$\drbrack\,$}}
+\def\Mstar#1{{$\,\lbrace$}{\it #1\/}{$\rbrace^*\,$}}
+\def\Mplus#1{{$\,\lbrace$}{\it #1\/}{$\rbrace^+\,$}}
+\def\Mgroup#1{{$\,\lbrace$}{\it #1\/}{$\rbrace\,$}}
+\def\Mor{{$|$}}
+\def\Mind#1{$\downarrow${\it #1\/}}
+
+% The following is taken from /usr/local/lib/tex/macros/latex.tex
+% but corrects a scoping bug.
+
+\newdimen\@curtabmardimen
+\def\@startline{\global\@curtabmar\@nxttabmar\relax
+   \global\@curtabmardimen\dimen\@curtabmar
+   \global\@curtab\@curtabmar\global\setbox\@curline\hbox
+    {}\@startfield\strut}
+
+\def\@stopline{\unskip\@stopfield\if@rjfield \global\@rjfieldfalse
+   \@tempdima\@totalleftmargin \advance\@tempdima\linewidth
+   \hbox to\@tempdima{\@itemfudge\hskip\@curtabmardimen
+   \box\@curline\hfil\box\@curfield}\else\@addfield
+   \hbox{\@itemfudge\hskip\@curtabmardimen\box\@curline}\fi}
+
+% End of material from /usr/local/lib/tex/macros/latex.tex .
+
+\def\defmac{\@defmacbegin{Macro}}
+\let\enddefmac\enddefun
+
+\def\defspec{\@defmacbegin{Special form}}
+\let\enddefspec\enddefun
+
+\def\defloop{\@defmacbegin{Loop clause}}
+\let\enddefloop\enddefun
+
+\def\@defmacbegin#1{\@ifstar{\@defmacstart{#1}}{\addvspace{18pt plus 12pt minus 6pt}\@defmacstart{#1}}}
+
+{\catcode`\^^M=13\global\def\@carret{
+}\global\def\@defmacnamecrgobble#1
+{\@defmacname{#1}}}
+
+\def\@dodefmacname#1{\cf\expandafter\@ifnextchar\@carret
+   {\@defmacnamecrgobble{#1}}{\@defmacname{#1}}}
+
+\def\@defmacname#1#2 {%\typeout{#1: #2 }\relax
+  \setbox0\hbox{\hskip1.5em$\lbrack$\it#1\/$\rbrack$}\relax
+  \leavevmode\hbox to 0pt{\hbox to \textwidth{\hss\box0}\hss}{\cf #2\ }\pushtabs\=\+\@backslashsetup
+  \@defunindex#2:\par{\lowercase{#1}}
+  \it}
+
+\bgroup
+\catcode`\<=1 \catcode`\>=2 \catcode`\{=13 \catcode`\}=13
+\global\def\@defunhackbraces<\catcode`\{=13\catcode`\}=13\let{\@lbracehack\let}\@rbracehack>
+\egroup
+
+\def\@rbracesuper#1{{\/$\rbrace^{#1}\,$}\@backslashsetup\it}
+
+
+\catcode`@=12		% Restore character codes
+\catcode`&=4
+
+%[End]
