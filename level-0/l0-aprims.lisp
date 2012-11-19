@@ -159,7 +159,9 @@ between threads."
     (or (%svref r target::lock.whostate-cell)
         (setf (%svref r target::lock.whostate-cell)
               (%lock-whostate-string "Lock wait" r)))
-    (report-bad-arg r 'recursive-lock)))
+    (if (typep r 'string)
+      r
+      (report-bad-arg r 'recursive-lock))))
 
 
 (defun read-write-lock-ptr (rw)

@@ -663,19 +663,17 @@
 (defx86lapfunction %store-immediate-conditional ((offset 8) #|(ra 0)|# (object arg_x) (old arg_y) (new arg_z))
   (movq (@ offset (% rsp)) (% temp0))
   (unbox-fixnum temp0 imm1)
-  @again
-  (movq (@ (% object) (% imm1)) (% rax))
-  (cmpq (% rax) (% old))
-  (jne @lose)
+  (movq (% old) (% rax))
   (lock)
   (cmpxchgq (% new) (@ (% object) (% imm1)))
-  (jne @again)
+  (jne @lose)
   (movl ($ (target-t-value)) (%l arg_z))
   (single-value-return 3)
   @lose
   (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return 3))
 
+;;; AFAICT, this is GC-safe
 (defx86lapfunction set-%gcable-macptrs% ((ptr x8664::arg_z))
   @again
   (movq (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers)))
@@ -685,6 +683,21 @@
   (cmpxchgq (% ptr) (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers))))
   (jne @again)
   (single-value-return))
+
+#||
+(defun set-%gcable-macptrs% (ptr)
+  (with-exception-lock
+      (%set-%gcable-macptrs% ptr)))
+
+(defx86lapfunction %set-%gcable-macptrs% ((ptr x8664::arg_z))
+  ;; We must own the exception lock here.
+  (movq (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers)))
+        (% temp0))
+  (movq (% temp0) (@ x8664::xmacptr.link (% ptr)))
+  (movq (% ptr) (@ (+ (target-nil-value) (x8664::kernel-global gcable-pointers))))
+  (single-value-return))
+
+||#
 
 ;;; Atomically increment or decrement the gc-inhibit-count kernel-global
 ;;; (It's decremented if it's currently negative, incremented otherwise.)
@@ -697,11 +710,14 @@
   (cmovsq (% temp0) (% arg_z))
   (lock)
   (cmpxchgq (% arg_z) (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count))))
-  (jnz @again)
+  (jz @win)
+  (pause)
+  (jmp @again)
+  @win
   (single-value-return))
 
 ;;; Atomically decrement or increment the gc-inhibit-count kernel-global
-;;; (It's incremented if it's currently negative, incremented otherwise.)
+;;; (It's incremented if it's currently negative, decremented otherwise.)
 ;;; If it's incremented from -1 to 0, try to GC (maybe just a little.)
 (defx86lapfunction %unlock-gc-lock ()
   @again
@@ -713,7 +729,10 @@
   (cmovleq (% arg_x) (% arg_z))
   (lock)
   (cmpxchgq (% arg_z) (@ (+ (target-nil-value) (x8664::kernel-global gc-inhibit-count))))
-  (jne @again)
+  (je @win)
+  (pause)
+  (jmp @again)
+  @win
   (cmpq ($ '-1) (% rax))
   (jne @done)
   ;; The GC tried to run while it was inhibited.  Unless something else
@@ -725,9 +744,6 @@
 
 ;;; Return true iff we were able to increment a non-negative
 ;;; lock._value
-
-
-
 
 (defx86lapfunction %atomic-incf-node ((by arg_x) (node arg_y) (disp arg_z))
   (check-nargs 3)
@@ -747,7 +763,10 @@
   (lea (@ 1 (% rax)) (% imm1))
   (lock)
   (cmpxchgq (% imm1) (@ (% imm2)))
-  (jne @again)
+  (je @win)
+  (pause)
+  (jmp @again)
+  @win
   (box-fixnum imm1 arg_z)
   (single-value-return))
 
@@ -759,7 +778,10 @@
   (add (% rax) (% imm1))
   (lock)
   (cmpxchgq (% imm1) (@ (% imm2)))
-  (jnz @again)
+  (jz @win)
+  (pause)
+  (jmp @again)
+  @win
   (box-fixnum imm1 arg_z)
   (single-value-return))
 
@@ -771,7 +793,10 @@
   (lea (@ -1 (% rax)) (% imm1))
   (lock)
   (cmpxchgq (% imm1) (@ (% imm2)))
-  (jnz @again)
+  (jz @win)
+  (pause)
+  (jmp @again)
+  @win
   (box-fixnum imm1 arg_z)
   (single-value-return))
 
@@ -784,7 +809,9 @@
   (jz @done)
   (lock)
   (cmpxchgq (% imm1) (@ (% imm2)))
-  (jnz @again)
+  (jz @done)
+  (pause)
+  (jmp @again)
   @done
   (box-fixnum imm1 arg_z)
   (single-value-return))
@@ -802,30 +829,18 @@
 ;;; was equal to OLDVAL.  Return the old value
 (defx86lapfunction %ptr-store-conditional ((ptr arg_x) (expected-oldval arg_y) (newval arg_z))
   (macptr-ptr ptr imm2)
-  @again
-  (movq (@ (% imm2)) (% imm0))
-  (box-fixnum imm0 temp0)
-  (cmpq (% temp0) (% expected-oldval))
-  (jne @done)
-  (unbox-fixnum newval imm1)
+  (unbox-fixnum expected-oldval imm0)
   (lock)
   (cmpxchgq (% imm1) (@ (% imm2)))
-  (jne @again)
-  @done
-  (movq (% temp0) (% arg_z))
+  (box-fixnum imm0 arg_z)
   (single-value-return))
 
 (defx86lapfunction %ptr-store-fixnum-conditional ((ptr arg_x) (expected-oldval arg_y) (newval arg_z))
   (let ((address imm1))
     (macptr-ptr ptr address)
-    @again
-    (movq (@ (% address)) (% imm0))
-    (cmpq (% imm0) (% expected-oldval))
-    (jne @done)
+    (movq (% expected-oldval) (% imm0))
     (lock)
     (cmpxchgq (% newval) (@ (% address)))
-    (jne @again)
-    @done
     (movq (% imm0) (% arg_z))
     (single-value-return)))
 

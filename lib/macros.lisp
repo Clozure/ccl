@@ -2535,17 +2535,31 @@ has immediate effect."
   "Wait until a given lock can be obtained, then evaluate its body with
 the lock held."
   (declare (ignore whostate))
-    (let* ((locked (gensym))
-           (l (gensym)))
-      `  (with-lock-context
-           (let ((,locked (make-lock-acquisition))
-             (,l ,lock))
-        (declare (dynamic-extent ,locked))
-        (unwind-protect
-             (progn
-               (%lock-recursive-lock-object ,l ,locked )
-               ,@body)
-          (when (lock-acquisition.status ,locked) (%unlock-recursive-lock-object ,l)))))))
+  (let* ((locked (gensym))
+         (l (gensym)))
+    `  (with-lock-context
+         (let ((,locked (make-lock-acquisition))
+               (,l ,lock))
+           (declare (dynamic-extent ,locked))
+           (unwind-protect
+                (progn
+                  (%lock-recursive-lock-object ,l ,locked )
+                  ,@body)
+             (when (lock-acquisition.status ,locked) (%unlock-recursive-lock-object ,l)))))))
+
+ 
+(defmacro with-exception-lock (&body body)
+  (let* ((p (gensym)))
+    `(with-macptrs (,p)     
+      (%get-kernel-global-ptr 'exception-lock ,p)
+      (%lock-recursive-lock-ptr ,p "global exception lock wait" nil)
+      ;; Among other things, we can't be interrupted by another
+      ;; thread now.
+      (unwind-protect
+           (progn
+             ,@body)
+        (%unlock-recursive-lock-ptr ,p "global exception lock")))))
+
 
 (defmacro with-lock-grabbed-maybe ((lock &optional
 					 (whostate "Lock"))

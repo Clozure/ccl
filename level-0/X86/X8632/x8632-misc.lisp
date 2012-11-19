@@ -453,13 +453,10 @@
     (movl (@ offset (% esp)) (% imm1))
     (sarl ($ x8632::fixnumshift) (% imm1))
     (movl (@ object (% esp)) (% robject))
-    @again
-    (movl (@ (% robject) (% imm1)) (% eax))
-    (cmpl (% eax) (% old))
-    (jne @lose)
+    (movl (% old) (% eax))
     (lock)
     (cmpxchgl (% new) (@ (% robject) (% imm1)))
-    (jne @again)
+    (jne @lose)
     (movl ($ (target-t-value)) (% arg_z))
     (mark-as-node temp0)
     (single-value-return 4)
@@ -469,12 +466,17 @@
     (single-value-return 4)))
 
 (defx8632lapfunction set-%gcable-macptrs% ((ptr arg_z))
+  (mark-as-node eax)
   @again
   (movl (@ (+ (target-nil-value) (x8632::kernel-global gcable-pointers))) (% eax))
   (movl (% eax) (@ x8632::xmacptr.link (% ptr)))
   (lock)
   (cmpxchgl (% ptr) (@ (+ (target-nil-value) (x8632::kernel-global gcable-pointers))))
-  (jne @again)
+  (je @win)
+  (pause)
+  (jmp @again)
+  @win
+  (mark-as-imm eax)
   (single-value-return))
 
 ;;; Atomically increment or decrement the gc-inhibit-count kernel-global
@@ -488,7 +490,10 @@
   (cmovsl (% temp0) (% arg_z))
   (lock)
   (cmpxchgl (% arg_z) (@ (+ (target-nil-value) (x8632::kernel-global gc-inhibit-count))))
-  (jnz @again)
+  (je @win)
+  (pause)
+  (jmp @again)
+@win  
   (single-value-return))
 
 ;;; Atomically decrement or increment the gc-inhibit-count kernel-global
@@ -526,7 +531,10 @@
     (lea (@ (% eax) (% rby)) (% arg_z))
     (lock)
     (cmpxchgl (% arg_z) (@ (% node) (% imm1)))
-    (jne @again))
+    (je @win)
+    (pause)
+    (jmp @again)
+    @win)
   (mark-as-node temp0)
   (single-value-return 3))
 
@@ -541,7 +549,10 @@
     (lea (@ 1 (% eax)) (% imm1))
     (lock)
     (cmpxchgl (% imm1) (@ (% imm2)))
-    (jne @again)
+    (je @win)
+    (pause)
+    (jmp @again)
+    @win
     (box-fixnum imm1 arg_z))
   (mark-as-node temp0)
   (mark-as-node temp1)
@@ -559,7 +570,10 @@
     (add (% eax) (% imm1))
     (lock)
     (cmpxchgl (% imm1) (@ (% imm2)))
-    (jnz @again)
+    (je @win)
+    (pause)
+    (jmp @again)
+    @win
     (box-fixnum imm1 arg_z))
   (mark-as-node temp0)
   (mark-as-node temp1)
@@ -576,7 +590,10 @@
     (lea (@ -1 (% eax)) (% imm1))
     (lock)
     (cmpxchgl (% imm1) (@ (% imm2)))
-    (jne @again)
+    (je @win)
+    (pause)
+    (jmp @again)
+    @win
     (box-fixnum imm1 arg_z))
   (mark-as-node temp0)
   (mark-as-node temp1)
@@ -595,7 +612,9 @@
     (jz @done)
     (lock)
     (cmpxchgl (% imm1) (@ (% imm2)))
-    (jnz @again)
+    (jz @done)
+    (pause)
+    (jmp @again)
     @done
     (box-fixnum imm1 arg_z))
   (mark-as-node temp0)
@@ -622,17 +641,16 @@
     (macptr-ptr temp0 imm2)
     (mark-as-imm temp0)
     (let ((imm1 temp0))
-      @again
-      (movl (@ (% imm2)) (% imm0))
-      (box-fixnum imm0 imm0)
-      (cmpl (% imm0) (% expected-oldval))
-      (jne @done)
+      (unbox-fixnum expected-oldval imm0)
       (unbox-fixnum newval imm1)
       (lock)
       (cmpxchgl (% imm1) (@ (% imm2)))
-      (jne @again)
-      @done
-      (movl (% imm0) (% arg_z)))
+      (jne @lost)
+      (movl (% expected-oldval) (% arg_z))
+      (jmp @done)
+      @lost
+      (box-fixnum imm0 arg_z)
+      @done)
     (mark-as-node temp0))
   (mark-as-node temp1)
   (single-value-return 3))
@@ -642,15 +660,11 @@
   (let ((address temp0))
     (movl (@ ptr (% esp)) (% temp1))
     (macptr-ptr temp1 address)
-    @again
-    (movl (@ (% address)) (% imm0))
-    (cmpl (% imm0) (% expected-oldval))
-    (jne @done)
+    (movl (% expected-oldval) (% imm0))
     (lock)
     (cmpxchgl (% newval) (@ (% address)))
-    (jne @again)
-    @done
-    (movl (% imm0) (% arg_z)))
+    (cmovel (% expected-oldval) (% arg_z))
+    (cmovnel (% imm0) (% arg_z)))
   (mark-as-node temp0)
   (single-value-return 3))
 

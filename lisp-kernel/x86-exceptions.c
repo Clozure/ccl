@@ -2609,11 +2609,22 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       if (program_counter <= &egc_set_hash_key_conditional_retry) {
         return;
       }
-      if ((program_counter < &egc_set_hash_key_conditional_success_test) ||
-          ((program_counter == &egc_set_hash_key_conditional_success_test) &&
-           !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
-        /* Back up the PC, try again */
+      if (program_counter < &egc_set_hash_key_conditional_success_test) {
+        /* Back up the PC, try again.  This is necessary since a pending
+           GC may cause the value in %eax/%rax to move and backing up
+           will reload %eax/%rax from a node register before trying the
+           cmpxchg.
+        */
         xpPC(xp) = (LispObj) &egc_set_hash_key_conditional_retry;
+        return;
+      }
+      if ((program_counter == &egc_set_hash_key_conditional_success_test) &&
+          !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT))) {
+        /* Conditional store failed.  Return NIL. */
+        LispObj *sp = (LispObj *)xpGPR(xp,Isp), ra = *sp++;
+        xpGPR(xp,Iarg_z) = lisp_nil;
+        xpPC(xp) = ra;
+        xpGPR(xp,Isp)=(LispObj)sp;
         return;
       }
       /* The conditional store succeeded.  Set the refbit, return to ra0 */
@@ -2632,13 +2643,23 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       if (program_counter <= &egc_store_node_conditional_retry) {
         return;
       }
-      if ((program_counter < &egc_store_node_conditional_success_test) ||
-          ((program_counter == &egc_store_node_conditional_success_test) &&
-           !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT)))) {
-        /* Back up the PC, try again */
+      if (program_counter < &egc_store_node_conditional_success_test) {
+        /* Back up the PC, try again.  Again, this is necessary because
+           we're possibly keeping a node in %eax/%rax and haven't completed
+           the cmpxchg yet. */
         xpPC(xp) = (LispObj) &egc_store_node_conditional_retry;
         return;
       }
+      if ((program_counter == &egc_store_node_conditional_success_test) &&
+           !(eflags_register(xp) & (1 << X86_ZERO_FLAG_BIT))) {
+        /* cmpxchg failed.  Return NIL. */
+        LispObj *sp = (LispObj *)xpGPR(xp,Isp), ra = *sp++;
+        xpGPR(xp,Iarg_z) = lisp_nil;
+        xpPC(xp) = ra;
+        xpGPR(xp,Isp)=(LispObj)sp;
+        return;
+      }
+
       if (program_counter >= &egc_store_node_conditional_success_end) {
         return;
       }

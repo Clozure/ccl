@@ -1845,7 +1845,7 @@ C(egc_set_hash_key):
 _endsubp(set_hash_key)
 
 /* This is a little trickier: if this is interrupted, we need to know  */
-/* whether or not the STORE-CONDITIONAL (cmpxchgq) has won or not.    */
+/* whether or not the STORE-CONDITIONAL (cmpxchgl) has won or not.    */
 /* If we're interrupted   before the PC has reached the "success_test" label, */
 /* repeat (luser the PC back to store_node_conditional_retry.)  If
 	we're at that */
@@ -1859,14 +1859,12 @@ C(egc_store_node_conditional):
 	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
         .globl C(egc_store_node_conditional_retry)
 C(egc_store_node_conditional_retry):      
-0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
-	__(movl misc_data_offset(%temp1,%temp0),%imm0)
-	__(jne 9f)
+0:	__(movl %arg_y,%imm0)
 	__(lock)
 	__(cmpxchgl %arg_z,misc_data_offset(%temp1,%temp0))
 	.globl C(egc_store_node_conditional_success_test)
 C(egc_store_node_conditional_success_test):
-	__(jne 0b)
+	__(jne 9f)
 	__(leal misc_data_offset(%temp1,%temp0),%imm0)
 	__(subl lisp_global(ref_base),%imm0)
 	__(shrl $dnode_shift,%imm0)
@@ -1899,14 +1897,12 @@ C(egc_set_hash_key_conditional):
 	__(sarl $fixnumshift,%temp0)	/* will be fixnum-tagged */
         .globl C(egc_set_hash_key_conditional_retry)
 C(egc_set_hash_key_conditional_retry):          
-0:	__(cmpl %arg_y,misc_data_offset(%temp1,%temp0))
-	__(movl misc_data_offset(%temp1,%temp0),%imm0)
-	__(jne 9f)
+0:	__(movl %arg_y,%imm0)
 	__(lock)
 	__(cmpxchgl %arg_z,misc_data_offset(%temp1,%temp0))
 	.globl C(egc_set_hash_key_conditional_success_test)
 C(egc_set_hash_key_conditional_success_test):
-	__(jne 0b)
+	__(jne 9f)
 	__(leal misc_data_offset(%temp1,%temp0),%imm0)
 	__(subl lisp_global(ref_base),%imm0)
 	__(shrl $dnode_shift,%imm0)
