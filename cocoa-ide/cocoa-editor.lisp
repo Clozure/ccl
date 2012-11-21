@@ -1323,6 +1323,8 @@
 
 (defloadvar *lisp-string-color* (#/blueColor ns:ns-color))
 (defloadvar *lisp-comment-color* (#/brownColor ns:ns-color))
+(defloadvar *lisp-double-comment-color* (#/orangeColor ns:ns-color))
+(defloadvar *lisp-triple-comment-color* (#/redColor ns:ns-color))
 
 ;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
 ;;; attrubutes before redisplay.
@@ -1337,7 +1339,9 @@
   (ns:with-ns-range (range)
     (let* ((color-attribute #&NSForegroundColorAttributeName)
            (string-color  *lisp-string-color* )
-           (comment-color *lisp-comment-color*))
+           (comment-color *lisp-comment-color*)
+           (double-comment-color *lisp-double-comment-color*)
+           (triple-comment-color *lisp-triple-comment-color*))
       (hi::with-mark ((m (hi::buffer-start-mark hi::*current-buffer*)))
         (hi::line-start m start-line)
         (hi::pre-command-parse-check m))
@@ -1360,14 +1364,30 @@
                                (:string-quote :string)
                                (t :comment)))
                        (start (+ p istart))
-                       (len (- iend istart)))
+                       (len (- iend istart))
+                       (nsemi (if (eq type :comment)
+                                (do* ((n 0)
+                                      (i istart (1+ i)))
+                                     ((= i iend) n)
+                                  (unless (eq
+                                           (hi:character-attribute :lisp-syntax
+                                                                   (hi::line-character line i))
+                                           :comment)
+                                    (return n))
+                                  (when (= (incf n) 3)
+                                    (return n))))))
                   (when type
                     (when (eq type :string)
                       (decf start)
                       (incf len 2))
                     (setf (ns:ns-range-location range) start
                           (ns:ns-range-length range) len)
-                    (let ((attrs (if (eq type :string) string-color comment-color)))
+                    (let ((attrs (if (eq type :string)
+                                   string-color
+                                   (case nsemi
+                                     (2 double-comment-color)
+                                     (3 triple-comment-color)
+                                     (t comment-color)))))
                       (#/addTemporaryAttribute:value:forCharacterRange:
                        layout color-attribute attrs range)))
                   (setq last-end iend))))))))))
