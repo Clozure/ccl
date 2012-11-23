@@ -1326,10 +1326,11 @@
 (defloadvar *lisp-double-comment-color* (#/orangeColor ns:ns-color))
 (defloadvar *lisp-triple-comment-color* (#/redColor ns:ns-color))
 
+
 ;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
 ;;; attrubutes before redisplay.
 ;;; POS is the absolute character position of the start of START-LINE.
-;;; END-LINE is either EQ to START-LNE (in the degenerate case) or
+;;; END-LINE is either EQ to START-LINE (in the degenerate case) or
 ;;; follows it in the buffer; it may be NIL and is the exclusive
 ;;; end of a range of lines
 ;;; HI::*CURRENT-BUFFER* is bound to the buffer containing START-LINE
