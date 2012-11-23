@@ -94,6 +94,7 @@
     (#_NSLog #@"This application requires features introduced in OSX 10.4.")
     (#_ _exit -1))
   (setq *standalone-cocoa-ide* t)
+  (change-class ccl::*current-process* 'appkit-process)
   (with-slots  (have-interactive-terminal-io) ccl::*current-process*
     (when (and (eql (nth-value 4 (ccl::%stat "/dev/null"))
                     (nth-value 4 (ccl::%fstat 0)))
@@ -118,7 +119,7 @@
   (assert (probe-file bundle-path))
 
   ;; Wait until we're sure that the Cocoa event loop has started.
-  (wait-on-semaphore *cocoa-ide-finished-launching*)
+  ;; (wait-on-semaphore *cocoa-ide-finished-launching*)
 
   #-cocotron				;needs conditionalization
   (require :easygui)
@@ -279,4 +280,4 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(start-cocoa-ide)
+;;(start-cocoa-ide)

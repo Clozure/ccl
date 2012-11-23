@@ -20,3 +20,4 @@
 
 (load "ccl:cocoa-ide;defsystem.lisp")
 (load-ide *cocoa-ide-force-compile*)
+(gui::start-cocoa-ide)
