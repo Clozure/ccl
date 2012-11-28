@@ -242,7 +242,7 @@ reaphashv(LispObj hashv)
     keys_frozen = ((hashp->flags & nhash_keys_frozen_mask) != 0);
   // Probably no reason why the non-keys_frozen case couldn't use slot_unbound as well,
   // but I don't want to risk it.
-  LispObj *empty_value = (keys_frozen ? slot_unbound : lisp_nil);
+  LispObj empty_value = (keys_frozen ? slot_unbound : lisp_nil);
   bitvector markbits = GCmarkbits;
   int tag;
 
