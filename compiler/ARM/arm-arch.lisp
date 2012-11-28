@@ -1419,6 +1419,6 @@
 (defconstant fasl-version #x62)
 (defconstant fasl-max-version #x62)
 (defconstant fasl-min-version #x62)
-(defparameter *image-abi-version* 1040)
+(defparameter *image-abi-version* 1041)
 
 (provide "ARM-ARCH")

@@ -25,9 +25,13 @@
 (eval-when (:compile-toplevel :execute)
   (require "HASHENV" "ccl:xdump;hashenv")
   (require :number-case-macro)
+  (assert (and (not (eql (%unbound-marker) (%slot-unbound-marker)))
+               (not (eql (%unbound-marker) (%illegal-marker)))
+               (not (eql (%slot-unbound-marker) (%illegal-marker)))))
   (define-symbol-macro deleted-hash-key-marker (%slot-unbound-marker))
+  (define-symbol-macro deleted-hash-value-marker (%slot-unbound-marker))
   (define-symbol-macro free-hash-marker (%unbound-marker))
-  (define-symbol-macro rehashing-value-marker (%slot-unbound-marker))
+  (define-symbol-macro rehashing-value-marker (%illegal-marker))
   (declaim (inline nhash.vector-size))
   (declaim (inline mixup-hash-code))
   (declaim (inline hash-table-p))
@@ -608,15 +612,16 @@ before doing so.")
 ;; rehashing at any given time, and readers/writers will block waiting for the rehashing
 ;; to finish.
 ;;
-;; In addition, I don't have a separate state for partially inserted key, I reuse the
-;; DELETED state for that.  So in our implementation the following are the possible states
-;; of a hash table entry (where "object" means any object other than the special markers):
+;; In our implementation the following are the possible states of a hash table entry:
+;;   (where "object" means any object other than the special markers):
 ;;
 ;; State      Key               Value
-;; DELETED1   object            free-hash-marker
-;; DELETED2   deleted-marker    free-hash-marker
-;; IN-USE     object            object
 ;; FREE       free-hash-marker  free-hash-marker
+;; INSERTING  object            free-hash-marker
+;; IN-USE     object            object
+;; DELETING1  object            deleted-marker
+;; DELETING2  deleted-marker    object
+;; DELETED    deleted-marker    deleted-marker
 ;; REHASHING  object            rehashing-value-marker
 ;; REHASHING  free-hash-marker  rehashing-value-marker
 ;; REHASHING  deleted-marker    rehashing-value-marker
@@ -625,8 +630,8 @@ before doing so.")
 ;; other state.   In addition, the only transitions allowed on the key slot are
 ;; free-hash-marker -> object/deleted-marker -> deleted-marker.  Once a key slot
 ;; is claimed, it must never change to free or another key value (even after the hash
-;; vector has been discarded after rehashing, because there some process might still
-;; be looking at it).
+;; vector has been discarded after rehashing, because some process might still be
+;; looking at it).
 ;; In particular, rehashing in place is not an option.  All rehashing creates a new
 ;; vector and copies into it.  This means it's kinda risky to use lock-free hash
 ;; tables with address-based keys, because they will thrash in low-memory situations,
@@ -636,8 +641,7 @@ before doing so.")
 ;;
 ;; * gethash: find matching key - if no match, return not found.  Else fetch value,
 ;;   if value is rehashing-value-marker then maybe-rehash and try again;
-;;   if value is free-hash-marker, return not found, else return found value.
-;;
+;;   if value is free-hash-marker or deleted-marker, return not found, else return found value.
 ;; * puthash: find matching key or FREE slot.
 ;;   ** If found key, fetch value.
 ;;      if value is rehashing-value-marker then maybe-rehash and try again;
@@ -645,24 +649,25 @@ before doing so.")
 ;;   ** Else have FREE slot, store-key-conditional free-hash-marker -> key,
 ;;      and if that succeeds, store-conditional free-hash-marker -> new value,
 ;;      if either fails, maybe-rehash and try again.
-;;
 ;; * remhash: find matching key - if no match, done.  Else fetch value,
 ;;   if value is rehashing-value-marker then maybe-rehash and try again;
-;;   else store-conditional the value -> free-hash-marker, if fails try again.
-;;
+;;   if value is free-hash-marker or deleted-marker, done.
+;;   else store-conditional the value -> deleted-marker, if fails try again.
+;;    if succeeds, clobber key with deleted-marker to allow it to get gc'd.
+;; * clrhash: grab the rehash lock, then set all slots to DELETED (transitioning through either
+;;    DELETED1 or DELETED2 state).
 ;; * rehash: grab a lock, estimate number of entries, make a new vector.  loop over
 ;; old vector, at each entry fetch the old value with atomic swap of
 ;; rehashing-value-marker.  This prevents any further state changes involving the
 ;; value.  It doesn't prevent state changes involving the key, but the only ones that
-;; can happen is FREE -> DELETED, and DELETED1 <-> DELETED2, all of which are
+;; can happen is FREE -> INSERTING, and DELETINGn -> DELETED, all of which are
 ;; equivalent from the point of view of rehashing.  Anyway, if the old value was
 ;; rehashing-value-marker then bug (because we have a lock).  If the old value is
-;; free-hash-marker then do nothing, else get the entry key and rehash into the new
-;; vector -- if no more room, start over.  When done, store the new vector in the
-;; hash table and release lock.
+;; free-hash-marker or deleted-marker then do nothing, else get the entry key and
+;; rehash into the new vector -- if no more room, start over.  When done, store the
+;; new vector in the hash table and release lock.
 ;;
-;; * gc: for weak tables, gc may convert IN-USE states to DELETED2 states.
-;;   Even for non-weak tables, gc could convert DELETED1 states to DELETED2.
+;; * gc: for weak tables, gc may convert IN-USE states to DELETED states.
 
 
 (defun lock-free-rehash (hash)
@@ -713,7 +718,9 @@ before doing so.")
           do (let* ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker))
                     (key (%svref old-vector i)))
                (when (eq value rehashing-value-marker) (error "Who else is doing this?"))
-               (unless (or (eq value free-hash-marker) (eq key deleted-hash-key-marker))
+               (unless (or (eq value free-hash-marker)
+                           (eq value deleted-hash-value-marker)
+                           (eq key deleted-hash-key-marker))
                  (let* ((new-index (%growhash-probe new-vector hash key))
                         (new-vector-index (index->vector-index new-index)))
                    (%set-hash-table-vector-key new-vector new-vector-index key)
@@ -764,6 +771,7 @@ before doing so.")
         (let* ((value (%svref vector (%i+ vector-index 1)))
                (key (%svref vector vector-index)))
           (if (or (eq value free-hash-marker)
+                  (eq value deleted-hash-value-marker)
                   (eq key deleted-hash-key-marker))
             (unless (eq key free-hash-marker)
               (setf (%svref vector vector-index) free-hash-marker))
@@ -785,7 +793,8 @@ before doing so.")
                     (%set-hash-table-vector-key vector found-vector-index key)
                     (setf (%svref vector (the fixnum (1+ found-vector-index))) value)
                     (when (or (eq newkey deleted-hash-key-marker)
-                              (eq newvalue free-hash-marker))
+                              (eq newvalue free-hash-marker)
+                              (eq newvalue deleted-hash-value-marker))
                       (return))
                     (when (eq key newkey)
                       (cerror "Delete one of the entries." "Duplicate key: ~s in ~s ~s ~s ~s ~s"
@@ -811,7 +820,8 @@ before doing so.")
                  (return-from lock-free-gethash (values default nil))))
               (t (let ((value (%svref vector (%i+ vector-index 1))))
                    (unless (eq value rehashing-value-marker)
-                     (if (eq value free-hash-marker)
+                     (if (or (eq value deleted-hash-value-marker)
+                             (eq value free-hash-marker))
                        (return-from lock-free-gethash (values default nil))
                        (return-from lock-free-gethash (values value t)))))))))
     ;; We're here because the table needs rehashing or it was getting rehashed while we
@@ -834,17 +844,18 @@ before doing so.")
                  (return-from lock-free-remhash nil)))
               (t (let ((old-value (%svref vector (%i+ vector-index 1))))
                    (unless (eq old-value rehashing-value-marker)
-                     (when (eq old-value free-hash-marker)
+                     (when (or (eq old-value deleted-hash-value-marker) ;; deleted
+                               (eq old-value free-hash-marker)) ;; or about to be added
                        (return-from lock-free-remhash nil))
-                     (when (set-hash-value-conditional vector-index vector old-value free-hash-marker)
-                       ;; We just use this as a flag - tell gc to scan the vector for deleted keys.
-                       ;; It's just a hint, so don't worry about sync'ing
-                       (setf (nhash.vector.deleted-count vector) 1)
+                     (when (set-hash-value-conditional vector-index vector old-value deleted-hash-value-marker)
+                       ;; Clear the key slot so can be gc'd.
+                       (setf (%svref vector vector-index) deleted-hash-key-marker)
                        (return-from lock-free-remhash t)))))))
       ;; We're here because the table needs rehashing or it was getting rehashed while we
       ;; were searching.  Take care of it and try again.
       (lock-free-rehash hash))))
 
+;; TODO: might be better (faster, safer) to just create a new all-free vector?
 (defun lock-free-clrhash (hash)
   (when (nhash.read-only hash)
     (signal-read-only-hash-table-error hash)) ;;continuable
@@ -854,18 +865,19 @@ before doing so.")
        (%lock-recursive-lock-object lock) ;; disallow rehashing.
        (loop
          with vector = (nhash.vector hash)
-         for i1 fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
-         do (setf (%svref vector i1) free-hash-marker)
-         ;; We just use this as a flag - tell gc to scan the vector for deleted keys.
-         ;; It's just a hint, so don't worry about sync'ing
-         finally (setf (nhash.vector.deleted-count vector) 1))
+         for i fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
+         as val = (%svref vector i)
+         unless (or (eq val free-hash-marker) (eq val deleted-hash-value-marker))
+         do (setf (%svref vector (%i- i 1)) deleted-hash-key-marker
+                  (%svref vector i) deleted-hash-value-marker))
        (%unlock-recursive-lock-object lock))))
   hash)
 
 (defun lock-free-puthash (key hash value)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
   (when (or (eq value rehashing-value-marker)
-            (eq value free-hash-marker))
+            (eq value free-hash-marker)
+            (eq value deleted-hash-value-marker))
     (error "Illegal value ~s for storing in a hash table" value))
   (when (nhash.read-only hash)
     (signal-read-only-hash-table-error hash)) ;;continuable
@@ -886,11 +898,14 @@ before doing so.")
                  ;; that risks grow-threshold ending up too big (e.g. if somebody rehashes
                  ;; before the incf), which _could_ be harmful.
                  (atomic-decf (nhash.grow-threshold hash))
-                 (if (set-hash-key-conditional vector-index vector free-hash-marker key)
+                 (when (set-hash-key-conditional vector-index vector free-hash-marker key)
                    (when (set-hash-value-conditional vector-index vector free-hash-marker value)
                      (return-from lock-free-puthash value)))))
               (t (let ((old-value (%svref vector (%i+ vector-index 1))))
-                   (unless (eq old-value rehashing-value-marker)
+                   (unless (or (eq old-value rehashing-value-marker)
+                               ;; In theory, could reuse the deleted slot since we know it had this key
+                               ;; initially, but that would complicate the state machine for very little gain.
+                               (eq old-value deleted-hash-value-marker))
                      (when (set-hash-value-conditional vector-index vector old-value value)
                        (return-from lock-free-puthash value))))))))
     ;; We're here because the table needs rehashing or it was getting rehashed while we
@@ -1267,16 +1282,21 @@ before doing so.")
                             (test-it ,predicate)
                             ; First probe failed. Iterate on secondary key
                             (let ((initial-index index)
-                                  (secondary-hash (%svref secondary-keys (logand 7 hash-code))))
+                                  (secondary-hash (%svref secondary-keys (logand 7 hash-code)))
+                                  (DEBUG-COUNT 0))
                               (declare (fixnum secondary-hash initial-index))
                               (loop
+                                (INCF DEBUG-COUNT)
                                 (incf index secondary-hash)
                                 (when (>= index entries)
                                   (decf index entries))
                                 (when (eql index initial-index)
                                   (return-it (if for-put-p
                                                (or first-deleted-index
-                                                   (error "Bug: no room in table"))
+                                                   #+NOT-SO-HELPFUL (error "Bug: no room in table")
+                                                   (bug (format nil "No room in table after ~s tests, ~%initial ~s index ~s entries ~s for-put-p ~s"
+                                                                DEBUG-COUNT initial-index index entries for-put-p))
+                                                   )
                                                -1)))
                                 (test-it ,predicate))))))
               (if (fixnump comparef)
@@ -1956,7 +1976,7 @@ before doing so.")
         t))))
 
   
-;; ** TODO: for lock-free hash tables, we don't need to copy,
+;; ** TODO: for lock-free hash tables, maybe we don't need to copy,
 ;; we could map over the actual hash table vector, because it's
 ;; always valid.
 (defun lock-free-enumerate-hash-keys-and-values (hash keys values)
@@ -1977,9 +1997,9 @@ before doing so.")
             (lock-free-rehash hash)
             (return-from lock-free-enumerate-hash-keys-and-values
                          (lock-free-enumerate-hash-keys-and-values hash keys values)))
-          (unless (eq val free-hash-marker)
-            (when (eql key deleted-hash-key-marker)
-              (error "Bug: deleted key but not value?"))
+          (unless (or (eq key deleted-hash-key-marker)
+                      (eq val deleted-hash-value-marker)
+                      (eq val free-hash-marker))
             (when keys (setf (%svref keys out-idx) key))
             (when values (setf (%svref values out-idx) val))
             (incf out-idx)))))))

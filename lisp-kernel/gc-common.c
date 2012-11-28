@@ -240,6 +240,9 @@ reaphashv(LispObj hashv)
   int weak_index = (((hashp->flags & nhash_weak_value_mask) == 0) ? 0 : 1);
   Boolean
     keys_frozen = ((hashp->flags & nhash_keys_frozen_mask) != 0);
+  // Probably no reason why the non-keys_frozen case couldn't use slot_unbound as well,
+  // but I don't want to risk it.
+  LispObj *empty_value = (keys_frozen ? slot_unbound : lisp_nil);
   bitvector markbits = GCmarkbits;
   int tag;
 
@@ -282,15 +285,8 @@ reaphashv(LispObj hashv)
       dnode = gc_area_dnode(weakelement);
       if ((dnode < GCndnodes_in_area) && 
           ! ref_bit(markbits, dnode)) {
-        pairp[0] = slot_unbound;
-        if (keys_frozen) {
-          if (pairp[1] != slot_unbound) {
-            pairp[1] = unbound;
-          }
-        }
-        else {
-          pairp[1] = lisp_nil;
-        }
+	pairp[0] = slot_unbound;
+	pairp[1] = empty_value;
         hashp->weak_deletions_count += (1<<fixnumshift);
       }
     }

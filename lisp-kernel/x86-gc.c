@@ -502,24 +502,6 @@ mark_root(LispObj n)
            that rehashing is necessary. */
         LispObj flags = ((hash_table_vector_header *) base)->flags;
 
-        if ((flags & nhash_keys_frozen_mask) &&
-            (((hash_table_vector_header *) base)->deleted_count > 0)) {
-          /* We're responsible for clearing out any deleted keys, since
-             lisp side can't do it without breaking the state machine
-          */
-          LispObj *pairp = base + hash_table_vector_header_count;
-          natural
-            npairs = (element_count - (hash_table_vector_header_count - 1)) >> 1;
-
-          while (npairs--) {
-            if ((pairp[1] == unbound) && (pairp[0] != unbound)) {
-              pairp[0] = slot_unbound;
-            }
-            pairp +=2;
-          }
-          ((hash_table_vector_header *) base)->deleted_count = 0;
-        }
-
         if (flags & nhash_weak_mask) {
           ((hash_table_vector_header *) base)->cache_key = undefined;
           ((hash_table_vector_header *) base)->cache_value = lisp_nil;
