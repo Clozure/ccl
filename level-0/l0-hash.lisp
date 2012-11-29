@@ -929,7 +929,8 @@ before doing so.")
               ;; done and try again.
               (lock-free-rehash hash)
               (return-from lock-free-count-entries (lock-free-count-entries hash)))
-            (neq value free-hash-marker))))
+	    (and (neq value free-hash-marker)
+		 (neq value deleted-hash-value-marker)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
