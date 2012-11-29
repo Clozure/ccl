@@ -490,7 +490,7 @@
 				  (top :lcell)))
   (movl (:%l src) (:@ (:apply - (:apply + (:apply calc-lcell-offset cell) x8632::word-size-in-bytes)) (:%l x8632::ebp))))
         
-(define-x8632-vinsn (popj :lispcontext :pop :csp :lrRestore :jumpLR)
+(define-x8632-vinsn (popj :lispcontext :pop :vsp :lrRestore :jumpLR)
     (()
      ())
   (leave)
