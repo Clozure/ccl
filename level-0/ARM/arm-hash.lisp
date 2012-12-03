@@ -112,7 +112,8 @@
 
 ;;; Strip the tag bits to turn x into a fixnum
 (defarmlapfunction strip-tag-to-fixnum ((x arg_z))
-  (bic arg_z x (:$ arm::fixnummask))
+  (bic arg_z x (:$ arm::fulltagmask))
+  (mov arg_z (:lsr arg_z (:$ (- arm::ntagbits arm::nfixnumtagbits))))
   (bx lr))
 
 ;;; end of arm-hash.lisp
