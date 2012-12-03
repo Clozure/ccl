@@ -1,0 +1,44 @@
+\documentclass[twoside,headings]{book}
+\usepackage[papersize={6.25in,9.25in}]{geometry} % CLTL2 is this size
+\usepackage{mathspec,xltxtra,xunicode}
+\defaultfontfeatures{Mapping=tex-text}
+\setromanfont[Mapping=tex-text]{Times-Roman}
+\setsansfont[Scale=MatchLowercase,Mapping=tex-text]{Eras Demi ITC}
+\setmonofont[Scale=MatchLowercase]{Inconsolata}
+\setmathfont(Digits){Times-Roman}
+
+\usepackage{sectsty}
+\chaptertitlefont{\sf}
+\chapterfont{\sf}
+
+\usepackage{listings}
+\lstset{basicstyle=\small\ttfamily,
+  showspaces=false,
+  showstringspaces=false,
+  columns=flexible,
+  language={}}
+
+% make this the last \usepackage
+\usepackage[pdfborder={0 0 0}]{hyperref}
+
+\def\CCL{Clozure CL}
+\def\cd#1{\frenchspacing\texttt{#1}}
+\def\cf{\tt\frenchspacing}
+\def\fn#1{\cd{#1}}
+\catcode`@=12
+
+\def\nil{\texttt{nil}}
+\def\lispchar#1{\texttt{\#\textbackslash{}#1}}
+\def\lisphex#1{\texttt{\#x#1}}
+
+\input{defun}
+
+\begin{document}
+\tableofcontents
+
+\input{chars}
+\input{gc}
+\input{external-process}
+\input{ffi}
+
+\end{document}

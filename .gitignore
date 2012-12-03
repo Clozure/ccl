@@ -41,6 +41,10 @@ compiler/PPC/PPC64/*~.*
 compiler/X86/*~.*
 doc/src/*html
 doc/src/build*
+doc/tex/*.aux
+doc/tex/*.log
+doc/tex/*.out
+doc/tex/*.toc
 examples/*~.*
 examples/cocoa/*fsl
 examples/cocoa/*~.*

@@ -164,7 +164,12 @@ doc/src/xsl/parameters.xsl -text
 doc/src/xsl/refentry.xsl -text
 doc/src/xsl/site-navigator.xsl -text
 doc/src/xsl/toc-at-end.xsl -text
+doc/tex/ccl.tex -text
+doc/tex/chars.tex -text
 doc/tex/defun.tex -text
+doc/tex/external-process.tex -text
+doc/tex/ffi.tex -text
+doc/tex/gc.tex -text
 examples/android/native-activity.lisp -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/designable.nib -text
 examples/cocoa/currency-converter/CurrencyConverter.nib/keyedobjects.nib -text

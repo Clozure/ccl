@@ -1,0 +1,227 @@
+\chapter{Characters, Strings, and External Formats}
+
+Common Lisp gives a certain amount of latitude to implementations when
+it comes to characters and strings.  In \CCL, there is a single
+\cd{character} type: thus \cd{character} and \cd{base-char} are
+the same type.
+
+Likewise, the types \cd{string} and \cd{base-string} are identical.
+
+\section{Characters and Unicode}
+
+Characters correspond to Unicode UTF-32 code points.  The value of
+\cd{char-code-limit} is \lisphex{110000}, which means that every
+Unicode code point can be directly represented.
+
+The \CCL\ implementers decided that the simplicity and speed advantages
+of supporting only UTF-32 outweigh the space disadvantage.
+
+There are certain code values (notably \lisphex{d800}--\lisphex{ddff})
+which are not valid code points.  The \cd{code-char} function will
+return \nil\ for arguments that range.  Other invalid code values are
+more expensive to detect and \cd{code-char} may return a non-\nil\
+value (an undefined and non-standard character object) in such
+circumstances.
+
+Characters can be written using the syntax \lispchar{u+xxxx}, where the
+\cd{xxxx} is a sequence of one or more hex digits.  The value of the hex
+digits denotes the code of the character.  The \cd{+} is optional, so
+\lispchar{u+0020}, \lispchar{u0020}, and \lispchar{u20} all refer to
+the same character, namely \lispchar{Space}.
+
+Characters in the range \lisphex{a0}--\lisphex{7ff} also have symbolic
+names.  These names are from the Unicode standard, with all spaces
+replaced by underscores.  For example,
+\lispchar{Greek\_Capital\_Letter\_Epsilon} may be used to refer to the
+character whose code is \lisphex{395}.
+
+\section{External Formats}
+
+The standard functions \cd{open}, \cd{load}, and \cd{compile-file}
+all take an \cd{:external-format} keyword argument.  The value of
+\cd{:external-format} can be \cd{:default} (the default value),
+a line-termination keyword, a character encoding keyword, an
+external-format object created with \cd{make-external-format}, or
+a plist with the keys \cd{:domain}, \cd{:character-encoding},
+and \cd{:line-termination}.
+
+If the external format is \cd{:default}, the value of
+\cd{ccl:*default-external-format*} determines the external format.  If
+no line termination is specified, the value of
+\cd{ccl:*default-line-termination*} determines the line termination
+convention.  This defaults to \cd{:unix}.  If no character encoding is
+specified, then the \cd{ccl:*default-file-character-encoding*} is used
+for file streams, and \cd{ccl:*default-socket-character-encoding*} is
+used for sockets.  The default character encoding is \nil, which is
+a synonym for \cd{:iso-8859-1}.
+
+Note that the set of keywords used to denote a character encoding and
+the set of keywords used to denote line termination conventions are
+disjoint:  a keyword denotes at most a character encoding or a line
+termination convention, but never both.
+
+\begin{defun}[Variable]
+ccl:*default-external-format*
+
+When \cd{:external-format} is unspecified or specified as \cd{:default},
+the value of this variable is used to determine the external format to
+use.  The default value is \cd{:unix}.
+\end{defun}
+
+\begin{defun}[Variable]
+ccl:*default-line-termination*
+
+The value of this variable specifies the line termination convention
+when an external format does not specify one (or specifies it as
+\cd{:default}).  The default value is \cd{:unix}.
+Table \ref{tab:line-termination} is a list of possible values.
+\end{defun}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{l|l}
+\hline
+keyword & line terminator \\
+\hline
+\cd{:unix} & \lispchar{Linefeed} \\
+\cd{:macos} & \lispchar{Return} \\
+\cd{:cr} & \lispchar{Return} \\
+\cd{:crlf} & \lispchar{Return} \lispchar{Linefeed} \\
+\cd{:cp/m} & \lispchar{Return} \lispchar{Linefeed} \\
+\cd{:msdos} & \lispchar{Return} \lispchar{Linefeed} \\
+\cd{:dos} & \lispchar{Return} \lispchar{Linefeed} \\
+\cd{:windows} & \lispchar{Return} \lispchar{Linefeed} \\
+\cd{:inferred} & see below  \\
+\cd{:unicode} & \lispchar{Line\_Separator} \\
+\end{tabular}
+\caption{Line termination keywords}
+\label{tab:line-termination}
+\end{table}
+
+In Table \ref{tab:line-termination}, the \cd{:inferred} keyword means that
+the line termination convention will be determined by looking at the
+contents of a file.  It is only useful for file streams that are open
+for input.  The first buffer full of data is examined.  If a
+\lispchar{Return} character is seen before any \lispchar{Linefeed}
+character is seen, then the line termination type is set to
+\cd{:windows} if that first \lispchar{Return} is followed immediately
+by a \lispchar{Linefeed}.  Otherise, the line termination type is set
+to \cd{:macos}.  If no \lispchar{Return} is seen, or if a
+\lispchar{Linefeed} was seen prior to a \lispchar{Return}, then the
+line termination type is set to \cd{:unix}.
+
+\section{Character Encodings}
+
+Internally, all characters and strings in \CCL\ are represented at
+UTF-32.  Externally, files or socket streams may encode characters in
+a wide variety of ways.  \CCL\ defines a number of encodings.  These
+encodings are part of the specification of external formats.  When
+reading from a stream, characters are converted from the specified
+external character encoding to the internal representation. When
+writing to a stream, characters are converted from the internal
+representation to the specified character encoding.
+
+Although character encodings are implemented internally as structures,
+it is generally preferable to refer to them by their names.  Character
+encodings are named by keywords, such as \cd{:iso-8859-1} or
+\cd{:utf-8}.
+
+\begin{defun}[Function]
+list-character-encodings &key :include-aliases
+
+This function returns a list of the names and aliases of all defined
+character encodings.  If \cd{:include-alises} is true, the aliases
+for the encodings are also included.
+\end{defun}
+
+\begin{defun}[Function]
+describe-character-encoding name
+
+This function prints a description of the encoding named by
+{\it name} to \cd{*terminal-io*}.  The description includes
+the aliases for the encoding, and a docstring that briefly
+describes the encoding's properties and intended use.
+\end{defun}
+
+\begin{defun}[Function]
+describe-character-encodings
+
+This is a convenience function that describes every defined character
+encoding using \fn{describe-character-encoding}.
+\end{defun}
+
+\subsection{Encoding Problems}
+
+By default, when writing to a stream that encodes the full range of
+Unicode, any unencodable characters are replaced with
+\lispchar{Replacement\_Character} (that is, with \lispchar{u+fffd}).
+When reading from a stream, any undecodable characters will
+be replaced in a similar way.  The presence of this character usually
+indicates that something got lost in translation.
+
+%\tracingmacros=1
+
+\begin{defun}[Macro]
+with-decoding-problems-as-errors &rest body \\
+with-encoding-problems-as-errors &rest body 
+
+These macros will signal the corresponding conditions as errors
+if they are signaled during the execution of its body.
+\end{defun}
+
+
+\subsection{Byte Order Marks}
+
+The endianness of a character encoding is sometimes explicit, and
+sometimes not. For example, \cd{:utf-16be} is explicitly big-endian,
+but \cd{:utf-16} does not specify endianness. A byte order mark is a
+special character that may appear at the beginning of a stream of
+encoded characters to specify the endianness of a multi-byte character
+encoding. (It may also be used with UTF-8 character encodings, where
+it is simply used to indicate that the encoding is UTF-8.)
+
+\CCL\ writes a byte order mark as the first character of a file or
+socket stream when the endianness of the character encoding is not
+explicit. \CCL\ also expects a byte order mark on input from
+streams where the endianness is not explicit. If a byte order mark is
+missing from input data, that data is assumed to be in big-endian
+order.
+
+A byte order mark from a UTF-8 encoded input stream is not treated
+specially and just appears as a normal character from the input
+stream. It is probably a good idea to skip over this character.
+
+\section{Encoding and Decoding Character Data}
+
+\CCL\ provides functions to encode and decode strings to and from
+vectors of type \cd{(simple-array (unsigned-byte 8))}.
+
+\begin{defun}[Function]
+count-characters-in-octet-vector vector &key :start :end :external-format
+
+This function returns the number of characters that would be produced
+by decoding {\it vector} (or the subsequence thereof delimited by
+\cd{:start} and \cd{:end}) according to the value of \cd{:external-format}.
+\end{defun}
+
+\begin{defun}[Function]
+decode-string-from-octets vector &key :start :end :external-format :string
+
+This function decodes the octets in {\it vector} (or the subsequence thereof
+delimited by \cd{:start} and \cd{:end}) into a string according to the
+value of \cd{:external-format}.
+
+If a value for \cd{:string} is supplied, output will be written into it.  It
+must be large enough to hold the decoded characters.  If \cd{:string} is
+not supplied, a new string will be allocated.
+
+The function returns, as multiple values, the decoded string and the
+position in {\it vector} where the decoding ended.
+
+Sequences of octets in {\it vector} that cannot be decoded into
+characters according to the \cd{:external-format} argument will be
+decoded as the replacement character \lispchar{Replacement\_Character}.
+\end{defun}
+
+
+

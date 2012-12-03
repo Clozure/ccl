@@ -1,0 +1,21 @@
+\chapter{Running External Programs}
+
+\section{Overview}
+
+Clozure CL provides primitives to run external Unix programs, to
+select and connect Lisp streams to their input and output sources, to
+(optionally) wait for their completion and to check their execution
+and exit status.
+
+This implementation is modeled on (and uses some code from) similar
+facilities in CMUCL.
+
+\begin{defun}[Function]
+run-program program args &key :wait :pty
+:sharing :input :if-input-does-not-exist
+:output :if-output-does-not-exist :error :if-error-exists
+:status-hook :external-format :env :silently-ignore-catastrophic-failures
+
+Runs the specified {\it program} as a subprocess, returning
+an object of type \cd{external-process} if successful.
+\end{defun}

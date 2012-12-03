@@ -1,0 +1,124 @@
+\chapter{The Garbage Collector}
+
+\section{Ephemeral GC}
+
+For many programs, the following observations are true to a very large
+degree:
+
+\begin{itemize}
+\item
+  Most heap-allocated objects have very short lifetimes (``are
+  ephemeral''): they become inaccessible soon after they are created.
+
+\item
+  Most non-ephemeral objects have very long lifetimes: it is rarely
+  productive for the GC to consider reclaiming them, since it is rarely
+  able to do so. (An object that has survived a large number of GCs is
+  likely to survive the next one. That's not always true of course,
+  but it's a reasonable heuristic.)
+
+\item
+  It's relatively rare for an old object to be destructively modified
+  (via \cd{setf}) so that it points to a new one. Therefore most
+  references to newly-created objects can be found in the stacks and
+  registers of active threads. It's not generally necessary to scan
+  the entire heap to find references to new objects (or to prove that
+  such references don't exist), though it is necessary to keep track
+  of the (hopefully exceptional) cases where old objects are modified
+  to point at new ones.
+\end{itemize}
+
+Ephemeral (or generational) garbage collectors try to exploit these
+observations: by concentrating on frequently reclaiming newly-created
+objects quickly, it's less often necessary to do more expensive GCs of
+the entire heap in order to reclaim unreferenced memory.  In some
+environments, the pauses associated with such full GCs can be
+noticeable and disruptive, and minimizing the frequency (and sometimes
+the duration) of these pauses is probably the EGC's primary goal
+(though there may be other benefits, such as increased locality of
+reference and better paging behavior.) The EGC generally leads to
+slightly longer execution times (and slightly higher, amortized GC
+time), but there are cases where it can improve overall performance as
+well; the nature and degree of its impact on performance is highly
+application-dependent.
+
+Most EGC strategies (including the one employed by \CCL) logically or
+physically divide memory into one or more areas of relatively young
+objects (``generations'') and one or more areas of old objects.  Objects
+that have survived one or more GCs as members of a young generation
+are promoted (or ``tenured'') into an older generation, where they may
+or may not survive long enough to be promoted to the next generation
+and eventually may become ``old'' objects that can only be reclaimed if
+a full GC proves that there are no live references to them.  This
+filtering process isn't perfect---a certain amount of premature
+tenuring may take place---but it usually works very well in
+practice.
+
+It's important to note that a GC of the youngest generation is
+typically very fast (perhaps a few milliseconds on a modern CPU,
+depending on various factors). \CCL's EGC is not concurrent and
+doesn't offer realtime guarantees.
+
+\CCL's EGC maintains three ephemeral generations.  All newly created
+objects are created as members of the youngest generation. Each
+generation has an associated threshold, which indicates the
+number of bytes in it and all younger generations that can be
+allocated before a GC is triggered. These GCs will involve the target
+generation and all younger ones (and may therefore cause some
+premature tenuring); since the older generations have larger
+thresholds, they're GCed less frequently and most short-lived objects
+that make it into an older generation tend not to survive there very
+long.
+
+The EGC can be enabled or disabled under program control; under some
+circumstances, it may be enabled but inactive (because a full GC is
+imminent).  Since it may be hard to know or predict the consing
+behavior of other threads, the distinction between the ``active'' and
+``inactive'' state isn't very meaningful, especially when native
+threads are involved.
+
+\begin{defun}[Function]
+egc arg
+
+Enables the EGC if {\it arg} is non-\cd{nil}; disables the EGC otherwise.
+Returns the previous enabled status.
+
+Although this function is thread-safe (in the sense that calls to it
+are serialized), it doesn't make a whole lot of sense to be turning
+the EGC on and off from multiple threads.
+\end{defun}
+
+\begin{defun}[Function]
+egc-enabled-p
+
+Returns \cd{t} if the EGC was enabled at the time of the call, and
+\cd{nil} otherwise.
+\end{defun}
+
+\begin{defun}[Function]
+egc-active-p
+
+Returns \cd{t} if the EGC was active at the time of the call, and
+\cd{nil} otherwise. Since this is generally a volatile piece of
+information, it's not clear whether this function serves a useful
+purpose when native threads are involved.
+\end{defun}
+
+\begin{defun}[Function]
+egc-configuration
+
+Returns, as multiple values, the sizes in kilobytes of the thresholds
+associated with the youngest ephemeral generation, the middle
+ephemeral generation, and the oldest ephemeral generation.
+\end{defun}
+
+\begin{defun}[Function]
+configure-egc g0-size g1-size g2-size
+
+Puts the indicated {\it sizes} (specified in kilobytes) into effect.
+Each value indicates the total size that may be allocated in that and
+all younger generations before a GC is triggered.  Disables EGC while
+setting the values.  The provided threshold sizes are rounded up to a
+multiple of 64 Kbytes.
+\end{defun}
+
