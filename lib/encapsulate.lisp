@@ -195,12 +195,12 @@
        (remove-obsoleted-combined-methods owner)))))
 
 
-(defun encapsulate (owner newdef type trace-spec newsym &optional advice-name advice-when)
+(defun encapsulate (owner newdef type spec newsym &optional advice-name advice-when)
   (let ((cap (make-encapsulation
 	      :owner owner
 	      :symbol newsym
 	      :type type
-	      :spec trace-spec
+	      :spec spec
 	      :advice-name advice-name
 	      :advice-when advice-when)))
     (put-encapsulation newdef cap)
@@ -831,11 +831,13 @@ functions are called."
 (defmacro unadvise (function &key when name)
   (cond ((neq function t)
          `(%unadvise-1 ',function ',when ',name))
-        (t '(%unadvise-all))))
+        (t `(%unadvise-all ',when ',name))))
 
-(defun %unadvise-all ()
+(defun %unadvise-all (&optional when name)
   (loop for cap being the hash-value of *encapsulation-table*
-    when (eq (encapsulation-type cap) 'advice)
+    when (and (eq (encapsulation-type cap) 'advice)
+              (or (null when)(eq when (encapsulation-advice-when cap)))
+              (or (null name)(equal name (encapsulation-advice-name cap))))
     collect (progn
               (remove-encapsulation cap)
               (encapsulation-advice-spec cap))))
