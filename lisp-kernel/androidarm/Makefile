@@ -14,7 +14,7 @@
 #   http://opensource.franz.com/preamble.html
 
 LIBBASE = 0x04001000
-NDK = /usr/local/android-ndk-r7b
+NDK = /usr/local/android-ndk-r8c
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 HOST = linux-x86
@@ -30,7 +30,8 @@ SYSROOT = $(NDK)/platforms/$(ANDROIDVERSION)/arch-arm
 NDKLIB = $(SYSROOT)/usr/lib
 NDKINC = $(SYSROOT)/usr/include
 ABI = arm-linux-androideabi
-NDKBIN = $(NDK)/toolchains/$(ABI)-4.4.3/prebuilt/$(HOST)/bin/$(ABI)-
+NDKBIN = $(NDK)/toolchains/$(ABI)-4.6/prebuilt/$(HOST)/bin/$(ABI)-
+GCCLIB = $(NDK)/toolchains/$(ABI)-4.6/prebuilt/$(HOST)/lib/gcc/$(ABI)/4.6/armv7-a
 VPATH = ../
 RM = /bin/rm
 AS = $(NDKBIN)as
@@ -96,7 +97,7 @@ aarmcl.o: aarmcl.c
 
 
 OSLIBS = -ldl -lm -lc -landroid -llog
-APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o
+APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o $(GCCLIB)/libgcc.a
 
 
 ../../libaarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
