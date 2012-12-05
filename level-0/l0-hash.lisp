@@ -618,6 +618,7 @@ before doing so.")
 ;; State      Key               Value
 ;; FREE       free-hash-marker  free-hash-marker
 ;; INSERTING  object            free-hash-marker
+;; DELETING0  deleted-marker    free-hash-marker  ;; abandoned insert
 ;; IN-USE     object            object
 ;; DELETING1  object            deleted-marker
 ;; DELETING2  deleted-marker    object
@@ -647,15 +648,17 @@ before doing so.")
 ;;      if value is rehashing-value-marker then maybe-rehash and try again;
 ;;      else store-conditional the value -> new value, if fails try again.
 ;;   ** Else have FREE slot, store-key-conditional free-hash-marker -> key,
-;;      and if that succeeds, store-conditional free-hash-marker -> new value,
-;;      if either fails, maybe-rehash and try again.
+;;      if that succeeds, check whether key moved (invalidating the hash), if so,
+;;         back out to DELETED0 and try again,
+;;      else store-conditional free-hash-marker -> new value,
+;;      if either store fails, maybe-rehash and try again.
 ;; * remhash: find matching key - if no match, done.  Else fetch value,
 ;;   if value is rehashing-value-marker then maybe-rehash and try again;
 ;;   if value is free-hash-marker or deleted-marker, done.
 ;;   else store-conditional the value -> deleted-marker, if fails try again.
 ;;    if succeeds, clobber key with deleted-marker to allow it to get gc'd.
 ;; * clrhash: grab the rehash lock, then set all slots to DELETED (transitioning through either
-;;    DELETED1 or DELETED2 state).
+;;    DELETING1 or DELETING2 state).
 ;; * rehash: grab a lock, estimate number of entries, make a new vector.  loop over
 ;; old vector, at each entry fetch the old value with atomic swap of
 ;; rehashing-value-marker.  This prevents any further state changes involving the
@@ -704,8 +707,7 @@ before doing so.")
          (inherited-flags (logand $nhash_weak_flags_mask (nhash.vector.flags old-vector)))
          (grow-threshold (nhash.grow-threshold hash))
          count new-vector vector-size)
-    ;; Prevent puthash from adding new entries.  Note this doesn't keep it from undeleting
-    ;; existing entries, so we might still lose, but this makes the odds much smaller.
+    ;; Prevent puthash from adding new entries.
     (setf (nhash.grow-threshold hash) 0)
     (setq count (lock-free-count-entries hash))
     (multiple-value-setq (grow-threshold vector-size)
@@ -713,7 +715,7 @@ before doing so.")
         (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
         (compute-hash-size count 1 (nhash.rehash-ratio hash))))
     (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
-    (loop with full-count = grow-threshold
+    (loop ;; with full-count = grow-threshold
           for i from $nhash.vector_overhead below (uvsize old-vector) by 2
           do (let* ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker))
                     (key (%svref old-vector i)))
@@ -727,6 +729,8 @@ before doing so.")
                    (setf (%svref new-vector (%i+ new-vector-index 1)) value)
                    (decf grow-threshold)
                    (when (%i<= grow-threshold 0)
+		     (error "Bug: undeleted entries?")
+		     #+obsolete ;; we no longer undelete entries
                      ;; Too many entries got undeleted while we were rehashing (that's the
                      ;; only way we could end up with more than COUNT entries, as adding
                      ;; new entries is blocked).  Grow the output vector.
@@ -768,14 +772,13 @@ before doing so.")
       (when (>= (incf index) size) (return))
       (setq vector-index (+ vector-index 2))
       (unless (%already-rehashed-p index rehash-bits)
-        (let* ((value (%svref vector (%i+ vector-index 1)))
-               (key (%svref vector vector-index)))
-          (if (or (eq value free-hash-marker)
-                  (eq value deleted-hash-value-marker)
-                  (eq key deleted-hash-key-marker))
-            (unless (eq key free-hash-marker)
-              (setf (%svref vector vector-index) free-hash-marker))
+        (let* ((key (%svref vector vector-index)))
+	  (if (or (eq key free-hash-marker) (eq key deleted-hash-key-marker))
+	    (unless (eq key free-hash-marker)
+	      (setf (%svref vector vector-index) free-hash-marker
+		    (%svref vector (%i+ vector-index 1)) free-hash-marker))
             (let* ((last-index index)
+		   (value (%svref vector (%i+ vector-index 1)))
                    (first t))
               (loop
                 (let ((found-index (%rehash-probe rehash-bits hash key vector)))
@@ -792,9 +795,7 @@ before doing so.")
                       (setf (%svref vector vector-index) free-hash-marker))
                     (%set-hash-table-vector-key vector found-vector-index key)
                     (setf (%svref vector (the fixnum (1+ found-vector-index))) value)
-                    (when (or (eq newkey deleted-hash-key-marker)
-                              (eq newvalue free-hash-marker)
-                              (eq newvalue deleted-hash-value-marker))
+                    (when (or (eq newkey deleted-hash-key-marker) (eq newkey free-hash-marker))
                       (return))
                     (when (eq key newkey)
                       (cerror "Delete one of the entries." "Duplicate key: ~s in ~s ~s ~s ~s ~s"
@@ -882,7 +883,10 @@ before doing so.")
   (when (nhash.read-only hash)
     (signal-read-only-hash-table-error hash)) ;;continuable
   (loop
-    (let* ((vector (nhash.vector  hash))
+    (let* ((vector (nhash.vector hash))
+	   (address (strip-tag-to-fixnum key))
+	   ;; This also makes sure the vector's track_keys bit is set if key is address based (in an eq table),
+	   ;; and component_address bit is set if a key component is address based (in an equal[p] table).
            (vector-index (funcall (nhash.find-new hash) hash key)))
       ;; Need to punt if vector changed because no way to know whether nhash.find-new was
       ;; using old or new vector.
@@ -899,8 +903,13 @@ before doing so.")
                  ;; before the incf), which _could_ be harmful.
                  (atomic-decf (nhash.grow-threshold hash))
                  (when (set-hash-key-conditional vector-index vector free-hash-marker key)
-                   (when (set-hash-value-conditional vector-index vector free-hash-marker value)
-                     (return-from lock-free-puthash value)))))
+		   ;; %needs-rehashing-p is not equite enough in the track_keys case, since gc cannot
+		   ;; track this key until it's actually added to the table.  Check now.
+		   (if (and (%ilogbitp $nhash_track_keys_bit (nhash.vector.flags vector))
+			    (not (eq address (strip-tag-to-fixnum key))))
+		     (setf (%svref vector vector-index) deleted-hash-key-marker)		       ;; Back out and try again.
+		     (when (set-hash-value-conditional vector-index vector free-hash-marker value)
+		       (return-from lock-free-puthash value))))))
               (t (let ((old-value (%svref vector (%i+ vector-index 1))))
                    (unless (or (eq old-value rehashing-value-marker)
                                ;; In theory, could reuse the deleted slot since we know it had this key
