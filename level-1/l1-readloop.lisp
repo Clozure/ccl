@@ -410,21 +410,6 @@
     (if win (setq won t) (return)))
   (values form won))
 
-(defun retain-lambda-expression (name lambda-expression env)
-  (if (and (let* ((lambda-list (cadr lambda-expression)))
-             (and (not (memq '&lap lambda-list))
-                  (not (memq '&method lambda-list))
-                  (not (memq '&lexpr lambda-list))))
-           (nx-declared-inline-p name env)
-           (not (gethash name *nx1-alphatizers*))
-           ; A toplevel definition defined inside a (symbol-)macrolet should
-           ; be inlineable.  It isn't; call DEFINITION-ENVIRONMENT with a
-           ; "clean-only" argument to ensure that there are no lexically
-           ; bound macros or symbol-macros.
-           (definition-environment env t))
-    lambda-expression))
-
-
 (defun %cons-def-info (type &optional lfbits keyvect data specializers qualifiers)
   (ecase type
     (defun nil)
@@ -449,14 +434,18 @@
   (and def-info (svref def-info 2)))
 
 (defun def-info.lambda (def-info)
-  (and def-info
-       (let ((data (svref def-info 3)))
-	 (and (eq (car data) 'lambda) data))))
+  (%def-info.lambda def-info))
+
+(defun def-info.environment (def-info)
+  (%def-info.environment def-info))
+
+
 
 (defun def-info.methods (def-info)
   (and def-info
        (let ((data (svref def-info 3)))
 	 (and (eq (car data) :methods) (%cdr data)))))
+
 
 (defun %cons-def-info-method (lfbits keyvect qualifiers specializers)
   (cons (cons (and keyvect
@@ -493,16 +482,7 @@
 (defun def-info.function-p (def-info)
   (not (and def-info (eq (car (svref def-info 3)) 'type))))
 
-(defun def-info.function-type (def-info)
-  (if (null def-info)
-    nil ;; ftype only, for the purposes here, is same as nothing.
-    (let ((data (svref def-info 3)))
-      (ecase (car data)
-	((nil lambda) 'defun)
-	(:methods 'defgeneric)
-	(macro 'defmacro)
-	(ftype nil)
-	(type nil)))))
+
 
 (defun def-info.deftype (def-info)
   (and def-info
@@ -516,7 +496,7 @@
        (consp (svref def-info 0))
        (svref def-info 1)))
 
-(defparameter *one-arg-defun-def-info* (%cons-def-info 'defun (encode-lambda-list '(x))))
+
 
 (defvar *compiler-warn-on-duplicate-definitions* t)
 

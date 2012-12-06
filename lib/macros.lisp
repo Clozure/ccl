@@ -2877,7 +2877,7 @@ defcallback returns the callback pointer, e.g., the value of name."
 (defmacro pprint-logical-block ((stream-symbol list
 				 &key (prefix "" prefixp)
                                       (per-line-prefix "" per-line-prefix-p)
-				      (suffix "" suffixp))
+				      (suffix ""))
 				&body body)
   (cond ((eq stream-symbol nil) (setq stream-symbol '*standard-output*))
 	((eq stream-symbol T) (setq stream-symbol '*terminal-io*)))

@@ -1213,14 +1213,14 @@ function to the indicated name is true.")
                        lambda-form (afunc-lambdaform afunc)))
         (setq info (cdr (retrieve-environment-function-info sym env)))
         (if (def-info.lambda info)
-            (setq lambda-form (def-info.lambda info)
-                  token sym
-                  containing-env (new-lexical-environment (definition-environment env)))
-            (unless info
-              (if (cdr (setq info (assq sym *nx-globally-inline*)))
-                (setq lambda-form (%cdr info)
-                      token sym
-                      containing-env (new-lexical-environment (new-definition-environment nil))))))))
+          (setq lambda-form (%def-info.lambda info)
+                token sym
+                containing-env (new-lexical-environment (%def-info.environment info)))
+          (unless info
+            (if (cdr (setq info (assq sym *nx-globally-inline*)))
+              (setq lambda-form (%cdr info)
+                    token sym
+                    containing-env (new-lexical-environment (new-definition-environment nil))))))))
     (values lambda-form (nx-closed-environment env containing-env) token)))
 
 (defun nx-closed-environment (current-env target)
@@ -1650,109 +1650,6 @@ Or something. Right? ~s ~s" var varbits))
        (list (nreverse auxvars) (nreverse auxvals))
        lexpr))))
 
-(defun nx-new-structured-var (pending sym)
-  (if sym
-    (nx-new-var pending sym t)
-    (nx-new-temp-var pending)))
-
-(defun nx-parse-structured-lambda-list (pending ll &optional no-acode whole-p &aux
-                                           req
-                                           opt
-                                           rest
-                                           keys
-                                           sym)
-  (multiple-value-bind (ok reqsyms opttail resttail keytail auxtail all whole structured-p)
-                       (verify-lambda-list ll t whole-p nil)
-    (declare (ignore all))
-    (unless ok (nx-error "Bad lambda list : ~S" ll))
-    (if (or whole (and whole-p structured-p)) (setq whole (nx-new-structured-var pending whole)))
-    (dolist (var reqsyms)
-      (push (if (symbolp var)
-                    (nx-new-structured-var pending var)
-                    (nx-structured-lambda-form pending var no-acode))
-                  req))
-    (when (eq (pop opttail) '&optional)
-      (let* (optvars optinits optsuppliedp)
-        (until (eq opttail resttail) 
-          (setq sym (pop opttail))
-          (let* ((var sym)
-                 (initform nil)
-                 (spvar nil))
-            (when (consp var)
-              (setq sym (pop var) initform (pop var) spvar (%car var)))
-            (push (if no-acode initform (nx1-form :value initform)) optinits)
-            (push (if (symbolp sym)
-                          (nx-new-structured-var pending sym)
-                          (nx-structured-lambda-form pending sym no-acode))
-                        optvars)
-            (push (if spvar (nx-new-var pending spvar)) optsuppliedp)))
-        (if optvars
-          (setq opt (list (nreverse optvars) (nreverse optinits) (nreverse optsuppliedp)))
-          (nx1-whine :lambda ll))))
-    (let ((var (pop resttail)))
-      (when (or (eq var '&rest)
-                (eq var '&body))
-        (setq var (pop resttail)
-              rest (if (symbolp var)
-                     (nx-new-structured-var pending var)
-                     (nx-structured-lambda-form pending var no-acode)))))
-    (when (eq (%car keytail) '&key) 
-      (setq keytail (%cdr keytail))
-      (let* ((keysyms ())
-             (keykeys ())
-             (keyinits ())
-             (keysupp ())
-             (kallowother (not (null (memq '&allow-other-keys ll))))
-             (kvar ())
-             (kkey ())
-             (kinit ())
-             (ksupp))
-        (until (eq keytail auxtail)
-          (unless (eq (setq sym (pop keytail)) '&allow-other-keys)      
-            (setq kinit (make-nx-nil) ksupp nil)
-            (if (atom sym)
-              (setq kvar sym kkey (make-keyword sym))
-              (progn
-                (if (consp (%car sym))
-                  (setq kkey (%caar sym) kvar (%cadar sym))
-                  (progn
-                    (setq kvar (%car sym))
-                    (setq kkey (make-keyword kvar))))
-                (setq kinit (if no-acode (%cadr sym) (nx1-form :value (%cadr sym))))
-                (setq ksupp (%caddr sym))))
-            (push (if (symbolp kvar)
-                          (nx-new-structured-var pending kvar)
-                          (nx-structured-lambda-form pending kvar no-acode))
-                        keysyms)
-            (push kkey keykeys)
-            (push kinit keyinits)
-            (push (if ksupp (nx-new-var pending ksupp)) keysupp)))
-        (setq 
-         keys
-         (list
-          kallowother
-          (nreverse keysyms)
-          (nreverse keysupp)
-          (nreverse keyinits)
-          (apply #'vector (nreverse keykeys))))))
-    (let (auxvals auxvars)
-      (dolist (pair (%cdr auxtail))
-        (let ((auxvar (nx-pair-name pair))
-              (auxval (nx-pair-initform pair)))
-          (push (if no-acode auxval (nx1-form :value auxval)) auxvals)
-          (push (nx-new-var pending auxvar) auxvars)))
-      (values
-       (nreverse req) 
-       opt 
-       rest 
-       keys
-       (list (nreverse auxvars) (nreverse auxvals))
-       whole))))
-
-(defun nx-structured-lambda-form (pending l &optional no-acode)
-  (multiple-value-bind (req opt rest keys auxen whole)
-                       (nx-parse-structured-lambda-list pending l no-acode t)
-    (list (%nx1-operator lambda-list) whole req opt rest keys auxen)))
 
 
 (defun nx1-immediate (context form)

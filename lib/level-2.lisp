@@ -90,9 +90,48 @@
                    ,@body)))
             doc))))))
 
+(defun lambda-list-bounds (lambda-list)
+  (let* ((state :required)
+         (min 0)
+         (max 0))
+    (do* ((lambda-list lambda-list (cdr lambda-list)))
+         ((null lambda-list) (values min max))
+      (case (car lambda-list)
+        ((&rest &key &body) (return (values min nil)))
+        (&aux (return (values min max)))
+        (&optional (setq state :optional))
+        (t (ecase state
+             (:required (incf min) (incf max))
+             (:optional (incf max))))))))
+  
+(defun prepare-to-destructure (list lambda-list min max)
+  (if (if max
+        (and (proper-list-p list)
+             (let* ((len (length list)))
+               (<= min len max)))
+             (do* ((tail list (cdr tail))
+                   (n min (1- n)))
+                  ((zerop n) t)
+               (when (atom tail)
+                 (return))))
+    list
+    (let* ((reason
+            (if max
+              (if (not (proper-list-p list))
+                "it is not a proper list"
+                (let* ((len (length list)))
+                  (if (eql min max)
+                    (format nil "it contains ~d elements, and exactly ~d are expected" len min)
+                    (if (< len min)
+                      (format nil "it contains ~d elements, and at least ~d are expected" len min)
+                      (format nil "it contains ~d elements, and at most ~d are expected" len max)))))
+              (format nil "it does not contain at least ~d elements" min))))
+      (signal-program-error "~s can't be destructured against the lambda list ~s, because ~a."
+                          list lambda-list reason))))
+    
 
 (defun %destructure-lambda-list (lambda-list wholeform  lets decls
-					     &key cdr-p (whole-p t) use-whole-var default-initial-value)
+                                              &key cdr-p (whole-p t) use-whole-var default-initial-value)
   (unless (and (listp lambda-list)
                (verify-lambda-list lambda-list t whole-p))
     (signal-simple-program-error "Invalid lambda list: ~s" lambda-list))
@@ -104,14 +143,11 @@
 	   (w (if use-whole-var wholeform (or whole (gensym "WHOLE"))))
 	   (argptr (gensym "ARGS"))
 	   (has-&key nil)
-	   (most-recent-binding nil)
 	   (keywords ())
 	   (first-keyword-init ())
 	   (restp nil))
       (labels ((simple-var (var &optional (initform `,default-initial-value))
 		 (let* ((binding `(,var ,initform)))
-		   (unless (eq argstate :aux)
-		     (setq most-recent-binding binding))
 		   (push  binding lets)
 		   binding))
 	       (structured-var (context sub-lambda-list initform)
@@ -124,7 +160,7 @@
 		      lets
 		      decls
 		      :default-initial-value default-initial-value
-))
+                      ))
 		   v)))
 	(unless use-whole-var
 	  (if (atom w)
@@ -132,130 +168,128 @@
 	    (progn
 	      (setq w (structured-var "WHOLE" w (if cdr-p `(cdr ,wholeform) wholeform))
 		    cdr-p nil))))
-	(simple-var argptr `(make-destructure-state ,@(if cdr-p `((cdr ,w)) `(,w)) ,w ',lambda-list))
-	(setq most-recent-binding nil)
-	(push `(dynamic-extent ,argptr) decls)
-	(do* ((tail normalized (cdr tail)))
-	     ((null tail)
-	      (if has-&key
-		(let* ((key-check-form `(check-keywords
-					 ',(nreverse keywords)
-					 ,rest-arg-name ,allow-other-keys)))
-		  (if first-keyword-init
-		    (rplaca (cdr first-keyword-init)
-			    `(progn
-			      ,key-check-form
-			      ,(cadr first-keyword-init)))
-		    (let* ((check-var (gensym "CHECK")))
-		      (push `(ignorable ,check-var) decls)
-		      (simple-var check-var key-check-form))))
-		(unless restp
-		  (let* ((checkform `(%check-extra-arguments ,argptr))
-			 (b most-recent-binding)
-			 (b-init (cadr b)))
-		    (if b
-		      (rplaca (cdr b) `(prog1 ,b-init ,checkform))
-		      (let* ((junk (gensym "JUNK")))
-			(simple-var junk checkform)
-			(push `(ignorable ,junk) decls))))))
-	      (values lets decls))
-	  (let* ((var (car tail)))
-	    (cond ((or (eq var '&rest) (eq var '&body))
-		   (let* ((r (cadr tail))
-			  (init `(destructure-state.current ,argptr)))
-		     (if (listp r)
-		       (setq rest-arg-name
-			     (structured-var "REST" r init))
-		       (progn
-			 (setq rest-arg-name (gensym "REST"))
-			 (simple-var rest-arg-name init)
-			 (simple-var r rest-arg-name ))))
-		   (setq restp t)
-		   (setq tail (cdr tail)))
-		  ((eq var '&optional) (setq argstate :optional))
-		  ((eq var '&key)
-		   (setq argstate :key)
-		   (setq has-&key t)
-		   (unless restp
-		     (setq restp t
-			   rest-arg-name (gensym "KEYS"))
-		     (push `(ignorable ,rest-arg-name) decls)
-		     (simple-var rest-arg-name
-				 `(destructure-state.current ,argptr))))
-		  ((eq var '&allow-other-keys)
-		   (setq allow-other-keys t))
-		  ((eq var '&aux)
-		   (setq argstate :aux))
-		  ((listp var)
-		   (case argstate
-		     (:required
-		      (structured-var "REQ" var `(%pop-required-arg-ptr ,argptr)))
-		     (:optional
-		      (let* ((variable (car var))
-			     (initform (if (cdr var)
-					 (cadr var)
-					 `,default-initial-value))
-			     (spvar (if (cddr var)
-				      (caddr var)
-				      (gensym "OPT-SUPPLIED-P")))
-			     (varinit `(if ,spvar
-					(%default-optional-value ,argptr)
-					,initform)))
-			(simple-var spvar
-				    `(not (null (destructure-state.current ,argptr))))
-			(if (listp variable)
-			  (structured-var "OPT" variable varinit)
-			  (simple-var variable varinit))))
-		     (:key
-		      (let* ((explicit-key (consp (car var)))
-			     (variable (if explicit-key
-					 (cadar var)
-					 (car var)))
-			     (keyword (if explicit-key
-					(caar var)
-					(make-keyword variable)))
-			     (initform (if (cdr var)
-					 (cadr var)
-					 `,default-initial-value))
-			     (spvar (if (cddr var)
-				      (caddr var)
-				      (gensym "KEY-SUPPLIED-P"))))
-			(push keyword keywords)
-			(let* ((sp-init (simple-var spvar
-						    `(%keyword-present-p
-						      ,rest-arg-name
-						      ',keyword)))
-			       (var-init `(if ,spvar
-					   (getf ,rest-arg-name ',keyword)
-					   ,initform)))
-			  (unless first-keyword-init
-			    (setq first-keyword-init sp-init))
-			  (if (listp variable)
-			    (structured-var "KEY" variable var-init)
-			    (simple-var variable var-init)))))
-		     (:aux
-		      (simple-var (car var) (cadr var)))
-		     (t (error "NYI: ~s" argstate))))
-		  ((symbolp var)
-		   (case argstate
-		     (:required
-		      (simple-var var `(%pop-required-arg-ptr ,argptr)))
-		     (:optional
-		      (simple-var var `(%default-optional-value ,argptr
-					',default-initial-value)))
-		     (:key
-		      (let* ((keyword (make-keyword var)))
-			(push keyword keywords)
-			(let* ((init (simple-var
-				      var
-				      `(getf ,rest-arg-name
-					',keyword
-					,@(if default-initial-value
-                                             `(',default-initial-value))))))
-			  (unless first-keyword-init
-			    (setq first-keyword-init init)))))
-		     (:aux
-		      (simple-var var)))))))))))
+        (multiple-value-bind (min max) (lambda-list-bounds normalized)
+          (simple-var argptr `(prepare-to-destructure ,@(if cdr-p `((cdr ,w)) `(,w)) ',lambda-list ,min ,max))
+          (push `(ignorable ,argptr) decls)
+          (when max
+            (push `(list ,argptr) decls))
+          (do* ((tail normalized (cdr tail)))
+               ((null tail)
+                (if has-&key
+                  (let* ((key-check-form `(check-keywords
+                                           ',(nreverse keywords)
+                                           ,rest-arg-name ,allow-other-keys)))
+                    (if first-keyword-init
+                      (rplaca (cdr first-keyword-init)
+                              `(progn
+                                ,key-check-form
+                                ,(cadr first-keyword-init)))
+                      (let* ((check-var (gensym "CHECK")))
+                        (push `(ignorable ,check-var) decls)
+                        (simple-var check-var key-check-form)))))
+                (values lets decls))
+            (let* ((var (car tail)))
+              (cond ((or (eq var '&rest) (eq var '&body))
+                     (let* ((r (cadr tail))
+                            (init argptr))
+                            (if (listp r)
+                              (setq rest-arg-name
+                                    (structured-var "REST" r init))
+                              (progn
+                                (setq rest-arg-name (gensym "REST"))
+                                (simple-var rest-arg-name init)
+                                (simple-var r rest-arg-name ))))
+                       (setq restp t)
+                       (setq tail (cdr tail)))
+                     ((eq var '&optional) (setq argstate :optional))
+                     ((eq var '&key)
+                      (setq argstate :key)
+                      (setq has-&key t)
+                      (unless restp
+                        (setq restp t
+                              rest-arg-name (gensym "KEYS"))
+                        (push `(ignorable ,rest-arg-name) decls)
+                        (simple-var rest-arg-name
+                                    argptr)))
+                     ((eq var '&allow-other-keys)
+                      (setq allow-other-keys t))
+                     ((eq var '&aux)
+                      (setq argstate :aux))
+                     ((listp var)
+                      (case argstate
+                        (:required
+                         (structured-var "REQ" var `(pop ,argptr)))
+                        (:optional
+                         (let* ((variable (car var))
+                                (initform (if (cdr var)
+                                            (cadr var)
+                                            `,default-initial-value))
+                                (anon-spvar (gensym "OPT-SUPPLIED-P"))
+                                (spvar (if (cddr var)
+                                         (caddr var)))
+                                (varinit `(if ,anon-spvar
+                                           (pop ,argptr)
+                                           ,initform)))
+                           (simple-var anon-spvar
+                                       `(not (null  ,argptr)))
+                           (if (listp variable)
+                             (structured-var "OPT" variable varinit)
+                             (simple-var variable varinit))
+                           (if spvar
+                             (simple-var spvar anon-spvar))))
+                        (:key
+                         (let* ((explicit-key (consp (car var)))
+                                (variable (if explicit-key
+                                            (cadar var)
+                                            (car var)))
+                                (keyword (if explicit-key
+                                           (caar var)
+                                           (make-keyword variable)))
+                                (initform (if (cdr var)
+                                            (cadr var)
+                                            `,default-initial-value))
+                                (anon-spvar (gensym "KEY-SUPPLIED-P"))
+                                (spvar (if (cddr var)
+                                         (caddr var))))
+                           (push keyword keywords)
+                           (let* ((sp-init (simple-var anon-spvar
+                                                       `(%keyword-present-p
+                                                         ,rest-arg-name
+                                                         ',keyword)))
+                                  (var-init `(if ,anon-spvar
+                                              (getf ,rest-arg-name ',keyword)
+                                              ,initform)))
+                             (unless first-keyword-init
+                               (setq first-keyword-init sp-init))
+                             (if (listp variable)
+                               (structured-var "KEY" variable var-init)
+                               (simple-var variable var-init))
+                             (if spvar
+                               (simple-var spvar anon-spvar)))))
+                        (:aux
+                         (simple-var (car var) (cadr var)))
+                        (t (error "NYI: ~s" argstate))))
+                     ((symbolp var)
+                      (case argstate
+                        (:required
+                         (simple-var var `(pop ,argptr)))
+                        (:optional
+                         (simple-var var `(if ,argptr
+                                           (pop ,argptr)
+                                           ',default-initial-value)))
+                        (:key
+                         (let* ((keyword (make-keyword var)))
+                           (push keyword keywords)
+                           (let* ((init (simple-var
+                                         var
+                                         `(getf ,rest-arg-name
+                                           ',keyword
+                                           ,@(if default-initial-value
+                                                 `(',default-initial-value))))))
+                             (unless first-keyword-init
+                               (setq first-keyword-init init)))))
+                        (:aux
+                         (simple-var var))))))))))))
 
 
 

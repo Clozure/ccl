@@ -827,8 +827,10 @@
 
 
 (defun store-gvector-conditional (index gvector old new)
-  (%store-node-conditional (+ target::misc-data-offset
-			      (ash index target::word-shift))
+  (declare (index index))
+  (%store-node-conditional (the fixnum
+                             (+ target::misc-data-offset
+                                (the fixnum (ash index target::word-shift))))
 			   gvector
 			   old
 			   new))

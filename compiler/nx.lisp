@@ -37,6 +37,67 @@
 (defparameter *nx-start* (cons nil nil))
 
 
+
+
+
+(defun %def-info.lambda (def-info)
+  (and def-info
+       (let ((data (svref def-info 3)))
+         (or (and (consp (car data)) (eq (caar data) 'lambda) (car data))
+             (and (eq (car data) 'lambda) data)))))
+
+
+
+(defun %def-info.environment (def-info)
+  (and def-info
+       (let* ((data (svref def-info 3)))
+         (and (consp (car data))
+              (eq (caar data) 'lambda)
+              (cdr data)))))
+
+(defun def-info.function-type (def-info)
+  (if (null def-info)
+    nil ;; ftype only, for the purposes here, is same as nothing.
+    (let ((data (svref def-info 3)))
+      (if (and (consp (car data)) (eq 'lambda (caar data)))
+        'defun
+        (ecase (car data)
+          ((nil lambda) 'defun)
+          (:methods 'defgeneric)
+          (macro 'defmacro)
+          (ftype nil)
+          (type nil))))))
+
+;;; Return T if and only if the lexical environment contains variable
+;;; or function bindings (other than macros or symbol-macros).
+(defun binding-free-environment-p (env)
+  (do* ((env env (lexenv.parent-env env)))
+       ((or (null env) (typep env 'definition-environment)) t)
+    (let* ((vars (lexenv.variables env)))
+      (unless (or (atom vars)
+                  (dolist (var vars t)
+                    (let* ((ea (var-ea var)))
+                      (unless (and (consp ea)
+                                 (eq (car ea) :symbol-macro))
+                        (return)))))
+        (return)))
+    (unless (dolist (f (lexenv.functions env) t)
+              (unless (and (consp f)
+                           (consp (cdr f))
+                           (eq 'macro (cadr f)))
+                (return))))))
+          
+
+(defun retain-lambda-expression (name lambda-expression env)
+  (if (and (let* ((lambda-list (cadr lambda-expression)))
+             (and (not (memq '&lap lambda-list))
+                  (not (memq '&method lambda-list))
+                  (not (memq '&lexpr lambda-list))))
+           (nx-declared-inline-p name env)
+           (not (gethash name *nx1-alphatizers*))
+           (binding-free-environment-p env))
+    (cons lambda-expression env)))
+
 (defvar *host-backend*)
 (defvar *target-backend*)
 

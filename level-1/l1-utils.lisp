@@ -122,6 +122,13 @@
 
 (setf (type-predicate 'macptr) 'macptrp)
 
+;;; Once we're bootstrapped, we should move the real PREPARE-TO-DESTRUCTURE
+;;; here.
+(defun %early-prepare-to-destructure (list &rest ignore)
+  (declare (ignore ignore))
+  list)
+
+(setf (fdefinition 'prepare-to-destructure) #'%early-prepare-to-destructure)
 
 
 

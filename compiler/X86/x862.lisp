@@ -6807,18 +6807,18 @@
                  (nx-null (car forms))
                  (null (cdr forms)))
           (x862-form seg vreg xfer first)
-          (progn
-            (x862-push-register seg 
+          (let* ((push-vinsn
+                  (x862-push-register seg 
                                 (if (or node-p crf-p)
                                   (x862-one-untargeted-reg-form seg first *x862-arg-z*)
-                                  (x862-one-targeted-reg-form seg first vreg)))
+                                  (x862-one-targeted-reg-form seg first vreg)))))
             (dolist (form forms)
               (x862-form seg nil nil form))
             (if crf-p
               (progn
-                (x862-vpop-register seg *x862-arg-z*)
+                (x862-elide-pushes seg push-vinsn (x862-vpop-register seg *x862-arg-z*))
                 (<- *x862-arg-z*))
-              (x862-pop-register seg vreg))
+              (x862-elide-pushes seg push-vinsn (x862-pop-register seg vreg)))
             (^)))))))
 
 (defx862 x862-free-reference free-reference (seg vreg xfer sym)

@@ -689,34 +689,34 @@
 ;;; contain whatever randomness is floating around at the point of
 ;;; application.)
 (defun nx1-destructure (context lambda-list bindform cdr-p &whole-allowed-p forms &optional (body-env *nx-lexical-environment*))
+  (declare (ignore cdr-p))
   (let* ((old-env body-env)
          (*nx-bound-vars* *nx-bound-vars*)
          (bindform (nx1-form :value bindform)))
     (if (not (verify-lambda-list lambda-list t &whole-allowed-p))
       (nx-error "Invalid lambda-list ~s" lambda-list)
-      (let* ((*nx-lexical-environment* body-env))
+      (let* ((*nx-lexical-environment* body-env)
+             (*nx-bound-vars* *nx-bound-vars*))
         (with-nx-declarations (pending)
-          (multiple-value-bind (body decls)
-                               (parse-body forms *nx-lexical-environment*)
-            (nx-process-declarations pending decls)
-            (multiple-value-bind (req opt rest keys auxen whole)
-                                 (nx-parse-structured-lambda-list pending lambda-list nil &whole-allowed-p)
-              (nx-effect-other-decls pending *nx-lexical-environment*)
-              (make-acode
-               (%nx1-operator debind)
-               nil
-               bindform
-               req
-               opt
-               rest
-               keys
-               auxen
-               whole
-               (nx1-env-body context body old-env)
-               *nx-new-p2decls*
-               cdr-p))))))))
-
-
+          (multiple-value-bind (body decls) (parse-body forms body-env t)
+          (let* ((temp-name (gensym))
+                 (temp-var (nx-new-var pending temp-name))
+                 (vars (list temp-var))
+                 (vals (list bindform))
+                 (binding (nx1-note-var-binding temp-var bindform))
+                 (var-bound-vars (if binding (list binding))))
+            (let* ((acode (make-acode (%nx1-operator let*)
+                                      (list temp-var)
+                                      (list bindform)
+                                      (nx1-env-body context
+                                                    `((destructuring-bind ,lambda-list ,temp-name
+                                                      ,@decls
+                                                      ,@body))
+                                                    old-env)
+                                      *nx-new-p2decls*)))
+              (nx1-check-var-bindings var-bound-vars)
+              (nx1-punt-bindings vars vals)
+              acode))))))))
 
 (defnx1 nx1-%setf-macptr ((%setf-macptr)) context (ptr newval)
   (let* ((arg1 (nx1-form :value ptr))
