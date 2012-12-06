@@ -650,8 +650,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
 (defmethod print-object ((num ratio) stream)
   (let ((base (get-*print-base*)))
-    ;;>> What to do when for *print-radix* and *print-base* = 10?
-    (when (and *print-radix* (not (eq base 10)))
+    (when *print-radix*
       (write-radix base stream))
     (%pr-integer (numerator num) base stream)
     (stream-write-char stream #\/)
