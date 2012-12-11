@@ -6506,10 +6506,8 @@ mark."
                                                   (list val)))
                     (setq plist (nconc plist (list key val)))))))))))))
 
-(defun external-format-from-file-options (line)
-  (let* ((emacs-name (getf (parse-file-options-line line) :coding))
-         (line-termination :unix))
-    (when emacs-name
+(defun process-file-coding-option (emacs-name line-termination)
+  (when emacs-name
       (let* ((len (length emacs-name)))
         (cond ((and (> len 5) (string-equal "-unix" emacs-name :start2 (- len 5)))
                (setq emacs-name (subseq emacs-name 0 (- len 5))))
@@ -6527,4 +6525,8 @@ mark."
                                   :line-termination line-termination)
             ;; Might be some cases where the Emacs name differs
             ;; from ours, but can't think of any.
-            )))))
+            ))))
+  
+(defun external-format-from-file-options (line)
+  (process-file-coding-option (getf (parse-file-options-line line) :coding)
+                              :unix))
