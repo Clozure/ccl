@@ -57,7 +57,7 @@
     (values
      (if (stringp res)
        res
-       (and res (princ-to-string res)))
+       (and res (with-standard-io-syntax (princ-to-string res))))
      type)))
 
 (defun set-arglist (sym arglist)
