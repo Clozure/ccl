@@ -292,7 +292,8 @@
     (:lambda . style-warning)
     (:format-error . style-warning)
     (:unused . style-warning)
-    (:type-conflict . style-warning)))
+    (:type-conflict . style-warning)
+    (:special-ignore . style-warning)))
 
 
 

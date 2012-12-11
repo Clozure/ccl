@@ -690,7 +690,8 @@
     (:program-error . "~a")
     (:unsure . "Nonspecific warning")
     (:duplicate-binding . "Multiple bindings of ~S in ~A form")
-    (:shadow-cl-package-definition . "Local function or macro name ~s shadows standard CL definition.")))
+    (:shadow-cl-package-definition . "Local function or macro name ~s shadows standard CL definition.")
+    (:special-ignore . "Variable ~S can't be declared SPECIAL and IGNOREd.")))
 
 (defun report-invalid-type-compiler-warning (condition stream)
   (destructuring-bind (type &optional why) (compiler-warning-args condition)

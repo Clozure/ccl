@@ -1006,16 +1006,18 @@ function to the indicated name is true.")
          (special (%ilogbitp $vbitspecial bits))
          (ignored (%ilogbitp $vbitignore bits))
          (ignoreunused (%ilogbitp $vbitignoreunused bits)))
-    (if (or special reffed closed)
-      (progn
-        (if ignored (nx1-whine :ignore sym))
-        (nx-set-var-bits var (%ilogand (nx-check-downward-vcell var bits) (%ilognot (%ilsl $vbitignore 1)))))
-      (progn
-        (if (and setqed ignored) (nx1-whine :ignore sym))
-        (or ignored ignoreunused 
-            (progn (and (consp expansion) (eq (car expansion) :symbol-macro) (setq sym (list :symbol-macro sym))) (nx1-whine :unused sym)))
-        (when (eql 0 (logior (nx-var-root-nrefs var) (nx-var-root-nsetqs var)))
-          (nx-set-var-bits var (%ilogior (%ilsl $vbitignore 1) bits)))))))
+    (if (and special ignored)
+      (nx1-whine :special-ignore sym)
+      (if (or  reffed closed)
+        (progn
+          (if ignored (nx1-whine :ignore sym))
+          (nx-set-var-bits var (%ilogand (nx-check-downward-vcell var bits) (%ilognot (%ilsl $vbitignore 1)))))
+        (progn
+          (if (and setqed ignored) (nx1-whine :ignore sym))
+          (or ignored ignoreunused 
+              (progn (and (consp expansion) (eq (car expansion) :symbol-macro) (setq sym (list :symbol-macro sym))) (nx1-whine :unused sym)))
+          (when (eql 0 (logior (nx-var-root-nrefs var) (nx-var-root-nsetqs var)))
+            (nx-set-var-bits var (%ilogior (%ilsl $vbitignore 1) bits))))))))
 
 ; if an inherited var isn't setqed, it gets no vcell.  If it -is- setqed, but
 ; all inheritors are downward, the vcell can be stack-consed.  Set a bit so that
