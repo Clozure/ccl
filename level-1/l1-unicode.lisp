@@ -6474,3 +6474,57 @@ mark."
                     (setf (schar new nout) (setq lastch combined))
                     (setf lastch ch
                       (schar new (incf nout)) ch))))))))))
+
+;;; Parse the string LINE (an Emacs-style file-attributes line)
+;;; into a plist with Emacs variable names as keywords and values
+;;; as strings (or list of strings).  Quietly return NIL on error.
+(defun parse-file-options-line (line)
+  (let* ((start (search "-*-" line))
+         (start+3 (when start (+ start 3)))
+         (end (and start+3 (search "-*-" line :start2 start+3))))
+    (when end
+      (setq line (subseq line start+3 end))
+      (let* ((plist ()))
+        (loop
+          ;; The line between -*- pairs should be of the form
+          ;; {varname: value;}*.  Emacs and Hemlock both seem
+          ;; able to deal with the case where the last pair is
+          ;; missing a trailing semicolon.
+          (let* ((colon (position #\: line))
+                 (semi (and colon (position #\; line :start (1+ colon)))))
+            (unless colon
+              (return plist))
+            (let* ((key (intern (nstring-upcase (string-trim " 	" (subseq line 0 colon))) "KEYWORD"))
+                   (val (string-trim '(#\space #\tab) (subseq line (1+ colon) (or semi (length line))))))
+              (setq line (if semi (subseq line (1+ semi)) ""))
+              (unless (eq key :eval)
+                (let* ((already (getf plist key)))
+                  (if already
+                    (setf (getf plist key) (nconc (if (atom already)
+                                                    (list already)
+                                                    already)
+                                                  (list val)))
+                    (setq plist (nconc plist (list key val)))))))))))))
+
+(defun external-format-from-file-options (line)
+  (let* ((emacs-name (getf (parse-file-options-line line) :coding))
+         (line-termination :unix))
+    (when emacs-name
+      (let* ((len (length emacs-name)))
+        (cond ((and (> len 5) (string-equal "-unix" emacs-name :start2 (- len 5)))
+               (setq emacs-name (subseq emacs-name 0 (- len 5))))
+              ((and (> len 4) (or
+                               (when (string-equal "-dos" emacs-name :start2 (- len 4))
+                                 (setq line-termination :crlf))
+                               (when (string-equal "-mac" emacs-name :start2 (- len 4))
+                                 (setq line-termination :cr))))
+                               
+               (setq emacs-name (subseq emacs-name 0 (- len 4))))))
+        (let* ((key (intern (string-upcase emacs-name) "KEYWORD"))
+               (encoding (get-character-encoding key)))
+          (if encoding
+            (make-external-format :character-encoding (character-encoding-name encoding)
+                                  :line-termination line-termination)
+            ;; Might be some cases where the Emacs name differs
+            ;; from ours, but can't think of any.
+            ))))))
