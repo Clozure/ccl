@@ -59,13 +59,14 @@
 	    (return-from do-file-options))
 	  (cond
 	   ((find #\: string :start start :end end)
-	    (do ((opt-start start (1+ semi)) colon semi)
+	    (do ((opt-start start (1+ semi)) colon semi real-semi)
 		(nil)
 	      (setq colon (position #\: string :start opt-start :end end))
 	      (unless colon
-		(loud-message "Missing \":\".  Aborting file options.")
+		(unless real-semi
+                  (loud-message "Missing \":\".  Aborting file options."))
 		(return-from do-file-options))
-	      (setq semi (or (position #\; string :start colon :end end) end))
+	      (setq semi (or (setq real-semi (position #\; string :start colon :end end)) end))
 	      (let* ((option (nstring-downcase
 			      (trim-subseq string opt-start colon)))
 		     (handler (assoc option *mode-option-handlers*
@@ -127,6 +128,16 @@
 
 (define-file-option "log" (buffer string)
   (declare (ignore buffer string)))
+
+(define-file-option "base" (buffer string)
+  (declare (ignore buffer string)))
+
+(define-file-option "syntax" (buffer string)
+  (declare (ignore buffer string)))
+
+(define-file-option "coding" (buffer string)
+  (hemlock-ext:set-buffer-external-format buffer string))
+
 
 
 
@@ -240,10 +251,17 @@
 		    (if (hemlock-bound-p 'current-package :buffer buffer)
 		      (variable-value 'hemlock::current-package
 				      :buffer buffer)
-		      "CL-USER")))
+		      "CL-USER"))
+                   (encoding-string (let* ((string (hemlock-ext:buffer-encoding-name buffer))
+                                           (suffix (case (hi::buffer-line-termination buffer)
+                                                     (:cr "mac")
+                                                     (:crlf "dos"))))
+                                      (if suffix
+                                        (concatenate 'string string "-" suffix)
+                                        string))))
 	      (insert-string
 	       mark
-	       (format nil ";;; -*- Mode: Lisp; Package: ~a -*-" package-name)))
+	       (format nil ";;; -*- Mode: Lisp; Package: ~a; Coding: ~a; -*-" package-name encoding-string)))
 	    (insert-string
 	     mark
 	     (format nil ";;; -*- Mode: ~a -*-" (or mode "Fundamental"))))

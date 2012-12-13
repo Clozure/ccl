@@ -2747,10 +2747,10 @@
   (when character-p
     (setf (ioblock-unread-char-function ioblock) (select-stream-untyi-function (ioblock-stream ioblock) :input))
     (setf (ioblock-decode-literal-code-unit-limit ioblock)
-          (if encoding
+          (if (and encoding (not (eq encoding :inferred)))
             (character-encoding-decode-literal-code-unit-limit encoding)
             256))    
-    (if encoding
+    (if (and encoding (not (eq encoding :inferred)))
       (let* ((unit-size (character-encoding-code-unit-size encoding)))
         (setf (ioblock-peek-char-function ioblock) '%encoded-ioblock-peek-char)
         (setf (ioblock-read-line-function ioblock)
@@ -3157,10 +3157,14 @@
   (declare (ignorable element-shift))
   (setq line-termination (cdr (assoc line-termination *canonical-line-termination-conventions*)))
   (when encoding
-    (unless (typep encoding 'character-encoding)
-      (setq encoding (get-character-encoding encoding)))
-    (if (eq encoding (get-character-encoding nil))
-      (setq encoding nil)))
+    (cond ((and (eq encoding :inferred)
+                (typep stream 'file-stream)
+                insize))
+          (t
+           (unless (typep encoding 'character-encoding)
+             (setq encoding (get-character-encoding encoding)))
+           (if (eq encoding (get-character-encoding nil))
+             (setq encoding nil)))))
   (when sharing
     (unless (or (eq sharing :private)
                 (eq sharing :lock))
@@ -3256,10 +3260,10 @@
     (when interactive
       (setf (ioblock-interactive ioblock) interactive))
     (setf (stream-ioblock stream) ioblock)
-    (when encoding
+    (when (and encoding (not (eq encoding :inferred)))
       (setf (ioblock-native-byte-order ioblock)
             (character-encoding-native-endianness encoding)))
-    (let* ((bom-info (and insize encoding (character-encoding-use-byte-order-mark encoding))))
+    (let* ((bom-info (and insize encoding (not (eq encoding :inferred)) (character-encoding-use-byte-order-mark encoding))))
       (when bom-info
         (ioblock-check-input-bom ioblock bom-info sharing)))
     (setf (ioblock-input-timeout ioblock) input-timeout)

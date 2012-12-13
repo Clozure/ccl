@@ -1844,6 +1844,22 @@
     (when doc
       (document-invalidate-modeline doc))))
 
+;;; Process a file's "coding" file-option.
+(defun hemlock-ext:set-buffer-external-format (buffer string)
+  (let* ((ef (ccl::process-file-coding-option string (or (hi::buffer-line-termination buffer) :unix)))
+         (encoding-val (nsstring-encoding-for-external-format ef)))
+    (cond (encoding-val
+           (setf (hi::buffer-line-termination buffer)
+                 (external-format-line-termination ef))
+           (let* ((doc (hi::buffer-document buffer)))
+             (when doc
+               (with-slots (encoding) doc
+                 (setq encoding encoding-val))))
+           (hemlock-ext:invalidate-modeline buffer))
+          (t
+           (hi:loud-message "Can't parse coding option ~a." string)))))
+                 
+
 (def-cocoa-default *text-pane-margin-width* :float 0.0f0 "width of indented margin around text pane")
 (def-cocoa-default *text-pane-margin-height* :float 0.0f0 "height of indented margin around text pane")
 
@@ -2329,7 +2345,7 @@
                              (if (eql lfpos (1+ crpos))
                                :crlf
                                :cr)
-			     :lf))
+			     :unix))
 	 (hemlock-string (case line-termination
 			   (:crlf (remove #\return string))
 			   (:cr (nsubstitute #\linefeed #\return string))
@@ -2658,23 +2674,31 @@
     (unless (%null-ptr-p frame)
       (hemlock-view frame))))
 
+#-cocotron
+(defun nsstring-encoding-for-character-encoding-name (name)
+  (let* ((string (string name))
+         (len (length string)))
+    (with-cstrs ((cstr string))
+      (with-nsstr (nsstr cstr len)
+        (let* ((cf (#_CFStringConvertIANACharSetNameToEncoding nsstr)))
+          (if (= cf #$kCFStringEncodingInvalidId)
+            (setq cf (#_CFStringGetSystemEncoding)))
+          (let* ((ns (#_CFStringConvertEncodingToNSStringEncoding cf)))
+            (if (= ns #$kCFStringEncodingInvalidId)
+              (#/defaultCStringEncoding ns:ns-string)
+              ns)))))))
+
+(defun nsstring-encoding-for-external-format (ef)
+  (and ef (nsstring-encoding-for-character-encoding-name
+           (ccl:external-format-character-encoding ef))))
+
 ;;; Map *default-file-character-encoding* to an :<NSS>tring<E>ncoding
 (defun get-default-encoding ()
   #-cocotron                            ;need IANA conversion stuff
   (let* ((file-encoding *default-file-character-encoding*))
     (when (and (typep file-encoding 'keyword)
                (lookup-character-encoding file-encoding))
-      (let* ((string (string file-encoding))
-             (len (length string)))
-        (with-cstrs ((cstr string))
-          (with-nsstr (nsstr cstr len)
-            (let* ((cf (#_CFStringConvertIANACharSetNameToEncoding nsstr)))
-              (if (= cf #$kCFStringEncodingInvalidId)
-                (setq cf (#_CFStringGetSystemEncoding)))
-              (let* ((ns (#_CFStringConvertEncodingToNSStringEncoding cf)))
-                (if (= ns #$kCFStringEncodingInvalidId)
-                  (#/defaultCStringEncoding ns:ns-string)
-                  ns)))))))))
+      (nsstring-encoding-for-character-encoding-name file-encoding))))
 
 (defclass hemlock-document-controller (ns:ns-document-controller)
     ((last-encoding :foreign-type :<NSS>tring<E>ncoding))
@@ -2888,41 +2912,64 @@
     (setf (hi::buffer-pathname buffer) pathname)
     buffer))
 
+;;; Try to read the URL's contents into an NSString which can be
+;;; used to initialize the document's Hemlock buffer and related
+;;; data structures.  First, try to use the encoding specified
+;;; in the last call to the document controller's "open" panel;
+;;; if that wasn't specified (was 0, "automatic") or if the string
+;;; couldn't be initialized in that encoding, try to use the
+;;; encoding specified in the "coding:" file option if that's present.
+;;; If that wasn't specified or fails, fall back to the default
+;;; encoding (based on CCL:*DEFAULT-FILE-CHARACTER-ENCODING*), and
+;;; if that fails, try using :iso-8859-1 (which should always win
+;;; but which may misinterpret some characters.)
+;;; We should only lose because of a filesystem or permissions
+;;; problem or because of a severe low-memory condition or something
+;;; equally catastrophic.
+;;; We should be careful to zero out the encoding from the last call
+;;; to the "open" panel so that leftover value doesn't affect anything
+;;; but the next call to this method, and if an encoding selected
+;;; explicitly (via the "open" panel or the file-options line) didn't
+;;; work, it'd be nice to (somehow) let the user know that.
+;;; Whatever encoding works here is remembered as the document's
+;;; encoding; that may be overridden when the file-options are parsed.
 (objc:defmethod (#/readFromURL:ofType:error: :<BOOL>)
     ((self hemlock-editor-document) url type (perror (:* :id)))
   (declare (ignorable type))
   (with-callback-context "readFromURL"
-    (rlet ((pused-encoding :<NSS>tring<E>ncoding 0))
-      (let* ((pathname
-              (lisp-string-from-nsstring
-               (if (#/isFileURL url)
-                 (#/path url)
-                 (#/absoluteString url))))
-             (buffer (or (hemlock-buffer self)
-                         (make-buffer-for-document self pathname)))
-             (selected-encoding (slot-value (#/sharedDocumentController (find-class 'hemlock-document-controller)) 'last-encoding))
-             (string
-              (if (zerop selected-encoding)
-                (#/stringWithContentsOfURL:usedEncoding:error:
-                 ns:ns-string
-                 url
-                 pused-encoding
-                 perror)
-                +null-ptr+)))
-        
-        (if (%null-ptr-p string)
-          (progn
-            (if (zerop selected-encoding)
-              (setq selected-encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
-            (setq string (#/stringWithContentsOfURL:encoding:error:
-                          ns:ns-string
-                          url
-                          selected-encoding
-                          perror)))
-          (setq selected-encoding (pref pused-encoding :<NSS>tring<E>ncoding)))
+    (let* ((data (#/dataWithContentsOfURL:options:error:
+                  ns:ns-data url 0 perror))
+           (bytes (#/bytes data))
+           (length (#/length data))
+           (pathname
+            (lisp-string-from-nsstring
+             (if (#/isFileURL url)
+                   (#/path url)
+               (#/absoluteString url))))
+           (buffer (or (hemlock-buffer self)
+                       (make-buffer-for-document self pathname)))
+           (document-controller (#/sharedDocumentController (find-class 'hemlock-document-controller)))
+           (string +null-ptr+))
+      (flet ((try-encoding (encoding)
+               (setq string 
+                     (if (or (null encoding)
+                             (zerop encoding))
+                       +null-ptr+
+                       (make-instance ns:ns-string
+                                      :with-bytes-no-copy bytes
+                                      :length length
+                                      :encoding encoding
+                                      :free-when-done nil)))
+               (unless (%null-ptr-p string)
+                 (setf (slot-value self 'encoding) encoding)
+                 t)))
+        (unless (try-encoding (with-slots (last-encoding) document-controller
+                                (prog1 last-encoding
+                                  (setq last-encoding 0))))
+          (unless (try-encoding (nsstring-encoding-for-external-format (ccl::external-format-from-octet-buffer bytes length)))
+            (unless (try-encoding (get-default-encoding))
+              (try-encoding #$NSISOLatin1StringEncoding))))
         (unless (%null-ptr-p string)
-          (with-slots (encoding) self (setq encoding selected-encoding))
-
           ;; ** TODO: Argh.  How about we just let hemlock insert it.
           (let* ((textstorage (slot-value self 'textstorage))
                  (display (hemlock-buffer-string-cache (#/hemlockString textstorage)))
@@ -2940,7 +2987,7 @@
                   (hemlock-buffer-length buffer))
                  (hi::note-modeline-change buffer)
                  (setf (hi::buffer-modified buffer) nil))))
-          t)))))
+            t)))))
 
 
 
@@ -3006,11 +3053,10 @@
 #-cocotron
 (objc:defmethod (#/prepareSavePanel: :<BOOL>) ((self hemlock-editor-document)
                                                panel)
-  (with-slots (encoding) self
-    (let* ((popup (build-encodings-popup (#/sharedDocumentController hemlock-document-controller) encoding)))
+  (let* ((popup (build-encodings-popup (#/sharedDocumentController hemlock-document-controller))))
       (#/setAction: popup (@selector #/noteEncodingChange:))
       (#/setTarget: popup self)
-      (#/setAccessoryView: panel popup)))
+      (#/setAccessoryView: panel popup))
   (#/setExtensionHidden: panel nil)
   (#/setCanSelectHiddenExtension: panel nil)
   (#/setAllowedFileTypes: panel +null-ptr+)
@@ -3365,7 +3411,8 @@
 ;;; popup to be customized (e.g., to suppress encodings that the
 ;;; user isn't interested in.)
 (defmethod build-encodings-popup ((self hemlock-document-controller)
-                                  &optional (preferred-encoding (get-default-encoding)))
+                                  &optional preferred-encoding)
+  (declare (ignorable preferred-encoding))
   (let* ((id-list (supported-nsstring-encodings))
          (popup (make-instance 'ns:ns-pop-up-button)))
     ;;; Add a fake "Automatic" item with tag 0.
@@ -3374,8 +3421,7 @@
     (dolist (id id-list)
       (#/addItemWithTitle: popup (nsstring-for-nsstring-encoding id))
       (#/setTag: (#/lastItem popup) (nsstring-encoding-to-nsinteger id)))
-    (when preferred-encoding
-      (#/selectItemWithTag: popup (nsstring-encoding-to-nsinteger preferred-encoding)))
+    (#/selectItemWithTag: popup (if preferred-encoding (nsstring-encoding-to-nsinteger preferred-encoding) 0))
     (#/sizeToFit popup)
     popup))
 

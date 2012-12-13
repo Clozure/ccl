@@ -6530,3 +6530,12 @@ mark."
 (defun external-format-from-file-options (line)
   (process-file-coding-option (getf (parse-file-options-line line) :coding)
                               :unix))
+
+(defun external-format-from-octet-buffer (buf count)
+  (declare (fixnum count))
+  (dotimes (i count)
+    (let* ((octet (%get-unsigned-byte buf i)))
+      (cond ((or (eql octet (char-code #\linefeed))
+                 (eql octet (char-code #\return)))
+             (return (external-format-from-file-options (%str-from-ptr buf i))))))))
+            

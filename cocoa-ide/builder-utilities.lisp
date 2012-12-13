@@ -1,4 +1,4 @@
-;;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10; Package: cl-user -*-
+;;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10; Package: cl-user; coding:iso-8859-1; -*-
 ;;;; ***********************************************************************
 ;;;; FILE IDENTIFICATION
 ;;;;

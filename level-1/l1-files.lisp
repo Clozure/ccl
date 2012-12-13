@@ -1331,7 +1331,7 @@ a host-structure or string."
 	    (t 
 	     (with-open-file (stream file-name
 				     :element-type 'base-char
-				     :external-format external-format)
+				     :external-format (if (eq external-format :default) :inferred external-format))
 	       (load-from-stream stream print)))))))
   file-name)
 

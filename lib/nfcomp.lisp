@@ -229,7 +229,9 @@ Will differ from *compiling-file* during an INCLUDE")
            (defenv (new-definition-environment))
            (lexenv (new-lexical-environment defenv))
            (*fasl-compile-time-env* (new-lexical-environment (new-definition-environment)))
-           (*fcomp-external-format* external-format)
+           (*fcomp-external-format* (if (eq external-format :default)
+                                      :inferred
+                                      external-format))
            (forms nil))
       (let ((current *outstanding-deferred-warnings*) last)
         (when (and current

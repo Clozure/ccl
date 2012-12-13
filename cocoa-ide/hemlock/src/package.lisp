@@ -377,6 +377,7 @@
    #:top-listener-output-stream
    #:top-listener-input-stream
    #:invalidate-modeline
+   #:set-buffer-external-format
    #:note-buffer-saved
    #:note-buffer-unsaved
    #:read-only-listener-p
