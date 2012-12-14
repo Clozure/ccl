@@ -1324,6 +1324,9 @@ new_tcr(natural vstack_size, natural tstack_size)
 }
 
 void
+#ifdef WIN_32
+__declspec(dllexport)
+#endif
 shutdown_thread_tcr(void *arg)
 {
 #ifdef DARWIN
