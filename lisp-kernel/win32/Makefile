@@ -117,3 +117,9 @@ clean:	cclean
 
 strip:	../../wx86cl.exe
 	strip -g ../../wx86cl.exe
+
+
+win32-foreign-thread-support.o: win32-foreign-thread-support.c $(CHEADERS)
+win32-foreign-thread-support.dll: win32-foreign-thread-support.o
+	$(CC) --shared -g -o $@ $<
+dll: win32-foreign-thread-support.dll
