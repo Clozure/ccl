@@ -6,6 +6,15 @@
 (unless (>= (parse-integer (software-version) :junk-allowed t) 10)
   (error "the Objective-C bridge needs at least Mac OS X 10.6"))
 
+(defloadvar *warned-deprecated-constructs* ())
+
+(defun warn-about-deprecated-objc-bridge-construct (whole alternative)
+  (let* ((construct (car whole)))
+    (unless (member construct *warned-deprecated-constructs*)
+      (push construct *warned-deprecated-constructs*)
+      (warn "~s, as used in ~s, is deprecated.  Use ~a instead."
+            construct whole alternative))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "BRIDGE"))
 
@@ -286,10 +295,24 @@
 (objc:defmethod #/init ((self ns-lisp-exception))
   (#/initWithName:reason:userInfo: self #@"lisp exception" #@"lisp exception" +null-ptr+))
 
+(defclass encapsulated-lisp-throw (ns::ns-exception)
+    ((id :foreign-type #>NSUInteger))
+  (:metaclass ns::+ns-object))
+
+(objc:defmethod #/init ((self encapsulated-lisp-throw))
+  (#/initWithName:reason:userInfo: self #@"encapsulated throw" #@"encapsulated-throw" +null-ptr+))
+
+(defun encapsulate-throw-info (info)
+  (let* ((els (make-instance 'encapsulated-lisp-throw)))
+    (setf (slot-value els 'id)
+          (assign-id-map-id *condition-id-map* info))
+    els))
 
 (defun recognize-objc-exception (x)
-  (if (typep x 'ns:ns-exception)
-    (ns-exception->lisp-condition x)))
+  (if (typep x 'encapsulated-lisp-throw)
+    (apply #'%throw (with-slots (id) x (id-map-object *condition-id-map* id)))
+    (if (typep x 'ns:ns-exception)
+      (ns-exception->lisp-condition x))))
 
 (pushnew 'recognize-objc-exception *foreign-error-condition-recognizers*)
 
@@ -429,6 +452,23 @@ instance variable."
       (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
   nil)
 
+(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer) 
+  ;; The callback glue reserves space for %rax at
+  ;; return-value-pointer-8, for %rdx at -16, for %xmm0 at -24.  Store
+  ;; encapsulated info about the throw in the %rax slot, the address
+  ;; of #_objc_exception_throw in the %rdx slot, the original return
+  ;; address in the %xmm0 slot, and force a return to the trampoline
+  ;; code above.
+  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
+        (%get-ptr return-value-pointer -16) (%get-ptr return-address-pointer 0)
+        (%get-ptr return-address-pointer 0) *x8664-objc-callback-error-return-trampoline*)
+  ;; A foreign entry point is always an integer on x8664.
+  (let* ((addr (%reference-external-entry-point (load-time-value (external "_objc_exception_throw")))))
+    (if (< addr 0)                      ;unlikely
+      (setf (%%get-signed-longlong return-value-pointer -24) addr)
+      (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
+  nil)
+
 
 )
 
@@ -450,6 +490,14 @@ instance variable."
   (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
     (setf (%get-unsigned-long return-value-pointer -12 ) addr))
   (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
+        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
+        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
+  nil)
+
+(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer)
+  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
+    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
+  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
         (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
         (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
   nil)

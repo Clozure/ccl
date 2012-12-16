@@ -688,4 +688,14 @@
 		   (:single-float (%get-single-float argptr 4))
 		   (:double-float (%get-double-float argptr 4)))))))))))
 
+(defx8632lapfunction %throw ()
+  (push-argregs)
+  (subl ($ x8632::fixnumone) (% nargs))
+  (lea (:@ (:^ @back) (% fn)) (% temp0))
+  (:talign 5)
+  (jmp-subprim .SPthrow)
+  @back
+  (recover-fn)
+  (uuo-error-reg-not-tag (% temp0) ($ x8632::subtag-catch-frame)))
+
 ;;; end of x86-def.lisp

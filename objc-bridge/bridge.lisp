@@ -1153,10 +1153,12 @@
 
 ;;; The SEND and SEND/STRET macros
 
-(defmacro send (o msg &rest args &environment env)
+(defmacro send (&whole w o msg &rest args &environment env)
+  (warn-about-deprecated-objc-bridge-construct w "#/ syntax")
   (make-optimized-send o msg args env))
 
-(defmacro send/stret (s o msg &rest args &environment env)
+(defmacro send/stret (&whole w s o msg &rest args &environment env)
+  (warn-about-deprecated-objc-bridge-construct w "#/ syntax")
   (make-optimized-send o msg args env s))
 
 

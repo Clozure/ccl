@@ -649,6 +649,8 @@
 
 
 
+        
+
 
 
 ;;; Initialize a jmp_buf so that when it's #_longjmp-ed to, it'll
@@ -2965,8 +2967,8 @@ argument lisp string."
 	  `(progn
 	    (defcallback ,impname
                 (:without-interrupts nil
-                 #+(and openmcl-native-threads (or apple-objc cocotron-objc)) :error-return
-                 #+(and openmcl-native-threads (or apple-objc cocotron-objc))  (condition objc-callback-error-return) ,@params ,resulttype)
+                 #+(and openmcl-native-threads (or apple-objc cocotron-objc)) :propagate-throw
+                 #+(and openmcl-native-threads (or apple-objc cocotron-objc))  objc-propagate-throw ,@params ,resulttype)
               (declare (ignorable ,_cmd))
               ,@decls
               (rlet ((,super :objc_super
@@ -3000,12 +3002,14 @@ argument lisp string."
 	     ,impname
 	     ,class-p)))))))
 
-(defmacro define-objc-method ((selector-arg class-arg)
+(defmacro define-objc-method (&whole w (selector-arg class-arg)
 			      &body body &environment env)
+  (warn-about-deprecated-objc-bridge-construct w "OBJC:DEFMETHOD")
   (objc-method-definition-form nil selector-arg class-arg body env))
 
-(defmacro define-objc-class-method ((selector-arg class-arg)
+(defmacro define-objc-class-method (&whole w (selector-arg class-arg)
 				     &body body &environment env)
+  (warn-about-deprecated-objc-bridge-construct w "OBJC:DEFMETHOD")
   (objc-method-definition-form t selector-arg class-arg body env))
 
 
@@ -3121,7 +3125,7 @@ argument lisp string."
                  ,class-p
                  ',result-type
                  ',(cddr arg-types))
-                (defcallback ,impname ( :error-return (,*objc-error-return-condition* objc-callback-error-return) ,@(arglist))
+                (defcallback ,impname ( :propagate-throw objc-propagate-throw ,@(arglist))
                   (declare (ignorable ,self-name)
                            (unsettable ,self-name)
                            ,@(unless class-p `((type ,lisp-class-name ,self-name))))
@@ -3151,64 +3155,7 @@ argument lisp string."
   #+(or apple-objc cocotron-objc) (#_method_getNumberOfArguments m)
   #+gnu-objc (#_method_get_number_of_arguments m))
 
-#+(and bad-idea (or apple-objc cocotron-objc))
-(progn
-(defloadvar *original-deallocate-hook* nil)
 
-;;; At one point in the past, an earlier version of
-;;; this code caused problems.  When a thread exits
-;;; and runs tls deallocation code, Mach used to remove
-;;; the message port that enabled it to respond to
-;;; asynchonous signals.  Some of that deallocation
-;;; code involved running this callback, and that meant
-;;; that callbacks were run on a thread that couldn't
-;;; be interrupted (and that could cause GC and other
-;;; problems.)
-;;; I don't know if that's still a problem; if it is,
-;;; we probably have to give up on this idea.
-;;; It's silly (and somewhat expensive) to call REMHASH
-;;; every time an NSObject gets freed; it's only necessary
-;;; to do this for instances of lisp-defined ObjC classes
-;;; that implement lisp slots.
-;;; One somewhat fascist approach would be:
-;;; - the user is prohibited from defining a dealloc method
-;;;   on their classes.
-;;; - for classes whose instances need lisp slot vectors,
-;;;   we automatically define a dealloc method which does
-;;;   the remhash and calls the next method.
-
-;;; ticket:706 suggests that people and libraries are using the
-;;; lisp-slot-on-foreign-object mechanism enough that it's
-;;; not acceptable to leave slot-vectors associated with (possibly
-;;; deallocated) NSObjects.  (Another, unrelated object gets created
-;;; at the same address as the deallocated object and winds up
-;;; getting the deallocated object's slot-vector.)
-(defcallback deallocate-nsobject (:address obj :void)
-  (declare (dynamic-extent obj))
-  (unless (%null-ptr-p obj)
-    (remhash obj *objc-object-slot-vectors*))
-  (ff-call *original-deallocate-hook* :address obj :void))
-
-(defun install-lisp-deallocate-hook ()
-  (let* ((class (@class "NSObject"))
-         (sel (@selector "dealloc")))
-    (setq *original-deallocate-hook* (#_class_getMethodImplementation class sel))
-    (with-cstrs ((types (encode-objc-method-arglist '(:id) :void)))
-      (#_class_replaceMethod class sel deallocate-nsobject types))))
-
-(def-ccl-pointers install-deallocate-hook ()
-  (install-lisp-deallocate-hook))
-
-(defun uninstall-lisp-deallocate-hook ()
-  (clrhash *objc-object-slot-vectors*)
-  (let* ((class (@class "NSObject"))
-         (sel (@selector "dealloc")))
-    (with-cstrs ((types (encode-objc-method-arglist '(:id) :void)))
-      (#_class_replaceMethod class sel *original-deallocate-hook* types))))
-
-(pushnew #'uninstall-lisp-deallocate-hook *save-exit-functions* :test #'eq
-         :key #'function-name)
-)
 
   
 
@@ -3293,14 +3240,20 @@ argument lisp string."
                                            :address)))
     (if (%null-ptr-p exception)
       (external-call "__NSRemoveHandler2" :address nshandler :void)
-      (error (ns-exception->lisp-condition (%inc-ptr exception 0))))))
+      (if (typep exception 'encapsulated-lisp-throw)
+        (apply #'%throw (with-slots (id) exception
+                          (id-map-object *condition-id-map* id)))
+        (error (ns-exception->lisp-condition (%inc-ptr exception 0)))))))
 
 #+cocotron-objc
 (defun check-ns-exception (xframe)
   (with-macptrs ((exception (pref xframe #>NSExceptionFrame.exception)))
     (if (%null-ptr-p exception)
       (external-call "__NSPopExceptionFrame" :address xframe :void)
-      (error (ns-exception->lisp-condition (%inc-ptr exception 0))))))
+      (if (typep exception 'encapsulated-lisp-throw)
+        (apply #'%throw (with-slots (id) exception
+                          (id-map-object *condition-id-map* id)))
+        (error (ns-exception->lisp-condition (%inc-ptr exception 0)))))))
 
 
 

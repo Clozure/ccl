@@ -2659,7 +2659,8 @@ defcallback returns the callback pointer, e.g., the value of name."
          (woi nil)
          (need-struct-arg)
          (struct-return-arg-name)
-         (error-return nil))
+         (error-return nil)
+         (propagate-throw nil))
     (collect ((arg-names)
               (arg-specs))
       (let* ((spec (car (last args)))
@@ -2681,11 +2682,16 @@ defcallback returns the callback pointer, e.g., the value of name."
               (setq error-return
                     (cadr args)                  
                     args (cddr args))
-              (if need-struct-arg
-                (setq struct-return-arg-name (pop args) need-struct-arg nil)
-                (progn
-                  (arg-specs (pop args))
-                  (arg-names (pop args))))))))
+              (if (eq (car args) :propagate-throw)
+                (setq propagate-throw (cadr args)
+                      args (cddr args))
+                (if need-struct-arg
+                  (setq struct-return-arg-name (pop args) need-struct-arg nil)
+                  (progn
+                    (arg-specs (pop args))
+                    (arg-names (pop args)))))))))
+      (when (and error-return propagate-throw)
+        (error "Can't specify both :ERROR-RETURN and :PROPAGATE-THROW in callback definition for ~s." name))
       (multiple-value-bind (rlets lets dynamic-extent-names inits foreign-return-type fp-args-form error-return-offset num-arg-bytes)
           (funcall (ftd-callback-bindings-function *target-ftd*)
                    stack-ptr fp-args-ptr (arg-names) (arg-specs) result-type-spec struct-return-arg-name)
@@ -2727,6 +2733,7 @@ defcallback returns the callback pointer, e.g., the value of name."
                                             struct-return-arg-name
                                             error-return
                                             error-return-offset
+                                            propagate-throw
                                             ))))))
                 ,doc
               ,woi
@@ -2735,7 +2742,7 @@ defcallback returns the callback pointer, e.g., the value of name."
 
 (defun defcallback-body (&rest args)
   (declare (dynamic-extent args))
-  (destructuring-bind (stack-ptr fp-args-ptr lets rlets inits dynamic-extent-decls other-decls body return-type struct-return-arg error-return error-delta) args
+  (destructuring-bind (stack-ptr fp-args-ptr lets rlets inits dynamic-extent-decls other-decls body return-type struct-return-arg error-return error-delta propagate-throw) args
     (declare (ignorable dynamic-extent-decls))
     (let* ((condition-name (if (atom error-return) 'error (car error-return)))
            (error-return-function (if (atom error-return) error-return (cadr error-return)))
@@ -2777,7 +2784,17 @@ defcallback returns the callback pointer, e.g., the value of name."
               (declare (dynamic-extent ,handler))
               (handler-bind ((,condition-name ,handler))
                 (values ,body)))))
-        body))))
+        (if propagate-throw
+          (let* ((throw-context (gensym))
+                 (block (gensym)))
+            `(block ,block
+              (unwind-protect
+                   (progn ,body)
+                (let* ((,throw-context (%throwing-through-cleanup-p)))
+                  (when ,throw-context
+                    (,propagate-throw ,throw-context ,stack-ptr (%inc-ptr ,stack-ptr ,error-delta))
+                    (return-from ,block nil))))))
+          body)))))
 
 
 (defmacro define-toplevel-command (group-name name arglist &body body &environment env)

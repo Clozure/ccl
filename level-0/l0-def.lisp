@@ -259,4 +259,62 @@
   (%fixnum-set-natural fixnum (if newval-p offset 0) (%ptr-to-int newval))
   newval)
 
+(defun nth-catch-frame-tag (n)
+  (declare (fixnum n))
+  (let* ((frame (%catch-top (%current-tcr))))
+    (dotimes (i n (%svref frame target::catch-frame.catch-tag-cell))
+      (setq frame (%svref frame target::catch-frame.link-cell)))))
+
+;;; This function is magic, and it can only be called from
+;;; an unwind-protect cleanup form (making it even more magic.)
+;;; If we can tell that we reached the unwind-protect via THROW,
+;;; return a list of the target catch tag and all values being
+;;; thrown.
+#+x86-target
+(defun %throwing-through-cleanup-p ()
+  ;; when we enter and unwind-protect cleanup on x8664, the
+  ;; top frame on the tstack contains state information that's
+  ;; used both by THROW and by normal exit from the protected
+  ;; form.  That state information contains a count of the number
+  ;; of catch/unwind-protect frames still to be processed (non-zero
+  ;; only in the case where we're actually throwing), the value(s)
+  ;; being thrown, and a return address that isn't interesting to
+  ;; us.  It's an historical accident that that information is stored
+  ;; differently in the cases where a single value is being thrown
+  ;; and multiple values are thrown.
+  ;; A tstack frame is always doubleword aligned, and the first two
+  ;; words are a backpointer to the previous tstack frame and a
+  ;; pointer into the main lisp stack.  In the single value case,
+  ;; we then have 3 words: return address, frame count, value;
+  ;; in the multiple-value we have 3 fixed words (value count,
+  ;; return address, frame count) with the values following the
+  ;; frame count (value 0 follows immediately.)
+  ;; A cleanup form is always called from either .SPnthrowvalues
+  ;; of .SPnthrow1value, and those subprims can be called either
+  ;; by .SPthrow (in which case the return address in the frame
+  ;; will have no function associated with it) or by Lisp code
+  ;; (in which case it will.)
+  ;; We (have to) just assume that the frame on top of the temp
+  ;; stack is context info for the nthrow stuff.  Tracing this
+  ;; function may violate this assumption and cause misbehavior
+  ;; here.
+  (let* ((frame (%current-tsp))
+         (single-value-case (not (typep (%lisp-word-ref frame 2) 'fixnum)))
+         (frame-count (%lisp-word-ref frame (if single-value-case 3 4)))
+         (throwing (null (%return-address-function (if single-value-case
+                                                     (%lisp-word-ref frame 2)
+                                                     (%lisp-word-ref frame 3))))))
+    (declare (fixnum frame))
+    (if throwing
+      (collect ((info))
+        (info (nth-catch-frame-tag frame-count))
+        (if single-value-case
+          (info (%lisp-word-ref frame 4))
+          (let* ((valptr (+ frame 5)))
+            (declare (fixnum valptr))
+            (dotimes (i (%lisp-word-ref frame 2))
+              (declare (fixnum i))
+              (info (%lisp-word-ref valptr i)))))
+        (info)))))
+
 ;;; end of l0-def.lisp
