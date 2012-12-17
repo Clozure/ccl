@@ -1872,16 +1872,16 @@ _spentry(misc_alloc)
 
 
 
-/* This doesn't need to memoize anything, but needs pc-lusering support
-   support because of the locative */
 _spentry(atomic_incf_node)
-        __(unbox_fixnum(imm1,arg_z))
-0:      __(add imm2,arg_y,imm1)
-        __(ldrex arg_z,[imm2])
+        __(build_lisp_frame(imm0))
+        __(add lr,arg_y,arg_z,asr #fixnumshift)
+0:      __(ldrex arg_z,[lr])
         __(add arg_z,arg_z,arg_x)
-        __(strex imm0,arg_z,[imm2])
+        __(strex imm0,arg_z,[lr])
         __(cmp imm0,#0)
         __(bne 0b)
+       /* Return this way, to get something else in the lr */
+        __(restore_lisp_frame(imm0))
         __(bx lr)
         
 _spentry(unused1)
