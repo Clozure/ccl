@@ -3029,7 +3029,7 @@
 		   (remove-dll-node copy)
 		   (if pushed-reg-is-set
 		     (insert-dll-node-after copy push-vinsn)
-		     (insert-dll-node-before copy push-vinsn))))
+		     (insert-dll-node-before copy pop-vinsn))))
 	       (elide-vinsn push-vinsn)
 	       (elide-vinsn pop-vinsn))
 	      ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
