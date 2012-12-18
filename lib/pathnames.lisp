@@ -98,7 +98,7 @@
   file, then the associated file is renamed."
   (let* ((original (truename file))
 	 (original-namestring (native-translated-namestring original))
-	 (new-name (merge-pathnames new-name original))
+	 (new-name (merge-pathnames new-name (merge-pathnames file)))
 	 (new-namestring (native-translated-namestring new-name)))
     (unless new-namestring
       (error "~S can't be created." new-name))
