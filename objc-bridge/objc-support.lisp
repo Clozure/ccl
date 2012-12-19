@@ -256,6 +256,115 @@
 (setup-objc-exception-globals)
 )
 
+#+(or apple-objc cocotron-objc)         ; not really
+(progn
+
+
+#+ppc-target
+(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
+  ;; On PPC, the "address" of an external entry point is always
+  ;; aligned on a 32-bit word boundary.  On PPC32, it can always
+  ;; be represented as a fixnum; on PPC64, it might be a pointer
+  ;; instead.
+  ;; Note that this clobbers the actual (foreign) return address,
+  ;; replacing it with the address of #__NSRaiseError.  Note also
+  ;; that storing the NSException object as the return value has
+  ;; the desired effect of causing #__NSRaiseError to be called
+  ;; with that NSException as its argument (because r3 is used both
+  ;; as the canonical return value register and used to pass the
+  ;; first argument on PPC.)
+  (process-debug-condition *current-process* condition (%get-frame-ptr))
+  (let* ((addr (%reference-external-entry-point (load-time-value (external "__NSRaiseError")))))
+    (if (typep addr 'fixnum)
+      (%set-object return-address-pointer 0 addr)
+      (setf (%get-ptr return-address-pointer 0) addr)))
+  (setf (%get-ptr return-value-pointer 0) (ns-exception condition))
+  nil)
+
+#+x8664-target
+(progn
+(defloadvar *x8664-objc-callback-error-return-trampoline*
+    (let* ((code-bytes '(#x48 #x89 #xc7      ; movq %rax %rdi
+                         #x66 #x48 #x0f #x7e #xc0 ; movd %xmm0,%rax
+                         #x52                ; pushq %rdx
+                         #xff #xe0))         ; jmp *rax
+           (nbytes (length code-bytes))
+           (ptr (%allocate-callback-pointer 16)))
+      (dotimes (i nbytes ptr)
+        (setf (%get-unsigned-byte ptr i) (pop code-bytes)))))
+
+(defun objc-callback-error-return (condition return-value-pointer return-address-pointer) 
+  ;; The callback glue reserves space for %rax at return-value-pointer-8,
+  ;; for %rdx at -16, for %xmm0 at -24.  Store NS-EXCEPTION in the
+  ;; %rax slot, the address of #_objc_exception_throw in the %rdx slot, the
+  ;; original return address in the %xmm0 slot, and force a return to
+  ;; the trampoline code above.
+  (process-debug-condition *current-process* condition (%get-frame-ptr))
+  (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
+        (%get-ptr return-value-pointer -16) (%get-ptr return-address-pointer 0)
+        (%get-ptr return-address-pointer 0) *x8664-objc-callback-error-return-trampoline*)
+  ;; A foreign entry point is always an integer on x8664.
+  (let* ((addr (%reference-external-entry-point (load-time-value (external "_objc_exception_throw")))))
+    (if (< addr 0)                      ;unlikely
+      (setf (%%get-signed-longlong return-value-pointer -24) addr)
+      (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
+  nil)
+
+(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer) 
+  ;; The callback glue reserves space for %rax at
+  ;; return-value-pointer-8, for %rdx at -16, for %xmm0 at -24.  Store
+  ;; encapsulated info about the throw in the %rax slot, the address
+  ;; of #_objc_exception_throw in the %rdx slot, the original return
+  ;; address in the %xmm0 slot, and force a return to the trampoline
+  ;; code above.
+  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
+        (%get-ptr return-value-pointer -16) (%get-ptr return-address-pointer 0)
+        (%get-ptr return-address-pointer 0) *x8664-objc-callback-error-return-trampoline*)
+  ;; A foreign entry point is always an integer on x8664.
+  (let* ((addr (%reference-external-entry-point (load-time-value (external "_objc_exception_throw")))))
+    (if (< addr 0)                      ;unlikely
+      (setf (%%get-signed-longlong return-value-pointer -24) addr)
+      (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
+  nil)
+
+
+)
+
+#+x8632-target
+(progn
+
+(defloadvar *x8632-objc-callback-error-return-trampoline*
+    (let* ((code-bytes '(#x83 #xec #x10      ; subl $16,%esp
+                         #x89 #x04 #x24      ; movl %eax,(%esp)
+                         #x52                ; pushl %edx
+                         #xff #xe1))         ; jmp *ecx
+           (nbytes (length code-bytes))
+           (ptr (%allocate-callback-pointer 16)))
+      (dotimes (i nbytes ptr)
+        (setf (%get-unsigned-byte ptr i) (pop code-bytes)))))
+
+(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
+  (process-debug-condition *current-process* condition (%get-frame-ptr))
+  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
+    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
+  (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
+        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
+        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
+  nil)
+
+(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer)
+  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
+    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
+  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
+        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
+        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
+  nil)
+)
+
+)
+
+
+
 
 (defvar *condition-id-map* (make-id-map) "Map lisp conditions to small integers")
 
@@ -396,114 +505,6 @@ instance variable."
   ;;(#_NSLog #@"Lisp exception: %@" :id (%make-nsstring (format nil "~a" c)))
   (make-instance 'ns-lisp-exception :condition c))
 
-
-
-#+(or apple-objc cocotron-objc)         ; not really
-(progn
-
-
-#+ppc-target
-(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
-  ;; On PPC, the "address" of an external entry point is always
-  ;; aligned on a 32-bit word boundary.  On PPC32, it can always
-  ;; be represented as a fixnum; on PPC64, it might be a pointer
-  ;; instead.
-  ;; Note that this clobbers the actual (foreign) return address,
-  ;; replacing it with the address of #__NSRaiseError.  Note also
-  ;; that storing the NSException object as the return value has
-  ;; the desired effect of causing #__NSRaiseError to be called
-  ;; with that NSException as its argument (because r3 is used both
-  ;; as the canonical return value register and used to pass the
-  ;; first argument on PPC.)
-  (process-debug-condition *current-process* condition (%get-frame-ptr))
-  (let* ((addr (%reference-external-entry-point (load-time-value (external "__NSRaiseError")))))
-    (if (typep addr 'fixnum)
-      (%set-object return-address-pointer 0 addr)
-      (setf (%get-ptr return-address-pointer 0) addr)))
-  (setf (%get-ptr return-value-pointer 0) (ns-exception condition))
-  nil)
-
-#+x8664-target
-(progn
-(defloadvar *x8664-objc-callback-error-return-trampoline*
-    (let* ((code-bytes '(#x48 #x89 #xc7      ; movq %rax %rdi
-                         #x66 #x48 #x0f #x7e #xc0 ; movd %xmm0,%rax
-                         #x52                ; pushq %rdx
-                         #xff #xe0))         ; jmp *rax
-           (nbytes (length code-bytes))
-           (ptr (%allocate-callback-pointer 16)))
-      (dotimes (i nbytes ptr)
-        (setf (%get-unsigned-byte ptr i) (pop code-bytes)))))
-
-(defun objc-callback-error-return (condition return-value-pointer return-address-pointer) 
-  ;; The callback glue reserves space for %rax at return-value-pointer-8,
-  ;; for %rdx at -16, for %xmm0 at -24.  Store NS-EXCEPTION in the
-  ;; %rax slot, the address of #_objc_exception_throw in the %rdx slot, the
-  ;; original return address in the %xmm0 slot, and force a return to
-  ;; the trampoline code above.
-  (process-debug-condition *current-process* condition (%get-frame-ptr))
-  (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
-        (%get-ptr return-value-pointer -16) (%get-ptr return-address-pointer 0)
-        (%get-ptr return-address-pointer 0) *x8664-objc-callback-error-return-trampoline*)
-  ;; A foreign entry point is always an integer on x8664.
-  (let* ((addr (%reference-external-entry-point (load-time-value (external "_objc_exception_throw")))))
-    (if (< addr 0)                      ;unlikely
-      (setf (%%get-signed-longlong return-value-pointer -24) addr)
-      (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
-  nil)
-
-(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer) 
-  ;; The callback glue reserves space for %rax at
-  ;; return-value-pointer-8, for %rdx at -16, for %xmm0 at -24.  Store
-  ;; encapsulated info about the throw in the %rax slot, the address
-  ;; of #_objc_exception_throw in the %rdx slot, the original return
-  ;; address in the %xmm0 slot, and force a return to the trampoline
-  ;; code above.
-  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
-        (%get-ptr return-value-pointer -16) (%get-ptr return-address-pointer 0)
-        (%get-ptr return-address-pointer 0) *x8664-objc-callback-error-return-trampoline*)
-  ;; A foreign entry point is always an integer on x8664.
-  (let* ((addr (%reference-external-entry-point (load-time-value (external "_objc_exception_throw")))))
-    (if (< addr 0)                      ;unlikely
-      (setf (%%get-signed-longlong return-value-pointer -24) addr)
-      (setf (%%get-unsigned-longlong return-value-pointer -24) addr)))
-  nil)
-
-
-)
-
-#+x8632-target
-(progn
-
-(defloadvar *x8632-objc-callback-error-return-trampoline*
-    (let* ((code-bytes '(#x83 #xec #x10      ; subl $16,%esp
-                         #x89 #x04 #x24      ; movl %eax,(%esp)
-                         #x52                ; pushl %edx
-                         #xff #xe1))         ; jmp *ecx
-           (nbytes (length code-bytes))
-           (ptr (%allocate-callback-pointer 16)))
-      (dotimes (i nbytes ptr)
-        (setf (%get-unsigned-byte ptr i) (pop code-bytes)))))
-
-(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
-  (process-debug-condition *current-process* condition (%get-frame-ptr))
-  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
-    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
-  (setf (%get-ptr return-value-pointer -8) (ns-exception condition)
-        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
-        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
-  nil)
-
-(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer)
-  (let* ((addr (%reference-external-entry-point (load-time-value (external #+cocotron-objc "_NSRaiseException" #-cocotron-objc "__NSRaiseError")))))
-    (setf (%get-unsigned-long return-value-pointer -12 ) addr))
-  (setf (%get-ptr return-value-pointer -8) (encapsulate-throw-info throw-info)
-        (%get-ptr return-value-pointer -4) (%get-ptr return-address-pointer)
-        (%get-ptr return-address-pointer) *x8632-objc-callback-error-return-trampoline*)
-  nil)
-)
-
-)
 
 
 
