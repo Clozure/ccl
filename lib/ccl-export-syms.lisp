@@ -722,6 +722,8 @@
      *terminal-character-encoding-name*
      *default-file-character-encoding*
      *default-socket-character-encoding*
+     define-character-encoding-alias
+     remove-character-encoding-alias
      ;; Mapped files.
      map-file-to-ivector
      map-file-to-octet-vector

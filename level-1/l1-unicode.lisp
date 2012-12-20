@@ -188,6 +188,45 @@
                                                        (lookup-character-encoding encoding))))
                                            (if enc (character-encoding-name enc) encoding))))
   code)
+
+
+(defun remove-character-encoding-alias (alias)
+  "(REMOVE-CHARACTER-ENCODING-ALIAS alias)
+alias - a keyword which is an alias for a defined character encoding.
+Makes the keyword cease to be an alias for that encoding and returns T."
+  (let* ((encoding (get-character-encoding alias))
+         (aliases (character-encoding-aliases encoding)))
+    (if (not (member alias aliases))
+      (error "~S is not an alias for ~s." alias encoding)
+      (progn
+        (setf (character-encoding-aliases encoding)
+              (remove alias aliases))
+        (remhash alias *character-encodings*)
+        t))))
+              
+  
+(defun define-character-encoding-alias (alias existing)
+  "(DEFINE-CHARACTER-ENCODING-ALIAS alias existing)
+alias - a keyword
+existing - a defined character encoding or a keyword that names one.
+Tries to make alias an alias for the existing encoding and returns
+that encoding."
+  (check-type alias keyword)
+  (let* ((canonical-encoding (ensure-character-encoding existing))
+         (current (lookup-character-encoding alias)))
+    (unless (eq current canonical-encoding)
+      (if (and current
+               (eq alias (character-encoding-name current)))
+        (error "Can't make ~s an alias for ~s, since it already names ~s."
+               alias existing current)
+        (progn
+          (when current
+            (setf (character-encoding-aliases current)
+                  (remove alias (character-encoding-aliases current))))
+          (pushnew alias (character-encoding-aliases canonical-encoding))
+          (setf (get-character-encoding alias) canonical-encoding))))
+    canonical-encoding))
+
                           
 ;;; N.B.  (ccl:nfunction <name> (lambda (...) ...)) is just  like
 ;;;       (cl:function (lambda (...) ...)), except that the resulting
@@ -6519,13 +6558,11 @@ mark."
                                
                (setq emacs-name (subseq emacs-name 0 (- len 4))))))
         (let* ((key (intern (string-upcase emacs-name) "KEYWORD"))
-               (encoding (get-character-encoding key)))
+               (encoding (lookup-character-encoding key)))
           (if encoding
             (make-external-format :character-encoding (character-encoding-name encoding)
                                   :line-termination line-termination)
-            ;; Might be some cases where the Emacs name differs
-            ;; from ours, but can't think of any.
-            ))))
+            (warn "file CODING option ~s isn't recognized as the name of a character encoding.~&Consider using ~S to define ~S as an alias for a supported encoding." key key)))))
   
 (defun external-format-from-file-options (line)
   (process-file-coding-option (getf (parse-file-options-line line) :coding)
@@ -6538,4 +6575,4 @@ mark."
       (cond ((or (eql octet (char-code #\linefeed))
                  (eql octet (char-code #\return)))
              (return (external-format-from-file-options (%str-from-ptr buf i))))))))
-            
+
