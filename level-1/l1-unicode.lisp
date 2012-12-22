@@ -6562,7 +6562,7 @@ mark."
           (if encoding
             (make-external-format :character-encoding (character-encoding-name encoding)
                                   :line-termination line-termination)
-            (warn "file CODING option ~s isn't recognized as the name of a character encoding.~&Consider using ~S to define ~S as an alias for a supported encoding." key key)))))
+            (warn "file CODING option ~s isn't recognized as the name of a character encoding.~&Consider using ~S to define ~S as an alias for a supported encoding." key 'define-character-encoding-alias key)))))
   
 (defun external-format-from-file-options (line)
   (process-file-coding-option (getf (parse-file-options-line line) :coding)
