@@ -17,13 +17,13 @@ SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 VPATH = ..
 RM = /bin/rm
-AS = /usr/sfw/bin/gas
+AS = gas
 # In earlier OpenSolaris releases, the bundled GNU m4 didn't work to
 # build the lisp kernel.  In the 2009.06 release, /usr/bin/gm4 seems 
 # to be adequate, but if m4 gives you any trouble, just download
 # the GNU m4 source from somewhere and use that.
-M4 = /usr/bin/gm4
-CC = /usr/sfw/bin/gcc
+M4 = gm4
+CC = gcc
 ASFLAGS = --32 --divide
 M4FLAGS = -DSOLARIS -DX86 -DX8632
 CDEFINES = -DSOLARIS -D_REENTRANT -DX86 -DX8632 -D__EXTENSIONS__ -DHAVE_TLS -DSVN_REVISION=$(SVN_REVISION) #-DDISABLE_EGC
