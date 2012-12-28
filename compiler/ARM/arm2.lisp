@@ -1756,9 +1756,11 @@
           (! trap-unless-fixnum unscaled-j)))
       (with-imm-target () dim1
         (let* ((idx-reg ($ arm::arg_y)))
-          (if safe                  
-            (! check-2d-bound dim1 unscaled-i unscaled-j src)
-            (! 2d-dim1 dim1 src))
+          (progn
+            (if safe                  
+              (! check-2d-bound dim1 unscaled-i unscaled-j src)
+              (! 2d-dim1 dim1 src))
+            (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
           (let* ((v ($ arm::arg_x)))
             (! array-data-vector-ref v src)
             (arm2-vset1 seg vreg xfer type-keyword v idx-reg nil val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval t)))))))
