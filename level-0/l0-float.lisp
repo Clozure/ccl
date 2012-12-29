@@ -887,8 +887,8 @@
     (complex
       (let ((sqrt-1-x (sqrt (- 1 x)))
             (sqrt-1+x (sqrt (+ 1 x))))
-        (complex (atan (/ (realpart x)
-                          (realpart (* sqrt-1-x sqrt-1+x))))
+        (complex (atan (realpart x)
+                       (realpart (* sqrt-1-x sqrt-1+x)))
                  (asinh (imagpart (* (conjugate sqrt-1-x)
                                      sqrt-1+x))))))
     (double-float
@@ -929,19 +929,13 @@
   (defconstant single-float-half-pi (asin 1.0f0))
 )
 
-
-
 (defun acos (x)
   "Return the arc cosine of NUMBER."
   (number-case x
     (complex
-     (let ((sqrt-1+x (sqrt (+ 1 x)))
-	   (sqrt-1-x (sqrt (- 1 x))))
-       (complex (* 2 (atan (/ (realpart sqrt-1-x)
-			      (realpart sqrt-1+x))))
-		(asinh (imagpart (* (conjugate sqrt-1+x)
-				    sqrt-1-x))))))
-    
+     (if (typep (realpart x) 'double-float)
+       (- double-float-half-pi (asin x))
+       (- single-float-half-pi (asin x))))
     (double-float
      (locally (declare (type double-float x))
        (if (and (<= -1.0d0 x)
