@@ -185,8 +185,7 @@
 	     (initial-function (lisp-thread.initial-function.args thread)))
 	(tcr-clear-preset-state tcr)
 	(%set-tcr-toplevel-function tcr nil)
-	(setf (interrupt-level) 0)
-	(apply (car initial-function) (cdr initial-function))
+        (apply (car initial-function) (cdr initial-function))
 	(cleanup-thread-tcr thread tcr))))
 
 (defun init-thread-from-tcr (tcr thread)

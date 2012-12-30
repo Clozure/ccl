@@ -356,8 +356,9 @@ a given process."
 	  (let* ((*current-process* process))
 	    (add-to-all-processes process)
             (with-initial-bindings (process-initial-bindings process)
-              (with-process-whostate ("Active")
-                (run-process-initial-form process initial-form)))))
+              (with-interrupts-enabled
+                  (with-process-whostate ("Active")
+                    (run-process-initial-form process initial-form))))))
       process
       initial-form)
      process))
