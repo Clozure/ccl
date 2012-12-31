@@ -2272,11 +2272,11 @@ argument lisp string."
 	    (- (apply #'max (mapcar #'(lambda (i) (+ (cadr i) (caddr i)))
 				    arg-info))
 	       objc-forwarding-stack-offset)))
-      (format nil "~a~d~:{~a~d~}"
-	      (encode-objc-type
-	       (parse-foreign-type result-spec))
-	      max-parm-end
-	      arg-info))))
+      (with-standard-io-syntax
+	(format nil "~a~d~:{~a~d~}"
+		(encode-objc-type (parse-foreign-type result-spec))
+		max-parm-end
+		arg-info)))))
 
 #+x86-target
 (defun encode-objc-method-arglist (arglist result-spec)
@@ -2298,11 +2298,11 @@ argument lisp string."
 		    (push (list (encode-objc-type arg) offset) result)
                     (setq offset (* target::node-size (ceiling (+ offset delta) target::node-size))))))))
     (let* ((max-parm-end offset))
-      (format nil "~a~d~:{~a~d~}"
-	      (encode-objc-type
-	       (parse-foreign-type result-spec))
-	      max-parm-end
-	      arg-info))))
+      (with-standard-io-syntax
+	(format nil "~a~d~:{~a~d~}"
+		(encode-objc-type (parse-foreign-type result-spec))
+		max-parm-end
+		arg-info)))))
 
 ;;; In Apple Objc, a class's methods are stored in a (-1)-terminated
 ;;; vector of method lists.  In GNU ObjC, method lists are linked
