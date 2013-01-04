@@ -678,6 +678,7 @@
     x
     (truncate x y)))
 
+
 (defun *-2 (x y)
   ;(declare (optimize (speed 3)(safety 0)))
   (flet ((integer*ratio (x y)
@@ -708,14 +709,21 @@
                       (rational (sfloat-rat * x y))
                       (complex (complex*real y x))))
       (bignum (number-case y
-                (fixnum (multiply-bignum-and-fixnum x y))
+                (fixnum
+                 (if (eql y target::target-most-negative-fixnum)
+                   (with-small-bignum-buffers ((by y))
+                     (multiply-bignums x by))
+                   (multiply-bignum-and-fixnum x y)))
                 (bignum (multiply-bignums x y))
                 (double-float (dfloat-rat * y x))
                 (short-float (sfloat-rat * y x))
                 (ratio (integer*ratio x y))
                 (complex (complex*real y x))))
       (fixnum (number-case y
-                (bignum (multiply-bignum-and-fixnum y x))
+                (bignum (if (eql x target::target-most-negative-fixnum)
+                          (with-small-bignum-buffers ((bx x))
+                            (multiply-bignums y bx))
+                          (multiply-bignum-and-fixnum y x)))
                 (fixnum (multiply-fixnums (the fixnum x) (the fixnum y)))
                 (short-float (sfloat-rat * y x))
                 (double-float (dfloat-rat * y x))
