@@ -720,6 +720,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmethod make-instance ((class objc:objc-class-object) &rest initargs)
+  (setq initargs (default-initargs class initargs))
   (let ((instance (apply #'allocate-instance class initargs)))
     (if (%null-ptr-p instance)
       instance
