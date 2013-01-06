@@ -138,10 +138,12 @@
                      (let* ((flags (objc-method-info-flags method)))
                        (not (or (memq :class flags)
                                 (memq :protocol flags)))))
-            (let* ((class (canonicalize-registered-class
-                           (find-objc-class (objc-method-info-class-name method)))))
-              (pushnew keyinfo (gethash class *class-init-keywords*)
-                       :test #'equal))))))))
+	    (with-cstrs ((s (objc-method-info-class-name method)))
+	      (unless (%null-ptr-p (#_objc_lookUpClass s))
+		(let* ((class (canonicalize-registered-class
+			       (find-objc-class (objc-method-info-class-name method)))))
+		  (pushnew keyinfo (gethash class *class-init-keywords*)
+			   :test #'equal))))))))))
 
 (register-objc-init-messages)
 (register-objc-set-messages)
