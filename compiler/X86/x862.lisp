@@ -5757,7 +5757,7 @@
         (setq vstack (x862-set-vstack (x862-unwind-stack seg $backend-return 0 0 #x7fffff)))
         (if *x862-returning-values*
           (cond ((and mask foldp (setq label (%cdr (assq vstack *x862-valret-labels*))))
-                 (-> label))
+                 (! popj-via-jump (aref *backend-labels* label)))
                 (t
                  (@ (setq label (backend-get-next-label)))
                  (push (cons vstack label) *x862-valret-labels*)
@@ -5766,7 +5766,7 @@
           (if (null mask)
             (! popj)
             (if (and foldp (setq label (assq *x862-vstack* *x862-popreg-labels*)))
-              (-> (cdr label))
+              (! popj-via-jump (aref *backend-labels* (cdr label)))
               (let* ((new-label (backend-get-next-label)))
                 (@ new-label)
                 (push (cons *x862-vstack* new-label) *x862-popreg-labels*)

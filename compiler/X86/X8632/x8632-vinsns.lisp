@@ -496,6 +496,11 @@
   (leave)
   (ret))
 
+(define-x8632-vinsn (popj-via-jump :lispcontext :pop :vsp :lrRestore :jumpLR)
+    (()
+     ((lab :label)))
+  (jmp lab))
+
 (define-x8632-vinsn (restore-full-lisp-context :lispcontext :pop :vsp )
     (()
      ())
