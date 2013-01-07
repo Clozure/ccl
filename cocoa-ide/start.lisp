@@ -133,7 +133,7 @@
 	 (let* ((class (ccl::lookup-objc-class name nil)))
 	   (unless (ccl::objc-class-id  class) (push name missing))))))
     (when missing
-      (break "ObjC classes ~{~&~a~} are declared but not defined." missing)))
+      (warn "ObjC classes ~{~&~a~} are declared but not defined." missing)))
 
   #-cocotron
   (ccl::touch bundle-path)
