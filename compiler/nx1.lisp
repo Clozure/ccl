@@ -237,6 +237,7 @@
       (with-nx-declarations (pending)
         (multiple-value-bind (body decls) (parse-body body new-env)
           (nx-process-declarations pending decls)
+          (nx-effect-other-decls pending new-env)
           (nx1-progn-body context body))))))
 
 ;;; Does SYMBOL-MACROLET allow declarations ?  Yes ...
