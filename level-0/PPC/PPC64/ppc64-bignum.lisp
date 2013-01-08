@@ -149,7 +149,7 @@
     (rotldi imm0 imm0 32)
     (stdx imm0 result iidx)
     (la iidx 8 iidx)
-    (add i i '1)
+    (la i '1 i)
     @test
     (cmpd i rlen)
     (blt @loop)
