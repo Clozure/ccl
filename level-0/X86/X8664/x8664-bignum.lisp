@@ -35,40 +35,7 @@
   (movl (% imm0.l) (@ x8664::misc-data-offset (% bignum)))
   (single-value-return))
   
-;; multiply x[i] by y and add to result starting at digit idx
-(defx86lapfunction %multiply-and-add-loop
-    ((x 16) (y 8) #|(ra 0)|# (r arg_x) (idx arg_y) (ylen arg_z))
-  (let ((cc mm2)
-	(xx mm3)
-	(yy mm4)
-	(rr mm5)
-	(i imm0)
-	(j imm1))
-    (unbox-fixnum idx i)
-    (movq (@ x (% rsp)) (% temp0))
-    (movd (@ x8664::misc-data-offset (% temp0) (% i) 4) (% xx)) ;x[i]
-    (movq (@ y (% rsp)) (% temp0))
-    (movq (% r) (% temp1))
-    (pxor (% cc) (% cc))
-    (xorq (% j) (% j))
-    @loop
-    (movd (@ x8664::misc-data-offset (% temp0) (% j) 4) (% yy)) ;y[j]
-    (pmuludq (% xx) (% yy))
-    ;; 64-bit product now in %yy
-    (movd (@ x8664::misc-data-offset (% temp1) (% i) 4) (% rr))
-    ;; add in digit from r[i]
-    (paddq (% yy) (% rr))
-    ;; add in carry
-    (paddq (% cc) (% rr))
-    (movd (% rr) (@ x8664::misc-data-offset (% temp1) (% i) 4)) ;update r[i]
-    (movq (% rr) (% cc))
-    (psrlq ($ 32) (% cc))		;get carry digit into low word
-    (addq ($ 1) (% i))
-    (addq ($ 1) (% j))
-    (subq ($ '1) (% ylen))
-    (jg @loop)
-    (movd (% cc) (@ x8664::misc-data-offset (% temp1) (% i) 4))
-    (single-value-return 4)))
+
 
 (defx86lapfunction %multiply-and-add-loop64
     ((xs 16) (ys 8) #|(ra 0)|# (r arg_x) (i arg_y) (ylen arg_z))
@@ -156,6 +123,41 @@
     (pushq (% low))
     (set-nargs 2)
     (jmp-subprim .SPvalues)))
+
+
+(defx86lapfunction %multiply-and-add-fixnum-loop ((len64 8) #||(ra 0)||# (x arg_x) (y arg_y) (result arg_z))
+  (let ((carry imm2)
+        (i temp0)
+        (rlen temp1))
+    (movq (@ len64 (% rsp)) (% rlen))
+    (xorl (%l carry) (%l carry))
+    (xorl (%l i) (%l i))
+    (jmp @test)
+    @loop
+    (unbox-fixnum y rax)
+    (mulq (@ x8664::misc-data-offset (% x) (% i)))
+    (addq (% carry) (% rax))
+    (adcq ($ 0) (% rdx))
+    (movq (% rdx) (% carry))
+    (movq (% rax) (@ x8664::misc-data-offset (% result) (% i)))
+    (addq ($ 8) (% i))
+    @test
+    (cmpq (% rlen) (% i))
+    (jl @loop)
+    (movq (% carry) (@ x8664::misc-data-offset (% result) (% i)))
+    (single-value-return 3)))
+    
+    
+
+    
+
+
+;;; Set the ith 64-bit digit of BIGNUM to R
+(defx86lapfunction %set-digit ((bignum arg_x) (i arg_y) (r arg_z))
+
+  (movq (@ x8664::misc-data-offset (% r)) (% imm0))
+  (movq (% imm0) (@ x8664::misc-data-offset (% bignum) (% i)))
+  (single-value-return))
 
 ;;; Return the (possibly truncated) 32-bit quotient and remainder
 ;;; resulting from dividing hi:low by divisor.
