@@ -36,42 +36,6 @@
   (std imm2 ppc64::misc-header-offset bignum)
   (blr))
   
-(defppclapfunction %multiply-and-add-loop
-    ((x 8) (y 0)  (r arg_x) (idx arg_y) (ylen arg_z))
-  (let ((cc nargs)
-	(xx imm2)
-	(yy imm3)
-	(rr imm4)
-	(i imm0)
-	(j imm1))
-    (srdi i idx 1)
-    (la i ppc64::misc-data-offset i)
-    (ld temp0 x vsp)
-    (lwzx xx temp0 i)			;x[i]
-    (ld temp0 y vsp)
-    (mr temp1 r)
-    (li cc 0)
-    (li j ppc64::misc-data-offset)
-    @loop
-    (lwzx yy temp0 j)
-    (mulld yy xx yy)
-    ;; 64-bit product now in %yy
-    (lwzx rr temp1 i)
-    ;; add in digit from r[i]
-    (add rr rr yy)
-    ;; add in carry
-    (add rr rr cc)
-    (stwx rr temp1 i)
-    (srdi cc rr 32) 		;get carry digit into low word
-    (cmpdi ylen '1)
-    (la i 4 i)
-    (la j 4 j)
-    (subi ylen ylen '1)
-    (bne  @loop)
-    (stwx cc temp1 i)
-    (set-nargs 0)
-    (la vsp 16 vsp)
-    (blr)))
 
 (defppclapfunction %multiply-and-add-loop64
     ((x 8) (y 0) (r arg_x) (idx arg_y) (ylen arg_z))
@@ -161,6 +125,39 @@
     (vpush low)
     (la temp0 '2 vsp)
     (ba .SPvalues)))
+
+(defppclapfunction %multiply-and-add-fixnum-loop ((len64 0) (x arg_x) (y arg_y) (result arg_z))
+  (let ((carry imm4)
+        (iidx imm3)
+        (unboxed-y imm0)
+        (i temp0)
+        (hi imm2)
+        (rlen temp1))
+    (vpop rlen)
+    (li carry 0)
+    (li iidx ppc64::misc-data-offset)
+    (li i 0)
+    (b @test)
+    @loop
+    (unbox-fixnum unboxed-y y)
+    (ldx imm1 x iidx)
+    (rotldi imm1 imm1 32)
+    (mulhdu hi imm1 unboxed-y)
+    (mulld imm0 imm1 unboxed-y)
+    (addc imm0 imm0 carry)
+    (addze carry hi)
+    (rotldi imm0 imm0 32)
+    (stdx imm0 result iidx)
+    (la iidx 8 iidx)
+    (add i i '1)
+    @test
+    (cmpd i rlen)
+    (blt @loop)
+    (rotldi carry carry 32)
+    (stdx carry result iidx)
+    (blr)))
+    
+    
 
 ;;; Return the (possibly truncated) 32-bit quotient and remainder
 ;;; resulting from dividing hi:low by divisor.
