@@ -4270,6 +4270,7 @@ _endsubp(builtin_aref1)
  * state here:  that is, tcr.node_regs_mask has its default value,
  * and the DF is clear.
  */
+        .globl C(ffcall_return)            
 _spentry(ffcall)
 LocalLabelPrefix`'ffcall:
 	__(unbox_fixnum(%arg_z,%imm0))
@@ -4307,6 +4308,7 @@ LocalLabelPrefix`'ffcall_setup:
         __endif
 LocalLabelPrefix`'ffcall_call:
 	__(call *%eax)
+C(ffcall_return):               
 	__ifdef(`WIN32_ES_HACK')
          __(movw tcr.ldt_selector(%ebx),%rcontext_reg)
         __endif

@@ -4072,6 +4072,7 @@ _endsubp(builtin_aref1)
 /*   When this returns, the foreign %rsp will contain its previous value, and  */
 /*   the function result will be in %rax (and possibly %rdx) or %xmm0 (+ %xmm1).  */
 
+        .globl C(ffcall_return)
 _spentry(ffcall)
 LocalLabelPrefix`'ffcall:                
         /* Unbox %arg_z.  It's either a fixnum or macptr (or bignum) ;
@@ -4135,6 +4136,7 @@ LocalLabelPrefix`'ffcall_setup:
 LocalLabelPrefix`'ffcall_setup_end: 
 LocalLabelPrefix`'ffcall_call:
 	__(call *%r11)
+C(ffcall_return):               
 LocalLabelPrefix`'ffcall_call_end:               
 	__ifdef(`WINDOWS')
 	__(add $0x20,%rsp)

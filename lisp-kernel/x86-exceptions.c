@@ -1728,6 +1728,20 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
   Boolean do_stack_switch = false;
   stack_t ss;
 
+  if ((tcr->valence != TCR_STATE_LISP) &&
+      (tcr->safe_ref_address) &&
+      ((signum == SIGBUS) || (signum == SIGSEGV))) {
+    extern opcode ffcall_return;
+    xpPC(context) = (natural)&ffcall_return;
+    xpGPR(context,Iimm0) = 0;
+    xpGPR(context,Isp) = (natural)(tcr->foreign_sp);
+    return;
+  }
+
+
+
+
+
 #if WORD_SIZE==64
   if ((signum == SIGFPE) && (tcr->valence != TCR_STATE_LISP)) {
     if (handle_foreign_fpe(tcr,context,info)) {
