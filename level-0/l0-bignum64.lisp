@@ -797,17 +797,7 @@
 
 (defun multiply-bignums (a b)
   (let* ((signs-differ (not (eq (bignum-minusp a) (bignum-minusp b)))))
-    (flet ((multiply-unsigned-bignums (a b)
-	     (let* ((len-a (%bignum-length a))
-		    (len-b (%bignum-length b))
-		    (len-res (+ len-a len-b))
-		    (res (%allocate-bignum len-res)))
-	       (declare (bignum-index len-a len-b len-res))
-	       (dotimes (i len-a)
-		 (declare (type bignum-index i))
-		 (%multiply-and-add-loop a b res i len-b))
-	       res))
-	   (multiply-unsigned-bignums64 (a b)
+    (flet ((multiply-unsigned-bignums64 (a b)
 	     (let* ((len-a (ceiling (%bignum-length a) 2))
 		    (len-b (ceiling (%bignum-length b) 2))
 		    (len-res (+ len-a len-b))
@@ -822,6 +812,7 @@
 	(if signs-differ (negate-bignum-in-place res))
 	(%normalize-bignum-macro res)))))
 
+#+old
 (defun multiply-bignum-and-fixnum (bignum fixnum)
   (declare (type bignum-type bignum) (fixnum fixnum))
   (if (eql fixnum 1)
@@ -829,105 +820,32 @@
     (with-small-bignum-buffers ((big-fix fixnum))
       (multiply-bignums bignum big-fix))))
 
-#+slower
 (defun multiply-bignum-and-fixnum (bignum fixnum)
   (declare (type bignum-type bignum) (fixnum fixnum))
   (if (eql fixnum 1)
     bignum
-    (if (eql fixnum target::target-most-negative-fixnum)
-      (with-small-bignum-buffers ((big-fix fixnum))
-        (multiply-bignums bignum big-fix))
-      (let* ((big-len (%bignum-length bignum))
-             (big-neg (bignum-minusp bignum))
-             (signs-differ (not (eq big-neg (minusp fixnum)))))
-        (flet ((multiply-unsigned-bignum-and-2-digit-fixnum (a len-a high low)
-                 (declare (bignum-type a)
-                          (bignum-element-type high low)
-                          (bignum-index len-a)
-                          (optimize (speed 3) (safety 0)))
-                 (let* ((len-res (+ len-a 2))
-                        (res (%allocate-bignum len-res)) )
-                   (declare (bignum-index len-a  len-res))
-                   (dotimes (i len-a)
-                     (declare (type bignum-index i))
-                     (let* ((carry-digit 0)
-                            (x (bignum-ref a i))
-                            (k i))
-                       (declare (fixnum k))
-                       (multiple-value-bind (big-carry res-digit)
-                           (%multiply-and-add4 x
-                                               low
-                                               (bignum-ref res k)
-                                               carry-digit)
-                         (setf (bignum-ref res k) res-digit
-                               carry-digit big-carry
-                               k (1+ k)))
-                       (multiple-value-bind (big-carry res-digit)
-                           (%multiply-and-add4 x
-                                               high
-                                               (bignum-ref res k)
-                                               carry-digit)
-                         (setf (bignum-ref res k) res-digit
-                               carry-digit big-carry
-                               k (1+ k)))
-                       (setf (bignum-ref res k) carry-digit)))
-                   res))
-               (multiply-unsigned-bignum-and-1-digit-fixnum (a len-a fix)
-                 (declare (bignum-type a)
-                          (bignum-element-type fix)
-                          (bignum-index len-a)
-                          (optimize (speed 3) (safety 0)))
-                 (let* ((len-res (+ len-a 1))
-                        (res (%allocate-bignum len-res)) )
-                   (declare (bignum-index len-a  len-res))
-                   (dotimes (i len-a)
-                     (declare (type bignum-index i))
-                     (let* ((carry-digit 0)
-                            (x (bignum-ref a i))
-                            (k i))
-                       (declare (fixnum k))
-                       (multiple-value-bind (big-carry res-digit)
-                           (%multiply-and-add4 x
-                                               fix
-                                               (bignum-ref res k)
-                                               carry-digit)
-                         (setf (bignum-ref res k) res-digit
-                               carry-digit big-carry
-                               k (1+ k)))
-                       (setf (bignum-ref res k) carry-digit)))
-                   res)))
-          (let* ((fixnum (if (< fixnum 0) (- fixnum) fixnum))
-                 (low (logand (1- (ash 1 32)) fixnum))
-                 (high (unless (<= (%fixnum-intlen fixnum) 32)
-                         (ldb (byte 32 32) fixnum)))
-                 (res (if big-neg
-                        (let* ((neg-len (1+ big-len)))
-                          (declare (type bignum-index neg-len))
-                          (with-bignum-buffers ((neg neg-len))
-                            (negate-bignum bignum nil neg)
-                            (setq neg-len (%bignum-length bignum))
-                            (if high
-                              (multiply-unsigned-bignum-and-2-digit-fixnum
-                               neg
-                               neg-len
-                               high
-                               low)
-                              (multiply-unsigned-bignum-and-1-digit-fixnum
-                               neg
-                               neg-len
-                               low))))
-                        (if high
-                          (multiply-unsigned-bignum-and-2-digit-fixnum
-                           bignum
-                           big-len
-                           high
-                           low)
-                          (multiply-unsigned-bignum-and-1-digit-fixnum
-                           bignum
-                           big-len
-                           low)))))
-            (if signs-differ (negate-bignum-in-place res))
-            (%normalize-bignum-macro res)))))))
+    (let* ((bignum-len (%bignum-length bignum))
+           (bignum-plus-p (bignum-plusp bignum))
+           (fixnum-plus-p (not (minusp fixnum)))
+           (negate-res (neq bignum-plus-p fixnum-plus-p)))
+      (declare (type bignum-type bignum)
+               (type bignum-index bignum-len))
+      (flet ((do-it (bignum fixnum  negate-res)
+               (let* ((bignum-len (%bignum-length bignum))
+                      (result (%allocate-bignum (the fixnum (+ bignum-len 2))))
+                      (len64 (ash (1+ bignum-len) -1)))
+                 (declare (type bignum-type bignum)
+                          (type bignum-index bignum-len len64))
+                 (%multiply-and-add-fixnum-loop len64 bignum fixnum result)
+                 (when negate-res
+                   (negate-bignum-in-place result))
+                 (%normalize-bignum-macro result ))))
+        (declare (dynamic-extent #'do-it))
+        (if bignum-plus-p
+          (do-it bignum (if fixnum-plus-p fixnum (- fixnum))  negate-res)
+          (with-bignum-buffers ((b1 (the fixnum (1+ bignum-len))))
+            (negate-bignum bignum nil b1)
+            (do-it b1 (if fixnum-plus-p fixnum (- fixnum))  negate-res)))))))
 
 
 ;; assume we already know result won't fit in a fixnum
