@@ -2661,7 +2661,7 @@ argument lisp string."
   (unless (%null-ptr-p p)
     (let* ((tag (tagged-objc-instance-p p)))
       (if tag
-	(objc-tagged-instance-class-index tag)
+	(objc-tagged-instance-class-index p tag)
 	(if (with-macptrs (q)
 	      (safe-get-ptr p q)
               (not (%null-ptr-p q)))

@@ -721,21 +721,37 @@ NSObjects describe themselves in more detail than others."
 (defmethod terminate ((instance objc:objc-object))
   (objc-message-send instance "release"))
 
-(defloadvar *tagged-instance-class-indices*
-  (let* ((alist ()))
-    ;; There should be a better way of doing this.  (A much better way.)
-      (let* ((instance (#/initWithInt: (#/alloc ns:ns-number) 0))
-	     (tag (tagged-objc-instance-p instance)))
-	(if tag
-	  (let* ((class (objc-message-send instance "class")))
-	    (unless (%null-ptr-p class)
-	      (install-foreign-objc-class class nil)
-	      (push (cons tag (objc-class-or-private-class-id class)) alist)))
-	  (#/release instance)))
-      alist))
+(defloadvar *tagged-instance-class-indices* ())
 
-(defun objc-tagged-instance-class-index (tag)
-  (cdr (assoc tag *tagged-instance-class-indices* :test #'eq)))
+(defun %safe-get-objc-class (instance)
+  (let* ((tcr (%current-tcr)))
+    (without-interrupts
+     (unwind-protect
+          (progn
+            (setf (%fixnum-ref tcr target::tcr.safe-ref-address) 1)
+            (objc-message-send instance "class"))
+       (setf (%fixnum-ref tcr target::tcr.safe-ref-address) 0)))))
+
+(defun lookup-tagged-instance-class (instance)
+  (let* ((tag (tagged-objc-instance-p instance)))
+    (if tag
+      (let* ((class (%safe-get-objc-class instance)))
+        (unless (%null-ptr-p class)
+          (install-foreign-objc-class class nil)
+          (let* ((idx (objc-class-or-private-class-id class)))
+            (atomic-push-uvector-cell (symptr->symvector '*tagged-instance-class-indices*)
+                                      target::symbol.vcell-cell
+                                      (cons tag idx))
+            idx))))))
+
+      
+
+
+(defun objc-tagged-instance-class-index (instance tag)
+  (or (cdr (assoc tag *tagged-instance-class-indices* :test #'eq))
+      (lookup-tagged-instance-class instance)))
+  
+
 
 
 (provide "OBJC-SUPPORT")
