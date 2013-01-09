@@ -271,21 +271,27 @@
 ;;; already been transformed.
 
 
-(defun transform-real-n-ary-comparision (whole binary-name)
+(defun transform-real-n-ary-comparision (whole binary-name )
   (destructuring-bind (n0 &optional (n1 0 n1-p) &rest more) (cdr whole)
     (if more
-      (if (cdr more)
+      (if (or (cdr more))               ; punt for now
         whole
         (let* ((n2 (car more))
                (n (gensym)))
-          `(let* ((,n ,n0))
-            (if (,binary-name ,n (setq ,n ,n1))
-              (,binary-name ,n ,n2)))))
+          (if (and (typep n0 'real) (typep n1 'real))
+            (let* ((result (funcall binary-name n0 n1)))
+              (if result
+                `(,binary-name ,n1 ,n2)
+                `(progn ,n2 nil)))
+            `(let* ((,n ,n0))
+              (if (,binary-name ,n (setq ,n ,n1))
+                (,binary-name ,n ,n2)
+                (progn ,n2 nil))))))
       (if (not n1-p)
         `(require-type ,n0 'real)
         `(,binary-name ,n0 ,n1)))))
 
-
+ç
 
 (define-compiler-macro < (&whole whole &rest ignore)
   (declare (ignore ignore))
