@@ -291,7 +291,7 @@
         `(require-type ,n0 'real)
         `(,binary-name ,n0 ,n1)))))
 
-ç
+
 
 (define-compiler-macro < (&whole whole &rest ignore)
   (declare (ignore ignore))
