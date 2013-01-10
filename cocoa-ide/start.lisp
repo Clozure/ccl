@@ -124,17 +124,6 @@
   #-cocotron				;needs conditionalization
   (require :easygui)
 
-  (ccl::maybe-map-objc-classes t)
-  (let* ((missing ()))
-    (ccl::do-interface-dirs (d)
-      (ccl::cdb-enumerate-keys
-       (ccl::db-objc-classes d)
-       (lambda (name)
-	 (let* ((class (ccl::lookup-objc-class name nil)))
-	   (unless (ccl::objc-class-id  class) (push name missing))))))
-    (when missing
-      (warn "ObjC classes ~{~&~a~} are declared but not defined." missing)))
-
   #-cocotron
   (ccl::touch bundle-path)
   (let ((kernel-file (make-pathname :name (ccl::standard-kernel-name) 
