@@ -1420,6 +1420,12 @@ shutdown_thread_tcr(void *arg)
     darwin_free_tcr(tcr);
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
+#ifdef HAVE_TLS
+    if (current_tcr == tcr) {
+      current_tcr = NULL;
+      memset(tcr,0,sizeof(tcr));
+    }
+#endif
   } else {
     tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
   }
