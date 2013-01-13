@@ -98,6 +98,8 @@ Will differ from *compiling-file* during an INCLUDE")
 (defparameter *fasl-package-qualified-symbols* '(*loading-file-source-file* set-package %define-package)
   "These symbols are always fasdumped with full package qualification.")
 
+(defvar *fasl-setf-name-alias-alist* ())
+
 (defun setup-target-features (backend features)
   (if (eq backend *host-backend*)
     features
@@ -232,6 +234,7 @@ Will differ from *compiling-file* during an INCLUDE")
            (*fcomp-external-format* (if (eq external-format :default)
                                       :inferred
                                       external-format))
+           (*fasl-setf-name-alias-alist* ())
            (forms nil))
       (let ((current *outstanding-deferred-warnings*) last)
         (when (and current
@@ -1452,9 +1455,26 @@ Will differ from *compiling-file* during an INCLUDE")
         (when init-form
           (fasl-scan-form compiled-initform))))))
 
+(defun fasl-setf-name-inverse-p (sym &optional create)
+  (or (cdr (assoc sym *fasl-setf-name-alias-alist*))
+      (and create
+           (let* (#+notyet (pname (symbol-name sym))
+                  #+notyet (namelen (length pname))
+                  (setf-for 
+                   (and #+notyet (> namelen 2)
+                        #+notyet (eql (schar pname 0) #\()
+                        #+notyet (eql (schar pname (1- namelen)) #\))
+                        (gethash sym %setf-function-name-inverses%))))
+           (when setf-for
+             (let* ((list `(,cfasl-load-time-eval-sym (setf-function-name ',setf-for))))
+               (fasl-scan-list list)
+               (push (cons sym list) *fasl-setf-name-alias-alist*)
+               list))))))
+  
 (defun fasl-scan-symbol (form)
-  (fasl-scan-ref form)
-  (fasl-scan-form (symbol-package form)))
+  (unless (fasl-setf-name-inverse-p form t)
+    (fasl-scan-ref form)
+    (fasl-scan-form (symbol-package form))))
   
 
 
@@ -1936,41 +1956,44 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
 (defun fasl-dump-symbol (sym)
-  (let* ((pkg (symbol-package sym))
-         (name (symbol-name sym))
-         (nextra (utf-8-extra-bytes name))
-         (ascii (eql nextra 0))
-         (idx (let* ((i (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.binding-index-cell)))
-                (declare (fixnum i))
-                (unless (zerop i) i))))
-    (cond ((null pkg) 
-           (progn 
-             (fasl-out-opcode (if idx
-                                (if ascii $fasl-nvmksym-special $fasl-vmksym-special)
-                                (if ascii $fasl-nvmksym $fasl-vmksym))
-                              sym)
-             (if ascii
-               (fasl-out-nvstring name)
-               (fasl-out-vstring name nextra))))
-          (*fasdump-epush*
-           (progn
-             (fasl-out-byte (fasl-epush-op (if idx
-                                             (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern-special)
-                                             (if ascii $fasl-nvpkg-intern $fasl-vpkg-intern))))
-             (fasl-dump-form pkg)
-             (fasl-dump-epush sym)
-             (if ascii
-               (fasl-out-nvstring name)
-               (fasl-out-vstring name nextra))))
-          (t
-           (progn
-             (fasl-out-byte (if idx
-                              (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern-special)
-                              (if ascii $fasl-nvpkg-intern $fasl-vpkg-intern)))
-             (fasl-dump-form pkg)
-             (if ascii
-               (fasl-out-nvstring name)
-               (fasl-out-vstring name nextra)))))))
+  (let* ((inverse (fasl-setf-name-inverse-p sym)))
+    (if inverse
+      (fasl-dump-form inverse)
+      (let* ((pkg (symbol-package sym))
+             (name (symbol-name sym))
+             (nextra (utf-8-extra-bytes name))
+             (ascii (eql nextra 0))
+             (idx (let* ((i (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.binding-index-cell)))
+                    (declare (fixnum i))
+                    (unless (zerop i) i))))
+        (cond ((null pkg) 
+               (progn 
+                 (fasl-out-opcode (if idx
+                                    (if ascii $fasl-nvmksym-special $fasl-vmksym-special)
+                                    (if ascii $fasl-nvmksym $fasl-vmksym))
+                                  sym)
+                 (if ascii
+                   (fasl-out-nvstring name)
+                   (fasl-out-vstring name nextra))))
+              (*fasdump-epush*
+               (progn
+                 (fasl-out-byte (fasl-epush-op (if idx
+                                                 (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern-special)
+                                                 (if ascii $fasl-nvpkg-intern $fasl-vpkg-intern))))
+                 (fasl-dump-form pkg)
+                 (fasl-dump-epush sym)
+                 (if ascii
+                   (fasl-out-nvstring name)
+                   (fasl-out-vstring name nextra))))
+              (t
+               (progn
+                 (fasl-out-byte (if idx
+                                  (if ascii $fasl-nvpkg-intern-special $fasl-vpkg-intern-special)
+                                  (if ascii $fasl-nvpkg-intern $fasl-vpkg-intern)))
+                 (fasl-dump-form pkg)
+                 (if ascii
+                   (fasl-out-nvstring name)
+                   (fasl-out-vstring name nextra)))))))))
 
 
 (defun fasl-unknown (exp)
