@@ -386,6 +386,38 @@
     (movd (% yy) (@ x8632::misc-data-offset (% arg_y)))
     (single-value-return 5)))
 
+
+(defx8632lapfunction %multiply-and-add-fixnum-loop ((len 8) (x 4) #||(ra 0)||# (y arg_y) (result arg_z))
+  (let ((savey mm0)
+        (savei mm1)
+        (carry temp0)
+        (i temp1)
+        (rx arg_y))
+    (unbox-fixnum y imm0)
+    (movd (% imm0) (% savey))
+    (mark-as-imm edx)
+    (mark-as-imm ebx)
+    (mov (@ x (% esp)) (% rx))
+    (xorl (% carry) (% carry))
+    (xorl (% i) (% i))
+    @loop
+    (movd (% i) (% savei))
+    (movd (% savey) (% eax))
+    (mull (@ x8632::misc-data-offset (% rx) (% i)))
+    (addl (% carry) (% eax))
+    (adcl ($ 0) (% edx))
+    (movl (% edx) (% carry))
+    (movd (% savei) (% i))
+    (movl (% eax) (@ x8632::misc-data-offset (% result) (% i)))
+    (addl ($ 4) (% i))
+    (cmpl (% i) (@ len (% esp)))
+    (jne @loop)
+    (movl (% carry) (@ x8632::misc-data-offset (% result) (% i)))
+    (mark-as-node temp1)
+    (mark-as-node temp0)
+    (single-value-return 4)))
+    
+        
 ;; multiply x[i] by y and add to result starting at digit i
 (defx8632lapfunction %multiply-and-add-harder-loop-2
     ((x 12) (y 8) (r 4) #|(ra 0)|# (i arg_y) (ylen arg_z))

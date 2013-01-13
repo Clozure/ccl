@@ -260,7 +260,36 @@
   (add vsp vsp (:$ 8))    
   (str imm1 (:@ arg_z  (:$ arm::misc-data-offset)))
   (bx lr))
-  
+
+(defarmlapfunction %multiply-and-add-fixnum-loop ((len 0) (x arg_x) (y arg_y) (result arg_z))
+  (let ((rlen temp0)
+        (idx rcontext)
+        (carry imm2)
+        (lo imm0)
+        (hi imm1))
+    (ldr rlen (:@ vsp (:$ len)))
+    (str rcontext (:@ vsp (:$ 0)))
+    (mov idx (:$ arm::misc-data-offset))
+    (mov carry (:$ 0))
+    (b @test)
+    @loop
+    (unbox-fixnum imm0 y)
+    (ldr imm1 (:@ x idx))
+    (umull lo hi imm0 imm1)
+    (adds lo lo carry)
+    (adc carry hi (:$ 0))
+    (str lo (:@ result idx))
+    (add idx idx (:$ 4))
+    @test
+    (subs rlen rlen '1)
+    (bge @loop)
+    (str carry (:@ result idx))
+    (vpop1 rcontext)
+    (bx lr)))
+
+
+    
+    
 
 
 (defarmlapfunction %bignum-ref-hi ((bignum arg_y) (i arg_z))

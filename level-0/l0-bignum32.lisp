@@ -730,11 +730,7 @@
                     (result (%allocate-bignum (the fixnum (1+ bignum-len)))))
                (declare (type bignum-type bignum)
 	                (type bignum-index bignum-len))
-	       (with-small-bignum-buffers ((carry-digit)
-					   (result-digit))
-		 (dotimes (i bignum-len (%set-digit result bignum-len carry-digit))
-		   (%set-digit result i
-			       (%multiply-and-add result-digit carry-digit bignum i fixnum))))
+               (%multiply-and-add-fixnum-loop bignum-len bignum fixnum result)
                (when negate-res
                  (negate-bignum-in-place result))
                (%normalize-bignum-macro result ))))
