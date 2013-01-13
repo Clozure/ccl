@@ -395,8 +395,8 @@
         (rx arg_y))
     (unbox-fixnum y imm0)
     (movd (% imm0) (% savey))
-    (mark-as-imm edx)
-    (mark-as-imm ebx)
+    (mark-as-imm temp1)
+    (mark-as-imm temp0)
     (mov (@ x (% esp)) (% rx))
     (xorl (% carry) (% carry))
     (xorl (% i) (% i))
@@ -606,6 +606,30 @@
 (defx8632lapfunction macptr->fixnum ((ptr arg_z))
   (macptr-ptr arg_z ptr)
   (single-value-return))
+
+;;; Return macptr's address as a fixnum, or NIL if that address
+;;; isn't aligned on a 64-bit boundary.
+(defx8632lapfunction %64-bit-aligned-macptr->fixnum ((ptr arg_z))
+  (macptr-ptr ptr imm0)
+  (movl ($ nil) (% arg_z))
+  (test ($ 7) (% arg_z))
+  (cmovel (% imm0) (% arg_z))
+  (single-value-return))
+
+(defx8632lapfunction %32-bit-aligned-macptr->fixnum ((ptr arg_z))
+  (macptr-ptr ptr imm0)
+  (movl ($ nil) (% arg_z))
+  (movl (% arg_z) (% arg_y))
+  (test ($ 3) (% imm0))
+  (jne @ret)
+  (movl (% imm0) (% arg_z))
+  (xorl (% arg_y) (% arg_y))
+  @ret
+  (movl (% esp) (% temp0))
+  (pushl (% arg_z))
+  (pushl (% arg_y))
+  (set-nargs 2)
+  (jmp-subprim .SPvalues))
 
 ; if dest not nil store unboxed result in dest(0), else return a fixnum
 (defx8632lapfunction fix-digit-logandc2 ((fix 4) #|(ra 0)|# (big arg_y) (dest arg_z)) ; index 0
