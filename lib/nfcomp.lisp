@@ -1458,12 +1458,12 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fasl-setf-name-inverse-p (sym &optional create)
   (or (cdr (assoc sym *fasl-setf-name-alias-alist*))
       (and create
-           (let* (#+notyet (pname (symbol-name sym))
-                  #+notyet (namelen (length pname))
+           (let* ((pname (symbol-name sym))
+                  (namelen (length pname))
                   (setf-for 
-                   (and #+notyet (> namelen 2)
-                        #+notyet (eql (schar pname 0) #\()
-                        #+notyet (eql (schar pname (1- namelen)) #\))
+                   (and (> namelen 2)
+                        (eql (schar pname 0) #\()
+                        (eql (schar pname (1- namelen)) #\))
                         (gethash sym %setf-function-name-inverses%))))
            (when setf-for
              (let* ((list `(,cfasl-load-time-eval-sym (setf-function-name ',setf-for))))

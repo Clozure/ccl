@@ -266,13 +266,13 @@ terminate the list"
 
 (defvar *setf-names-lock* (make-lock))
 (defun setf-function-name (sym)
-  "Returns the symbol in the SETF package that holds the binding of (SETF sym)"
+  "Returns the uninterned symbol that holds the binding of (SETF sym)"
    (or (gethash sym %setf-function-names%)
        (with-lock-grabbed (*setf-names-lock*)
          (or (gethash sym %setf-function-names%)
-             (let* ((setf-package-sym (construct-setf-function-name sym)))
-               (setf (gethash setf-package-sym %setf-function-name-inverses%) sym
-                     (gethash sym %setf-function-names%) setf-package-sym))))))
+             (let* ((setf-function-symbol (construct-setf-function-name sym)))
+               (setf (gethash setf-function-symbol %setf-function-name-inverses%) sym
+                     (gethash sym %setf-function-names%) setf-function-symbol))))))
 
 (defun existing-setf-function-name (sym)
   (gethash sym %setf-function-names%))
@@ -285,10 +285,7 @@ terminate the list"
 
                      
 
-(defconstant *setf-package* (or (find-package "SETF")
-                                (make-package
-                                 "DEPRECATED SETF PACKAGE"
-                                 :nicknames '("SETF") :use nil :external-size 1)))
+
 
 (defun construct-setf-function-name (sym)
   (make-symbol (%str-cat "(setf " (symbol-name sym) ")")))
