@@ -1416,9 +1416,9 @@
 (defconstant numeric-tags-mask (logior real-tags-mask (ash 1 subtag-complex)))
 
   
-(defconstant fasl-version #x62)
-(defconstant fasl-max-version #x62)
-(defconstant fasl-min-version #x62)
+(defconstant fasl-version #x63)
+(defconstant fasl-max-version #x63)
+(defconstant fasl-min-version #x63)
 (defparameter *image-abi-version* 1041)
 
 (provide "ARM-ARCH")
