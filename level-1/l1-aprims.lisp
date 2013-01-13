@@ -264,13 +264,15 @@ terminate the list"
 (defvar %setf-function-names% (make-hash-table :weak t :test 'eq))
 (defvar %setf-function-name-inverses% (make-hash-table :weak t :test 'eq))
 
+(defvar *setf-names-lock* (make-lock))
 (defun setf-function-name (sym)
   "Returns the symbol in the SETF package that holds the binding of (SETF sym)"
    (or (gethash sym %setf-function-names%)
-       (progn
-         (let* ((setf-package-sym (construct-setf-function-name sym)))
-           (setf (gethash setf-package-sym %setf-function-name-inverses%) sym
-                 (gethash sym %setf-function-names%) setf-package-sym)))))
+       (with-lock-grabbed (*setf-names-lock*)
+         (or (gethash sym %setf-function-names%)
+             (let* ((setf-package-sym (construct-setf-function-name sym)))
+               (setf (gethash setf-package-sym %setf-function-name-inverses%) sym
+                     (gethash sym %setf-function-names%) setf-package-sym))))))
 
 (defun existing-setf-function-name (sym)
   (gethash sym %setf-function-names%))
@@ -283,20 +285,13 @@ terminate the list"
 
                      
 
-(defconstant *setf-package* (or (find-package "SETF") (make-package "SETF" :use nil :external-size 1)))
+(defconstant *setf-package* (or (find-package "SETF")
+                                (make-package
+                                 "DEPRECATED SETF PACKAGE"
+                                 :nicknames '("SETF") :use nil :external-size 1)))
 
 (defun construct-setf-function-name (sym)
-  (let ((pkg (symbol-package sym)))
-    (setq sym (symbol-name sym))
-    (if (null pkg)
-      (gentemp sym *setf-package*)
-      (values
-       (intern
-        ;;I wonder, if we didn't check, would anybody report it as a bug?
-        (if (not (%str-member #\: (setq pkg (package-name pkg))))
-          (%str-cat pkg "::" sym)
-          (%str-cat (prin1-to-string pkg) "::" (princ-to-string sym)))
-        *setf-package*)))))
+  (make-symbol (%str-cat "(setf " (symbol-name sym) ")")))
 
 (defun setf-function-name-p (name)
   (and (consp name)
