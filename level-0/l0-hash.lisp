@@ -300,6 +300,42 @@
                 (pathname (%%equalphash key))
                 (t (%%eqlhash key)))))))
 
+(defun %string-hash-folding-case (start string len)
+  (declare (index start len)
+           (optimize (speed 3) (safety 0)))
+  (let* ((copy (make-string len)))
+    (declare (dynamic-extent copy))
+    (dotimes (i len (values (%string-hash 0 copy len)))
+      (declare (index i))
+      (setf (schar copy i)
+            (char-upcase (schar string start))
+            start (1+ start)))))
+
+(defun %hash-pathname (key)
+  (let* ((logical (istruct-typep key 'logical-pathnames))
+         (case-sensitive *case-sensitive-filesystem*)
+         (hash 0))
+    (flet ((incorporate (component)
+             (setq hash (logand target::target-most-positive-fixnum
+                                (+ hash
+                                   (if case-sensitive
+                                     (%%equalhash component)
+                                     (%%equalphash component)))))))
+      (if logical
+        (progn
+          (incorporate (%logical-pathname-host key))
+          (incorporate (%logical-pathname-version key)))
+        (incorporate (%physical-pathname-device key)))
+      (dolist (element (%pathname-directory key))
+        (incorporate element))
+      (incorporate (%pathname-name key))
+      (incorporate (%pathname-type key))
+      (mixup-hash-code hash))))
+    
+
+         
+    
+
 (defun update-hash-flags (hash vector addressp)
   (when addressp
     (flet ((new-flags (flags addressp)
@@ -1725,6 +1761,13 @@ before doing so.")
          (%ilogxor (%%equalphash (realpart key)) (%%equalphash (imagpart key))))
         ((hash-table-p key)
          (equalphash-hash-table key))
+        ((typep key 'simple-string)
+         (%string-hash-folding-case 0 key (length key)))
+        ((typep key 'string)
+         (multiple-value-bind (data offset) (array-data-and-offset key)
+           (%string-hash-folding-case offset data (length key))))
+        ((pathnamep key)
+         (%hash-pathname key))
         ((or (istructp key)
              (structurep key))  ; was (gvectorp key)
          (%%equalphash-structure 11 key))
