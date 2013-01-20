@@ -412,6 +412,18 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 	  addr);
 #elif !defined(WINDOWS)
   if (info) {
+#ifdef X86
+    if ((info->si_signo == SIGNUM_FOR_INTN_TRAP) &&
+        IS_MAYBE_INT_TRAP(info, xp)) {
+      pc program_counter = (pc)xpPC(xp);
+
+      if ((program_counter != NULL) && 
+          (*program_counter == INTN_OPCODE)) {
+        fprintf(dbgout, "unhandled int 0x%x instruction", program_counter[1]);
+      }
+      return;
+    }
+#endif
     fprintf(dbgout, "received signal %d; faulting address: %p\n",
             info->si_signo, info->si_addr);
     describe_siginfo(info);
