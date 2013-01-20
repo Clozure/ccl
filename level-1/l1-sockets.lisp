@@ -780,7 +780,7 @@ the socket is not connected."))
 (defun %socket-connect (fd addr addrlen &optional timeout-in-milliseconds)
   (let* ((err (c_connect fd addr addrlen timeout-in-milliseconds)))
     (declare (fixnum err))
-    (unless (eql err 0) (fd-close fd) (socket-error nil "connect" err nil :sockaddr addr))))
+    (unless (eql err 0) #||(fd-close fd)||# (socket-error nil "connect" err nil :sockaddr addr))))
     
 (defun inet-connect (fd host-n port-n &optional timeout-in-milliseconds)
   (rlet ((sockaddr :sockaddr_in))
