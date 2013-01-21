@@ -323,7 +323,7 @@
                                      (%%equalphash component)))))))
       (if logical
         (progn
-          (incorporate (%logical-pathname-host key))
+          (setq hash (%%equalphash (%logical-pathname-host key)))
           (incorporate (%logical-pathname-version key)))
         (incorporate (%physical-pathname-device key)))
       (dolist (element (%pathname-directory key))
