@@ -581,8 +581,7 @@ before doing so.")
   "Return the number of entries in the given HASH-TABLE."
   (setq hash (require-type hash 'hash-table))
   (when (hash-lock-free-p hash)
-    ;; We don't try to maintain a running total, so just count.
-    (return-from hash-table-count (lock-free-count-entries hash)))
+    (return-from hash-table-count (lock-free-hash-table-count hash)))
   (the fixnum (nhash.vector.count (nhash.vector hash))))
 
 (defun hash-table-rehash-size (hash)
@@ -735,7 +734,7 @@ before doing so.")
         (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
         (compute-hash-size count 1 (nhash.rehash-ratio hash))))
     (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
-    (loop ;; with full-count = grow-threshold
+    (loop with full-count = grow-threshold
           for i from $nhash.vector_overhead below (uvsize old-vector) by 2
           do (let* ((value (atomic-swap-gvector (%i+ i 1) old-vector rehashing-value-marker))
                     (key (%svref old-vector i)))
@@ -768,7 +767,9 @@ before doing so.")
                          (setq grow-threshold (- bigger-threshold full-count))
                          (setq full-count bigger-threshold)
                          (setq new-vector bigger-vector)
-                         (setq vector-size bigger-vector-size))))))))
+                         (setq vector-size bigger-vector-size)))))))
+          finally (setf (nhash.vector.count new-vector) (- full-count grow-threshold)))
+
     (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
       (%lock-free-rehash-in-place hash new-vector))
     (setf (nhash.vector.hash new-vector) hash)
@@ -863,14 +864,19 @@ before doing so.")
         (cond ((eql vector-index -1)
                (unless (%needs-rehashing-p vector)
                  (return-from lock-free-remhash nil)))
-              (t (let ((old-value (%svref vector (%i+ vector-index 1))))
+              (t (let ((old-value (%svref vector (%i+ vector-index 1)))
+		       (old-key (%svref vector vector-index)))
                    (unless (eq old-value rehashing-value-marker)
                      (when (or (eq old-value deleted-hash-value-marker) ;; deleted
-                               (eq old-value free-hash-marker)) ;; or about to be added
+                               (eq old-value free-hash-marker) ;; or about to be added
+			       (eq old-key deleted-hash-key-marker)) ;; or in clrhash...
                        (return-from lock-free-remhash nil))
-                     (when (set-hash-value-conditional vector-index vector old-value deleted-hash-value-marker)
-                       ;; Clear the key slot so can be gc'd.
-                       (setf (%svref vector vector-index) deleted-hash-key-marker)
+		     (when (without-interrupts
+			     (when (set-hash-value-conditional vector-index vector old-value deleted-hash-value-marker)
+			       (atomic-decf (nhash.vector.count vector))
+			       t))
+		       ;; Clear the key slot so can be gc'd.
+		       (setf (%svref vector vector-index) deleted-hash-key-marker)
                        (return-from lock-free-remhash t)))))))
       ;; We're here because the table needs rehashing or it was getting rehashed while we
       ;; were searching.  Take care of it and try again.
@@ -890,7 +896,8 @@ before doing so.")
          as val = (%svref vector i)
          unless (or (eq val free-hash-marker) (eq val deleted-hash-value-marker))
          do (setf (%svref vector (%i- i 1)) deleted-hash-key-marker
-                  (%svref vector i) deleted-hash-value-marker))
+                  (%svref vector i) deleted-hash-value-marker)
+	 finally (setf (nhash.vector.count vector) 0))
        (%unlock-recursive-lock-object lock))))
   hash)
 
@@ -928,13 +935,19 @@ before doing so.")
 		   (if (and (%ilogbitp $nhash_track_keys_bit (nhash.vector.flags vector))
 			    (not (eq address (strip-tag-to-fixnum key))))
 		     (setf (%svref vector vector-index) deleted-hash-key-marker)		       ;; Back out and try again.
-		     (when (set-hash-value-conditional vector-index vector free-hash-marker value)
+		     (when (without-interrupts
+			     (when (set-hash-value-conditional vector-index vector free-hash-marker value)
+			       (atomic-incf (nhash.vector.count vector))
+			       t))
 		       (return-from lock-free-puthash value))))))
               (t (let ((old-value (%svref vector (%i+ vector-index 1))))
                    (unless (or (eq old-value rehashing-value-marker)
                                ;; In theory, could reuse the deleted slot since we know it had this key
                                ;; initially, but that would complicate the state machine for very little gain.
-                               (eq old-value deleted-hash-value-marker))
+                               (eq old-value deleted-hash-value-marker)
+                               ;; This means we're competing with someone inserting this key.  We could continue
+                               ;; except then would have to sync up nhash.vector.count, so don't.
+                               (eq old-value free-hash-marker))
                      (when (set-hash-value-conditional vector-index vector old-value value)
                        (return-from lock-free-puthash value))))))))
     ;; We're here because the table needs rehashing or it was getting rehashed while we
@@ -942,6 +955,15 @@ before doing so.")
     ;; under us (that last case doesn't need to retry, but it's unlikely enough that
     ;; it's not worth checking for).  Take care of it and try again.
     (lock-free-rehash hash)))
+
+(defun lock-free-hash-table-count (hash)
+  (let* ((vector (nhash.vector hash))
+	 (count (nhash.vector.count vector)))
+    #+debug-hash
+    (let ((entries (lock-free-count-entries hash)))
+	   (unless (eq entries count)
+	     (error "hash count mismatch, count=~s actual ~s" count entries)))
+    count))
 
 (defun lock-free-count-entries (hash)
   ;; Other threads could be adding/removing entries while we count, some of
@@ -952,14 +974,16 @@ before doing so.")
   (loop
     with vector = (nhash.vector hash)
     for i fixnum from $nhash.vector_overhead below (uvsize vector) by 2
-    count (let ((value (%svref vector (%i+ i 1))))
+    count (let ((value (%svref vector (%i+ i 1)))
+                (key (%svref vector i)))
             (when (eq value rehashing-value-marker)
               ;; This table is being rehashed.  Wait for it to be
               ;; done and try again.
               (lock-free-rehash hash)
               (return-from lock-free-count-entries (lock-free-count-entries hash)))
-	    (and (neq value free-hash-marker)
-		 (neq value deleted-hash-value-marker)))))
+            (and (neq value free-hash-marker)
+                 (neq value deleted-hash-value-marker)
+                 (neq key deleted-hash-key-marker)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
