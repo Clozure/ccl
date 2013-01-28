@@ -23,7 +23,7 @@ AS = as
 M4 = m4
 ASFLAGS = -mfpu=vfp -march=armv6 -mfloat-abi=$(FLOAT_ABI)
 M4FLAGS = -DLINUX -DARM
-CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

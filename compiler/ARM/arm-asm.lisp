@@ -1666,16 +1666,17 @@
 (defun arm-finalize (seg &optional drained)
   (let* ((removed nil))
     (do-lap-labels (lab)
-      (loop
-        (when (dolist (ref (lap-label-refs lab) t)              
-                (when (and (eq :b (cdr ref))
-                           (eq lab (lap-instruction-succ (car ref))))
-                  (ccl::remove-dll-node (car ref))
-                  (setq removed t)
-                  (setf (lap-label-refs lab)
-                        (delete ref (lap-label-refs lab)))
-                  (return)))
-          (return))))
+      (let* ((predaddr (- (or (lap-label-address lab) 0) 4)))
+        (loop
+          (when (dolist (ref (lap-label-refs lab) t)              
+                  (when (and (eq :b (cdr ref))
+                             (eql predaddr (lap-instruction-address (car ref))))
+                    (ccl::remove-dll-node (car ref))
+                    (setq removed t)
+                    (setf (lap-label-refs lab)
+                          (delete ref (lap-label-refs lab)))
+                    (return)))
+          (return)))))
     (when removed
       (set-element-addresses 0 seg))
 
