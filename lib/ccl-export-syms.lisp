@@ -703,6 +703,7 @@
 
      getenv
      setenv
+     unsetenv
 
      external-format
      make-external-format

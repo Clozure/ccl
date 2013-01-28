@@ -362,7 +362,7 @@ environment. If there is no such environment variable, create it."
   (with-cstrs ((ckey key))
     (#_unsetenv key))
   #+windows-target
-  (with-cstrs ((ckey (concatenate 'string "=")))
+  (with-cstrs ((ckey (concatenate 'string key "=")))
     (#__putenv ckey)))
 
 #-windows-target                        ; Windows "impersonation" crap ?
