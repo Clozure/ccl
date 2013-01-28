@@ -277,16 +277,13 @@
       (if (or (cdr more))               ; punt for now
         whole
         (let* ((n2 (car more))
-               (n (gensym)))
-          (if (and (typep n0 'real) (typep n1 'real))
-            (let* ((result (funcall binary-name n0 n1)))
-              (if result
-                `(,binary-name ,n1 ,n2)
-                `(progn ,n2 nil)))
-            `(let* ((,n ,n0))
-              (if (,binary-name ,n (setq ,n ,n1))
-                (,binary-name ,n ,n2)
-                (progn ,n2 nil))))))
+               (a (gensym))
+               (b (gensym))
+               (c (gensym)))
+          `(let* ((,a ,n0)
+                  (,b ,n1)
+                  (,c ,n2))
+            (if (,binary-name ,a ,b) (,binary-name ,b ,c)))))
       (if (not n1-p)
         `(require-type ,n0 'real)
         `(,binary-name ,n0 ,n1)))))

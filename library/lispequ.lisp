@@ -120,16 +120,12 @@
 (defconstant $sym_fbit_constant_fold (+ 8 $sym_bit_const))
 (defconstant $sym_fbit_fold_subforms (+ 8 $sym_bit_global))
 
-(def-accessors () %svref
-  nil					;'destructure-state
-  destructure-state.current
-  destructure-state.whole
-  destructure-state.lambda
-  )
+
 
 ;Lfun bits.
 ;Assumed to be a fixnum, so if you ever assign a bit number > 28,
-;change lfun-bits and its callers.
+;change lfun-bits and its callers.  Do the same if you change the
+;number of bits in a fixnum, too.  Ignore other sign.
 (defconstant $lfbits-nonnullenv-bit 0)
 (defconstant $lfbits-keys-bit 1)
 (defconstant $lfbits-numopt (byte 5 2))

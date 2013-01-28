@@ -1016,9 +1016,6 @@ are no Forms, OR returns NIL."
       ,@(when decls `((declare ,@decls)))
       ,@body)))
 
-(defmacro make-destructure-state (tail whole lambda)
-  `(%istruct 'destructure-state ,tail ,whole ,lambda))
-
 
 ; This is supposedly ANSI CL.
 (defmacro lambda (&whole lambda-expression (&rest paramlist) &body body)

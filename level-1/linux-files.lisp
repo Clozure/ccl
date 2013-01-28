@@ -353,9 +353,17 @@ environment. If there is no such environment variable, create it."
 	       (cvalue value))
     (#_setenv ckey cvalue (if overwrite 1 0)))
   #+windows-target
-  (with-cstrs ((pair (format nil "~a=~a" key value)))
+  (with-cstrs ((pair (concatenate 'string key "=" value)))
     (#__putenv pair))
   )
+
+(defun unsetenv (key)
+  #-windows-target
+  (with-cstrs ((ckey key))
+    (#_unsetenv key))
+  #+windows-target
+  (with-cstrs ((ckey (concatenate 'string "=")))
+    (#__putenv ckey)))
 
 #-windows-target                        ; Windows "impersonation" crap ?
 (defun setuid (uid)

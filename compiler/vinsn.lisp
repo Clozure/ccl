@@ -241,13 +241,14 @@
       (let* ((annotation (vinsn-annotation v)))
 	(when annotation
 	  (format stream " ||~a|| " annotation))))))
-  
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
 (defparameter *known-vinsn-attributes*
   '(
     :jump				; an unconditional branch
     :branch				; a conditional branch
     :call				; a jump that returns
-    :funcall				; A full function call, assumed to bash all volatile registers
+    :align				; aligns FOLLOWING label
     :subprim-call			; A subprimitive call; bashes some volatile registers
     :jumpLR				; Jumps to the LR, possibly stopping off at a function along the way.
     :lrsave				; saves LR in LOC-PC
@@ -273,7 +274,7 @@
     :sp
     :predicatable                       ; all instructions can be predicated, no instructions set or test condition codes.
     :sets-lr                            ; uses the link register, if there is one.
-    ))
+    )))
 
 (defparameter *nvp-max* 10 "size of *vinsn-varparts* freelist elements")
 (def-standard-initial-binding *vinsn-varparts* (%cons-pool))
@@ -582,10 +583,10 @@
     (when (eq vinsn element)
       (return t))))
 
-(defun last-vinsn (seg)
+(defun last-vinsn (seg &optional (after seg))
   ;; Try to find something that isn't a SOURCE-NOTE.  Go ahead.  I dare you.
   (do* ((element (dll-header-last seg) (dll-node-pred element)))
-       ((eq element seg))               ;told ya!
+       ((eq element after))               ;told ya!
     (when (typep element 'vinsn)
       (return element))))
 
@@ -766,6 +767,37 @@
             (replace-label-refs ref prev target)
             (push ref (vinsn-label-refs target))))))))
 
+(defparameter *nx-do-dead-code-elimination* t)
+
+(defun eliminate-dead-code (header)
+  (when *nx-do-dead-code-elimination*
+    (let* ((eliding nil)
+           (won nil))
+      (do-dll-nodes (element header won)
+        ;; If a label, leave it.
+        (etypecase element
+          (vinsn-label
+           (when (typep (vinsn-label-id element) 'fixnum)
+             (if (vinsn-label-refs element)
+               (setq eliding nil))))
+          (vinsn
+           (when (vinsn-attribute-p element :align)
+             (let* ((next (vinsn-succ element)))
+               (when (and (typep next 'vinsn-label)
+                          (typep (vinsn-label-id next) 'fixnum)
+                          (not (null (vinsn-label-refs next))))
+                 (setq eliding nil))))
+           (cond (eliding
+                    (setq won t)
+                    (let* ((operands (vinsn-variable-parts element)))
+                      (dotimes (i (length operands) (elide-vinsn element))
+                        (let* ((op (svref operands i)))
+                          (when (typep op 'vinsn-label)
+                            (setf (vinsn-label-refs op)
+                                  (delete element (vinsn-label-refs op))))))))
+                   (t (setq eliding (vinsn-attribute-p element :jump))))))))))
+         
+
 (defun optimize-vinsns (header)
   ;; Delete unreferenced labels that the compiler might have emitted.
   ;; Subsequent operations may cause other labels to become
@@ -789,7 +821,8 @@
             (return)))))
     (maximize-jumps header)
     (delete-unreferenced-labels labels)
-    (normalize-vinsns header)
+    ;;(normalize-vinsns header)
+    (eliminate-dead-code header)
   ))
 
 (defun show-vinsns (vinsns indent)
@@ -841,6 +874,21 @@
     (declare (fixnum p) (dynamic-extent process-after))
     (dfs-walk fgns :process-after process-after)
     v))
+
+       
+(defun last-vinsn-unless-label (seg)
+  ;; Look at the last element(s) of seg.  If a vinsn-note,
+  ;; keep looking.  If a vinsn, return it; if a vinsn-label,
+  ;; return nil
+  (do* ((element (dll-header-last seg) (dll-node-pred element)))
+       ((eq element seg))
+    (etypecase element
+      (vinsn (return element))
+      (vinsn-label (if (typep (vinsn-label-id element) 'fixnum)
+                     (return nil))))))
+       
+
+
 
 ;;; This generally only gives a meaningful result if pass 2 of the
 ;;; compiler has been compiled in the current session.

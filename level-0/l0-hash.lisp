@@ -405,21 +405,6 @@
 (defun hash-table-p (hash)
   (istruct-typep hash 'hash-table))
 
-(defun %normalize-hash-table-count (hash)
-  (let* ((vector (nhash.vector hash))
-	 (weak-deletions-count (nhash.vector.weak-deletions-count vector)))
-    (declare (fixnum weak-deletions-count))
-    (unless (eql 0 weak-deletions-count)
-      (setf (nhash.vector.weak-deletions-count vector) 0)
-      ;; lock-free hash tables don't maintain deleted-count, since would need to
-      ;; lock and it's not worth it.
-      (unless (hash-lock-free-p hash)
-	(let ((deleted-count (the fixnum
-			       (+ (the fixnum (nhash.vector.deleted-count vector))
-				  weak-deletions-count)))
-	      (count (the fixnum (- (the fixnum (nhash.vector.count vector)) weak-deletions-count))))
-          (setf (nhash.vector.deleted-count vector) deleted-count
-                (nhash.vector.count vector) count))))))
 
 
 (defparameter *shared-hash-table-default* t
@@ -598,7 +583,6 @@ before doing so.")
   (when (hash-lock-free-p hash)
     ;; We don't try to maintain a running total, so just count.
     (return-from hash-table-count (lock-free-count-entries hash)))
-  (%normalize-hash-table-count hash)
   (the fixnum (nhash.vector.count (nhash.vector hash))))
 
 (defun hash-table-rehash-size (hash)
@@ -939,7 +923,7 @@ before doing so.")
                  ;; before the incf), which _could_ be harmful.
                  (atomic-decf (nhash.grow-threshold hash))
                  (when (set-hash-key-conditional vector-index vector free-hash-marker key)
-		   ;; %needs-rehashing-p is not equite enough in the track_keys case, since gc cannot
+		   ;; %needs-rehashing-p is not quite enough in the track_keys case, since gc cannot
 		   ;; track this key until it's actually added to the table.  Check now.
 		   (if (and (%ilogbitp $nhash_track_keys_bit (nhash.vector.flags vector))
 			    (not (eq address (strip-tag-to-fixnum key))))
@@ -1057,8 +1041,8 @@ before doing so.")
              (let ((vidx (index->vector-index (nhash.vector.cache-idx vector))))
                (setf (%svref vector vidx) deleted-hash-key-marker)
                (setf (%svref vector (the fixnum (1+ vidx))) nil))
-             (incf (the fixnum (nhash.vector.deleted-count vector)))
-             (decf (the fixnum (nhash.vector.count vector)))
+             (atomic-incf (the fixnum (nhash.vector.deleted-count vector)))
+             (atomic-decf (the fixnum (nhash.vector.count vector)))
              (setq foundp t))
            (let* ((vector-index (funcall (nhash.find hash) hash key)))
              (declare (fixnum vector-index))
@@ -1069,8 +1053,8 @@ before doing so.")
                (setf (nhash.vector.cache-key vector) free-hash-marker
                      (nhash.vector.cache-value vector) nil)
                ;; Update the count
-               (incf (the fixnum (nhash.vector.deleted-count vector)))
-               (decf (the fixnum (nhash.vector.count vector)))
+               (atomic-incf (the fixnum (nhash.vector.deleted-count vector)))
+               (atomic-decf (the fixnum (nhash.vector.count vector)))
                ;; Delete the value from the table.
                (setf (%svref vector vector-index) deleted-hash-key-marker
                      (%svref vector (the fixnum (1+ vector-index))) nil)
@@ -1107,7 +1091,6 @@ before doing so.")
              (nhash.vector.cache-value vector) nil
              (nhash.vector.finalization-alist vector) nil
              (nhash.vector.free-alist vector) nil
-             (nhash.vector.weak-deletions-count vector) 0
              (nhash.vector.deleted-count vector) 0
              (nhash.vector.flags vector) (logand $nhash_weak_flags_mask
                                                  (nhash.vector.flags vector))))
@@ -1148,12 +1131,9 @@ before doing so.")
               (cond ((eq old-value deleted-hash-key-marker)
                      (%set-hash-table-vector-key vector vector-index key)
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)
-                     (incf (the fixnum (nhash.vector.count vector)))
+                     (atomic-incf (nhash.vector.count vector))
                      ;; Adjust deleted-count
-                     (when (> 0 (the fixnum
-                                  (decf (the fixnum
-                                          (nhash.vector.deleted-count vector)))))
-                       (%normalize-hash-table-count hash)))
+                     (atomic-decf (nhash.vector.deleted-count vector)))
                     ((eq old-value free-hash-marker)
                      (when (eql 0 (nhash.grow-threshold hash))
                        (%unlock-gc-lock)
@@ -1162,7 +1142,7 @@ before doing so.")
                      (%set-hash-table-vector-key vector vector-index key)
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)
                      (decf (the fixnum (nhash.grow-threshold hash)))
-                     (incf (the fixnum (nhash.vector.count vector))))
+                     (atomic-incf (the fixnum (nhash.vector.count vector))))
                     (t
                      ;; Key was already there, update value.
                      (setf (%svref vector (the fixnum (1+ vector-index))) value)))
@@ -1187,12 +1167,6 @@ before doing so.")
         (when (>= (setq idx (+ idx 2)) size)
           (return count))))))
 
-
-
-
-
-     
-
 (defun grow-hash-table (hash)
   (unless (typep hash 'hash-table)
     (setq hash (require-type hash 'hash-table)))
@@ -1210,7 +1184,6 @@ before doing so.")
 ;;; lock on the hash table.
 (defun %grow-hash-table (hash)
   (block grow-hash-table
-    (%normalize-hash-table-count hash)
     (let* ((old-vector (nhash.vector hash))
            (old-size (nhash.vector.count old-vector))
            (old-total-size (nhash.vector.size old-vector))
@@ -1235,7 +1208,6 @@ before doing so.")
                     flags-sans-weak (logand flags (logxor -1 $nhash_weak_flags_mask))
                     weak-flags (logand flags $nhash_weak_flags_mask))
               (setf (nhash.vector.flags old-vector) flags-sans-weak)      ; disable GC weak stuff
-              (%normalize-hash-table-count hash)
               (when (%grow-hash-table-in-place-p hash)
                 (setf (nhash.vector.flags old-vector) flags)
                 (setq weak-flags nil)
@@ -1562,14 +1534,8 @@ before doing so.")
           (unless
             (when (or deleted (eq key free-hash-marker))
               (if deleted  ; one less deleted entry
-                (let ((count (1- (nhash.vector.deleted-count vector))))
-                  (declare (fixnum count))
-                  (setf (nhash.vector.deleted-count vector) count)
-                  (if (< count 0)
-                    (let ((wdc (nhash.vector.weak-deletions-count vector)))
-                      (setf (nhash.vector.weak-deletions-count vector) 0)
-                      (incf (nhash.vector.deleted-count vector) wdc)
-                      (decf (nhash.vector.count vector) wdc)))
+                (progn
+                  (atomic-decf  (nhash.vector.deleted-count vector))
                   (incf (nhash.grow-threshold hash))
                   ;; Change deleted to free
                   (setf (%svref vector vector-index) free-hash-marker)))
@@ -1596,20 +1562,13 @@ before doing so.")
                         (when (or (eq newkey free-hash-marker)
                                   (setq deleted (eq newkey deleted-hash-key-marker)))
                           (when deleted
-                            (let ((count (1- (nhash.vector.deleted-count vector))))
-                              (declare (fixnum count))
-                              (setf (nhash.vector.deleted-count vector) count)
-                              (if (< count 0)
-                                (let ((wdc (nhash.vector.weak-deletions-count vector)))
-                                  (setf (nhash.vector.weak-deletions-count vector) 0)
-                                  (incf (nhash.vector.deleted-count vector) wdc)
-                                  (decf (nhash.vector.count vector) wdc)))
-                              (incf (nhash.grow-threshold hash))))
+                            (atomic-decf (nhash.vector.deleted-count vector))
+                            (incf (nhash.grow-threshold hash)))
                           (return))
                         (when (eq key newkey)
                           (cerror "Delete one of the entries." "Duplicate key: ~s in ~s ~s ~s ~s ~s"
                                   key hash value newvalue index found-index)                       
-                          (decf (nhash.vector.count vector))
+                          (atomic-decf (nhash.vector.count vector))
                           (incf (nhash.grow-threshold hash))
                           (return))
                         (setq key newkey
@@ -1962,7 +1921,6 @@ before doing so.")
           (nhash.vector.gc-count vector) (%get-gc-count)
           (nhash.vector.free-alist vector) nil
           (nhash.vector.finalization-alist vector) nil
-          (nhash.vector.weak-deletions-count vector) 0
           (nhash.vector.hash vector) nil
           (nhash.vector.deleted-count vector) 0
           (nhash.vector.count vector) 0

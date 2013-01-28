@@ -19,7 +19,7 @@
 
 
 ;;; Bootstrapping for futexes
-#+(and linux-target (or x86-target arm-target))
+#+(and linux-target no (or x86-target arm-target))
 (eval-when (:compile-toplevel :execute)
   (pushnew :futex *features*))
 

@@ -247,7 +247,6 @@
 
 (defmethod make-load-form ((hash hash-table) &optional env)
   (declare (ignore env))
-  (%normalize-hash-table-count hash)
   (let ((keytransF (nhash.keytransF hash))
         (compareF (nhash.compareF hash))
         (vector (nhash.vector hash))

@@ -419,7 +419,7 @@ describe_memfault(ExceptionInformation *xp, siginfo_t *info)
 
       if ((program_counter != NULL) && 
           (*program_counter == INTN_OPCODE)) {
-        fprintf(dbgout, "unhandled int 0x%x instruction", program_counter[1]);
+        fprintf(dbgout, "unhandled int 0x%x instruction\n", program_counter[1]);
       }
       return;
     }

@@ -1380,7 +1380,7 @@
       (x862-nil seg vreg xfer)
       (if (nx-t form)
         (x862-t seg vreg xfer)
-        (let* ((fn (x862-acode-operator-function form)) ;; also typechecks
+        (let* ((fn (x862-acode-operator-function form));; also typechecks
                (op (acode-operator form)))
           (if (and (null vreg)
                    (%ilogbitp operator-acode-subforms-bit op)
@@ -5701,10 +5701,32 @@
               ;; some other case where it can't ($test, $vpush.)  The
               ;; case of a null vd can certainly avoid it; the check
               ;; of numundo is to keep $acc boxed in case of nthrow.
-              (x862-form  seg (if (or vreg (not (%izerop numundo))) *x862-arg-z*) nil body)
-              (x862-unwind-set seg xfer old-stack)
-              (when vreg (<- *x862-arg-z*))
-              (^))))))))
+              (let* ((so-far (dll-header-last seg))
+                     (handled-crf nil))
+                (declare (ignorable so-far))
+                (x862-form  seg (if (or vreg (not (%izerop numundo))) *x862-arg-z*) nil body)
+                (when (and (backend-crf-p vreg)
+                           (eql 0 numundo))
+                  (let* ((last-vinsn (last-vinsn seg so-far))
+                         (unconditional (and last-vinsn (eq last-vinsn (last-vinsn-unless-label seg))))
+                         (vinsn-name (and last-vinsn (vinsn-template-name (vinsn-template last-vinsn))))
+                         (constant-valued (member vinsn-name
+                                                  '(load-nil load-t lri lriu ref-constant))))
+                    (when constant-valued
+                      (let* ((targetlabel (if (eq vinsn-name 'load-nil) (x862-cd-false xfer) (x862-cd-true xfer))))
+                        (and (> targetlabel 0)
+                             (> $backend-return targetlabel)
+                             (let* ((diff (- *x862-vstack* (nth-value 2 (x862-decode-stack old-stack))))
+                                    (adjust (remove-dll-node (! vstack-discard (ash diff (- *x862-target-fixnum-shift*)))))
+                                    (jump (remove-dll-node (! jump (aref *backend-labels* targetlabel)))))
+                               (insert-dll-node-after adjust last-vinsn)
+                               (insert-dll-node-after jump adjust)
+                               (remove-dll-node last-vinsn)
+                               (setq handled-crf unconditional)))))))
+                (unless handled-crf
+                  (x862-unwind-set seg xfer old-stack)
+                  (when vreg (<- *x862-arg-z*))
+                  (^))))))))))
 
 
 (defun x862-unwind-set (seg xfer encoding)
@@ -6780,6 +6802,11 @@
                 (setq bits (logior (%ilsl $lfbits-nextmeth-bit 1) bits)))))
           bits)))))
 
+(defx862 x862-nil nil (seg vreg xfer)
+  (x862-nil seg vreg xfer))
+
+(defx862 x862-t t (seg vreg xfer)
+  (x862-t seg vreg xfer))
 
 (defx862 x862-progn progn (seg vreg xfer forms)
   (declare (list forms))
@@ -7796,7 +7823,7 @@
                       (if need-else 
                         (if true-is-goto 0 falselabel) 
                         (if true-is-goto xfer (x862-cd-merge xfer falselabel))))) 
-                 testform)  
+                 testform)
                 (if true-is-goto
                   (x862-unreachable-store)
                   (if true-cleanup-label

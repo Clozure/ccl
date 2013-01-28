@@ -1880,7 +1880,6 @@ to replace that class with ~s" name old-class new-class)
 
   (make-istruct-class 'logical-pathname (find-class 'pathname))
 
-  (make-istruct-class 'destructure-state *istruct-class*)
   
   (defstatic *base-char-class* (alias-class 'base-char *character-class*))
   (defstatic *standard-char-class* (make-built-in-class 'standard-char *base-char-class*))

@@ -1782,8 +1782,8 @@
   (pushq (:%q temp)))
 
 ;; ????
-(define-x8664-vinsn emit-aligned-label (()
-                                        ((label :label)))
+(define-x8664-vinsn (emit-aligned-label :align) (()
+                                                 ((label :label)))
   (:align 3)
   (:long (:^ label)))
 

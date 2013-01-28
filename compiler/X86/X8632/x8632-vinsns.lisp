@@ -1626,8 +1626,8 @@
   (leal (:@ (:^ label) (:%l x8632::fn)) (:%l temp))
   (pushl (:%l temp)))
 
-(define-x8632-vinsn emit-aligned-label (()
-                                        ((label :label)))
+(define-x8632-vinsn (emit-aligned-label :align) (()
+                                                ((label :label)))
   ;; We don't care about label.
   ;; We just want the label following this stuff to be tra-tagged.
   (:align 3)

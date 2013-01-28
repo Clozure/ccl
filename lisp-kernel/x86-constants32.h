@@ -406,5 +406,5 @@ typedef struct {
 #endif
 
 #define ABI_VERSION_MIN 1038
-#define ABI_VERSION_CURRENT 1038
-#define ABI_VERSION_MAX 1038
+#define ABI_VERSION_CURRENT 1039
+#define ABI_VERSION_MAX 1039

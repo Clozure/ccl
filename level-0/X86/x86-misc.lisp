@@ -753,7 +753,10 @@
   (lea (@ (% rax) (% by)) (% arg_z))
   (lock)
   (cmpxchgq (% arg_z) (@ (% node) (% imm1)))
-  (jne @again)
+  (je @win)
+  (pause)
+  (jmp @again)
+  @win
   (single-value-return))
 
 (defx86lapfunction %atomic-incf-ptr ((ptr arg_z))
