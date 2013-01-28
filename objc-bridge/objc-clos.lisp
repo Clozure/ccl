@@ -791,23 +791,24 @@
   (let ((class (class-of instance)))
     ;; Initialize CLOS slots
     (dolist (slotd (class-slots class))
-      (when (not (typep slotd 'foreign-effective-slot-definition)) ; For now
-	(let ((sname (slot-definition-name slotd))
-	      (slot-type (slot-definition-type slotd))
-	      (typepred (slot-value slotd 'type-predicate))
-	      (initfunction (slot-definition-initfunction slotd)))
-	  (multiple-value-bind (ignore newval foundp)
-			       (get-properties initargs
-					       (slot-definition-initargs slotd))
-	    (declare (ignore ignore))
-	    (if foundp
-		(if (or (null typepred)
-                        (funcall typepred newval))
-		    (setf (slot-value instance sname) newval)
-		  (report-bad-arg newval slot-type))
-	      (let* ((loc (slot-definition-location slotd))
+      (let* ((foreign (typep slotd 'foreign-effective-slot-definition))
+             (sname (slot-definition-name slotd))
+             (slot-type (slot-definition-type slotd))
+             (typepred (unless foreign (slot-value slotd 'type-predicate)))
+             (initfunction (unless foreign (slot-definition-initfunction slotd))))
+        (multiple-value-bind (ignore newval foundp)
+            (get-properties initargs
+                            (slot-definition-initargs slotd))
+          (declare (ignore ignore))
+          (if foundp
+            (if (or (null typepred)
+                    (funcall typepred newval))
+              (setf (slot-value instance sname) newval)
+              (report-bad-arg newval slot-type))
+            (unless foreign
+              (let* ((loc (slot-definition-location slotd))
 		     (curval (%standard-instance-instance-location-access
-			     instance loc)))
+                              instance loc)))
 		(when (and (or (eq slot-names t) 
 			       (member sname slot-names :test #'eq))
 			   (eq curval (%slot-unbound-marker))
