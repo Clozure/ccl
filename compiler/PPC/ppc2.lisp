@@ -9321,3 +9321,11 @@
                  (! fixnum-set-double-float rbase rindex rval))
                (<- rboxed)))))
     (^)))
+
+(defppc2 ppc2-nil nil (seg vreg xfer)
+  (ppc2-nil seg vreg xfer))
+
+(defppc2 ppc2-t t (seg vreg xfer)
+  (ppc2-t seg vreg xfer))
+
+   

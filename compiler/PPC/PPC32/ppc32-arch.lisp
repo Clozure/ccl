@@ -945,6 +945,6 @@
 (defconstant fasl-version #x60)
 (defconstant fasl-max-version #x60)
 (defconstant fasl-min-version #x60)
-(defparameter *image-abi-version* 1038)
+(defparameter *image-abi-version* 1039)
 
 (provide "PPC32-ARCH")
