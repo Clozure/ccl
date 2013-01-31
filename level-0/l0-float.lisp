@@ -22,6 +22,12 @@
 (eval-when (:compile-toplevel :execute)
   (require "NUMBER-MACROS")
   (require :number-case-macro) 
+  (defconstant single-float-pi (coerce pi 'single-float))
+  (defconstant double-float-half-pi (/ pi 2))
+  (defconstant single-float-half-pi (coerce (/ pi 2) 'single-float))
+  (defconstant single-float-log2 0.6931472)                ; (log 2)
+  (defconstant double-float-log2 0.6931471805599453d0)     ; (log 2.0d0)
+  (defconstant double-float-log2^23 15.942385152878742d0)  ; (log (expt 2 23))
 )
 
 ;;; used by float reader
@@ -728,34 +734,106 @@
       )))
 
 
+;;; Multiply by i (with additional optional scale factor)
+;;; Does the "right thing" with minus zeroes (see CLTL2)
+(defun i* (number &optional (scale 1))
+  (complex (* (- scale) (imagpart number))
+           (* scale (realpart number))))
 
+;;; complex atanh
+(defun %complex-atanh (z)
+  (let* ((rx (realpart z))
+         (ix (imagpart z))
+         (sign (typecase rx
+                 (double-float (%double-float-sign rx))
+                 (short-float (%short-float-sign rx))
+                 (t (minusp rx))))
+         (x rx)
+         (y ix)
+         (y1 (abs y))
+         ra ia)
+    ;; following code requires non-negative x
+    (when sign
+      (setf x (- x))
+      (setf y (- y)))
+    (cond ((> (max x y1) 1.8014399e+16)
+           ;; large value escape
+           (setq ra (if (> x y1)
+                      (let ((r (/ y x)))
+                        (/ (/ x) (1+ (* r r))))
+                      (let ((r (/ x y)))
+                        (/ (/ r y) (1+ (* r r))))))
+           (setq ia (typecase y
+                      (double-float (float-sign y double-float-half-pi))
+                      (single-float (float-sign y single-float-half-pi))
+                      (t (if (minusp y) #.(- single-float-half-pi) single-float-half-pi)))))
+          ((= x 1)
+           (setq ra (if (< y1 1e-9)
+                      (/ (log-e (/ 2 y1)) 2)
+                      (/ (log1+ (/ 4 (* y y))) 4)))
+           (setq ia (/ (atan (/ 2 y) -1) 2)))
+          (t
+           (let ((r2 (+ (* x x) (* y y))))
+             (setq ra (/ (log1+ (/ (* -4 x) (1+ (+ (* 2 x) r2)))) -4))
+             (setq ia (/ (atan (* 2 y) (- 1 r2)) 2)))))
+    ;; fixup signs, with special case for real arguments
+    (cond (sign
+           (setq ra (- ra))
+           (when (typep z 'complex)
+             (setq ia (- ia))))
+          (t
+           (unless (typep z 'complex)
+             (setq ia (- ia)))))
+    (complex ra ia)))
 
 (defun atan (y &optional (x nil x-p))
   "Return the arc tangent of Y if X is omitted or Y/X if X is supplied."
-  (if x-p
-    (if (or (typep x 'double-float)
-            (typep y 'double-float))
-      (with-stack-double-floats ((dy y)
-                                 (dx x))
-        (%df-atan2 dy dx))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sy y)
-                                (sx x))
-        (%sf-atan2! sy sx))
-      #+64-bit-target
-      (%sf-atan2 (%short-float y) (%short-float x)))
-    (if (typep y 'complex)
-      (let ((iy (complex (- (imagpart y)) (realpart y))))
-	(/ (- (log (+ 1 iy)) (log (- 1 iy)))
-	   #c(0 2)))
-      (if (typep y 'double-float)
-        (%double-float-atan! y (%make-dfloat))
-        #+32-bit-target
-        (target::with-stack-short-floats ((sy y))
-          (%single-float-atan! sy (%make-sfloat)))
-        #+64-bit-target
-        (%single-float-atan (%short-float y))
-        ))))
+  (cond (x-p
+         (cond ((or (typep x 'double-float)
+                    (typep y 'double-float))
+                (with-stack-double-floats ((dy y)
+                                           (dx x))
+                  (%df-atan2 dy dx)))
+               (t
+                (when (and (rationalp x) (rationalp y))
+                  ;; rescale arguments so that the maximum absolute value is 1
+                  (let ((x1 (abs x)) (y1 (abs y)))
+                    (cond ((> y1 x1)
+                           (setf x (/ x y1))
+                           (setf y (signum y)))
+                          ((not (zerop x))
+                           (setf y (/ y x1))
+                           (setf x (signum x))))))
+                #+32-bit-target
+                (target::with-stack-short-floats ((sy y)
+                                                  (sx x))
+                  (%sf-atan2! sy sx))
+                #+64-bit-target
+                (%sf-atan2 (%short-float y) (%short-float x)))))
+        ((typep y 'double-float)
+         (%double-float-atan! y (%make-dfloat)))
+        ((typep y 'single-float)
+         #+32-bit-target
+         (%single-float-atan! y (%make-sfloat))
+         #+64-bit-target
+         (%single-float-atan y))
+        ((typep y 'rational)
+         (cond ((<= (abs y) most-positive-short-float)
+                #+32-bit-target
+                (target::with-stack-short-floats ((sy y))
+                  (%single-float-atan! sy (%make-sfloat)))
+                #+64-bit-target
+                (%single-float-atan (%short-float y)))
+               ((minusp y)
+                #.(- single-float-half-pi))
+               (t
+                single-float-half-pi)))
+        (t
+         (let ((r (realpart y))
+               (i (imagpart y)))
+           (if (zerop i)
+             (complex (atan r) i)
+             (i* (%complex-atanh (complex (- i) r)) -1))))))
 
 
 
@@ -765,45 +843,191 @@
     (if (zerop b)
       (if (zerop x)
         (report-bad-arg x '(not (satisfies zerop) ))
-        (if (floatp x) (float 0.0d0 x) 0))
-      (/ (log-e x) (log-e b)))
+        ;; ** CORRECT THE CONTAGION for complex args **
+        (+ 0 (* x b)))
+      ;; do the float/rational contagion before the division
+      ;; but take care with negative zeroes
+      (let ((x1 (realpart x))
+            (b1 (realpart b)))
+        (if (and (typep x1 'float)
+                 (typep b1 'float))
+          (/ (log-e (* x (float 1.0 b1)))
+             (log-e (* b (float 1.0 x1))))
+          (let ((r (/ (cond ((typep x 'rational)
+                             (%rational-log x 1.0d0))
+                            ((typep x1 'rational)
+                             (%rational-complex-log x 1.0d0))
+                            (t
+                             (log-e (* x 1.0d0))))
+                      (cond ((typep b 'rational)
+                             (%rational-log b 1.0d0))
+                            ((typep b1 'rational)
+                             (%rational-complex-log b 1.0d0))
+                            (t
+                             (log-e (* b 1.0d0)))))))
+            (cond ((or (typep x1 'double-float)
+                       (typep b1 'double-float))
+                   r)
+                  ((complexp r)
+                   (complex (%short-float (realpart r))
+                            (%short-float (imagpart r))))
+                  (t
+                   (%short-float r)))))))
     (log-e x)))
 
+
+
 (defun log-e (x)
-  (cond 
-    ((bignump x)
-     (if (minusp x)
-       (complex (log-e (- x)) pi)
-       (let* ((base1 3)
-              (guess (floor (1- (integer-length x))
-                            (log base1 2)))
-              (guess1 (* guess (log-e base1))))
-         (+ guess1 (log-e (/ x (expt base1 guess)))))))
-    ((and (ratiop x)  
-          (or (> x most-positive-short-float)
-              (< x most-negative-short-float)))
-     (- (log-e (%numerator x)) (log-e (%denominator x))))
-    ((typep x 'complex)
-     (complex (log-e (abs x)) (phase x)))
-    ((typep x 'double-float)
-     (with-stack-double-floats ((dx x))
-       (if (minusp x)
-         (complex (%double-float-log! (%%double-float-abs! dx dx) (%make-dfloat)) pi)
-         (%double-float-log! dx (%make-dfloat)))))
-    (t
+   (cond
+     ((typep x 'double-float)
+      (if (%double-float-sign x)
+        (with-stack-double-floats ((dx x))
+          (complex (%double-float-log! (%%double-float-abs! dx dx) (%make-dfloat)) pi))
+        (%double-float-log! x (%make-dfloat))))
+    ((typep x 'short-float)
      #+32-bit-target
-     (target::with-stack-short-floats ((sx x))
-       (if (minusp x)
+     (if (%short-float-sign x)
+       (target::with-stack-short-floats ((sx x))
          (complex (%single-float-log! (%%short-float-abs! sx sx) (%make-sfloat))
-                  #.(coerce pi 'short-float))
-         (%single-float-log! sx (%make-sfloat))))
+                  single-float-pi))
+       (%single-float-log! x (%make-sfloat)))
      #+64-bit-target
-     (if (minusp x)
-       (complex (%single-float-log (%short-float-abs (%short-float x))) #.(coerce pi 'single-float))
-       (%single-float-log (%short-float x)))
-     )))
+     (if (%short-float-sign x)
+       (complex (%single-float-log (%short-float-abs (%short-float x)))
+                single-float-pi)
+       (%single-float-log (%short-float x))))
+    ((typep x 'complex)
+     (if (typep (realpart x) 'rational)
+       (%rational-complex-log x 1.0s0)
+       ;; take care that intermediate results do not overflow/underflow:
+       ;; pre-scale argument by an appropriate power of two;
+       ;; we only need to scale for very large and very small values -
+       ;;  hence the various 'magic' numbers (values may not be too
+       ;;  critical but do depend on the sqrt update to fix abs's operation)
+       (let ((m (max (abs (realpart x))
+                     (abs (imagpart x))))
+             (log-s 0)
+             (s 1))
+         (if (typep m 'short-float)
+           (let ((expon (- (%short-float-exp m) IEEE-single-float-bias)))
+             (cond ((> expon 126)
+                    (setq log-s double-float-log2^23)
+                    (setq s #.(ash 1 23)))
+                   ((< expon -124)
+                    (setq log-s #.(- double-float-log2^23))
+                    (setq s #.(/ 1.0s0 (ash 1 23))))))
+           (let ((expon (- (%double-float-exp m) IEEE-double-float-bias)))
+             (cond ((> expon 1022)
+                    (setq log-s double-float-log2^23)
+                    (setq s #.(ash 1 23)))
+                   ((< expon -1020)
+                    (setq log-s #.(- double-float-log2^23))
+                    (setq s #.(/ 1.0d0 (ash 1 23)))))))
+         (if (eql s 1)
+           (complex (log-abs x) (phase x))
+           (let ((temp (log-abs (/ x s))))
+             (complex (float (+ log-s temp) temp) (phase x)))))))
+    (t
+     (%rational-log x 1.0s0))))
 
+;;; helpers for rational log
+(defun %rational-log (x prototype)
+  (cond ((minusp x)
+         (complex (%rational-log (- x) prototype)
+                  (if (typep prototype 'short-float)
+                    single-float-pi
+                    pi)))
+        ((bignump x)
+         ;(let* ((base1 3)
+         ;       (guess (floor (1- (integer-length x))
+         ;                     (log base1 2)))
+         ;       (guess1 (* guess (log-e base1))))
+         ;  (+ guess1 (log-e (/ x (expt base1 guess)))))
+         ; Using base1 = 2 is *much* faster. Was there a reason for 3?
+         (let* ((guess (1- (integer-length x)))
+                (guess1 (* guess double-float-log2)))
+           (float (+ guess1 (log-e (float (/ x (ash 1 guess)) 1.0d0))) prototype)))
+        ((and (ratiop x)
+              ;; Rational arguments near +1 can be specified with great precision: don't lose it
+              (cond ((< 0.5 x 3)
+                     (log1+ (float (- x 1) prototype)))
+                    (
+                     ;; Escape out small values as well as large
+                     (or (> x most-positive-short-float)
+                         (< x least-positive-normalized-short-float))
+                     ;; avoid loss of precision due to subtracting logs of numerator and denominator
+                     (let* ((n (%numerator x))
+                            (d (%denominator x))
+                            (sn (1- (integer-length n)))
+                            (sd (1- (integer-length d))))
+                       (float (+ (* (- sn sd) double-float-log2)
+                                 (- (log1+ (float (1- (/ n (ash 1 sn))) 1.0d0))
+                                    (log1+ (float (1- (/ d (ash 1 sd))) 1.0d0))))
+                              prototype))))))
+        ((typep prototype 'short-float)
+         #+32-bit-target
+         (target::with-stack-short-floats ((sx x))
+           (%single-float-log! sx (%make-sfloat)))
+         #+64-bit-target
+         (%single-float-log (%short-float x)))
+        (t
+         (with-stack-double-floats ((dx x))
+           (%double-float-log! dx (%make-dfloat))))))
 
+;;; (log1+ x) = (log (1+ x))
+;;; but is much more precise near x = 0
+(defun log1+ (x)
+  ;;(cond ((typep x 'complex)
+  ;;      (let ((r (realpart x))
+  ;;            (i (imagpart x)))
+  ;;        (if (and (< (abs r) 0.5)
+  ;;                 (< (abs i) 3))
+  ;;          (let* ((n (+ (* r (+ 2 r)) (* i i)))
+  ;;                 (d (1+ (sqrt (1+ n)))))
+  ;;            (complex (log1+ (/ n d)) (atan i (1+ r))))
+  ;;         (log (1+ x)))))
+  ;;     (t
+  (if (and (typep x 'ratio)
+           (< -0.5 x 2))
+    (setq x (%short-float x)))
+  (let ((y (1+ x)))
+    (if (eql y x)
+      (log-e y)
+      (let ((e (1- y)))
+        (if (zerop e)
+          (* x 1.0)
+          (- (log-e y) (/ (- e x) y)))))))
+
+;;; helper for complex log
+;;; uses more careful approach when (abs x) is near 1
+(defun log-abs (x)
+  (let ((a (abs x)))
+    (if (< 0.5 a 3)
+      (let* ((r (realpart x))
+             (i (imagpart x))
+             (n (if (> (abs r) (abs i))
+                  (+ (* (1+ r) (1- r)) (* i i))
+                  (+ (* r r) (* (1+ i) (1- i))))))
+        (log1+ (/ n (1+ a))))
+      (log-e a))))
+
+(defun %rational-complex-log (x prototype &aux ra ia)
+  (let* ((rx (realpart x))
+         (ix (imagpart x))
+         (x (abs rx))
+         (y (abs ix)))
+    (if (> y x)
+      (let ((r (float (/ rx y) 1.0d0)))
+        (setq ra (+ (%rational-log y 1.0d0)
+                    (/ (log1+ (* r r)) 2)))
+        (setq ia (atan (if (minusp ix) -1.0d0 1.0d0) r)))
+      (let ((r (float (/ ix x) 1.0d0)))
+        (setq ra (+ (%rational-log x 1.0d0)
+                    (/ (log1+ (* r r)) 2)))
+        (setq ia (atan r (if (minusp rx) -1.0d0 1.0d0)))))
+    (if (typep prototype 'short-float)
+      (complex (%short-float ra) (%short-float ia))
+      (complex ra ia))))
 
 (defun exp (x)
   "Return e raised to the power NUMBER."
@@ -853,14 +1077,55 @@
   "Return the square root of NUMBER."
   (cond ((zerop x) x)
         ((complexp x)
-         (let* ((i (imagpart x)))
-           (if (zerop i)                ; has to be a float
-             (let* ((zero (if (typep i 'double-float) 0.0d0 0.0f0))
-                    (r (realpart x)))
-               (if (< r zero)
-                 (%make-complex zero (float-sign i (sqrt (- r))))
-                 (%make-complex (abs (sqrt r)) (float-sign i zero))))
-             (* (sqrt (abs x)) (cis (/ (phase x) 2))))))
+         (let ((rx (realpart x))
+               (ix (imagpart x)))
+           (cond ((rationalp rx)
+                  (if (zerop rx)
+                    (let ((s (sqrt (/ (abs ix) 2))))
+                      (complex s (if (minusp ix) (- s) s)))
+                    (let* ((s (+ (* rx rx) (* ix ix)))
+                           (d (if (ratiop s)
+                                (/ (isqrt (%numerator s))
+                                   (isqrt (%denominator s)))
+                                (isqrt s))))
+                      (unless (eql s (* d d))
+                        (setf d (%double-float-hypot (%double-float rx)
+                                                     (%double-float ix))))
+                      (cond ((minusp rx)
+                             (setq b (sqrt (/ (- d rx) 2)))
+                             (when (minusp ix)
+                               (setq b (- b)))
+                             (setq a (/ ix (+ b b))))
+                            (t
+                             (setq a (sqrt (/ (+ rx d) 2)))
+                             (setq b (/ ix (+ a a)))))
+                      (if (rationalp a)
+                        (complex a b)
+                        (complex (%short-float a) (%short-float b))))))
+                 ((minusp rx)
+                  (if (zerop ix)
+                    (complex 0 (float-sign ix (sqrt (- rx))))
+                    (let ((shift (cond ((< rx -1) -3)
+                                       ((and (> rx -5.9604645E-8) (< (abs ix) 5.9604645E-8)) 25)
+                                       (t -1))))
+                      (setq rx (scale-float rx shift))
+                      (let ((s (fsqrt (- (abs (complex rx (scale-float ix shift))) rx))))
+                        (setq b (scale-float s (ash (- -1 shift) -1)))
+                        (when (minusp ix)
+                          (setq b (- b)))
+                        (setq a (/ ix (scale-float b 1)))
+                        (complex a b)))))
+                 (t
+                  (if (zerop ix)
+                    (complex (sqrt rx) ix)
+                    (let ((shift (cond ((> rx 1) -3)
+                                       ((and (< rx 5.9604645E-8) (< (abs ix) 5.9604645E-8)) 25)
+                                       (t -1))))
+                      (setq rx (scale-float rx shift))
+                      (let ((s (fsqrt (+ rx (abs (complex rx (scale-float ix shift)))))))
+                        (setq a (scale-float s (ash (- -1 shift) -1)))
+                        (setq b (/ ix (scale-float a 1)))
+                        (complex a b))))))))
         ((minusp x) (complex 0 (sqrt (- x))))
         ((floatp x)
          (fsqrt x))
@@ -873,11 +1138,7 @@
                           (* (setq b (isqrt d)) b)))))
          (/ a b))          
         (t
-         #+32-bit-target
-         (target::with-stack-short-floats ((f1))
-           (fsqrt (%short-float x f1)))
-         #+64-bit-target
-         (fsqrt (%short-float x)))))
+         (float (fsqrt (float x 0.0d0)) 1.0s0))))
 
 
 
