@@ -1,5 +1,5 @@
 ;;; -*- mode: Common-Lisp; Base: 10 ; Syntax: ANSI-Common-Lisp -*-
-;;; This is ASDF 2.27: Another System Definition Facility.
+;;; This is ASDF 2.28: Another System Definition Facility.
 ;;;
 ;;; Feedback, bug reports, and patches are all welcome:
 ;;; please mail to <asdf-devel@common-lisp.net>.
@@ -4972,7 +4972,7 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
          ;; "3.4.5.67" would be a development version in the official upstream of 3.4.5.
          ;; "3.4.5.0.8" would be your eighth local modification of official release 3.4.5
          ;; "3.4.5.67.8" would be your eighth local modification of development version 3.4.5.67
-         (asdf-version "2.27")
+         (asdf-version "2.28")
          (existing-version (asdf-version)))
     (setf *asdf-version* asdf-version)
     (when (and existing-version (not (equal asdf-version existing-version)))
@@ -7935,12 +7935,13 @@ system names to pathnames of .asd files")
   ;;    and may be from within the EVAL-WHEN of a file compilation.
   ;; If no absolute pathname was found, we return NIL.
   (check-type pathname (or null string pathname))
-  (resolve-symlinks*
-   (ensure-absolute-pathname
-    (parse-unix-namestring pathname :type :directory)
-    #'(lambda () (ensure-absolute-pathname
-                  (load-pathname) 'get-pathname-defaults nil))
-    nil)))
+  (pathname-directory-pathname
+   (resolve-symlinks*
+    (ensure-absolute-pathname
+     (parse-unix-namestring pathname :type :directory)
+     #'(lambda () (ensure-absolute-pathname
+                   (load-pathname) 'get-pathname-defaults nil))
+     nil))))
 
 
 ;;; Component class
