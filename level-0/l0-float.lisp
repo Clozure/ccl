@@ -1184,12 +1184,6 @@
      )))
 
 
-(eval-when (:execute :compile-toplevel)
-  (defconstant single-float-pi (coerce pi 'single-float))
-  (defconstant double-float-half-pi (asin 1.0d0))
-  (defconstant single-float-half-pi (asin 1.0f0))
-)
-
 (defun acos (x)
   "Return the arc cosine of NUMBER."
   (number-case x
