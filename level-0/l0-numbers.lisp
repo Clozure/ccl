@@ -1180,7 +1180,10 @@
          (fixnum (if (eq divisor 1) (values number 0) (%fixnum-truncate number divisor)))
          (bignum (if (eq number target::target-most-negative-fixnum)
 		   (with-small-bignum-buffers ((bn number))
-		     (bignum-truncate bn divisor))
+                     (multiple-value-bind (q r) (bignum-truncate bn divisor)
+                       (if (eq r bn)
+                         (values q number)
+                         (values q r))))
 		   (values 0 number)))
          (double-float (truncate-rat-dfloat number divisor))
          (short-float (truncate-rat-sfloat number divisor))
@@ -1556,7 +1559,11 @@
     (fixnum
      (number-case divisor
        (fixnum (nth-value 1 (%fixnum-truncate number divisor)))
-       (bignum number)
+       (bignum
+        (if (and (eql number target::target-most-negative-fixnum)
+                 (eql divisor (- target::target-most-negative-fixnum)))
+          0
+          number))
        (t (nth-value 1 (truncate number divisor)))))
     (bignum
      (number-case divisor
