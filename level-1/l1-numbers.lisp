@@ -768,6 +768,7 @@
     (%df-check-exception-1 'exp n (%ffi-exception-status))
     #+linux-target
     (and (infinity-p TEMP)
+         (not (infinity-p n))
          (get-fpu-mode :overflow)
          (error 'floating-point-overflow
                 :operation 'exp
@@ -786,6 +787,7 @@
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
     #+linux-target
     (and (infinity-p TEMP)
+         (not (infinity-p n))
          (get-fpu-mode :overflow)
          (error 'floating-point-overflow
                 :operation 'exp
@@ -807,6 +809,7 @@
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
     #+linux-target
     (and (infinity-p result)
+         (not (infinity-p n))
          (get-fpu-mode :overflow)
          (error 'floating-point-overflow
                 :operation 'exp
