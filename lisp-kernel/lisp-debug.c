@@ -311,6 +311,9 @@ int bit_for_regnum(int r)
   case REG_EBP: return 1<<5;
   case REG_ESI: return 1<<6;
   case REG_EDI: return 1<<7;
+  default:
+    /* stupid Apple C compiler */
+    return -1;
   }
 }
 #endif
