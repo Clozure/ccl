@@ -434,11 +434,22 @@ int keepcost
   ;; size of the active region above the sentinel.
   (with-other-threads-suspended
     (when gc-first (gc)) ;; get rid of thread allocation chunks.  Wish could just egc...
-    ;; This mustn't cons.
+    ;; This mustn't cons.  Ut really shouldn't deadlock either, but
+    ;; it could.  (The GC shouldn't free malloc'ed things if any threads
+    ;; are suspended when it wakes up whatever it suspended, since one
+    ;; of those sleeping threads could own a malloc lock.)
     (let* ((first-area (%normalize-areas)) ;; youngest generation
            (min-base (loop with current = (%current-tcr)
-                           for tcr = (%fixnum-ref current target::tcr.next)
-                             then (%fixnum-ref tcr target::tcr.next)
+                           for tcr = (%fixnum-ref current
+                                                  #+win32-target
+                                                  target:tcr-aux.next
+                                                  #-win32-target
+                                                  target::tcr.next)
+                             then (%fixnum-ref tcr
+                                               #+win32-target
+                                               target::tcr-aux.next
+                                               #-win32-target
+                                               target::tcr.next)
                            as base fixnum = (%fixnum-ref tcr target::tcr.save-allocbase)
                            when (> base 0)
                              minimize base
