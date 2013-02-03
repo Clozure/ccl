@@ -442,7 +442,7 @@ int keepcost
            (min-base (loop with current = (%current-tcr)
                            for tcr = (%fixnum-ref current
                                                   #+win32-target
-                                                  target:tcr-aux.next
+                                                  target::tcr-aux.next
                                                   #-win32-target
                                                   target::tcr.next)
                              then (%fixnum-ref tcr
