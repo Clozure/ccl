@@ -22,6 +22,7 @@
 (eval-when (:compile-toplevel :execute)
   (require "NUMBER-MACROS")
   (require :number-case-macro) 
+  (defconstant two^23 (ash 1 23))
   (defconstant single-float-pi (coerce pi 'single-float))
   (defconstant double-float-half-pi (/ pi 2))
   (defconstant single-float-half-pi (coerce (/ pi 2) 'single-float))
@@ -692,46 +693,125 @@
 ;;; Transcendental functions.
 (defun sin (x)
   "Return the sine of NUMBER."
-  (if (complexp x)
-    (let* ((r (realpart x))
-           (i (imagpart x)))
-      (complex (* (sin r) (cosh i))
-               (* (cos r) (sinh i))))
-    (if (typep x 'double-float)
-      (%double-float-sin! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-        (%single-float-sin! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-sin (%short-float x)))))
+  (cond ((complexp x)
+         (let* ((r (realpart x))
+                (i (imagpart x)))
+           (complex (* (sin r) (cosh i))
+                    (* (cos r) (sinh i)))))
+        ((or (typep x 'ratio)
+             (> (abs x) two^23))
+         (if (typep x 'double-float)
+           (imagpart (%extended-cis x))
+           (%short-float (imagpart (%extended-cis x)))))
+        ((typep x 'double-float)
+         (%double-float-sin! x (%make-dfloat)))
+        (t
+         #+32-bit-target
+         (target::with-stack-short-floats ((sx x))
+           (%single-float-sin! sx (%make-sfloat)))
+         #+64-bit-target
+         (%single-float-sin (%short-float x)))))
 
 (defun cos (x)
   "Return the cosine of NUMBER."
-  (if (complexp x)
-    (let* ((r (realpart x))
-           (i (imagpart x)))
-      (complex (* (cos r) (cosh i))
-               (- (* (sin r) (sinh i)))))
-    (if (typep x 'double-float)
-      (%double-float-cos! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-        (%single-float-cos! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-cos (%short-float x)))))
+  (cond ((complexp x)
+         (let* ((r (realpart x))
+                (i (imagpart x)))
+           (complex (* (cos r) (cosh i))
+                    (- (* (sin r) (sinh i))))))
+        ((or (typep x 'ratio)
+             (> (abs x) two^23))
+         (if (typep x 'double-float)
+           (realpart (%extended-cis x))
+           (%short-float (realpart (%extended-cis x)))))
+        ((typep x 'double-float)
+         (%double-float-cos! x (%make-dfloat)))
+        (t
+         #+32-bit-target
+         (target::with-stack-short-floats ((sx x))
+           (%single-float-cos! sx (%make-sfloat)))
+         #+64-bit-target
+         (%single-float-cos (%short-float x)))))
 
 (defun tan (x)
   "Return the tangent of NUMBER."
-  (if (complexp x)
-    (/ (sin x) (cos x))
-    (if (typep x 'double-float)
-      (%double-float-tan! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-        (%single-float-tan! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-tan (%short-float x))
-      )))
+  (cond ((complexp x)
+         (let ((r (realpart x))
+               (i (imagpart x)))
+           (if (zerop i)
+             (complex (tan r) i)
+             (let* ((tx (tan r))
+                    (ty (tanh i))
+                    (tx2 (* tx tx))
+                    (d (1+ (* tx2 (* ty ty))))
+                    (n (if (> (abs i) 20)
+                         (* 4 (exp (* -2 (abs i))))
+                         (let ((c (cosh i)))
+                           (/ (* c c))))))
+               (complex (/ (* n tx) d)
+                        (/ (* ty (1+ tx2)) d))))))
+        ((or (typep x 'ratio)
+             (> (abs x) two^23))
+         (let ((c (%extended-cis x)))
+           (if (typep x 'double-float)
+             (/ (imagpart c) (realpart c))
+             (%short-float (/ (imagpart c) (realpart c))))))
+        ((typep x 'double-float)
+         (%double-float-tan! x (%make-dfloat)))
+        (t
+         #+32-bit-target
+         (target::with-stack-short-floats ((sx x))
+           (%single-float-tan! sx (%make-sfloat)))
+         #+64-bit-target
+         (%single-float-tan (%short-float x))
+         )))
+
+
+;;; Helper function for sin/cos/tan for ratio or large arguments
+;;; (Will become inaccurate for ridiculously large arguments though)
+;;; Does not assume that float library returns accurate values for large arguments
+;;; (many don't)
+
+;;; hexdecimal representations of pi at various precisions
+(defconstant pi-vector
+  #(#x3243F6A8885A308D313198A2E0
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D008
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B5470
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310B
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D9
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD588215
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3E
+    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3ED71577C1BD314B2778AF2FDA5
+    ))
+
+(defun %extended-cis (x)
+  (let (size pi-size)
+    (typecase x
+      (integer (setq size (1- (integer-length (abs x)))))
+      (ratio (setq size (- (integer-length (abs (numerator x)))
+                           (integer-length (denominator x)))))
+      (float (multiple-value-bind (mantissa exponent sign)
+                                  (integer-decode-float x)
+               (setq size (+ (1- (integer-length mantissa)) exponent))
+               (setq x (* sign mantissa (expt 2 exponent))))))
+    (setq pi-size (ceiling (+ size 64) 100))
+    (cond ((< pi-size 1) (setq pi-size 1))
+          ((> pi-size 17) (setq pi-size 17)))
+    (let* ((2pi-approx (/ (aref pi-vector (1- pi-size))
+                          (ash 1 (1- (* 100 pi-size)))))
+           (reduced-x (rem x 2pi-approx))
+           (x0 (float reduced-x 1.0d0))
+           (x1 (- reduced-x (rational x0))))
+      (* (cis x0) (cis (float x1 1.0d0))))))
 
 
 ;;; Multiply by i (with additional optional scale factor)
@@ -1045,14 +1125,32 @@
 (defun positive-realpart-p (n)
   (> (realpart n) 0))
 
+;;; (It may be possible to do something with rational exponents, e.g. so that
+;;;       (expt x 1/2) == (sqrt x)
+;;;       (expt x 3/2) == (expt (sqrt x) 3)      ** NOT (sqrt (expt x 3)) !! **
+;;;                      or (* x (sqrt x))
+;;;       (expt x 1/8) == (sqrt (sqrt (sqrt x)))
+;;;    even, in the case of rational x, returning a rational result if possible.)
+;;;
 (defun expt (b e)
   "Return BASE raised to the POWER."
   (cond ((zerop e) (1+ (* b e)))
 	((integerp e)
          (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e)))
         ((zerop b)
-         (if (plusp (realpart e)) b (report-bad-arg e '(satisfies positive-realpart-p))))
-        ((and (realp b) (plusp b) (realp e))
+         (if (plusp (realpart e)) (* b e) (report-bad-arg e '(satisfies plusp))))
+        ((and (realp b) (plusp b) (realp e)
+              ; escape out very small or very large rationals
+              ; - avoid problems converting to float
+              (typecase b
+                (bignum (<= b most-positive-short-float))
+                (ratio (cond ((< b 0.5)
+                              (>= b least-positive-normalized-short-float))
+                             ((> b 3)
+                              (<= b most-positive-short-float))))
+                (t t)))
+         ;; assumes that the library routines are accurate
+         ;; (if not, just excise this whole clause)
          (if (or (typep b 'double-float)
                  (typep e 'double-float))
            (with-stack-double-floats ((b1 b)
@@ -1060,16 +1158,34 @@
              (%double-float-expt! b1 e1 (%make-dfloat)))
            #+32-bit-target
            (target::with-stack-short-floats ((b1 b)
-                                     (e1 e))
+                                             (e1 e))
              (%single-float-expt! b1 e1 (%make-sfloat)))
            #+64-bit-target
            (%single-float-expt (%short-float b) (%short-float e))
            ))
-	((typep (realpart e) 'double-float)
-	 ;; Avoid intermediate single-float result from LOG
-	 (let ((promoted-base (* 1d0 b)))
-	   (exp (* e (log promoted-base)))))
-        (t (exp (* e (log b))))))
+        ((typep b 'rational)
+         (let ((r (exp (* e (%rational-log b 1.0d0)))))
+           (cond ((typep (realpart e) 'double-float)
+                  r)
+                 ((typep r 'complex)
+                  (complex (%short-float (realpart r)) (%short-float (imagpart r))))
+                 (t
+                  (%short-float r)))))
+        ((typep (realpart b) 'rational)
+         (let ((r (exp (* e (%rational-complex-log b 1.0d0)))))
+           (if (typep (realpart e) 'double-float)
+             r
+             (complex (%short-float (realpart r)) (%short-float (imagpart r))))))
+        (t
+         ;; type upgrade b without losing -0.0 ...
+         (let ((r (exp (* e (log-e (* b 1.0d0))))))
+           (cond ((or (typep (realpart b) 'double-float)
+                      (typep (realpart e) 'double-float))
+                  r)
+                 ((typep r 'complex)
+                  (complex (%short-float (realpart r)) (%short-float (imagpart r))))
+                 (t
+                  (%short-float r)))))))
 
 
         
@@ -1144,76 +1260,150 @@
 
 (defun asin (x)
   "Return the arc sine of NUMBER."
-  (number-case x
-    (complex
-      (let ((sqrt-1-x (sqrt (- 1 x)))
-            (sqrt-1+x (sqrt (+ 1 x))))
-        (complex (atan (realpart x)
-                       (realpart (* sqrt-1-x sqrt-1+x)))
-                 (asinh (imagpart (* (conjugate sqrt-1-x)
-                                     sqrt-1+x))))))
-    (double-float
-     (locally (declare (type double-float x))
-       (if (and (<= -1.0d0 x)
-		(<= x 1.0d0))
-	 (%double-float-asin! x (%make-dfloat))
-	 (let* ((temp (+ (complex -0.0d0 x)
-			 (sqrt (- 1.0d0 (the double-float (* x x)))))))
-	   (complex (phase temp) (- (log (abs temp))))))))
-    ((short-float rational)
-     #+32-bit-target
-     (let* ((x1 (%make-sfloat)))
-       (declare (dynamic-extent x1))
-       (if (and (realp x) 
-		(<= -1.0s0 (setq x (%short-float x x1)))
-		(<= x 1.0s0))
-	 (%single-float-asin! x1 (%make-sfloat))
-	 (progn
-	   (setq x (+ (complex (- (imagpart x)) (realpart x))
-		      (sqrt (- 1 (* x x)))))
-	   (complex (phase x) (- (log (abs x)))))))
-     #+64-bit-target
-     (if (and (realp x) 
-              (<= -1.0s0 (setq x (%short-float x)))
-              (<= x 1.0s0))
-	 (%single-float-asin x)
-	 (progn
-	   (setq x (+ (complex (- (imagpart x)) (realpart x))
-		      (sqrt (- 1 (* x x)))))
-	   (complex (phase x) (- (log (abs x))))))
-     )))
+  (cond ((and (typep x 'double-float)
+              (locally (declare (type double-float x))
+                (and (<= -1.0d0 x)
+                     (<= x 1.0d0))))
+         (%double-float-asin! x (%make-dfloat)))
+        ((and (typep x 'single-float)
+              (locally (declare (type single-float x))
+                (and (<= -1.0s0 x)
+                     (<= x 1.0s0))))
+         #+32-bit-target
+         (%single-float-asin! x (%make-sfloat))
+         #+64-bit-target
+         (%single-float-asin x))
+        ((and (typep x 'rational)
+              (<= (abs x) 1))
+         (if (integerp x)
+           (case x
+             (0 0.0s0)                          ; or simply 0 ??
+             (1 single-float-half-pi)
+             (-1 #.(- single-float-half-pi)))
+           (atan x (sqrt (- 1 (* x x))))))
+        (t
+         (%complex-asin/acos x nil))
+        ))
 
 
 (defun acos (x)
   "Return the arc cosine of NUMBER."
-  (number-case x
-    (complex
-     (if (typep (realpart x) 'double-float)
-       (- double-float-half-pi (asin x))
-       (- single-float-half-pi (asin x))))
-    (double-float
-     (locally (declare (type double-float x))
-       (if (and (<= -1.0d0 x)
-		(<= x 1.0d0))
-	 (%double-float-acos! x (%make-dfloat))
-	 (- double-float-half-pi (asin x)))))
-    ((short-float rational)
-     #+32-bit-target
-     (target::with-stack-short-floats ((sx x))
-	(locally
-	    (declare (type short-float sx))
-	  (if (and (<= -1.0s0 sx)
-		   (<= sx 1.0s0))
-	    (%single-float-acos! sx (%make-sfloat))
-	    (- single-float-half-pi (asin sx)))))
-     #+64-bit-target
-     (let* ((sx (%short-float x)))
-       (declare (type short-float sx))
-       (if (and (<= -1.0s0 sx)
-                (<= sx 1.0s0))
-         (%single-float-acos sx)
-         (- single-float-half-pi (asin sx))))
-     )))
+  (cond ((and (typep x 'double-float)
+              (locally (declare (type double-float x))
+                (and (<= -1.0d0 x)
+                     (<= x 1.0d0))))
+         (%double-float-acos! x (%make-dfloat)))
+        ((and (typep x 'short-float)
+              (locally (declare (type short-float x))
+                (and (<= -1.0s0 x)
+                     (<= x 1.0s0))))
+         #+32-bit-target
+         (%single-float-acos! x (%make-sfloat))
+         #+64-bit-target
+         (%single-float-acos x))
+        ((and (typep x 'rational)
+              (<= (abs x) 1))
+         (if (integerp x)
+           (case x
+             (0 single-float-half-pi)
+             (1 0.0s0)                          ; or simply 0 ??
+             (-1 single-float-pi))
+           (atan (sqrt (- 1 (* x x))) x)))
+        (t
+         (%complex-asin/acos x t))
+        ))
+
+;;; combined complex asin/acos routine
+;;; argument acos is true for acos(z); false for asin(z)
+;;;
+;;; based on Hull, Fairgrieve & Tang, ACM TMS 23, 3, 299-335 (Sept. 1997)
+(defun %complex-asin/acos (z acos)
+  (let* ((rx (realpart z))
+         (ix (imagpart z))
+         (x (abs rx))
+         (y (abs ix))
+         (m (max x y)))
+    (if (> m 1.8014399E+16)
+      ;; Large argument escape
+      (let ((log-s 0))
+        (if (typep m 'double-float)
+          (if (> m #.(/ most-positive-double-float 2))
+            (setq log-s double-float-log2)
+            (setq z (* 2 z)))
+          (if (> m #.(/ most-positive-short-float 2))
+            (setq log-s single-float-log2)
+            (setq z (* 2 z))))
+        (if acos
+          (i* (+ log-s (log-e z))
+              (if (minusp ix) +1 -1))
+          (if (minusp ix)
+            (i* (+ log-s (log-e (i* z 1))) -1)
+            (i* (+ log-s (log-e (i* z -1))) 1))))
+      (let ((qrx rx)
+            (qx x)
+            x-1 y2 s)
+        (cond ((rationalp rx)
+               (setq x-1 (float (abs (- x 1))))
+               (setq rx (float rx))
+               (setq x (abs rx))
+               (setq y (float y))
+               (setq y2 (* y y))
+               (setq s (cond ((zerop x-1)
+                              y)
+                             ((> y x-1)
+                              (let ((c (/ x-1 y)))
+                                (* y (sqrt (1+ (* c c))))))
+                             (t
+                              (let ((c (/ y x-1)))
+                                (* x-1 (sqrt (1+ (* c c)))))))))
+              (t
+               (setq x-1 (abs (- x 1)))
+               (setq y2 (* y y))
+               (setq s (if (zerop x-1)
+                         y
+                         (sqrt (+ (* x-1 x-1) y2))))))
+        (let* ((x+1 (+ x 1))
+               (r (sqrt (+ (* x+1 x+1) y2)))
+               (a (/ (+ r s) 2))
+               (b (/ rx a))
+               (ra (if (<= (abs b) 0.6417)
+                     (if acos (acos b) (asin b))
+                     (let* ((r+x+1 (+ r x+1))
+                            (s+x-1 (+ s x-1))
+                            (a+x (+ a x))
+                            (ry (if (<= qx 1)
+                                  (let ((aa (+ (/ y2 r+x+1) s+x-1)))
+                                    (sqrt (/ (* a+x aa) 2)))
+                                  (let ((aa (+ (/ a+x r+x+1) (/ a+x s+x-1))))
+                                    (* y (sqrt (/ aa 2)))))))
+                       (if acos (atan ry rx) (atan rx ry)))))
+               (ia (if (<= a 1.5)
+                     (let* ((r+x+1 (+ r x+1))
+                            (s+x-1 (+ s x-1))
+                            (ll (if (< qx 1)
+                                  (let* ((aa (/ (+ (/ 1 r+x+1) (/ 1 s+x-1)) 2)))
+                                    (+ (* aa y2) (* y (sqrt (* aa (1+ a))))))
+                                  (let* ((a-1 (/ (+ (/ y2 r+x+1) s+x-1) 2)))
+                                    (+ a-1 (sqrt (* a-1 (1+ a))))))))
+                       (log1+ ll))
+                     (log (+ a (sqrt (1- (* a a))))))))
+          ;; final fixup of signs
+          (if acos
+            (if (complexp z)
+              (if (typep ix 'float)
+                (setq ia (float-sign (- ix) ia))
+                (if (plusp ix)
+                  (setq ia (- ia))))
+              (if (< qrx -1)
+                (setq ia (- ia))))
+            (if (complexp z)
+              (if (typep ix 'float)
+                (setq ia (float-sign ix ia))
+                (if (minusp ix)
+                  (setq ia (- ia))))
+              (if (> qrx 1)
+                (setq ia (- ia)))))
+          (complex ra ia))))))
 
 
 (defun fsqrt (x)
