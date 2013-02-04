@@ -1590,9 +1590,15 @@
 
 (defun cis (theta)
   "Return cos(Theta) + i sin(Theta), i.e. exp(i Theta)."
-  (if (complexp theta)
-    (error "Argument to CIS is complex: ~S" theta)
-    (complex (cos theta) (sin theta))))
+  (cond ((complexp theta)
+         (error "Argument to CIS is complex: ~S" theta))
+        ((or (typep theta 'ratio)
+             (> (abs theta) #.(ash 1 23)))
+         (if (typep theta 'double-float)
+           (%extended-cis theta)
+           (coerce (%extended-cis theta) '(complex single-float))))
+        (t
+         (complex (cos theta) (sin theta)))))
 
 
 (defun complex (realpart &optional (imagpart 0))

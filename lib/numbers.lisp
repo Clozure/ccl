@@ -640,7 +640,17 @@
 
 (defun signum (x)
   "If NUMBER is zero, return NUMBER, else return (/ NUMBER (ABS NUMBER))."
-  (cond ((complexp x) (if (zerop x) x (/ x (abs x))))
+  (cond ((complexp x) (if (zerop x)
+                        x
+                        (let ((m (max (abs (realpart x))
+                                      (abs (imagpart x)))))
+                          (cond ((rationalp m)
+                                 ;; rescale to avoid intermediate under/overflow
+                                 (setq x (/ x m)))
+                                ((> m #.(ash 1 23))
+                                 ;; ensure no overflow for abs
+                                 (setq x (/ x 2))))
+                          (/ x (abs x)))))
         ((rationalp x) (if (plusp x) 1 (if (zerop x) 0 -1)))
         ((zerop x) (float 0.0 x))
         (t (float-sign x))))
@@ -677,7 +687,10 @@
 (defun sinh (x)
   "Return the hyperbolic sine of NUMBER."
   (if (complexp x) 
-    (/ (- (exp x) (exp (- x))) 2)
+    (let ((r (realpart x))
+          (i (imagpart x)))
+      (complex (* (sinh r) (cos i))
+               (* (cosh r) (sin i))))
     (if (typep x 'double-float)
       (%double-float-sinh! x (%make-dfloat))
       #+32-bit-target
@@ -690,7 +703,10 @@
 (defun cosh (x)
   "Return the hyperbolic cosine of NUMBER."
   (if (complexp x) 
-    (/ (+ (exp x) (exp (- x))) 2)
+    (let ((r (realpart x))
+          (i (imagpart x)))
+      (complex (* (cosh r) (cos i))
+               (* (sinh r) (sin i))))
     (if (typep x 'double-float)
       (%double-float-cosh! x (%make-dfloat))
       #+32-bit-target
@@ -701,50 +717,113 @@
 
 (defun tanh (x)
   "Return the hyperbolic tangent of NUMBER."
-  (if (complexp x) 
-    (/ (sinh x) (cosh x))
-    (if (typep x 'double-float)
-      (%double-float-tanh! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-	(%single-float-tanh! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-tanh (%short-float x)))))
+  (cond ((complexp x)
+         (let ((r (realpart x))
+               (i (imagpart x)))
+           (if (zerop r)
+             (complex r (tan i))
+             (let* ((tx (tanh r))
+                    (ty (tan i))
+                    (ty2 (* ty ty))
+                    (d (1+ (* (* tx tx) ty2)))
+                    (n (if (> (abs r) 20)
+                         (* 4 (exp (- (* 2 (abs r)))))
+                         (let ((c (cosh r)))
+                           (/ (* c c))))))
+               (complex (/ (* tx (1+ ty2)) d)
+                        (/ (* n ty) d))))))
+        ((typep x 'double-float)
+         (%double-float-tanh! x (%make-dfloat)))
+        ((and (typep x 'rational)
+              (> (abs x) 12))
+         (if (plusp x) 1.0s0 -1.0s0))
+        (t
+         #+32-bit-target
+         (target::with-stack-short-floats ((sx x))
+           (%single-float-tanh! sx (%make-sfloat)))
+         #+64-bit-target
+         (%single-float-tanh (%short-float x)))))
 
 (defun asinh (x)
   "Return the hyperbolic arc sine of NUMBER."
-  (if (complexp x) 
-    (log (+ x (sqrt (+ 1 (* x x)))))
-    (if (typep x 'double-float)
-      (%double-float-asinh! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-	(%single-float-asinh! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-asinh (%short-float x)))))
+  (cond ((typep x 'double-float)
+         (%double-float-asinh! x (%make-dfloat)))
+        ((typep x 'short-float)
+         #+32-bit-target
+         (%single-float-asinh! x (%make-sfloat))
+         #+64-bit-target
+         (%single-float-asinh (%short-float x)))
+        ((typep x 'rational)
+         (if (< (abs x) most-positive-short-float)
+           #+32-bit-target
+           (target::with-stack-short-floats ((sx x))
+             (%single-float-asinh! sx (%make-sfloat)))
+           #+64-bit-target
+           (%single-float-asinh (%short-float x))
+           (* (signum x) (log-e (* 2 (abs x))))))
+        (t
+         (i* (%complex-asin/acos (i* x) nil) -1))))
 
+;;; for complex case, use acos and post-fix the branch cut
 (defun acosh (x)
   "Return the hyperbolic arc cosine of NUMBER."
-  (if (and (realp x) (<= 1.0 x))
-    (if (typep x 'double-float)
-      (%double-float-acosh! x (%make-dfloat))
-      #+32-bit-target
-      (target::with-stack-short-floats ((sx x))
-	(%single-float-acosh! sx (%make-sfloat)))
-      #+64-bit-target
-      (%single-float-acosh (%short-float x)))
-    (* 2 (log (+ (sqrt (/ (1+ x) 2)) (sqrt (/ (1- x) 2)))))))
+  (cond ((and (typep x 'double-float)
+              (locally (declare (type double-float x))
+                (<= 1.0d0 x)))
+         (%double-float-acosh! x (%make-dfloat)))
+        ((and (typep x 'short-float)
+              (locally (declare (type short-float x))
+                (<= 1.0s0 x)))
+         #+32-bit-target
+         (%single-float-acosh! x (%make-sfloat))
+         #+64-bit-target
+         (%single-float-acosh (%short-float x)))
+        ((and (typep x 'rational)
+              (<= 1 x))
+         (cond ((< x 2)
+                (log1+ (+ (- x 1) (sqrt (- (* x x) 1)))))
+               ((<= x most-positive-short-float)
+                #+32-bit-target
+                (target::with-stack-short-floats ((x1 x))
+                  (%single-float-acosh! x1 (%make-sfloat)))
+                #+64-bit-target
+                (%single-float-acosh (%short-float x)))
+               (t
+                (log-e (* 2 x)))))
+        (t
+         (let ((sign (and (typep x 'complex)
+                          (let ((ix (imagpart x)))
+                            (typecase ix
+                              (double-float (%double-float-sign ix))
+                              (single-float (%short-float-sign ix))
+                              (t (minusp ix)))))))
+           (i* (%complex-asin/acos x t) (if sign -1 1))))))
 
 (defun atanh (x)
   "Return the hyperbolic arc tangent of NUMBER."
-  (if (and (realp x) (<= -1.0 (setq x (float x)) 1.0))
-    (if (typep x 'double-float)
-      (%double-float-atanh! x (%make-dfloat))
-      #+32-bit-target
-      (%single-float-atanh! x (%make-sfloat))
-      #+64-bit-target
-      (%single-float-atanh x))
-    (/ (- (log (+ 1 x)) (log (- 1 x))) 2)))
+  (cond ((and (typep x 'double-float)
+              (locally (declare (type double-float x))
+                (and (<= -1.0d0 x)
+                     (<= x 1.0d0))))
+         (%double-float-atanh! x (%make-dfloat)))
+        ((and (typep x 'short-float)
+              (locally (declare (type short-float x))
+                (and (<= -1.0s0 x)
+                     (<= x 1.0s0))))
+         #+32-bit-target
+         (%single-float-atanh! x (%make-sfloat))
+         #+64-bit-target
+         (%single-float-atanh x))
+        ((and (typep x 'rational)
+              (<= (abs x) 1))
+         (let ((n (numerator x))
+               (d (denominator x)))
+           (/ (log-e (/ (+ d n) (- d n))) 2)))
+        (t
+         (let ((r (realpart x)))
+           (if (zerop r)
+             (complex r (atan (imagpart x)))
+             (%complex-atanh x))))))
 
 (defun ffloor (number &optional divisor)
   "Same as FLOOR, but returns first value as a float."

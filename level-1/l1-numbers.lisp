@@ -733,29 +733,24 @@
     (%sf-check-exception-1 'atan n (%ffi-exception-status))
     temp))
 
+;;; On current (early 2013) versions of x8664 Linux,
+;;; (#_atan2 most-positive-double-float most-positive-double-float)
+;;; returns the correct answer but generates an intermediate
+;;; invalid-operation exception. #_atan2[f] is documented to never
+;;; raise fp exceptions, so don't check for them.
 (defun %double-float-atan2! (x y result)
   (declare (double-float x y result))
-  (with-stack-double-floats ((temp))
-    #+arm-target (%set-fpscr-status 0)
-    (%setf-double-float TEMP (#_atan2 x y))
-    (%df-check-exception-2 'atan2 x y (%ffi-exception-status))
-    (%setf-double-float result TEMP)))
+  (%setf-double-float result (#_atan2 x y)))
 
 #+32-bit-target
 (defun %single-float-atan2! (x y result)
   (declare (single-float x y result))
-  (target::with-stack-short-floats ((temp))
-    #+arm-target (%set-fpscr-status 0)
-    (%setf-short-float TEMP (#_atan2f x y))
-    (%sf-check-exception-2 'atan2 x y (%ffi-exception-status))
-    (%setf-short-float result TEMP)))
+  (%setf-short-float result (#_atan2f x y)))
 
 #+64-bit-target
 (defun %single-float-atan2 (x y)
   (declare (single-float x y))
-  (let* ((result (#_atan2f x y)))
-    (%sf-check-exception-2 'atan2 x y (%ffi-exception-status))
-    result))
+  (#_atan2f x y))
 
 (defun %double-float-exp! (n result)
   (declare (double-float n result))
