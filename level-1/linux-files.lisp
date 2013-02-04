@@ -360,7 +360,7 @@ environment. If there is no such environment variable, create it."
 (defun unsetenv (key)
   #-windows-target
   (with-cstrs ((ckey key))
-    (#_unsetenv key))
+    (#_unsetenv ckey))
   #+windows-target
   (with-cstrs ((ckey (concatenate 'string key "=")))
     (#__putenv ckey)))
