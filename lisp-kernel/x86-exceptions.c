@@ -1508,7 +1508,7 @@ copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 
 #ifdef FREEBSD
 typedef void *FPREGS;
-#endif
+
 
 LispObj *
 copy_avx(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
@@ -1527,7 +1527,7 @@ copy_avx(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
   }
   return current;
 }
-
+#endif
 
 #ifdef DARWIN
 LispObj *
