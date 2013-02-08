@@ -1505,6 +1505,30 @@ copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 }
 #endif
 
+
+#ifdef FREEBSD
+typedef void *FPREGS;
+#endif
+
+LispObj *
+copy_avx(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
+{
+  natural sp;
+
+  *destptr = (FPREGS)AVX_CONTEXT_PTR(xp);
+
+  if (AVX_CONTEXT_PRESENT(xp)) {
+    sp = (natural)current;
+    sp -= AVX_CONTEXT_SIZE(xp);
+    sp = truncate_to_power_of_2(sp,6);
+    memcpy((void *)sp,(void *)AVX_CONTEXT_PTR(xp),AVX_CONTEXT_SIZE(xp));
+    current = (LispObj *)sp;
+    *destptr = (FPREGS)current;
+  }
+  return current;
+}
+
+
 #ifdef DARWIN
 LispObj *
 copy_darwin_mcontext(MCONTEXT_T context, 
@@ -1551,6 +1575,11 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
      it is "allocated" ? */
 #ifdef LINUX
   dest->uc_mcontext.fpregs = (fpregset_t)fp;
+#endif
+#ifdef FREEBSD
+  if (AVX_CONTEXT_PRESENT(context)) {
+    AVX_CONTEXT_PTR(context) = fp;
+  }
 #endif
   dest->uc_stack.ss_sp = 0;
   dest->uc_stack.ss_size = 0;
@@ -1663,6 +1692,9 @@ handle_signal_on_foreign_stack(TCR *tcr,
 
 #ifdef LINUX
   foreign_rsp = copy_fpregs(context, foreign_rsp, &fpregs);
+#endif
+#ifdef FREEBSD
+  foreign_rsp = copy_avx(context, foreign_rsp, &fpregs);
 #endif
 #ifdef DARWIN
   foreign_rsp = copy_darwin_mcontext(UC_MCONTEXT(context), foreign_rsp, &mcontextp);

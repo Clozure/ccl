@@ -63,4 +63,12 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 #define IS_PAGE_FAULT(info,xp) (xp->uc_mcontext.mc_trapno == T_PAGEFLT)
 #define SIGRETURN(context) freebsd_sigreturn(context)
 
+/* AVX stuff.  Funky, because some of this isn't defined until
+   fbsd 9.1 headers; if we built on an older OS version, we still need
+   to know about this if we run on 9.1+ */
+
+#define AVX_CONTEXT_PRESENT(xp) ((xp)->uc_mcontext.mc_trapno & 4)
+#define AVX_CONTEXT_PTR(xp) (((xp)->uc_mcontext.mc_fpstate[66]))
+#define AVX_CONTEXT_SIZE(xp) ((natural)((xp)->uc_mcontext.mc_fpstate[67]))
+
 #include "os-freebsd.h"
