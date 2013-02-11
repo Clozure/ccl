@@ -163,7 +163,8 @@ _endfn
         
 _exportfn(C(freebsd_sigreturn))
 	__(movl $417,%eax)	/* SYS_sigreturn */
-	__(syscall)				
+	__(syscall)	
+        __(ret)			
 	
 _exportfn(C(get_vector_registers))
 _endfn

@@ -1578,7 +1578,7 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
 #endif
 #ifdef FREEBSD
   if (AVX_CONTEXT_PRESENT(context)) {
-    AVX_CONTEXT_PTR(context) = fp;
+    AVX_CONTEXT_PTR(context) = (natural)fp;
   }
 #endif
   dest->uc_stack.ss_sp = 0;
@@ -2376,13 +2376,7 @@ setup_sigaltstack(area *a)
 
   stack.ss_size = SIGSTKSZ*8;
   stack.ss_flags = 0;
-#ifdef SEPARATE_ALTSTACK
   stack.ss_sp = mmap(NULL,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_ANON|MAP_PRIVATE,-1,0);
-#else
-  stack.ss_sp = a->low;
-  a->low += SIGSTKSZ*8;
-  mmap(stack.ss_sp,stack.ss_size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_FIXED|MAP_ANON|MAP_PRIVATE,-1,0);
-#endif
 #ifdef LINUX
   /* The ucontext pushed on the altstack may not contain the (largish)
      __fpregs_mem field; copy_ucontext() wants to copy what it thinks
