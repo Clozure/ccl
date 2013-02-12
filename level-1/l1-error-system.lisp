@@ -189,7 +189,31 @@
 (define-condition allocation-disabled (storage-condition)
   ()
   (:report (lambda (c s) (declare (ignore c)) (format s "Attempt to heap-allocate a lisp object when heap allocation is disabled."))))
-  
+
+(define-condition vector-size-limitation (storage-condition)
+  ((subtag :initarg :subtag)
+   (element-count :initarg :element-count))
+  (:report (lambda (c s)
+             (let* ((subtag (slot-value c 'subtag))
+                    (element-count (slot-value c 'element-count))
+                    (typename (if (eql subtag target::subtag-bignum)
+                                'bignum
+                                (if (eql subtag target::subtag-simple-vector)
+                                  'simple-vector
+                                  (if (eql subtag target::subtag-simple-base-string)
+                                    'string
+                                    (if (> subtag target::subtag-simple-vector)
+                                      `(simple-array ,(element-subtype-type subtag) (*))
+                                      `(ccl::uvector ,subtag))))))
+                    (qualifier (if (eql subtag target::subtag-bignum)
+                                 "32-bit "
+                                 "")))
+               (format s "Cannot allocate a ~s with ~d elements.~&Objects of type ~s can can have at most ~&~d ~aelements in this implementation."
+                       typename
+                       element-count
+                       (copy-tree typename)
+                       (1- target::array-total-size-limit)
+                       qualifier)))))
 
 (define-condition type-error (error)
   ((datum :initarg :datum)
