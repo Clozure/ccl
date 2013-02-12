@@ -3309,7 +3309,7 @@ _spentry(misc_alloc)
          __(srdi imm2,imm2,3+fixnumshift)
          __(b 1b)
 9:                      
-         __(lri arg_x,XARRLIMIT)
+         __(li arg_x,XARRLIMIT)
          __(set_nargs(3))
          __(b _SPksignalerr)
         __else
@@ -3345,7 +3345,7 @@ _spentry(misc_alloc)
 	 __(srwi imm2,imm2,fixnumshift+3)
 	 __(b 1b)
 9:
-         __(lri arg_x,XARRLIMIT)
+         __(li arg_x,XARRLIMIT)
          __(set_nargs(3))
          __(b _SPksignalerr)
         __endif
