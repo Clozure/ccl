@@ -1374,7 +1374,7 @@ shutdown_thread_tcr(void *arg)
     /* If we use the sigaltstack mechanism, we always keep the
        altstack separate from other stacks now.
     */
-#ifdef USE_ALTSTACK
+#ifdef USE_SIGALTSTACK
     {
       stack_t new, current;
       new.ss_flags = SS_DISABLE;
