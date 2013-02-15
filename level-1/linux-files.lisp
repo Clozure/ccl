@@ -1072,35 +1072,37 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 
 ;;; Foreign (unix) processes.
 
-(defun call-with-string-vector (function strings)
-  (let ((bufsize (reduce #'+ strings
-			 :key #'(lambda (s) (1+ (length (string s))))))
-	(argvsize (ash (1+ (length strings)) target::word-shift))
-	(bufpos 0)
-	(argvpos 0))
+(defun call-with-string-vector (function strings encoding)
+  (let* ((encoding (if (typep encoding 'character-encoding)
+                     encoding
+                     (get-character-encoding encoding)))
+         (bufsize (reduce #'+ strings
+                          :key #'(lambda (s)
+                                   (let* ((string (string s)))
+                                     (cstring-encoded-length-in-bytes encoding
+                                                                      string
+                                                                      0
+                                                                      (length string))))))
+         (argvsize (ash (1+ (length strings)) target::word-shift))
+         (bufpos 0)
+         (argvpos 0))        
     (%stack-block ((buf bufsize) (argv argvsize))
       (flet ((init (s)
-	     (multiple-value-bind (sstr start end) (get-sstring s)
-               (declare (fixnum start end))
-	       (let ((len (- end start)))
-                 (declare (fixnum len))
-                 (do* ((i 0 (1+ i))
-                       (start start (1+ start))
-                       (bufpos bufpos (1+ bufpos)))
-                      ((= i len))
-                   (setf (%get-unsigned-byte buf bufpos)
-                         (logand #xff (%scharcode sstr start))))
-		 (setf (%get-byte buf (%i+ bufpos len)) 0)
-		 (setf (%get-ptr argv argvpos) (%inc-ptr buf bufpos))
-		 (setq bufpos (%i+ bufpos len 1))
-		 (setq argvpos (%i+ argvpos target::node-size))))))
+               (multiple-value-bind (sstr start end) (get-sstring s)
+                 (declare (fixnum start end))
+                 (let* ((len (- (encode-string-to-memory encoding buf bufpos sstr start end) bufpos)))
+                   (declare (fixnum len))
+                   (setf (%get-byte buf (%i+ bufpos len)) 0)
+                   (setf (%get-ptr argv argvpos) (%inc-ptr buf bufpos))
+                   (setq bufpos (%i+ bufpos len 1))
+                   (setq argvpos (%i+ argvpos target::node-size))))))
 	(declare (dynamic-extent #'init))
 	(map nil #'init strings))
       (setf (%get-ptr argv argvpos) (%null-ptr))
       (funcall function argv))))
 
-(defmacro with-string-vector ((var strings) &body body)
-  `(call-with-string-vector #'(lambda (,var) ,@body) ,strings))
+(defmacro with-string-vector ((var strings &optional encoding) &body body)
+  `(call-with-string-vector #'(lambda (,var) ,@body) ,strings ,encoding))
 
 (defloadvar *max-os-open-files* #-windows-target (#_getdtablesize) #+windows-target 32)
 
@@ -1451,6 +1453,7 @@ itself, by setting the status and exit-code fields.")
     (declare (ignore pty))
     (unless (every #'(lambda (a) (typep a 'simple-string)) args)
       (error "Program args must all be simple strings : ~s" args))
+    (setq external-format (normalize-external-format t external-format))
     (dolist (pair env)
       (destructuring-bind (var . val) pair
         (check-type var (or string symbol character))
@@ -1513,7 +1516,8 @@ itself, by setting the status and exit-code fields.")
                          :tstack-size (ash 128 10))
                    #'run-external-process proc in-fd out-fd error-fd argv env)
                   (wait-on-semaphore (external-process-signal proc)))
-              args))
+              args
+              (external-format-character-encoding external-format)))
         (dolist (fd close-in-parent) (fd-close fd))
         (unless (external-process-pid proc)
           (dolist (fd close-on-error) (fd-close fd)))

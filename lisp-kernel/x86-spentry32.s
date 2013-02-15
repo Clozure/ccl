@@ -2119,7 +2119,13 @@ local_label(stack_misc_alloc_heap_alloc_gvector):
 	__(jmp _SPmisc_alloc)
 
 local_label(stack_misc_alloc_not_u24):
-	__(uuo_error_reg_not_type(Rarg_y,error_object_not_unsigned_byte_24))
+        __(popl %temp0)
+        __(pushl $reserved_frame_marker)
+        __(pushl $reserved_frame_marker)
+        __(pushl $XARRLIMIT)
+        __(pushl %temp0)
+        __(set_nargs(3))
+        __(jmp _SPksignalerr)        
 _endsubp(stack_misc_alloc)
 
 /* subtype (boxed, of course) is pushed, followed by nargs bytes worth of */
@@ -2963,7 +2969,13 @@ local_label(misc_alloc_alloc_vector):
 	__(Misc_Alloc(%arg_z))
 	__(ret)
 local_label(misc_alloc_not_u24):
-	__(uuo_error_reg_not_type(Rarg_y,error_object_not_unsigned_byte_24))
+        __(popl %temp0)
+        __(pushl $reserved_frame_marker)
+        __(pushl $reserved_frame_marker)
+        __(pushl $XARRLIMIT)
+        __(pushl %temp0)
+        __(set_nargs(3))
+        __(jmp _SPksignalerr)        
 _endsubp(misc_alloc)
 
 /* N.B. arg count word in %imm0, not %nargs */

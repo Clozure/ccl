@@ -85,4 +85,4 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 #include "os-darwin.h"
 
 
-#define SEPARATE_ALTSTACK 1
+

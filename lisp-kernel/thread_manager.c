@@ -1371,12 +1371,10 @@ shutdown_thread_tcr(void *arg)
     if (cs) {
       condemn_area_holding_area_lock(cs);
     }
-    /* On some platforms - currently just linuxarm - we have to
-       allocate a separate alternate signal stack (rather than just
-       using a few pages of the thread's main stack.)  Disable and
-       free that alternate stack here.
+    /* If we use the sigaltstack mechanism, we always keep the
+       altstack separate from other stacks now.
     */
-#ifdef SEPARATE_ALTSTACK
+#ifdef USE_ALTSTACK
     {
       stack_t new, current;
       new.ss_flags = SS_DISABLE;

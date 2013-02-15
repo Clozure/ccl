@@ -954,13 +954,13 @@
        (%short-float pi)
        0.0f0))
     (double-float
-     (if (minusp number)
+     (if (%double-float-sign number)
        (%double-float pi)
        0.0d0))
     (complex
      (atan (%imagpart number) (%realpart number)))
     (short-float
-     (if (minusp number)
+     (if (%short-float-sign number)
        (%short-float pi)
        0.0s0))))
 

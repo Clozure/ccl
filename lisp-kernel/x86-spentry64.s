@@ -2154,7 +2154,9 @@ local_label(stack_misc_alloc_heap_alloc_gvector):
 	__(jmp _SPmisc_alloc)	
 		
 local_label(stack_misc_alloc_not_u56):				
-	__(uuo_error_reg_not_type(Rarg_y,error_object_not_unsigned_byte_56))	
+        __(movl $XARRLIMIT,%arg_x_l)
+        __(set_nargs(3))
+        __(jmp _SPksignalerr)
 _endsubp(stack_misc_alloc)
 
 /* subtype (boxed, of course) is pushed, followed by nargs bytes worth of   */
@@ -2895,7 +2897,9 @@ local_label(misc_alloc_alloc_vector):
 	__(Misc_Alloc(%arg_z))
 	__(ret)
 local_label(misc_alloc_not_u56):
-	__(uuo_error_reg_not_type(Rarg_y,error_object_not_unsigned_byte_56))
+        __(movl $XARRLIMIT,%arg_x_l)
+        __(set_nargs(3))
+        __(jmp _SPksignalerr)
 local_label(misc_alloc_large):
         /* If we tried to subtract %imm1 from tcr.allocptr, it
            might become negative ; we treat addresses as being unsigned,

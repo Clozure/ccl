@@ -744,11 +744,10 @@
                     (ty (tanh i))
                     (tx2 (* tx tx))
                     (d (1+ (* tx2 (* ty ty))))
-                    (n (if (> (abs i) 20)
-                         (* 4 (exp (* -2 (abs i))))
-                         (let ((c (cosh i)))
-                           (/ (* c c))))))
-               (complex (/ (* n tx) d)
+                    (c (if (> (abs i) 20)
+                         (* 2 (exp (- (abs i))))
+                         (/ (cosh i)))))
+               (complex (/ (* (* c c) tx) d)
                         (/ (* ty (1+ tx2)) d))))))
         ((or (typep x 'ratio)
              (> (abs x) two^23))
@@ -848,11 +847,22 @@
                       (single-float (float-sign y single-float-half-pi))
                       (t (if (minusp y) #.(- single-float-half-pi) single-float-half-pi)))))
           ((= x 1)
-           (setq ra (if (< y1 1e-9)
-                      (/ (log-e (/ 2 y1)) 2)
-                      (/ (log1+ (/ 4 (* y y))) 4)))
-           (setq ia (/ (atan (/ 2 y) -1) 2)))
-          (t
+           (cond ((< y1 1e-9)
+                  (setq ra (/ (- (if (typep y 'double-float) double-float-log2 single-float-log2)
+                                 (log-e y1))
+                              2))
+                  (setq ia (/ (if (minusp y) (atan -2 y) (atan 2 (- y))) 2)))
+                 (t
+                  (setq ra (/ (log1+ (/ 4 (* y y))) 4))
+                  (setq ia (/ (atan (/ 2 y) -1) 2)))))
+          ((and (< y1 1)
+                (< 0.5 x 2))
+           (let ((x-1 (- x 1))
+                 (x+1 (+ x 1))
+                 (y2 (* y y)))
+             (setq ra (/ (log-e (/ (+ (* x-1 x-1) y2) (+ (* x+1 x+1) y2))) -4))
+             (setq ia (/ (atan (* 2 y) (- 1 (+ (* x x) y2))) 2))))
+           (t
            (let ((r2 (+ (* x x) (* y y))))
              (setq ra (/ (log1+ (/ (* -4 x) (1+ (+ (* 2 x) r2)))) -4))
              (setq ia (/ (atan (* 2 y) (- 1 r2)) 2)))))
@@ -1115,11 +1125,14 @@
     (complex (* (exp (realpart x)) (cis (imagpart x))))
     (double-float (%double-float-exp! x (%make-dfloat)))
     (t
-     #+32-bit-target
-     (target::with-stack-short-floats ((sx x))
-       (%single-float-exp! sx (%make-sfloat)))
-     #+64-bit-target
-     (%single-float-exp (%short-float x)))))
+     (if (and (typep x 'rational)
+              (< x -104))
+       0.0s0
+       #+32-bit-target
+       (target::with-stack-short-floats ((sx x))
+         (%single-float-exp! sx (%make-sfloat)))
+       #+64-bit-target
+       (%single-float-exp (%short-float x))))))
 
 
 (defun positive-realpart-p (n)

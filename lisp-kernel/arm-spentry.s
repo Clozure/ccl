@@ -1085,7 +1085,9 @@ _spentry(progvsave)
 _spentry(stack_misc_alloc)
         __(tst arg_y,#unsigned_byte_24_mask)
         __(beq 1f)
-        __(uuo_error_reg_not_xtype(al,arg_y,xtype_unsigned_byte_24))
+        __(mov arg_x,#XARRLIMIT)
+        __(set_nargs(3))
+        __(b _SPksignalerr)
 1:              
         __(unbox_fixnum(imm2,arg_z))
         __(extract_fulltag(imm1,imm2))
@@ -1868,7 +1870,9 @@ _spentry(misc_alloc)
         __(Misc_Alloc(arg_z,imm0,imm2))
         __(bx lr)
 9:
-        __(uuo_error_reg_not_xtype(al,arg_y,xtype_unsigned_byte_24))
+        __(mov arg_y,#XARRLIMIT)
+        __(set_nargs(3))
+        __(b _SPksignalerr)
 
 
 

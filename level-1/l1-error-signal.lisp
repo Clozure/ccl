@@ -53,10 +53,16 @@
   (declare (fixnum err-num))
   ;;; The compiler (finally !) won't tail-apply error.  But we kind of
   ;;; expect it to ...
-  (let* ((err-typ (max (ash err-num -16) 0))
-         (err-num (%word-to-int err-num))
-         (format-string (%rsc-string err-num)))
-    (%err-disp-common err-num err-typ format-string errargs frame-ptr)))
+  (if (eql err-num $XARRLIMIT)
+    (%error (make-condition 'vector-size-limitation
+                            :subtag (cadr errargs)
+                            :element-count (car errargs))
+            nil
+            frame-ptr)
+    (let* ((err-typ (max (ash err-num -16) 0))
+           (err-num (%word-to-int err-num))
+           (format-string (%rsc-string err-num)))
+      (%err-disp-common err-num err-typ format-string errargs frame-ptr))))
 
 (defparameter *foreign-error-condition-recognizers* ())
 

@@ -61,6 +61,17 @@ extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS
 #define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
 #define IS_PAGE_FAULT(info,xp) (xp->uc_mcontext.mc_trapno == T_PAGEFLT)
-#define SIGRETURN(context) freebsd_sigreturn(context)
+#define SIGRETURN(context) do {freebsd_sigreturn(context); \
+    Bug(context,"sigreturn returned"); \
+  } while (0)
+
+/* AVX stuff.  Funky, because some of this isn't defined until
+   fbsd 9.1 headers; if we built on an older OS version, we still need
+   to know about this if we run on 9.1+ */
+
+#define AVX_CONTEXT_PRESENT(xp) ((xp)->uc_mcontext.mc_trapno & 4)
+#define AVX_CONTEXT_PTR(xp) (((xp)->uc_mcontext.mc_fpstate[66]))
+#define AVX_CONTEXT_SIZE(xp) ((natural)((xp)->uc_mcontext.mc_fpstate[67]))
 
 #include "os-freebsd.h"
+
