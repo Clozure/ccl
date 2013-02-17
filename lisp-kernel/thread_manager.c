@@ -782,12 +782,41 @@ dequeue_tcr(TCR *tcr)
 #endif
 }
   
+#ifdef DARWIN
+/* Sending signals to "workqueue threads" (created via libdispatch)
+   via pthread_kill() isn't supported, unless the thread calls an
+   undocumented internal function.
+
+   Someone got paid to design this.
+*/
+static Boolean looked_up_setkill = false;
+typedef int(*setkillfn)(int);
+static setkillfn setkill = NULL;
+
+void
+try_enable_kill()
+{
+  if (!looked_up_setkill) {
+    setkill = dlsym(RTLD_DEFAULT,"__pthread_workqueue_setkill");
+    looked_up_setkill = true;
+  }
+  if (setkill) {
+    setkill(1);
+  }
+}
+#endif
+
 void
 enqueue_tcr(TCR *new)
 {
   TCR *head, *tail;
   
   LOCK(lisp_global(TCR_AREA_LOCK),new);
+#ifdef DARWIN
+  if (new->flags & (1<<TCR_FLAG_BIT_FOREIGN)) {
+    try_enable_kill();
+  }
+#endif
   head = (TCR *)ptr_from_lispobj(lisp_global(INITIAL_TCR));
   tail = TCR_AUX(head)->prev;
   TCR_AUX(tail)->next = new;
