@@ -59,8 +59,8 @@ typedef struct __ucontext ExceptionInformation;
 #define xpMXCSR(x) (((struct savefpu *)(&(x)->uc_mcontext.mc_fpstate))->sv_env.en_mxcsr)
 extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS
-#define IS_MAYBE_INT_TRAP(info,xp) ((xp->uc_mcontext.mc_trapno == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
-#define IS_PAGE_FAULT(info,xp) (xp->uc_mcontext.mc_trapno == T_PAGEFLT)
+#define IS_MAYBE_INT_TRAP(info,xp) (((uint32_t)(xp->uc_mcontext.mc_trapno) == T_PROTFLT) && ((xp->uc_mcontext.mc_err & 7) == 2))
+#define IS_PAGE_FAULT(info,xp) ((uint32_t)(xp->uc_mcontext.mc_trapno) == T_PAGEFLT)
 #define SIGRETURN(context) do {freebsd_sigreturn(context); \
     Bug(context,"sigreturn returned"); \
   } while (0)

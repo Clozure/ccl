@@ -24,6 +24,7 @@
 #include <stdio.h>
 #ifndef WINDOWS
 #include <pthread.h>
+#include <dlfcn.h>
 #endif
 #ifdef WINDOWS
 #include <process.h>
