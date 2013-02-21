@@ -1,5 +1,5 @@
 ;;; -*- mode: Common-Lisp; Base: 10 ; Syntax: ANSI-Common-Lisp -*-
-;;; This is ASDF 2.29: Another System Definition Facility.
+;;; This is ASDF 2.30: Another System Definition Facility.
 ;;;
 ;;; Feedback, bug reports, and patches are all welcome:
 ;;; please mail to <asdf-devel@common-lisp.net>.
@@ -54,7 +54,7 @@
   (declaim (optimize (speed 1) (safety 3) (debug 3)))
   (setf ext:*gc-verbose* nil))
 
-#+(or abcl clisp cmu ecl xcl)
+#+(or abcl clisp clozure cmu ecl xcl)
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (unless (member :asdf3 *features*)
     (let* ((existing-version
@@ -71,7 +71,8 @@
            (existing-version-number (and existing-version (read-from-string existing-major-minor)))
            (away (format nil "~A-~A" :asdf existing-version)))
       (when (and existing-version (< existing-version-number
-                                     #+abcl 2.25 #+clisp 2.27 #+cmu 2.018 #+ecl 2.21 #+xcl 2.27))
+                                     #+abcl 2.25 #+clisp 2.27 #+clozure 2.27
+                                     #+cmu 2.018 #+ecl 2.21 #+xcl 2.27))
         (rename-package :asdf away)
         (when *load-verbose*
           (format t "; Renamed old ~A package away to ~A~%" :asdf away))))))
@@ -991,7 +992,6 @@ or when loading the package is optional."
    #:call-function #:call-functions #:register-hook-function
    #:match-condition-p #:match-any-condition-p ;; conditions
    #:call-with-muffled-conditions #:with-muffled-conditions
-   #:load-string #:load-stream
    #:lexicographic< #:lexicographic<=
    #:parse-version #:unparse-version #:version< #:version<= #:version-compatible-p)) ;; version
 (in-package :asdf/utility)
@@ -1362,9 +1362,6 @@ with later being determined by a lexicographical comparison of minor numbers."
 ;;; Condition control
 
 (with-upgradability ()
-  (defvar *uninteresting-conditions* nil
-    "Uninteresting conditions, as per MATCH-CONDITION-P")
-
   (defparameter +simple-condition-format-control-slot+
     #+abcl 'system::format-control
     #+allegro 'excl::format-control
@@ -1401,8 +1398,8 @@ or a string describing the format-control of a simple-condition."
                                       (muffle-warning c)))))
       (funcall thunk)))
 
-  (defmacro with-muffled-uninteresting-conditions ((conditions) &body body)
-    `(call-with-muffled-uninteresting-conditions #'(lambda () ,@body) ,conditions)))
+  (defmacro with-muffled-conditions ((conditions) &body body)
+    `(call-with-muffled-conditions #'(lambda () ,@body) ,conditions)))
 
 
 ;;;; ---------------------------------------------------------------------------
@@ -1596,7 +1593,7 @@ then returning the non-empty string value of the variable"
 (with-upgradability ()
   (defun hostname ()
     ;; Note: untested on RMCL
-    #+(or abcl clozure cmucl ecl genera lispworks mcl mkcl sbcl scl xcl) (machine-instance)
+    #+(or abcl clozure cmu ecl genera lispworks mcl mkcl sbcl scl xcl) (machine-instance)
     #+cormanlisp "localhost" ;; is there a better way? Does it matter?
     #+allegro (symbol-call :excl.osi :gethostname)
     #+clisp (first (split-string (machine-instance) :separator " "))
@@ -1657,75 +1654,74 @@ then returning the non-empty string value of the variable"
 ;;;; Jesse Hager: The Windows Shortcut File Format.
 ;;;; http://www.wotsit.org/list.asp?fc=13
 
+#-(or clisp genera) ; CLISP doesn't need it, and READ-SEQUENCE annoys old Genera.
 (with-upgradability ()
-  #-(or clisp genera) ; CLISP doesn't need it, and READ-SEQUENCE annoys old Genera.
-  (progn
-    (defparameter *link-initial-dword* 76)
-    (defparameter *link-guid* #(1 20 2 0 0 0 0 0 192 0 0 0 0 0 0 70))
+  (defparameter *link-initial-dword* 76)
+  (defparameter *link-guid* #(1 20 2 0 0 0 0 0 192 0 0 0 0 0 0 70))
 
-    (defun read-null-terminated-string (s)
-      (with-output-to-string (out)
-        (loop :for code = (read-byte s)
-              :until (zerop code)
-              :do (write-char (code-char code) out))))
+  (defun read-null-terminated-string (s)
+    (with-output-to-string (out)
+      (loop :for code = (read-byte s)
+            :until (zerop code)
+            :do (write-char (code-char code) out))))
 
-    (defun read-little-endian (s &optional (bytes 4))
-      (loop :for i :from 0 :below bytes
-            :sum (ash (read-byte s) (* 8 i))))
+  (defun read-little-endian (s &optional (bytes 4))
+    (loop :for i :from 0 :below bytes
+          :sum (ash (read-byte s) (* 8 i))))
 
-    (defun parse-file-location-info (s)
-      (let ((start (file-position s))
-            (total-length (read-little-endian s))
-            (end-of-header (read-little-endian s))
-            (fli-flags (read-little-endian s))
-            (local-volume-offset (read-little-endian s))
-            (local-offset (read-little-endian s))
-            (network-volume-offset (read-little-endian s))
-            (remaining-offset (read-little-endian s)))
-        (declare (ignore total-length end-of-header local-volume-offset))
-        (unless (zerop fli-flags)
-          (cond
-            ((logbitp 0 fli-flags)
-             (file-position s (+ start local-offset)))
-            ((logbitp 1 fli-flags)
-             (file-position s (+ start
-                                 network-volume-offset
-                                 #x14))))
-          (strcat (read-null-terminated-string s)
-                  (progn
-                    (file-position s (+ start remaining-offset))
-                    (read-null-terminated-string s))))))
+  (defun parse-file-location-info (s)
+    (let ((start (file-position s))
+          (total-length (read-little-endian s))
+          (end-of-header (read-little-endian s))
+          (fli-flags (read-little-endian s))
+          (local-volume-offset (read-little-endian s))
+          (local-offset (read-little-endian s))
+          (network-volume-offset (read-little-endian s))
+          (remaining-offset (read-little-endian s)))
+      (declare (ignore total-length end-of-header local-volume-offset))
+      (unless (zerop fli-flags)
+        (cond
+          ((logbitp 0 fli-flags)
+           (file-position s (+ start local-offset)))
+          ((logbitp 1 fli-flags)
+           (file-position s (+ start
+                               network-volume-offset
+                               #x14))))
+        (strcat (read-null-terminated-string s)
+                (progn
+                  (file-position s (+ start remaining-offset))
+                  (read-null-terminated-string s))))))
 
-    (defun parse-windows-shortcut (pathname)
-      (with-open-file (s pathname :element-type '(unsigned-byte 8))
-        (handler-case
-            (when (and (= (read-little-endian s) *link-initial-dword*)
-                       (let ((header (make-array (length *link-guid*))))
-                         (read-sequence header s)
-                         (equalp header *link-guid*)))
-              (let ((flags (read-little-endian s)))
-                (file-position s 76)        ;skip rest of header
-                (when (logbitp 0 flags)
-                  ;; skip shell item id list
-                  (let ((length (read-little-endian s 2)))
-                    (file-position s (+ length (file-position s)))))
-                (cond
-                  ((logbitp 1 flags)
-                   (parse-file-location-info s))
-                  (t
-                   (when (logbitp 2 flags)
-                     ;; skip description string
-                     (let ((length (read-little-endian s 2)))
-                       (file-position s (+ length (file-position s)))))
-                   (when (logbitp 3 flags)
-                     ;; finally, our pathname
-                     (let* ((length (read-little-endian s 2))
-                            (buffer (make-array length)))
-                       (read-sequence buffer s)
-                       (map 'string #'code-char buffer)))))))
-          (end-of-file (c)
-            (declare (ignore c))
-            nil))))))
+  (defun parse-windows-shortcut (pathname)
+    (with-open-file (s pathname :element-type '(unsigned-byte 8))
+      (handler-case
+          (when (and (= (read-little-endian s) *link-initial-dword*)
+                     (let ((header (make-array (length *link-guid*))))
+                       (read-sequence header s)
+                       (equalp header *link-guid*)))
+            (let ((flags (read-little-endian s)))
+              (file-position s 76)        ;skip rest of header
+              (when (logbitp 0 flags)
+                ;; skip shell item id list
+                (let ((length (read-little-endian s 2)))
+                  (file-position s (+ length (file-position s)))))
+              (cond
+                ((logbitp 1 flags)
+                 (parse-file-location-info s))
+                (t
+                 (when (logbitp 2 flags)
+                   ;; skip description string
+                   (let ((length (read-little-endian s 2)))
+                     (file-position s (+ length (file-position s)))))
+                 (when (logbitp 3 flags)
+                   ;; finally, our pathname
+                   (let* ((length (read-little-endian s 2))
+                          (buffer (make-array length)))
+                     (read-sequence buffer s)
+                     (map 'string #'code-char buffer)))))))
+        (end-of-file (c)
+          (declare (ignore c))
+          nil)))))
 
 
 ;;;; -------------------------------------------------------------------------
@@ -2484,47 +2480,48 @@ or the original (parsed) pathname if it is false (the default)."
         (null nil)
         (string (probe-file* (parse-namestring p) :truename truename))
         (pathname
-         (handler-case
-             (or
-              #+allegro
-              (probe-file p :follow-symlinks truename)
-              #-(or allegro clisp gcl2.6)
-              (if truename
-                  (probe-file p)
-                  (and (not (wild-pathname-p p))
+         (and (not (wild-pathname-p p))
+              (handler-case
+                  (or
+                   #+allegro
+                   (probe-file p :follow-symlinks truename)
+                   #-(or allegro clisp gcl2.6)
+                   (if truename
+                       (probe-file p)
                        (ignore-errors
                         (let ((pp (translate-logical-pathname p)))
-                          #+(or cmu scl) (unix:unix-stat (ext:unix-namestring pp))
-                          #+(and lispworks unix) (system:get-file-stat pp)
-                          #+sbcl (sb-unix:unix-stat (sb-ext:native-namestring pp))
-                          #-(or cmu (and lispworks unix) sbcl scl) (file-write-date pp)))
-                       p))
-              #+(or clisp gcl2.6)
-              #.(flet ((probe (probe)
-                         `(let ((foundtrue ,probe))
-                            (cond
-                              (truename foundtrue)
-                              (foundtrue p)))))
-                  #+gcl2.6
-                  (probe '(or (probe-file p)
-                           (and (directory-pathname-p p)
-                            (ignore-errors
-                             (ensure-directory-pathname
-                              (truename* (subpathname
-                                          (ensure-directory-pathname p) ".")))))))
-                  #+clisp
-                  (let* ((fs (find-symbol* '#:file-stat :posix nil))
-                         (pp (find-symbol* '#:probe-pathname :ext nil))
-                         (resolve (if pp
-                                      `(ignore-errors (,pp p))
-                                      '(or (truename* p)
-                                        (truename* (ignore-errors (ensure-directory-pathname p)))))))
-                    (if fs
-                        `(if truename
-                             ,resolve
-                             (and (ignore-errors (,fs p)) p))
-                        (probe resolve)))))
-           (file-error () nil))))))
+                          (and
+                           #+(or cmu scl) (unix:unix-stat (ext:unix-namestring pp))
+                           #+(and lispworks unix) (system:get-file-stat pp)
+                           #+sbcl (sb-unix:unix-stat (sb-ext:native-namestring pp))
+                           #-(or cmu (and lispworks unix) sbcl scl) (file-write-date pp)
+                           p))))
+                   #+(or clisp gcl2.6)
+                   #.(flet ((probe (probe)
+                              `(let ((foundtrue ,probe))
+                                 (cond
+                                   (truename foundtrue)
+                                   (foundtrue p)))))
+                       #+gcl2.6
+                       (probe '(or (probe-file p)
+                                (and (directory-pathname-p p)
+                                 (ignore-errors
+                                  (ensure-directory-pathname
+                                   (truename* (subpathname
+                                               (ensure-directory-pathname p) ".")))))))
+                       #+clisp
+                       (let* ((fs (find-symbol* '#:file-stat :posix nil))
+                              (pp (find-symbol* '#:probe-pathname :ext nil))
+                              (resolve (if pp
+                                           `(ignore-errors (,pp p))
+                                           '(or (truename* p)
+                                             (truename* (ignore-errors (ensure-directory-pathname p)))))))
+                         (if fs
+                             `(if truename
+                                  ,resolve
+                                  (and (ignore-errors (,fs p)) p))
+                             (probe resolve)))))
+                (file-error () nil)))))))
 
   (defun directory* (pathname-spec &rest keys &key &allow-other-keys)
     (apply 'directory pathname-spec
@@ -2858,7 +2855,8 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
 (with-upgradability ()
   (defun ensure-all-directories-exist (pathnames)
     (dolist (pathname pathnames)
-      (ensure-directories-exist (translate-logical-pathname pathname))))
+      (when pathname
+        (ensure-directories-exist (translate-logical-pathname pathname)))))
 
   (defun rename-file-overwriting-target (source target)
     #+clisp ;; But for a bug in CLISP 2.48, we should use :if-exists :overwrite and be atomic
@@ -2887,7 +2885,6 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
    #:with-input-file #:call-with-input-file
    #:finish-outputs #:format! #:safe-format!
    #:copy-stream-to-stream #:concatenate-files
-   #:copy-stream-to-stream-line-by-line
    #:slurp-stream-string #:slurp-stream-lines #:slurp-stream-line
    #:slurp-stream-forms #:slurp-stream-form
    #:read-file-string #:read-file-lines #:read-file-forms #:read-file-form #:safe-read-file-form
@@ -3335,7 +3332,7 @@ For the latter case, we ought pick random suffix and atomically open it."
    #:*image-dumped-p* #:raw-command-line-arguments #:*command-line-arguments*
    #:command-line-arguments #:raw-command-line-arguments #:setup-command-line-arguments
    #:*lisp-interaction*
-   #:fatal-conditions #:fatal-condition-p #:handle-fatal-condition
+   #:*fatal-conditions* #:fatal-condition-p #:handle-fatal-condition
    #:call-with-fatal-condition-handler #:with-fatal-condition-handler
    #:*image-restore-hook* #:*image-prelude* #:*image-entry-point*
    #:*image-postlude* #:*image-dump-hook*
@@ -3343,7 +3340,7 @@ For the latter case, we ought pick random suffix and atomically open it."
    #:shell-boolean-exit
    #:register-image-restore-hook #:register-image-dump-hook
    #:call-image-restore-hook #:call-image-dump-hook
-   #:initialize-asdf-utilities #:restore-image #:dump-image #:create-image
+   #:restore-image #:dump-image #:create-image
 ))
 (in-package :asdf/image)
 
@@ -3436,7 +3433,7 @@ This is designed to abstract away the implementation specific quit forms."
     (let ((*debug-io* stream))
       (ccl:print-call-history :count count :start-frame-number 1)
       (finish-output stream))
-    #+(or cmucl scl)
+    #+(or cmu scl)
     (let ((debug:*debug-print-level* *print-level*)
           (debug:*debug-print-length* *print-length*))
       (debug:backtrace most-positive-fixnum stream))
@@ -4234,12 +4231,15 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
     (etypecase sexp
       (symbol (reify-symbol sexp))
       ((or number character simple-string pathname) sexp)
-      (cons (cons (reify-simple-sexp (car sexp)) (reify-simple-sexp (cdr sexp))))))
+      (cons (cons (reify-simple-sexp (car sexp)) (reify-simple-sexp (cdr sexp))))
+      (simple-vector (vector (mapcar 'reify-simple-sexp (coerce sexp 'list))))))
+    
   (defun unreify-simple-sexp (sexp)
     (etypecase sexp
       ((or symbol number character simple-string pathname) sexp)
       (cons (cons (unreify-simple-sexp (car sexp)) (unreify-simple-sexp (cdr sexp))))
-      ((simple-vector 2) (unreify-symbol sexp))))
+      ((simple-vector 2) (unreify-symbol sexp))
+      ((simple-vector 1) (coerce (mapcar 'unreify-simple-sexp (aref sexp 0)) 'vector))))
 
   #+clozure
   (progn
@@ -4256,16 +4256,14 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
           (ccl::make-source-note :filename filename :start-pos start-pos :end-pos end-pos
                                  :source (unreify-source-note source)))))
     (defun reify-function-name (function-name)
-      (reify-simple-sexp
-       (if-let (setfed (gethash function-name ccl::%setf-function-name-inverses%))
-         `(setf ,setfed)
-         function-name)))
+      (if-let (setfed (gethash function-name ccl::%setf-function-name-inverses%))
+	      `(setf ,setfed)
+	      function-name))
     (defun unreify-function-name (function-name)
-      (let ((name (unreify-simple-sexp function-name)))
-        (if (and (consp name) (eq (first name) 'setf))
-            (let ((setfed (second name)))
-              (gethash setfed ccl::%setf-function-names%))
-            name)))
+      (if (and (consp function-name) (eq (first function-name) 'setf))
+	  (let ((setfed (second function-name)))
+	    (gethash setfed ccl::%setf-function-names%))
+	function-name))
     (defun reify-deferred-warning (deferred-warning)
       (with-accessors ((warning-type ccl::compiler-warning-warning-type)
                        (args ccl::compiler-warning-args)
@@ -4274,7 +4272,7 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
         (list :warning-type warning-type :function-name (reify-function-name function-name)
               :source-note (reify-source-note source-note)
               :args (destructuring-bind (fun . formals) args
-                      (cons (reify-function-name fun) (reify-simple-sexp formals))))))
+                      (cons (reify-function-name fun) formals)))))
     (defun unreify-deferred-warning (reified-deferred-warning)
       (destructuring-bind (&key warning-type function-name source-note args)
           reified-deferred-warning
@@ -4284,7 +4282,7 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
                         :source-note (unreify-source-note source-note)
                         :warning-type warning-type
                         :args (destructuring-bind (fun . formals) args
-                                (cons (unreify-function-name fun) (unreify-simple-sexp formals)))))))
+                                (cons (unreify-function-name fun) formals))))))
   #+(or cmu scl)
   (defun reify-undefined-warning (warning)
     ;; Extracting undefined-warnings from the compilation-unit
@@ -4330,9 +4328,8 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
 using READ within a WITH-SAFE-IO-SYNTAX, that represents the warnings currently deferred by
 WITH-COMPILATION-UNIT. One of three functions required for deferred-warnings support in ASDF."
     #+allegro
-    (reify-simple-sexp
-     (list :functions-defined excl::.functions-defined.
-           :functions-called excl::.functions-called.))
+    (list :functions-defined excl::.functions-defined.
+	  :functions-called excl::.functions-called.)
     #+clozure
     (mapcar 'reify-deferred-warning
             (if-let (dw ccl::*outstanding-deferred-warnings*)
@@ -4374,7 +4371,7 @@ One of three functions required for deferred-warnings support in ASDF."
     (declare (ignorable reified-deferred-warnings))
     #+allegro
     (destructuring-bind (&key functions-defined functions-called)
-        (unreify-simple-sexp reified-deferred-warnings)
+			reified-deferred-warnings
       (setf excl::.functions-defined.
             (append functions-defined excl::.functions-defined.)
             excl::.functions-called.
@@ -5118,7 +5115,7 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
          ;; "3.4.5.67" would be a development version in the official upstream of 3.4.5.
          ;; "3.4.5.0.8" would be your eighth local modification of official release 3.4.5
          ;; "3.4.5.67.8" would be your eighth local modification of development version 3.4.5.67
-         (asdf-version "2.29")
+         (asdf-version "2.30")
          (existing-version (asdf-version)))
     (setf *asdf-version* asdf-version)
     (when (and existing-version (not (equal asdf-version existing-version)))
@@ -5679,7 +5676,7 @@ in which the system specification (.asd file) is located."
    #:*central-registry* #:probe-asd #:sysdef-central-registry-search
    #:find-system-if-being-defined #:*systems-being-defined*
    #:contrib-sysdef-search #:sysdef-find-asdf ;; backward compatibility symbols, functions removed
-   #:system-find-preloaded-system #:register-preloaded-system #:*preloaded-systems*
+   #:sysdef-preloaded-system-search #:register-preloaded-system #:*preloaded-systems*
    #:clear-defined-systems #:*defined-systems*
    ;; defined in source-registry, but specially mentioned here:
    #:initialize-source-registry #:sysdef-source-registry-search))
@@ -5762,6 +5759,7 @@ of which is a system object.")
       (setf *defined-systems* (make-hash-table :test 'equal))
       (when asdf
         (setf (component-version asdf) *asdf-version*)
+        (setf (builtin-system-p asdf) t)
         (register-system asdf)))
     (values))
 
@@ -5801,7 +5799,7 @@ called with an object of type asdf:system."
            (remove-if #'(lambda (x) (member x *system-definition-search-functions*))
                       '(sysdef-central-registry-search
                         sysdef-source-registry-search
-                        sysdef-find-preloaded-systems)))))
+                        sysdef-preloaded-system-search)))))
   (cleanup-system-definition-search-functions)
 
   (defun search-for-system-definition (system)
@@ -5917,11 +5915,17 @@ Going forward, we recommend new users should be using the source-registry.
   (defmacro with-system-definitions ((&optional) &body body)
     `(call-with-system-definitions #'(lambda () ,@body)))
 
-  (defun load-asd (pathname &key name (external-format (encoding-external-format (detect-encoding pathname))))
+  (defun load-asd (pathname &key name (external-format (encoding-external-format (detect-encoding pathname))) &aux (readtable *readtable*) (print-pprint-dispatch *print-pprint-dispatch*))
     ;; Tries to load system definition with canonical NAME from PATHNAME.
     (with-system-definitions ()
       (with-standard-io-syntax
         (let ((*package* (find-package :asdf-user))
+              ;; Note that our backward-compatible *readtable* is
+              ;; a global readtable that gets globally side-effected. Ouch.
+              ;; Same for the *print-pprint-dispatch* table.
+              ;; We should do something about that for ASDF3 if possible, or else ASDF4.
+              (*readtable* readtable)
+              (*print-pprint-dispatch* print-pprint-dispatch)
               (*print-readably* nil)
               (*default-pathname-defaults*
                 ;; resolve logical-pathnames so they won't wreak havoc in parsing namestrings.
@@ -6002,7 +6006,7 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 
   (defvar *preloaded-systems* (make-hash-table :test 'equal))
 
-  (defun sysdef-find-preloaded-systems (requested)
+  (defun sysdef-preloaded-system-search (requested)
     (let ((name (coerce-name requested)))
       (multiple-value-bind (keys foundp) (gethash name *preloaded-systems*)
         (when foundp
@@ -6783,7 +6787,7 @@ in some previous image, or T if it needs to be done.")
    #:circular-dependency #:circular-dependency-actions
    #:node-for #:needed-in-image-p
    #:action-index #:action-planned-p #:action-valid-p
-   #:plan-record-dependency #:visiting-action-p
+   #:plan-record-dependency
    #:normalize-forced-systems #:action-forced-p #:action-forced-not-p
    #:map-direct-dependencies #:reduce-direct-dependencies #:direct-dependencies
    #:visit-dependencies #:compute-action-stamp #:traverse-action
@@ -7218,12 +7222,11 @@ processed in order by OPERATE."))
    :asdf/find-system :asdf/find-component :asdf/lisp-action :asdf/plan)
   (:export
    #:operate #:oos
-   #:*systems-being-operated* #:*asdf-upgrade-already-attempted*
+   #:*systems-being-operated*
    #:build-system
    #:load-system #:load-systems #:compile-system #:test-system #:require-system
    #:*load-system-operation* #:module-provide-asdf
-   #:component-loaded-p #:already-loaded-systems
-   #:upgrade-asdf #:cleanup-upgraded-asdf #:*post-upgrade-hook*))
+   #:component-loaded-p #:already-loaded-systems))
 (in-package :asdf/operate)
 
 (with-upgradability ()
@@ -7374,7 +7377,7 @@ for how to load or compile stuff")
         (clrhash *systems-being-defined*)
         (dolist (s l) (find-system s nil)))))
 
-  (pushnew 'restart-upgraded-asdf *post-upgrade-restart-hook*))
+  (register-hook-function '*post-upgrade-restart-hook* 'restart-upgraded-asdf))
 
 
 ;;;; ---------------------------------------------------------------------------
@@ -7700,11 +7703,11 @@ effectively disabling the output translation facility."
   (:recycle :asdf/source-registry :asdf)
   (:use :asdf/common-lisp :asdf/driver :asdf/upgrade :asdf/find-system)
   (:export
-   #:*source-registry* #:*source-registry-parameter* #:*default-source-registries*
+   #:*source-registry-parameter* #:*default-source-registries*
    #:invalid-source-registry
-   #:source-registry #:source-registry-initialized-p
+   #:source-registry-initialized-p
    #:initialize-source-registry #:clear-source-registry #:*source-registry*
-   #:disable-source-registry #:ensure-source-registry #:*source-registry-parameter*
+   #:ensure-source-registry #:*source-registry-parameter*
    #:*default-source-registry-exclusions* #:*source-registry-exclusions*
    #:*wild-asd* #:directory-asd-files #:register-asd-directory
    #:collect-asds-in-directory #:collect-sub*directories-asd-files
@@ -8795,9 +8798,7 @@ system names to pathnames of .asd files")
    #:monolithic-concatenate-source-op
    #:monolithic-load-concatenated-source-op
    #:monolithic-compile-concatenated-source-op
-   #:monolithic-load-compiled-concatenated-source-op
-   #:component-concatenated-source-file
-   #:concatenated-source-file))
+   #:monolithic-load-compiled-concatenated-source-op))
 (in-package :asdf/concatenate-source)
 
 ;;;
@@ -9094,7 +9095,7 @@ Please use ASDF-DRIVER:RUN-PROGRAM instead."
    #:component #:parent-component #:child-component #:system #:module
    #:file-component #:source-file #:c-source-file #:java-source-file
    #:cl-source-file #:cl-source-file.cl #:cl-source-file.lsp
-   #:static-file #:doc-file #:html-file :text-file
+   #:static-file #:doc-file #:html-file
    #:source-file-type
 
    #:component-children          ; component accessors
@@ -9123,8 +9124,8 @@ Please use ASDF-DRIVER:RUN-PROGRAM instead."
    #:system-source-directory
    #:system-relative-pathname
    #:system-homepage
+   #:system-mailto
    #:system-bug-tracker
-   #:system-developers-email
    #:system-long-name
    #:system-source-control
    #:map-systems
