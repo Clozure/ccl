@@ -2401,7 +2401,7 @@ extern opcode egc_write_barrier_start, egc_write_barrier_end,
   egc_set_hash_key_conditional_retry,
   egc_store_node_conditional_success_end, egc_store_node_conditional_retry,
   egc_store_node_conditional_success_test,egc_store_node_conditional,
-  egc_set_hash_key, egc_gvset, egc_rplacd;
+  egc_set_hash_key, egc_gvset, egc_rplacd, egc_rplaca;
 
 /* We use (extremely) rigidly defined instruction sequences for consing,
    mostly so that 'pc_luser_xp()' knows what to do if a thread is interrupted
@@ -2643,7 +2643,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       (program_counter < &egc_write_barrier_end)) {
     LispObj *ea = 0, val, root = 0;
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
-    Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
+    Boolean  need_check_memo = true, need_memoize_root = false;
 
     if (program_counter >= &egc_set_hash_key_conditional) {
       if (program_counter <= &egc_set_hash_key_conditional_retry) {
@@ -2677,7 +2677,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       ea = (LispObj *)(root + misc_data_offset + xpGPR(xp,Itemp0));
 #endif
       need_memoize_root = true;
-      need_store = false;
       xpGPR(xp,Iarg_z) = t_value;
     } else if (program_counter >= &egc_store_node_conditional) {
       if (program_counter <= &egc_store_node_conditional_retry) {
@@ -2713,8 +2712,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       ea = (LispObj *)(misc_data_offset + xpGPR(xp,Itemp1) + xpGPR(xp,Itemp0));
 #endif
       xpGPR(xp,Iarg_z) = t_value;
-      need_store = false;
     } else if (program_counter >= &egc_set_hash_key) {
+      if (program_counter == &egc_set_hash_key) {
+        return;
+      }
 #ifdef X8664
       root = xpGPR(xp,Iarg_x);
 #else
@@ -2724,6 +2725,15 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
       val = xpGPR(xp,Iarg_z);
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
+      /* This assumes that the store is the first instruction at _SPgvset.
+         As of late February 2013 - just before the 1.9 release, that's
+         a relatively recent change.
+         If the store has already completed, don't do it again.
+         See ticket:1058 for an example showing why this matters.
+      */
+      if (program_counter == &egc_gvset) {
+        return;
+      }
 #ifdef X8664
       ea = (LispObj *) (xpGPR(xp,Iarg_x)+xpGPR(xp,Iarg_y)+misc_data_offset);
 #else
@@ -2731,14 +2741,17 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
 #endif
       val = xpGPR(xp,Iarg_z);
     } else if (program_counter >= &egc_rplacd) {
+      if (program_counter == &egc_rplacd) {
+        return;
+      }
       ea = (LispObj *) untag(xpGPR(xp,Iarg_y));
       val = xpGPR(xp,Iarg_z);
     } else {                      /* egc_rplaca */
+      if (program_counter == &egc_rplaca) {
+        return;
+      }
       ea =  ((LispObj *) untag(xpGPR(xp,Iarg_y)))+1;
       val = xpGPR(xp,Iarg_z);
-    }
-    if (need_store) {
-      *ea = val;
     }
     if (need_check_memo) {
       if ((LispObj)ea < val) {

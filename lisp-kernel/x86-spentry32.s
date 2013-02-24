@@ -1721,8 +1721,9 @@ C(egc_write_barrier_start):
 _spentry(rplaca)
         .globl C(egc_rplaca)
 C(egc_rplaca):
-	__(rcmpl(%arg_z,%arg_y))
+        /* pc_luser_xp() expects the store to be the first instruction here */
 	__(_rplaca(%arg_y,%arg_z))
+	__(rcmpl(%arg_z,%arg_y))
 	__(ja 1f)
 0:	__(repret)
 1:	__(movl %arg_y,%imm0)
@@ -1747,8 +1748,9 @@ _endsubp(rplaca)
 _spentry(rplacd)
         .globl C(egc_rplacd)
 C(egc_rplacd):
-	__(rcmpl(%arg_z,%arg_y))
+        /* pc_luser_xp() expects the store to be the first instruction here */
 	__(_rplacd(%arg_y,%arg_z))
+	__(rcmpl(%arg_z,%arg_y))
 	__(ja 1f)
 0:	__(repret)
 1:	__(movl %arg_y,%imm0)
@@ -1775,6 +1777,7 @@ _endsubp(rplacd)
 _spentry(gvset)
         .globl C(egc_gvset)
 C(egc_gvset):
+        /* pc_luser_xp() expects the store to be the first instruction here */
 	__(movl %arg_z,misc_data_offset(%temp0,%arg_y))
 	__(rcmpl(%arg_z,%temp0))
 	__(ja 1f)
@@ -1805,6 +1808,7 @@ _endsubp(gvset)
 _spentry(set_hash_key)
         .globl C(egc_set_hash_key)
 C(egc_set_hash_key):
+        /* pc_luser_xp() expects the store to be the first instruction here */
 	__(movl %arg_z,misc_data_offset(%temp0,%arg_y))
 	__(rcmpl(%arg_z,%temp0))
 	__(ja 1f)
