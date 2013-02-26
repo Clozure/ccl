@@ -870,6 +870,7 @@ is :UNIX.")
                                  :direction direction
                                  :listen-function 'fd-stream-listen
                                  :close-function 'fd-stream-close
+                                 :eofp-function 'fd-stream-eofp
                                  :advance-function
                                  (if in-p (select-stream-advance-function class direction))
                                  :force-output-function
