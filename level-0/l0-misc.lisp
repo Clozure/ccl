@@ -757,11 +757,8 @@
          (declare (fixnum pending))
          (setf (%get-natural ptr target::lockptr.avail) 0
                (%get-natural ptr target::lockptr.waiting) 0)
-         (decf pending)
-         (if (> pending 0)
-           (setf (%get-natural ptr target::lockptr.waiting) pending))
          (setf (%get-ptr spin) (%null-ptr))
-         (if (>= pending 0)
+         (dotimes (i pending)
            (%signal-semaphore-ptr signal)))))
     nil))
 
