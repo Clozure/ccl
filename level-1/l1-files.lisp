@@ -81,7 +81,8 @@
 
 
 (defun native-translated-namestring (path)
-  (let ((name (translated-namestring path)))
+  (let ((name (let ((*default-pathname-defaults* #P""))
+                (translated-namestring path))))
     ;; Check that no quoted /'s
     (when (%path-mem-last-quoted "/" name)
       (signal-file-error $xbadfilenamechar name #\/))

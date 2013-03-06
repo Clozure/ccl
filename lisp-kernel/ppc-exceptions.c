@@ -1920,10 +1920,10 @@ extern opcode
   egc_write_barrier_end, 
   egc_store_node_conditional, 
   egc_store_node_conditional_test,
-  egc_set_hash_key,
-  egc_gvset,
-  egc_rplaca,
-  egc_rplacd,
+  egc_set_hash_key, egc_set_hash_key_did_store,
+  egc_gvset, egc_gvset_did_store,
+  egc_rplaca, egc_rplaca_did_store,
+  egc_rplacd, egc_rplacd_did_store,
   egc_set_hash_key_conditional,
   egc_set_hash_key_conditional_test;
 
@@ -1945,7 +1945,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       (program_counter >= &egc_write_barrier_start)) {
     LispObj *ea = 0, val = 0, root = 0;
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
-    Boolean need_store = true, need_check_memo = true, need_memoize_root = false;
+    Boolean need_check_memo = true, need_memoize_root = false;
 
     if (program_counter >= &egc_set_hash_key_conditional) {
       if ((program_counter < &egc_set_hash_key_conditional_test) ||
@@ -1953,7 +1953,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 	   (! (xpCCR(xp) & 0x20000000)))) {
 	return;
       }
-      need_store = false;
       root = xpGPR(xp,arg_x);
       ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
       need_memoize_root = true;
@@ -1967,24 +1966,32 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       }
       ea = (LispObj*)(xpGPR(xp,arg_x) + xpGPR(xp,imm4));
       xpGPR(xp,arg_z) = t_value;
-      need_store = false;
     } else if (program_counter >= &egc_set_hash_key) {
+      if (program_counter < &egc_set_hash_key_did_store) {
+        return;
+      }
       root = xpGPR(xp,arg_x);
       val = xpGPR(xp,arg_z);
       ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
+      if (program_counter < &egc_gvset_did_store) {
+        return;
+      }
       ea = (LispObj *) (xpGPR(xp,arg_x)+xpGPR(xp,arg_y)+misc_data_offset);
       val = xpGPR(xp,arg_z);
     } else if (program_counter >= &egc_rplacd) {
+      if (program_counter < &egc_rplacd_did_store) {
+        return;
+      }
       ea = (LispObj *) untag(xpGPR(xp,arg_y));
       val = xpGPR(xp,arg_z);
     } else {                      /* egc_rplaca */
+      if (program_counter < &egc_rplaca_did_store) {
+        return;
+      }
       ea =  ((LispObj *) untag(xpGPR(xp,arg_y)))+1;
       val = xpGPR(xp,arg_z);
-    }
-    if (need_store) {
-      *ea = val;
     }
     if (need_check_memo) {
       natural  bitnumber = area_dnode(ea, lisp_global(REF_BASE));
