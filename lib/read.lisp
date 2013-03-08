@@ -102,7 +102,7 @@
                           (il initial-contents (if (> (length il) 0)
                                                  (etypecase il
                                                    (list (car il))
-                                                   ((vector t) (aref il 0))))))
+                                                   (vector (aref il 0))))))
                          ((null dl))
                        (rplaca dl (length il)))
                      (make-array dlist :initial-contents initial-contents))))))
