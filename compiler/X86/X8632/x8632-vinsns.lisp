@@ -2457,8 +2457,7 @@
 (define-x8632-vinsn require-fixnum (()
                                     ((object :lisp)))
   :again
-  ((:and (:pred > (:apply %hard-regspec-value object) x8632::eax)
-	 (:pred <= (:apply %hard-regspec-value object) x8632::ebx))
+  ((:pred <= (:apply %hard-regspec-value object) x8632::ebx)
    (testb (:$b x8632::fixnummask) (:%b object)))
   ((:pred > (:apply %hard-regspec-value object) x8632::ebx)
    (testl (:$l x8632::fixnummask) (:%l object)))
@@ -2779,7 +2778,10 @@
                                        ((object :lisp))
                                        ((tag :u32)))
   :again
-  (testb (:$b x8632::fixnummask) (:%b object))
+  ((:pred <= (:apply %hard-regspec-value object) x8632::ebx)
+   (testb (:$b x8632::fixnummask) (:%b object)))
+  ((:pred > (:apply %hard-regspec-value object) x8632::ebx)
+   (testl (:$l x8632::fixnummask) (:%l object)))  
   (jne :bad)
   (cmpl (:$l (ash #x110000 x8632::fixnumshift)) (:%l object))
   (jae :bad)
