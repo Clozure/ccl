@@ -97,9 +97,9 @@
   "Rename FILE to have the specified NEW-NAME. If FILE is a stream open to a
   file, then the associated file is renamed."
   (let* ((original (truename file))
-	 (original-namestring (native-translated-namestring original))
+	 (original-namestring (defaulted-native-namestring original))
 	 (new-name (merge-pathnames new-name (merge-pathnames file)))
-	 (new-namestring (native-translated-namestring new-name)))
+	 (new-namestring (defaulted-native-namestring new-name)))
     (unless new-namestring
       (error "~S can't be created." new-name))
     (unless (and (probe-file new-name)
@@ -161,13 +161,13 @@
               (copy-file f dest-file :if-exists :supersede :preserve-attributes t)))))))
 
 (defun delete-empty-directory (path)
-  (let* ((namestring (native-translated-namestring path))
+  (let* ((namestring (defaulted-native-namestring path))
 	 (err (%rmdir namestring)))
     (or (eql 0 err) (signal-file-error err path))))
 
 (defun delete-directory (path)
   "Delete specified directory and all its contents."
-  (let ((namestring (native-translated-namestring path)))
+  (let ((namestring (defaulted-native-namestring path)))
     (if (eq :directory (%unix-file-kind namestring t))
       (let* ((dir (ensure-directory-pathname path))
 	     (wild (make-pathname :name :wild :type :wild :defaults dir))
@@ -186,7 +186,8 @@
 ;;; use with caution!
 ;;; blows away a directory and all its contents
 (defun recursive-delete-directory (path &key (if-does-not-exist :error))
-  (setq path (ensure-directory-pathname path))
+  (setq path (make-pathname :name nil :type nil
+                            :defaults (merge-pathnames (ensure-directory-pathname path))))
   (setq if-does-not-exist (require-type if-does-not-exist '(member :error nil)))
   (when (eq if-does-not-exist :error)
     (unless (probe-file path)
@@ -197,7 +198,7 @@
 	  (let* ((pattern (make-pathname :name :wild :type :wild :defaults path))
 		 (files (directory pattern :directories nil :files t))
 		 (subdirs (directory pattern :directories t :files nil))
-		 (target-pathname (native-translated-namestring path)))
+		 (target-pathname (defaulted-native-namestring path)))
 	    (dolist (f files)
 	      (delete-file f))
 	    (dolist (d subdirs)
@@ -235,7 +236,7 @@
 		      :host (pathname-host pathname)
 		      :device (pathname-device pathname)
 		      :directory (subseq parent-dirs 0 i)))
-	     (parent-name (native-translated-namestring parent))
+	     (parent-name (defaulted-native-namestring parent))
 	     (parent-kind (%unix-file-kind parent-name)))
 
 	(if parent-kind
@@ -315,7 +316,7 @@
 ;E.g. (directoryp "ccl;:foo:baz") might return #P"hd:mumble:foo:baz:" if baz
 ;is a dir. - should we doc this - its exported?
 (defun directoryp (path)
-  (let* ((native (native-translated-namestring path))
+  (let* ((native (defaulted-native-namestring path))
 	 (realpath (%realpath native)))
     (if realpath (eq (%unix-file-kind realpath) :directory))))
 	 

@@ -72,10 +72,14 @@
 
 #+openmcl
 (progn
+
+  #-BOOTSTRAPPED ;; remove once bootstrapped.
+  (unless (fboundp 'defaulted-native-namestring) (fset 'defaulted-native-namestring #'native-translated-namestring))
+
   ;;; Given a (possibly logical) PATHNAME, return a corresponding namestring
   ;;; suitable for passing to an OS file-open call.
   (defun cdb-native-namestring (pathname)
-    (native-translated-namestring pathname))
+    (defaulted-native-namestring pathname))
   
   ;;; Open the file specified by PATHNAME for output and return a
   ;;; small integer "file id" (fid).

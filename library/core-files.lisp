@@ -165,7 +165,7 @@
 
 #-run-external-program-to-find-sections
 (defun sections-from-elf-file (pathname)
-  (let* ((fd (fd-open (native-translated-namestring pathname) #$O_RDONLY)))
+  (let* ((fd (fd-open (defaulted-native-namestring pathname) #$O_RDONLY)))
     (if (< fd 0)
       (signal-file-error fd pathname)
       (let* ((size (fd-size fd))
@@ -233,7 +233,7 @@
                              (or (position-if #'whitespacep line :start start :end end) end))
                  collect (subseq line start next)
                  do (setq start next))))
-    (let* ((file (native-translated-namestring pathname))
+    (let* ((file (defaulted-native-namestring pathname))
            (string (with-output-to-string (output)
                      #+readelf (ccl:run-program "readelf" `("--sections" "--wide" ,file) :output output)
                      #-readelf (ccl:run-program "objdump" `("-h" "-w" ,file) :output output)))

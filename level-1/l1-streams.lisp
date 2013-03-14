@@ -5911,7 +5911,7 @@
       (setf (%pathname-name tem-path) (%integer-to-string (setq base (1+ base)))))))
 
 (defun probe-file-x (path)
-  (%probe-file-x (native-translated-namestring path)))
+  (%probe-file-x (defaulted-native-namestring path)))
 
 (defun file-length (stream)
   (typecase stream
