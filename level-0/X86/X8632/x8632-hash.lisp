@@ -121,7 +121,10 @@
 
 ;;; Strip the tag bits to turn x into a fixnum
 (defx8632lapfunction strip-tag-to-fixnum ((x arg_z))
+  (testb ($ target::fixnummask) (%b x))
+  (jz @done)
   (andl ($ (lognot target::fulltagmask)) (% x))
   (shrl ($ (- target::ntagbits target::fixnumshift)) (% arg_z))
+  @done
   (single-value-return))
 
