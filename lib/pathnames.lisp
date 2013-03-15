@@ -583,6 +583,10 @@
   (%path-str*= pstr pattern))
 
 (defun %file*= (name-pat type-pat pstr)
+  (when (and (eq name-pat :wild)
+             (or (null type-pat)
+                 (eq type-pat :unspecific)))
+    (setq type-pat :wild))
   (if (eq name-pat :wild) (setq name-pat "*"))
   (if (eq type-pat :wild) (setq type-pat "*"))
   (when (and (null name-pat) (null type-pat))
