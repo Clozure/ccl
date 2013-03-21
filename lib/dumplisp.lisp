@@ -82,7 +82,7 @@
   (unless (probe-file (make-pathname :defaults nil
                                      :directory (pathname-directory (translate-logical-pathname filename))))
     (error "Directory containing ~s does not exist." filename))
-  (let* ((kind (%unix-file-kind (native-translated-namestring filename))))
+  (let* ((kind (%unix-file-kind (defaulted-native-namestring filename))))
     (when (and kind (not (eq kind :file )))
       (error "~S is not a regular file." filename)))
   (let* ((watched (watch)))
@@ -291,14 +291,14 @@
   (let* ((prepend-path (if prepend-kernel
                          (if (eq prepend-kernel t)
                            (kernel-path)
-                           (native-translated-namestring
-                          (pathname prepend-kernel)))))
+                           (defaulted-native-namestring
+                            (pathname prepend-kernel)))))
          (prepend-fd (if prepend-path (fd-open prepend-path #$O_RDONLY)))
 	 (prepend-len (if prepend-kernel
                         (if (and prepend-fd (>= prepend-fd 0))
                           (skip-embedded-image prepend-fd)
                           (signal-file-error prepend-fd prepend-path))))
-	 (filename (native-translated-namestring path)))
+	 (filename (defaulted-native-namestring path)))
     (when (probe-file filename)
       (%delete-file filename))
     (when prepend-fd

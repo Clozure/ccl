@@ -559,11 +559,11 @@ given is that of a group to which the current user belongs."
    Returns T if succeeded, NIL if some of the attributes couldn't be copied due to
    permission problems.  Any other failures cause an error to be signalled"
   (multiple-value-bind (win mode ignore mtime-sec ignore uid ignore mtime-usec gid)
-                       (%stat (native-translated-namestring source-path) t)
+                       (%stat (defaulted-native-namestring source-path) t)
     (declare (ignore ignore))
     (unless win
       (error "Cannot get attributes of ~s" source-path))
-    (with-filename-cstrs ((cnamestr (native-translated-namestring dest-path)))
+    (with-filename-cstrs ((cnamestr (defaulted-native-namestring dest-path)))
       (macrolet ((errchk (form)
                    `(let ((err ,form))
                       (unless (eql err 0)
@@ -2415,7 +2415,7 @@ not, why not; and what its result code was if it completed."
       (error "Invalid element-type: ~s" element-type))
     (let* ((bits-per-element (integer-length (- (numeric-ctype-high upgraded-ctype)
                                                 (numeric-ctype-low upgraded-ctype))))
-           (fd (fd-open (native-translated-namestring pathname) #$O_RDONLY)))
+           (fd (fd-open (defaulted-native-namestring pathname) #$O_RDONLY)))
       (if (< fd 0)
         (signal-file-error fd pathname)
         (let* ((len (fd-size fd)))

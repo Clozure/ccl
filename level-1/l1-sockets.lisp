@@ -1251,7 +1251,7 @@ unsigned IP address."
                     (%find-foreign-record-type-field
                      (parse-foreign-type '(:struct :sockaddr_un)) :sun_path)))
                   8)))
-    (let* ((name (native-translated-namestring path))
+    (let* ((name (defaulted-native-namestring path))
            (namelen (length name))
            (pathlen (sockaddr_un-path-len))
            (copylen (min (1- pathlen) namelen)))

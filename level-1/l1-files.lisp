@@ -80,6 +80,9 @@
     (t (report-bad-arg if-does-not-exist '(member :error :create nil)))))
 
 
+(defun defaulted-native-namestring (path)
+  (native-translated-namestring (merge-pathnames path)))
+
 (defun native-translated-namestring (path)
   (let ((name (let ((*default-pathname-defaults* #P""))
                 (translated-namestring path))))
@@ -190,7 +193,7 @@
   "Return a pathname which is the truename of the file if it exists, or NIL
   otherwise. An error of type FILE-ERROR is signaled if pathname is wild."
   (check-pathname-not-wild path)
-  (let* ((native (native-translated-namestring path))
+  (let* ((native (defaulted-native-namestring path))
          (realpath (%realpath native))
          (kind (if realpath (%unix-file-kind realpath))))
     ;; Darwin's #_realpath will happily return non-nil for
@@ -205,7 +208,7 @@
         nil))))
 
 (defun cwd (path)  
-  (multiple-value-bind (realpath kind) (%probe-file-x (native-translated-namestring path))
+  (multiple-value-bind (realpath kind) (%probe-file-x (defaulted-native-namestring path))
     (if kind
       (if (eq kind :directory)
 	(let* ((error (%chdir realpath)))
@@ -228,7 +231,7 @@
     (create-directory path))
   (when (directory-pathname-p path)
     (return-from %create-file (probe-file-x path)))
-  (let* ((unix-name (native-translated-namestring path))
+  (let* ((unix-name (defaulted-native-namestring path))
 	 (fd (fd-open unix-name (logior #$O_WRONLY #$O_CREAT
                                         (if (eq if-exists :overwrite)
                                           #$O_TRUNC
@@ -1157,13 +1160,13 @@ a host-structure or string."
 (defun file-write-date (path)
   "Return file's creation date, or NIL if it doesn't exist.
   An error of type file-error is signaled if file is a wild pathname"
-  (%file-write-date (native-translated-namestring path)))
+  (%file-write-date (defaulted-native-namestring path)))
 
 (defun file-author (path)
   "Return the file author as a string, or NIL if the author cannot be
   determined. Signal an error of type FILE-ERROR if FILE doesn't exist,
   or FILE is a wild pathname."
-  (%file-author (native-translated-namestring path)))
+  (%file-author (defaulted-native-namestring path)))
 
 (defun touch (path)
   (if (not (probe-file path))
@@ -1172,7 +1175,7 @@ a host-structure or string."
       (if (or (pathname-name path)
               (pathname-type path))
         (create-file path)))
-    (%utimes (native-translated-namestring path)))
+    (%utimes (defaulted-native-namestring path)))
   t)
 
 
@@ -1200,7 +1203,7 @@ a host-structure or string."
                   (true-fasl
                    (values true-fasl merged fasl))
                   ((and (multiple-value-setq (full-name kind)
-                          (let* ((realpath (%realpath (native-translated-namestring full-name))))
+                          (let* ((realpath (%realpath (defaulted-native-namestring full-name))))
                             (if realpath
                               (%probe-file-x realpath ))))
                         (eq kind :file))
@@ -1313,7 +1316,7 @@ a host-structure or string."
 			#+versioned-file-system
 			(namestring p)))
 		 (restart-case (multiple-value-bind (winp err) 
-				   (%fasload (native-translated-namestring file-name))
+				   (%fasload (defaulted-native-namestring file-name))
 				 (if (not winp) 
 				   (%err-disp err)))
 		   (load-source 
@@ -1377,7 +1380,7 @@ a host-structure or string."
 
 (defun delete-file (path)
   "Delete the specified FILE."
-  (let* ((namestring (native-translated-namestring path))
+  (let* ((namestring (defaulted-native-namestring path))
 	 (err (%delete-file namestring)))
     (or (eql 0 err) (signal-file-error err path))))
 
