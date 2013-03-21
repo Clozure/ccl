@@ -353,7 +353,8 @@
 
 (defun trace-inside-frame-p (name)
   (if (packagep name)
-    (map-call-frames #'(lambda (p)
+    (map-call-frames #'(lambda (p context)
+                         (declare (ignore context))
                          (let* ((fn (cfp-lfun p))
                                 (fname (and fn (function-name fn)))
                                 (sym (typecase fname
@@ -365,7 +366,8 @@
                              (return-from trace-inside-frame-p t)))))
     (let ((fn (%encap-binding name)))
       (when fn
-        (map-call-frames #'(lambda (p)
+        (map-call-frames #'(lambda (p context)
+                             (declare (ignore context))
                              (when (eq (cfp-lfun p) fn)
                                (return-from trace-inside-frame-p t))))))))
 
