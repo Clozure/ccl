@@ -161,8 +161,11 @@
 
 ;;; Strip the tag bits to turn x into a fixnum
 (defppclapfunction strip-tag-to-fixnum ((x arg_z))
+  (clrlri. imm0 arg_z (- target::nbits-in-word target::fixnumshift))
+  (beq @done)
   (clrrri arg_z x target::ntagbits)
   (srri arg_z arg_z (- target::ntagbits target::fixnumshift))
+  @done
   (blr))
 
 ;;; end of ppc-hash.lisp

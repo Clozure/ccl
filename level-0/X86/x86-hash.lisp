@@ -124,8 +124,11 @@
 
 ;;; Strip the tag bits to turn x into a fixnum
 (defx86lapfunction strip-tag-to-fixnum ((x arg_z))
+  (testb ($ target::fixnummask) (%b arg_z))
+  (jz @done)
   (andq ($ (lognot target::fulltagmask)) (% x))
   (shrq ($ (- target::ntagbits target::fixnumshift)) (% arg_z))
+  @done
   (single-value-return))
 
 ;;; end of x86-hash.lisp
