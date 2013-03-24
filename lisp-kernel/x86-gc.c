@@ -194,7 +194,76 @@ check_all_mark_bits(LispObj *nodepointer)
 }
 
 
+void
+check_readonly_range(LispObj *start, LispObj *end)
+{
+  LispObj node, *current = start, *prev = NULL, *next, fn;
+  int tag, subtag;
+  natural elements;
+  area *a;
+  area_code code;
 
+  while (current < end) {
+    prev = current;
+    node = *current++;
+    tag = fulltag_of(node);
+    if (immheader_tag_p(tag)) {
+      current = (LispObj *)skip_over_ivector((natural)prev, node);
+    } else {
+      if (nodeheader_tag_p(tag)) {
+        next = current+(header_element_count(node)|1);
+      } else {
+        next = current+1;
+      }
+      subtag = header_subtag(node);
+      if (subtag != subtag_function) {
+        Bug(NULL, "Found 0x" LISP " in readonly area at 0x" LISP ", expected ivector or function header", node, (LispObj)current);
+      } else {
+        elements = header_element_count(node);
+        {
+#ifdef X8632
+          int skip = *(unsigned short *)current;
+          
+          fn = (LispObj)(current-1)+fulltag_misc;
+          /* XXX bootstrapping */
+          if (skip & 0x8000)
+            skip = elements - (skip & 0x7fff);
+#else
+          int skip = *(int *)current;
+          fn = (LispObj)(current-1)+fulltag_function;
+#endif
+          current += skip;
+          elements -= skip;
+        }
+        while (elements--) {
+          node = *current;
+          if (is_node_fulltag(fulltag_of(node))) {
+            a = area_containing((BytePtr)node);
+            if (a) {
+              code = a->code;
+            } else {
+              a = AREA_VOID;
+            }
+            switch (code) {
+            case AREA_READONLY:
+            case AREA_MANAGED_STATIC:
+            case AREA_STATIC:
+              break;
+            default:
+              Bug(NULL, "Bad constant reference from purified function 0x" LISP " to 0x" LISP ".", fn, node);
+            }
+          }
+          current++;
+        }
+      }
+      current = next;
+    }
+  }
+  if (current != end) {
+    Bug(NULL, "Overran end of memory range: start = 0x" LISP ", end = 0x" LISP ", prev = 0x" LISP ", current = 0x" LISP "",
+        start, end, prev, current);
+  }
+}
 
 
 void
@@ -344,6 +413,10 @@ check_all_areas(TCR *tcr)
     case AREA_MANAGED_STATIC:
       check_range((LispObj *)a->low, (LispObj *)a->active, true);
       break;
+
+    case AREA_READONLY:
+      check_readonly_range((LispObj *)a->low, (LispObj *)a->active);
+      true;
 
     case AREA_VSTACK:
       {
