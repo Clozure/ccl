@@ -416,7 +416,7 @@ check_all_areas(TCR *tcr)
 
     case AREA_READONLY:
       check_readonly_range((LispObj *)a->low, (LispObj *)a->active);
-      true;
+      break;
 
     case AREA_VSTACK:
       {
