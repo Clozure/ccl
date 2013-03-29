@@ -32,7 +32,7 @@
             (make-condition 'simple-error
                            :format-control "CLOS optimizations are in effect, so it isn't safe to ~a ~s."
                            :format-arguments (list operation operand))
-            (cons 'snap-reader-methods *clos-optimizations-active*))
+            (cons 'snap-reader-methods (cdr *clos-optimizations-active*)))
     (setq *clos-optimizations-active* nil)
     (pessimize-clos)
     t))

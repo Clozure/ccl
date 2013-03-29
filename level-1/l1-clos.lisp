@@ -2529,7 +2529,7 @@ changing its name to ~s may have serious consequences." class new))
   (if *clos-optimizations-active*
     (values nil nil 0)
     (progn
-      (setq *clos-optimizations-active* args)
+      (setq *clos-optimizations-active* (cons t args))
       (when optimize-make-instance
         (optimize-named-class-make-instance-methods))
       (let* ((ngf 0)
