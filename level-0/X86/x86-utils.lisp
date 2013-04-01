@@ -433,17 +433,6 @@ be somewhat larger than what was specified)."
   (movl ($ (target-nil-value)) (%l arg_z))
   (single-value-return))
 
-(defx86lapfunction freeze ()
-  "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
-  (movl ($ arch::gc-trap-function-freeze) (% imm0.l))
-  (uuo-gc-trap)
-  (jmp-subprim .SPmakeu64))
-
-(defx86lapfunction flash-freeze ()
-  "Like FREEZE, without the GC."
-  (movl ($ arch::gc-trap-function-flash-freeze) (% imm0.l))
-  (uuo-gc-trap)
-  (jmp-subprim .SPmakeu64))
 
 (defx86lapfunction %watch ((thing arg_z))
   (check-nargs 1)

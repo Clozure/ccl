@@ -576,25 +576,6 @@ be somewhat larger than what was specified)."
   (blr))
 
 
-(defppclapfunction freeze ()
-  "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
-  (check-nargs 0)
-  (li imm0 arch::gc-trap-function-freeze)
-  (trlgei allocptr 0)
-  #+64-bit-target
-  (ba .SPmakeu64)
-  #+32-bit-target
-  (ba .SPmakeu32))
-
-(defppclapfunction flash-freeze ()
-  "Like FREEZE, but don't GC first."
-  (check-nargs 0)
-  (li imm0 arch::gc-trap-function-flash-freeze)
-  (trlgei allocptr 0)
-  #+64-bit-target
-  (ba .SPmakeu64)
-  #+32-bit-target
-  (ba .SPmakeu32))
 
 (defun %watch (uvector)
   (declare (ignore uvector))

@@ -408,19 +408,6 @@ be somewhat larger than what was specified)."
   (bx lr))
 
 
-(defarmlapfunction freeze ()
-  "Do a full GC, then consider all heap-allocated objects which survive to be non-relocatable."
-  (check-nargs 0)
-  (mov imm0 (:$ arch::gc-trap-function-freeze))
-  (uuo-gc-trap)
-  (spjump .SPmakeu32))
-
-(defarmlapfunction flash-freeze ()
-  "Like FREEZE, but don't GC first."
-  (check-nargs 0)
-  (mov imm0 (:$ arch::gc-trap-function-flash-freeze))
-  (uuo-gc-trap)
-  (spjump .SPmakeu32))
 
 (defarmlapfunction allow-heap-allocation ((arg arg_z))
   "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts
