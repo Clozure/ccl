@@ -368,7 +368,6 @@
 
 
 
-(defvar *condition-id-map* (make-id-map) "Map lisp conditions to small integers")
 
 ;;; Encapsulate an NSException in a lisp condition.
 (define-condition ns-exception (error)

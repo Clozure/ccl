@@ -3230,6 +3230,7 @@ argument lisp string."
   )
 
 
+(defvar *condition-id-map* (make-id-map) "Map lisp conditions to small integers")
 
 
 
