@@ -177,6 +177,29 @@
             (let* ((executable-path (#/executablePath altconsole-bundle)))
               (when (%null-ptr-p executable-path)
                 (return-from exit nil))
+              ;; Try to work around OSX 10.7+ lossage.  Problems that
+              ;; the "AltConsole" application has initializing itself
+              ;; on 10.7+ seem to have to do with the presence of
+              ;; certain (mostly opaque) files in some magic
+              ;; directory.  Delete those files before executing
+              ;; AltConsole to increase the chance that it'll actually
+              ;; activate its UI (rather than just sit in the dock
+              ;; ...).  The troublesome files will get recreated when
+              ;; the application -does- create its UI, so there are
+              ;; possible timing screws here.
+              ;;
+              ;; What a steaming pile of crap OSX has become.
+              (dolist (f (ignore-errors
+                           (directory
+                            (make-pathname :directory
+                                           (pathname-directory
+                                            (merge-pathnames
+                                             (format nil "Library/Saved Application State/~a.SavedState/"
+                                                     (lisp-string-from-nsstring (#/bundleIdentifier altconsole-bundle)))
+                                             (user-homedir-pathname)))
+                                           :name :wild
+                                           :type :wild))))
+                (ignore-errors (delete-file f)))
               (let* ((nbytes (1+ (#/lengthOfBytesUsingEncoding:
                                   executable-path
                                   #$NSUTF8StringEncoding))))
@@ -227,19 +250,21 @@
                              (#_dup2 parent-socket 0)
                              (set-lisp-stream-fd ccl::*stdin* parent-socket)
                              (set-lisp-stream-fd ccl::*stdout* parent-socket))
-                           ;; Ensure that output to the stream ccl::*stdout* -
-                           ;; which is connected to fd 1 - is flushed periodically
-                           ;; by the housekeeping task.  (ccl::*stdout* is
-                           ;; typically the output side of the two-way stream
-                           ;; which is the global/static value of *TERMINAL-IO*;
-                           ;; many standard streams are synonym streams to
-                           ;; *TERMINAL-IO*.
+                           ;; Ensure that output to the stream
+                           ;; ccl::*stdout* - which is connected to
+                           ;; the parent socket - is flushed
+                           ;; periodically by the housekeeping task.
+                           ;; (ccl::*stdout* is typically the output
+                           ;; side of the two-way stream which is the
+                           ;; global/static value of *TERMINAL-IO*;
+                           ;; many standard streams are synonym
+                           ;; streams to *TERMINAL-IO*.
                            (ccl::add-auto-flush-stream ccl::*stdout*)
                            pid)))))))))
           #+windows-target
           (let* ((executable-path (#/stringByAppendingPathComponent:
-                                  resource-path
-                                  #@"WaltConsole.exe")))
+                                   resource-path
+                                   #@"WaltConsole.exe")))
             (unless (#/isExecutableFileAtPath:
                      (#/defaultManager ns:ns-file-manager)
                      executable-path)
@@ -257,8 +282,8 @@
                                   :int out-fd
                                   :int)                         
                          (flet ((set-lisp-stream-handle (stream handle)
-                                    (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
-                                          handle)))
+                                  (setf (ccl::ioblock-device (ccl::stream-ioblock stream t))
+                                        handle)))
                            (set-lisp-stream-handle ccl::*stdin* parent-in)
                            (set-lisp-stream-handle ccl::*stdout* parent-out)
                            (ccl::add-auto-flush-stream ccl::*stdout*)
