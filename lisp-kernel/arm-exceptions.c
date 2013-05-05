@@ -2052,3 +2052,19 @@ exception_init()
 
 
 
+
+
+void
+early_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
+{
+  extern pc feature_check_fpu,feature_check_ldrex,feature_check_clrex;
+  extern int arm_architecture_version;
+  
+  if ((xpPC(context) == feature_check_fpu) ||
+      (xpPC(context) == feature_check_ldrex)) {
+    arm_architecture_version = 5;
+  } else {
+    arm_architecture_version = 6;
+  }
+  xpPC(context) = xpLR(context);
+}

@@ -164,3 +164,6 @@ invoke_handler_on_main_stack(int, siginfo_t*, ExceptionInformation *, void *, vo
 
 void
 normalize_tcr(ExceptionInformation *,TCR *, Boolean);
+
+void
+install_signal_handler(int, void*, unsigned);
