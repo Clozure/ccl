@@ -110,6 +110,10 @@ compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
 doc/ccl-documentation.html -text
 doc/doc-splitter.lisp -text
+doc/lyx/about.lyx -text
+doc/lyx/build.lyx -text
+doc/lyx/ccl-documentation.lyx -text
+doc/lyx/install.lyx -text
 doc/release-notes-1.2.txt -text
 doc/release-notes.txt -text
 doc/src/Makefile.debian -text
