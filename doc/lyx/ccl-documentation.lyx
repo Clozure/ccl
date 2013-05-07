@@ -70,14 +70,6 @@ LatexCommand tableofcontents
 \end_layout
 
 \begin_layout Standard
-\begin_inset FloatList table
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Standard
 \begin_inset CommandInset include
 LatexCommand include
 filename "about.lyx"
@@ -98,6 +90,34 @@ filename "install.lyx"
 \begin_inset CommandInset include
 LatexCommand include
 filename "build.lyx"
+
+\end_inset
+
+
+\begin_inset CommandInset include
+LatexCommand include
+filename "using.lyx"
+
+\end_inset
+
+
+\begin_inset CommandInset include
+LatexCommand include
+filename "ide.lyx"
+
+\end_inset
+
+
+\begin_inset CommandInset include
+LatexCommand include
+filename "hemlock.lyx"
+
+\end_inset
+
+
+\begin_inset CommandInset index_print
+LatexCommand printindex
+type "idx"
 
 \end_inset
 
