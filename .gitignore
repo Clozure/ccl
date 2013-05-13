@@ -39,6 +39,7 @@ compiler/PPC/*~.*
 compiler/PPC/PPC32/*~.*
 compiler/PPC/PPC64/*~.*
 compiler/X86/*~.*
+doc/lyx/ccl-documentation.html.LyXconv
 doc/src/*html
 doc/src/build*
 doc/tex/*.aux

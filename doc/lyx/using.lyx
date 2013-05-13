@@ -3165,7 +3165,14 @@ Clozure CL uses ISO-8859-1 encoding for
 \family typewriter
 -K
 \family default
- command-line argument (see [?]).
+ command-line argument (see 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Command-Line-Options"
+
+\end_inset
+
+).
 \end_layout
 
 \begin_layout Standard
@@ -8378,8 +8385,22 @@ Summary
 
 \begin_layout Standard
 In Clozure CL, the cleanup forms are always executed as if they were wrapped
- with [?].
- To allow interrupts, use [?].
+ with 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "m_without-interrupts"
+
+\end_inset
+
+.
+ To allow interrupts, use 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "m_with-interrupts-enabled"
+
+\end_inset
+
+.
 \end_layout
 
 \begin_layout Subsection

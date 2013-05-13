@@ -936,7 +936,14 @@ This section does
 not
 \emph default
  provide comprehensive documentation on the build process.
- Please refer to [?] for more information.
+ Please refer to 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "building-ccl-from-source"
+
+\end_inset
+
+ for more information.
  Those more detailed instructions are used mainly by developers who maintain,
  customize, and/or port Clozure CL.
  If you are customizing Clozure CL, or if you run into some exceptional
@@ -988,7 +995,14 @@ make
 m4
 \family default
 .
- Please refer to [?] for details.
+ Please refer to 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Kernel-build-prerequisites"
+
+\end_inset
+
+for details.
  
 \end_layout
 
@@ -1002,7 +1016,14 @@ If you don't have the prerequisite C compiler toolchain installed,
 rebuild-ccl
 \family default
  will not work.
- See [?] for additional details.
+ See 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Kernel-build-prerequisites"
+
+\end_inset
+
+ for additional details.
 \end_layout
 
 \end_inset
@@ -1042,29 +1063,8 @@ For Mac OS X, Xcode 4 is available from the App Store.
 \end_layout
 
 \begin_layout Standard
-For Windows, install Cygwin and the MinGW toolchain for the 32-
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-{}
-\end_layout
-
-\end_inset
-
- or 64-
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-{}
-\end_layout
-
-\end_inset
-
-bit OS.
+For Windows, install Cygwin and the MinGW toolchain for the 32- or 64-bit
+ OS.
  More information about installing Clozure CL on Windows is available in
  the Clozure CL Wiki at URL: 
 \begin_inset Flex Flex:URL
@@ -1350,24 +1350,59 @@ Should the build fail, your first concern should be to confirm that all
 \end_layout
 
 \begin_layout Itemize
-Build the Lisp kernel ([?])
+Build the Lisp kernel (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Building-the-kernel"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
-Build the heap image ([?]) 
+Build the heap image (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Building-the-heap-image"
+
+\end_inset
+
+) 
 \end_layout
 
 \begin_deeper
 \begin_layout Itemize
-Create a bootstrapping heap image ([?])
+Create a bootstrapping heap image (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Generating-a-bootstrapping-image"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
-Compile Lisp code to generate fasl files ([?])
+Compile Lisp code to generate fasl files (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Generating-fasl-files"
+
+\end_inset
+
+4)
 \end_layout
 
 \begin_layout Itemize
-Build a full image from bootstrapping image ([?]) 
+Build a full image from bootstrapping image (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Building-a-full-image-from-a-bootstrapping-image"
+
+\end_inset
+
+) 
 \end_layout
 
 \begin_deeper
@@ -1425,54 +1460,16 @@ require
 provide
 \family default
 , access to foreign interface information (see 
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-href{
-\backslash
-#The-Interface-Database}{
-\end_layout
-
-\end_inset
-
-The Interface Database
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-}
-\end_layout
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "The-Interface-Database"
 
 \end_inset
 
 ) and the Lisp build process (see 
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-href{
-\backslash
-#Building-CCL}{
-\end_layout
-
-\end_inset
-
-Building Clozure CL from its Source Code
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-}
-\end_layout
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "building-ccl-from-source"
 
 \end_inset
 
@@ -1736,8 +1733,7 @@ reference "Command-Line-Options"
 Assuming the shell script is configured and invoked properly, Clozure CL
  should be able to initialize the 
 \family typewriter
-"ccl:\SpecialChar \-
-"
+"ccl:"
 \family default
  logical host so that its translations refer to the 
 \family typewriter
@@ -1793,8 +1789,7 @@ By default Clozure CL tries to load the file
  upon starting up.
  Clozure CL does this by executing 
 \family typewriter
-(load\SpecialChar \-
- "home:ccl-init")
+(load "home:ccl-init")
 \family default
 .
  If it's unable to load the file (for example because the file doesn't exist),
@@ -2115,7 +2110,14 @@ n
 \family default
 \emph default
 .
- (see [?])
+ (see 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "f_set-lisp-heap-gc-threshold"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
@@ -2167,7 +2169,14 @@ n
  549755813888
 \family default
 .
- (see [?])
+ (see 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Heap-space-allocation"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
@@ -2200,7 +2209,14 @@ n
 \family default
 \emph default
 .
- (see [?])
+ (see 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Thread-Stack-Sizes"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
@@ -2234,7 +2250,14 @@ n
 \family default
 \emph default
 .
- (see [?])
+ (see 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "Thread-Stack-Sizes"
+
+\end_inset
+
+)
 \end_layout
 
 \begin_layout Itemize
