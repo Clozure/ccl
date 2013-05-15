@@ -1501,7 +1501,7 @@ Or something. Right? ~s ~s" var varbits))
       (setf (afunc-warnings p) warnings))
     p))
 
-o(defun method-lambda-p (form)
+(defun method-lambda-p (form)
   (and (consp form)
        (consp (setq form (%cdr form)))
        (consp (car form))
