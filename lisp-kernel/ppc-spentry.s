@@ -471,6 +471,8 @@ _spentry(bind_self_boundp_check)
 	
         .globl C(egc_write_barrier_start)
         .globl C(egc_rplaca_did_store)
+        .globl C(ephemeral_ref)
+
 _spentry(rplaca)
 C(egc_write_barrier_start):
         __(cmplr(cr2,arg_z,arg_y))
@@ -497,6 +499,8 @@ C(egc_rplaca_did_store):
         __(strcx(imm1,imm2,imm0))
         __(bne- 1b)
         __(isync)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
         __(blr)
 
         .globl C(egc_rplacd)
@@ -527,6 +531,8 @@ C(egc_rplacd_did_store):
         __(strcx(imm1,imm2,imm0))
         __(bne- 1b)
         __(isync)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
         __(blr)
 
 /* Storing into a gvector can be handled the same way as storing into a CONS. */
@@ -561,6 +567,8 @@ C(egc_gvset_did_store):
         __(strcx(imm1,imm2,imm0))
         __(bne- 1b)
         __(isync)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
         __(blr)
 
 /* This is a special case of storing into a gvector: if we need to memoize  */
@@ -596,6 +604,8 @@ C(egc_set_hash_key_did_store):
         __(strcx(imm1,imm2,imm0))
         __(bne- 1b)
         __(isync)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
 2:              
         __(ref_global(imm1,ref_base))
         __(sub imm0,arg_x,imm1)
@@ -666,6 +676,8 @@ C(egc_store_node_conditional_test):
         __(strcx( imm1,imm2,imm0))
         __(bne- 2b)
         __(isync)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
         __(b 4f)
 
 /* arg_z = new value, arg_y = expected old value, arg_x = hash-vector,
@@ -703,6 +715,8 @@ C(egc_set_hash_key_conditional_test):
 	__(or imm1,imm1,imm3)
 	__(strcx(imm1,imm2,imm0))
 	__(bne- 2b)
+        __(lis imm0,C(ephemeral_ref)@ha)
+        __(str sp,C(ephemeral_ref)@l(imm0))
 	__(isync)
 	/* Memoize hash table header */		
         __(ref_global(imm1,ref_base))
