@@ -1720,6 +1720,7 @@ C(egc_write_barrier_start):
 
 _spentry(rplaca)
         .globl C(egc_rplaca)
+        .globl C(ephemeral_ref)
 C(egc_rplaca):
         /* pc_luser_xp() expects the store to be the first instruction here */
 	__(_rplaca(%arg_y,%arg_z))
@@ -1735,6 +1736,7 @@ C(egc_rplaca):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%temp0))
+        __(movb $1,C(ephemeral_ref))
         __(xorb $31,%imm0_b)
 2:      __(cmpl lisp_global(managed_static_dnodes),%imm0)
         __(jae 0b)
@@ -1762,6 +1764,7 @@ C(egc_rplacd):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%temp0))
+        __(movb $1,C(ephemeral_ref))
 	__(xorb $31,%imm0_b)        
 2:      __(cmpl lisp_global(managed_static_dnodes),%imm0)
         __(jae 0b)
@@ -1791,6 +1794,7 @@ C(egc_gvset):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%temp1))
+        __(movb $1,C(ephemeral_ref))
 	__(xorb $31,%imm0_b)
 2:      __(cmpl lisp_global(managed_static_dnodes),%imm0)
         __(jae 0b)
@@ -1822,6 +1826,7 @@ C(egc_set_hash_key):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%temp1))
+        __(movb $1,C(ephemeral_ref))
 	/* Now memoize the address of the hash vector */
 	__(movl %temp0,%imm0)
 	__(subl lisp_global(ref_base),%imm0)
@@ -1878,6 +1883,7 @@ C(egc_store_node_conditional_success_test):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%arg_y))
+        __(movb $1,C(ephemeral_ref))
 	__(xorb $31,%imm0_b)
 2:      __(cmpl lisp_global(managed_static_dnodes),%imm0)
         __(jae 8f)
@@ -1916,6 +1922,7 @@ C(egc_set_hash_key_conditional_success_test):
 	__(xorb $31,%imm0_b)
 	__(lock)
 	__(btsl %imm0,(%arg_y))
+        __(movb $1,C(ephemeral_ref))
 	/* Now memoize the address of the hash vector */
 	__(movl %temp1,%imm0)
 	__(subl lisp_global(ref_base),%imm0)

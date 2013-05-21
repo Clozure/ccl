@@ -1760,6 +1760,7 @@ C(egc_write_barrier_start):
 
 	
 _spentry(rplaca)
+        .globl C(ephemeral_ref)
         .globl C(egc_rplaca)
 C(egc_rplaca):
         /* pc_luser_xp() expects the store to be the first instruction here */
@@ -1777,6 +1778,7 @@ C(egc_rplaca):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp0))
+        __(movb $1,C(ephemeral_ref)(%rip))
 2:      __(cmpq lisp_global(managed_static_dnodes),%imm1)
         __(jae 0b)
         __(ref_global(managed_static_refbits,%temp0))
@@ -1804,7 +1806,7 @@ C(egc_rplacd):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp0))
-        __(ret)
+        __(movb $1,C(ephemeral_ref)(%rip))
 2:      __(cmpq lisp_global(managed_static_dnodes),%imm1)
         __(jae 0b)
         __(ref_global(managed_static_refbits,%temp0))
@@ -1835,6 +1837,7 @@ C(egc_gvset):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp0))
+        __(movb $1,C(ephemeral_ref)(%rip))
 2:      __(cmpq lisp_global(managed_static_dnodes),%imm1)
         __(jae 0b)
         __(ref_global(managed_static_refbits,%temp0))
@@ -1867,6 +1870,7 @@ C(egc_set_hash_key):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp0))
+        __(movb $1,C(ephemeral_ref)(%rip))
         /* Now memoize the address of the hash vector   */
         __(movq %arg_x,%imm0)
         __(subq lisp_global(ref_base),%imm0)
@@ -1924,6 +1928,7 @@ C(egc_store_node_conditional_success_test):
         __(xorb $63,%imm1_b)
         __(lock)
         __(btsq %imm1,(%temp1))        
+        __(movb $1,C(ephemeral_ref)(%rip))
 	.globl C(egc_store_node_conditional_success_end)
 C(egc_store_node_conditional_success_end):
 8:      __(movl $t_value,%arg_z_l)
@@ -1954,6 +1959,7 @@ C(egc_set_hash_key_conditional_success_test):
         __(xorb $63,%imm0_b)
         __(lock)
         __(btsq %imm0,(%temp1))
+        __(movb $1,C(ephemeral_ref)(%rip))
         /* Now memoize the address of the hash vector   */
         __(movq %arg_x,%imm0)
         __(subq lisp_global(ref_base),%imm0)

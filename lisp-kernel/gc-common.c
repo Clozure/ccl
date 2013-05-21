@@ -1352,6 +1352,9 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
   }
 }
 
+natural
+ephemeral_ref=0;
+
 void
 mark_memoized_area(area *a, natural num_memo_dnodes)
 {
