@@ -1677,6 +1677,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT)) &&
           ((LispObj)ea < val)) {
         atomic_set_bit(refbits, bitnumber);
+        ephemeral_ref = 1;
         if (need_memoize_root) {
           bitnumber = area_dnode(root, lisp_global(REF_BASE));
           atomic_set_bit(refbits, bitnumber);

@@ -1103,7 +1103,7 @@ forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits)
 
 
 
-  if (num_memo_dnodes) {
+  if (num_memo_dnodes && ephemeral_ref) {
     if (GCDebug) {
       check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
     }
@@ -1355,18 +1355,18 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
 natural
 ephemeral_ref=0;
 
-void
+Boolean
 mark_memoized_area(area *a, natural num_memo_dnodes)
 {
   bitvector refbits = a->refbits;
   LispObj *p = (LispObj *) a->low, x1, x2;
   natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0;
-  Boolean keep_x1, keep_x2;
+  Boolean keep_x1, keep_x2, have_ref = false;
   natural hash_dnode_limit = 0;
   hash_table_vector_header *hashp = NULL;
   int mark_method = 3;
 
-  if (num_memo_dnodes) {
+  if (num_memo_dnodes && ephemeral_ref) {
     if (GCDebug) {
       check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
     }
@@ -1479,6 +1479,8 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
             (keep_x2 == false) &&
             (hashp == NULL)) {
           outbits &= ~(BIT0_MASK >> bitidx);
+        } else {
+          have_ref = true;
         }
         memo_dnode++;
         bitidx++;
@@ -1489,6 +1491,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
       check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
     }
   }
+  return have_ref;
 }
 
 extern void zero_dnodes(void *,natural);
@@ -1688,8 +1691,14 @@ gc(TCR *tcr, signed_natural param)
     }
 
     if (GCephemeral_low) {
-      mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
-      mark_memoized_area(managed_static_area,managed_static_area->ndnodes);
+      Boolean have_tenured_ref = 
+        mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
+      Boolean have_managed_static_ref =
+        mark_memoized_area(managed_static_area,managed_static_area->ndnodes);
+
+      if (!have_tenured_ref && !have_managed_static_ref) {
+        ephemeral_ref = 0; /* Otherwise, keep loooking in both places */
+      }
     } else {
       mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address));
     }
