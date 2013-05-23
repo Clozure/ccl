@@ -86,7 +86,6 @@ int change_hons_area_size(TCR *, signed_natural);
 void delete_protected_area(protected_area_ptr);
 Boolean egc_control(Boolean, BytePtr);
 Boolean free_segments_zero_filled_by_OS;
-natural ephemeral_ref;
 
 /* an type representing 1/4 of a natural word */
 #if WORD_SIZE == 64
@@ -220,7 +219,7 @@ void mark_tstack_area(area *);
 void mark_vstack_area(area *);
 void mark_cstack_area(area *);
 void mark_simple_area_range(LispObj *, LispObj *);
-Boolean mark_memoized_area(area *, natural);
+void mark_memoized_area(area *, natural);
 LispObj calculate_relocation(void);
 void forward_range(LispObj *, LispObj *);
 void forward_tstack_area(area *);

@@ -178,3 +178,7 @@ typedef struct hash_table_vector_header {
 #define gc_allow_stack_overflows_bit fixnum_bitmask(5)
 #define gc_postgc_pending fixnum_bitmask(26)
 
+typedef struct {
+  natural w0;
+  natural w1;
+} dnode;

@@ -742,7 +742,6 @@ _spentry(bind_self_boundp_check)
 
         .globl C(egc_write_barrier_start)
         .globl C(egc_rplaca_did_store)
-        .globl C(ephemeral_ref)
 _spentry(rplaca)
 C(egc_write_barrier_start):     
         __(cmp arg_z,arg_y)
@@ -768,11 +767,9 @@ C(egc_rplaca_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
-        __(bne 0b)  
-        __(ldr imm0,1f)
-        __(str sp,[imm0,#0])      
+        __(bne 0b)        
         __(bx lr)
-1:      .word C(ephemeral_ref)
+
 
         .globl C(egc_rplacd)
         .globl C(egc_rplacd_did_store)
@@ -801,11 +798,8 @@ C(egc_rplacd_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
-        __(bne 0b)
-        __(ldr imm0,1f)
-        __(str sp,[imm0,#0])
+        __(bne 0b)        
         __(bx lr)
-1:      .word C(ephemeral_ref)
 	
 
 /* Storing into a gvector can be handled the same way as storing into a CONS. */
@@ -839,11 +833,8 @@ C(egc_gvset_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
-        __(bne 0b)
-        __(ldr imm0,1f)
-        __(str sp,[imm0,#0])
+        __(bne 0b)        
         __(bx lr)
-1:      .word C(ephemeral_ref)
 
         
 /* This is a special case of storing into a gvector: if we need to memoize  */
@@ -893,15 +884,12 @@ C(egc_set_hash_key_did_store):
         __(ldr imm2,[temp0])
         __(tst imm2,imm1)
         __(bxne lr)
-        __(ldr imm0,2f)
-        __(str sp,[imm0,#0])
 1:      __(ldrex imm2,[temp0])
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
         __(bne 1b)        
         __(bx lr)
-2:      .word C(ephemeral_ref)
         
 
 /*
@@ -963,11 +951,8 @@ C(egc_store_node_conditional_test):
 C(egc_set_hash_key_conditional_test): 
         __(cmp imm0,#0)
         __(bne 2b)
-        __(ldr imm0,3f)
-        __(str sp,[imm0,#0])
         __(b 4f)
-3:      .word C(ephemeral_ref)
-
+ 
 /* arg_z = new value, arg_y = expected old value, arg_x = hash-vector,
     vsp`0' = (boxed) byte-offset 
     Interrupt-related issues are as in store_node_conditional, but
@@ -1024,9 +1009,7 @@ C(egc_set_hash_key_conditional):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
-        __(bne 1b) 
-        __(ldr imm0,6f)
-        __(str sp,[imm0,#0])       
+        __(bne 1b)        
 C(egc_write_barrier_end):
 4:      __(mov arg_z,#nil_value)
         __(add arg_z,arg_z,#t_offset)
@@ -1034,7 +1017,7 @@ C(egc_write_barrier_end):
 5:      __(_clrex(arg_z))
         __(mov arg_z,#nil_value)
         __(bx lr)
-6:      .word C(ephemeral_ref)
+
 
 
 

@@ -289,7 +289,6 @@ allocate_lisp_stack_area(area_code stack_type,
     a = new_area(base, bottom, stack_type);
     a->hardlimit = base+hardsize;
     a->softlimit = base+hardsize+softsize;
-    a->h = h;
     a->softprot = soft_area;
     a->hardprot = hard_area;
     add_area_holding_area_lock(a);
@@ -721,7 +720,6 @@ allocate_dynamic_area(natural initsize)
   a->active = start+initsize;
   add_area_holding_area_lock(a);
   CommitMemory(start, end-start);
-  a->h = start;
   a->softprot = NULL;
   a->hardprot = NULL;
   map_initial_reloctab(a->low, a->high);
