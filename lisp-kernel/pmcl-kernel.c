@@ -135,7 +135,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -524,7 +524,7 @@ area *
 create_reserved_area(natural totalsize)
 {
   Ptr h;
-  natural base;
+  natural base, refbits_size;
   BytePtr 
     end, 
     lastbyte, 
@@ -570,9 +570,15 @@ create_reserved_area(natural totalsize)
   */
   end = lastbyte;
   reserved_region_end = lastbyte;
-  end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63)>>6)) & ~4095));
+  refbits_size = ((totalsize+63)>>6); /* word size! */
+  end = (BytePtr) ((natural)((((natural)end) - refbits_size) & ~4095));
 
   global_mark_ref_bits = (bitvector)end;
+  end  = (BytePtr) ((natural)((((natural)end) - ((refbits_size+255) >> 8)) & ~4095));
+  global_refidx = (bitvector)end;
+  /* Don't really want to commit so much so soon */
+  CommitMemory((BytePtr)global_refidx,(BytePtr)global_mark_ref_bits-(BytePtr)global_refidx);
+    
   end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63) >> 6)) & ~4095));
   global_reloctab = (LispObj *) end;
   reserved = new_area(start, end, AREA_VOID);
@@ -1752,6 +1758,7 @@ init_consing_areas()
     lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
     lisp_global(STATIC_CONS_AREA) = ptr_to_lispobj(static_cons_area);
     lisp_global(REFBITS) = ptr_to_lispobj(global_mark_ref_bits);
+    lisp_global(EPHEMERAL_REFIDX) = ptr_to_lispobj(global_refidx);
     g2_area->threshold = default_g2_threshold;
     g1_area->threshold = default_g1_threshold;
     a->threshold = default_g0_threshold;
