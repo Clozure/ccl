@@ -213,7 +213,7 @@ void mark_xp(ExceptionInformation *);
 #endif
 LispObj dnode_forwarding_address(natural, int);
 LispObj locative_forwarding_address(LispObj);
-void check_refmap_consistency(LispObj *, LispObj *, bitvector);
+void check_refmap_consistency(LispObj *, LispObj *, bitvector, bitvector);
 void check_all_areas(TCR *);
 void mark_tstack_area(area *);
 void mark_vstack_area(area *);

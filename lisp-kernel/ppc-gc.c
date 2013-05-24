@@ -830,7 +830,7 @@ skip_over_ivector(natural start, LispObj header)
 
 
 void
-check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
+check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits, bitvector refidx)
 {
   LispObj x1, *base = start, *prev = start;
   int tag;
@@ -873,6 +873,12 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
       if (!ref_bit(refbits, ref_dnode)) {
         Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
         set_bit(refbits, ref_dnode);
+        set_bit(refidx,ref_dnode>>8);
+      } else {
+        if (!ref_bit(refidx, ref_dnode>>8)) {
+          Bug(NULL, "Memoization for doublenode at 0x" LISP " not indexed\n", start);
+          set_bit(refidx,ref_dnode>>8);
+        }
       }
     }
     start += 2;

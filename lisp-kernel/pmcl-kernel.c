@@ -135,7 +135,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL, dynamic_refidx = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -647,10 +647,19 @@ map_initial_markbits(BytePtr low, BytePtr high)
     ndnodes = area_dnode(high, low),
     prefix_size = (prefix_dnodes+7)>>3,
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
+    prefix_index_bits,
     n;
   low_markable_address = low;
   high_markable_address = high;
   dynamic_mark_ref_bits = (bitvector)(((BytePtr)global_mark_ref_bits)+prefix_size);
+  if (prefix_dnodes & 255) {
+    fprintf(dbgout, "warning: prefix_dnodes not a multiple of 256\n");
+  }
+  prefix_index_bits = prefix_dnodes>>8;
+  if (prefix_index_bits & (WORD_SIZE-1)) {
+    fprintf(dbgout, "warning: prefix_index_bits not a multiple of %d\n", WORD_SIZE);
+  }
+  dynamic_refidx = (bitvector)(((BytePtr)global_refidx)+(prefix_index_bits>>3));
   relocatable_mark_ref_bits = dynamic_mark_ref_bits;
   n = align_to_power_of_2(markbits_size,log2_page_size);
   markbits_limit = ((BytePtr)dynamic_mark_ref_bits)+n;
@@ -1749,7 +1758,9 @@ init_consing_areas()
     g2_area->older = tenured_area;
     tenured_area->younger = g2_area;
     tenured_area->refbits = dynamic_mark_ref_bits;
+    tenured_area->refidx = dynamic_refidx;
     managed_static_area->refbits = global_mark_ref_bits;
+    managed_static_area->refidx = global_refidx;
     a->markbits = dynamic_mark_ref_bits;
     tenured_area->static_dnodes = a->static_dnodes;
     a->static_dnodes = 0;

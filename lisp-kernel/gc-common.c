@@ -1105,7 +1105,7 @@ forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits)
 
   if (num_memo_dnodes) {
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
 
     /* This is pretty straightforward, but we have to note
@@ -1306,7 +1306,7 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
 
   if (num_memo_dnodes) {
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
 
  
@@ -1347,7 +1347,7 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
     }
     if (GCDebug) {
       p = (LispObj *) a->low;
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
   }
 }
@@ -1365,7 +1365,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
 
   if (num_memo_dnodes) {
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
 
     /* The distinction between "inbits" and "outbits" is supposed to help us
@@ -1483,7 +1483,7 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
     }
     if (GCDebug) {
       p = (LispObj *) a->low;
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
   }
 }
