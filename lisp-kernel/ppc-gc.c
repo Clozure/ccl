@@ -873,11 +873,15 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits, bitvec
       if (!ref_bit(refbits, ref_dnode)) {
         Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
         set_bit(refbits, ref_dnode);
-        set_bit(refidx,ref_dnode>>8);
-      } else {
-        if (!ref_bit(refidx, ref_dnode>>8)) {
-          Bug(NULL, "Memoization for doublenode at 0x" LISP " not indexed\n", start);
+        if (refidx) {
           set_bit(refidx,ref_dnode>>8);
+        }
+      } else {
+        if (refidx) {
+          if (!ref_bit(refidx, ref_dnode>>8)) {
+            Bug(NULL, "Memoization for doublenode at 0x" LISP " not indexed\n", start);
+            set_bit(refidx,ref_dnode>>8);
+          }
         }
       }
     }

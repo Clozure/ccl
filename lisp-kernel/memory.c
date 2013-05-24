@@ -654,6 +654,9 @@ tenure_to_area(area *target)
   
   if (target == tenured_area) {
     zero_bits(refbits, new_tenured_dnodes);
+    zero_bits(managed_static_area->refbits, managed_static_area->ndnodes);
+    zero_bits(global_refidx, (managed_static_area->ndnodes+255)>>8);
+    zero_bits(dynamic_refidx,(new_tenured_dnodes+255)>>8);
     lisp_global(OLDEST_EPHEMERAL) = ptr_to_lispobj(curfree);
   } else {
     /* Need more (zeroed) refbits & fewer markbits */

@@ -53,11 +53,15 @@ set_n_bits(bitvector bits, natural first, natural n)
   }
 }
 
-/* Note that this zeros longwords */
+/* Note that this zeros natural-sized words */
 void
 zero_bits(bitvector bits, natural nbits)
 {
-  memset(bits, 0, ((sizeof(natural)*(((nbits+(nbits_in_word-1)))>>bitmap_shift))));
+  natural i, n = (((nbits+(nbits_in_word-1)))>>bitmap_shift);
+  
+  for(i=0; i < n; i++) {
+    bits[i]= 0;
+  }
 }
 
 void

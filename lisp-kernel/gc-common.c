@@ -1100,12 +1100,17 @@ forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits)
   int tag_x1;
   hash_table_vector_header *hashp = NULL;
   Boolean header_p;
+  bitvector refidx = NULL;
+  
+  if (refbits == a->refbits) {
+    refidx = a->refidx;
+  }
 
 
 
   if (num_memo_dnodes) {
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, refidx);
     }
 
     /* This is pretty straightforward, but we have to note
@@ -1306,7 +1311,7 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
 
   if (num_memo_dnodes) {
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, NULL);
     }
 
  
@@ -1347,7 +1352,7 @@ mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_
     }
     if (GCDebug) {
       p = (LispObj *) a->low;
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, NULL);
     }
   }
 }

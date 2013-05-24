@@ -63,7 +63,7 @@
 extern void zero_memory_range(BytePtr,BytePtr);
 extern LispObj GCarealow, GCareadynamiclow;
 extern natural GCndnodes_in_area, GCndynamic_dnodes_in_area;
-extern bitvector GCmarkbits, GCdynamic_markbits,managed_static_refbits,global_refidx;
+extern bitvector GCmarkbits, GCdynamic_markbits,managed_static_refbits,global_refidx,dynamic_refidx;
 LispObj *global_reloctab, *GCrelocptr;
 LispObj GCfirstunmarked;
 
