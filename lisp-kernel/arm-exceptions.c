@@ -1643,7 +1643,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 	   has failed.  No need to adjust the PC, or do memoization. */
 	return;
       }
-      ea = (LispObj*)(xpGPR(xp,arg_x) + xpGPR(xp,imm0));
+      ea = (LispObj*)(xpGPR(xp,arg_x) + unbox_fixnum(xpGPR(xp,temp2)));
       xpGPR(xp,arg_z) = t_value;
     } else if (program_counter >= &egc_set_hash_key) {
       if (program_counter < &egc_set_hash_key_did_store) {
@@ -1651,7 +1651,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       }
       root = xpGPR(xp,arg_x);
       val = xpGPR(xp,arg_z);
-      ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
+      ea = (LispObj *) (root+unbox_fixnum(xpGPR(xp,temp2)));
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
       if (program_counter < &egc_gvset_did_store) {
