@@ -1214,7 +1214,7 @@ skip_over_ivector(natural start, LispObj header)
 
 
 void
-check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits, bitvector refidx)
+check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
 {
   LispObj x1, *base = start, *prev = start;
   int tag;
@@ -1271,16 +1271,6 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits, bitvec
         if (!ref_bit(refbits, ref_dnode)) {
           Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
           set_bit(refbits, ref_dnode);
-          if (refidx) {
-            set_bit(refidx, ref_dnode>>8);
-          }
-        } else {
-          if (refidx) {
-            if (!ref_bit(refidx, ref_dnode>>8)) {
-              Bug(NULL, "Memoization for doublenode at 0x" LISP " not indexed\n", start);
-              set_bit(refidx,ref_dnode>>8);
-            }
-          }
         }
       }
       start += 2;
@@ -2686,7 +2676,7 @@ update_managed_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnode
     x1, 
     *base = start, *prev = start;
   int tag;
-  bitvector refbits = managed_static_refbits, refidx = managed_static_refidx;
+  bitvector refbits = managed_static_refbits;
   natural ref_dnode, node_dnode;
   Boolean intergen_ref;
 
@@ -2730,7 +2720,6 @@ update_managed_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnode
       if (intergen_ref) {
         ref_dnode = area_dnode(start, base);
         set_bit(refbits, ref_dnode);
-        set_bit(refidx, ref_dnode>>8);
       }
       start += 2;
     }
@@ -2837,7 +2826,6 @@ purify(TCR *tcr, signed_natural param)
         lisp_global(MANAGED_STATIC_DNODES) = managed_dnodes;
         CommitMemory(managed_static_area->refbits, refbytes); /* zeros them */
         CommitMemory(managed_static_refbits,refbytes); /* zeroes them, too */
-        CommitMemory(managed_static_refidx,((managed_dnodes+255)>>8)>>3);
         update_managed_refs(managed_static_area, low_markable_address, area_dnode(a->active,low_markable_address));
       }
       managed_static_area->high = managed_static_area->active;
