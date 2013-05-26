@@ -282,6 +282,18 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    fd)) {
         return;
       }
+      /* Should change image format and store this in the image */
+      {
+        natural ndnodes = area_dnode(a->active, a->low), i;
+        if (!CommitMemory(managed_static_refidx,(((ndnodes +255)>>8)+7)>>3)) {
+          return;
+        }
+        for (i=0; i < ndnodes; i++) {
+          if (ref_bit(managed_static_refbits,i)) {
+            set_bit(managed_static_refidx,i>>8);
+          }
+        }
+      }
       advance += refbits_size;
     }
     sect->area = a;

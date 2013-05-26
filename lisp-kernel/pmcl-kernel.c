@@ -135,7 +135,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL, dynamic_refidx = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL, dynamic_refidx = NULL,managed_static_refidx = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -596,6 +596,15 @@ create_reserved_area(natural totalsize)
 #endif
       exit(1);
     }
+    managed_static_refidx = ReserveMemory(((((MANAGED_STATIC_SIZE>>dnode_shift)+255)>>8)+7)>>3);
+    if (managed_static_refidx == NULL) {
+#ifdef WINDOWS
+      wperror("allocate refidx for managed static area");
+#else
+      perror("allocate refidx for managed static area");
+#endif
+      exit(1);
+    }      
   }
 #endif
   return reserved;
@@ -2076,6 +2085,7 @@ main
     lisp_global(OLDSPACE_DNODE_COUNT) = 0;
   }
   lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
+  lisp_global(MANAGED_STATIC_REFIDX) = (LispObj)managed_static_refidx;
   lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
   atexit(lazarus);
 #ifdef ARM

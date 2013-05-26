@@ -78,9 +78,9 @@ extern LispObj lisp_nil;
 #define MANAGED_STATIC_REFBITS (-50) /* refs from managed_static to dynamic */
 #define MANAGED_STATIC_DNODES (-51) /* ndnodes in managed_static_area */
 #define EPHEMERAL_REFIDX      (-52) /* compressed refmap to ephmeral space */
+#define MANAGED_STATIC_REFIDX (-53) /* compressed refmap from managed static to dynamic */
 
-
-#define MIN_KERNEL_GLOBAL EPHEMERAL_REFIDX
+#define MIN_KERNEL_GLOBAL MANAGED_STATIC_REFIDX
 
 /* These are only non-zero when an image is being saved or loaded */
 

@@ -711,6 +711,7 @@ load_native_library(char *path)
   extern BytePtr allocate_from_reserved_area(natural);
   void *lib;
   LispObj image_nil = 0;
+  natural i;
 
   /* Because of the way that we've reserved memory, we can only
      load the image's segments at their preferred address if we
@@ -842,9 +843,14 @@ load_native_library(char *path)
     nrefbytes = msr_end - ms_end;
     CommitMemory(global_mark_ref_bits,align_to_power_of_2(nrefbytes, 12));
     CommitMemory(managed_static_refbits,align_to_power_of_2(nrefbytes, 12));
+    CommitMemory(managed_static_refidx,(managed_static_area->ndnodes+255)>>3);
     memcpy(managed_static_refbits,ms_end,nrefbytes);
     memset(ms_end,0,nrefbytes);
-    
+    for (i = 0; i < managed_static_area->ndnodes; i++) {
+      if (ref_bit(managed_static_refbits,i)) {
+        set_bit(managed_static_refidx,i>>8);
+      }
+    }
     return image_nil;
   }
 }

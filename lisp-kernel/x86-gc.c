@@ -2686,7 +2686,7 @@ update_managed_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnode
     x1, 
     *base = start, *prev = start;
   int tag;
-  bitvector refbits = managed_static_refbits;
+  bitvector refbits = managed_static_refbits, refidx = managed_static_refidx;
   natural ref_dnode, node_dnode;
   Boolean intergen_ref;
 
@@ -2730,6 +2730,7 @@ update_managed_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnode
       if (intergen_ref) {
         ref_dnode = area_dnode(start, base);
         set_bit(refbits, ref_dnode);
+        set_bit(refidx, ref_dnode>>8);
       }
       start += 2;
     }
@@ -2836,6 +2837,7 @@ purify(TCR *tcr, signed_natural param)
         lisp_global(MANAGED_STATIC_DNODES) = managed_dnodes;
         CommitMemory(managed_static_area->refbits, refbytes); /* zeros them */
         CommitMemory(managed_static_refbits,refbytes); /* zeroes them, too */
+        CommitMemory(managed_static_refidx,((managed_dnodes+255)>>8)>>3);
         update_managed_refs(managed_static_area, low_markable_address, area_dnode(a->active,low_markable_address));
       }
       managed_static_area->high = managed_static_area->active;

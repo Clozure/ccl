@@ -2767,8 +2767,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
         }
         if (bitnumber < lisp_global(MANAGED_STATIC_DNODES)) {
           atomic_set_bit(managed_static_refbits,bitnumber);
+          atomic_set_bit(managed_static_refidx,bitnumber>>8);
           if (need_memoize_root) {
             atomic_set_bit(managed_static_refbits, rootbitnumber);
+            atomic_set_bit(managed_static_refidx,rootbitnumber>>8);
           }
         }
       }

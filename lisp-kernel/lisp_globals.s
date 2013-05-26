@@ -212,6 +212,7 @@ nrs_symbol_extra = symbol.size-nrs_symbol_fulltag
          _rnode(managed_static_refbits) /* refs from managed_static to dynamic */
          _rnode(managed_static_dnodes) /* ndnodes in managed_static_area */
          _rnode(ephemeral_refidx) /* index of refbits */
+         _rnode(managed_static_refidx) /* index of managed_static_refbits */
 	_ends
 
 /* Traditional name, differs from C */
