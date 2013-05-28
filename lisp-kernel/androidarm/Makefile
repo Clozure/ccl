@@ -102,7 +102,7 @@ APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o $(GC
 
 ../../libaarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
 	$(LD) --shared -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../libaarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o android_native_app_glue.o --no-as-needed $(OSLIBS) -T ./armandroid.x
-	./fixlib $(LIBBASE) >> ../../libaarmcl.so
+#	./fixlib $(LIBBASE) >> ../../libaarmcl.so
 
 ../../aarmcl:	aarmcl.o
 		$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl -L $(NDKLIB) aarmcl.o $(APPLIBS)

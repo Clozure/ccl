@@ -454,8 +454,9 @@ at heap allocation."
 (defarmlapfunction %kernel-import ((offset arg_z))
   (ref-global imm0 kernel-imports)
   (ldr imm0 (:@ imm0 (:asr arg_z (:$ arm::fixnumshift))))
-  (box-fixnum arg_z imm0)
-  (bx lr))
+  ;; May not fit in a fixnum.  We'd really rather not CONS
+  ;; here, but it won't kill us to do so.
+  (spjump .SPmakeu32))
 
 (defarmlapfunction %get-unboxed-ptr ((macptr arg_z))
   (macptr-ptr imm0 arg_z)
