@@ -84,25 +84,20 @@
   (native-translated-namestring (merge-pathnames path)))
 
 (defun native-translated-namestring (path)
-  (let ((name (let ((*default-pathname-defaults* #P""))
-                (translated-namestring path))))
-    ;; Check that no quoted /'s
-    (when (%path-mem-last-quoted "/" name)
-      (signal-file-error $xbadfilenamechar name #\/))
+  (let ((name (namestring (translate-logical-pathname path))))
+    ;; Check that no quoted /'s (or :'s on windows)
+    (when (%path-mem-last-quoted #-windows-target "/" #+windows-target "/:" name)
+      (signal-file-error $xbadfilenamechar name
+                         #-windows-target #\/
+                         #+windows-target (if (%path-mem-last-quoted ":" name) #\: #\/)))
     ;; Check that no unquoted wildcards.
     (when (%path-mem-last "*" name)
       (signal-file-error $xillwild name))
     (namestring-unquote name)))
 
+;; TODO: change callers and get rid of this.
 (defun native-untranslated-namestring (path)
-  (let ((name (namestring (translate-logical-pathname path))))
-    ;; Check that no quoted /'s
-    (when (%path-mem-last-quoted "/" name)
-      (signal-file-error $xbadfilenamechar name #\/))
-    ;; Check that no unquoted wildcards.
-    (when (%path-mem-last "*" name)
-      (signal-file-error $xillwild name))
-    (namestring-unquote name)))
+  (native-translated-namestring path))
 
 ;; Reverse of above, take native namestring and make a Lisp pathname.
 (defun native-to-pathname (name)
@@ -112,19 +107,34 @@
   ;; in *DEFAULT-PATHNAME-DEFAULTS*.
   ;; I -think- that that's true for all callers of this function.
   (let* ((*default-pathname-defaults* #p""))
-    (pathname (%path-std-quotes name nil
-                                   #+windows-target "*;"
-                                   #-windows-target "*;:"))))
+    (pathname (native-to-namestring name))))
+
+;; this is used to quote full namestrings, so do not quote /'s, and on windows do not quote :'s either,
+;; since those are syntactic.  See also native-to-filename.
+(defun native-to-namestring (native)
+  (%path-std-quotes native nil #+windows-target "*;" #-windows-target "*;:"))
 
 (defun native-to-directory-pathname (name)
-  #+windows-target
-  (let* ((len (length name)))
-    (when (and (> len 1) (not (or (eql (schar name (1- len)) #\/)
-                                  (eql (schar name (1- len)) #\\))))
-      (setq name (%str-cat name "/")))
-    (string-to-pathname name))
-  #-windows-target
-  (make-directory-pathname  :device nil :directory (%path-std-quotes name nil "*;:")))
+  (let* ((*default-pathname-defaults* #p""))
+    #+windows-target
+    (let* ((len (length name)))
+      (when (and (> len 1) (not (or (eql (schar name (1- len)) #\/)
+                                    (eql (schar name (1- len)) #\\))))
+        (setq name (%str-cat name "/")))
+      (string-to-pathname (native-to-namestring name)))
+    #-windows-target
+    (make-directory-pathname  :device nil :directory (native-to-namestring name))))
+
+;; This is used to quote a single native filename component, so directory/device
+;; markers have been removed.  See also native-to-namestring.
+(defun native-to-filename (native)
+  (%path-std-quotes native nil "/:;*"))
+
+(defun %std-filename-quotes (name &optional quote-period)
+  (if quote-period
+    (%path-std-quotes name "./:;*" "./:;")
+    (%path-std-quotes name "/:;*" "/:;")))
+
 
 ;;; Make a pathname which names the specified directory; use
 ;;; explict :NAME, :TYPE, and :VERSION components of NIL.
@@ -168,10 +178,6 @@
                        (incf dest)
                        (setq quote-next nil))
                       ((eq ch esc) (setq quote-next t)))))))))))
-
-(defun translated-namestring (path)
-  (namestring (translate-logical-pathname (merge-pathnames path))))
-
 
 (defun truename (path)
   "Return the pathname for the actual file described by PATHNAME.
@@ -440,12 +446,14 @@
   (%str-cat (case name
 	      ((nil :unspecific) "")
 	      (:wild "*")
-	      (t (%path-std-quotes name "*;:" ".")))
+              ;; Quote periods if there is no type/version following, so don't get mistaken for a type.
+              ;; Otherwise there is no need to quote them.
+	      (t (%std-filename-quotes name (null (or type version)))))
 	    (if (or type version)
 	      (%str-cat (case type
 			  ((nil) ".")
 			  (:wild ".*")
-			  (t (%str-cat "." (%path-std-quotes type "*;:" "."))))
+			  (t (%str-cat "." (%std-filename-quotes type t))))
 			(case version
 			  ((nil) "")
 			  (:newest ".newest")
@@ -549,7 +557,7 @@
   (multiple-value-bind (sstr start end) (get-pathname-sstring string start end)
     (if (and (> end start)
              (eql (schar sstr start) #\~))
-      (setq sstr (tilde-expand (subseq sstr start end))
+      (setq sstr (namestring-unquote (tilde-expand (subseq sstr start end)))
             start 0
             end (length sstr)))
     (let (directory name type host version device (start-pos start) (end-pos end) has-slashes)
@@ -718,7 +726,7 @@ a host-structure or string."
     (t (cond ((string= name "*") :wild)
              ((string= name "**") :wild-inferiors)
 	     ((string= name "..") :up)
-             (t (%path-std-quotes name "/:;*" "/:;"))))))
+             (t (%std-filename-quotes name))))))
 
 ; this will allow creation of garbage pathname "foo:bar;bas:" do we care?
 (defun merge-pathnames (path &optional (defaults *default-pathname-defaults*)
@@ -937,7 +945,7 @@ a host-structure or string."
 	((string= v "") :unspecific)
 	((string-equal v "newest") :newest)
 	((every #'digit-char-p v) (parse-integer v))
-	(t (%path-std-quotes v "./:;*" "./:;"))))
+	(t (%std-filename-quotes v t))))
 
 
 ;A name is either NIL or a (possibly wildcarded, possibly empty) string.
@@ -974,7 +982,7 @@ a host-structure or string."
 (defun %std-name-component (name)
   (cond ((or (null name) (eq name :unspecific) (eq name :wild)) name)
         ((equal name "*") :wild)
-        (t (%path-std-quotes name "/:;*" "/:;"))))
+        (t (%std-filename-quotes name))))
 
 ;A type is either NIL or a (possibly wildcarded, possibly empty) string.
 ;Quoted :'s are allowed at this stage, though will get an error if go to the
@@ -1015,17 +1023,14 @@ a host-structure or string."
 (defun %std-type-component (type)
   (cond ((or (null type) (eq type :unspecific) (eq type :wild)) type)
         ((equal type "*") :wild)
-        (t (%path-std-quotes type "./:;*" "./:;"))))
+        (t (%std-filename-quotes type t))))
 
 (defun %std-name-and-type (native)
   (let* ((end (length native))
 	 (pos (position #\. native :from-end t))
-	 (type (and pos
-		    (%path-std-quotes (%substr native (%i+ 1 pos) end)
-				      nil "/:;*")))
+	 (type (and pos (native-to-filename (%substr native (%i+ 1 pos) end))))
 	 (name (unless (eq (or pos end) 0)
-		 (%path-std-quotes (if pos (%substr native 0 pos) native)
-				   nil "/:;*"))))
+		 (native-to-filename (if pos (%substr native 0 pos) native)))))
     (values name type)))
 
 (defun %reverse-component-case (name case)

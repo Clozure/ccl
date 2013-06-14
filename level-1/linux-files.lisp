@@ -659,7 +659,6 @@ given is that of a group to which the current user belongs."
       (fd-set-flags fd (logandc2 old mask)))))
 )
 
-;;; Assume that any quoting's been removed already.
 (defun tilde-expand (namestring)
   (let* ((len (length namestring)))
     (if (or (zerop len)
@@ -667,14 +666,14 @@ given is that of a group to which the current user belongs."
       namestring
       (if (or (= len 1)
               (eql (schar namestring 1) #\/))
-        (concatenate 'string (get-user-home-dir (getuid)) (if (= len 1) "/" (subseq namestring 1)))
+        (concatenate 'string (native-to-namestring (get-user-home-dir (getuid))) (if (= len 1) "/" (subseq namestring 1)))
         #+windows-target namestring
         #-windows-target
-        (let* ((slash-pos (position #\/ namestring))
-               (user-name (subseq namestring 1 slash-pos))
+        (let* ((slash-pos (%path-mem "/" namestring))
+               (user-name (namestring-unquote (subseq namestring 1 slash-pos)))
                (uid (or (get-uid-from-name user-name)
                         (error "Unknown user ~s in namestring ~s" user-name namestring))))
-          (concatenate 'string (get-user-home-dir uid) (if slash-pos (subseq namestring slash-pos) "/")))))))
+          (concatenate 'string (native-to-namestring (get-user-home-dir uid)) (if slash-pos (subseq namestring slash-pos) "/")))))))
 
 
 #+windows-target
@@ -932,8 +931,9 @@ given is that of a group to which the current user belongs."
 
 (defun get-user-home-dir (userid)
   "Look up and return the defined home directory of the user identified
-by uid. This value comes from the OS user database, not from the $HOME
-environment variable. Returns NIL if there is no user with the ID uid."
+by uid, as a native namestring. This value comes from the OS user database, not from the $HOME
+environment variable, unless *TRUST-PATHS-FROM-ENVIRONMENT* is true.
+Returns NIL if there is no user with the ID uid."
   #+(or windows-target android-target)
   (declare (ignore userid))
   #+windows-target

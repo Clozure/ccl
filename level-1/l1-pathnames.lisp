@@ -123,7 +123,7 @@
          t)
         ((not (and (stringp name) (stringp wild)))
          (eq name wild))
-        (t (%path-str*= name wild))))
+        (t (%path-str*= (namestring-unquote name) wild))))
 
 (defun translate-directory (source from to reversible &optional thost)
   (declare (ignore thost)) ;; leftover from a mac kludge.
@@ -460,7 +460,7 @@
                               (cond ((string= wildstr "**")
                                      (setq result (%pathname-match-dir1 path (cdr wild)))
                                      (return-from nil))
-                                    ((%path-str*= pathstr wildstr))))
+                                    ((%path-str*= (namestring-unquote pathstr) wildstr))))
                          (setq result nil)
                          (return-from nil)))
                      (setq wild (cdr wild) path (cdr path))))
@@ -491,7 +491,7 @@
                  (:wild (setq pathstr "*"))
                  (:wild-inferiors (setq pathstr "**")))
                (until (or (not (consp path))
-                          (%path-str*= pathstr wildstr))
+                          (%path-str*= (namestring-unquote pathstr) wildstr))
                  (when cons-result (push pathstr match))
                  (setq path (cdr path))
                  (setq pathstr (car path))
@@ -509,8 +509,9 @@
                           (go AGN)))))))))
 
 ; three times bigger and 3 times slower - does it matter?
-(defun %path-str*= (string pattern)
-  (multiple-value-bind (string s-start s-end) (get-sstring string)
+;; This assumes pattern is escaped, but pstr is a native string (not escaped)
+(defun %path-str*= (native-pstr pattern)
+  (multiple-value-bind (string s-start s-end) (get-sstring native-pstr)
     (multiple-value-bind (pattern p-start p-end) (get-sstring pattern)
       (path-str-sub pattern string p-start s-start p-end s-end))))
 
