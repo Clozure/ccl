@@ -135,7 +135,7 @@ wperror(char* message)
 #endif
 
 LispObj lisp_nil = (LispObj) 0;
-bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL;
+bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL, dynamic_refidx = NULL,managed_static_refidx = NULL;
 
 
 /* These are all "persistent" : they're initialized when
@@ -150,6 +150,8 @@ LispObj text_start = 0;
 
 extern LispObj import_ptrs_base;
 
+/* The highest heap address that's (probably) been written to. */
+BytePtr heap_dirty_limit = NULL;
 
 
 
@@ -289,7 +291,6 @@ allocate_lisp_stack_area(area_code stack_type,
     a = new_area(base, bottom, stack_type);
     a->hardlimit = base+hardsize;
     a->softlimit = base+hardsize+softsize;
-    a->h = h;
     a->softprot = soft_area;
     a->hardprot = hard_area;
     add_area_holding_area_lock(a);
@@ -525,7 +526,7 @@ area *
 create_reserved_area(natural totalsize)
 {
   Ptr h;
-  natural base;
+  natural base, refbits_size;
   BytePtr 
     end, 
     lastbyte, 
@@ -571,9 +572,15 @@ create_reserved_area(natural totalsize)
   */
   end = lastbyte;
   reserved_region_end = lastbyte;
-  end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63)>>6)) & ~4095));
+  refbits_size = ((totalsize+63)>>6); /* word size! */
+  end = (BytePtr) ((natural)((((natural)end) - refbits_size) & ~4095));
 
   global_mark_ref_bits = (bitvector)end;
+  end  = (BytePtr) ((natural)((((natural)end) - ((refbits_size+255) >> 8)) & ~4095));
+  global_refidx = (bitvector)end;
+  /* Don't really want to commit so much so soon */
+  CommitMemory((BytePtr)global_refidx,(BytePtr)global_mark_ref_bits-(BytePtr)global_refidx);
+    
   end = (BytePtr) ((natural)((((natural)end) - ((totalsize+63) >> 6)) & ~4095));
   global_reloctab = (LispObj *) end;
   reserved = new_area(start, end, AREA_VOID);
@@ -591,6 +598,15 @@ create_reserved_area(natural totalsize)
 #endif
       exit(1);
     }
+    managed_static_refidx = ReserveMemory(((((MANAGED_STATIC_SIZE>>dnode_shift)+255)>>8)+7)>>3);
+    if (managed_static_refidx == NULL) {
+#ifdef WINDOWS
+      wperror("allocate refidx for managed static area");
+#else
+      perror("allocate refidx for managed static area");
+#endif
+      exit(1);
+    }      
   }
 #endif
   return reserved;
@@ -642,10 +658,19 @@ map_initial_markbits(BytePtr low, BytePtr high)
     ndnodes = area_dnode(high, low),
     prefix_size = (prefix_dnodes+7)>>3,
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
+    prefix_index_bits,
     n;
   low_markable_address = low;
   high_markable_address = high;
   dynamic_mark_ref_bits = (bitvector)(((BytePtr)global_mark_ref_bits)+prefix_size);
+  if (prefix_dnodes & 255) {
+    fprintf(dbgout, "warning: prefix_dnodes not a multiple of 256\n");
+  }
+  prefix_index_bits = prefix_dnodes>>8;
+  if (prefix_index_bits & (WORD_SIZE-1)) {
+    fprintf(dbgout, "warning: prefix_index_bits not a multiple of %d\n", WORD_SIZE);
+  }
+  dynamic_refidx = (bitvector)(((BytePtr)global_refidx)+(prefix_index_bits>>3));
   relocatable_mark_ref_bits = dynamic_mark_ref_bits;
   n = align_to_power_of_2(markbits_size,log2_page_size);
   markbits_limit = ((BytePtr)dynamic_mark_ref_bits)+n;
@@ -658,7 +683,8 @@ lower_heap_start(BytePtr new_low, area *a)
   natural new_dnodes = area_dnode(low_markable_address,new_low);
 
   if (new_dnodes) {
-    natural n = (new_dnodes+7)>>3;
+    natural n = (new_dnodes+7)>>3,
+      nidx = ((((new_dnodes+255)>>8)+7)>>3)>>node_shift;
 
     BytePtr old_markbits = (BytePtr)dynamic_mark_ref_bits,
       new_markbits = old_markbits-n;
@@ -670,6 +696,7 @@ lower_heap_start(BytePtr new_low, area *a)
     a->static_dnodes += new_dnodes;
     a->ndnodes += new_dnodes;
     a->low = new_low;
+    a->refidx -= nidx;
     low_markable_address = new_low;
     lisp_global(HEAP_START) = (LispObj)new_low;
     static_cons_area->ndnodes = area_dnode(static_cons_area->high,new_low);
@@ -721,7 +748,6 @@ allocate_dynamic_area(natural initsize)
   a->active = start+initsize;
   add_area_holding_area_lock(a);
   CommitMemory(start, end-start);
-  a->h = start;
   a->softprot = NULL;
   a->hardprot = NULL;
   map_initial_reloctab(a->low, a->high);
@@ -774,6 +800,9 @@ shrink_dynamic_area(natural delta)
 
   a->high -= delta;
   a->ndnodes = area_dnode(a->high, a->low);
+  if (heap_dirty_limit > a->high) {
+    heap_dirty_limit = a->high;
+  }
   a->hardlimit = a->high;
   uncommit_pages(a->high, delta);
   reserved->low -= delta;
@@ -1745,7 +1774,9 @@ init_consing_areas()
     g2_area->older = tenured_area;
     tenured_area->younger = g2_area;
     tenured_area->refbits = dynamic_mark_ref_bits;
+    tenured_area->refidx = dynamic_refidx;
     managed_static_area->refbits = global_mark_ref_bits;
+    managed_static_area->refidx = global_refidx;
     a->markbits = dynamic_mark_ref_bits;
     tenured_area->static_dnodes = a->static_dnodes;
     a->static_dnodes = 0;
@@ -1754,6 +1785,7 @@ init_consing_areas()
     lisp_global(TENURED_AREA) = ptr_to_lispobj(tenured_area);
     lisp_global(STATIC_CONS_AREA) = ptr_to_lispobj(static_cons_area);
     lisp_global(REFBITS) = ptr_to_lispobj(global_mark_ref_bits);
+    lisp_global(EPHEMERAL_REFIDX) = ptr_to_lispobj(global_refidx);
     g2_area->threshold = default_g2_threshold;
     g1_area->threshold = default_g1_threshold;
     a->threshold = default_g0_threshold;
@@ -2059,7 +2091,9 @@ main
   } else {
     lisp_global(OLDSPACE_DNODE_COUNT) = 0;
   }
+  heap_dirty_limit = active_dynamic_area->active;
   lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
+  lisp_global(MANAGED_STATIC_REFIDX) = (LispObj)managed_static_refidx;
   lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
   atexit(lazarus);
 #ifdef ARM

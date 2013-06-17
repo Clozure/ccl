@@ -140,53 +140,14 @@ update_bytes_allocated(TCR* tcr, void *cur_allocptr)
 //  satisfy the request.
 
 
-Boolean
-new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tcr, Boolean *crossed_threshold)
+
+void
+platform_new_heap_segment(ExceptionInformation *xp, TCR *tcr, BytePtr low, BytePtr high)
 {
-  area *a;
-  natural newlimit, oldlimit;
-  natural log2_allocation_quantum = TCR_AUX(tcr)->log2_allocation_quantum;
-
-  if (crossed_threshold) {
-    *crossed_threshold = false;
-  }
-
-  a  = active_dynamic_area;
-  oldlimit = (natural) a->active;
-  newlimit = (align_to_power_of_2(oldlimit, log2_allocation_quantum) +
-	      align_to_power_of_2(need, log2_allocation_quantum));
-  if (newlimit > (natural) (a->high)) {
-    if (extend) {
-      signed_natural inhibit = (signed_natural)(lisp_global(GC_INHIBIT_COUNT));
-      natural extend_by = inhibit ? 0 : lisp_heap_gc_threshold;
-      do {
-        if (resize_dynamic_heap(a->active, (newlimit-oldlimit)+extend_by)) {
-          break;
-        }
-        extend_by = align_to_power_of_2(extend_by>>1,log2_allocation_quantum);
-        if (extend_by < 4<<20) {
-          return false;
-        }
-      } while (1);
-    } else {
-      return false;
-    }
-  }
-  a->active = (BytePtr) newlimit;
-  tcr->last_allocptr = (void *)newlimit;
-  tcr->save_allocptr = (void *)newlimit;
-  xpGPR(xp,Iallocptr) = (LispObj) newlimit;
-  tcr->save_allocbase = (void *) oldlimit;
-
-  if (crossed_threshold && (!extend)) {
-    if (((a->high - (BytePtr)newlimit) < lisp_heap_notify_threshold)&&
-        ((a->high - (BytePtr)oldlimit) >= lisp_heap_notify_threshold)) {
-      *crossed_threshold = true;
-    }
-  }
-    
-
-  return true;
+  tcr->last_allocptr = (void *)high;
+  tcr->save_allocptr = (void *)high;
+  xpGPR(xp,Iallocptr) = (LispObj) high;
+  tcr->save_allocbase = (void *) low;
 }
 
 Boolean
@@ -2759,14 +2720,18 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *interrupt_displa
           rootbitnumber = area_dnode(root, lisp_global(REF_BASE));
         if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT))) {
           atomic_set_bit(refbits, bitnumber);
+          atomic_set_bit(global_refidx,bitnumber>>8);
           if (need_memoize_root) {
             atomic_set_bit(refbits, rootbitnumber);
+            atomic_set_bit(global_refidx,rootbitnumber>>8);
           }
         }
         if (bitnumber < lisp_global(MANAGED_STATIC_DNODES)) {
           atomic_set_bit(managed_static_refbits,bitnumber);
+          atomic_set_bit(managed_static_refidx,bitnumber>>8);
           if (need_memoize_root) {
             atomic_set_bit(managed_static_refbits, rootbitnumber);
+            atomic_set_bit(managed_static_refidx,rootbitnumber>>8);
           }
         }
       }

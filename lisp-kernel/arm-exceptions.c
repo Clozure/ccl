@@ -224,7 +224,7 @@ allocate_object(ExceptionInformation *xp,
   /* Life is pretty simple if we can simply grab a segment
      without extending the heap.
   */
-  if (new_heap_segment(xp, bytes_needed, false, tcr)) {
+  if (new_heap_segment(xp, bytes_needed, false, tcr, NULL)) {
     xpGPR(xp, allocptr) += disp_from_allocptr;
     return true;
   }
@@ -239,7 +239,7 @@ allocate_object(ExceptionInformation *xp,
   }
   
   /* Try again, growing the heap if necessary */
-  if (new_heap_segment(xp, bytes_needed, true, tcr)) {
+  if (new_heap_segment(xp, bytes_needed, true, tcr, NULL)) {
     xpGPR(xp, allocptr) += disp_from_allocptr;
     return true;
   }
@@ -621,49 +621,15 @@ reset_lisp_process(ExceptionInformation *xp)
 #endif
 }
 
-/*
-  This doesn't GC; it returns true if it made enough room, false
-  otherwise.
-  If "extend" is true, it can try to extend the dynamic area to
-  satisfy the request.
-*/
 
-Boolean
-new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tcr)
+
+void
+platform_new_heap_segment(ExceptionInformation *xp, TCR *tcr, BytePtr low, BytePtr high)
 {
-  area *a;
-  natural newlimit, oldlimit;
-  natural log2_allocation_quantum = tcr->log2_allocation_quantum;
-
-  a  = active_dynamic_area;
-  oldlimit = (natural) a->active;
-  newlimit = (align_to_power_of_2(oldlimit, log2_allocation_quantum) +
-	      align_to_power_of_2(need, log2_allocation_quantum));
-  if (newlimit > (natural) (a->high)) {
-    if (extend) {
-      signed_natural inhibit = (signed_natural)(lisp_global(GC_INHIBIT_COUNT));
-      natural extend_by = inhibit ? 0 : lisp_heap_gc_threshold;
-      do {
-        if (resize_dynamic_heap(a->active, (newlimit-oldlimit)+extend_by)) {
-          break;
-        }
-        extend_by = align_to_power_of_2(extend_by>>1, log2_allocation_quantum);
-        if (extend_by < 4<<20) {
-          return false;
-        }
-      } while (1);
-    } else {
-      return false;
-    }
-  }
-  a->active = (BytePtr) newlimit;
-  tcr->last_allocptr = (void *)newlimit;
-  xpGPR(xp,allocptr) = (LispObj) newlimit;
-  tcr->save_allocbase = (void*) oldlimit;
-
-  return true;
+  tcr->last_allocptr = (void *)high;
+  xpGPR(xp,allocptr) = (LispObj) high;
+  tcr->save_allocbase = (void*) low;
 }
-
  
 void
 update_area_active (area **aptr, BytePtr value)
@@ -1633,7 +1599,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 	return;
       }
       root = xpGPR(xp,arg_x);
-      ea = (LispObj *) (root+xpGPR(xp,arg_y)+misc_data_offset);
+      ea = (LispObj *) (root+unbox_fixnum(xpGPR(xp,temp2)));
       need_memoize_root = true;
     } else if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_test) ||
@@ -1643,7 +1609,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 	   has failed.  No need to adjust the PC, or do memoization. */
 	return;
       }
-      ea = (LispObj*)(xpGPR(xp,arg_x) + xpGPR(xp,imm0));
+      ea = (LispObj*)(xpGPR(xp,arg_x) + unbox_fixnum(xpGPR(xp,temp2)));
       xpGPR(xp,arg_z) = t_value;
     } else if (program_counter >= &egc_set_hash_key) {
       if (program_counter < &egc_set_hash_key_did_store) {
@@ -1677,9 +1643,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       if ((bitnumber < lisp_global(OLDSPACE_DNODE_COUNT)) &&
           ((LispObj)ea < val)) {
         atomic_set_bit(refbits, bitnumber);
+        atomic_set_bit(global_refidx, bitnumber>>8);
         if (need_memoize_root) {
           bitnumber = area_dnode(root, lisp_global(REF_BASE));
           atomic_set_bit(refbits, bitnumber);
+          atomic_set_bit(global_refidx,bitnumber>>8);
         }
       }
     }

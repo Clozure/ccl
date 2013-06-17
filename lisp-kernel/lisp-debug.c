@@ -310,6 +310,7 @@ int bit_for_regnum(int r)
   case REG_ESP: return 1<<4;
   case REG_EBP: return 1<<5;
   case REG_ESI: return 1<<6;
+  default:                      /* stupid compiler */
   case REG_EDI: return 1<<7;
   }
 }

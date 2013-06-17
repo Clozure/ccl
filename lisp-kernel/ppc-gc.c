@@ -830,7 +830,7 @@ skip_over_ivector(natural start, LispObj header)
 
 
 void
-check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
+check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits, bitvector refidx)
 {
   LispObj x1, *base = start, *prev = start;
   int tag;
@@ -839,47 +839,61 @@ check_refmap_consistency(LispObj *start, LispObj *end, bitvector refbits)
 
   while (start < end) {
     x1 = *start;
-    prev = start;
     tag = fulltag_of(x1);
     if (immheader_tag_p(tag)) {
+      prev = start;
       start = skip_over_ivector(ptr_to_lispobj(start), x1);
     } else {
-      intergen_ref = false;
-      if (header_subtag(x1) == subtag_weak)
-        lenient_next_dnode == true;
-    }
-    if ((tag == fulltag_misc) || (tag == fulltag_cons)) {        
-      node_dnode = gc_area_dnode(x1);
-      if (node_dnode < GCndnodes_in_area) {
-        intergen_ref = true;
+      if (nodeheader_tag_p(tag)) {
+        prev = start;
       }
-    }
-    if (lenient_this_dnode) {
-      lenient_this_dnode = false;
-    } else {
-      if (intergen_ref == false) {        
-        x1 = start[1];
-        tag = fulltag_of(x1);
-        if ((tag == fulltag_misc) || (tag == fulltag_cons)) {
-          node_dnode = gc_area_dnode(x1);
-          if (node_dnode < GCndnodes_in_area) {
-            intergen_ref = true;
+      intergen_ref = false;
+      if (header_subtag(x1) == subtag_weak) {        
+        lenient_next_dnode = true;
+      }
+      if (is_node_fulltag(tag)) {        
+        node_dnode = gc_area_dnode(x1);
+        if (node_dnode < GCndnodes_in_area) {
+          intergen_ref = true;
+        }
+      }
+      if (lenient_this_dnode) {
+        lenient_this_dnode = false;
+      } else {
+        if (intergen_ref == false) {        
+          x1 = start[1];
+          tag = fulltag_of(x1);
+          if (is_node_fulltag(tag)) {
+            node_dnode = gc_area_dnode(x1);
+            if (node_dnode < GCndnodes_in_area) {
+              intergen_ref = true;
+            }
           }
         }
       }
-    }
-    if (intergen_ref) {
-      ref_dnode = area_dnode(start, base);
-      if (!ref_bit(refbits, ref_dnode)) {
-        Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
-        set_bit(refbits, ref_dnode);
+      if (intergen_ref) {
+        ref_dnode = area_dnode(start, base);
+        if (!ref_bit(refbits, ref_dnode)) {
+          Bug(NULL, "Missing memoization in doublenode at 0x" LISP "\n", start);
+          set_bit(refbits, ref_dnode);
+          if (refidx) {
+            set_bit(refidx,ref_dnode>>8);
+          }
+        } else {
+          if (refidx) {
+            if (!ref_bit(refidx, ref_dnode>>8)) {
+              Bug(NULL, "Memoization for doublenode at 0x" LISP " not indexed\n", start);
+              set_bit(refidx,ref_dnode>>8);
+            }
+          }
+        }
       }
+      start += 2;
+      if (lenient_next_dnode) {
+        lenient_this_dnode = true;
+      }
+      lenient_next_dnode = false;
     }
-    start += 2;
-    if (lenient_next_dnode) {
-      lenient_this_dnode = true;
-    }
-    lenient_next_dnode = false;
   }
 }
 

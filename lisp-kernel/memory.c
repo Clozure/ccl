@@ -405,6 +405,42 @@ zero_memory_range(BytePtr start, BytePtr end)
 #endif
 }
 
+void
+zero_refbits(bitvector refidx, bitvector refbits, natural ndnodes)
+{
+  bitvector refbase = refbits, refword, limit = refbase + ((ndnodes + (WORD_SIZE-1)) >> node_shift), reflimit;
+  natural i, n = (((ndnodes + 255) >> 8) + (WORD_SIZE-1)) >> bitmap_shift, bit, idx;
+
+  for (i = 0; i < n; i++, refbase += WORD_SIZE * (256 / WORD_SIZE)) {
+    idx = *refidx;
+    
+    if (idx != 0) {
+      *refidx = 0;
+      while (idx) {
+        bit = count_leading_zeros(idx);
+        idx &= ~(BIT0_MASK>>bit);
+        refword = refbase + bit * (256/WORD_SIZE);
+        reflimit = refword + (256/WORD_SIZE);
+        if (limit < reflimit) {
+          reflimit = limit;
+        }
+        while (refword < reflimit) {
+          *refword++ = 0;
+        }
+      }
+    }
+    refidx++;
+  }
+#if 0
+  /* Check,slowly */
+  for (i=0;i<ndnodes;i++) {
+    if (ref_bit(refbits,i)) {
+      Bug(NULL, "Bit 0x" LISP " set unexpectedly\n", i);
+    }
+  }
+#endif
+}
+
 
   
 
@@ -431,7 +467,7 @@ resize_dynamic_heap(BytePtr newfree,
       shrink_dynamic_area(a->high-newlimit);
       return true;
     }
-  }
+  } 
   return false;
 }
 
@@ -653,7 +689,9 @@ tenure_to_area(area *target)
   new_markbits = refbits + ((new_tenured_dnodes + (nbits_in_word-1)) >> bitmap_shift);
   
   if (target == tenured_area) {
+    zero_refbits(global_refidx,managed_static_area->refbits, managed_static_area->ndnodes);
     zero_bits(refbits, new_tenured_dnodes);
+    zero_bits(dynamic_refidx,(new_tenured_dnodes+255)>>8);
     lisp_global(OLDEST_EPHEMERAL) = ptr_to_lispobj(curfree);
   } else {
     /* Need more (zeroed) refbits & fewer markbits */
@@ -885,6 +923,10 @@ ReserveMemory(natural size)
 #endif
 }
 
+
+    
+
+  
 #ifdef DARWIN
 /*
   On 64-bit Darwin, we try to make a TCR's address serve as a Mach port

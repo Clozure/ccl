@@ -63,7 +63,7 @@
 extern void zero_memory_range(BytePtr,BytePtr);
 extern LispObj GCarealow, GCareadynamiclow;
 extern natural GCndnodes_in_area, GCndynamic_dnodes_in_area;
-extern bitvector GCmarkbits, GCdynamic_markbits,managed_static_refbits;
+extern bitvector GCmarkbits, GCdynamic_markbits,managed_static_refbits,global_refidx,dynamic_refidx,managed_static_refidx;
 LispObj *global_reloctab, *GCrelocptr;
 LispObj GCfirstunmarked;
 
@@ -86,7 +86,8 @@ int change_hons_area_size(TCR *, signed_natural);
 void delete_protected_area(protected_area_ptr);
 Boolean egc_control(Boolean, BytePtr);
 Boolean free_segments_zero_filled_by_OS;
-
+Boolean new_heap_segment(ExceptionInformation *, natural, Boolean , TCR *, Boolean *);
+void platform_new_heap_segment(ExceptionInformation *, TCR*, BytePtr, BytePtr);
 /* an type representing 1/4 of a natural word */
 #if WORD_SIZE == 64
 typedef unsigned short qnode;
@@ -186,7 +187,8 @@ LispObj node_forwarding_address(LispObj);
 Boolean update_noderef(LispObj *);
 void update_locref(LispObj *);
 void forward_gcable_ptrs(void);
-void forward_memoized_area(area *, natural, bitvector);
+void forward_memoized_area(area *, natural, bitvector, bitvector);
+
 void forward_tcr_tlb(TCR *);
 void reclaim_static_dnodes(void);
 Boolean youngest_non_null_area_p(area *);
@@ -213,13 +215,13 @@ void mark_xp(ExceptionInformation *);
 #endif
 LispObj dnode_forwarding_address(natural, int);
 LispObj locative_forwarding_address(LispObj);
-void check_refmap_consistency(LispObj *, LispObj *, bitvector);
+void check_refmap_consistency(LispObj *, LispObj *, bitvector, bitvector);
 void check_all_areas(TCR *);
 void mark_tstack_area(area *);
 void mark_vstack_area(area *);
 void mark_cstack_area(area *);
 void mark_simple_area_range(LispObj *, LispObj *);
-void mark_memoized_area(area *, natural);
+void mark_memoized_area(area *, natural, bitvector);
 LispObj calculate_relocation(void);
 void forward_range(LispObj *, LispObj *);
 void forward_tstack_area(area *);
@@ -251,5 +253,9 @@ extern bitvector global_mark_ref_bits, dynamic_mark_ref_bits, relocatable_mark_r
 
 extern Boolean
 did_gc_notification_since_last_full_gc;
+
+extern BytePtr heap_dirty_limit;
+extern void zero_dnodes(void *,natural);
+
 
 #endif                          /* __GC_H__ */

@@ -1089,100 +1089,169 @@ forward_gcable_ptrs()
   }
 }
 
-void
-forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits)
+typedef struct {
+  bitvector refidx;
+  bitvector refbits;
+  bitvector idxp;
+  bitvector idxlimit;
+  bitvector rangelimit;
+  bitvector reflimit;
+  bitvector refp;
+  natural idx;
+  bitvector idxbase;
+} bitidx_state;
+
+natural *
+next_refbits(bitidx_state *s)
 {
-  LispObj *p = (LispObj *) a->low, x1, x2, new;
+  bitvector p, limit;
+  natural idxbit, idx;
+
+  while (1) {
+    p = s->refp;
+    limit = s->rangelimit;
+    while (p < limit) {
+      if (*p) {
+        s->refp = p+1;
+        return p;
+      }
+      p++;
+    }
+    if (!s->refidx) {
+      return NULL;
+    }
+    idx = s->idx;
+    while (idx == 0) {
+      if (s->idxp == s->idxlimit) {
+        return NULL;
+      }
+      idx = *(s->idxp);
+      if (idx) {
+        s->idx = idx;
+        s->idxbase = s->refbits + ((s->idxp - s->refidx) * (WORD_SIZE * (256 / WORD_SIZE)));
+      }
+      s->idxp++;
+    }
+    idxbit = count_leading_zeros(idx);
+    s->idx &= ~(BIT0_MASK>>idxbit);
+    p = s->idxbase + (idxbit * (256/WORD_SIZE));
+    s->refp = p;
+    s->rangelimit = p + (256/WORD_SIZE);
+    if (s->reflimit < s->rangelimit) {
+      s->rangelimit = s->reflimit;
+    }
+  }
+}
+
+void
+init_bitidx_state(bitidx_state *s, bitvector refidx, bitvector refbits, natural ndnodes) 
+{
+  s->refidx = refidx;
+  s->refbits = refbits;
+  s->idxp = refidx;
+  s->idx = 0;
+  s->refp = refbits;
+  s->reflimit = refbits + ((ndnodes + (WORD_SIZE-1)) >> bitmap_shift);
+  if (refidx == NULL) {
+    s->idxlimit = NULL;
+    s->rangelimit = s->reflimit;
+  } else {
+  s->idxlimit = refidx + ((((ndnodes + 255) >> 8) + (WORD_SIZE-1)) >> bitmap_shift);
+    s->rangelimit = s->idxbase = NULL;
+  }
+}
+
+
+void
+forward_memoized_area(area *a, natural num_memo_dnodes, bitvector refbits, bitvector refidx)
+{
+  LispObj *p = (LispObj *) a->low, *pbase = p, x1, x2, new;
 #ifdef ARM
   LispObj *p0 = p;
 #endif
-  natural bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0, hash_dnode_limit = 0;
+  natural bits, *bitsp, nextbit,  memo_dnode = 0, ref_dnode, hash_dnode_limit = 0;
   int tag_x1;
   hash_table_vector_header *hashp = NULL;
   Boolean header_p;
+  bitidx_state state;
+
 
 
 
   if (num_memo_dnodes) {
+    init_bitidx_state(&state, refidx, refbits, num_memo_dnodes);
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, refidx);
     }
 
     /* This is pretty straightforward, but we have to note
        when we move a key in a hash table vector that wants
        us to tell it about that. */
-
-    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
-    while (memo_dnode < num_memo_dnodes) {
+    
+    bits = 0;
+    while (1) {
       if (bits == 0) {
-        int remain = nbits_in_word - bitidx;
-        memo_dnode += remain;
-        p += (remain+remain);
-        if (memo_dnode < num_memo_dnodes) {
-          bits = *++bitsp;
+        bitsp = next_refbits(&state);
+        if (bitsp == NULL) {
+          return;
         }
-        bitidx = 0;
-      } else {
-        nextbit = count_leading_zeros(bits);
-        if ((diff = (nextbit - bitidx)) != 0) {
-          memo_dnode += diff;
-          bitidx = nextbit;
-          p += (diff+diff);
+        bits = *bitsp;
+        ref_dnode = (bitsp-refbits)<<bitmap_shift;
+      }
+      nextbit = count_leading_zeros(bits);
+      bits &= ~(BIT0_MASK>>nextbit);
+      memo_dnode = ref_dnode + nextbit;
+      p = pbase+(memo_dnode*2);
+      x1 = p[0];
+      x2 = p[1];
+      tag_x1 = fulltag_of(x1);
+      header_p = (nodeheader_tag_p(tag_x1));
+
+      if (header_p &&
+          (header_subtag(x1) == subtag_hash_vector)) {
+        hashp = (hash_table_vector_header *) p;
+        if (hashp->flags & nhash_track_keys_mask) {
+          hash_dnode_limit = memo_dnode + ((header_element_count(x1)+2)>>1);
+        } else {
+          hashp = NULL;
         }
-        x1 = p[0];
-        x2 = p[1];
-        tag_x1 = fulltag_of(x1);
-        bits &= ~(BIT0_MASK >> bitidx);
-        header_p = (nodeheader_tag_p(tag_x1));
-
-        if (header_p &&
-            (header_subtag(x1) == subtag_hash_vector)) {
-          hashp = (hash_table_vector_header *) p;
-          if (hashp->flags & nhash_track_keys_mask) {
-            hash_dnode_limit = memo_dnode + ((header_element_count(x1)+2)>>1);
-          } else {
-            hashp = NULL;
-          }
-        }
-
-
-        if (! header_p) {
-          new = node_forwarding_address(x1);
-          if (new != x1) {
-            *p = new;
+      }
+      if (! header_p) {
+        new = node_forwarding_address(x1);
+        if (new != x1) {
+          *p = new;
 #ifdef ARM
-            if (p != p0) {
-              if(header_subtag(p[-2]) == subtag_function) {
-                /* Just updated the code vector; fix the entrypoint */
-                if (p[-1] == (untag(x1)+fulltag_odd_fixnum)) {
-                  p[-1] = (untag(new)+fulltag_odd_fixnum);
-                }
+          /* This is heuristic: the two words before P might be immediate
+             data that just happens to look like a function header and
+             an unboxed reference to p[0].  That's extremely unlikely,
+             but close doesn't count ... Fix this. */
+          if (p != p0) {
+            if(header_subtag(p[-2]) == subtag_function) {
+              /* Just updated the code vector; fix the entrypoint */
+              if (p[-1] == (untag(x1)+fulltag_odd_fixnum)) {
+                p[-1] = (untag(new)+fulltag_odd_fixnum);
               }
             }
+          }
 #endif
-          }
         }
-        p++;
-
-        new = node_forwarding_address(x2);
-        if (new != x2) {
-          *p = new;
-          if (memo_dnode < hash_dnode_limit) {
-            /* If this code is reached, 'hashp' is non-NULL and pointing
-               at the header of a hash_table_vector, and 'memo_dnode' identifies
-               a pair of words inside the hash_table_vector.  It may be
-               hard for program analysis tools to recognize that, but I
-               believe that warnings about 'hashp' being NULL here can
-               be safely ignored. */
-            hashp->flags |= nhash_key_moved_mask;
-            hash_dnode_limit = 0;
-            hashp = NULL;
-          }
+      }
+      p++;
+      
+      new = node_forwarding_address(x2);
+      if (new != x2) {
+        *p = new;
+        if (memo_dnode < hash_dnode_limit) {
+          /* If this code is reached, 'hashp' is non-NULL and pointing
+             at the header of a hash_table_vector, and 'memo_dnode' identifies
+             a pair of words inside the hash_table_vector.  It may be
+             hard for program analysis tools to recognize that, but I
+             believe that warnings about 'hashp' being NULL here can
+             be safely ignored. */
+          hashp->flags |= nhash_key_moved_mask;
+          hash_dnode_limit = 0;
+          hashp = NULL;
         }
-        p++;
-        memo_dnode++;
-        bitidx++;
-
       }
     }
   }
@@ -1295,77 +1364,82 @@ mark_static_ref(LispObj n, BytePtr dynamic_start, natural ndynamic_dnodes)
   return false;                 /* Not a heap pointer or not dynamic */
 }
 
+
 void
-mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnodes)
+mark_managed_static_refs(area *a, BytePtr low_dynamic_address, natural ndynamic_dnodes, bitvector refidx)
 {
   bitvector refbits = managed_static_refbits;
+  dnode *dnodes = (dnode *)a->low, *d;
   LispObj *p = (LispObj *) a->low, x1, x2;
-  natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0,
-    num_memo_dnodes = a->ndnodes;
+  natural inbits, outbits, bits, *bitsp, nextbit, memo_dnode = 0,
+    num_memo_dnodes = a->ndnodes, ref_dnode;
   Boolean keep_x1, keep_x2;
+  bitidx_state state;
 
   if (num_memo_dnodes) {
+    init_bitidx_state(&state, refidx, refbits, num_memo_dnodes);
+
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, refidx);
     }
 
  
-    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
-    inbits = outbits = bits;
-    while (memo_dnode < num_memo_dnodes) {
+
+
+    inbits = outbits = bits = 0;
+    while (1) {
       if (bits == 0) {
-        int remain = nbits_in_word - bitidx;
-        memo_dnode += remain;
-        p += (remain+remain);
         if (outbits != inbits) {
           *bitsp = outbits;
         }
-        if (memo_dnode < num_memo_dnodes) {
-          bits = *++bitsp;
+        bitsp = next_refbits(&state);
+        if (bitsp == NULL) {
+          break;
         }
-        inbits = outbits = bits;
-        bitidx = 0;
-      } else {
-        nextbit = count_leading_zeros(bits);
-        if ((diff = (nextbit - bitidx)) != 0) {
-          memo_dnode += diff;
-          bitidx = nextbit;
-          p += (diff+diff);
-        }
-        x1 = *p++;
-        x2 = *p++;
-        bits &= ~(BIT0_MASK >> bitidx);
-        keep_x1 = mark_static_ref(x1, low_dynamic_address, ndynamic_dnodes);
-        keep_x2 = mark_static_ref(x2, low_dynamic_address, ndynamic_dnodes);
-        if ((keep_x1 == false) && 
-            (keep_x2 == false)) {
-          outbits &= ~(BIT0_MASK >> bitidx);
-        }
-        memo_dnode++;
-        bitidx++;
+        inbits = outbits = bits = *bitsp;
+        ref_dnode = (bitsp-refbits)<<bitmap_shift;
+      }
+      nextbit = count_leading_zeros(bits);
+      bits &= ~(BIT0_MASK>>nextbit);
+      memo_dnode = ref_dnode + nextbit;
+      d = dnodes+memo_dnode;
+      x1 = d->w0;
+      x2 = d->w1;
+      keep_x1 = mark_static_ref(x1, low_dynamic_address, ndynamic_dnodes);
+      keep_x2 = mark_static_ref(x2, low_dynamic_address, ndynamic_dnodes);
+      if ((keep_x1 == false) && 
+          (keep_x2 == false)) {
+        outbits &= ~(BIT0_MASK >> nextbit);
       }
     }
     if (GCDebug) {
       p = (LispObj *) a->low;
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, NULL);
     }
   }
 }
 
+
 void
-mark_memoized_area(area *a, natural num_memo_dnodes)
+mark_memoized_area(area *a, natural num_memo_dnodes, bitvector refidx)
 {
   bitvector refbits = a->refbits;
-  LispObj *p = (LispObj *) a->low, x1, x2;
-  natural inbits, outbits, bits, bitidx, *bitsp, nextbit, diff, memo_dnode = 0;
+  dnode *dnodes = (dnode *)a->low, *d;
+  LispObj *p = (LispObj *) a->low,x1, x2;
+  natural inbits, outbits, bits,  *bitsp, nextbit,  memo_dnode = 0, ref_dnode = 0;
   Boolean keep_x1, keep_x2;
   natural hash_dnode_limit = 0;
   hash_table_vector_header *hashp = NULL;
   int mark_method = 3;
+  bitidx_state state;
+
+
 
   if (num_memo_dnodes) {
+    init_bitidx_state(&state, refidx, refbits, num_memo_dnodes);   
+    
     if (GCDebug) {
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, refidx);
     }
 
     /* The distinction between "inbits" and "outbits" is supposed to help us
@@ -1373,7 +1447,6 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
        NIL, fixnums, immediates (characters, etc.) or node pointers to static
        or readonly areas is definitely uninteresting, but other cases are
        more complicated (and some of these cases are hard to detect.)
-
        Some headers are "interesting", to the forwarder if not to us. 
 
     */
@@ -1396,99 +1469,91 @@ mark_memoized_area(area *a, natural num_memo_dnodes)
         refbits[index_of_last_word] &= mask;
       }
     }
-        
-    set_bitidx_vars(refbits, 0, bitsp, bits, bitidx);
-    inbits = outbits = bits;
-    while (memo_dnode < num_memo_dnodes) {
+      
+      
+
+    inbits = outbits = bits = 0;
+    while (1) {
       if (bits == 0) {
-        int remain = nbits_in_word - bitidx;
-        memo_dnode += remain;
-        p += (remain+remain);
         if (outbits != inbits) {
           *bitsp = outbits;
         }
-        if (memo_dnode < num_memo_dnodes) {
-          bits = *++bitsp;
-        } 
-        inbits = outbits = bits;
-        bitidx = 0;
-      } else {
-        nextbit = count_leading_zeros(bits);
-        if ((diff = (nextbit - bitidx)) != 0) {
-          memo_dnode += diff;
-          bitidx = nextbit;
-          p += (diff+diff);
+        bitsp = next_refbits(&state);
+        if (bitsp == NULL) {
+          break;
         }
-        x1 = *p++;
-        x2 = *p++;
-        bits &= ~(BIT0_MASK >> bitidx);
+        inbits = outbits = bits = *bitsp;
+        ref_dnode = (bitsp-refbits)<<bitmap_shift;
+      } 
+      nextbit = count_leading_zeros(bits);
+      bits &= ~(BIT0_MASK >> nextbit);
+      memo_dnode = ref_dnode + nextbit;
+      d = dnodes+memo_dnode;
+      x1 = d->w0;
+      x2 = d->w1;
 
 
-        if (hashp) {
-          Boolean force_x1 = false;
-          if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
-            /* if vector_header_count is odd, x1 might be the last word of the header */
-            force_x1 = (hash_table_vector_header_count & 1) && (memo_dnode == hash_dnode_limit);
-            /* was marking header, switch to data */
-            hash_dnode_limit = area_dnode(((LispObj *)hashp)
-                                          + 1
-                                          + header_element_count(hashp->header),
-                                          a->low);
-            /* In traditional weak method, don't mark vector entries at all. */
-            /* Otherwise mark the non-weak elements only */
-            mark_method = ((lisp_global(WEAK_GC_METHOD) == 0) ? 0 :
-                           ((hashp->flags & nhash_weak_value_mask)
-                            ? (1 + (hash_table_vector_header_count & 1))
-                            : (2 - (hash_table_vector_header_count & 1))));
-          }
-
-          if (memo_dnode < hash_dnode_limit) {
-            /* perhaps ignore one or both of the elements */
-            if (!force_x1 && !(mark_method & 1)) x1 = 0;
-            if (!(mark_method & 2)) x2 = 0;
-          } else {
-            hashp = NULL;
-          }
+      if (hashp) {
+        Boolean force_x1 = false;
+        if ((memo_dnode >= hash_dnode_limit) && (mark_method == 3)) {
+          /* if vector_header_count is odd, x1 might be the last word of the header */
+          force_x1 = (hash_table_vector_header_count & 1) && (memo_dnode == hash_dnode_limit);
+          /* was marking header, switch to data */
+          hash_dnode_limit = area_dnode(((LispObj *)hashp)
+                                        + 1
+                                        + header_element_count(hashp->header),
+                                        a->low);
+          /* In traditional weak method, don't mark vector entries at all. */
+          /* Otherwise mark the non-weak elements only */
+          mark_method = ((lisp_global(WEAK_GC_METHOD) == 0) ? 0 :
+                         ((hashp->flags & nhash_weak_value_mask)
+                          ? (1 + (hash_table_vector_header_count & 1))
+                          : (2 - (hash_table_vector_header_count & 1))));
         }
+        
+        if (memo_dnode < hash_dnode_limit) {
+          /* perhaps ignore one or both of the elements */
+          if (!force_x1 && !(mark_method & 1)) x1 = 0;
+          if (!(mark_method & 2)) x2 = 0;
+        } else {
+          hashp = NULL;
+        }
+      }
 
-        if (header_subtag(x1) == subtag_hash_vector) {
-          if (hashp) Bug(NULL, "header inside hash vector?");
-          hash_table_vector_header *hp = (hash_table_vector_header *)(p - 2);
-          if (hp->flags & nhash_weak_mask) {
-            /* Work around the issue that seems to cause ticket:817,
-               which is that tenured hash vectors that are weak on value
-               aren't always maintained on GCweakvll.  If they aren't and
-               we process them weakly here, nothing will delete the unreferenced
-               elements. */
-            if (!(hp->flags & nhash_weak_value_mask)) {
-              /* If header_count is odd, this cuts off the last header field */
-              /* That case is handled specially above */
-              hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
-              hashp = hp;
-              mark_method = 3;
-            }
+      if (header_subtag(x1) == subtag_hash_vector) {
+        if (hashp) Bug(NULL, "header inside hash vector?");
+        hash_table_vector_header *hp = (hash_table_vector_header *)d;
+        if (hp->flags & nhash_weak_mask) {
+          /* Work around the issue that seems to cause ticket:817,
+             which is that tenured hash vectors that are weak on value
+             aren't always maintained on GCweakvll.  If they aren't and
+             we process them weakly here, nothing will delete the unreferenced
+             elements. */
+          if (!(hp->flags & nhash_weak_value_mask)) {
+            /* If header_count is odd, this cuts off the last header field */
+            /* That case is handled specially above */
+            hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
+            hashp = hp;
+            mark_method = 3;
           }
         }
+      }
 
-        keep_x1 = mark_ephemeral_root(x1);
-        keep_x2 = mark_ephemeral_root(x2);
-        if ((keep_x1 == false) && 
-            (keep_x2 == false) &&
-            (hashp == NULL)) {
-          outbits &= ~(BIT0_MASK >> bitidx);
-        }
-        memo_dnode++;
-        bitidx++;
+      keep_x1 = mark_ephemeral_root(x1);
+      keep_x2 = mark_ephemeral_root(x2);
+      if ((keep_x1 == false) && 
+          (keep_x2 == false) &&
+          (hashp == NULL)) {
+        outbits &= ~(BIT0_MASK >> nextbit);
       }
     }
     if (GCDebug) {
       p = (LispObj *) a->low;
-      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits);
+      check_refmap_consistency(p, p+(num_memo_dnodes << 1), refbits, a->refidx);
     }
   }
 }
 
-extern void zero_dnodes(void *,natural);
 
 void 
 gc(TCR *tcr, signed_natural param)
@@ -1500,7 +1565,7 @@ gc(TCR *tcr, signed_natural param)
   LispObj
     pkg = 0,
     itabvec = 0;
-  BytePtr oldfree = a->active, last_zeroed_addr;
+  BytePtr oldfree = a->active;
   TCR *other_tcr;
   natural static_dnodes;
   natural weak_method = lisp_global(WEAK_GC_METHOD) >> fixnumshift;
@@ -1685,10 +1750,10 @@ gc(TCR *tcr, signed_natural param)
     }
 
     if (GCephemeral_low) {
-      mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low));
-      mark_memoized_area(managed_static_area,managed_static_area->ndnodes);
+      mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low), tenured_area->refidx);
+      mark_memoized_area(managed_static_area,managed_static_area->ndnodes, managed_static_area->refidx);
     } else {
-      mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address));
+      mark_managed_static_refs(managed_static_area,low_markable_address,area_dnode(a->active,low_markable_address), managed_static_refidx);
     }
     other_tcr = tcr;
     do {
@@ -1821,10 +1886,10 @@ gc(TCR *tcr, signed_natural param)
     }
 
     if (GCephemeral_low) {
-      forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low), tenured_area->refbits);
-      forward_memoized_area(managed_static_area,managed_static_area->ndnodes, managed_static_area->refbits);
+      forward_memoized_area(tenured_area, area_dnode(a->low, tenured_area->low), tenured_area->refbits, tenured_area->refidx);
+      forward_memoized_area(managed_static_area,managed_static_area->ndnodes, managed_static_area->refbits, managed_static_area->refidx);
     } else {
-      forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low),managed_static_refbits);
+      forward_memoized_area(managed_static_area,area_dnode(managed_static_area->active,managed_static_area->low),managed_static_refbits, NULL);
     }
     a->active = (BytePtr) ptr_from_lispobj(compact_dynamic_heap());
 
@@ -1838,12 +1903,6 @@ gc(TCR *tcr, signed_natural param)
     resize_dynamic_heap(a->active,
                         (GCephemeral_low == 0) ? lisp_heap_gc_threshold : 0);
 
-    if (oldfree < a->high) {
-      last_zeroed_addr = oldfree;
-    } else {
-      last_zeroed_addr = a->high;
-    }
-    zero_dnodes(a->active, area_dnode(last_zeroed_addr,a->active));
 
     /*
       If the EGC is enabled: If there's no room for the youngest
@@ -1938,4 +1997,67 @@ gc(TCR *tcr, signed_natural param)
       }
     }
   }
+}
+
+/*
+  This doesn't GC; it returns true if it made enough room, false
+  otherwise.
+  If "extend" is true, it can try to extend the dynamic area to
+  satisfy the request.
+*/
+
+Boolean
+new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tcr, Boolean *crossed_threshold)
+{
+  area *a;
+  natural newlimit, oldlimit;
+  natural log2_allocation_quantum = TCR_AUX(tcr)->log2_allocation_quantum;
+
+  if (crossed_threshold) {
+    *crossed_threshold = false;
+  }
+
+  a  = active_dynamic_area;
+  oldlimit = (natural) a->active;
+  newlimit = (align_to_power_of_2(oldlimit, log2_allocation_quantum) +
+	      align_to_power_of_2(need, log2_allocation_quantum));
+  if (newlimit > (natural) (a->high)) {
+    if (extend) {
+      signed_natural inhibit = (signed_natural)(lisp_global(GC_INHIBIT_COUNT));
+      natural extend_by = inhibit ? 0 : lisp_heap_gc_threshold;
+      do {
+        if (resize_dynamic_heap(a->active, (newlimit-oldlimit)+extend_by)) {
+          break;
+        }
+        extend_by = align_to_power_of_2(extend_by>>1,log2_allocation_quantum);
+        if (extend_by < 4<<20) {
+          return false;
+        }
+      } while (1);
+    } else {
+      return false;
+    }
+  }
+  a->active = (BytePtr) newlimit;
+  platform_new_heap_segment(xp, tcr, (BytePtr)oldlimit, (BytePtr)newlimit);
+  if ((BytePtr)oldlimit < heap_dirty_limit) {
+    if ((BytePtr)newlimit < heap_dirty_limit) {
+      zero_dnodes((void *)oldlimit,area_dnode(newlimit,oldlimit)); 
+    } else {
+      zero_dnodes((void *)oldlimit,area_dnode(heap_dirty_limit,oldlimit));
+    }
+  }
+  if ((BytePtr)newlimit > heap_dirty_limit) {
+    heap_dirty_limit = (BytePtr)newlimit;       
+  }
+
+  if (crossed_threshold && (!extend)) {
+    if (((a->high - (BytePtr)newlimit) < lisp_heap_notify_threshold)&&
+        ((a->high - (BytePtr)oldlimit) >= lisp_heap_notify_threshold)) {
+      *crossed_threshold = true;
+    }
+  }
+    
+
+  return true;
 }

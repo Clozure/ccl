@@ -75,6 +75,7 @@ typedef struct area {
   LispObj gccount;              /* boxed generation GC count. */
   natural static_dnodes;        /* for hash consing, maybe other things. */
   natural *static_used;         /* bitvector */
+  natural *refidx;              /* compressed refbits */
 } area;
 
 
