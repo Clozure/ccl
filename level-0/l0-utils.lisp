@@ -189,7 +189,4 @@
     (%get-signed-long buf)))
 
 
-(defun car (x) (car x))
-(defun cdr (x) (cdr x))
-
 ; end

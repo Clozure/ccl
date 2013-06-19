@@ -403,7 +403,8 @@
   
  
   
-
+  (%eval-redef car (x))
+  (%eval-redef cdr (x))
   (%eval-redef cons (x y))
   (%eval-redef endp (x))
 
