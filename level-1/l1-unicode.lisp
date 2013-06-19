@@ -120,6 +120,63 @@
 (defconstant byte-order-mark-char-code (char-code byte-order-mark))
 (defconstant swapped-byte-order-mark-char-code #xfffe)
 
+;;; Map 30-bit integers to 30-bit integers, using binary search.
+;;; This is mostly to avoid using hash tables with integer key/value
+;;; pairs and to avoid the GC impact of using such hash tables.
+(defstruct pv-map
+  keys
+  values)
+
+
+
+(defun %pv-map-lookup (code keys values)
+  (declare (type (signed-byte 30) code)
+           (type (simple-array (signed-byte 30) (*)) keys values)
+           (optimize (speed 3) (safety 0)))
+  (let* ((right (length keys))
+         (left 0)
+         (mid (ash right -1)))
+    (declare (fixnum left right mid))
+    (loop
+      (if (>= left right)
+        (return)
+        (let* ((val (aref keys mid)))
+          (declare (type (signed-byte 30) val))
+          (if (= val code)
+            (return (aref values mid))
+            (progn
+              (if (< val code)
+                (setq left (1+ mid))
+                (setq right mid))
+              (setq mid (+ left (the fixnum (ash (the fixnum (- right left)) -1)))))))))))
+
+(defun pv-map-lookup (code map)
+  (%pv-map-lookup code (pv-map-keys map) (pv-map-values map)))
+
+
+(defun pv-map-vectors (alist reverse-mapping)
+  (dolist (pair alist)
+    (unless (and (consp pair)
+                 (typep (car pair) '(signed-byte 30))
+                 (typep (cdr pair) '(signed-byte 30)))
+      (error "Alist element ~s is not a CONS of two 30-bit integers" pair)))
+  (let* ((n (length alist))
+         (cars (make-array n :element-type '(signed-byte 30)))
+         (cdrs (make-array n :element-type '(signed-byte 30)))
+         (i 0))
+    (declare (fixnum i n))
+    (dolist (pair (sort-list  (copy-list alist) #'<  (if reverse-mapping #'cdr #'car)))
+      (setf (aref cars i) (car pair)
+            (aref cdrs i) (cdr pair))
+      (incf i))
+    (if reverse-mapping
+      (values cdrs cars)
+      (values cars cdrs))))
+
+(defun init-pv-map (alist &key reverse-mapping)
+  (multiple-value-bind (keys values) (pv-map-vectors alist reverse-mapping)
+    (make-pv-map :keys keys :values values)))
+
 
 (defmethod default-character-encoding ((domain t))
   (character-encoding-name (get-character-encoding nil)))
@@ -440,1477 +497,356 @@ codes map to their Unicode equivalents."
 ;;; Other 1-byte, fixed-width encodings.  Typically, codes in the range
 ;;; #x00-#x9f maps straight through, while codes #xa0-#xff select arbitrary
 ;;; Unicode characters that are commonly used in some locale.  (Sometimes
-;;; the break is at #x80 instead of #xa0).
+;;; the break is at #x80 or #xd0 instead of #xa0).
 
-(defstatic *iso-8859-2-to-unicode*
-  #(
-  ;; #xa0
-  #\u+00a0 #\u+0104 #\u+02d8 #\u+0141 #\u+00a4 #\u+013d #\u+015a #\u+00a7
-  #\u+00a8 #\u+0160 #\u+015e #\u+0164 #\u+0179 #\u+00ad #\u+017d #\u+017b
-  ;; #xb0 
-  #\u+00b0 #\u+0105 #\u+02db #\u+0142 #\u+00b4 #\u+013e #\u+015b #\u+02c7
-  #\u+00b8 #\u+0161 #\u+015f #\u+0165 #\u+017a #\u+02dd #\u+017e #\u+017c
-  ;; #xc0 
-  #\u+0154 #\u+00c1 #\u+00c2 #\u+0102 #\u+00c4 #\u+0139 #\u+0106 #\u+00c7
-  #\u+010c #\u+00c9 #\u+0118 #\u+00cb #\u+011a #\u+00cd #\u+00ce #\u+010e
-  ;; #xd0 
-  #\u+0110 #\u+0143 #\u+0147 #\u+00d3 #\u+00d4 #\u+0150 #\u+00d6 #\u+00d7
-  #\u+0158 #\u+016e #\u+00da #\u+0170 #\u+00dc #\u+00dd #\u+0162 #\u+00df
-  ;; #xe0 
-  #\u+0155 #\u+00e1 #\u+00e2 #\u+0103 #\u+00e4 #\u+013a #\u+0107 #\u+00e7
-  #\u+010d #\u+00e9 #\u+0119 #\u+00eb #\u+011b #\u+00ed #\u+00ee #\u+010f
-  ;; #xf0 
-  #\u+0111 #\u+0144 #\u+0148 #\u+00f3 #\u+00f4 #\u+0151 #\u+00f6 #\u+00f7
-  #\u+0159 #\u+016f #\u+00fa #\u+0171 #\u+00fc #\u+00fd #\u+0163 #\u+02d9
-))
+(defmacro define-8-bit-fixed-width-encoding (name doc aliases encode-map decode-string mapping &optional (literal-limit #xa0))
+  (unless (= (length mapping) (- 256 literal-limit))
+    (error "Mapping data for encoding ~s should contain exactly ~d elements, not ~d" name (- 256 literal-limit) (length mapping)))
+  `(progn
+    (defstatic ,encode-map (init-pv-map ',(loop
+                                             for i from literal-limit to 256
+                                             for code across mapping
+                                             unless (eql code (char-code #\replacement_character))
+                                             collect (cons i code))
+                                          :reverse-mapping t))
+    (defstatic ,decode-string ,(map 'string #'code-char mapping))
+    (define-character-encoding ,name
+        ,doc
+      :aliases ',aliases
+      :stream-encode-function
+      (nfunction ,(intern (concatenate 'string (string name) "-STREAM-ENCODE"))
+       (lambda (char write-function stream)
+         (let* ((code (char-code char))
+                (c2 (if (< code ,literal-limit)
+                      code
+                      (pv-map-lookup code ,encode-map))))
+           (declare (type (mod #x110000) code))
+           (funcall write-function stream (or c2 (note-encoding-problem char stream ,name (char-code #\Sub))))
+           1)))
+      :stream-decode-function
+      (nfunction
+       ,(intern (concatenate 'string (string name) "-STREAM-DECODE"))
+       (lambda (1st-unit next-unit-function stream)
+         (declare (ignore next-unit-function)
+                  (type (unsigned-byte 8) 1st-unit))
+         (if (< 1st-unit ,literal-limit)
+           (code-char 1st-unit)
+           (let* ((char (schar ,decode-string (- 1st-unit ,literal-limit))))
+             (when (eql char #\replacement_character)
+               (note-stream-decoding-problem stream))
+             char))))
+      :vector-encode-function
+      (nfunction
+       ,(intern (concatenate 'string (string name) "-VECTOR-ENCODE"))
+       (lambda (string vector idx start end)
+         (declare (type (simple-array (unsigned-byte 8) (*)) vector)
+                  (fixnum idx))
+         (do* ((i start (1+ i)))
+              ((>= i end) idx)
+           (let* ((char (schar string i))
+                  (code (char-code char))
+                  (c2 (if (< code ,literal-limit)
+                        code
+                        (pv-map-lookup code ,encode-map))))
+             (declare (type (mod #x110000) code))
+             (setf (aref vector idx) (or c2 (note-encoding-problem char vector ,name (char-code #\Sub))))
+             (incf idx)))))
+      :vector-decode-function
+      (nfunction
+       ,(intern (concatenate 'string (string name) "-VECTOR-DECODE"))
+       (lambda (vector idx noctets string)
+         (declare (type (simple-array (unsigned-byte 8) (*)) vector))
+         (do* ((i 0 (1+ i))
+               (index idx (1+ index)))
+              ((>= i noctets) index)
+           (let* ((1st-unit (aref vector index)))
+             (declare (type (unsigned-byte 8) 1st-unit))
+             (setf (schar string i)
+                   (if (< 1st-unit ,literal-limit)
+                     (code-char 1st-unit)
+                     (let* ((char (schar ,decode-string (the fixnum (- 1st-unit ,literal-limit)))))
+                       (when (eql char #\replacement_character)
+                         (note-vector-decoding-problem vector i ,name ))
+                       char)))))))
+      :memory-encode-function
+      (nfunction
+       ,(intern (concatenate 'string (string name) "-MEMORY-ENCODE"))
+       (lambda (string pointer idx start end)
+         (do* ((i start (1+ i)))
+              ((>= i end) idx)
+           (let* ((char (schar string i))
+                  (code (char-code char))
+                  (c2 (if (< code ,literal-limit)
+                        code
+                        (pv-map-lookup code ,encode-map))))
+             (declare (type (mod #x110000) code))
+             (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer ,name (char-code #\Sub))))
+             (1+ idx)))))
+      :memory-decode-function
+      (nfunction
+       ,(intern (concatenate 'string (string name) "-MEMORY-DECODE"))
+       (lambda (pointer noctets idx string)
+         (do* ((i 0 (1+ i))
+               (index idx (1+ index)))
+              ((>= i noctets) index)
+           (let* ((1st-unit (%get-unsigned-byte pointer index)))
+             (declare (type (unsigned-byte 8) 1st-unit))
+             (setf (schar string i)
+                   (if (< 1st-unit ,literal-limit)
+                     (code-char 1st-unit)
+                     (let* ((char (schar ,decode-string (the fixnum (- 1st-unit ,literal-limit)))))
+                       (when (eql char #\replacement_character)
+                         (note-vector-decoding-problem pointer index ,name ))
+                       char)))))))
+      :octets-in-string-function
+      #'8-bit-fixed-width-octets-in-string
+      :length-of-vector-encoding-function
+      #'8-bit-fixed-width-length-of-vector-encoding
+      :length-of-memory-encoding-function 
+      #'8-bit-fixed-width-length-of-memory-encoding
+      :decode-literal-code-unit-limit ,literal-limit
+      :encode-literal-char-code-limit ,literal-limit)))
 
-(defstatic *unicode-00a0-0180-to-iso-8859-2*
-  #(
-    #xa0 nil nil nil #xa4 nil nil #xa7 ; #xa0-#xa7 
-    #xa8 nil nil nil nil #xad nil nil ; #xa8-#xaf 
-    #xb0 nil nil nil #xb4 nil nil nil ; #xb0-#xb7 
-    #xb8 nil nil nil nil nil nil nil  ; #xb8-#xbf 
-    nil #xc1 #xc2 nil #xc4 nil nil #xc7 ; #xc0-#xc7 
-    nil #xc9 nil #xcb nil #xcd #xce nil ; #xc8-#xcf 
-    nil nil nil #xd3 #xd4 nil #xd6 #xd7 ; #xd0-#xd7 
-    nil nil #xda nil #xdc #xdd nil #xdf ; #xd8-#xdf 
-    nil #xe1 #xe2 nil #xe4 nil nil #xe7 ; #xe0-#xe7 
-    nil #xe9 nil #xeb nil #xed #xee nil ; #xe8-#xef 
-    nil nil nil #xf3 #xf4 nil #xf6 #xf7 ; #xf0-#xf7 
-    nil nil #xfa nil #xfc #xfd nil nil ; #xf8-#xff 
-    ;; #x0100 
-    nil nil #xc3 #xe3 #xa1 #xb1 #xc6 #xe6 ; #x100-#x107 
-    nil nil nil nil #xc8 #xe8 #xcf #xef ; #x108-#x10f 
-    #xd0 #xf0 nil nil nil nil nil nil ; #x110-#x117 
-    #xca #xea #xcc #xec nil nil nil nil ; #x118-#x11f 
-    nil nil nil nil nil nil nil nil     ; #x120-#x127 
-    nil nil nil nil nil nil nil nil     ; #x128-#x12f 
-    nil nil nil nil nil nil nil nil     ; #x130-#x137 
-    nil #xc5 #xe5 nil nil #xa5 #xb5 nil ; #x138-#x13f 
-    nil #xa3 #xb3 #xd1 #xf1 nil nil #xd2 ; #x140-#x147 
-    #xf2 nil nil nil nil nil nil nil  ; #x148-#x14f 
-    #xd5 #xf5 nil nil #xc0 #xe0 nil nil ; #x150-#x157 
-    #xd8 #xf8 #xa6 #xb6 nil nil #xaa #xba ; #x158-#x15f 
-    #xa9 #xb9 #xde #xfe #xab #xbb nil nil ; #x160-#x167 
-    nil nil nil nil nil nil #xd9 #xf9 ; #x168-#x16f 
-    #xdb #xfb nil nil nil nil nil nil ; #x170-#x177 
-    nil #xac #xbc #xaf #xbf #xae #xbe nil ; #x178-#x17f 
-    ))
-
-(defstatic *unicode-00c0-00e0-to-iso-8859-2*
-  #(
-    nil nil nil nil nil nil nil #xb7  ; #xc0-#xc7 
-    nil nil nil nil nil nil nil nil     ; #xc8-#xcf 
-    nil nil nil nil nil nil nil nil     ; #xd0-#xd7 
-    #xa2 #xff nil #xb2 nil #xbd nil nil ; #xd8-#xdf
-    ))
-
-(define-character-encoding :iso-8859-2
-  "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
+(define-8-bit-fixed-width-encoding :iso-8859-2
+    "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in most
 languages used in Central/Eastern Europe."
-  :aliases '(:iso_8859-2 :latin2 :l2 :csISOLatin2)
-  :stream-encode-function
-  (nfunction
-   iso-8859-2-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-00a0-0180-to-iso-8859-2*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x2c0) (< code #x2e0))
-                       (svref *unicode-00c0-00e0-to-iso-8859-2*
-                                      (the fixnum (- code #x2c0)))))))
-                      
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-2 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-2-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-2-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-2-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                          ((< code #x180)
-                           (svref *unicode-00a0-0180-to-iso-8859-2*
-                                  (the fixnum (- code #xa0))))
-                          ((and (>= code #x2c0) (< code #x2e0))
-                           (svref *unicode-00c0-00e0-to-iso-8859-2*
-                                  (the fixnum (- code #x2c0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-2 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-2-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-           (declare (type (unsigned-byte 8) 1st-unit))
-           (setf (schar string i)
-            (if (< 1st-unit #xa0)
-              (code-char 1st-unit)
-              (svref *iso-8859-2-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-2-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #x180)
-                         (svref *unicode-00a0-0180-to-iso-8859-2*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x2c0) (< code #x2e0))
-                         (svref *unicode-00c0-00e0-to-iso-8859-2*
-                                (the fixnum (- code #x2c0)))))))
-       (declare (type (mod #x110000) code))
-       (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-2 (char-code #\Sub))))
-       (1+ idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-2-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-2-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0
-  )
+  (:iso_8859-2 :latin2 :l2 :csISOLatin2)
+  *unicode-to-iso-8859-2-map*
+  *iso-to-8859-2-to-unicode-string*
+  #(#xA0 #x104 #x2D8 #x141 #xA4 #x13D #x15A #xA7 #xA8 #x160 #x15E #x164
+    #x179 #xAD #x17D #x17B #xB0 #x105 #x2DB #x142 #xB4 #x13E #x15B #x2C7
+    #xB8 #x161 #x15F #x165 #x17A #x2DD #x17E #x17C #x154 #xC1 #xC2 #x102
+    #xC4 #x139 #x106 #xC7 #x10C #xC9 #x118 #xCB #x11A #xCD #xCE #x10E
+    #x110 #x143 #x147 #xD3 #xD4 #x150 #xD6 #xD7 #x158 #x16E #xDA #x170
+    #xDC #xDD #x162 #xDF #x155 #xE1 #xE2 #x103 #xE4 #x13A #x107 #xE7
+    #x10D #xE9 #x119 #xEB #x11B #xED #xEE #x10F #x111 #x144 #x148 #xF3
+    #xF4 #x151 #xF6 #xF7 #x159 #x16F #xFA #x171 #xFC #xFD #x163 #x2D9))
 
-(defstatic *iso-8859-3-to-unicode*
-  #(
-    ;; #xa0 
-    #\u+00a0 #\u+0126 #\u+02d8 #\u+00a3 #\u+00a4 #\u+fffd #\u+0124 #\u+00a7
-    #\u+00a8 #\u+0130 #\u+015e #\u+011e #\u+0134 #\u+00ad #\u+fffd #\u+017b
-    ;; #xb0 
-    #\u+00b0 #\u+0127 #\u+00b2 #\u+00b3 #\u+00b4 #\u+00b5 #\u+0125 #\u+00b7
-    #\u+00b8 #\u+0131 #\u+015f #\u+011f #\u+0135 #\u+00bd #\u+fffd #\u+017c
-    ;; #xc0 
-    #\u+00c0 #\u+00c1 #\u+00c2 #\u+fffd #\u+00c4 #\u+010a #\u+0108 #\u+00c7
-    #\u+00c8 #\u+00c9 #\u+00ca #\u+00cb #\u+00cc #\u+00cd #\u+00ce #\u+00cf
-    ;; #xd0 
-    #\u+fffd #\u+00d1 #\u+00d2 #\u+00d3 #\u+00d4 #\u+0120 #\u+00d6 #\u+00d7
-    #\u+011c #\u+00d9 #\u+00da #\u+00db #\u+00dc #\u+016c #\u+015c #\u+00df
-    ;; #xe0 
-    #\u+00e0 #\u+00e1 #\u+00e2 #\u+fffd #\u+00e4 #\u+010b #\u+0109 #\u+00e7
-    #\u+00e8 #\u+00e9 #\u+00ea #\u+00eb #\u+00ec #\u+00ed #\u+00ee #\u+00ef
-    ;; #xf0 
-    #\u+fffd #\u+00f1 #\u+00f2 #\u+00f3 #\u+00f4 #\u+0121 #\u+00f6 #\u+00f7
-    #\u+011d #\u+00f9 #\u+00fa #\u+00fb #\u+00fc #\u+016d #\u+015d #\u+02d9
-    ))
-
-(defstatic *unicode-a0-100-to-iso-8859-3*
-  #(
-    #xa0 nil nil #xa3 #xa4 nil nil #xa7 ; #xa0-#xa7 
-    #xa8 nil nil nil nil #xad nil nil   ; #xa8-#xaf 
-    #xb0 nil #xb2 #xb3 #xb4 #xb5 nil #xb7 ; #xb0-#xb7 
-    #xb8 nil nil nil nil #xbd nil nil   ; #xb8-#xbf 
-    #xc0 #xc1 #xc2 nil #xc4 nil nil #xc7 ; #xc0-#xc7 
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #xc8-#xcf 
-    nil #xd1 #xd2 #xd3 #xd4 nil #xd6 #xd7 ; #xd0-#xd7 
-    nil #xd9 #xda #xdb #xdc nil nil #xdf ; #xd8-#xdf 
-    #xe0 #xe1 #xe2 nil #xe4 nil nil #xe7 ; #xe0-#xe7 
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #xe8-#xef 
-    nil #xf1 #xf2 #xf3 #xf4 nil #xf6 #xf7 ; #xf0-#xf7 
-    nil #xf9 #xfa #xfb #xfc nil nil nil ; #xf8-#xff 
-    ))
-
-(defstatic *unicode-108-180-to-iso-8859-3*
-  #(
-    #xc6 #xe6 #xc5 #xe5 #x00 #x00 #x00 #x00 ; #x108-#x10f 
-    nil nil nil nil nil nil nil nil     ; #x110-#x117 
-    nil nil nil nil #xd8 #xf8 #xab #xbb ; #x118-#x11f 
-    #xd5 #xf5 nil nil #xa6 #xb6 #xa1 #xb1 ; #x120-#x127 
-    nil nil nil nil nil nil nil nil     ; #x128-#x12f 
-    #xa9 #xb9 nil nil #xac #xbc nil nil ; #x130-#x137 
-    nil nil nil nil nil nil nil nil     ; #x138-#x13f 
-    nil nil nil nil nil nil nil nil     ; #x140-#x147 
-    nil nil nil nil nil nil nil nil     ; #x148-#x14f 
-    nil nil nil nil nil nil nil nil     ; #x150-#x157 
-    nil nil nil nil #xde #xfe #xaa #xba ; #x158-#x15f 
-    nil nil nil nil nil nil nil nil     ; #x160-#x167 
-    nil nil nil nil #xdd #xfd nil nil   ; #x168-#x16f 
-    nil nil nil nil nil nil nil nil     ; #x170-#x177 
-    nil nil nil #xaf #xbf nil nil nil   ; #x178-#x17f 
-    ))
-
-(defstatic *unicode-2d8-2e0-to-iso-8859-3*
-  #(
-    #xa2 #xff nil nil nil nil nil nil   ; #x2d8-#x2df 
-    ))
-
-
-    
-(define-character-encoding :iso-8859-3
+(define-8-bit-fixed-width-encoding :iso-8859-3
   "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in most
 languages used in Southern Europe."
-
-  :aliases '(:iso_8859-3 :latin3 :l3 :csisolatin3)
-  :stream-encode-function
-  (nfunction
-   iso-8859-3-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-3*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x108) (< code #x180))
-                       (svref *unicode-108-180-to-iso-8859-3*
-                              (the fixnum (- code #x108))))
-                      ((and (>= code #x2d8) (< code #x2e0))
-                       (svref *unicode-2d8-2e0-to-iso-8859-3*
-                              (the fixnum (- code #x2d8)))))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2
-                                          (note-encoding-problem
-                                           char stream :iso-8859-3 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-3-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-3-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-3-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #x100)
-                         (svref *unicode-a0-100-to-iso-8859-3*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x108) (< code #x180))
-                         (svref *unicode-108-180-to-iso-8859-3*
-                                (the fixnum (- code #x108))))
-                        ((and (>= code #x2d8) (< code #x2e0))
-                         (svref *unicode-2d8-2e0-to-iso-8859-3*
-                 
-               (the fixnum (- code #x2d8)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-3 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-3-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-         (let* ((1st-unit (aref vector index)))
-           (declare (type (unsigned-byte 8) 1st-unit))
-           (setf (schar string i)
-                 (if (< 1st-unit #xa0)
-                   (code-char 1st-unit)
-                   (svref *iso-8859-3-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-3-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #x100)
-                         (svref *unicode-a0-100-to-iso-8859-3*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x108) (< code #x180))
-                         (svref *unicode-108-180-to-iso-8859-3*
-                                (the fixnum (- code #x108))))
-                        ((and (>= code #x2d8) (< code #x2e0))
-                         (svref *unicode-2d8-2e0-to-iso-8859-3*
-                                (the fixnum (- code #x2d8)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-3 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-3-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-3-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-
-(defstatic *iso-8859-4-to-unicode*
+  (:iso_8859-3 :latin3 :l3 :csisolatin3)
+  *unicode-to-iso-8859-3-map*
+  *iso-to-8859-3-to-unicode-string*
   #(
     ;; #xa0 
-    #\u+00a0 #\u+0104 #\u+0138 #\u+0156 #\u+00a4 #\u+0128 #\u+013b #\u+00a7
-    #\u+00a8 #\u+0160 #\u+0112 #\u+0122 #\u+0166 #\u+00ad #\u+017d #\u+00af
+    #x00a0 #x0126 #x02d8 #x00a3 #x00a4 #xfffd #x0124 #x00a7
+    #x00a8 #x0130 #x015e #x011e #x0134 #x00ad #xfffd #x017b
     ;; #xb0 
-    #\u+00b0 #\u+0105 #\u+02db #\u+0157 #\u+00b4 #\u+0129 #\u+013c #\u+02c7
-    #\u+00b8 #\u+0161 #\u+0113 #\u+0123 #\u+0167 #\u+014a #\u+017e #\u+014b
+    #x00b0 #x0127 #x00b2 #x00b3 #x00b4 #x00b5 #x0125 #x00b7
+    #x00b8 #x0131 #x015f #x011f #x0135 #x00bd #xfffd #x017c
     ;; #xc0 
-    #\u+0100 #\u+00c1 #\u+00c2 #\u+00c3 #\u+00c4 #\u+00c5 #\u+00c6 #\u+012e
-    #\u+010c #\u+00c9 #\u+0118 #\u+00cb #\u+0116 #\u+00cd #\u+00ce #\u+012a
+    #x00c0 #x00c1 #x00c2 #xfffd #x00c4 #x010a #x0108 #x00c7
+    #x00c8 #x00c9 #x00ca #x00cb #x00cc #x00cd #x00ce #x00cf
     ;; #xd0 
-    #\u+0110 #\u+0145 #\u+014c #\u+0136 #\u+00d4 #\u+00d5 #\u+00d6 #\u+00d7
-    #\u+00d8 #\u+0172 #\u+00da #\u+00db #\u+00dc #\u+0168 #\u+016a #\u+00df
+    #xfffd #x00d1 #x00d2 #x00d3 #x00d4 #x0120 #x00d6 #x00d7
+    #x011c #x00d9 #x00da #x00db #x00dc #x016c #x015c #x00df
     ;; #xe0 
-    #\u+0101 #\u+00e1 #\u+00e2 #\u+00e3 #\u+00e4 #\u+00e5 #\u+00e6 #\u+012f
-    #\u+010d #\u+00e9 #\u+0119 #\u+00eb #\u+0117 #\u+00ed #\u+00ee #\u+012b
+    #x00e0 #x00e1 #x00e2 #xfffd #x00e4 #x010b #x0109 #x00e7
+    #x00e8 #x00e9 #x00ea #x00eb #x00ec #x00ed #x00ee #x00ef
     ;; #xf0 
-    #\u+0111 #\u+0146 #\u+014d #\u+0137 #\u+00f4 #\u+00f5 #\u+00f6 #\u+00f7
-    #\u+00f8 #\u+0173 #\u+00fa #\u+00fb #\u+00fc #\u+0169 #\u+016b #\u+02d9
+    #xfffd #x00f1 #x00f2 #x00f3 #x00f4 #x0121 #x00f6 #x00f7
+    #x011d #x00f9 #x00fa #x00fb #x00fc #x016d #x015d #x02d9
     ))
 
-
-(defstatic *unicode-a0-180-to-iso-8859-4*
-  #(
-    #xa0 nil nil nil #xa4 nil nil #xa7  ; #xa0-#xa7 
-    #xa8 nil nil nil nil #xad nil #xaf  ; #xa8-#xaf 
-    #xb0 nil nil nil #xb4 nil nil nil   ; #xb0-#xb7 
-    #xb8 nil nil nil nil nil nil nil    ; #xb8-#xbf 
-    nil #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 nil ; #xc0-#xc7 
-    nil #xc9 nil #xcb nil #xcd #xce nil ; #xc8-#xcf 
-    nil nil nil nil #xd4 #xd5 #xd6 #xd7 ; #xd0-#xd7 
-    #xd8 nil #xda #xdb #xdc nil nil #xdf ; #xd8-#xdf 
-    nil #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 nil ; #xe0-#xe7 
-    nil #xe9 nil #xeb nil #xed #xee nil ; #xe8-#xef 
-    nil nil nil nil #xf4 #xf5 #xf6 #xf7 ; #xf0-#xf7 
-    #xf8 nil #xfa #xfb #xfc nil nil nil ; #xf8-#xff 
-    #xc0 #xe0 nil nil #xa1 #xb1 nil nil ; #x100-#x107 
-    nil nil nil nil #xc8 #xe8 nil nil   ; #x108-#x10f 
-    #xd0 #xf0 #xaa #xba nil nil #xcc #xec ; #x110-#x117 
-    #xca #xea nil nil nil nil nil nil   ; #x118-#x11f 
-    nil nil #xab #xbb nil nil nil nil   ; #x120-#x127 
-    #xa5 #xb5 #xcf #xef nil nil #xc7 #xe7 ; #x128-#x12f 
-    nil nil nil nil nil nil #xd3 #xf3   ; #x130-#x137 
-    #xa2 nil nil #xa6 #xb6 nil nil nil  ; #x138-#x13f 
-    nil nil nil nil nil #xd1 #xf1 nil   ; #x140-#x147 
-    nil nil #xbd #xbf #xd2 #xf2 nil nil ; #x148-#x14f 
-    nil nil nil nil nil nil #xa3 #xb3   ; #x150-#x157 
-    nil nil nil nil nil nil nil nil     ; #x158-#x15f 
-    #xa9 #xb9 nil nil nil nil #xac #xbc ; #x160-#x167 
-    #xdd #xfd #xde #xfe nil nil nil nil ; #x168-#x16f 
-    nil nil #xd9 #xf9 nil nil nil nil   ; #x170-#x177 
-    nil nil nil nil nil #xae #xbe nil   ; #x178-#x17f 
-    ))
-
-(defstatic *unicode-2c0-2e0-to-iso-8859-4*
-  #(
-    nil nil nil nil nil nil nil #xb7    ; #x2c0-#x2c7
-    nil nil nil nil nil nil nil nil     ; #x2c8-#x2cf
-    nil nil nil nil nil nil nil nil     ; #x2d0-#x2d7
-    nil #xff nil #xb2 nil nil nil nil   ; #x2d8-#x2df
-    ))
-
-
-
-(define-character-encoding :iso-8859-4
+(define-8-bit-fixed-width-encoding :iso-8859-4
   "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in most
 languages used in Northern Europe."
-
-  :aliases '(:iso_8859-4 :latin4 :l4 :csisolatin4)
-  :stream-encode-function
-  (nfunction
-   iso-8859-4-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-4*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x2d8) (< code #x2e0))
-                       (svref *unicode-2c0-2e0-to-iso-8859-4*
-                              (the fixnum (- code #x2c0)))))))
-                      
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-4 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-4-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-4-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-4-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #x180)
-                         (svref *unicode-a0-180-to-iso-8859-4*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x2d8) (< code #x2e0))
-                         (svref *unicode-2c0-2e0-to-iso-8859-4*
-                                (the fixnum (- code #x2c0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-4 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-4-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-4-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-4-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #x180)
-                         (svref *unicode-a0-180-to-iso-8859-4*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x2d8) (< code #x2e0))
-                         (svref *unicode-2c0-2e0-to-iso-8859-4*
-                                (the fixnum (- code #x2c0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-4 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-4-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-4-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-5-to-unicode*
+  (:iso_8859-4 :latin4 :l4 :csisolatin4)
+  *unicode-to-iso-8859-4-map*
+  *iso-to-8859-4-to-unicode-string*
   #(
-    ;; #xa0
-    #\u+00a0 #\u+0401 #\u+0402 #\u+0403 #\u+0404 #\u+0405 #\u+0406 #\u+0407
-    #\u+0408 #\u+0409 #\u+040a #\u+040b #\u+040c #\u+00ad #\u+040e #\u+040f
-    ;; #xb0
-    #\u+0410 #\u+0411 #\u+0412 #\u+0413 #\u+0414 #\u+0415 #\u+0416 #\u+0417
-    #\u+0418 #\u+0419 #\u+041a #\u+041b #\u+041c #\u+041d #\u+041e #\u+041f
-    ;; #xc0
-    #\u+0420 #\u+0421 #\u+0422 #\u+0423 #\u+0424 #\u+0425 #\u+0426 #\u+0427
-    #\u+0428 #\u+0429 #\u+042a #\u+042b #\u+042c #\u+042d #\u+042e #\u+042f
-    ;; #xd0
-    #\u+0430 #\u+0431 #\u+0432 #\u+0433 #\u+0434 #\u+0435 #\u+0436 #\u+0437
-    #\u+0438 #\u+0439 #\u+043a #\u+043b #\u+043c #\u+043d #\u+043e #\u+043f
-    ;; #xe0
-    #\u+0440 #\u+0441 #\u+0442 #\u+0443 #\u+0444 #\u+0445 #\u+0446 #\u+0447
-    #\u+0448 #\u+0449 #\u+044a #\u+044b #\u+044c #\u+044d #\u+044e #\u+044f
-    ;; #xf0
-    #\u+2116 #\u+0451 #\u+0452 #\u+0453 #\u+0454 #\u+0455 #\u+0456 #\u+0457
-    #\u+0458 #\u+0459 #\u+045a #\u+045b #\u+045c #\u+00a7 #\u+045e #\u+045f
+    ;; #xa0 
+    #x00a0 #x0104 #x0138 #x0156 #x00a4 #x0128 #x013b #x00a7
+    #x00a8 #x0160 #x0112 #x0122 #x0166 #x00ad #x017d #x00af
+    ;; #xb0 
+    #x00b0 #x0105 #x02db #x0157 #x00b4 #x0129 #x013c #x02c7
+    #x00b8 #x0161 #x0113 #x0123 #x0167 #x014a #x017e #x014b
+    ;; #xc0 
+    #x0100 #x00c1 #x00c2 #x00c3 #x00c4 #x00c5 #x00c6 #x012e
+    #x010c #x00c9 #x0118 #x00cb #x0116 #x00cd #x00ce #x012a
+    ;; #xd0 
+    #x0110 #x0145 #x014c #x0136 #x00d4 #x00d5 #x00d6 #x00d7
+    #x00d8 #x0172 #x00da #x00db #x00dc #x0168 #x016a #x00df
+    ;; #xe0 
+    #x0101 #x00e1 #x00e2 #x00e3 #x00e4 #x00e5 #x00e6 #x012f
+    #x010d #x00e9 #x0119 #x00eb #x0117 #x00ed #x00ee #x012b
+    ;; #xf0 
+    #x0111 #x0146 #x014d #x0137 #x00f4 #x00f5 #x00f6 #x00f7
+    #x00f8 #x0173 #x00fa #x00fb #x00fc #x0169 #x016b #x02d9
     ))
 
-
-(defstatic *unicode-a0-b0-to-iso-8859-5*
-  #(
-    #xa0 nil nil nil nil nil nil #xfd   ; #xa0-#xa7
-    nil nil nil nil nil #xad nil nil    ; #xa8-#xaf
-    ))
-
-(defstatic *unicode-400-460-to-iso-8859-5*
-  #(
-    nil #xa1 #xa2 #xa3 #xa4 #xa5 #xa6 #xa7 ; #x400-#x407
-    #xa8 #xa9 #xaa #xab #xac nil #xae #xaf ; #x408-#x40f
-    #xb0 #xb1 #xb2 #xb3 #xb4 #xb5 #xb6 #xb7 ; #x410-#x417
-    #xb8 #xb9 #xba #xbb #xbc #xbd #xbe #xbf ; #x418-#x41f
-    #xc0 #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 #xc7 ; #x420-#x427
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #x428-#x42f
-    #xd0 #xd1 #xd2 #xd3 #xd4 #xd5 #xd6 #xd7 ; #x430-#x437
-    #xd8 #xd9 #xda #xdb #xdc #xdd #xde #xdf ; #x438-#x43f
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #x440-#x447
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #x448-#x44f
-    nil #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 #xf7 ; #x450-#x457
-    #xf8 #xf9 #xfa #xfb #xfc nil #xfe #xff ; #x458-#x45f
-    ))
-
-
-(define-character-encoding :iso-8859-5
+(define-8-bit-fixed-width-encoding :iso-8859-5
   "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in the
 Cyrillic alphabet."
-
-  :aliases '(:iso_8859-5 :cyrillic :csISOLatinCyrillic :iso-ir-144)
-  :stream-encode-function
-  (nfunction
-   iso-8859-5-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #xb0)
-                       (svref *unicode-a0-b0-to-iso-8859-5*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x400) (< code #x460))
-                       (svref *unicode-400-460-to-iso-8859-5*
-                              (the fixnum (- code #x400)))))))
-                      
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-5 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-5-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-5-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-5-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #xb0)
-                         (svref *unicode-a0-b0-to-iso-8859-5*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x400) (< code #x460))
-                         (svref *unicode-400-460-to-iso-8859-5*
-                                (the fixnum (- code #x400)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-5 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-5-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-5-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-5-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #xb0)
-                         (svref *unicode-a0-b0-to-iso-8859-5*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x400) (< code #x460))
-                         (svref *unicode-400-460-to-iso-8859-5*
-                                (the fixnum (- code #x400)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-5 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-5-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-5-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0
-  )
-
-(defstatic *iso-8859-6-to-unicode*
+  (:iso_8859-5 :cyrillic :csISOLatinCyrillic :iso-ir-144)
+  *unicode-to-iso-8859-5-map*
+  *iso-to-8859-5-to-unicode-string*
   #(
-    ;; #xa0 
-    #\u+00a0 #\u+fffd #\u+fffd #\u+fffd #\u+00a4 #\u+fffd #\u+fffd #\u+fffd
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+060c #\u+00ad #\u+fffd #\u+fffd
-    ;; #xb0 
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
-    #\u+fffd #\u+fffd #\u+fffd #\u+061b #\u+fffd #\u+fffd #\u+fffd #\u+061f
-    ;; #xc0 
-    #\u+fffd #\u+0621 #\u+0622 #\u+0623 #\u+0624 #\u+0625 #\u+0626 #\u+0627
-    #\u+0628 #\u+0629 #\u+062a #\u+062b #\u+062c #\u+062d #\u+062e #\u+062f
-    ;; #xd0 
-    #\u+0630 #\u+0631 #\u+0632 #\u+0633 #\u+0634 #\u+0635 #\u+0636 #\u+0637
-    #\u+0638 #\u+0639 #\u+063a #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
-    ;; #xe0 
-    #\u+0640 #\u+0641 #\u+0642 #\u+0643 #\u+0644 #\u+0645 #\u+0646 #\u+0647
-    #\u+0648 #\u+0649 #\u+064a #\u+064b #\u+064c #\u+064d #\u+064e #\u+064f
-    ;; #xf0 
-    #\u+0650 #\u+0651 #\u+0652 #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
+    ;; #xa0
+    #x00a0 #x0401 #x0402 #x0403 #x0404 #x0405 #x0406 #x0407
+    #x0408 #x0409 #x040a #x040b #x040c #x00ad #x040e #x040f
+    ;; #xb0
+    #x0410 #x0411 #x0412 #x0413 #x0414 #x0415 #x0416 #x0417
+    #x0418 #x0419 #x041a #x041b #x041c #x041d #x041e #x041f
+    ;; #xc0
+    #x0420 #x0421 #x0422 #x0423 #x0424 #x0425 #x0426 #x0427
+    #x0428 #x0429 #x042a #x042b #x042c #x042d #x042e #x042f
+    ;; #xd0
+    #x0430 #x0431 #x0432 #x0433 #x0434 #x0435 #x0436 #x0437
+    #x0438 #x0439 #x043a #x043b #x043c #x043d #x043e #x043f
+    ;; #xe0
+    #x0440 #x0441 #x0442 #x0443 #x0444 #x0445 #x0446 #x0447
+    #x0448 #x0449 #x044a #x044b #x044c #x044d #x044e #x044f
+    ;; #xf0
+    #x2116 #x0451 #x0452 #x0453 #x0454 #x0455 #x0456 #x0457
+    #x0458 #x0459 #x045a #x045b #x045c #x00a7 #x045e #x045f
     ))
 
-(defstatic *unicode-a0-b0-to-iso-8859-6*
-  #(
-    0xa0 nil nil nil 0xa4 nil nil nil   ; #xa0-#xa7
-    nil nil nil nil nil #xad nil nil    ; #xa8-#xaf
-    ))
-
-
-(defstatic *unicode-608-658-to-iso-8859-6*
-  #(
-    nil nil nil nil #xac nil nil nil    ; #x608-#x60f
-    nil nil nil nil nil nil nil nil     ; #x610-#x617
-    nil nil nil #xbb nil nil nil #xbf   ; #x618-#x61f
-    nil #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 #xc7 ; #x620-#x627
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #x628-#x62f
-    #xd0 #xd1 #xd2 #xd3 #xd4 #xd5 #xd6 #xd7 ; #x630-#x637
-    #xd8 #xd9 #xda nil nil nil nil nil  ; #x638-#x63f
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #x640-#x647
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #x648-#x64f
-    #xf0 #xf1 #xf2 nil nil nil nil nil  ; #x650-#x657
-    ))
-
-(define-character-encoding :iso-8859-6
+(define-8-bit-fixed-width-encoding :iso-8859-6
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in the
 Arabic alphabet."
-
-  :aliases '(:iso_8859-6 :arabic :csISOLatinArabic :iso-ir-127)
-  :stream-encode-function
-  (nfunction
-   iso-8859-6-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #xb0)
-                       (svref *unicode-a0-b0-to-iso-8859-6*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x608) (< code #x658))
-                       (svref *unicode-608-658-to-iso-8859-6*
-                              (the fixnum (- code #x608)))))))
-                      
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-6 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-6-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-6-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-6-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #xb0)
-                         (svref *unicode-a0-b0-to-iso-8859-6*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x608) (< code #x658))
-                         (svref *unicode-608-658-to-iso-8859-6*
-                                (the fixnum (- code #x608)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-6 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-6-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-6-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-6-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                        ((< code #xb0)
-                         (svref *unicode-a0-b0-to-iso-8859-6*
-                                (the fixnum (- code #xa0))))
-                        ((and (>= code #x608) (< code #x658))
-                         (svref *unicode-608-658-to-iso-8859-6*
-                                (the fixnum (- code #x608)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-6 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-6-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-6-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-7-to-unicode*
+  (:iso_8859-6 :arabic :csISOLatinArabic :iso-ir-127)
+  *unicode-to-iso-8859-6-map*
+  *iso-to-8859-6-to-unicode-string*
   #(
-    ;; #xa0
-    #\u+00a0 #\u+2018 #\u+2019 #\u+00a3 #\u+20ac #\u+20af #\u+00a6 #\u+00a7
-    #\u+00a8 #\u+00a9 #\u+037a #\u+00ab #\u+00ac #\u+00ad #\u+fffd #\u+2015
-    ;; #xb0
-    #\u+00b0 #\u+00b1 #\u+00b2 #\u+00b3 #\u+0384 #\u+0385 #\u+0386 #\u+00b7
-    #\u+0388 #\u+0389 #\u+038a #\u+00bb #\u+038c #\u+00bd #\u+038e #\u+038f
-    ;; #xc0
-    #\u+0390 #\u+0391 #\u+0392 #\u+0393 #\u+0394 #\u+0395 #\u+0396 #\u+0397
-    #\u+0398 #\u+0399 #\u+039a #\u+039b #\u+039c #\u+039d #\u+039e #\u+039f
-    ;; #xd0
-    #\u+03a0 #\u+03a1 #\u+fffd #\u+03a3 #\u+03a4 #\u+03a5 #\u+03a6 #\u+03a7
-    #\u+03a8 #\u+03a9 #\u+03aa #\u+03ab #\u+03ac #\u+03ad #\u+03ae #\u+03af
-    ;; #xe0
-    #\u+03b0 #\u+03b1 #\u+03b2 #\u+03b3 #\u+03b4 #\u+03b5 #\u+03b6 #\u+03b7
-    #\u+03b8 #\u+03b9 #\u+03ba #\u+03bb #\u+03bc #\u+03bd #\u+03be #\u+03bf
-    ;; #xf0
-    #\u+03c0 #\u+03c1 #\u+03c2 #\u+03c3 #\u+03c4 #\u+03c5 #\u+03c6 #\u+03c7
-    #\u+03c8 #\u+03c9 #\u+03ca #\u+03cb #\u+03cc #\u+03cd #\u+03ce #\u+fffd
+    ;; #xa0 
+    #x00a0 #xfffd #xfffd #xfffd #x00a4 #xfffd #xfffd #xfffd
+    #xfffd #xfffd #xfffd #xfffd #x060c #x00ad #xfffd #xfffd
+    ;; #xb0 
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd
+    #xfffd #xfffd #xfffd #x061b #xfffd #xfffd #xfffd #x061f
+    ;; #xc0 
+    #xfffd #x0621 #x0622 #x0623 #x0624 #x0625 #x0626 #x0627
+    #x0628 #x0629 #x062a #x062b #x062c #x062d #x062e #x062f
+    ;; #xd0 
+    #x0630 #x0631 #x0632 #x0633 #x0634 #x0635 #x0636 #x0637
+    #x0638 #x0639 #x063a #xfffd #xfffd #xfffd #xfffd #xfffd
+    ;; #xe0 
+    #x0640 #x0641 #x0642 #x0643 #x0644 #x0645 #x0646 #x0647
+    #x0648 #x0649 #x064a #x064b #x064c #x064d #x064e #x064f
+    ;; #xf0 
+    #x0650 #x0651 #x0652 #xfffd #xfffd #xfffd #xfffd #xfffd
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd
     ))
 
-(defstatic *unicode-a0-c0-to-iso-8859-7*
-  #(
-    #xa0 nil nil #xa3 nil nil #xa6 #xa7 ; #xa0-#xa7
-    #xa8 #xa9 nil #xab #xac #xad nil nil ; #xa8-#xaf
-    #xb0 #xb1 #xb2 #xb3 nil nil nil #xb7 ; #xb0-#xb7
-    nil nil nil #xbb nil #xbd nil nil   ; #xb8-#xbf
-    ))
-
-(defstatic *unicode-378-3d0-to-iso-8859-7*
-  #(
-    nil nil #xaa nil nil nil nil nil    ; #x378-#x37f 
-    nil nil nil nil #xb4 #xb5 #xb6 nil  ; #x380-#x387 
-    #xb8 #xb9 #xba nil #xbc nil #xbe #xbf ; #x388-#x38f 
-    #xc0 #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 #xc7 ; #x390-#x397 
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #x398-#x39f 
-    #xd0 #xd1 nil #xd3 #xd4 #xd5 #xd6 #xd7 ; #x3a0-#x3a7 
-    #xd8 #xd9 #xda #xdb #xdc #xdd #xde #xdf ; #x3a8-#x3af 
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #x3b0-#x3b7 
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #x3b8-#x3bf 
-    #xf0 #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 #xf7 ; #x3c0-#x3c7 
-    #xf8 #xf9 #xfa #xfb #xfc #xfd #xfe nil ; #x3c8-#x3cf 
-    ))
-
-(defstatic *unicode-2010-2020-to-iso-8859-7*
-  #(
-    nil nil nil nil nil #xaf nil nil    ; #x2010-#x2017 
-    #xa1 #xa2 nil nil nil nil nil nil   ; #x2018-#x201f 
-    ))
-
-(defstatic *unicode-20ac-20b0-to-iso-8859-7*
-  #(
-    #xa4 nil nil #xa5
-    ))
-
-(define-character-encoding :iso-8859-7
+(define-8-bit-fixed-width-encoding :iso-8859-7
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in the
 Greek alphabet."
-
-  :aliases '(:iso_8859-7 :greek  :greek8 :csISOLatinGreek :iso-ir-126 :ELOT_928 :ecma-118)
-  :stream-encode-function
-  (nfunction
-   iso-8859-7-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #xc0)
-                       (svref *unicode-a0-c0-to-iso-8859-7*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x378) (< code #x3d0))
-                       (svref *unicode-378-3d0-to-iso-8859-7*
-                              (the fixnum (- code #x378))))
-                      ((and (>= code #x2010) (< code #x2020))
-                       (svref *unicode-2010-2020-to-iso-8859-7*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x20ac) (< code #x20b0))
-                       (svref *unicode-20ac-20b0-to-iso-8859-7*
-                              (the fixnum (- code #x20ac)))))))
-              
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-7 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-7-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-7-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-7-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #xc0)
-                       (svref *unicode-a0-c0-to-iso-8859-7*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x378) (< code #x3d0))
-                       (svref *unicode-378-3d0-to-iso-8859-7*
-                              (the fixnum (- code #x378))))
-                      ((and (>= code #x2010) (< code #x2020))
-                       (svref *unicode-2010-2020-to-iso-8859-7*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x20ac) (< code #x20b0))
-                       (svref *unicode-20ac-20b0-to-iso-8859-7*
-                              (the fixnum (- code #x20ac)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-7 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-7-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-7-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-7-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #xc0)
-                       (svref *unicode-a0-c0-to-iso-8859-7*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x378) (< code #x3d0))
-                       (svref *unicode-378-3d0-to-iso-8859-7*
-                              (the fixnum (- code #x378))))
-                      ((and (>= code #x2010) (< code #x2020))
-                       (svref *unicode-2010-2020-to-iso-8859-7*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x20ac) (< code #x20b0))
-                       (svref *unicode-20ac-20b0-to-iso-8859-7*
-                              (the fixnum (- code #x20ac)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-7 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-7-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-7-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-8-to-unicode*
+  (:iso_8859-7 :greek  :greek8 :csISOLatinGreek :iso-ir-126 :ELOT_928 :ecma-118)
+  *unicode-to-iso-8859-7-map*
+  *iso-to-8859-7-to-unicode-string*
   #(
     ;; #xa0
-    #\u+00a0 #\u+fffd #\u+00a2 #\u+00a3 #\u+00a4 #\u+00a5 #\u+00a6 #\u+00a7
-    #\u+00a8 #\u+00a9 #\u+00d7 #\u+00ab #\u+00ac #\u+00ad #\u+00ae #\u+00af
+    #x00a0 #x2018 #x2019 #x00a3 #x20ac #x20af #x00a6 #x00a7
+    #x00a8 #x00a9 #x037a #x00ab #x00ac #x00ad #xfffd #x2015
     ;; #xb0
-    #\u+00b0 #\u+00b1 #\u+00b2 #\u+00b3 #\u+00b4 #\u+00b5 #\u+00b6 #\u+00b7
-    #\u+00b8 #\u+00b9 #\u+00f7 #\u+00bb #\u+00bc #\u+00bd #\u+00be #\u+fffd
+    #x00b0 #x00b1 #x00b2 #x00b3 #x0384 #x0385 #x0386 #x00b7
+    #x0388 #x0389 #x038a #x00bb #x038c #x00bd #x038e #x038f
     ;; #xc0
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
+    #x0390 #x0391 #x0392 #x0393 #x0394 #x0395 #x0396 #x0397
+    #x0398 #x0399 #x039a #x039b #x039c #x039d #x039e #x039f
     ;; #xd0
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd
-    #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+fffd #\u+2017
+    #x03a0 #x03a1 #xfffd #x03a3 #x03a4 #x03a5 #x03a6 #x03a7
+    #x03a8 #x03a9 #x03aa #x03ab #x03ac #x03ad #x03ae #x03af
     ;; #xe0
-    #\u+05d0 #\u+05d1 #\u+05d2 #\u+05d3 #\u+05d4 #\u+05d5 #\u+05d6 #\u+05d7
-    #\u+05d8 #\u+05d9 #\u+05da #\u+05db #\u+05dc #\u+05dd #\u+05de #\u+05df
+    #x03b0 #x03b1 #x03b2 #x03b3 #x03b4 #x03b5 #x03b6 #x03b7
+    #x03b8 #x03b9 #x03ba #x03bb #x03bc #x03bd #x03be #x03bf
     ;; #xf0
-    #\u+05e0 #\u+05e1 #\u+05e2 #\u+05e3 #\u+05e4 #\u+05e5 #\u+05e6 #\u+05e7
-    #\u+05e8 #\u+05e9 #\u+05ea #\u+fffd #\u+fffd #\u+200e #\u+200f #\u+fffd
+    #x03c0 #x03c1 #x03c2 #x03c3 #x03c4 #x03c5 #x03c6 #x03c7
+    #x03c8 #x03c9 #x03ca #x03cb #x03cc #x03cd #x03ce #xfffd
     ))
 
-(defstatic *unicode-a0-f8-to-iso-8859-8*
-  #(
-    #xa0 nil #xa2 #xa3 #xa4 #xa5 #xa6 #xa7 ; #xa0-#xa7 
-    #xa8 #xa9 nil #xab #xac #xad #xae #xaf ; #xa8-#xaf 
-    #xb0 #xb1 #xb2 #xb3 #xb4 #xb5 #xb6 #xb7 ; #xb0-#xb7 
-    #xb8 #xb9 nil #xbb #xbc #xbd #xbe nil ; #xb8-#xbf 
-    nil nil nil nil nil nil nil nil     ; #xc0-#xc7 
-    nil nil nil nil nil nil nil nil     ; #xc8-#xcf 
-    nil nil nil nil nil nil nil #xaa    ; #xd0-#xd7 
-    nil nil nil nil nil nil nil nil     ; #xd8-#xdf 
-    nil nil nil nil nil nil nil nil     ; #xe0-#xe7 
-    nil nil nil nil nil nil nil nil     ; #xe8-#xef 
-    nil nil nil nil nil nil nil #xba    ; #xf0-#xf7 
-    ))
-
-(defstatic *unicode-5d0-5f0-to-iso-8859-8*
-  #(
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #x5d0-#x5d7
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #x5d8-#x5df
-    #xf0 #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 #xf7 ; #x5e0-#x5e7
-    #xf8 #xf9 #xfa nil nil nil nil nil  ; #x5e8-#x5ef
-    ))
-
-(defstatic *unicode-2008-2018-to-iso-8859-8*
-  #(
-    nil nil nil nil nil nil #xfd #xfe   ; #x2008-#x200f 
-    nil nil nil nil nil nil nil #xdf    ; #x2010-#x2017 
-    ))    
-
-(define-character-encoding :iso-8859-8
+(define-8-bit-fixed-width-encoding :iso-8859-8
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in the
 Hebrew alphabet."
-
-  :aliases '(:iso_8859-8 :hebrew :csISOLatinHebrew :iso-ir-138)
-  :stream-encode-function
-  (nfunction
-   iso-8859-8-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #xf8)
-                       (svref *unicode-a0-f8-to-iso-8859-8*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x5d0) (< code #x5f0))
-                       (svref *unicode-5d0-5f0-to-iso-8859-8*
-                              (the fixnum (- code #x5d0))))
-                      ((and (>= code #x2008) (< code #x2018))
-                       (svref *unicode-2008-2018-to-iso-8859-8*
-                              (the fixnum (- code #x2008)))))))
-              
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-8 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-8-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-8-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-8-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #xf8)
-                       (svref *unicode-a0-f8-to-iso-8859-8*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x5d0) (< code #x5f0))
-                       (svref *unicode-5d0-5f0-to-iso-8859-8*
-                              (the fixnum (- code #x5d0))))
-                      ((and (>= code #x2008) (< code #x2018))
-                       (svref *unicode-2008-2018-to-iso-8859-8*
-                              (the fixnum (- code #x2008)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-8 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-8-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-8-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-8-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #xf8)
-                       (svref *unicode-a0-f8-to-iso-8859-8*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x5d0) (< code #x5f0))
-                       (svref *unicode-5d0-5f0-to-iso-8859-8*
-                              (the fixnum (- code #x5d0))))
-                      ((and (>= code #x2008) (< code #x2018))
-                       (svref *unicode-2008-2018-to-iso-8859-8*
-                              (the fixnum (- code #x2008)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-8 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-8-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-8-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-9-to-unicode*
+  (:iso_8859-8 :hebrew :csISOLatinHebrew :iso-ir-138)
+  *unicode-to-iso-8859-8-map*
+  *iso-to-8859-8-to-unicode-string*
   #(
+    ;; #xa0
+    #x00a0 #xfffd #x00a2 #x00a3 #x00a4 #x00a5 #x00a6 #x00a7
+    #x00a8 #x00a9 #x00d7 #x00ab #x00ac #x00ad #x00ae #x00af
+    ;; #xb0
+    #x00b0 #x00b1 #x00b2 #x00b3 #x00b4 #x00b5 #x00b6 #x00b7
+    #x00b8 #x00b9 #x00f7 #x00bb #x00bc #x00bd #x00be #xfffd
+    ;; #xc0
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd
     ;; #xd0
-    #\u+011e #\u+00d1 #\u+00d2 #\u+00d3 #\u+00d4 #\u+00d5 #\u+00d6 #\u+00d7
-    #\u+00d8 #\u+00d9 #\u+00da #\u+00db #\u+00dc #\u+0130 #\u+015e #\u+00df
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd
+    #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #xfffd #x2017
     ;; #xe0
-    #\u+00e0 #\u+00e1 #\u+00e2 #\u+00e3 #\u+00e4 #\u+00e5 #\u+00e6 #\u+00e7
-    #\u+00e8 #\u+00e9 #\u+00ea #\u+00eb #\u+00ec #\u+00ed #\u+00ee #\u+00ef
+    #x05d0 #x05d1 #x05d2 #x05d3 #x05d4 #x05d5 #x05d6 #x05d7
+    #x05d8 #x05d9 #x05da #x05db #x05dc #x05dd #x05de #x05df
     ;; #xf0
-    #\u+011f #\u+00f1 #\u+00f2 #\u+00f3 #\u+00f4 #\u+00f5 #\u+00f6 #\u+00f7
-    #\u+00f8 #\u+00f9 #\u+00fa #\u+00fb #\u+00fc #\u+0131 #\u+015f #\u+00ff
+    #x05e0 #x05e1 #x05e2 #x05e3 #x05e4 #x05e5 #x05e6 #x05e7
+    #x05e8 #x05e9 #x05ea #xfffd #xfffd #x200e #x200f #xfffd
     ))
 
-(defstatic *unicode-d0-100-to-iso-8859-9*
-  #(
-    nil #xd1 #xd2 #xd3 #xd4 #xd5 #xd6 #xd7 ; #xd0-#xd7
-    #xd8 #xd9 #xda #xdb #xdc nil nil #xdf ; #xd8-#xdf
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #xe0-#xe7
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #xe8-#xef
-    nil #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 #xf7 ; #xf0-#xf7
-    #xf8 #xf9 #xfa #xfb #xfc nil nil #xff ; #xf8-#xff
-    ))
-
-(defstatic *unicode-118-160-to-iso-8859-9*
-  #(
-    nil nil nil nil nil nil #xd0 #xf0   ; #x118-#x11f 
-    nil nil nil nil nil nil nil nil     ; #x120-#x127 
-    nil nil nil nil nil nil nil nil     ; #x128-#x12f 
-    #xdd #xfd nil nil nil nil nil nil   ; #x130-#x137 
-    nil nil nil nil nil nil nil nil     ; #x138-#x13f 
-    nil nil nil nil nil nil nil nil     ; #x140-#x147 
-    nil nil nil nil nil nil nil nil     ; #x148-#x14f 
-    nil nil nil nil nil nil nil nil     ; #x150-#x157 
-    nil nil nil nil nil nil #xde #xfe   ; #x158-#x15f 
-    ))
-
-
-(define-character-encoding :iso-8859-9
+(define-8-bit-fixed-width-encoding :iso-8859-9
     "An 8-bit, fixed-width character encoding in which codes #x00-#xcf
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in the
 Turkish alphabet."
-
-  :aliases '(:iso_8859-9 :latin5 :csISOLatin5 :iso-ir-148)
-  :stream-encode-function
-  (nfunction
-   iso-8859-9-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xd0) code)
-                      ((< code #x100)
-                       (svref *unicode-d0-100-to-iso-8859-9*
-                              (the fixnum (- code #xd0))))
-                      ((and (>= code #x118) (< code #x160))
-                       (svref *unicode-118-160-to-iso-8859-9*
-                              (the fixnum (- code #x118)))))))
-              
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-9 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-9-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-9-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-9-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xd0) code)
-                      ((< code #x100)
-                       (svref *unicode-d0-100-to-iso-8859-9*
-                              (the fixnum (- code #xd0))))
-                      ((and (>= code #x118) (< code #x160))
-                       (svref *unicode-118-160-to-iso-8859-9*
-                              (the fixnum (- code #x118)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-9 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-9-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-9-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-9-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xd0) code)
-                      ((< code #x100)
-                       (svref *unicode-d0-100-to-iso-8859-9*
-                              (the fixnum (- code #xd0))))
-                      ((and (>= code #x118) (< code #x160))
-                       (svref *unicode-118-160-to-iso-8859-9*
-                              (the fixnum (- code #x118)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-9 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-9-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-9-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xd0
-  :encode-literal-char-code-limit #xa0
-  )
-
-(defstatic *iso-8859-10-to-unicode*
+  (:iso_8859-9 :latin5 :csISOLatin5 :iso-ir-148)
+  *unicode-to-iso-8859-9-map*
+  *iso-to-8859-9-to-unicode-string*
   #(
-    ;; #xa0
-    #\u+00a0 #\u+0104 #\u+0112 #\u+0122 #\u+012a #\u+0128 #\u+0136 #\u+00a7
-    #\u+013b #\u+0110 #\u+0160 #\u+0166 #\u+017d #\u+00ad #\u+016a #\u+014a
-    ;; #xb0
-    #\u+00b0 #\u+0105 #\u+0113 #\u+0123 #\u+012b #\u+0129 #\u+0137 #\u+00b7
-    #\u+013c #\u+0111 #\u+0161 #\u+0167 #\u+017e #\u+2015 #\u+016b #\u+014b
-    ;; #xc0
-    #\u+0100 #\u+00c1 #\u+00c2 #\u+00c3 #\u+00c4 #\u+00c5 #\u+00c6 #\u+012e
-    #\u+010c #\u+00c9 #\u+0118 #\u+00cb #\u+0116 #\u+00cd #\u+00ce #\u+00cf
     ;; #xd0
-    #\u+00d0 #\u+0145 #\u+014c #\u+00d3 #\u+00d4 #\u+00d5 #\u+00d6 #\u+0168
-    #\u+00d8 #\u+0172 #\u+00da #\u+00db #\u+00dc #\u+00dd #\u+00de #\u+00df
+    #x011e #x00d1 #x00d2 #x00d3 #x00d4 #x00d5 #x00d6 #x00d7
+    #x00d8 #x00d9 #x00da #x00db #x00dc #x0130 #x015e #x00df
     ;; #xe0
-    #\u+0101 #\u+00e1 #\u+00e2 #\u+00e3 #\u+00e4 #\u+00e5 #\u+00e6 #\u+012f
-    #\u+010d #\u+00e9 #\u+0119 #\u+00eb #\u+0117 #\u+00ed #\u+00ee #\u+00ef
+    #x00e0 #x00e1 #x00e2 #x00e3 #x00e4 #x00e5 #x00e6 #x00e7
+    #x00e8 #x00e9 #x00ea #x00eb #x00ec #x00ed #x00ee #x00ef
     ;; #xf0
-    #\u+00f0 #\u+0146 #\u+014d #\u+00f3 #\u+00f4 #\u+00f5 #\u+00f6 #\u+0169
-    #\u+00f8 #\u+0173 #\u+00fa #\u+00fb #\u+00fc #\u+00fd #\u+00fe #\u+0138
-    ))
+    #x011f #x00f1 #x00f2 #x00f3 #x00f4 #x00f5 #x00f6 #x00f7
+    #x00f8 #x00f9 #x00fa #x00fb #x00fc #x0131 #x015f #x00ff
+    )
+  #xd0)
 
-(defstatic *unicode-a0-180-to-iso-8859-10*
-  #(
-    #xa0 nil nil nil nil nil nil #xa7   ; #xa0-#xa7 
-    nil nil nil nil nil #xad nil nil    ; #xa8-#xaf 
-    #xb0 nil nil nil nil nil nil #xb7   ; #xb0-#xb7 
-    nil nil nil nil nil nil nil nil     ; #xb8-#xbf 
-    nil #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 nil ; #xc0-#xc7 
-    nil #xc9 nil #xcb nil #xcd #xce #xcf ; #xc8-#xcf 
-    #xd0 nil nil #xd3 #xd4 #xd5 #xd6 nil ; #xd0-#xd7 
-    #xd8 nil #xda #xdb #xdc #xdd #xde #xdf ; #xd8-#xdf 
-    nil #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 nil ; #xe0-#xe7 
-    nil #xe9 nil #xeb nil #xed #xee #xef ; #xe8-#xef 
-    #xf0 nil nil #xf3 #xf4 #xf5 #xf6 nil ; #xf0-#xf7 
-    #xf8 nil #xfa #xfb #xfc #xfd #xfe nil ; #xf8-#xff 
-    #xc0 #xe0 nil nil #xa1 #xb1 nil nil ; #x100-#x107 
-    nil nil nil nil #xc8 #xe8 nil nil   ; #x108-#x10f 
-    #xa9 #xb9 #xa2 #xb2 nil nil #xcc #xec ; #x110-#x117 
-    #xca #xea nil nil nil nil nil nil   ; #x118-#x11f 
-    nil nil #xa3 #xb3 nil nil nil nil   ; #x120-#x127 
-    #xa5 #xb5 #xa4 #xb4 nil nil #xc7 #xe7 ; #x128-#x12f 
-    nil nil nil nil nil nil #xa6 #xb6   ; #x130-#x137 
-    #xff nil nil #xa8 #xb8 nil nil nil  ; #x138-#x13f 
-    nil nil nil nil nil #xd1 #xf1 nil   ; #x140-#x147 
-    nil nil #xaf #xbf #xd2 #xf2 nil nil ; #x148-#x14f 
-    nil nil nil nil nil nil nil nil     ; #x150-#x157 
-    nil nil nil nil nil nil nil nil     ; #x158-#x15f 
-    #xaa #xba nil nil nil nil #xab #xbb ; #x160-#x167 
-    #xd7 #xf7 #xae #xbe nil nil nil nil ; #x168-#x16f 
-    nil nil #xd9 #xf9 nil nil nil nil   ; #x170-#x177 
-    nil nil nil nil nil #xac #xbc nil   ; #x178-#x17f 
-    ))
-
-(define-character-encoding :iso-8859-10
+(define-8-bit-fixed-width-encoding :iso-8859-10
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in Nordic
 alphabets."
-
-  :aliases '(:iso_8859-10 :latin6 :csISOLatin6 :iso-ir-157)
-  :stream-encode-function
-  (nfunction
-   iso-8859-10-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-10*
-                              (the fixnum (- code #xa0)))))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-10 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-10-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-10-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-10-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-10*
-                              (the fixnum (- code #xa0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-10 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-10-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-10-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-10-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-10*
-                              (the fixnum (- code #xa0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-10 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-10-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-10-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
+  (:iso_8859-10 :latin6 :csISOLatin6 :iso-ir-157)
+  *unicode-to-iso-8859-10-map*
+  *iso-to-8859-10-to-unicode-string*
+  #(
+    ;; #xa0
+    #x00a0 #x0104 #x0112 #x0122 #x012a #x0128 #x0136 #x00a7
+    #x013b #x0110 #x0160 #x0166 #x017d #x00ad #x016a #x014a
+    ;; #xb0
+    #x00b0 #x0105 #x0113 #x0123 #x012b #x0129 #x0137 #x00b7
+    #x013c #x0111 #x0161 #x0167 #x017e #x2015 #x016b #x014b
+    ;; #xc0
+    #x0100 #x00c1 #x00c2 #x00c3 #x00c4 #x00c5 #x00c6 #x012e
+    #x010c #x00c9 #x0118 #x00cb #x0116 #x00cd #x00ce #x00cf
+    ;; #xd0
+    #x00d0 #x0145 #x014c #x00d3 #x00d4 #x00d5 #x00d6 #x0168
+    #x00d8 #x0172 #x00da #x00db #x00dc #x00dd #x00de #x00df
+    ;; #xe0
+    #x0101 #x00e1 #x00e2 #x00e3 #x00e4 #x00e5 #x00e6 #x012f
+    #x010d #x00e9 #x0119 #x00eb #x0117 #x00ed #x00ee #x00ef
+    ;; #xf0
+    #x00f0 #x0146 #x014d #x00f3 #x00f4 #x00f5 #x00f6 #x0169
+    #x00f8 #x0173 #x00fa #x00fb #x00fc #x00fd #x00fe #x0138
+    ))
 
 (define-character-encoding :iso-8859-11
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
@@ -2025,995 +961,163 @@ alphabet."
 
 ;;; There is no iso-8859-12 encoding.
 
-(defstatic *iso-8859-13-to-unicode*
-  #(
-    ;; #xa0
-    #\u+00a0 #\u+201d #\u+00a2 #\u+00a3 #\u+00a4 #\u+201e #\u+00a6 #\u+00a7
-    #\u+00d8 #\u+00a9 #\u+0156 #\u+00ab #\u+00ac #\u+00ad #\u+00ae #\u+00c6
-    ;; #xb0
-    #\u+00b0 #\u+00b1 #\u+00b2 #\u+00b3 #\u+201c #\u+00b5 #\u+00b6 #\u+00b7
-    #\u+00f8 #\u+00b9 #\u+0157 #\u+00bb #\u+00bc #\u+00bd #\u+00be #\u+00e6
-    ;; #xc0
-    #\u+0104 #\u+012e #\u+0100 #\u+0106 #\u+00c4 #\u+00c5 #\u+0118 #\u+0112
-    #\u+010c #\u+00c9 #\u+0179 #\u+0116 #\u+0122 #\u+0136 #\u+012a #\u+013b
-    ;; #xd0
-    #\u+0160 #\u+0143 #\u+0145 #\u+00d3 #\u+014c #\u+00d5 #\u+00d6 #\u+00d7
-    #\u+0172 #\u+0141 #\u+015a #\u+016a #\u+00dc #\u+017b #\u+017d #\u+00df
-    ;; #xe0
-    #\u+0105 #\u+012f #\u+0101 #\u+0107 #\u+00e4 #\u+00e5 #\u+0119 #\u+0113
-    #\u+010d #\u+00e9 #\u+017a #\u+0117 #\u+0123 #\u+0137 #\u+012b #\u+013c
-    ;; #xf0
-    #\u+0161 #\u+0144 #\u+0146 #\u+00f3 #\u+014d #\u+00f5 #\u+00f6 #\u+00f7
-    #\u+0173 #\u+0142 #\u+015b #\u+016b #\u+00fc #\u+017c #\u+017e #\u+2019
-    ))
-
-(defstatic *unicode-a0-180-to-iso-8859-13*
-  #(
-    #xa0 nil #xa2 #xa3 #xa4 nil #xa6 #xa7 ; #xa0-#xa7
-    nil #xa9 nil #xab #xac #xad #xae nil ; #xa8-#xaf
-    #xb0 #xb1 #xb2 #xb3 nil #xb5 #xb6 #xb7 ; #xb0-#xb7
-    nil #xb9 nil #xbb #xbc #xbd #xbe nil ; #xb8-#xbf
-    nil nil nil nil #xc4 #xc5 #xaf nil ; #xc0-#xc7
-    nil #xc9 nil nil nil nil nil nil ; #xc8-#xcf
-    nil nil nil #xd3 nil #xd5 #xd6 #xd7 ; #xd0-#xd7
-    #xa8 nil nil nil #xdc nil nil #xdf ; #xd8-#xdf
-    nil nil nil nil #xe4 #xe5 #xbf nil ; #xe0-#xe7
-    nil #xe9 nil nil nil nil nil nil ; #xe8-#xef
-    nil nil nil #xf3 nil #xf5 #xf6 #xf7 ; #xf0-#xf7
-    #xb8 nil nil nil #xfc nil nil nil ; #xf8-#xff
-    #xc2 #xe2 nil nil #xc0 #xe0 #xc3 #xe3 ; #x100-#x107
-    nil nil nil nil #xc8 #xe8 nil nil ; #x108-#x10f
-    nil nil #xc7 #xe7 nil nil #xcb #xeb ; #x110-#x117
-    #xc6 #xe6 nil nil nil nil nil nil ; #x118-#x11f
-    nil nil #xcc #xec nil nil nil nil ; #x120-#x127
-    nil nil #xce #xee nil nil #xc1 #xe1 ; #x128-#x12f
-    nil nil nil nil nil nil #xcd #xed ; #x130-#x137
-    nil nil nil #xcf #xef nil nil nil ; #x138-#x13f
-    nil #xd9 #xf9 #xd1 #xf1 #xd2 #xf2 nil ; #x140-#x147
-    nil nil nil nil #xd4 #xf4 nil nil ; #x148-#x14f
-    nil nil nil nil nil nil #xaa #xba ; #x150-#x157
-    nil nil #xda #xfa nil nil nil nil ; #x158-#x15f
-    #xd0 #xf0 nil nil nil nil nil nil ; #x160-#x167
-    nil nil #xdb #xfb nil nil nil nil ; #x168-#x16f
-    nil nil #xd8 #xf8 nil nil nil nil ; #x170-#x177
-    nil #xca #xea #xdd #xfd #xde #xfe nil ; #x178-#x17f
-    ))
-
-(defstatic *unicode-2018-2020-to-iso-8859-13*
-  #(
-    nil #xff nil nil #xb4 #xa1 #xa5 nil ; #x2018-#x201f */
-    ))
-
-
-(define-character-encoding :iso-8859-13
+(define-8-bit-fixed-width-encoding :iso-8859-13
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in Baltic
 alphabets."
-
-  :aliases '()
-  :stream-encode-function
-  (nfunction
-   iso-8859-13-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-13*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x2018)
-                            (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-13*
-                              (the fixnum (- code #x2018)))))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-13 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-13-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-13-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-13-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-13*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x2018)
-                            (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-13*
-                              (the fixnum (- code #x2018)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-13 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-13-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-13-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-13-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-13*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x2018)
-                            (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-13*
-                              (the fixnum (- code #x2018)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-13 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-13-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-13-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-14-to-unicode*
+  () 
+  *unicode-to-iso-8859-13-map*
+  *iso-to-8859-13-to-unicode-string*
   #(
     ;; #xa0
-    #\u+00a0 #\u+1e02 #\u+1e03 #\u+00a3 #\u+010a #\u+010b #\u+1e0a #\u+00a7
-    #\u+1e80 #\u+00a9 #\u+1e82 #\u+1e0b #\u+1ef2 #\u+00ad #\u+00ae #\u+0178
+    #x00a0 #x201d #x00a2 #x00a3 #x00a4 #x201e #x00a6 #x00a7
+    #x00d8 #x00a9 #x0156 #x00ab #x00ac #x00ad #x00ae #x00c6
     ;; #xb0
-    #\u+1e1e #\u+1e1f #\u+0120 #\u+0121 #\u+1e40 #\u+1e41 #\u+00b6 #\u+1e56
-    #\u+1e81 #\u+1e57 #\u+1e83 #\u+1e60 #\u+1ef3 #\u+1e84 #\u+1e85 #\u+1e61
+    #x00b0 #x00b1 #x00b2 #x00b3 #x201c #x00b5 #x00b6 #x00b7
+    #x00f8 #x00b9 #x0157 #x00bb #x00bc #x00bd #x00be #x00e6
     ;; #xc0
-    #\u+00c0 #\u+00c1 #\u+00c2 #\u+00c3 #\u+00c4 #\u+00c5 #\u+00c6 #\u+00c7
-    #\u+00c8 #\u+00c9 #\u+00ca #\u+00cb #\u+00cc #\u+00cd #\u+00ce #\u+00cf
+    #x0104 #x012e #x0100 #x0106 #x00c4 #x00c5 #x0118 #x0112
+    #x010c #x00c9 #x0179 #x0116 #x0122 #x0136 #x012a #x013b
     ;; #xd0
-    #\u+0174 #\u+00d1 #\u+00d2 #\u+00d3 #\u+00d4 #\u+00d5 #\u+00d6 #\u+1e6a
-    #\u+00d8 #\u+00d9 #\u+00da #\u+00db #\u+00dc #\u+00dd #\u+0176 #\u+00df
+    #x0160 #x0143 #x0145 #x00d3 #x014c #x00d5 #x00d6 #x00d7
+    #x0172 #x0141 #x015a #x016a #x00dc #x017b #x017d #x00df
     ;; #xe0
-    #\u+00e0 #\u+00e1 #\u+00e2 #\u+00e3 #\u+00e4 #\u+00e5 #\u+00e6 #\u+00e7
-    #\u+00e8 #\u+00e9 #\u+00ea #\u+00eb #\u+00ec #\u+00ed #\u+00ee #\u+00ef
+    #x0105 #x012f #x0101 #x0107 #x00e4 #x00e5 #x0119 #x0113
+    #x010d #x00e9 #x017a #x0117 #x0123 #x0137 #x012b #x013c
     ;; #xf0
-    #\u+0175 #\u+00f1 #\u+00f2 #\u+00f3 #\u+00f4 #\u+00f5 #\u+00f6 #\u+1e6b
-    #\u+00f8 #\u+00f9 #\u+00fa #\u+00fb #\u+00fc #\u+00fd #\u+0177 #\u+00ff
+    #x0161 #x0144 #x0146 #x00f3 #x014d #x00f5 #x00f6 #x00f7
+    #x0173 #x0142 #x015b #x016b #x00fc #x017c #x017e #x2019
     ))
 
-(defstatic *unicode-a0-100-to-iso-8859-14*
-  #(
-    #xa0 nil nil #xa3 nil nil nil #xa7  ; #xa0-#xa7
-    nil #xa9 nil nil nil #xad #xae nil  ; #xa8-#xaf
-    nil nil nil nil nil nil #xb6 nil    ; #xb0-#xb7
-    nil nil nil nil nil nil nil nil     ; #xb8-#xbf
-    #xc0 #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 #xc7 ; #xc0-#xc7
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #xc8-#xcf
-    nil #xd1 #xd2 #xd3 #xd4 #xd5 #xd6 nil ; #xd0-#xd7
-    #xd8 #xd9 #xda #xdb #xdc #xdd nil #xdf ; #xd8-#xdf
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #xe0-#xe7
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #xe8-#xef
-    nil #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 nil ; #xf0-#xf7
-    #xf8 #xf9 #xfa #xfb #xfc #xfd nil #xff ; #xf8-#xff
-    ))
-
-(defstatic *unicode-108-128-to-iso-8859-14*
-  #(
-    nil nil #xa4 #xa5 nil nil nil nil   ; #x108-#x10f
-    nil nil nil nil nil nil nil nil     ; #x110-#x117
-    nil nil nil nil nil nil nil nil     ; #x118-#x11f
-    #xb2 #xb3 nil nil nil nil nil nil   ; #x120-#x127
-    ))
-
-(defstatic *unicode-170-180-to-iso-8859-14*
-  #(
-    nil nil nil nil #xd0 #xf0 #xde #xfe ; #x170-#x177
-    #xaf nil nil nil nil nil nil nil    ; #x178-#x17f
-    ))    
-
-(defstatic *unicode-1e00-1e88-to-iso-8859-14*
-  #(
-    nil nil #xa1 #xa2 nil nil nil nil   ; #x1e00-#x1e07
-    nil nil #xa6 #xab nil nil nil nil   ; #x1e08-#x1e0f
-    nil nil nil nil nil nil nil nil     ; #x1e10-#x1e17
-    nil nil nil nil nil nil #xb0 #xb1   ; #x1e18-#x1e1f
-    nil nil nil nil nil nil nil nil     ; #x1e20-#x1e27
-    nil nil nil nil nil nil nil nil     ; #x1e28-#x1e2f
-    nil nil nil nil nil nil nil nil     ; #x1e30-#x1e37
-    nil nil nil nil nil nil nil nil     ; #x1e38-#x1e3f
-    #xb4 #xb5 nil nil nil nil nil nil   ; #x1e40-#x1e47
-    nil nil nil nil nil nil nil nil     ; #x1e48-#x1e4f
-    nil nil nil nil nil nil #xb7 #xb9   ; #x1e50-#x1e57
-    nil nil nil nil nil nil nil nil     ; #x1e58-#x1e5f
-    #xbb #xbf nil nil nil nil nil nil   ; #x1e60-#x1e67
-    nil nil #xd7 #xf7 nil nil nil nil   ; #x1e68-#x1e6f
-    nil nil nil nil nil nil nil nil     ; #x1e70-#x1e77
-    nil nil nil nil nil nil nil nil     ; #x1e78-#x1e7f
-    #xa8 #xb8 #xaa #xba #xbd #xbe nil nil ; #x1e80-#x1e87
-    ))
-
-(defstatic *unicode-1ef0-1ef8-to-iso-8859-14*
-  #(
-    nil nil #xac #xbc nil nil nil nil   ; #x1ef0-#x1ef7
-    ))
-
-(define-character-encoding :iso-8859-14
+(define-8-bit-fixed-width-encoding :iso-8859-14
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in Celtic
 languages."
-  :aliases '(:iso_8859-14 :iso-ir-199 :latin8 :l8 :iso-celtic)
-  :stream-encode-function
-  (nfunction
-   iso-8859-14-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-14*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x108) (< code #x128))
-                       (svref *unicode-108-128-to-iso-8859-14*
-                              (the fixnum (- code #x108))))
-                      ((and (>= code #x170) (< code #x180))
-                       (svref *unicode-170-180-to-iso-8859-14*
-                              (the fixnum (- code #x170))))
-                      ((and (>= code #x1e00) (< code #x1e88))
-                       (svref *unicode-1e00-1e88-to-iso-8859-14*
-                              (the fixnum (- code #x1e00))))
-                      ((and (>= code #x1ef0) (< code #x1ef8))
-                       (svref *unicode-1ef0-1ef8-to-iso-8859-14*
-                              (the fixnum (- code #x1ef0)))))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-14 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-14-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-14-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-14-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-14*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x108) (< code #x128))
-                       (svref *unicode-108-128-to-iso-8859-14*
-                              (the fixnum (- code #x108))))
-                      ((and (>= code #x170) (< code #x180))
-                       (svref *unicode-170-180-to-iso-8859-14*
-                              (the fixnum (- code #x170))))
-                      ((and (>= code #x1e00) (< code #x1e88))
-                       (svref *unicode-1e00-1e88-to-iso-8859-14*
-                              (the fixnum (- code #x1e00))))
-                      ((and (>= code #x1ef0) (< code #x1ef8))
-                       (svref *unicode-1ef0-1ef8-to-iso-8859-14*
-                              (the fixnum (- code #x1ef0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-14 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-14-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-14-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-14-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-14*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x108) (< code #x128))
-                       (svref *unicode-108-128-to-iso-8859-14*
-                              (the fixnum (- code #x108))))
-                      ((and (>= code #x170) (< code #x180))
-                       (svref *unicode-170-180-to-iso-8859-14*
-                              (the fixnum (- code #x170))))
-                      ((and (>= code #x1e00) (< code #x1e88))
-                       (svref *unicode-1e00-1e88-to-iso-8859-14*
-                              (the fixnum (- code #x1e00))))
-                      ((and (>= code #x1ef0) (< code #x1ef8))
-                       (svref *unicode-1ef0-1ef8-to-iso-8859-14*
-                              (the fixnum (- code #x1ef0)))))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-14 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-14-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-14-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-15-to-unicode*
+  (:iso_8859-14 :iso-ir-199 :latin8 :l8 :iso-celtic)
+  *unicode-to-iso-8859-14-map*
+  *iso-to-8859-14-to-unicode-string*
   #(
     ;; #xa0
-    #\u+00a0 #\u+00a1 #\u+00a2 #\u+00a3 #\u+20ac #\u+00a5 #\u+0160 #\u+00a7
-    #\u+0161 #\u+00a9 #\u+00aa #\u+00ab #\u+00ac #\u+00ad #\u+00ae #\u+00af
+    #x00a0 #x1e02 #x1e03 #x00a3 #x010a #x010b #x1e0a #x00a7
+    #x1e80 #x00a9 #x1e82 #x1e0b #x1ef2 #x00ad #x00ae #x0178
     ;; #xb0
-    #\u+00b0 #\u+00b1 #\u+00b2 #\u+00b3 #\u+017d #\u+00b5 #\u+00b6 #\u+00b7
-    #\u+017e #\u+00b9 #\u+00ba #\u+00bb #\u+0152 #\u+0153 #\u+0178 #\u+00bf
+    #x1e1e #x1e1f #x0120 #x0121 #x1e40 #x1e41 #x00b6 #x1e56
+    #x1e81 #x1e57 #x1e83 #x1e60 #x1ef3 #x1e84 #x1e85 #x1e61
     ;; #xc0
-    #\u+00c0 #\u+00c1 #\u+00c2 #\u+00c3 #\u+00c4 #\u+00c5 #\u+00c6 #\u+00c7 
-    ;; #xc8
-    #\u+00c8 #\u+00c9 #\u+00ca #\u+00cb #\u+00cc #\u+00cd #\u+00ce #\u+00cf 
+    #x00c0 #x00c1 #x00c2 #x00c3 #x00c4 #x00c5 #x00c6 #x00c7
+    #x00c8 #x00c9 #x00ca #x00cb #x00cc #x00cd #x00ce #x00cf
     ;; #xd0
-    #\u+00d0 #\u+00d1 #\u+00d2 #\u+00d3 #\u+00d4 #\u+00d5 #\u+00d6 #\u+00d7 
-    ;; #xd8
-    #\u+00d8 #\u+00d9 #\u+00da #\u+00db #\u+00dc #\u+00dd #\u+00de #\u+00df 
+    #x0174 #x00d1 #x00d2 #x00d3 #x00d4 #x00d5 #x00d6 #x1e6a
+    #x00d8 #x00d9 #x00da #x00db #x00dc #x00dd #x0176 #x00df
     ;; #xe0
-    #\u+00e0 #\u+00e1 #\u+00e2 #\u+00e3 #\u+00e4 #\u+00e5 #\u+00e6 #\u+00e7 
-    ;; #xe8
-    #\u+00e8 #\u+00e9 #\u+00ea #\u+00eb #\u+00ec #\u+00ed #\u+00ee #\u+00ef 
+    #x00e0 #x00e1 #x00e2 #x00e3 #x00e4 #x00e5 #x00e6 #x00e7
+    #x00e8 #x00e9 #x00ea #x00eb #x00ec #x00ed #x00ee #x00ef
     ;; #xf0
-    #\u+00f0 #\u+00f1 #\u+00f2 #\u+00f3 #\u+00f4 #\u+00f5 #\u+00f6 #\u+00f7 
-    ;; #xf8
-    #\u+00f8 #\u+00f9 #\u+00fa #\u+00fb #\u+00fc #\u+00fd #\u+00fe #\u+00ff 
+    #x0175 #x00f1 #x00f2 #x00f3 #x00f4 #x00f5 #x00f6 #x1e6b
+    #x00f8 #x00f9 #x00fa #x00fb #x00fc #x00fd #x0177 #x00ff
     ))
 
-(defstatic *unicode-a0-100-to-iso-8859-15*
-  #(
-    #xa0 #xa1 #xa2 #xa3 nil #xa5 nil #xa7 ; #xa0-#xa7
-    nil #xa9 #xaa #xab #xac #xad #xae #xaf ; #xa8-#xaf
-    #xb0 #xb1 #xb2 #xb3 nil #xb5 #xb6 #xb7 ; #xb0-#xb7
-    nil #xb9 #xba #xbb nil nil nil #xbf ; #xb8-0xbf
-    #xc0 #xc1 #xc2 #xc3 #xc4 #xc5 #xc6 #xc7 ; #xc0-#xc7
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #xc8-#xcf
-    #xd0 #xd1 #xd2 #xd3 #xd4 #xd5 #xd6 #xd7 ; #xd0-#xd7
-    #xd8 #xd9 #xda #xdb #xdc #xdd #xde #xdf ; #xd8-#xdf
-    #xe0 #xe1 #xe2 #xe3 #xe4 #xe5 #xe6 #xe7 ; #xe0-#xe7
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #xe8-#xef
-    #xf0 #xf1 #xf2 #xf3 #xf4 #xf5 #xf6 #xf7 ; #xf0-#xf7
-    #xf8 #xf9 #xfa #xfb #xfc #xfd #xfe #xff ; #xf8-#xff
-    ))
-
-(defstatic *unicode-150-180-to-iso-8859-15*
-  #(
-    nil nil #xbc #xbd nil nil nil nil   ; #x150-#x157
-    nil nil nil nil nil nil nil nil     ; #x158-#x15f
-    #xa6 #xa8 nil nil nil nil nil nil   ; #x160-#x167
-    nil nil nil nil nil nil nil nil     ; #x168-#x16f
-    nil nil nil nil nil nil nil nil     ; #x170-#x177
-    #xbe nil nil nil nil #xb4 #xb8 nil  ; #x178-#x17f
-    ))
-
-(define-character-encoding :iso-8859-15
+(define-8-bit-fixed-width-encoding :iso-8859-15
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
-character values.  Intended to provide most characters found in Western
-European languages (including the Euro sign and some other characters
-missing from ISO-8859-1."
-  :aliases '(:iso_8859-15 :latin9)
-  :stream-encode-function
-  (nfunction
-   iso-8859-15-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-15*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x150) (< code #x180))
-                       (svref *unicode-150-180-to-iso-8859-15*
-                              (the fixnum (- code #x150))))
-                      ((= code #x20ac) #xa4))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-15 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-15-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-15-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-15-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-15*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x150) (< code #x180))
-                       (svref *unicode-150-180-to-iso-8859-15*
-                              (the fixnum (- code #x150))))
-                      ((= code #x20ac) #xa4))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-15 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-15-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-15-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-15-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x100)
-                       (svref *unicode-a0-100-to-iso-8859-15*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x150) (< code #x180))
-                       (svref *unicode-150-180-to-iso-8859-15*
-                              (the fixnum (- code #x150))))
-                      ((= code #x20ac) #xa4))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-15 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-15-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-15-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *iso-8859-16-to-unicode*
+character values.  Intended to provide most characters found in
+Western European languages (including the Euro sign and some other
+characters missing from ISO-8859-1.)"
+  (:iso_8859-15 :latin9)
+  *unicode-to-iso-8859-15-map*
+  *iso-to-8859-15-to-unicode-string*
   #(
     ;; #xa0
-    #\u+00a0 #\u+0104 #\u+0105 #\u+0141 #\u+20ac #\u+201e #\u+0160 #\u+00a7
-    #\u+0161 #\u+00a9 #\u+0218 #\u+00ab #\u+0179 #\u+00ad #\u+017a #\u+017b
+    #x00a0 #x00a1 #x00a2 #x00a3 #x20ac #x00a5 #x0160 #x00a7
+    #x0161 #x00a9 #x00aa #x00ab #x00ac #x00ad #x00ae #x00af
     ;; #xb0
-    #\u+00b0 #\u+00b1 #\u+010c #\u+0142 #\u+017d #\u+201d #\u+00b6 #\u+00b7
-    #\u+017e #\u+010d #\u+0219 #\u+00bb #\u+0152 #\u+0153 #\u+0178 #\u+017c
+    #x00b0 #x00b1 #x00b2 #x00b3 #x017d #x00b5 #x00b6 #x00b7
+    #x017e #x00b9 #x00ba #x00bb #x0152 #x0153 #x0178 #x00bf
     ;; #xc0
-    #\u+00c0 #\u+00c1 #\u+00c2 #\u+0102 #\u+00c4 #\u+0106 #\u+00c6 #\u+00c7
-    #\u+00c8 #\u+00c9 #\u+00ca #\u+00cb #\u+00cc #\u+00cd #\u+00ce #\u+00cf
+    #x00c0 #x00c1 #x00c2 #x00c3 #x00c4 #x00c5 #x00c6 #x00c7 
+    ;; #xc8
+    #x00c8 #x00c9 #x00ca #x00cb #x00cc #x00cd #x00ce #x00cf 
     ;; #xd0
-    #\u+0110 #\u+0143 #\u+00d2 #\u+00d3 #\u+00d4 #\u+0150 #\u+00d6 #\u+015a
-    #\u+0170 #\u+00d9 #\u+00da #\u+00db #\u+00dc #\u+0118 #\u+021a #\u+00df
+    #x00d0 #x00d1 #x00d2 #x00d3 #x00d4 #x00d5 #x00d6 #x00d7 
+    ;; #xd8
+    #x00d8 #x00d9 #x00da #x00db #x00dc #x00dd #x00de #x00df 
     ;; #xe0
-    #\u+00e0 #\u+00e1 #\u+00e2 #\u+0103 #\u+00e4 #\u+0107 #\u+00e6 #\u+00e7
-    #\u+00e8 #\u+00e9 #\u+00ea #\u+00eb #\u+00ec #\u+00ed #\u+00ee #\u+00ef
+    #x00e0 #x00e1 #x00e2 #x00e3 #x00e4 #x00e5 #x00e6 #x00e7 
+    ;; #xe8
+    #x00e8 #x00e9 #x00ea #x00eb #x00ec #x00ed #x00ee #x00ef 
     ;; #xf0
-    #\u+0111 #\u+0144 #\u+00f2 #\u+00f3 #\u+00f4 #\u+0151 #\u+00f6 #\u+015b
-    #\u+0171 #\u+00f9 #\u+00fa #\u+00fb #\u+00fc #\u+0119 #\u+021b #\u+00ff
+    #x00f0 #x00f1 #x00f2 #x00f3 #x00f4 #x00f5 #x00f6 #x00f7 
+    ;; #xf8
+    #x00f8 #x00f9 #x00fa #x00fb #x00fc #x00fd #x00fe #x00ff 
     ))
 
-(defstatic *unicode-a0-180-to-iso-8859-16*
-  #(
-    #xa0 nil nil nil nil nil nil #xa7   ; #xa0-#xa7 
-    nil #xa9 nil #xab nil #xad nil nil  ; #xa8-#xaf 
-    #xb0 #xb1 nil nil nil nil #xb6 #xb7 ; #xb0-#xb7 
-    nil nil nil #xbb nil nil nil nil    ; #xb8-#xbf 
-    #xc0 #xc1 #xc2 nil #xc4 nil #xc6 #xc7 ; #xc0-#xc7 
-    #xc8 #xc9 #xca #xcb #xcc #xcd #xce #xcf ; #xc8-#xcf 
-    nil nil #xd2 #xd3 #xd4 nil #xd6 nil ; #xd0-#xd7 
-    nil #xd9 #xda #xdb #xdc nil nil #xdf ; #xd8-#xdf 
-    #xe0 #xe1 #xe2 nil #xe4 nil #xe6 #xe7 ; #xe0-#xe7 
-    #xe8 #xe9 #xea #xeb #xec #xed #xee #xef ; #xe8-#xef 
-    nil nil #xf2 #xf3 #xf4 nil #xf6 nil ; #xf0-#xf7 
-    nil #xf9 #xfa #xfb #xfc nil nil #xff ; #xf8-#xff 
-    nil nil #xc3 #xe3 #xa1 #xa2 #xc5 #xe5 ; #x100-#x107 
-    nil nil nil nil #xb2 #xb9 nil nil   ; #x108-#x10f 
-    #xd0 #xf0 nil nil nil nil nil nil   ; #x110-#x117 
-    #xdd #xfd nil nil nil nil nil nil   ; #x118-#x11f 
-    nil nil nil nil nil nil nil nil     ; #x120-#x127 
-    nil nil nil nil nil nil nil nil     ; #x128-#x12f 
-    nil nil nil nil nil nil nil nil     ; #x130-#x137 
-    nil nil nil nil nil nil nil nil     ; #x138-#x13f 
-    nil #xa3 #xb3 #xd1 #xf1 nil nil nil ; #x140-#x147 
-    nil nil nil nil nil nil nil nil     ; #x148-#x14f 
-    #xd5 #xf5 #xbc #xbd nil nil nil nil ; #x150-#x157 
-    nil nil #xd7 #xf7 nil nil nil nil   ; #x158-#x15f 
-    #xa6 #xa8 nil nil nil nil nil nil   ; #x160-#x167 
-    nil nil nil nil nil nil nil nil     ; #x168-#x16f 
-    #xd8 #xf8 nil nil nil nil nil nil   ; #x170-#x177 
-    #xbe #xac #xae #xaf #xbf #xb4 #xb8 nil ; #x178-#x17f 
-    ))
-
-(defstatic *unicode-218-220-to-iso-8859-16*
-  #(
-    #xaa #xba #xde #xfe nil nil nil nil ; #x218-#x21f
-    ))
-
-(defstatic *unicode-2018-2020-to-iso-8859-16*
-  #(
-    nil nil nil nil nil #xb5 #xa5 nil   ; #x2018-#x201f
-    ))
-  
-
-(define-character-encoding :iso-8859-16
+(define-8-bit-fixed-width-encoding :iso-8859-16
     "An 8-bit, fixed-width character encoding in which codes #x00-#x9f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Intended to provide most characters found in Southeast
 European languages."
-  :aliases '(:iso_8859-16 :latin10 :l1 :iso-ir-226)
-  :stream-encode-function
-  (nfunction
-   iso-8859-16-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-16*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x218) (< code #x220))
-                       (svref *unicode-218-220-to-iso-8859-16*
-                              (the fixnum (- code #x218))))
-                      ((and (>= code #x2018) (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-16*
-                              (the fixnum (- code #x2018))))
-                      ((= code #x20ac) #xa4))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :iso-8859-16 (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   iso-8859-16-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #xa0)
-       (code-char 1st-unit)
-       (svref *iso-8859-16-to-unicode* (the fixnum (- 1st-unit #xa0))))))
-  :vector-encode-function
-  (nfunction
-   iso-8859-16-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-16*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x218) (< code #x220))
-                       (svref *unicode-218-220-to-iso-8859-16*
-                              (the fixnum (- code #x218))))
-                      ((and (>= code #x2018) (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-16*
-                              (the fixnum (- code #x2018))))
-                      ((= code #x20ac) #xa4))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :iso-8859-16 (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   iso-8859-16-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-16-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :memory-encode-function
-  (nfunction
-   iso-8859-16-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #xa0) code)
-                      ((< code #x180)
-                       (svref *unicode-a0-180-to-iso-8859-16*
-                              (the fixnum (- code #xa0))))
-                      ((and (>= code #x218) (< code #x220))
-                       (svref *unicode-218-220-to-iso-8859-16*
-                              (the fixnum (- code #x218))))
-                      ((and (>= code #x2018) (< code #x2020))
-                       (svref *unicode-2018-2020-to-iso-8859-16*
-                              (the fixnum (- code #x2018))))
-                      ((= code #x20ac) #xa4))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :iso-8859-16 (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   iso-8859-16-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #xa0)
-                 (code-char 1st-unit)
-                 (svref *iso-8859-16-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #xa0
-  :encode-literal-char-code-limit #xa0  
-  )
-
-(defstatic *macintosh-to-unicode*
+  (:iso_8859-16 :latin10 :l1 :iso-ir-226)
+  *unicode-to-iso-8859-16-map*
+  *iso-to-8859-16-to-unicode-string*
   #(
-    ;; #x80 
-    #\u+00c4 #\u+00c5 #\u+00c7 #\u+00c9 #\u+00d1 #\u+00d6 #\u+00dc #\u+00e1
-    #\u+00e0 #\u+00e2 #\u+00e4 #\u+00e3 #\u+00e5 #\u+00e7 #\u+00e9 #\u+00e8
-    ;; #x90 
-    #\u+00ea #\u+00eb #\u+00ed #\u+00ec #\u+00ee #\u+00ef #\u+00f1 #\u+00f3
-    #\u+00f2 #\u+00f4 #\u+00f6 #\u+00f5 #\u+00fa #\u+00f9 #\u+00fb #\u+00fc
-    ;; #xa0 
-    #\u+2020 #\u+00b0 #\u+00a2 #\u+00a3 #\u+00a7 #\u+2022 #\u+00b6 #\u+00df
-    #\u+00ae #\u+00a9 #\u+2122 #\u+00b4 #\u+00a8 #\u+2260 #\u+00c6 #\u+00d8
-    ;; #xb0 
-    #\u+221e #\u+00b1 #\u+2264 #\u+2265 #\u+00a5 #\u+00b5 #\u+2202 #\u+2211
-    #\u+220f #\u+03c0 #\u+222b #\u+00aa #\u+00ba #\u+2126 #\u+00e6 #\u+00f8
-    ;; #xc0 
-    #\u+00bf #\u+00a1 #\u+00ac #\u+221a #\u+0192 #\u+2248 #\u+2206 #\u+00ab
-    #\u+00bb #\u+2026 #\u+00a0 #\u+00c0 #\u+00c3 #\u+00d5 #\u+0152 #\u+0153
-    ;; #xd0 
-    #\u+2013 #\u+2014 #\u+201c #\u+201d #\u+2018 #\u+2019 #\u+00f7 #\u+25ca
-    #\u+00ff #\u+0178 #\u+2044 #\u+00a4 #\u+2039 #\u+203a #\u+fb01 #\u+fb02
-    ;; #xe0 
-    #\u+2021 #\u+00b7 #\u+201a #\u+201e #\u+2030 #\u+00c2 #\u+00ca #\u+00c1
-    #\u+00cb #\u+00c8 #\u+00cd #\u+00ce #\u+00cf #\u+00cc #\u+00d3 #\u+00d4
-    ;; #xf0 
-    #\u+f8ff #\u+00d2 #\u+00da #\u+00db #\u+00d9 #\u+0131 #\u+02c6 #\u+02dc
-    #\u+00af #\u+02d8 #\u+02d9 #\u+02da #\u+00b8 #\u+02dd #\u+02db #\u+02c7
+    ;; #xa0
+    #x00a0 #x0104 #x0105 #x0141 #x20ac #x201e #x0160 #x00a7
+    #x0161 #x00a9 #x0218 #x00ab #x0179 #x00ad #x017a #x017b
+    ;; #xb0
+    #x00b0 #x00b1 #x010c #x0142 #x017d #x201d #x00b6 #x00b7
+    #x017e #x010d #x0219 #x00bb #x0152 #x0153 #x0178 #x017c
+    ;; #xc0
+    #x00c0 #x00c1 #x00c2 #x0102 #x00c4 #x0106 #x00c6 #x00c7
+    #x00c8 #x00c9 #x00ca #x00cb #x00cc #x00cd #x00ce #x00cf
+    ;; #xd0
+    #x0110 #x0143 #x00d2 #x00d3 #x00d4 #x0150 #x00d6 #x015a
+    #x0170 #x00d9 #x00da #x00db #x00dc #x0118 #x021a #x00df
+    ;; #xe0
+    #x00e0 #x00e1 #x00e2 #x0103 #x00e4 #x0107 #x00e6 #x00e7
+    #x00e8 #x00e9 #x00ea #x00eb #x00ec #x00ed #x00ee #x00ef
+    ;; #xf0
+    #x0111 #x0144 #x00f2 #x00f3 #x00f4 #x0151 #x00f6 #x015b
+    #x0171 #x00f9 #x00fa #x00fb #x00fc #x0119 #x021b #x00ff
     ))
 
-
-(defstatic *unicode-a0-100-to-macintosh*
-  #(
-    #xca #xc1 #xa2 #xa3 #xdb #xb4 nil #xa4 ; #xa0-#xa7 
-    #xac #xa9 #xbb #xc7 #xc2 nil #xa8 #xf8 ; #xa8-#xaf 
-    #xa1 #xb1 nil nil #xab #xb5 #xa6 #xe1 ; #xb0-#xb7 
-    #xfc nil #xbc #xc8 nil nil nil #xc0 ; #xb8-#xbf 
-    #xcb #xe7 #xe5 #xcc #x80 #x81 #xae #x82 ; #xc0-#xc7 
-    #xe9 #x83 #xe6 #xe8 #xed #xea #xeb #xec ; #xc8-#xcf 
-    nil #x84 #xf1 #xee #xef #xcd #x85 nil ; #xd0-#xd7 
-    #xaf #xf4 #xf2 #xf3 #x86 nil nil #xa7 ; #xd8-#xdf 
-    #x88 #x87 #x89 #x8b #x8a #x8c #xbe #x8d ; #xe0-#xe7 
-    #x8f #x8e #x90 #x91 #x93 #x92 #x94 #x95 ; #xe8-#xef 
-    nil #x96 #x98 #x97 #x99 #x9b #x9a #xd6 ; #xf0-#xf7 
-    #xbf #x9d #x9c #x9e #x9f nil nil #xd8 ; #xf8-#xff 
-    ))
-
-(defstatic *unicode-130-198-to-macintosh*
-  #(
-    nil #xf5 nil nil nil nil nil nil ; #x130-#x137 
-    nil nil nil nil nil nil nil nil ; #x138-#x13f 
-    nil nil nil nil nil nil nil nil ; #x140-#x147 
-    nil nil nil nil nil nil nil nil ; #x148-#x14f 
-    nil nil #xce #xcf nil nil nil nil ; #x150-#x157 
-    nil nil nil nil nil nil nil nil ; #x158-#x15f 
-    nil nil nil nil nil nil nil nil ; #x160-#x167 
-    nil nil nil nil nil nil nil nil ; #x168-#x16f 
-    nil nil nil nil nil nil nil nil ; #x170-#x177 
-    #xd9 nil nil nil nil nil nil nil ; #x178-#x17f 
-    nil nil nil nil nil nil nil nil ; #x180-#x187 
-    nil nil nil nil nil nil nil nil ; #x188-#x18f 
-    nil nil #xc4 nil nil nil nil nil ; #x190-#x197 
-    ))
-
-(defstatic *unicode-2c0-2e0-to-macintosh*
-  #(
-    nil nil nil nil nil nil #xf6 #xff   ; #x2c0-#x2c7 
-    nil nil nil nil nil nil nil nil     ; #x2c8-#x2cf 
-    nil nil nil nil nil nil nil nil     ; #x2d0-#x2d7 
-    #xf9 #xfa #xfb #xfe #xf7 #xfd nil nil ; #x2d8-#x2df 
-    ))
-
-(defstatic *unicode-2010-2048-to-macintosh*
-  #(
-  nil nil nil #xd0 #xd1 nil nil nil ; #x2010-#x2017 
-  #xd4 #xd5 #xe2 nil #xd2 #xd3 #xe3 nil ; #x2018-#x201f 
-  #xa0 #xe0 #xa5 nil nil nil #xc9 nil ; #x2020-#x2027 
-  nil nil nil nil nil nil nil nil ; #x2028-#x202f 
-  #xe4 nil nil nil nil nil nil nil ; #x2030-#x2037 
-  nil #xdc #xdd nil nil nil nil nil ; #x2038-#x203f 
-  nil nil nil nil #xda nil nil nil ; #x2040-#x2047 
-    ))
-
-(defstatic *unicode-2120-2128-to-macintosh*
-  #(
-    nil nil #xaa nil nil nil #xbd nil   ; #x2120-#x2127
-    ))
-
-(defstatic *unicode-2200-2268-to-macintosh*
-  #(
-    nil nil #xb6 nil nil nil #xc6 nil   ; #x2200-#x2207 
-    nil nil nil nil nil nil nil #xb8    ; #x2208-#x220f 
-    nil #xb7 nil nil nil nil nil nil    ; #x2210-#x2217 
-    nil nil #xc3 nil nil nil #xb0 nil   ; #x2218-#x221f 
-    nil nil nil nil nil nil nil nil     ; #x2220-#x2227 
-    nil nil nil #xba nil nil nil nil    ; #x2228-#x222f 
-    nil nil nil nil nil nil nil nil     ; #x2230-#x2237 
-    nil nil nil nil nil nil nil nil     ; #x2238-#x223f 
-    nil nil nil nil nil nil nil nil     ; #x2240-#x2247 
-    #xc5 nil nil nil nil nil nil nil    ; #x2248-#x224f 
-    nil nil nil nil nil nil nil nil     ; #x2250-#x2257 
-    nil nil nil nil nil nil nil nil     ; #x2258-#x225f 
-    #xad nil nil nil #xb2 #xb3 nil nil  ; #x2260-#x2267 
-    ))
-
-(defstatic *unicode-fb00-fb08-to-macintosh*
-  #(
-    nil #xde #xdf nil nil nil nil nil ; #xfb00-#xfb07
-    ))
-
-(define-character-encoding :macintosh
+(define-8-bit-fixed-width-encoding :macintosh
     "An 8-bit, fixed-width character encoding in which codes #x00-#x7f
 map to their Unicode equivalents and other codes map to other Unicode
 character values.  Traditionally used on Classic MacOS to encode characters
 used in western languages."
-  :aliases '(:macos-roman :macosroman :mac-roman :macroman)
+  (:macos-roman :macosroman :mac-roman :macroman)
+  *unicode-to-macintosh-map*
+  *macintosh-to-unicode-string*
+  #(
+    ;; #x80 
+    #x00c4 #x00c5 #x00c7 #x00c9 #x00d1 #x00d6 #x00dc #x00e1
+    #x00e0 #x00e2 #x00e4 #x00e3 #x00e5 #x00e7 #x00e9 #x00e8
+    ;; #x90 
+    #x00ea #x00eb #x00ed #x00ec #x00ee #x00ef #x00f1 #x00f3
+    #x00f2 #x00f4 #x00f6 #x00f5 #x00fa #x00f9 #x00fb #x00fc
+    ;; #xa0 
+    #x2020 #x00b0 #x00a2 #x00a3 #x00a7 #x2022 #x00b6 #x00df
+    #x00ae #x00a9 #x2122 #x00b4 #x00a8 #x2260 #x00c6 #x00d8
+    ;; #xb0 
+    #x221e #x00b1 #x2264 #x2265 #x00a5 #x00b5 #x2202 #x2211
+    #x220f #x03c0 #x222b #x00aa #x00ba #x2126 #x00e6 #x00f8
+    ;; #xc0 
+    #x00bf #x00a1 #x00ac #x221a #x0192 #x2248 #x2206 #x00ab
+    #x00bb #x2026 #x00a0 #x00c0 #x00c3 #x00d5 #x0152 #x0153
+    ;; #xd0 
+    #x2013 #x2014 #x201c #x201d #x2018 #x2019 #x00f7 #x25ca
+    #x00ff #x0178 #x2044 #x00a4 #x2039 #x203a #xfb01 #xfb02
+    ;; #xe0 
+    #x2021 #x00b7 #x201a #x201e #x2030 #x00c2 #x00ca #x00c1
+    #x00cb #x00c8 #x00cd #x00ce #x00cf #x00cc #x00d3 #x00d4
+    ;; #xf0 
+    #xf8ff #x00d2 #x00da #x00db #x00d9 #x0131 #x02c6 #x02dc
+    #x00af #x02d8 #x02d9 #x02da #x00b8 #x02dd #x02db #x02c7
+    )
+  #x80)
 
-  :stream-encode-function
-  (nfunction
-   macintosh-stream-encode
-   (lambda (char write-function stream)
-     (let* ((code (char-code char))
-            (c2 (cond ((< code #x80) code)
-                      ((and (>= code #xa0) (< code #x100)
-                       (svref *unicode-a0-100-to-macintosh*
-                              (the fixnum (- code #xa0)))))
-                      ((and (>= code #x130) (< code #x198))
-                       (svref *unicode-130-198-to-macintosh*
-                              (the fixnum (- code #x130))))
-                      ((and (>= code #x2c0) (< code #x2e0))
-                       (svref *unicode-2c0-2e0-to-macintosh*
-                              (the fixnum (- code #x2c0))))
-                      ((= code #x3c0) #xb9)
-                      ((and (>= code #x2010) (< code #x2048))
-                       (svref *unicode-2010-2048-to-macintosh*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x2120) (< code #x2128))
-                       (svref *unicode-2120-2128-to-macintosh*
-                              (the fixnum (- code #x2120))))
-                      ((and (>= code #x2200) (< code #x2268))
-                       (svref *unicode-2200-2268-to-macintosh*
-                              (the fixnum (- code #x2200))))
-                      ((= code #x25ca) #xd7)
-                      ((and (>= code #xfb00) (< code #xfb08))
-                       (svref *unicode-fb00-fb08-to-macintosh*
-                              (the fixnum (- code #xfb00))))
-                      ((= code #xf8ff) #xf0))))
-       (declare (type (mod #x110000) code))
-       (funcall write-function stream (or c2 (note-encoding-problem char stream :macintosh (char-code #\Sub))))
-       1)))
-  :stream-decode-function
-  (nfunction
-   macintosh-stream-decode
-   (lambda (1st-unit next-unit-function stream)
-     (declare (ignore next-unit-function stream)
-              (type (unsigned-byte 8) 1st-unit))
-     (if (< 1st-unit #x80)
-       (code-char 1st-unit)
-       (svref *macintosh-to-unicode* (the fixnum (- 1st-unit #x80))))))
-  :vector-encode-function
-  (nfunction
-   macintosh-vector-encode
-   (lambda (string vector idx start end)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector)
-              (fixnum idx))
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-            (c2 (cond ((< code #x80) code)
-                      ((and (>= code #xa0) (< code #x100)
-                       (svref *unicode-a0-100-to-macintosh*
-                              (the fixnum (- code #xa0)))))
-                      ((and (>= code #x130) (< code #x198))
-                       (svref *unicode-130-198-to-macintosh*
-                              (the fixnum (- code #x130))))
-                      ((and (>= code #x2c0) (< code #x2e0))
-                       (svref *unicode-2c0-2e0-to-macintosh*
-                              (the fixnum (- code #x2c0))))
-                      ((= code #x3c0) #xb9)
-                      ((and (>= code #x2010) (< code #x2048))
-                       (svref *unicode-2010-2048-to-macintosh*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x2120) (< code #x2128))
-                       (svref *unicode-2120-2128-to-macintosh*
-                              (the fixnum (- code #x2120))))
-                      ((and (>= code #x2200) (< code #x2268))
-                       (svref *unicode-2200-2268-to-macintosh*
-                              (the fixnum (- code #x2200))))
-                      ((= code #x25ca) #xd7)
-                      ((and (>= code #xfb00) (< code #xfb08))
-                       (svref *unicode-fb00-fb08-to-macintosh*
-                              (the fixnum (- code #xfb00))))
-                      ((= code #xf8ff) #xf0))))
-         (declare (type (mod #x110000) code))
-         (setf (aref vector idx) (or c2 (note-encoding-problem char vector :macintosh (char-code #\Sub))))
-         (incf idx)))))
-  :vector-decode-function
-  (nfunction
-   macintosh-vector-decode
-   (lambda (vector idx noctets string)
-     (declare (type (simple-array (unsigned-byte 8) (*)) vector))
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (aref vector index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #x80)
-                 (code-char 1st-unit)
-                 (svref *macintosh-to-unicode* (the fixnum (- 1st-unit #x80)))))))))
-  :memory-encode-function
-  (nfunction
-   macintosh-memory-encode
-   (lambda (string pointer idx start end)
-     (do* ((i start (1+ i)))
-          ((>= i end) idx)
-       (let* ((char (schar string i))
-              (code (char-code char))
-              (c2 (cond ((< code #x80) code)
-                      ((and (>= code #xa0) (< code #x100)
-                       (svref *unicode-a0-100-to-macintosh*
-                              (the fixnum (- code #xa0)))))
-                      ((and (>= code #x130) (< code #x198))
-                       (svref *unicode-130-198-to-macintosh*
-                              (the fixnum (- code #x130))))
-                      ((and (>= code #x2c0) (< code #x2e0))
-                       (svref *unicode-2c0-2e0-to-macintosh*
-                              (the fixnum (- code #x2c0))))
-                      ((= code #x3c0) #xb9)
-                      ((and (>= code #x2010) (< code #x2048))
-                       (svref *unicode-2010-2048-to-macintosh*
-                              (the fixnum (- code #x2010))))
-                      ((and (>= code #x2120) (< code #x2128))
-                       (svref *unicode-2120-2128-to-macintosh*
-                              (the fixnum (- code #x2120))))
-                      ((and (>= code #x2200) (< code #x2268))
-                       (svref *unicode-2200-2268-to-macintosh*
-                              (the fixnum (- code #x2200))))
-                      ((= code #x25ca) #xd7)
-                      ((and (>= code #xfb00) (< code #xfb08))
-                       (svref *unicode-fb00-fb08-to-macintosh*
-                              (the fixnum (- code #xfb00))))
-                      ((= code #xf8ff) #xf0))))
-         (declare (type (mod #x110000) code))
-         (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer :macintosh (char-code #\Sub))))
-         (incf idx)))))
-  :memory-decode-function
-  (nfunction
-   macintosh-memory-decode
-   (lambda (pointer noctets idx string)
-     (do* ((i 0 (1+ i))
-           (index idx (1+ index)))
-          ((>= i noctets) index)
-       (let* ((1st-unit (%get-unsigned-byte pointer index)))
-         (declare (type (unsigned-byte 8) 1st-unit))
-         (setf (schar string i)
-               (if (< 1st-unit #x80)
-                 (code-char 1st-unit)
-                 (svref *macintosh-to-unicode* (the fixnum (- 1st-unit #xa0)))))))))
-  :octets-in-string-function
-  #'8-bit-fixed-width-octets-in-string
-  :length-of-vector-encoding-function
-  #'8-bit-fixed-width-length-of-vector-encoding
-  :length-of-memory-encoding-function 
-  #'8-bit-fixed-width-length-of-memory-encoding
-  :decode-literal-code-unit-limit #x80
-  :encode-literal-char-code-limit #x80  
-  )
 
 
 ;;; UTF-8.  Decoding checks for malformed sequences; it might be faster (and
