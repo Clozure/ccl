@@ -3460,10 +3460,294 @@ _spentry(misc_alloc)
 /* on exit and return  */
 /* Deprecated */        
 _spentry(poweropen_ffcallX)
-_spentry(macro_bind)
-_spentry(destructuring_bind)
-_spentry(destructuring_bind_inner)
         .long 0x7c800008        /* debug trap */
+
+
+/* Destructuring-bind, macro-bind.  */
+   
+/* OK to use arg_x, arg_y for whatever (tagged) purpose;  */
+/* likewise immX regs.  */
+/* arg_z preserved, nothing else in particular defined on exit.  */
+/* nargs contains req count (0-255) in PPC bits mask_req_start/mask_req_width,  */
+/* opt count (0-255) in PPC bits mask_opt_start/mask_opt_width,  */
+/* key count (0-255) in PPC bits mask_key_start/mask_key_width,  */
+/* opt-supplied-p flag in PPC bit mask_initopt,  */
+/* keyp flag in PPC bit mask_keyp,  */
+/* &allow-other-keys flag in PPC bit mask_aok,  */
+/* &rest flag in PPC bit mask_restp.  */
+/* When mask_keyp bit is set, keyvect contains vector of keyword symbols,  */
+/* length key count.  */
+
+_spentry(macro_bind)
+        __ifdef(`PPC64')
+ 	 __(mr whole_reg,arg_reg)
+	 __(extract_fulltag(imm0,arg_reg))
+         __(cmpri(cr1,arg_reg,nil_value))
+	 __(cmpri(cr0,imm0,fulltag_cons))
+         __(beq cr1,0f)
+	 __(bne- cr0,1f)
+0:             
+	 __(_cdr(arg_reg,arg_reg))
+	 __(b local_label(destbind1))
+        __else
+	 __(mr whole_reg,arg_reg)
+	 __(extract_lisptag(imm0,arg_reg))
+	 __(cmpri(cr0,imm0,tag_list))
+	 __(bne- cr0,1f)
+	 __(_cdr(arg_reg,arg_reg))
+	 __(b (local_label(destbind1)))
+        __endif
+1:
+	__(li arg_y,XCALLNOMATCH)
+	__(mr arg_z,whole_reg)
+	__(set_nargs(2))
+	__(b _SPksignalerr)
+
+
+_spentry(destructuring_bind)
+	__(mr whole_reg,arg_reg)
+        __(b local_label(destbind1))
+	
+_spentry(destructuring_bind_inner)
+	__(mr whole_reg,arg_z)
+local_label(destbind1): 
+	/* Extract required arg count.  */
+	/* A bug in gas: can't handle shift count of "32" (= 0  */
+	ifelse(eval(mask_req_width+mask_req_start),eval(32),`
+	__(clrlwi. imm0,nargs,mask_req_start)
+	',`
+	__(extrwi. imm0,nargs,mask_req_width,mask_req_start)
+	')
+	__(extrwi imm1,nargs,mask_opt_width,mask_opt_start)
+	__(rlwinm imm2,nargs,0,mask_initopt,mask_initopt)
+	__(rlwinm imm4,nargs,0,mask_keyp,mask_keyp)
+	__(cmpri(cr4,imm4,0))
+	__(rlwinm imm4,nargs,0,mask_restp,mask_restp)
+	__(cmpri(cr5,imm4,0))
+	__(cmpri(cr1,imm1,0))
+	__(cmpri(cr2,imm2,0))
+	/* Save entry vsp in case of error.  */
+	__(mr imm4,vsp)
+	__(beq cr0,2f)
+1:
+	__(cmpri(cr7,arg_reg,nil_value))
+        __ifdef(`PPC64')
+         __(extract_fulltag(imm3,arg_reg))
+         __(cmpri(cr3,imm3,fulltag_cons))
+        __else       
+	 __(extract_lisptag(imm3,arg_reg))
+	 __(cmpri(cr3,imm3,tag_list))
+        __endif
+	__(subi imm0,imm0,1)
+	__(cmpri(cr0,imm0,0))
+	__(beq cr7,toofew)
+	__(bne cr3,badlist)
+	__(ldr(arg_x,cons.car(arg_reg)))
+	__(ldr(arg_reg,cons.cdr(arg_reg)))
+	__(vpush(arg_x))
+	__(bne cr0,1b)
+2:
+	__(beq cr1,rest_keys)
+	__(bne cr2,opt_supp)
+	/* 'simple' &optionals:	 no supplied-p, default to nil.  */
+simple_opt_loop:
+	__(cmpri(cr0,arg_reg,nil_value))
+        __ifdef(`PPC64')
+         __(extract_fulltag(imm3,arg_reg))
+         __(cmpri(cr3,imm3,fulltag_cons))
+        __else
+	 __(extract_lisptag(imm3,arg_reg))
+	 __(cmpri(cr3,imm3,tag_list))
+        __endif
+	__(subi imm1,imm1,1)
+	__(cmpri(cr1,imm1,0))
+	__(li imm5,nil_value)
+	__(beq cr0,default_simple_opt)
+	__(bne cr3,badlist)
+	__(ldr(arg_x,cons.car(arg_reg)))
+	__(ldr(arg_reg,cons.cdr(arg_reg)))
+	__(vpush(arg_x))
+	__(bne cr1,simple_opt_loop)
+	__(b rest_keys)
+default_simple_opt_loop:
+	__(subi imm1,imm1,1)
+	__(cmpri(cr1,imm1,0))
+default_simple_opt:
+	__(vpush(imm5))
+	__(bne cr1,default_simple_opt_loop)
+	__(b rest_keys)
+	/* Provide supplied-p vars for the &optionals.  */
+opt_supp:
+	__(li arg_y,t_value)
+opt_supp_loop:
+	__(cmpri(cr0,arg_reg,nil_value))
+        __ifdef(`PPC64')
+         __(extract_fulltag(imm3,arg_reg))
+         __(cmpri(cr3,imm3,fulltag_cons))
+        __else        
+	 __(extract_lisptag(imm3,arg_reg))
+	 __(cmpri(cr3,imm3,tag_list))
+        __endif
+	__(subi imm1,imm1,1)
+	__(cmpri(cr1,imm1,0))
+	__(beq cr0,default_hard_opt)
+	__(bne cr3,badlist)
+	__(ldr(arg_x,cons.car(arg_reg)))
+	__(ldr(arg_reg,cons.cdr(arg_reg)))
+	__(vpush(arg_x))
+	__(vpush(arg_y))
+	__(bne cr1,opt_supp_loop)
+	__(b rest_keys)
+default_hard_opt_loop:
+	__(subi imm1,imm1,1)
+	__(cmpri(cr1,imm1,0))
+default_hard_opt:
+	__(vpush(imm5))
+	__(vpush(imm5))
+	__(bne cr1,default_hard_opt_loop)
+rest_keys:
+	__(cmpri(cr0,arg_reg,nil_value))
+	__(bne cr5,have_rest)
+	__(bne cr4,have_keys)
+	__(bne cr0,toomany)
+	__(blr)
+have_rest:
+	__(vpush(arg_reg))
+	__(beqlr cr4)
+have_keys:
+	/* Ensure that arg_reg contains a proper,even-length list.  */
+	/* Insist that its length is <= 512 (as a cheap circularity check.)  */
+	__(li imm0,256)
+	__(mr arg_x,arg_reg)
+count_keys_loop:
+        __ifdef(`PPC64')
+         __(extract_fulltag(imm3,arg_x))
+         __(cmpri(cr3,imm3,fulltag_cons))
+        __else
+	 __(extract_lisptag(imm3,arg_x))
+	 __(cmpri(cr3,imm3,tag_list))
+        __endif
+	__(cmpri(cr0,arg_x,nil_value))
+	__(subi imm0,imm0,1)
+	__(cmpri(cr4,imm0,0))
+	__(beq cr0,counted_keys)
+	__(bne cr3,badlist)
+	__(ldr(arg_x,cons.cdr(arg_x)))
+        __ifdef(`PPC64')
+         __(extract_fulltag(imm3,arg_x))
+         __(cmpri(cr3,imm3,fulltag_cons))
+        __else
+	 __(extract_lisptag(imm3,arg_x))
+	 __(cmpri(cr3,imm3,tag_list))
+        __endif
+	__(blt cr4,toomany)
+	__(cmpri(cr0,arg_x,nil_value))
+	__(beq cr0,db_badkeys)
+	__(bne cr3,badlist)
+	__(ldr(arg_x,cons.cdr(arg_x)))
+	__(b count_keys_loop)
+counted_keys:
+	/* We've got a proper, even-length list of key/value pairs in */
+	/* arg_reg. For each keyword var in the lambda-list, push a pair */
+	/* of NILs on the vstack.  */
+	__(extrwi. imm0,nargs,mask_key_width,mask_key_start )
+	__(mr imm2,imm0) 	/* save number of keys  */
+	__(li imm5,nil_value)
+	__(b push_pair_test)
+push_pair_loop:
+	__(cmpri(cr0,imm0,1))
+	__(subi imm0,imm0,1)
+	__(vpush(imm5))
+	__(vpush(imm5))
+push_pair_test:
+	__(bne cr0,push_pair_loop)
+	__(slwi imm2,imm2,dnode_shift)  /* pairs -> bytes  */
+	__(add imm2,vsp,imm2)		/* imm2 points below pairs  */
+	__(li imm0,0)			/* count unknown keywords so far  */
+	__(extrwi imm1,nargs,1,mask_aok) /* unknown keywords allowed  */
+	__(extrwi nargs,nargs,mask_key_width,mask_key_start)
+	/* Now, for each keyword/value pair in the list  */
+	/*  a) if the keyword is found in the keyword vector, set the  */
+	/*     corresponding entry on the vstack to the value and the  */
+	/*     associated supplied-p var to T.  */
+	/*  b) Regardless of whether or not the keyword is found,  */
+        /*     if :ALLOW-OTHER-KEYS is provided with a non-nil value, */
+	/*     set the low bit of imm1 to indicate that unknown keywords  */
+	/*     are acceptable. (This bit is pre-set above to the value */
+        /*     the encoded value of &allow_other_keys.) */
+	/*  c) If the keyword is not found (and isn't :ALLOW-OTHER-KEYS), increment  */
+	/*     the count of unknown keywords in the high bits of imm1*/
+	/* At the end of the list, signal an error if any unknown keywords were seen  */
+	/* but not allowed.  Otherwise, return.  */
+
+match_keys_loop:
+	__(cmpri(cr0,arg_reg,nil_value))
+	__(li imm0,0)
+	__(li imm3,misc_data_offset)
+	__(beq cr0,matched_keys)
+	__(ldr(arg_x,cons.car(arg_reg)))
+	__(li arg_y,nrs.kallowotherkeys)
+	__(cmpr(cr3,arg_x,arg_y))	/* :ALLOW-OTHER-KEYS ?  */
+	__(ldr(arg_reg,cons.cdr(arg_reg)))
+	__(ldr(arg_y,cons.car(arg_reg)))
+	__(cmpr(cr4,imm0,nargs))
+	__(ldr(arg_reg,cons.cdr(arg_reg)))
+	__(b match_test)
+match_loop:
+	__(ldrx(temp0,keyvect_reg,imm3))
+	__(cmpr(cr0,arg_x,temp0))
+	__(addi imm0,imm0,1)
+	__(cmpr(cr4,imm0,nargs))
+	__(addi imm3,imm3,node_size)
+	__(bne cr0,match_test)
+	/* Got a hit.  Unless this keyword's been seen already, set it.  */
+	__(slwi imm0,imm0,dnode_shift)
+	__(subf imm0,imm0,imm2)
+	__(ldr(temp0,0(imm0)))
+	__(cmpri(cr0,temp0,nil_value))
+	__(li temp0,t_value)
+	__(bne cr0,match_keys_loop)	/* already saw this  */
+	__(str(arg_y,node_size*1(imm0)))
+	__(str(temp0,node_size*0(imm0)))
+        __(bne cr3,match_keys_loop)
+	__(b match_keys_check_aok)
+match_test:
+	__(bne cr4,match_loop)
+        __(beq cr3,match_keys_check_aok)
+        __(addi imm1,imm1,node_size)
+        __(b match_keys_loop)
+match_keys_check_aok:
+        __(andi. imm0,imm1,2)  /* check "seen-aok" bit in imm1 */
+        __(cmpri cr1,arg_y,nil_value) /* check value */
+        __(ori imm1,imm1,2)
+        __(bne cr0,match_keys_loop) /* duplicate aok */
+        __(beq cr1,match_keys_loop)
+        __(ori imm1,imm1,1)
+	__(b match_keys_loop)
+matched_keys:
+        __(clrrwi. imm0,imm1,2)
+        __(beqlr)
+        __(andi. imm1,imm1,1)
+        __(bnelr)
+	/* Some unrecognized keywords.  Complain generically about  */
+	/* invalid keywords.  */
+db_badkeys:
+	__(li arg_y,XBADKEYS)
+	__(b destructure_error)
+toomany:
+	__(li arg_y,XCALLTOOMANY)
+	__(b destructure_error)
+toofew:
+	__(li arg_y,XCALLTOOFEW)
+	__(b destructure_error)
+badlist:
+	__(li arg_y,XCALLNOMATCH)
+	/* b destructure_error  */
+destructure_error:
+	__(mr vsp,imm4)		/* undo everything done to the stack  */
+	__(mr arg_z,whole_reg)
+	__(set_nargs(2))
+	__(b _SPksignalerr)
         
 /* vpush the values in the value set atop the vsp, incrementing nargs.  */
 /* Discard the tsp frame; leave values atop the vsp.  */
