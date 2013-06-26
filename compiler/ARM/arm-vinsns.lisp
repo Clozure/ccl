@@ -43,7 +43,7 @@
   (:word header)
   (:code))
 
-(define-arm-vinsn (pop-nvfprs :push :multiple :doubleword :csp :predicatable)
+(define-arm-vinsn (pop-nvfprs :pop :multiple :doubleword :csp :predicatable)
     (()
      ((n :u16const))
      ((d7 (:double-float #.arm::d7))))
@@ -2055,15 +2055,23 @@
                                             ((label :label)))
   (b label))
 
+(define-arm-vinsn lock-constant-pool (()
+                                      ())
+  (:lock-constant-pool))
+
+(define-arm-vinsn unlock-constant-pool (()
+                                      ())
+  (:unlock-constant-pool))
 
 (define-arm-vinsn (skip-unless-fixnum-in-range :branch)
     (((idx :u32))
      ((reg :imm)
       (minval :s32const)
       (maxval :u32const)
+
+
       (default :label))
      ((temp :s32)))
-  (:drain-constant-pool)
   (tst reg (:$ arm::fixnummask))
   (mov idx (:asr reg (:$  arm::fixnumshift)))
   (bne default)

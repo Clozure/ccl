@@ -1705,7 +1705,7 @@
                    (if (>= diff-in-bytes 0)
                      (set-field-value insn (byte 1 23) 1)
                      (setq diff-in-bytes (- diff-in-bytes)))
-                   (when (> (integer-length diff-in-bytes) 12)
+                   (when (> (integer-length diff-in-bytes) (if (eq reftype :fpmem) 10 12))
                      (error "PC-relative displacement can't be encoded."))
                    (if (eq reftype :fpmem)
                      (set-field-value insn (byte 8 0) (ash diff-in-bytes -2))

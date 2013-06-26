@@ -35,7 +35,7 @@
 (defparameter *arm2-half-fixnum-type* '(signed-byte 29))
 (defparameter *arm2-target-half-fixnum-type* nil)
 (defparameter *arm2-operator-supports-u8-target* ())
-
+(defparameter *arm2-autodrain-constant-pool* ())
 
 
 
@@ -438,6 +438,7 @@
            (*arm2-vcells* (arm2-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
            (*arm2-fcells* (afunc-fcells afunc))
            *arm2-recorded-symbols*
+           (*arm2-autodrain-constant-pool* t)
            (*arm2-emitted-source-notes* '())
            (*arm2-gpr-locations-valid-mask* 0)
            (*arm2-gpr-locations* (make-array 16 :initial-element nil))
@@ -5382,8 +5383,8 @@
                  (:word (let* ((val (parse-operand-form (cadr f))))
                           (expand-insn-form (list (cons (ldb (byte 16 16) val)
                                                         (ldb (byte 16 0) val))))))
-                 (:drain-constant-pool
-                  (arm-drain-constant-pool code data t))
+                 (:lock-constant-pool (setq *arm2-autodrain-constant-pool* nil))
+                 (:unlock-constant-pool (setq *arm2-autodrain-constant-pool* t))
                  (t
                   
                   (let* ((insn (arm::make-lap-instruction nil))
@@ -5402,7 +5403,8 @@
                     ;; If we just emitted an unconditional control transfer
                     ;; and we have data in the constant pool, drain the pool.
                     (when (and (eql current code)
-                               (not (eq (dll-header-succ data) data)))
+                               (not (eq (dll-header-succ data) data))
+                               *arm2-autodrain-constant-pool*)
                       (let* ((high (arm::lap-instruction-opcode-high insn)))
                         (declare (type (unsigned-byte 16) high))
                         (when (>= high #xe000)
@@ -6600,6 +6602,7 @@
                        (single-clause (and (eql count span)
                                            (eql (length labeled-trueforms) 1))))
                   (let* ((reg (arm2-one-untargeted-reg-form seg (make-acode (%nx1-operator lexical-reference) var) arm::arg_z)))
+                    (! lock-constant-pool)
                     (with-imm-target () (idx :u32)
                       (! skip-unless-fixnum-in-range idx reg min span  (aref *backend-labels* defaultlabel))
 
@@ -6610,6 +6613,7 @@
                           (declare (fixnum val))
                           (let* ((info (assoc val all)))
                             (! non-barrier-jump (aref *backend-labels* (if info (cadr info) defaultlabel))))))
+                      (! unlock-constant-pool)
                       (let* ((target (if (arm2-mvpass-p xfer)
                                        (logior $backend-mvpass-mask endlabel)
                                        (arm2-cd-merge xfer endlabel)))
@@ -7972,10 +7976,12 @@
   (let* ((tag-label (backend-get-next-label))
          (mv-pass (arm2-mv-p xfer)))
     (arm2-one-targeted-reg-form seg tag ($ arm::arg_z))
+    (! lock-constant-pool)
     (if mv-pass
       (! mkcatchmv)
       (! mkcatch1v))
     (! non-barrier-jump (aref *backend-labels* tag-label))
+    (! unlock-constant-pool)
     (arm2-open-undo)
     (if mv-pass
       (arm2-multiple-value-body seg valform)  
@@ -8517,6 +8523,7 @@
          (protform-label (backend-get-next-label))
          (old-stack (arm2-encode-stack))
          (ilevel '*interrupt-level*))
+    (! lock-constant-pool)
     (! nmkunwind)
     (arm2-open-undo $undointerruptlevel)
     (arm2-new-vstack-lcell :special-value *arm2-target-lcell-size* 0 ilevel)
@@ -8525,6 +8532,7 @@
     (arm2-adjust-vstack (* 3 *arm2-target-node-size*))    
     (! non-barrier-jump (aref *backend-labels* cleanup-label))
     (-> protform-label)
+    (! unlock-constant-pool)
     (@ cleanup-label)
     (let* ((*arm2-vstack* *arm2-vstack*)
            (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
@@ -8553,10 +8561,12 @@
          (protform-label (backend-get-next-label))
          (old-stack (arm2-encode-stack)))
     (arm2-two-targeted-reg-forms seg symbols ($ arm::arg_y) values ($ arm::arg_z))
+    (! lock-constant-pool)
     (! progvsave)                       ;creates an unwind-protect
     (arm2-open-undo $undostkblk)
     (! non-barrier-jump (aref *backend-labels* cleanup-label))
     (-> protform-label)
+    (! unlock-constant-pool)
     (@ cleanup-label)
     (! progvrestore)
     (arm2-open-undo)

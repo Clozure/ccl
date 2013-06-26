@@ -140,31 +140,88 @@
                      (%make-code-executable code-vector))
       constants-vector)))
 
-;;; This can be called as a result of a :DRAIN-CONSTANT-POOL directive
-;;; or at the end of a function. In either case, it shouldn't be possible
-;;; for code to reach the point where the constants are appended to
-;;; the primary section.
-(defun arm-drain-constant-pool (primary constants &optional force)
-  (let* ((constants-size (arm::section-size constants)))
-    (unless (= constants-size 0)
-      (let* ((force-label-name (when force (gensym))))
-        (when force
-          (arm::assemble-instruction primary `(b ,force-label-name)))
-        (when (logtest 7 (arm::section-size primary))
-          (arm::assemble-instruction primary '(nop)))
-        (let* ((marker (arm::make-lap-instruction nil))
-               (code-count (arm::make-lap-instruction nil))
-               (constant-count (arm::make-lap-instruction nil)))
-          (arm::emit-lap-instruction-element marker primary)
-          (arm::emit-lap-instruction-element code-count primary)
-          (arm::set-field-value code-count (byte 32 0) (ash (arm::section-size primary) -2))
-          (arm::emit-lap-instruction-element constant-count primary)
-          (arm::set-field-value constant-count (byte 32 0) (ash (arm::section-size constants) -2))
-          (do-dll-nodes (element constants)
-            (remove-dll-node element)
-            (arm::emit-lap-instruction-element element primary))
-          (when force (arm::emit-lap-label primary force-label-name))
-          t)))))
+;;; Iterate until the constants pool is empty or until all constant references
+;;; would be "near enough" to the constants that they reference if the
+;;; constants that they reference were appended to the primary section.
+;;; If a referenced constant is too far away from the point of reference,
+;;; embed the constant in the code right after the reference and jump
+;;; around it, then adjust element addresses and try again.
+;;; This assumes that each constant is referenced exactly once.
+(defun arm-drain-constant-pool (primary constants)
+  (loop
+    (when (eq (dll-header-first constants) constants)
+      (return))
+    (let* ((primary-size (arm::section-size primary))
+           (label-offset (+ primary-size 12 (if (logtest 7 primary-size) 4 0))))
+      (collect ((data-label-offsets))
+        (do-dll-nodes (node constants)
+          (if (typep node 'arm::lap-label)
+            (data-label-offsets (cons node label-offset))
+            (incf label-offset (arm::instruction-element-size node))))
+        (let* ((tentative-data-labels (data-label-offsets))
+               (first-outlier nil))
+          (dolist (pair tentative-data-labels)
+            (destructuring-bind (label . tentative-addr) pair
+              (unless (dolist (ref (arm::lap-label-refs label) t)
+                        (destructuring-bind (insn . type) ref
+                          (let* ((insn-addr (arm::instruction-element-address insn)))
+                            (when (> (- tentative-addr insn-addr)
+                                     (ecase type
+                                       (:mem12 4095)
+                                       (:fpmem 1023)))
+                              (setq first-outlier label)
+                              (return nil)))))
+                        (return nil))))
+            (cond ((not first-outlier)
+                   (when (logtest 7 primary-size)
+                     (arm::assemble-instruction primary '(nop)))
+                   (let* ((marker (arm::make-lap-instruction nil))
+                          (code-count (arm::make-lap-instruction nil))
+                          (constant-count (arm::make-lap-instruction nil)))
+                     (arm::emit-lap-instruction-element marker primary)
+                     (arm::emit-lap-instruction-element code-count primary)
+                     (arm::set-field-value code-count (byte 32 0) (ash (arm::section-size primary) -2))
+                     (arm::emit-lap-instruction-element constant-count primary)
+                     (arm::set-field-value constant-count (byte 32 0) (ash (arm::section-size constants) -2))
+                     (do-dll-nodes (element constants)
+                       (remove-dll-node element)
+                       (arm::emit-lap-instruction-element element primary))
+                     (return t)))
+                  (t (let* ((ref (caar (arm::lap-label-refs first-outlier)))
+                            (trailing-instructions (make-dll-header))
+                            (next (arm::lap-instruction-succ ref))
+                            (last (dll-header-last primary))
+                            (after-data-label-name (gensym)))
+                       (remove-dll-node-list next last)
+                       (insert-dll-node-after next trailing-instructions last)
+                       (arm::assemble-instruction primary `(b ,after-data-label-name))
+                       (when (logtest 7 (arm::section-size primary))
+                         (arm::assemble-instruction primary '(nop)))
+                       (let* ((marker (arm::make-lap-instruction nil))
+                              (code-count (arm::make-lap-instruction nil))
+                              (constant-count (arm::make-lap-instruction nil))
+                              (constant-bytes 0)
+                              (node first-outlier)
+                              (succ (dll-node-succ node)))
+                         (arm::emit-lap-instruction-element marker primary)
+                         (arm::emit-lap-instruction-element code-count primary)
+                         (arm::set-field-value code-count (byte 32 0) (ash (arm::section-size primary) -2))
+                         (arm::emit-lap-instruction-element constant-count primary)
+                         (loop
+                           (remove-dll-node node)
+                           (arm::emit-lap-instruction-element node primary)
+                           (incf constant-bytes (arm::instruction-element-size node))
+                           (if (or (eq succ constants)
+                                   (typep succ 'arm::lap-label))
+                             (return)
+                             (setq node succ
+                                   succ (dll-node-succ node))))
+                         (arm::set-field-value constant-count (byte 32 0) (ash constant-bytes -2))
+                         (arm::emit-lap-label primary after-data-label-name)
+                         (arm::set-element-addresses 0 constants)
+                         (arm::set-element-addresses (arm::section-size primary) trailing-instructions)
+                         (remove-dll-node-list next last)
+                         (insert-dll-node-after next (dll-header-last primary) last))))))))))
 
   
 (defun arm-lap-pseudo-op (directive arg current sections)

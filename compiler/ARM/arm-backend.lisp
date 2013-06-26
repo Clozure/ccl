@@ -167,7 +167,7 @@
                                      (mapcar #'simplify-form opvals))
                                (if (keywordp opname)
                                  (ecase opname
-                                   ((:code :data :drain-constant-pool)  form)
+                                   ((:code :data :lock-constant-pool :unlock-constant-pool)  form)
                                    (:word (destructuring-bind (val) opvals
                                             (list opname
                                                   (let* ((p (position val name-list)))

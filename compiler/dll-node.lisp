@@ -61,6 +61,15 @@
           (dll-node-succ node) header
           (dll-node-succ last) node)))
 
+(defun remove-dll-node-list (head tail)
+  (let* ((prev (dll-node-pred head))
+         (after (dll-node-succ tail)))
+    (setf (dll-node-pred after) prev
+          (dll-node-succ prev) after
+          (dll-node-pred head) nil
+          (dll-node-succ tail) nil)))
+
+
 ;;; Splice one or more nodes out of the containing doubly-linked list.
 ;;; Return the first and last nodes in the new chain.
 (defun remove-dll-node (node &optional (count 1))
