@@ -25,10 +25,12 @@
 
 
 
-
 (defun catch-frame-sp (catch)
-  (+ (strip-tag-to-fixnum catch)        ;catch frame is stack-consed
-     arm::catch-frame.element-count))
+  (%stack-block ((ptr arm::node-size))
+    (%set-object ptr 0 catch)           ;catch frame is stack-consed
+    (setf (%get-long ptr) (logandc2 (%get-long ptr) arm::fulltagmask))
+    (+ (%get-object ptr 0)
+       (1+ arm::catch-frame.element-count))))
 
 (defun fake-stack-frame-p (x)
   (and (typep x 'fixnum)
