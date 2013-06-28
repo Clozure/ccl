@@ -933,7 +933,7 @@
   (unless (and (typep i 'fixnum)
                (>= (the fixnum i) 0)
                (< (the fixnum i) (the fixnum (sparse-vector-size sv))))
-    (%err-disp $xarroob sv i))
+    (error "~s is not a valid index for ~s" i sv))
   (locally (declare (fixnum i))
     (let* ((major (ash i -8))
            (table (sparse-vector-table sv))
