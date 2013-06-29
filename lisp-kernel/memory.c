@@ -396,16 +396,6 @@ find_protected_area(BytePtr addr)
 
 
 void
-zero_memory_range(BytePtr start, BytePtr end)
-{
-#ifdef WINDOWS
-  ZeroMemory(start,end-start);
-#else
-  bzero(start,(size_t)(end-start));
-#endif
-}
-
-void
 zero_refbits(bitvector refidx, bitvector refbits, natural ndnodes)
 {
   bitvector refbase = refbits, refword, limit = refbase + ((ndnodes + (WORD_SIZE-1)) >> node_shift), reflimit;
