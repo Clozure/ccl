@@ -222,7 +222,8 @@
           (multiple-value-bind (body decls doc)
                                (parse-body body env t)
             (setq body `((block ,access-fn ,@body)))
-            (let* ((args (gensym))
+            (let* ((ignorable `((declare (ignorable ,@lambda-temps))))
+                   (args (gensym))
                    (dummies (gensym))
                    (newval-vars (gensym))
                    (new-access-form (gensym))
@@ -248,7 +249,9 @@
                                ,dummies
                                (cdr ,access-form)
                                ,newval-vars
-                               `((lambda ,,lambda-list ,,@body)
+                               `((lambda ,,lambda-list
+                                   ,',@ignorable
+                                   ,,@body)
                                  ,@,dummies)
                                ,new-access-form))))))
                  ,@(if doc (list doc))
