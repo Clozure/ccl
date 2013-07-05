@@ -862,12 +862,15 @@
                               (objc-method-info-signature-info ,first-method)))
                             receiver ,selector args))))
               :name `(:objc-dispatch ,name)))
-            (let* ((protocol-pairs (mapcar #'(lambda (pm)
-                                               (cons (lookup-objc-protocol
-                                                      (objc-method-info-class-name pm))
-                                                     (objc-method-info-signature-info
-                                                      pm)))
-                                           (objc-message-info-protocol-methods message-info)))
+            (let* ((protocol-pairs (let* ((pp ()))
+                                     (dolist (pm (objc-message-info-protocol-methods message-info) pp)
+                                       (let* ((protocol (lookup-objc-protocol
+                                                      (objc-method-info-class-name pm))))
+                                         (when protocol
+                                           (push (cons protocol
+                                                       (objc-method-info-signature-info
+                                                      pm))
+                                                 pp))))))
                    (method-pairs (mapcar #'(lambda (group)
                                              (cons (mapcar #'(lambda (m)
                                                                (get-objc-method-info-class m))
