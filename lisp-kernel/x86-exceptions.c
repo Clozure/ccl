@@ -2107,8 +2107,13 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
 
 
-  
-  if ((code & 0x80000000L) == 0) {
+  /* Only try to handle codes which have a "severity" of error 
+     (e.g. have their high 2 bits set) and which don't have bit
+     29 - the "customer" bit - set.
+     (Runtime exceptions generated MS language products have #xE
+     in thier high nibbles.  So much for "reserved for the customer".)
+  */
+  if ((code & 0xF0000000L) != 0xc0000000) {
     return EXCEPTION_CONTINUE_SEARCH;
   } else {
     TCR *tcr = get_interrupt_tcr(false);
