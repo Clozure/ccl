@@ -1,5 +1,5 @@
 ;;; -*- mode: Common-Lisp; Base: 10 ; Syntax: ANSI-Common-Lisp -*-
-;;; This is ASDF 3.0.1: Another System Definition Facility.
+;;; This is ASDF 3.0.2: Another System Definition Facility.
 ;;;
 ;;; Feedback, bug reports, and patches are all welcome:
 ;;; please mail to <asdf-devel@common-lisp.net>.
@@ -70,8 +70,8 @@
            (existing-major-minor (subseq existing-version 0 second-dot))
            (existing-version-number (and existing-version (read-from-string existing-major-minor)))
            (away (format nil "~A-~A" :asdf existing-version)))
-      (when (and existing-version (< existing-version-number
-                                     (or #+abcl 2.25 #+cmu 2.018 #-(or abcl cmu) 2.27)))
+      (when (and existing-version
+                 (< existing-version-number #+abcl 2.25 #+cmu 2.018 #-(or abcl cmu) 2.27))
         (rename-package :asdf away)
         (when *load-verbose*
           (format t "~&; Renamed old ~A package away to ~A~%" :asdf away))))))
@@ -1514,20 +1514,23 @@ or a string describing the format-control of a simple-condition."
 
   (defun os-windows-p ()
     (or #+abcl (featurep :windows)
-        #+(and (not (or unix cygwin darwin)) (or win32 windows mswindows mingw32)) t))
+        #+(and (not (or abcl unix cygwin darwin)) (or win32 windows mswindows mingw32)) t))
 
   (defun os-genera-p ()
     (or #+genera t))
 
+  (defun os-oldmac-p ()
+    (or #+mcl t))
+
   (defun detect-os ()
-    (flet ((yes (yes) (pushnew yes *features*))
-           (no (no) (setf *features* (remove no *features*))))
-      (cond
-        ((os-unix-p) (yes :os-unix) (no :os-windows) (no :genera))
-        ((os-windows-p) (yes :os-windows) (no :os-unix) (no :genera))
-        ((os-genera-p) (no :os-unix) (no :os-windows) (yes :genera))
-        (t (error "Congratulations for trying XCVB on an operating system~%~
-that is neither Unix, nor Windows, nor even Genera.~%Now you port it.")))))
+    (loop* :with o
+           :for (feature . detect) :in '((:os-unix . os-unix-p) (:os-windows . os-windows-p)
+                                         (:genera . os-genera-p) (:os-oldmac . os-oldmac-p))
+           :when (and (not o) (funcall detect)) :do (setf o feature) (pushnew o *features*)
+           :else :do (setf *features* (remove feature *features*))
+           :finally
+           (return (or o (error "Congratulations for trying ASDF on an operating system~%~
+that is neither Unix, nor Windows, nor Genera, nor even old MacOS.~%Now you port it.")))))
 
   (detect-os))
 
@@ -1911,6 +1914,7 @@ then returning the non-empty string value of the variable"
     "Takes arguments like CL:MAKE-PATHNAME in the CLHS, and
    tries hard to make a pathname that will actually behave as documented,
    despite the peculiarities of each implementation"
+    ;; TODO: reimplement defaulting for MCL, whereby an explicit NIL should override the defaults.
     (declare (ignorable host device directory name type version defaults))
     (apply 'make-pathname
            (append
@@ -1986,12 +1990,14 @@ by default *DEFAULT-PATHNAME-DEFAULTS*, which cannot be NIL."
     ;; see also "valid physical pathname host" in the CLHS glossary, that suggests
     ;; strings and lists of strings or :unspecific
     ;; But CMUCL decides to die on NIL.
+    ;; MCL has issues with make-pathname, nil and defaulting
+    (declare (ignorable defaults))
     #.`(make-pathname* :directory nil :name nil :type nil :version nil :device nil
                        :host (or #+cmu lisp::*unix-host*)
                        #+scl ,@'(:scheme nil :scheme-specific-part nil
                                  :username nil :password nil :parameters nil :query nil :fragment nil)
                        ;; the default shouldn't matter, but we really want something physical
-                       :defaults defaults))
+                       #-mcl ,@'(:defaults defaults)))
 
   (defvar *nil-pathname* (nil-pathname (translate-logical-pathname (user-homedir-pathname))))
 
@@ -2259,7 +2265,7 @@ to throw an error if the pathname is absolute"
                  (make-pathname*
                   :directory (unless file-only (cons relative path))
                   :name name :type type
-                  :defaults (or defaults *nil-pathname*))
+                  :defaults (or #-mcl defaults *nil-pathname*))
                  (remove-plist-keys '(:type :dot-dot :defaults) keys))))))
 
   (defun unix-namestring (pathname)
@@ -3143,7 +3149,7 @@ hopefully, if done consistently, that won't affect program behavior too much.")
 and implementation-defined external-format's")
 
   (defun encoding-external-format (encoding)
-    (funcall *encoding-external-format-hook* encoding)))
+    (funcall *encoding-external-format-hook* (or encoding *default-encoding*))))
 
 
 ;;; Safe syntax
@@ -3613,7 +3619,7 @@ This is designed to abstract away the implementation specific quit forms."
     #+gcl (lisp:quit code)
     #+genera (error "You probably don't want to Halt the Machine. (code: ~S)" code)
     #+lispworks (lispworks:quit :status code :confirm nil :return nil :ignore-errors-p t)
-    #+mcl (ccl:quit) ;; or should we use FFI to call libc's exit(3) ?
+    #+mcl (progn code (ccl:quit)) ;; or should we use FFI to call libc's exit(3) ?
     #+mkcl (mk-ext:quit :exit-code code)
     #+sbcl #.(let ((exit (find-symbol* :exit :sb-ext nil))
                    (quit (find-symbol* :quit :sb-ext nil)))
@@ -3627,9 +3633,7 @@ This is designed to abstract away the implementation specific quit forms."
     "Die in error with some error message"
     (with-safe-io-syntax ()
       (ignore-errors
-       (fresh-line *stderr*)
-       (apply #'format *stderr* format arguments)
-       (format! *stderr* "~&")))
+       (format! *stderr* "~&~?~&" format arguments)))
     (quit code))
 
   (defun raw-print-backtrace (&key (stream *debug-io*) count)
@@ -3651,7 +3655,8 @@ This is designed to abstract away the implementation specific quit forms."
     (system::print-backtrace :out stream :limit count)
     #+(or clozure mcl)
     (let ((*debug-io* stream))
-      (ccl:print-call-history :count count :start-frame-number 1)
+      #+clozure (ccl:print-call-history :count count :start-frame-number 1)
+      #+mcl (ccl:print-call-history :detailed-p nil)
       (finish-output stream))
     #+(or cmu scl)
     (let ((debug:*debug-print-level* *print-level*)
@@ -3742,11 +3747,11 @@ This is designed to abstract away the implementation specific quit forms."
     #+(or cmu scl) extensions:*command-line-strings*
     #+ecl (loop :for i :from 0 :below (si:argc) :collect (si:argv i))
     #+gcl si:*command-args*
-    #+genera nil
+    #+(or genera mcl) nil
     #+lispworks sys:*line-arguments-list*
     #+sbcl sb-ext:*posix-argv*
     #+xcl system:*argv*
-    #-(or abcl allegro clisp clozure cmu ecl gcl genera lispworks sbcl scl xcl)
+    #-(or abcl allegro clisp clozure cmu ecl gcl genera lispworks mcl sbcl scl xcl)
     (error "raw-command-line-arguments not implemented yet"))
 
   (defun command-line-arguments (&optional (arguments (raw-command-line-arguments)))
@@ -4139,10 +4144,22 @@ return the exit status code of the process that was called.
 if it was NIL, the output is discarded;
 if it was :INTERACTIVE, the output and the input are inherited from the current process.
 
-Otherwise, the output will be processed by SLURP-INPUT-STREAM,
-using OUTPUT as the first argument, and return whatever it returns,
-e.g. using :OUTPUT :STRING will have it return the entire output stream as a string.
-Use ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT processor."
+Otherwise, OUTPUT should be a value that is a suitable first argument to
+SLURP-INPUT-STREAM.  In this case, RUN-PROGRAM will create a temporary stream
+for the program output.  The program output, in that stream, will be processed
+by SLURP-INPUT-STREAM, according to the using OUTPUT as the first argument.
+RUN-PROGRAM will return whatever SLURP-INPUT-STREAM returns.  E.g., using
+:OUTPUT :STRING will have it return the entire output stream as a string.  Use
+ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT processor."
+
+    ;; TODO: The current version does not honor :OUTPUT NIL on Allegro.  Setting
+    ;; the :INPUT and :OUTPUT arguments to RUN-SHELL-COMMAND on ACL actually do
+    ;; what :OUTPUT :INTERACTIVE is advertised to do here.  To get the behavior
+    ;; specified for :OUTPUT NIL, one would have to grab up the process output
+    ;; into a stream and then throw it on the floor.  The consequences of
+    ;; getting this wrong seemed so much worse than having excess output that it
+    ;; is not currently implemented.
+
     ;; TODO: specially recognize :output pathname ?
     (declare (ignorable ignore-error-status element-type external-format))
     #-(or abcl allegro clisp clozure cmu cormanlisp ecl gcl lispworks mcl sbcl scl xcl)
@@ -4184,7 +4201,8 @@ Use ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT process
                          (excl:run-shell-command
                           #+os-unix (coerce (cons (first command) command) 'vector)
                           #+os-windows command
-                          :input interactive :output (or (and pipe :stream) interactive) :wait wait
+                          :input nil
+                          :output (and pipe :stream) :wait wait
                           #+os-windows :show-window #+os-windows (and (or (null output) pipe) :hide))
                          #+clisp
                          (flet ((run (f &rest args)
@@ -4276,8 +4294,12 @@ Use ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT process
                #+(or abcl xcl) (ext:run-shell-command command)
                #+allegro
                (excl:run-shell-command
-                command :input interactive :output interactive :wait t
-                        #+os-windows :show-window #+os-windows (unless (or interactive (eq output t)) :hide))
+                command
+                :input nil
+                :output nil
+                :error-output :output ; write STDERR to output, too
+                :wait t
+                #+os-windows :show-window #+os-windows (unless (or interactive (eq output t)) :hide))
                #+(or clisp clozure cmu (and lispworks os-unix) sbcl scl)
                (process-result (run-program command :pipe nil :interactive interactive) nil)
                #+ecl (ext:system command)
@@ -4626,7 +4648,7 @@ using READ within a WITH-SAFE-IO-SYNTAX, that represents the warnings currently 
 WITH-COMPILATION-UNIT. One of three functions required for deferred-warnings support in ASDF."
     #+allegro
     (list :functions-defined excl::.functions-defined.
-	  :functions-called excl::.functions-called.)
+          :functions-called excl::.functions-called.)
     #+clozure
     (mapcar 'reify-deferred-warning
             (if-let (dw ccl::*outstanding-deferred-warnings*)
@@ -4668,7 +4690,7 @@ One of three functions required for deferred-warnings support in ASDF."
     (declare (ignorable reified-deferred-warnings))
     #+allegro
     (destructuring-bind (&key functions-defined functions-called)
-			reified-deferred-warnings
+        reified-deferred-warnings
       (setf excl::.functions-defined.
             (append functions-defined excl::.functions-defined.)
             excl::.functions-called.
@@ -4883,7 +4905,7 @@ possibly in a different process. Otherwise just run the BODY."
 
   (defun* (compile-file*) (input-file &rest keys
                                       &key compile-check output-file warnings-file
-                                      #+clisp lib-file #+(or ecl mkcl) object-file
+                                      #+clisp lib-file #+(or ecl mkcl) object-file #+sbcl emit-cfasl
                                       &allow-other-keys)
     "This function provides a portable wrapper around COMPILE-FILE.
 It ensures that the OUTPUT-FILE value is only returned and
@@ -4924,12 +4946,23 @@ it will filter them appropriately."
              (or object-file
                  (compile-file-pathname output-file :fasl-p nil)))
            (tmp-file (tmpize-pathname output-file))
+           #+sbcl
+           (cfasl-file (etypecase emit-cfasl
+                         (null nil)
+                         ((eql t) (make-pathname :type "cfasl" :defaults output-file))
+                         (string (parse-namestring emit-cfasl))
+                         (pathname emit-cfasl)))
+           #+sbcl
+           (tmp-cfasl (when cfasl-file (make-pathname :type "cfasl" :defaults tmp-file)))
            #+clisp
            (tmp-lib (make-pathname :type "lib" :defaults tmp-file)))
       (multiple-value-bind (output-truename warnings-p failure-p)
           (with-saved-deferred-warnings (warnings-file)
             (with-muffled-compiler-conditions ()
-              (or #-(or ecl mkcl) (apply 'compile-file input-file :output-file tmp-file keywords)
+              (or #-(or ecl mkcl)
+                  (apply 'compile-file input-file :output-file tmp-file
+                         #+sbcl (if emit-cfasl (list* :emit-cfasl tmp-cfasl keywords) keywords)
+                         #-sbcl keywords)
                   #+ecl (apply 'compile-file input-file :output-file
                                (if object-file
                                    (list* object-file :system-p t keywords)
@@ -4954,11 +4987,14 @@ it will filter them appropriately."
            (delete-file-if-exists output-file)
            (when output-truename
              #+clisp (when lib-file (rename-file-overwriting-target tmp-lib lib-file))
+             #+sbcl (when cfasl-file (rename-file-overwriting-target tmp-cfasl cfasl-file))
              (rename-file-overwriting-target output-truename output-file)
              (setf output-truename (truename output-file)))
            #+clisp (delete-file-if-exists tmp-lib))
           (t ;; error or failed check
            (delete-file-if-exists output-truename)
+           #+clisp (delete-file-if-exists tmp-lib)
+           #+sbcl (delete-file-if-exists tmp-cfasl)
            (setf output-truename nil)))
         (values output-truename warnings-p failure-p))))
 
@@ -5421,7 +5457,7 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
          ;; "3.4.5.67" would be a development version in the official upstream of 3.4.5.
          ;; "3.4.5.0.8" would be your eighth local modification of official release 3.4.5
          ;; "3.4.5.67.8" would be your eighth local modification of development version 3.4.5.67
-         (asdf-version "3.0.1")
+         (asdf-version "3.0.2")
          (existing-version (asdf-version)))
     (setf *asdf-version* asdf-version)
     (when (and existing-version (not (equal asdf-version existing-version)))
@@ -5439,7 +5475,7 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
              #:find-component ;; find-component
              #:explain #:perform #:perform-with-restarts #:input-files #:output-files ;; action
              #:component-depends-on #:operation-done-p #:component-depends-on
-             #:traverse ;; plan
+             #:traverse ;; backward-interface
              #:operate  ;; operate
              #:parse-component-form ;; defsystem
              #:apply-output-translations ;; output-translations
@@ -6618,17 +6654,26 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 ;;;; Convenience methods
 (with-upgradability ()
   (defmacro define-convenience-action-methods
-      (function (operation component &optional keyp)
-       &key if-no-operation if-no-component operation-initargs)
+      (function formals &key if-no-operation if-no-component operation-initargs)
     (let* ((rest (gensym "REST"))
            (found (gensym "FOUND"))
+           (keyp (equal (last formals) '(&key)))
+           (formals-no-key (if keyp (butlast formals) formals))
+           (len (length formals-no-key))
+           (operation 'operation)
+           (component 'component)
+           (opix (position operation formals))
+           (coix (position component formals))
+           (prefix (subseq formals 0 opix))
+           (suffix (subseq formals (1+ coix) len))
            (more-args (when keyp `(&rest ,rest &key &allow-other-keys))))
+      (assert (and (integerp opix) (integerp coix) (= coix (1+ opix))))
       (flet ((next-method (o c)
                (if keyp
-                   `(apply ',function ,o ,c ,rest)
-                   `(,function ,o ,c))))
+                   `(apply ',function ,@prefix ,o ,c ,@suffix ,rest)
+                   `(,function ,@prefix ,o ,c ,@suffix))))
         `(progn
-           (defmethod ,function ((,operation symbol) ,component ,@more-args)
+           (defmethod ,function (,@prefix (,operation symbol) component ,@suffix ,@more-args)
              (if ,operation
                  ,(next-method
                    (if operation-initargs ;backward-compatibility with ASDF1's operate. Yuck.
@@ -6636,14 +6681,13 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
                        `(make-operation ,operation))
                    `(or (find-component () ,component) ,if-no-component))
                  ,if-no-operation))
-           (defmethod ,function ((,operation operation) ,component ,@more-args)
+           (defmethod ,function (,@prefix (,operation operation) ,component ,@suffix ,@more-args)
              (if (typep ,component 'component)
                  (error "No defined method for ~S on ~/asdf-action:format-action/"
                         ',function (cons ,operation ,component))
-                 (let ((,found (find-component () ,component)))
-                   (if ,found
-                       ,(next-method operation found)
-                       ,if-no-component)))))))))
+                 (if-let (,found (find-component () ,component))
+                    ,(next-method operation found)
+                    ,if-no-component))))))))
 
 
 ;;;; self-description
@@ -6922,15 +6966,14 @@ in some previous image, or T if it needs to be done.")
   (defclass basic-load-op (operation) ())
   (defclass basic-compile-op (operation)
     ((proclamations :initarg :proclamations :accessor compile-op-proclamations :initform nil)
-     (flags :initarg :flags :accessor compile-op-flags
-            :initform nil))))
+     (flags :initarg :flags :accessor compile-op-flags :initform nil))))
 
 ;;; Our default operations: loading into the current lisp image
 (with-upgradability ()
   (defclass prepare-op (upward-operation sideway-operation)
     ((sideway-operation :initform 'load-op)))
   (defclass load-op (basic-load-op downward-operation sideway-operation selfward-operation)
-    ;; NB: even though compile-op depends-on on prepare-op it is not needed-in-image-p,
+    ;; NB: even though compile-op depends on prepare-op it is not needed-in-image-p,
     ;; so we need to directly depend on prepare-op for its side-effects in the current image.
     ((selfward-operation :initform '(prepare-op compile-op))))
   (defclass compile-op (basic-compile-op downward-operation selfward-operation)
@@ -7161,7 +7204,7 @@ in some previous image, or T if it needs to be done.")
    #:visit-dependencies #:compute-action-stamp #:traverse-action
    #:circular-dependency #:circular-dependency-actions
    #:call-while-visiting-action #:while-visiting-action
-   #:traverse #:plan-actions #:perform-plan #:plan-operates-on-p
+   #:make-plan #:plan-actions #:perform-plan #:plan-operates-on-p
    #:planned-p #:index #:forced #:forced-not #:total-action-count
    #:planned-action-count #:planned-output-action-count #:visited-actions
    #:visiting-action-set #:visiting-action-list #:plan-actions-r
@@ -7347,8 +7390,8 @@ the action of OPERATION on COMPONENT in the PLAN"))
            (in-files (input-files o c))
            ;; Three kinds of actions:
            (out-op (and out-files t)) ; those that create files on the filesystem
-                                        ;(image-op (and in-files (null out-files))) ; those that load stuff into the image
-                                        ;(null-op (and (null out-files) (null in-files))) ; dependency placeholders that do nothing
+           ;;(image-op (and in-files (null out-files))) ; those that load stuff into the image
+           ;;(null-op (and (null out-files) (null in-files))) ; placeholders that do nothing
            ;; When was the thing last actually done? (Now, or ask.)
            (op-time (or just-done (component-operation-time o c)))
            ;; Accumulated timestamp from dependencies (or T if forced or out-of-date)
@@ -7467,7 +7510,9 @@ the action of OPERATION on COMPONENT in the PLAN"))
                                  :stamp stamp
                                  :done-p (and done-p (not add-to-plan-p))
                                  :planned-p add-to-plan-p
-                                 :index (if status (action-index status) (incf (plan-total-action-count plan)))))
+                                 :index (if status
+                                            (action-index status)
+                                            (incf (plan-total-action-count plan)))))
                           (when add-to-plan-p
                             (incf (plan-planned-action-count plan))
                             (unless aniip
@@ -7483,6 +7528,8 @@ the action of OPERATION on COMPONENT in the PLAN"))
     ((actions-r :initform nil :accessor plan-actions-r)))
 
   (defgeneric plan-actions (plan))
+  (defmethod plan-actions ((plan list))
+    plan)
   (defmethod plan-actions ((plan sequential-plan))
     (reverse (plan-actions-r plan)))
 
@@ -7499,45 +7546,46 @@ the action of OPERATION on COMPONENT in the PLAN"))
 
 ;;;; high-level interface: traverse, perform-plan, plan-operates-on-p
 (with-upgradability ()
-  (defgeneric* (traverse) (operation component &key &allow-other-keys)
+  (defgeneric make-plan (plan-class operation component &key &allow-other-keys)
     (:documentation
-     "Generate and return a plan for performing OPERATION on COMPONENT.
-
-The plan returned is a list of dotted-pairs. Each pair is the CONS
-of ASDF operation object and a COMPONENT object. The pairs will be
-processed in order by OPERATE."))
-  (define-convenience-action-methods traverse (operation component &key))
+     "Generate and return a plan for performing OPERATION on COMPONENT."))
+  (define-convenience-action-methods make-plan (plan-class operation component &key))
 
   (defgeneric perform-plan (plan &key))
   (defgeneric plan-operates-on-p (plan component))
 
   (defvar *default-plan-class* 'sequential-plan)
 
-  (defmethod traverse ((o operation) (c component) &rest keys &key plan-class &allow-other-keys)
+  (defmethod make-plan (plan-class (o operation) (c component) &rest keys &key &allow-other-keys)
     (let ((plan (apply 'make-instance
                        (or plan-class *default-plan-class*)
-                       :system (component-system c) (remove-plist-key :plan-class keys))))
+                       :system (component-system c) keys)))
       (traverse-action plan o c t)
-      (plan-actions plan)))
+      plan))
 
-  (defmethod perform-plan :around (plan &key)
-    (declare (ignorable plan))
+  (defmethod perform-plan :around ((plan t) &key)
     (let ((*package* *package*)
           (*readtable* *readtable*))
       (with-compilation-unit () ;; backward-compatibility.
         (call-next-method))))   ;; Going forward, see deferred-warning support in lisp-build.
+
+  (defmethod perform-plan ((plan t) &rest keys &key &allow-other-keys)
+    (apply 'perform-plan (plan-actions plan) keys))
 
   (defmethod perform-plan ((steps list) &key force &allow-other-keys)
     (loop* :for (o . c) :in steps
            :when (or force (not (nth-value 1 (compute-action-stamp nil o c))))
            :do (perform-with-restarts o c)))
 
+  (defmethod plan-operates-on-p ((plan plan-traversal) (component-path list))
+    (plan-operates-on-p (plan-actions plan) component-path))
+
   (defmethod plan-operates-on-p ((plan list) (component-path list))
     (find component-path (mapcar 'cdr plan)
           :test 'equal :key 'component-find-path)))
 
 
-;;;; Incidental traversals 
+;;;; Incidental traversals
 (with-upgradability ()
   (defclass filtered-sequential-plan (sequential-plan)
     ((action-filter :initform t :initarg :action-filter :reader plan-action-filter)
@@ -7561,11 +7609,10 @@ processed in order by OPERATE."))
 
   (defmethod traverse-actions (actions &rest keys &key plan-class &allow-other-keys)
     (let ((plan (apply 'make-instance (or plan-class 'filtered-sequential-plan) keys)))
-      (loop* :for (o . c) :in actions :do
-             (traverse-action plan o c t))
-      (plan-actions plan)))
+      (loop* :for (o . c) :in actions :do (traverse-action plan o c t))
+      plan))
 
-  (define-convenience-action-methods traverse-sub-actions (o c &key))
+  (define-convenience-action-methods traverse-sub-actions (operation component &key))
   (defmethod traverse-sub-actions ((operation operation) (component component) &rest keys &key &allow-other-keys)
     (apply 'traverse-actions (direct-dependencies operation component)
            :system (component-system component) keys))
@@ -7573,14 +7620,14 @@ processed in order by OPERATE."))
   (defmethod plan-actions ((plan filtered-sequential-plan))
     (with-slots (keep-operation keep-component) plan
       (loop* :for (o . c) :in (call-next-method)
-             :when (and (typep o keep-operation)
-                        (typep c keep-component))
+             :when (and (typep o keep-operation) (typep c keep-component))
              :collect (cons o c))))
 
   (defmethod required-components (system &rest keys &key (goal-operation 'load-op) &allow-other-keys)
     (remove-duplicates
-     (mapcar 'cdr (apply 'traverse-sub-actions goal-operation system
-                         (remove-plist-key :goal-operation keys)))
+     (mapcar 'cdr (plan-actions
+                   (apply 'traverse-sub-actions goal-operation system
+                          (remove-plist-key :goal-operation keys))))
      :from-end t)))
 
 ;;;; -------------------------------------------------------------------------
@@ -7671,8 +7718,8 @@ The :FORCE or :FORCE-NOT argument to OPERATE can be:
       (error 'missing-component-of-version :requires component :version version)))
 
   (defmethod operate ((operation operation) (component component)
-                      &rest keys &key &allow-other-keys)
-    (let ((plan (apply 'traverse operation component keys)))
+                      &rest keys &key plan-class &allow-other-keys)
+    (let ((plan (apply 'make-plan plan-class operation component keys)))
       (apply 'perform-plan plan keys)
       (values operation plan)))
 
@@ -7797,7 +7844,7 @@ for how to load or compile stuff")
 
 
 ;;;; -------------------------------------------------------------------------
-;;; Internal hacks for backward-compatibility 
+;;; Internal hacks for backward-compatibility
 
 (asdf/package:define-package :asdf/backward-internals
   (:recycle :asdf/backward-internals :asdf)
@@ -8181,14 +8228,16 @@ for how to load or compile stuff")
   ;; we'd have to have the monolithic-op not inherit from the main op,
   ;; but instead inherit from a basic-FOO-op as with basic-fasl-op above.
 
-  (defclass lib-op (bundle-compile-op)
+  (defclass no-ld-flags-op (operation) ())
+
+  (defclass lib-op (bundle-compile-op no-ld-flags-op)
     ((bundle-type :initform #+(or ecl mkcl) :lib #-(or ecl mkcl) :no-output-file))
     (:documentation #+(or ecl mkcl) "compile the system and produce linkable (.a) library for it."
      #-(or ecl mkcl) "just compile the system"))
 
-  (defclass dll-op (bundle-op basic-compile-op)
+  (defclass dll-op (bundle-compile-op selfward-operation no-ld-flags-op)
     ((bundle-type :initform :dll))
-    (:documentation "Link together all the dynamic library used by this system into a single one."))
+    (:documentation "compile the system and produce dynamic (.so/.dll) library for it."))
 
   (defclass binary-op (basic-compile-op selfward-operation)
     ((selfward-operation :initform '(fasl-op lib-op)))
@@ -8211,15 +8260,14 @@ for how to load or compile stuff")
   (defclass monolithic-fasl-op (monolithic-bundle-compile-op basic-fasl-op) ()
     (:documentation "Create a single fasl for the system and its dependencies."))
 
-  (defclass monolithic-lib-op (monolithic-bundle-compile-op basic-compile-op)
+  (defclass monolithic-lib-op (monolithic-bundle-compile-op basic-compile-op  no-ld-flags-op)
     ((bundle-type :initform #+(or ecl mkcl) :lib #-(or ecl mkcl) :no-output-file))
     (:documentation #+(or ecl mkcl) "Create a single linkable library for the system and its dependencies."
      #-(or ecl mkcl) "Compile a system and its dependencies."))
 
-  (defclass monolithic-dll-op (monolithic-bundle-op basic-compile-op sideway-operation selfward-operation)
-    ((bundle-type :initform :dll)
-     (selfward-operation :initform 'dll-op)
-     (sideway-operation :initform 'dll-op)))
+  (defclass monolithic-dll-op (monolithic-bundle-compile-op sideway-operation selfward-operation no-ld-flags-op)
+    ((bundle-type :initform :dll))
+    (:documentation "Create a single dynamic (.so/.dll) library for the system and its dependencies."))
 
   (defclass program-op #+(or mkcl ecl) (monolithic-bundle-compile-op)
             #-(or mkcl ecl) (monolithic-bundle-op selfward-operation)
@@ -8233,7 +8281,7 @@ for how to load or compile stuff")
       ((or null string) bundle-type)
       ((eql :fasl) #-(or ecl mkcl) (compile-file-type) #+(or ecl mkcl) "fasb")
       #+ecl
-      ((member :binary :dll :lib :static-library :program :object :program)
+      ((member :binary :dll :lib :shared-library :static-library :program :object :program)
        (compile-file-type :type bundle-type))
       ((eql :binary) "image")
       ((eql :dll) (cond ((os-unix-p) "so") ((os-windows-p) "dll")))
@@ -8305,7 +8353,7 @@ for how to load or compile stuff")
           (remove-plist-keys '(:type :monolithic :name-suffix)
                              (operation-original-initargs instance))))
 
-  (defmethod bundle-op-build-args :around ((o lib-op))
+  (defmethod bundle-op-build-args :around ((o no-ld-flags-op))
     (declare (ignorable o))
     (let ((args (call-next-method)))
       (remf args :ld-flags)
@@ -9032,11 +9080,11 @@ effectively disabling the output translation facility."
   (:recycle :asdf/backward-interface :asdf)
   (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/find-system :asdf/operation :asdf/action
-   :asdf/lisp-action :asdf/operate :asdf/output-translations)
+   :asdf/lisp-action :asdf/plan :asdf/operate :asdf/output-translations)
   (:export
    #:*asdf-verbose*
    #:operation-error #:compile-error #:compile-failed #:compile-warned
-   #:error-component #:error-operation
+   #:error-component #:error-operation #:traverse
    #:component-load-dependencies
    #:enable-asdf-binary-locations-compatibility
    #:operation-forced
@@ -9089,7 +9137,19 @@ We recommend you use ASDF:SYSTEM-SOURCE-FILE instead
 for a mostly compatible replacement that we're supporting,
 or even ASDF:SYSTEM-SOURCE-DIRECTORY or ASDF:SYSTEM-RELATIVE-PATHNAME
 if that's whay you mean." ;;)
-    (system-source-file x)))
+    (system-source-file x))
+
+  (defgeneric* (traverse) (operation component &key &allow-other-keys)
+    (:documentation
+     "Generate and return a plan for performing OPERATION on COMPONENT.
+
+The plan returned is a list of dotted-pairs. Each pair is the CONS
+of ASDF operation object and a COMPONENT object. The pairs will be
+processed in order by OPERATE."))
+  (define-convenience-action-methods traverse (operation component &key))
+
+  (defmethod traverse ((o operation) (c component) &rest keys &key plan-class &allow-other-keys)
+    (plan-actions (apply 'make-plan plan-class o c keys))))
 
 
 ;;;; ASDF-Binary-Locations compatibility
@@ -9160,7 +9220,15 @@ Deprecated function, for backward-compatibility only.
 Please use UIOP:RUN-PROGRAM instead."
     (let ((command (apply 'format nil control-string args)))
       (asdf-message "; $ ~A~%" command)
-      (run-program command :force-shell t :ignore-error-status t :output *verbose-out*))))
+      (handler-case
+          (progn
+            (run-program command :force-shell t :ignore-error-status nil :output *verbose-out*)
+            0)
+        (subprocess-error (c)
+          (let ((code (subprocess-error-code c)))
+            (typecase code
+              (integer code)
+              (t 255))))))))
 
 (with-upgradability ()
   (defvar *asdf-verbose* nil)) ;; backward-compatibility with ASDF2 only. Unused.
@@ -9470,7 +9538,7 @@ system names to pathnames of .asd files")
   (defvar *source-registry-parameter* nil)
 
   (defun initialize-source-registry (&optional (parameter *source-registry-parameter*))
-    ;; Record the parameter used to configure the registry 
+    ;; Record the parameter used to configure the registry
     (setf *source-registry-parameter* parameter)
     ;; Clear the previous registry database:
     (setf *source-registry* (make-hash-table :test 'equal))
@@ -9516,7 +9584,7 @@ system names to pathnames of .asd files")
   ;; TODO: automatically generate interface with reexport?
   (:export
    #:defsystem #:find-system #:locate-system #:coerce-name
-   #:oos #:operate #:traverse #:perform-plan #:sequential-plan
+   #:oos #:operate #:make-plan #:perform-plan #:sequential-plan
    #:system-definition-pathname #:with-system-definitions
    #:search-for-system-definition #:find-component #:component-find-path
    #:compile-system #:load-system #:load-systems
@@ -9572,6 +9640,7 @@ system names to pathnames of .asd files")
    #:module-components ; backward-compatibility
    #:operation-on-warnings #:operation-on-failure ; backward-compatibility
    #:component-property ; backward-compatibility
+   #:traverse ; backward-compatibility
 
    #:system-description
    #:system-long-description
@@ -9705,6 +9774,12 @@ system names to pathnames of .asd files")
                         (let ((l (multiple-value-list (funcall f name))))
                           (and (first l) (register-pre-built-system (coerce-name name)))
                           (values-list l))))))))
+
+#+cmu
+(with-upgradability ()
+  (defun herald-asdf (stream)
+    (format stream "    ASDF ~A" (asdf-version)))
+  (setf (getf ext:*herald-items* :asdf) `(herald-asdf)))
 
 
 ;;;; Done!
