@@ -1879,14 +1879,15 @@ forward_tcr_xframes(TCR *tcr)
     forward_xp(xp);
 #else
     forward_xp(xp, tcr->node_regs_mask);
-
-    update_noderef(&tcr->save0);
-    update_noderef(&tcr->save1);
-    update_noderef(&tcr->save2);
-    update_noderef(&tcr->save3);
-    update_noderef(&tcr->next_method_context);
 #endif
   }
+#ifdef X8632
+  update_noderef(&tcr->save0);
+  update_noderef(&tcr->save1);
+  update_noderef(&tcr->save2);
+  update_noderef(&tcr->save3);
+  update_noderef(&tcr->next_method_context);
+#endif
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
 #ifdef X8664
     forward_xp(xframes->curr);
@@ -3353,13 +3354,16 @@ wp_update_tcr_xframes(TCR *tcr, LispObj old, LispObj new)
     wp_update_xp(xp, old, new);
 #else
     wp_update_xp(xp, old, new, tcr->node_regs_mask);
-    wp_maybe_update(&tcr->save0, old, new);
-    wp_maybe_update(&tcr->save1, old, new);
-    wp_maybe_update(&tcr->save2, old, new);
-    wp_maybe_update(&tcr->save3, old, new);
-    wp_maybe_update(&tcr->next_method_context, old, new);
 #endif
   }
+#ifdef X8632
+  wp_maybe_update(&tcr->save0, old, new);
+  wp_maybe_update(&tcr->save1, old, new);
+  wp_maybe_update(&tcr->save2, old, new);
+  wp_maybe_update(&tcr->save3, old, new);
+  wp_maybe_update(&tcr->next_method_context, old, new);
+#endif
+
   for (xframes = tcr->xframe; xframes; xframes = xframes->prev) {
 #ifdef X8664
     wp_update_xp(xframes->curr, old, new);
