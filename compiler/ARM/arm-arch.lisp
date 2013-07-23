@@ -1007,7 +1007,11 @@
   lisp-gettimeofday
   lisp-sigexit
   jvm-init
+  ;; Dummy entry
+  last-kernel-import
 )
+
+(defconstant num-kernel-imports (ash kernel-import-last-kernel-import -2))
 
 (defmacro nrs-offset (name)
   (let* ((pos (position name arm::*arm-nilreg-relative-symbols* :test #'eq)))

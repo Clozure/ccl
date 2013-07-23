@@ -448,15 +448,37 @@ at heap allocation."
   (mov arg_z 'nil)
   (bx lr))
 
+(defparameter *kernel-import-table* nil)
+
+(defun %kernel-import (offset)
+  (declare (fixnum offset)
+           (optimize (speed 3) (safety 0)))
+  (let* ((table (or *kernel-import-table*
+                    (setq *kernel-import-table* (make-array target::num-kernel-imports))))
+         (idx (ash offset -2))
+         (p (svref table idx)))
+    (declare (simple-vector table) (fixnum idx))
+    (if (typep p 'macptr) ; not dead-macptr from earlier session
+      p
+      (setf (svref table idx) (%kernel-import-internal offset)))))
 
 ;;; offset is a fixnum, one of the arm::kernel-import-xxx constants.
-;;; Returns that kernel import, a fixnum.
-(defarmlapfunction %kernel-import ((offset arg_z))
+;;; Returns that kernel import as a MACPTR
+(defarmlapfunction %kernel-import-internal ((offset arg_z))
   (ref-global imm0 kernel-imports)
   (ldr imm0 (:@ imm0 (:asr arg_z (:$ arm::fixnumshift))))
-  ;; May not fit in a fixnum.  We'd really rather not CONS
-  ;; here, but it won't kill us to do so.
-  (spjump .SPmakeu32))
+  (lri imm1 arm::macptr-header)
+  (sub allocptr allocptr (:$ (- arm::macptr.size arm::fulltag-misc)))
+  (ldr arg_z (:@ rcontext (:$ arm::tcr.save-allocbase)))
+  (cmp allocptr arg_z)
+  (bhi @no-trap)
+  (uuo-alloc-trap)
+  @no-trap
+  (str imm1 (:@ allocptr (:$ arm::macptr.header)))
+  (mov arg_z allocptr)
+  (bic allocptr allocptr (:$ arm::fulltagmask))
+  (str imm0 (:@ arg_z (:$ arm::macptr.address)))
+  (bx lr))
 
 (defarmlapfunction %get-unboxed-ptr ((macptr arg_z))
   (macptr-ptr imm0 arg_z)
