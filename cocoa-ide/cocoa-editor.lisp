@@ -3640,6 +3640,27 @@
                    (lisp-string-from-nsstring (#/localizedDescription error))))))
       (front-view-for-buffer (hemlock-buffer doc)))))
 
+;; Execute in cocoa thread in a dynamic context that allows hemlock buffer functions to work.
+;; The function should not modify the buffer, since display will not be updated, for that go
+;; through hi::handle-hemlock-event instead.
+(defun execute-in-buffer (buffer thunk)
+  (check-type buffer hi:buffer)
+  (let ((emsg nil))
+    (multiple-value-prog1
+        (execute-in-gui (lambda ()
+                         (block exit
+                           (handler-bind ((error (lambda (cc)
+                                                   (setq emsg
+                                                         (with-standard-io-syntax
+                                                             (or (ignore-errors (princ-to-string cc))
+                                                                 "#<error printing error message>")))
+                                                   (return-from exit))))
+                             (let ((hi::*current-buffer* buffer))
+                               (funcall thunk))))))
+      (when emsg (error "~a" emsg)))))
+
+
+
 (defun hemlock-ext:execute-in-file-view (pathname thunk)
   (execute-in-gui #'(lambda ()
                       (assume-cocoa-thread)
@@ -3651,6 +3672,11 @@
                                         :message (or (ignore-errors (princ-to-string c))
                                                      "#<error printing error message>")
                                         :default-button "Ok"))))))
+
+;; Bring view to front.
+(defun hemlock-ext:select-view (view)
+  (execute-in-gui (lambda ()
+                    (#/makeKeyAndOrderFront: (#/window (hi::hemlock-view-pane view)) (%null-ptr)))))
 
 (defun hemlock-ext:open-sequence-dialog (&key title sequence action (printer #'prin1))
   (make-instance 'sequence-window-controller

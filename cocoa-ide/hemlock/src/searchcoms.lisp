@@ -454,3 +454,69 @@
 	    (incf occurrences)
 	    (character-offset mark won))))
       occurrences)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defparameter *def-search-string* (coerce '(#\newline #\() 'string))
+
+(defcommand "List Definitions" (p)
+  "List definitions in the buffer, or in the current region if there is one"
+  (declare (ignore p))
+  (let* ((view (current-view))
+         (region (if (region-active-p)
+                  (current-region)
+                  (buffer-region (current-buffer))))
+         (definitions (collect-definition-lines region)))
+    (flet ((defn-action (defn)
+             (gui::execute-in-gui (lambda ()
+                                    (hemlock-ext:select-view view)
+                                    (hi::handle-hemlock-event view 
+                                      (lambda ()
+                                        ;; TODO: only leave mark if we're far away, or maybe if last command
+                                        ;; was not list-definitions...
+                                        (destructuring-bind (line-text posn) defn
+                                          (or (move-to-definition posn line-text t)
+                                              (loud-message "Could find definition"))))))))
+           (defn-printer (defn stream)
+             (write-string (car defn) stream)))
+      (hemlock-ext:open-sequence-dialog
+       :title (format nil "Definitions in ~s" (buffer-name (current-buffer)))
+       :sequence definitions
+       :action #'defn-action
+       :printer #'defn-printer))))
+
+(defun collect-definition-lines (&optional (region (buffer-region (current-buffer))))
+  (let* ((pattern (new-search-pattern :string-sensitive :forward *def-search-string*))
+         (end (region-end region)))
+    (with-mark ((mark (region-start region)))
+      ;; TODO: doesn't find the definition on very first line.  LTRAB.
+      (loop
+        until (or (null (find-pattern mark pattern)) (mark> mark end))
+        as line = (mark-line (mark-after mark))
+        collect (list (line-string line) (hi::get-line-origin line))
+        while (let ((next (line-next line)))
+                (when next
+                  (setf (mark-line mark) next)
+                  (setf (mark-charpos mark) 0)))))))
+
+(defun move-to-definition (posn line-text &optional (leave-mark t))
+  (flet ((ssearch (mark string direction)
+           (find-pattern mark (new-search-pattern :string-insensitive
+                                                  direction
+                                                  string))))
+    (declare (inline ssearch))
+    (with-mark ((mark (current-point)))
+      (or (move-to-absolute-position mark posn) (buffer-end mark))
+      (when (or (ssearch mark line-text :forward)
+                (ssearch mark line-text :backward))
+        (if leave-mark
+          (move-point-leaving-mark mark)
+          (move-mark (current-point-collapsing-selection) mark))))))
+
+
+;; Interface for getting this functionality outside of the editor
+;; returns a list of (string number) where string is the first line of the definition and number is the
+;; absolute position in the buffer of the start of the line.
+(defun definitions-in-document (ns-doc)
+  (gui::execute-in-buffer (gui::hemlock-buffer ns-doc) #'collect-definition-lines))

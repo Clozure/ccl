@@ -387,6 +387,7 @@
    #:revert-hemlock-buffer
    #:open-sequence-dialog
    #:execute-in-file-view
+   #:select-view
    #:change-active-pane
    #:send-string-to-listener
    #:buffer-process-description
