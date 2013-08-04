@@ -60,8 +60,8 @@ nullAPC(ULONG_PTR arg)
 {
 }
   
-BOOL (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
-BOOL (*pCancelSynchronousIo)(HANDLE) = NULL;
+BOOL WINAPI (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+BOOL WINAPI (*pCancelSynchronousIo)(HANDLE) = NULL;
 
 
 

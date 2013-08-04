@@ -2021,10 +2021,10 @@ map_windows_exception_code_to_posix_signal(DWORD code, siginfo_t *info, Exceptio
 
 
 LONG
-windows_exception_handler(EXCEPTION_POINTERS *exception_pointers, TCR *tcr)
+windows_exception_handler(EXCEPTION_POINTERS *exception_pointers, TCR *tcr, int signal_number)
 {
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
-  int old_valence, signal_number;
+  int old_valence;
   ExceptionInformation *context = exception_pointers->ContextRecord;
   siginfo_t *info = exception_pointers->ExceptionRecord;
   xframe_list xframes;
@@ -2032,7 +2032,7 @@ windows_exception_handler(EXCEPTION_POINTERS *exception_pointers, TCR *tcr)
   old_valence = prepare_to_wait_for_exception_lock(tcr, context);
   wait_for_exception_lock_in_handler(tcr, context, &xframes);
 
-  signal_number = map_windows_exception_code_to_posix_signal(code, info, context);
+
   
   if (!handle_exception(signal_number, info, context, tcr, old_valence)) {
     char msg[512];
@@ -2053,7 +2053,8 @@ setup_exception_handler_call(CONTEXT *context,
                              LispObj new_sp,
                              void *handler,
                              EXCEPTION_POINTERS *new_ep,
-                             TCR *tcr)
+                             TCR *tcr,
+                             int signal_number)
 {
   extern void windows_halt(void);
   LispObj *p = (LispObj *)new_sp;
@@ -2064,10 +2065,12 @@ setup_exception_handler_call(CONTEXT *context,
   context->Rip = (DWORD64)handler;
   context->Rcx = (DWORD64)new_ep;
   context->Rdx = (DWORD64)tcr;
+  context->R8 = (DWORD64)signal_number;
 #else
   p-=4;                          /* args on stack, stack aligned */
   p[0] = (LispObj)new_ep;
   p[1] = (LispObj)tcr;
+  p[2] = signal_number;
   *(--p) = (LispObj)windows_halt;
   context->Esp = (DWORD)p;
   context->Eip = (DWORD)handler;
@@ -2077,9 +2080,11 @@ setup_exception_handler_call(CONTEXT *context,
 
 void
 prepare_to_handle_windows_exception_on_foreign_stack(TCR *tcr,
+
                                                      CONTEXT *context,
                                                      void *handler,
-                                                     EXCEPTION_POINTERS *original_ep)
+                                                     EXCEPTION_POINTERS *original_ep, 
+                                                     int signal_number)
 {
   LispObj foreign_rsp = 
     (LispObj) (tcr->foreign_sp - 128) & ~15;
@@ -2097,7 +2102,7 @@ prepare_to_handle_windows_exception_on_foreign_stack(TCR *tcr,
   foreign_rsp = (LispObj)new_ep & ~15;
   new_ep->ContextRecord = new_context;
   new_ep->ExceptionRecord = new_info;
-  setup_exception_handler_call(context,foreign_rsp,handler,new_ep, tcr);
+  setup_exception_handler_call(context,foreign_rsp,handler,new_ep, tcr, signal_number);
 }
 
 LONG CALLBACK
@@ -2105,21 +2110,17 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
 {
   extern void ensure_safe_for_string_operations(void);
   DWORD code = exception_pointers->ExceptionRecord->ExceptionCode;
+  siginfo_t *info = exception_pointers->ExceptionRecord;
+  ExceptionInformation *context = exception_pointers->ContextRecord;
+  int signal_number = map_windows_exception_code_to_posix_signal(code, info, context);
 
 
-  /* Only try to handle codes which have a "severity" of error 
-     (e.g. have their high 2 bits set) and which don't have bit
-     29 - the "customer" bit - set.
-     (Runtime exceptions generated MS language products have #xE
-     in thier high nibbles.  So much for "reserved for the customer".)
-  */
-  if ((code & 0xF0000000L) != 0xc0000000) {
+  if (signal_number <= 0) {
     return EXCEPTION_CONTINUE_SEARCH;
   } else {
     TCR *tcr = get_interrupt_tcr(false);
     area *cs = TCR_AUX(tcr)->cs_area;
     BytePtr current_sp = (BytePtr) current_stack_pointer();
-    CONTEXT *context = exception_pointers->ContextRecord;
     
     ensure_safe_for_string_operations();
 
@@ -2133,7 +2134,8 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
     prepare_to_handle_windows_exception_on_foreign_stack(tcr,
                                                          context,
                                                          windows_exception_handler,
-                                                         exception_pointers);
+                                                         exception_pointers,
+                                                         signal_number);
     return EXCEPTION_CONTINUE_EXECUTION;
   }
 }
