@@ -167,11 +167,14 @@
 			  `(:relative ,(string-downcase name))))))
 	(append-dll-node d (ftd-dirlist ftd)))))
 
-(defun use-interface-dir (name &optional (ftd *target-ftd*))
+(defun use-interface-dir (name &optional (headers-dir nil) (ftd *target-ftd*))
   "Tell Clozure CL to add the interface directory denoted by dir-id to the
 list of interface directories which it consults for foreign type and
 function information. Arrange that that directory is searched before any
 others.
+
+Optional headers-dir arg may be used to specify a non-standard location for
+the interface directory.
 
 Note that use-interface-dir merely adds an entry to a search list. If the
 named directory doesn't exist in the file system or doesn't contain a set
@@ -179,8 +182,13 @@ of database files, a runtime error may occur when Clozure CL tries to open some
 database file in that directory, and it will try to open such a database
 file whenever it needs to find any foreign type or function information.
 unuse-interface-dir may come in handy in that case."
+  (when (foreign-type-data-p headers-dir) ;; backward compat
+    (shiftf ftd headers-dir nil))
   (let* ((d (ensure-interface-dir name ftd)))
     (move-dll-nodes d (ftd-dirlist ftd))
+    (when headers-dir
+      (let ((target-dir (merge-pathnames (make-pathname :directory `(:relative ,@(cdb-subdirectory-path ftd))) headers-dir)))
+        (setf (interface-dir-subdir d) (merge-pathnames (interface-dir-subdir d) target-dir))))
     d))
 
 (defun unuse-interface-dir (name &optional (ftd *target-ftd*))
