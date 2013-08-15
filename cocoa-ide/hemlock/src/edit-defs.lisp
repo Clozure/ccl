@@ -30,34 +30,41 @@
 (defvar *last-go-to-def-string* "")
 (declaim (simple-string *last-go-to-def-string*))
   
-(defun symbol-at-point (buffer point)
+(defun symbol-at-point (buffer)
   "Returns symbol at point, or contents of selection if there is one"
-  (with-mark ((mark1 point)
-	      (mark2 point))
-    (if (hi::%buffer-current-region-p buffer)
-	(let* ((mark (hi::buffer-%mark buffer)))
-	  (if (mark< mark point)
-              (move-mark mark1 mark)
-              (move-mark mark2 mark)))
-	;; This doesn't handle embedded #'s or escaped chars in names.
-	;; So let them report it as a bug...
-	(progn
-	  (when (test-char (previous-character point) :lisp-syntax :constituent)
-	    (or (rev-scan-char mark1 :lisp-syntax (not :constituent))
-		(buffer-start mark1))
-	    (scan-char mark1 :lisp-syntax :constituent))
-	  (when (test-char (next-character point) :lisp-syntax :constituent)
-	    (or (scan-char mark2 :lisp-syntax (not :constituent))
-		(buffer-end mark2)))
-	  (when (mark= mark1 mark2)
-	    ;; Try to get whole form
-	    (pre-command-parse-check point)
-            (move-mark mark1 point)
-            (form-offset mark1 -1)
-            (move-mark mark2 mark1)
-            (form-offset mark2 1))))
+  (let ((point (buffer-point buffer))
+        (mark (buffer-mark buffer)))
+    (if (and (hi::%buffer-current-region-p buffer)
+             (not (mark= mark point)))
+      (string-trim '(#\space #\tab)
+                   (region-to-string (if (mark< mark point)
+                                       (region mark point)
+                                       (region point mark))))
+      (symbol-at-mark buffer point))))
+
+(defun symbol-at-mark (buffer mark)
+  (with-mark ((mark1 mark)
+              (mark2 mark))
+    ;; This doesn't handle embedded #'s or escaped chars in names.
+    ;; So let them report it as a bug...
+    (when (test-char (previous-character mark) :lisp-syntax :constituent)
+      (or (rev-scan-char mark1 :lisp-syntax (not :constituent))
+          (buffer-start mark1))
+      (scan-char mark1 :lisp-syntax :constituent))
+    (when (test-char (next-character mark) :lisp-syntax :constituent)
+      (or (scan-char mark2 :lisp-syntax (not :constituent))
+          (buffer-end mark2)))
+    (when (mark= mark1 mark2)
+      ;; Try to get whole form
+      (pre-command-parse-check mark)
+      (move-mark mark1 mark)
+      (form-offset mark1 -1)
+      (move-mark mark2 mark1)
+      (form-offset mark2 1))
     (loop until (or (mark= mark1 mark2) (not (eql (previous-character mark2) #\:)))
-          do (mark-before mark2))
+      do (mark-before mark2))
+    (when (and (eql (previous-character mark1) #\#) (eql (next-character mark1) #\<))
+      (mark-after mark1))
     (unless (mark= mark1 mark2)
       (region-to-string (region mark1 mark2)))))
 
@@ -65,12 +72,11 @@
   "Go to the current function/macro's definition.  With a numarg, prompts for name to go to."
   (if p
       (edit-definition-command nil)
-      (let* ((point (current-point))
-	     (buffer (current-buffer))
-	     (fun-name (symbol-at-point buffer point)))
+      (let* ((buffer (current-buffer))
+	     (fun-name (symbol-at-point buffer)))
 	(if fun-name
 	    (get-def-info-and-go-to-it fun-name (or
-						 (buffer-package (current-buffer))
+						 (buffer-package buffer)
 						 *package*))
 	    (beep)))))
 

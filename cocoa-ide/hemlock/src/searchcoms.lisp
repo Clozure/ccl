@@ -494,11 +494,23 @@
       (loop
         until (or (null (find-pattern mark pattern)) (mark> mark end))
         as line = (mark-line (mark-after mark))
-        collect (list (line-string line) (hi::get-line-origin line))
+        collect (list (line-string line) (hi::get-line-origin line) (get-definition-type mark))
         while (let ((next (line-next line)))
                 (when next
                   (setf (mark-line mark) next)
                   (setf (mark-charpos mark) 0)))))))
+
+(defun get-definition-type (mark)
+  (let ((buffer (mark-buffer mark)))
+    (mark-after mark)
+    (let ((str (symbol-at-mark buffer mark)))
+      (when str
+        (multiple-value-bind (sym error)
+                             (let* ((*package* (ccl:require-type (or (buffer-package buffer) *package*) 'package)))
+                               (ignore-errors (values (read-from-string str))))
+          (if error
+            (intern (string-upcase str) *package*)
+            sym))))))
 
 (defun move-to-definition (posn line-text &optional (leave-mark t))
   (flet ((ssearch (mark string direction)
@@ -515,8 +527,9 @@
           (move-mark (current-point-collapsing-selection) mark))))))
 
 
-;; Interface for getting this functionality outside of the editor
-;; returns a list of (string number) where string is the first line of the definition and number is the
-;; absolute position in the buffer of the start of the line.
+;; Interface for getting this functionality outside of the editor.
+;; Returns a list of (string number symbol) where string is the first line of the definition,
+;; number is the absolute position in the buffer of the start of the line, and symbol is the
+;; definition type (eg. DEFUN, DEFVAR, HI:DEFCOMMAND, etc).
 (defun definitions-in-document (ns-doc)
   (gui::execute-in-buffer (gui::hemlock-buffer ns-doc) #'collect-definition-lines))
