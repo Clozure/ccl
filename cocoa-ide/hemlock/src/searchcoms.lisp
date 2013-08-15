@@ -475,7 +475,8 @@
                                       (lambda ()
                                         ;; TODO: only leave mark if we're far away, or maybe if last command
                                         ;; was not list-definitions...
-                                        (destructuring-bind (line-text posn) defn
+                                        (destructuring-bind (line-text posn type) defn
+					  (declare (ignore type))
                                           (or (move-to-definition posn line-text t)
                                               (loud-message "Could find definition"))))))))
            (defn-printer (defn stream)
