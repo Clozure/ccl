@@ -733,7 +733,7 @@
 (defun arm2-save-non-volatile-fprs (seg n)
   (unless (eql n 0)
     (with-arm-local-vinsn-macros (seg)
-      (! push-nvfprs n (logior (ash n arm::num-subtag-bits) arm::subtag-double-float)))
+      (! push-nvfprs n (logior (ash n arm::num-subtag-bits) arm::subtag-double-float-vector)))
     (setq *arm2-non-volatile-fpr-count* n)))
 
 (defun arm2-restore-non-volatile-fprs (seg)
