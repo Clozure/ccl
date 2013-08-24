@@ -4943,7 +4943,7 @@
          (numundo (%i- *arm2-undo-count* (arm2-encoding-undo-count old-stack))))
     (declare (fixnum numundo))
     (with-arm-local-vinsn-macros (seg vreg xfer)
-      (if (eq current-stack old-stack)
+      (if (arm2-equal-encodings-p current-stack old-stack)
         (arm2-form seg vreg xfer body)
         (if (eq xfer $backend-return)
           (progn
@@ -6627,6 +6627,8 @@
                                                   *arm2-vstack*
                                                   *arm2-top-vstack-lcell*)
                               (arm2-decode-stack entry-stack))
+                            (when (arm2-mvpass-p xfer)
+                              (arm2-open-undo $undomvexpect))
                             (arm2-undo-body seg vreg target form entry-stack)))
                         (@ defaultlabel)
                         (multiple-value-setq (*arm2-undo-count*
@@ -6634,6 +6636,8 @@
                                               *arm2-vstack*
                                               *arm2-top-vstack-lcell*)
                           (arm2-decode-stack entry-stack))
+                        (when (arm2-mvpass-p xfer)
+                          (arm2-open-undo $undomvexpect)) 
                         (arm2-undo-body seg vreg target otherwise entry-stack)
                         (@ endlabel)
                         (when (arm2-mvpass-p xfer)

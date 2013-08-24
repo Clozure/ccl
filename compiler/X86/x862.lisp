@@ -7755,6 +7755,8 @@
                                               *x862-vstack*
                                               *x862-top-vstack-lcell*)
                           (x862-decode-stack entry-stack))
+                        (when (x862-mvpass-p xfer)
+                          (x862-open-undo $undomvexpect))
                         (x862-undo-body seg vreg target form entry-stack)))
                     (if single-clause
                       (@ defaultlabel)
@@ -7764,6 +7766,8 @@
                                           *x862-vstack*
                                           *x862-top-vstack-lcell*)
                       (x862-decode-stack entry-stack))
+                    (when (x862-mvpass-p xfer)
+                      (x862-open-undo $undomvexpect))
                     (x862-undo-body seg vreg target otherwise entry-stack)
                     (@ endlabel)
                     (when (x862-mvpass-p xfer)
