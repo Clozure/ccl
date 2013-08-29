@@ -82,7 +82,6 @@
     "lispmode"
     "listener"
     "comments"
-    "icom"
     "defsyn"
     "edit-defs"
     "register"
