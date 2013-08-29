@@ -1349,6 +1349,13 @@
      ())
   (popl (:%l dest)))
 
+(define-x8632-vinsn (vpop-gvector-element :pop :node :vsp)
+    (()
+     ((vector :lisp)
+      (idx :u32const)))
+  (popl (:@ (:apply + x8632::misc-data-offset (:apply ash idx x8632::word-shift))
+            (:%l vector))))
+
 (define-x8632-vinsn (push-argregs :push :node :vsp) (()
 						     ())
   (rcmpl (:%l x8632::nargs) (:$b (* 1 x8632::node-size)))

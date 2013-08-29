@@ -261,6 +261,9 @@
 				     (idx :s32const)))
   (movq (:%q val) (:@ (:apply + x8664::misc-data-offset (:apply ash idx 3)) (:%q v))))
 
+
+
+
 (define-x8664-vinsn misc-set-immediate-c-node (()
                                                ((val :s32const)
                                                 (v :lisp)
@@ -1484,6 +1487,13 @@
     (((dest :lisp))
      ())
   (popq (:%q dest)))
+
+(define-x8664-vinsn (vpop-gvector-element :pop :node :vsp)
+    (()
+     ((vector :lisp)
+      (idx :u32const))
+     ())
+  (popq (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q vector))))
 
                                            
 (define-x8664-vinsn (push-argregs :push :node :vsp) (()

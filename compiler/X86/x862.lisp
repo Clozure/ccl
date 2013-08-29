@@ -2749,9 +2749,12 @@
                           (not safe)
                           (nx2-constant-index-ok-for-type-keyword index-known-fixnum type-keyword))
                    (multiple-value-setq (src result-reg unscaled-idx)
-                     (x862-two-untargeted-reg-forms seg
-                                                  vector src
-                                                  value result-reg))
+                     (if (and (null vreg) (typep constval '(signed-byte 32)))
+                       (x862-one-untargeted-reg-form seg vector src)
+                       
+                       (x862-two-untargeted-reg-forms seg
+                                                      vector src
+                                                      value result-reg)))
                    (multiple-value-setq (src unscaled-idx result-reg)
                      (x862-three-untargeted-reg-forms seg
                                                       vector src
@@ -2777,7 +2780,7 @@
 	      (with-additional-imm-reg (unscaled-idx src)
 		(! check-misc-bound unscaled-idx src))
 	      (! check-misc-bound unscaled-idx src))))
-        (x862-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (x862-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization)))))
+        (x862-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (when result-reg (x862-unboxed-reg-for-aset seg type-keyword result-reg safe constval)) constval needs-memoization)))))
 
 
 
@@ -3401,13 +3404,17 @@
 ;;; If suggested reg is a node reg that contains a stack location,
 ;;; try to use some other node temp.
 (defun x862-try-non-conflicting-reg (suggested reserved)
-  (let* ((mask *x862-gpr-locations-valid-mask*))
+  (let* ((mask *x862-gpr-locations-valid-mask*)
+         (bit (hard-regspec-value suggested)))
     (or (when (and (node-reg-p suggested)
-                   (logbitp (hard-regspec-value suggested) mask))
+                   (logbitp bit mask))
           (setq mask (logior mask reserved))
           (%available-node-temp (logand *available-backend-node-temps*
                                         (lognot mask))))
-        suggested)))
+        (if (logbitp bit reserved)
+          (%available-node-temp (logand *available-backend-node-temps*
+                                        (lognot reserved)))
+          suggested))))
 
 (defun x862-one-untargeted-reg-form (seg form suggested &optional (reserved 0))
   (or (x862-reg-for-form form suggested)
@@ -5441,10 +5448,15 @@
              (*x862-top-vstack-lcell* *x862-top-vstack-lcell*)
              (arch (backend-target-arch *target-backend*))
              (n (length initforms))
+             (vreg-val (hard-regspec-value vreg))
              (nntriv (let* ((count 0)) 
                        (declare (fixnum count))
                        (dolist (f initforms count) 
-                         (unless (x86-side-effect-free-form-p f)
+                         (unless (and (x86-side-effect-free-form-p f)
+                                      (let* ((reg (x862-reg-for-form f vreg)))
+                                        (not (eql (if reg
+                                                    (hard-regspec-value reg))
+                                                  vreg-val))))
                            (incf count)))))
              (header (arch::make-vheader n subtag)))
         (declare (fixnum n nntriv))
@@ -5460,13 +5472,15 @@
 		 (x862-lri seg x8664::imm1 (- (ash (logandc2 (+ n 2) 1) (arch::target-word-shift arch)) x8664::fulltag-misc))))
                (! %allocate-uvector vreg)
                (unless (eql n 0)
-                 (! %init-gvector vreg  (ash n (arch::target-word-shift arch)))))
+                 (do* ((idx (1- n) (1- idx)))
+                      ((< idx 0))
+                   (! vpop-gvector-element vreg idx))))
               (t
-               (let* ((pending ())
-                      (vstack *x862-vstack*))
-                 (declare (fixnum vstack))
+               (let* ((pending ()))
                  (dolist (form initforms)
-                   (if (x86-side-effect-free-form-p form)
+                   (if (and (x86-side-effect-free-form-p form)
+                            (let* ((reg (x862-reg-for-form form vreg)))
+                              (not (eql (if reg (hard-regspec-value reg)) vreg-val))))
                      (push form pending)
                      (progn
                        (push nil pending)
@@ -5483,20 +5497,28 @@
                    (! %allocate-uvector target)
                    (with-node-temps (target) (nodetemp)
                      (do* ((forms pending (cdr forms))
-                           (index (1- n) (1- index))
-                           (pushed-cell (+ vstack (the fixnum (ash nntriv (arch::target-word-shift arch))))))
+                           (index (1- n) (1- index)))
                           ((null forms))
-                       (declare (list forms) (fixnum pushed-cell))
+                       (declare (list forms))
                        (let* ((form (car forms))
                               (reg nodetemp))
                          (if form
-                           (setq reg (x862-one-untargeted-reg-form seg form nodetemp))
+                           (cond ((nx-null form)
+                                  (! misc-set-immediate-c-node (target-nil-value) target index))
+                                 ((nx-t form)
+                                  (! misc-set-immediate-c-node (target-t-value) target index))
+                                 (t (let* ((fixval (acode-fixnum-form-p form)))
+                                      (cond ((and fixval
+                                                  (typep (setq fixval (ash fixval *x862-target-fixnum-shift*)) '(signed-byte 32)))
+                                             (! misc-set-immediate-c-node fixval target index))
+                                            (t
+                                             (setq reg (x862-one-untargeted-reg-form seg form nodetemp))
+                                             (! misc-set-c-node reg target index))))))
                            (progn
-                             (decf pushed-cell *x862-target-node-size*)
-                             (x862-stack-to-register seg (x862-vloc-ea pushed-cell) nodetemp)))
-                         (! misc-set-c-node reg target index)))))
-                 (! vstack-discard nntriv))
-               ))))
+                             (! vpop-gvector-element target index)
+                             (setq *x862-top-vstack-lcell* (lcell-parent *x862-top-vstack-lcell*))
+                             (x862-adjust-vstack (- *x862-target-node-size*))))
+                         )))))))))
      (^)))
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
