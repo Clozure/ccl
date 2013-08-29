@@ -194,6 +194,7 @@
    #:bind-key
    #:command-bindings
    #:delete-key-binding
+   #:commands-and-bindings
    #:get-command
    #:map-bindings
    #:key-translation
@@ -577,7 +578,7 @@
 
 
    ;; interp.lisp
-   #:bind-key #:delete-key-binding #:get-command #:map-bindings
+   #:bind-key #:delete-key-binding #:get-command #:map-bindings #:commands-and-bindings
    #:make-command #:command-name #:command-bindings #:last-command-type
    #:prefix-argument #:key-translation
 

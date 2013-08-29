@@ -2890,14 +2890,16 @@
 
 (defvar *last-document-created* nil)
 
+(setf (hemlock::value hemlock::default-modes) '("Lisp" "Editor"))
+
+
 (objc:defmethod #/init ((self hemlock-editor-document))
   (let* ((doc (call-next-method)))
     (unless  (%null-ptr-p doc)
       (#/setTextStorage: doc (make-textstorage-for-hemlock-buffer
                               (make-hemlock-buffer
                                (lisp-string-from-nsstring
-                                (#/displayName doc))
-                               :modes '("Lisp" "Editor")))))
+                                (#/displayName doc))))))
     (with-slots (encoding) doc
       (setq encoding (or (get-default-encoding) #$NSISOLatin1StringEncoding)))
     (setq *last-document-created* doc)

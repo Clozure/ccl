@@ -246,7 +246,7 @@
 ;;;    Look up a key in the current environment.
 ;;;
 (defun get-current-binding (key)
-  (let ((buffer *current-buffer*)
+  (let ((buffer (current-buffer))
         (t-bindings nil) res t-res)
     (multiple-value-setq (res t-res) (get-binding-in-buffer key buffer))
     (when t-res (push t-res t-bindings))
@@ -375,6 +375,38 @@
 		   (not (member place result :test #'equalp)))
 	  (push place result))))
     result))
+
+;;; COMMANDS-AND-BINDINGS -- Public
+;;;
+;;; Return a list of (command . key-bindings), for use in help.  Looks only at bindings
+;;; in modes in "Default Modes" variable, doesn't require current buffer.
+;;;
+(defun commands-and-bindings (&optional (modes (value hemlock::default-modes)))
+  (when (some #'stringp modes)
+    (setq modes (mapcar (lambda (m) (if (stringp m) (get-mode-object m) m)) modes)))
+  (loop for cmd in (string-table-values *command-names*)
+    as bindings = (command-bindings cmd)
+    ;; collect unshadowed bindings
+    as keys = (loop for (key-seq) in bindings
+                when (eq cmd (get-binding-with-modes key-seq modes))
+                collect key-seq)
+    unless (or (and bindings (not keys)) ;; ignore pseudo-commands like "I-Search whatever"
+               (command-transparent-p cmd) ;; ignore addons like exit search mode.
+               (eq cmd (get-default-command)) ;; ignore illegal
+               (eq cmd (get-self-insert-command));; and self insert
+               (> (length keys) 5))      ;; ignore commmands like "Digit"
+    collect (cons cmd keys)))
+
+(defun get-binding-with-modes (key modes)
+  (or (loop for mode in modes  ;; first find minor mode binding
+            do (when (stringp mode) (setq mode (get-mode-object mode)))
+            thereis (and (not (mode-object-major-p mode)) (get-binding-in-mode key mode)))
+      (loop for mode in modes  ;; next try major mode
+            do (when (stringp mode) (setq mode (get-mode-object mode)))
+            thereis (and (mode-object-major-p mode) (get-binding-in-mode key mode)))
+      (get-table-entry *global-command-table* key)))
+
+
 
 (defvar *key-event-history* (make-ring 60)) 
 

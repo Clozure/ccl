@@ -357,7 +357,11 @@
 	  (setf word-table next-table))))
     (setf (word-entry-value-node entry) value-node)))
 
-
+(defun string-table-values (string-table)
+  (loop with nodes = (string-table-value-nodes string-table)
+    for i from 0 below (string-table-num-nodes string-table)
+    collect (value-node-value (svref nodes i))))
+
 ;;;; Find-Bound-Entries
 
 (defun find-bound-entries (word-entries)
