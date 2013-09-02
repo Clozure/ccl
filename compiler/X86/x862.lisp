@@ -5476,11 +5476,10 @@
                       ((< idx 0))
                    (! vpop-gvector-element vreg idx))))
               (t
-               (let* ((pending ()))
+               (let* ((pending ())
+                      (vec *x862-allocptr*))
                  (dolist (form initforms)
-                   (if (and (x86-side-effect-free-form-p form)
-                            (let* ((reg (x862-reg-for-form form vreg)))
-                              (not (eql (if reg (hard-regspec-value reg)) vreg-val))))
+                   (if (x86-side-effect-free-form-p form)
                      (push form pending)
                      (progn
                        (push nil pending)
@@ -5494,8 +5493,8 @@
 		   (x862-lri seg *x862-imm0* header)
 		   (x862-lri seg x8664::imm1 (- (ash (logandc2 (+ n 2) 1) (arch::target-word-shift arch)) x8664::fulltag-misc))))
                  (ensuring-node-target (target vreg)
-                   (! %allocate-uvector target)
-                   (with-node-temps (target) (nodetemp)
+                   (! %allocate-uvector vec)
+                   (with-node-temps (vec) (nodetemp)
                      (do* ((forms pending (cdr forms))
                            (index (1- n) (1- index)))
                           ((null forms))
@@ -5504,21 +5503,22 @@
                               (reg nodetemp))
                          (if form
                            (cond ((nx-null form)
-                                  (! misc-set-immediate-c-node (target-nil-value) target index))
+                                  (! misc-set-immediate-c-node (target-nil-value) vec index))
                                  ((nx-t form)
-                                  (! misc-set-immediate-c-node (target-t-value) target index))
+                                  (! misc-set-immediate-c-node (target-t-value) vec index))
                                  (t (let* ((fixval (acode-fixnum-form-p form)))
                                       (cond ((and fixval
                                                   (typep (setq fixval (ash fixval *x862-target-fixnum-shift*)) '(signed-byte 32)))
-                                             (! misc-set-immediate-c-node fixval target index))
+                                             (! misc-set-immediate-c-node fixval vec index))
                                             (t
                                              (setq reg (x862-one-untargeted-reg-form seg form nodetemp))
-                                             (! misc-set-c-node reg target index))))))
+                                             (! misc-set-c-node reg vec index))))))
                            (progn
-                             (! vpop-gvector-element target index)
+                             (! vpop-gvector-element vec index)
                              (setq *x862-top-vstack-lcell* (lcell-parent *x862-top-vstack-lcell*))
                              (x862-adjust-vstack (- *x862-target-node-size*))))
-                         )))))))))
+                         )))
+                   (x862-copy-register seg target vec)))))))
      (^)))
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
