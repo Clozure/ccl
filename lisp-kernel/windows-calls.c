@@ -622,18 +622,21 @@ lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
 __int64
 lisp_ftruncate(HANDLE hfile, off_t new_size)
 {
-  __int64 oldpos;
+  __int64 cureof,curpos;
+  int e;
 
-
-  oldpos = lisp_lseek(hfile, 0, SEEK_END);
-  if (oldpos == -1) {
+  curpos = lisp_lseek(hfile, 0, SEEK_CUR);
+  cureof = lisp_lseek(hfile, 0, SEEK_END);
+  lisp_lseek(hfile, 0, SEEK_CUR);
+  if (cureof == -1) {
     return 0;
   }
-  if (oldpos < new_size) {
+  if (cureof < new_size) {
     char buf[4096];
-    __int64 n = new_size-oldpos;
+    __int64 n = new_size-cureof;
     DWORD nwritten, to_write;
 
+    lisp_lseek(hfile, cureof, SEEK_SET);
     memset(buf,0,sizeof(buf));
     while(n) {
       if (n > 4096LL) {
@@ -643,17 +646,25 @@ lisp_ftruncate(HANDLE hfile, off_t new_size)
       }
       if (!WriteFile(hfile,buf,to_write,&nwritten,NULL)) {
         _dosmaperr(GetLastError());
+        e = errno;
+        lisp_lseek(hfile,curpos,SEEK_SET);
+        errno = e;
         return -1;
       }
       n -= nwritten;
     }
+    lisp_lseek(hfile,curpos,SEEK_SET);
     return 0;
   }
   lisp_lseek(hfile, new_size, SEEK_SET);
   if (SetEndOfFile(hfile)) {
+    lisp_lseek(hfile,curpos,SEEK_SET);
     return 0;
   }
   _dosmaperr(GetLastError());
+  e = errno;
+  lisp_lseek(hfile,curpos,SEEK_SET);
+  errno = e;
   return -1;
 }
 
