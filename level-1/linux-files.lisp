@@ -1867,7 +1867,7 @@ space, and prefixed with PREFIX."
                  (write-char #\\ out)
                  (write-char #\" out))
                 (t (write-char c out)))))
-          (when strings (write-char #\space out))))))
+          (when (cdr strings) (write-char #\space out))))))
 
   (defun create-windows-process (new-in new-out new-err cmdstring env)
     (declare (ignore env))              ; until we can do better.
