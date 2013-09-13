@@ -33,6 +33,7 @@
    (browse-button :foreign-type :id :accessor browse-button)
    (outline-view :foreign-type :id :accessor outline-view)
    (recursive-checkbox :foreign-type :id :accessor recursive-checkbox)
+   (regex-checkbox :foreign-type :id :accessor regex-checkbox)
    (case-sensitive-checkbox :foreign-type :id :accessor case-sensitive-checkbox)
    (expand-results-checkbox :foreign-type :id :accessor expand-results-checkbox)
    (progress-indicator :foreign-type :id :accessor progress-indicator)
@@ -46,6 +47,7 @@
    (search-dir :initform "" :accessor search-dir) ;the expanded search directory
    (search-str :initform "" :accessor search-str) ;a lisp string
    (recursive-p :initform t :reader recursive-p)
+   (regex-p :initform t :reader regex-p)
    (case-sensitive-p :initform nil :reader case-sensitive-p)
    (expand-results-p :initform nil :reader expand-results-p)
    (grep-process :initform nil :accessor grep-process))
@@ -100,10 +102,12 @@
   (#/setEnabled: (search-button wc) (can-search-p wc)))
 
 (objc:defmethod (#/toggleCheckbox: :void) ((wc search-files-window-controller) checkbox)
-  (with-slots (recursive-checkbox case-sensitive-checkbox expand-results-checkbox
-	       recursive-p case-sensitive-p expand-results-p) wc
+  (with-slots (recursive-checkbox regex-checkbox case-sensitive-checkbox expand-results-checkbox
+	       recursive-p regex-p case-sensitive-p expand-results-p) wc
     (cond ((eql checkbox recursive-checkbox)
 	   (setf recursive-p (not recursive-p)))
+          ((eql checkbox regex-checkbox)
+           (setf regex-p (not regex-p)))
 	  ((eql checkbox case-sensitive-checkbox)
 	   (setf case-sensitive-p (not case-sensitive-p)))
 	  ((eql checkbox expand-results-checkbox)
@@ -223,6 +227,8 @@
       (push "-r" grep-args))
     (unless (case-sensitive-p wc)
       (push "-i" grep-args))
+    (unless (regex-p wc)
+      (push "-F" grep-args))
     (setf (search-dir wc) folder-str
 	  (search-str wc) find-str)
     (#/setEnabled: (search-button wc) nil)
