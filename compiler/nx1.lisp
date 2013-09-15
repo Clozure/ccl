@@ -2157,7 +2157,6 @@
             (let* ((*nx-lexical-environment* arg-env))
               (setq arglist (nx1-formlist context args)))
             (nx-effect-other-decls pending *nx-lexical-environment*)
-            (setq body (nx1-env-body context body old-env))
             (while req
               (when (null arglist)
                 (nx-error "Not enough args ~S for (LAMBDA ~s ...)" args lambda-list))
@@ -2167,6 +2166,7 @@
                 (push var vars)
                 (push val vals)
                 (when binding (push binding var-bound-vars))))
+            (setq body (nx1-env-body context body old-env))
             (nx1-check-var-bindings var-bound-vars)
             (nx1-punt-bindings vars vals)
             (destructuring-bind (&optional optvars inits spvars) opt

@@ -5704,7 +5704,7 @@
          (numundo (%i- *x862-undo-count* (x862-encoding-undo-count old-stack))))
     (declare (fixnum numundo))
     (with-x86-local-vinsn-macros (seg vreg xfer)
-      (if (eq current-stack old-stack)
+      (if (x862-equal-encodings-p current-stack old-stack)
         (x862-form seg vreg xfer body)
         (if (eq xfer $backend-return)
           (progn
