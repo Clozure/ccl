@@ -542,7 +542,6 @@
 			     (%cons-pathname (reverse (cdr so-far)) (car so-far) nil nil device)))
 		 (when (or (null test) (funcall test sub))
                    (%add-directory-result sub result follow-links))))))
-    (unless (or do-dirs do-files) (return-from %all-directories nil))
     ;; now descend doing %all-dirs on dirs and collecting files & dirs
     ;; if do-x is t
     (with-open-dir (dirent device (native-to-namestring native-dir) result follow-links)
@@ -563,7 +562,7 @@
 					    std-sub nil nil device)))
 		(when (or (null test) (funcall test ans))
 		  (%add-directory-result ans result follow-links)))
-	      (%all-directories native-subdir rest path so-far keys result))
+              (%all-directories native-subdir rest path so-far keys result))
 	    (when (and do-files (%file*= name type native-sub))
 	      (multiple-value-bind (name type) (%std-name-and-type native-sub)
 		(setq ans (%cons-pathname (or dir-list (setq dir-list (reverse so-far))) name type nil device))
