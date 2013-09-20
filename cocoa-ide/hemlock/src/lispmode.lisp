@@ -353,6 +353,8 @@
                     mark)))))
     (setf (lisp-info-net-open-parens line-info) net-open-parens)
     (setf (lisp-info-net-close-parens line-info) net-close-parens)
+    (setf (lisp-info-ranges-to-ignore line-info)
+          (nreverse (lisp-info-ranges-to-ignore line-info)))
     (setf (lisp-info-signature-slot line-info) 
 	  (line-signature (mark-line mark)))))
 
