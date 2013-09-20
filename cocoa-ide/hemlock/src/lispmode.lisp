@@ -470,6 +470,7 @@
 	   (let ((info (getf (line-plist line) 'lisp-info)))
 	     (if info
 		 (dolist (range (lisp-info-ranges-to-ignore info)
+                                ;; if mark is at end of line, should check ending-quoted so can quote the newline...
 				(values nil line))
 		   (let ((start (car range))
 			 (end (cdr range)))
@@ -867,11 +868,13 @@
                    (return nil))
                  (when (test-char (next-character mark) :lisp-syntax :symbol-quote)
                    (return t))
-                 (character-offset mark 2))
+		 (unless (character-offset mark 2)
+		   (return nil)))
          (return nil))
        (mark-after mark))
       (:char-quote
-       (character-offset mark 2))
+       (unless (character-offset mark 2)
+	 (return nil)))
       (t (return mark)))))
 
 (defun %backward-symbol-at-mark (mark in-comment-p)
@@ -2183,7 +2186,7 @@
 (defparameter *previous-in-package-search-pattern*
     (new-search-pattern :string-insensitive :backward "in-package" nil))
 
-(defun package-at-mark (start-mark)
+(defun package-at-mark (start-mark &optional return-mark)
   (let* ((pattern *previous-in-package-search-pattern*)
          (mark (copy-mark start-mark :temporary)))
     (with-mark ((start mark)
@@ -2210,18 +2213,20 @@
                                (eq (ignore-errors (values (read-from-string s)))
                                    'in-package)))
                    (go again))
-                 (unless (form-offset end 1) (format t "~& worse") (return 4))
+                 (unless (form-offset end 1) (go again))
                  (move-mark start end)
-                 (form-offset start -1)
+                 (unless (form-offset start -1) (go again))
                  (return
                   (if (eql (next-character start) #\")
                     (progn
                       (character-offset start 1)
                       (character-offset end -1)
+                      (when return-mark (move-mark return-mark list-end))
                       (region-to-string (region start end)))
-                    (let* ((pkgname (ignore-errors (values (read-from-string (region-to-string (region start end)))))))
-                      (if pkgname
-                        (values (ignore-errors (string pkgname)))))))))))
+                     (let* ((pkgname (ignore-errors (read-from-string (region-to-string (region start end))))))
+                       (when (and pkgname (setq pkgname (ignore-errors (string pkgname))))
+                         (when return-mark (move-mark return-mark list-end))
+                         pkgname))))))))
          again)))))
 
 (defun ensure-buffer-package (buffer)

@@ -40,9 +40,9 @@
                    (region-to-string (if (mark< mark point)
                                        (region mark point)
                                        (region point mark))))
-      (symbol-at-mark buffer point))))
+      (symbol-at-mark point))))
 
-(defun symbol-at-mark (buffer mark)
+(defun symbol-at-mark (mark)
   (with-mark ((mark1 mark)
               (mark2 mark))
     ;; This doesn't handle embedded #'s or escaped chars in names.

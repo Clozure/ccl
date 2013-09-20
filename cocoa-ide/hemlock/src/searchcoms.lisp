@@ -504,7 +504,7 @@
 (defun get-definition-type (mark)
   (let ((buffer (mark-buffer mark)))
     (mark-after mark)
-    (let ((str (symbol-at-mark buffer mark)))
+    (let ((str (symbol-at-mark mark)))
       (when str
         (multiple-value-bind (sym error)
                              (let* ((*package* (ccl:require-type (or (buffer-package buffer) *package*) 'package)))

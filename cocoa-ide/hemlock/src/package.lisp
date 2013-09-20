@@ -394,6 +394,7 @@
    #:buffer-process-description
    #:raise-buffer-view
    #:string-to-clipboard
+   #:lookup-color
    ))
 
 (defpackage :hi
@@ -621,7 +622,15 @@
 
 (defpackage :hemlock
   (:use :common-lisp :hemlock-interface :hemlock-internals :hemlock-ext)
-  )
+  (:export ;; Symbols defined in hemlock for use in the IDE
+   #:with-display-context
+   #:update-current-package
+   #:paren-matching-bounds
+   #:compute-syntax-coloring
+   #:selection-for-click
+   #:move-point-for-click
+   #:edit-definition
+   ))
 
 
 ;; $Log$

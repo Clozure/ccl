@@ -1177,6 +1177,29 @@
     (setf (text-view-paren-highlight-enabled self) #$NO)
     (remove-paren-highlight self)))
 
+(defun hemlock-ext:lookup-color (color-spec)
+  (etypecase color-spec
+    (cons (apply #'color-values-to-nscolor color-spec))
+    ((vector t) (apply #'color-values-to-nscolor (coerce color-spec 'list)))
+    ((or string symbol)
+     (let ((name (string color-spec)))
+       ;; Please rewrite me...
+       (cond ((string-equal name "black") (#/blackColor ns:ns-color))
+             ((string-equal name "blue") (#/blueColor ns:ns-color))
+             ((string-equal name "brown") (#/brownColor ns:ns-color))
+             ((string-equal name "cyan") (#/cyanColor ns:ns-color))
+             ((string-equal name "gray") (#/grayColor ns:ns-color))
+             ((string-equal name "lightgray") (#/lightGrayColor ns:ns-color))
+             ((string-equal name "darkgray") (#/darkGrayColor ns:ns-color))        
+             ((string-equal name "green") (#/greenColor ns:ns-color))
+             ((string-equal name "magenta") (#/magentaColor ns:ns-color))
+             ((string-equal name "orange") (#/orangeColor ns:ns-color))
+             ((string-equal name "purple") (#/purpleColor ns:ns-color))
+             ((string-equal name "red") (#/redColor ns:ns-color))
+             ((string-equal name "white") (#/whiteColor ns:ns-color))
+             ((string-equal name "yellow") (#/yellowColor ns:ns-color))
+             (t (error "I don't know color ~s" name)))))))
+
 
 (defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
   #-cocotron
@@ -1199,17 +1222,16 @@
        layout #&NSForegroundColorAttributeName char-range)
       (#/removeTemporaryAttribute:forCharacterRange:
        layout #&NSBackgroundColorAttributeName char-range)
-      (let* ((ts (#/textStorage self))
-             (cache (hemlock-buffer-string-cache (slot-value ts 'hemlock-string)))
-             (hi::*current-buffer* (buffer-cache-buffer cache)))
-        (multiple-value-bind (start-line start-offset)
-            (update-line-cache-for-index cache start)
-          (let* ((end-line (update-line-cache-for-index cache (+ start length))))
-            (set-temporary-character-attributes
-             layout
-             (- start start-offset)
-             start-line
-             (hi::line-next end-line)))))))
+      (hemlock:with-display-context (hemlock-view self)
+        (ns:with-ns-range (range)
+          (loop
+            for (start len . color) in (hemlock:compute-syntax-coloring start length)
+            when color
+            do (progn
+                 (setf (ns:ns-range-location range) start
+                       (ns:ns-range-length range) len)
+                 (#/addTemporaryAttribute:value:forCharacterRange:
+                  layout #&NSForegroundColorAttributeName color range)))))))
   (when (eql #$YES (text-view-paren-highlight-enabled self))
     (let* ((background #&NSBackgroundColorAttributeName)
            (paren-highlight-left (text-view-paren-highlight-left-pos self))
@@ -1233,35 +1255,18 @@
 
 (defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
   (disable-paren-highlight self)
-  (let* ((buffer (hemlock-buffer self)))
-    (when (and buffer (string= (hi::buffer-major-mode buffer) "Lisp"))
-      (let* ((hi::*current-buffer* buffer)
-             (point (hi::buffer-point buffer)))
+  (let* ((view (hemlock-view self))
+         (buffer (and view (hi:hemlock-view-buffer view))))
+    (when (and buffer (string= (hi:buffer-major-mode buffer) "Lisp"))
+      (hemlock:with-display-context view
         #+debug (#_NSLog #@"Syntax check for paren-highlighting")
-        (update-buffer-package (hi::buffer-document buffer) buffer)
-        (cond ((eql (hi::next-character point) #\()
-               (hemlock::pre-command-parse-check point)
-               (when (hemlock::valid-spot point t)
-                 (hi::with-mark ((temp point))
-                   (when (hemlock::list-offset temp 1)
-                     #+debug (#_NSLog #@"enable paren-highlight, forward")
-                     (setf (text-view-paren-highlight-right-pos self)
-                           (1- (hi:mark-absolute-position temp))
-                           (text-view-paren-highlight-left-pos self)
-                           (hi::mark-absolute-position point)
-                           (text-view-paren-highlight-enabled self) #$YES)))))
-              ((eql (hi::previous-character point) #\))
-               (hemlock::pre-command-parse-check point)
-               (when (hemlock::valid-spot point nil)
-                 (hi::with-mark ((temp point))
-                   (when (hemlock::list-offset temp -1)
-                     #+debug (#_NSLog #@"enable paren-highlight, backward")
-                     (setf (text-view-paren-highlight-left-pos self)
-                           (hi:mark-absolute-position temp)
-                           (text-view-paren-highlight-right-pos self)
-                           (1- (hi:mark-absolute-position point))
-                           (text-view-paren-highlight-enabled self) #$YES))))))
-        (compute-temporary-attributes self)))))
+        (update-buffer-package (hi::buffer-document buffer))
+        (multiple-value-bind (left right) (hemlock:paren-matching-bounds)
+          (when (and left right)
+            (setf (text-view-paren-highlight-left-pos self) left
+                  (text-view-paren-highlight-right-pos self) right
+                  (text-view-paren-highlight-enabled self) #$YES))))
+      (compute-temporary-attributes self))))
 
 
 
@@ -1321,85 +1326,6 @@
   (#/duplicate: (#/window self) sender))
 
 
-(defloadvar *lisp-string-color* (#/blueColor ns:ns-color))
-(defloadvar *lisp-comment-color* (#/brownColor ns:ns-color))
-(defloadvar *lisp-double-comment-color* (#/orangeColor ns:ns-color))
-(defloadvar *lisp-triple-comment-color* (#/redColor ns:ns-color))
-
-
-;;; LAYOUT is an NSLayoutManager in which we'll set temporary character
-;;; attrubutes before redisplay.
-;;; POS is the absolute character position of the start of START-LINE.
-;;; END-LINE is either EQ to START-LINE (in the degenerate case) or
-;;; follows it in the buffer; it may be NIL and is the exclusive
-;;; end of a range of lines
-;;; HI::*CURRENT-BUFFER* is bound to the buffer containing START-LINE
-;;; and END-LINE
-#-cocotron
-(defun set-temporary-character-attributes (layout pos start-line end-line)
-  (ns:with-ns-range (range)
-    (let* ((color-attribute #&NSForegroundColorAttributeName)
-           (string-color  *lisp-string-color* )
-           (comment-color *lisp-comment-color*)
-           (double-comment-color *lisp-double-comment-color*)
-           (triple-comment-color *lisp-triple-comment-color*))
-      (hi::with-mark ((m (hi::buffer-start-mark hi::*current-buffer*)))
-        (hi::line-start m start-line)
-        (hi::pre-command-parse-check m))
-      (do ((p pos (+ p (1+ (hi::line-length line))))
-           (line start-line (hi::line-next line)))
-          ((eq line end-line))
-        (let* ((parse-info (getf (hi::line-plist line) 'hemlock::lisp-info))
-               (last-end 0))
-          (when parse-info
-            (dolist (r (hemlock::lisp-info-ranges-to-ignore parse-info))
-              (destructuring-bind (istart . iend) r
-                (let* ((attr (if (= istart 0)
-                               (hemlock::lisp-info-begins-quoted parse-info)
-                               (if (< last-end istart)
-                                 (hi:character-attribute :lisp-syntax
-                                                         (hi::line-character line (1- istart)))
-                                 :comment)))
-                       (type (case attr
-                               ((:char-quote :symbol-quote) nil)
-                               (:string-quote :string)
-                               (t :comment)))
-                       (start (+ p istart))
-                       (len (- iend istart))
-                       (nsemi (if (eq type :comment)
-                                (do* ((n 0)
-                                      (i istart (1+ i)))
-                                     ((= i iend) n)
-                                  (unless (eq
-                                           (hi:character-attribute :lisp-syntax
-                                                                   (hi::line-character line i))
-                                           :comment)
-                                    (return n))
-                                  (when (= (incf n) 3)
-                                    (return n))))))
-                  (when type
-                    (when (eq type :string)
-                      (decf start)
-                      (incf len 2))
-                    (setf (ns:ns-range-location range) start
-                          (ns:ns-range-length range) len)
-                    (let ((attrs (if (eq type :string)
-                                   string-color
-                                   (case nsemi
-                                     (2 double-comment-color)
-                                     (3 triple-comment-color)
-                                     (t comment-color)))))
-                      (#/addTemporaryAttribute:value:forCharacterRange:
-                       layout color-attribute attrs range)))
-                  (setq last-end iend))))))))))
-
-#+no
-(objc:defmethod (#/drawRect: :void) ((self hemlock-text-view) (rect :<NSR>ect))
-  ;; Um, don't forget to actually draw the view..
-  (call-next-method  rect))
-
-
-
 (defmethod hemlock-view ((self hemlock-text-view))
   (slot-value self 'hemlock-view))
 
@@ -1410,34 +1336,28 @@
       (hi::handle-hemlock-event view #'(lambda ()
                                          (hemlock::editor-execute-expression-command nil))))))
 
+(defun ui-buffer-env (obj)
+  (let* ((buffer (hemlock-buffer obj))
+         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
+         (pathname (hi::buffer-pathname buffer)))
+    (list package-name pathname)))
+
 (objc:defmethod (#/evalAll: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
-         (pathname (hi::buffer-pathname buffer))
-         (s (lisp-string-from-nsstring (#/string self))))
-    (ui-object-eval-selection *NSApp* (list package-name pathname s))))
+  (let* ((s (lisp-string-from-nsstring (#/string self))))
+    (ui-object-eval-selection *NSApp* `(,@(ui-buffer-env self) ,s))))
 
 (objc:defmethod (#/loadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
-         (pathname (hi::buffer-pathname buffer)))
-    (ui-object-load-buffer *NSApp* (list package-name pathname))))
+  (ui-object-load-buffer *NSApp* (ui-buffer-env self)))
 
 (objc:defmethod (#/compileBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
-         (pathname (hi::buffer-pathname buffer)))
-    (ui-object-compile-buffer *NSApp* (list package-name pathname))))
+  (ui-object-compile-buffer *NSApp* (ui-buffer-env self)))
 
 (objc:defmethod (#/compileAndLoadBuffer: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::default-package :buffer buffer))
-         (pathname (hi::buffer-pathname buffer)))
-    (ui-object-compile-and-load-buffer *NSApp* (list package-name pathname))))
+  (ui-object-compile-and-load-buffer *NSApp* (ui-buffer-env self)))
 
 (defloadvar *text-view-context-menu* ())
 
@@ -1573,10 +1493,10 @@
                      (atom-mode (eql g #$NSSelectByParagraph)))
                 (hi:with-mark ((mark point))
                   (when (or (= length 0) (hi:move-to-absolute-position mark index))
-                    (let* ((region (selection-for-click mark atom-mode))
+                    (let* ((region (hemlock:selection-for-click mark atom-mode))
                            (other-region (and (< 0 length)
                                               (hi:character-offset mark length)
-                                              (selection-for-click mark atom-mode))))
+                                              (hemlock:selection-for-click mark atom-mode))))
                       (when (null region) (setq region other-region other-region nil))
                       (when region
                         (let ((start-pos (min (hi:mark-absolute-position (hi:region-start region))
@@ -1612,17 +1532,6 @@
                    :address (#_NSStringFromRange proposed)
                    :<NSS>election<G>ranularity g))))))
 
-;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
-(defun selection-for-click (mark paragraph-mode-p)
-  ;; Handle lisp mode specially, otherwise just go with default Cocoa behavior
-  (when (string= (hi:buffer-major-mode (hi::mark-buffer mark)) "Lisp") ;; gag
-    (unless paragraph-mode-p
-      (let ((region (hemlock::word-region-at-mark mark)))
-        (when region
-          (return-from selection-for-click region))))
-    (hemlock::pre-command-parse-check mark)
-    (hemlock::form-region-at-mark mark)))
-
 (defun append-output (view string)
   (assume-cocoa-thread)
   ;; Arrange to do the append in command context
@@ -1631,16 +1540,6 @@
 				       (hemlock::append-buffer-output (hi::hemlock-view-buffer view) string)))))
 
 
-(defun move-point-for-click (buffer index)
-  (let* ((point (hi::buffer-point buffer))
-         (mark (and (hemlock::%buffer-region-active-p buffer) (hi::buffer-mark buffer))))
-    (setf (hi::buffer-region-active buffer) nil)
-    (unless (eql (hi:mark-absolute-position point) index)  ;; if point is already at target, leave mark alone
-      (if (and mark (eql (hi:mark-absolute-position mark) index))
-        (hi:move-mark mark point)
-        (hi::push-new-buffer-mark point))
-      (hi:move-to-absolute-position point index))))
-  
 ;;; Update the underlying buffer's point (and "active region", if appropriate.
 ;;; This is called in response to a mouse click or other event; it shouldn't
 ;;; be called from the Hemlock side of things.
@@ -1671,7 +1570,7 @@
                #+debug
                (#_NSLog #@"Moving point to absolute position %d" :int location)
                ;; Do this even if still-selecting, in order to enable the heuristic below.
-               (move-point-for-click buffer location)
+               (hemlock:move-point-for-click buffer location)
                (update-paren-highlight self))
               (t
                ;; We don't get much information about which end of the
@@ -2129,8 +2028,8 @@
 (objc:defmethod #/undoManager ((self echo-area-document))
   +null-ptr+) ;For now, undo is not supported for echo-areas
 
-(defmethod update-buffer-package ((doc echo-area-document) buffer)
-  (declare (ignore buffer)))
+(defmethod update-buffer-package ((doc echo-area-document))
+  nil)
 
 (defmethod document-invalidate-modeline ((self echo-area-document))
   nil)
@@ -2752,17 +2651,8 @@
 	 (unless (%null-ptr-p pane)
 	   (#/setNeedsDisplay: (text-pane-mode-line pane) t))))))
 
-(defmethod update-buffer-package ((doc hemlock-editor-document) buffer)
-  (let* ((name (or (hemlock::package-at-mark (hi::buffer-point buffer))
-                   (hi::variable-value 'hemlock::default-package :buffer buffer))))
-    (when name
-      (let* ((pkg (find-package name)))
-        (if pkg
-          (setq name (shortest-package-name pkg))))
-      (let* ((curname (hi::variable-value 'hemlock::current-package :buffer buffer)))
-        (if (or (null curname)
-                (not (string= curname name)))
-          (setf (hi::variable-value 'hemlock::current-package :buffer buffer) name))))))
+(defmethod update-buffer-package ((doc hemlock-editor-document))
+  (hemlock:update-current-package))
 
 (defun hemlock-ext:note-selection-set-by-search (buffer)
   (let* ((doc (hi::buffer-document buffer)))
@@ -3750,7 +3640,7 @@
                (when (probe-file lpath) (setq arg lpath)))))
          (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
         ((ccl::valid-function-name-p arg)
-         (hemlock::edit-definition arg)
+         (hemlock:edit-definition arg)
          nil)
         (t (report-bad-arg arg '(or null string pathname (satisfies ccl::valid-function-name-p))))))
 
@@ -3772,7 +3662,7 @@
                    (handler-case (read-from-string string)
                      (error () nil)))))
     (if symbol
-      (hemlock::edit-definition symbol)
+      (hemlock:edit-definition symbol)
       (execute-in-gui #'(lambda ()
                           (find-or-make-hemlock-view
                            (if (probe-file string)

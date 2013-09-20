@@ -88,6 +88,8 @@
     "completion"
     "symbol-completion"
     "bindings"
+
+    "display"
     ))
 
 (defun compile-hemlock (&optional force)

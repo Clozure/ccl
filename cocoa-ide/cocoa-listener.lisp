@@ -368,8 +368,8 @@
 (defun buffer-process (buffer)
   (hemlock-document-process (hi::buffer-document buffer)))
 
-(defmethod update-buffer-package ((doc hemlock-listener-document) buffer)
-  (declare (ignore buffer)))
+(defmethod update-buffer-package ((doc hemlock-listener-document))
+  nil)
 
 (defmethod document-encoding-name ((doc hemlock-listener-document))
   "UTF-8")
@@ -684,21 +684,13 @@
 (defmethod perform-close-kills-process-p ((self hemlock-listener-document))
   t)
 
-(defun shortest-package-name (package)
-  (let* ((name (package-name package))
-         (len (length name)))
-    (dolist (nick (package-nicknames package) name)
-      (let* ((nicklen (length nick)))
-        (if (< nicklen len)
-          (setq name nick len nicklen))))))
-
 (defmethod ui-object-note-package ((app ns:ns-application) package)
-  (let ((proc *current-process*)
-        (name (shortest-package-name package)))
+  (let ((proc *current-process*))
     (execute-in-gui #'(lambda ()
                         (dolist (buf hi::*buffer-list*)
                           (when (eq proc (buffer-process buf))
-                            (setf (hi::variable-value 'hemlock::current-package :buffer buf) name)))))))
+                            (let ((hi::*current-buffer* buf))
+                              (hemlock:update-current-package package))))))))
 
 
 (defmethod eval-in-listener-process ((process cocoa-listener-process)
