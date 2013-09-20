@@ -262,18 +262,14 @@
                                (character-attribute :lisp-syntax (line-character line (1- start-offset)))
                                :comment))
               do (when (member syntax '(:symbol-quote :string-quote))
-                   (decf start-offset)
-                   (incf end-offset))
+                   (when (< 0 start-offset)
+                     (decf start-offset))
+                   (when (< end-offset (line-length line))
+                     (incf end-offset)))
               unless (and (eq line start-line) (<= end-offset start-charpos))
               nconc (let* ((type (case syntax
-                                   (:char-quote nil)
-                                   (:symbol-quote
-                                    (incf end-offset)
-                                    nil)
-                                   (:string-quote
-                                    (decf start-offset)
-                                    (incf end-offset)
-                                    :string)
+                                   ((:char-quote :symbol-quote) nil)
+                                   (:string-quote :string)
                                    (t (loop for i from start-offset as nsemi upfrom 0
                                         until (or (eql nsemi 3)
                                                   (eql i end-offset)
