@@ -186,6 +186,7 @@
              (*package* pkg)
              (*read-eval* nil)
              (sym (ignore-errors (read-from-string str))))
+        (unless (symbolp sym) (setq sym nil))
         (setf (gethash str *string-to-symbol-cache*) (cons (cons pkg sym) pkg-alist))
         sym))))
 
