@@ -2755,29 +2755,36 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-signed-byte-64))))
 
+;;; Something is an (UNSIGNED-BYTE 64) iff:
+;;; a) it's a non-negative FIXNUM
+;;; b) it's a 1- or 2-digit BIGNUM and the sign bit is clear
+;;; c) it's a 3-digit BIGNUM and the high word is 0
 (define-x8632-vinsn require-u64 (()
 				 ((object :lisp))
 				 ((tag :s32)))
   :again
-  (testl (:$l x8632::fixnummask) (:%l object))
+  (testl (:$l (logior (ash 1 31) x8632::fixnummask)) (:%l object))
   (movl (:%l object) (:%l tag))
-  (je :ok-if-non-negative)
+  (je :ok)
   (andl (:$l x8632::fulltagmask) (:%l tag))
   (cmpl (:$l x8632::fulltag-misc) (:%l tag))
   (jne :bad)
-  (cmpl (:$l x8632::two-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
-  (je :two)
   (cmpl (:$l x8632::three-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
-  (jne :bad)
+  (jne :notthree)
   (cmpl (:$b 0) (:@ (+ x8632::misc-data-offset 8) (:%l object)))
   (je :ok)
   :bad
   (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-unsigned-byte-64))
   (jmp :again)
-  :two
-  (movl (:@ x8632::misc-data-offset (:%l object)) (:%l tag))
-  :ok-if-non-negative
-  (testl (:%l tag) (:%l tag))
+  :notthree
+  (xorl (:%l tag) (:%l tag))
+  (cmpl (:$l x8632::one-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
+  (je :testsign)
+  (addl (:$b x8632::fixnumone) (:%l tag))
+  (cmpl (:$l x8632::two-digit-bignum-header) (:@ x8632::misc-header-offset (:%l object)))
+  (jne :bad)
+  :testsign
+  (cmpl (:$b 0) (:@ x8632::misc-data-offset (:%l object) (:%l tag)))
   (js :bad)
   :ok)
 
