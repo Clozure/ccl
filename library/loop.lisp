@@ -954,11 +954,7 @@ collected result will be returned as the value of the LOOP."
 				    (t 'let))
 			     ,vars
 			     ,@(loop-build-destructuring-bindings crocks forms)))))))
-      (if *loop-names*
-	  (do () ((null (car *loop-names*)) answer)
-	    (setq answer `(block ,(pop *loop-names*) ,answer)))
-	  `(block nil ,answer)))))
-
+      `(block ,(car *loop-names*) ,answer))))
 
 (defun loop-iteration-driver ()
   (do () ((null *loop-source-code*))
@@ -1265,7 +1261,7 @@ collected result will be returned as the value of the LOOP."
     (when *loop-names*
       (loop-error "You may only use one NAMED clause in your loop: NAMED ~S ... NAMED ~S."
 		  (car *loop-names*) name))
-    (setq *loop-names* (list name nil))))
+    (setq *loop-names* (list name))))
 
 (defun loop-do-return ()
   (loop-emit-body (loop-construct-return (loop-get-form))))
