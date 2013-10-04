@@ -73,19 +73,19 @@
         (if (< nicklen len)
           (setq name nick len nicklen))))))
 
-(defun hemlock:update-current-package (&optional pkg)
-  (when (equalp (buffer-major-mode (current-buffer)) "Lisp")
+(defun hemlock:update-current-package (&optional pkg (buffer (current-buffer)))
+  (when (equalp (buffer-major-mode buffer) "Lisp")
     (unless pkg
       (setq pkg (or (package-at-mark (current-point))
-                    (value default-package))))
+                    (variable-value 'default-package :buffer buffer))))
     (when pkg
       (let* ((name (if (packagep pkg) (package-name pkg) (string pkg)))
-             (curname (value current-package)))
+             (curname (variable-value 'current-package :buffer buffer)))
         (when (setq pkg (find-package name))
           (setq name (shortest-package-name pkg)))
         (if (or (null curname)
                 (not (string= curname name)))
-          (setf (value current-package) name))))))
+            (setf (variable-value 'current-package :buffer buffer) name))))))
 
 ;; advance to next symbol, ignoring form boundaries, strings, etc.
 (defun %scan-to-symbol (mark)
