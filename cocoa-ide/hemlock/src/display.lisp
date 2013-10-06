@@ -20,7 +20,29 @@
 			     (:system-symbol (0 .5 0 1))
 			     (:definition  (1 0 1 1))
 			     (:keyword :purple)))
+;; Cache for actual color objects.
+(defvar *lisp-code-colors-cache* nil)
 
+;; (cached-lisp-code-colors)
+(defun cached-lisp-code-colors ()
+  (let ((specs (car *lisp-code-colors-cache*))
+        (alist (cdr *lisp-code-colors-cache*))
+        (user-alist *lisp-code-colors*))
+    (flet ((get-spec (cell)
+             (let ((spec (cdr cell)))
+               (if (and (consp spec) (null (cdr spec)))
+                 (car spec)
+                 spec))))
+      (declare (inline get-spec))
+      (unless (and (eql (length user-alist) (length alist))
+                   (loop for spec in specs for cell in alist for user-cell in user-alist
+                     always (and (eq (car cell) (car user-cell)) (eq spec (get-spec user-cell)))))
+        (setq specs (mapcar #'get-spec user-alist))
+        (setq alist (mapcar #'(lambda (user-cell spec)
+                                (cons (car user-cell) (hemlock-ext:lookup-color spec)))
+                            user-alist specs))
+        (setq *lisp-code-colors-cache* (cons specs alist)))
+      alist)))
 
 ;; Hemlock style would be more to pass in two marks that get moved to the bounds, leave the absolute position
 ;; stuff to caller.  We could keep two marks for this purpose in the view, so don't have to cons them each time.
@@ -107,21 +129,6 @@
         (pos (position #\space full-name)))
     (if pos (subseq full-name 0 pos) full-name)))
 
-;; Cache for actual color objects.
-(defvar *lisp-code-colors-cache* nil)
-
-;; (cached-lisp-code-colors)
-(defun cached-lisp-code-colors ()
-  ;; Assume nobody is going to destructively modify the list...
-  (unless (eq *lisp-code-colors* (car *lisp-code-colors-cache*))
-    (setq *lisp-code-colors-cache*
-          (cons *lisp-code-colors*
-                (loop
-                  for (type . color-spec) in *lisp-code-colors*
-                  do (when (and (consp color-spec) (null (cdr color-spec))) (setq color-spec (car color-spec)))
-                  collect (cons type (hemlock-ext:lookup-color color-spec))))))
-  (cdr *lisp-code-colors-cache*))
-
 ;; When get a cache miss, means we'll fill in parsing and line-origin caches for the whole buffer, so might
 ;; as well get a little extra coloring pre-computed in as well, for smoother scrolling...
 (defparameter $coloring-cache-extra 1000)
@@ -130,6 +137,7 @@
   (tick nil)
   (start 0)
   (end 0)
+  (colors nil)
   (data nil))
 
 (defun make-sym-vec ()
@@ -156,18 +164,19 @@
   (let* ((buffer (current-buffer))
          (end-pos (+ start-pos length))
          (tick (buffer-signature buffer))
+         (colors (cached-lisp-code-colors))
          (cache (or (getf (buffer-plist buffer) 'coloring-cache)
                     (setf (getf (buffer-plist buffer) 'coloring-cache) (make-coloring-cache)))))
     (unless (and (eql (coloring-cache-tick cache) tick)
                  (<= (coloring-cache-start cache) start-pos)
                  (<= end-pos (coloring-cache-end cache))
-                 ;; make sure colors haven't changed
-                 (eq *lisp-code-colors* (car *lisp-code-colors-cache*)))
+                 (eq colors (coloring-cache-colors cache)))
       (setq start-pos (max 0 (- start-pos $coloring-cache-extra)))
       (setq end-pos (+ end-pos $coloring-cache-extra))
       (let ((res (compute-syntax-coloring-in-region buffer start-pos end-pos)))
           (setf (coloring-cache-start cache) start-pos
                 (coloring-cache-end cache) end-pos
+                (coloring-cache-colors cache) colors
                 (coloring-cache-data cache) res
                 (coloring-cache-tick cache) tick)))
     (coloring-cache-data cache)))
@@ -196,7 +205,7 @@
   (and (test-char (previous-character start-mark) :lisp-syntax :open-paren)
        (prog2
          (mark-before start-mark)
-         (not (test-char (previous-character start-mark) :lisp-syntax :prefix))
+         (not (test-char (previous-character start-mark) :lisp-syntax (or :prefix :open-paren)))
          (mark-after start-mark))))
 
 (defun compute-symbol-category (start-mark sym)
