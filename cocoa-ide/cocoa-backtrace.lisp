@@ -85,14 +85,22 @@
    (label :initarg :label :reader frame-descriptor-label)
    (values :initarg :values :reader frame-descriptor-values)))
 
+(defvar $backtrace-label-max-len 300)
+
 (defun make-frame-descriptor (fp context)
   (let* ((args (ccl:frame-supplied-arguments fp context))
          (vars (ccl:frame-named-variables fp context))
          (lfun (ccl:frame-function fp context)))
-    (make-instance 'frame-descriptor
-      :data (cons fp context)
-      :label (if lfun
-               (with-output-to-string (stream)
+    (macrolet ((with-truncating-output ((streamvar) &body body)
+                 `(multiple-value-bind (str truncated-p)
+                                       (ccl::with-output-to-truncating-string-stream
+                                          (,streamvar $backtrace-label-max-len)
+                                         ,@body)
+                    (if truncated-p (concatenate 'string str "...") str))))
+      (make-instance 'frame-descriptor
+        :data (cons fp context)
+        :label (if lfun
+               (with-truncating-output (stream)
                  (format stream "(~S" (or (ccl:function-name lfun) lfun))
                  (if (eq args (ccl::%unbound-marker))
                    (format stream " #<Unknown Arguments>")
@@ -105,13 +113,13 @@
       :values (if lfun
                 (map 'vector
                      (lambda (var.val)
-                       (destructuring-bind (var . val) var.val
-                         (let ((label (format nil "~:[~s~;~a~]: ~s"
-                                              (stringp var) var val)))
-                           (cons label var.val))))
+                       (let* ((var (car var.val))
+			      (val (cdr var.val))
+			      (label (with-truncating-output (stream)
+                                      (format stream "~:[~s~;~a~]: ~s" (stringp var) var val))))
+                         (cons label var.val)))
                      (cons `("Function" . ,lfun)
-                           (and (not (eq vars (ccl::%unbound-marker))) vars)))
-                ))))
+                           (and (not (eq vars (ccl::%unbound-marker))) vars))))))))
 
 (defmethod stack-descriptor-frame ((sd stack-descriptor) index)
   (let ((cache (stack-descriptor-frame-cache sd)))

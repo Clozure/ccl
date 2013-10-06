@@ -1537,7 +1537,7 @@ All output to that string stream is saved in a string."
 	   (progn
 	     ,@forms
 	     (values (get-output-stream-string ,var)
-		     (slot-value ,var 'truncated)))
+                     (truncating-string-output-stream-truncated-p ,var)))
 	(close ,var)))))
 
 (defmacro with-open-file ((var filename . args) &body body &aux (stream (gensym))(done (gensym)))
