@@ -19,7 +19,8 @@
 			     (:triple-comment :red)
 			     (:system-symbol (0 .5 0 1))
 			     (:definition  (1 0 1 1))
-			     (:keyword :purple)))
+			     (:keyword :purple)
+                             (:unmatched-paren :red)))
 ;; Cache for actual color objects.
 (defvar *lisp-code-colors-cache* nil)
 
@@ -345,6 +346,44 @@
                   (coloring-region start-mark end-mark defn-color))
         do (rotatef start-mark end-mark)))))
 
+(defun compute-unmatched-parens-coloring-in-region (start-mark end-mark)
+  (macrolet ((scan-loop (forwardp open-key buffer-start-mark start-line end-line close-key)
+               `(loop with paren-count = 0 with limit-line = (neighbor-line ,end-line ,forwardp) with in-region-p = nil
+                  for line = (mark-line (,buffer-start-mark (mark-buffer m))) then (neighbor-line line ,forwardp)
+                  until (eq line limit-line)
+                  for info = (or (getf (line-plist line) 'lisp-info) (return nil))
+                  as parens-on-line = ,(if forwardp '(lisp-info-net-close-parens info) '(lisp-info-net-open-parens info))
+                  do (when (eq line ,start-line) (setq in-region-p t))
+                  do (decf paren-count parens-on-line)
+                  do (when (< paren-count 0)
+                       (when in-region-p
+                         ,(if forwardp '(line-start m line) '(line-end m line))
+                         (loop with net-count =  (+ paren-count parens-on-line) doing
+                           (unless (scan-direction-valid m ,forwardp :lisp-syntax (or :close-paren :open-paren :newline))
+                             (error "couldn't find ~s mismatches" (- paren-count)))
+                           (ecase (character-attribute :lisp-syntax (direction-char m ,forwardp))
+                             (,open-key (incf net-count))
+                             (,close-key (when (< (decf net-count) 0)
+                                             (push (cons ,(if forwardp
+                                                            '(mark-absolute-position m)
+                                                            '(1- (mark-absolute-position m)))
+                                                         coloring-data) result)
+                                             (when (eql (incf paren-count) 0) (return))
+                                             (setq net-count 0))))
+                           (neighbor-mark m ,forwardp)))
+                       (setq paren-count 0))
+                  do (incf paren-count ,(if forwardp '(lisp-info-net-open-parens info) '(lisp-info-net-close-parens info))))))
+    (with-mark ((m start-mark))
+      (let* ((end-line (mark-line end-mark))
+             (start-line (mark-line start-mark))
+             (color (or (cdr (assq :unmatched-paren (cached-lisp-code-colors)))
+                        (return-from compute-unmatched-parens-coloring-in-region nil)))
+             (coloring-data (cons 1 color))
+             (result nil))
+        (scan-loop t :open-paren buffer-start-mark start-line end-line :close-paren) ; Compute unmatched close parens, top down.
+        (scan-loop nil :close-paren buffer-end-mark end-line start-line :open-paren) ; Compute umatched open parens, bottom up.
+        result))))
+
 (defun compute-syntax-coloring-in-region (buffer start-pos end-pos)
   (let* ((some-mark (buffer-point buffer)))
     (with-mark ((start-mark some-mark)
@@ -357,6 +396,7 @@
       (when (mark< start-mark end-mark)
         (pre-command-parse-check start-mark)
         (sort (nconc (compute-string/comment-coloring-in-region start-mark end-mark)
-                     (compute-symbol-coloring-in-region start-mark end-mark))
+                     (compute-symbol-coloring-in-region start-mark end-mark)
+                     (compute-unmatched-parens-coloring-in-region start-mark end-mark))
               #'< :key #'car)))))
 
