@@ -85,6 +85,8 @@
      frame-supplied-arguments
      frame-named-variables
      apply-in-frame
+     *error-print-level*
+     *error-print-length*
      *quit-on-eof*
      *quit-interrupt-hook*
      *break-hook*

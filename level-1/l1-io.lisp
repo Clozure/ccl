@@ -251,6 +251,12 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
 (defvar *print-catch-errors* nil)
 
+(defun default-print-level (val)
+  (if (eq val :default) *print-level* val))
+
+(defun default-print-length (val)
+  (if (eq val :default) *print-length* val))
+
 ;;;; ======================================================================
 
 (defclass xp-stream (output-stream)

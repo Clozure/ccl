@@ -153,8 +153,8 @@ object."
 			       (nth-value-in-frame p i context lfun pc vsp parent-vsp)
 	    (format t "~&  ~D " i)
 	    (when name (format t "~s" name))
-	    (let* ((*print-length* *backtrace-print-length*)
-		   (*print-level* *backtrace-print-level*))
+	    (let* ((*print-length* (default-print-length *backtrace-print-length*))
+		   (*print-level* (default-print-level *backtrace-print-level*)))
 	      (format t ": ~s" var))
 	    (when type (format t " (~S)" type)))))
     (error () (format t "#<error printing frame>")))
@@ -169,8 +169,8 @@ object."
             (:direct
                (format t "~&     Arguments: ~:s" (arglist-from-map lfun)))
             (t (format t "~&  ~s" (arglist-from-map lfun))))
-	  (let* ((*print-length* *backtrace-print-length*)
-		 (*print-level* *backtrace-print-level*))
+	  (let* ((*print-length* (default-print-length *backtrace-print-length*))
+		 (*print-level* (default-print-level *backtrace-print-level*)))
 	    (flet ((show-pair (pair prefix)
 		     (destructuring-bind (name . val) pair
 		       (format t "~&~a~s: " prefix name)
@@ -219,8 +219,8 @@ object."
       (loop for arg in args
             collect (if (eq arg (%unbound-marker))
                       "?"
-                      (let* ((*print-length* *backtrace-print-length*)
-                             (*print-level* *backtrace-print-level*))
+                      (let* ((*print-length* (default-print-length *backtrace-print-length*))
+                             (*print-level* (default-print-level *backtrace-print-level*)))
                         (format nil "~s" arg)))))))
 
 ;;; Return a list of "interesting" frame addresses in context, most

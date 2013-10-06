@@ -220,8 +220,8 @@ binding of that symbol is used - or an integer index into the frame's set of loc
    "Return a form which looks like the call which established the stack frame identified by <frame-number>.  This is only well-defined in certain cases: when the function is globally named and not a lexical closure and when it was compiled with *SAVE-LOCAL-SYMBOLS* in effect."
    (let* ((form (dbg-form frame-number)))
      (when form
-       (let* ((*print-level* *backtrace-print-level*)
-              (*print-length* *backtrace-print-length*))
+       (let* ((*print-level* (default-print-level *backtrace-print-level*))
+              (*print-length* (default-print-length *backtrace-print-length*)))
          (toplevel-print (list form))))))
 
 ;;; Ordinarily, form follows function.
@@ -562,8 +562,8 @@ commands but aren't")
         (*print-array* nil)
         (*print-escape* t)
         (*print-gensym* t)
-        (*print-length* *error-print-length*)
-        (*print-level* *error-print-level*)
+        (*print-length* (default-print-length *error-print-length*))
+        (*print-level* (default-print-level *error-print-level*))
         (*print-lines* nil)
         (*print-miser-width* nil)
         (*print-readably* nil)
@@ -769,8 +769,8 @@ commands but aren't")
       (with-toplevel-commands :break
         (if *continuablep*
           (let* ((*print-circle* *error-print-circle*)
-                 (*print-level* *error-print-level*)
-                 (*print-length* *error-print-length*)
+                 (*print-length* (default-print-length *error-print-length*))
+                 (*print-level* (default-print-level *error-print-level*))
                  ;(*print-pretty* nil)
                  (*print-array* nil))
             (format t (or (application-ui-operation *application* :break-options-string t)
