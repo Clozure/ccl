@@ -246,23 +246,6 @@
 (defun current-event-command-key-p ()
   (current-event-modifier-p #$NSCommandKeyMask))
 
-; Better definition in file-dialogs.lisp
-#+IGNORE
-(defun choose-directory-dialog ()
-  (execute-in-gui #'(lambda ()
-                      (let ((op (#/openPanel ns:ns-open-panel)))
-                        (#/setAllowsMultipleSelection: op nil)
-                        (#/setCanChooseDirectories: op t)
-                        (#/setCanChooseFiles: op nil)
-                        (when (eql (#/runModalForTypes: op +null-ptr+) #$NSOKButton)
-                          ;; #/stringByStandardizingPath seems to strip trailing slashes
-                         (let* ((path (#/retain (#/stringByAppendingString:
-                                        (#/stringByStandardizingPath
-                                         (#/objectAtIndex: (#/filenames op) 0))
-                                        #@"/"))))
-                            path))))))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; debugging
