@@ -1728,7 +1728,7 @@
 (defcommand "Backward Form" (p)
     "Skip over the previous Form, collapsing the selection.
   With argument, skips the previous p Forms."
-    "Skip over the previous Form, collaspsing the selection."
+    "Skip over the previous Form, collapsing the selection."
   (or (collapse-if-selection :direction :backward)
       (let ((point (current-point-collapsing-selection))
             (count (- (or p 1))))
