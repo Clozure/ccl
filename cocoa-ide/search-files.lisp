@@ -194,7 +194,7 @@
 (defmethod get-full-dir-string ((str string))
   ;make sure it has a trailing slash
   (let ((ret (ccl::native-untranslated-namestring str)))
-    (unless (eql #\/ (aref ret (1- (length ret))))
+    (unless (eql #\/ (ignore-errors (aref ret (1- (length ret)))))
       (setf ret (concatenate 'string ret "/")))
     ret))
 
