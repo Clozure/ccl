@@ -213,6 +213,17 @@
 (defmethod get-full-dir-string ((nsstring ns:ns-string))
   (get-full-dir-string (lisp-string-from-nsstring nsstring)))
 
+(defun make-grep-arglist (wc find-str)
+  (let ((grep-args (list "-I" "-s" "-e" find-str)))
+    ; Ignore binary files, suppress error messages
+    (when (recursive-p wc)
+      (push "-r" grep-args))
+    (unless (case-sensitive-p wc)
+      (push "-i" grep-args))
+    (unless (regex-p wc)
+      (push "-F" grep-args))
+    grep-args))
+
 (objc:defmethod (#/doSearch: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
   (set-results-string wc #@"Searching...")
@@ -222,13 +233,9 @@
   (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
 	 (folder-str (get-full-dir-string (lisp-string-from-nsstring (folder-string-value wc))))
 	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
-	 (grep-args (list "-I" "-s" "-c" "-e" find-str "--include" file-str folder-str)))
-    (when (recursive-p wc)
-      (push "-r" grep-args))
-    (unless (case-sensitive-p wc)
-      (push "-i" grep-args))
-    (unless (regex-p wc)
-      (push "-F" grep-args))
+	 (grep-args (make-grep-arglist wc find-str)))
+    (push "-c" grep-args) ; we just want the count here
+    (setf grep-args (nconc grep-args (list "--include" file-str folder-str)))
     (setf (search-dir wc) folder-str
 	  (search-str wc) find-str)
     (#/setEnabled: (search-button wc) nil)
@@ -385,7 +392,9 @@
                                           (search-result-file-name result))))))
       (let* ((file-result (nsstring-to-file-result wc item))
              (line-result (get-line-result wc file-result child)))
-        (search-result-line-nsstr line-result)))))
+        (if line-result
+          (search-result-line-nsstr line-result)
+          #@"[internal error]")))))
 
 (defun get-line-result (wc file-result index)
   (let ((lines (search-result-file-lines file-result)))
@@ -396,9 +405,9 @@
 
 (defun compute-line-results (wc file-result)
   (with-slots (search-str search-dir) wc
-    (let* ((grep-output (call-grep (nconc (unless (case-sensitive-p wc) (list "-i"))
-                                          (list "-n" "-e" search-str 
-                                                (concatenate 'string search-dir (search-result-file-name file-result))))))
+    (let* ((grep-args (cons "-n" (make-grep-arglist wc search-str))) ; prefix each result with line number
+           (grep-output (call-grep (nconc grep-args 
+                                          (list (concatenate 'string search-dir (search-result-file-name file-result))))))
            (index -1))
       (map-lines grep-output
                  #'(lambda (start end)
