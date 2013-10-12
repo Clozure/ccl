@@ -115,7 +115,7 @@
 
 (objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
                                             sender)
-  ;;If command key is pressed, always make a new window
+  ;;If function key is pressed, always make a new window
   ;;otherwise bring frontmost search files window to the front
   (declare (ignore sender))
   (let ((w nil))
