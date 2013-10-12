@@ -669,14 +669,18 @@ NSObjects describe themselves in more detail than others."
 
 (defun load-objc-extension-framework (name)
   (let* ((dirs *standard-framework-directories*)
-         (home-frameworks (make-pathname :defaults nil
-                                         :directory
-                                         (append (pathname-directory
-                                                  (user-homedir-pathname))
-                                                 '("Library" "Frameworks"))))
+         (home-frameworks (probe-file (make-pathname :defaults nil
+                                                     :directory
+                                                     (append (pathname-directory
+                                                              (user-homedir-pathname))
+                                                             '("Library" "Frameworks")))))
+         (bundled-frameworks (probe-file (lisp-string-from-nsstring
+                                          (#/privateFrameworksPath (open-main-bundle)))))
          (fname (list (format nil "~a.framework" name))))
-    (when (probe-file home-frameworks)
+    (when home-frameworks
       (pushnew home-frameworks dirs :test #'equalp))
+    (when bundled-frameworks
+      (pushnew bundled-frameworks dirs :test #'equalp))
     (dolist (d dirs)
       (let* ((path (probe-file (make-pathname :defaults nil
                                               :directory (append (pathname-directory d)
