@@ -74,7 +74,7 @@
   (declare (ignore sender))
   (when (null *preferences-window-controller*)
     (setf *preferences-window-controller*
-	  (make-instance 'preferences-window-controller)))
+	  (make-instance 'ccl-preferences-window-controller)))
   (#/showWindow: *preferences-window-controller* self))
 
 (defloadvar *processes-window-controller* nil)

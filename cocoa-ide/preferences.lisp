@@ -1,40 +1,8 @@
 ;;;-*-Mode: LISP; Package: GUI -*-
 ;;;
 ;;;   Copyright (C) 2007 Clozure Associates
-;;;
-;;; How to add a new preference pane:
-;;;
-;;; 1. Open preferences.nib with IB.  Drag a Custom View instance from
-;;;    the palette.  Use the inpector to set its class to PreferencesView.
-;;; 2. Inspect File's Owner (which represents an instance of
-;;;    PreferencesWindowController).  Add an outlet for the new
-;;;    preferences view you just made.  Hook up the outlet.  You can
-;;;    add actions here too, if your preferences view will need them.
-;;; 3. Add controls to your view, binding them to the defaults controller.
-;;; 4. Save the nib file.
-;;; 5. In preferences.lisp (this file), edit the defclass form for
-;;;    preferences-window-controller and add a slot that matches the outlet
-;;;    you created in step 2.
-;;; 6. Edit the toolbar delegate methods to add a toolbar item for your
-;;;    new preference view.
-;;; 7. Implement a #/showFooPrefs: method to swap in the view when
-;;;    the toolbar item is clicked.  (See #/showGeneralPrefs: for an
-;;;    example.
-;;; 8. Implement actions, if needed.
-
 
 (in-package "GUI")
-
-;;; A view that keeps track of its initial size.
-(defclass preferences-view (ns:ns-view)
-  ((width :accessor width)
-   (height :accessor height))
-  (:metaclass ns:+ns-object))
-
-(objc:defmethod (#/awakeFromNib :void) ((self preferences-view))
-  (let* ((frame (#/frame self)))
-    (setf (width self) (ns-width frame)
-	  (height self) (ns-height frame))))
 
 (defclass font-to-name-transformer (ns:ns-value-transformer)
   ()
@@ -55,24 +23,32 @@
          (size (float (#/pointSize font) 0.0d0)))
     (#/stringWithFormat: ns:ns-string #@"%@ %.0f" :id name :double-float size)))
 
-(defclass preferences-window-controller (ns:ns-window-controller)
-  ((appearance-prefs :foreign-type :id :accessor appearance-prefs)
-   (documentation-prefs :foreign-type :id :accessor documentation-prefs)
-   (editor-tab-view-item :foreign-type :id :accessor editor-tab-view-item)
-   (encodings-prefs :foreign-type :id :accessor encodings-prefs)
-   (general-prefs :foreign-type :id :accessor general-prefs)
-   (hyperspec-path-button :foreign-type :id :accessor hyperspec-path-button)
-   (listener-tab-view-item :foreign-type :id :accessor listener-tab-view-item)
-   (tab-view :foreign-type :id :accessor tab-view)
-   (toolbar :foreign-type :id :accessor toolbar))
+(defclass ccl-preferences-window-controller (ns:ns-window-controller)
+  ((general-view :foreign-type :id)
+   (appearance-view :foreign-type :id))
   (:metaclass ns:+ns-object))
 
-(objc:defmethod #/init ((self preferences-window-controller))
+(objc:defmethod (#/dealloc :void) ((self ccl-preferences-window-controller))
+  (#/release (slot-value self 'general-view))
+  (#/release (slot-value self 'appearance-view))
+  (call-next-method))
+
+(objc:defmethod #/init ((self ccl-preferences-window-controller))
   (#/setValueTransformer:forName: ns:ns-value-transformer
 				  (make-instance 'font-to-name-transformer)
 				  #@"FontToName")
-
-  (#/initWithWindowNibName: self #@"preferences")
+  (setf (slot-value self 'general-view) (%preferences-general-view)
+        (slot-value self 'appearance-view) (%preferences-appearance-view))
+  (let* ((window (%preferences-panel))
+         (toolbar (#/initWithIdentifier: (#/alloc ns:ns-toolbar)
+                                         #@"ccl-preferences")))
+    (#/initWithWindow: self window)
+    (#/release window)
+    (#/setDelegate: toolbar self)
+    (#/setToolbar: window toolbar)
+    (#/release toolbar)
+    (#/setSelectedItemIdentifier: toolbar #@"appearance")
+    (#/showAppearancePrefs: self +null-ptr+))
   (#/addObserver:selector:name:object: (#/defaultCenter ns:ns-notification-center)
 				       self
 				       (@selector #/defaultsDidChange:)
@@ -81,25 +57,12 @@
 
   self)
 
-(objc:defmethod (#/windowDidLoad :void) ((self preferences-window-controller))
-  (let* ((window (#/window self)))
-    (with-slots (toolbar) self
-      (setf toolbar (make-instance 'ns:ns-toolbar
-				   :with-identifier #@"preferences-window-toolbar"))
-      (#/setDelegate: toolbar self)
-      (#/setSelectedItemIdentifier: toolbar #@"appearance")
-      (#/setToolbar: window toolbar)
-      ;; for some reason, setting this in IB doesn't work on Tiger/PPC32
-      (#/setShowsToolbarButton: window nil)
-      (#/release toolbar))
-    (#/showAppearancePrefs: self +null-ptr+)))
-  
-(objc:defmethod (#/showWindow: :void) ((self preferences-window-controller)
+(objc:defmethod (#/showWindow: :void) ((self ccl-preferences-window-controller)
 				       sender)
   (#/center (#/window self))
   (call-next-method sender))
 
-(objc:defmethod (#/defaultsDidChange: :void) ((self preferences-window-controller)
+(objc:defmethod (#/defaultsDidChange: :void) ((self ccl-preferences-window-controller)
 					      notification)
   (declare (ignore notification))
   (update-cocoa-defaults))
@@ -111,7 +74,7 @@
 ;;; Ugh.
 (defvar *listener-or-editor* nil)
 
-(objc:defmethod (#/showFontPanel: :void) ((self preferences-window-controller)
+(objc:defmethod (#/showFontPanel: :void) ((self ccl-preferences-window-controller)
 					 sender)
   (let* ((tag (#/tag sender))
 	 (font-manager (#/sharedFontManager ns:ns-font-manager))
@@ -133,7 +96,7 @@
 
 ;;; This message is sent to the first responder, which is why
 ;;; we do the *listener-or-editor* thing.
-(objc:defmethod (#/changeFont: :void) ((self preferences-window-controller)
+(objc:defmethod (#/changeFont: :void) ((self ccl-preferences-window-controller)
 					    font-manager)
   (let* ((defaults (#/standardUserDefaults ns:ns-user-defaults))
 	 (data nil)
@@ -158,7 +121,7 @@
 ;;; toolbar delegate methods
 
 (objc:defmethod #/toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:
-		((self preferences-window-controller)
+		((self ccl-preferences-window-controller)
 		 toolbar itemIdentifier (flag :<BOOL>))
   (declare (ignore toolbar))
   (let ((item +null-ptr+))
@@ -167,7 +130,8 @@
       (setf item (make-instance 'ns:ns-toolbar-item
 				:with-item-identifier itemIdentifier))
       (#/setLabel: item #@"General")
-      (#/setImage: item (#/imageNamed: ns:ns-image #@"General"))
+      (#/setImage: item (#/imageNamed: ns:ns-image
+                                       #&NSImageNamePreferencesGeneral))
       (#/setTarget: item self)
       (#/setAction: item (@selector #/showGeneralPrefs:)))
      ((#/isEqualToString: itemIdentifier #@"appearance")
@@ -176,87 +140,61 @@
       (#/setLabel: item #@"Appearance")
       (#/setImage: item (#/imageNamed: ns:ns-image #@"Appearance"))
       (#/setTarget: item self)
-      (#/setAction: item (@selector #/showAppearancePrefs:)))
-     ((#/isEqualToString: itemIdentifier #@"documentation")
-      (setf item (make-instance 'ns:ns-toolbar-item
-				:with-item-identifier itemIdentifier))
-      (#/setLabel: item #@"Documentation")
-      (#/setImage: item (#/imageNamed: ns:ns-image #@"Documentation"))
-      (#/setTarget: item self)
-      (#/setAction: item (@selector #/showDocumentationPrefs:)))
-     ((#/isEqualToString: itemIdentifier #@"encodings")
-      (setf item (make-instance 'ns:ns-toolbar-item
-				:with-item-identifier itemIdentifier))
-      (#/setLabel: item #@"Encodings")
-      (#/setImage: item (#/imageNamed: ns:ns-image #@"Encodings"))
-      (#/setTarget: item self)
-      (#/setAction: item (@selector #/showEncodingsPrefs:))))
+      (#/setAction: item (@selector #/showAppearancePrefs:))))
     (#/autorelease item)))
 
 (objc:defmethod #/toolbarDefaultItemIdentifiers:
-		((self preferences-window-controller) toolbar)
+		((self ccl-preferences-window-controller) toolbar)
   (declare (ignore toolbar))
   (#/arrayWithObjects: ns:ns-array #@"general"
 		       #@"appearance"
-		       #@"documentation"
-		       #@"encodings"
-		       +null-ptr+)) ; don't even think about putting nil here
+		       +null-ptr+))
 
 (objc:defmethod #/toolbarAllowedItemIdentifiers:
-		((self preferences-window-controller) toolbar)
+		((self ccl-preferences-window-controller) toolbar)
   (declare (ignore toolbar))
   (#/arrayWithObjects: ns:ns-array #@"general"
 		       #@"appearance"
-		       #@"documentation"
-		       #@"encodings"
 		       +null-ptr+))
 
 (objc:defmethod #/toolbarSelectableItemIdentifiers:
-		((self preferences-window-controller) toolbar)
+		((self ccl-preferences-window-controller) toolbar)
   (declare (ignore toolbar))
   (#/arrayWithObjects: ns:ns-array #@"general"
 		       #@"appearance"
-		       #@"documentation"
-		       #@"encodings"
 		       +null-ptr+))
 
-(defun switch-content-view (window view)
-  (#/setContentView: window view)
+(defun switch-preference-view (window view)
+  (#/setSubviews: (#/contentView window)
+                  (#/array ns:ns-array))
   (let* ((frame (#/frame window))
 	 (min-size (#/minSize window))
 	 (new-frame nil)
+         (view-frame (#/frame view))
+         (view-height (ns:ns-rect-height view-frame))
+         (view-width (ns:ns-rect-width view-frame))
 	 (content-rect (#/contentRectForFrameRect: window frame))
-	 (dy (- (height view)
+	 (dy (- view-height
 		(ns-height content-rect))))
     (decf (ns:ns-rect-y content-rect) dy)
     (incf (ns:ns-rect-height content-rect) dy)
-    (setf (ns:ns-rect-width content-rect) (max (width view)
+    (setf (ns:ns-rect-width content-rect) (max view-width
 					       (ns:ns-size-width min-size)))
     (setq new-frame (#/frameRectForContentRect: window content-rect))
-    (#/setFrame:display:animate: window new-frame t t)))
+    (#/setFrame:display:animate: window new-frame t t))
+  (#/setSubviews: (#/contentView window)
+                  (#/arrayWithObject: ns:ns-array view)))
 
 ;;; toolbar actions
 
-(objc:defmethod (#/showGeneralPrefs: :void) ((self preferences-window-controller)
+(objc:defmethod (#/showGeneralPrefs: :void) ((self ccl-preferences-window-controller)
 						sender)
   (declare (ignore sender))
   (#/setTitle: (#/window self) #@"General")
-  (switch-content-view (#/window self) (general-prefs self)))
+  (switch-preference-view (#/window self) (slot-value self 'general-view)))
 
-(objc:defmethod (#/showAppearancePrefs: :void) ((self preferences-window-controller)
+(objc:defmethod (#/showAppearancePrefs: :void) ((self ccl-preferences-window-controller)
 						sender)
   (declare (ignore sender))
   (#/setTitle: (#/window self) #@"Appearance")
-  (switch-content-view (#/window self) (appearance-prefs self)))
-
-(objc:defmethod (#/showDocumentationPrefs: :void) ((self preferences-window-controller)
-						sender)
-  (declare (ignore sender))
-  (#/setTitle: (#/window self) #@"Documentation")
-  (switch-content-view (#/window self) (documentation-prefs self)))
-
-(objc:defmethod (#/showEncodingsPrefs: :void) ((self preferences-window-controller)
-						sender)
-  (declare (ignore sender))
-  (#/setTitle: (#/window self) #@"Encodings")
-  (switch-content-view (#/window self) (encodings-prefs self)))
+  (switch-preference-view (#/window self) (slot-value self 'appearance-view)))

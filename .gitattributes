@@ -61,8 +61,6 @@ cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/displaydoc.nib/keyedobjects.nib -text svneol=unset#application/octet-stream
 cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/inspector.nib/keyedobjects.nib -text
-cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/designable.nib -text
-cocoa-ide/ide-contents/Resources/English.lproj/preferences.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/processes.nib/keyedobjects.nib -text
@@ -89,6 +87,7 @@ cocoa-ide/lib/cf-utils.lisp -text
 cocoa-ide/lib/cg.lisp -text
 cocoa-ide/lib/event-process.lisp -text
 cocoa-ide/lib/libdispatch.lisp -text
+cocoa-ide/preferences-views.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/project.lisp -text

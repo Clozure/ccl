@@ -64,6 +64,7 @@
 (defparameter *ide-lib-files*
   '("libdispatch"
     "event-process"
+    "cg"
     "cf-utils"))
 
 (defparameter *ide-files*
@@ -71,7 +72,6 @@
     "constants"
     "cocoa-utils"
     "cocoa-defaults"
-    "cocoa-prefs"
     "cocoa-typeout"
     "console-window"
     "cocoa-window"
@@ -85,6 +85,7 @@
     "inspector"
     "project"
     "cocoa-remote-lisp"
+    "preferences-views"
     "preferences"
     "processes-window"
     "apropos-window"
