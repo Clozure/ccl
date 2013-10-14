@@ -581,7 +581,7 @@ codes map to their Unicode equivalents."
                         (pv-map-lookup code ,encode-map))))
              (declare (type (mod #x110000) code))
              (setf (%get-unsigned-byte pointer idx) (or c2 (note-encoding-problem char pointer ,name (char-code #\Sub))))
-             (1+ idx)))))
+             (incf idx)))))
       :memory-decode-function
       (nfunction
        ,(intern (concatenate 'string (string name) "-MEMORY-DECODE"))
