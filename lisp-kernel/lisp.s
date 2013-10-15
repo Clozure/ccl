@@ -70,4 +70,9 @@
          include(arm-macros.s)
          include(arm-uuo.s)
         ')
+        ifdef(`ARM64',`
+         include(arm64-constants.s)
+         include(arm64-macros.s)
+         include(arm64-uuo.s)
+        ')
 

@@ -377,6 +377,12 @@ lisp-kernel/arm-gc.c -text
 lisp-kernel/arm-macros.s -text
 lisp-kernel/arm-spentry.s -text
 lisp-kernel/arm-uuo.s -text
+lisp-kernel/arm64-constants.h -text
+lisp-kernel/arm64-constants.s -text
+lisp-kernel/arm64-exceptions.h -text
+lisp-kernel/arm64-macros.s -text
+lisp-kernel/arm64-spentry.s -text
+lisp-kernel/arm64-uuo.s -text
 lisp-kernel/arm_print.c -text
 lisp-kernel/constants.h -text
 lisp-kernel/darwinarm/Makefile -text
@@ -395,6 +401,7 @@ lisp-kernel/linuxarm/.gdbinit -text
 lisp-kernel/linuxarm/Makefile -text
 lisp-kernel/linuxarm/armlinux.x -text
 lisp-kernel/linuxarm/float_abi.mk -text
+lisp-kernel/linuxarm64/Makefile -text
 lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
 lisp-kernel/lisp_globals.s -text
