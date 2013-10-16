@@ -76,7 +76,7 @@ define(`extract_lisptag_',`
         ')
 
 define(`extract_subtag',`
-        __(ldrb $1,[$2,#misc_subtag_offset])
+        __(ldrb gpr32($1),[$2,#misc_subtag_offset])
 	')
 
                                
@@ -93,7 +93,7 @@ define(`extract_typecode',`
         __(extract_lisptag($1,$2))
         __(cmp $1,#tag_misc)
         __(b.ne macro_label(not_misc))
-        __(ldrb $1,[$2,#misc_subtag_offset])
+        __(ldrb gpr32($1),[$2,#misc_subtag_offset])
 macro_label(not_misc):          
         ')
 
@@ -109,12 +109,6 @@ define(`unbox_character',`
         __(lsr $1,$2, #charcode_shift)
         ')
                 
-define(`loaddf',`
-	__(lfd $1,dfloat.value($2))')
-	
-define(`storedf',`
-	__(stfd $1,dfloat.value($2))
-	')
 
 define(`push1',`
         __(str $1,[$2,#-node_size]!)
@@ -143,18 +137,13 @@ define(`set_nargs',`
 	__(mov nargs,#($1)<<fixnumshift)
 	')
 	
-define(`bitclr',`
-	__(rlwinm $1,$2,0,0x1f&((31-($3))+1),0x1f&((31-($3))-1))
-	')
+
 	
 
 define(`vref32',`
-        __(ldr $1,[$2,#misc_data_offset+(($3)<<2)])
+        __(ldr gpr32($1),[$2,#misc_data_offset+(($3)<<2)])
 	')
         
-define(`vref16',`/* dest,src,n*/
-	__(lhz $1,misc_data_offset+(($3)<<1)($2))
-	')
 	
 define(`vrefr',`
         __(vref32($1,$2,$3))
@@ -170,8 +159,7 @@ define(`getvheader',`
 	
 	/* "Length" is fixnum element count */
 define(`header_length',`
-        __(bic $1,$2,#subtag_mask)
-        __(mov $1,$1,lsr #num_subtag_bits-fixnumshift)
+        __(ubfm $1,$2,#num_subtag_bits-fixnumshift,#60)
         ')
 
 
@@ -183,14 +171,13 @@ define(`vector_length',`
 
 	
 define(`ref_global',`
-        __(mov ifelse($3,`',$1,$3),#nil_value)
-	__(ldr $1,[ifelse($3,`',$1,$3),#lisp_globals.$2])
+        __(mov $1,#lisp_globals.$2)
+	__(ldr $1,[rnil,$1])
 ')
 
 
 define(`ref_nrs_value',`
-        __(mov $1,#nil_value)
-	__(ldr $1,[$1,#((nrs.$2)+(symbol.vcell))])
+	__(ldr $1,[rnil,#((nrs.$2)+(symbol.vcell))])
 ')
 
 define(`ref_nrs_function',`
@@ -250,11 +237,12 @@ define(`build_lisp_frame',`
    to say (at interrupt time) that there's either a lisp frame
    on the stack or there isn't. */
 define(`restore_lisp_frame',`
-        __(ldm sp!,{$1,vsp,fn,lr})
+        __(ldp vsp,lr,[sp],#2*node_size)
         ')
 
 define(`return_lisp_frame',`
-        __(ldm sp!,{$1,vsp,fn,pc})
+        __(restore_lisp_frame())
+        __(ret)
         ')
         
 define(`discard_lisp_frame',`
@@ -360,72 +348,71 @@ macro_label(not_callable):
 ')
 
 /* Save the non-volatile FPRs (d8-d15) in a stack-allocated vector.
-   Clobber d7.  Note that d7/s14 wind up looking like denormalized
-   floats (we effectively load a vector header into d7.)
 */        
    
 define(`push_foreign_fprs',`
-        __(b macro_label(next))
-        .align 3
-macro_label(data):      
-        .long make_header(8,subtag_double_float_vector)
-        .long 0
-macro_label(next):
-        __(fldd d7,[pc,#-16])
-        __(fstmfdd sp!,{d7-d15})
+        __(mov $1,make_header(9,subtag_double_float_vector))
+        __(stp $1,xzr,[sp,#-10<<3]!)
+        __(stp d8,d9,[sp,#16])
+        __(stp d10,d11,[sp,#32])
+        __(stp d12,d14,[sp,#48])
+        __(stp d14,d15,[sp,#64])
 ')
 
 /* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
    FPRs. */
 define(`push_lisp_fprs',`
-        new_macro_labels()
-        __(b macro_label(next))
-macro_label(data):      
-        .long make_header(8,subtag_double_float_vector)
-macro_label(next):
-        __(flds single_float_zero,[pc,#-12])
-        __(fstmfdd sp!,{d7-d15})
-        __(fcpys single_float_zero,s15)
+        __(mov $1,#make_header(9,subtag_double_float_vector))
+        __(stp $1,xzr,[sp,#-10<<3]!)
+        __(stp d8,d9,[sp,#16])
+        __(stp d10,d11,[sp,#32])
+        __(stp d12,d14,[sp,#48])
+        __(stp d14,d15,[sp,#64])
 ')
         
 /* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
-   on top of the stack.  This loads the vector header
-   into d7 as a side-effect. */
+   on top of the stack and discard the vector. */
 define(`pop_foreign_fprs',`
-        __(fldmfdd sp!,{d7-d15})
+        __(ldp d8,d9,[sp,#16])
+        __(ldp d10,d11,[sp,#32])
+        __(ldp d12,d14,[sp,#48])
+        __(ldp d14,d15,[sp,#64])
+        __(add sp,sp,#10<<3)
 ')
 
 /* Pop the lisp non-volatile FPRs */        
 define(`pop_lisp_fprs',`
-        __(fldmfdd sp!,{d7-d15})
-        __(fcpys single_float_zero,s15)
+        __(ldp d8,d9,[sp,#16])
+        __(ldp d10,d11,[sp,#32])
+        __(ldp d12,d14,[sp,#48])
+        __(ldp d14,d15,[sp,#64])
+        __(add sp,sp,#10<<3)
 ')
 
 /* Reload the non-volatile lisp FPRs (d8-d15) from the stack-consed vector
-   on top of the stack, leaving the vector in place.  d7 winds up with
-   a denormalized float in it, if anything cares. */
+   on top of the stack, leaving the vector in place.   */
 define(`restore_lisp_fprs',`
-        __(fldmfdd $1,{d7-d15})
-        __(fcpys single_float_zero,s15)
+        __(ldp d8,d9,[sp,#16])
+        __(ldp d10,d11,[sp,#32])
+        __(ldp d12,d14,[sp,#48])
+        __(ldp d14,d15,[sp,#64])
 ')                
 
 /* discard the stack-consed vector which contains a set of 8 non-volatile
    FPRs. */
 define(`discard_lisp_fprs',`
-        __(add sp,sp,#9*8)
+        __(add sp,sp,#10*8)
 ')                        
         
 define(`mkcatch',`
         new_macro_labels()
-        __(push_lisp_fprs())
+        __(push_lisp_fprs(imm0))
 	__(build_lisp_frame(imm0))
-        __(movc16(imm0,make_header(catch_frame.element_count,subtag_u32_vector)))
+        __(mov imm0,#make_header(catch_frame.element_count,subtag_u64_vector))
         __(mov imm1,#catch_frame.element_count<<word_shift)
         __(dnode_align(imm1,imm1,node_size))
         __(stack_allocate_zeroed_ivector(imm0,imm1))
-        __(movc16(imm0,make_header(catch_frame.element_count,subtag_catch_frame)))
-        __(movs temp2,fn)
-        __(ldrne temp2,[temp2,_function.codevector])
+        __(mov imm0,#make_header(catch_frame.element_count,subtag_catch_frame))
         __(ldr temp1,[rcontext,#tcr.last_lisp_frame])
 	__(ldr imm1,[rcontext,#tcr.catch_top])
         /* imm2 is mvflag */
@@ -450,7 +437,6 @@ define(`clear_alloc_tag',`
 define(`Cons',`
        	new_macro_labels()
         __(add allocptr,allocptr,#-cons.size+fulltag_cons)
-        __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
         __(uuo_alloc_trap(al))
@@ -503,27 +489,47 @@ macro_label(ok):
 /*  Parameters $1, $2 as above; $3 = physical size constant. */
 define(`Misc_Alloc_Fixed',`
         new_macro_labels()
-        __(add allocptr,allocptr,#(-$3)+fulltag_misc)
-        __(ldr allocbase,[rcontext,#tcr.save_allocbase])
+        __(sub allocptr,allocptr,#$3+fulltag_misc)
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
+        __(uuo_alloc_trap())
 macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
 	__(mov $1,allocptr)
 	__(clear_alloc_tag())
 ')
 
-/* Stack-allocate an ivector; $1 = header, $0 = dnode-aligned
+/* Stack-allocate an ivector; $1 = header, $2 = dnode-aligned
    size in bytes. */
 define(`stack_allocate_ivector',`
         __(str $1,[sp,-$2]!)
         ')
+
+define(`scale_8_bit_index',`
+        __(lsr $1,$2,#3)
+        __(add $1,$1,#misc_data_offset)
+        ')
+
+define(`scale_16_bit_index',`
+        __(lsr $1,#2,#2)
+        __(add $1,$1,#misc_data_offset)
+        ')
+
+define(`scale_32_bit_index',`
+        __(lsr $1,#2,#1)
+        __(add $1,$1,#misc_data_offset)
+        ')
         
+define(`scale_64_bit_index',`
+        __(add $1,$2,#misc_data_offset)
+        ')
+        
+
+                        
                         
 /* Stack-allocate an ivector and zero its contents; caller may
    change subtag of header after it's zeroed. 
-   $1 = header (tagged as subtag_u32_vector until zeroed), $2 = dnode-
+   $1 = header (tagged as subtag_u64_vector until zeroed), $2 = dnode-
    aligned size in bytes).  Both $1 and $2 are modified here. */
 define(`stack_allocate_zeroed_ivector',`
        new_macro_labels()
@@ -534,8 +540,8 @@ define(`stack_allocate_zeroed_ivector',`
 macro_label(loop):      
         __(str $1,[$2])
 macro_label(test):                      
-        __(sub $2,#dnode_size)
-        __(cmp $2,sp)
+        __(sub $2,$2,#dnode_size)
+        __(cmp $2,xsp)
         __(str $1,[$2,#node_size])
         __(bne macro_label(loop))
         ')
@@ -545,7 +551,7 @@ define(`check_enabled_pending_interrupt',`
         __(ldr $1,[rcontext,#tcr.interrupt_pending])
         __(cmp $1,0)
         __(ble $2)
-        __(uuo_interrupt_now(al))
+        __(uuo_interrupt_now())
         ')
         
 define(`check_pending_interrupt',`

@@ -41,9 +41,6 @@ define(`jump_builtin',`
 	jump_fname()
 ')
 
-/* Set the _function.entrypoint locative in nfn - which pointed here -
-   to the address of the first instruction in the _function.codevector.
-   This must be the first ARM subprim. */
 
 
         
@@ -70,11 +67,10 @@ _spentry(builtin_times)
         __(branch_if_not_fixnum(arg_z,1f))
 	__(unbox_fixnum(imm2,arg_z))
         __(unbox_fixnum(imm3,arg_y))
-	__(smull imm0,imm2,imm3)
+	__(mul imm0,imm2,imm3)
         __(smulh imm1,imm2,imm3)
 	__(b _SPmakes128)
-
-1:      _(jump_builtin(_builtin_times,2))
+1:      __(jump_builtin(_builtin_times,2))
 
 _spentry(builtin_div)
         __(jump_builtin(_builtin_div,2))
@@ -149,8 +145,14 @@ _spentry(builtin_eql)
         __(cmp imm0,#subtag_macptr)
         __(ccmp imm0,#subtag_double_float,#0,ne)
         __(bne 2f)
-2:      __(cmp imm0,#subtag_ratio)
-        __(ccmp imm0,#subtag_complex,#0,ne)
+        __(ldr imm0,[arg_y,#misc_data_offset])
+        __(ldr imm1,[arg_z,#misc_data_offset])
+        __(cmp imm0,imm1)
+        __(lisp_boolean(arg_z,eq))
+        __(ret)
+2:      __(mov imm1,#subtag_ratio)      /* value won't fit in ccmp operand */
+        __(cmp imm0,#subtag_complex)
+        __(ccmp imm0,imm1,#0,ne)
         __(bne 3f)
         __(ldr temp0,[arg_y,#ratio.denom])
         __(ldr temp1,[arg_z,#ratio.denom])
@@ -159,7 +161,7 @@ _spentry(builtin_eql)
         __(ldr arg_z,[arg_z,#ratio.numer])
         __(build_lisp_frame())
         __(bl 0b)
-        __(cmp arg_z,#nil_value)
+        __(cmp arg_z,rnil)
         __(restore_lisp_frame())
         __(ldp arg_z,arg_y,[vsp],#2*node_size)
         __(bne 0b)
@@ -260,7 +262,7 @@ _spentry(builtin_logbitp)
         __(branch_if_not_fixnum(arg_y,1f))
         __(branch_if_not_fixnum(arg_z,1f))
         __(unbox_fixnum(imm0,arg_y))
-        __(branch_if_negative(imm0,1f)
+        __(branch_if_negative(imm0,1f))
         __(mov imm2,#(1<<63))        
         __(mov imm1,#fixnum1)
         __(lsl imm1,imm1,imm0)
@@ -291,31 +293,32 @@ _spentry(builtin_logand)
 _spentry(builtin_ash)
         __(branch_if_not_fixnum(arg_y,9f))
         __(branch_if_not_fixnum(arg_z,9f))
-        __(cmp arg_z,#0)
-        __(bgt 1f)
-        __(blt 0f)
+        __(branch_if_negative(arg_z,0f))
+        __(cbnz arg_z,2f)
         __(mov arg_z,arg_y)
         __(ret)
 0:              
         /* Shift right */
         __(unbox_fixnum(imm2,arg_z))
         __(neg imm2,imm2)
-        __(cmp imm2,#32)
-        __(movge imm2,#31)
-        __(mov arg_z,#-fixnumone)
-        __(and arg_z,arg_z,arg_y,asr imm2)
+        __(mov imm1,#63)
+        __(cmp imm2,imm1)
+        __(csel imm2,imm1,imm2,gt)
+        __(asr imm0,arg_y,imm2)
+        __(bic arg_z,imm0,#fixnummask)
         __(ret)
         /* shift left */
 1:      __(unbox_fixnum(imm0,arg_y))
         __(unbox_fixnum(imm2,arg_z))
-        __(cmp imm2,#32)
-        __(moveq imm1,imm0)
-        __(moveq imm0,#0)
+        __(cmp imm2,#64)
+        __(csel imm1,imm0,imm1,eq)
+        __(csel imm0,xzr,imm0,eq)
         __(beq _SPmakes128)
         __(bgt 9f)
-        __(rsb imm1,imm2,#32)
-        __(mov imm1,imm0,asr imm1)
-        __(mov imm0,imm0,lsl imm2)
+        __(mov imm1,#64)
+        __(sub imm1,imm1,imm2)
+        __(asr imm1,imm0,imm1)
+        __(lsl imm0,imm0,imm2)
         __(b _SPmakes128)
 9:  
         __(jump_builtin(_builtin_ash,2))
@@ -329,9 +332,11 @@ _spentry(builtin_negate)
         __(jump_builtin(_builtin_negate,1))
  
 _spentry(builtin_logxor)
-        __(test_two_fixnums(arg_y,arg_z,imm0))
-        __(eoreq arg_z,arg_y,arg_z)
-        __(bxeq lr)
+        __(branch_if_not_fixnum(arg_y,1f))
+        __(branch_if_not_fixnum(arg_z,1f))
+        __(orr arg_z,arg_y,arg_z)
+        __(ret)
+1:              
         __(jump_builtin(_builtin_logxor,2))
 
 _spentry(builtin_aref1)
@@ -392,7 +397,7 @@ _spentry(bind)
 	__(ldr imm0,[rcontext,#tcr.tlb_limit])
 	__(cmp imm0,imm1)
         __(bhi 1f)
-	__(uuo_tlb_too_small(al,imm1))
+	__(uuo_tlb_too_small(imm1))
 1:              
 	__(cmp imm1,#0)
 	__(ldr imm2,[rcontext,#tcr.tlb_pointer])
@@ -412,7 +417,7 @@ _spentry(bind)
 	__(b _SPksignalerr)
 
 _spentry(conslist)
-	__(mov arg_z,#nil_value)
+	__(mov arg_z,rnil)
 	__(cmp nargs,#0)
 	__(b 2f) 
 1:
@@ -444,7 +449,7 @@ _spentry(makes64)
 	__(mov imm1,#two_digit_bignum_header)
 	__(Misc_Alloc_Fixed(arg_z,imm1,aligned_bignum_size(2)))
 	__(str imm0,[arg_z,#misc_data_offset])
-	__(ret)
+1:     	__(ret)
 
 /* Construct a lisp integer out of the 64-bit unsigned value in imm0 */
 
@@ -454,15 +459,14 @@ _spentry(makeu64)
 	__(tst imm0,imm1)
 	__(box_fixnum(arg_z,imm0))
 	__(b.eq 1f)
-	__(tst imm0,#0x80000000)
-	__(bne 2f)
+        __(branch_if_negative(imm0,2f))
 	__(mov imm1,#two_digit_bignum_header)
 	__(Misc_Alloc_Fixed(arg_z,imm1,aligned_bignum_size(2)))
 	__(str imm0,[arg_z,#misc_data_offset])
 1:      __(ret)
 2:              
-	__(mov imm1,#two_digit_bignum_header)
-	__(Misc_Alloc_Fixed(arg_z,imm1,aligned_bignum_size(2)))
+	__(mov imm1,#three_digit_bignum_header)
+	__(Misc_Alloc_Fixed(arg_z,imm1,aligned_bignum_size(3)))
 	__(str imm0,[arg_z,#misc_data_offset])
 	__(ret)
 
@@ -473,39 +477,58 @@ _spentry(makeu64)
 
 _spentry(fix_overflow)
 	__(unbox_fixnum(imm0,arg_z))
-	__(eor imm0,imm0,#0xc0000000)
+        __(mov imm1,#e000000000000000)
+	__(eor imm0,imm0,imm1)
 	__(b _SPmakes64)
 
 
 
-/*  Construct a lisp integer out of the 64-bit unsigned value in */
-/*           imm0 (low 32 bits) and imm1 (high 32 bits) */
+/*  Construct a lisp integer out of the 128-bit unsigned value in */
+/*           imm0 (low  bits) and imm1 (high 32 bits) */
 	
 _spentry(makeu128)
-	__(cmp imm1,#0)
-	__(beq _SPmakeu64)
-	__(blt 3f)
-	__(mov imm2,#two_digit_bignum_header)
-	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(2)))
-	__(str imm0,[arg_z,#misc_data_offset])
-	__(str imm1,[arg_z,#misc_data_offset+4])
-	__(ret)
-3:              
+	__(cbz imm1,_SPmakeu64)
+	__(branch_if_negative(imm1,5f)
+        __(clz imm2,imm1)
+        __(cmp imm2,#32)
+        __(ble 4f)
 	__(mov imm2,#three_digit_bignum_header)
 	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(3)))
 	__(str imm0,[arg_z,#misc_data_offset])
-	__(str imm1,[arg_z,#misc_data_offset+4])
+        __(str gpr32(imm1),[arg_z,#misc_data_offset+8])
+	__(ret)
+
+4:              
+	__(mov imm2,#four_digit_bignum_header)
+	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(4)))
+	__(str imm0,[arg_z,#misc_data_offset])
+	__(str imm1,[arg_z,#misc_data_offset+8])
+	__(ret)
+5:              
+	__(mov imm2,#five_digit_bignum_header)
+	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(5)))
+	__(str imm0,[arg_z,#misc_data_offset])
+	__(str imm1,[arg_z,#misc_data_offset+8])
 	__(ret)
 
 /*  Construct a lisp integer out of the 128-bit signed value in */
 /*        imm0 (low 64 bits) and imm1 (high 64 bits). */
 _spentry(makes128)
-	__(cmp imm1,imm0,asr #31) /* is imm1 sign extension of imm0 ? */
+	__(cmp imm1,imm0,asr #63) /* is imm1 sign extension of imm0 ? */
 	__(beq _SPmakes64)        /* forget imm1 if so */
-	__(mov imm2,#two_digit_bignum_header)
-	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(2)))
+        __(asr imm2,imm1,#32)
+        __(cmp imm1,imm2,lsl #32)
+        __(beq 3f)
+	__(mov imm2,#four_digit_bignum_header)
+	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(4)))
 	__(str imm0,[arg_z,#misc_data_offset])
-	__(str imm1,[arg_z,#misc_data_offset+4])
+	__(str imm1,[arg_z,#misc_data_offset+8])
+	__(ret)
+3:      
+       	__(mov imm2,#three_digit_bignum_header)
+	__(Misc_Alloc_Fixed(arg_z,imm2,aligned_bignum_size(3)))
+	__(str imm0,[arg_z,#misc_data_offset])
+	__(str gpr32(imm1),[arg_z,#misc_data_offset+8])
 	__(ret)
 
 
@@ -516,12 +539,12 @@ _spentry(makes128)
 /* funcall nfn, returning multiple values if it does.  */
 _spentry(mvpass)
         __(cmp nargs,#node_size*nargregs)
-        __(mov imm1,vsp)
-	__(subgt imm1,imm1,#node_size*nargregs)
-	__(addgt imm1,imm1,nargs)
-	__(build_lisp_frame(imm0,imm1))
+	__(sub imm0,vsp,#node_size*nargregs)
+	__(add imm2,imm1,gpr64(nargs))
+        __(csel imm1,imm0,imm1,gt)
+        __(csel nargs,imm2,nargs,gt)
+	__(build_lisp_frame(imm1))
 	__(adr lr,C(ret1valn))
-	__(mov fn,#0)
 	__(funcall_nfn())
 
 /* ret1valn returns "1 multiple value" when a called function does not  */
@@ -529,7 +552,7 @@ _spentry(mvpass)
 /* identifies the stack frame to code which returns multiple values.  */
 
 _exportfn(C(ret1valn))
-	__(restore_lisp_frame(imm0))
+	__(restore_lisp_frame())
 	__(vpush1(arg_z))
 	__(set_nargs(1))
 	__(ret)
@@ -541,7 +564,7 @@ _exportfn(C(ret1valn))
 _spentry(values)
 local_label(return_values):  
 	__(ref_global(imm0,ret1val_addr))
-	__(mov arg_z,#nil_value)
+	__(mov arg_z,rnil)
 	__(cmp imm0,lr)
 	__(beq 3f)
 	__(cmp nargs,#fixnum_one)
@@ -556,10 +579,9 @@ local_label(return_values):
 	__(ldr lr,[sp,#lisp_frame.savelr])
 	__(add imm1,nargs,vsp)
 	__(ldr imm0,[sp,#lisp_frame.savevsp])
-	__(ldr fn,[sp,#lisp_frame.savefn])
 	__(cmp imm1,imm0) /* a fairly common case  */
 	__(discard_lisp_frame())
-	__(bxeq lr) /* already in the right place  */
+	__(b.eq 9f) /* already in the right place  */
 	__(cmp nargs,#fixnum_one) /* sadly, a very common case  */
 	__(bne 4f)
 	__(ldr arg_z,[vsp,#0])
@@ -577,7 +599,7 @@ local_label(return_values):
 	__(bne 5b)
 6:
 	__(mov vsp,imm0)
-	__(ret)
+9:      __(ret)                 
 
 
 /* Come here with saved context on top of stack.  */
@@ -586,7 +608,6 @@ _spentry(nvalret)
 C(nvalret): 
 	__(ldr lr,[sp,#lisp_frame.savelr])
 	__(ldr temp0,[sp,#lisp_frame.savevsp])
-	__(ldr fn,[sp,#lisp_frame.savefn])
 	__(discard_lisp_frame())
 	__(b local_label(return_values))                         
 
@@ -598,7 +619,7 @@ C(nvalret):
         __(ldr temp0,[rcontext, #tcr.catch_top])
         __(mov imm0,#0) /* count intervening catch/unwind-protect frames.  */
         __(cmp temp0,#0)
-        __(ldr temp2,[vsp,nargs])
+        __(ldr temp2,[vsp,gpr64(nargs)])
         __(beq local_label(_throw_tag_not_found))
 local_label(_throw_loop):
         __(ldr temp1,[temp0,#catch_frame.catch_tag])
@@ -610,7 +631,7 @@ local_label(_throw_loop):
         __(bne local_label(_throw_loop))
 local_label(_throw_tag_not_found):
         __(uuo_error_no_throw_tag(al,temp2))
-        __(str temp2,[vsp,nargs])
+        __(str temp2,[vsp,gpr64(nargs)])
         __(b _SPthrow)
 
 /* This takes N multiple values atop the vstack.  */
@@ -659,7 +680,7 @@ _spentry(nthrow1value)
 /* Bind symbol in arg_z to NIL                 */
 _spentry(bind_nil)
         __(mov arg_y,arg_z)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(b _SPbind)
 
 /* Bind symbol in arg_z to its current value;  trap if symbol is unbound */
@@ -716,13 +737,13 @@ _spentry(rplaca)
 C(egc_write_barrier_start):     
         __(cmp arg_z,arg_y)
         __(_rplaca(arg_y,arg_z))
-        __(bxlo lr)
+        __(blo 9f)
         __(ref_global(temp0,ref_base))
         __(sub imm0,arg_y,temp0)
         __(mov imm0,imm0,lsr #dnode_shift)
         __(ref_global(imm1,oldspace_dnode_count))
         __(cmp imm0,imm1)
-        __(bxhs lr)
+        __(bhs 9f)
         __(and imm2,imm0,#31)
         __(mov imm1,#0x80000000)
         __(mov imm1,imm1,lsr imm2)
@@ -731,13 +752,13 @@ C(egc_write_barrier_start):
         __(add temp0,temp0,imm0,lsl #word_shift)
         __(ldr imm2,[temp0])
         __(tst imm2,imm1)
-        __(bxne lr)
+        __(bne 9f)
 0:      __(ldrex imm2,[temp0])
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
         __(bne 0b)        
-        __(ret)
+9:      __(ret)
 
 
         .globl C(egc_rplacd)
@@ -745,13 +766,13 @@ _spentry(rplacd)
 C(egc_rplacd):
         __(cmp arg_z,arg_y)
         __(_rplacd(arg_y,arg_z))
-        __(bxlo lr)
+        __(blo 9f)
         __(ref_global(temp0,ref_base))
         __(sub imm0,arg_y,temp0)
         __(mov imm0,imm0,lsr #dnode_shift)
         __(ref_global(imm1,oldspace_dnode_count))
         __(cmp imm0,imm1)
-        __(bxhs lr)
+        __(bhs 9f)
         __(and imm2,imm0,#31)
         __(mov imm1,#0x80000000)
         __(mov imm1,imm1,lsr imm2)
@@ -760,13 +781,13 @@ C(egc_rplacd):
         __(add temp0,temp0,imm0,lsl #word_shift)
         __(ldr imm2,[temp0])
         __(tst imm2,imm1)
-        __(bxne lr)
+        __(bne 9f)
 0:      __(ldrex imm2,[temp0])
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp0])
         __(cmp imm0,#0)
         __(bne 0b)        
-        __(ret)
+9:      __(ret)
 	
 
 /* Storing into a gvector can be handled the same way as storing into a CONS. */
@@ -781,7 +802,7 @@ C(egc_gvset):
         __(add imm0,imm0,arg_x)
         __(ref_global(temp0,ref_base))
         __(sub imm0,imm0,temp0)
-        __(mov imm0,imm0,lsr #dnode_shift)
+        __(lsr imm0,imm0,#dnode_shift)
         __(ref_global(imm1,oldspace_dnode_count))
         __(cmp imm0,imm1)
         __(bxhs lr)
@@ -837,10 +858,10 @@ C(egc_set_hash_key):
    know that it's in bounds, etc. */
         __(ref_global(temp0,ref_base))
         __(sub imm0,arg_x,temp0)
-        __(mov imm0,imm0,lsr #dnode_shift)
-        __(and imm2,imm0,#31)
-        __(mov imm1,#0x80000000)
-        __(mov imm1,imm1,lsr imm2)
+        __(lsr imm0,imm0, #dnode_shift)
+        __(and imm2,imm0,#63)
+        __(mov imm1,#0x8000000000000000)
+        __(lsr imm1,imm1,imm2)
         __(mov imm0,imm0,lsr #bitmap_shift)
         __(ref_global(temp0,refbits))
         __(add temp0,temp0,imm0,lsl #word_shift)
@@ -974,11 +995,11 @@ C(egc_set_hash_key_conditional):
         __(cmp imm0,#0)
         __(bne 1b)        
 C(egc_write_barrier_end):
-4:      __(mov arg_z,#nil_value)
+4:      __(mov arg_z,rnil)
         __(add arg_z,arg_z,#t_offset)
         __(ret)
 5:      __(_clrex(arg_z))
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(ret)
 
 
@@ -988,7 +1009,7 @@ C(egc_write_barrier_end):
 /* We always have to create a stack frame (even if nargs is 0), so the compiler  */
 /* doesn't get confused.  */
 _spentry(stkconslist)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
 C(stkconslist_star):           
         __(mov temp2,nargs,lsl #1)
         __(add temp2,temp2,#node_size)
@@ -997,7 +1018,7 @@ C(stkconslist_star):
         __(orr imm0,imm0,#subtag_u32_vector)
         __(stack_allocate_zeroed_ivector(imm0,temp2))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp,#0])
+        __(strb gpr32(imm0),[sp,#0])
         __(add imm1,sp,#dnode_size+fulltag_cons)
         __(cmp nargs,#0)
         __(b 4f)
@@ -1024,7 +1045,7 @@ _spentry(mkstackv)
         __(orr imm0,imm0,#subtag_u32_vector)
         __(stack_allocate_zeroed_ivector(imm0,imm1))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp,#0])
+        __(strb gpr32(imm0),[sp,#0])
         __(add arg_z,sp,#fulltag_misc)
         __(add imm0,arg_z,#misc_data_offset)
         __(add imm1,imm0,nargs)
@@ -1092,7 +1113,7 @@ _spentry(stack_misc_alloc)
         __(mov temp1,sp)
         __(stack_allocate_zeroed_ivector(imm0,imm1))
         __(add arg_z,sp,#fulltag_misc)
-        __(strb imm2,[sp])
+        __(strb gpr32(imm2),[sp])
         __(stmdb sp!,{temp0,temp1})
         __(ret)
 
@@ -1106,7 +1127,7 @@ _spentry(stack_misc_alloc)
 
 _spentry(gvector)
         __(sub nargs,nargs,#node_size)
-        __(ldr arg_z,[vsp,nargs])
+        __(ldr arg_z,[vsp,gpr64(nargs)])
         __(unbox_fixnum(imm0,arg_z))
         __(orr imm0,imm0,nargs,lsl #num_subtag_bits-fixnum_shift)
         __(dnode_align(imm1,nargs,node_size))
@@ -1127,7 +1148,7 @@ _spentry(gvector)
 
 _spentry(fitvals)
         __(subs imm0,imm0,nargs)
-        __(mov imm1,#nil_value)
+        __(mov imm1,rnil)
         __(sublt vsp,vsp,imm0)
         __(bxlt lr)
         __(b 2f)
@@ -1144,7 +1165,7 @@ _spentry(nthvalue)
         __(add imm0,vsp,nargs)
         __(ldr imm1,[imm0,#0])
         __(cmp imm1,nargs) /*  do unsigned compare:  if (n < 0) => nil.  */
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(rsb imm1,imm1,#0)
         __(sub imm1,imm1,#node_size)
         __(ldrlo arg_z,[imm0,imm1])
@@ -1158,7 +1179,7 @@ _spentry(nthvalue)
 _spentry(default_optional_args)
         __(vpush_argregs())
         __(cmp nargs,imm0)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(mov imm1,nargs)
         __(bxhs lr)
 1: 
@@ -1174,7 +1195,7 @@ _spentry(default_optional_args)
 /* Note that nargs may be > imm0 if &rest/&key is involved.  */
 _spentry(opt_supplied_p)
         __(mov imm1,#0)
-        __(mov arg_x,#nil_value)
+        __(mov arg_x,rnil)
         __(add arg_x,arg_x,#t_offset)        
 1:     
         /* (vpush (< imm1 nargs))  */
@@ -1191,7 +1212,7 @@ _spentry(opt_supplied_p)
 _spentry(heap_rest_arg)
         __(vpush_argregs())
         __(movs imm1,nargs)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(b 2f)
 1:
         __(vpop1(arg_y))
@@ -1209,7 +1230,7 @@ _spentry(heap_rest_arg)
 _spentry(req_heap_rest_arg)
         __(vpush_argregs())
         __(subs imm1,nargs,imm0)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(b 2f)
 1:
         __(vpop1(arg_y))
@@ -1223,7 +1244,7 @@ _spentry(req_heap_rest_arg)
 /* Here where argregs already pushed */
 _spentry(heap_cons_rest_arg)
         __(subs imm1,nargs,imm0)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(b 2f)
 1:
         __(vpop1(arg_y))
@@ -1318,7 +1339,7 @@ _spentry(req_stack_rest_arg)
 
 _spentry(stack_cons_rest_arg)
         __(subs imm1,nargs,imm0)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(ble 2f)  /* always temp-push something.  */
         __(mov temp0,imm1)
         __(add imm1,imm1,imm1)
@@ -1332,7 +1353,7 @@ _spentry(stack_cons_rest_arg)
         __(blo 3f)
         __(stack_allocate_zeroed_ivector(imm1,imm0))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp])
+        __(strb gpr32(imm0),[sp])
         __(add imm0,sp,#dnode_size+fulltag_cons)
 1:
         __(subs temp0,temp0,#fixnumone)
@@ -1372,7 +1393,7 @@ _spentry(call_closure)
         /* and go to the function.  */
         __(vpush_all_argregs())
         __(mov arg_x,imm0)
-        __(mov arg_y,#nil_value)
+        __(mov arg_y,rnil)
 local_label(push_nil_loop):
         __(subs arg_x,arg_x,#fixnumone)
         __(vpush1(arg_y))
@@ -1456,7 +1477,7 @@ local_label(go):
 /* ppc2-invoke-fn assumes that temp1 is preserved here.  */
 _spentry(spreadargz)
         __(extract_lisptag(imm1,arg_z))
-        __(cmp arg_z,#nil_value) 
+        __(cmp arg_z,rnil) 
         __(mov imm0,#0)
         __(mov arg_y,arg_z)  /*  save in case of error  */
         __(beq 2f)
@@ -1465,7 +1486,7 @@ _spentry(spreadargz)
         __(bne 3f)
         __(_car(arg_x,arg_z))
         __(_cdr(arg_z,arg_z))
-        __(cmp arg_z,#nil_value)
+        __(cmp arg_z,rnil)
         __(extract_lisptag(imm1,arg_z))
         __(vpush1(arg_x))
         __(add imm0,imm0,#fixnum_one)
@@ -1489,7 +1510,6 @@ _spentry(spreadargz)
 _spentry(tfuncallgen)
         __(cmp nargs,#nargregs<<fixnumshift)
         __(ldr lr,[sp,#lisp_frame.savelr])
-        __(ldr fn,[sp,#lisp_frame.savefn])
         __(ble 2f)
         __(ldr imm0,[sp,#lisp_frame.savevsp])
         __(discard_lisp_frame())
@@ -1512,7 +1532,6 @@ _spentry(tfuncallgen)
 /* Some args were vpushed.  Slide them down to the base of  */
 /* the current frame, then do funcall.  */
 _spentry(tfuncallslide)
-        __(ldr fn,[sp,#lisp_frame.savefn])
         __(ldr imm0,[sp,#lisp_frame.savevsp])
         __(ldr lr,[sp,#lisp_frame.savelr])
         __(discard_lisp_frame())
@@ -1539,7 +1558,6 @@ _spentry(jmpsym)
 _spentry(tcallsymgen)
         __(cmp nargs,#nargregs<<fixnumshift)
         __(ldr lr,[sp,#lisp_frame.savelr])
-        __(ldr fn,[sp,#lisp_frame.savefn])
         __(ble 2f)
 
         __(ldr imm0,[sp,#lisp_frame.savevsp])
@@ -1565,7 +1583,6 @@ _spentry(tcallsymgen)
 /* the current frame, then do funcall.  */
 _spentry(tcallsymslide)
         __(ldr lr,[sp,#lisp_frame.savelr])
-        __(ldr fn,[sp,#lisp_frame.savefn])
         __(ldr imm0,[sp,#lisp_frame.savevsp])
         __(discard_lisp_frame())
         /* can use nfn (= temp2) as a temporary  */
@@ -1592,7 +1609,6 @@ _spentry(tcallnfngen)
 /* the current frame, then do funcall.  */
 _spentry(tcallnfnslide)
         __(ldr lr,[sp,#lisp_frame.savelr])
-        __(ldr fn,[sp,#lisp_frame.savefn])
         __(ldr imm0,[sp,#lisp_frame.savevsp])
         __(discard_lisp_frame())
         /* Since we have a known function, can use fname as a temporary.  */
@@ -1703,7 +1719,7 @@ _spentry(makestackblock0)
         __(mov imm1,#stack_alloc_marker)
         __(stmdb sp!,{imm1,temp0})
         __(mov arg_y,arg_z) /* save block size  */
-        __(mov arg_z,#nil_value) /* clear-p arg to %new-gcable-ptr  */
+        __(mov arg_z,rnil) /* clear-p arg to %new-gcable-ptr  */
         __(add arg_z,arg_z,#t_offset)
         __(set_nargs(2))
         __(ref_nrs_symbol(fname,new_gcable_ptr,imm0))
@@ -1723,11 +1739,11 @@ _spentry(makestacklist)
         __(bls 4f)
         __(stack_allocate_zeroed_ivector(imm1,imm0))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp,#0])
+        __(strb gpr32(imm0),[sp,#0])
         __(add imm2,sp,#dnode_size+fulltag_cons)
         __(movs imm1,arg_y)
         __(mov arg_y,arg_z)
-        __(mov arg_z,#nil_value)
+        __(mov arg_z,rnil)
         __(b 3f)
 2:
         __(_rplacd(imm2,arg_z))
@@ -1743,7 +1759,7 @@ _spentry(makestacklist)
         __(str imm0,[sp,#-8]!)
         __(movs imm1,arg_y) /* count  */
         __(mov arg_y,arg_z) /* initial value  */
-        __(mov arg_z,#nil_value) /* result  */
+        __(mov arg_z,rnil) /* result  */
         __(b 6f)
 5:
         __(Cons(arg_z,arg_y,arg_z))
@@ -1769,7 +1785,7 @@ _spentry(stkgvector)
         __(bls 3f)
         __(stack_allocate_zeroed_ivector(imm1,temp1))
         __(unbox_fixnum(imm1,temp0))
-        __(strb imm1,[sp])
+        __(strb gpr32(imm1),[sp])
         __(add arg_z,sp,#fulltag_misc)
         __(add imm0,sp,nargs)
         __(stmdb sp!,{arg_x,temp2})
@@ -2034,7 +2050,7 @@ local_label(save_values_to_tsp):
         __(cmp temp1,$0)
         __(mov imm1,#subtag_simple_vector)
         __(mov arg_y,#stack_alloc_marker)
-        __(strb imm1,[sp])
+        __(strb gpr32(imm1),[sp])
         __(mov temp0,sp)
         __(stmdb sp!,{arg_y,arg_x})
         __(str temp1,[temp0,#mvcall_older_value_set])
@@ -2063,13 +2079,13 @@ _spentry(add_values)
 /* Calls out to %init-misc, which does the rest of the work.  */
 
 _spentry(misc_alloc_init)
-        __(build_lisp_frame(imm0))
+        __(build_lisp_frame())
         __(mov fn,#0)
         __(mov temp2,arg_z)  /* initval  */
         __(mov arg_z,arg_y)  /* subtag  */
         __(mov arg_y,arg_x)  /* element-count  */
         __(bl _SPmisc_alloc)
-        __(restore_lisp_frame(imm0))
+        __(restore_lisp_frame())
         __(mov arg_y,temp2)
 initialize_vector:              
         __(ref_nrs_symbol(fname,init_misc,imm0))
@@ -2099,7 +2115,7 @@ _spentry(stack_misc_alloc_init)
         __(mov temp1,sp)
         __(stack_allocate_zeroed_ivector(imm0,imm1))
         __(unbox_fixnum(imm0,arg_y))
-        __(strb imm0,[sp])
+        __(strb gpr32(imm0),[sp])
         __(mov arg_y,arg_z)
         __(add arg_z,sp,#fulltag_misc)
         __(stmdb sp!,{temp0,temp1})
@@ -2109,128 +2125,55 @@ _spentry(stack_misc_alloc_init)
 _spentry(popj)
         .globl C(popj)
 C(popj):
-        __(return_lisp_frame(imm0))
+        __(return_lisp_frame())
 
 
-
-/* Divide the 64 bit unsigned integer in imm0 (low) and imm1 (high) by
-   the 32-bit unsigned integer in imm2; return the quotient in
-   imm0:imm1 and remainder in imm2.  We pretty much have to do this
-   as an ff call; even if we wrote the code ourselves, we'd have to
-   enter foreign context to use as many imm regs as we'd need.
-   Moral: don't do integer division on the ARM.
-*/
-        .globl C(__aeabi_uldivmod)        
-_spentry(udiv64by32)
-        __(cmp imm2,#0)
-        __(bne 1f)
-        __(build_lisp_frame(imm2))
-        __(bl _SPmakeu128)
-        __(mov arg_y,#XDIVZRO)
-        __(mov nargs,#2<<fixnumshift)
-        __(restore_lisp_frame(imm0))
-        __(b _SPksignalerr)
-1:              
-        __(stmdb vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(str vsp,[rcontext,#tcr.save_vsp])
-        __(mov arg_z,rcontext)
-        __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(build_lisp_frame(r3))
-        __(str sp,[arg_z,#tcr.last_lisp_frame])
-        __(str allocptr,[arg_z,#tcr.save_allocptr])
-        __(mov r3,#TCR_STATE_FOREIGN)
-        __(str r3,[arg_z,#tcr.valence])
-        __(mov r3,#0)
-        __(bl C(__aeabi_uldivmod))
-        __(mov rcontext,arg_z)
-        __(str arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(mov allocptr,#VOID_ALLOCPTR)
-        __(mov fn,#0)
-        __(mov temp2,#0)
-        __(mov temp1,#0)
-        __(mov temp0,#0)
-        __(mov arg_x,#TCR_STATE_LISP)
-        __(str arg_x,[rcontext,#tcr.valence])
-        __(ldr allocptr,[rcontext,#tcr.save_allocptr])
-        __(ldm vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(ldr fn,[sp,#lisp_frame.savefn])
-        __(ldr lr,[sp,#lisp_frame.savelr])
-        __(discard_lisp_frame())
-        __(ret)
 
 
 /* arg_z should be of type (UNSIGNED-BYTE 64);  */
-/* return high 32 bits in imm1, low 32 bits in imm0 */
+/* return unboxed value in imm0 */
 
 
 _spentry(getu64)
-        __(test_fixnum(arg_z))
-        __(bne 1f)
+        __(branch_if_not_fixnum(arg_z,1f))
+        __(branch_if_negative(arg_z,0f))
         __(unbox_fixnum(imm0,arg_z))
-        __(movs imm1,imm0,asr #31)
-        __(bxeq lr)
+        __(ret)
 0:              
         __(uuo_error_reg_not_xtype(al,arg_z,xtype_u64))
 1:
-        __(extract_typecode(imm0,arg_z))
-        __(cmp imm0,#subtag_bignum)
-        __(bne 0b)
-        __(mov imm1,#two_digit_bignum_header)
-        __(getvheader(imm0,arg_z))
-        __(cmp imm0,imm1)
-        __(bne 2f)
-        __(vrefr(imm0,arg_z,0))
-        __(vrefr(imm1,arg_z,1))
-        __(cmp imm1,#0)
-        __(bxge lr)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_u64))
-2:      __(mov imm1,#three_digit_bignum_header)
-        __(cmp imm0,imm1)
-        __(bne 3f)
-        __(vrefr(imm2,arg_z,2))
-        __(cmp imm2,#0)
-        __(vrefr(imm1,arg_z,1))
-        __(vrefr(imm0,arg_z,0))
-        __(bxeq lr)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_u64))
-3:      __(mov imm1,#one_digit_bignum_header)
-        __(cmp imm0,imm1)
-        __(bne 0b)
-        __(vrefr(imm0,arg_z,0))
-        __(mov imm1,#0)
-        __(cmp imm0,#0)
-        __(bxgt lr)
-        __(b 0b)
-        __
-         
-/* arg_z should be of type (SIGNED-BYTE 64);  */
-/*    return high 32 bits  in imm1, low 32 bits in imm0  */
-
-_spentry(gets64)
-        __(test_fixnum(arg_z))
-        __(moveq imm0,arg_z,asr #fixnumshift)
-        __(moveq imm1,imm0,asr #31)
-        __(bxeq lr)
-        __(mov imm2,#0)
         __(extract_lisptag(imm0,arg_z))
         __(cmp imm0,#tag_misc)
-        __(mov imm1,#one_digit_bignum_header)
-        __(ldreq imm2,[arg_z,#misc_header_offset])
-        __(cmp imm1,imm2)
-        __(bne 0f)
-        __(vrefr(imm0,arg_z,0))
-        __(mov imm1,imm0,asr #31)
+        __(bne 0b)
+        __(getvheader(imm0,arg_z))
+        __(cmp imm0,#two_digit_bignum_header)
+        __(bne 2f)
+        __(ldr imm0,[arg_z,#misc_data_offset])
+        __(branch_if_negative(imm0,0b))
         __(ret)
-0:     
-        __(mov imm1,#two_digit_bignum_header)
-        __(cmp imm1,imm2)
-        __(beq 1f)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_s64))
-1:              
-        __(vrefr(imm1,arg_z,1))
-        __(vrefr(imm0,arg_z,0))
+2:      __(cmp imm0,#three_digit_bignum_header)
+        __(bne 0b)
+        __(vref32(imm1,arg_z,2))
+        __(ldr imm0,[arg_z,#misc_data_offset])
+        __(cbnz imm1,0b)
         __(ret)
 
+         
+/* arg_z should be of type (SIGNED-BYTE 64);  */
+/*    return unboxed value in imm0  */
+
+_spentry(gets64)
+        __(unbox_fixnum(imm0,arg_z))
+        __(branch_if_fixnum(arg_z,1f))
+        __(extract_lisptag(imm0,arg_z))
+        __(cmp imm0,#tag_misc)
+        __(bne 2f)
+        __(getvheader(imm0,arg_z))
+        __(cmp imm0,#two_digit_bignum_header)
+        __(bne 2f)
+        __(ldr imm0,[arg_z,#misc_data_offset])
+1:      __(ret)
+2:      __(uuo_error_reg_not_xtype(arg_z,xtype_s64))
 
 /* on entry: arg_z = symbol.  On exit, arg_z = value (possibly */
 /* unbound_marker), arg_y = symbol, imm1 = symbol.binding-index  */
@@ -2278,58 +2221,6 @@ _spentry(specset)
 
 
 	
-/* Construct a lisp integer out of the 32-bit signed value in imm0 */
-/* arg_z should be of type (SIGNED-BYTE 32); return unboxed result in imm0 */
-
-_spentry(gets32)
-        __(test_fixnum(arg_z))
-        __(moveq imm0,arg_z,asr #fixnumshift)
-        __(bxeq lr)
-        __(extract_lisptag(imm0,arg_z))
-        __(cmp imm0,#tag_misc)
-        __(beq 1f)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_s32))
-1:              
-        __(getvheader(imm0,arg_z))
-        __(mov imm1,#one_digit_bignum_header)
-        __(cmp imm0,imm1)
-        __(beq 2f)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_s32))
-2:              
-        __(vrefr(imm0,arg_z,0))
-        __(ret)        
-
-
-/*  */
-/* arg_z should be of type (UNSIGNED-BYTE 32); return unboxed result in imm0 */
-/*  */
-
-_spentry(getu32)
-        __(test_fixnum(arg_z))
-        __(moveq imm0,arg_z,asr #fixnumshift)
-        __(movseq imm1,imm0,asr #31)
-        __(bxeq lr)
-        __(mov imm1,#one_digit_bignum_header)
-        __(extract_lisptag(imm0,arg_z))
-        __(cmp imm0,#tag_misc)
-        __(beq 1f)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_u32))
-1:              
-        __(getvheader(imm0,arg_z))
-        __(cmp imm0,imm1)
-        __(ldreq imm0,[arg_z,#misc_data_offset])
-        __(beq 7f)
-        __(mov imm1,#two_digit_bignum_header)
-        __(cmp imm0,imm1)
-        __(ldreq imm0,[arg_z,#misc_data_offset])
-        __(ldreq imm1,[arg_z,#misc_data_offset+4])
-        __(cmpeq imm1,#0)
-        __(bxeq lr)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_u32))
-7:              
-        __(movs imm1,imm0,asr #31)
-        __(bxeq lr)
-        __(uuo_error_reg_not_xtype(al,arg_z,xtype_u32))
 
 
 /* */
@@ -2692,7 +2583,7 @@ _spentry(keyword_bind)
         __(add imm0,key_value_count,#dnode_size) /* we know  count is even */
         __(stack_allocate_zeroed_ivector(imm1,imm0))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp])
+        __(strb gpr32(imm0),[sp])
         /* Copy key/value pairs in reverse order from the vstack to
            the gvector we just created on the cstack. */
         __(add imm0,vsp,key_value_count) /* src, predecrement */
@@ -2709,7 +2600,7 @@ _spentry(keyword_bind)
         __(getvheader(imm0,temp2))
         __(mov imm0,imm0,lsr #num_subtag_bits)
         __(mov temp0,vsp)
-        __(mov imm1,#nil_value)
+        __(mov imm1,rnil)
         /* Push a pair of NILs (value, supplied-p) for each defined keyword */
         __(b 3f)
 2:      __(vpush1(imm1))
@@ -2746,7 +2637,7 @@ local_label(nextvalpairloop):
            value here, and don't have a lot of free registers ... */
         __(add temp1,sp,#8)
         __(ldr temp1,[temp1,imm2])
-        __(cmp temp1,#nil_value)
+        __(cmp temp1,rnil)
         __(orrne keyword_flags,keyword_flags,#keyword_flag_allow_other_keys)
         __(mov temp1,imm1)      /* from comparison above */
 local_label(current_key_allow_other_keys_handled):
@@ -2771,7 +2662,7 @@ local_label(defined_keyword_compare_test):
 local_label(defined_keyword_found):     
         __(sub imm0,temp0,imm0,lsl #1)
         __(ldr arg_x,[imm0,#-8])
-        __(cmp arg_x,#nil_value) /* seen this keyword yet ? */
+        __(cmp arg_x,rnil) /* seen this keyword yet ? */
         __(bne local_label(nextkeyvalpairnext))
         __(add arg_x,arg_x,#t_offset)
         __(str arg_x,[imm0,#-8])
@@ -2830,81 +2721,6 @@ local_label(odd_keywords):
         __(mov nargs,key_value_count)
         __(b local_label(error_exit))
 
-        .globl C(__aeabi_uidivmod)                
-_spentry(udiv32)
-        __(cmp imm1,#0)
-        __(bne 1f)
-        __(build_lisp_frame(imm1))
-        __(bl _SPmakeu64)
-        __(mov arg_y,#XDIVZRO)
-        __(mov nargs,#2<<fixnumshift)
-        __(restore_lisp_frame(imm0))
-        __(b _SPksignalerr)
-1:              
-        __(stmdb vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(str vsp,[rcontext,#tcr.save_vsp])
-        __(mov arg_z,rcontext)
-        __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(build_lisp_frame(r3))
-        __(str sp,[arg_z,#tcr.last_lisp_frame])
-        __(str allocptr,[arg_z,#tcr.save_allocptr])
-        __(mov r3,#TCR_STATE_FOREIGN)
-        __(str r3,[arg_z,#tcr.valence])
-        __(mov r3,#0)
-        __(bl C(__aeabi_uidivmod))
-        __(mov rcontext,arg_z)
-        __(str arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(mov allocptr,#VOID_ALLOCPTR)
-        __(mov fn,#0)
-        __(mov temp2,#0)
-        __(mov temp1,#0)
-        __(mov temp0,#0)
-        __(mov arg_x,#TCR_STATE_LISP)
-        __(str arg_x,[rcontext,#tcr.valence])
-        __(ldr allocptr,[rcontext,#tcr.save_allocptr])
-        __(ldm vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(ldr fn,[sp,#lisp_frame.savefn])
-        __(ldr lr,[sp,#lisp_frame.savelr])
-        __(discard_lisp_frame())
-        __(ret)
-
-_spentry(sdiv32)
-        __(cmp imm1,#0)
-        __(bne 1f)
-        __(build_lisp_frame(imm1))
-        __(bl _SPmakes64)
-        __(mov arg_y,#XDIVZRO)
-        __(mov nargs,#2<<fixnumshift)
-        __(restore_lisp_frame(imm0))
-        __(b _SPksignalerr)
-1:              
-        __(stmdb vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(str vsp,[rcontext,#tcr.save_vsp])
-        __(mov arg_z,rcontext)
-        __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(build_lisp_frame(r3))
-        __(str sp,[arg_z,#tcr.last_lisp_frame])
-        __(str allocptr,[arg_z,#tcr.save_allocptr])
-        __(mov r3,#TCR_STATE_FOREIGN)
-        __(str r3,[arg_z,#tcr.valence])
-        __(mov r3,#0)
-        __(bl C(__aeabi_idivmod))
-        __(mov rcontext,arg_z)
-        __(str arg_y,[rcontext,#tcr.last_lisp_frame])
-        __(mov allocptr,#VOID_ALLOCPTR)
-        __(mov fn,#0)
-        __(mov temp2,#0)
-        __(mov temp1,#0)
-        __(mov temp0,#0)
-        __(mov arg_x,#TCR_STATE_LISP)
-        __(str arg_x,[rcontext,#tcr.valence])
-        __(ldr allocptr,[rcontext,#tcr.save_allocptr])
-        __(ldm vsp!,{arg_z,arg_y,arg_x,temp0,temp1,temp2})
-        __(ldr fn,[sp,#lisp_frame.savefn])
-        __(ldr lr,[sp,#lisp_frame.savelr])
-        __(discard_lisp_frame())
-        __(ret)
-        
 
 _spentry(eabi_ff_callhf)
         __(add imm0,sp,#8)
@@ -2927,13 +2743,11 @@ _spentry(eabi_ff_call)
         __(sub temp0,temp0,#lisp_frame.size)
         __(str imm0,[temp0,#lisp_frame.marker])
         __(ldr imm0,[sp,#0])        
-        __(str imm1,[temp0,#lisp_frame.savefn])
         __(str imm1,[temp0,#lisp_frame.savelr])
         __(sub imm0,imm0,#(lisp_frame.size/4)<<num_subtag_bits)
         __(str vsp,[temp0,#lisp_frame.savevsp])
         __(str imm0,[sp,#0])
         __(str lr,[temp0,#lisp_frame.savelr])
-        __(str fn,[temp0,#lisp_frame.savefn])
         __(str allocptr,[rcontext,#tcr.save_allocptr])
         __(str temp0,[rcontext,#tcr.last_lisp_frame])
         __(mov temp0,rcontext)
@@ -3038,7 +2852,6 @@ _startfn(C(misc_ref_common))
 local_label(misc_ref_jmp):          
 	/* 00-0f  */
 	__(b local_label(misc_ref_invalid)) /* 00 even_fixnum  */
-	
 	__(b local_label(misc_ref_invalid)) /* 01 cons  */
 	__(b local_label(misc_ref_node))    /* 02 pseudofunction */
 	__(b local_label(misc_ref_invalid)) /* 03 imm  */
@@ -3312,87 +3125,90 @@ local_label(misc_ref_jmp):
 
 local_label(misc_ref_node):        
 	/* A node vector.  */
-	__(add imm0,arg_z,#misc_data_offset)
+	__(scale_64_bit_index(imm0,arg_z))
 	__(ldr  arg_z,[arg_y,imm0])
 	__(ret)
 local_label(misc_ref_single_float_vector):        
-	__(add imm0,arg_z,misc_data_offset)
-	__(mov imm1,#single_float_header)
-	__(ldr imm0,[arg_y,imm0])
-	__(Misc_Alloc_Fixed(arg_z,imm1,single_float.size))
-	__(str imm0,[arg_z,#single_float.value])
+	__(scale_32_bit_index(imm0,arg_z)) 
+	__(ldr gpr32(imm0),[arg_y,imm0])
+        __(lsl imm0,imm0,#32)
+        __(orr arg_z,imm0,#subtag_single_float)
 	__(ret)
 local_label(misc_ref_new_string):        
-	__(add imm0,arg_z,#misc_data_offset)
-	__(ldr imm0,[arg_y,imm0])
-	__(mov arg_z,imm0,lsl #charcode_shift)
+	__(scale_32_bit_index(imm0,arg_z))
+	__(ldr gpr32(imm0),[arg_y,imm0])
+	__(lsl arg_z,imm0,#charcode_shift)
 	__(orr arg_z,arg_z,#subtag_character)
 	__(ret)
 local_label(misc_ref_s32):        
-	__(add imm0,arg_z,#misc_data_offset)
-	__(ldr imm0,[arg_y,imm0])
-	__(b _SPmakes64)
+	__(scale_32_bit_index(imm0,arg_z))
+	__(ldrsw imm0,[arg_y,imm0])
+        __(box_fixnum(arg_z,imm0))
+        __(ret)
 local_label(misc_ref_fixnum_vector):    
-	__(add imm0,arg_z,#misc_data_offset)
+	__(scale_64_bit_index(imm0,arg_z))
 	__(ldr imm0,[arg_y,imm0])
-	__(box_fixnum(arg_z,imm0))
-	__(ret)        
+        __(box_fixnum(arg_z,imm0))
+        __(ret)
 local_label(misc_ref_u32):        
-	__(add imm0,arg_z,#misc_data_offset)
-	__(ldr imm0,[arg_y,imm0])
-	__(b _SPmakeu64)
-local_label(misc_ref_double_float_vector):      
-	__(mov imm2,arg_z,lsl #1)
-	__(add imm2,imm2,#misc_dfloat_offset)
-	__(ldrd imm0,imm1,[arg_y,imm2])
+	__(scale_32_bit_index(imm,arg_z)
+	__(ldr gpr32(imm0),[arg_y,imm0])
+        __(box_fixnum(arg_z,imm0))
+        __(ret)
+local_label(misc_ref_double_float_vector):
+        __(scale_64_bit_index(imm0,arg_z))
+        __(ldr d0,[arg_y,imm0])
 	__(mov imm2,#double_float_header)
 	__(Misc_Alloc_Fixed(arg_z,imm2,double_float.size))
-	__(strd imm0,imm1,[arg_z,#double_float.value])
+        __(str d0,[arg_z,#double_float.value])
 	__(ret)
 local_label(misc_ref_bit_vector):
-	__(mov imm1,#nbits_in_word-1)
-	__(and imm1,imm1,arg_z,lsr #2)
-	__(mov imm2,#1)
-	__(mov imm2,imm2,lsl imm1)
-	__(mov imm0,arg_z,lsr #5+fixnumshift)
-	__(mov imm0,imm0,lsl #2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(mov arg_z,#0)
-	__(ldr imm0,[arg_y,imm0])
-	__(tst imm0,imm2)
-	__(addne arg_z,arg_z,#fixnumone)
+        __(unbox_fixnum(imm0,arg_z))
+        __(and imm1,imm0,#63)
+        __(lsr imm0,imm0,#6)
+        __(mov imm2,#1)
+        __(add imm0,imm0,#misc_data_offset)
+        __(lsl imm2,imm2,imm1)
+        __(ldr imm0,[arg_y,imm0])
+        __(mov arg_z,#fixnumone)
+        __(tst imm0,imm2)
+        __(csel arg_z,arg_z,xzr,ne)
 	__(ret)
-local_label(misc_ref_s8):       
-	__(mov imm0,arg_z,lsr #2)
-	__(add imm0,imm0,#misc_data_offset)
+local_label(misc_ref_s8):
+        __(scale_8_bit_index(imm0,arg_z))
 	__(ldsb imm0,[arg_y,imm0])
 	__(box_fixnum(arg_z,imm0))
 	__(ret)
-local_label(misc_ref_u8):       
-	__(mov imm0,arg_z,lsr #2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(ldrb imm0,[arg_y,imm0])
+local_label(misc_ref_u8):
+        __(scale_8_bit_index(imm0,arg_z))
+	__(ldrb gpr32(imm0),[arg_y,imm0])
 	__(box_fixnum(arg_z,imm0))
 	__(ret)
-local_label(misc_ref_old_string):          
-	__(mov imm0,arg_z,lsr #2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(ldrb imm0,[arg_y,imm0])
+local_label(misc_ref_old_string):
+        __(scale_8_bit_index(imm0,arg_z))
+	__(ldrb gpr32(imm0),[arg_y,imm0])
 	__(mov arg_z,imm0,lsl #charcode_shift)
 	__(orr arg_z,arg_z,#subtag_character)
 	__(ret)
-local_label(misc_ref_u16):        
-	__(mov imm0,arg_z,lsr #1)     
-	__(add imm0,imm0,#misc_data_offset)
-	__(ldrh imm0,[arg_y,imm0])
+local_label(misc_ref_u16):
+        __(scale_16_bit_index(imm0,arg_z))
+	__(ldrh gpr32(imm0),[arg_y,imm0])
 	__(box_fixnum(arg_z,imm0))
 	__(ret)
-local_label(misc_ref_s16):             
-	__(mov imm0,arg_z,lsr #1)     
-	__(add imm0,imm0,#misc_data_offset)
+local_label(misc_ref_s16):
+        __(scale_16_bit_index(imm0,arg_z))
 	__(ldrsh imm0,[arg_y,imm0])
 	__(box_fixnum(arg_z,imm0))
 	__(ret)
+local_label(misc_ref_u64)
+        __(scale_64_bit_index(imm0,arg_z))
+        __(ldr imm0,[arg_y,imm0])
+        __(b _SPmakeu64)
+local_label(misc_ref_s64)
+        __(scale_64_bit_index(imm0,arg_z))
+        __(ldr imm0,[arg_y,imm0])
+        __(b _SPmakes64)
+                
 local_label(misc_ref_invalid):
 	__(mov arg_x,#XBADVEC)
 	__(set_nargs(3))
@@ -3679,11 +3495,9 @@ local_label(misc_set_jmp):
 local_label(misc_set_u32):        
 	/* Either a non-negative fixnum, a positive one-digit bignum, */
 	/* or a two-digit bignum whose sign-digit is 0 is ok.  */
-	__(add imm0,arg_y,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(bne local_label(set_not_fixnum_u32))
-	__(tst arg_z,#0x80000000)
-	__(bne local_label(set_bad))
+	__(scale_32_bit_index imm0,arg_y)
+	__(branch_if_not_fixnum(arg_z,local_label(set_bad)))
+        __(branch_if_negative(arg_z,local_label(set_bad)))
 	__(unbox_fixnum(imm1,arg_z))
 local_label(set_set32):         
 	__(str imm1,[arg_x,imm0])
@@ -3759,7 +3573,7 @@ local_label(misc_set_u8):
 	__(tst arg_z,imm2)
 	__(bne local_label(set_bad))
 	__(unbox_fixnum(imm1,arg_z))
-	__(strb imm1,[arg_x,imm0])
+	__(strb gpr32(imm1),[arg_x,imm0])
 	__(ret)
 local_label(misc_set_old_string):
 	__(mov imm0,arg_y,lsr #2)
@@ -3768,7 +3582,7 @@ local_label(misc_set_old_string):
 	__(cmp imm2,#subtag_character)
 	__(unbox_character(imm1,arg_z))
 	__(bne local_label(set_bad))
-	__(strb imm1,[arg_x,imm0])
+	__(strb gpr32(imm1),[arg_x,imm0])
 	__(ret)
 local_label(misc_set_s8):
 	__(mov imm0,arg_y,lsr #2)
@@ -3779,7 +3593,7 @@ local_label(misc_set_s8):
 	__(mov imm2,imm1,lsl #32-8)
 	__(cmp imm1,imm2,asr #32-8)
 	__(bne local_label(set_bad))
-	__(strb imm1,[arg_x,imm0])
+	__(strb fpr32(imm1),[arg_x,imm0])
 	__(ret)
 local_label(misc_set_u16):         
 	__(mov imm0,arg_y,lsr #1)
@@ -3848,7 +3662,7 @@ _startfn(C(_throw_found))
         __(add imm1,imm1,#-node_size)
         __(bne local_label(throw_all_values))
         __(cmp nargs,#0)
-        __(moveq imm1,#nil_value)
+        __(moveq imm1,rnil)
         __(set_nargs(1))
         __(streq imm1,[vsp,#-node_size]!)
         __(movne vsp,imm1)
@@ -4022,7 +3836,7 @@ local_label(nthrownv_do_unwind):
         __(orr imm1,imm1,#subtag_u32_vector)
         __(stack_allocate_zeroed_ivector(imm1,imm0))
         __(mov imm0,#subtag_simple_vector)
-        __(strb imm0,[sp])
+        __(strb gpr32(imm0),[sp])
         __(str temp2,[sp,#node_size])
         __(add temp2,sp,#dnode_size)
         __(add temp2,temp2,nargs)
@@ -4084,7 +3898,7 @@ _endfn
 _startfn(C(progvsave))        
         /* Error if arg_z isn't a proper list.  That's unlikely, */
         /* but it's better to check now than to crash later. */
-        __(cmp arg_z,#nil_value)
+        __(cmp arg_z,rnil)
         __(mov arg_x,arg_z) /* fast  */
         __(mov temp1,arg_z) /* slow  */
         __(beq 9f)  /* Null list is proper  */
@@ -4092,7 +3906,7 @@ _startfn(C(progvsave))
         __(trap_unless_list(arg_x,imm0))
         __(_cdr(temp2,arg_x)) /* (null (cdr fast)) ?  */
         __(trap_unless_list(temp2,imm0,cr0))
-        __(cmp temp2,#nil_value)
+        __(cmp temp2,rnil)
         __(_cdr(arg_x,temp2))
         __(beq 9f)
         __(_cdr(temp1,temp1))
@@ -4108,7 +3922,7 @@ _startfn(C(progvsave))
         __(mov imm0,#0)
         __(mov arg_x,arg_y)
 1:
-        __(cmp arg_x,#nil_value)
+        __(cmp arg_x,rnil)
         __(addne imm0,imm0,#node_size)
         __(_cdr(arg_x,arg_x))
         __(bne 1b)
@@ -4131,7 +3945,7 @@ _startfn(C(progvsave))
         __(mov temp1,sp)
         __(stack_allocate_zeroed_ivector(imm1,imm2))
         __(mov imm1,#subtag_simple_vector)
-        __(strb imm1,[sp])
+        __(strb fpr32(imm1),[sp])
         __(str imm0,[sp,#node_size])
         __(ldr imm1,[rcontext,#tcr.db_link])
 3:      __(_car(temp0,arg_y))
@@ -4144,11 +3958,11 @@ _startfn(C(progvsave))
 4:              
         __(ldr arg_x,[rcontext,#tcr.tlb_pointer])
         __(ldr temp0,[arg_x,imm0])
-        __(cmp arg_z,#nil_value)
+        __(cmp arg_z,rnil)
         __(mov temp2,#unbound_marker)
         __(ldrne temp2,[arg_z,#cons.car])
         __(_cdr(arg_z,arg_z))
-        __(cmp arg_y,#nil_value)
+        __(cmp arg_y,rnil)
         __(push1(temp0,temp1))
         __(push1(imm0,temp1))
         __(push1(imm1,temp1))
@@ -4228,12 +4042,12 @@ local_label(loop):
         __(ldr nfn,[vsp,#0])
 	__(set_nargs(0))
         __(bl _SPfuncall)
-	__(mov arg_z,#nil_value)
+	__(mov arg_z,rnil)
 	__(mov imm0,#fixnum_one)
 	__(bl _SPnthrow1value)
 local_label(test):
         __(ldr nfn,[vsp,#0])
-        __(cmp nfn,#nil_value)
+        __(cmp nfn,rnil)
 	__(bne local_label(loop))
         __(return_lisp_frame(imm0))
 	_endfn
@@ -4280,7 +4094,7 @@ _exportfn(C(start_lisp))
         __(str imm0,[rcontext,#tcr.valence])
         __(pop_foreign_fprs())
         __(add sp,sp,#2*node_size)
-        __(mov imm0,#nil_value)
+        __(mov imm0,rnil)
         __(ldr sp,[sp])
         __(ldmia sp!,{r4,r5,r6,r7,r8,r9,r10,r11,r12,lr})
         __(ret)

@@ -18,7 +18,7 @@ define(`imm1',`x1')
 define(`imm2',`x2')
 define(`imm3',`x3')
 define(`imm4',`x4')
-define(`imm5',`x5') define(`nargs',`w5')
+define(`imm5',`x5') define(`nargs',`x5')
 define(`rnil',`x6')
 define(`rt',`x7')
         
@@ -44,6 +44,7 @@ define(`allocptr',`x26')
 define(`allocbase',`x27')                
 define(`rcontext',`x28')
 
+define(`lr',`x30')        
 define(`fname',`temp3')
 define(`nfn',`temp2')
         
@@ -75,27 +76,28 @@ fixnum1 = fixnumone
 
 
 tag_fixnum = 0
+tag_single_float = 1
 tag_callable = 4        
 tag_list = 5
 tag_misc = 6
 tag_imm = 7            
 
 fulltag_even_fixnum = 0
-fulltag_immheader_1 = 1
+fulltag_immheader_32 = 1
 fulltag_immheader_8 = 2                    
 fulltag_immheader_16 = 3
 fulltag_symbol = 4        
 fulltag_cons = 5
 fulltag_misc = 6
-fulltag_imm = 7                
+fulltag_nodeheader_a = 7
 fulltag_odd_fixnum = 8
-fulltag_immheader_32 = 9
-fulltag_immheader_64 = 10
-fulltag_nodehader_a = 11
+fulltag_single_float = 9
+fulltag_immheader_misc = 10     /* 64-bit, bitvectors */
+fulltag_nodehader_b = 11
 fulltag_function = 12        
 fulltag_nil = 13
-fulltag_nodeheader_b = 14
-fulltag_nodeheader_c = 15        
+fulltag_nodeheader_c = 14
+fulltag_imm = 15
 
 callable_function_bit = 3
                 
@@ -120,11 +122,11 @@ min_vector_subtag = subtag_vectorH
 min_array_subtag = subtag_arrayH
         
 	
-ivector_class_64_bit = fulltag_immheader_64
+ivector_class_64_bit = fulltag_immheader_misc
 ivector_class_32_bit = fulltag_immheader_32
 ivector_class_16_bit = fulltag_immheader_16
 ivector_class_8_bit = fulltag_immheader_8
-ivector_class_1_bit = fulltag_immheader_1
+ivector_class_1_bit = fulltag_immheader_misc
 
 define_cl_array_subtag(s64_vector,ivector_class_64_bit,1)
 define_cl_array_subtag(u64_vector,ivector_class_64_bit,2)
@@ -153,7 +155,7 @@ define_subtag(ratio,fulltag_nodeheader_a,0)
 define_subtag(complex,fulltag_nodeheader_a,1)
 define_subtag(function,fulltag_nodeheader_a,2)
 define_subtag(symbol,fulltag_nodeheader_a,3)
-        0
+        
 define_subtag(catch_frame,fulltag_nodeheader_b,0)
 define_subtag(basic_stream,fulltag_nodeheader_b,1)
 define_subtag(lock,fulltag_nodeheader_b,2)
@@ -180,19 +182,18 @@ misc_data_offset = misc_header_offset+node_size /* first word of data */
 misc_subtag_offset = misc_data_offset-7       /* low byte of header */
 misc_dfloat_offset = misc_data_offset		/* double-floats are doubleword-aligned */
 
-define_subtag(single_float,fulltag_imm,0)
+define_subtag(single_float,fulltag_single_float,0)
 
 
-define_subtag(character,fulltag_imm_1,0)
-                	
-define_subtag(unbound,fulltag_imm_3,0)
+define_subtag(character,fulltag_imm,0)                	
+define_subtag(unbound,fulltag_imm,1)
 unbound_marker = subtag_unbound
 undefined = unbound_marker
-define_subtag(slot_unbound,fulltag_imm_3,1)
+define_subtag(slot_unbound,fulltag_imm1,2)
 slot_unbound_marker = subtag_slot_unbound
-define_subtag(illegal,fulltag_imm_3,2)
+define_subtag(illegal,fulltag_imm,3)
 illegal_marker = subtag_illegal
-define_subtag(no_thread_local_binding,fulltag_imm_3,3)
+define_subtag(no_thread_local_binding,fulltag_imm,4)
 no_thread_local_binding_marker = subtag_no_thread_local_binding        
 
 	
@@ -308,9 +309,9 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 
 
 nrs_origin = (0x3000+(LOWMEM_BIAS))
-nrs_symbol_fulltag = fulltag_misc        
+nrs_symbol_fulltag = fulltag_symbol
 define(`nilsym',`nil')        
-lisp_globals_limit = (0x3000+(LOWMEM_BIAS))
+lisp_globals_limit = (fulltag_nil+dnode_size)
         
         include(lisp_globals.s)
         

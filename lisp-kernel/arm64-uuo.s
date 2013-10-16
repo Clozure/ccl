@@ -28,7 +28,13 @@ hlt_code_unary_reg_not_xtype = 4
 hlt_code_unary_misc = 5
 hlt_code_binary = 6
 
-define(`uuo_error_reg_not_lisptag',`
+define(`uuo_error_reg_not_tag',`
         __(hlt #(hlt_code_unary_reg_not_lisptag|(gprval($1)<<3)|$2<<8))
         ')
-                                                                                
+define(`uuo_alloc_trap',`
+        __(hlt #(hlt_code_nullary|(0<<3)))
+        ')
+	
+define(`uuo_error_not_callable',`
+        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(0<<8)))
+        ')                                                                                             
