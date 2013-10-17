@@ -356,7 +356,6 @@
 (bind-key "Illegal" #k"control-x control-s" :mode "Listener")
 (bind-key "Save To File" #k"control-x control-w" :mode "Listener")
 
-(bind-key "Editor Evaluate Expression" #k"control-meta-escape")
 (bind-key "Editor Evaluate Expression" #k"meta-escape"  :mode "Editor")
 
 (bind-key "Editor Execute Expression" #k"enter" :mode "Editor")
@@ -413,6 +412,7 @@
 (bind-key "Goto Absolute Line" #k"meta-g")
 ;;;(bind-key "Set Package Name" #k"control-x p" :mode "Lisp")
 (bind-key "Insert Sharp Comment" #k"meta-#")
+(bind-key "Show Callers" #k"control-meta-c" :mode "Lisp")
 
 #+listener-bindings
 (progn
@@ -508,7 +508,7 @@
 ;;;; Auto Fill Mode.
 
 (bind-key "Fill Paragraph" #k"meta-q")
-(bind-key "Fill Region" #k"meta-g")
+(bind-key "Fill Region" #k"meta-g" :mode "Fill")
 (bind-key "Set Fill Prefix" #k"control-x .")
 (bind-key "Set Fill Column" #k"control-x f")
 (bind-key "Auto Fill Return" #k"return" :mode "Fill")

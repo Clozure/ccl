@@ -597,7 +597,6 @@
 (defcommand "Save File" (p &optional (buffer (current-buffer)))
   "Writes the contents of the current buffer to the associated file.  If there
   is no associated file, one is prompted for."
-  "Writes the contents of the current buffer to the associated file."
   (declare (ignore p))
   (when (buffer-modified buffer)
     (hemlock-ext:save-hemlock-buffer buffer)))

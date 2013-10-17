@@ -18,6 +18,8 @@
 
 ;;;; Some global state.
 
+(defparameter *isearch-is-global* nil "True if incremental search string is not per-buffer but global.")
+
 (defvar *last-search-string* () "Last string searched for.")
 (defvar *last-search-pattern*
   (new-search-pattern :string-insensitive :forward "Foo")

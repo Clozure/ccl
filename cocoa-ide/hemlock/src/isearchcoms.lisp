@@ -61,13 +61,31 @@
 ;;
 
 (defstruct (isearch-state (:conc-name "ISS-"))
-  string
   direction
   pattern
   failure
   wrapped-p
   history
   start-region)
+
+(defvar *global-search-pattern* nil "Used when *isearch-is-global*") ; can't use *last-search-pattern* because that's
+; used elsewhere
+
+(defvar original-iss-pattern-definition #'iss-pattern)
+
+(defun local-iss-pattern (state)
+  (funcall original-iss-pattern-definition state))
+
+(declaim (notinline iss-pattern))
+(defun iss-pattern (state)
+  (if *isearch-is-global*
+    (or *global-search-pattern*
+        (local-iss-pattern state))
+    (local-iss-pattern state)))
+
+(defun iss-string (state)
+  (ignore-errors ; because iss-pattern might be nil
+   (hi::search-pattern-pattern (iss-pattern state))))
 
 (defun current-region-info ()
   (list (copy-mark (current-point) :temporary)
@@ -128,6 +146,8 @@
   (let* ((buffer (current-buffer))
          (iss (make-isearch-state :direction direction
 				  :start-region (current-region-info))))
+    (when (iss-pattern iss)
+      (setf (hi::search-pattern-pattern (iss-pattern iss)) nil))
     (setf (buffer-minor-mode buffer "I-Search") t)
     (unless (hemlock-bound-p 'i-search-state :buffer buffer)
       (defhvar "I-Search State"
@@ -145,7 +165,7 @@
    "Pull string from current selection into search string."
   (declare (ignore p))
   (let* ((iss (current-isearch-state)))
-    (i-search-extend iss (region-to-string (region (current-mark) (current-point))))))
+    (i-search-extend iss (symbol-at-point (current-buffer)))))
 
 (defun i-search-backup (iss)
   (if (iss-history iss)
@@ -215,17 +235,18 @@
   (message ""))
 
 (defun %i-search-set-pattern (iss &key (string nil s-p) (direction nil d-p))
-  (when s-p
-    (setf (iss-string iss) (and (not (zerop (length string))) string)))
-  (when d-p
-    (setf (iss-direction iss) direction))
-  (setf (iss-pattern iss)
-	(new-search-pattern (if (value string-search-ignore-case)
-			      :string-insensitive
-			      :string-sensitive)
-			    (iss-direction iss)
-			    (or (iss-string iss) "")
-			    (iss-pattern iss))))
+  (let ((thisstring (if s-p (or string "") (iss-string iss))))
+    (when *isearch-is-global*
+      (setf *last-search-string* thisstring))
+    (when d-p
+      (setf (iss-direction iss) direction))
+    (setf *global-search-pattern*
+          (setf (iss-pattern iss) (new-search-pattern (if (value string-search-ignore-case)
+                                                        :string-insensitive
+                                                        :string-sensitive)
+                                                      (iss-direction iss)
+                                                      thisstring
+                                                      (iss-pattern iss))))))
 
 ;; Do a search for the current pattern starting at START going to
 ;; end/beginning as per ISS-DIRECTION.  Sets ISS-FAILURE depending on

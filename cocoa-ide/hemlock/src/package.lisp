@@ -630,6 +630,7 @@
    #:selection-for-click
    #:move-point-for-click
    #:edit-definition
+   #:*isearch-is-global*
    ))
 
 
