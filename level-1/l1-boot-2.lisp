@@ -375,8 +375,6 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "EDIT-CALLERS" "edit-callers")
       (bin-load-provide "DESCRIBE" "describe")
       (bin-load-provide "SWINK" "swink")
-      #-LINUX-TARGET
-      (bin-load-provide "CCL-IDE" "ccl-ide")
       (bin-load-provide "COVER" "cover")
       (bin-load-provide "LEAKS" "leaks")
       (bin-load-provide "CORE-FILES" "core-files")

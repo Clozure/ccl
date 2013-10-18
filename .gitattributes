@@ -22,6 +22,7 @@ cocoa-ide/app-delegate.lisp -text
 cocoa-ide/apropos-window.lisp -text
 cocoa-ide/build-application.lisp -text
 cocoa-ide/builder-utilities.lisp -text
+cocoa-ide/ccl-ide.lisp -text
 cocoa-ide/cocoa-doc.lisp -text
 cocoa-ide/cocoa-grep.lisp -text
 cocoa-ide/cocoa-remote-lisp.lisp -text
@@ -325,7 +326,6 @@ level-1/arm-threads-utils.lisp -text
 level-1/arm-trap-support.lisp -text
 lib/arm-backtrace.lisp -text
 lib/armenv.lisp -text
-lib/ccl-ide.lisp -text
 lib/ffi-androidarm.lisp -text
 lib/ffi-darwinarm.lisp -text
 lib/ffi-darwinx8632.lisp -text
