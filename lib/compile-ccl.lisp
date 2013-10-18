@@ -208,7 +208,8 @@
     numbers 
     dumplisp
     source-files
-    swink))
+    swink
+    #-LINUX-TARGET ccl-ide))
 
 (defun target-other-lib-modules (&optional (target
 					    (backend-target-arch-name

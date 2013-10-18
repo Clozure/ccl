@@ -76,8 +76,7 @@
   (ccl::break-loop-handle-error condition error-pointer))
 
 (defmethod ccl::application-init-file ((a cocoa-ide))
-  (unless (shift-key-now-p)
-    '("home:ccl-init" "home:\\.ccl-init")))
+  (unless (shift-key-now-p) ccl::*ccl-init-file*))
 
 ;;; If we're launched via the Finder, the only argument we'll
 ;;; get is of the form -psnXXXXXX.  That's meaningless to us;

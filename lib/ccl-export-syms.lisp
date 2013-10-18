@@ -26,6 +26,8 @@
      @
      *elements-per-buffer*
      save-application
+     #-LINUX-TARGET
+     ccl-ide
      def-load-pointers
      *save-exit-functions*
      *restore-lisp-functions*

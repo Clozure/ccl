@@ -251,6 +251,12 @@ Default version returns Clozure CL version info."
 (defparameter *application*
   (make-instance 'lisp-development-system))
 
+(defvar *ccl-init-file*
+  #+unix '("home:ccl-init" "home:\\.ccl-init")
+  #+windows "home:ccl-init"
+  "Global default init file for CCL. This file will be loaded by the first listener process.
+   It's probably a better idea to specialize application-init-file than to override this value.")
+
 (defloadvar *load-lisp-init-file* t)
 (defloadvar *lisp-startup-parameters* ())
 
@@ -312,5 +318,5 @@ Default version returns Clozure CL version info."
 
 (defmethod application-init-file ((app lisp-development-system))
   ;; This is the init file loaded before cocoa.
-  #+unix '("home:ccl-init" "home:\\.ccl-init")
-  #+windows "home:ccl-init")
+  *ccl-init-file*)
+
