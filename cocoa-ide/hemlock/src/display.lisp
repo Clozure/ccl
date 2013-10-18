@@ -22,7 +22,7 @@
 			     (:keyword :purple)
                              (:unmatched-paren :red)))
 ;; Cache for actual color objects.
-(defvar *lisp-code-colors-cache* nil)
+(ccl::defloadvar *lisp-code-colors-cache* nil)
 
 ;; (cached-lisp-code-colors)
 (defun cached-lisp-code-colors ()
