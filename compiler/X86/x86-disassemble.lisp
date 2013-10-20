@@ -1864,15 +1864,15 @@
    ;; PREGRP8
    (vector
     (make-x86-dis "movups" 'op-xmm 0 'op-ex +v-mode+)
-    (make-x86-dis "movss" 'op-xmm 0 'op-ex +v-mode+)
+    (make-x86-dis '("movss" .  :single) 'op-xmm 0 'op-ex +v-mode+)
     (make-x86-dis "movupd" 'op-xmm 0 'op-ex +v-mode+)
-    (make-x86-dis "movsd" 'op-xmm 0 'op-ex +v-mode+))
+    (make-x86-dis '("movsd" . :double) 'op-xmm 0 'op-ex +v-mode+))
    ;; PREGRP9
    (vector
     (make-x86-dis "movups" 'op-ex +v-mode+ 'op-xmm 0)
-    (make-x86-dis "movss" 'op-ex +v-mode+ 'op-xmm 0)
+    (make-x86-dis '("movss" . :single)'op-ex +v-mode+ 'op-xmm 0)
     (make-x86-dis "movupd" 'op-ex +v-mode+ 'op-xmm 0)
-    (make-x86-dis "movsd" 'op-ex +v-mode+ 'op-xmm 0))
+    (make-x86-dis '("movsd" . :double) 'op-ex +v-mode+ 'op-xmm 0))
    ;; PREGRP10
    (vector
     (make-x86-dis "mulps" 'op-xmm 0 'op-ex +v-mode+)
@@ -2448,7 +2448,7 @@
         (case flag
           ;; Should also check alignment here, and check
           
-          (:lea
+          ((:lea :single :double)
            (let* ((disp ))
              (if (or (and (setq disp (is-fn-ea op0)) (> disp 0))
                      (and (setq disp (is-ra0-ea op0)) (< disp 0) (is-fn op1)))
@@ -2459,7 +2459,30 @@
                           (if (< disp 0)
                             `(- (:^ ,label-ea))
                             `(:^ ,label-ea))))
-                   (push label-ea (x86-ds-pending-labels ds))))
+                   (push label-ea (x86-ds-pending-labels ds))
+                   (when (or (eq flag :single) (eq flag :double))
+                     (let* ((block (make-x86-dis-block :start-address label-ea
+                                                       :end-address (+ label-ea (if (eq flag :single) 4 8))))
+                            (instructions (x86-dis-block-instructions block))
+                            (instruction (make-x86-disassembled-instruction
+                                          :address label-ea
+                                          :labeled t
+                                          :mnemonic (if (eq flag :single)
+                                                      ":long"
+                                                      ":quad")
+                                          :op0 (x86::make-x86-immediate-operand
+                                                :value (if (eq flag :single)
+                                                         (x86-ds-u32-ref ds disp)
+                                                         (logior
+                                                          (x86-ds-u32-ref ds disp)
+                                                          (ash (x86-ds-u32-ref ds (+ disp 4))
+                                                               32))))
+                                          :start label-ea
+                                          :end (+ label-ea (if (eq flag :single) 4 8)))))
+                       (append-dll-node instruction instructions)
+                       (insert-x86-block block (x86-ds-blocks ds))))))
+                     
+                   
                (if (and (setq disp (is-rip-ea op0)) (< disp 0) (is-fn op1))
                  (progn
                    (setf (x86::x86-memory-operand-disp op0)
@@ -2484,7 +2507,7 @@
                       (instructions (x86-dis-block-instructions block))
                       (labeled t))
                  (setf (x86::x86-memory-operand-disp op0)
-                       (parse-x86-lap-expression `(:^ ,jtab)))
+                       (parse-x86-lap-expression `(:^ ,(+ jtab (x86-ds-entry-point ds)))))
                  (dotimes (i count)
                    (let* ((target (+ (x86-ds-u32-ref ds jtab)
                                      (x86-ds-entry-point ds)))
@@ -2762,7 +2785,7 @@
                      (integer
                       (+ (x86-ds-entry-point ds) disp))
                      (t nil)))))
-    (when (and val (>= val code-limit))
+    (when (and code-limit val (>= val code-limit))
       (- val code-limit))))
 
 (defun x86-lap-operand-constant (op ds)
