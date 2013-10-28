@@ -21,6 +21,8 @@ define(`imm4',`x4')
 define(`imm5',`x5') define(`nargs',`x5')
 define(`rnil',`x6')
 define(`rt',`x7')
+/* If we need this, should point to _SPcall_closure.  Used in FFI. */
+define(`rclosure_call',`x8')
         
 define(`temp3',`x9')
 define(`temp2',`x10')
@@ -47,16 +49,18 @@ define(`rcontext',`x28')
 define(`lr',`x30')        
 define(`fname',`temp3')
 define(`nfn',`temp2')
+
+define(`vzero',`q31')
         
 nbits_in_word = 64
 nbits_in_byte = 8
-ntagbits = 4
-nlisptagbits = 3
-nfixnumtagbits = 3
-nlowtagbits = 2        
+ntagbits = 8
+nlisptagbits = 8
+nfixnumtagbits = 8
+nlowtagbits = 0      
 num_subtag_bits = 8
-fixnumshift = 3
-fixnum_shift = 3
+fixnumshift = 0
+fixnum_shift = 0
 fulltagmask = 15
 tagmask = 7
 fixnummask = 7
@@ -65,143 +69,146 @@ charcode_shift = 8
 word_shift = 3
 node_size = 8
 dnode_size = 16
+dnode_mask = (dnode_size-1)        
 dnode_align_bits = 4
 dnode_shift = dnode_align_bits        
 bitmap_shift = 6
         
-fixnumone = (1<<fixnumshift)
+fixnumone = 1
 fixnum_one = fixnumone
 fixnum1 = fixnumone
 
+/* The ARM64 can (and generally is) configured to ignore the
+   top 8 bits of a 64-bit address, allowing us to use those
+   bits as tags. */
 
+tag_shift = 56
+                        
+/* 56-bit fixnums have the sign-extension of bit 55 in their
+   high 8 bits. */
 
-tag_fixnum = 0
-tag_single_float = 1
-tag_callable = 4        
-tag_list = 5
-tag_misc = 6
-tag_imm = 7            
+tag_positive_fixnum = 0         /* non-negative *
+tag_negative_fixnum = 0xff
 
-fulltag_even_fixnum = 0
-fulltag_immheader_32 = 1
-fulltag_immheader_8 = 2                    
-fulltag_immheader_16 = 3
-fulltag_symbol = 4        
-fulltag_cons = 5
-fulltag_misc = 6
-fulltag_nodeheader_a = 7
-fulltag_odd_fixnum = 8
-fulltag_single_float = 9
-fulltag_immheader_misc = 10     /* 64-bit, bitvectors */
-fulltag_nodehader_b = 11
-fulltag_function = 12        
-fulltag_nil = 13
-fulltag_nodeheader_c = 14
-fulltag_imm = 15
+/* If we do addition or subtraction on a pair of (SIGNED-BYTE 56) values,
+   the result may overflow by one bit.  The GC should ignore such things ;
+   we can't do too much with them besides boxing them as bignums ... */
 
-callable_function_bit = 3
-                
-/* Per the scheme above, a node is a fixnum iff bit 2 is clear */
-fixnum_clr_bit = 2
-/* And a node is a list iff bit 0 is set */
-list_set_bit = 0                                
+tag_overflowed_positive_fixnum = 1
+tag_overflowed_negative_fixnum = 0xfe
+                                
+           
+/* lists have their 6 most significant bits (58-63) clear and bit 57
+   set. */
+list_leading_zero_bits = 6        
+tag_list = 2
+tag_nil = 3
 
-define(`define_subtag',`
-subtag_$1 = ($2 | ($3 << ntagbits))
-')
+/* leaf node objects (characters, single-floats, other markers) have their
+   top 3 bits clear and bit 60 set. */
+        
+imm_tag_mask = 0x10
+tag_single_float = (imm_tag_mask | 0)
+tag_character = (imm_tag_mask | 1)
+tag_unbound = (imm_tag_mask | 2)
+unbound_marker = (tag_unbound << tag_shift)
+tag_slot_unbound = (imm_tag_mask | 3)
+slot_unbound_marker = (tag_slot_unbound << tag_shift)
+tag_no_thread_local_binding = (imm_tag | 4)
+no_thread_local_binding_marker = (tag_no_thread_local_binding << tag_shift)
+tag_illegal = (imm_tag | 5)
+illegal_marker = (tag_illegal << tag_shift)  
+tag_stack_alloc = (tag_imm | 6)
+stack_alloc_marker = (tag_stack_alloc << tag_shift)                      
+
+/* Everything else is either (a) the tag of a uvector header, which
+   is the first word in a non-CONS allocated object or (b) a pointer
+   to a uvector, where the tag of the pointer encodes the type of the
+   uvector.  A header's tag top 2 bits are #b10 ;  a uvector reference's
+   top 2 bits are #b10.  A uvector reference or header with bit 5 set describes
+   a gvector (one whose contents are nodes.) */
+
+gvector_tag_bit = 5        
+gvector_tag_mask = (1<<gvecor_tag_bit)        
+uvector_ref = 0x40
+uvector_header = 0x80
+uvector_mask = (uvector_header | uvector_ref)
+cl_ivector_tag_bit = 0        
+cl_ivector_mask = (1<<cl_ivector_tag_bit)
+cl_ivector_ref = (uvector_ref | cl_ivector_mask)  
+cl_ivector_ref_mask = (uvector_mask | gvector_tag_mask | cl_ivector_mask)
+        
+define(`define_uvector',`
+tag_$1 = (uvector_ref | ($2))
+$1_header = (uvector_header | ($2))
+        ')
+define(`define_ivector',`define_uvector($1,($2<<1))')
+define(`define_cl_ivector',`define_uvector($1,($2<<1)|1)')        
+define(`define_gvector',`define_uvector($1,($2|gvector_tag_mask))')
+
+define_cl_ivector(bit_vector,0)
+define_cl_ivector(s8_vector,1)
+define_cl_ivector(u8_vector,2)                
+define_cl_ivector(s16_vector,3)
+define_cl_ivector(u16_vector,4)
+define_cl_ivector(s32_vector,8)
+define_cl_ivector(u32_vector,9)
+define_ivector(xcode_vector,10)        
+define_cl_ivector(single_float_vector,10)
+define_ivector(double_float,11)
+define_cl_ivector(simple_string,11)
+define_cl_ivector(s64_vector,12)
+define_cl_ivector(u64_vector,13)
+define_ivector(macptr,14)        
+define_cl_ivector(fixnum_vector,14)  
+define_ivector(dead_macptr,15)              
+define_cl_ivector(double_float_vector,15)
+
+min_8_bit_ivector_header = s8_vector_header
+min_16_bit_ivector_header = s16_vector_header
+min_32_bit_ivector_header = s32_vector_header
+min_64_bit_ivector_header = s64_vector_header
+
+define_gvector(ratio,0)
+define_gvector(complex,1)
+define_gvector(function,2)
+define_gvector(symbol,3)
+define_gvector(catch_frame,4)
+define_gvector(basic_stream,5)                                        
+define_gvector(lock,6)
+define_gvector(hash_vector,7)
+define_gvector(pool,8)
+define_gvector(weak,9)
+define_gvector(package,10)
+define_gvector(slot_vector,11)
+define_gvector(instance,12)
+define_gvector(struct,13)
+define_gvector(istruct,14)
+define_gvector(value_cell,15)
+define_gvector(xfunction,16)
+define_gvector(simple_vector,28)
+define_gvector(vectorH,29)
+define_gvector(arrayH,31)        
 			
-cl_array_subtag_mask = 0x80
-define(`define_cl_array_subtag',`
-define_subtag($1,(cl_array_subtag_mask|$2),$3)
-')
-
-define_cl_array_subtag(arrayH,fulltag_nodeheader_a,0)
-define_cl_array_subtag(vectorH,fulltag_nodeheader_b,0)
-define_cl_array_subtag(simple_vector,fulltag_nodeheader_c,0)
-min_vector_subtag = subtag_vectorH
-min_array_subtag = subtag_arrayH
-        
-	
-ivector_class_64_bit = fulltag_immheader_misc
-ivector_class_32_bit = fulltag_immheader_32
-ivector_class_16_bit = fulltag_immheader_16
-ivector_class_8_bit = fulltag_immheader_8
-ivector_class_1_bit = fulltag_immheader_misc
-
-define_cl_array_subtag(s64_vector,ivector_class_64_bit,1)
-define_cl_array_subtag(u64_vector,ivector_class_64_bit,2)
-define_cl_array_subtag(fixnum_vector,ivector_class_64_bit,3)        
-define_cl_array_subtag(double_float_vector,ivector_class_64_bit,4)
-define_cl_array_subtag(s32_vector,ivector_class_32_bit,1)
-define_cl_array_subtag(u32_vector,ivector_class_32_bit,2)
-define_cl_array_subtag(single_float_vector,ivector_class_32_bit,3)
-define_cl_array_subtag(simple_base_string,ivector_class_32_bit,5)
-define_cl_array_subtag(s16_vector,ivector_class_16_bit,1)
-define_cl_array_subtag(u16_vector,ivector_class_16_bit,2)
-define_cl_array_subtag(bit_vector,ivector_class_1_bit,7)
-define_cl_array_subtag(s8_vector,ivector_class_8_bit,1)
-define_cl_array_subtag(u8_vector,ivector_class_8_bit,2)
-/* There's some room for expansion in non-array ivector space. */
-define_subtag(macptr,ivector_class_64_bit,1)
-define_subtag(dead_macptr,ivector_class_64_bit,2)
-define_subtag(double_float,ivector_class_32_bit,0)
-define_subtag(bignum,ivector_class_32_bit,1)
-define_subtag(xcode_vector,ivector_class_32_bit,2)
-
-
-
-	
-define_subtag(ratio,fulltag_nodeheader_a,0)
-define_subtag(complex,fulltag_nodeheader_a,1)
-define_subtag(function,fulltag_nodeheader_a,2)
-define_subtag(symbol,fulltag_nodeheader_a,3)
-        
-define_subtag(catch_frame,fulltag_nodeheader_b,0)
-define_subtag(basic_stream,fulltag_nodeheader_b,1)
-define_subtag(lock,fulltag_nodeheader_b,2)
-define_subtag(hash_vector,fulltag_nodeheader_b,3)
-define_subtag(pool,fulltag_nodeheader_b,4)
-define_subtag(weak,fulltag_nodeheader_b,5)
-define_subtag(package,fulltag_nodeheader_b,6)
-        
-define_subtag(slot_vector,fulltag_nodeheader_c,0)
-define_subtag(instance,fulltag_nodeheader_c,1)
-define_subtag(struct,fulltag_nodeheader_c,2)
-define_subtag(istruct,fulltag_nodeheader_c,3)
-define_subtag(value_cell,fulltag_nodeheader_c,4)
-define_subtag(xfunction,fulltag_nodeheader_c,5)
-	
-			
+misc_bias = -node_size
+cons_bias = misc_bias
+function_bias = misc_bias
 t_value = (0x3000+fulltag_misc)	
-misc_bias = fulltag_misc
-cons_bias = fulltag_cons
 define(`t_offset',-symbol.size)
 	
-misc_header_offset = -fulltag_misc
-misc_data_offset = misc_header_offset+node_size /* first word of data */
-misc_subtag_offset = misc_data_offset-7       /* low byte of header */
-misc_dfloat_offset = misc_data_offset		/* double-floats are doubleword-aligned */
-
-define_subtag(single_float,fulltag_single_float,0)
+misc_header_offset = node_bias
+misc_data_offset = 0
+misc_header_byte_offset = (node_bias + (node_size-1))       /* high byte of header */
+misc_dfloat_offset = 0		/* double-floats are doubleword-aligned */
 
 
-define_subtag(character,fulltag_imm,0)                	
-define_subtag(unbound,fulltag_imm,1)
-unbound_marker = subtag_unbound
-undefined = unbound_marker
-define_subtag(slot_unbound,fulltag_imm1,2)
-slot_unbound_marker = subtag_slot_unbound
-define_subtag(illegal,fulltag_imm,3)
-illegal_marker = subtag_illegal
-define_subtag(no_thread_local_binding,fulltag_imm,4)
-no_thread_local_binding_marker = subtag_no_thread_local_binding        
 
 	
-max_64_bit_constant_index = ((0x7fff + misc_dfloat_offset)>>3)
-max_32_bit_constant_index = ((0x7fff + misc_data_offset)>>2)
-max_16_bit_constant_index = ((0x7fff + misc_data_offset)>>1)
-max_8_bit_constant_index = (0x7fff + misc_data_offset)
-max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
+max_64_bit_constant_index = 0x400
+max_32_bit_constant_index = 0x400
+max_16_bit_constant_index = 0x400
+max_8_bit_constant_index = 0x400
+max_1_bit_constant_index = 0
 
 
 	
@@ -210,7 +217,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 /* Order of CAR and CDR doesn't seem to matter much - there aren't */
 /* too many tricks to be played with predecrement/preincrement addressing. */
 /* Keep them in the confusing MCL 3.0 order, to avoid confusion. */
-	_struct(cons,-cons_bias)
+	_struct(cons,cons_bias)
 	 _node(cdr)
 	 _node(car)
 	_ends
@@ -232,23 +239,14 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 	_endstructf
 	
 /* Functions are of (conceptually) unlimited size. */
-	_struct(_function,-fulltag_function)
-	 _node(header)
-	 _word(codewords)
+	_struct(_function,function_bias)
          _struct_label(entrypoint)
 	_ends
 
-	_struct(tsp_frame,0)
-	 _node(backlink)
-	 _node(type)
-	 _struct_label(fixed_overhead)
-	 _struct_label(data_offset)
-	_ends
 
 
 
-	_struct(symbol,-fulltag_symbol)
-         _node(header)
+	_structf(symbol)
 	 _node(pname)
 	 _node(vcell)
 	 _node(fcell)
@@ -260,13 +258,19 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 
 	_structf(catch_frame)
 	 _node(catch_tag)	/* #<unbound> -> unwind-protect, else catch */
+         _node(_save0)
+         _node(_save1)
+         _node(_save2)
+         _node(_save3)
+         _node(_save4)
+         _node(_save5)
+         _node(_save6)
+         _node(_save7)
 	 _node(link)		/* backpointer to previous catch frame */
 	 _node(mvflag)		/* 0 if single-valued catch, fixnum 1 otherwise */
-	 _node(csp)		/* pointer to lisp_frame on csp */
 	 _node(db_link)		/* head of special-binding chain */
-	 _field(regs,8*node_size)	/* save7-save0 */
 	 _node(xframe)		/* exception frame chain */
-	 _node(tsp_segment)	/* maybe someday; padding for now */
+	 _node(last_lisp_frame) /* from TCR */
 	_endstructf
 
 
@@ -292,7 +296,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 	 _node(savelr)	
 	_ends
 
-	_struct(vector,-fulltag_misc)
+	_struct(vector,misc_bias)
 	 _node(header)
 	 _struct_label(data)
 	_ends
@@ -308,10 +312,10 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 /* is surprisingly hard. */
 
 
-nrs_origin = (0x3000+(LOWMEM_BIAS))
-nrs_symbol_fulltag = fulltag_symbol
+nrs_origin = node_size
+nrs_symbol_fulltag = node_size
 define(`nilsym',`nil')        
-lisp_globals_limit = (fulltag_nil+dnode_size)
+lisp_globals_limit = -node_size
         
         include(lisp_globals.s)
         
@@ -320,22 +324,17 @@ lisp_globals_limit = (fulltag_nil+dnode_size)
 define(`def_header',`
 $1 = ($2<<num_subtag_bits)|$3')
 
-	def_header(double_float_header,2,subtag_double_float)
-	def_header(two_digit_bignum_header,2,subtag_bignum)
-	def_header(three_digit_bignum_header,3,subtag_bignum)
-	def_header(four_digit_bignum_header,4,subtag_bignum)
+	def_header(two_digit_bignum_header,2,bignum_header)
+	def_header(three_digit_bignum_header,3,bignum_header)
+	def_header(four_digit_bignum_header,4,bignum_header)
 	def_header(five_digit_bignum_header,5,subtag_bignum)        
-	def_header(symbol_header,symbol.element_count,subtag_symbol)
-	def_header(value_cell_header,1,subtag_value_cell	)
-	def_header(macptr_header,macptr.element_count,subtag_macptr)
-	def_header(vectorH_header,vectorH.element_count,subtag_vectorH)
 
 	include(errors.s)
 
 /* Symbol bits that we care about */
-sym_vbit_bound = (0+fixnum_shift)
+sym_vbit_bound = (0)
 sym_vbit_bound_mask = (1<<sym_vbit_bound)
-sym_vbit_const = (1+fixnum_shift)
+sym_vbit_const = (1)
 sym_vbit_const_mask = (1<<sym_vbit_const)
 
 	_struct(area,0)
@@ -360,23 +359,13 @@ sym_vbit_const_mask = (1<<sym_vbit_const)
 	_ends
 
 
-/* This is only referenced by c->lisp code that needs to save/restore C NVRs in a TSP frame. */
-	_struct(c_reg_save,0)
-	 _node(tsp_link)	/* backpointer */
-	 _node(tsp_mark)	/* frame type */
-	 _node(save_fpscr)	/* for Cs FPSCR */
-	 _field(save_gprs,19*node_size) /* r13-r31 */
-	 _dword(save_fp_zero)	/* for fp_zero */
-	 _dword(save_fps32conv)
-         _field(save_fprs,13*8)
-	_ends
 
 
 TCR_BIAS = 0
 	
 /*  Thread context record. */
 
-	_struct(tcr,-TCR_BIAS)
+	_struct(tcr,0)
 	 _node(prev)		/* in doubly-linked list */
 	 _node(next)		/* in doubly-linked list */
          _node(single_float_convert) /* xxxf0 */
@@ -423,14 +412,14 @@ TCR_BIAS = 0
          _node(safe_ref_address)
 	_ends
 
-TCR_FLAG_BIT_FOREIGN = fixnum_shift
-TCR_FLAG_BIT_AWAITING_PRESET = (fixnum_shift+1)
-TCR_FLAG_BIT_ALT_SUSPEND = (fixnumshift+2)
-TCR_FLAG_BIT_PROPAGATE_EXCEPTION = (fixnumshift+3)
-TCR_FLAG_BIT_SUSPEND_ACK_PENDING = (fixnumshift+4)
-TCR_FLAG_BIT_PENDING_EXCEPTION = (fixnumshift+5)
-TCR_FLAG_BIT_FOREIGN_EXCEPTION = (fixnumshift+6)
-TCR_FLAG_BIT_PENDING_SUSPEND = (fixnumshift+7)        
+TCR_FLAG_BIT_FOREIGN = 0
+TCR_FLAG_BIT_AWAITING_PRESET = 1
+TCR_FLAG_BIT_ALT_SUSPEND = 2
+TCR_FLAG_BIT_PROPAGATE_EXCEPTION = 3
+TCR_FLAG_BIT_SUSPEND_ACK_PENDING = 4
+TCR_FLAG_BIT_PENDING_EXCEPTION = 5
+TCR_FLAG_BIT_FOREIGN_EXCEPTION = 6
+TCR_FLAG_BIT_PENDING_SUSPEND = 7        
 
 
 nil_value = (0x3000+symbol.size+fulltag_misc+(LOWMEM_BIAS))
@@ -441,4 +430,10 @@ define(`RESERVATION_DISCHARGE',(0x2008+(LOWMEM_BIAS)))
         
 INTERRUPT_LEVEL_BINDING_INDEX = fixnumone
         
-                
+/* Condition bits, not to be confused with condition codes (which
+   depend on them.) */
+        
+nzvc_n = 8
+nzvc_z = 4
+nzvc_v = 2
+nzvc_c = 1                                                

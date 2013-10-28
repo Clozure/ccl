@@ -22,7 +22,10 @@ define(`gpr64',``x'gprval($1)')
         __(bic $1,$1,#((1<<dnode_align_bits)-1))
 ')
 
-define(`make_header',`(($1<<num_subtag_bits)|($2&subtag_mask))')
+define(`make_header',`
+        __(mov $1,#($3<<tag_shift))
+        __(add $1,$1,#$2)
+        ')
         
 /* Load a 16-bit constant into $1 */
 define(`movc16',`
@@ -33,22 +36,45 @@ define(`_clrex',`
         __(clrex)
         ')        
 
+define(`extract_tag',`
+        __(lsr $2,$1,#tag_shift)
+        ')
+
+/* Set $1 to $2, with bit 55 sign-sextended into bits 56-63.  If
+   $2 is a fixnum, $1 and $2 will be =. */        
+define(`sign_extend_value',`
+        __(sbfx $2,$1,#0,#56)
+        ')
         
+/* Set $2 to 0 iff $1 is a fixnum, to an arbitrary bit pattern otherwise. */
+define(`test_fixnum',`
+        __(sign_extend_value($2,$1))
+        __(eor $2,$1,$2)
+        ')
+        
+                        
 define(`branch_if_not_fixnum',`
-        __(tbnz gpr32($1),#fixnum_clr_bit,$2)
+        __(test_fixnum($3,$1))
+        __(cbnz $3,$2)
         ')
 
 define(`branch_if_fixnum',`
-        __(tbz gpr32($1),#fixnum_clr_bit,$2)
+        __(test_fixnum($3,$1))
+        __(cbz $3,$2)
         ')
 
 define(`branch_if_list',`
-        __(tbnz gpr32($1),#list_set_bit,$2)
+        __(clz $3,$1)
+        __(sub $3,$3,#list_leading_zero_bits)
+        __(cbz $3,$2)
         ')
 
 define(`branch_if_not_list',`
-        __(tbz gpr32($1),#list_set_bit,$2)
-        ')                        
+        __(clz $3,$1)
+        __(sub $3,$3,#list_leading_zero_bits)
+        __(cbz $3,$2)
+        ')
+                
                 
 define(`branch_if_negative',`
         __(tbnz $1,#63,$2)
@@ -59,54 +85,19 @@ define(`lisp_boolean',`
         ')
                 
 define(`test_two_fixnums',`
-        __(orr $3,$1,$2)
-        __(test_fixnum($3))
+        __(test_fixnum($3,$1))
+        __(test_fixnum($4,$2))
+        __(orr $3,$3,$4)
         ')
         	
-define(`extract_fulltag',`
-        __(and $1,$2,#fulltagmask)
-        ')
-
-define(`extract_lisptag',`
-        __(and $1,$2,#tagmask)
-        ')
-
-define(`extract_lisptag_',`
-        __(ands $1,$1,#tagmask)
-        ')
-
-define(`extract_subtag',`
-        __(ldrb gpr32($1),[$2,#misc_subtag_offset])
-	')
-
-                               
-define(`extract_lowbyte',`
-        __(and $1,$2,#((1<<num_subtag_bits)-1))
-        ')
 
 define(`extract_header',`
 	__(ldr $1,[$2,#misc_header_offset])
 	')
 
-define(`extract_typecode',`
-       	new_macro_labels()
-        __(extract_lisptag($1,$2))
-        __(cmp $1,#tag_misc)
-        __(b.ne macro_label(not_misc))
-        __(ldrb gpr32($1),[$2,#misc_subtag_offset])
-macro_label(not_misc):          
-        ')
-
-define(`box_fixnum',`
-        __(lsl $1,$2, #fixnumshift)
-	')
-
-define(`unbox_fixnum',`	
-	__(asr $1,$2, #fixnumshift)
-	')
 
 define(`unbox_character',`
-        __(lsr $1,$2, #charcode_shift)
+        __(clear_tag($1,$2))
         ')
                 
 
@@ -114,7 +105,6 @@ define(`push1',`
         __(str $1,[$2,#-node_size]!)
 	')
 	
-	/* Generally not a great idea. */
 define(`pop1',`
         __(ldr $1,[$2],#node_size)
 	')
@@ -134,14 +124,14 @@ define(`unlink',`
 
 	
 define(`set_nargs',`
-	__(mov nargs,#($1)<<fixnumshift)
+	__(mov nargs,#($1<<3))
 	')
 	
 
 	
 
 define(`vref32',`
-        __(ldr gpr32($1),[$2,#misc_data_offset+(($3)<<2)])
+        __(ldr gpr32($1),[$2,#$2<<2])
 	')
         
 	
@@ -159,10 +149,13 @@ define(`getvheader',`
 	
 	/* "Length" is fixnum element count */
 define(`header_length',`
-        __(ubfm $1,$2,#num_subtag_bits-fixnumshift,#60)
+        __(ubfx $1,$2,#0,#56)
         ')
 
-
+define(`header_size',`
+        __(header_length($1,$2))
+        ')
+        
 
 define(`vector_length',`
 	__(getvheader($3,$2))
@@ -181,47 +174,63 @@ define(`ref_nrs_value',`
 ')
 
 define(`ref_nrs_function',`
-        __(mov $1,#nil_value)
-	__(ldr $1,[$1,#((nrs.$2)+(symbol.fcell))])
+	__(ldr $1,[rnil,#((nrs.$2)+(symbol.fcell))])
 ')
         
 define(`ref_nrs_symbol',`
-        __(movc16($3,nrs.$2))
-        __(add $1,$3,#nil_value)
+        __(add $1,rnil,#$2)
         ')
 	
-define(`set_nrs_value',`
-	__(str($1,((nrs.$2)+(symbol.vcell))(0)))
-')
 
 
 	/* vpop argregs - nargs is known to be non-zero */
 define(`vpop_argregs_nz',`
+        new_macro_labels()
         __(cmp nargs,#node_size*2)
         __(vpop1(arg_z))
-        __(ldrhs arg_y,[vsp],#node_size)
-        __(ldrhi arg_x,[vsp],#node_size)
+        __(blo macro_label(done))
+        __(vpop1(arg_y))
+        __(beq macro_label(done))
+        __(vpop1(arg_x))
+macro_label(done):              
         ')
 
-                
-	/* vpush argregs */
+define(`vpop_argregs',`
+        new_macro_labels()
+        __(cbz nargs,macro_label(done))
+        __(vpop_argregs_nz())
+macro_label(done):      
+        ')
+        
+define(`vpush_argregs_nz',`
+        new_macro_labels()
+        __(cmp nargs,#2<<fixnumshift)
+        __(bls macro_label(notx))
+        __(vpush1(arg_x))
+macro_label(notx):      
+        __(bne macro_label(justz))
+        __(vpush1(arg_y))
+macro_label(justz):
+        __(vpush1(arg_z))
+        ')
+        
 define(`vpush_argregs',`
 	new_macro_labels()
-        __(cmp nargs,#0)
-        __(beq macro_label(done))
-        __(cmp nargs,#node_size*2)
-        __(strhi arg_x,[vsp,#-node_size]!)
-        __(strhs arg_y,[vsp,#-node_size]!)
-        __(str arg_z,[vsp,#-node_size]!)
+        __(cbz nargs,macro_label(done))
+        __(vpush_argregs_nz())
 macro_label(done):
 ')
 
 define(`vpush_all_argregs',`
-        __(stmdb vsp!,{arg_z,arg_y,arg_x})
+        __(vpush1(arg_x))
+        __(vpush1(arg_y))
+        __(vpush1(arg_z))
         ')
 
 define(`vpop_all_argregs',`
-        __(ldmia vsp!,{arg_z,arg_y,arg_x})
+        __(vpop1(arg_z))
+        __(vpop1(arg_y))
+        __(vpop1(arg_x))
         ')
                         
                 
@@ -231,11 +240,6 @@ define(`build_lisp_frame',`
         __(stp ifelse($1,`',vsp,$1),lr,[sp,#-(2*node_size)]!)
 ')
 
-/* This has the odd side effect of loading lisp_frame_marker into
-   the arg/temp/imm reg $1.  I think that that's probably better
-   than adjusting sp and loading the other regs ; it'd be good
-   to say (at interrupt time) that there's either a lisp frame
-   on the stack or there isn't. */
 define(`restore_lisp_frame',`
         __(ldp vsp,lr,[sp],#2*node_size)
         ')
@@ -267,47 +271,22 @@ define(`_rplacd',`
 	')
 
 
-define(`trap_unless_lisptag_equal',`
-       	new_macro_labels()
-	__(extract_lisptag($3,$1))
-        __(cmp $3,#$2)
-        __(beq macro_label(ok))
-	__(uuo_error_reg_not_lisptag(al,$3,$2))
-macro_label(ok):                
-')
 
 define(`trap_unless_list',`
-       	new_macro_labels()
-        __(tbnz $1,#0,macro_label(ok))
-        __(uuo_error_reg_not_tag($1,tag_list))
-macro_label(ok):        
+        new_macro_labels()
+        __(clz $2,$1)
+        __(cmp $2,#list_leading_zero_bits)
+        __(beq local_label(ok))
+        __(uuo_error_reg_not_lisptag($1,tag_list))
 ')
 
 define(`trap_unless_fixnum',`
         __(new_macro_labels())
-        __(test_fixnum($1))
-        __(beq macro_label(ok))
-        __(uuo_error_reg_not_lisptag(al,$1,tag_fixnum))
+        __(branch_if_fixnum($1,macro_label(ok),$2))
+        __(uuo_error_reg_not_lisptag($1,tag_fixnum))
 macro_label(ok):        
         ')
                 
-define(`trap_unless_fulltag_equal',`
-        new_macro_labels()
-	__(extract_fulltag($3,$1))
-        __(cmp $3,#$2)
-        __(beq macro_label(ok))
-        __(uuo_error_reg_not_fulltag(al,$1,$2))
-macro_label(ok):        
-')
-	
-define(`trap_unless_typecode_equal',`
-        new_macro_labels()
-        __(extract_typecode($3,$1))
-        __(cmp $3,#$2)
-        __(beq macro_label(ok))
-        __(uuo_error_reg_not_xtype(al,$2))
-macro_label(ok):                
-')
         
 /* "jump" to the code-vector of the function in nfn. */
 define(`jump_nfn',`
@@ -334,16 +313,17 @@ define(`call_fname',`
 
 define(`funcall_nfn',`
         new_macro_labels()
-        __(extract_lisptag(imm0,nfn))
-        __(cmp imm0,#tag_callable)
-        __(b.ne macro_label(not_callable))
-        __(tbnz nfn,#callable_function_bit,macro_label(go))
+        __(extract_tag(imm0,nfn))
+        __(cmp imm0,#tag_function)
+        __(beq local_label(go))
+        __(cmp imm0,#tag_symbol)
+        __(beq macro_label(symbol))
+        __(uuo_error_not_callable(nfn))
+macro_label(symbol):            
         __(mov fname,nfn)
         __(ldr nfn,[fname,#symbol.fcell])
 macro_label(go):      
         __(jump_nfn())
-macro_label(not_callable):              
-        __(uuo_error_not_callable(nfn))
 
 ')
 
@@ -351,7 +331,7 @@ macro_label(not_callable):
 */        
    
 define(`push_foreign_fprs',`
-        __(mov $1,make_header(9,subtag_double_float_vector))
+        __(make_header($1,9,double_float_vector_header))
         __(stp $1,xzr,[sp,#-10<<3]!)
         __(stp d8,d9,[sp,#16])
         __(stp d10,d11,[sp,#32])
@@ -362,7 +342,7 @@ define(`push_foreign_fprs',`
 /* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
    FPRs. */
 define(`push_lisp_fprs',`
-        __(mov $1,#make_header(9,subtag_double_float_vector))
+        __(make_header($1,9,double_float_vector_header))
         __(stp $1,xzr,[sp,#-10<<3]!)
         __(stp d8,d9,[sp,#16])
         __(stp d10,d11,[sp,#32])
@@ -407,20 +387,26 @@ define(`discard_lisp_fprs',`
 define(`mkcatch',`
         new_macro_labels()
         __(push_lisp_fprs(imm0))
-	__(build_lisp_frame(imm0))
-        __(mov imm0,#make_header(catch_frame.element_count,subtag_u64_vector))
-        __(mov imm1,#catch_frame.element_count<<word_shift)
-        __(dnode_align(imm1,imm1,node_size))
-        __(stack_allocate_zeroed_ivector(imm0,imm1))
-        __(mov imm0,#make_header(catch_frame.element_count,subtag_catch_frame))
+	__(build_lisp_frame())
+        __(make_header(imm1,catch_frame.element_count,catch_frame_header))
+        __(mov imm2,#catch_frame.element_count<<word_shift)
+        __(dnode_align(imm2,imm2,node_size))
+        __(stack_allocate_zeroed_vector(imm0,imm1,imm2,#tag_catch_frame))
         __(ldr temp1,[rcontext,#tcr.last_lisp_frame])
 	__(ldr imm1,[rcontext,#tcr.catch_top])
         /* imm2 is mvflag */
         /* arg_z is tag */
         __(ldr arg_x,[rcontext,#tcr.db_link])
         __(ldr temp0,[rcontext,#tcr.xframe])
-        __(stmia sp,{imm0,imm1,imm2,arg_z,arg_x,temp0,temp1,temp2})
-        __(add imm0,sp,#fulltag_misc)
+        __(str arg_z,[imm0,#catch_frame.catch_tag])
+        __(str imm1,[imm0,#catch_frame.link])
+        __(str imm2,[imm0,#catch_frame.mvflag])
+        __(str arg_x,[imm0,#catch_frame.db_link])
+        __(str temp0,[imm0,#catch_frame.xframe])
+        __(stp save0,save1,[imm0,#catch_frame.save0])
+        __(stp save2,save3,[sp,#catch_frame.save2])
+        __(stp save4,save5,[sp,#catch_frame.save4])
+        __(stp save6,save7,[sp,#catch_frame/save6])
         __(str imm0,[rcontext,#tcr.catch_top])
         __(add lr,lr,#4)
 ')	
@@ -431,19 +417,28 @@ define(`mkcatch',`
 define(`stack_align',`((($1)+STACK_ALIGN_MASK)&~STACK_ALIGN_MASK)')
 
 define(`clear_alloc_tag',`
-        __(bic allocptr,allocptr,#fulltagmask)
+        __(bic allocptr,allocptr,#dnode_mask)
 ')
 
+define(`clear_header_element_count',`
+        __(ubfm $1,$2,#56,#63)
+        ')
+
+define(`clear_tag',`
+        __(ubfm $1,$2,#0,#55)
+        ')
+        
+        
 define(`Cons',`
        	new_macro_labels()
-        __(add allocptr,allocptr,#-cons.size+fulltag_cons)
+        __(sub allocptr,allocptr,#cons.size-node_size)
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
+        __(uuo_alloc_trap())
 macro_label(ok):                
         __(str $3,[allocptr,#cons.cdr])
         __(str $2,[allocptr,#cons.car])
-        __(mov $1,allocptr)
+        __(orr $1,allocptr,#tag_cons<<tag_shift)
 	__(clear_alloc_tag())
 ')
 
@@ -463,87 +458,68 @@ macro_label(ok):
 
 
 
-/* Parameters: */
+/* Parameters: 
 
-/* $1 = dest reg */
-/* $2 = header.
-/* $3 = register containing size in bytes.  (We're going to subtract */
-/* fulltag_misc from this; do it in the macro body, rather than force the
-/* (1 ?) caller to do it. */
+ $1 = dest reg 
+ $2 = header
+ $3 = register containing size in bytes.  (We're going to subtract 
+ node_size from this; do it in the macro body, rather than force the
+ (1 ?) caller to do it. 
+ $4 = tag byte
+ */
 
 
 define(`Misc_Alloc',`
         new_macro_labels()
-	__(sub $3,$3,#fulltag_misc)
+	__(sub $3,$3,#node_size)
 	__(sub allocptr,allocptr,$3)
-        __(ldr allocbase,[rcontext,#tcr.save_allocbase])
-        __(cmp allocptr,allocbase)
-        __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
-macro_label(ok):                
-	__(str $2,[allocptr,#misc_header_offset])
-	__(mov $1,allocptr)
-	__(clear_alloc_tag())
-')
-
-/*  Parameters $1, $2 as above; $3 = physical size constant. */
-define(`Misc_Alloc_Fixed',`
-        new_macro_labels()
-        __(sub allocptr,allocptr,#$3+fulltag_misc)
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
         __(uuo_alloc_trap())
 macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
-	__(mov $1,allocptr)
+        __(orr $1,allocptr,$4,lsl #tag_shift)
 	__(clear_alloc_tag())
 ')
 
-/* Stack-allocate an ivector; $1 = header, $2 = dnode-aligned
+/*  Parameters $1, $2, $4 as above; $3 = physical size constant. */
+define(`Misc_Alloc_Fixed',`
+        new_macro_labels()
+        __(sub allocptr,allocptr,#$3-node_size)
+        __(cmp allocptr,allocbase)
+        __(bhi macro_label(ok))
+        __(uuo_alloc_trap())
+macro_label(ok):                
+	__(str $2,[allocptr,#misc_header_offset])
+        __(orr $1,allocptr,$4,lsl #tag_shift)
+	__(clear_alloc_tag())
+')
+
+/* Stack-allocate an ivector; $1 = header_lengthder, $2 = dnode-aligned
    size in bytes. */
 define(`stack_allocate_ivector',`
         __(str $1,[sp,-$2]!)
         ')
 
-define(`scale_8_bit_index',`
-        __(lsr $1,$2,#3)
-        __(add $1,$1,#misc_data_offset)
-        ')
-
-define(`scale_16_bit_index',`
-        __(lsr $1,#2,#2)
-        __(add $1,$1,#misc_data_offset)
-        ')
-
-define(`scale_32_bit_index',`
-        __(lsr $1,#2,#1)
-        __(add $1,$1,#misc_data_offset)
-        ')
-        
-define(`scale_64_bit_index',`
-        __(add $1,$2,#misc_data_offset)
-        ')
         
 
                         
                         
-/* Stack-allocate an ivector and zero its contents; caller may
-   change subtag of header after it's zeroed. 
-   $1 = header (tagged as subtag_u64_vector until zeroed), $2 = dnode-
-   aligned size in bytes).  Both $1 and $2 are modified here. */
-define(`stack_allocate_zeroed_ivector',`
+/* Stack-allocate a uvector (other than a smallish ivector) and return
+   a tagged pointer to it in $1.
+   $2 = header, $3 = dnode-aligned size in bytes, $4 = tag).  
+   Both $2 and $3 are modified here. 
+   We need to make sure that the right thing happens if we're
+   interrupted in the middle of the zeroing loop. */
+define(`stack_allocate_zeroed_vector',`
        new_macro_labels()
-        __(str $1,[sp,-$2]!)
-        __(mov $1,#0)
-        __(add $2,sp,$2)
-        __(b macro_label(test))
-macro_label(loop):      
-        __(str $1,[$2])
-macro_label(test):                      
-        __(sub $2,$2,#dnode_size)
-        __(cmp $2,xsp)
-        __(str $1,[$2,#node_size])
+macro_label(loop):              
+        __(subs $3,$3,#dnode_size)
+        __(str vzero,[sp,#-dnode_size]!)
         __(bne macro_label(loop))
+        __(str $2,[sp,#0])
+        __(add $1,sp,#node_size)
+        __(orr $1,$1,$4)
         ')
    
 
@@ -568,37 +544,35 @@ macro_label(done):
 define(`aligned_bignum_size',`((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1))))')
 
 define(`suspend_now',`
-	__(uuo_suspend_now(al))
+	__(uuo_suspend_now())
 ')
 
 /* $3 points to a uvector header.  Set $1 to the first dnode-aligned address */
-/* beyond the uvector, using imm regs $1 and $2 as temporaries. */
+/* beyond the uvector, using imm regs $1,$2,$4, and $5 as temporaries. */
 define(`skip_stack_vector',`
         new_macro_labels()
         __(ldr $1,[$3])
-        __(extract_fulltag($2,$1))        
-        __(cmp $2,#fulltag_immheader)
-        __(extract_lowbyte($2,$1))
-        __(mov $1,$1,lsr #num_subtag_bits)
-        __(moveq $1,$1,lsl #2)
-        __(beq macro_label(bytes))
-        __(cmp $2,#max_32_bit_ivector_subtag)
-        __(movle $1,$1,lsl #2)
-        __(ble macro_label(bytes))
-        __(cmp $2,#max_8_bit_ivector_subtag)
-        __(ble macro_label(bytes))
-        __(cmp $2,#max_16_bit_ivector_subtag)
-        __(movle $1,$1,lsl #1)
-        __(ble macro_label(bytes))
-        __(cmp $2,subtag_double_float_vector)
-        __(moveq $1,$1,lsl #3)
-        __(addeq $1,$1,#4)
-        __(beq macro_label(bytes))
+        __(extract_tag($2,$1))
+        __(header_size($1,$1))
+        __(cmp $2,#min_64_bit_ivector_header)
+        __(bge local_label(bits64))
+        __(cmp $2,#min_32_bit_ivector_header)
+        __(bge local_label(bits32))
+        __(cmp $2,#min_16_bit_ivector_header)
+        __(bge local_label(bits16))
+        __(cmp $2,#min_8_bit_ivector_header)
+        __(bge local_label(bytes))
         __(add $1,$1,#7)
-        __(mov $1,$1,lsr #3)
-macro_label(bytes):     
-        __(add $1,$1,#node_size+(dnode_size-1))
-        __(bic $1,$1,#fulltagmask)
+        __(lsr $1,$1,#3)
+        __(b local_label(bytes))
+local_label(bits64):    
+        __(lsl $1,$1,#1)
+local_label(bits32):
+        __(lsl $1,$1,#1)
+local_label(bits16):    
+        __(lsl $1,$1,#1)        
+macro_label(bytes):
+        __(dnode_align($1,$1,node_size))
         __(add $1,$1,$3)
         ')
 

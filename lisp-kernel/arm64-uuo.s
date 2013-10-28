@@ -28,13 +28,39 @@ hlt_code_unary_reg_not_xtype = 4
 hlt_code_unary_misc = 5
 hlt_code_binary = 6
 
-define(`uuo_error_reg_not_tag',`
+define(`uuo_error_reg_not_lisptag',`
         __(hlt #(hlt_code_unary_reg_not_lisptag|(gprval($1)<<3)|$2<<8))
         ')
+
+define(`uuo_error_reg_not_fulltag',`
+        __(hlt #(hlt_code_unary_reg_not_fulltag|(gprval($1)<<3)|$2<<8))
+        ')
+        
 define(`uuo_alloc_trap',`
         __(hlt #(hlt_code_nullary|(0<<3)))
         ')
 	
 define(`uuo_error_not_callable',`
         __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(0<<8)))
-        ')                                                                                             
+        ')
+
+define(`uuo_error_no_throw_tag',`
+        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(1<<8)))
+        ')
+
+define(`uuo_tlb_too_small',`
+        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(2<<8)))
+        ')
+
+define(`uuo_error_unbound',`
+        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(3<<8)))
+        ')
+
+define(`uuo_error_reg_not_xtype',`
+        __(hlt #(hlt_code_unary_reg_not_xtype|(gprval($1)<<3)|($2<<8)))
+        ')
+
+define(`uuo_error_vector_bounds',`
+        __(hlt #(hlt_code_binary|(gprval($1)<<3)|(gprval($2)<<8)|(0<<13)))
+        ')
+        
