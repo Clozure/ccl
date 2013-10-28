@@ -253,8 +253,7 @@
     dominance
     swank-loader
     remote-lisp
-    ;; asdf has peculiar compile-time side-effects
-    ;;asdf
+    asdf
     defsystem
     jp-encode
     cn-encode
@@ -667,6 +666,7 @@ the lisp and run REBUILD-CCL again.")
                         (run-program
                          (format nil "./~a" (standard-kernel-name))
                          (list* "--image-name" (standard-boot-image-name)
+				"--no-init"
                                 "--batch"
                                 reload-arguments)
                          :input cmd
