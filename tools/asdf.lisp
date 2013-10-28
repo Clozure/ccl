@@ -1,5 +1,5 @@
 ;;; -*- mode: Common-Lisp; Base: 10 ; Syntax: ANSI-Common-Lisp -*-
-;;; This is ASDF 3.0.2: Another System Definition Facility.
+;;; This is ASDF 3.0.3: Another System Definition Facility.
 ;;;
 ;;; Feedback, bug reports, and patches are all welcome:
 ;;; please mail to <asdf-devel@common-lisp.net>.
@@ -54,7 +54,7 @@
   (declaim (optimize (speed 1) (safety 3) (debug 3)))
   (setf ext:*gc-verbose* nil))
 
-#+(or abcl clisp clozure cmu ecl xcl)
+#+(or abcl clisp clozure cmu ecl xcl) ;; punt on hard package upgrade on those implementations
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (unless (member :asdf3 *features*)
     (let* ((existing-version
@@ -71,7 +71,7 @@
            (existing-version-number (and existing-version (read-from-string existing-major-minor)))
            (away (format nil "~A-~A" :asdf existing-version)))
       (when (and existing-version
-                 (< existing-version-number #+abcl 2.25 #+cmu 2.018 #-(or abcl cmu) 2.27))
+                 (< existing-version-number 2.27))
         (rename-package :asdf away)
         (when *load-verbose*
           (format t "~&; Renamed old ~A package away to ~A~%" :asdf away))))))
@@ -86,7 +86,7 @@
   ;; CAUTION: we must handle the first few packages specially for hot-upgrade.
   ;; This package definition MUST NOT change unless its name too changes;
   ;; if/when it changes, don't forget to add new functions missing from below.
-  ;; Until then, asdf/package is frozen to forever
+  ;; Until then, uiop/package is frozen to forever
   ;; import and export the same exact symbols as for ASDF 2.27.
   ;; Any other symbol must be import-from'ed and re-export'ed in a different package.
   (:use :common-lisp)
@@ -562,7 +562,14 @@ or when loading the package is optional."
                     (home-package-p existing to-package) (symbol-package-name existing)))
             (t
              (ensure-inherited name symbol to-package from-package t shadowed imported inherited)))))))
+  
   (defun recycle-symbol (name recycle exported)
+    ;; Takes a symbol NAME (a string), a list of package designators for RECYCLE
+    ;; packages, and a hash-table of names (strings) of symbols scheduled to be
+    ;; EXPORTED from the package being defined. It returns two values, the
+    ;; symbol found (if any, or else NIL), and a boolean flag indicating whether
+    ;; a symbol was found. The caller (DEFINE-PACKAGE) will then do the
+    ;; re-homing of the symbol, etc.
     (check-type name string)
     (check-type recycle list)
     (check-type exported hash-table)
@@ -776,6 +783,28 @@ or when loading the package is optional."
                          :mix ,mix :reexport ,reexport :unintern ,unintern)))))
 
 (defmacro define-package (package &rest clauses)
+  "DEFINE-PACKAGE takes a PACKAGE and a number of CLAUSES, of the form 
+\(KEYWORD . ARGS\).
+DEFINE-PACKAGE supports the following keywords:
+USE, SHADOW, SHADOWING-IMPORT-FROM, IMPORT-FROM, EXPORT, INTERN -- as per CL:DEFPACKAGE.
+RECYCLE -- Recycle the package's exported symbols from the specified packages,
+in order.  For every symbol scheduled to be exported by the DEFINE-PACKAGE,
+either through an :EXPORT option or a :REEXPORT option, if the symbol exists in
+one of the :RECYCLE packages, the first such symbol is re-homed to the package
+being defined.
+For the sake of idempotence, it is important that the package being defined
+should appear in first position if it already exists, and even if it doesn't,
+ahead of any package that is not going to be deleted afterwards and never
+created again. In short, except for special cases, always make it the first
+package on the list if the list is not empty.
+MIX -- Takes a list of package designators.  MIX behaves like 
+\(:USE PKG1 PKG2 ... PKGn\) but additionally uses :SHADOWING-IMPORT-FROM to
+resolve conflicts in favor of the first found symbol.  It may still yield
+an error if there is a conflict with an explicitly :SHADOWING-IMPORT-FROM symbol.
+REEXPORT -- Takes a list of package designators.  For each package, p, in the list,
+export symbols with the same name as those exported from p.  Note that in the case
+of shadowing, etc. the symbols with the same name may not be the same symbols.
+UNINTERN -- Remove symbols here from PACKAGE."
   (let ((ensure-form
           `(apply 'ensure-package ',(parse-define-package-form package clauses))))
     `(progn
@@ -846,10 +875,14 @@ or when loading the package is optional."
 
 ;;;; Early meta-level tweaks
 
-#+(or abcl (and allegro ics) (and (or clisp cmu ecl mkcl) unicode)
-      clozure lispworks (and sbcl sb-unicode) scl)
+#+(or abcl allegro clisp cmu ecl mkcl clozure lispworks sbcl scl)
 (eval-when (:load-toplevel :compile-toplevel :execute)
-  (pushnew :asdf-unicode *features*))
+  ;; Check for unicode at runtime, so that a hypothetical FASL compiled with unicode
+  ;; but loaded in a non-unicode setting (e.g. on Allegro) won't tell a lie.
+  (when (and #+allegro (member :ics *features*)
+             #+(or clisp cmu ecl mkcl) (member :unicode *features*)
+             #+sbcl (member :sb-unicode *features*))
+    (pushnew :asdf-unicode *features*)))
 
 #+allegro
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -859,6 +892,20 @@ or when loading the package is optional."
   (when (boundp 'excl:*warn-on-nested-reader-conditionals*)
     (setf excl:*warn-on-nested-reader-conditionals* nil))
   (setf *print-readably* nil))
+
+#+clozure (in-package :ccl)
+#+(and clozure windows-target) ;; See http://trac.clozure.com/ccl/ticket/1117
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (unless (fboundp 'external-process-wait)
+    (in-development-mode
+     (defun external-process-wait (proc)
+       (when (and (external-process-pid proc) (eq (external-process-%status proc) :running))
+         (with-interrupts-enabled
+             (wait-on-semaphore (external-process-completed proc))))
+       (values (external-process-%exit-code proc)
+               (external-process-%status proc))))))
+#+clozure (in-package :uiop/common-lisp)
+
 
 #+cormanlisp
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -962,6 +1009,12 @@ or when loading the package is optional."
 ;;;; compatfmt: avoid fancy format directives when unsupported
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun frob-substrings (string substrings &optional frob)
+    "for each substring in SUBSTRINGS, find occurrences of it within STRING
+that don't use parts of matched occurrences of previous strings, and
+FROB them, that is to say, remove them if FROB is NIL,
+replace by FROB if FROB is a STRING, or if FROB is a FUNCTION,
+call FROB with the match and a function that emits a string in the output.
+Return a string made of the parts not omitted or emitted by FROB."
     (declare (optimize (speed 0) (safety 3) (debug 3)))
     (let ((length (length string)) (stream nil))
       (labels ((emit-string (x &optional (start 0) (end (length x)))
@@ -998,8 +1051,6 @@ or when loading the package is optional."
     #+(or gcl genera)
     (frob-substrings format `("~3i~_" #+(or genera gcl2.6) ,@'("~@<" "~@;" "~@:>" "~:>")))
     #-(or gcl genera) format))
-
-
 ;;;; -------------------------------------------------------------------------
 ;;;; General Purpose Utilities for ASDF
 
@@ -1007,7 +1058,7 @@ or when loading the package is optional."
   (:nicknames :asdf/utility)
   (:recycle :uiop/utility :asdf/utility :asdf)
   (:use :uiop/common-lisp :uiop/package)
-  ;; import and reexport a few things defined in :asdf/common-lisp
+  ;; import and reexport a few things defined in :uiop/common-lisp
   (:import-from :uiop/common-lisp #:compatfmt #:loop* #:frob-substrings
    #+ecl #:use-ecl-byte-compiler-p #+mcl #:probe-posix)
   (:export #:compatfmt #:loop* #:frob-substrings #:compatfmt
@@ -1021,14 +1072,15 @@ or when loading the package is optional."
    #:remove-plist-keys #:remove-plist-key ;; plists
    #:emptyp ;; sequences
    #:+non-base-chars-exist-p+ ;; characters
+   #:+max-character-type-index+ #:character-type-index #:+character-types+
    #:base-string-p #:strings-common-element-type #:reduce/strcat #:strcat ;; strings
-   #:first-char #:last-char #:split-string
+   #:first-char #:last-char #:split-string #:stripln #:+cr+ #:+lf+ #:+crlf+
    #:string-prefix-p #:string-enclosed-p #:string-suffix-p
    #:find-class* ;; CLOS
    #:stamp< #:stamps< #:stamp*< #:stamp<= ;; stamps
    #:earlier-stamp #:stamps-earliest #:earliest-stamp
    #:later-stamp #:stamps-latest #:latest-stamp #:latest-stamp-f
-   #:list-to-hash-set ;; hash-table
+   #:list-to-hash-set #:ensure-gethash ;; hash-table
    #:ensure-function #:access-at #:access-at-count ;; functions
    #:call-function #:call-functions #:register-hook-function
    #:match-condition-p #:match-any-condition-p ;; conditions
@@ -1070,9 +1122,9 @@ or when loading the package is optional."
                  ;; undefining the previous function is the portable way
                  ;; of overriding any incompatible previous gf, except on CLISP.
                  ;; We usually try to do it only for the functions that need it,
-                 ;; which happens in asdf/upgrade - however, for ECL, we need this hammer,
+                 ;; which happens in asdf/upgrade - however, for ECL, we need this hammer
                  ;; (which causes issues in clisp)
-                 ,@(when (or #-clisp supersede #+(or ecl gcl2.7) t) ; XXX
+                 ,@(when (or #-clisp supersede #+(or ecl gcl2.7) t)
                      `((undefine-function ',name)))
                  #-gcl ; gcl 2.7.0 notinline functions lose secondary return values :-(
                  ,@(when (and #+ecl (symbolp name)) ; fails for setf functions on ecl
@@ -1188,23 +1240,54 @@ Returns two values: \(A B C\) and \(1 2 3\)."
 
 
 ;;; Characters
-(with-upgradability ()
+(with-upgradability () ;; base-char != character on ECL, LW, SBCL, Genera. LW also has SIMPLE-CHAR.
   (defconstant +non-base-chars-exist-p+ (not (subtypep 'character 'base-char)))
   (when +non-base-chars-exist-p+ (pushnew :non-base-chars-exist-p *features*)))
+
+(with-upgradability ()
+  (defparameter +character-types+ ;; assuming a simple hierarchy
+    #(#+non-base-chars-exist-p base-char #+lispworks lw:simple-char character))
+  (defparameter +max-character-type-index+ (1- (length +character-types+))))
+
+(with-upgradability ()
+  (defun character-type-index (x)
+    (declare (ignorable x))
+    #.(case +max-character-type-index+
+        (0 0)
+        (1 '(etypecase x
+             (character (if (typep x 'base-char) 0 1))
+             (symbol (if (subtypep x 'base-char) 0 1))))
+        (otherwise
+         '(or (position-if (etypecase x
+                             (character  #'(lambda (type) (typep x type)))
+                             (symbol #'(lambda (type) (subtypep x type))))
+               +character-types+)
+           (error "Not a character or character type: ~S" x))))))
 
 
 ;;; Strings
 (with-upgradability ()
   (defun base-string-p (string)
+    "Does the STRING only contain BASE-CHARs?"
     (declare (ignorable string))
     (and #+non-base-chars-exist-p (eq 'base-char (array-element-type string))))
 
   (defun strings-common-element-type (strings)
+    "What least subtype of CHARACTER can contain all the elements of all the STRINGS?"
     (declare (ignorable strings))
-    #-non-base-chars-exist-p 'character
-    #+non-base-chars-exist-p
-    (if (loop :for s :in strings :always (or (null s) (typep s 'base-char) (base-string-p s)))
-        'base-char 'character))
+    #.(if +non-base-chars-exist-p+
+          `(aref +character-types+
+            (loop :with index = 0 :for s :in strings :do
+              (cond
+                ((= index ,+max-character-type-index+) (return index))
+                ((emptyp s)) ;; NIL or empty string
+                ((characterp s) (setf index (max index (character-type-index s))))
+                ((stringp s) (unless (>= index (character-type-index (array-element-type s)))
+                               (setf index (reduce 'max s :key #'character-type-index
+                                                          :initial-value index))))
+                (t (error "Invalid string designator ~S for ~S" s 'strings-common-element-type)))
+                  :finally (return index)))
+          ''character))
 
   (defun reduce/strcat (strings &key key start end)
     "Reduce a list as if by STRCAT, accepting KEY START and END keywords like REDUCE.
@@ -1222,12 +1305,16 @@ NIL is interpreted as an empty string. A character is interpreted as a string of
           :finally (return output)))
 
   (defun strcat (&rest strings)
+    "Concatenate strings.
+NIL is interpreted as an empty string, a character as a string of length one."
     (reduce/strcat strings))
 
   (defun first-char (s)
+    "Return the first character of a non-empty string S, or NIL"
     (and (stringp s) (plusp (length s)) (char s 0)))
 
   (defun last-char (s)
+    "Return the last character of a non-empty string S, or NIL"
     (and (stringp s) (plusp (length s)) (char s (1- (length s)))))
 
   (defun split-string (string &key max (separator '(#\Space #\Tab)))
@@ -1238,6 +1325,7 @@ starting the separation from the end, e.g. when called with arguments
  \"a.b.c.d.e\" :max 3 :separator \".\" it will return (\"a.b.c\" \"d\" \"e\")."
     (block ()
       (let ((list nil) (words 0) (end (length string)))
+        (when (zerop end) (return nil))
         (flet ((separatorp (char) (find char separator))
                (done () (return (cons (subseq string 0 end) list))))
           (loop
@@ -1270,6 +1358,22 @@ starting the separation from the end, e.g. when called with arguments
     (and (string-prefix-p prefix string)
          (string-suffix-p string suffix))))
 
+  (defvar +cr+ (coerce #(#\Return) 'string))
+  (defvar +lf+ (coerce #(#\Linefeed) 'string))
+  (defvar +crlf+ (coerce #(#\Return #\Linefeed) 'string))
+
+  (defun stripln (x)
+    "Strip a string X from any ending CR, LF or CRLF.
+Return two values, the stripped string and the ending that was stripped,
+or the original value and NIL if no stripping took place.
+Since our STRCAT accepts NIL as empty string designator,
+the two results passed to STRCAT always reconstitute the original string"
+    (check-type x string)
+    (block nil
+      (flet ((c (end) (when (string-suffix-p x end)
+                        (return (values (subseq x 0 (- (length x) (length end))) end)))))
+        (when x (c +crlf+) (c +lf+) (c +cr+) (values x nil)))))
+
 
 ;;; CLOS
 (with-upgradability ()
@@ -1280,7 +1384,7 @@ starting the separation from the end, e.g. when called with arguments
       (symbol (find-class x errorp environment)))))
 
 
-;;; stamps: a REAL or boolean where NIL=-infinity, T=+infinity
+;;; stamps: a REAL or a boolean where NIL=-infinity, T=+infinity
 (eval-when (#-lispworks :compile-toplevel :load-toplevel :execute)
   (deftype stamp () '(or real boolean)))
 (with-upgradability ()
@@ -1304,12 +1408,6 @@ starting the separation from the end, e.g. when called with arguments
   (define-modify-macro latest-stamp-f (&rest stamps) latest-stamp))
 
 
-;;; Hash-tables
-(with-upgradability ()
-  (defun list-to-hash-set (list &aux (h (make-hash-table :test 'equal)))
-    (dolist (x list h) (setf (gethash x h) t))))
-
-
 ;;; Function designators
 (with-upgradability ()
   (defun ensure-function (fun &key (package :cl))
@@ -1320,14 +1418,17 @@ If the FUN is a non-sequence literal constant, return constantly that,
 i.e. for a boolean keyword character number or pathname.
 Otherwise if FUN is a non-literally constant symbol, return its FDEFINITION.
 If FUN is a CONS, return the function that applies its CAR
-to the appended list of the rest of its CDR and the arguments.
+to the appended list of the rest of its CDR and the arguments,
+unless the CAR is LAMBDA, in which case the expression is evaluated.
 If FUN is a string, READ a form from it in the specified PACKAGE (default: CL)
 and EVAL that in a (FUNCTION ...) context."
     (etypecase fun
       (function fun)
       ((or boolean keyword character number pathname) (constantly fun))
-      ((or function symbol) fun)
-      (cons #'(lambda (&rest args) (apply (car fun) (append (cdr fun) args))))
+      (symbol fun)
+      (cons (if (eq 'lambda (car fun))
+                (eval fun)
+                #'(lambda (&rest args) (apply (car fun) (append (cdr fun) args)))))
       (string (eval `(function ,(with-standard-io-syntax
                                   (let ((*package* (find-package package)))
                                     (read-from-string fun))))))))
@@ -1357,7 +1458,7 @@ instead of a list."
 
   (defun access-at-count (at)
     "From an AT specification, extract a COUNT of maximum number
-   of sub-objects to read as per ACCESS-AT"
+of sub-objects to read as per ACCESS-AT"
     (cond
       ((integerp at)
        (1+ at))
@@ -1365,14 +1466,36 @@ instead of a list."
        (1+ (first at)))))
 
   (defun call-function (function-spec &rest arguments)
+    "Call the function designated by FUNCTION-SPEC as per ENSURE-FUNCTION,
+with the given ARGUMENTS"
     (apply (ensure-function function-spec) arguments))
 
   (defun call-functions (function-specs)
+    "For each function in the list FUNCTION-SPECS, in order, call the function as per CALL-FUNCTION"
     (map () 'call-function function-specs))
 
   (defun register-hook-function (variable hook &optional call-now-p)
-    (pushnew hook (symbol-value variable))
+    "Push the HOOK function (a designator as per ENSURE-FUNCTION) onto the hook VARIABLE.
+When CALL-NOW-P is true, also call the function immediately."
+    (pushnew hook (symbol-value variable) :test 'equal)
     (when call-now-p (call-function hook))))
+
+
+;;; Hash-tables
+(with-upgradability ()
+  (defun ensure-gethash (key table default)
+    "Lookup the TABLE for a KEY as by gethash, but if not present,
+call the (possibly constant) function designated by DEFAULT as per CALL-FUNCTION,
+set the corresponding entry to the result in the table, and return that result."
+    (multiple-value-bind (value foundp) (gethash key table)
+      (if foundp
+          value
+          (setf (gethash key table) (values (call-function default))))))
+
+  (defun list-to-hash-set (list &aux (h (make-hash-table :test 'equal)))
+    "Convert a LIST into hash-table that has the same elements when viewed as a set,
+up to the given equality TEST"
+    (dolist (x list h) (setf (gethash x h) t))))
 
 
 ;;; Version handling
@@ -1471,13 +1594,13 @@ or a string describing the format-control of a simple-condition."
     (loop :for x :in conditions :thereis (match-condition-p x condition)))
 
   (defun call-with-muffled-conditions (thunk conditions)
+    "calls the THUNK in a context where the CONDITIONS are muffled"
     (handler-bind ((t #'(lambda (c) (when (match-any-condition-p c conditions)
                                       (muffle-warning c)))))
       (funcall thunk)))
 
   (defmacro with-muffled-conditions ((conditions) &body body)
     `(call-with-muffled-conditions #'(lambda () ,@body) ,conditions)))
-
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; Access to the Operating System
@@ -1487,7 +1610,7 @@ or a string describing the format-control of a simple-condition."
   (:recycle :uiop/os :asdf/os :asdf)
   (:use :uiop/common-lisp :uiop/package :uiop/utility)
   (:export
-   #:featurep #:os-unix-p #:os-windows-p #:os-genera-p #:detect-os ;; features
+   #:featurep #:os-unix-p #:os-macosx-p #:os-windows-p #:os-genera-p #:detect-os ;; features
    #:getenv #:getenvp ;; environment variables
    #:implementation-identifier ;; implementation identifier
    #:implementation-type #:*implementation-type*
@@ -1501,6 +1624,11 @@ or a string describing the format-control of a simple-condition."
 ;;; Features
 (with-upgradability ()
   (defun featurep (x &optional (*features* *features*))
+    "Checks whether a feature expression X is true with respect to the *FEATURES* set,
+as per the CLHS standard for #+ and #-. Beware that just like the CLHS,
+we assume symbols from the KEYWORD package are used, but that unless you're using #+/#-
+your reader will not have magically used the KEYWORD package, so you need specify
+keywords explicitly."
     (cond
       ((atom x) (and (member x *features*) t))
       ((eq :not (car x)) (assert (null (cddr x))) (not (featurep (cadr x))))
@@ -1509,22 +1637,38 @@ or a string describing the format-control of a simple-condition."
       (t (error "Malformed feature specification ~S" x))))
 
   (defun os-unix-p ()
+    "Is the underlying operating system some Unix variant?"
     (or #+abcl (featurep :unix)
         #+(and (not abcl) (or unix cygwin darwin)) t))
 
+  (defun os-macosx-p ()
+    "Is the underlying operating system MacOS X?"
+    ;; OS-MACOSX is not mutually exclusive with OS-UNIX,
+    ;; in fact the former implies the latter.
+    (or
+     #+allegro (featurep :macosx)
+     #+clisp (featurep :macos)
+     (featurep :darwin)))
+
   (defun os-windows-p ()
+    "Is the underlying operating system Microsoft Windows?"
     (or #+abcl (featurep :windows)
         #+(and (not (or abcl unix cygwin darwin)) (or win32 windows mswindows mingw32)) t))
 
   (defun os-genera-p ()
+    "Is the underlying operating system Genera (running on a Symbolics Lisp Machine)?"
     (or #+genera t))
 
   (defun os-oldmac-p ()
+    "Is the underlying operating system an (emulated?) MacOS 9 or earlier?"
     (or #+mcl t))
 
   (defun detect-os ()
+    "Detects the current operating system. Only needs be run at compile-time,
+except on ABCL where it might change between FASL compilation and runtime."
     (loop* :with o
            :for (feature . detect) :in '((:os-unix . os-unix-p) (:os-windows . os-windows-p)
+                                         (:os-macosx . os-macosx-p)
                                          (:genera . os-genera-p) (:os-oldmac . os-oldmac-p))
            :when (and (not o) (funcall detect)) :do (setf o feature) (pushnew o *features*)
            :else :do (setf *features* (remove feature *features*))
@@ -1538,6 +1682,9 @@ that is neither Unix, nor Windows, nor Genera, nor even old MacOS.~%Now you port
 
 (with-upgradability ()
   (defun getenv (x)
+    "Query the environment, as in C getenv.
+Beware: may return empty string if a variable is present but empty;
+use getenvp to return NIL in such a case."
     (declare (ignorable x))
     #+(or abcl clisp ecl xcl) (ext:getenv x)
     #+allegro (sys:getenv x)
@@ -1579,6 +1726,7 @@ then returning the non-empty string value of the variable"
 
 (with-upgradability ()
   (defun first-feature (feature-sets)
+    "A helper for various feature detection functions"
     (dolist (x feature-sets)
       (multiple-value-bind (short long feature-expr)
           (if (consp x)
@@ -1588,15 +1736,18 @@ then returning the non-empty string value of the variable"
           (return (values short long))))))
 
   (defun implementation-type ()
+    "The type of Lisp implementation used, as a short UIOP-standardized keyword"
     (first-feature
      '(:abcl (:acl :allegro) (:ccl :clozure) :clisp (:corman :cormanlisp)
        (:cmu :cmucl :cmu) :ecl :gcl
        (:lwpe :lispworks-personal-edition) (:lw :lispworks)
        :mcl :mkcl :sbcl :scl (:smbx :symbolics) :xcl)))
 
-  (defvar *implementation-type* (implementation-type))
+  (defvar *implementation-type* (implementation-type)
+    "The type of Lisp implementation used, as a short UIOP-standardized keyword")
 
   (defun operating-system ()
+    "The operating system of the current host"
     (first-feature
      '(:cygwin (:win :windows :mswindows :win32 :mingw32) ;; try cygwin first!
        (:linux :linux :linux-target) ;; for GCL at least, must appear before :bsd
@@ -1605,6 +1756,7 @@ then returning the non-empty string value of the variable"
        :genera)))
 
   (defun architecture ()
+    "The CPU architecture of the current host"
     (first-feature
      '((:x64 :x86-64 :x86_64 :x8664-target :amd64 (:and :word-size=64 :pc386))
        (:x86 :x86 :i386 :i486 :i586 :i686 :pentium3 :pentium4 :pc386 :iapx386 :x8632-target)
@@ -1625,6 +1777,7 @@ then returning the non-empty string value of the variable"
         (error "Can't determine fasl version.")))
 
   (defun lisp-version-string ()
+    "return a string that identifies the current Lisp implementation version"
     (let ((s (lisp-implementation-version)))
       (car ; as opposed to OR, this idiom prevents some unreachable code warning
        (list
@@ -1660,6 +1813,8 @@ then returning the non-empty string value of the variable"
         s))))
 
   (defun implementation-identifier ()
+    "Return a string that identifies the ABI of the current implementation,
+suitable for use as a directory name to segregate Lisp FASLs, C dynamic libraries, etc."
     (substitute-if
      #\_ #'(lambda (x) (find x " /:;&^\\|?<>(){}[]$#`'\""))
      (format nil "~(~a~@{~@[-~a~]~}~)"
@@ -1673,6 +1828,7 @@ then returning the non-empty string value of the variable"
 
 (with-upgradability ()
   (defun hostname ()
+    "return the hostname of the current host"
     ;; Note: untested on RMCL
     #+(or abcl clozure cmu ecl genera lispworks mcl mkcl sbcl scl xcl) (machine-instance)
     #+cormanlisp "localhost" ;; is there a better way? Does it matter?
@@ -1686,6 +1842,7 @@ then returning the non-empty string value of the variable"
 
   #+cmu
   (defun parse-unix-namestring* (unix-namestring)
+    "variant of LISP::PARSE-UNIX-NAMESTRING that returns a pathname object"
     (multiple-value-bind (host device directory name type version)
         (lisp::parse-unix-namestring unix-namestring 0 (length unix-namestring))
       (make-pathname :host (or host lisp::*unix-host*) :device device
@@ -1735,22 +1892,27 @@ then returning the non-empty string value of the variable"
 ;;;; Jesse Hager: The Windows Shortcut File Format.
 ;;;; http://www.wotsit.org/list.asp?fc=13
 
-#-(or clisp genera) ; CLISP doesn't need it, and READ-SEQUENCE annoys old Genera.
+#-(or clisp genera) ; CLISP doesn't need it, and READ-SEQUENCE annoys old Genera that doesn't need it
 (with-upgradability ()
   (defparameter *link-initial-dword* 76)
   (defparameter *link-guid* #(1 20 2 0 0 0 0 0 192 0 0 0 0 0 0 70))
 
   (defun read-null-terminated-string (s)
+    "Read a null-terminated string from an octet stream S"
+    ;; note: doesn't play well with UNICODE
     (with-output-to-string (out)
       (loop :for code = (read-byte s)
             :until (zerop code)
             :do (write-char (code-char code) out))))
 
   (defun read-little-endian (s &optional (bytes 4))
+    "Read a number in little-endian format from an byte (octet) stream S,
+the number having BYTES octets (defaulting to 4)."
     (loop :for i :from 0 :below bytes
           :sum (ash (read-byte s) (* 8 i))))
 
   (defun parse-file-location-info (s)
+    "helper to parse-windows-shortcut"
     (let ((start (file-position s))
           (total-length (read-little-endian s))
           (end-of-header (read-little-endian s))
@@ -1774,6 +1936,8 @@ then returning the non-empty string value of the variable"
                   (read-null-terminated-string s))))))
 
   (defun parse-windows-shortcut (pathname)
+    "From a .lnk windows shortcut, extract the pathname linked to"
+    ;; NB: doesn't do much checking & doesn't look like it will work well with UNICODE.
     (with-open-file (s pathname :element-type '(unsigned-byte 8))
       (handler-case
           (when (and (= (read-little-endian s) *link-initial-dword*)
@@ -1822,7 +1986,7 @@ then returning the non-empty string value of the variable"
    #:merge-pathnames*
    #:nil-pathname #:*nil-pathname* #:with-pathname-defaults
    ;; Predicates
-   #:pathname-equal #:logical-pathname-p #:physical-pathname-p
+   #:pathname-equal #:logical-pathname-p #:physical-pathname-p #:physicalize-pathname
    #:absolute-pathname-p #:relative-pathname-p #:hidden-pathname-p #:file-pathname-p
    ;; Directories
    #:pathname-directory-pathname #:pathname-parent-directory-pathname
@@ -1835,7 +1999,7 @@ then returning the non-empty string value of the variable"
    #:subpathname #:subpathname*
    #:ensure-absolute-pathname
    #:pathname-root #:pathname-host-pathname
-   #:subpathp
+   #:subpathp #:enough-pathname #:with-enough-pathname #:call-with-enough-pathname
    ;; Checking constraints
    #:ensure-pathname ;; implemented in filesystem.lisp to accommodate for existence constraints
    ;; Wildcard pathnames
@@ -1851,7 +2015,9 @@ then returning the non-empty string value of the variable"
 
 (with-upgradability ()
   (defun normalize-pathname-directory-component (directory)
-    "Given a pathname directory component, return an equivalent form that is a list"
+    "Convert the DIRECTORY component from a format usable by the underlying
+implementation's MAKE-PATHNAME and other primitives to a CLHS-standard format
+that is a list and not a string."
     #+gcl2.6 (setf directory (substitute :back :parent directory))
     (cond
       #-(or cmu sbcl scl) ;; these implementations already normalize directory components.
@@ -1869,6 +2035,8 @@ then returning the non-empty string value of the variable"
        (error (compatfmt "~@<Unrecognized pathname directory component ~S~@:>") directory))))
 
   (defun denormalize-pathname-directory-component (directory-component)
+    "Convert the DIRECTORY-COMPONENT from a CLHS-standard format to a format usable
+by the underlying implementation's MAKE-PATHNAME and other primitives"
     #-gcl2.6 directory-component
     #+gcl2.6
     (let ((d (substitute-if :parent (lambda (x) (member x '(:up :back)))
@@ -1879,7 +2047,7 @@ then returning the non-empty string value of the variable"
         (t d))))
 
   (defun merge-pathname-directory-components (specified defaults)
-    ;; Helper for merge-pathnames* that handles directory components.
+    "Helper for MERGE-PATHNAMES* that handles directory components"
     (let ((directory (normalize-pathname-directory-component specified)))
       (ecase (first directory)
         ((nil) defaults)
@@ -1906,7 +2074,8 @@ then returning the non-empty string value of the variable"
   ;; This will be :unspecific if supported, or NIL if not.
   (defparameter *unspecific-pathname-type*
     #+(or abcl allegro clozure cmu gcl genera lispworks mkcl sbcl scl xcl) :unspecific
-    #+(or clisp ecl #|These haven't been tested:|# cormanlisp mcl) nil)
+    #+(or clisp ecl #|These haven't been tested:|# cormanlisp mcl) nil
+    "Unspecific type component to use with the underlying implementation's MAKE-PATHNAME")
 
   (defun make-pathname* (&rest keys &key (directory nil #+gcl2.6 directoryp)
                                       host (device () #+allegro devicep) name type version defaults
@@ -1947,11 +2116,11 @@ and make a new pathname with corresponding components and specified logical HOST
 if the SPECIFIED pathname does not have an absolute directory,
 then the HOST and DEVICE both come from the DEFAULTS, whereas
 if the SPECIFIED pathname does have an absolute directory,
-then the HOST and DEVICE both come from the SPECIFIED.
+then the HOST and DEVICE both come from the SPECIFIED pathname.
 This is what users want on a modern Unix or Windows operating system,
-unlike the MERGE-PATHNAME behavior.
+unlike the MERGE-PATHNAMES behavior.
 Also, if either argument is NIL, then the other argument is returned unmodified;
-this is unlike MERGE-PATHNAME which always merges with a pathname,
+this is unlike MERGE-PATHNAMES which always merges with a pathname,
 by default *DEFAULT-PATHNAME-DEFAULTS*, which cannot be NIL."
     (when (null specified) (return-from merge-pathnames* defaults))
     (when (null defaults) (return-from merge-pathnames* specified))
@@ -1983,9 +2152,23 @@ by default *DEFAULT-PATHNAME-DEFAULTS*, which cannot be NIL."
                           :type (funcall unspecific-handler type)
                           :version (funcall unspecific-handler version))))))
 
+  (defun logical-pathname-p (x)
+    "is X a logical-pathname?"
+    (typep x 'logical-pathname))
+
+  (defun physical-pathname-p (x)
+    "is X a pathname that is not a logical-pathname?"
+    (and (pathnamep x) (not (logical-pathname-p x))))
+
+  (defun physicalize-pathname (x)
+    "if X is a logical pathname, use translate-logical-pathname on it."
+    ;; Ought to be the same as translate-logical-pathname, except the latter borks on CLISP
+    (let ((p (when x (pathname x))))
+      (if (logical-pathname-p p) (translate-logical-pathname p) p)))
+
   (defun nil-pathname (&optional (defaults *default-pathname-defaults*))
     "A pathname that is as neutral as possible for use as defaults
-   when merging, making or parsing pathnames"
+when merging, making or parsing pathnames"
     ;; 19.2.2.2.1 says a NIL host can mean a default host;
     ;; see also "valid physical pathname host" in the CLHS glossary, that suggests
     ;; strings and lists of strings or :unspecific
@@ -1999,15 +2182,20 @@ by default *DEFAULT-PATHNAME-DEFAULTS*, which cannot be NIL."
                        ;; the default shouldn't matter, but we really want something physical
                        #-mcl ,@'(:defaults defaults)))
 
-  (defvar *nil-pathname* (nil-pathname (translate-logical-pathname (user-homedir-pathname))))
+  (defvar *nil-pathname* (nil-pathname (physicalize-pathname (user-homedir-pathname)))
+    "A pathname that is as neutral as possible for use as defaults
+when merging, making or parsing pathnames")
 
   (defmacro with-pathname-defaults ((&optional defaults) &body body)
+    "Execute BODY in a context where the *DEFAULT-PATHNAME-DEFAULTS* are as neutral as possible
+when merging, making or parsing pathnames"
     `(let ((*default-pathname-defaults* ,(or defaults '*nil-pathname*))) ,@body)))
 
 
 ;;; Some pathname predicates
 (with-upgradability ()
   (defun pathname-equal (p1 p2)
+    "Are the two pathnames P1 and P2 reasonably equal in the paths they denote?"
     (when (stringp p1) (setf p1 (pathname p1)))
     (when (stringp p2) (setf p2 (pathname p2)))
     (flet ((normalize-component (x)
@@ -2026,12 +2214,6 @@ by default *DEFAULT-PATHNAME-DEFAULTS*, which cannot be NIL."
                       (=? pathname-name)
                       (=? pathname-type)
                       (=? pathname-version)))))))
-
-  (defun logical-pathname-p (x)
-    (typep x 'logical-pathname))
-
-  (defun physical-pathname-p (x)
-    (and (pathnamep x) (not (logical-pathname-p x))))
 
   (defun absolute-pathname-p (pathspec)
     "If PATHSPEC is a pathname or namestring object that parses as a pathname
@@ -2219,7 +2401,7 @@ The last #\\/-separated substring is interpreted as follows:
 1- If TYPE is :DIRECTORY or ENSURE-DIRECTORY is true,
  the string is made the last directory component, and NAME and TYPE are NIL.
  if the string is empty, it's the empty pathname with all slots NIL.
-2- If TYPE is NIL, the substring is file-namestring, and its NAME and TYPE
+2- If TYPE is NIL, the substring is a file-namestring, and its NAME and TYPE
  are separated by SPLIT-NAME-TYPE.
 3- If TYPE is a string, it is the given TYPE, and the whole string is the NAME.
 
@@ -2228,7 +2410,7 @@ Any directory named .. is read as DOT-DOT,
 which must be one of :BACK or :UP and defaults to :BACK.
 
 HOST, DEVICE and VERSION components are taken from DEFAULTS,
-which itself defaults to *NIL-PATHNAME*, also used if DEFAULTS in NIL.
+which itself defaults to *NIL-PATHNAME*, also used if DEFAULTS is NIL.
 No host or device can be specified in the string itself,
 which makes it unsuitable for absolute pathnames outside Unix.
 
@@ -2329,6 +2511,7 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
          (subpathname (ensure-directory-pathname pathname) subpath :type type)))
 
   (defun pathname-root (pathname)
+    "return the root directory for the host and device of given PATHNAME"
     (make-pathname* :directory '(:absolute)
                     :name nil :type nil :version nil
                     :defaults pathname ;; host device, and on scl, *some*
@@ -2336,6 +2519,7 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
                     . #.(or #+scl '(:parameters nil :query nil :fragment nil))))
 
   (defun pathname-host-pathname (pathname)
+    "return a pathname with the same host as given PATHNAME, and all other fields NIL"
     (make-pathname* :directory nil
                     :name nil :type nil :version nil :device nil
                     :defaults pathname ;; host device, and on scl, *some*
@@ -2343,6 +2527,8 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
                     . #.(or #+scl '(:parameters nil :query nil :fragment nil))))
 
   (defun subpathp (maybe-subpath base-pathname)
+    "if MAYBE-SUBPATH is a pathname that is under BASE-PATHNAME, return a pathname object that
+when used with MERGE-PATHNAMES* with defaults BASE-PATHNAME, returns MAYBE-SUBPATH."
     (and (pathnamep maybe-subpath) (pathnamep base-pathname)
          (absolute-pathname-p maybe-subpath) (absolute-pathname-p base-pathname)
          (directory-pathname-p base-pathname) (not (wild-pathname-p base-pathname))
@@ -2351,7 +2537,33 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
            (let ((enough (enough-namestring maybe-subpath base-pathname)))
              (and (relative-pathname-p enough) (pathname enough))))))
 
+  (defun enough-pathname (maybe-subpath base-pathname)
+    "if MAYBE-SUBPATH is a pathname that is under BASE-PATHNAME, return a pathname object that
+when used with MERGE-PATHNAMES* with defaults BASE-PATHNAME, returns MAYBE-SUBPATH."
+    (check-type maybe-subpath (or null pathname))
+    (check-type base-pathname (or null pathname))
+    (when (pathnamep base-pathname) (assert (absolute-pathname-p base-pathname)))
+    (or (and base-pathname (subpathp maybe-subpath base-pathname))
+        maybe-subpath))
+
+  (defun call-with-enough-pathname (maybe-subpath defaults-pathname thunk)
+    "In a context where *DEFAULT-PATHNAME-DEFAULTS* is bound to DEFAULTS-PATHNAME (if not null,
+or else to its current value), call THUNK with ENOUGH-PATHNAME for MAYBE-SUBPATH
+given DEFAULTS-PATHNAME as a base pathname."
+    (let ((enough (enough-pathname maybe-subpath defaults-pathname))
+          (*default-pathname-defaults* (or defaults-pathname *default-pathname-defaults*)))
+      (funcall thunk enough)))
+
+  (defmacro with-enough-pathname ((pathname-var &key (pathname pathname-var)
+                                                  (defaults *default-pathname-defaults*))
+                                  &body body)
+    "Shorthand syntax for CALL-WITH-ENOUGH-PATHNAME"
+    `(call-with-enough-pathname ,pathname ,defaults #'(lambda (,pathname-var) ,@body)))
+
   (defun ensure-absolute-pathname (path &optional defaults (on-error 'error))
+    "Given a pathname designator PATH, return an absolute pathname as specified by PATH
+considering the DEFAULTS, or, if not possible, use CALL-FUNCTION on the specified ON-ERROR behavior,
+with a format control-string and other arguments as arguments"
     (cond
       ((absolute-pathname-p path))
       ((stringp path) (ensure-absolute-pathname (pathname path) defaults on-error))
@@ -2370,28 +2582,37 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
 
 ;;; Wildcard pathnames
 (with-upgradability ()
-  (defparameter *wild* (or #+cormanlisp "*" :wild))
-  (defparameter *wild-directory-component* (or #+gcl2.6 "*" :wild))
-  (defparameter *wild-inferiors-component* (or #+gcl2.6 "**" :wild-inferiors))
+  (defparameter *wild* (or #+cormanlisp "*" :wild)
+    "Wild component for use with MAKE-PATHNAME")
+  (defparameter *wild-directory-component* (or #+gcl2.6 "*" :wild)
+    "Wild directory component for use with MAKE-PATHNAME")
+  (defparameter *wild-inferiors-component* (or #+gcl2.6 "**" :wild-inferiors)
+    "Wild-inferiors directory component for use with MAKE-PATHNAME")
   (defparameter *wild-file*
     (make-pathname :directory nil :name *wild* :type *wild*
-                   :version (or #-(or allegro abcl xcl) *wild*)))
+                   :version (or #-(or allegro abcl xcl) *wild*))
+    "A pathname object with wildcards for matching any file in a given directory")
   (defparameter *wild-directory*
     (make-pathname* :directory `(:relative ,*wild-directory-component*)
-                    :name nil :type nil :version nil))
+                    :name nil :type nil :version nil)
+    "A pathname object with wildcards for matching any subdirectory")
   (defparameter *wild-inferiors*
     (make-pathname* :directory `(:relative ,*wild-inferiors-component*)
-                    :name nil :type nil :version nil))
+                    :name nil :type nil :version nil)
+    "A pathname object with wildcards for matching any recursive subdirectory")
   (defparameter *wild-path*
-    (merge-pathnames* *wild-file* *wild-inferiors*))
+    (merge-pathnames* *wild-file* *wild-inferiors*)
+    "A pathname object with wildcards for matching any file in any recursive subdirectory")
 
   (defun wilden (path)
+    "From a pathname, return a wildcard pathname matching any file in any subdirectory of given pathname's directory"
     (merge-pathnames* *wild-path* path)))
 
 
 ;;; Translate a pathname
 (with-upgradability ()
   (defun relativize-directory-component (directory-component)
+    "Given the DIRECTORY-COMPONENT of a pathname, return an otherwise similar relative directory component"
     (let ((directory (normalize-pathname-directory-component directory-component)))
       (cond
         ((stringp directory)
@@ -2402,17 +2623,21 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
          directory))))
 
   (defun relativize-pathname-directory (pathspec)
+    "Given a PATHNAME, return a relative pathname with otherwise the same components"
     (let ((p (pathname pathspec)))
       (make-pathname*
        :directory (relativize-directory-component (pathname-directory p))
        :defaults p)))
 
   (defun directory-separator-for-host (&optional (pathname *default-pathname-defaults*))
+    "Given a PATHNAME, return the character used to delimit directory names on this host and device."
     (let ((foo (make-pathname* :directory '(:absolute "FOO") :defaults pathname)))
       (last-char (namestring foo))))
 
   #-scl
   (defun directorize-pathname-host-device (pathname)
+    "Given a PATHNAME, return a pathname that has representations of its HOST and DEVICE components
+added to its DIRECTORY component. This is useful for output translations."
     #+(or unix abcl)
     (when (and #+abcl (os-unix-p) (physical-pathname-p pathname))
       (return-from directorize-pathname-host-device pathname))
@@ -2457,6 +2682,13 @@ then it is merged with the PATHNAME-DIRECTORY-PATHNAME of PATHNAME."
         pathname)))
 
   (defun* (translate-pathname*) (path absolute-source destination &optional root source)
+    "A wrapper around TRANSLATE-PATHNAME to be used by the ASDF output-translations facility.
+PATH is the pathname to be translated.
+ABSOLUTE-SOURCE is an absolute pathname to use as source for translate-pathname,
+DESTINATION is either a function, to be called with PATH and ABSOLUTE-SOURCE,
+or a relative pathname, to be merged with ROOT and used as destination for translate-pathname
+or an absolute pathname, to be used as destination for translate-pathname.
+In that last case, if ROOT is non-NIL, PATH is first transformated by DIRECTORIZE-PATHNAME-HOST-DEVICE."
     (declare (ignore source))
     (cond
       ((functionp destination)
@@ -2546,10 +2778,12 @@ a CL pathname satisfying all the specified constraints as per ENSURE-PATHNAME"
 ;;; Probing the filesystem
 (with-upgradability ()
   (defun truename* (p)
+    "Nicer variant of TRUENAME that plays well with NIL and avoids logical pathname contexts"
     ;; avoids both logical-pathname merging and physical resolution issues
     (and p (handler-case (with-pathname-defaults () (truename p)) (file-error () nil))))
 
   (defun safe-file-write-date (pathname)
+    "Safe variant of FILE-WRITE-DATE that may return NIL rather than raise an error."
     ;; If FILE-WRITE-DATE returns NIL, it's possible that
     ;; the user or some other agent has deleted an input file.
     ;; Also, generated files will not exist at the time planning is done
@@ -2559,7 +2793,7 @@ a CL pathname satisfying all the specified constraints as per ENSURE-PATHNAME"
     ;; as if the file were very old.
     ;; (or should we treat the case in a different, special way?)
     (and pathname
-         (handler-case (file-write-date (translate-logical-pathname pathname))
+         (handler-case (file-write-date (physicalize-pathname pathname))
            (file-error () nil))))
 
   (defun probe-file* (p &key truename)
@@ -2581,7 +2815,7 @@ or the original (parsed) pathname if it is false (the default)."
                    (if truename
                        (probe-file p)
                        (ignore-errors
-                        (let ((pp (translate-logical-pathname p)))
+                        (let ((pp (physicalize-pathname p)))
                           (and
                            #+(or cmu scl) (unix:unix-stat (ext:unix-namestring pp))
                            #+(and lispworks unix) (system:get-file-stat pp)
@@ -2616,23 +2850,31 @@ or the original (parsed) pathname if it is false (the default)."
                 (file-error () nil)))))))
 
   (defun directory-exists-p (x)
+    "Is X the name of a directory that exists on the filesystem?"
     (let ((p (probe-file* x :truename t)))
       (and (directory-pathname-p p) p)))
 
   (defun file-exists-p (x)
+    "Is X the name of a file that exists on the filesystem?"
     (let ((p (probe-file* x :truename t)))
       (and (file-pathname-p p) p)))
 
   (defun directory* (pathname-spec &rest keys &key &allow-other-keys)
+    "Return a list of the entries in a directory by calling DIRECTORY.
+Try to override the defaults to not resolving symlinks, if implementation allows."
     (apply 'directory pathname-spec
            (append keys '#.(or #+allegro '(:directories-are-files nil :follow-symbolic-links nil)
                                #+(or clozure digitool) '(:follow-links nil)
                                #+clisp '(:circle t :if-does-not-exist :ignore)
                                #+(or cmu scl) '(:follow-links nil :truenamep nil)
+                               #+lispworks '(:link-transparency nil)
                                #+sbcl (when (find-symbol* :resolve-symlinks '#:sb-impl nil)
                                         '(:resolve-symlinks nil))))))
 
   (defun filter-logical-directory-results (directory entries merger)
+    "Given ENTRIES in a DIRECTORY, remove if the directory is logical
+the entries which are physical yet when transformed by MERGER have a different TRUENAME.
+This function is used as a helper to DIRECTORY-FILES to avoid invalid entries when using logical-pathnames."
     (if (logical-pathname-p directory)
         ;; Try hard to not resolve logical-pathname into physical pathnames;
         ;; otherwise logical-pathname users/lovers will be disappointed.
@@ -2642,7 +2884,7 @@ or the original (parsed) pathname if it is false (the default)."
         ;; translating the LPN commute.
         (loop :for f :in entries
               :for p = (or (and (logical-pathname-p f) f)
-                           (let* ((u (ignore-errors (funcall merger f))))
+                           (let* ((u (ignore-errors (call-function merger f))))
                              ;; The first u avoids a cumbersome (truename u) error.
                              ;; At this point f should already be a truename,
                              ;; but isn't quite in CLISP, for it doesn't have :version :newest
@@ -2651,6 +2893,8 @@ or the original (parsed) pathname if it is false (the default)."
         entries))
 
   (defun directory-files (directory &optional (pattern *wild-file*))
+    "Return a list of the files in a directory according to the PATTERN,
+which is not very portable to override. Try not resolve symlinks if implementation allows."
     (let ((dir (pathname directory)))
       (when (logical-pathname-p dir)
         ;; Because of the filtering we do below,
@@ -2675,6 +2919,7 @@ or the original (parsed) pathname if it is false (the default)."
                             :version (make-pathname-component-logical (pathname-version f))))))))
 
   (defun subdirectories (directory)
+    "Given a DIRECTORY pathname designator, return a list of the subdirectories under it."
     (let* ((directory (ensure-directory-pathname directory))
            #-(or abcl cormanlisp genera xcl)
            (wild (merge-pathnames*
@@ -2712,6 +2957,9 @@ or the original (parsed) pathname if it is false (the default)."
                      :directory (append prefix (make-pathname-component-logical (last dir)))))))))))
 
   (defun collect-sub*directories (directory collectp recursep collector)
+    "Given a DIRECTORY, call-function the COLLECTOR function designator
+on the directory if COLLECTP returns true when CALL-FUNCTION'ed with the directory,
+and recurse each of its subdirectories on which the RECURSEP returns true when CALL-FUNCTION'ed with them."
     (when (call-function collectp directory)
       (call-function collector directory))
     (dolist (subdir (subdirectories directory))
@@ -2745,6 +2993,7 @@ or the original (parsed) pathname if it is false (the default)."
                 :finally (return p))))))
 
   (defun resolve-symlinks (path)
+    "Do a best effort at resolving symlinks in PATH, returning a partially or totally resolved PATH."
     #-allegro (truenamize path)
     #+allegro
     (if (physical-pathname-p path)
@@ -2756,6 +3005,7 @@ or the original (parsed) pathname if it is false (the default)."
 Defaults to T.")
 
   (defun resolve-symlinks* (path)
+    "RESOLVE-SYMLINKS in PATH iff *RESOLVE-SYMLINKS* is T (the default)."
     (if *resolve-symlinks*
         (and path (resolve-symlinks path))
         path)))
@@ -2849,7 +3099,7 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
           (unless (pathnamep p) (return nil))
           (check want-logical (logical-pathname-p p) "Expected a logical pathname")
           (check want-physical (physical-pathname-p p) "Expected a physical pathname")
-          (transform ensure-physical () (translate-logical-pathname p))
+          (transform ensure-physical () (physicalize-pathname p))
           (check ensure-physical (physical-pathname-p p) "Could not translate to a physical pathname")
           (check want-relative (relative-pathname-p p) "Expected a relative pathname")
           (check want-absolute (absolute-pathname-p p) "Expected an absolute pathname")
@@ -2886,14 +3136,18 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
 ;;; Pathname defaults
 (with-upgradability ()
   (defun get-pathname-defaults (&optional (defaults *default-pathname-defaults*))
+    "Find the actual DEFAULTS to use for pathnames, including
+resolving them with respect to GETCWD if the DEFAULTS were relative"
     (or (absolute-pathname-p defaults)
         (merge-pathnames* defaults (getcwd))))
 
   (defun call-with-current-directory (dir thunk)
+    "call the THUNK in a context where the current directory was changed to DIR, if not NIL.
+Note that this operation is usually NOT thread-safe."
     (if dir
         (let* ((dir (resolve-symlinks* (get-pathname-defaults (pathname-directory-pathname dir))))
-               (*default-pathname-defaults* dir)
-               (cwd (getcwd)))
+               (cwd (getcwd))
+               (*default-pathname-defaults* dir))
           (chdir dir)
           (unwind-protect
                (funcall thunk)
@@ -2908,13 +3162,18 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
 ;;; Environment pathnames
 (with-upgradability ()
   (defun inter-directory-separator ()
+    "What character does the current OS conventionally uses to separate directories?"
     (if (os-unix-p) #\: #\;))
 
   (defun split-native-pathnames-string (string &rest constraints &key &allow-other-keys)
+    "Given a string of pathnames specified in native OS syntax, separate them in a list,
+check constraints and normalize each one as per ENSURE-PATHNAME."
     (loop :for namestring :in (split-string string :separator (string (inter-directory-separator)))
           :collect (apply 'parse-native-namestring namestring constraints)))
 
   (defun getenv-pathname (x &rest constraints &key ensure-directory want-directory on-error &allow-other-keys)
+    "Extract a pathname from a user-configured environment variable, as per native OS,
+check constraints and normalize as per ENSURE-PATHNAME."
     ;; For backward compatibility with ASDF 2, want-directory implies ensure-directory
     (apply 'parse-native-namestring (getenvp x)
            :ensure-directory (or ensure-directory want-directory)
@@ -2922,16 +3181,23 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
                          `(error "In (~S ~S), invalid pathname ~*~S: ~*~?" getenv-pathname ,x))
            constraints))
   (defun getenv-pathnames (x &rest constraints &key on-error &allow-other-keys)
+    "Extract a list of pathname from a user-configured environment variable, as per native OS,
+check constraints and normalize each one as per ENSURE-PATHNAME."
     (apply 'split-native-pathnames-string (getenvp x)
            :on-error (or on-error
                          `(error "In (~S ~S), invalid pathname ~*~S: ~*~?" getenv-pathnames ,x))
            constraints))
   (defun getenv-absolute-directory (x)
+    "Extract an absolute directory pathname from a user-configured environment variable,
+as per native OS"
     (getenv-pathname x :want-absolute t :ensure-directory t))
   (defun getenv-absolute-directories (x)
+    "Extract a list of absolute directories from a user-configured environment variable,
+as per native OS"
     (getenv-pathnames x :want-absolute t :ensure-directory t))
 
   (defun lisp-implementation-directory (&key truename)
+    "Where are the system files of the current installation of the CL implementation?"
     (declare (ignorable truename))
     #+(or clozure ecl gcl mkcl sbcl)
     (let ((dir
@@ -2947,6 +3213,7 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
           dir)))
 
   (defun lisp-implementation-pathname-p (pathname)
+    "Is the PATHNAME under the current installation of the CL implementation?"
     ;; Other builtin systems are those under the implementation directory
     (and (when pathname
            (if-let (impdir (lisp-implementation-directory))
@@ -2961,18 +3228,23 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
 ;;; Simple filesystem operations
 (with-upgradability ()
   (defun ensure-all-directories-exist (pathnames)
+    "Ensure that for every pathname in PATHNAMES, we ensure its directories exist"
     (dolist (pathname pathnames)
       (when pathname
-        (ensure-directories-exist (translate-logical-pathname pathname)))))
+        (ensure-directories-exist (physicalize-pathname pathname)))))
 
   (defun rename-file-overwriting-target (source target)
-    #+clisp ;; But for a bug in CLISP 2.48, we should use :if-exists :overwrite and be atomic
-    (posix:copy-file source target :method :rename)
+    "Rename a file, overwriting any previous file with the TARGET name,
+in an atomic way if the implementation allows."
+    #+clisp ;; in recent enough versions of CLISP, :if-exists :overwrite would make it atomic
+    (progn (funcall 'require "syscalls")
+           (symbol-call :posix :copy-file source target :method :rename))
     #-clisp
     (rename-file source target
                  #+clozure :if-exists #+clozure :rename-and-delete))
 
   (defun delete-file-if-exists (x)
+    "Delete a file X if it already exists"
     (when x (handler-case (delete-file x) (file-error () nil))))
 
   (defun delete-empty-directory (directory-pathname)
@@ -2995,8 +3267,9 @@ TRUENAMIZE uses TRUENAMIZE to resolve as many symlinks as possible."
     #+sbcl #.(if-let (dd (find-symbol* :delete-directory :sb-ext nil))
                `(,dd directory-pathname) ;; requires SBCL 1.0.44 or later
                `(progn (require :sb-posix) (symbol-call :sb-posix :rmdir directory-pathname)))
-    #-(or abcl allegro clisp clozure cmu cormanlisp digitool ecl gcl lispworks sbcl scl)
-    (error "~S not implemented on ~S" 'delete-empty-directory (implementation-type))) ; genera xcl
+    #+xcl (symbol-call :uiop :run-program `("rmdir" ,(native-namestring directory-pathname)))
+    #-(or abcl allegro clisp clozure cmu cormanlisp digitool ecl gcl lispworks sbcl scl xcl)
+    (error "~S not implemented on ~S" 'delete-empty-directory (implementation-type))) ; genera
 
   (defun delete-directory-tree (directory-pathname &key (validate nil validatep) (if-does-not-exist :error))
     "Delete a directory including all its recursive contents, aka rm -rf.
@@ -3061,19 +3334,24 @@ If you're suicidal or extremely confident, just use :VALIDATE T."
   (:recycle :uiop/stream :asdf/stream :asdf)
   (:use :uiop/common-lisp :uiop/package :uiop/utility :uiop/os :uiop/pathname :uiop/filesystem)
   (:export
-   #:*default-stream-element-type* #:*stderr* #:setup-stderr
+   #:*default-stream-element-type*
+   #:*stdin* #:setup-stdin #:*stdout* #:setup-stdout #:*stderr* #:setup-stderr
    #:detect-encoding #:*encoding-detection-hook* #:always-default-encoding
    #:encoding-external-format #:*encoding-external-format-hook* #:default-encoding-external-format
    #:*default-encoding* #:*utf-8-external-format*
    #:with-safe-io-syntax #:call-with-safe-io-syntax #:safe-read-from-string
    #:with-output #:output-string #:with-input
    #:with-input-file #:call-with-input-file #:with-output-file #:call-with-output-file
+   #:null-device-pathname #:call-with-null-input #:with-null-input
+   #:call-with-null-output #:with-null-output
    #:finish-outputs #:format! #:safe-format!
    #:copy-stream-to-stream #:concatenate-files #:copy-file
    #:slurp-stream-string #:slurp-stream-lines #:slurp-stream-line
    #:slurp-stream-forms #:slurp-stream-form
-   #:read-file-string #:read-file-lines #:read-file-forms #:read-file-form #:safe-read-file-form
+   #:read-file-string #:read-file-line #:read-file-lines #:safe-read-file-line
+   #:read-file-forms #:read-file-form #:safe-read-file-form
    #:eval-input #:eval-thunk #:standard-eval-thunk
+   #:println #:writeln
    ;; Temporary files
    #:*temporary-directory* #:temporary-directory #:default-temporary-directory
    #:setup-temporary-directory
@@ -3083,18 +3361,48 @@ If you're suicidal or extremely confident, just use :VALIDATE T."
 (in-package :uiop/stream)
 
 (with-upgradability ()
-  (defvar *default-stream-element-type* (or #+(or abcl cmu cormanlisp scl xcl) 'character :default)
+  (defvar *default-stream-element-type*
+    (or #+(or abcl cmu cormanlisp scl xcl) 'character
+        #+lispworks 'lw:simple-char
+        :default)
     "default element-type for open (depends on the current CL implementation)")
+
+  (defvar *stdin* *standard-input*
+    "the original standard input stream at startup")
+
+  (defun setup-stdin ()
+    (setf *stdin*
+          #.(or #+clozure 'ccl::*stdin*
+                #+(or cmu scl) 'system:*stdin*
+                #+ecl 'ext::+process-standard-input+
+                #+sbcl 'sb-sys:*stdin*
+                '*standard-input*)))
+
+  (defvar *stdout* *standard-output*
+    "the original standard output stream at startup")
+
+  (defun setup-stdout ()
+    (setf *stdout*
+          #.(or #+clozure 'ccl::*stdout*
+                #+(or cmu scl) 'system:*stdout*
+                #+ecl 'ext::+process-standard-output+
+                #+sbcl 'sb-sys:*stdout*
+                '*standard-output*)))
 
   (defvar *stderr* *error-output*
     "the original error output stream at startup")
 
   (defun setup-stderr ()
     (setf *stderr*
-          #+allegro excl::*stderr*
-          #+clozure ccl::*stderr*
-          #-(or allegro clozure) *error-output*))
-  (setup-stderr))
+          #.(or #+allegro 'excl::*stderr*
+                #+clozure 'ccl::*stderr*
+                #+(or cmu scl) 'system:*stderr*
+                #+ecl 'ext::+process-error-output+
+                #+sbcl 'sb-sys:*stderr*
+                '*error-output*)))
+
+  ;; Run them now. In image.lisp, we'll register them to be run at image restart.
+  (setup-stdin) (setup-stdout) (setup-stderr))
 
 
 ;;; Encodings (mostly hooks only; full support requires asdf-encodings)
@@ -3113,9 +3421,9 @@ reading emacs-style -*- coding: utf-8 -*- specifications,
 and falling back to utf-8 or latin1 if nothing is specified.")
 
   (defparameter *utf-8-external-format*
-    #+(and asdf-unicode (not clisp)) :utf-8
-    #+(and asdf-unicode clisp) charset:utf-8
-    #-asdf-unicode :default
+    (if (featurep :asdf-unicode)
+        (or #+clisp charset:utf-8 :utf-8)
+        :default)
     "Default :external-format argument to pass to CL:OPEN and also
 CL:LOAD or CL:COMPILE-FILE to best process a UTF-8 encoded file.
 On modern implementations, this will decode UTF-8 code points as CL characters.
@@ -3124,6 +3432,8 @@ with non-ASCII code points being read as several CL characters;
 hopefully, if done consistently, that won't affect program behavior too much.")
 
   (defun always-default-encoding (pathname)
+    "Trivial function to use as *encoding-detection-hook*,
+always 'detects' the *default-encoding*"
     (declare (ignore pathname))
     *default-encoding*)
 
@@ -3131,11 +3441,15 @@ hopefully, if done consistently, that won't affect program behavior too much.")
     "Hook for an extension to define a function to automatically detect a file's encoding")
 
   (defun detect-encoding (pathname)
+    "Detects the encoding of a specified file, going through user-configurable hooks"
     (if (and pathname (not (directory-pathname-p pathname)) (probe-file* pathname))
         (funcall *encoding-detection-hook* pathname)
         *default-encoding*))
 
   (defun default-encoding-external-format (encoding)
+    "Default, ignorant, function to transform a character ENCODING as a
+portable keyword to an implementation-dependent EXTERNAL-FORMAT specification.
+Load system ASDF-ENCODINGS to hook in a better one."
     (case encoding
       (:default :default) ;; for backward-compatibility only. Explicit usage discouraged.
       (:utf-8 *utf-8-external-format*)
@@ -3145,16 +3459,20 @@ hopefully, if done consistently, that won't affect program behavior too much.")
 
   (defvar *encoding-external-format-hook*
     #'default-encoding-external-format
-    "Hook for an extension to define a mapping between non-default encodings
-and implementation-defined external-format's")
+    "Hook for an extension (e.g. ASDF-ENCODINGS) to define a better mapping
+from non-default encodings to and implementation-defined external-format's")
 
   (defun encoding-external-format (encoding)
+    "Transform a portable ENCODING keyword to an implementation-dependent EXTERNAL-FORMAT,
+going through all the proper hooks."
     (funcall *encoding-external-format-hook* (or encoding *default-encoding*))))
 
 
 ;;; Safe syntax
 (with-upgradability ()
-  (defvar *standard-readtable* (copy-readtable nil))
+  (defvar *standard-readtable* (with-standard-io-syntax *readtable*)
+    "The standard readtable, implementing the syntax specified by the CLHS.
+It must never be modified, though only good implementations will even enforce that.")
 
   (defmacro with-safe-io-syntax ((&key (package :cl)) &body body)
     "Establish safe CL reader options around the evaluation of BODY"
@@ -3169,9 +3487,9 @@ and implementation-defined external-format's")
         (funcall thunk))))
 
   (defun safe-read-from-string (string &key (package :cl) (eof-error-p t) eof-value (start 0) end preserve-whitespace)
+    "Read from STRING using a safe syntax, as per WITH-SAFE-IO-SYNTAX"
     (with-safe-io-syntax (:package package)
       (read-from-string string eof-error-p eof-value :start start :end end :preserve-whitespace preserve-whitespace))))
-
 
 ;;; Output to a stream or string, FORMAT-style
 (with-upgradability ()
@@ -3269,6 +3587,40 @@ Other keys are accepted but discarded."
     (declare (ignore element-type external-format if-exists if-does-not-exist))
     `(call-with-output-file ,pathname #'(lambda (,var) ,@body) ,@keys)))
 
+;;; Null device
+(with-upgradability ()
+  (defun null-device-pathname ()
+    "Pathname to a bit bucket device that discards any information written to it
+and always returns EOF when read from"
+    (cond
+      ((os-unix-p) #p"/dev/null")
+      ((os-windows-p) #p"NUL") ;; Q: how many Lisps accept the #p"NUL:" syntax?
+      (t (error "No /dev/null on your OS"))))
+  (defun call-with-null-input (fun &rest keys &key element-type external-format if-does-not-exist)
+    (declare (ignore element-type external-format if-does-not-exist))
+    (apply 'call-with-input-file (null-device-pathname) fun keys))
+  (defmacro with-null-input ((var &rest keys
+                              &key element-type external-format if-does-not-exist)
+                             &body body)
+    (declare (ignore element-type external-format if-does-not-exist))
+    "Evaluate BODY in a context when VAR is bound to an input stream accessing the null device."
+    `(call-with-null-input #'(lambda (,var) ,@body) ,@keys))
+  (defun call-with-null-output (fun
+                                &key (element-type *default-stream-element-type*)
+                                  (external-format *utf-8-external-format*)
+                                  (if-exists :overwrite)
+                                  (if-does-not-exist :error))
+    (call-with-output-file
+     (null-device-pathname) fun
+     :element-type element-type :external-format external-format
+     :if-exists if-exists :if-does-not-exist if-does-not-exist))
+  (defmacro with-null-output ((var &rest keys
+                              &key element-type external-format if-does-not-exist if-exists)
+                              &body body)
+    "Evaluate BODY in a context when VAR is bound to an output stream accessing the null device."
+    (declare (ignore element-type external-format if-exists if-does-not-exist))
+    `(call-with-null-output #'(lambda (,var) ,@body) ,@keys)))
+
 ;;; Ensure output buffers are flushed
 (with-upgradability ()
   (defun finish-outputs (&rest streams)
@@ -3276,8 +3628,8 @@ Other keys are accepted but discarded."
 Useful for portably flushing I/O before user input or program exit."
     ;; CCL notably buffers its stream output by default.
     (dolist (s (append streams
-                       (list *stderr* *error-output* *standard-output* *trace-output*
-                             *debug-io* *terminal-io* *debug-io* *query-io*)))
+                       (list *stdout* *stderr* *error-output* *standard-output* *trace-output*
+                             *debug-io* *terminal-io* *query-io*)))
       (ignore-errors (finish-output s)))
     (values))
 
@@ -3285,9 +3637,11 @@ Useful for portably flushing I/O before user input or program exit."
     "Just like format, but call finish-outputs before and after the output."
     (finish-outputs stream)
     (apply 'format stream format args)
-    (finish-output stream))
+    (finish-outputs stream))
 
   (defun safe-format! (stream format &rest args)
+    "Variant of FORMAT that is safe against both
+dangerous syntax configuration and errors while printing."
     (with-safe-io-syntax ()
       (ignore-errors (apply 'format! stream format args))
       (finish-outputs stream)))) ; just in case format failed
@@ -3317,6 +3671,7 @@ Otherwise, using WRITE-SEQUENCE using a buffer of size BUFFER-SIZE."
                 (when (< end buffer-size) (return))))))
 
   (defun concatenate-files (inputs output)
+    "create a new OUTPUT file the contents of which a the concatenate of the INPUTS files."
     (with-open-file (o output :element-type '(unsigned-byte 8)
                               :direction :output :if-exists :rename-and-delete)
       (dolist (input inputs)
@@ -3325,17 +3680,23 @@ Otherwise, using WRITE-SEQUENCE using a buffer of size BUFFER-SIZE."
           (copy-stream-to-stream i o :element-type '(unsigned-byte 8))))))
 
   (defun copy-file (input output)
+    "Copy contents of the INPUT file to the OUTPUT file"
     ;; Not available on LW personal edition or LW 6.0 on Mac: (lispworks:copy-file i f)
     (concatenate-files (list input) output))
 
-  (defun slurp-stream-string (input &key (element-type 'character))
+  (defun slurp-stream-string (input &key (element-type 'character) stripped)
     "Read the contents of the INPUT stream as a string"
-    (with-open-stream (input input)
-      (with-output-to-string (output)
-        (copy-stream-to-stream input output :element-type element-type))))
+    (let ((string
+            (with-open-stream (input input)
+              (with-output-to-string (output)
+                (copy-stream-to-stream input output :element-type element-type)))))
+      (if stripped (stripln string) string)))
 
   (defun slurp-stream-lines (input &key count)
     "Read the contents of the INPUT stream as a list of lines, return those lines.
+
+Note: relies on the Lisp's READ-LINE, but additionally removes any remaining CR
+from the line-ending if the file or stream had CR+LF but Lisp only removed LF.
 
 Read no more than COUNT lines."
     (check-type count (or null integer))
@@ -3343,7 +3704,8 @@ Read no more than COUNT lines."
       (loop :for n :from 0
             :for l = (and (or (not count) (< n count))
                           (read-line input nil nil))
-            :while l :collect l)))
+            ;; stripln: to remove CR when the OS sends CRLF and Lisp only remove LF
+            :while l :collect (stripln l))))
 
   (defun slurp-stream-line (input &key (at 0))
     "Read the contents of the INPUT stream as a list of lines,
@@ -3396,6 +3758,14 @@ BEWARE: be sure to use WITH-SAFE-IO-SYNTAX, or some variant thereof"
 BEWARE: be sure to use WITH-SAFE-IO-SYNTAX, or some variant thereof"
     (apply 'call-with-input-file file 'slurp-stream-lines keys))
 
+  (defun read-file-line (file &rest keys &key (at 0) &allow-other-keys)
+    "Open input FILE with option KEYS (except AT),
+and read its contents as per SLURP-STREAM-LINE with given AT specifier.
+BEWARE: be sure to use WITH-SAFE-IO-SYNTAX, or some variant thereof"
+    (apply 'call-with-input-file file
+           #'(lambda (input) (slurp-stream-line input :at at))
+           (remove-plist-key :at keys)))
+
   (defun read-file-forms (file &rest keys &key count &allow-other-keys)
     "Open input FILE with option KEYS (except COUNT),
 and read its contents as per SLURP-STREAM-FORMS with given COUNT.
@@ -3411,6 +3781,13 @@ BEWARE: be sure to use WITH-SAFE-IO-SYNTAX, or some variant thereof"
     (apply 'call-with-input-file file
            #'(lambda (input) (slurp-stream-form input :at at))
            (remove-plist-key :at keys)))
+
+  (defun safe-read-file-line (pathname &rest keys &key (package :cl) &allow-other-keys)
+    "Reads the specified line from the top of a file using a safe standardized syntax.
+Extracts the line using READ-FILE-LINE,
+within an WITH-SAFE-IO-SYNTAX using the specified PACKAGE."
+    (with-safe-io-syntax (:package package)
+      (apply 'read-file-line pathname (remove-plist-key :package keys))))
 
   (defun safe-read-file-form (pathname &rest keys &key (package :cl) &allow-other-keys)
     "Reads the specified form from the top of a file using a safe standardized syntax.
@@ -3448,10 +3825,20 @@ If a string, repeatedly read and evaluate from it, returning the last values."
         (let ((*read-eval* t))
           (eval-thunk thunk))))))
 
+(with-upgradability ()
+  (defun println (x &optional (stream *standard-output*))
+    "Variant of PRINC that also calls TERPRI afterwards"
+    (princ x stream) (terpri stream) (values))
+
+  (defun writeln (x &rest keys &key (stream *standard-output*) &allow-other-keys)
+    "Variant of WRITE that also calls TERPRI afterwards"
+    (apply 'write x keys) (terpri stream) (values)))
+
 
 ;;; Using temporary files
 (with-upgradability ()
   (defun default-temporary-directory ()
+    "Return a default directory to use for temporary files"
     (or
      (when (os-unix-p)
        (or (getenv-pathname "TMPDIR" :ensure-directory t)
@@ -3460,71 +3847,99 @@ If a string, repeatedly read and evaluate from it, returning the last values."
        (getenv-pathname "TEMP" :ensure-directory t))
      (subpathname (user-homedir-pathname) "tmp/")))
 
-  (defvar *temporary-directory* nil)
+  (defvar *temporary-directory* nil "User-configurable location for temporary files")
 
   (defun temporary-directory ()
+    "Return a directory to use for temporary files"
     (or *temporary-directory* (default-temporary-directory)))
 
   (defun setup-temporary-directory ()
+    "Configure a default temporary directory to use."
     (setf *temporary-directory* (default-temporary-directory))
     ;; basic lack fixed after gcl 2.7.0-61, but ending / required still on 2.7.0-64.1
     #+(and gcl (not gcl2.6)) (setf system::*tmp-dir* *temporary-directory*))
 
   (defun call-with-temporary-file
       (thunk &key
+               (want-stream-p t) (want-pathname-p t)
                prefix keep (direction :io)
                (element-type *default-stream-element-type*)
-               (external-format :default))
+               (external-format *utf-8-external-format*))
+    "Call a THUNK with STREAM and PATHNAME arguments identifying a temporary file.
+The pathname will be based on appending a random suffix to PREFIX.
+This utility will KEEP the file past its extent if and only if explicitly requested.
+The file will be open with specified DIRECTION, ELEMENT-TYPE and EXTERNAL-FORMAT."
     #+gcl2.6 (declare (ignorable external-format))
     (check-type direction (member :output :io))
+    (assert (or want-stream-p want-pathname-p))
     (loop
       :with prefix = (namestring (ensure-absolute-pathname (or prefix "tmp") #'temporary-directory))
+      :with results = ()
       :for counter :from (random (ash 1 32))
-      :for pathname = (pathname (format nil "~A~36R" prefix counter)) :do
+      :for pathname = (pathname (format nil "~A~36R" prefix counter))
+      :for okp = nil :do
         ;; TODO: on Unix, do something about umask
         ;; TODO: on Unix, audit the code so we make sure it uses O_CREAT|O_EXCL
-        ;; TODO: on Unix, use CFFI and mkstemp -- but asdf/driver is precisely meant to not depend on CFFI or on anything! Grrrr.
-        (with-open-file (stream pathname
-                                :direction direction
-                                :element-type element-type
-                                #-gcl2.6 :external-format #-gcl2.6 external-format
-                                :if-exists nil :if-does-not-exist :create)
-          (when stream
-            (return
-              (if keep
-                  (funcall thunk stream pathname)
-                  (unwind-protect
-                       (funcall thunk stream pathname)
-                    (ignore-errors (delete-file pathname)))))))))
+        ;; TODO: on Unix, use CFFI and mkstemp -- but UIOP is precisely meant to not depend on CFFI or on anything! Grrrr.
+        (unwind-protect
+             (progn
+               (with-open-file (stream pathname
+                                       :direction direction
+                                       :element-type element-type
+                                       #-gcl2.6 :external-format #-gcl2.6 external-format
+                                       :if-exists nil :if-does-not-exist :create)
+                 (when stream
+                   (setf okp pathname)
+                   (when want-stream-p
+                     (setf results
+                           (multiple-value-list
+                            (if want-pathname-p
+                                (funcall thunk stream pathname)
+                                (funcall thunk stream)))))))
+               (when okp
+                 (if want-stream-p
+                     (return (apply 'values results))
+                     (return (funcall thunk pathname)))))
+          (when (and okp (not keep))
+            (ignore-errors (delete-file-if-exists okp))))))
 
   (defmacro with-temporary-file ((&key (stream (gensym "STREAM") streamp)
                                     (pathname (gensym "PATHNAME") pathnamep)
                                     prefix keep direction element-type external-format)
                                  &body body)
     "Evaluate BODY where the symbols specified by keyword arguments
-STREAM and PATHNAME are bound corresponding to a newly created temporary file
-ready for I/O. Unless KEEP is specified, delete the file afterwards."
+STREAM and PATHNAME (if respectively specified) are bound corresponding
+to a newly created temporary file ready for I/O, as per CALL-WITH-TEMPORARY-FILE.
+The STREAM will be closed if no binding is specified.
+Unless KEEP is specified, delete the file afterwards."
     (check-type stream symbol)
     (check-type pathname symbol)
-    `(flet ((think (,stream ,pathname)
-              ,@(unless pathnamep `((declare (ignore ,pathname))))
-              ,@(unless streamp `((when ,stream (close ,stream))))
+    (assert (or streamp pathnamep))
+    `(flet ((think (,@(when streamp `(,stream)) ,@(when pathnamep `(,pathname)))
               ,@body))
        #-gcl (declare (dynamic-extent #'think))
        (call-with-temporary-file
         #'think
+        :want-stream-p ,streamp
+        :want-pathname-p ,pathnamep
         ,@(when direction `(:direction ,direction))
         ,@(when prefix `(:prefix ,prefix))
         ,@(when keep `(:keep ,keep))
         ,@(when element-type `(:element-type ,element-type))
-        ,@(when external-format `(:external-format external-format)))))
+        ,@(when external-format `(:external-format ,external-format)))))
+
+  (defun get-temporary-file (&key prefix)
+    (with-temporary-file (:pathname pn :keep t :prefix prefix)
+      pn))
 
   ;; Temporary pathnames in simple cases where no contention is assumed
   (defun add-pathname-suffix (pathname suffix)
+    "Add a SUFFIX to the name of a PATHNAME, return a new pathname"
     (make-pathname :name (strcat (pathname-name pathname) suffix)
                    :defaults pathname))
 
   (defun tmpize-pathname (x)
+    "Return a new pathname modified from X by adding a trivial deterministic suffix"
     (add-pathname-suffix x "-ASDF-TMP"))
 
   (defun call-with-staging-pathname (pathname fun)
@@ -3677,6 +4092,7 @@ This is designed to abstract away the implementation specific quit forms."
      stream))
 
   (defun print-backtrace (&rest keys &key stream count)
+    "Print a backtrace"
     (declare (ignore stream count))
     (with-safe-io-syntax (:package :cl)
       (let ((*print-readably* nil)
@@ -3688,6 +4104,7 @@ This is designed to abstract away the implementation specific quit forms."
         (ignore-errors (apply 'raw-print-backtrace keys)))))
 
   (defun print-condition-backtrace (condition &key (stream *stderr*) count)
+    "Print a condition after a backtrace triggered by that condition"
     ;; We print the condition *after* the backtrace,
     ;; for the sake of who sees the backtrace at a terminal.
     ;; It is up to the caller to print the condition *before*, with some context.
@@ -3697,10 +4114,12 @@ This is designed to abstract away the implementation specific quit forms."
                     condition)))
 
   (defun fatal-condition-p (condition)
+    "Is the CONDITION fatal? It is if it matches any in *FATAL-CONDITIONS*"
     (match-any-condition-p condition *fatal-conditions*))
 
   (defun handle-fatal-condition (condition)
-    "Depending on whether *LISP-INTERACTION* is set, enter debugger or die"
+    "Handle a fatal CONDITION:
+depending on whether *LISP-INTERACTION* is set, enter debugger or die"
     (cond
       (*lisp-interaction*
        (invoke-debugger condition))
@@ -3710,10 +4129,12 @@ This is designed to abstract away the implementation specific quit forms."
        (die 99 "~A" condition))))
 
   (defun call-with-fatal-condition-handler (thunk)
+    "Call THUNK in a context where fatal conditions are appropriately handled"
     (handler-bind (((satisfies fatal-condition-p) #'handle-fatal-condition))
       (funcall thunk)))
 
   (defmacro with-fatal-condition-handler ((&optional) &body body)
+    "Execute BODY in a context where fatal conditions are appropriately handled"
     `(call-with-fatal-condition-handler #'(lambda () ,@body)))
 
   (defun shell-boolean-exit (x)
@@ -3724,15 +4145,19 @@ This is designed to abstract away the implementation specific quit forms."
 ;;; Using image hooks
 (with-upgradability ()
   (defun register-image-restore-hook (hook &optional (call-now-p t))
+    "Regiter a hook function to be run when restoring a dumped image"
     (register-hook-function '*image-restore-hook* hook call-now-p))
 
   (defun register-image-dump-hook (hook &optional (call-now-p nil))
+    "Register a the hook function to be run before to dump an image"
     (register-hook-function '*image-dump-hook* hook call-now-p))
 
   (defun call-image-restore-hook ()
+    "Call the hook functions registered to be run when restoring a dumped image"
     (call-functions (reverse *image-restore-hook*)))
 
   (defun call-image-dump-hook ()
+    "Call the hook functions registered to be run before to dump an image"
     (call-functions *image-dump-hook*)))
 
 
@@ -3776,6 +4201,8 @@ if we are not called from a directly executable image."
                           ((:prelude *image-prelude*) *image-prelude*)
                           ((:entry-point *image-entry-point*) *image-entry-point*)
                           (if-already-restored '(cerror "RUN RESTORE-IMAGE ANYWAY")))
+    "From a freshly restarted Lisp image, restore the saved Lisp environment
+by setting appropriate variables, running various hooks, and calling any specified entry point."
     (when *image-restored-p*
       (if if-already-restored
           (call-function if-already-restored "Image already ~:[being ~;~]restored" (eq *image-restored-p* t))
@@ -3801,6 +4228,7 @@ if we are not called from a directly executable image."
                                 ((:postlude *image-postlude*) *image-postlude*)
                                 ((:dump-hook *image-dump-hook*) *image-dump-hook*)
                                 #+clozure prepend-symbols #+clozure (purify t))
+    "Dump an image of the current Lisp environment at pathname FILENAME, with various options"
     (declare (ignorable filename output-name executable))
     (setf *image-dumped-p* (if executable :executable t))
     (setf *image-restored-p* :in-regress)
@@ -3867,6 +4295,7 @@ if we are not called from a directly executable image."
                          (entry-point () entry-point-p) build-args)
     (declare (ignorable destination object-files kind output-name prologue-code epilogue-code
                         prelude preludep postlude postludep entry-point entry-point-p build-args))
+    "On ECL, create an executable at pathname DESTINATION from the specified OBJECT-FILES and options"
     ;; Is it meaningful to run these in the current environment?
     ;; only if we also track the object files that constitute the "current" image,
     ;; and otherwise simulate dump-image, including quitting at the end.
@@ -3893,7 +4322,8 @@ if we are not called from a directly executable image."
 ;;; Some universal image restore hooks
 (with-upgradability ()
   (map () 'register-image-restore-hook
-       '(setup-temporary-directory setup-stderr setup-command-line-arguments
+       '(setup-stdin setup-stdout setup-stderr
+         setup-command-line-arguments setup-temporary-directory
          #+abcl detect-os)))
 ;;;; -------------------------------------------------------------------------
 ;;;; run-program initially from xcvb-driver.
@@ -3909,7 +4339,7 @@ if we are not called from a directly executable image."
    #:escape-token #:escape-command
 
    ;;; run-program
-   #:slurp-input-stream
+   #:slurp-input-stream #:vomit-output-stream
    #:run-program
    #:subprocess-error
    #:subprocess-error-code #:subprocess-error-command #:subprocess-error-process
@@ -3989,16 +4419,17 @@ omit the outer double-quotes if key argument :QUOTE is NIL"
     (when quote (princ #\" s)))
 
   (defun easy-sh-character-p (x)
+    "Is X an \"easy\" character that does not require quoting by the shell?"
     (or (alphanumericp x) (find x "+-_.,%@:/")))
 
   (defun escape-sh-token (token &optional s)
     "Escape a string TOKEN within double-quotes if needed
 for use within a POSIX Bourne shell, outputing to S."
-    (escape-token token :stream s :quote #\" :good-chars
-                  #'easy-sh-character-p
+    (escape-token token :stream s :quote #\" :good-chars #'easy-sh-character-p
                         :escaper 'escape-sh-token-within-double-quotes))
 
   (defun escape-shell-token (token &optional s)
+    "Escape a token for the current operating system shell"
     (cond
       ((os-unix-p) (escape-sh-token token s))
       ((os-windows-p) (escape-windows-token token s))))
@@ -4033,49 +4464,84 @@ by /bin/sh in POSIX"
 
 ;;;; Slurping a stream, typically the output of another program
 (with-upgradability ()
-  (defgeneric slurp-input-stream (processor input-stream &key &allow-other-keys))
+  (defun call-stream-processor (fun processor stream)
+    "Given FUN (typically SLURP-INPUT-STREAM or VOMIT-OUTPUT-STREAM,
+a PROCESSOR specification which is either an atom or a list specifying
+a processor an keyword arguments, call the specified processor with
+the given STREAM as input"
+    (if (consp processor)
+        (apply fun (first processor) stream (rest processor))
+        (funcall fun processor stream)))
+
+  (defgeneric slurp-input-stream (processor input-stream &key)
+    (:documentation
+     "SLURP-INPUT-STREAM is a generic function with two positional arguments
+PROCESSOR and INPUT-STREAM and additional keyword arguments, that consumes (slurps)
+the contents of the INPUT-STREAM and processes them according to a method
+specified by PROCESSOR.
+
+Built-in methods include the following:
+* if PROCESSOR is a function, it is called with the INPUT-STREAM as its argument
+* if PROCESSOR is a list, its first element should be a function.  It will be applied to a cons of the
+  INPUT-STREAM and the rest of the list.  That is (x . y) will be treated as
+    \(APPLY x <stream> y\)
+* if PROCESSOR is an output-stream, the contents of INPUT-STREAM is copied to the output-stream,
+  per copy-stream-to-stream, with appropriate keyword arguments.
+* if PROCESSOR is the symbol CL:STRING or the keyword :STRING, then the contents of INPUT-STREAM
+  are returned as a string, as per SLURP-STREAM-STRING.
+* if PROCESSOR is the keyword :LINES then the INPUT-STREAM will be handled by SLURP-STREAM-LINES.
+* if PROCESSOR is the keyword :LINE then the INPUT-STREAM will be handled by SLURP-STREAM-LINE.
+* if PROCESSOR is the keyword :FORMS then the INPUT-STREAM will be handled by SLURP-STREAM-FORMS.
+* if PROCESSOR is the keyword :FORM then the INPUT-STREAM will be handled by SLURP-STREAM-FORM.
+* if PROCESSOR is T, it is treated the same as *standard-output*. If it is NIL, NIL is returned.
+
+Programmers are encouraged to define their own methods for this generic function."))
 
   #-(or gcl2.6 genera)
-  (defmethod slurp-input-stream ((function function) input-stream &key &allow-other-keys)
+  (defmethod slurp-input-stream ((function function) input-stream &key)
     (funcall function input-stream))
 
-  (defmethod slurp-input-stream ((list cons) input-stream &key &allow-other-keys)
-    (apply (first list) (cons input-stream (rest list))))
+  (defmethod slurp-input-stream ((list cons) input-stream &key)
+    (apply (first list) input-stream (rest list)))
 
   #-(or gcl2.6 genera)
   (defmethod slurp-input-stream ((output-stream stream) input-stream
-                                 &key linewise prefix (element-type 'character) buffer-size &allow-other-keys)
+                                 &key linewise prefix (element-type 'character) buffer-size)
     (copy-stream-to-stream
      input-stream output-stream
      :linewise linewise :prefix prefix :element-type element-type :buffer-size buffer-size))
 
-  (defmethod slurp-input-stream ((x (eql 'string)) stream &key &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql 'string)) stream &key stripped)
     (declare (ignorable x))
-    (slurp-stream-string stream))
+    (slurp-stream-string stream :stripped stripped))
 
-  (defmethod slurp-input-stream ((x (eql :string)) stream &key &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql :string)) stream &key stripped)
     (declare (ignorable x))
-    (slurp-stream-string stream))
+    (slurp-stream-string stream :stripped stripped))
 
-  (defmethod slurp-input-stream ((x (eql :lines)) stream &key count &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql :lines)) stream &key count)
     (declare (ignorable x))
     (slurp-stream-lines stream :count count))
 
-  (defmethod slurp-input-stream ((x (eql :line)) stream &key (at 0) &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql :line)) stream &key (at 0))
     (declare (ignorable x))
     (slurp-stream-line stream :at at))
 
-  (defmethod slurp-input-stream ((x (eql :forms)) stream &key count &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql :forms)) stream &key count)
     (declare (ignorable x))
     (slurp-stream-forms stream :count count))
 
-  (defmethod slurp-input-stream ((x (eql :form)) stream &key (at 0) &allow-other-keys)
+  (defmethod slurp-input-stream ((x (eql :form)) stream &key (at 0))
     (declare (ignorable x))
     (slurp-stream-form stream :at at))
 
   (defmethod slurp-input-stream ((x (eql t)) stream &rest keys &key &allow-other-keys)
     (declare (ignorable x))
     (apply 'slurp-input-stream *standard-output* stream keys))
+
+  (defmethod slurp-input-stream ((x null) stream &key)
+    (declare (ignorable x stream))
+    nil)
 
   (defmethod slurp-input-stream ((pathname pathname) input
                                  &key
@@ -4095,8 +4561,7 @@ by /bin/sh in POSIX"
        :element-type element-type :buffer-size buffer-size :linewise linewise)))
 
   (defmethod slurp-input-stream (x stream
-                                 &key linewise prefix (element-type 'character) buffer-size
-                                 &allow-other-keys)
+                                 &key linewise prefix (element-type 'character) buffer-size)
     (declare (ignorable stream linewise prefix element-type buffer-size))
     (cond
       #+(or gcl2.6 genera)
@@ -4104,10 +4569,89 @@ by /bin/sh in POSIX"
       #+(or gcl2.6 genera)
       ((output-stream-p x)
        (copy-stream-to-stream
-        input-stream output-stream
+        stream x
         :linewise linewise :prefix prefix :element-type element-type :buffer-size buffer-size))
       (t
        (error "Invalid ~S destination ~S" 'slurp-input-stream x)))))
+
+
+(with-upgradability ()
+  (defgeneric vomit-output-stream (processor output-stream &key)
+    (:documentation
+     "VOMIT-OUTPUT-STREAM is a generic function with two positional arguments
+PROCESSOR and OUTPUT-STREAM and additional keyword arguments, that produces (vomits)
+some content onto the OUTPUT-STREAM, according to a method specified by PROCESSOR.
+
+Built-in methods include the following:
+* if PROCESSOR is a function, it is called with the OUTPUT-STREAM as its argument
+* if PROCESSOR is a list, its first element should be a function.
+  It will be applied to a cons of the OUTPUT-STREAM and the rest of the list.
+  That is (x . y) will be treated as \(APPLY x <stream> y\)
+* if PROCESSOR is an input-stream, its contents will be copied the OUTPUT-STREAM,
+  per copy-stream-to-stream, with appropriate keyword arguments.
+* if PROCESSOR is a string, its contents will be printed to the OUTPUT-STREAM.
+* if PROCESSOR is T, it is treated the same as *standard-input*. If it is NIL, nothing is done.
+
+Programmers are encouraged to define their own methods for this generic function."))
+
+  #-(or gcl2.6 genera)
+  (defmethod vomit-output-stream ((function function) output-stream &key)
+    (funcall function output-stream))
+
+  (defmethod vomit-output-stream ((list cons) output-stream &key)
+    (apply (first list) output-stream (rest list)))
+
+  #-(or gcl2.6 genera)
+  (defmethod vomit-output-stream ((input-stream stream) output-stream
+                                 &key linewise prefix (element-type 'character) buffer-size)
+    (copy-stream-to-stream
+     input-stream output-stream
+     :linewise linewise :prefix prefix :element-type element-type :buffer-size buffer-size))
+
+  (defmethod vomit-output-stream ((x string) stream &key fresh-line terpri)
+    (princ x stream)
+    (when fresh-line (fresh-line stream))
+    (when terpri (terpri stream))
+    (values))
+
+  (defmethod vomit-output-stream ((x (eql t)) stream &rest keys &key &allow-other-keys)
+    (declare (ignorable x))
+    (apply 'vomit-output-stream *standard-input* stream keys))
+
+  (defmethod vomit-output-stream ((x null) stream &key)
+    (declare (ignorable x stream))
+    (values))
+
+  (defmethod vomit-output-stream ((pathname pathname) input
+                                 &key
+                                   (element-type *default-stream-element-type*)
+                                   (external-format *utf-8-external-format*)
+                                   (if-exists :rename-and-delete)
+                                   (if-does-not-exist :create)
+                                   buffer-size
+                                   linewise)
+    (with-output-file (output pathname
+                              :element-type element-type
+                              :external-format external-format
+                              :if-exists if-exists
+                              :if-does-not-exist if-does-not-exist)
+      (copy-stream-to-stream
+       input output
+       :element-type element-type :buffer-size buffer-size :linewise linewise)))
+
+  (defmethod vomit-output-stream (x stream
+                                 &key linewise prefix (element-type 'character) buffer-size)
+    (declare (ignorable stream linewise prefix element-type buffer-size))
+    (cond
+      #+(or gcl2.6 genera)
+      ((functionp x) (funcall x stream))
+      #+(or gcl2.6 genera)
+      ((input-stream-p x)
+       (copy-stream-to-stream
+        x stream
+        :linewise linewise :prefix prefix :element-type element-type :buffer-size buffer-size))
+      (t
+       (error "Invalid ~S source ~S" 'vomit-output-stream x)))))
 
 
 ;;;; ----- Running an external program -----
@@ -4124,215 +4668,531 @@ by /bin/sh in POSIX"
                        (subprocess-error-command condition)
                        (subprocess-error-code condition)))))
 
-  (defun run-program (command
-                       &key output ignore-error-status force-shell
-                       (element-type *default-stream-element-type*)
-                       (external-format :default)
-                       &allow-other-keys)
+  ;;; Internal helpers for run-program
+  (defun %normalize-command (command)
+    "Given a COMMAND as a list or string, transform it in a format suitable
+for the implementation's underlying run-program function"
+    (etypecase command
+      #+os-unix (string `("/bin/sh" "-c" ,command))
+      #+os-unix (list command)
+      #+os-windows
+      (string
+       ;; NB: We do NOT add cmd /c here. You might want to.
+       #+(or allegro clisp) command
+       ;; On ClozureCL for Windows, we assume you are using
+       ;; r15398 or later in 1.9 or later,
+       ;; so that bug 858 is fixed http://trac.clozure.com/ccl/ticket/858
+       #+clozure (cons "cmd" (strcat "/c " command))
+       ;; NB: On other Windows implementations, this is utterly bogus
+       ;; except in the most trivial cases where no quoting is needed.
+       ;; Use at your own risk.
+       #-(or allegro clisp clozure) (list "cmd" "/c" command))
+      #+os-windows
+      (list
+       #+allegro (escape-windows-command command)
+       #-allegro command)))
+
+  (defun %active-io-specifier-p (specifier)
+    "Determines whether a run-program I/O specifier requires Lisp-side processing
+via SLURP-INPUT-STREAM or VOMIT-OUTPUT-STREAM (return T),
+or whether it's already taken care of by the implementation's underlying run-program."
+    (not (typep specifier '(or null string pathname (member :interactive :output)
+                            #+(or cmu (and sbcl os-unix) scl) (or stream (eql t))
+                            #+lispworks file-stream)))) ;; not a type!? comm:socket-stream
+
+  (defun %normalize-io-specifier (specifier &optional role)
+    "Normalizes a portable I/O specifier for %RUN-PROGRAM into an implementation-dependent
+argument to pass to the internal RUN-PROGRAM"
+    (declare (ignorable role))
+    (etypecase specifier
+      (null (or #+(or allegro lispworks) (null-device-pathname)))
+      (string (pathname specifier))
+      (pathname specifier)
+      (stream specifier)
+      ((eql :stream) :stream)
+      ((eql :interactive)
+       #+allegro nil
+       #+clisp :terminal
+       #+(or clozure cmu ecl sbcl scl) t)
+      #+(or allegro clozure cmu ecl lispworks sbcl scl)
+      ((eql :output)
+       (if (eq role :error-output)
+           :output
+           (error "Wrong specifier ~S for role ~S" specifier role)))))
+
+  (defun %interactivep (input output error-output)
+    (member :interactive (list input output error-output)))
+
+  #+clisp
+  (defun clisp-exit-code (raw-exit-code)
+    (typecase raw-exit-code
+      (null 0) ; no error
+      (integer raw-exit-code) ; negative: signal
+      (t -1)))
+
+  (defun %run-program (command
+                       &rest keys
+                       &key input (if-input-does-not-exist :error)
+                         output (if-output-exists :overwrite)
+                         error-output (if-error-output-exists :overwrite)
+                         directory wait
+                         #+allegro separate-streams
+                         &allow-other-keys)
+    "A portable abstraction of a low-level call to the implementation's run-program or equivalent.
+It spawns a subprocess that runs the specified COMMAND (a list of program and arguments).
+INPUT, OUTPUT and ERROR-OUTPUT specify a portable IO specifer,
+to be normalized by %NORMALIZE-IO-SPECIFIER.
+It returns a process-info plist with possible keys:
+     PROCESS, EXIT-CODE, INPUT-STREAM, OUTPUT-STREAM, BIDIR-STREAM, ERROR-STREAM."
+    ;; NB: these implementations have unix vs windows set at compile-time.
+    (declare (ignorable if-input-does-not-exist if-output-exists if-error-output-exists))
+    (assert (not (and wait (member :stream (list input output error-output)))))
+    #-(or allegro clozure cmu (and lispworks os-unix) sbcl scl)
+    (progn command keys directory
+           (error "run-program not available"))
+    #+(or allegro clisp clozure cmu (and lispworks os-unix) sbcl scl)
+    (let* ((%command (%normalize-command command))
+           (%input (%normalize-io-specifier input :input))
+           (%output (%normalize-io-specifier output :output))
+           (%error-output (%normalize-io-specifier error-output :error-output))
+           #+(and allegro os-windows) (interactive (%interactivep input output error-output))
+           (process*
+             #+allegro
+             (multiple-value-list
+              (apply
+               'excl:run-shell-command
+               #+os-unix (coerce (cons (first %command) %command) 'vector)
+               #+os-windows %command
+               :input %input
+               :output %output
+               :error-output %error-output
+               :directory directory :wait wait
+               #+os-windows :show-window #+os-windows (if interactive nil :hide)
+               :allow-other-keys t keys))
+             #-allegro
+             (with-current-directory (#-sbcl directory)
+               #+clisp
+               (flet ((run (f &rest args)
+                        (multiple-value-list
+                         (apply f :input %input :output %output
+                                  :allow-other-keys t `(,@args ,@keys)))))
+                 (assert (eq %error-output :terminal))
+                 ;;; since we now always return a code, we can't use this code path, anyway!
+                 (etypecase %command
+                   #+os-windows (string (run 'ext:run-shell-command %command))
+                   (list (run 'ext:run-program (car %command)
+                              :arguments (cdr %command)))))
+               #+(or clozure cmu ecl sbcl scl)
+               (#-ecl progn #+ecl multiple-value-list
+                (apply
+                 '#+(or cmu ecl scl) ext:run-program
+                 #+clozure ccl:run-program #+sbcl sb-ext:run-program
+                 (car %command) (cdr %command)
+                 :input %input
+                 :output %output
+                 :error %error-output
+                 :wait wait
+                 :allow-other-keys t
+                 (append
+                  #+(or clozure cmu sbcl scl)
+                  `(:if-input-does-not-exist ,if-input-does-not-exist
+                    :if-output-exists ,if-output-exists
+                    :if-error-exists ,if-error-output-exists)
+                  #+sbcl `(:search t
+                           :if-output-does-not-exist :create
+                           :if-error-does-not-exist :create)
+                  #-sbcl keys #+sbcl (if directory keys (remove-plist-key :directory keys)))))
+               #+(and lispworks os-unix) ;; note: only used on Unix in non-interactive case
+               (multiple-value-list
+                (apply
+                 'system:run-shell-command
+                 (cons "/usr/bin/env" %command) ; lispworks wants a full path.
+                 :input %input :if-input-does-not-exist if-input-does-not-exist
+                 :output %output :if-output-exists if-output-exists
+                 :error-output %error-output :if-error-output-exists if-error-output-exists
+                 :wait wait :save-exit-status t :allow-other-keys t keys))))
+           (process-info-r ()))
+      (flet ((prop (key value) (push key process-info-r) (push value process-info-r)))
+        #+allegro
+        (cond
+          (wait (prop :exit-code (first process*)))
+          (separate-streams
+           (destructuring-bind (in out err pid) process*
+             (prop :process pid)
+             (when (eq input :stream) (prop :input-stream in))
+             (when (eq output :stream) (prop :output-stream out))
+             (when (eq error-output :stream) (prop :error-stream err))))
+          (t
+           (prop :process (third process*))
+           (let ((x (first process*)))
+             (ecase (+ (if (eq input :stream) 1 0) (if (eq output :stream) 2 0))
+               (0)
+               (1 (prop :input-stream x))
+               (2 (prop :output-stream x))
+               (3 (prop :bidir-stream x))))
+           (when (eq error-output :stream)
+             (prop :error-stream (second process*)))))
+        #+clisp
+        (cond
+          (wait (prop :exit-code (clisp-exit-code (first process*))))
+          (t
+           (ecase (+ (if (eq input :stream) 1 0) (if (eq output :stream) 2 0))
+             (0)
+             (1 (prop :input-stream (first process*)))
+             (2 (prop :output-stream (first process*)))
+             (3 (prop :bidir-stream (pop process*))
+                (prop :input-stream (pop process*))
+                (prop :output-stream (pop process*))))))
+        #+(or clozure cmu sbcl scl)
+        (progn
+          (prop :process process*)
+          (when (eq input :stream)
+            (prop :input-stream
+                  #+clozure (ccl:external-process-input-stream process*)
+                  #+(or cmu scl) (ext:process-input process*)
+                  #+sbcl (sb-ext:process-input process*)))
+          (when (eq output :stream)
+            (prop :output-stream
+                  #+clozure (ccl:external-process-output-stream process*)
+                  #+(or cmu scl) (ext:process-output process*)
+                  #+sbcl (sb-ext:process-output process*)))
+          (when (eq error-output :stream)
+            (prop :error-output-stream
+                  #+clozure (ccl:external-process-error-stream process*)
+                  #+(or cmu scl) (ext:process-error process*)
+                  #+sbcl (sb-ext:process-error process*))))
+        #+ecl
+        (destructuring-bind (stream code process) process*
+          (let ((mode (+ (if (eq input :stream) 1 0) (if (eq output :stream) 2 0))))
+            (cond
+              ((zerop mode))
+              ((null process*) (prop :exit-code -1))
+              (t (prop (case mode (1 :input-stream) (2 :output-stream) (3 :bidir-stream)) stream))))
+          (when code (prop :exit-code code))
+          (when process (prop :process process)))
+        #+lispworks
+        (if wait
+            (prop :exit-code (first process*))
+            (let ((mode (+ (if (eq input :stream) 1 0) (if (eq output :stream) 2 0))))
+              (if (zerop mode)
+                  (prop :process (first process*))
+                  (destructuring-bind (x err pid) process*
+                    (prop :process pid)
+                    (prop (ecase mode (1 :input-stream) (2 :output-stream) (3 :bidir-stream)) x)
+                    (when (eq error-output :stream) (prop :error-stream err))))))
+        (nreverse process-info-r))))
+
+  (defun %wait-process-result (process-info)
+    (or (getf process-info :exit-code)
+        (let ((process (getf process-info :process)))
+          (when process
+            ;; 1- wait
+            #+clozure (ccl::external-process-wait process)
+            #+(or cmu scl) (ext:process-wait process)
+            #+(and ecl os-unix) (ext:external-process-wait process)
+            #+sbcl (sb-ext:process-wait process)
+            ;; 2- extract result
+            #+allegro (sys:reap-os-subprocess :pid process :wait t)
+            #+clozure (nth-value 1 (ccl:external-process-status process))
+            #+(or cmu scl) (ext:process-exit-code process)
+            #+ecl (nth-value 1 (ext:external-process-status process))
+            #+lispworks (system:pid-exit-status process :wait t)
+            #+sbcl (sb-ext:process-exit-code process)))))
+
+  (defun %check-result (exit-code &key command process ignore-error-status)
+    (unless ignore-error-status
+      (unless (eql exit-code 0)
+        (cerror "IGNORE-ERROR-STATUS"
+                'subprocess-error :command command :code exit-code :process process)))
+    exit-code)
+
+  (defun %call-with-program-io (gf tval stream-easy-p fun direction spec activep returner
+                                &key element-type external-format &allow-other-keys)
+    ;; handle redirection for run-program and system
+    ;; SPEC is the specification for the subprocess's input or output or error-output
+    ;; TVAL is the value used if the spec is T
+    ;; GF is the generic function to call to handle arbitrary values of SPEC
+    ;; STREAM-EASY-P is T if we're going to use a RUN-PROGRAM that copies streams in the background
+    ;; (it's only meaningful on CMUCL, SBCL, SCL that actually do it)
+    ;; DIRECTION is :INPUT, :OUTPUT or :ERROR-OUTPUT for the direction of this io argument
+    ;; FUN is a function of the new reduced spec and an activity function to call with a stream
+    ;; when the subprocess is active and communicating through that stream.
+    ;; ACTIVEP is a boolean true if we will get to run code while the process is running
+    ;; ELEMENT-TYPE and EXTERNAL-FORMAT control what kind of temporary file we may open.
+    ;; RETURNER is a function called with the value of the activity.
+    ;; --- TODO (fare@tunes.org): handle if-output-exists and such when doing it the hard way.
+    (declare (ignorable stream-easy-p))
+    (let* ((actual-spec (if (eq spec t) tval spec))
+           (activity-spec (if (eq actual-spec :output)
+                              (ecase direction
+                                ((:input :output)
+                                 (error "~S not allowed as a ~S ~S spec"
+                                        :output 'run-program direction))
+                                ((:error-output)
+                                 nil))
+                              actual-spec)))
+      (labels ((activity (stream)
+                 (call-function returner (call-stream-processor gf activity-spec stream)))
+               (easy-case ()
+                 (funcall fun actual-spec nil))
+               (hard-case ()
+                 (if activep
+                     (funcall fun :stream #'activity)
+                     (with-temporary-file (:pathname tmp)
+                       (ecase direction
+                         (:input
+                          (with-output-file (s tmp :if-exists :overwrite
+                                               :external-format external-format
+                                               :element-type element-type)
+                            (activity s))
+                          (funcall fun tmp nil))
+                         ((:output :error-output)
+                          (multiple-value-prog1 (funcall fun tmp nil)
+                            (with-input-file (s tmp
+                                               :external-format external-format
+                                               :element-type element-type)
+                              (activity s)))))))))
+        (typecase activity-spec
+          ((or null string pathname (eql :interactive))
+           (easy-case))
+          #+(or cmu (and sbcl os-unix) scl) ;; streams are only easy on implementations that try very hard
+          (stream
+           (if stream-easy-p (easy-case) (hard-case)))
+          (t
+           (hard-case))))))
+
+  (defmacro place-setter (place)
+    (when place
+      (let ((value (gensym)))
+        `#'(lambda (,value) (setf ,place ,value)))))
+
+  (defmacro with-program-input (((reduced-input-var
+                                  &optional (input-activity-var (gensym) iavp))
+                                 input-form &key setf stream-easy-p active keys) &body body)
+    `(apply '%call-with-program-io 'vomit-output-stream *standard-input* ,stream-easy-p
+            #'(lambda (,reduced-input-var ,input-activity-var)
+                ,@(unless iavp `((declare (ignore ,input-activity-var))))
+                ,@body)
+            :input ,input-form ,active (place-setter ,setf) ,keys))
+
+  (defmacro with-program-output (((reduced-output-var
+                                  &optional (output-activity-var (gensym) oavp))
+                                  output-form &key setf stream-easy-p active keys) &body body)
+    `(apply '%call-with-program-io 'slurp-input-stream *standard-output* ,stream-easy-p
+            #'(lambda (,reduced-output-var ,output-activity-var)
+                ,@(unless oavp `((declare (ignore ,output-activity-var))))
+                ,@body)
+            :output ,output-form ,active (place-setter ,setf) ,keys))
+
+  (defmacro with-program-error-output (((reduced-error-output-var
+                                         &optional (error-output-activity-var (gensym) eoavp))
+                                        error-output-form &key setf stream-easy-p active keys)
+                                       &body body)
+    `(apply '%call-with-program-io 'slurp-input-stream *error-output* ,stream-easy-p
+            #'(lambda (,reduced-error-output-var ,error-output-activity-var)
+                ,@(unless eoavp `((declare (ignore ,error-output-activity-var))))
+                ,@body)
+            :error-output ,error-output-form ,active (place-setter ,setf) ,keys))
+
+  (defun %use-run-program (command &rest keys
+                           &key input output error-output ignore-error-status &allow-other-keys)
+    ;; helper for RUN-PROGRAM when using %run-program
+    #+(or abcl cormanlisp gcl (and lispworks os-windows) mcl mkcl xcl)
+    (error "Not implemented on this platform")
+    (assert (not (member :stream (list input output error-output))))
+    (let* ((active-input-p (%active-io-specifier-p input))
+           (active-output-p (%active-io-specifier-p output))
+           (active-error-output-p (%active-io-specifier-p error-output))
+           (activity
+             (cond
+               (active-output-p :output)
+               (active-input-p :input)
+               (active-error-output-p :error-output)
+               (t nil)))
+           (wait (not activity))
+           output-result error-output-result exit-code)
+      (with-program-output ((reduced-output output-activity)
+                            output :keys keys :setf output-result
+                            :stream-easy-p t :active (eq activity :output))
+        (with-program-error-output ((reduced-error-output error-output-activity)
+                                    error-output :keys keys :setf error-output-result
+                                    :stream-easy-p t :active (eq activity :error-output))
+          (with-program-input ((reduced-input input-activity)
+                               input :keys keys
+                               :stream-easy-p t :active (eq activity :input))
+            (let ((process-info
+                    (apply '%run-program command
+                           :wait wait :input reduced-input :output reduced-output
+                           :error-output (if (eq error-output :output) :output reduced-error-output)
+                           keys)))
+              (labels ((get-stream (stream-name &optional fallbackp)
+                         (or (getf process-info stream-name)
+                             (when fallbackp
+                               (getf process-info :bidir-stream))))
+                       (run-activity (activity stream-name &optional fallbackp)
+                         (if-let (stream (get-stream stream-name fallbackp))
+                           (funcall activity stream)
+                           (error 'subprocess-error
+                                  :code `(:missing ,stream-name)
+                                  :command command :process process-info))))
+                (unwind-protect
+                     (ecase activity
+                       ((nil))
+                       (:input (run-activity input-activity :input-stream t))
+                       (:output (run-activity output-activity :output-stream t))
+                       (:error-output (run-activity error-output-activity :error-output-stream)))
+                  (loop :for (() val) :on process-info :by #'cddr
+                        :when (streamp val) :do (ignore-errors (close val)))
+                  (setf exit-code
+                        (%check-result (%wait-process-result process-info)
+                                       :command command :process process-info
+                                       :ignore-error-status ignore-error-status))))))))
+      (values output-result error-output-result exit-code)))
+
+  (defun %normalize-system-command (command) ;; helper for %USE-SYSTEM
+    (etypecase command
+      (string command)
+      (list (escape-shell-command
+             (if (os-unix-p) (cons "exec" command) command)))))
+
+  (defun %redirected-system-command (command in out err directory) ;; helper for %USE-SYSTEM
+    (flet ((redirect (spec operator)
+             (let ((pathname
+                     (typecase spec
+                       (null (null-device-pathname))
+                       (string (pathname spec))
+                       (pathname spec)
+                       ((eql :output)
+                        (assert (equal operator "2>"))
+                        (return-from redirect '(" 2>&1"))))))
+               (when pathname
+                 (list " " operator " "
+                       (escape-shell-token (native-namestring pathname)))))))
+      (multiple-value-bind (before after)
+          (let ((normalized (%normalize-system-command command)))
+            (if (os-unix-p)
+                (values '("exec") (list " ; " normalized))
+                (values (list normalized) ())))
+        (reduce/strcat
+         (append
+          before (redirect in "<") (redirect out ">") (redirect err "2>")
+          (when (and directory (os-unix-p)) `("cd " (escape-shell-token directory) " ; "))
+          after)))))
+
+  (defun %system (command &rest keys
+                  &key input output error-output directory &allow-other-keys)
+    "A portable abstraction of a low-level call to libc's system()."
+    (declare (ignorable input output error-output directory keys))
+    #+(or allegro clozure cmu (and lispworks os-unix) sbcl scl)
+    (%wait-process-result
+     (apply '%run-program (%normalize-system-command command) :wait t keys))
+    #+(or abcl clisp cormanlisp ecl gcl (and lispworks os-windows) mkcl xcl)
+    (let ((%command (%redirected-system-command command input output error-output directory)))
+      #+(and lispworks os-windows)
+      (system:call-system %command :current-directory directory :wait t)
+      #-(and lispworks os-windows)
+      (with-current-directory ((unless (os-unix-p) directory))
+        #+(or abcl xcl) (ext:run-shell-command %command)
+        #+clisp (clisp-exit-code (ext:shell %command))
+        #+cormanlisp (win32:system %command)
+        #+ecl (let ((*standard-input* *stdin*)
+                    (*standard-output* *stdout*)
+                    (*error-output* *stderr*))
+                (ext:system %command))
+        #+gcl (lisp:system %command)
+        #+mcl (ccl::with-cstrs ((%%command %command)) (_system %%command))
+        #+mkcl ;; PROBABLY BOGUS -- ask jcb
+        (multiple-value-bind (io process exit-code)
+            (mkcl:run-program #+windows %command #+windows ()
+                              #-windows "/bin/sh" #-windows (list "-c" %command)
+                              :input t :output t)))))
+
+  (defun %use-system (command &rest keys
+                      &key input output error-output ignore-error-status &allow-other-keys)
+    ;; helper for RUN-PROGRAM when using %system
+    (let (output-result error-output-result exit-code)
+      (with-program-output ((reduced-output)
+                            output :keys keys :setf output-result)
+        (with-program-error-output ((reduced-error-output)
+                                    error-output :keys keys :setf error-output-result)
+          (with-program-input ((reduced-input) input :keys keys)
+            (setf exit-code
+                  (%check-result (apply '%system command
+                                        :input reduced-input :output reduced-output
+                                        :error-output reduced-error-output keys)
+                                 :command command
+                                 :ignore-error-status ignore-error-status)))))
+      (values output-result error-output-result exit-code)))
+
+  (defun run-program (command &rest keys
+                       &key ignore-error-status force-shell
+                         (input nil inputp) (if-input-does-not-exist :error)
+                         output (if-output-exists :overwrite)
+                         (error-output nil error-output-p) (if-error-output-exists :overwrite)
+                         (element-type #-clozure *default-stream-element-type* #+clozure 'character)
+                         (external-format *utf-8-external-format*)
+                      &allow-other-keys)
     "Run program specified by COMMAND,
 either a list of strings specifying a program and list of arguments,
 or a string specifying a shell command (/bin/sh on Unix, CMD.EXE on Windows).
 
-Always call a shell (rather than directly execute the command)
+Always call a shell (rather than directly execute the command when possible)
 if FORCE-SHELL is specified.
 
-Signal a SUBPROCESS-ERROR if the process wasn't successful (exit-code 0),
+Signal a continuable SUBPROCESS-ERROR if the process wasn't successful (exit-code 0),
 unless IGNORE-ERROR-STATUS is specified.
 
-If OUTPUT is either NIL or :INTERACTIVE, then
-return the exit status code of the process that was called.
-if it was NIL, the output is discarded;
-if it was :INTERACTIVE, the output and the input are inherited from the current process.
-
+If OUTPUT is a pathname, a string designating a pathname, or NIL designating the null device,
+the file at that path is used as output.
+If it's :INTERACTIVE, output is inherited from the current process.
 Otherwise, OUTPUT should be a value that is a suitable first argument to
-SLURP-INPUT-STREAM.  In this case, RUN-PROGRAM will create a temporary stream
-for the program output.  The program output, in that stream, will be processed
-by SLURP-INPUT-STREAM, according to the using OUTPUT as the first argument.
-RUN-PROGRAM will return whatever SLURP-INPUT-STREAM returns.  E.g., using
-:OUTPUT :STRING will have it return the entire output stream as a string.  Use
-ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT processor."
+SLURP-INPUT-STREAM (qv.), or a list of such a value and keyword arguments.
+In this case, RUN-PROGRAM will create a temporary stream for the program output.
+The program output, in that stream, will be processed by a call to SLURP-INPUT-STREAM,
+using OUTPUT as the first argument (or the first element of OUTPUT, and the rest as keywords).
+T designates the *STANDARD-OUTPUT* to be provided to SLURP-INPUT-STREAM.
+The primary value resulting from that call (or NIL if no call was needed)
+will be the first value returned by RUN-PROGRAM.
+E.g., using :OUTPUT :STRING will have it return the entire output stream as a string.
 
-    ;; TODO: The current version does not honor :OUTPUT NIL on Allegro.  Setting
-    ;; the :INPUT and :OUTPUT arguments to RUN-SHELL-COMMAND on ACL actually do
-    ;; what :OUTPUT :INTERACTIVE is advertised to do here.  To get the behavior
-    ;; specified for :OUTPUT NIL, one would have to grab up the process output
-    ;; into a stream and then throw it on the floor.  The consequences of
-    ;; getting this wrong seemed so much worse than having excess output that it
-    ;; is not currently implemented.
+ERROR-OUTPUT is similar to OUTPUT, except that the resulting value is returned
+as the second value of RUN-PROGRAM. T designates the *ERROR-OUTPUT*.
+Also :OUTPUT means redirecting the error output to the output stream, and NIL is returned.
 
-    ;; TODO: specially recognize :output pathname ?
-    (declare (ignorable ignore-error-status element-type external-format))
+INPUT is similar to OUTPUT, except that VOMIT-OUTPUT-STREAM is used,
+no value is returned, and T designates the *STANDARD-INPUT*.
+
+Use ELEMENT-TYPE and EXTERNAL-FORMAT to specify how streams are created.
+
+One and only one of the stream slurping or vomiting may or may not happen
+in parallel in parallel with the subprocess, depending on options and implementation.
+Other streams are completely produced or consumed before or after the subprocess is spawned,
+using temporary files.
+
+RUN-PROGRAM returns 3 values:
+0- the result of the OUTPUT slurping if any, or NIL
+1- the result of the ERROR-OUTPUT slurping if any, or NIL
+2- either 0 if the subprocess exited with success status,
+or an indication of failure via the EXIT-CODE of the process"
+    (declare (ignorable ignore-error-status))
     #-(or abcl allegro clisp clozure cmu cormanlisp ecl gcl lispworks mcl sbcl scl xcl)
     (error "RUN-PROGRAM not implemented for this Lisp")
-    (labels (#+(or allegro clisp clozure cmu ecl (and lispworks os-unix) sbcl scl)
-             (run-program (command &key pipe interactive)
-               "runs the specified command (a list of program and arguments).
-              If using a pipe, returns two values: process and stream
-              If not using a pipe, returns one values: the process result;
-              also, inherits the output stream."
-               ;; NB: these implementations have unix vs windows set at compile-time.
-               (assert (not (and pipe interactive)))
-               (let* ((wait (not pipe))
-                      #-(and clisp os-windows)
-                      (command
-                        (etypecase command
-                          #+os-unix (string `("/bin/sh" "-c" ,command))
-                          #+os-unix (list command)
-                          #+os-windows
-                          (string
-                           ;; NB: We do NOT add cmd /c here. You might want to.
-                           #+allegro command
-                           ;; On ClozureCL for Windows, we assume you are using
-                           ;; r15398 or later in 1.9 or later,
-                           ;; so that bug 858 is fixed http://trac.clozure.com/ccl/ticket/858
-                           #+clozure (cons "cmd" (strcat "/c " command))
-                           ;; NB: On other Windows implementations, this is utterly bogus
-                           ;; except in the most trivial cases where no quoting is needed.
-                           ;; Use at your own risk.
-                           #-(or allegro clozure) (list "cmd" "/c" command))
-                          #+os-windows
-                          (list
-                           #+(or allegro clozure) (escape-windows-command command)
-                           #-(or allegro clozure) command)))
-                      #+(and clozure os-windows) (command (list command))
-                      (process*
-                        (multiple-value-list
-                         #+allegro
-                         (excl:run-shell-command
-                          #+os-unix (coerce (cons (first command) command) 'vector)
-                          #+os-windows command
-                          :input nil
-                          :output (and pipe :stream) :wait wait
-                          #+os-windows :show-window #+os-windows (and (or (null output) pipe) :hide))
-                         #+clisp
-                         (flet ((run (f &rest args)
-                                  (apply f `(,@args :input ,(when interactive :terminal) :wait ,wait :output
-                                                    ,(if pipe :stream :terminal)))))
-                           (etypecase command
-                             #+os-windows (run 'ext:run-shell-command command)
-                             (list (run 'ext:run-program (car command)
-                                        :arguments (cdr command)))))
-                         #+lispworks
-                         (system:run-shell-command
-                          (cons "/usr/bin/env" command) ; lispworks wants a full path.
-                          :input interactive :output (or (and pipe :stream) interactive)
-                          :wait wait :save-exit-status (and pipe t))
-                         #+(or clozure cmu ecl sbcl scl)
-                         (#+(or cmu ecl scl) ext:run-program
-                            #+clozure ccl:run-program
-                            #+sbcl sb-ext:run-program
-                            (car command) (cdr command)
-                            :input interactive :wait wait
-                            :output (if pipe :stream t)
-                            . #.(append
-                                 #+(or clozure cmu ecl sbcl scl) '(:error t)
-                                 ;; note: :external-format requires a recent SBCL
-                                 #+sbcl '(:search t :external-format external-format)))))
-                      (process
-                        #+allegro (if pipe (third process*) (first process*))
-                        #+ecl (third process*)
-                        #-(or allegro ecl) (first process*))
-                      (stream
-                        (when pipe
-                          #+(or allegro lispworks ecl) (first process*)
-                          #+clisp (first process*)
-                          #+clozure (ccl::external-process-output process)
-                          #+(or cmu scl) (ext:process-output process)
-                          #+sbcl (sb-ext:process-output process))))
-                 (values process stream)))
-             #+(or allegro clisp clozure cmu ecl (and lispworks os-unix) sbcl scl)
-             (process-result (process pipe)
-               (declare (ignorable pipe))
-               ;; 1- wait
-               #+(and clozure os-unix) (ccl::external-process-wait process)
-               #+(or cmu scl) (ext:process-wait process)
-               #+(and ecl os-unix) (ext:external-process-wait process)
-               #+sbcl (sb-ext:process-wait process)
-               ;; 2- extract result
-               #+allegro (if pipe (sys:reap-os-subprocess :pid process :wait t) process)
-               #+clisp process
-               #+clozure (nth-value 1 (ccl:external-process-status process))
-               #+(or cmu scl) (ext:process-exit-code process)
-               #+ecl (nth-value 1 (ext:external-process-status process))
-               #+lispworks (if pipe (system:pipe-exit-status process :wait t) process)
-               #+sbcl (sb-ext:process-exit-code process))
-             (check-result (exit-code process)
-               #+clisp
-               (setf exit-code
-                     (typecase exit-code (integer exit-code) (null 0) (t -1)))
-               (unless (or ignore-error-status
-                           (equal exit-code 0))
-                 (error 'subprocess-error :command command :code exit-code :process process))
-               exit-code)
-             (use-run-program ()
-               #-(or abcl cormanlisp gcl (and lispworks os-windows) mcl mkcl xcl)
-               (let* ((interactive (eq output :interactive))
-                      (pipe (and output (not interactive))))
-                 (multiple-value-bind (process stream)
-                     (run-program command :pipe pipe :interactive interactive)
-                   (if (and output (not interactive))
-                       (unwind-protect
-                            (slurp-input-stream output stream)
-                         (when stream (close stream))
-                         (check-result (process-result process pipe) process))
-                       (unwind-protect
-                            (check-result
-                             #+(or allegro lispworks) ; when not capturing, returns the exit code!
-                             process
-                             #-(or allegro lispworks) (process-result process pipe)
-                             process))))))
-             (system-command (command)
-               (etypecase command
-                 (string (if (os-windows-p) (format nil "cmd /c ~A" command) command))
-                 (list (escape-shell-command
-                        (if (os-unix-p) (cons "exec" command) command)))))
-             (redirected-system-command (command out)
-               (format nil (if (os-unix-p) "exec > ~*~A ; ~2:*~A" "~A > ~A")
-                       (system-command command) (native-namestring out)))
-             (system (command &key interactive)
-               (declare (ignorable interactive))
-               #+(or abcl xcl) (ext:run-shell-command command)
-               #+allegro
-               (excl:run-shell-command
-                command
-                :input nil
-                :output nil
-                :error-output :output ; write STDERR to output, too
-                :wait t
-                #+os-windows :show-window #+os-windows (unless (or interactive (eq output t)) :hide))
-               #+(or clisp clozure cmu (and lispworks os-unix) sbcl scl)
-               (process-result (run-program command :pipe nil :interactive interactive) nil)
-               #+ecl (ext:system command)
-               #+cormanlisp (win32:system command)
-               #+gcl (lisp:system command)
-               #+(and lispworks os-windows)
-               (system:call-system-showing-output
-                command :show-cmd (or interactive (eq output t)) :prefix "" :output-stream nil)
-               #+mcl (ccl::with-cstrs ((%command command)) (_system %command))
-               #+mkcl (nth-value 2
-                                 (mkcl:run-program #+windows command #+windows ()
-                                                   #-windows "/bin/sh" (list "-c" command)
-                                                   :input nil :output nil)))
-             (call-system (command-string &key interactive)
-               (check-result (system command-string :interactive interactive) nil))
-             (use-system ()
-               (let ((interactive (eq output :interactive)))
-                 (if (and output (not interactive))
-                     (with-temporary-file (:pathname tmp :direction :output)
-                       (call-system (redirected-system-command command tmp))
-                       (with-open-file (stream tmp
-                                               :direction :input
-                                               :if-does-not-exist :error
-                                               :element-type element-type
-                                               #-gcl2.6 :external-format #-gcl2.6 external-format)
-                         (slurp-input-stream output stream)))
-                     (call-system (system-command command) :interactive interactive)))))
-      (if (and (not force-shell)
-               #+(or clisp ecl) ignore-error-status
-               #+(or abcl cormanlisp gcl (and lispworks os-windows) mcl mkcl xcl) nil)
-          (use-run-program)
-          (use-system)))))
-
+    (flet ((default (x xp output) (cond (xp x) ((eq output :interactive) :interactive))))
+      (apply (if (or force-shell
+                     #+(or clisp ecl) (or (not ignore-error-status) t)
+                     #+clisp (eq error-output :interactive)
+                     #+(or abcl clisp) (eq :error-output :output)
+                     #+(and lispworks os-unix) (%interactivep input output error-output)
+                     #+(or abcl cormanlisp gcl (and lispworks os-windows) mcl mkcl xcl) t)
+                 '%use-system '%use-run-program)
+             command
+             :input (default input inputp output)
+             :error-output (default error-output error-output-p output)
+             :if-input-does-not-exist if-input-does-not-exist
+             :if-output-exists if-output-exists
+             :if-error-output-exists if-error-output-exists
+             :element-type element-type :external-format external-format
+           keys))))
 ;;;; -------------------------------------------------------------------------
 ;;;; Support to build (compile and load) Lisp files
 
@@ -4346,6 +5206,7 @@ ELEMENT-TYPE and EXTERNAL-FORMAT for the stream passed to the OUTPUT processor."
    #:*compile-file-warnings-behaviour* #:*compile-file-failure-behaviour*
    #:*output-translation-function*
    #:*optimization-settings* #:*previous-optimization-settings*
+   #:*base-build-directory*
    #:compile-condition #:compile-file-error #:compile-warned-error #:compile-failed-error
    #:compile-warned-warning #:compile-failed-warning
    #:check-lisp-compile-results #:check-lisp-compile-warnings
@@ -4379,13 +5240,20 @@ Valid values are :error, :warn, and :ignore.")
     "How should ASDF react if it encounters a failure (per the ANSI spec of COMPILE-FILE)
 when compiling a file, which includes any non-style-warning warning.
 Valid values are :error, :warn, and :ignore.
-Note that ASDF ALWAYS raises an error if it fails to create an output file when compiling."))
+Note that ASDF ALWAYS raises an error if it fails to create an output file when compiling.")
 
+  (defvar *base-build-directory* nil
+    "When set to a non-null value, it should be an absolute directory pathname,
+which will serve as the *DEFAULT-PATHNAME-DEFAULTS* around a COMPILE-FILE,
+what more while the input-file is shortened if possible to ENOUGH-PATHNAME relative to it.
+This can help you produce more deterministic output for FASLs."))
 
 ;;; Optimization settings
 (with-upgradability ()
-  (defvar *optimization-settings* nil)
-  (defvar *previous-optimization-settings* nil)
+  (defvar *optimization-settings* nil
+    "Optimization settings to be used by PROCLAIM-OPTIMIZATION-SETTINGS")
+  (defvar *previous-optimization-settings* nil
+    "Optimization settings saved by PROCLAIM-OPTIMIZATION-SETTINGS")
   (defun get-optimization-settings ()
     "Get current compiler optimization settings, ready to PROCLAIM again"
     #-(or clisp clozure cmu ecl sbcl scl)
@@ -4414,6 +5282,7 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
   #+sbcl
   (progn
     (defun sb-grovel-unknown-constant-condition-p (c)
+      "Detect SB-GROVEL unknown-constant conditions on older versions of SBCL"
       (and (typep c 'sb-int:simple-style-warning)
            (string-enclosed-p
             "Couldn't grovel for "
@@ -4459,16 +5328,18 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
 ;;;; ----- Filtering conditions while building -----
 (with-upgradability ()
   (defun call-with-muffled-compiler-conditions (thunk)
+    "Call given THUNK in a context where uninteresting conditions and compiler conditions are muffled"
     (call-with-muffled-conditions
      thunk (append *uninteresting-conditions* *uninteresting-compiler-conditions*)))
   (defmacro with-muffled-compiler-conditions ((&optional) &body body)
-    "Run BODY where uninteresting compiler conditions are muffled"
+    "Trivial syntax for CALL-WITH-MUFFLED-COMPILER-CONDITIONS"
     `(call-with-muffled-compiler-conditions #'(lambda () ,@body)))
   (defun call-with-muffled-loader-conditions (thunk)
+    "Call given THUNK in a context where uninteresting conditions and loader conditions are muffled"
     (call-with-muffled-conditions
      thunk (append *uninteresting-conditions* *uninteresting-loader-conditions*)))
   (defmacro with-muffled-loader-conditions ((&optional) &body body)
-    "Run BODY where uninteresting compiler and additional loader conditions are muffled"
+    "Trivial syntax for CALL-WITH-MUFFLED-LOADER-CONDITIONS"
     `(call-with-muffled-loader-conditions #'(lambda () ,@body))))
 
 
@@ -4494,6 +5365,8 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
 
   (defun check-lisp-compile-warnings (warnings-p failure-p
                                                   &optional context-format context-arguments)
+    "Given the warnings or failures as resulted from COMPILE-FILE or checking deferred warnings,
+raise an error or warning as appropriate"
     (when failure-p
       (case *compile-file-failure-behaviour*
         (:warn (warn 'compile-failed-warning
@@ -4519,6 +5392,7 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
 
   (defun check-lisp-compile-results (output warnings-p failure-p
                                              &optional context-format context-arguments)
+    "Given the results of COMPILE-FILE, raise an error or warning as appropriate"
     (unless output
       (error 'compile-file-error :context-format context-format :context-arguments context-arguments))
     (check-lisp-compile-warnings warnings-p failure-p context-format context-arguments)))
@@ -4531,6 +5405,8 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
 ;;; See their respective docstrings.
 (with-upgradability ()
   (defun reify-simple-sexp (sexp)
+    "Given a simple SEXP, return a representation of it as a portable SEXP.
+Simple means made of symbols, numbers, characters, simple-strings, pathnames, cons cells."
     (etypecase sexp
       (symbol (reify-symbol sexp))
       ((or number character simple-string pathname) sexp)
@@ -4538,6 +5414,7 @@ Note that ASDF ALWAYS raises an error if it fails to create an output file when 
       (simple-vector (vector (mapcar 'reify-simple-sexp (coerce sexp 'list))))))
 
   (defun unreify-simple-sexp (sexp)
+    "Given the portable output of REIFY-SIMPLE-SEXP, return the simple SEXP it represents"
     (etypecase sexp
       ((or symbol number character simple-string pathname) sexp)
       (cons (cons (unreify-simple-sexp (car sexp)) (unreify-simple-sexp (cdr sexp))))
@@ -4789,6 +5666,8 @@ possibly in a different process."
         (terpri s))))
 
   (defun warnings-file-type (&optional implementation-type)
+    "The pathname type for warnings files on given IMPLEMENTATION-TYPE,
+where NIL designates the current one"
     (case (or implementation-type *implementation-type*)
       ((:acl :allegro) "allegro-warnings")
       ;;((:clisp) "clisp-warnings")
@@ -4798,21 +5677,27 @@ possibly in a different process."
       ((:scl) "scl-warnings")))
 
   (defvar *warnings-file-type* nil
-    "Type for warnings files")
+    "Pathname type for warnings files, or NIL if disabled")
 
   (defun enable-deferred-warnings-check ()
+    "Enable the saving of deferred warnings"
     (setf *warnings-file-type* (warnings-file-type)))
 
   (defun disable-deferred-warnings-check ()
+    "Disable the saving of deferred warnings"
     (setf *warnings-file-type* nil))
 
   (defun warnings-file-p (file &optional implementation-type)
+    "Is FILE a saved warnings file for the given IMPLEMENTATION-TYPE?
+If that given type is NIL, use the currently configured *WARNINGS-FILE-TYPE* instead."
     (if-let (type (if implementation-type
                       (warnings-file-type implementation-type)
                       *warnings-file-type*))
       (equal (pathname-type file) type)))
 
   (defun check-deferred-warnings (files &optional context-format context-arguments)
+    "Given a list of FILES in which deferred warnings were saved by CALL-WITH-DEFERRED-WARNINGS,
+re-intern and raise any warnings that are still meaningful."
     (let ((file-errors nil)
           (failure-p nil)
           (warnings-p nil))
@@ -4853,6 +5738,9 @@ possibly in a different process."
   |#
 
   (defun call-with-saved-deferred-warnings (thunk warnings-file)
+    "If WARNINGS-FILE is not nil, record the deferred-warnings around a call to THUNK
+and save those warnings to the given file for latter use,
+possibly in a different process. Otherwise just call THUNK."
     (if warnings-file
         (with-compilation-unit (:override t)
           (unwind-protect
@@ -4864,21 +5752,22 @@ possibly in a different process."
         (funcall thunk)))
 
   (defmacro with-saved-deferred-warnings ((warnings-file) &body body)
-    "If WARNINGS-FILE is not nil, records the deferred-warnings around the BODY
-and saves those warnings to the given file for latter use,
-possibly in a different process. Otherwise just run the BODY."
+    "Trivial syntax for CALL-WITH-SAVED-DEFERRED-WARNINGS"
     `(call-with-saved-deferred-warnings #'(lambda () ,@body) ,warnings-file)))
 
 
 ;;; from ASDF
 (with-upgradability ()
   (defun current-lisp-file-pathname ()
+    "Portably return the PATHNAME of the current Lisp source file being compiled or loaded"
     (or *compile-file-pathname* *load-pathname*))
 
   (defun load-pathname ()
-    *load-pathname*)
+    "Portably return the LOAD-PATHNAME of the current source file or fasl"
+    *load-pathname*) ;; see magic for GCL in uiop/common-lisp
 
   (defun lispize-pathname (input-file)
+    "From a INPUT-FILE pathname, return a corresponding .lisp source pathname"
     (make-pathname :type "lisp" :defaults input-file))
 
   (defun compile-file-type (&rest keys)
@@ -4888,9 +5777,11 @@ possibly in a different process. Otherwise just run the BODY."
     #+(or ecl mkcl) (pathname-type (apply 'compile-file-pathname "foo" keys)))
 
   (defun call-around-hook (hook function)
+    "Call a HOOK around the execution of FUNCTION"
     (call-function (or hook 'funcall) function))
 
   (defun compile-file-pathname* (input-file &rest keys &key output-file &allow-other-keys)
+    "Variant of COMPILE-FILE-PATHNAME that works well with COMPILE-FILE*"
     (let* ((keys
              (remove-plist-keys `(#+(and allegro (not (version>= 8 2))) :external-format
                                     ,@(unless output-file '(:output-file))) keys)))
@@ -4959,16 +5850,17 @@ it will filter them appropriately."
       (multiple-value-bind (output-truename warnings-p failure-p)
           (with-saved-deferred-warnings (warnings-file)
             (with-muffled-compiler-conditions ()
-              (or #-(or ecl mkcl)
-                  (apply 'compile-file input-file :output-file tmp-file
-                         #+sbcl (if emit-cfasl (list* :emit-cfasl tmp-cfasl keywords) keywords)
-                         #-sbcl keywords)
-                  #+ecl (apply 'compile-file input-file :output-file
-                               (if object-file
-                                   (list* object-file :system-p t keywords)
-                                   (list* tmp-file keywords)))
-                  #+mkcl (apply 'compile-file input-file
-                                :output-file object-file :fasl-p nil keywords))))
+              (with-enough-pathname (input-file :defaults *base-build-directory*)
+                (or #-(or ecl mkcl)
+                    (apply 'compile-file input-file :output-file tmp-file
+                           #+sbcl (if emit-cfasl (list* :emit-cfasl tmp-cfasl keywords) keywords)
+                           #-sbcl keywords)
+                    #+ecl (apply 'compile-file input-file :output-file
+                                 (if object-file
+                                     (list* object-file :system-p t keywords)
+                                     (list* tmp-file keywords)))
+                    #+mkcl (apply 'compile-file input-file
+                                  :output-file object-file :fasl-p nil keywords)))))
         (cond
           ((and output-truename
                 (flet ((check-flag (flag behaviour)
@@ -4999,6 +5891,7 @@ it will filter them appropriately."
         (values output-truename warnings-p failure-p))))
 
   (defun load* (x &rest keys &key &allow-other-keys)
+    "Portable wrapper around LOAD that properly handles loading from a stream."
     (etypecase x
       ((or pathname string #-(or allegro clozure gcl2.6 genera) stream)
        (apply 'load x
@@ -5021,6 +5914,7 @@ it will filter them appropriately."
 ;;; Links FASLs together
 (with-upgradability ()
   (defun combine-fasls (inputs output)
+    "Combine a list of FASLs INPUTS into a single FASL OUTPUT"
     #-(or abcl allegro clisp clozure cmu lispworks sbcl scl xcl)
     (error "~A does not support ~S~%inputs ~S~%output  ~S"
            (implementation-type) 'combine-fasls inputs output)
@@ -5081,8 +5975,10 @@ it will filter them appropriately."
                               (condition-arguments c))))))
 
   (defun get-folder-path (folder)
-    (or ;; this semi-portably implements a subset of the functionality of lispworks' sys:get-folder-path
-        #+(and lispworks mswindows) (sys:get-folder-path folder)
+    "Semi-portable implementation of a subset of LispWorks' sys:get-folder-path,
+this function tries to locate the Windows FOLDER for one of
+:LOCAL-APPDATA, :APPDATA or :COMMON-APPDATA."
+    (or #+(and lispworks mswindows) (sys:get-folder-path folder)
         ;; read-windows-registry HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\AppData
         (ecase folder
           (:local-appdata (getenv-absolute-directory "LOCALAPPDATA"))
@@ -5091,6 +5987,7 @@ it will filter them appropriately."
                                (subpathname* (getenv-absolute-directory "ALLUSERSPROFILE") "Application Data/"))))))
 
   (defun user-configuration-directories ()
+    "Determine user configuration directories"
     (let ((dirs
             `(,@(when (os-unix-p)
                   (cons
@@ -5105,6 +6002,7 @@ it will filter them appropriately."
                          :from-end t :test 'equal)))
 
   (defun system-configuration-directories ()
+    "Determine system user configuration directories"
     (cond
       ((os-unix-p) '(#p"/etc/common-lisp/"))
       ((os-windows-p)
@@ -5112,23 +6010,28 @@ it will filter them appropriately."
          (list it)))))
 
   (defun in-first-directory (dirs x &key (direction :input))
+    "Determine system user configuration directories"
     (loop :with fun = (ecase direction
                         ((nil :input :probe) 'probe-file*)
                         ((:output :io) 'identity))
           :for dir :in dirs
-          :thereis (and dir (funcall fun (merge-pathnames* x (ensure-directory-pathname dir))))))
+          :thereis (and dir (funcall fun (subpathname (ensure-directory-pathname dir) x)))))
 
   (defun in-user-configuration-directory (x &key (direction :input))
+    "return pathname under user configuration directory, subpathname X"
     (in-first-directory (user-configuration-directories) x :direction direction))
   (defun in-system-configuration-directory (x &key (direction :input))
+    "return pathname under system configuration directory, subpathname X"
     (in-first-directory (system-configuration-directories) x :direction direction))
 
   (defun configuration-inheritance-directive-p (x)
+    "Is X a configuration inheritance directive?"
     (let ((kw '(:inherit-configuration :ignore-inherited-configuration)))
       (or (member x kw)
           (and (length=n-p x 1) (member (car x) kw)))))
 
   (defun report-invalid-form (reporter &rest args)
+    "Report an invalid form according to REPORTER and various ARGS"
     (etypecase reporter
       (null
        (apply 'error 'invalid-configuration args))
@@ -5139,10 +6042,12 @@ it will filter them appropriately."
       (cons
        (apply 'apply (append reporter args)))))
 
-  (defvar *ignored-configuration-form* nil)
+  (defvar *ignored-configuration-form* nil
+    "Have configuration forms been ignored while parsing the configuration?")
 
   (defun validate-configuration-form (form tag directive-validator
                                             &key location invalid-form-reporter)
+    "Validate a configuration FORM"
     (unless (and (consp form) (eq (car form) tag))
       (setf *ignored-configuration-form* t)
       (report-invalid-form invalid-form-reporter :form form :location location)
@@ -5171,6 +6076,7 @@ it will filter them appropriately."
              (return (nreverse x))))
 
   (defun validate-configuration-file (file validator &key description)
+    "Validate a configuration file for conformance of its form with the validator function"
     (let ((forms (read-file-forms file)))
       (unless (length=n-p forms 1)
         (error (compatfmt "~@<One and only one form allowed for ~A. Got: ~3i~_~S~@:>~%")
@@ -5203,6 +6109,7 @@ values of TAG include :source-registry and :output-translations."
         :inherit-configuration)))
 
   (defun resolve-relative-location (x &key ensure-directory wilden)
+    "Given a designator X for an relative location, resolve it to a pathname"
     (ensure-pathname
      (etypecase x
        (pathname x)
@@ -5241,6 +6148,7 @@ directive.")
     "A specification as per RESOLVE-LOCATION of where the user keeps his FASL cache")
 
   (defun compute-user-cache ()
+    "Compute the location of the default user-cache for translate-output objects"
     (setf *user-cache*
           (flet ((try (x &rest sub) (and x `(,x ,@sub))))
             (or
@@ -5253,6 +6161,7 @@ directive.")
   (register-image-restore-hook 'compute-user-cache)
 
   (defun resolve-absolute-location (x &key ensure-directory wilden)
+    "Given a designator X for an absolute location, resolve it to a pathname"
     (ensure-pathname
      (etypecase x
        (pathname x)
@@ -5293,6 +6202,7 @@ directive.")
                                (:ensure-directory boolean)) t) resolve-location))
 
   (defun* (resolve-location) (x &key ensure-directory wilden directory)
+    "Resolve location designator X into a PATHNAME"
     ;; :directory backward compatibility, until 2014-01-16: accept directory as well as ensure-directory
     (loop* :with dirp = (or directory ensure-directory)
            :with (first . rest) = (if (atom x) (list x) x)
@@ -5310,6 +6220,7 @@ directive.")
            :finally (return path)))
 
   (defun location-designator-p (x)
+    "Is X a designator for a location?"
     (flet ((absolute-component-p (c)
              (typep c '(or string pathname
                         (member :root :home :here :user-cache))))
@@ -5321,26 +6232,25 @@ directive.")
           (and (consp x) (absolute-component-p (first x)) (every #'relative-component-p (rest x))))))
 
   (defun location-function-p (x)
+    "Is X the specification of a location function?"
     (and
      (length=n-p x 2)
-     (eq (car x) :function)
-     (or (symbolp (cadr x))
-         (and (consp (cadr x))
-              (eq (caadr x) 'lambda)
-              (length=n-p (cadadr x) 2)))))
+     (eq (car x) :function)))
 
   (defvar *clear-configuration-hook* '())
 
   (defun register-clear-configuration-hook (hook-function &optional call-now-p)
+    "Register a function to be called when clearing configuration"
     (register-hook-function '*clear-configuration-hook* hook-function call-now-p))
 
   (defun clear-configuration ()
+    "Call the functions in *CLEAR-CONFIGURATION-HOOK*"
     (call-functions *clear-configuration-hook*))
 
   (register-image-dump-hook 'clear-configuration)
 
-  ;; If a previous version of ASDF failed to read some configuration, try again.
   (defun upgrade-configuration ()
+    "If a previous version of ASDF failed to read some configuration, try again now."
     (when *ignored-configuration-form*
       (clear-configuration)
       (setf *ignored-configuration-form* nil))))
@@ -5388,17 +6298,19 @@ directive.")
   #+(or ecl mkcl)
   (defun compile-file-keeping-object (&rest args) (apply #'compile-file* args)))
 ;;;; ---------------------------------------------------------------------------
-;;;; Re-export all the functionality in asdf/driver
+;;;; Re-export all the functionality in UIOP
 
 (uiop/package:define-package :uiop/driver
   (:nicknames :uiop :asdf/driver :asdf-driver :asdf-utils)
   (:use :uiop/common-lisp :uiop/package :uiop/utility
-    :uiop/os :uiop/pathname :uiop/stream :uiop/filesystem :uiop/image
+   :uiop/os :uiop/pathname :uiop/stream :uiop/filesystem :uiop/image
    :uiop/run-program :uiop/lisp-build
    :uiop/configuration :uiop/backward-driver)
   (:reexport
-   ;; NB: excluding asdf/common-lisp
-   ;; which include all of CL with compatibility modifications on select platforms.
+   ;; NB: excluding uiop/common-lisp
+   ;; which include all of CL with compatibility modifications on select platforms,
+   ;; that could cause potential conflicts for packages that would :use (cl uiop)
+   ;; or :use (closer-common-lisp uiop), etc.
    :uiop/package :uiop/utility
    :uiop/os :uiop/pathname :uiop/stream :uiop/filesystem :uiop/image
    :uiop/run-program :uiop/lisp-build
@@ -5409,7 +6321,7 @@ directive.")
 
 (asdf/package:define-package :asdf/upgrade
   (:recycle :asdf/upgrade :asdf)
-  (:use :asdf/common-lisp :asdf/driver)
+  (:use :uiop/common-lisp :uiop)
   (:export
    #:asdf-version #:*previous-asdf-versions* #:*asdf-version*
    #:asdf-message #:*verbose-out*
@@ -5457,13 +6369,13 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
          ;; "3.4.5.67" would be a development version in the official upstream of 3.4.5.
          ;; "3.4.5.0.8" would be your eighth local modification of official release 3.4.5
          ;; "3.4.5.67.8" would be your eighth local modification of development version 3.4.5.67
-         (asdf-version "3.0.2")
+         (asdf-version "3.0.3")
          (existing-version (asdf-version)))
     (setf *asdf-version* asdf-version)
     (when (and existing-version (not (equal asdf-version existing-version)))
       (push existing-version *previous-asdf-versions*)
-      (when (or *load-verbose* *verbose-out*)
-        (format *trace-output*
+      (when (or *verbose-out* *load-verbose*)
+        (format (or *verbose-out* *trace-output*)
                 (compatfmt "~&~@<; ~@;Upgrading ASDF ~@[from version ~A ~]to version ~A~@:>~%")
                 existing-version asdf-version)))))
 
@@ -5483,7 +6395,7 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
              #:inherit-source-registry #:process-source-registry ;; source-registry
              #:process-source-registry-directive
              #:trivial-system-p ;; bundle
-             ;; NB: it's too late to do anything about asdf-driver functions!
+             ;; NB: it's too late to do anything about uiop functions!
              ))
          (uninterned-symbols
            '(#:*asdf-revision* #:around #:asdf-method-combination
@@ -5548,8 +6460,8 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
 ;;;; Components
 
 (asdf/package:define-package :asdf/component
-  (:recycle :asdf/component :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade)
+  (:recycle :asdf/component :asdf/defsystem :asdf/find-system :asdf)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade)
   (:export
    #:component #:component-find-path
    #:component-name #:component-pathname #:component-relative-pathname
@@ -5573,6 +6485,10 @@ You can compare this string with e.g.: (ASDF:VERSION-SATISFIES (ASDF:ASDF-VERSIO
    #:module-default-component-class
    #:module-components ;; backward-compatibility. DO NOT USE.
    #:sub-components
+
+   ;; conditions
+   #:system-definition-error ;; top level, moved here because this is the earliest place for it.
+   #:duplicate-names
 
    ;; Internals we'd like to share with the ASDF package, especially for upgrade purposes
    #:name #:version #:description #:long-description #:author #:maintainer #:licence
@@ -5607,7 +6523,24 @@ another pathname in a degenerate way."))
 
   ;; Backward compatible way of computing the FILE-TYPE of a component.
   ;; TODO: find users, have them stop using that, remove it for ASDF4.
-  (defgeneric (source-file-type) (component system)))
+  (defgeneric (source-file-type) (component system))
+
+  (define-condition system-definition-error (error) ()
+    ;; [this use of :report should be redundant, but unfortunately it's not.
+    ;; cmucl's lisp::output-instance prefers the kernel:slot-class-print-function
+    ;; over print-object; this is always conditions::%print-condition for
+    ;; condition objects, which in turn does inheritance of :report options at
+    ;; run-time.  fortunately, inheritance means we only need this kludge here in
+    ;; order to fix all conditions that build on it.  -- rgr, 28-Jul-02.]
+    #+cmu (:report print-object))
+
+  (define-condition duplicate-names (system-definition-error)
+    ((name :initarg :name :reader duplicate-names-name))
+    (:report (lambda (c s)
+               (format s (compatfmt "~@<Error while defining system: multiple components are given same name ~S~@:>")
+                       (duplicate-names-name c))))))
+
+
 
 (when-upgrading (:when (find-class 'component nil))
   (defmethod reinitialize-instance :after ((c component) &rest initargs &key)
@@ -5838,7 +6771,7 @@ another pathname in a degenerate way."))
 
 (asdf/package:define-package :asdf/system
   (:recycle :asdf :asdf/system)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade :asdf/component)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade :asdf/component)
   (:export
    #:system #:proto-system
    #:system-source-file #:system-source-directory #:system-relative-pathname
@@ -5948,9 +6881,9 @@ in which the system specification (.asd file) is located."
 ;;;; Stamp cache
 
 (asdf/package:define-package :asdf/cache
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade)
   (:export #:get-file-stamp #:compute-file-stamp #:register-file-stamp
-           #:consult-asdf-cache #:do-asdf-cache
+           #:consult-asdf-cache #:do-asdf-cache #:normalize-namestring
            #:call-with-asdf-cache #:with-asdf-cache #:*asdf-cache*))
 (in-package :asdf/cache)
 
@@ -5988,29 +6921,39 @@ in which the system specification (.asd file) is located."
   (defmacro with-asdf-cache ((&key override) &body body)
     `(call-with-asdf-cache #'(lambda () ,@body) :override ,override))
 
-  (defun compute-file-stamp (file)
-    (safe-file-write-date file))
+  (defun normalize-namestring (pathname)
+    (let ((resolved (resolve-symlinks*
+                     (ensure-absolute-pathname
+                      (physicalize-pathname pathname)
+                      'get-pathname-defaults))))
+      (with-pathname-defaults () (namestring resolved))))
 
-  (defun register-file-stamp (file &optional (stamp (compute-file-stamp file)))
-    (set-asdf-cache-entry `(get-file-stamp ,file) (list stamp)))
+  (defun compute-file-stamp (normalized-namestring)
+    (with-pathname-defaults ()
+      (safe-file-write-date normalized-namestring)))
+
+  (defun register-file-stamp (file &optional (stamp nil stampp))
+    (let* ((namestring (normalize-namestring file))
+           (stamp (if stampp stamp (compute-file-stamp namestring))))
+      (set-asdf-cache-entry `(get-file-stamp ,namestring) (list stamp))))
 
   (defun get-file-stamp (file)
-    (do-asdf-cache `(get-file-stamp ,file) (compute-file-stamp file))))
-
+    (let ((namestring (normalize-namestring file)))
+      (do-asdf-cache `(get-file-stamp ,namestring) (compute-file-stamp namestring)))))
 
 ;;;; -------------------------------------------------------------------------
 ;;;; Finding systems
 
 (asdf/package:define-package :asdf/find-system
   (:recycle :asdf/find-system :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/cache)
   (:export
    #:remove-entry-from-registry #:coerce-entry-to-directory
    #:coerce-name #:primary-system-name #:coerce-filename
    #:find-system #:locate-system #:load-asd #:with-system-definitions
    #:system-registered-p #:register-system #:registered-systems #:clear-system #:map-systems
-   #:system-definition-error #:missing-component #:missing-requires #:missing-parent
+   #:missing-component #:missing-requires #:missing-parent
    #:formatted-system-definition-error #:format-control #:format-arguments #:sysdef-error
    #:load-system-definition-error #:error-name #:error-pathname #:error-condition
    #:*system-definition-search-functions* #:search-for-system-definition
@@ -6025,15 +6968,6 @@ in which the system specification (.asd file) is located."
 
 (with-upgradability ()
   (declaim (ftype (function (&optional t) t) initialize-source-registry)) ; forward reference
-
-  (define-condition system-definition-error (error) ()
-    ;; [this use of :report should be redundant, but unfortunately it's not.
-    ;; cmucl's lisp::output-instance prefers the kernel:slot-class-print-function
-    ;; over print-object; this is always conditions::%print-condition for
-    ;; condition objects, which in turn does inheritance of :report options at
-    ;; run-time.  fortunately, inheritance means we only need this kludge here in
-    ;; order to fix all conditions that build on it.  -- rgr, 28-Jul-02.]
-    #+cmu (:report print-object))
 
   (define-condition missing-component (system-definition-error)
     ((requires :initform "(unnamed)" :reader missing-requires :initarg :requires)
@@ -6134,7 +7068,7 @@ called with an object of type asdf:system."
     (setf *system-definition-search-functions*
           (append
            ;; Remove known-incompatible sysdef functions from old versions of asdf.
-           (remove-if #'(lambda (x) (member x '(contrib-sysdef-search sysdef-find-asdf)))
+           (remove-if #'(lambda (x) (member x '(contrib-sysdef-search sysdef-find-asdf sysdef-preloaded-system-search)))
                       *system-definition-search-functions*)
            ;; Tuck our defaults at the end of the list if they were absent.
            ;; This is imperfect, in case they were removed on purpose,
@@ -6142,14 +7076,16 @@ called with an object of type asdf:system."
            ;; to upgrade asdf before he does such a thing rather than after.
            (remove-if #'(lambda (x) (member x *system-definition-search-functions*))
                       '(sysdef-central-registry-search
-                        sysdef-source-registry-search
-                        sysdef-preloaded-system-search)))))
+                        sysdef-source-registry-search)))))
   (cleanup-system-definition-search-functions)
 
   (defun search-for-system-definition (system)
-    (some (let ((name (coerce-name system))) #'(lambda (x) (funcall x name)))
-          (cons 'find-system-if-being-defined
-                *system-definition-search-functions*)))
+    (block ()
+      (let ((name (coerce-name system)))
+        (flet ((try (f) (if-let ((x (funcall f name))) (return x))))
+          (try 'find-system-if-being-defined)
+          (map () #'try *system-definition-search-functions*)
+          (try 'sysdef-preloaded-system-search)))))
 
   (defvar *central-registry* nil
     "A list of 'system directory designators' ASDF uses to find systems.
@@ -6177,7 +7113,7 @@ Going forward, we recommend new users should be using the source-registry.
                        :truename truename))
           (return file))
         #-(or clisp genera) ; clisp doesn't need it, plain genera doesn't have read-sequence(!)
-        (when (os-windows-p)
+        (when (and (os-windows-p) (physical-pathname-p defaults))
           (let ((shortcut
                   (make-pathname
                    :defaults defaults :case :local
@@ -6252,7 +7188,9 @@ Going forward, we recommend new users should be using the source-registry.
     (setf (gethash (coerce-name system-name) *preloaded-systems*) keys))
 
   (register-preloaded-system "asdf" :version *asdf-version*)
+  (register-preloaded-system "uiop" :version *asdf-version*)
   (register-preloaded-system "asdf-driver" :version *asdf-version*)
+  (register-preloaded-system "asdf-defsystem" :version *asdf-version*)
 
   (defmethod find-system ((name null) &optional (error-p t))
     (declare (ignorable name))
@@ -6267,7 +7205,8 @@ Going forward, we recommend new users should be using the source-registry.
 
   (defun find-system-if-being-defined (name)
     (when *systems-being-defined*
-      (gethash (coerce-name name) *systems-being-defined*)))
+      ;; notable side effect: mark the system as being defined, to avoid infinite loops
+      (ensure-gethash (coerce-name name) *systems-being-defined* nil)))
 
   (defun call-with-system-definitions (thunk)
     (if *systems-being-defined*
@@ -6298,7 +7237,7 @@ Going forward, we recommend new users should be using the source-registry.
               (*print-readably* nil)
               (*default-pathname-defaults*
                 ;; resolve logical-pathnames so they won't wreak havoc in parsing namestrings.
-                (pathname-directory-pathname (translate-logical-pathname pathname))))
+                (pathname-directory-pathname (physicalize-pathname pathname))))
           (handler-bind
               ((error #'(lambda (condition)
                           (error 'load-system-definition-error
@@ -6319,13 +7258,13 @@ Going forward, we recommend new users should be using the source-registry.
                              (read-file-form version-pathname)))
                (old-version (asdf-version)))
           (or (version<= old-version version)
-              (let ((old-pathname
-                      (if-let (pair (system-registered-p "asdf"))
-                        (system-source-file (cdr pair))))
-                    (key (list pathname old-version)))
-                (unless (gethash key *old-asdf-systems*)
-                  (setf (gethash key *old-asdf-systems*) t)
-                  (warn "~@<~
+              (ensure-gethash
+               (list pathname old-version) *old-asdf-systems*
+                 #'(lambda ()
+                     (let ((old-pathname
+                             (if-let (pair (system-registered-p "asdf"))
+                               (system-source-file (cdr pair)))))
+                       (warn "~@<~
         You are using ASDF version ~A ~:[(probably from (require \"asdf\") ~
         or loaded by quicklisp)~;from ~:*~S~] and have an older version of ASDF ~
         ~:[(and older than 2.27 at that)~;~:*~A~] registered at ~S. ~
@@ -6347,7 +7286,8 @@ Going forward, we recommend new users should be using the source-registry.
         then you might indeed want to either install and register a more recent version, ~
         or use :ignore-inherited-configuration to avoid registering the old one. ~
         Please consult ASDF documentation and/or experts.~@:>~%"
-                    old-version old-pathname version pathname)))))))
+                             old-version old-pathname version pathname)
+                       t)))))))
 
   (defun locate-system (name)
     "Given a system NAME designator, try to locate where to load the system from.
@@ -6384,6 +7324,10 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 
   (defmethod find-system ((name string) &optional (error-p t))
     (with-system-definitions ()
+      (let ((primary-name (primary-system-name name)))
+        (unless (or (equal name primary-name)
+                    (nth-value 1 (gethash primary-name *systems-being-defined*)))
+          (find-system primary-name nil)))
       (loop
         (restart-case
             (multiple-value-bind (foundp found-system pathname previous previous-time)
@@ -6402,8 +7346,8 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
                                             (or (pathname-equal pathname previous-pathname)
                                                 (and pathname previous-pathname
                                                      (pathname-equal
-                                                      (translate-logical-pathname pathname)
-                                                      (translate-logical-pathname previous-pathname))))
+                                                      (physicalize-pathname pathname)
+                                                      (physicalize-pathname previous-pathname))))
                                             (stamp<= stamp previous-time))))))
                   ;; only load when it's a pathname that is different or has newer content, and not an old asdf
                   (load-asd pathname :name name)))
@@ -6426,7 +7370,7 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 
 (asdf/package:define-package :asdf/find-component
   (:recycle :asdf/find-component :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/find-system)
   (:export
    #:find-component
@@ -6556,7 +7500,7 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 
 (asdf/package:define-package :asdf/operation
   (:recycle :asdf/operation :asdf/action :asdf) ;; asdf/action for FEATURE pre 2.31.5.
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade)
   (:export
    #:operation
    #:operation-original-initargs #:original-initargs ;; backward-compatibility only. DO NOT USE.
@@ -6591,11 +7535,8 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 (with-upgradability ()
   (defparameter *operations* (make-hash-table :test 'equal))
   (defun make-operation (operation-class &rest initargs)
-    (let ((key (cons operation-class initargs)))
-      (multiple-value-bind (operation foundp) (gethash key *operations*)
-        (if foundp operation
-            (setf (gethash key *operations*)
-                  (apply 'make-instance operation-class initargs))))))
+    (ensure-gethash (cons operation-class initargs) *operations*
+                    (list* 'make-instance operation-class initargs)))
 
   (defgeneric find-operation (context spec)
     (:documentation "Find an operation by resolving the SPEC in the CONTEXT"))
@@ -6620,7 +7561,7 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
 (asdf/package:define-package :asdf/action
   (:nicknames :asdf-action)
   (:recycle :asdf/action :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system #:asdf/cache :asdf/find-system :asdf/find-component :asdf/operation)
   (:export
    #:action #:define-convenience-action-methods
@@ -6937,8 +7878,8 @@ in some previous image, or T if it needs to be done.")
 (asdf/package:define-package :asdf/lisp-action
   (:recycle :asdf/lisp-action :asdf)
   (:intern #:proclamations #:flags)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
-   :asdf/cache :asdf/component :asdf/system :asdf/find-component :asdf/find-system
+  (:use :uiop/common-lisp :uiop :asdf/upgrade :asdf/cache
+   :asdf/component :asdf/system :asdf/find-component :asdf/find-system
    :asdf/operation :asdf/action)
   (:export
    #:try-recompiling
@@ -7187,7 +8128,7 @@ in some previous image, or T if it needs to be done.")
 
 (asdf/package:define-package :asdf/plan
   (:recycle :asdf/plan :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/operation :asdf/system
    :asdf/cache :asdf/find-system :asdf/find-component
    :asdf/operation :asdf/action :asdf/lisp-action)
@@ -7635,14 +8576,15 @@ the action of OPERATION on COMPONENT in the PLAN"))
 
 (asdf/package:define-package :asdf/operate
   (:recycle :asdf/operate :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/operation :asdf/action
    :asdf/find-system :asdf/find-component :asdf/lisp-action :asdf/plan)
   (:export
    #:operate #:oos
    #:*systems-being-operated*
    #:build-system
-   #:load-system #:load-systems #:compile-system #:test-system #:require-system
+   #:load-system #:load-systems #:load-systems*
+   #:compile-system #:test-system #:require-system
    #:*load-system-operation* #:module-provide-asdf
    #:component-loaded-p #:already-loaded-systems))
 (in-package :asdf/operate)
@@ -7752,9 +8694,13 @@ for how to load or compile stuff")
     (apply 'operate *load-system-operation* system keys)
     t)
 
+  (defun load-systems* (systems &rest keys)
+    "Loading multiple systems at once."
+    (dolist (s systems) (apply 'load-system s keys)))
+
   (defun load-systems (&rest systems)
     "Loading multiple systems at once."
-    (map () 'load-system systems))
+    (load-systems* systems))
 
   (defun compile-system (system &rest args &key force force-not verbose version &allow-other-keys)
     "Shorthand for `(asdf:operate 'asdf:compile-op system)`. See OPERATE for details."
@@ -7848,7 +8794,7 @@ for how to load or compile stuff")
 
 (asdf/package:define-package :asdf/backward-internals
   (:recycle :asdf/backward-internals :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/system :asdf/component :asdf/operation
    :asdf/find-system :asdf/action :asdf/lisp-action)
   (:export ;; for internal use
@@ -7938,7 +8884,7 @@ for how to load or compile stuff")
 
 (asdf/package:define-package :asdf/defsystem
   (:recycle :asdf/defsystem :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/cache
    :asdf/find-system :asdf/find-component :asdf/lisp-action :asdf/operate
    :asdf/backward-internals)
@@ -7946,7 +8892,7 @@ for how to load or compile stuff")
    #:defsystem #:register-system-definition
    #:class-for-type #:*default-component-class*
    #:determine-system-directory #:parse-component-form
-   #:duplicate-names #:non-toplevel-system #:non-system-system
+   #:non-toplevel-system #:non-system-system
    #:sysdef-error-component #:check-component-input))
 (in-package :asdf/defsystem)
 
@@ -8001,12 +8947,6 @@ for how to load or compile stuff")
 
 ;;; Check inputs
 (with-upgradability ()
-  (define-condition duplicate-names (system-definition-error)
-    ((name :initarg :name :reader duplicate-names-name))
-    (:report (lambda (c s)
-               (format s (compatfmt "~@<Error while defining system: multiple components are given same name ~S~@:>")
-                       (duplicate-names-name c)))))
-
   (define-condition non-system-system (system-definition-error)
     ((name :initarg :name :reader non-system-system-name)
      (class-name :initarg :class-name :reader non-system-system-class-name))
@@ -8055,10 +8995,12 @@ for how to load or compile stuff")
                     (case (first form)
                       ((:read-file-form)
                        (destructuring-bind (subpath &key (at 0)) (rest form)
-                         (safe-read-file-form (subpathname pathname subpath) :at at :package :asdf-user)))
+                         (safe-read-file-form (subpathname pathname subpath)
+                                              :at at :package :asdf-user)))
                       ((:read-file-line)
                        (destructuring-bind (subpath &key (at 0)) (rest form)
-                         (read-file-lines (subpathname pathname subpath) :at at)))
+                         (safe-read-file-line (subpathname pathname subpath)
+                                              :at at)))
                       (otherwise
                        (invalid))))
                    (t
@@ -8161,7 +9103,7 @@ for how to load or compile stuff")
              (defsystem-dependencies (loop :for spec :in defsystem-depends-on :collect
                                            (resolve-dependency-spec nil spec))))
         (setf (gethash name *systems-being-defined*) system)
-        (apply 'load-systems defsystem-dependencies)
+        (load-systems* defsystem-dependencies)
         ;; We change-class AFTER we loaded the defsystem-depends-on
         ;; since the class might be defined as part of those.
         (let ((class (class-for-type nil class)))
@@ -8182,7 +9124,7 @@ for how to load or compile stuff")
 
 (asdf/package:define-package :asdf/bundle
   (:recycle :asdf/bundle :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/system :asdf/find-system :asdf/find-component :asdf/operation
    :asdf/action :asdf/lisp-action :asdf/plan :asdf/operate)
   (:export
@@ -8284,7 +9226,7 @@ for how to load or compile stuff")
       ((member :binary :dll :lib :shared-library :static-library :program :object :program)
        (compile-file-type :type bundle-type))
       ((eql :binary) "image")
-      ((eql :dll) (cond ((os-unix-p) "so") ((os-windows-p) "dll")))
+      ((eql :dll) (cond ((os-macosx-p) "dylib") ((os-unix-p) "so") ((os-windows-p) "dll")))
       ((member :lib :static-library) (cond ((os-unix-p) "a") ((os-windows-p) "lib")))
       ((eql :program) (cond ((os-unix-p) nil) ((os-windows-p) "exe")))))
 
@@ -8674,7 +9616,7 @@ for how to load or compile stuff")
 
 (asdf/package:define-package :asdf/concatenate-source
   (:recycle :asdf/concatenate-source :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/component :asdf/operation
    :asdf/system :asdf/find-system :asdf/defsystem
    :asdf/action :asdf/lisp-action :asdf/bundle)
@@ -8728,15 +9670,18 @@ for how to load or compile stuff")
           (when (typep c 'cl-source-file)
             (let ((e (component-encoding c)))
               (unless (equal e encoding)
-                (pushnew e other-encodings :test 'equal)))
-            (let ((a (around-compile-hook c)))
-              (unless (equal a around-compile)
-                (pushnew a other-around-compile :test 'equal)))
+                (let ((a (assoc e other-encodings)))
+                  (if a (push (component-find-path c) (cdr a))
+                      (push (list a (component-find-path c)) other-encodings)))))
+            (unless (equal around-compile (around-compile-hook c))
+              (push (component-find-path c) other-around-compile))
             (input-files (make-operation 'compile-op) c)) :into inputs
           :finally
              (when other-encodings
-               (warn "~S uses encoding ~A but has sources that use these encodings: ~A"
-                     operation encoding other-encodings))
+               (warn "~S uses encoding ~A but has sources that use these encodings:~{ ~A~}"
+                     operation encoding
+                     (mapcar #'(lambda (x) (cons (car x) (list (reverse (cdr x)))))
+                             other-encodings)))
              (when other-around-compile
                (warn "~S uses around-compile hook ~A but has sources that use these hooks: ~A"
                      operation around-compile other-around-compile))
@@ -8760,7 +9705,7 @@ for how to load or compile stuff")
 
 (asdf/package:define-package :asdf/output-translations
   (:recycle :asdf/output-translations :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade)
   (:export
    #:*output-translations* #:*output-translations-parameter*
    #:invalid-output-translation
@@ -8954,10 +9899,7 @@ and the order is by decreasing length of namestring of the source pathname.")
                   (cond
                     ((location-function-p dst)
                      (funcall collect
-                              (list trusrc
-                                    (if (symbolp (second dst))
-                                        (fdefinition (second dst))
-                                        (eval (second dst))))))
+                              (list trusrc (ensure-function (second dst)))))
                     ((eq dst t)
                      (funcall collect (list trusrc t)))
                     (t
@@ -9042,7 +9984,7 @@ effectively disabling the output translation facility."
               :return (translate-pathname* p absolute-source destination root source)
               :finally (return p)))))
 
-  ;; Hook into asdf/driver's output-translation mechanism
+  ;; Hook into uiop's output-translation mechanism
   #-cormanlisp
   (setf *output-translation-function* 'apply-output-translations)
 
@@ -9220,15 +10162,13 @@ Deprecated function, for backward-compatibility only.
 Please use UIOP:RUN-PROGRAM instead."
     (let ((command (apply 'format nil control-string args)))
       (asdf-message "; $ ~A~%" command)
-      (handler-case
-          (progn
-            (run-program command :force-shell t :ignore-error-status nil :output *verbose-out*)
-            0)
-        (subprocess-error (c)
-          (let ((code (subprocess-error-code c)))
-            (typecase code
-              (integer code)
-              (t 255))))))))
+      (let ((exit-code
+              (ignore-errors
+               (nth-value 2 (run-program command :force-shell t :ignore-error-status t
+                                                 :output *verbose-out*)))))
+        (typecase exit-code
+          ((integer 0 255) exit-code)
+          (t 255))))))
 
 (with-upgradability ()
   (defvar *asdf-verbose* nil)) ;; backward-compatibility with ASDF2 only. Unused.
@@ -9254,7 +10194,7 @@ Please use UIOP:RUN-PROGRAM instead."
 
 (asdf/package:define-package :asdf/source-registry
   (:recycle :asdf/source-registry :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade :asdf/find-system)
+  (:use :uiop/common-lisp :uiop :asdf/upgrade :asdf/find-system)
   (:export
    #:*source-registry-parameter* #:*default-source-registries*
    #:invalid-source-registry
@@ -9575,7 +10515,7 @@ system names to pathnames of .asd files")
    #:split #:make-collector
    #:loaded-systems ; makes for annoying SLIME completion
    #:output-files-for-system-and-operation) ; obsolete ASDF-BINARY-LOCATION function
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade :asdf/cache
+  (:use :uiop/common-lisp :uiop :asdf/upgrade :asdf/cache
    :asdf/component :asdf/system :asdf/find-system :asdf/find-component
    :asdf/operation :asdf/action :asdf/lisp-action
    :asdf/output-translations :asdf/source-registry
@@ -9587,7 +10527,7 @@ system names to pathnames of .asd files")
    #:oos #:operate #:make-plan #:perform-plan #:sequential-plan
    #:system-definition-pathname #:with-system-definitions
    #:search-for-system-definition #:find-component #:component-find-path
-   #:compile-system #:load-system #:load-systems
+   #:compile-system #:load-system #:load-systems #:load-systems*
    #:require-system #:test-system #:clear-system
    #:operation #:make-operation #:find-operation
    #:upward-operation #:downward-operation #:sideway-operation #:selfward-operation
@@ -9737,7 +10677,7 @@ system names to pathnames of .asd files")
 
 (asdf/package:define-package :asdf/footer
   (:recycle :asdf/footer :asdf)
-  (:use :asdf/common-lisp :asdf/driver :asdf/upgrade
+  (:use :uiop/common-lisp :uiop :asdf/upgrade
    :asdf/find-system :asdf/find-component :asdf/operation :asdf/action :asdf/lisp-action
    :asdf/operate :asdf/bundle :asdf/concatenate-source
    :asdf/output-translations :asdf/source-registry
