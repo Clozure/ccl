@@ -15,13 +15,16 @@
 
 SVN_REVISION := "$(shell svnversion || echo unknown)"
 
+# default float-abi to whatever the toolchain defaults to.
+# allow float-abi.mk to override
+FLOAT_ABI_OPTION =
 VPATH = ../
 RM = /bin/rm
 # Versions of GNU as >= 2.9.1 all seem to work
 # AS = gas-2.9.1
 AS = as
 M4 = m4
-ASFLAGS = -mfpu=vfp -march=armv6 -mfloat-abi=$(FLOAT_ABI)
+ASFLAGS = -mfpu=vfp -march=armv6 $(FLOAT_ABI_OPTION)
 M4FLAGS = -DLINUX -DARM
 CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DSVN_REVISION=$(SVN_REVISION)
 CDEBUG = -g
@@ -52,7 +55,7 @@ A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -march=armv6 -mfloat-abi=$(FLOAT_ABI) $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -march=armv6 $(FLOAT_ABI_OPTION) $(WFORMAT)  -o $@
 
 SPOBJ = pad.o  arm-spentry.o
 ASMOBJ = arm-asmutils.o imports.o
@@ -86,7 +89,7 @@ OSLIBS = -ldl -lm -lpthread -lrt
 
 
 ../../armcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -mfloat-abi=$(FLOAT_ABI) -o $@ -T ./armlinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) $(FLOAT_ABI_OPTION) -o $@ -T ./armlinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
