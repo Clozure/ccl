@@ -625,7 +625,7 @@
   (:export ;; Symbols defined in hemlock for use in the IDE
    #:with-display-context
    #:update-current-package
-   #:paren-matching-bounds
+   #:compute-paren-highlighting
    #:compute-syntax-coloring
    #:selection-for-click
    #:move-point-for-click

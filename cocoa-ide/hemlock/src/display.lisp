@@ -20,9 +20,11 @@
 			     (:system-symbol (0 .5 0 1))
 			     (:definition  (1 0 1 1))
 			     (:keyword :purple)
-                             (:unmatched-paren :red)))
+			     (:unmatched-paren :red)
+			     (:matched-paren (:background (0.3 0.875 0.8125 1)))))
+
 ;; Cache for actual color objects.
-(ccl::defloadvar *lisp-code-colors-cache* nil)
+(ccl:defloadvar *lisp-code-colors-cache* nil)
 
 ;; (cached-lisp-code-colors)
 (defun cached-lisp-code-colors ()
@@ -40,30 +42,34 @@
                      always (and (eq (car cell) (car user-cell)) (eq spec (get-spec user-cell)))))
         (setq specs (mapcar #'get-spec user-alist))
         (setq alist (mapcar #'(lambda (user-cell spec)
-                                (cons (car user-cell) (hemlock-ext:lookup-color spec)))
+                                (cons (car user-cell)
+                                      (if (and (consp spec) (keywordp (car spec)) (null (cddr spec)))
+                                        (cons (car spec) (hemlock-ext:lookup-color (cadr spec)))
+                                        (cons :foreground (hemlock-ext:lookup-color spec)))))
                             user-alist specs))
         (setq *lisp-code-colors-cache* (cons specs alist)))
       alist)))
 
-;; Hemlock style would be more to pass in two marks that get moved to the bounds, leave the absolute position
-;; stuff to caller.  We could keep two marks for this purpose in the view, so don't have to cons them each time.
-(defun hemlock:paren-matching-bounds ()
-  "Compute the positions of the two characters to be shown as matching parens"
-  (let ((point (current-point)))
-    (cond ((eql (next-character point) #\()
-           (pre-command-parse-check point)
-           (when (valid-spot point t)
-             (with-mark ((temp point))
-               (when (list-offset temp 1)
-                 (values (mark-absolute-position point)
-                         (1- (mark-absolute-position temp)))))))
-          ((eql (previous-character point) #\))
-           (pre-command-parse-check point)
-           (when (valid-spot point nil)
+(defun hemlock:compute-paren-highlighting ()
+  "Compute the positions of the characters to be shown as matching parens"
+  (let* ((point (current-point))
+         (color-alist (cached-lisp-code-colors))
+	 (color (cdr (assq :matched-paren color-alist))))
+    (when color
+      (cond ((test-char (next-character point) :lisp-syntax :open-paren)
+             (pre-command-parse-check point)
+             (when (valid-spot point t)
+               (with-mark ((temp point))
+		 (when (list-offset temp 1)
+		   (list (cons (mark-absolute-position point) color)
+			 (cons (1- (mark-absolute-position temp)) color))))))
+            ((test-char (previous-character point) :lisp-syntax :close-paren)
+             (pre-command-parse-check point)
+             (when (valid-spot point nil)
              (with-mark ((temp point))
                (when (list-offset temp -1)
-                 (values (mark-absolute-position temp)
-                         (1- (mark-absolute-position point))))))))))
+		 (list (cons (mark-absolute-position temp) color)
+		       (cons (1- (mark-absolute-position point)) color))))))))))
 
 
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.

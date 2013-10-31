@@ -910,11 +910,9 @@
 
 ;;; An abstract superclass of the main and echo-area text views.
 (defclass hemlock-textstorage-text-view (ns::ns-text-view)
-    ((paren-highlight-left-pos :foreign-type #>NSUInteger :accessor text-view-paren-highlight-left-pos)
-     (paren-highlight-right-pos :foreign-type #>NSUInteger :accessor text-view-paren-highlight-right-pos)
-     (paren-highlight-color-attribute :foreign-type :id :accessor text-view-paren-highlight-color)
-     (paren-highlight-enabled :foreign-type #>BOOL :accessor text-view-paren-highlight-enabled)
+    ((paren-highlight-enabled :foreign-type #>BOOL :accessor text-view-paren-highlight-enabled)
      (peer :foreign-type :id)
+     (paren-highlighting :initform nil :accessor text-view-paren-highlighting)
      (hemlock-view :initform nil)
      (selection-info :initform nil :accessor view-selection-info))
   (:metaclass ns:+ns-object))
@@ -1133,44 +1131,32 @@
     #-cocotron
     (#/setBackgroundLayoutEnabled: layout nil)))
 
-(defloadvar *paren-highlight-background-color* ())
-
-(defun paren-highlight-background-color ()
-  (or *paren-highlight-background-color*
-      (setq *paren-highlight-background-color*
-            (#/retain (#/colorWithCalibratedRed:green:blue:alpha:
-                       ns:ns-color
-                       .3
-                       .875
-                       .8125
-                       1.0)))))
-                                                        
+(defun ns-attribute (attribute)
+  (ecase attribute
+    (:foreground #&NSForegroundColorAttributeName)
+    (:background #&NSBackgroundColorAttributeName)))
 
 (defmethod remove-paren-highlight ((self hemlock-textstorage-text-view))
-  #-cocotron
-  (let* ((left (text-view-paren-highlight-left-pos self))
-         (right (text-view-paren-highlight-right-pos self)))
-    (ns:with-ns-range (char-range left 1)
-      (let* ((layout (#/layoutManager self)))
-        (#/removeTemporaryAttribute:forCharacterRange: layout
-                                                       #&NSBackgroundColorAttributeName
-                                                       char-range)
-        (setf (pref char-range #>NSRange.location) right)
-        (#/removeTemporaryAttribute:forCharacterRange: layout
-                                                       #&NSBackgroundColorAttributeName
-                                                       char-range))))
-  ;;; This assumes that NSBackgroundColorAttributeName can only be 
-  ;;; present id it's (possibly stale) paren highlighting info.
-  ;;; We can't be sure of the locations (because of insertions/deletions),
-  ;;; so remove the attribute from the entire textstorage.
-  #+cocotron
-  (let* ((textstorage (#/textStorage self))
-         (len (#/length textstorage)))
-    (#/beginEditing textstorage)
-    (ns:with-ns-range (char-range 0 len)
-      (#/removeAttribute:range: textstorage #&NSBackgroundColorAttributeName
-                                char-range))
-    (#/endEditing textstorage)))
+  (ns:with-ns-range (range)
+    #-cocotron
+    (let* ((layout (#/layoutManager self)))
+      (setf (ns:ns-range-length range) 1)
+      (loop
+        for (pos attrib . nil) in (text-view-paren-highlighting self)
+        do (setf (ns:ns-range-location range) pos)
+        do  (#/removeTemporaryAttribute:forCharacterRange: layout (ns-attribute attrib) range)))
+    ;;; This assumes that NSBackgroundColorAttributeName can only be 
+    ;;; present if it's (possibly stale) paren highlighting info.
+    ;;; We can't be sure of the locations (because of insertions/deletions),
+    ;;; so remove the attribute from the entire textstorage.
+    #+cocotron
+    (let* ((textstorage (#/textStorage self))
+           (len (#/length textstorage)))
+      (#/beginEditing textstorage)
+      (setf (ns:ns-range-location range) 0)
+      (setf (ns:ns-range-length range) len)
+      (#/removeAttribute:range: textstorage #&NSBackgroundColorAttributeName range)
+      (#/endEditing textstorage))))
 
 (defmethod disable-paren-highlight ((self hemlock-textstorage-text-view))
   (when (eql (text-view-paren-highlight-enabled self) #$YES)
@@ -1200,7 +1186,6 @@
              ((string-equal name "yellow") (#/yellowColor ns:ns-color))
              (t (error "I don't know color ~s" name)))))))
 
-
 (defmethod compute-temporary-attributes ((self hemlock-textstorage-text-view))
   #-cocotron
   (let* ((container (#/textContainer self))
@@ -1215,43 +1200,39 @@
          (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
                       layout glyph-range +null-ptr+))
          (start (ns:ns-range-location char-range))
-         (length (ns:ns-range-length char-range)))
-    (when (> length 0)
-      ;; Remove all temporary attributes from the character range
-      (#/removeTemporaryAttribute:forCharacterRange:
-       layout #&NSForegroundColorAttributeName char-range)
-      (#/removeTemporaryAttribute:forCharacterRange:
-       layout #&NSBackgroundColorAttributeName char-range)
-      (hemlock:with-display-context (hemlock-view self)
-        (ns:with-ns-range (range)
+         (length (ns:ns-range-length char-range))
+         (end (+ start length)))
+    (hemlock:with-display-context (hemlock-view self)
+      (ns:with-ns-range (range)
+        (when (> length 0)
+          ;; Remove all temporary attributes from the character range
+          (#/removeTemporaryAttribute:forCharacterRange: layout #&NSForegroundColorAttributeName char-range)
+          (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)
           (loop
-            for (start len . color) in (hemlock:compute-syntax-coloring start length)
+            for (start len attrib . color) in (hemlock:compute-syntax-coloring start length)
             when color
             do (progn
                  (setf (ns:ns-range-location range) start
                        (ns:ns-range-length range) len)
-                 (#/addTemporaryAttribute:value:forCharacterRange:
-                  layout #&NSForegroundColorAttributeName color range)))))))
+		 (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range))))
+        (when (eql #$YES (text-view-paren-highlight-enabled self))
+          (setf (ns:ns-range-length range) 1)
+          (loop
+             for (pos attrib . color) in (text-view-paren-highlighting self)
+             do (when (and (<= start pos) (< pos end))
+                  (setf (ns:ns-range-location range) pos)
+		  (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range)))))))
+  #+cocotron
   (when (eql #$YES (text-view-paren-highlight-enabled self))
-    (let* ((background #&NSBackgroundColorAttributeName)
-           (paren-highlight-left (text-view-paren-highlight-left-pos self))
-           (paren-highlight-right (text-view-paren-highlight-right-pos self))
-           (paren-highlight-color (text-view-paren-highlight-color self))
-           (attrs (#/dictionaryWithObject:forKey: ns:ns-dictionary
-                                                  paren-highlight-color
-                                                  background)))
-      (ns:with-ns-range (left-range paren-highlight-left 1)
-        (ns:with-ns-range (right-range paren-highlight-right 1)
-          #-cocotron
-          (let ((layout (#/layoutManager (#/textContainer self))))
-            (#/addTemporaryAttributes:forCharacterRange: layout attrs left-range)
-            (#/addTemporaryAttributes:forCharacterRange: layout attrs right-range))
-          #+cocotron
-          (let ((ts (#/textStorage self)))
-            (#/beginEditing ts)
-            (#/addAttributes:range: ts attrs left-range)
-            (#/addAttributes:range: ts attrs right-range)
-            (#/endEditing ts)))))))
+    (let* ((ts (#/textStorage self)))
+      (ns:with-ns-range (range)
+        (#/beginEditing ts)
+        (setf (ns:ns-range-length range) 1)
+        (loop
+          for (pos attrib . color) in (text-view-paren-highlighting self)
+          do (setf (ns:ns-range-location range) pos)
+          do (#/addAttribute:value:range: ts (ns-attribute attrib) color range))
+        (#/endEditing ts)))))
 
 (defmethod update-paren-highlight ((self hemlock-textstorage-text-view))
   (disable-paren-highlight self)
@@ -1261,11 +1242,8 @@
       (hemlock:with-display-context view
         #+debug (#_NSLog #@"Syntax check for paren-highlighting")
         (update-buffer-package (hi::buffer-document buffer))
-        (multiple-value-bind (left right) (hemlock:paren-matching-bounds)
-          (when (and left right)
-            (setf (text-view-paren-highlight-left-pos self) left
-                  (text-view-paren-highlight-right-pos self) right
-                  (text-view-paren-highlight-enabled self) #$YES))))
+        (setf (text-view-paren-highlighting self) (hemlock:compute-paren-highlighting))
+        (setf (text-view-paren-highlight-enabled self) #$YES))
       (compute-temporary-attributes self))))
 
 
@@ -1910,7 +1888,6 @@
                                                        :with-frame tv-frame
                                                        :text-container container))))
                 (init-selection-info-for-textview tv (hemlock-buffer textstorage))
-                (setf (text-view-paren-highlight-color tv) (paren-highlight-background-color))
                 (#/setDelegate: layout tv)
                 (#/setMinSize: tv (ns:make-ns-size 0 (ns:ns-size-height contentsize)))
                 (#/setMaxSize: tv (ns:make-ns-size large-number-for-text large-number-for-text))
