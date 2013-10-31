@@ -235,12 +235,12 @@
     (when d-p
       (setf (iss-direction iss) direction))
     (setf *global-search-pattern*
-          (setf (iss-pattern iss) (new-search-pattern (if (value string-search-ignore-case)
-                                                        :string-insensitive
-                                                        :string-sensitive)
-                                                      (iss-direction iss)
-                                                      thisstring
-                                                      (iss-pattern iss))))))
+          (setf (iss-local-pattern iss) (new-search-pattern (if (value string-search-ignore-case)
+                                                              :string-insensitive
+                                                              :string-sensitive)
+                                                            (iss-direction iss)
+                                                            thisstring
+                                                            (iss-pattern iss))))))
 
 ;; Do a search for the current pattern starting at START going to
 ;; end/beginning as per ISS-DIRECTION.  Sets ISS-FAILURE depending on
