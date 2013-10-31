@@ -62,7 +62,7 @@
 
 (defstruct (isearch-state (:conc-name "ISS-"))
   direction
-  pattern
+  local-pattern
   failure
   wrapped-p
   history
@@ -71,17 +71,11 @@
 (defvar *global-search-pattern* nil "Used when *isearch-is-global*") ; can't use *last-search-pattern* because that's
 ; used elsewhere
 
-(defvar original-iss-pattern-definition #'iss-pattern)
-
-(defun local-iss-pattern (state)
-  (funcall original-iss-pattern-definition state))
-
-(declaim (notinline iss-pattern))
 (defun iss-pattern (state)
   (if *isearch-is-global*
     (or *global-search-pattern*
-        (local-iss-pattern state))
-    (local-iss-pattern state)))
+        (iss-local-pattern state))
+    (iss-local-pattern state)))
 
 (defun iss-string (state)
   (ignore-errors ; because iss-pattern might be nil
