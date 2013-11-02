@@ -455,7 +455,7 @@ _spentry(conslist)
 1:
 	__(vpop1(arg_y))
 	__(Cons(arg_z,arg_y,arg_z))
-	__(subs nargs,nargs,#fixnum_one)
+	__(subs nargs,nargs,#1)
 2:
 	__(bne 1b)
 	__(ret)
@@ -469,7 +469,7 @@ _spentry(conslist_star)
 1:
 	__(vpop1(arg_y))
 	__(Cons(arg_z,arg_y,arg_z))
-	__(subs nargs,nargs,fixnum_one)
+	__(subs nargs,nargs,#1)
 2:
 	__(bne 1b)
 	__(ret)
@@ -577,11 +577,11 @@ _spentry(makes128)
 
 /* funcall nfn, returning multiple values if it does.  */
 _spentry(mvpass)
-        __(cmp nargs,#node_size*nargregs)
+        __(cmp nargs,#nargregs)
+        __(mov imm1,vsp)        
 	__(sub imm0,vsp,#node_size*nargregs)
-	__(add imm2,imm1,gpr64(nargs))
-        __(csel imm1,imm0,imm1,gt)
-        __(csel nargs,imm2,nargs,gt)
+	__(add imm2,imm1,narg),lsl #node_shift)
+        __(csel imm1,imm0,imm2,gt)
 	__(build_lisp_frame(imm1))
 	__(adr lr,C(ret1valn))
 	__(funcall_nfn())
@@ -607,8 +607,10 @@ local_label(return_values):
 	__(cmp imm0,lr)
 	__(beq 3f)
 	__(cmp nargs,#1)
-	__(add imm0,nargs,vsp)
-	__(ldrge arg_z,[imm0,#-node_size])
+	__(add imm0,vsp,nargs,lsl #node_shift)
+        __(blo 0f)
+	__(ldr arg_z,[imm0,#-node_size])
+0:      
 	__(mov vsp,temp0)
 	__(ret)
 
@@ -616,12 +618,12 @@ local_label(return_values):
 /* Return multiple values to real caller.  */
 3:
 	__(ldr lr,[sp,#lisp_frame.savelr])
-	__(add imm1,nargs,vsp)
+	__(add imm1,vsp,nargs,lsl #node_shift)
 	__(ldr imm0,[sp,#lisp_frame.savevsp])
 	__(cmp imm1,imm0) /* a fairly common case  */
 	__(discard_lisp_frame())
 	__(b.eq 9f) /* already in the right place  */
-	__(cmp nargs,#fixnum_one) /* sadly, a very common case  */
+	__(cmp nargs,#1) /* sadly, a very common case  */
 	__(bne 4f)
 	__(ldr arg_z,[vsp,#0])
 	__(mov vsp,imm0)
@@ -629,10 +631,10 @@ local_label(return_values):
 	__(ret)
 4:
 	__(blt 6f)
-	__(mov temp1,#fixnum_one)
+	__(mov temp1,#1)
 5:
 	__(cmp temp1,nargs)
-	__(add temp1,temp1,#fixnum_one)
+	__(add temp1,temp1,#1)
 	__(ldr arg_z,[imm1,#-node_size]!)
 	__(push1(arg_z,imm0))
 	__(bne 5b)
@@ -658,7 +660,7 @@ C(nvalret):
         __(ldr temp0,[rcontext, #tcr.catch_top])
         __(mov imm0,#0) /* count intervening catch/unwind-protect frames.  */
         __(cmp temp0,#0)
-        __(ldr temp2,[vsp,gpr64(nargs)])
+        __(ldr temp2,[vsp,nargs,lsl #node_shift])
         __(beq local_label(_throw_tag_not_found))
 local_label(_throw_loop):
         __(ldr temp1,[temp0,#catch_frame.catch_tag])
@@ -670,7 +672,7 @@ local_label(_throw_loop):
         __(bne local_label(_throw_loop))
 local_label(_throw_tag_not_found):
         __(uuo_error_no_throw_tag(temp2))
-        __(str temp2,[vsp,gpr64(nargs)])
+        __(str temp2,[vsp,nargs,lsl #node_shift])
         __(b _SPthrow)
 
 /* This takes N multiple values atop the vstack.  */
@@ -1052,13 +1054,15 @@ C(egc_write_barrier_end):
 _spentry(stkconslist)
         __(mov arg_z,rnil)
 C(stkconslist_star):           
-        __(lsl temp2,nargs,#1)
-        __(add temp2,temp2,#node_size)
-        __(lsl imm0,temp2,#num_subtag_bits-word_shift) 
-        __(add temp2,temp2,#node_size)
-        __(add imm0,imm0,#subtag_simple_vector)
-        __(stack_allocate_zeroed_vector(imm0,temp2))
-        __(add imm1,sp,#dnode_size+fulltag_cons)
+        __(lsl temp2,nargs,#node_shift+1)
+        __(dnode_align(temp2,temp2,node_size))
+        __(mov imm1,#simple_vector_header<<tag_shift)
+        __(add imm1,imm1,#1)
+        __(add imm1,imm1,nargs,lsl #1)
+        __(mov imm0,#tag_simple_vector)
+        __(stack_allocate_zeroed_vector(imm0,imm1,temp2,imm0))
+        __(add imm1,sp,#dnode_size+node_size)
+        __(orr imm1,imm1,#tag_cons)
         __(cmp nargs,#0)
         __(b 4f)
 1:      __(vpop1(temp0))
@@ -1066,7 +1070,7 @@ C(stkconslist_star):
         __(_rplacd(imm1,arg_z))
         __(mov arg_z,imm1)
         __(add imm1,imm1,#cons.size)
-        __(subs nargs,nargs,#node_size)
+        __(subs nargs,nargs,#1)
 4:
         __(bne 1b)
         __(ret)
@@ -1079,18 +1083,18 @@ _spentry(stkconslist_star)
 /* Make a stack-consed simple-vector out of the NARGS objects  */
 /* on top of the vstack; return it in arg_z.  */
 _spentry(mkstackv)
+        __(lsl imm1,nargs,#node_shift)
         __(dnode_align(imm1,nargs,node_size))
         __(mov imm0,#simple_vector_header<<tag_shift)
-        __(orr imm0,imm0,nargs,lsr #3)
+        __(orr imm0,imm0,nargs)
         __(mov imm2,#tag_simple_vector)
         __(stack_allocate_zeroed_vector(arg_z,imm0,imm1,imm2))
-        __(add imm1,arg_z,nargs)
+        __(add imm1,arg_z,nargs,lsl #node_shift)
         __(b 4f)
 3:      __(vpop1(arg_y))
         __(str arg_y,[imm1,#-node_size]!)
-        __(sub nargs,nargs,#node_size)
-4:      __(cmp nargs,#0)
-        __(bne 3b)
+        __(sub nargs,nargs,#1)
+4:      __(cbnz nargs,3b)
         __(ret)
 	
 _spentry(setqsym)
@@ -1187,59 +1191,56 @@ _spentry(progvsave)
 /* Allocate a uvector on the  stack.  (Push a frame on the stack and  */
 /* heap-cons the object if there's no room on the stack.)  */
 _spentry(stack_misc_alloc)
-        __(tst arg_y,#unsigned_byte_24_mask)
-        __(beq 1f)
-        __(uuo_error_reg_not_xtype(arg_y,xtype_unsigned_byte_24))
-1:              
-        __(unbox_fixnum(imm2,arg_z))
-        __(extract_fulltag(imm1,imm2))
-        __(cmp imm1,#fulltag_nodeheader)
-        __(bne 1f)
-        __(dnode_align(imm1,arg_y,node_size))
-        __(mov imm0,#subtag_u32_vector)
-        __(orr imm0,imm0,arg_y,lsl #num_subtag_bits-fixnumshift)
-        __(b 9f)
-1:      __(lsl imm0,arg_y,#num_subtag_bits-fixnumshift)
-        __(orr imm0,imm0,arg_z,lsr #fixnumshift)
-        __(cmp arg_z,#max_32_bit_ivector_subtag<<fixnumshift)
-        __(movle imm1,arg_y)
-        __(ble 8f)
-        __(cmp arg_z,#max_8_bit_ivector_subtag<<fixnumshift)
-        __(movle imm1,arg_y,lsr #fixnumshift)
-        __(ble 8f)
-        __(cmp arg_z,#max_16_bit_ivector_subtag<<fixnumshift)
-        __(movle imm1,arg_y,lsr #1)
-        __(ble 8f)
-        __(cmp arg_z,#subtag_double_float_vector<<fixnumshift)
-        __(moveq imm1,arg_y,lsl #1)
-        __(addeq imm1,imm1,#node_size)
-        __(addne imm1,arg_y,#7<<fixnumshift)
-        __(movne imm1,imm1,lsr#3+fixnumshift)
+        __(test_fixnum(arg_y,imm0))
+        __(cbnz imm0,0f)
+        __(branch_if_positive(arg_y,1f))
+0:      
+        __(uuo_error_reg_not_xtype(arg_y,xtype_unsigned_byte_56))
+1:
+        __(cmp arg_z,#min_64_bit_ivector_tag)
+        __(lsl imm1,arg_y,#3)
+        __(bge 8f)
+        __(cmp arg_z,#min_32_bit_ivector_tag)
+        __(lsl imm1,arg_y,#2)
+        __(bge 8f)
+        __(cmp arg_z,#min_16_bit_ivector_tag)
+        __(lsl imm1,arg_y,#1)
+        __(bge 8f)
+        __(cmp arg_z,#min_8_bit_ivector_tag)
+        __(mov imm1,arg_y)
+        __(bge 8f)
+        __(add imm1,arg_y,#7)
+        __(lst imm1,imm1,#3)   
 8:      __(dnode_align(imm1,imm1,node_size))
 9:      
         __(ldr temp0,[rcontext,tcr.cs_limit])
         __(sub temp1,sp,imm1)
         __(cmp temp1,temp0)
-        __(bls stack_misc_alloc_no_room)
         __(mov temp0,#stack_alloc_marker)
         __(mov temp1,sp)
-        __(stack_allocate_zeroed_vector(imm0,imm1))
-        __(add arg_z,sp,#fulltag_misc)
-        __(strb gpr32(imm2),[sp])
+        __(bls stack_misc_alloc_no_room)
+        __(eor imm0,arg_z,#uvector_mask)
+        __(add imm0,arg_t,imm0,lsl #tag_shift)
+        __(stack_allocate_zeroed_vector(arg_z,imm0,imm1,arg_z))
         __(stp temp0,temp1,[sp,#-dnode_size]!)
         __(ret)
+/* Too large to safely fit on stack.  Heap-cons the vector, but make  */
+/* sure that there's an empty stack frame to keep the compiler happy.  */
+stack_misc_alloc_no_room:       
+        __(stp temp0,temp1,[sp,#-dnode-size]!)
+        __(b _SPmisc_alloc)
 
 
 
 
-/* subtype (boxed, of course) is vpushed, followed by nargs bytes worth of  */
+/* subtype (boxed, of course) is vpushed, followed by nargs words worth of  */
 /* initial-contents.  Note that this can be used to cons any type of initialized  */
 /* node-header'ed misc object (symbols, closures, ...) as well as vector-like  */
 /* objects.  */
 
 _spentry(gvector)
-        __(sub nargs,nargs,#node_size)
-        __(ldr arg_z,[vsp,gpr64(nargs)])
+        __(sub nargs,nargs,#1)
+        __(ldr arg_z,[vsp,nargs,lsl #node_shift])
         __(unbox_fixnum(imm0,arg_z))
         __(orr imm0,imm0,nargs,lsl #num_subtag_bits-fixnum_shift)
         __(dnode_align(imm1,nargs,node_size))
@@ -2932,368 +2933,131 @@ _spentry(eabi_callback)
 /*  EOF, basically  */
 	
 _startfn(C(misc_ref_common))
-        __(add pc,pc,imm1,lsl #2)
-        __(nop)
+        __(and imm0,imm1,#uvector_mask)
+        __(cmp imm0,#uvector_ref)
+        __(bne local_label(misc_ref_invalid))
+        __(tst imm1,#gvector_tag_mask)
+        __(beq 0f)
+        __(cmp #imm1,#tag_function)
+        __(bne local_label(misc_ref_node))
+        __(getvheader(imm0,arg_y,imm0))
+        __(sub imm0,imm0,#1)
+        __(ldr imm0,[arg_y,imm0,lsl #3])
+        __(cmp arg_z,imm0)
+        __(blo local_label(misc_ref_u64))
+        __(b local_label(misc_ref_node))
+0:      __(and imm1,imm1,#31)
+        __(adr imm0,local_label(misc_ref_jmp))
+        __(add imm0,imm0,imm1,lsl #2)
+        __(br imm0)        
 
 local_label(misc_ref_jmp):          
-	/* 00-0f  */
-	__(b local_label(misc_ref_invalid)) /* 00 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 01 cons  */
-	__(b local_label(misc_ref_node))    /* 02 pseudofunction */
-	__(b local_label(misc_ref_invalid)) /* 03 imm  */
-	__(b local_label(misc_ref_invalid)) /* 04 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 05 nil  */
-	__(b local_label(misc_ref_invalid)) /* 06 misc  */
-	__(b local_label(misc_ref_u32)) /* 07 bignum  */
-	__(b local_label(misc_ref_invalid)) /* 08 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 09 cons  */
-	__(b local_label(misc_ref_node)) /* 0a ratio  */
-	__(b local_label(misc_ref_invalid)) /* 0b imm  */
-	__(b local_label(misc_ref_invalid)) /* 0c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 0d nil  */
-	__(b local_label(misc_ref_invalid)) /* 0e misc  */
-	__(b local_label(misc_ref_u32)) /* 0f single_float  */
-	/* 10-1f  */
-	__(b local_label(misc_ref_invalid)) /* 10 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 11 cons  */
-	__(b local_label(misc_ref_invalid)) /* 12 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* 13 imm  */
-	__(b local_label(misc_ref_invalid)) /* 14 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 15 nil  */
-	__(b local_label(misc_ref_invalid)) /* 16 misc  */
-	__(b local_label(misc_ref_u32)) /* 17 double_float  */
-	__(b local_label(misc_ref_invalid)) /* 18 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 19 cons  */
-	__(b local_label(misc_ref_node)) /* 1a complex  */
-	__(b local_label(misc_ref_invalid)) /* 1b imm  */
-	__(b local_label(misc_ref_invalid)) /* 1c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 1d nil  */
-	__(b local_label(misc_ref_invalid)) /* 1e misc  */
-	__(b local_label(misc_ref_u32)) /* 1f macptr  */
-	/* 20-2f  */
-	__(b local_label(misc_ref_invalid)) /* 20 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 21 cons  */
-	__(b local_label(misc_ref_node)) /* 22 catch_frame  */
-	__(b local_label(misc_ref_invalid)) /* 23 imm  */
-	__(b local_label(misc_ref_invalid)) /* 24 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 25 nil  */
-	__(b local_label(misc_ref_invalid)) /* 26 misc  */
-	__(b local_label(misc_ref_u32)) /* 27 dead_macptr  */
-	__(b local_label(misc_ref_invalid)) /* 28 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 29 cons  */
-	__(b local_label(misc_ref_node)) /* 2a function  */
-	__(b local_label(misc_ref_invalid)) /* 2b imm  */
-	__(b local_label(misc_ref_invalid)) /* 2c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 2d nil  */
-	__(b local_label(misc_ref_invalid)) /* 2e misc  */
-	__(b local_label(misc_ref_u32)) /* 2f code_vector  */
-	/* 30-3f  */
-	__(b local_label(misc_ref_invalid)) /* 30 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 31 cons  */
-	__(b local_label(misc_ref_node)) /* 32 lisp_thread  */
-	__(b local_label(misc_ref_invalid)) /* 33 imm  */
-	__(b local_label(misc_ref_invalid)) /* 34 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 35 nil  */
-	__(b local_label(misc_ref_invalid)) /* 36 misc  */
-	__(b local_label(misc_ref_u32)) /* 37 creole  */
-	__(b local_label(misc_ref_invalid)) /* 38 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 39 cons  */
-	__(b local_label(misc_ref_node)) /* 3a symbol  */
-	__(b local_label(misc_ref_invalid)) /* 3b imm  */
-	__(b local_label(misc_ref_invalid)) /* 3c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 3d nil  */
-	__(b local_label(misc_ref_invalid)) /* 3e misc  */
-	__(b local_label(misc_ref_u32)) /* 3f xcode_vector  */
-	/* 40-4f  */
-	__(b local_label(misc_ref_invalid)) /* 40 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 41 cons  */
-	__(b local_label(misc_ref_node)) /* 42 lock  */
-	__(b local_label(misc_ref_invalid)) /* 43 imm  */
-	__(b local_label(misc_ref_invalid)) /* 44 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 45 nil  */
-	__(b local_label(misc_ref_invalid)) /* 46 misc  */
-	__(b local_label(misc_ref_invalid)) /* 47 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 48 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 49 cons  */
-	__(b local_label(misc_ref_node)) /* 4a hash_vector  */
-	__(b local_label(misc_ref_invalid)) /* 4b imm  */
-	__(b local_label(misc_ref_invalid)) /* 4c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 4d nil  */
-	__(b local_label(misc_ref_invalid)) /* 4e misc  */
-	__(b local_label(misc_ref_invalid)) /* 4f immheader  */
-	/* 50-5f  */
-	__(b local_label(misc_ref_invalid)) /* 50 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 51 cons  */
-	__(b local_label(misc_ref_node)) /* 52 pool  */
-	__(b local_label(misc_ref_invalid)) /* 53 imm  */
-	__(b local_label(misc_ref_invalid)) /* 54 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 55 nil  */
-	__(b local_label(misc_ref_invalid)) /* 56 misc  */
-	__(b local_label(misc_ref_invalid)) /* 57 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 58 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 59 cons  */
-	__(b local_label(misc_ref_node)) /* 5a weak  */
-	__(b local_label(misc_ref_invalid)) /* 5b imm  */
-	__(b local_label(misc_ref_invalid)) /* 5c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 5d nil  */
-	__(b local_label(misc_ref_invalid)) /* 5e misc  */
-	__(b local_label(misc_ref_invalid)) /* 5f immheader  */
-	/* 60-6f  */
-	__(b local_label(misc_ref_invalid)) /* 60 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 61 cons  */
-	__(b local_label(misc_ref_node)) /* 62 package  */
-	__(b local_label(misc_ref_invalid)) /* 63 imm  */
-	__(b local_label(misc_ref_invalid)) /* 64 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 65 nil  */
-	__(b local_label(misc_ref_invalid)) /* 66 misc  */
-	__(b local_label(misc_ref_invalid)) /* 67 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 68 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 69 cons  */
-	__(b local_label(misc_ref_node)) /* 6a slot_vector  */
-	__(b local_label(misc_ref_invalid)) /* 6b imm  */
-	__(b local_label(misc_ref_invalid)) /* 6c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 6d nil  */
-	__(b local_label(misc_ref_invalid)) /* 6e misc  */
-	__(b local_label(misc_ref_invalid)) /* 6f immheader  */
-	/* 70-7f  */
-	__(b local_label(misc_ref_invalid)) /* 70 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 71 cons  */
-	__(b local_label(misc_ref_node)) /* 72 instance  */
-	__(b local_label(misc_ref_invalid)) /* 73 imm  */
-	__(b local_label(misc_ref_invalid)) /* 74 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 75 nil  */
-	__(b local_label(misc_ref_invalid)) /* 76 misc  */
-	__(b local_label(misc_ref_invalid)) /* 77 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 78 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 79 cons  */
-	__(b local_label(misc_ref_node)) /* 7a struct  */
-	__(b local_label(misc_ref_invalid)) /* 7b imm  */
-	__(b local_label(misc_ref_invalid)) /* 7c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 7d nil  */
-	__(b local_label(misc_ref_invalid)) /* 7e misc  */
-	__(b local_label(misc_ref_invalid)) /* 7f immheader  */
-	/* 80-8f  */
-	__(b local_label(misc_ref_invalid)) /* 80 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 81 cons  */
-	__(b local_label(misc_ref_node)) /* 82 istruct  */
-	__(b local_label(misc_ref_invalid)) /* 83 imm  */
-	__(b local_label(misc_ref_invalid)) /* 84 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 85 nil  */
-	__(b local_label(misc_ref_invalid)) /* 86 misc  */
-	__(b local_label(misc_ref_invalid)) /* 87 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 88 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 89 cons  */
-	__(b local_label(misc_ref_node)) /* 8a value_cell  */
-	__(b local_label(misc_ref_invalid)) /* 8b imm  */
-	__(b local_label(misc_ref_invalid)) /* 8c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 8d nil  */
-	__(b local_label(misc_ref_invalid)) /* 8e misc  */
-	__(b local_label(misc_ref_invalid)) /* 8f immheader  */
-	/* 90-9f  */
-	__(b local_label(misc_ref_invalid)) /* 90 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 91 cons  */
-	__(b local_label(misc_ref_node)) /* 92 xfunction  */
-	__(b local_label(misc_ref_invalid)) /* 93 imm  */
-	__(b local_label(misc_ref_invalid)) /* 94 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 95 nil  */
-	__(b local_label(misc_ref_invalid)) /* 96 misc  */
-	__(b local_label(misc_ref_invalid)) /* 97 immheader  */
-	__(b local_label(misc_ref_invalid)) /* 98 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 99 cons  */
-	__(b local_label(misc_ref_node)) /* 9a arrayN  */
-	__(b local_label(misc_ref_invalid)) /* 9b imm  */
-	__(b local_label(misc_ref_invalid)) /* 9c odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* 9d nil  */
-	__(b local_label(misc_ref_invalid)) /* 9e misc  */
-	__(b local_label(misc_ref_invalid)) /* 9f immheader  */
-	/* a0-af  */
-	__(b local_label(misc_ref_invalid)) /* a0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* a1 cons  */
-	__(b local_label(misc_ref_node)) /* a2 vectorH  */
-	__(b local_label(misc_ref_invalid)) /* a3 imm  */
-	__(b local_label(misc_ref_invalid)) /* a4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* a5 nil  */
-	__(b local_label(misc_ref_invalid)) /* a6 misc  */
-	__(b local_label(misc_ref_single_float_vector)) /* a7 sf_vector  */
-	__(b local_label(misc_ref_invalid)) /* a8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* a9 cons  */
-	__(b local_label(misc_ref_node)) /* aa simple_vector  */
-	__(b local_label(misc_ref_invalid)) /* ab imm  */
-	__(b local_label(misc_ref_invalid)) /* ac odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* ad nil  */
-	__(b local_label(misc_ref_invalid)) /* ae misc  */
-	__(b local_label(misc_ref_u32)) /* af u32  */
-	/* b0-bf  */
-	__(b local_label(misc_ref_invalid)) /* b0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* b1 cons  */
-	__(b local_label(misc_ref_invalid)) /* b2 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* b3 imm  */
-	__(b local_label(misc_ref_invalid)) /* b4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* b5 nil  */
-	__(b local_label(misc_ref_invalid)) /* b6 misc  */
-	__(b local_label(misc_ref_s32)) /* b7 s32  */
-	__(b local_label(misc_ref_invalid)) /* b8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* b9 cons  */
-	__(b local_label(misc_ref_invalid)) /* ba nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* bb imm  */
-	__(b local_label(misc_ref_invalid)) /* bc odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* bd nil  */
-	__(b local_label(misc_ref_invalid)) /* be misc  */
-	__(b local_label(misc_ref_fixnum_vector)) /* bf fixnum_vector  */
-	/* c0-cf  */
-	__(b local_label(misc_ref_invalid)) /* c0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* c1 cons  */
-	__(b local_label(misc_ref_invalid)) /* c2 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* c3 imm  */
-	__(b local_label(misc_ref_invalid)) /* c4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* c5 nil  */
-	__(b local_label(misc_ref_invalid)) /* c6 misc  */
-	__(b local_label(misc_ref_new_string)) /* c7 new_string  */
-	__(b local_label(misc_ref_invalid)) /* c8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* c9 cons  */
-	__(b local_label(misc_ref_invalid)) /* ca nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* cb imm  */
-	__(b local_label(misc_ref_invalid)) /* cc odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* cd nil  */
-	__(b local_label(misc_ref_invalid)) /* ce misc  */
-	__(b local_label(misc_ref_u8)) /* cf u8  */
-	/* d0-df  */
-	__(b local_label(misc_ref_invalid)) /* d0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* d1 cons  */
-	__(b local_label(misc_ref_invalid)) /* d2 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* d3 imm  */
-	__(b local_label(misc_ref_invalid)) /* d4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* d5 nil  */
-	__(b local_label(misc_ref_invalid)) /* d6 misc  */
-	__(b local_label(misc_ref_s8))      /* d7 s8  */
-	__(b local_label(misc_ref_invalid)) /* d8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* d9 cons  */
-	__(b local_label(misc_ref_invalid)) /* da nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* db imm  */
-	__(b local_label(misc_ref_invalid)) /* dc odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* dd nil  */
-	__(b local_label(misc_ref_invalid)) /* de misc  */
-	__(b local_label(misc_ref_old_string)) /* df (old)subtag_simple_base_string  */
-	/* e0-ef  */
-	__(b local_label(misc_ref_invalid)) /* e0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* e1 cons  */
-	__(b local_label(misc_ref_invalid)) /* e2 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* e3 imm  */
-	__(b local_label(misc_ref_invalid)) /* e4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* e5 nil  */
-	__(b local_label(misc_ref_invalid)) /* e6 misc  */
-	__(b local_label(misc_ref_u16)) /* e7 u16  */
-	__(b local_label(misc_ref_invalid)) /* e8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* e9 cons  */
-	__(b local_label(misc_ref_invalid)) /* ea nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* eb imm  */
-	__(b local_label(misc_ref_invalid)) /* ec odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* ed nil  */
-	__(b local_label(misc_ref_invalid)) /* ee misc  */
-	__(b local_label(misc_ref_s16)) /* ef s16  */
-	/* f0-ff  */
-	__(b local_label(misc_ref_invalid)) /* f0 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* f1 cons  */
-	__(b local_label(misc_ref_invalid)) /* f2 nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* f3 imm  */
-	__(b local_label(misc_ref_invalid)) /* f4 odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* f5 nil  */
-	__(b local_label(misc_ref_invalid)) /* f6 misc  */
-	__(b local_label(misc_ref_double_float_vector)) /* f7 df vector  */
-	__(b local_label(misc_ref_invalid)) /* f8 even_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* f9 cons  */
-	__(b local_label(misc_ref_invalid)) /* fa nodeheader  */
-	__(b local_label(misc_ref_invalid)) /* fb imm  */
-	__(b local_label(misc_ref_invalid)) /* fc odd_fixnum  */
-	__(b local_label(misc_ref_invalid)) /* fd nil  */
-	__(b local_label(misc_ref_invalid)) /* fe misc  */
-	__(b local_label(misc_ref_bit_vector)) /* ff bit_vector  */
+	__(b local_label(misc_ref_invalid))     
+        __(b local_label(misc_ref_bit))
+	
+	__(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_s8))
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_u8))
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_s16)) 
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_u16))
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_invalid))
+
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_invalid))
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_invalid))
+	
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_s32))
+        
+        __(b local_label(misc_ref_u32))     /* bignum */
+        __(b local_label(misc_ref_u32))
+        
+        __(b local_label(misc_ref_u32))
+        __(b local_label(misc_ref_single_float_vector))
+        
+        __(b local_label(misc_ref_u32))
+        __(b local_label(misc_ref_simple_string))
+        
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_s64))
+	
+        __(b local_label(misc_ref_invalid))
+        __(b local_label(misc_ref_u64))
+        
+        __(b local_label(misc_ref_u64))
+        __(b local_label(misc_ref_node)) /* fixnum-vector */
+	
+        __(b local_label(misc_ref_u64))
+        __(b local_label(misc_ref_double_float))
+              
+                
 
 local_label(misc_ref_node):        
 	/* A node vector.  */
-	__(scale_64_bit_index(imm0,arg_z))
-	__(ldr  arg_z,[arg_y,imm0])
+	__(ldr  arg_z,[arg_y,arg_z,lsl #node_shift])
 	__(ret)
-local_label(misc_ref_single_float_vector):        
-	__(scale_32_bit_index(imm0,arg_z)) 
-	__(ldr gpr32(imm0),[arg_y,imm0])
-        __(lsl imm0,imm0,#32)
-        __(orr arg_z,imm0,#subtag_single_float)
+local_label(misc_ref_single_float_vector):
+        __(mov imm1,#tag_single_float<<tag_shift)        
+	__(ldr gpr32(imm0),[arg_y,arg_z,lsl #2])
+        __(orr arg_z,imm1,imm0)
 	__(ret)
-local_label(misc_ref_new_string):        
-	__(scale_32_bit_index(imm0,arg_z))
-	__(ldr gpr32(imm0),[arg_y,imm0])
-	__(lsl arg_z,imm0,#charcode_shift)
-	__(orr arg_z,arg_z,#subtag_character)
+local_label(misc_ref_simple_string):        
+        __(mov imm1,#tag_character<<tag_shift)        
+	__(ldr gpr32(imm0),[arg_y,arg_z,lsl #2])
+	__(orr arg_z,imm1,imm0)
 	__(ret)
 local_label(misc_ref_s32):        
-	__(scale_32_bit_index(imm0,arg_z))
-	__(ldrsw imm0,[arg_y,imm0])
-        __(box_fixnum(arg_z,imm0))
-        __(ret)
-local_label(misc_ref_fixnum_vector):    
-	__(scale_64_bit_index(imm0,arg_z))
-	__(ldr imm0,[arg_y,imm0])
-        __(box_fixnum(arg_z,imm0))
+	__(ldrsw arg_z,[arg_y,arg_z,lsl #2])
         __(ret)
 local_label(misc_ref_u32):        
-	__(scale_32_bit_index(imm,arg_z))
-	__(ldr gpr32(imm0),[arg_y,imm0])
-        __(box_fixnum(arg_z,imm0))
+	__(ldr gpr32(arg_z),[arg_y,arg_z,lsl #2])
         __(ret)
+local_label(misc_ref_u64):      
+        __(ldr imm0,[arg_y,arg_z,lsl #3])
+        __(b _SPmakeu64)
+local_label(misc_ref_s64):      
+        __(ldr imm0,[arg_y,arg_z,lsl #3])
+        __(b _SPmakes64)
+                
 local_label(misc_ref_double_float_vector):
-        __(scale_64_bit_index(imm0,arg_z))
-        __(ldr d0,[arg_y,imm0])
-	__(mov imm2,#double_float_header)
-	__(Misc_Alloc_Fixed(arg_z,imm2,double_float.size))
+        __(ldr d0,[arg_y,arg_z,lsl #3])
+	__(mov imm2,#double_float_header<<tag_shift)
+        __(add imm2,imm2,#double_float.element_count)
+        __(mov imm1,#tag_double_float)
+	__(Misc_Alloc_Fixed(arg_z,imm2,double_float.size,imm2))
         __(str d0,[arg_z,#double_float.value])
 	__(ret)
-local_label(misc_ref_bit_vector):
-        __(unbox_fixnum(imm0,arg_z))
-        __(and imm1,imm0,#63)
-        __(lsr imm0,imm0,#6)
-        __(mov imm2,#1)
-        __(add imm0,imm0,#misc_data_offset)
-        __(lsl imm2,imm2,imm1)
-        __(ldr imm0,[arg_y,imm0])
-        __(mov arg_z,#fixnumone)
-        __(tst imm0,imm2)
-        __(csel arg_z,arg_z,xzr,ne)
-	__(ret)
+local_label(misc_ref_bit):
+        __(and imm1,arg_z,#63)
+        __(eor imm1,imm1,#63)
+        __(lsr imm0,arg_z,#6)
+        __(ldr imm2,[arg_y,imm0,lsl #word_shift])
+        __(lsr imm2,imm2,imm1)
+        __(and arg_z,imm2,#1)
+        __(ret)
 local_label(misc_ref_s8):
-        __(scale_8_bit_index(imm0,arg_z))
-	__(ldsb imm0,[arg_y,imm0])
-	__(box_fixnum(arg_z,imm0))
+	__(ldrsb arg_z,[arg_y,arg_z])
 	__(ret)
 local_label(misc_ref_u8):
-        __(scale_8_bit_index(imm0,arg_z))
-	__(ldrb gpr32(imm0),[arg_y,imm0])
-	__(box_fixnum(arg_z,imm0))
-	__(ret)
-local_label(misc_ref_old_string):
-        __(scale_8_bit_index(imm0,arg_z))
-	__(ldrb gpr32(imm0),[arg_y,imm0])
-	__(lsl arg_z,imm0,#charcode_shift)
-	__(orr arg_z,arg_z,#subtag_character)
+	__(ldrb gpr32(arg_z),[arg_y,arg_z])
 	__(ret)
 local_label(misc_ref_u16):
-        __(scale_16_bit_index(imm0,arg_z))
-	__(ldrh gpr32(imm0),[arg_y,imm0])
-	__(box_fixnum(arg_z,imm0))
+	__(ldrh gpr32(arg_z),[arg_y,arg_z,lsl #1])
 	__(ret)
 local_label(misc_ref_s16):
-        __(scale_16_bit_index(imm0,arg_z))
-	__(ldrsh imm0,[arg_y,imm0])
+	__(ldrsh arg_z,[arg_y,arg_z,lsl #1])
 	__(box_fixnum(arg_z,imm0))
 	__(ret)
-local_label(misc_ref_u64)
-        __(scale_64_bit_index(imm0,arg_z))
-        __(ldr imm0,[arg_y,imm0])
-        __(b _SPmakeu64)
-local_label(misc_ref_s64)
-        __(scale_64_bit_index(imm0,arg_z))
-        __(ldr imm0,[arg_y,imm0])
-        __(b _SPmakes64)
                 
 local_label(misc_ref_invalid):
 	__(mov arg_x,#XBADVEC)
@@ -3302,312 +3066,80 @@ local_label(misc_ref_invalid):
 _endfn
         
 _startfn(C(misc_set_common))
-        __(add pc,pc,imm1,lsl #2)
-        __(nop)
-local_label(misc_set_jmp):             
-	/* 00-0f  */
-	__(b local_label(misc_set_invalid)) /* 00 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 01 cons  */
-	__(b _SPgvset)                      /* 02 pseudofunction  */
-	__(b local_label(misc_set_invalid)) /* 03 imm  */
-	__(b local_label(misc_set_invalid)) /* 04 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 05 nil  */
-	__(b local_label(misc_set_invalid)) /* 06 misc  */
-	__(b local_label(misc_set_u32)) /* 07 bignum  */
-	__(b local_label(misc_set_invalid)) /* 08 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 09 cons  */
-	__(b _SPgvset) /* 0a ratio  */
-	__(b  local_label(misc_set_invalid)) /* 0b imm  */
-	__(b local_label(misc_set_invalid)) /* 0c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 0d nil  */
-	__(b local_label(misc_set_invalid)) /* 0e misc  */
-	__(b local_label(misc_set_u32)) /* 0f single_float  */
-	/* 10-1f  */
-	__(b local_label(misc_set_invalid)) /* 10 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 11 cons  */
-	__(b local_label(misc_set_invalid)) /* 12 nodeheader  */
-	__(b local_label(misc_set_invalid)) /* 13 imm  */
-	__(b local_label(misc_set_invalid)) /* 14 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 15 nil  */
-	__(b local_label(misc_set_invalid)) /* 16 misc  */
-	__(b local_label(misc_set_u32)) /* 17 double_float  */
-	__(b local_label(misc_set_invalid)) /* 18 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 19 cons  */
-	__(b _SPgvset) /* 1a complex  */
-	__(b  local_label(misc_set_invalid)) /* 1b imm  */
-	__(b local_label(misc_set_invalid)) /* 1c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 1d nil  */
-	__(b local_label(misc_set_invalid)) /* 1e misc  */
-	__(b local_label(misc_set_u32)) /* 1f macptr  */
-	/* 20-2f  */
-	__(b local_label(misc_set_invalid)) /* 20 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 21 cons  */
-	__(b _SPgvset) /* 22 catch_frame  */
-	__(b  local_label(misc_set_invalid)) /* 23 imm  */
-	__(b local_label(misc_set_invalid)) /* 24 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 25 nil  */
-	__(b local_label(misc_set_invalid)) /* 26 misc  */
-	__(b local_label(misc_set_u32)) /* 27 dead_macptr  */
-	__(b local_label(misc_set_invalid)) /* 28 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 29 cons  */
-	__(b _SPgvset) /* 2a function  */
-	__(b  local_label(misc_set_invalid)) /* 2b imm  */
-	__(b local_label(misc_set_invalid)) /* 2c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 2d nil  */
-	__(b local_label(misc_set_invalid)) /* 2e misc  */
-	__(b local_label(misc_set_u32)) /* 2f code_vector  */
-	/* 30-3f  */
-	__(b local_label(misc_set_invalid)) /* 30 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 31 cons  */
-	__(b _SPgvset) /* 32 lisp_thread  */
-	__(b  local_label(misc_set_invalid)) /* 33 imm  */
-	__(b local_label(misc_set_invalid)) /* 34 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 35 nil  */
-	__(b local_label(misc_set_invalid)) /* 36 misc  */
-	__(b local_label(misc_set_u32)) /* 37 creole  */
-	__(b local_label(misc_set_invalid)) /* 38 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 39 cons  */
-	__(b _SPgvset) /* 3a symbol  */
-	__(b  local_label(misc_set_invalid)) /* 3b imm  */
-	__(b local_label(misc_set_invalid)) /* 3c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 3d nil  */
-	__(b local_label(misc_set_invalid)) /* 3e misc  */
-	__(b local_label(misc_set_u32)) /* 3f xcode_vector  */
-	/* 40-4f  */
-	__(b local_label(misc_set_invalid)) /* 40 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 41 cons  */
-	__(b _SPgvset) /* 42 lock  */
-	__(b  local_label(misc_set_invalid)) /* 43 imm  */
-	__(b local_label(misc_set_invalid)) /* 44 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 45 nil  */
-	__(b local_label(misc_set_invalid)) /* 46 misc  */
-	__(b local_label(misc_set_invalid)) /* 47 immheader  */
-	__(b local_label(misc_set_invalid)) /* 48 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 49 cons  */
-	__(b _SPgvset) /* 4a hash_vector  */
-	__(b  local_label(misc_set_invalid)) /* 4b imm  */
-	__(b local_label(misc_set_invalid)) /* 4c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 4d nil  */
-	__(b local_label(misc_set_invalid)) /* 4e misc  */
-	__(b local_label(misc_set_invalid)) /* 4f immheader  */
-	/* 50-5f  */
-	__(b local_label(misc_set_invalid)) /* 50 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 51 cons  */
-	__(b _SPgvset) /* 52 pool  */
-	__(b  local_label(misc_set_invalid)) /* 53 imm  */
-	__(b local_label(misc_set_invalid)) /* 54 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 55 nil  */
-	__(b local_label(misc_set_invalid)) /* 56 misc  */
-	__(b local_label(misc_set_invalid)) /* 57 immheader  */
-	__(b local_label(misc_set_invalid)) /* 58 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 59 cons  */
-	__(b _SPgvset) /* 5a weak  */
-	__(b  local_label(misc_set_invalid)) /* 5b imm  */
-	__(b local_label(misc_set_invalid)) /* 5c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 5d nil  */
-	__(b local_label(misc_set_invalid)) /* 5e misc  */
-	__(b local_label(misc_set_invalid)) /* 5f immheader  */
-	/* 60-6f  */
-	__(b local_label(misc_set_invalid)) /* 60 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 61 cons  */
-	__(b _SPgvset) /* 62 package  */
-	__(b  local_label(misc_set_invalid)) /* 63 imm  */
-	__(b local_label(misc_set_invalid)) /* 64 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 65 nil  */
-	__(b local_label(misc_set_invalid)) /* 66 misc  */
-	__(b local_label(misc_set_invalid)) /* 67 immheader  */
-	__(b local_label(misc_set_invalid)) /* 68 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 69 cons  */
-	__(b _SPgvset) /* 6a slot_vector  */
-	__(b  local_label(misc_set_invalid)) /* 6b imm  */
-	__(b local_label(misc_set_invalid)) /* 6c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 6d nil  */
-	__(b local_label(misc_set_invalid)) /* 6e misc  */
-	__(b local_label(misc_set_invalid)) /* 6f immheader  */
-	/* 70-7f  */
-	__(b local_label(misc_set_invalid)) /* 70 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 71 cons  */
-	__(b _SPgvset) /* 72 instance  */
-	__(b  local_label(misc_set_invalid)) /* 73 imm  */
-	__(b local_label(misc_set_invalid)) /* 74 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 75 nil  */
-	__(b local_label(misc_set_invalid)) /* 76 misc  */
-	__(b local_label(misc_set_invalid)) /* 77 immheader  */
-	__(b local_label(misc_set_invalid)) /* 78 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 79 cons  */
-	__(b _SPgvset) /* 7a struct  */
-	__(b  local_label(misc_set_invalid)) /* 7b imm  */
-	__(b local_label(misc_set_invalid)) /* 7c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 7d nil  */
-	__(b local_label(misc_set_invalid)) /* 7e misc  */
-	__(b local_label(misc_set_invalid)) /* 7f immheader  */
-	/* 80-8f  */
-	__(b local_label(misc_set_invalid)) /* 80 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 81 cons  */
-	__(b _SPgvset) /* 82 istruct  */
-	__(b  local_label(misc_set_invalid)) /* 83 imm  */
-	__(b local_label(misc_set_invalid)) /* 84 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 85 nil  */
-	__(b local_label(misc_set_invalid)) /* 86 misc  */
-	__(b local_label(misc_set_invalid)) /* 87 immheader  */
-	__(b local_label(misc_set_invalid)) /* 88 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 89 cons  */
-	__(b _SPgvset) /* 8a value_cell  */
-	__(b  local_label(misc_set_invalid)) /* 8b imm  */
-	__(b local_label(misc_set_invalid)) /* 8c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 8d nil  */
-	__(b local_label(misc_set_invalid)) /* 8e misc  */
-	__(b local_label(misc_set_invalid)) /* 8f immheader  */
-	/* 90-9f  */
-	__(b local_label(misc_set_invalid)) /* 90 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 91 cons  */
-	__(b _SPgvset) /* 92 xfunction  */
-	__(b  local_label(misc_set_invalid)) /* 93 imm  */
-	__(b local_label(misc_set_invalid)) /* 94 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 95 nil  */
-	__(b local_label(misc_set_invalid)) /* 96 misc  */
-	__(b local_label(misc_set_invalid)) /* 97 immheader  */
-	__(b local_label(misc_set_invalid)) /* 98 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 99 cons  */
-	__(b _SPgvset) /* 9a arrayH  */
-	__(b  local_label(misc_set_invalid)) /* 9b imm  */
-	__(b local_label(misc_set_invalid)) /* 9c odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* 9d nil  */
-	__(b local_label(misc_set_invalid)) /* 9e misc  */
-	__(b local_label(misc_set_invalid)) /* 9f immheader  */
-	/* a0-af  */
-	__(b local_label(misc_set_invalid)) /* a0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* a1 cons  */
-	__(b _SPgvset) /* a2 vectorH  */
-	__(b  local_label(misc_set_invalid)) /* a3 imm  */
-	__(b local_label(misc_set_invalid)) /* a4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* a5 nil  */
-	__(b local_label(misc_set_invalid)) /* a6 misc  */
-	__(b local_label(misc_set_single_float_vector)) /* a7 sf vector  */
-	__(b local_label(misc_set_invalid)) /* a8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* a9 cons  */
-	__(b _SPgvset) /* aa vectorH  */
-	__(b  local_label(misc_set_invalid)) /* ab imm  */
-	__(b local_label(misc_set_invalid)) /* ac odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* ad nil  */
-	__(b local_label(misc_set_invalid)) /* ae misc  */
-	__(b local_label(misc_set_u32)) /* af u32  */
-	/* b0-bf  */
-	__(b local_label(misc_set_invalid)) /* b0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* b1 cons  */
-	__(b local_label(misc_set_invalid)) /* b2 node  */
-	__(b local_label(misc_set_invalid)) /* b3 imm  */
-	__(b local_label(misc_set_invalid)) /* b4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* b5 nil  */
-	__(b local_label(misc_set_invalid)) /* b6 misc  */
-	__(b local_label(misc_set_s32)) /* b7 s32  */
-	__(b local_label(misc_set_invalid)) /* b8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* b9 cons  */
-	__(b local_label(misc_set_invalid)) /* ba nodeheader  */
-	__(b local_label(misc_set_invalid)) /* bb imm  */
-	__(b local_label(misc_set_invalid)) /* bc odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* bd nil  */
-	__(b local_label(misc_set_invalid)) /* be misc  */
-	__(b local_label(misc_set_fixnum_vector)) /* bf fixnum_vector  */
-	/* c0-cf  */
-	__(b local_label(misc_set_invalid)) /* c0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* c1 cons  */
-	__(b local_label(misc_set_invalid)) /* c2 nodeheader  */
-	__(b local_label(misc_set_invalid)) /* c3 imm  */
-	__(b local_label(misc_set_invalid)) /* c4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* c5 nil  */
-	__(b local_label(misc_set_invalid)) /* c6 misc  */
-	__(b local_label(misc_set_new_string)) /* c7 new_string  */
-	__(b local_label(misc_set_invalid)) /* c8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* c9 cons  */
-	__(b local_label(misc_set_invalid)) /* ca nodeheader  */
-	__(b local_label(misc_set_invalid)) /* cb imm  */
-	__(b local_label(misc_set_invalid)) /* cc odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* cd nil  */
-	__(b local_label(misc_set_invalid)) /* ce misc  */
-	__(b local_label(misc_set_u8)) /* cf u8  */
-	/* d0-df  */
-	__(b local_label(misc_set_invalid)) /* d0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* d1 cons  */
-	__(b local_label(misc_set_invalid)) /* d2 nodeheader  */
-	__(b local_label(misc_set_invalid)) /* d3 imm  */
-	__(b local_label(misc_set_invalid)) /* d4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* d5 nil  */
-	__(b local_label(misc_set_invalid)) /* d6 misc  */
-	__(b local_label(misc_set_s8)) /* d7 s8  */
-	__(b local_label(misc_set_invalid)) /* d8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* d9 cons  */
-	__(b local_label(misc_set_invalid)) /* da nodeheader  */
-	__(b local_label(misc_set_invalid)) /* db imm  */
-	__(b local_label(misc_set_invalid)) /* dc odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* dd nil  */
-	__(b local_label(misc_set_invalid)) /* de misc  */
-	__(b local_label(misc_set_old_string)) /* df (old) simple_base_string  */
-	/* e0-ef  */
-	__(b local_label(misc_set_invalid)) /* e0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* e1 cons  */
-	__(b local_label(misc_set_invalid)) /* e2 nodeheader  */
-	__(b local_label(misc_set_invalid)) /* e3 imm  */
-	__(b local_label(misc_set_invalid)) /* e4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* e5 nil  */
-	__(b local_label(misc_set_invalid)) /* e6 misc  */
-	__(b local_label(misc_set_u16)) /* e7 u16  */
-	__(b local_label(misc_set_invalid)) /* e8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* e9 cons  */
-	__(b local_label(misc_set_invalid)) /* ea nodeheader  */
-	__(b local_label(misc_set_invalid)) /* eb imm  */
-	__(b local_label(misc_set_invalid)) /* ec odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* ed nil  */
-	__(b local_label(misc_set_invalid)) /* ee misc  */
-	__(b local_label(misc_set_s16)) /* ef s16  */
-	/* f0-ff  */
-	__(b local_label(misc_set_invalid)) /* f0 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* f1 cons  */
-	__(b local_label(misc_set_invalid)) /* f2 nodeheader  */
-	__(b local_label(misc_set_invalid)) /* f3 imm  */
-	__(b local_label(misc_set_invalid)) /* f4 odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* f5 nil  */
-	__(b local_label(misc_set_invalid)) /* f6 misc  */
-	__(b local_label(misc_set_double_float_vector)) /* f7 df vector  */
-	__(b local_label(misc_set_invalid)) /* f8 even_fixnum  */
-	__(b local_label(misc_set_invalid)) /* f9 cons  */
-	__(b local_label(misc_set_invalid)) /* fa nodeheader  */
-	__(b local_label(misc_set_invalid)) /* fb imm  */
-	__(b local_label(misc_set_invalid)) /* fc odd_fixnum  */
-	__(b local_label(misc_set_invalid)) /* fd nil  */
-	__(b local_label(misc_set_invalid)) /* fe misc  */
-	__(b local_label(misc_set_bit_vector)) /* ff bit_vector  */
+        __(and imm0,imm1,#uvector_mask)
+        __(cmp imm0,#uvector_ref)
+        __(bne local_label(misc_set_invalid))
+        __(tst imm1,#gvector_tag_mask)
+        __(beq 0f)
+        __(cmp #imm1,#tag_function)
+        __(bne _SPgvset)
+        __(getvheader(imm0,arg_y,imm0))
+        __(sub imm0,imm0,#1)
+        __(ldr imm0,[arg_y,imm0,lsl #3])
+        __(cmp arg_z,imm0)
+        __(blo local_label(misc_set_u64))
+        __(b _SPgvset)
+0:      __(and imm1,imm1,#31)
+        __(adr imm0,local_label(misc_set_jmp))
+        __(add imm0,imm0,imm1,lsl #2)
+        __(br imm0)        
 
-local_label(misc_set_u32):        
-	/* Either a non-negative fixnum, a positive one-digit bignum, */
-	/* or a two-digit bignum whose sign-digit is 0 is ok.  */
-	__(scale_32_bit_index imm0,arg_y)
-	__(branch_if_not_fixnum(arg_z,local_label,imm0(set_bad)))
-        __(branch_if_negative(arg_z,local_label(set_bad)))
-	__(unbox_fixnum(imm1,arg_z))
+local_label(misc_set_jmp):          
+	__(b local_label(misc_set_invalid))     
+        __(b local_label(misc_set_bit))
+	
+	__(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_s8))
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_u8))
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_s16)) 
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_u16))
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_invalid))
+
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_invalid))
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_invalid))
+	
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_s32))
+        
+        __(b local_label(misc_set_u32))     /* bignum */
+        __(b local_label(misc_set_u32))
+        
+        __(b local_label(misc_set_u32))
+        __(b local_label(misc_set_single_float_vector))
+        
+        __(b local_label(misc_set_u32))
+        __(b local_label(misc_set_simple_string))
+        
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_s64))
+	
+        __(b local_label(misc_set_invalid))
+        __(b local_label(misc_set_u64))
+        
+        __(b local_label(misc_set_u64))
+        __(b local_label(misc_set_fixnum)) /* fixnum-vector */
+	
+        __(b local_label(misc_set_u64))
+        __(b local_label(misc_set_double_float))
+
+local_label(misc_set_u32):
+        __(extract_unsigned_byte(imm0,arg_z,32))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
 local_label(set_set32):         
-	__(str imm1,[arg_x,imm0])
+	__(str gpr32(arg_z),[arg_x,arg_y,lsl #2])
 	__(ret)
-local_label(set_not_fixnum_u32):
-	__(extract_lisptag(imm1,arg_z))
-	__(cmp imm1,#tag_misc)
-	__(bne local_label(set_bad))
-	__(mov imm2,#one_digit_bignum_header)
-	__(getvheader(imm1,arg_z))
-	__(cmp imm1,imm2)
-	__(bne local_label(set_not_1_digit_u32))
-	__(ldr imm1,[arg_z,#misc_data_offset])
-	__(cmp imm1,#0)
-	__(bge local_label(set_set32))
-	__(b local_label(set_bad))
-local_label(set_not_1_digit_u32):
-	__(mov imm2,#two_digit_bignum_header)
-	__(cmp imm1,imm2)
-	__(bne local_label(set_bad))
-	__(vrefr(imm2,arg_z,1))
-	__(vrefr(imm1,arg_z,0))
-	__(cmp imm2,#0)
-	__(beq local_label(set_set32))
 local_label(set_bad):
 	/* arg_z does not match the array-element-type of arg_x.  */
 	__(mov arg_y,arg_z)
@@ -3615,119 +3147,110 @@ local_label(set_bad):
 	__(mov arg_x,#XNOTELT)
 	__(set_nargs(3))
 	__(b _SPksignalerr)
-local_label(misc_set_fixnum_vector):   
-	__(add imm0,arg_y,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(bne local_label(set_bad))
-	__(unbox_fixnum(imm1,arg_z))
-	__(str imm1,[arg_x,imm0])
-	__(ret)
-local_label(misc_set_new_string):   
-	__(add imm0,arg_y,#misc_data_offset)
-	__(extract_lowbyte(imm2,arg_z))
-	__(cmp imm2,#subtag_character)
-	__(bne local_label(set_bad))
-	__(unbox_character(imm1,arg_z))
-	__(str imm1,[arg_x,imm0])
+local_label(misc_set_fixnum):
+        __(extract_signed_byte(imm0,arg_z,#56))
+        __(cmp imm0,arg_z)
+        __(bne local_label(misc_set_bad))
+local_label(misc_set_64):               
+        __(str arg_z,[arg_x,arg_y,lsl #word_shift])
+        __(ret)
+local_label(misc_set_simple_string):
+        __(extract_tag(imm0,arg_z))
+        __(cmp imm0,#tag_character)
+        __(bne local_label(set_bad))
+        __(str gpr32(arg_z),[arg_x,arg_y,lsl #2])
 	__(ret)
 local_label(misc_set_s32):
-	__(add imm0,arg_y,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(moveq imm1,arg_z,asr #fixnumshift)
-	__(beq local_label(set_set32))
-	__(extract_lisptag(imm2,arg_z))
-	__(cmp imm2,#tag_misc)
-	__(bne local_label(set_bad))
-	__(mov imm1,#one_digit_bignum_header)
-	__(getvheader(imm2,arg_z))
-	__(cmp imm2,imm1)
-	__(vrefr(imm1,arg_z,0))
-	__(beq local_label(set_set32))
-	__(b local_label(set_bad))
+        __(extract_signed_byte(imm0,arg_z,32))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(str gpr32(arg_z),[arg_x,arg_y,lsl #2])
+        __(ret)
 local_label(misc_set_single_float_vector):
-	__(add imm0,arg_y,#misc_data_offset)
-	__(extract_tag(imm2,arg_z))
-	__(cmp imm2,#subtag_single_float)
-	__(bne local_label(set_bad))
-	__(ldr imm1,[arg_z,#single_float.value])
-	__(str imm1,[arg_x,imm0])
-	__(ret)
-local_label(misc_set_u8):               
-	__(lsr imm0,arg_y,#2)  
-	__(add imm0,imm0,#misc_data_offset)
-	__(mov imm2,#~(0xff<<fixnumshift))
-	__(tst arg_z,imm2)
-	__(bne local_label(set_bad))
-	__(unbox_fixnum(imm1,arg_z))
-	__(strb gpr32(imm1),[arg_x,imm0])
-	__(ret)
-local_label(misc_set_old_string):
-	__(lsr imm0,arg_y,#2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(extract_lowbyte(imm2,arg_z))
-	__(cmp imm2,#subtag_character)
-	__(unbox_character(imm1,arg_z))
-	__(bne local_label(set_bad))
-	__(strb gpr32(imm1),[arg_x,imm0])
-	__(ret)
+        __(extract_tag(imm0,arg_z))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(str gpr32(arg_z),[arg_x,arg_y,lsl #2])
+        __(ret)
+local_label(misc_set_u8):
+        __(extract_unsigned_byte(imm0,arg_z,8))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(strb gpr32(arg_z),[arg_x,arg_y])
+        __(ret)
 local_label(misc_set_s8):
-	__(lsr imm0,arg_y,#2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(bne local_label(set_bad))
-	__(unbox_fixnum(imm1,arg_z))
-	__(lsl imm2,imm1,#32-8)
-	__(cmp imm1,imm2,asr #32-8)
-	__(bne local_label(set_bad))
-	__(strb gpr32(imm1),[arg_x,imm0])
-	__(ret)
-local_label(misc_set_u16):         
-	__(lsr imm0,arg_y,#1)
-	__(add imm0,imm0,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(bne local_label(set_bad))
-	__(unbox_fixnum(imm1,arg_z))
-	__(lsl imm2,imm1,#16)
-	__(cmp imm1,imm2,lsr #16)
-	__(bne local_label(set_bad))
-	__(strh imm1,[arg_x,imm0])
-	__(ret)
+        __(extract_signed_byte(imm0,arg_z,8))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(strb gpr32(arg_z),[arg_x,arg_y])
+        __(ret)
+local_label(misc_set_u16):
+        __(extract_unsigned_byte(imm0,arg_z,16))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(strh gpr32(arg_z),[arg_x,arg_y,lsl #1])
+        __(ret)
 local_label(misc_set_s16):
-	__(lsr imm0,arg_y,#1)
-	__(add imm0,imm0,#misc_data_offset)
-	__(test_fixnum(arg_z))
-	__(bne local_label(set_bad))
-	__(unbox_fixnum(imm1,arg_z))
-	__(lsl imm2,imm1, #16)
-	__(cmp imm1,imm2,asr #16)
-	__(bne local_label(set_bad))
-	__(strh imm1,[arg_x,imm0])
-	__(ret)
+        __(extract_signed_byte(imm0,arg_z,16))
+        __(cmp imm0,arg_z)
+        __(bne local_label(set_bad))
+        __(strh gpr32(arg_z),[arg_x,arg_y,lsl #1])
+        __(ret)
 local_label(misc_set_bit_vector):
-	__(bics imm0,arg_z,#fixnumone)
-	__(bne local_label(set_bad))
-	__(mov imm2,#31)
-	__(and imm2,imm2,arg_y,lsr #2)
-	__(mov imm1,#1)
-	__(lsl imm1,imm1, imm2)
-	__(lsr imm0,arg_y,#fixnumshift+5)
-	__(lsl imm0,imm0,#2)
-	__(add imm0,imm0,#misc_data_offset)
-	__(cmp arg_z,#0)
-	__(ldr imm2,[arg_x,imm0])
-	__(orrne imm2,imm2,imm1)
-	__(biceq imm2,imm2,imm1)
-	__(str imm2,[arg_x,imm0])
-	__(ret)
-
+        __(mov imm1,#1)
+        __(cmp arg_z,imm1)
+        __(bhi local_label(set_bad))
+        __(and temp0,arg_y,#63)
+        __(eor temp0,temp0,#63)
+        __(lsl imm1,imm1,temp0)
+        __(lsl imm0,arg_z,temp0)
+        __(lsr temp1,arg_y,#6)
+        __(ldr imm2,[arg_x,temp1,lsl #word_shift])
+        __(bic imm2,imm2,imm1)
+        __(orr imm2,imm2,imm0)
+        __(str imm2,[arg_x,temp1,lsl #word_shift])
+        __(ret)
+local_label(misc_set_s64):
+        __(extract_signed_byte(imm0,arg_z,56))
+        __(cmp imm0,arg_z)
+        __(beq local_label(misc_set_64))
+        __(extract_tag(imm0,arg_z))
+        __(cmp imm0,#tag_bignum)
+        __(bne local_label(set_bad))
+        __(vector_length(imm0,arg_z,imm0))
+        __(cmp imm0,#2)
+        __(bne local_label(set_bad))
+        __(ldr imm0,[arg_z,#0])
+        __(str imm0,[arg_x,arg_y,lsl #word_shift])
+        __(ret)
+local_label(misc_set_u64):
+        __(extract_unsigned_byte(imm0,arg_z,56))
+        __(cmp imm0,arg_z)
+        __(beq local_label(misc_set_64))
+        __(extract_tag(imm0,arg_z))
+        __(cmp imm0,#tag_bignum)
+        __(bne local_label(set_bad))
+        __(vector_length(imm0,arg_z,imm0))
+        __(cmp imm0,#2)
+        __(bne local_label(local_label_misc_set_u64_3_digit))
+        __(ldr imm0,[arg_z,#0])
+        __(branch_if_negative(imm0,local_label(set_bad)))
+        __(str imm0,[arg_x,arg_y,lsl #word_shift])
+        __(ret)
+local_label(local_label_misc_set_u64_3_digit):  
+        __(cmp imm0,#3)
+        __(bne local_label(misc_set_bad))
+        __(ldr gpr32(imm0),[arg_z,#2<<2])
+        __(cbnz imm0,local_label(misc_set_bad))
+        __(ldr imm0,[arg_z,#0])
+        __(str imm0,[arg_x,arg_y,lsl #word_shift])
+        __(ret)
 local_label(misc_set_double_float_vector):
-	__(extract_subtag(imm2,arg_z))
-	__(cmp imm2,#subtag_double_float)
+	__(extract_tag(imm0,arg_z))
+	__(cmp imm0,#tag_double_float)
 	__(bne local_label(set_bad))
-	__(ldrd imm0,imm1,[arg_z,#misc_dfloat_offset])
-	__(lsl imm2,arg_y, #1)
-	__(add imm2,imm2,#misc_dfloat_offset)
-	__(strd imm0,imm1,[arg_x,imm2])
+        __(ldr imm0,[arg_z,#0])
+        __(str imm0,[arg_x,arg_y,lsl #word_shift])
 	__(ret)
 local_label(misc_set_invalid):  
 	__(mov temp0,#XSETBADVEC)        
@@ -3976,14 +3499,6 @@ local_label(nthrownv_done):
 _endfn                
 
                
-/* Too large to safely fit on tstack.  Heap-cons the vector, but make  */
-/* sure that there's an empty tsp frame to keep the compiler happy.  */
-_startfn(stack_misc_alloc_no_room)
-        __(mov imm0,#stack_alloc_marker)
-        __(mov imm1,sp)
-        __(stp imm0,imm1,[sp,#-dnode-size]!)
-        __(b _SPmisc_alloc)
-_endfn        
 _startfn(stack_misc_alloc_init_no_room)
 /* Too large to safely fit on tstack.  Heap-cons the vector, but make  */
 /* sure that there's an empty tsp frame to keep the compiler happy.  */

@@ -37,7 +37,7 @@ define(`_clrex',`
         ')        
 
 define(`extract_tag',`
-        __(lsr $2,$1,#tag_shift)
+        __(lsr $1,$2,#tag_shift)
         ')
 
 /* Set $1 to $2, with bit 55 sign-sextended into bits 56-63.  If
@@ -45,6 +45,21 @@ define(`extract_tag',`
 define(`sign_extend_value',`
         __(sbfx $2,$1,#0,#56)
         ')
+define(`extract_signed_byte',`
+        __(sbfx $1,$2,#0,#$3)
+        ')
+
+define(`extract_unsigned_byte',`
+        __(ubfx $1,$2,$0,#$3)
+        ')        
+                
+
+define(`clear_tag',`
+        __(ubfx $2,$1,#0,#56)
+        ')
+              
+        
+        
         
 /* Set $2 to 0 iff $1 is a fixnum, to an arbitrary bit pattern otherwise. */
 define(`test_fixnum',`
@@ -78,6 +93,10 @@ define(`branch_if_not_list',`
                 
 define(`branch_if_negative',`
         __(tbnz $1,#63,$2)
+        ')
+
+define(`branch_if_positive',`
+        __(tbz $1,#63,$2)
         ')
         
 define(`lisp_boolean',`
@@ -124,7 +143,7 @@ define(`unlink',`
 
 	
 define(`set_nargs',`
-	__(mov nargs,#($1<<3))
+	__(mov nargs,#($1))
 	')
 	
 
@@ -186,7 +205,7 @@ define(`ref_nrs_symbol',`
 	/* vpop argregs - nargs is known to be non-zero */
 define(`vpop_argregs_nz',`
         new_macro_labels()
-        __(cmp nargs,#node_size*2)
+        __(cmp nargs,#2)
         __(vpop1(arg_z))
         __(blo macro_label(done))
         __(vpop1(arg_y))
@@ -204,7 +223,7 @@ macro_label(done):
         
 define(`vpush_argregs_nz',`
         new_macro_labels()
-        __(cmp nargs,#2<<fixnumshift)
+        __(cmp nargs,#2)
         __(bls macro_label(notx))
         __(vpush1(arg_x))
 macro_label(notx):      
@@ -424,9 +443,6 @@ define(`clear_header_element_count',`
         __(ubfm $1,$2,#56,#63)
         ')
 
-define(`clear_tag',`
-        __(ubfm $1,$2,#0,#55)
-        ')
         
         
 define(`Cons',`

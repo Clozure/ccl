@@ -54,16 +54,6 @@ define(`vzero',`q31')
         
 nbits_in_word = 64
 nbits_in_byte = 8
-ntagbits = 8
-nlisptagbits = 8
-nfixnumtagbits = 8
-nlowtagbits = 0      
-num_subtag_bits = 8
-fixnumshift = 0
-fixnum_shift = 0
-fulltagmask = 15
-tagmask = 7
-fixnummask = 7
 ncharcodebits = 8
 charcode_shift = 8
 word_shift = 3
@@ -101,8 +91,8 @@ tag_overflowed_negative_fixnum = 0xfe
 /* lists have their 6 most significant bits (58-63) clear and bit 57
    set. */
 list_leading_zero_bits = 6        
-tag_list = 2
-tag_nil = 3
+tag_nil = 2
+tag_cons = 3
 
 /* leaf node objects (characters, single-floats, other markers) have their
    top 3 bits clear and bit 60 set. */
@@ -152,6 +142,7 @@ define_cl_ivector(u8_vector,2)
 define_cl_ivector(s16_vector,3)
 define_cl_ivector(u16_vector,4)
 define_cl_ivector(s32_vector,8)
+define_ivector(bignum,9)        
 define_cl_ivector(u32_vector,9)
 define_ivector(xcode_vector,10)        
 define_cl_ivector(single_float_vector,10)
@@ -169,6 +160,11 @@ min_16_bit_ivector_header = s16_vector_header
 min_32_bit_ivector_header = s32_vector_header
 min_64_bit_ivector_header = s64_vector_header
 
+min_8_bit_ivector_tag = s8_vector
+min_16_bit_ivector_tag = s16_vector
+min_32_bit_ivector_tag = s32_vector
+min_64_bit_ivector_tag = s64_vector
+        
 define_gvector(ratio,0)
 define_gvector(complex,1)
 define_gvector(function,2)
@@ -228,8 +224,9 @@ max_1_bit_constant_index = 0
 	_endstructf
 	
 	_structf(double_float)
+         _struct_label(value)
          _word(val_low)
-	 _word(value)
+	 _word(val_high)
 	_endstructf
 	
 	_structf(macptr)
