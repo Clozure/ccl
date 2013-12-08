@@ -4962,6 +4962,9 @@
               ;; some other case where it can't ($test, $vpush.)  The
               ;; case of a null vd can certainly avoid it; the check
               ;; of numundo is to keep $acc boxed in case of nthrow.
+              (when (null vreg)
+                (arm2-form seg nil nil body)
+                (setq body (make-acode (%nx1-operator nil))))
               (arm2-form  seg (if (or vreg (not (%izerop numundo))) arm::arg_z) nil body)
               (arm2-unwind-set seg xfer old-stack)
               (when vreg (<- arm::arg_z))
