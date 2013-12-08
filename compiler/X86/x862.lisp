@@ -2333,7 +2333,6 @@
                (or (eq (acode-operator form) (%nx1-operator immediate))
                    (eq (acode-operator form) (%nx1-operator fixnum))))
         (let* ((val (%cadr form))
-
                (typep (cond ((eq type-keyword :signed-32-bit-vector)
                              (typep val '(signed-byte 32)))
                             ((eq type-keyword :single-float-vector)
@@ -2747,11 +2746,13 @@
 		(:x8664
                  (if (and index-known-fixnum
                           (not safe)
-                          (nx2-constant-index-ok-for-type-keyword index-known-fixnum type-keyword))
+                          (nx2-constant-index-ok-for-type-keyword index-known-fixnum type-keyword)
+                          (memq type-keyword (arch::target-gvector-types
+                                              (backend-target-arch
+                                               *target-backend*))))
                    (multiple-value-setq (src result-reg unscaled-idx)
                      (if (and (null vreg) (typep constval '(signed-byte 32)))
                        (x862-one-untargeted-reg-form seg vector src)
-                       
                        (x862-two-untargeted-reg-forms seg
                                                       vector src
                                                       value result-reg)))
@@ -5726,6 +5727,9 @@
               (let* ((so-far (dll-header-last seg))
                      (handled-crf nil))
                 (declare (ignorable so-far))
+                (when (null vreg)
+                  (x862-form seg nil nil body)
+                  (setq body (make-acode (%nx1-operator nil))))
                 (x862-form  seg (if (or vreg (not (%izerop numundo))) *x862-arg-z*) nil body)
                 (when (and (backend-crf-p vreg)
                            (eql 0 numundo))
