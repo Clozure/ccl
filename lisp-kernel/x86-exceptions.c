@@ -2806,14 +2806,16 @@ gc_like_from_xp(ExceptionInformation *xp,
 {
   TCR *tcr = get_tcr(false), *other_tcr;
   int result;
-  signed_natural inhibit;
+  signed_natural inhibit, barrier = 0;
 
+  atomic_incf(&barrier);
   suspend_other_threads(true);
   inhibit = (signed_natural)(lisp_global(GC_INHIBIT_COUNT));
   if (inhibit != 0) {
     if (inhibit > 0) {
       lisp_global(GC_INHIBIT_COUNT) = (LispObj)(-inhibit);
     }
+    atomic_decf(&barrier);
     resume_other_threads(true);
     gc_deferred++;
     return 0;
@@ -2860,6 +2862,7 @@ gc_like_from_xp(ExceptionInformation *xp,
 
   gc_tcr = NULL;
 
+  atomic_decf(&barrier);
   resume_other_threads(true);
 
   return result;
