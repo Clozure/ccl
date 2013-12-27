@@ -1768,6 +1768,7 @@
              (not (directory-pathname-p pathname)))
       pathname)))
 
+#| broken in the case of a string that's already preceded by package name
 (defun find-symbol-in-packages (string pkgs)
   (setq string (string-upcase string))
   (let (sym)
@@ -1775,6 +1776,28 @@
       (when (setq sym (find-symbol string p))
         (return)))
     sym))
+|#
+
+(defun find-symbol-in-packages (string pkgs)
+  "Look up symbol named by string in given list of packages. If no list, just try to read the symbol itself,
+   using current binding of *package* unless string has its own package designator."
+  (cond (pkgs
+         (let (sym)
+           (dolist (p pkgs)
+             (let ((*package* (find-package p)))
+               (when (setq sym (ignore-errors (read-from-string string)))
+                 (return))))
+           sym))
+        (t (ignore-errors (read-from-string string)))))
+
+(defun find-symbol-in-buffer-packages (string buffer)
+  (let ((package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+        (packages nil))
+    (unless (find #\: string) ; don't bother looking in other packages if the string itself contains a package designator
+      (setf packages (append ; all packages in order, starting with the ones of this buffer
+                      #1=(cons package-name (package-use-list package-name))
+                      (set-difference (list-all-packages) #1#))))
+    (find-symbol-in-packages string packages)))
 
 (objc:defmethod (#/openSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
@@ -1791,20 +1814,19 @@
   (declare (ignore sender))
   (let* ((text (#/string self))
          (selection (#/substringWithRange: text (#/selectedRange self)))
-         (symbol-name (string-upcase (lisp-string-from-nsstring selection)))
-         (buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer)))
-    (inspect (find-symbol-in-packages symbol-name 
-                                      (cons package-name
-                                            (package-use-list package-name))))))
+         (symbol-name (lisp-string-from-nsstring selection))
+         (buffer (hemlock-buffer self)))
+    (inspect (find-symbol-in-buffer-packages symbol-name buffer))))
 
 (objc:defmethod (#/sourceForSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (let* ((text (#/string self))
          (selection (#/substringWithRange: text (#/selectedRange self)))
-         (sym (find-symbol-in-packages (lisp-string-from-nsstring selection)
-                                       (list-all-packages))))
-    (ed sym)))
+         (buffer (hemlock-buffer self))
+         (sym (find-symbol-in-buffer-packages (lisp-string-from-nsstring selection) buffer)))
+    (let* ((target-listener (ui-object-choose-listener-for-selection *NSApp* nil)))
+      (when target-listener
+        (enqueue-listener-input (cocoa-listener-process-input-stream target-listener) (format nil "(ed '~S)" sym))))))
 
 ;;; If we don't override this, NSTextView will start adding Google/
 ;;; Spotlight search options and dictionary lookup when a selection
@@ -1817,11 +1839,8 @@
          (menu (if (> (length s) 0)
                  (#/copy (#/menu self))
                  (#/retain (#/menu self))))
-         (buffer (hemlock-buffer self))
-         (package-name (hi::variable-value 'hemlock::current-package :buffer buffer)))
-    (when (find-symbol-in-packages (string-upcase s)
-                                   (cons package-name
-                                         (package-use-list package-name)))
+         (buffer (hemlock-buffer self)))
+    (when (find-symbol-in-buffer-packages s buffer)
       (let* ((title (#/stringByAppendingString: #@"Inspect " selection))
              (item (make-instance 'ns:ns-menu-item :with-title title
                      :action (@selector #/inspectSelection:)
@@ -1829,7 +1848,7 @@
         (#/setTarget: item self)
         (#/insertItem:atIndex: menu item 0)
         (#/release item)))
-    (when (find-symbol-in-packages (string-upcase s) (list-all-packages))
+    (when (find-symbol-in-buffer-packages s buffer)
       (let* ((title (#/stringByAppendingString: #@"Source of " selection))
              (item (make-instance 'ns:ns-menu-item :with-title title
                      :action (@selector #/sourceForSelection:)
