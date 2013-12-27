@@ -1828,6 +1828,15 @@
       (when target-listener
         (enqueue-listener-input (cocoa-listener-process-input-stream target-listener) (format nil "(ed '~S)" sym))))))
 
+(hi:defcommand "Inspect Symbol" (p)
+  "Inspects current symbol."
+  (declare (ignore p))
+  (let* ((buffer (hi:current-buffer))
+         (fun-name (hemlock::symbol-at-point buffer)))
+    (if fun-name
+      (inspect (find-symbol-in-buffer-packages fun-name buffer))
+      (hi:beep))))
+
 ;;; If we don't override this, NSTextView will start adding Google/
 ;;; Spotlight search options and dictionary lookup when a selection
 ;;; is active.
