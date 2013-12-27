@@ -17,6 +17,9 @@
 ;; user-level slots.  [Note: currently, multiple views on a buffer are but a remote
 ;; dream.  Basic things like the insertion point are still per buffer when they
 ;; should be per view]
+
+;; NOTE: In CCL, it's no longer a dream. See definition
+;;  (objc:defmethod (#/duplicate: :void) ((self hemlock-frame) sender)
 ;;
 ;; The user interacts with a HEMLOCK-VIEW using events.  Each time the user presses a
 ;; key, the OS arranges to invoke our event handler.  The event handler computes and
