@@ -1030,7 +1030,6 @@
                  (hi::handle-hemlock-event view hemlock-key))
 	       (call-next-method event)))))))
 
-
 (defmacro with-view-selection-info ((text-view buffer) &body body)
   (let* ((old (gensym)))
     `(let* ((,old (hi::buffer-selection-info ,buffer)))
@@ -1041,6 +1040,20 @@
              ,@body)
         (setf (hi::buffer-selection-info ,buffer) ,old)))))
       
+(defmacro with-string-under-cursor ((text-view selection-name &optional bufname) &body body)
+  "Intelligently grab the string under the cursor in the given text-view.
+   If something is selected, just grab that. Otherwise call hemlock::symbol-at-point at cursor position.
+   selection-name is the name of a variable to which the selection will be assigned.
+   bufname (if given) is the name of a variable to which the current buffer will be assigned."
+  (let ((bufsym (or bufname (gensym)))
+        (viewsym (gensym)))      
+    `(let* ((,viewsym ,text-view)
+            (,bufsym (hemlock-buffer ,viewsym)))
+       (with-view-selection-info (,viewsym ,bufsym)
+         (let* ((hi::*current-buffer* ,bufsym) ; needed for symbol-at-point to work
+                (,selection-name (hemlock::symbol-at-point ,bufsym)))
+           ,@body)))))
+
 (defmethod hi::handle-hemlock-event :around ((view hi:hemlock-view) event)
   (declare (ignore event))
   (with-view-selection-info ((text-pane-text-view (hi::hemlock-view-pane view))
@@ -1302,7 +1315,6 @@
 
 (objc:defmethod (#/duplicate: :void) ((self hemlock-text-view) sender)
   (#/duplicate: (#/window self) sender))
-
 
 (defmethod hemlock-view ((self hemlock-text-view))
   (slot-value self 'hemlock-view))
@@ -1799,34 +1811,41 @@
                       (set-difference (list-all-packages) #1#))))
     (find-symbol-in-packages string packages)))
 
+(defun choose-listener ()
+  (ui-object-choose-listener-for-selection *NSApp* nil))
+
+(defun eval-in-listener (string)
+  "Evals string in nearest listener, or creates one if none. Any errors reported during evaluation
+   go to the listener, not the console."
+  (let* ((target-listener (choose-listener)))
+    (when target-listener
+      (enqueue-listener-input (cocoa-listener-process-input-stream target-listener) string))))
+
 (objc:defmethod (#/openSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((text (#/string self))
-         (selection (#/substringWithRange: text (#/selectedRange self)))
-         (pathname (pathname-for-namestring-fragment
-                    (lisp-string-from-nsstring selection))))
-    (when (pathnamep pathname)
-      (ed pathname))))
+  (with-string-under-cursor (self selection)
+    (let* ((pathname (pathname-for-namestring-fragment selection)))
+      (when pathname
+        (eval-in-listener (format nil "(ed ~S)" pathname))))))
 
-;;; If we get here, we've already checked that the selection represents
-;;; a valid symbol name.
+(objc:defmethod (#/traceSelection: :void) ((self hemlock-text-view) sender)
+  (declare (ignore sender))
+  (with-string-under-cursor (self symbol-name buffer)
+    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
+      (eval-in-listener (format nil "(trace ~S)" sym)))))
+
 (objc:defmethod (#/inspectSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((text (#/string self))
-         (selection (#/substringWithRange: text (#/selectedRange self)))
-         (symbol-name (lisp-string-from-nsstring selection))
-         (buffer (hemlock-buffer self)))
-    (inspect (find-symbol-in-buffer-packages symbol-name buffer))))
+  (with-string-under-cursor (self symbol-name buffer)
+    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
+      (inspect sym))))
 
 (objc:defmethod (#/sourceForSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((text (#/string self))
-         (selection (#/substringWithRange: text (#/selectedRange self)))
-         (buffer (hemlock-buffer self))
-         (sym (find-symbol-in-buffer-packages (lisp-string-from-nsstring selection) buffer)))
-    (let* ((target-listener (ui-object-choose-listener-for-selection *NSApp* nil)))
-      (when target-listener
-        (enqueue-listener-input (cocoa-listener-process-input-stream target-listener) (format nil "(ed '~S)" sym))))))
+  (with-string-under-cursor (self symbol-name buffer)
+    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
+      ;(execute-in-gui (lambda () (ed sym))) ; NO! If this errors, it throws to the console. Same with execute-in-buffer.
+      (eval-in-listener (format nil "(ed '~S)" sym)))))
 
 (hi:defcommand "Inspect Symbol" (p)
   "Inspects current symbol."
@@ -1842,39 +1861,26 @@
 ;;; is active.
 (objc:defmethod #/menuForEvent: ((self hemlock-text-view) event)
   (declare (ignore event))
-  (let* ((text (#/string self))
-	 (selection (#/substringWithRange: text (#/selectedRange self)))
-	 (s (lisp-string-from-nsstring selection))
-         (menu (if (> (length s) 0)
-                 (#/copy (#/menu self))
-                 (#/retain (#/menu self))))
-         (buffer (hemlock-buffer self)))
-    (when (find-symbol-in-buffer-packages s buffer)
-      (let* ((title (#/stringByAppendingString: #@"Inspect " selection))
-             (item (make-instance 'ns:ns-menu-item :with-title title
-                     :action (@selector #/inspectSelection:)
-                     :key-equivalent #@"")))
-        (#/setTarget: item self)
-        (#/insertItem:atIndex: menu item 0)
-        (#/release item)))
-    (when (find-symbol-in-buffer-packages s buffer)
-      (let* ((title (#/stringByAppendingString: #@"Source of " selection))
-             (item (make-instance 'ns:ns-menu-item :with-title title
-                     :action (@selector #/sourceForSelection:)
-                     :key-equivalent #@"")))
-        (#/setTarget: item self)
-        (#/insertItem:atIndex: menu item 0)
-        (#/release item)))
-    (when (pathname-for-namestring-fragment s)
-      (let* ((title (#/stringByAppendingString: #@"Open " selection))
-             (item (make-instance 'ns:ns-menu-item :with-title title
-                     :action (@selector #/openSelection:)
-                     :key-equivalent #@"")))
-        (#/setTarget: item self)
-        (#/insertItem:atIndex: menu item 0)
-        (#/release item)))
-
-    (#/autorelease menu)))
+  (with-string-under-cursor (self selection)
+    (let* ((menu (if (> (length selection) 0)
+                   (#/copy (#/menu self))
+                   (#/retain (#/menu self))))
+           (thingfound? (> (length selection) 0)))
+      (flet ((make-contextual-menu-item (title selector &optional (key-equiv #@""))
+               (let* ((nstitle (%make-nsstring title))
+                      (item (make-instance 'ns:ns-menu-item :with-title nstitle
+                              :action (ccl::%get-selector (ccl::load-objc-selector selector))
+                              :key-equivalent key-equiv)))
+                 (#/setTarget: item self)
+                 (#/insertItem:atIndex: menu item 0)
+                 (#/release item))))
+        (when thingfound? (make-contextual-menu-item (concatenate 'string "Hyperspec " selection) '#/hyperSpecLookUp:))
+        (when thingfound? (make-contextual-menu-item (concatenate 'string "Trace " selection) '#/traceSelection:))
+        (when thingfound? (make-contextual-menu-item (concatenate 'string "Inspect " selection) '#/inspectSelection:))
+        (when thingfound? (make-contextual-menu-item (concatenate 'string "Source of " selection) '#/sourceForSelection:))
+        (when (and thingfound? (pathname-for-namestring-fragment selection))
+          (make-contextual-menu-item (concatenate 'string "Open " selection) '#/openSelection:))
+        (#/autorelease menu)))))
 
 (defun init-selection-info-for-textview (tv buffer)
   (let* ((buffer-info (hi::buffer-selection-info buffer))
@@ -2672,10 +2678,10 @@
   (let* ((action (#/action item)))
     #+debug (#_NSLog #@"action = %s" :address action)
     (cond ((eql action (@selector #/hyperSpecLookUp:))
-           ;; For now, demand a selection.
            (and *hyperspec-lookup-enabled*
 		(hyperspec-root-url)
-                (not (eql 0 (ns:ns-range-length (#/selectedRange self))))))
+                (with-string-under-cursor (self selection)
+                  (nth-value 1 (find-symbol (nstring-upcase selection) "CL")))))
           ((eql action (@selector #/cut:))
            (let* ((selection (#/selectedRange self)))
              (and (> (ns:ns-range-length selection))
@@ -2700,9 +2706,8 @@
                   (pathname (hi::buffer-pathname buffer)))
              (not (null pathname))))
           ((eql action (@selector #/openSelection:))
-           (let* ((text (#/string self))
-                  (selection (#/substringWithRange: text (#/selectedRange self))))
-             (pathname-for-namestring-fragment (lisp-string-from-nsstring selection))))
+           (with-string-under-cursor (self selection)
+             (pathname-for-namestring-fragment selection)))
           ((eql action (@selector #/duplicate:))
            ;; Duplicating a listener "works", but listeners have all kinds
            ;; of references to the original window and text view and get
@@ -3498,17 +3503,12 @@
           (#/endEditing textstorage)
           (update-hemlock-selection textstorage) )))))
 
-
-(objc:defmethod (#/hyperSpecLookUp: :void)
-    ((self hemlock-text-view) sender)
+(objc:defmethod (#/hyperSpecLookUp: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
-  (let* ((range (#/selectedRange self)))
-    (unless (eql 0 (ns:ns-range-length range))
-      (let* ((string (nstring-upcase (lisp-string-from-nsstring (#/substringWithRange: (#/string (#/textStorage self)) range)))))
-        (multiple-value-bind (symbol win) (find-symbol string "CL")
-          (when win
-            (lookup-hyperspec-symbol symbol self)))))))
-
+  (with-string-under-cursor (self selection)
+    (multiple-value-bind (symbol win) (find-symbol (nstring-upcase selection) "CL")
+      (when win
+        (lookup-hyperspec-symbol symbol self)))))
 
 ;; This is called by stuff that makes a window programmatically, e.g. m-. or grep.
 ;; But the Open and New menus invoke the cocoa fns below directly. So just changing
