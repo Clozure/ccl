@@ -35,16 +35,41 @@
 			      #-little-endian-target :utf-16be
 			      buf noctets))))))
 	
-(defun %make-cfurl (pathname)
+(defmethod %make-cfurl ((pathname pathname))
   (let* ((namestring (native-translated-namestring pathname))
 	 (noctets (string-size-in-octets namestring :external-format :utf-8))
 	 (dir-p (if (directoryp pathname) #$true #$false)))
     (with-encoded-cstrs :utf-8 ((s namestring))
       (#_CFURLCreateFromFileSystemRepresentation +null-ptr+ s noctets dir-p))))
 
-(defmacro with-cfurl ((sym pathname) &body body)
-  `(let ((,sym (%make-cfurl ,pathname)))
+(defmethod %make-cfurl ((string string))
+  (with-cfstring (s string)
+      (#_CFURLCreateWithString +null-ptr+ s +null-ptr+)))
+
+(defmacro with-cfurl ((sym thing) &body body)
+  `(let ((,sym (%make-cfurl ,thing)))
      (unwind-protect
 	  (progn ,@body)
        (unless (%null-ptr-p ,sym)
 	 (external-call "CFRelease" :address ,sym :void)))))
+
+(defun %open-url-in-browser (cfurl)
+  (#_LSOpenCFURLRef cfurl +null-ptr+))
+
+(defun open-url-in-browser (url)
+  "Open the given absolute url with the current browser of choice"
+  (let ((result (with-cfurl (my-url url)
+                  (%open-url-in-browser my-url))))
+    (if (and result (= result #$fnfErr))
+      ; if it was a file: URL and resulted in file-not-found, try again, removing
+      ;   "Volumes/" from the filename. Sheesh.
+      (let ((pos (search "Volumes/" url :test #'string-equal)))
+        (if pos
+          (with-cfurl (my-url (concatenate 'string (subseq url 0 pos) (subseq url (+ pos 8))))
+            (%open-url-in-browser my-url))
+          result))
+      result)))
+
+; (ccl::open-url-in-browser "http://www.google.com/")
+; (ccl::open-url-in-browser "file:///Applications/ccl/trunk/ccl/doc/ccl-documentation.html")
+

@@ -10,6 +10,8 @@
 (defloadvar *hyperspec-map-sym-hash* nil)
 (defloadvar *hyperspec-map-sym-url* nil)
 
+(defvar *lookup-hyperspec-in-browser* nil "True if you want hyperspec lookups to be sent to your browser of choice. Nil if you want them sent to a window within CCL IDE.")
+
 (def-cocoa-default *hyperspec-lookup-enabled* :bool nil "enables hyperspec lookup"
                    (lambda (old new)
                      (unless (eq new old)
@@ -135,33 +137,36 @@
     (when relative-url
       (let* ((url (#/absoluteURL
                    (make-instance 'ns:ns-url
-                                  :with-string (%make-nsstring relative-url)
-                                  :relative-to-url *hyperspec-map-sym-url*))))
-        (rlet ((pdocattrs :id +null-ptr+)
-               (perror :id  +null-ptr+))
-          (let* ((data (make-instance 'ns:ns-data
-                                      :with-contents-of-url url
-                                      :options 0
-                                      :error perror)))
-            (if (not (%null-ptr-p (pref perror :id)))
-              (progn
-                (#/presentError: doc (pref perror :id)))
-              (let* ((string (make-instance 'ns:ns-attributed-string
-                                            :with-html data
-                                            :base-url url
-                                            :document-attributes pdocattrs))
-                     (docattrs (pref pdocattrs :id))
-                     (title #+cocotron +null-ptr+
-                            #-cocotron
-                            (if (%null-ptr-p docattrs)
-                              +null-ptr+
-                              (#/objectForKey: docattrs #&NSTitleDocumentAttribute))))
-                (if (%null-ptr-p title)
-                  (setq title (%make-nsstring (string symbol))))
-                (#/newDisplayDocumentWithTitle:content:
-                 (#/sharedDocumentController ns:ns-document-controller)
-                 title
-                 string)))))))))
+                     :with-string (%make-nsstring relative-url)
+                     :relative-to-url *hyperspec-map-sym-url*))))
+        
+        (if *lookup-hyperspec-in-browser*
+          (ccl::%open-url-in-browser url)
+          (rlet ((pdocattrs :id +null-ptr+)
+                 (perror :id  +null-ptr+))
+            (let* ((data (make-instance 'ns:ns-data
+                           :with-contents-of-url url
+                           :options 0
+                           :error perror)))
+              (if (not (%null-ptr-p (pref perror :id)))
+                (progn
+                  (#/presentError: doc (pref perror :id)))
+                (let* ((string (make-instance 'ns:ns-attributed-string
+                                 :with-html data
+                                 :base-url url
+                                 :document-attributes pdocattrs))
+                       (docattrs (pref pdocattrs :id))
+                       (title #+cocotron +null-ptr+
+                              #-cocotron
+                              (if (%null-ptr-p docattrs)
+                                +null-ptr+
+                                (#/objectForKey: docattrs #&NSTitleDocumentAttribute))))
+                  (if (%null-ptr-p title)
+                    (setq title (%make-nsstring (string symbol))))
+                  (#/newDisplayDocumentWithTitle:content:
+                   (#/sharedDocumentController ns:ns-document-controller)
+                   title
+                   string))))))))))
                               
 
 
