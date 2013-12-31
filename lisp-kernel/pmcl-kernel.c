@@ -289,6 +289,7 @@ allocate_lisp_stack_area(area_code stack_type,
 
   if (bottom) {
     a = new_area(base, bottom, stack_type);
+    a->h = h;
     a->hardlimit = base+hardsize;
     a->softlimit = base+hardsize+softsize;
     a->softprot = soft_area;
