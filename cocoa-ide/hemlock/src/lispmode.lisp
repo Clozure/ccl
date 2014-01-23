@@ -1023,7 +1023,7 @@
          (when (<= (decf nesting) 0)
            (return mark)))
         (t
-         (mark-after mark)
+         ;(mark-after mark)
          (unless (%backward-form-at-mark mark in-comment-p)
            (return nil)))))))
 
