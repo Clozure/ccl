@@ -638,8 +638,8 @@ NSObjects describe themselves in more detail than others."
 ;;; need to be recompiled with that augmented method type info, e.g.,
 ;;; because ambiguity was introduced.)
 
-(defun augment-objc-interfaces (dirname)
-  (use-interface-dir dirname)
+(defun augment-objc-interfaces (dirname &optional interfaces-dir)
+  (use-interface-dir dirname interfaces-dir)
   (register-objc-class-decls)
   (update-objc-method-info))
 
@@ -707,11 +707,11 @@ NSObjects describe themselves in more detail than others."
                         (register-objc-set-messages))
                       (return winning)))))))))))
 
-(defun objc:load-framework (framework-name interfaces-name)
-  (use-interface-dir interfaces-name)
+(defun objc:load-framework (framework-name interfaces-name &optional interfaces-dir)
+  (use-interface-dir interfaces-name interfaces-dir)
   (or (load-objc-extension-framework framework-name)
       (error "Can't load ObjC framework ~s" framework-name))
-  (augment-objc-interfaces interfaces-name))
+  (augment-objc-interfaces interfaces-name interfaces-dir))
 
                       
 (defmethod print-object ((p ns:protocol) stream)
