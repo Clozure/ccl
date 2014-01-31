@@ -733,6 +733,7 @@
                               :internal-size (or size 60)
                               :external-size (or external-size
                                                  (max (length export) 1)))))
+    (record-source-file name 'package)
     (unuse-package (package-use-list pkg) pkg)
     (rename-package pkg name nicknames)
     (flet ((operation-on-all-specs (function speclist)
