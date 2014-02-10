@@ -1069,7 +1069,7 @@
         
 (defun hash-pname (str len)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((primary (%pname-hash str len)))
+  (let* ((primary (mixup-hash-code (%pname-hash str len))))
     (declare (fixnum primary))
     (values primary (aref (the (simple-array (unsigned-byte 16) (8)) $hprimes) (logand primary 7)))))
     
@@ -1091,7 +1091,7 @@
           (if (and 
                (= (the fixnum (length pname)) len)
                (dotimes (j len t)
-                 (unless (eq (aref str j) (schar pname j))
+                 (unless (eq (schar str j) (schar pname j))
                    (return))))
             (return (values t (%symptr->symbol elt) i))))))))
 
