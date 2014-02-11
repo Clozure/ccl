@@ -87,8 +87,6 @@
         <string>OPENMCL-MAJOR-VERSION.OPENMCL-MINOR-VERSIONOPENMCL-REVISION</string>
         <key>NSHumanReadableCopyright</key>
         <string>Copyright 2002-CURRENT-YEAR Clozure Associates and contributors</string>
-	<key>NSMainNibFile</key>
-	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>LispApplication</string>
 	<key>UTExportedTypeDeclarations</key>

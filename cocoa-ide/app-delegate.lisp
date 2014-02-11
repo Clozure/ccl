@@ -59,7 +59,8 @@
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
     ((self lisp-application-delegate) notification)
   (declare (ignore notification))
-  (initialize-user-interface))
+  (initialize-user-interface)
+  (initialize-menus))
 
 (objc:defmethod (#/applicationWillTerminate: :void)
 		((self lisp-application-delegate) notification)

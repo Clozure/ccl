@@ -2681,7 +2681,7 @@
            (and *hyperspec-lookup-enabled*
 		(hyperspec-root-url)
                 (with-string-under-cursor (self selection)
-                  (nth-value 1 (find-symbol (nstring-upcase selection) "CL")))))
+		  (and selection (nth-value 1 (find-symbol (nstring-upcase selection) "CL"))))))
           ((eql action (@selector #/cut:))
            (let* ((selection (#/selectedRange self)))
              (and (> (ns:ns-range-length selection))

@@ -91,6 +91,7 @@
     "apropos-window"
     "xapropos"
     "file-dialogs"
+    "menus"
     "app-delegate"
     "ide-self-update"
     "search-files"

@@ -44,8 +44,6 @@ cocoa-ide/ide-contents/Resources/Encodings.tiff -text
 cocoa-ide/ide-contents/Resources/English.lproj/Authenticate.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/Authenticate.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/Credits.html -text
-cocoa-ide/ide-contents/Resources/English.lproj/MainMenu.nib/designable.nib -text
-cocoa-ide/ide-contents/Resources/English.lproj/MainMenu.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/OpenmclInspector.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/keyedobjects.nib -text
@@ -88,6 +86,7 @@ cocoa-ide/lib/cf-utils.lisp -text
 cocoa-ide/lib/cg.lisp -text
 cocoa-ide/lib/event-process.lisp -text
 cocoa-ide/lib/libdispatch.lisp -text
+cocoa-ide/menus.lisp -text
 cocoa-ide/preferences-views.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
