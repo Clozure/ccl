@@ -426,6 +426,7 @@
 )
 
 (bind-key "Goto Definition" #k"meta-.")
+; (bind-key "Inspect Symbol" #k"control-x control-i") ; conflicts with Indent Rigidly. Uncomment if you prefer this def.
 
 #+debugger-bindings
 (progn
