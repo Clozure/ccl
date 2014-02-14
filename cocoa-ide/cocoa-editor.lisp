@@ -2708,10 +2708,12 @@
           ((eql action (@selector #/openSelection:))
            (with-string-under-cursor (self selection)
              (pathname-for-namestring-fragment selection)))
-          ((eql action (@selector #/duplicate:))
+          ((or (eql action (@selector #/duplicate:))
+               (eql action (@selector #/showListDefinitions:)))
            ;; Duplicating a listener "works", but listeners have all kinds
            ;; of references to the original window and text view and get
            ;; confused if the original is closed before all duplicates are.
+           ;; Listing definitions is not applicable to listeners.
            (let* ((doc (#/document (#/windowController (#/window self)))))
              (not (typep doc 'hemlock-listener-document))))
            

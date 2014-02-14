@@ -465,10 +465,16 @@
 (defcommand "List Definitions" (p)
   "List definitions in the buffer, or in the current region if there is one"
   (declare (ignore p))
-  (let* ((view (current-view))
-         (region (if (region-active-p)
-                  (current-region)
-                  (buffer-region (current-buffer))))
+  (show-list-definitions-window (current-view)))
+
+;;; TODO: It could be nice to track and raise an existing window. That
+;;; could mean keeping track of each window per buffer and region, or just
+;;; keeping one per buffer and updating it if the region changes. As it
+;;; works now, a new window will be opened each time.
+(defun show-list-definitions-window (view)
+  (let* ((region (if (region-active-p)
+                   (current-region)
+                   (buffer-region (current-buffer))))
          (definitions (collect-definition-lines region)))
     (flet ((defn-action (defn)
              (gui::execute-in-gui (lambda ()

@@ -78,6 +78,7 @@
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Execute All" (objc:@selector #/evalAll:) #@"E")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Compile Buffer" (objc:@selector #/compileBuffer:) #@"")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Compile and Load Buffer" (objc:@selector #/compileAndLoadBuffer:) #@"")
+    (#/addItemWithTitle:action:keyEquivalent: menu #@"Definitions..." (objc:@selector #/showListDefinitions:) #@"")
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Interrupt" (objc:@selector #/interrupt:) #@",")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Continue" (objc:@selector #/continue:) #@"/")

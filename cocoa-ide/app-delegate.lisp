@@ -129,6 +129,14 @@
         (#/makeKeyAndOrderFront: w self)
         (set-search-files-default-dir (#/windowController w))))))
 
+(objc:defmethod (#/showListDefinitions: :void) ((self hemlock-text-view)
+                                               sender)
+  (declare (ignore sender))
+  (let ((view (hemlock-view self)))
+    (hi::handle-hemlock-event view
+                              #'(lambda () 
+                                  (hemlock::show-list-definitions-window view)))))
+
 (objc:defmethod (#/newListener: :void) ((self lisp-application-delegate)
                                         sender)
   (declare (ignore sender))
