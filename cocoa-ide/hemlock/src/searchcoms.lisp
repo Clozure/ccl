@@ -460,8 +460,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defparameter *def-search-string* (coerce '(#\newline #\() 'string))
-
 (defcommand "List Definitions" (p)
   "List definitions in the buffer, or in the current region if there is one"
   (declare (ignore p))
@@ -496,18 +494,26 @@
        :printer #'defn-printer))))
 
 (defun collect-definition-lines (&optional (region (buffer-region (current-buffer))))
-  (let* ((pattern (new-search-pattern :string-sensitive :forward *def-search-string*))
-         (end (region-end region)))
+  (let ((line (mark-line (region-start region)))
+        (last-line (mark-line (region-end region)))
+        (lines '()))
     (with-mark ((mark (region-start region)))
-      ;; TODO: doesn't find the definition on very first line.  LTRAB.
-      (loop
-        until (or (null (find-pattern mark pattern)) (mark> mark end))
-        as line = (mark-line (mark-after mark))
-        collect (list (line-string line) (hi::get-line-origin line) (get-definition-type mark))
-        while (let ((next (line-next line)))
-                (when next
-                  (setf (mark-line mark) next)
-                  (setf (mark-charpos mark) 0)))))))
+      (labels ((collect-line (line)
+                 (move-to-position mark 0 line)
+                 (push (list (line-string line) 
+                             (hi::get-line-origin line)
+                             (get-definition-type mark))
+                       lines))
+               (starts-with-definition (line)
+                 (let ((string (line-string line)))
+                   (and (plusp (length string))
+                        (char= #\( (char string 0))))))
+        (loop
+          (when (starts-with-definition line)
+            (collect-line line))
+          (when (eq line last-line)
+            (return (nreverse lines)))
+          (setf line (line-next line)))))))
 
 (defun get-definition-type (mark)
   (let ((buffer (mark-buffer mark)))
