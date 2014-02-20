@@ -307,20 +307,82 @@
                                               (edited #>BOOL))
   (declare (ignorable edited)))
 
-(objc:defmethod (#/windowShouldClose: #>BOOL) ((w hemlock-listener-frame)
-                                               sender)
-  (declare (ignorable sender))
+(defun maybe-close-all-windows-of-this-class (sender)
+  "Maybe forcibly close all windows of same class as window of current event, if any, and
+  if the option key was pressed. Returns t if we forcibly 'closed' window(s) here
+  (for some definition of 'close'), nil otherwise."
+  (let* ((event (#/currentEvent *nsapp*))
+         (modifiers (#/modifierFlags event))
+         (original-window (#/window event)))
+    (when (logtest #$NSAlternateKeyMask modifiers) ; check for option key pressed
+      (unless (%null-ptr-p original-window)
+        ;(format t "~%About to call map-windows for sender ~S" sender)
+        (map-windows #'(lambda (w) (when (and (eq (type-of w)
+                                                  (type-of original-window))
+                                              (not (#/isDocumentEdited w)))
+                                     (do-close-window w sender))))
+        ;(print "Called map-windows")
+        )
+      t)))
+
+(defmethod do-close-window ((w hemlock-listener-frame) sender)
+  "Forcibly 'close' this window, with some definition of 'close' that's right for this window class."
   (let* ((doc (#/document (#/windowController w))))
     (if (or (%null-ptr-p doc)
             (null (hemlock-document-process doc)) 
             (perform-close-kills-process-p doc))
-      t
+      (#/close w)
       (progn
         (#/orderOut: w sender)
         ;(#/close w)
-        nil))))
+        )))
+  nil ; tell system we already closed it
+  )
 
+(defmethod do-close-window ((w ns:ns-window) sender)
+  "Maybe forcibly 'close' this window, with some definition of 'close' that's right for this window class.
+  Return nil if we should let the system close it instead."
+  (declare (ignore sender))
+  (#/close w)
+  nil ; tell system we already closed it
+  )
 
+; This is a mess, but a necessary mess.
+; The reason this should ALWAYS return nil is because of the case where the option key is held
+; down and a window's close box is clicked. The proper behavior for a Lisp IDE is for all windows of
+; the same class as the first one to close. But we can't use the #/windowShouldClose mechanism for
+; this, because we have to somehow record the window class of the window that triggered the event in
+; the first place, and after that window is closed, we cannot then refer back to find out what kind
+; it was. And since I didn't want to introduce global variables, this is the next best thing:
+; When the option key is held down, forcibly close all the windows of the same class as the first,
+;   and tell #/windowShouldClose to always return nil so the system won't ever try to actually
+;   close anything. Note that the system does call #/windowShouldClose once for every window that's
+;   still open anyway. The first call to #/windowShouldClose establishes whether the option key
+;   was held down and if it was, it takes control away from the system and just closes the right
+;   windows then and there. If the option key was NOT held down, theoretically we could just return
+;   T and the system would take care of it, but because the 'closing' method on hemlock-listener-frames
+;   is complicated, we can't do this either. So we have complete lisp control over all window closing.
+
+; Well, almost.
+; There's still a slight bug when
+;  -- You have multiple open Hemlock windows, AND
+;  -- One or more of those windows contains modified but as-yet-unsaved content, and
+;  -- You option-close a listener window.
+; In that case, you'll get a "Do you want to save" dialog panel for the unsaved Hemlock window,
+;   when you shouldn't because you aren't tryin to close Hemlock windows--you're trying to close
+;   listeners. But I haven't figured out a way to prevent this panel from showing up. Since it shows
+;   up BEFORE #/windowShouldClose is called, that function cannot stop it. It's a benign bug because
+;   it gives the user a chance to save unsaved files. And it's a rare case (because it's not common
+;   to have a bunch of listener windows that you want to close all at once anyway).
+;   But it's kind of annoying when it happens.
+
+(objc:defmethod (#/windowShouldClose: #>BOOL) ((w ns:ns-window)
+                                               sender)
+  (declare (ignorable sender))
+  ;(format t "~%In #/windowShouldClose for ~S" (or (window-pathname w) (class-of w) ))
+  (if (maybe-close-all-windows-of-this-class sender)
+    nil ; because maybe-close-all-windows-of-this-class already closed all that needed closing
+    (do-close-window w sender)))
 
 (defclass hemlock-listener-window-controller (hemlock-editor-window-controller)
     ()
