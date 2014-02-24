@@ -119,6 +119,7 @@
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Clozure CL Manual" (objc:@selector #/showManual:) #@"")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"HyperSpec Lookup" (objc:@selector #/hyperSpecLookUp:) #@"y")
+    (#/addItemWithTitle:action:keyEquivalent: menu #@"Hemlock Commands" (objc:@selector #/showHemlockCommands:) #@"")
     menu))
 
 (defun initialize-menus ()

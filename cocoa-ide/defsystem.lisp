@@ -90,6 +90,7 @@
     "processes-window"
     "apropos-window"
     "xapropos"
+    "hemlock-commands"
     "file-dialogs"
     "menus"
     "app-delegate"

@@ -31,6 +31,7 @@ cocoa-ide/console-window.lisp -text
 cocoa-ide/constants.lisp -text
 cocoa-ide/defsystem.lisp -text
 cocoa-ide/file-dialogs.lisp -text
+cocoa-ide/hemlock-commands.lisp -text
 cocoa-ide/hemlock-text.lisp -text
 cocoa-ide/hemlock/src/charprops.lisp -text
 cocoa-ide/hemlock/src/display.lisp -text

@@ -276,4 +276,12 @@
     (with-cfstring (s (native-translated-namestring p))
       (#/openFile: workspace s))))
 
+(defloadvar *hemlock-commands-window-controller* nil)
 
+(objc:defmethod (#/showHemlockCommands: :void) ((self lisp-application-delegate)
+                                               sender)
+  (declare (ignore sender))
+  (when (null *hemlock-commands-window-controller*)
+    (setf *hemlock-commands-window-controller*
+	  (make-instance 'hemlock-commands-window-controller)))
+  (#/showWindow: *hemlock-commands-window-controller* +null-ptr+))
