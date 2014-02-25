@@ -1358,7 +1358,7 @@
            ,(lognot identity))
         (if more
           (if (cdr more)
-            whole
+            `(,(car whole) (,binop ,n0 ,n1) ,@more)
             `(,binop ,n0 (,binop ,n1 ,(car more))))
           (if n1p
             `(,binop ,n0 ,n1)
