@@ -3586,6 +3586,7 @@
         (unless (or
                  (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :push)
                  (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :pop)
+                 (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump)
                  (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
                                             push-vinsn pop-vinsn pushed-reg))
                         (popped-reg-is-set (if same-reg
@@ -3595,8 +3596,10 @@
                         (popped-reg-is-reffed (unless same-reg
                                                 (vinsn-sequence-refs-reg-p
                                                  push-vinsn pop-vinsn popped-reg))))
+
                    (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
                                (or (null popped-reg-is-reffed)
+                                   (null pushed-reg-is-set)
                                    (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)))
                           (unless same-reg
                             (let* ((copy (! copy-gpr popped-reg pushed-reg)))
@@ -3608,7 +3611,8 @@
                                   (insert-dll-node-before copy pop-vinsn)))))
                           (elide-vinsn push-vinsn)
                           (elide-vinsn pop-vinsn))
-                   (t                   ; maybe allocate a node temp
+                    (t                   ; maybe allocate a node temp
+
                     )))))))))
                 
         
