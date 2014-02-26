@@ -193,10 +193,12 @@
 
 (defmethod get-full-dir-string ((str string))
   ;make sure it has a trailing slash
-  (let ((ret (ccl:native-translated-namestring str)))
-    (unless (eql #\/ (ignore-errors (aref ret (1- (length ret)))))
-      (setf ret (concatenate 'string ret "/")))
-    ret))
+  (let* ((ret (ccl:native-translated-namestring str))
+         (len (length ret)))
+    (cond ((eql len 0) "./")
+          ((eql #\/ (char ret (1- len))) ret)
+          (t (concatenate 'string ret "/")))))
+
 
 ;;; nil host is considered valid
 (defmethod valid-host-p ((ob t))
@@ -216,8 +218,6 @@
 (defun make-grep-arglist (wc find-str)
   (let ((grep-args (list "-I" "-s" "-e" find-str)))
     ; Ignore binary files, suppress error messages
-    (when (recursive-p wc)
-      (push "-r" grep-args))
     (unless (case-sensitive-p wc)
       (push "-i" grep-args))
     (unless (regex-p wc)
@@ -231,13 +231,15 @@
 	(folder-string-value wc) (#/stringValue (folder-combo-box wc))
 	(file-name-string-value wc) (#/stringValue (file-name-combo-box wc)))
   (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
-	 (folder-str (get-full-dir-string (lisp-string-from-nsstring (folder-string-value wc))))
+	 (folder-str (get-full-dir-string (folder-string-value wc)))
 	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
 	 (grep-args (make-grep-arglist wc find-str)))
+    (setf (search-str wc) find-str
+          (search-dir wc) folder-str)
     (push "-c" grep-args) ; we just want the count here
-    (setf grep-args (nconc grep-args (list "--include" file-str folder-str)))
-    (setf (search-dir wc) folder-str
-	  (search-str wc) find-str)
+    (if (recursive-p wc)
+      (setf grep-args (nconc grep-args (list "-r" "--include" file-str folder-str)))
+      (list (concatenate 'string folder-str file-str)))
     (#/setEnabled: (search-button wc) nil)
     (setf (grep-process wc) (process-run-function "grep" 'run-grep grep-args wc))
     (#/setTitle: (#/window wc) (#/autorelease
