@@ -640,7 +640,7 @@
             (bad-index end2 string2)))
         (locally (declare (fixnum start2 end2))
           (if (> start2 end2)
-            (error ":start2 argument ~s exceeds :end2 argument ~s" start1 end1))
+            (error ":start2 argument ~s exceeds :end2 argument ~s" start2 end2))
           (when disp2
             (locally (declare (fixnum disp2))
               (incf start2 disp2)
