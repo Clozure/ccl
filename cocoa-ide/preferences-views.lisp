@@ -116,6 +116,10 @@
       (#/release text-field)
       view)))
 
+(defconstant $preferences-change-editor-font-button-tag 100)
+(defconstant $preferences-change-listener-input-font-button-tag 101)
+(defconstant $preferences-change-listener-output-font-button-tag 102)
+
 (defun %appearance-editor-box (frame)
   (let ((box (#/initWithFrame: (#/alloc ns:ns-box) frame))
         (dc (#/sharedUserDefaultsController ns:ns-user-defaults-controller)))
@@ -131,6 +135,7 @@
         (#/addSubview: box default-font-label)
         (#/release default-font-label)
         (#/addSubview: box change-button)
+        (#/setTag: change-button $preferences-change-editor-font-button-tag)
         (#/release change-button)
         (let ((options (#/dictionaryWithObject:forKey:
                       ns:ns-dictionary
@@ -226,6 +231,7 @@
         (#/addSubview: box input-font-label)
         (#/release input-font-label)
         (#/addSubview: box change-input-button)
+        (#/setTag: change-input-button $preferences-change-listener-input-font-button-tag)
         (#/release change-input-button)
         (#/bind:toObject:withKeyPath:options: input-font-name-label #@"value"
                                               dc
@@ -236,6 +242,7 @@
         (#/addSubview: box output-font-label)
         (#/release output-font-label)
         (#/addSubview: box change-output-button)
+        (#/setTag: change-output-button $preferences-change-listener-output-font-button-tag)
         (#/release change-output-button)
         (#/bind:toObject:withKeyPath:options: output-font-name-label #@"value"
                                               dc

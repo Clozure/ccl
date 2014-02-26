@@ -49,6 +49,17 @@
     (#/release toolbar)
     (#/setSelectedItemIdentifier: toolbar #@"appearance")
     (#/showAppearancePrefs: self +null-ptr+))
+  (let* ((view (slot-value self 'appearance-view))
+         (editor-font-button (#/viewWithTag: view $preferences-change-editor-font-button-tag))
+         (listener-input-font-button (#/viewWithTag: view $preferences-change-listener-input-font-button-tag))
+         (listener-output-font-button (#/viewWithTag: view $preferences-change-listener-output-font-button-tag)))
+    (#/setTarget: editor-font-button self)
+    (#/setAction: editor-font-button (objc:@selector #/showFontPanel:))
+    (#/setTarget: listener-input-font-button self)
+    (#/setAction: listener-input-font-button (objc:@selector #/showFontPanel:))
+    (#/setTarget: listener-output-font-button self)
+    (#/setAction: listener-output-font-button (objc:@selector #/showFontPanel:)))
+
   (#/addObserver:selector:name:object: (#/defaultCenter ns:ns-notification-center)
 				       self
 				       (@selector #/defaultsDidChange:)
@@ -81,13 +92,13 @@
 	 (font nil)
 	 (panel (#/window self)))
     (ecase tag
-      (1
+      (#.$preferences-change-editor-font-button-tag
        (setq font *editor-font*)
        (setq *listener-or-editor* :editor))
-      (2
+      (#.$preferences-change-listener-input-font-button-tag
        (setq font *listener-input-font*)
        (setq *listener-or-editor* :listener-input))
-      (3
+      (#.$preferences-change-listener-output-font-button-tag
        (setq font *listener-output-font*)
        (setq *listener-or-editor* :listener-output)))
     (#/makeFirstResponder: panel panel)
