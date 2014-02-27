@@ -144,7 +144,7 @@
   ;; replaced with the appropriate conditional name for your
   ;; implementation/dialect.
   ;; Uhh, DECLARATION-INFORMATION isn't ANSI-CL anymore
-  (let ((stuff (ccl:declaration-information 'optimize env)))
+  (let ((stuff (ccl::declaration-information 'optimize env)))
     (values (or (cadr (assoc 'speed stuff)) 1)
             (or (cadr (assoc 'space stuff)) 1)
             (or (cadr (assoc 'safety stuff)) 1)
