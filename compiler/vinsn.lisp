@@ -829,6 +829,13 @@
   (do-dll-nodes (n vinsns)
     (format t "~&~v@t~s" indent n)))
 
+(defun show-vinsn-range (first last indent)
+  (do* ((vinsn first (dll-node-succ vinsn)))
+       ()
+    (format t "~&~v@t~s" indent vinsn)
+    (when (eq vinsn last) (return))))
+
+
 (defun show-fgn (node)
   (format t "~&~s (~d) {~a}" (type-of node) (fgn-id node) (mapcar #'fgn-id (fgn-inedges node)))
   (show-vinsns node 2)
