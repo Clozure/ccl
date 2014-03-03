@@ -657,6 +657,9 @@ the lisp and run REBUILD-CCL again.")
                                 "Developer tools may not be installed correctly.")
                                (get-output-stream-string s))))))))
              (when reload
+               (let* ((old-write-date
+                       (or (ignore-errors (file-write-date (standard-image-name)))
+                      0)))
                (with-input-from-string (cmd (format nil
                                               "(save-application ~s)"
                                               (standard-image-name)))
@@ -674,7 +677,9 @@ the lisp and run REBUILD-CCL again.")
                          :error output))
                      (if (and (eq status :exited)
                               (eql exit-code 0))
-                       (progn
+                       (let* ((write-date (file-write-date (standard-image-name))))
+                         (unless (and write-date (>= write-date old-write-date))
+                           (error "The hesp imsge ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
                          (format t "~&;Wrote heap image: ~s"
                                  (truename (format nil "ccl:~a"
                                                    (standard-image-name))))
@@ -683,7 +688,7 @@ the lisp and run REBUILD-CCL again.")
                                    (get-output-stream-string output))))
                        (error "Errors (~s ~s) reloading boot image:~&~a"
                               status exit-code
-                              (get-output-stream-string output)))))))
+                              (get-output-stream-string output))))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))
