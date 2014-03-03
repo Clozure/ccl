@@ -366,12 +366,6 @@
 ;;; Displaying and updating the interface
 ;;;
 
-(defstruct search-result-file 
-  name ;A lisp string that contains the full path of the file
-  nsstr  ;An NSString that is shown in the dialog
-  lines ;A vector of search-result-lines
-  )
-
 
 (defclass search-files-window-controller (ns:ns-window-controller)
   ((find-combo-box :foreign-type :id :accessor find-combo-box)
@@ -662,94 +656,3 @@
              (line-number (#/lineNumber node-data)))
         (cocoa-edit-grep-line (%get-cfstring (#/path url))
                               (1- line-number))))))
-
-(defun map-lines (string fn)
-  "For each line in string, fn is called with the start and end of the line"
-  (loop with end = (length string)
-    for start = 0 then (1+ pos)
-    as pos = (or (position #\Newline string :start start :end end) end)
-    when (< start pos) do (funcall fn start pos)
-    while (< pos end)))
-
-(defun nsstring-to-file-result (wc nsstring)
-  (find nsstring (search-results wc) :test #'ns-string-equal :key #'search-result-file-nsstr))
-
-(defun nsstring-to-line-result (wc nsstring)
-  (loop for file-result across (search-results wc)
-    do (loop for line-result across (search-result-file-lines file-result)
-         while line-result
-         do (when (ns-string-equal nsstring (search-result-line-nsstr line-result))
-              (return-from nsstring-to-line-result line-result)))))
-
-;;NSOutlineView data source protocol
-;- (id)outlineView:(NSOutlineView *)outlineView child:(NSInteger)index ofItem:(id)item
-(objc:defmethod #/outlineView:child:ofItem: ((wc search-files-window-controller) view (child :<NSI>nteger) item)
-  (declare (ignore view))
-  (with-slots (results) wc
-    (if (Eql Item +Null-Ptr+)
-      (let ((result (aref results child)))
-        (or (search-result-file-nsstr result)
-            (setf (search-result-file-nsstr result)
-                  (%make-nsstring (format nil "[~a] ~a" 
-                                          (length (search-result-file-lines result))
-                                          (search-result-file-name result))))))
-      (let* ((file-result (nsstring-to-file-result wc item))
-             (line-result (get-line-result wc file-result child)))
-        (if line-result
-          (search-result-line-nsstr line-result)
-          #@"[internal error]")))))
-
-(defun get-line-result (wc file-result index)
-  (let ((lines (search-result-file-lines file-result)))
-    (or (aref lines index)
-        (progn
-          (compute-line-results wc file-result)
-          (aref lines index)))))
-
-(defun compute-line-results (wc file-result)
-  (with-slots (search-str search-dir) wc
-    (let* ((grep-args (cons "-n" (make-grep-arglist wc search-str))) ; prefix each result with line number
-           (grep-output (call-grep (nconc grep-args 
-                                          (list (concatenate 'string search-dir (search-result-file-name file-result))))))
-           (index -1))
-      (map-lines grep-output
-                 #'(lambda (start end)
-                     (let* ((str (subseq grep-output start end))
-                            (colon-pos (position #\: str))
-                            (num (parse-integer str :end colon-pos)))
-                       (setf (aref (search-result-file-lines file-result) (incf index))
-                             (make-search-result-line :file (search-result-file-name file-result) 
-                                                      :number num 
-                                                      :nsstr (%make-nsstring str)))))))))
-
-;- (BOOL)outlineView:(NSOutlineView *)outlineView isItemExpandable:(id)item
-(objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>) ((wc search-files-window-controller) view item)
-  (declare (ignore view))
-  ;;it's expandable if it starts with #\[ (it's a file)
-  (and (typep item 'ns:ns-string)
-       (= (char-code #\[) (#/characterAtIndex: item 0))))
-
-;- (NSInteger)outlineView:(NSOutlineView *)outlineView numberOfChildrenOfItem:(id)item
-(objc:defmethod (#/outlineView:numberOfChildrenOfItem: :<NSI>nteger)
-                ((wc search-files-window-controller) view item)
-  (declare (ignore view))
-  (if (eql item +null-ptr+)
-    (length (search-results wc))
-    (let ((file-result (nsstring-to-file-result wc item)))
-      (if file-result
-        (length (search-result-file-lines file-result))
-        0))))
-
-;- (id)outlineView:(NSOutlineView *)outlineView objectValueForTableColumn:(NSTableColumn *)tableColumn byItem:(id)item
-(objc:defmethod #/outlineView:objectValueForTableColumn:byItem: 
-                ((wc search-files-window-controller) outline-view table-column item)
-  (declare (ignore outline-view table-column))
-  (let ((file-result (nsstring-to-file-result wc item)))
-    (if file-result
-      (search-result-file-nsstr file-result)
-      (let ((line-result (nsstring-to-line-result wc item)))
-        (if line-result
-          (search-result-line-nsstr line-result)
-          #@"ERROR")))))
-
-
