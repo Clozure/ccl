@@ -3604,11 +3604,13 @@
                           (unless same-reg
                             (let* ((copy (! copy-gpr popped-reg pushed-reg)))
                               (remove-dll-node copy)
-                              (if popped-reg-is-reffed
-                                (insert-dll-node-after copy popped-reg-is-reffed)
-                                (if pushed-reg-is-set
+                              (if (not pushed-reg-is-set)
+                                (insert-dll-node-before copy pop-vinsn)
+                                (if popped-reg-is-reffed
+                                  (insert-dll-node-after copy popped-reg-is-reffed)
+
                                   (insert-dll-node-after copy push-vinsn)
-                                  (insert-dll-node-before copy pop-vinsn)))))
+                                  ))))
                           (elide-vinsn push-vinsn)
                           (elide-vinsn pop-vinsn))
                     (t                   ; maybe allocate a node temp
