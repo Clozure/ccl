@@ -659,36 +659,36 @@ the lisp and run REBUILD-CCL again.")
              (when reload
                (let* ((old-write-date
                        (or (ignore-errors (file-write-date (standard-image-name)))
-                      0)))
-               (with-input-from-string (cmd (format nil
-                                              "(save-application ~s)"
-                                              (standard-image-name)))
-                 (with-output-to-string (output)
-                   (multiple-value-bind (status exit-code)
-                       (external-process-status
-                        (run-program
-                         (format nil "./~a" (standard-kernel-name))
-                         (list* "--image-name" (standard-boot-image-name)
-				"--no-init"
-                                "--batch"
-                                reload-arguments)
-                         :input cmd
-                         :output output
-                         :error output))
-                     (if (and (eq status :exited)
-                              (eql exit-code 0))
-                       (let* ((write-date (file-write-date (standard-image-name))))
-                         (unless (and write-date (>= write-date old-write-date))
-                           (error "The hesp imsge ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
-                         (format t "~&;Wrote heap image: ~s"
-                                 (truename (format nil "ccl:~a"
-                                                   (standard-image-name))))
-                         (when verbose
-                           (format t "~&;Reload heap image output:~%~a"
-                                   (get-output-stream-string output))))
-                       (error "Errors (~s ~s) reloading boot image:~&~a"
-                              status exit-code
-                              (get-output-stream-string output))))))))
+                           0)))
+                 (with-input-from-string (cmd (format nil
+                                                "(save-application ~s)"
+                                                (standard-image-name)))
+                   (with-output-to-string (output)
+                     (multiple-value-bind (status exit-code)
+                         (external-process-status
+                          (run-program
+                           (format nil "./~a" (standard-kernel-name))
+                           (list* "--image-name" (standard-boot-image-name)
+                                  "--no-init"
+                                  "--batch"
+                                  reload-arguments)
+                           :input cmd
+                           :output output
+                           :error output))
+                       (if (and (eq status :exited)
+                                (eql exit-code 0))
+                         (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
+                           (unless (and write-date (> write-date old-write-date))
+                             (error "The hesp imsge ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
+                           (format t "~&;Wrote heap image: ~s"
+                                   (truename (format nil "ccl:~a"
+                                                     (standard-image-name))))
+                           (when verbose
+                             (format t "~&;Reload heap image output:~%~a"
+                                     (get-output-stream-string output))))
+                         (error "Errors (~s ~s) reloading boot image:~&~a"
+                                status exit-code
+                                (get-output-stream-string output))))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))
