@@ -1,29 +1,377 @@
 (in-package "GUI")
 
+(defparameter *search-files-history-limit* 5 "combo box history length")
+
+;;;
+;;; Creating the outline view from grep
+;;;
+
+;;; Views for the outline view
+
+(defun %image-and-text-table-cell-view ()
+  (cg:with-rects ((image-frame 0 0 16 16)
+                  (text-field-frame 0 0 100 16))
+    (let* ((view (#/initWithFrame: (#/alloc ns:ns-table-cell-view)
+                                   #&NSZeroRect))
+           (image-view (#/initWithFrame: (#/alloc ns:ns-image-view)
+                                         image-frame))
+           (text-field (#/initWithFrame: (#/alloc ns:ns-text-field)
+                                         text-field-frame))
+           (views-dict (#/dictionaryWithObjectsAndKeys: ns:ns-dictionary
+                                                        image-view #@"imageView"
+                                                        text-field #@"textField"
+                                                        +null-ptr+)))
+      (#/setNextKeyView: view text-field)
+      (#/setImageView: view image-view)
+      (#/setTextField: view text-field)
+      (#/setDrawsBackground: text-field nil)
+      (#/setFont: text-field (#/systemFontOfSize:
+                              ns:ns-font
+                              (#/smallSystemFontSize ns:ns-font)))
+      (#/setBordered: text-field nil)
+      (#/setEditable: text-field nil)
+      (#/setLineBreakMode: (#/cell text-field)
+                           #$NSLineBreakByTruncatingTail)
+      (#/setTranslatesAutoresizingMaskIntoConstraints: image-view nil)
+      (#/setTranslatesAutoresizingMaskIntoConstraints: text-field nil)
+      (#/addSubview: view image-view)
+      (#/release image-view)
+      (#/addSubview: view text-field)
+      (#/release text-field)
+      (#/addConstraints: view
+                         (#/constraintsWithVisualFormat:options:metrics:views:
+                          ns:ns-layout-constraint
+                          #@"|-5-[imageView(==16)]-[textField(>=100)]|"
+                          0 +null-ptr+ views-dict))
+      (#/addConstraint: view
+                        (#/constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:
+                         ns:ns-layout-constraint image-view #$NSLayoutAttributeCenterY
+                         #$NSLayoutRelationEqual view #$NSLayoutAttributeCenterY 1d0 0d0))
+      (#/addConstraint: view
+                        (#/constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:
+                         ns:ns-layout-constraint text-field #$NSLayoutAttributeCenterY
+                         #$NSLayoutRelationEqual view #$NSLayoutAttributeCenterY 1d0 0d0))
+      view)))
+
+(defun %navigator-search-table-cell-view ()
+  (%image-and-text-table-cell-view))
+
+(defun %navigator-match-table-cell-view ()
+  (cg:with-rects ((text-field-frame 0 0 100 16))
+    (let* ((view (#/initWithFrame: (#/alloc ns:ns-table-cell-view)
+                                   #&NSZeroRect))
+           (text-field (#/initWithFrame: (#/alloc ns:ns-text-field)
+                                         text-field-frame))
+           (views-dict (#/dictionaryWithObjectsAndKeys: ns:ns-dictionary
+                                                        text-field
+                                                        #@"textField"
+                                                        +null-ptr+)))
+      (#/setNextKeyView: view text-field)
+      (#/setTextField: view text-field)
+      (#/setDrawsBackground: text-field nil)
+      (#/setFont: text-field (#/systemFontOfSize:
+                              ns:ns-font
+                              (#/smallSystemFontSize ns:ns-font)))
+      (#/setBordered: text-field nil)
+      (#/setEditable: text-field t)
+      (#/setLineBreakMode: (#/cell text-field)
+                           #$NSLineBreakByTruncatingTail)
+      (#/setTranslatesAutoresizingMaskIntoConstraints: text-field nil)
+      (#/addSubview: view text-field)
+      (#/release text-field)
+      (#/addConstraints: view (#/constraintsWithVisualFormat:options:metrics:views:
+                               ns:ns-layout-constraint
+                               #@"|-5-[textField(>=100)]|"
+                               0 +null-ptr+ views-dict))
+      (#/addConstraint: view
+                        (#/constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:
+                         ns:ns-layout-constraint text-field #$NSLayoutAttributeCenterY
+                         #$NSLayoutRelationEqual view #$NSLayoutAttributeCenterY 1d0 0d0))
+      view)))
+
+
+
+(defun string-to-lines (string)
+  (with-input-from-string (s string)
+    (loop for line = (read-line s nil nil) while line collect line)))
+
+(defun run-grep (pathnames pattern)
+  ;; Don't try to grep files that don't exist.  Even if we use
+  ;; grep's -s flag, the exit code will still indicate an error.
+  (setq pathnames (remove-if-not #'probe-file pathnames))
+  (let* ((s (make-string-output-stream))
+         (args (append (list "-nHI" "--null" "--directories=skip" "-F" pattern) pathnames))
+         (proc (run-program "/usr/bin/grep" args :input nil :output s)))
+    (multiple-value-bind (status exit-code)
+                         (external-process-status proc)
+      (if (eq status :exited)
+        (cond ((= exit-code 0)
+               ;; matched one or more lines
+               (values (string-to-lines (get-output-stream-string s)) t))
+              ((= exit-code 1)
+               ;; no matches
+               (values nil t))
+              ((>= exit-code 2)
+               ;; some error occurred
+               (values nil nil)))
+        (values (ccl::describe-external-process-failure proc "running grep") nil)))))
+
+(defun run-search-files-grep (folder file-pattern pattern
+                              &key recursive case-sensitive regex)
+  (when (probe-file folder)
+    (let* ((s (make-string-output-stream))
+           (args (append (list "-snHI" "--null" "--include" file-pattern
+                               "--directories=skip")
+                         (when recursive
+                           (list "-R"))
+                         (unless case-sensitive
+                           (list "-i"))
+                         (unless regex
+                           (list "-F"))
+                         (list pattern
+                               (string-right-trim "/" folder))))
+           (proc (run-program "/usr/bin/grep" args :input nil :output s)))
+      (multiple-value-bind (status exit-code)
+          (external-process-status proc)
+        (if (eq status :exited)
+            (cond ((= exit-code 0)
+                   ;; matched one or more lines
+                   (values (string-to-lines (get-output-stream-string s)) t))
+                  ((= exit-code 1)
+                   ;; no matches
+                   (values nil t))
+                  ((>= exit-code 2)
+                   ;; Return *some* data, even if the exit code
+                   ;; indicates an error. This is mainly because grep
+                   ;; will still return useful results even if some
+                   ;; files were unreadable (e.g. dangling symlinks).
+                   (values (string-to-lines (get-output-stream-string s))
+                           nil)))
+            (values (ccl::describe-external-process-failure proc "running grep") nil))))))
+
+(defclass grep-result ()
+  ((file :accessor grep-result-file :initarg :file)
+   (matches :accessor grep-result-matches :initarg :matches)))
+
+(defun grep-result-match-count (grep-result)
+  (length (grep-result-matches grep-result)))
+
+(defmethod print-object ((g grep-result) stream)
+  (print-unreadable-object (g stream :type t)
+    (format stream "~s, ~d matched line~:p" (grep-result-file g)
+            (length (grep-result-matches g)))))
+
+(defun make-grep-result (filename matches)
+  (make-instance 'grep-result :file filename :matches matches))
+
+;; This assumes that grep was called with --null, which prints a null
+;; after the filname.  If it printed the usual #\: then we would choke
+;; on file names that contain colons.
+(defun grep-output-line-values (line)
+  (let* ((nul (position #\nul line))
+         (colon (position #\: line :start (1+ nul))))
+    (values (subseq line 0 nul)
+            (parse-integer line :start (1+ nul) :end colon)
+            (subseq line (1+ colon)))))
+
+(defun generate-grep-results (lines)
+  (let ((current-filename nil)
+        (current-matches nil)
+        (results nil))
+    (dolist (line lines)
+      (multiple-value-bind (filename line-number text)
+                           (grep-output-line-values line)
+        (cond ((null current-filename)
+               (setq current-filename filename)
+               (push (list line-number text) current-matches))
+              ((string= filename current-filename)
+               (push (list line-number text) current-matches))
+              (t
+               (push (make-grep-result current-filename
+                                       (nreverse current-matches)) results)
+               (setq current-filename filename)
+               (setq current-matches nil)
+               (push (list line-number text) current-matches)))))
+    (when current-matches
+      (push (make-grep-result current-filename
+                              (nreverse current-matches)) results))
+    (nreverse results)))
+
+(defclass navigator-search-node-data (ns:ns-object)
+  ((display-string :foreign-type :id)
+   (url :foreign-type :id)
+   (line-number :foreign-type #>NSInteger)
+   (text :foreign-type :id))
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod (#/setDisplayString: :void) ((self navigator-search-node-data) string)
+  (with-slots (display-string) self
+    (unless (eql string display-string)
+      (#/release display-string)
+      (setq display-string (#/retain string)))))
+
+(objc:defmethod #/URL ((self navigator-search-node-data))
+  (slot-value self 'url))
+
+(objc:defmethod (#/setURL: :void) ((self navigator-search-node-data) new-url)
+  (with-slots (url) self
+    (unless (eql url new-url)
+      (#/release url)
+      (setq url (#/retain new-url)))))
+
+(objc:defmethod (#/lineNumber #>NSInteger) ((self navigator-search-node-data))
+  (slot-value self 'line-number))
+
+(objc:defmethod (#/setLineNumber: :void) ((self navigator-search-node-data)
+                                          (number #>NSInteger))
+  (setf (slot-value self 'line-number) number))
+
+(objc:defmethod (#/setText: :void) ((self navigator-search-node-data) string)
+  (with-slots (text) self
+    (unless (eql string text)
+      (#/release text)
+      (setq text (#/retain string)))))
+
+(objc:defmethod (#/dealloc :void) ((self navigator-search-node-data))
+  (#/release (slot-value self 'display-string))
+  (#/release (slot-value self 'url))
+  (#/release (slot-value self 'text))
+  (call-next-method))
+
+(objc:defmethod (#/isContainer #>BOOL) ((self navigator-search-node-data))
+  (%null-ptr-p (slot-value self 'text)))
+
+(defun %tree-node-for-grep-result (grep-result)
+  (let* ((node-data (#/new navigator-search-node-data))
+         (node (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node) node-data))
+         (file (grep-result-file grep-result)))
+    (#/release node-data)
+    (with-cfstring (s file)
+      (#/setDisplayString: node-data s))
+    (with-cfurl (u file)
+      (#/setURL: node-data u))
+    (let ((matches (grep-result-matches grep-result)))
+      (dolist (match matches)
+        (let* ((child-node-data (#/new navigator-search-node-data))
+               (child-node (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node)
+                                                         child-node-data))
+               (line-number (first match))
+               (text (second match)))
+          (#/release child-node-data)
+          (with-cfurl (u file)
+            (#/setURL: child-node-data u))
+          (#/setLineNumber: child-node-data line-number)
+          (with-cfstring (s text)
+            (#/setText: child-node-data s))
+          (#/addObject: (#/childNodes node) child-node))))
+    node))
+
+(defun %tree-node-for-grep-results (grep-results)
+  (let* ((root-node (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node)
+						  +null-ptr+))
+	 (children (#/mutableChildNodes root-node)))
+    (dolist (r grep-results)
+      (let ((node (%tree-node-for-grep-result r)))
+	(#/addObject: children node)
+	(#/release node)))
+    root-node))
+
+(defclass grep-results-data-source (ns:ns-object)
+  ((root-node :foreign-type :id))
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod #/init ((self grep-results-data-source))
+  (let ((new (call-next-method)))
+    (unless (%null-ptr-p new)
+      (setf (slot-value self 'root-node)
+	    (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node)
+					  +null-ptr+)))
+    new))
+
+(objc:defmethod (#/dealloc :void) ((self grep-results-data-source))
+  (#/release (slot-value self 'root-node))
+  (call-next-method))
+
+(objc:defmethod (#/setRootNode: :void) ((self grep-results-data-source) tree-node)
+  (with-slots (root-node) self
+    (unless (eql root-node tree-node)
+      (#/release root-node)
+      (setq root-node (#/retain tree-node)))))
+
+(objc:defmethod #/childrenForItem: ((self grep-results-data-source) item)
+  (if (%null-ptr-p item)
+    (#/childNodes (slot-value self 'root-node))
+    (#/childNodes item)))
+
+(objc:defmethod (#/outlineView:numberOfChildrenOfItem: #>NSInteger)
+                ((self grep-results-data-source) outline-view item)
+  (declare (ignore outline-view))
+  (#/count (#/childrenForItem: self item)))
+
+(objc:defmethod (#/outlineView:isItemExpandable: #>BOOL)
+                ((self grep-results-data-source) outline-view item)
+  (declare (ignore outline-view))
+  (let* ((node (if (%null-ptr-p item)
+                 (slot-value self 'root-node)
+                 item))
+         (node-data (#/representedObject node)))
+    (#/isContainer node-data)))
+
+(objc:defmethod #/outlineView:child:ofItem: ((self grep-results-data-source)
+                                             outline-view (index #>NSInteger)
+                                             item)
+  (declare (ignore outline-view))
+  (let ((children (#/childrenForItem: self item)))
+    (#/objectAtIndex: children index)))
+
+(objc:defmethod #/outlineView:viewForTableColumn:item: ((self grep-results-data-source)
+                                                       outline-view table-column item)
+  (declare (ignore table-column))
+  (cond ((zerop (#/count (#/childNodes item)))
+         (let ((view (%navigator-match-table-cell-view))
+               (node-data (#/representedObject item)))
+           (#/setStringValue: (#/textField view) (slot-value node-data 'text))
+           (#/setEditable: (#/textField view) nil)
+           (#/autorelease view)))
+        (t
+         (let ((view (#/makeViewWithIdentifier:owner: outline-view
+                                                      #@"search-files-cell" self)))
+           (when (%null-ptr-p view)
+             (setq view (%navigator-search-table-cell-view))
+             (#/setIdentifier: view #@"search-files-cell")
+             (#/autorelease view))
+           (let* ((node-data (#/representedObject item))
+                  (url (slot-value node-data 'url))
+                  (extension (#/pathExtension url))
+                  (name +null-ptr+))
+             (unless (%null-ptr-p url)
+               (setq name (#/path url)))
+             (if (%null-ptr-p name)
+               (setq name #@"no url?"))
+             (#/setEditable: (#/textField view) nil)
+             (#/setTranslatesAutoresizingMaskIntoConstraints: (#/imageView view) nil)
+             (#/setTranslatesAutoresizingMaskIntoConstraints: (#/textField view) nil)
+             (#/setImage: (#/imageView view)
+                          (#/iconForFileType: (#/sharedWorkspace ns:ns-workspace) extension))
+             (#/setStringValue: (#/textField view) name))
+           view))))
+
+(objc:defmethod (#/outlineView:shouldSelectItem: #>BOOL) ((self grep-results-data-source) ov
+                                                         item)
+  (declare (ignore ov))
+  (let ((node-data (#/representedObject item)))
+    (not (#/isContainer node-data))))
+
+;;;
+;;; Displaying and updating the interface
+;;;
+
 (defstruct search-result-file 
   name ;A lisp string that contains the full path of the file
   nsstr  ;An NSString that is shown in the dialog
   lines ;A vector of search-result-lines
   )
 
-(defstruct search-result-line 
-  file ;The search-result-file that contains this search-result-line
-  number ;An integer that is the line-number of the line
-  nsstr ;The NSString used in the dialog
-  )
-
-(defmethod print-object ((srl search-result-line) stream)
-  (print-unreadable-object (srl stream :type t)
-    (format stream "~a ~a ~s" 
-            (search-result-line-file srl)
-            (search-result-line-number srl)
-            (search-result-line-nsstr srl))))
-
-(defconstant $find-combo-box-tag 0)
-(defconstant $folder-combo-box-tag 1)
-(defconstant $file-name-combo-box-tag 2)
-
-(defparameter *search-files-history-limit* 5 "combo box history length")
 
 (defclass search-files-window-controller (ns:ns-window-controller)
   ((find-combo-box :foreign-type :id :accessor find-combo-box)
@@ -50,7 +398,8 @@
    (regex-p :initform t :reader regex-p)
    (case-sensitive-p :initform nil :reader case-sensitive-p)
    (expand-results-p :initform nil :reader expand-results-p)
-   (grep-process :initform nil :accessor grep-process))
+   (grep-process :initform nil :accessor grep-process)
+   (search-data-source :foreign-type :id :accessor search-data-source))
   (:metaclass ns:+ns-object))
 
 (defmacro def-copying-setter (slot-name class-name)
@@ -177,9 +526,12 @@
 
 (objc:defmethod (#/awakeFromNib :void) ((wc search-files-window-controller))
   (#/setStringValue: (status-field wc) #@"")
-  (with-slots (outline-view) wc
-    (#/setTarget: outline-view wc)
-    (#/setDoubleAction: outline-view (@selector #/editLine:)))
+  (with-slots (outline-view search-data-source) wc
+    (#/setTarget: outline-view search-data-source)
+    (#/setDoubleAction: outline-view (@selector #/editLine:))
+    (setf search-data-source (#/new grep-results-data-source))
+    (#/setDelegate: outline-view search-data-source)
+    (#/setDataSource: outline-view search-data-source))
   (setf (find-string-value wc) #@"")
   (setf (folder-string-value wc) #@"")
   (with-slots (file-name-combo-box) wc
@@ -215,36 +567,52 @@
 (defmethod get-full-dir-string ((nsstring ns:ns-string))
   (get-full-dir-string (lisp-string-from-nsstring nsstring)))
 
-(defun make-grep-arglist (wc find-str)
-  (let ((grep-args (list "-I" "-s" "-e" find-str)))
-    ; Ignore binary files, suppress error messages
-    (unless (case-sensitive-p wc)
-      (push "-i" grep-args))
-    (unless (regex-p wc)
-      (push "-F" grep-args))
-    grep-args))
-
 (objc:defmethod (#/doSearch: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
   (set-results-string wc #@"Searching...")
-  (setf (find-string-value wc) (#/stringValue (find-combo-box wc))
-	(folder-string-value wc) (#/stringValue (folder-combo-box wc))
-	(file-name-string-value wc) (#/stringValue (file-name-combo-box wc)))
-  (let* ((find-str (lisp-string-from-nsstring (find-string-value wc)))
-	 (folder-str (get-full-dir-string (folder-string-value wc)))
-	 (file-str (lisp-string-from-nsstring (file-name-string-value wc)))
-	 (grep-args (make-grep-arglist wc find-str)))
-    (setf (search-str wc) find-str
-          (search-dir wc) folder-str)
-    (push "-c" grep-args) ; we just want the count here
-    (if (recursive-p wc)
-      (setf grep-args (nconc grep-args (list "-r" "--include" file-str folder-str)))
-      (list (concatenate 'string folder-str file-str)))
-    (#/setEnabled: (search-button wc) nil)
-    (setf (grep-process wc) (process-run-function "grep" 'run-grep grep-args wc))
-    (#/setTitle: (#/window wc) (#/autorelease
-				(%make-nsstring (format nil "Search Files: ~a"
-							find-str))))))
+  (#/setEnabled: (search-button wc) nil)
+  (#/performSelectorOnMainThread:withObject:waitUntilDone:
+   (progress-indicator wc) (@selector #/stopAnimation:) nil t)
+  (process-run-function
+   'do-search
+   (lambda ()
+     (let ((result-status #@"Done"))
+       (#/performSelectorOnMainThread:withObject:waitUntilDone:
+        (progress-indicator wc) (@selector #/startAnimation:) nil t)
+       (unwind-protect
+            (let* ((pattern (lisp-string-from-nsstring (find-string-value wc)))
+                   (folder (get-full-dir-string (folder-string-value wc)))
+                   (file-pattern (lisp-string-from-nsstring (file-name-string-value wc)))
+                   (lines (run-search-files-grep folder file-pattern pattern
+                                                     :recursive (recursive-p wc)
+                                                     :case-sensitive (case-sensitive-p wc)
+                                                     :regex (regex-p wc)))
+                   (results (generate-grep-results lines))
+                   (tree-node (%tree-node-for-grep-results results)))
+              (setf result-status
+                    (if results
+                        (#/autorelease
+                         (%make-nsstring
+                          (format nil "~D line~:P matched in ~D file~:P"
+                                  (reduce #'+ results
+                                          :key #'grep-result-match-count)
+                                  (length results))))
+                        #@"No matches"))
+              (setf (new-results wc) tree-node))
+         (progn
+           (#/performSelectorOnMainThread:withObject:waitUntilDone:
+            wc
+            (@selector #/updateResults:)
+            +null-ptr+
+            t)
+           (set-results-string wc result-status)
+           (#/setTitle: (#/window wc)
+                        (#/autorelease
+                         (%make-nsstring (format nil "Search Files: ~a"
+                                                 (lisp-string-from-nsstring (find-string-value wc))))))
+           (#/performSelectorOnMainThread:withObject:waitUntilDone:
+            (progress-indicator wc) (@selector #/stopAnimation:) nil t)
+           (#/setEnabled: (search-button wc) t)))))))
 
 (objc:defmethod (#/windowWillClose: :void) ((wc search-files-window-controller)
 					    notification)
@@ -252,84 +620,14 @@
   (let* ((proc (grep-process wc)))
     (when proc (process-kill proc))))
 
-(defun auto-expandable-p (results)
-  (let ((n 0))
-    (dotimes (f (length results) t)
-      (dotimes (l (length (search-result-file-lines (aref results f))))
-	(incf n)
-	(when (> n 20)
-	  (return-from auto-expandable-p nil))))))
-
 (objc:defmethod (#/updateResults: :void) ((wc search-files-window-controller)
-					  msg)
-  (let* ((old-results (search-results wc)))
-    (setf (search-results wc) (new-results wc))
-    ;; release NSString instances.  sigh.
-    (dotimes (idx (length old-results))
-      (let* ((file (aref old-results idx))
-             (lines (when file (search-result-file-lines file))))
-        (dotimes (idx (length lines))
-          (let* ((line (aref lines idx))
-                 (string (when line (search-result-line-nsstr line))))
-            (and string (#/release string))))
-        (and (search-result-file-nsstr file)
-             (#/release (search-result-file-nsstr file)))))
-    (set-results-string wc msg)
-;;     (when (or (auto-expandable-p (search-results wc))
-;;              (expand-results-p wc))
-;;       (expand-all-results wc))
-    (setf (grep-process wc) nil)
-    (#/reloadData (outline-view wc))
-    (#/setEnabled: (search-button wc) t)))
+					  sender)
+  (declare (ignore sender))
+  (with-slots (search-data-source outline-view new-results) wc
+    (#/setRootNode: search-data-source new-results)
+    (#/release new-results)
+    (#/reloadData outline-view)))
 
-;;; This is run in a secondary thread.
-(defun run-grep (grep-arglist wc)
-  (with-autorelease-pool 
-      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/startAnimation:) nil t)
-    (unwind-protect
-	 (let* ((grep-output (call-grep grep-arglist)))
-	   (multiple-value-bind (results message)
-	       (results-and-message grep-output wc)
-	     ;; This assumes that only one grep can be running at
-	     ;; a time.
-	     (setf (new-results wc) results)
-	     (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	      wc
-	      (@selector #/updateResults:)
-	      (#/autorelease (%make-nsstring message))
-	      t)))
-      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/stopAnimation:) nil t))))
-
-(defun results-and-message (grep-output wc)
-  (let* ((results (make-array 10 :fill-pointer 0 :adjustable t))
-	 (occurrences 0)
-	 (file-count 0)
-	 (dir-len (length (search-dir wc))))
-    (map-lines
-     grep-output
-     #'(lambda (start end)
-	 (let* ((colon-pos (position #\: grep-output :from-end t :start start
-				     :end end))
-		(count (and colon-pos
-			    (parse-integer grep-output :start (1+ colon-pos)
-					   :end end))))
-	   (when count
-	     (incf file-count)
-	     (when (> count 0)
-	       (vector-push-extend (make-search-result-file
-				    :name (subseq grep-output
-						  (+ start dir-len)
-						  colon-pos)
-				    :lines (make-array count :initial-element nil))
-				   results)
-	       (incf occurrences count))))))
-    (values results
-	    (format nil "Found ~a occurrence~:p in ~a file~:p out of ~a ~
-                         file~:p searched." occurrences (length results)
-			 file-count))))
-		   
 (defmethod expand-all-results ((wc search-files-window-controller))
   (with-slots (outline-view) wc
     (#/expandItem:expandChildren: outline-view +null-ptr+ t)
@@ -342,7 +640,8 @@
 
 (defun set-results-string (wc str)
   (#/setStringValue: (status-field wc) str))
-	    
+
+;;; For choosing the right directory
 (objc:defmethod (#/doBrowse: :void) ((wc search-files-window-controller) sender)
   (declare (ignore sender))
   (let ((pathname (cocoa-choose-directory-dialog)))
@@ -353,22 +652,24 @@
 	  (#/setStringValue: folder-combo-box dir)
 	  (#/updateFolderString: wc folder-combo-box))))))
 
+;;; For jumping to a search result
 (objc:defmethod (#/editLine: :void) ((wc search-files-window-controller) outline-view)
-  (let* ((item (get-selected-item outline-view))
-         (line-result (and item (nsstring-to-line-result wc item))))
-    (unless line-result
-      (let ((file-result (and item (nsstring-to-file-result wc item))))
-        (when file-result
-          (setf line-result (get-line-result wc file-result 0)))))          
-    (when line-result
-      (cocoa-edit-grep-line (concatenate 'string (search-dir wc) "/" (search-result-line-file line-result))
-                      (1- (search-result-line-number line-result))
-                      (search-str wc)))))
+  (let ((selected-row (#/selectedRow outline-view)))
+    (when (plusp selected-row)
+      (let* ((item (#/itemAtRow: outline-view selected-row))
+             (node-data (#/representedObject item))
+             (url (#/URL node-data))
+             (line-number (#/lineNumber node-data)))
+        (cocoa-edit-grep-line (%get-cfstring (#/path url))
+                              (1- line-number))))))
 
-(defun get-selected-item (outline-view)
-  (let ((index (#/selectedRow outline-view)))
-    (when (> index -1)
-      (#/itemAtRow: outline-view (#/selectedRow outline-view)))))
+(defun map-lines (string fn)
+  "For each line in string, fn is called with the start and end of the line"
+  (loop with end = (length string)
+    for start = 0 then (1+ pos)
+    as pos = (or (position #\Newline string :start start :end end) end)
+    when (< start pos) do (funcall fn start pos)
+    while (< pos end)))
 
 (defun nsstring-to-file-result (wc nsstring)
   (find nsstring (search-results wc) :test #'ns-string-equal :key #'search-result-file-nsstr))
@@ -451,28 +752,4 @@
           (search-result-line-nsstr line-result)
           #@"ERROR")))))
 
-(defun call-grep (args)
-  ;;Calls grep with the strings as arguments, and returns a string containing the output
-  (with-output-to-string (stream)
-    (let* ((proc (run-program "grep" args :input nil :output stream)))
-      (multiple-value-bind (status exit-code) (external-process-status proc)
-	(let ((output (get-output-stream-string stream)))
-	  (if (eq :exited status)
-	    (return-from call-grep output)
-            (error "~a returned exit status ~s" *grep-program* exit-code)))))))
-
-(defun map-lines (string fn)
-  "For each line in string, fn is called with the start and end of the line"
-  (loop with end = (length string)
-    for start = 0 then (1+ pos)
-    as pos = (or (position #\Newline string :start start :end end) end)
-    when (< start pos) do (funcall fn start pos)
-    while (< pos end)))
-
-
-#|
-(defun top-search ()
-  (#/windowController 
-   (first-window-with-controller-type 'search-files-window-controller)))
-|#
 
