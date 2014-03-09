@@ -105,6 +105,16 @@
   doing replacements."
   :value t)
 
+(defun search-match-type (mark match-len)
+  (cond ((or (eql match-len 0) (not (upper-case-p (next-character mark))))
+         :exact)
+        ((or (eql match-len 1) (prog2
+                                 (mark-after mark)
+                                 (upper-case-p (next-character mark))
+                                 (mark-before mark)))
+         :upcase)
+        (t :capitalize)))
+
 (defcommand "Replace String" (p &optional
 				(target (prompt-for-string
 					 :prompt "Replace String: "
@@ -220,15 +230,10 @@
     (with-mark ((undo-mark1 point :left-inserting)
 		(undo-mark2 point :left-inserting))
       (character-offset undo-mark1 (- length))
-      (let ((string (cond ((qrs-dumb-p qrs) replacement)
-			  ((upper-case-p (next-character undo-mark1))
-			   (prog2
-			    (mark-after undo-mark1)
-			    (if (upper-case-p (next-character undo-mark1))
-			      (qrs-upper qrs)
-			      (qrs-cap qrs))
-			    (mark-before undo-mark1)))
-			  (t replacement))))
+      (let ((string (ecase (if (qrs-dumb-p qrs) :exact (search-match-type undo-mark1 length))
+                      (:exact replacement)
+                      (:upcase (qrs-upper qrs))
+                      (:capitalize (qrs-cap qrs)))))
 	(push (make-replace-undo
                ;; Save :right-inserting, so the INSERT-STRING at mark below
                ;; doesn't move the copied mark the past replacement.
