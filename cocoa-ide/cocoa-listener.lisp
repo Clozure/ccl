@@ -791,21 +791,21 @@
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
     (when target-listener
       (destructuring-bind (package path) selection
-        (let ((string (format nil "(load ~S)" path)))
+        (let ((string (format nil "(cl:load ~S)" path)))
           (eval-in-listener-process target-listener string :package package))))))
 
 (defmethod ui-object-compile-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
     (when target-listener
       (destructuring-bind (package path) selection
-        (let ((string (format nil "(compile-file ~S)" path)))
+        (let ((string (format nil "(cl:compile-file ~S)" path)))
           (eval-in-listener-process target-listener string :package package))))))
 
 (defmethod ui-object-compile-and-load-buffer ((app ns:ns-application) selection)
   (let* ((target-listener (ui-object-choose-listener-for-selection app nil)))
     (when target-listener
       (destructuring-bind (package path) selection
-        (let ((string (format nil "(progn (compile-file ~S)(load ~S))" 
+        (let ((string (format nil "(cl:progn (cl:compile-file ~S) (cl:load ~S))" 
                               path
                               (make-pathname :directory (pathname-directory path)
                                              :name (pathname-name path)
