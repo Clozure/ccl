@@ -307,6 +307,9 @@
                                               (edited #>BOOL))
   (declare (ignorable edited)))
 
+(defun window-type (w)
+  (type-of (#/windowController w)))
+
 (defun maybe-close-all-windows-of-this-class (sender)
   "Maybe forcibly close all windows of same class as window of current event, if any, and
   if the option key was pressed. Returns t if we forcibly 'closed' window(s) here
@@ -317,8 +320,8 @@
     (when (logtest #$NSAlternateKeyMask modifiers) ; check for option key pressed
       (unless (%null-ptr-p original-window)
         ;(format t "~%About to call map-windows for sender ~S" sender)
-        (map-windows #'(lambda (w) (when (and (eq (type-of w)
-                                                  (type-of original-window))
+        (map-windows #'(lambda (w) (when (and (eq (window-type w)
+                                                  (window-type original-window))
                                               (not (#/isDocumentEdited w)))
                                      (do-close-window w sender))))
         ;(print "Called map-windows")
