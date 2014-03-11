@@ -475,8 +475,9 @@
 
 (objc:defmethod (#/updateFindString: :void) ((wc search-files-window-controller)
 					     sender)
-  (setf (find-string-value wc) (#/stringValue sender))
-  (update-combo-box sender (find-string-value wc)))
+  (let ((value (#/stringValue sender)))
+    (setf (find-string-value wc) value)
+    (update-combo-box sender value)))
 
 (objc:defmethod (#/updateFolderString: :void) ((wc search-files-window-controller) sender)
   (setf (folder-string-value wc) (#/stringValue sender))
@@ -507,16 +508,25 @@
                 (#/cascadeTopLeftFromPoint: top-dialog zp))))))
   (#/cascadeTopLeftFromPoint: (#/window wc) *search-files-cascade-point*))
 
+(defun set-search-files-pattern (wc pattern)
+  (let ((string (#/autorelease (%make-nsstring pattern))))
+    (with-slots (find-combo-box) wc
+      (#/setStringValue: find-combo-box string)
+      (#/updateFindString: wc find-combo-box))))
+
+(defun set-search-files-dir (wc dir)
+  (let ((nsdir (#/autorelease (%make-nsstring dir))))
+    (with-slots (folder-combo-box) wc
+      (#/setStringValue: folder-combo-box nsdir)
+      (#/updateFolderString: wc folder-combo-box))))
+
 (defun set-search-files-default-dir (wc)
   (let* ((w (first-window-satisfying-predicate #'window-pathname))
          (path (and w (window-pathname w)))
          (dir (if path
                 (namestring (ccl::back-translate-pathname (directory-namestring path)))
-                "ccl:"))
-         (nsdir (#/autorelease (%make-nsstring dir))))
-    (with-slots (folder-combo-box) wc
-      (#/setStringValue: folder-combo-box nsdir)
-      (#/updateFolderString: wc folder-combo-box))))
+                "ccl:")))
+    (set-search-files-dir wc dir)))
 
 (objc:defmethod (#/awakeFromNib :void) ((wc search-files-window-controller))
   (#/setStringValue: (status-field wc) #@"")
@@ -617,10 +627,12 @@
 (objc:defmethod (#/updateResults: :void) ((wc search-files-window-controller)
 					  sender)
   (declare (ignore sender))
-  (with-slots (search-data-source outline-view new-results) wc
+  (with-slots (search-data-source outline-view new-results expand-results-p) wc
     (#/setRootNode: search-data-source new-results)
     (#/release new-results)
-    (#/reloadData outline-view)))
+    (#/reloadData outline-view)
+    (when expand-results-p
+      (expand-all-results wc))))
 
 (defmethod expand-all-results ((wc search-files-window-controller))
   (with-slots (outline-view) wc
