@@ -506,7 +506,7 @@
                    (buffer-cache-workline-length cache)))))))
 
 ;;; For debugging, mostly: make the printed representation of the string
-;;; referenence the named Hemlock buffer.
+;;; reference the named Hemlock buffer.
 (objc:defmethod #/description ((self hemlock-buffer-string))
   (let* ((cache (hemlock-buffer-string-cache self))
 	 (b (buffer-cache-buffer cache)))

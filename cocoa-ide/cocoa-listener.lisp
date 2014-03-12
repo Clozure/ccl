@@ -372,7 +372,7 @@
 ;  -- One or more of those windows contains modified but as-yet-unsaved content, and
 ;  -- You option-close a listener window.
 ; In that case, you'll get a "Do you want to save" dialog panel for the unsaved Hemlock window,
-;   when you shouldn't because you aren't tryin to close Hemlock windows--you're trying to close
+;   when you shouldn't because you aren't trying to close Hemlock windows--you're trying to close
 ;   listeners. But I haven't figured out a way to prevent this panel from showing up. Since it shows
 ;   up BEFORE #/windowShouldClose is called, that function cannot stop it. It's a benign bug because
 ;   it gives the user a chance to save unsaved files. And it's a rare case (because it's not common
