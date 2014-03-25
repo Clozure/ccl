@@ -160,7 +160,6 @@
   (:metaclass ns:+ns-object))
 
 (objc:defmethod (#/dealloc :void) ((self hemlock-commands-window-controller))
-  (debug-message "hemlock-commands-window-controller dealloc")
   (#/release (slot-value self 'array-controller))
   (#/release (slot-value self 'items))
   (call-next-method))
