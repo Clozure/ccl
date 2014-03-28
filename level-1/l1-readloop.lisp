@@ -142,7 +142,7 @@
     (when (or (null part) (eql 0 part))
       (dolist (f *lisp-cleanup-functions*)
 	(funcall f)))
-    (let* ((stragglers ()))
+    (let* (#+forcibly-kill-threads (stragglers ()))
       (dolist (p (all-processes))
 	(unless (or (eq p *initial-process*)
 		    (not (process-active-p p)))
@@ -154,7 +154,8 @@
           (when semaphore
             (unless (eq p *initial-process*)
               (unless (timed-wait-on-semaphore semaphore 0.05)
-                (push p stragglers))))))
+           #+forcibly-kill-threads     (push p stragglers))))))
+      #+forcibly-kill-threads
       (dolist (p stragglers)
         (let* ((semaphore (process-termination-semaphore p)))
           (maybe-finish-process-kill p :kill)
