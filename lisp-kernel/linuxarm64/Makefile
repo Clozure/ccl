@@ -16,7 +16,7 @@
 SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 # See <http://people.debian.org/~wookey/bootstrap.html>
-CROSS=aarch64-linux-gnu-
+#CROSS=aarch64-linux-gnu-
 VPATH = ../
 RM = /bin/rm
 AS = ${CROSS}as
