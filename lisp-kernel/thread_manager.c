@@ -1450,7 +1450,7 @@ shutdown_thread_tcr(void *arg)
 #ifdef HAVE_TLS
     if (current_tcr == tcr) {
       current_tcr = NULL;
-      memset(tcr,0,sizeof(tcr));
+      memset(tcr, 0, sizeof(TCR));
     }
 #endif
   } else {
