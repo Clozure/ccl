@@ -251,6 +251,9 @@ atomic_and(natural*, natural);
 natural 
 atomic_ior(natural*, natural);
 
+signed_natural atomic_incf(signed_natural *);
+signed_natural atomic_decf(signed_natural *);
+
 #define SET_TCR_FLAG(t,bit) atomic_ior(&(t->flags),(1L<<bit))
 #define CLR_TCR_FLAG(t,bit) atomic_and(&(t->flags),~(1L<<bit))
 
