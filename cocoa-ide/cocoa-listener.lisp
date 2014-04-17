@@ -308,7 +308,7 @@
   (declare (ignorable edited)))
 
 (defun window-type (w)
-  (type-of (#/windowController w)))
+  (type-of w))
 
 (defun maybe-close-all-windows-of-this-class (sender)
   "Maybe forcibly close all windows of same class as window of current event, if any, and

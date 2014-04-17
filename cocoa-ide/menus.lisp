@@ -33,6 +33,10 @@
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Open Selection" (objc:@selector #/openSelection:) #@"d")
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Close" (objc:@selector #/performClose:) #@"w")
+    (let ((closesimilar
+           (#/addItemWithTitle:action:keyEquivalent: menu #@"Close Similar" (objc:@selector #/performClose:) #@"w")))
+      (#/setKeyEquivalentModifierMask: closesimilar (logior #$NSCommandKeyMask #$NSAlternateKeyMask)))
+    
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Save" (objc:@selector #/saveDocument:) #@"s")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Save As..." (objc:@selector #/saveDocumentAs:) #@"S")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Save To..." (objc:@selector #/saveDocumentTo:) #@"")
