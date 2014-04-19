@@ -300,10 +300,10 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         ExceptionInformation *other_context;
         suspend_other_threads(true);
         normalize_tcr(xp,tcr,false);
-        for (other_tcr=tcr->next; other_tcr != tcr; other_tcr = other_tcr->next) {
+        for (other_tcr=TCR_AUX(tcr)->next; other_tcr != tcr; other_tcr = TCR_AUX(other_tcr)->next) {
           other_context = other_tcr->pending_exception_context;
           if (other_context == NULL) {
-            other_context = other_tcr->suspend_context;
+            other_context = TCR_AUX(other_tcr)->suspend_context;
           }
           normalize_tcr(other_context, other_tcr, true);
         }
