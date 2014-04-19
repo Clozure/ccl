@@ -467,7 +467,13 @@
     (cond ((zerop signal)               ;thread interrupt
            (cmain))
           ((< signal 0)
-           (%err-disp-internal code () frame-ptr))
+           (if (and (zerop code)
+                    (eql other arch::error-allocation-disabled))
+             (restart-case (%error 'allocation-disabled nil frame-ptr)
+                           (continue ()
+                                     :report (lambda (stream)
+                                               (format stream "retry the heap allocation."))))
+             (%err-disp-internal code () frame-ptr)))
           ((= signal #$SIGFPE)
            (setq code (logand #xffffffff code))
            (multiple-value-bind (operation operands)
@@ -520,42 +526,42 @@
 					 :object object
 					 :instruction insn)
 					nil frame-ptr)
-		    #-windows-target
-		    (emulate ()
-		      :test (lambda (c)
-			      (declare (ignore c))
-			      (x86-can-emulate-instruction insn))
-		      :report
-		      "Emulate this instruction, leaving the object watched."
-		      (flet ((watchedp (object)
-			       (%map-areas #'(lambda (x)
-					       (when (eq object x)
-						 (return-from watchedp t)))
-					   area-watched)))
-			(let ((result nil))
-			  (with-other-threads-suspended
-			    (when (watchedp object)
-			      ;; We now trust that the object is in a
-			      ;; static gc area.
-			      (let* ((a (+ (%address-of object) offset))
-				     (ptr (%int-to-ptr
-					   (logandc2 a (1- *host-page-size*)))))
-				(#_mprotect ptr *host-page-size* #$PROT_WRITE)
-				(setq result (x86-emulate-instruction xp insn))
-				(#_mprotect ptr *host-page-size*
-					    (logior #$PROT_READ #$PROT_EXEC)))))
-			  (if result
-			    (setq skip insn-length)
-			    (error "could not emulate the instrution")))))
-		    (skip ()
-		      :test (lambda (c)
-			      (declare (ignore c))
-			      insn)
-		      :report "Skip over this write instruction."
-		      (setq skip insn-length))
-		    (unwatch ()
-		      :report "Unwatch the object and retry the write."
-		      (unwatch object))))))))
+                                #-windows-target
+                                (emulate ()
+                                         :test (lambda (c)
+                                                 (declare (ignore c))
+                                                 (x86-can-emulate-instruction insn))
+                                         :report
+                                         "Emulate this instruction, leaving the object watched."
+                                         (flet ((watchedp (object)
+                                                  (%map-areas #'(lambda (x)
+                                                                  (when (eq object x)
+                                                                    (return-from watchedp t)))
+                                                              area-watched)))
+                                           (let ((result nil))
+                                             (with-other-threads-suspended
+                                                 (when (watchedp object)
+                                                   ;; We now trust that the object is in a
+                                                   ;; static gc area.
+                                                   (let* ((a (+ (%address-of object) offset))
+                                                          (ptr (%int-to-ptr
+                                                                (logandc2 a (1- *host-page-size*)))))
+                                                     (#_mprotect ptr *host-page-size* #$PROT_WRITE)
+                                                     (setq result (x86-emulate-instruction xp insn))
+                                                     (#_mprotect ptr *host-page-size*
+                                                                 (logior #$PROT_READ #$PROT_EXEC)))))
+                                             (if result
+                                               (setq skip insn-length)
+                                               (error "could not emulate the instrution")))))
+                                (skip ()
+                                      :test (lambda (c)
+                                              (declare (ignore c))
+                                              insn)
+                                      :report "Skip over this write instruction."
+                                      (setq skip insn-length))
+                                (unwatch ()
+                                         :report "Unwatch the object and retry the write."
+                                         (unwatch object))))))))
           ((= signal #+win32-target 10 #-win32-target #$SIGBUS)
            (if (= code -1)
              (%error (make-condition 'invalid-memory-operation)

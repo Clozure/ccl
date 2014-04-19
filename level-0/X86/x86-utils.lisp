@@ -485,6 +485,23 @@ GC notifications."
   (jmp-subprim .SPmakeu64))
   
 
+(defx86lapfunction allow-heap-allocation ((arg_arg_z))
+  "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts
+at heap allocation."
+  (check-nargs 1)
+  (cmpq ($ (target-nil-value)) (%q arg_z))
+  (setne (%b imm1))
+  (andl ($ 1) (%l imm1))
+  (movl ($ arch::gc-trap-function-allocation-control) (%l imm0))
+  (uuo-gc-trap)
+  (single-value-return))
+
+(defx86lapfunction heap-allocation-allowed-p ()
+  (check-nargs 0)
+  (movl ($ arch::gc-trap-function-allocation-control) (%l imm0))
+  (movl ($ 2) (%l imm1))                ;query
+  (uuo-gc-trap)
+  (single-value-return))
 
 ;;; offset is a fixnum, one of the x8664::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.

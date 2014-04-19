@@ -443,6 +443,25 @@ GC notifications."
   (uuo-gc-trap)
   (jmp-subprim .SPmakeu32))
 
+(defx8632lapfunction allow-heap-allocation ((flag arg_z))
+  (check-nargs 1)
+  (cmpl ($ (target-nil-value)) (% arg_z))
+  (setne (%b imm0))
+  (andl ($ 1) (%l imm0))
+  (movd (% imm0) (% xmm0))
+  (movl ($ arch::gc-trap-function-allocation-control) (%l imm0))
+  (uuo-gc-trap)
+  (single-value-return))
+
+(defx8632lapfunction heap-allocation-allowed-p ()
+  (check-nargs 0)
+  (movl ($ 2) (% imm0))
+  (movd (% imm0) (% xmm0))
+  (movl ($ arch::gc-trap-function-allocation-control) (%l imm0))
+  (uuo-gc-trap)
+  (single-value-return))
+  
+
 ;;; offset is a fixnum, one of the x8632::kernel-import-xxx constants.
 ;;; Returns that kernel import, a fixnum.
 (defx8632lapfunction %kernel-import ((offset arg_z))

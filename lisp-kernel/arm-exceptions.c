@@ -1,5 +1,3 @@
-
-
 /*
    Copyright (C) 2010 Clozure Associates
    This file is part of Clozure CL.  

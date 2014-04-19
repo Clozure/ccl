@@ -49,6 +49,9 @@
 #endif
 #endif
 
+void
+normalize_tcr(ExceptionInformation *, TCR *, Boolean);
+
 /*
   We do all kinds of funky things to avoid handling a signal on the lisp
   stack.  One of those funky things involves using the  __builtin_return_address()
@@ -118,6 +121,8 @@ log2_page_size = 12;
 Boolean
 did_gc_notification_since_last_full_gc = false;
 
+Boolean
+allocation_enabled = true;
 
 void
 update_bytes_allocated(TCR* tcr, void *cur_allocptr)
@@ -284,6 +289,45 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       tenure_to_area(tenured_area);
     }
     xpGPR(xp, Iimm0) = tenured_area->static_dnodes << dnode_shift;
+    break;
+
+  case GC_TRAP_FUNCTION_ALLOCATION_CONTROL:
+    switch(arg) {
+    case 0: /* disable if allocation enabled */
+      xpGPR(xp, Iarg_z) = lisp_nil;
+      if (allocation_enabled) {
+        TCR *other_tcr;
+        ExceptionInformation *other_context;
+        suspend_other_threads(true);
+        normalize_tcr(xp,tcr,false);
+        for (other_tcr=tcr->next; other_tcr != tcr; other_tcr = other_tcr->next) {
+          other_context = other_tcr->pending_exception_context;
+          if (other_context == NULL) {
+            other_context = other_tcr->suspend_context;
+          }
+          normalize_tcr(other_context, other_tcr, true);
+        }
+        allocation_enabled = false;
+        xpGPR(xp, Iarg_z) = t_value;
+        resume_other_threads(true);
+      }
+      break;
+
+    case 1:                     /* enable if disabled */
+      xpGPR(xp, Iarg_z) = lisp_nil;
+      if (!allocation_enabled) {
+        allocation_enabled = true;
+        xpGPR(xp, Iarg_z) = t_value;
+      }
+      break;
+
+    default:
+      xpGPR(xp, Iarg_z) = lisp_nil;
+      if (allocation_enabled) {
+        xpGPR(xp, Iarg_z) = t_value;
+      }
+      break;
+    }
     break;
 
   default:
@@ -587,7 +631,21 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
   natural cur_allocptr, bytes_needed;
   unsigned allocptr_tag;
   signed_natural disp;
-  
+
+  if (!allocation_enabled) {
+    LispObj xcf,
+      save_sp = xpGPR(xp,Isp),
+      save_fp = xpGPR(xp,Ifp),
+      cmain = nrs_CMAIN.vcell;
+    xcf =create_exception_callback_frame(xp, tcr),
+    pc_luser_xp(xp,tcr,NULL);
+    allocation_enabled = true;
+    tcr->save_allocbase = (void *)VOID_ALLOCPTR;
+    callback_to_lisp(tcr, cmain, xp, xcf, -1, 0, 0, error_allocation_disabled);
+    xpGPR(xp,Isp) = save_sp;
+    xpGPR(xp,Ifp) = save_fp;
+    return true;
+  }
   cur_allocptr = xpGPR(xp,Iallocptr);
   allocptr_tag = fulltag_of(cur_allocptr);
   if (allocptr_tag == fulltag_misc) {
@@ -1147,13 +1205,16 @@ handle_exception(int signum, siginfo_t *info, ExceptionInformation  *context, TC
         case UUO_ALLOC_TRAP:
           {
             Boolean did_notify = false,
+              allocation_disabled = !allocation_enabled,
               *notify_ptr = &did_notify;
             if (did_gc_notification_since_last_full_gc) {
               notify_ptr = NULL;
             }
             if (handle_alloc_trap(context, tcr, notify_ptr)) {
               if (! did_notify) {
-                xpPC(context) += 2;	/* we might have GCed. */
+                if (! allocation_disabled) {
+                  xpPC(context) += 2;	/* we might have GCed. */
+                }
               }
               return true;
             }
