@@ -174,6 +174,8 @@
            (funcall thunk (%dnode-address-of pc-frame))))
         (t (funcall thunk (xp-gpr-lisp xp arm::sp)))))
 
+(defparameter *pending-gc-notification-hook* nil)
+
 (defcallback xcmain (:address xp
                               :signed-fullword signal
                               :signed-fullword arg
@@ -188,6 +190,10 @@
                                    :write-p (eql signal #$SIGBUS))
                    ()
                    frame-ptr))
+          ((eql signal #$SIGTRAP)
+           (let* ((hook *pending-gc-notification-hook*))
+               (declare (special *pending-gc-notification-hook*))
+               (when hook (funcall hook))))
           (t
            (error "cmain callback: signal = ~d, arg = #x~x, fnreg = ~d, offset = ~d"
                   signal arg fnreg offset)))))

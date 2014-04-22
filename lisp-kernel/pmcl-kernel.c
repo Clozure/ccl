@@ -1992,7 +1992,7 @@ main
   gc_init();
 
   set_nil(load_image(image_name));
-  lisp_heap_notify_threshold = GC_NOTIFY_THRESHOLD;
+  lisp_heap_notify_threshold = lisp_global(GC_NOTIFY_THRESHOLD);
   lisp_heap_threshold_from_image = lisp_global(LISP_HEAP_THRESHOLD);
   
   if (lisp_heap_threshold_from_image) {

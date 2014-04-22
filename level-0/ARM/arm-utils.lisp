@@ -448,6 +448,28 @@ at heap allocation."
   (mov arg_z 'nil)
   (bx lr))
 
+(defarmlapfunction set-gc-notification-threshold ((threshold arg_z))
+  "Set the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 1)
+  (build-lisp-frame)
+  (sploadlr .SPgetu32)
+  (blx lr)
+  (mov imm1 imm0)
+  (mov imm0 (:$ arch::gc-trap-function-set-gc-notification-threshold))
+  (uuo-gc-trap)
+  (restore-lisp-frame imm1)
+  (spjump .SPmakeu32))
+
+(defarmlapfunction get-gc-notification-threshold ()
+  "Get the value of the kernel variable that can be used to trigger
+GC notifications."
+  (check-nargs 0)
+  (mov imm0 (:$ arch::gc-trap-function-get-gc-notification-threshold))
+  (uuo-gc-trap)
+  (spjump .SPmakeu32))
+
+
 (defparameter *kernel-import-table* nil)
 
 (defun %kernel-import (offset)

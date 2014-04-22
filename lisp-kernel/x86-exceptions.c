@@ -603,7 +603,6 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
   if (nconses == 0) {
     /* Silly case */
     xpGPR(xp,Iarg_z) = lisp_nil;
-    xpGPR(xp,Iallocptr) = lisp_nil;
     return true;
   }
   update_bytes_allocated(tcr, (void *)tcr->save_allocptr);

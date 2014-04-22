@@ -77,6 +77,9 @@ extern Boolean grow_dynamic_area(natural);
 
 Boolean allocation_enabled = true;
 
+Boolean
+did_gc_notification_since_last_full_gc = false;
+
 
 
 
@@ -208,7 +211,8 @@ Boolean
 allocate_object(ExceptionInformation *xp,
                 natural bytes_needed, 
                 signed_natural disp_from_allocptr,
-		TCR *tcr)
+		TCR *tcr,
+                Boolean *crossed_threshold)
 {
   area *a = active_dynamic_area;
 
@@ -222,7 +226,7 @@ allocate_object(ExceptionInformation *xp,
   /* Life is pretty simple if we can simply grab a segment
      without extending the heap.
   */
-  if (new_heap_segment(xp, bytes_needed, false, tcr, NULL)) {
+  if (new_heap_segment(xp, bytes_needed, false, tcr, crossed_threshold)) {
     xpGPR(xp, allocptr) += disp_from_allocptr;
     return true;
   }
@@ -234,6 +238,7 @@ allocate_object(ExceptionInformation *xp,
   if ((lisp_global(HEAP_END)-lisp_global(HEAP_START)) > bytes_needed) {
     untenure_from_area(tenured_area); /* force a full GC */
     gc_from_xp(xp, 0L);
+    did_gc_notification_since_last_full_gc = false;
   }
   
   /* Try again, growing the heap if necessary */
@@ -272,6 +277,18 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
   handle_error(xp, bytes_needed < (128<<10) ? XNOMEM : error_alloc_failed,0, NULL);
 }
 
+void
+callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr)
+{
+  LispObj cmain = nrs_CMAIN.vcell;
+
+  did_gc_notification_since_last_full_gc = true;
+  if ((fulltag_of(cmain) == fulltag_misc) &&
+      (header_subtag(header_of(cmain)) == subtag_macptr)) {
+    callback_to_lisp(cmain,xp,SIGTRAP,0,NULL);
+  }
+}
+
 /*
   Allocate a large list, where "large" means "large enough to
   possibly trigger the EGC several times if this was done
@@ -290,15 +307,15 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     prev = lisp_nil,
     current,
     initial = xpGPR(xp,arg_y);
+  Boolean notify_pending_gc = false;
 
   if (nconses == 0) {
     /* Silly case */
     xpGPR(xp,arg_z) = lisp_nil;
-    xpGPR(xp,allocptr) = lisp_nil;
     return true;
   }
   update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
-  if (allocate_object(xp,bytes_needed,(-bytes_needed)+fulltag_cons,tcr)) {
+  if (allocate_object(xp,bytes_needed,(-bytes_needed)+fulltag_cons,tcr,&notify_pending_gc)) {
     for (current = xpGPR(xp,allocptr);
          nconses;
          prev = current, current+= dnode_size, nconses--) {
@@ -308,6 +325,9 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     xpGPR(xp,arg_z) = prev;
     xpGPR(xp,arg_y) = xpGPR(xp,allocptr);
     xpGPR(xp,allocptr)-=fulltag_cons;
+    if (notify_pending_gc && !did_gc_notification_since_last_full_gc) {
+      callback_for_gc_notification(xp,tcr);
+    }
   } else {
     lisp_allocation_failure(xp,tcr,bytes_needed);
   }
@@ -315,7 +335,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
 }
 
 Boolean
-handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
+handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
 {
   pc program_counter;
   natural cur_allocptr, bytes_needed = 0;
@@ -355,8 +375,12 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   }
 
   update_bytes_allocated(tcr,((BytePtr)(cur_allocptr-disp)));
-  if (allocate_object(xp, bytes_needed, disp, tcr)) {
+  if (allocate_object(xp, bytes_needed, disp, tcr, notify)) {
     adjust_exception_pc(xp,4);
+    if (notify && *notify) {
+      pc_luser_xp(xp,tcr,NULL);
+      callback_for_gc_notification(xp,tcr);
+    }
     return true;
   }
   lisp_allocation_failure(xp,tcr,bytes_needed);
@@ -419,6 +443,18 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     }
     xpGPR(xp, imm0) = lisp_heap_gc_threshold;
     break;
+
+  case GC_TRAP_FUNCTION_SET_GC_NOTIFICATION_THRESHOLD:
+    if ((signed_natural)arg >= 0) {
+      lisp_heap_notify_threshold = arg;
+      did_gc_notification_since_last_full_gc = false;
+    }
+    /* fall through */
+
+  case GC_TRAP_FUNCTION_GET_GC_NOTIFICATION_THRESHOLD:
+    xpGPR(xp, imm0) = lisp_heap_notify_threshold;
+    break;
+
 
   case GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES:
     ensure_static_conses(xp,tcr,32768);
@@ -1013,7 +1049,12 @@ handle_exception(int xnum,
   }
 
   if (IS_ALLOC_TRAP(instruction)) {
-    return handle_alloc_trap(xp, tcr);
+    Boolean did_notify = false,
+      *notify_ptr = &did_notify;
+    if (did_gc_notification_since_last_full_gc) {
+      notify_ptr = NULL;
+    }
+    return handle_alloc_trap(xp, tcr, notify_ptr);
   } else if ((xnum == SIGSEGV) ||
 	     (xnum == SIGBUS)) {
     return handle_protection_violation(xp, info, tcr, old_valence);
@@ -1751,6 +1792,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         /* Whatever we finished allocating, reset allocptr/allocbase to
            VOID_ALLOCPTR */
         xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+        tcr->save_allocptr = tcr->save_allocbase = VOID_ALLOCPTR;
       }
       return;
     }
