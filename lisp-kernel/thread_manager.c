@@ -2080,23 +2080,37 @@ Boolean
 suspend_tcr(TCR *tcr)
 {
   int suspend_count = atomic_incf(&(tcr->suspend_count));
-  pthread_t thread;
-  if (suspend_count == 1) {
-    thread = (pthread_t)(tcr->osid);
-    if ((thread != (pthread_t) 0) &&
-        (pthread_kill(thread, thread_suspend_signal) == 0)) {
-      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
-    } else {
-      /* A problem using pthread_kill.  On Darwin, this can happen
-	 if the thread has had its signal mask surgically removed
-	 by pthread_exit.  If the native (Mach) thread can be suspended,
-	 do that and return true; otherwise, flag the tcr as belonging
-	 to a dead thread by setting tcr->osid to 0.
-      */
+
+  if (suspend_count == 1 && tcr->osid != 0) {
+    pthread_t thread = (pthread_t)tcr->osid;
+    int ret;
+    
+    ret = pthread_kill(thread, thread_suspend_signal);
+    switch (ret) {
+    case 0:
+      SET_TCR_FLAG(tcr, TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
+      return true;
+    case ESRCH:
+      /* The thread appears to be gone already.  Flag the tcr as
+	 belonging to a dead thread by setting tcr->osid to 0. */
       tcr->osid = 0;
       return false;
+#ifdef DARWIN
+    case ENOTSUP:
+      /* We can get this (undocumented) result if we signal a
+	 workqueue thread, which by default blocks signals.  Calling
+	 the undocumented function __pthread_workqueue_setkill(1) from
+	 the thread is supposed to make the thread accept signals.  We
+	 try to call that when creating a TCR for foriegn threads, but
+	 if we get here, it either means that didn't work, or we
+	 missed a thread somehow. */
+      /* fall through */
+#endif
+    default:
+      fprintf(dbgout, "%s: pthread_kill returned %d, target thread = %p\n",
+	      __FUNCTION__, ret, thread);
+      abort();
     }
-    return true;
   }
   return false;
 }

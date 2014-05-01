@@ -1450,7 +1450,15 @@ raise_pending_interrupt(TCR *tcr)
 {
   if ((TCR_INTERRUPT_LEVEL(tcr) >= 0) &&
       (tcr->interrupt_pending)) {
-    pthread_kill((pthread_t)(tcr->osid), SIGNAL_FOR_PROCESS_INTERRUPT);
+    int ret;
+    pthread_t thread = (pthread_t)tcr->osid;
+
+    ret = pthread_kill(thread, SIGNAL_FOR_PROCESS_INTERRUPT);
+    if (ret != 0) {
+      fprintf(dbgout, "%s: pthread_kill returned %d, target thread = %p\n",
+	      __FUNCTION__, ret, thread);
+      abort();
+    }
   }
 }
 
@@ -1478,8 +1486,15 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 
   int old_valence = prepare_to_wait_for_exception_lock(tcr, context);
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
+    int ret;
+
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
-    pthread_kill(pthread_self(), thread_suspend_signal);
+    ret = pthread_kill(pthread_self(), thread_suspend_signal);
+    if (ret != 0) {
+      fprintf(dbgout, "%s: pthread_kill returned %d, target thread = %p\n",
+	      __FUNCTION__, ret, pthread_self());
+      abort();
+    }
   }
   wait_for_exception_lock_in_handler(tcr,context, &xframe_link);
 
