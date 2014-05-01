@@ -849,19 +849,12 @@ allocate_tcr()
 TCR *
 allocate_tcr()
 {
-  TCR *tcr,  *next;
-#ifdef DARWIN
-  extern TCR* darwin_allocate_tcr(void);
-  extern void darwin_free_tcr(TCR *);
-#endif
-  for (;;) {
-#ifdef DARWIN
-    tcr = darwin_allocate_tcr();
-#else
-    tcr = calloc(1, sizeof(TCR));
-#endif
-    return tcr;
-  }
+  TCR *tcr;
+
+  tcr = calloc(1, sizeof(TCR));
+  if (tcr == NULL)
+    allocation_failure(true, sizeof(TCR));
+  return tcr;
 }
 #endif
 
@@ -1358,9 +1351,6 @@ __declspec(dllexport)
 #endif
 shutdown_thread_tcr(void *arg)
 {
-#ifdef DARWIN
-  extern void darwin_free_tcr(TCR *);
-#endif
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
@@ -1444,7 +1434,8 @@ shutdown_thread_tcr(void *arg)
 #endif
 #endif
 #ifdef DARWIN
-    darwin_free_tcr(tcr);
+    memset(tcr, 0, sizeof(TCR));
+    free(tcr);
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
 #ifdef HAVE_TLS
@@ -2289,9 +2280,6 @@ normalize_dead_tcr_areas(TCR *tcr)
 void
 free_freed_tcrs ()
 {
-#ifdef DARWIN
-  extern void darwin_free_tcr(TCR *);
-#endif
   TCR *current, *next;
 
   for (current = freed_tcrs; current; current = next) {
@@ -2301,11 +2289,7 @@ free_freed_tcrs ()
     /* We sort of have TLS in that the TEB is per-thread.  We free the
      * tcr aux vector elsewhere. */
 #else
-#ifdef DARWIN
-    darwin_free_tcr(current);
-#else
     free(current);
-#endif
 #endif
 #endif
   }
