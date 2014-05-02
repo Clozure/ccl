@@ -2127,7 +2127,14 @@ Boolean
 tcr_suspend_ack(TCR *tcr)
 {
   if (tcr->flags & (1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING)) {
-    SEM_WAIT_FOREVER(tcr->suspend);
+    int status;
+
+    status = wait_on_semaphore(tcr->suspend, 5, 0);
+    if (status == ETIMEDOUT) {
+      fprintf(dbgout, "%s: timed out waiting on TCR %p\n",
+	      __FUNCTION__, tcr);
+      abort();
+    }
     tcr->flags &= ~(1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
   }
   return true;
