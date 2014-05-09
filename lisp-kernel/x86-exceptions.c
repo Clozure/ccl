@@ -1502,8 +1502,6 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 #ifndef DARWIN
   TCR *tcr = get_tcr(false);
 
-  ResetAltStack();
-
   int old_valence = prepare_to_wait_for_exception_lock(tcr, context);
 #endif
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
