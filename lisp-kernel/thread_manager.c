@@ -170,6 +170,11 @@ int
 raise_thread_interrupt(TCR *target)
 {
   pthread_t thread = (pthread_t)TCR_AUX(target)->osid;
+#ifdef DARWIN_not_yet
+  if (use_mach_exception_handling) {
+    return mach_raise_thread_interrupt(target);
+  }
+#endif
   if (thread != (pthread_t) 0) {
     return pthread_kill(thread, SIGNAL_FOR_PROCESS_INTERRUPT);
   }
@@ -782,41 +787,12 @@ dequeue_tcr(TCR *tcr)
 #endif
 }
   
-#ifdef DARWIN
-/* Sending signals to "workqueue threads" (created via libdispatch)
-   via pthread_kill() isn't supported, unless the thread calls an
-   undocumented internal function.
-
-   Someone got paid to design this.
-*/
-static Boolean looked_up_setkill = false;
-typedef int(*setkillfn)(int);
-static setkillfn setkill = NULL;
-
-void
-try_enable_kill()
-{
-  if (!looked_up_setkill) {
-    setkill = dlsym(RTLD_DEFAULT,"__pthread_workqueue_setkill");
-    looked_up_setkill = true;
-  }
-  if (setkill) {
-    setkill(1);
-  }
-}
-#endif
-
 void
 enqueue_tcr(TCR *new)
 {
   TCR *head, *tail;
   
   LOCK(lisp_global(TCR_AREA_LOCK),new);
-#ifdef DARWIN
-  if (new->flags & (1<<TCR_FLAG_BIT_FOREIGN)) {
-    try_enable_kill();
-  }
-#endif
   head = (TCR *)ptr_from_lispobj(lisp_global(INITIAL_TCR));
   tail = TCR_AUX(head)->prev;
   TCR_AUX(tail)->next = new;
@@ -849,12 +825,39 @@ allocate_tcr()
 TCR *
 allocate_tcr()
 {
-  TCR *tcr;
+  TCR *tcr,  *next;
+#ifdef DARWIN
+  extern Boolean use_mach_exception_handling;
+#ifdef DARWIN
+  extern TCR* darwin_allocate_tcr(void);
+  extern void darwin_free_tcr(TCR *);
+#endif
+  kern_return_t kret;
+  mach_port_t 
+    thread_exception_port,
+    task_self = mach_task_self();
+#endif
+  for (;;) {
+#ifdef DARWIN
+    tcr = darwin_allocate_tcr();
+#else
+    tcr = calloc(1, sizeof(TCR));
+#endif
+#ifdef DARWIN
+    if (use_mach_exception_handling) {
+      if (mach_port_allocate(task_self,
+                             MACH_PORT_RIGHT_RECEIVE,
+                             &thread_exception_port) == KERN_SUCCESS) {
+        tcr->io_datum = (void *)((natural)thread_exception_port);
+        associate_tcr_with_exception_port(thread_exception_port,tcr);
+      } else {
+        Fatal("Can't allocate Mach exception port for thread.", "");
+      }
+    }
 
-  tcr = calloc(1, sizeof(TCR));
-  if (tcr == NULL)
-    allocation_failure(true, sizeof(TCR));
-  return tcr;
+#endif
+    return tcr;
+  }
 }
 #endif
 
@@ -1351,9 +1354,16 @@ __declspec(dllexport)
 #endif
 shutdown_thread_tcr(void *arg)
 {
+#ifdef DARWIN
+  extern void darwin_free_tcr(TCR *);
+  extern void darwin_exception_cleanup(TCR *);
+#endif
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
 
   area *vs, *ts, *cs;
+#ifdef DARWIN
+  mach_port_t kernel_thread;
+#endif
   
   if (current == NULL) {
     current = tcr;
@@ -1369,6 +1379,8 @@ shutdown_thread_tcr(void *arg)
       tsd_set(lisp_global(TCR_KEY), NULL);
     }
 #ifdef DARWIN
+    darwin_exception_cleanup(tcr);
+    kernel_thread = (mach_port_t) (uint32_t)(natural)( TCR_AUX(tcr)->native_thread_id);
 #endif
     LOCK(lisp_global(TCR_AREA_LOCK),current);
     vs = tcr->vs_area;
@@ -1434,8 +1446,7 @@ shutdown_thread_tcr(void *arg)
 #endif
 #endif
 #ifdef DARWIN
-    memset(tcr, 0, sizeof(TCR));
-    free(tcr);
+    darwin_free_tcr(tcr);
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
 #ifdef HAVE_TLS
@@ -1527,6 +1538,12 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
 #endif
   TCR_AUX(tcr)->errno_loc = (int *)(&errno);
   tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
+#ifdef DARWIN
+  extern Boolean use_mach_exception_handling;
+  if (use_mach_exception_handling) {
+    darwin_exception_init(tcr);
+  }
+#endif
 #ifdef LINUX
   linux_exception_init(tcr);
 #endif
@@ -2076,41 +2093,61 @@ suspend_tcr(TCR *tcr)
   return false;
 }
 #else
+#ifdef DARWIN
+extern ExceptionInformation *
+create_thread_context_frame(mach_port_t, natural *, siginfo_t *, TCR*, native_thread_state_t *);
+
+Boolean mach_suspend_tcr(TCR *tcr)
+{
+  thread_act_t thread = (thread_act_t)(tcr->native_thread_id);
+  kern_return_t kret = thread_suspend(thread);
+
+  if (kret == 0) {
+    kret = thread_abort_safely(thread);       /* or maybe thread_abort(). Who knows? */
+    if (kret == 0) {
+      mach_msg_type_number_t thread_state_count = NATIVE_THREAD_STATE_COUNT;
+      native_thread_state_t ts;
+
+      thread_get_state(thread,
+                       NATIVE_THREAD_STATE_FLAVOR,
+                       (thread_state_t)&ts,
+                       &thread_state_count);
+
+      tcr->suspend_context = create_thread_context_frame(thread,
+                                                         NULL,
+                                                         NULL,
+                                                         tcr,
+                                                         &ts);
+      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_ALT_SUSPEND);
+      return true;
+    }
+  }
+  return false;
+}
+#endif
+
+    
+
 Boolean
 suspend_tcr(TCR *tcr)
 {
-  int suspend_count = atomic_incf(&(tcr->suspend_count));
-
-  if (suspend_count == 1 && tcr->osid != 0) {
-    pthread_t thread = (pthread_t)tcr->osid;
-    int ret;
-    
-    ret = pthread_kill(thread, thread_suspend_signal);
-    switch (ret) {
-    case 0:
-      SET_TCR_FLAG(tcr, TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
-      return true;
-    case ESRCH:
-      /* The thread appears to be gone already.  Flag the tcr as
-	 belonging to a dead thread by setting tcr->osid to 0. */
+  int suspend_count = atomic_incf(&(tcr->suspend_count)), kill_return;
+  pthread_t thread;
+  if (suspend_count == 1) {
+    thread = (pthread_t)(tcr->osid);
+    if ((thread != (pthread_t) 0) &&
+        (kill_return = pthread_kill(thread, thread_suspend_signal) == 0)) {
+      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
+    } else {
+#ifdef DARWIN
+      if (kill_return != ESRCH) {
+        return mach_suspend_tcr(tcr);
+      }
+#endif
       tcr->osid = 0;
       return false;
-#ifdef DARWIN
-    case ENOTSUP:
-      /* We can get this (undocumented) result if we signal a
-	 workqueue thread, which by default blocks signals.  Calling
-	 the undocumented function __pthread_workqueue_setkill(1) from
-	 the thread is supposed to make the thread accept signals.  We
-	 try to call that when creating a TCR for foriegn threads, but
-	 if we get here, it either means that didn't work, or we
-	 missed a thread somehow. */
-      /* fall through */
-#endif
-    default:
-      fprintf(dbgout, "%s: pthread_kill returned %d, target thread = %p\n",
-	      __FUNCTION__, ret, thread);
-      abort();
     }
+    return true;
   }
   return false;
 }
@@ -2127,14 +2164,7 @@ Boolean
 tcr_suspend_ack(TCR *tcr)
 {
   if (tcr->flags & (1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING)) {
-    int status;
-
-    status = wait_on_semaphore(tcr->suspend, 5, 0);
-    if (status == ETIMEDOUT) {
-      fprintf(dbgout, "%s: timed out waiting on TCR %p\n",
-	      __FUNCTION__, tcr);
-      abort();
-    }
+    SEM_WAIT_FOREVER(tcr->suspend);
     tcr->flags &= ~(1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
   }
   return true;
@@ -2227,15 +2257,46 @@ resume_tcr(TCR *tcr)
   return false;
 }   
 #else
+#ifdef DARWIN
+Boolean mach_resume_tcr(TCR *tcr)
+{
+  ExceptionInformation *xp = tcr->suspend_context;
+  mach_port_t thread = (mach_port_t)(tcr->native_thread_id);
+#if WORD_SIZE == 64
+  MCONTEXT_T mc = UC_MCONTEXT(xp);
+#else
+  mcontext_t mc = UC_MCONTEXT(xp);
+#endif
+
+  thread_set_state(thread,
+                   NATIVE_FLOAT_STATE_FLAVOR,
+                   (thread_state_t)&(mc->__fs),
+                   NATIVE_FLOAT_STATE_COUNT);
+
+  thread_set_state(thread,
+                   NATIVE_THREAD_STATE_FLAVOR,
+                   (thread_state_t)&(mc->__ss),
+                   NATIVE_THREAD_STATE_COUNT);
+  thread_resume(thread);
+  return true;
+}
+#endif
 Boolean
 resume_tcr(TCR *tcr)
 {
   int suspend_count = atomic_decf(&(tcr->suspend_count));
   if (suspend_count == 0) {
-    void *s = (tcr->resume);
-    if (s != NULL) {
-      SEM_RAISE(s);
-      return true;
+#ifdef DARWIN
+    if (tcr->flags & (1L<<TCR_FLAG_BIT_ALT_SUSPEND)) {
+      return mach_resume_tcr(tcr);
+    }
+#endif
+    {
+      void *s = (tcr->resume);
+      if (s != NULL) {
+        SEM_RAISE(s);
+        return true;
+      }
     }
   }
   return false;
@@ -2301,6 +2362,9 @@ normalize_dead_tcr_areas(TCR *tcr)
 void
 free_freed_tcrs ()
 {
+#ifdef DARWIN
+  extern void darwin_free_tcr(TCR *);
+#endif
   TCR *current, *next;
 
   for (current = freed_tcrs; current; current = next) {
@@ -2310,7 +2374,11 @@ free_freed_tcrs ()
     /* We sort of have TLS in that the TEB is per-thread.  We free the
      * tcr aux vector elsewhere. */
 #else
+#ifdef DARWIN
+    darwin_free_tcr(current);
+#else
     free(current);
+#endif
 #endif
 #endif
   }

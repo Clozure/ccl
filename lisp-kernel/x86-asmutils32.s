@@ -113,6 +113,12 @@ _exportfn(C(atomic_and))
 _endfn
 
 
+        __ifdef(`DARWIN')
+_exportfn(C(pseudo_sigreturn))
+        __(hlt)
+        __(jmp C(pseudo_sigreturn))
+_endfn
+        __endif    
 
 /* int cpuid (int code, int *pebx, int *pecx, int *pedx)  */
 _exportfn(C(cpuid))

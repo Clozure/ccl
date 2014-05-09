@@ -59,6 +59,8 @@ typedef ucontext_t ExceptionInformation;
 extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 
 /* xp accessors, sigreturn stuff */
+#define DARWIN_USE_PSEUDO_SIGRETURN 1
+
 #define DarwinSigReturn(context) do {\
     darwin_sigreturn(context, 0x1e);                 \
     Bug(context,"sigreturn returned");\
@@ -81,6 +83,12 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
    hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)
 
+#include <mach/mach.h>
+#include <mach/mach_error.h>
+#include <mach/machine/thread_state.h>
+#include <mach/machine/thread_status.h>
+
+pthread_mutex_t *mach_exception_lock;
 
 #include "os-darwin.h"
 

@@ -912,3 +912,143 @@ ReserveMemory(natural size)
   return p;
 #endif
 }
+
+
+    
+
+  
+#ifdef DARWIN
+/*
+  On 64-bit Darwin, we try to make a TCR's address serve as a Mach port
+  name, which means that it has to fit in 32 bits (and not conflict with
+  an existing port name, but that's a separate issue.)  Darwin doesn't
+  seem to offer means of mapping/allocating memory that's guaranteed to
+  return a 32-bit address on 64-bit systems, and trial-and-error doesn't
+  scale well.
+  
+  Since it's a PITA to allocate 32-bit TCR pointers, we never free them
+  once we've done so.  (We maintain a queue of "freed" TCRs but never
+  unmap the memory.)  When we need to allocate TCR pointers, we try to
+  allocate substantially more than we need.
+
+  The bulk allocation works by scanning the task's mapped memory
+  regions until a free region of appropriate size is found, then
+  mapping that region (without the dangerous use of MAP_FIXED).  This
+  will win if OSX's mmap() tries to honor the suggested address if it
+  doesn't conflict with a mapped region (as it seems to in practice
+  since at least 10.5 and as it's documented to in 10.6.)
+
+  OSX 10.8 introduces new horrors that affect 32-bit CCL as well: 
+
+  mach_port_allocate_name(mach_task_self(),MACH_PORT_RIGHT_RECEIVE,n)
+  
+  returns KERN_NO_SPACE for n > ~#x09800000.  It's not known whether or
+  not this is intentional; even if it's a bug, it suggests that we should
+  probably stop trying to arrange that a TCR's address can be used as the
+  corresponding thread's exception port and maintain some sort of 
+  efficient and thread-safe mapping from port to TCR.  Soon.
+
+  News flash:  mach_port_allocate_name() is not only worse than we
+  imagine on 10.8, but it's worse than we can imagine.  Give up.
+  (This means that there are no longer any constraints on TCR addresses
+  and we could just use malloc here, but keep some of this code around
+  for now.)
+*/
+
+pthread_mutex_t darwin_tcr_lock = PTHREAD_MUTEX_INITIALIZER;
+
+TCR _free_tcr_queue, *darwin_tcr_freelist=&_free_tcr_queue;
+
+#define TCR_CLUSTER_COUNT 1024   /* Enough that we allocate clusters rarely,
+but not so much that we waste lots of 32-bit memory. */
+
+
+
+
+/* force 16-bit alignment, just in case */
+typedef struct {
+  TCR tcr;
+}  __attribute__ ((aligned(16))) MTCR;
+
+
+
+void
+link_tcr_list(TCR *head, MTCR *buf, int n)
+{
+  TCR *prev = head, *tcr;
+  int i;
+
+  for (i=0; i < n; i++, buf++) {
+    tcr = &(buf->tcr);
+    prev->next = tcr;
+    tcr->prev = prev;
+    head->prev = tcr;
+    tcr->next = head;
+    prev = tcr;
+  }
+}
+
+
+
+
+void
+map_tcr_cluster(TCR *head)
+{
+  MTCR *work = NULL;
+  TCR *prev = head;
+  int i;
+  size_t request_size = align_to_power_of_2((TCR_CLUSTER_COUNT*sizeof(MTCR)),log2_page_size);
+
+  work = (MTCR *)mmap(NULL,
+                      request_size,
+                      PROT_READ|PROT_WRITE,
+                      MAP_PRIVATE|MAP_ANON,
+                      -1,
+                      0);
+
+  if (work == MAP_FAILED) {
+    Fatal("Can't allocate memory for thread-local storage.", "");
+  }
+  link_tcr_list(head, work, TCR_CLUSTER_COUNT);
+}
+
+void
+darwin_free_tcr(TCR *tcr)
+{
+  TCR  *head = darwin_tcr_freelist, *tail;
+
+  pthread_mutex_lock(&darwin_tcr_lock);
+  tail = head->prev;
+  tail->next = tcr;
+  head->prev = tcr;
+  tcr->prev = tail;
+  tcr->next = head;
+  pthread_mutex_unlock(&darwin_tcr_lock);
+}
+
+
+TCR *
+darwin_allocate_tcr()
+{
+  TCR  *head = darwin_tcr_freelist, *tail, *tcr;
+  pthread_mutex_lock(&darwin_tcr_lock);
+  if (head->next == NULL) { /* First time */
+    head->next = head->prev = head;
+  }
+
+  if (head->next == head) {
+    map_tcr_cluster(head);
+  }
+  tcr = head->next;
+  tail = tcr->next;
+  tail->prev = head;
+  head->next = tail;
+  pthread_mutex_unlock(&darwin_tcr_lock);
+  memset(tcr,0,sizeof(TCR));
+  return tcr;
+}
+  
+
+
+
+#endif
