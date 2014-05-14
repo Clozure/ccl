@@ -571,7 +571,7 @@
 
 
 (defun ensure-open-shlib (c force)
-  (if (or (shlib.map c) (not force))
+  (if (or (shlib.handle c) (not force))
     *rtld-use*
     (error "Shared library not open: ~s" (shlib.soname c))))
 
