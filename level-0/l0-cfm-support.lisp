@@ -116,7 +116,8 @@
                    (declare (ignore k))
                    (when (fv.addr fv)
                      (when (or (null lib) (eq (fv.container fv) lib))
-                       (setf (fv.addr fv) nil))))
+                       (setf (fv.addr fv) nil)
+                       (resolve-foreign-variable fv nil))))
                fvs))))
 
 ;;; Walk over all registered entrypoints, invalidating any whose container
@@ -130,8 +131,10 @@
                  (when (eep.address eep)
                    (when (or (null lib) (eq (eep.container eep) lib))
                      (setf (eep.address eep) nil)
+                     (resolve-eep eep nil)
                      (incf count))))
-	     (eeps))    
+	     (eeps))
+    
     (not (zerop count))))
 
 (defun shared-library-with-name (name)
