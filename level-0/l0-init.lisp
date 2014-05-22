@@ -34,6 +34,8 @@
     :ccl-1.6
     :ccl-1.7
     :ccl-1.8
+    :ccl-1.9
+    :ccl-1.10
     :clozure
     :clozure-common-lisp
     :ansi-cl
