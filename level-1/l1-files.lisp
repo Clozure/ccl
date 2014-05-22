@@ -1163,7 +1163,7 @@ a host-structure or string."
 
 
 (defun file-write-date (path)
-  "Return file's creation date, or NIL if it doesn't exist.
+  "Return file's last modification date, or NIL if it doesn't exist.
   An error of type file-error is signaled if file is a wild pathname"
   (%file-write-date (defaulted-native-namestring path)))
 
