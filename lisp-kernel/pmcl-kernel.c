@@ -1577,72 +1577,20 @@ check_x86_cpu()
 
 #ifdef ARM
 int
-arm_architecture_version = 0;
+arm_architecture_version = 7;
 
 Boolean
 check_arm_cpu()
 {
   Boolean win = false;
 #ifdef LINUX
-/* It's hard to determine ARM features in general, and especially
-   hard to do so from user mode.  Parse /proc/cpuinfo. 
-   According to Android's cpufeatures library, some ARMv6 chips
-   are reported to have archutecture version 7; check the ELF
-   architecture in this case.
+  extern void feature_check(), early_signal_handler();
 
-   (In other words, we assume that we're on ARMv7 or later if
-   the reported architecture is > 7, or if it's = 7 and the 
-   ELF architecture is "v7l".)
-*/
-  FILE *f = fopen("/proc/cpuinfo", "r");
-  char *procline = NULL, *cpuline = NULL, line[129], *workline;
-  size_t n;
+  install_signal_handler(SIGILL, (void *)early_signal_handler,0);
+  feature_check();
+  win = arm_architecture_version >= 6;
+  install_signal_handler(SIGILL, NULL, 0);
 
-  if (f) {
-    while (1) {
-      if (fgets(line,128,f)==NULL) {
-        break;
-      }
-      n = strlen(line);
-      if (strncmp(line,"Processor",sizeof("Processor")-1) == 0) {
-        procline = malloc(n+1);
-        strcpy(procline,line);
-        procline[n]='\0';
-      } else if (strncmp(line, "CPU architecture",sizeof("CPU architecture")-1) == 0) {
-        cpuline = malloc(n+1);
-        strcpy(cpuline,line);
-        cpuline[n] = '\0';
-      }
-    }
-    if (procline) {
-      win = (strstr(procline, "v7l") != NULL);
-      if (win) {
-        arm_architecture_version = 7;
-      } else {
-        win = (strstr(procline, "v6l") != NULL);
-        if (win) {
-          arm_architecture_version = 6;
-        } else {
-          if (cpuline) {
-            workline = index(cpuline,':');
-            if (workline) {
-              arm_architecture_version = strtol(workline+1,NULL,0);
-              if (arm_architecture_version >= ARM_ARCHITECTURE_min) {
-                win = true;
-              }
-            }
-          }
-        }
-      }
-    }
-    if (procline) {
-      free(procline);
-    }
-    if (cpuline) {
-      free(cpuline);
-    }
-    fclose(f);
-  }
 #endif
   return win;
 }

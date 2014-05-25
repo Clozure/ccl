@@ -216,5 +216,17 @@ _exportfn(C(zero_dnodes))
         .long 0        
 _endfn                        
                                 
+_exportfn(C(feature_check))
+        .globl C(feature_check_ldrex)
+        .globl C(feature_check_clrex)
+        .globl C(feature_check_fpu)
+C(feature_check_fpu):           
+        __(fcmpd d15,d15)
+C(feature_check_ldrex): 
+        __(ldrex r2,[sp])
+C(feature_check_clrex):         
+        __(.long 0xf57ff01f)    /* clrex */
+        __(bx lr)
+_endfn        
 	_endfile
 
