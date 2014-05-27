@@ -94,7 +94,7 @@
 
 (def-standard-initial-binding *operand-vector-freelist* (%cons-pool))
 
-(defconstant lap-operand-vector-size #+ppc-target 5)
+(defconstant lap-operand-vector-size #+ppc-target 5 #-ppc-target 5)
 
 (defun alloc-lap-operand-vector (&optional (size lap-operand-vector-size))
   (declare (fixnum size))

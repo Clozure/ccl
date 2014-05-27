@@ -365,6 +365,7 @@
   (%eval-redef %ptr-eql (ptr1 ptr2))
   (%eval-redef %setf-macptr (ptr1 ptr2))
   (%eval-redef %null-ptr-p (ptr))
+ 
 
 
   (%eval-redef %iasr (x y))
@@ -438,7 +439,7 @@
     (%eval-redef require-u32 (x))
     (%eval-redef require-s64 (x))
     (%eval-redef require-u64 (x))
-    (%eval-redef %reference-external-entry-point (x))
+    (%eval-redef %reference-external-entry-point (x))    
     )
   
   (%eval-redef %get-bit (ptr offset))
@@ -456,6 +457,8 @@
                (%fixnum-ref-double-float base index))
   (%eval-redef %fixnum-set-double-float (base index &optional (new (prog1 index (setq index 0))))
                (%fixnum-set-double-float base index new))
+  (%eval-redef ivector-typecode-p (arg))
+  (%eval-redef gvector-typecode-p (arg))
 )
 
 ; In the spirit of eval-redef ...

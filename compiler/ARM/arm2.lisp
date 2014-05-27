@@ -26,8 +26,6 @@
 (defparameter *arm2-debug-mask* 0)
 (defconstant arm2-debug-verbose-bit 0)
 (defconstant arm2-debug-vinsns-bit 1)
-(defconstant arm2-debug-lcells-bit 2)
-(defparameter *arm2-target-lcell-size* 0)
 (defparameter *arm2-target-node-size* 0)
 (defparameter *arm2-target-fixnum-shift* 0)
 (defparameter *arm2-target-node-shift* 0)
@@ -36,6 +34,25 @@
 (defparameter *arm2-target-half-fixnum-type* nil)
 (defparameter *arm2-operator-supports-u8-target* ())
 (defparameter *arm2-autodrain-constant-pool* ())
+(defparameter *arm2-nfp-depth* 0)
+(defparameter *arm2-max-nfp-depth* ())
+(defparameter *arm2-all-nfp-pushes* ())
+(defparameter *arm2-nfp-vars* ())
+
+(defun arm2-max-nfp-depth ()
+  (or *arm2-max-nfp-depth*
+      (setq *arm2-max-nfp-depth*
+            (let* ((max 0))
+              (declare (fixnum max))
+              (dolist (v *arm2-all-nfp-pushes* max)
+                (when (vinsn-succ v)    ;not elided
+                  (let* ((depth (+ (the fixnum (svref (vinsn-variable-parts v) 1))
+                                   (if (vinsn-attribute-p v :doubleword)
+                                     16
+                                     8))))
+                    (declare (fixnum depth))
+                    (if (> depth max)
+                      (setq max depth)))))))))
 
 
 
@@ -126,7 +143,7 @@
 (defvar *arm2-register-restore-count* 0)
 (defvar *arm2-register-restore-ea* nil)
 (defvar *arm2-non-volatile-fpr-count* 0)
-(defvar *arm2-compiler-register-save-label* nil)
+(defvar *arm2-compiler-register-save-note* nil)
 
 (defparameter *arm2-tail-call-aliases*
   ()
@@ -182,6 +199,7 @@
 
 
 
+
 (declaim (fixnum *arm2-vstack* *arm2-cstack*))
 
  
@@ -189,77 +207,22 @@
 
 ;;; Before any defarm2's, make the *arm2-specials* vector.
 
-(defvar *arm2-all-lcells* ())
-
 
 
 
      
-(defun arm2-free-lcells ()
-  (without-interrupts 
-   (let* ((prev (pool.data *lcell-freelist*)))
-     (dolist (r *arm2-all-lcells*)
-       (setf (lcell-kind r) prev
-             prev r))
-     (setf (pool.data *lcell-freelist*) prev)
-     (setq *arm2-all-lcells* nil))))
 
-(defun arm2-note-lcell (c)
-  (push c *arm2-all-lcells*)
-  c)
 
-(defvar *arm2-top-vstack-lcell* ())
-(defvar *arm2-bottom-vstack-lcell* ())
 
-(defun arm2-new-lcell (kind parent width attributes info)
-  (arm2-note-lcell (make-lcell kind parent width attributes info)))
 
-(defun arm2-new-vstack-lcell (kind width attributes info)
-  (setq *arm2-top-vstack-lcell* (arm2-new-lcell kind *arm2-top-vstack-lcell* width attributes info)))
 
-(defun arm2-reserve-vstack-lcells (n)
-  (dotimes (i n) (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)))
 
-(defun arm2-vstack-mark-top ()
-  (arm2-new-lcell :tos *arm2-top-vstack-lcell* 0 0 nil))
 
-;;; Alist mapping VARs to lcells/lregs
-(defvar *arm2-var-cells* ())
-
-(defun arm2-note-var-cell (var cell)
-  ;(format t "~& ~s -> ~s" (var-name var) cell)
-  (push (cons var cell) *arm2-var-cells*))
-
-(defun arm2-note-top-cell (var)
-  (arm2-note-var-cell var *arm2-top-vstack-lcell*))
-
-(defun arm2-lookup-var-cell (var)
-  (or (cdr (assq var *arm2-var-cells*))
-      (and nil (warn "Cell not found for ~s" (var-name var)))))
-
-(defun arm2-collect-lcells (kind &optional (bottom *arm2-bottom-vstack-lcell*) (top *arm2-top-vstack-lcell*))
-  (do* ((res ())
-        (cell top (lcell-parent cell)))
-       ((eq cell bottom) res)
-    (if (null cell)
-      (compiler-bug "Horrible compiler bug.")
-      (if (eq (lcell-kind cell) kind)
-        (push cell res)))))
 
 
 
   
-;;; ensure that lcell's offset matches what we expect it to.
-;;; For bootstrapping.
 
-(defun arm2-ensure-lcell-offset (c expected)
-  (if c (= (calc-lcell-offset c) expected) (zerop expected)))
-
-(defun arm2-check-lcell-depth (&optional (context "wherever"))
-  (when (logbitp arm2-debug-verbose-bit *arm2-debug-mask*)
-    (let* ((depth (calc-lcell-depth *arm2-top-vstack-lcell*)))
-      (or (= depth *arm2-vstack*)
-          (warn "~a: lcell depth = ~d, vstack = ~d" context depth *arm2-vstack*)))))
 
 (defun arm2-gprs-containing-constant (c)
   (let* ((in *arm2-gpr-constants-valid-mask*)
@@ -272,19 +235,209 @@
                  (eql c (svref vals i)))
         (setq out (logior out (ash 1 i)))))))
 
+(defun arm2-nfp-ref (seg vreg ea)
+  (with-arm-local-vinsn-macros (seg vreg)
+    (let* ((offset (logand #xfff8 ea))
+           (type (logand #x7 ea))
+           (vreg-class (hard-regspec-class vreg))
+           (vreg-mode (get-regspec-mode vreg))
+           (nested (> *arm2-undo-count* 0))
+           (vinsn nil)
+           (reg vreg))
+      (ecase type
+        (#. memspec-nfp-type-natural
+            (unless (and (eql vreg-class hard-reg-class-gpr)
+                         (eql vreg-mode hard-reg-class-gpr-mode-u32))
+              (setq reg (available-imm-temp
+                         *available-backend-imm-temps*
+                         :u32)))
+            (setq vinsn
+                  (if nested
+                    (! nfp-load-unboxed-word-nested reg offset)
+                    (! nfp-load-unboxed-word reg offset))))
+        (#. memspec-nfp-type-double-float
+            (unless (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-double))
+              (setq reg (available-fp-temp
+                         *available-backend-fp-temps*
+                         :double-float)))
+            (setq vinsn
+                  (if nested
+                    (! nfp-load-double-float-nested reg offset)
+                    (! nfp-load-double-float reg offset))))
+        (#. memspec-nfp-type-single-float
+            (unless (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-single))
+              (setq reg (available-fp-temp
+                         *available-backend-fp-temps*
+                         :single-float)))
+            (setq vinsn
+                  (if nested
+                    (! nfp-load-single-float-nested reg offset)
+                    (! nfp-load-single-float  reg offset))))    
+        (#. memspec-nfp-type-complex-double-float
+            (unless (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+              (setq reg (available-fp-temp
+                         *available-backend-fp-temps*
+                         :complex-double-float)))
+            (setq vinsn
+                  (if nested
+                    (! nfp-load-complex-double-float-nested reg offset)
+                    (! nfp-load-complex-double-float reg offset))))
+        (#. memspec-nfp-type-complex-single-float
+            (unless (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+              (setq reg (available-fp-temp
+                         *available-backend-fp-temps*
+                         :complex-single-float)))
+            (setq vinsn
+                  (if nested
+                    (! nfp-load-complex-single-float-nested reg offset)
+                    (! nfp-load-complex-single-float  reg offset)))))
+      (when (memspec-single-ref-p ea)
+        (let* ((push-vinsn
+                (find offset *arm2-all-nfp-pushes*
+                      :key (lambda (v)
+                             (when (typep v 'vinsn)
+                               (svref (vinsn-variable-parts v) 1))))))
+          (when push-vinsn
+            (arm2-elide-pushes seg push-vinsn vinsn))))
+      (<- reg))))
+
+(defun arm2-reg-for-nfp-set (vreg ea)
+  (with-arm-local-vinsn-macros (seg )
+    (let* ((type (logand #x7 ea))
+           (vreg-class (if vreg (hard-regspec-class vreg)))
+           (vreg-mode (if vreg (get-regspec-mode vreg))))
+      (ecase type
+        (#. memspec-nfp-type-natural
+            (if (and (eql vreg-class hard-reg-class-gpr)
+                     (eql vreg-mode hard-reg-class-gpr-mode-u32))
+              vreg
+              (make-unwired-lreg
+               (available-imm-temp *available-backend-imm-temps* :u32))))
+        (#. memspec-nfp-type-double-float
+            (if (and (eql vreg-class hard-reg-class-fpr)
+                     (eql vreg-mode hard-reg-class-fpr-mode-double))
+              vreg
+              (make-unwired-lreg
+               (available-fp-temp *available-backend-fp-temps* :double-float))))
+        (#. memspec-nfp-type-single-float
+            (if (and (eql vreg-class hard-reg-class-fpr)
+                     (eql vreg-mode hard-reg-class-fpr-mode-single))
+              vreg
+              (make-unwired-lreg
+               (available-fp-temp *available-backend-fp-temps* :single-float))))    
+        (#. memspec-nfp-type-complex-double-float
+            (if (and (eql vreg-class hard-reg-class-fpr)
+                     (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+              vreg
+              (make-unwired-lreg
+               (available-fp-temp *available-backend-fp-temps* :complex-double-float))))
+        (#. memspec-nfp-type-complex-single-float
+            (if (and (eql vreg-class hard-reg-class-fpr)
+                     (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+              vreg
+              (make-unwired-lreg
+               (available-fp-temp *available-backend-fp-temps* :complex-single-float))))))))
+      
+(defun arm2-nfp-set (seg reg ea)
+  (with-arm-local-vinsn-macros (seg )
+    (let* ((offset (logand #xfff8 ea))
+           (nested (> *arm2-undo-count* 0)))
+      (ecase (logand #x7 ea)
+        (#. memspec-nfp-type-natural
+            (if nested
+              (! nfp-store-unboxed-word-nested reg offset)
+              (! nfp-store-unboxed-word reg offset)))
+        (#. memspec-nfp-type-double-float
+            (if nested
+              (! nfp-store-unboxed-double-float-nested reg offset)
+              (! nfp-store-double-float reg offset)))
+        (#. memspec-nfp-type-single-float
+            (if nested
+              (! nfp-store-single-float-nested reg offset)
+              (! nfp-store-single-float  reg offset)))    
+        (#. memspec-nfp-type-complex-double-float
+            (if nested
+              (! nfp-store-complex-double-float-nested reg offset)
+              (! nfp-store-complex-double-float reg offset)))
+        (#. memspec-nfp-type-complex-single-float
+            (if nested
+              (! nfp-store-complex-single-float-nested reg offset)
+              (! nfp-store-complex-single-float  reg offset)))))))
+
+;;; Depending on the variable's type and other attributes, maybe
+;;; push it on te NFP.  Return the nfp-relative EA if we push it.
+(defun arm2-nfp-bind (seg var initform)
+  (let* ((bits (nx-var-bits var)))
+    (unless (logtest bits (logior (ash 1 $vbitspecial)
+                                  (ash 1 $vbitclosed)
+                                  (ash 1 $vbitdynamicextent)))
+      (let* ((type (acode-var-type var *arm2-trust-declarations*))
+             (reg nil)
+             (nfp-bits 0))
+        (cond ((and (subtypep type '(unsigned-byte 32))
+                    NIL
+                    (not (subtypep type '(signed-byte 30))))
+               (setq reg (available-imm-temp
+                          *available-backend-imm-temps* :u32)
+                     nfp-bits memspec-nfp-type-natural))
+              ((subtypep type 'single-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :single-float)
+                     nfp-bits memspec-nfp-type-single-float))
+              ((subtypep type 'double-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :double-float)
+                     nfp-bits memspec-nfp-type-double-float))
+              ((subtypep type 'complex-single-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :complex-single-float)
+                     nfp-bits memspec-nfp-type-complex-single-float))
+              ((subtypep type 'complex-douuble-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :complex-double-float)
+                     nfp-bits memspec-nfp-type-complex-double-float)))
+        (when reg
+          (let* ((vinsn (arm2-push-register
+                         seg
+                         (arm2-one-untargeted-reg-form seg initform reg))))
+            (when vinsn
+              (push (cons vinsn var) *arm2-nfp-vars*)
+              (make-nfp-address
+               (svref (vinsn-variable-parts vinsn) 1)
+               nfp-bits
+               #|                       ;
+               (and (eql 0 (var-root-nsetqs var))
+               (eql 1 (var-root-nrefs var)))
+               |#))))))))
+
+
+               
+
+
+
+                                            
+              
+                      
+
 
 (defun arm2-do-lexical-reference (seg vreg ea)
   (when vreg
     (with-arm-local-vinsn-macros (seg vreg) 
       (if (memory-spec-p ea)
-        (ensuring-node-target (target vreg)
-          (let* ((reg (unless (node-reg-p vreg)
-                        (or (arm2-reg-for-ea ea)
-                            (arm2-try-non-conflicting-reg target 0)))))
-            (when reg (setq target reg))
-            (arm2-stack-to-register seg ea target)
-            (if (addrspec-vcell-p ea)
-              (! vcell-ref target target))))
+        (if (eql (memspec-type ea) memspec-nfp-offset)
+          (arm2-nfp-ref seg vreg ea)
+          (ensuring-node-target (target vreg)
+            (let* ((reg (unless (node-reg-p vreg)
+                          (or (arm2-reg-for-ea ea)
+                              (arm2-try-non-conflicting-reg target 0)))))
+              (when reg (setq target reg))
+              (arm2-stack-to-register seg ea target)
+              (if (addrspec-vcell-p ea)
+                (! vcell-ref target target)))))
         (<- ea)))))
 
 (defun arm2-do-lexical-setq (seg vreg ea valreg)
@@ -297,7 +450,7 @@
            (arm2-lri seg arm::arg_y 0)
            (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-offset  '.SPgvset) arm::arg_x arm::arg_y arm::arg_z)
            (setq valreg arm::arg_z))
-          ((memory-spec-p ea)    ; vstack slot
+          ((memory-spec-p ea)    ; vstack slot or fp offset
            (arm2-register-to-stack seg valreg ea))
           (t
            (arm2-copy-register seg ea valreg)))
@@ -327,7 +480,7 @@
 
 
 (defun acode-condition-to-arm-cr-bit (cond)
-  (condition-to-arm-cr-bit (cadr cond)))
+  (condition-to-arm-cr-bit (car (acode-operands cond))))
 
 (defun condition-to-arm-cr-bit (cond)
   (case cond
@@ -383,26 +536,20 @@
            (*arm2-returning-values* nil)
            (*arm-current-context-annotation* nil)
            (*arm2-woi* nil)
-           (*next-lcell-id* -1)
            (*encoded-reg-value-byte* (byte 5 0))           
            (*arm2-open-code-inline* nil)
            (*arm2-optimize-for-space* nil)
            (*arm2-register-restore-count* nil)
-           (*arm2-compiler-register-save-label* nil)
+           (*arm2-compiler-register-save-note* nil)
            (*arm2-non-volatile-fpr-count* 0)
            (*arm2-register-restore-ea* nil)
            (*arm2-vstack* 0)
            (*arm2-cstack* 0)
-	   (*arm2-target-lcell-size* (arch::target-lisp-node-size (backend-target-arch *target-backend*)))
            (*arm2-target-fixnum-shift* (arch::target-fixnum-shift (backend-target-arch *target-backend*)))
            (*arm2-target-node-shift* (arch::target-word-shift  (backend-target-arch *target-backend*)))
            (*arm2-target-bits-in-word* (arch::target-nbits-in-word (backend-target-arch *target-backend*)))
-	   (*arm2-target-node-size* *arm2-target-lcell-size*)
+	   (*arm2-target-node-size* (arch::target-lisp-node-size (backend-target-arch *target-backend*)))
            (*arm2-target-half-fixnum-type* *arm2-half-fixnum-type*)
-           (*arm2-all-lcells* ())
-           (*arm2-top-vstack-lcell* nil)
-           (*arm2-bottom-vstack-lcell* (arm2-new-vstack-lcell :bottom 0 0 nil))
-           (*arm2-var-cells* nil)
            (*backend-vinsns* (backend-p2-vinsn-templates *target-backend*))
            (*backend-node-regs* arm-node-regs)
            (*backend-node-temps* arm-temp-node-regs)
@@ -443,7 +590,11 @@
            (*arm2-gpr-locations-valid-mask* 0)
            (*arm2-gpr-locations* (make-array 16 :initial-element nil))
            (*arm2-gpr-constants-valid-mask* 0)
-           (*arm2-gpr-constants*(make-array 16 :initial-element nil)))
+           (*arm2-gpr-constants*(make-array 16 :initial-element nil))
+           (*arm2-nfp-depth* 0)
+           (*arm2-max-nfp-depth* ())
+           (*arm2-all-nfp-pushes* ())
+           (*arm2-nfp-vars* ()))
       (declare (dynamic-extent *arm2-gpr-locations* *arm2-gpr-constants*))
       (set-fill-pointer
        *backend-labels*
@@ -551,8 +702,9 @@
     (arm2-invalidate-regmap)
     (let* ((clobbered-regs (vinsn-gprs-set vinsn)))
       (setq *arm2-gpr-locations-valid-mask* (logandc2 *arm2-gpr-locations-valid-mask* clobbered-regs)
-            *arm2-gpr-constants-valid-mask* (logandc2 *arm2-gpr-constants-valid-mask* clobbered-regs))))
-    vinsn)
+            *arm2-gpr-constants-valid-mask* (logandc2 *arm2-gpr-constants-valid-mask* clobbered-regs))
+))
+  vinsn)
 
 (defun arm2-invalidate-regmap-entry (i loc)
   (when (and (logbitp i *arm2-gpr-locations-valid-mask*)
@@ -620,6 +772,8 @@
     (arm2-copy-constmap ,constmap *arm2-gpr-constants* ,constmap)
     ,@body))
 
+
+
 (defun arm2-generate-pc-source-map (debug-info)
   (let* ((definition-source-note (getf debug-info '%function-source-note))
          (emitted-source-notes (getf debug-info 'pc-source-map))
@@ -671,8 +825,7 @@
               (aref vec l) (svref text-ends idx))))))
 
 (defun arm2-vinsn-note-label-address (note &optional start-p sym)
-  (let* ((label (vinsn-note-label note))
-         (lap-label (if label (vinsn-label-info label))))
+  (let* ((lap-label (vinsn-note-address note)))
     (if lap-label
       (arm::lap-label-address lap-label)
       (compiler-bug "Missing or bad ~s label: ~s" 
@@ -708,10 +861,30 @@
             *arm2-open-code-inline* (neq 0 (%ilogand2 $decl_opencodeinline decls))
 	    *arm2-full-safety* (neq 0 (%ilogand2 $decl_full_safety decls))
             *arm2-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
-            *arm2-float-safety* (not *arm2-reckless*)
+            *arm2-float-safety*  (neq 0 (%ilogand2 $decl_float_safety decls))
             *arm2-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls decls))))))
 
 
+(defun arm2-check-fixnum-overflow (seg crf target &optional labelno)
+  (with-arm-local-vinsn-macros (seg)
+    (let* ((no-overflow (backend-get-next-label))
+           (label (if labelno (aref *backend-labels* labelno))))
+      (! cbranch-false (or label (aref *backend-labels* no-overflow)) crf arm::arm-cond-vs)
+      (if *arm2-open-code-inline*
+        (! handle-fixnum-overflow-inline target target)
+        (let* ((target-other (not (eql (hard-regspec-value target)
+                                       arm::arg_z)))
+               (arg (if target-other
+                      (make-wired-lreg arm::arg_z)
+                      target))
+               (result (make-wired-lreg arm::arg_z)))
+          (when target-other
+            (arm2-copy-register seg arg target))
+          (! call-subprim-1 result (subprim-name->offset '.SPfix-overflow) arg)
+          (when target-other
+            (arm2-copy-register seg target result))))
+        (when labelno (-> labelno))
+        (@ no-overflow))))
 
 
 
@@ -721,11 +894,10 @@
 (defun arm2-save-nvrs (seg n)
   (declare (fixnum n))
   (when (> n 0)
-    (setq *arm2-compiler-register-save-label* (arm2-emit-note seg :regsave))
+    (setq *arm2-compiler-register-save-note* (enqueue-vinsn-note seg :regsave))
     (with-arm-local-vinsn-macros (seg)
       (! save-nvrs n))
-    (dotimes (i n)
-      (arm2-new-vstack-lcell :regsave *arm2-target-lcell-size* 0 (+ *arm2-first-nvr* i)))
+
     (incf *arm2-vstack* (the fixnum (* n *arm2-target-node-size*)))
     (setq *arm2-register-restore-ea* *arm2-vstack*
           *arm2-register-restore-count* n)))
@@ -784,40 +956,39 @@
 
 
 
-(defun arm2-bind-lambda (seg lcells req opt rest keys auxen optsupvloc passed-in-regs lexpr &optional inherited
-                             &aux (vloc 0) (numopt (list-length (%car opt)))
+(defun arm2-bind-lambda (seg req opt rest keys auxen optsupvloc passed-in-regs lexpr &optional inherited
+                             &aux (vloc 0)
                              (nkeys (list-length (%cadr keys))) 
                              reg)
   (declare (fixnum vloc))
-  (arm2-check-lcell-depth)
   (dolist (arg inherited)
     (if (memq arg passed-in-regs)
       (arm2-set-var-ea seg arg (var-ea arg))
-      (let* ((lcell (pop lcells)))
+      (progn
         (if (setq reg (nx2-assign-register-var arg))
           (arm2-init-regvar seg arg reg (arm2-vloc-ea vloc))
-          (arm2-bind-var seg arg vloc lcell))
+          (arm2-bind-var seg arg vloc ))
         (setq vloc (%i+ vloc *arm2-target-node-size*)))))
   (dolist (arg req)
     (if (memq arg passed-in-regs)
       (arm2-set-var-ea seg arg (var-ea arg))
-      (let* ((lcell (pop lcells)))
+      (progn
+
         (if (setq reg (nx2-assign-register-var arg))
           (arm2-init-regvar seg arg reg (arm2-vloc-ea vloc))
-          (arm2-bind-var seg arg vloc lcell))
+          (arm2-bind-var seg arg vloc))
         (setq vloc (%i+ vloc *arm2-target-node-size*)))))
   (when opt
     (if (arm2-hard-opt-p opt)
-      (setq vloc (apply #'arm2-initopt seg vloc optsupvloc lcells (nthcdr (- (length lcells) numopt) lcells) opt)
-            lcells (nthcdr numopt lcells))
+      (setq vloc (apply #'arm2-initopt seg vloc optsupvloc opt))
 
       (dolist (var (%car opt))
         (if (memq var passed-in-regs)
           (arm2-set-var-ea seg var (var-ea var))
-          (let* ((lcell (pop lcells)))
+          (progn
             (if (setq reg (nx2-assign-register-var var))
               (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
-              (arm2-bind-var seg var vloc lcell))
+              (arm2-bind-var seg var vloc))
             (setq vloc (+ vloc *arm2-target-node-size*)))))))
   (when rest
     (if lexpr
@@ -829,24 +1000,21 @@
           (with-imm-temps () ((nargs-cell :natural))
             (arm2-load-lexpr-address seg nargs-cell)
             (let* ((loc *arm2-vstack*))
-              (arm2-vpush-register seg nargs-cell :reserved)
-              (arm2-note-top-cell rest)
-              (arm2-bind-var seg rest loc *arm2-top-vstack-lcell*)))))
+              (arm2-vpush-register seg nargs-cell)
+              (arm2-bind-var seg rest loc)))))
       (let* ((rvloc (+ vloc (* 2 *arm2-target-node-size* nkeys))))
         (if (setq reg (nx2-assign-register-var rest))
           (arm2-init-regvar seg rest reg (arm2-vloc-ea rvloc))
-          (arm2-bind-var seg rest rvloc (pop lcells))))))
+          (arm2-bind-var seg rest rvloc )))))
   (when keys
-    (apply #'arm2-init-keys seg vloc lcells keys))  
+    (apply #'arm2-init-keys seg vloc  keys))  
   (arm2-seq-bind seg (%car auxen) (%cadr auxen)))
 
-(defun arm2-initopt (seg vloc spvloc lcells splcells vars inits spvars)
+(defun arm2-initopt (seg vloc spvloc vars inits spvars)
   (with-arm-local-vinsn-macros (seg)
     (dolist (var vars vloc)
       (let* ((initform (pop inits))
              (spvar (pop spvars))
-             (lcell (pop lcells))
-             (splcell (pop splcells))
              (reg (nx2-assign-register-var var))
              (sp-reg ($ arm::arg_z))
              (regloadedlabel (if reg (backend-get-next-label))))
@@ -863,15 +1031,15 @@
           (progn
             (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
             (@ regloadedlabel))
-          (arm2-bind-var seg var vloc lcell))
+          (arm2-bind-var seg var vloc))
         (when spvar
           (if (setq reg (nx2-assign-register-var spvar))
             (arm2-init-regvar seg spvar reg (arm2-vloc-ea spvloc))
-            (arm2-bind-var seg spvar spvloc splcell))))
+            (arm2-bind-var seg spvar spvloc))))
       (setq vloc (%i+ vloc *arm2-target-node-size*))
       (if spvloc (setq spvloc (%i+ spvloc *arm2-target-node-size*))))))
 
-(defun arm2-init-keys (seg vloc lcells allow-others keyvars keysupp keyinits keykeys)
+(defun arm2-init-keys (seg vloc allow-others keyvars keysupp keyinits keykeys)
   (declare (ignore keykeys allow-others))
   (with-arm-local-vinsn-macros (seg)
     (dolist (var keyvars)
@@ -879,8 +1047,7 @@
              (initform (pop keyinits))
              (reg (nx2-assign-register-var var))
              (regloadedlabel (if reg (backend-get-next-label)))
-             (var-lcell (pop lcells))
-             (sp-lcell (pop lcells))
+
              (sp-reg ($ arm::arg_z))
              (sploc (%i+ vloc *arm2-target-node-size*)))
         (unless (nx-null initform)
@@ -896,11 +1063,11 @@
           (progn
             (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
             (@ regloadedlabel))
-          (arm2-bind-var seg var vloc var-lcell))
+          (arm2-bind-var seg var vloc ))
         (when spvar
           (if (setq reg (nx2-assign-register-var spvar))
             (arm2-init-regvar seg spvar reg (arm2-vloc-ea sploc))
-            (arm2-bind-var seg spvar sploc sp-lcell))))
+            (arm2-bind-var seg spvar sploc ))))
       (setq vloc (%i+ vloc (* 2 *arm2-target-node-size*))))))
 
 ;;; Return NIL if arg register should be vpushed, else var.
@@ -935,8 +1102,7 @@
       (destructuring-bind (&optional zvar yvar xvar &rest stack-args) revargs
         (let* ((nstackargs (length stack-args)))
           (arm2-set-vstack (* nstackargs *arm2-target-node-size*))
-          (dotimes (i nstackargs)
-            (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil))
+
           (let* ((mask 0))
             (declare (fixnum mask))
             (when (>= nargs 3)
@@ -945,7 +1111,6 @@
                 (unless retain-x
                   (setq mask (logior (ash 1 arm::arg_x) mask))
                   (arm2-regmap-note-store arm::arg_x *arm2-vstack*)
-                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
                   (arm2-adjust-vstack *arm2-target-node-size*))))
             (when (>= nargs 2)
               (let* ((retain-y (arm2-retain-arg-register yvar)))
@@ -953,7 +1118,7 @@
                 (unless retain-y
                   (setq mask (logior (ash 1 arm::arg_y) mask))
                   (arm2-regmap-note-store arm::arg_y *arm2-vstack*)
-                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
+
                   (arm2-adjust-vstack *arm2-target-node-size*))))
             (when (>= nargs 1)
               (let* ((retain-z (arm2-retain-arg-register zvar)))
@@ -961,7 +1126,7 @@
                 (unless retain-z
                   (setq mask (logior (ash 1 arm::arg_z) mask))
                   (arm2-regmap-note-store arm::arg_z *arm2-vstack*)
-                  (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil)
+
                   (arm2-adjust-vstack *arm2-target-node-size*))))
             (unless (eql 0 mask)
               (if (eql (logcount mask) 1)
@@ -1022,50 +1187,11 @@
     (! load-vframe-address dest *arm2-vstack*)))
 
 
-(defun arm2-structured-initopt (seg lcells vloc context vars inits spvars)
-  (with-arm-local-vinsn-macros (seg)
-    (dolist (var vars vloc)
-      (let* ((initform (pop inits))
-             (spvar (pop spvars))
-             (spvloc (%i+ vloc *arm2-target-node-size*))
-             (var-lcell (pop lcells))
-             (sp-reg ($ arm::arg_z))
-             (sp-lcell (pop lcells)))
-        (unless (nx-null initform)
-          (arm2-stack-to-register seg (arm2-vloc-ea spvloc) sp-reg)
-          (let ((skipinitlabel (backend-get-next-label)))
-            (with-crf-target () crf
-              (arm2-compare-register-to-nil seg crf (arm2-make-compound-cd 0 skipinitlabel) sp-reg arm::arm-cond-eq t))
-            (arm2-register-to-stack seg (arm2-one-untargeted-reg-form seg initform ($ arm::arg_z)) (arm2-vloc-ea vloc))
-            (@ skipinitlabel)))
-        (arm2-bind-structured-var seg var vloc var-lcell context)
-        (when spvar
-          (arm2-bind-var seg spvar spvloc sp-lcell)))
-      (setq vloc (%i+ vloc (* 2 *arm2-target-node-size*))))))
 
 
 
-(defun arm2-structured-init-keys (seg lcells vloc context allow-others keyvars keysupp keyinits keykeys)
-  (declare (ignore keykeys allow-others))
-  (with-arm-local-vinsn-macros (seg)
-    (dolist (var keyvars)
-      (let* ((spvar (pop keysupp))
-             (initform (pop keyinits))
-             (sploc (%i+ vloc *arm2-target-node-size*))
-             (var-lcell (pop lcells))
-             (sp-reg ($ arm::arg_z))
-             (sp-lcell (pop lcells)))
-        (unless (nx-null initform)
-          (arm2-stack-to-register seg (arm2-vloc-ea sploc) sp-reg)
-          (let ((skipinitlabel (backend-get-next-label)))
-            (with-crf-target () crf
-              (arm2-compare-register-to-nil seg crf (arm2-make-compound-cd 0 skipinitlabel) sp-reg arm::arm-cond-eq t))
-            (arm2-register-to-stack seg (arm2-one-untargeted-reg-form seg initform ($ arm::arg_z)) (arm2-vloc-ea vloc))
-            (@ skipinitlabel)))
-        (arm2-bind-structured-var seg var vloc var-lcell context)
-        (when spvar
-          (arm2-bind-var seg spvar sploc sp-lcell)))
-      (setq vloc (%i+ vloc (* 2 *arm2-target-node-size*))))))
+
+
 
 (defun arm2-vloc-ea (n &optional vcell-p)
   (setq n (make-memory-spec (dpb memspec-frame-address memspec-type-byte n)))
@@ -1079,22 +1205,21 @@
            (svref *arm2-specials* (%ilogand #.operator-id-mask (acode-operator form))))
       (compiler-bug "arm2-form ? ~s" form)))
 
-(defmacro with-note ((form-var seg-var &rest other-vars) &body body)
+(defmacro arm-with-note ((form-var seg-var &rest other-vars) &body body)
   (let* ((note (gensym "NOTE"))
          (code-note (gensym "CODE-NOTE"))
          (source-note (gensym "SOURCE-NOTE"))
          (start (gensym "START"))
-         (end (gensym "END"))
-         (with-note-body (gensym "WITH-NOTE-BODY")))
-    `(flet ((,with-note-body (,form-var ,seg-var ,@other-vars) ,@body))
+         (arm-with-note-body (gensym "ARM-WITH-NOTE-BODY")))
+    `(flet ((,arm-with-note-body (,form-var ,seg-var ,@other-vars) ,@body))
        (let ((,note (acode-note ,form-var)))
          (if ,note
-           (let* ((,code-note (and (code-note-p ,note) ,note))
+           (let* ((,code-note (and ,note (code-note-p ,note) ,note))
                   (,source-note (if ,code-note
                                   (code-note-source-note ,note)
                                   ,note))
                   (,start (and ,source-note
-                               (arm2-emit-note ,seg-var :source-location-begin ,source-note))))
+                               (enqueue-vinsn-note ,seg-var :source-location-begin ,source-note))))
              (prog2
                  (when ,code-note
                    (with-arm-local-vinsn-macros (,seg-var)
@@ -1102,45 +1227,43 @@
                      (with-node-temps (arm::temp0) (zero)
                        (! lri zero 0)
                        (! misc-set-c-node ($ zero) ($ arm::temp0) 1))))
-                 (,with-note-body ,form-var ,seg-var ,@other-vars)
+                 (,arm-with-note-body ,form-var ,seg-var ,@other-vars)
                (when ,source-note
-                 (let ((,end (arm2-emit-note ,seg-var :source-location-end)))
-                   (setf (vinsn-note-peer ,start) ,end
-                         (vinsn-note-peer ,end) ,start)
-                   (push ,start *arm2-emitted-source-notes*)))))
-           (,with-note-body ,form-var ,seg-var ,@other-vars))))))
+                 (close-vinsn-note ,seg-var ,start))))
+           (,arm-with-note-body ,form-var ,seg-var ,@other-vars))))))
 
 (defun arm2-toplevel-form (seg vreg xfer form)
   (let* ((code-note (acode-note form))
-         (args (if code-note `(,@(%cdr form) ,code-note) (%cdr form))))
+         (args (if code-note `(,@(acode-operands form) ,code-note) (acode-operands form))))
     (apply (arm2-acode-operator-function form) seg vreg xfer args)))
 
 (defun arm2-form (seg vreg xfer form)
-  (with-note (form seg vreg xfer)
+  (arm-with-note (form seg vreg xfer)
     (if (nx-null form)
       (arm2-nil seg vreg xfer)
-      (if (nx-t form)
+      (if (nx-t form)
         (arm2-t seg vreg xfer)
         (let ((fn (arm2-acode-operator-function form))
               (op (acode-operator form)))
           (if (and (null vreg)
                    (%ilogbitp operator-acode-subforms-bit op)
-                   (%ilogbitp operator-assignment-free-bit op))
-            (dolist (f (%cdr form) (arm2-branch seg xfer nil))
+                   (%ilogbitp operator-assignment-free-bit op)
+                   (%ilogbitp operator-side-effect-free-bit op))
+            (dolist (f (acode-operands form) (arm2-branch seg xfer nil))
               (arm2-form seg nil nil f ))
-            (apply fn seg vreg xfer (%cdr form))))))))
+            (apply fn seg vreg xfer (acode-operands form))))))))
 
 ;;; dest is a float reg - form is acode
 (defun arm2-form-float (seg freg xfer form)
   (declare (ignore xfer))
-  (with-note (form seg freg)
+  (arm-with-note (form seg freg)
     (when (or (nx-null form)(nx-t form))(compiler-bug "arm2-form to freg ~s" form))
     (when (and (= (get-regspec-mode freg) hard-reg-class-fpr-mode-double)
                (arm2-form-typep form 'double-float))
                                         ; kind of screwy - encoding the source type in the dest register spec
       (set-node-regspec-type-modes freg hard-reg-class-fpr-type-double))
     (let* ((fn (arm2-acode-operator-function form)))
-      (apply fn seg freg nil (%cdr form)))))
+      (apply fn seg freg nil (acode-operands form)))))
 
 
 
@@ -1155,36 +1278,7 @@
   (declare (dynamic-extent forms))
   (apply (svref *arm2-specials* (%ilogand operator-id-mask op)) seg vreg xfer forms))
 
-;;; Returns true iff lexical variable VAR isn't setq'ed in FORM.
-;;; Punts a lot ...
-(defun arm2-var-not-set-by-form-p (var form)
-  (or (not (%ilogbitp $vbitsetq (nx-var-bits var)))
-      (arm2-setqed-var-not-set-by-form-p var form)))
 
-(defun arm2-setqed-var-not-set-by-form-p (var form)
-  (setq form (acode-unwrapped-form form))
-  (or (atom form)
-      (arm-constant-form-p form)
-      (arm2-lexical-reference-p form)
-      (let ((op (acode-operator form))
-            (subforms nil))
-        (if (eq op (%nx1-operator setq-lexical))
-          (and (neq var (cadr form))
-               (arm2-setqed-var-not-set-by-form-p var (caddr form)))
-          (and (%ilogbitp operator-side-effect-free-bit op)
-               (flet ((not-set-in-formlist (formlist)
-                        (dolist (subform formlist t)
-                          (unless (arm2-setqed-var-not-set-by-form-p var subform) (return)))))
-                 (if
-                   (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
-                         ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
-                   (not-set-in-formlist subforms)
-                   (and (or (eq op (%nx1-operator call))
-                            (eq op (%nx1-operator lexical-function-call)))
-                        (arm2-setqed-var-not-set-by-form-p var (cadr form))
-                        (setq subforms (caddr form))
-                        (not-set-in-formlist (car subforms))
-                        (not-set-in-formlist (cadr subforms))))))))))
   
 (defun arm2-nil (seg vreg xfer)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -1233,25 +1327,6 @@
   (setq *arm2-vstack* new))
 
 
-;;; Emit a note at the end of the segment.
-(defun arm2-emit-note (seg class &rest info)
-  (declare (dynamic-extent info))
-  (let* ((note (make-vinsn-note class info)))
-    (append-dll-node (vinsn-note-label note) seg)
-    note))
-
-;;; Emit a note immediately before the target vinsn.
-(defun arm-prepend-note (vinsn class &rest info)
-  (declare (dynamic-extent info))
-  (let* ((note (make-vinsn-note class info)))
-    (insert-dll-node-before (vinsn-note-label note) vinsn)
-    note))
-
-(defun arm2-close-note (seg note)
-  (let* ((end (close-vinsn-note note)))
-    (append-dll-node (vinsn-note-label end) seg)
-    end))
-
 
 (defun arm2-register-for-frame-offset (offset &optional suggested)
   (let* ((mask *arm2-gpr-locations-valid-mask*)
@@ -1267,6 +1342,7 @@
 
 (defun arm2-reg-for-ea (ea)
   (when (and (memory-spec-p ea)
+             (eql (memspec-type ea) memspec-frame-address)
              (not (addrspec-vcell-p ea)))
     (let* ((offset (memspec-frame-address-offset ea))
            (mask *arm2-gpr-locations-valid-mask*)
@@ -1430,15 +1506,15 @@
   (let ((current-stack (arm2-encode-stack)))
     (while (and (acode-p form) (or (eq (acode-operator form) (%nx1-operator progn))
                                    (eq (acode-operator form) (%nx1-operator local-tagbody))))
-      (setq form (caadr form)))
+      (setq form (caar  (acode-operands form))))
     (when (acode-p form)
       (let ((op (acode-operator form)))
         (if (and (eq op (%nx1-operator local-go))
-                 (arm2-equal-encodings-p (%caddr (%cadr form)) current-stack))
-          (%cadr (%cadr form))
+                 (arm2-equal-encodings-p (%caddr (car (acode-operands form))) current-stack))
+          (%cadr (car (acode-operands form)))
           (if (and (eq op (%nx1-operator local-return-from))
-                   (nx-null (caddr form)))
-            (let ((tagdata (car (cadr form))))
+                   (nx-null (cadr (acode-operands form))))
+            (let ((tagdata (car (car (acode-operands form)))))
               (and (arm2-equal-encodings-p (cdr tagdata) current-stack)
                    (null (caar tagdata))
                    (< 0 (cdar tagdata) $backend-mvpass)
@@ -1452,7 +1528,7 @@
         (let ((op (acode-operator form)))
           (or (%ilogbitp operator-single-valued-bit op)
               (and (eql op (%nx1-operator values))
-                   (let ((values (cadr form)))
+                   (let ((values (car (acode-operands form))))
                      (and values (null (cdr values)))))
               nil                       ; Learn about functions someday
               )))))
@@ -1493,6 +1569,7 @@
              (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
              (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
              (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+             (is-128-bit (eq type-keyword :complex-double-float-vector))
              (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
              (vreg-class (hard-regspec-class vreg))
              (vreg-mode
@@ -1629,58 +1706,63 @@
                      (! misc-ref-u16 temp src idx-reg))))
                (! box-fixnum target temp))))
           (is-64-bit
-           (with-fp-target () (fp-val :double-float)
-             (with-imm-target () (temp :u64)
-               (if (and (eql vreg-class hard-reg-class-fpr)
-                        (eql vreg-mode hard-reg-class-fpr-mode-double))
-                 (setq fp-val vreg)
-                 (if (eql vreg-class hard-reg-class-gpr)
-                   (if (or (and is-signed
-                                (eql vreg-mode hard-reg-class-gpr-mode-s64))
-                           (and (not is-signed)
-                                (eql vreg-mode hard-reg-class-gpr-mode-u64)))
-                     (setf temp vreg temp-is-vreg t)
-                     (if is-signed
-                       (set-regspec-mode temp hard-reg-class-gpr-mode-s64)))))
-               (case type-keyword
-                 (:double-float-vector
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-double-float fp-val src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (unless unscaled-idx
-                          (setq unscaled-idx idx-reg)
-                          (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
-                      (! misc-ref-double-float fp-val src unscaled-idx)))
-                  (if (eq vreg-class hard-reg-class-fpr)
-                    (<- fp-val)
-                    (ensuring-node-target (target vreg)
-                      (! double->heap target fp-val))))
-                 ((:signed-64-bit-vector :fixnum-vector)
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-s64 temp src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (arm2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-s64 temp src idx-reg)))
-                  (if (eq type-keyword :fixnum-vector)
-                    (ensuring-node-target (target vreg)
-                      (! box-fixnum target temp))
-                    (unless temp-is-vreg
-                      (ensuring-node-target (target vreg)
-                        (! s64->integer target temp)))))
-                 (t
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-u64 temp src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (arm2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-u64  temp src idx-reg)))
-                  (unless temp-is-vreg
-                    (ensuring-node-target (target vreg)
-                      (! u64->integer target temp))))))))
+           (case type-keyword
+             (:double-float-vector
+              (with-fp-target () (fp-val :double-float)
+
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-double))
+                  (setq fp-val vreg)
+                  )
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-double-float fp-val src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (unless unscaled-idx
+                        (setq unscaled-idx idx-reg)
+                        (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                    (! misc-ref-double-float fp-val src unscaled-idx)))
+                (if (eq vreg-class hard-reg-class-fpr)
+                  (<- fp-val)
+                  (ensuring-node-target (target vreg)
+                    (! double->heap target fp-val)))))
+             (:complex-single-float-vector
+              (with-fp-target () (fp-val :complex-single-float)
+
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+                  (setq fp-val vreg)
+                  )
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-double-float fp-val src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (unless unscaled-idx
+                        (setq unscaled-idx idx-reg)
+                        (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                    (! misc-ref-double-float fp-val src unscaled-idx)))
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+                  (<- fp-val)
+                  (ensuring-node-target (target vreg)
+                    (! complex-single-float->node target fp-val)))))))
+          (is-128-bit
+              (with-fp-target () (fp-val :complex-double-float)
+
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+                  (setq fp-val vreg)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (unless unscaled-idx
+                        (setq unscaled-idx idx-reg)
+                        (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                    (! misc-ref-complex-double-float fp-val src unscaled-idx))                  )
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+                  (<- fp-val)
+                  (ensuring-node-target (target vreg)
+                    (! complex-double-float->heap target fp-val)))))
           (t
            (unless is-1-bit
              (nx-error "~& unsupported vector type: ~s"
@@ -2023,7 +2105,7 @@
   (if (and (acode-p (setq form (acode-unwrapped-form form)))
            (or (eq (acode-operator form) (%nx1-operator immediate))
                (eq (acode-operator form) (%nx1-operator fixnum))))
-    (let* ((val (%cadr form))
+    (let* ((val (car (acode-operands form)))
            (typep (cond ((eq type-keyword :signed-32-bit-vector)
                          (typep val '(signed-byte 32)))
                         ((eq type-keyword :single-float-vector)
@@ -2439,7 +2521,7 @@
                              (and lexref 
                                   (neq lexref rest)
                                   (dolist (val rest-values t)
-                                    (unless (arm2-var-not-set-by-form-p lexref val)
+                                    (unless (nx2-var-not-set-by-form-p lexref val)
                                       (return))))))))
                 (unless (or (eq op (%nx1-operator lexical-function-call))
                             (independent-of-all-values fn-form))
@@ -2485,21 +2567,20 @@
                              (not spread-p)
                              (flet ((all-simple (args)
                                       (dolist (arg args t)
-                                        (when (and arg (not (arm2-var-not-set-by-form-p lexref arg)))
+                                        (when (and arg (not (nx2-var-not-set-by-form-p lexref arg)))
                                           (return)))))
                                (and (all-simple (car arglist))
                                     (all-simple (cadr arglist))
                                     (setq fn (var-ea lexref)))))))
            (cstack *arm2-cstack*)
-           (top *arm2-top-vstack-lcell*)
            (vstack *arm2-vstack*))
       (setq xfer (or xfer 0))
       (when (and (eq xfer $backend-return)
                  (eq 0 *arm2-undo-count*)
                  (acode-p fn)
                  (eq (acode-operator fn) (%nx1-operator immediate))
-                 (symbolp (cadr fn)))
-        (setq fn (arm2-tail-call-alias fn (%cadr fn) arglist)))
+                 (symbolp (car (acode-operands fn))))
+        (setq fn (arm2-tail-call-alias fn (car (acode-operands fn)) arglist)))
       
       (if (and (eq xfer $backend-return) (not (arm2-tailcallok xfer)))
         (progn
@@ -2522,7 +2603,6 @@
             (unless (or mv-p simple-case)
               (! vstack-discard 1)))
           (arm2-set-vstack vstack)
-          (setq *arm2-top-vstack-lcell* top)
           (setq *arm2-cstack* cstack)
           (when (or (logbitp $backend-mvpass-bit xfer) (not mv-p))
             (<- arm::arg_z)
@@ -2556,14 +2636,14 @@
 (defun arm2-invoke-fn (seg fn nargs spread-p xfer)
   (with-arm-local-vinsn-macros (seg)
     (let* ((f-op (acode-unwrapped-form-value fn))
-           (immp (and (consp f-op)
-                      (eq (%car f-op) (%nx1-operator immediate))))
-           (symp (and immp (symbolp (%cadr f-op))))
+           (immp (and (acode-p f-op)
+                      (eq (acode-operator f-op) (%nx1-operator immediate))))
+           (symp (and immp (symbolp (car (acode-operands f-op)))))
            (label-p (and (fixnump fn) 
                          (locally (declare (fixnum fn))
                            (and (= fn -1) (- fn)))))
            (tail-p (eq xfer $backend-return))
-           (func (if (consp f-op) (%cadr f-op)))
+           (func (if (acode-p f-op) (car (acode-operands f-op))))
            (a-reg nil)
            (lfunp (and (acode-p f-op) 
                        (eq (acode-operator f-op) (%nx1-operator simple-function))))
@@ -2598,7 +2678,8 @@
           (arm2-copy-register seg destreg a-reg))
         (unless spread-p
           (arm2-restore-nvrs seg (null nargs))
-          (arm2-restore-non-volatile-fprs seg)))
+          (arm2-restore-non-volatile-fprs seg)
+          (! restore-nfp)))
       (if spread-p
         (progn
           (arm2-set-nargs seg (%i- nargs 1))
@@ -2606,7 +2687,8 @@
             (! spread-lexpr)
             (! spread-list))
           (arm2-restore-nvrs seg nil)
-          (arm2-restore-non-volatile-fprs seg))
+          (arm2-restore-non-volatile-fprs seg)
+          (! restore-nfp))
         (if nargs
           (unless known-fixed-nargs (arm2-set-nargs seg nargs))
           (! pop-argument-registers)))
@@ -2729,8 +2811,7 @@
         (declare (list inherited-vars))
         (if downward-p
           (progn
-            (let* ((*arm2-vstack* *arm2-vstack*)
-                   (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+            (let* ((*arm2-vstack* *arm2-vstack*))
               (arm2-lri seg arm::arg_x (ash (nx-lookup-target-uvector-subtag :function) *arm2-target-fixnum-shift*))
               (arm2-lri seg arm::temp0 0)
               (! %closure-code% arm::arg_y)
@@ -2806,15 +2887,15 @@
 (defun arm2-immediate-function-p (f)
   (setq f (acode-unwrapped-form-value f))
   (and (acode-p f)
-       (or (eq (%car f) (%nx1-operator immediate))
-           (eq (%car f) (%nx1-operator simple-function)))))
+       (or (eq (acode-operator f) (%nx1-operator immediate))
+           (eq (acode-operator f) (%nx1-operator simple-function)))))
 
 (defun arm-constant-form-p (form)
   (setq form (nx-untyped-form form))
   (if form
     (or (nx-null form)
         (nx-t form)
-        (and (consp form)
+        (and (acode-p form)
              (or (eq (acode-operator form) (%nx1-operator immediate))
                  (eq (acode-operator form) (%nx1-operator fixnum))
                  (eq (acode-operator form) (%nx1-operator simple-function)))))))
@@ -2826,18 +2907,19 @@
          (or (acode-fixnum-form-p (setq form (acode-unwrapped-form form)))
              (and (acode-p form)
                   (eq (acode-operator form) (%nx1-operator immediate))
-                  (setq form (%cadr form))
+                  (setq form (car (acode-operands form)))
                   (if (typep form 'integer)
                     form)))))
     (and val (%typep val (mode-specifier-type mode)) val)))
 
 
 (defun arm-side-effect-free-form-p (form)
-  (when (consp (setq form (acode-unwrapped-form-value form)))
-    (or (arm-constant-form-p form)
-        ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
-        (if (eq (acode-operator form) (%nx1-operator lexical-reference))
-          (not (%ilogbitp $vbitsetq (nx-var-bits (%cadr form))))))))
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
+    (unless (arm2-nfp-ref-p form)
+      (or (arm-constant-form-p form)
+                                        ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
+          (if (eq (acode-operator form) (%nx1-operator lexical-reference))
+            (not (%ilogbitp $vbitsetq (nx-var-bits (car (acode-operands form))))))))))
 
 (defun arm2-formlist (seg stkargs &optional revregargs)
   (with-arm-local-vinsn-macros (seg)  
@@ -2942,6 +3024,41 @@
                                         (lognot mask))))
         suggested)))
 
+(defun arm2-push-register (seg areg)
+  (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
+         (fpr-mode-name (if a-float (fpr-mode-value-name (get-regspec-mode areg))))
+         (a-node (unless a-float (= (get-regspec-mode areg) hard-reg-class-gpr-mode-node)))
+         (nested (> *arm2-undo-count* 0))
+         vinsn)
+    (with-arm-local-vinsn-macros (seg)
+      (if a-node
+        (setq vinsn (arm2-vpush-register seg areg))
+        (let* ((offset *arm2-nfp-depth*))
+          (setq vinsn
+                (if a-float
+                  (case fpr-mode-name
+                    ((:double-float :omplex-single-float)
+                     (if nested
+                       (! nfp-store-double-float-nested areg offset)
+                       (! nfp-store-double-float areg  offset)))
+                    (:complex-double-float
+                     (incf offset 8)
+                     (if nested
+                       (! nfp-store-oomplex-double-float-nested areg offset)
+                       (! nfp-store-complex-double-float areg  offset)))
+                    (:single-float
+                     (if nested
+                       (! nfp-store-single-float-nested areg offset)
+                       (! nfp-store-single-float areg offset))))
+                  (if nested
+                    (! nfp-store-unboxed-word-nested areg offset)
+                    (! nfp-store-unboxed-word areg offset))))
+          (push vinsn *arm2-all-nfp-pushes*)
+          (incf offset 8)
+          (setq *arm2-nfp-depth* offset)))
+      vinsn)))
+             
+
 (defun arm2-one-untargeted-reg-form (seg form suggested &optional (reserved 0))
   (or (arm2-reg-for-form form suggested)
       (if (and (acode-p form)
@@ -2950,42 +3067,37 @@
         (if (node-reg-p suggested)
           (arm2-one-untargeted-lreg-form seg form (arm2-try-non-conflicting-reg suggested reserved))
           (arm2-one-untargeted-lreg-form seg form suggested)))))
-             
-
-(defun arm2-push-register (seg areg)
-  (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
-         (a-double (if a-float (= (get-regspec-mode areg) hard-reg-class-fpr-mode-double)))
-         (a-node (unless a-float (= (get-regspec-mode areg) hard-reg-class-gpr-mode-node)))
-         vinsn)
-    (with-arm-local-vinsn-macros (seg)
-      (if a-node
-        (setq vinsn (arm2-vpush-register seg areg :node-temp))
-        (progn
-          (setq vinsn
-                (if a-float
-                  (if a-double
-                    (! temp-push-double-float areg)
-                    (! temp-push-single-float areg))
-                  (! temp-push-unboxed-word areg)))
-          (arm2-open-undo $undostkblk)))
-      vinsn)))
 
 (defun arm2-pop-register (seg areg)
   (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
-         (a-double (if a-float (= (get-regspec-mode areg) hard-reg-class-fpr-mode-double)))
+         (fpr-mode-name (if a-float (fpr-mode-value-name (get-regspec-mode areg))))
          (a-node (unless a-float (= (get-regspec-mode areg) hard-reg-class-gpr-mode-node)))
+         (nested (> *arm2-undo-count* 0))
          vinsn)
     (with-arm-local-vinsn-macros (seg)
       (if a-node
         (setq vinsn (arm2-vpop-register seg areg))
-        (progn
+        (let* ((offset (- *arm2-nfp-depth* 8)))
           (setq vinsn
                 (if a-float
-                  (if a-double
-                    (! temp-pop-double-float areg)
-                    (! temp-pop-single-float areg))
-                  (! temp-pop-unboxed-word areg)))
-          (arm2-close-undo)))
+                  (case fpr-mode-name
+                    ((:double-float :complex-single-float)
+                     (if nested
+                       (! nfp-load-double-float-nested areg offset)
+                       (! nfp-load-double-float areg  offset)))
+                    (:complex-double-float
+                     (decf offset 8)
+                     (if nested
+                       (! nfp-load-complex-double-float-nested areg offset)
+                       (! nfp-load-complex-double-float areg  offset)))
+                    (:single-float
+                     (if nested
+                       (! nfp-load-single-float-nested areg offset)
+                       (! nfp-load-single-float areg  offset))))
+                  (if nested
+                    (! nfp-load-unboxed-word-nested areg offset)
+                    (! nfp-load-unboxed-word areg offset))))
+          (setq *arm2-nfp-depth* offset)))
       vinsn)))
 
 (defun arm2-acc-reg-for (reg)
@@ -2995,72 +3107,116 @@
       ($ arm::arg_z)
       reg)))
 
+(defun arm2-copy-fpr (seg dest src)
+  ;; src and dest are distinct FPRs with the same mode.
+  (with-arm-local-vinsn-macros (seg)
+    (case (fpr-mode-name-value (get-regspec-mode src))
+      (:single-float (! simgle-to-single dest src))
+      (:double-float (! double-to-double dest src))
+      (:complex-single-float (! complex-single-float-to-complex-single-float
+                                dest src))
+      (:complex-double-float (! complex-double-float-to-complex-dooble-float
+                                dest src)))))
+
 ;;; The compiler often generates superfluous pushes & pops.  Try to
 ;;; eliminate them.
 ;;; It's easier to elide pushes and pops to the SP.
 (defun arm2-elide-pushes (seg push-vinsn pop-vinsn)
   (with-arm-local-vinsn-macros (seg)
-    (let* ((pushed-reg (svref (vinsn-variable-parts push-vinsn) 0))
+    (let* ((operands (vinsn-variable-parts push-vinsn))
+           (pushed-reg (svref operands  0))
            (popped-reg (svref (vinsn-variable-parts pop-vinsn) 0))
            (same-reg (eq (hard-regspec-value pushed-reg)
                          (hard-regspec-value popped-reg)))
-           (sp-p (vinsn-attribute-p push-vinsn :csp)))
-      (when sp-p               ; vsp case is harder.
-        (unless (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :csp :discard)
-          (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
-                                     push-vinsn pop-vinsn pushed-reg))
-                 (popped-reg-is-set (if same-reg
-                                      pushed-reg-is-set
-                                      (vinsn-sequence-sets-reg-p
-                                       push-vinsn pop-vinsn popped-reg))))
-            (cond
-	      ((not (and pushed-reg-is-set popped-reg-is-set))
-	       (unless same-reg
-		 (let* ((copy (if (eq (hard-regspec-class pushed-reg)
-				      hard-reg-class-fpr)
-				(if (eql (get-regspec-mode pushed-reg)
-					 hard-reg-class-fpr-mode-single)
-				  (! single-to-single popped-reg pushed-reg)
-				  (! double-to-double popped-reg pushed-reg))
-				(! copy-gpr popped-reg pushed-reg))))
-		   (remove-dll-node copy)
-		   (if pushed-reg-is-set
-		     (insert-dll-node-after copy push-vinsn)
-		     (insert-dll-node-before copy pop-vinsn))))
-	       (elide-vinsn push-vinsn)
-	       (elide-vinsn pop-vinsn))
-	      ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
-               (let* ((mode (get-regspec-mode pushed-reg))
-                      (double-p (eql mode hard-reg-class-fpr-mode-double)))
-                 ;; If we're pushing float register that gets
-                 ;; set by the intervening vinsns, try to copy it to and
-                 ;; from a free FPR instead.
-                 (multiple-value-bind (used-gprs used-fprs)
-		   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
-		 (declare (ignore used-gprs))
+           (nfp-p (vinsn-attribute-p push-vinsn :nfp)))
+      (when nfp-p               ; vsp case is harder.
+        (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
+                                   push-vinsn pop-vinsn pushed-reg))
+               (popped-reg-is-set (if same-reg
+                                    pushed-reg-is-set
+                                    (vinsn-sequence-sets-reg-p
+                                     push-vinsn pop-vinsn popped-reg)))
+               (offset (svref operands 1))
+               (nested ())
+               (conflicts ())
+               (win nil))
+          (declare (fixnum offset))
+          (do* ((element (dll-node-succ push-vinsn) (dll-node-succ element)))
+               ((eq element pop-vinsn))
+            (when (typep element 'vinsn)
+              (when (vinsn-attribute-p element :nfp)
+                (let* ((element-offset (svref (vinsn-variable-parts element) 1)))
+                  (declare (fixnum element-offset))
+                  (if (= element-offset offset)
+                    (push element conflicts)
+                    (if (> element-offset offset)
+                      (push element nested)))))))
+          (cond
+            (conflicts nil)
+            ((not (and pushed-reg-is-set popped-reg-is-set))
+             (unless same-reg
+               (let* ((copy (if (eq (hard-regspec-class pushed-reg)
+                                    hard-reg-class-fpr)
+                              (arm2-copy-fpr seg popped-reg pushed-reg)
+                              (! copy-gpr popped-reg pushed-reg))))
+                 (remove-dll-node copy)
+                 (if pushed-reg-is-set
+                   (insert-dll-node-after copy push-vinsn)
+                   (insert-dll-node-before copy pop-vinsn))))
+             (setq win t))
+            ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
+             (let* ((mode (get-regspec-mode pushed-reg))
+                    (mode-name (fpr-mode-value-name mode)))
+               ;; If we're pushing a float register that gets
+               ;; set by the intervening vinsns, try to copy it to and
+               ;; from a free FPR instead.
+               (multiple-value-bind (used-gprs used-fprs)
+                   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
+                 (declare (ignore used-gprs))
                  ;; We have 14 volatile single-floats or 7
                  ;; volatile double-floats
-		 (let* ((nfprs (if double-p 7 14))
-			(free-fpr
-			 (dotimes (r nfprs nil)
-			   (unless (logtest (target-fpr-mask
-                                             r (if double-p :double-float :single-float))
-					    used-fprs)
-			     (return r)))))
-		   (when free-fpr
-		     (let* ((reg ($ free-fpr :class :fpr :mode mode))
-			    (save (if double-p
-                                    (! double-to-double reg pushed-reg)
-                                    (! single-to-single reg pushed-reg)))
-			    (restore (if double-p
-                                       (! double-to-double popped-reg reg)
-                                       (! single-to-single popped-reg reg))))
-		       (remove-dll-node save)
-		       (insert-dll-node-after save push-vinsn)
-		       (remove-dll-node restore)
-		       (insert-dll-node-before restore pop-vinsn)
-		       (elide-vinsn push-vinsn)
-		       (elide-vinsn pop-vinsn)))))))))))
+                 (let* ((nfprs (case mode-name
+                                 ((:double-float :complex-single-float) 7)
+                                 (:complex-double-float 3)
+                                 (:single-float 14)))
+                        (free-fpr
+                         (dotimes (r nfprs nil)
+                           (unless (logtest (target-fpr-mask
+                                             r mode)
+                                            used-fprs)
+                             (return r)))))
+                   (when free-fpr
+                     (let* ((reg (make-wired-lreg free-fpr :class :fpr :mode mode))
+                            (save (arm2-copy-fpr seg reg pushed-reg))
+                                  (restore (arm2-copy-fpr seg popped-reg reg)))
+                       (remove-dll-node save)
+                       (insert-dll-node-after save push-vinsn)
+                       (remove-dll-node restore)
+                       (insert-dll-node-before restore pop-vinsn)
+                       (setq win t))))))))
+          (when win
+            (setq *arm2-all-nfp-pushes*
+                  (delete push-vinsn *arm2-all-nfp-pushes*))
+            (let* ((pair (assq push-vinsn *arm2-nfp-vars*)))
+              (when pair
+                (setf (car pair) nil)))
+            (when nested
+              (let* ((size (if (vinsn-attribute-p push-vinsn :doubleword)
+                             16
+                             8)))
+                (declare (fixnum size))
+                (dolist (inner nested)
+                  (let* ((inner-operands (vinsn-variable-parts inner)))
+                    (setf (svref inner-operands 1)
+                          (the fixnum
+                            (- (the fixnum (svref inner-operands 1))
+                               size))))
+                  (let* ((var (cdr (assq inner *arm2-nfp-vars*))))
+                    (when var (setf (var-ea var)
+                                    (- (var-ea var) size)))))))
+            (elide-vinsn push-vinsn)
+            (elide-vinsn pop-vinsn)
+            t) ))
       (when (and (vinsn-attribute-p push-vinsn :vsp))
         (unless (or
                  (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :push)
@@ -3133,18 +3289,20 @@
                                   (insert-dll-node-after copy push-vinsn)
                                   (insert-dll-node-before copy pop-vinsn))))
                           (elide-vinsn push-vinsn)
-                          (elide-vinsn pop-vinsn))
+                          (elide-vinsn pop-vinsn)
+                          t)
                    (t                   ; maybe allocate a node temp
-                    )))))))))
+                    nil)))))))))
                 
         
 ;;; we never leave the first form pushed (the 68K compiler had some subprims that
 ;;; would vpop the first argument out of line.)
 (defun arm2-two-targeted-reg-forms (seg aform areg bform breg)
-  (let* ((avar (arm2-lexical-reference-p aform))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (avar (arm2-lexical-reference-p aform))
          (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
          (aconst (and (not atriv) (or (arm-side-effect-free-form-p aform)
-                                      (if avar (arm2-var-not-set-by-form-p avar bform)))))
+                                      (if avar (nx2-var-not-set-by-form-p avar bform)))))
          (apushed))
     (progn
       (unless aconst
@@ -3171,7 +3329,8 @@
 
 
 (defun arm2-two-untargeted-reg-forms (seg aform areg bform breg)
-  (let* ((aalready (arm2-reg-for-form aform areg))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (aalready (arm2-reg-for-form aform areg))
          (balready (arm2-reg-for-form bform breg)))
     (if (and aalready balready)
       (values aalready balready)
@@ -3182,7 +3341,7 @@
                (bdest nil)
                (atriv (and (arm2-trivial-p bform) (nx2-node-gpr-p breg)))
                (aconst (and (not atriv) (or (arm-side-effect-free-form-p aform)
-                                            (if avar (arm2-var-not-set-by-form-p avar bform)))))
+                                            (if avar (nx2-var-not-set-by-form-p avar bform)))))
                (apushed nil)
                (restricted 0))
           (progn
@@ -3212,7 +3371,8 @@
 
 
 (defun arm2-four-targeted-reg-forms (seg aform areg bform breg cform creg dform dreg)
-  (let* ((bnode (nx2-node-gpr-p breg))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (bnode (nx2-node-gpr-p breg))
          (cnode (nx2-node-gpr-p creg))
          (dnode (nx2-node-gpr-p dreg))
          (atriv (or (null aform) 
@@ -3234,20 +3394,20 @@
                       (or (arm-side-effect-free-form-p aform)
                           (let ((avar (arm2-lexical-reference-p aform)))
                             (and avar 
-                                 (arm2-var-not-set-by-form-p avar bform)
-                                 (arm2-var-not-set-by-form-p avar cform)
-                                 (arm2-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or (arm-side-effect-free-form-p bform)
                           (let ((bvar (arm2-lexical-reference-p bform)))
                             (and bvar
-                                 (arm2-var-not-set-by-form-p bvar cform)
-                                 (arm2-var-not-set-by-form-p bvar dform))))))
+                                 (nx2-var-not-set-by-form-p bvar cform)
+                                 (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or (arm-side-effect-free-form-p cform)
                           (let ((cvar (arm2-lexical-reference-p cform)))
                             (and cvar
-                                 (arm2-var-not-set-by-form-p cvar dform))))))
+                                 (nx2-var-not-set-by-form-p cvar dform))))))
          (apushed nil)
          (bpushed nil)
          (cpushed nil))
@@ -3279,7 +3439,8 @@
     (values areg breg creg dreg)))
 
 (defun arm2-three-targeted-reg-forms (seg aform areg bform breg cform creg)
-  (let* ((bnode (nx2-node-gpr-p breg))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (bnode (nx2-node-gpr-p breg))
          (cnode (nx2-node-gpr-p creg))
          (atriv (or (null aform) 
                     (and (arm2-trivial-p bform)
@@ -3293,13 +3454,13 @@
                       (or (arm-side-effect-free-form-p aform)
                           (let ((avar (arm2-lexical-reference-p aform)))
                             (and avar 
-                                 (arm2-var-not-set-by-form-p avar bform)
-                                 (arm2-var-not-set-by-form-p avar cform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform))))))
          (bconst (and (not btriv)
                       (or
                        (arm-side-effect-free-form-p bform)
                        (let ((bvar (arm2-lexical-reference-p bform)))
-                         (and bvar (arm2-var-not-set-by-form-p bvar cform))))))
+                         (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
          (apushed nil)
          (bpushed nil))
     (if (and aform (not aconst))
@@ -3323,7 +3484,8 @@
 
 (defun arm2-three-untargeted-reg-forms (seg aform areg bform breg cform creg)
   (with-arm-local-vinsn-macros (seg)
-    (let* ((bnode (nx2-node-gpr-p breg))
+    (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+           (bnode (nx2-node-gpr-p breg))
            (cnode (nx2-node-gpr-p creg))
            (atriv (or (null aform) 
                       (and (arm2-trivial-p bform)
@@ -3337,13 +3499,13 @@
                         (or (arm-side-effect-free-form-p aform)
                             (let ((avar (arm2-lexical-reference-p aform)))
                               (and avar 
-                                   (arm2-var-not-set-by-form-p avar bform)
-                                   (arm2-var-not-set-by-form-p avar cform))))))
+                                   (nx2-var-not-set-by-form-p avar bform)
+                                   (nx2-var-not-set-by-form-p avar cform))))))
            (bconst (and (not btriv)
                         (or
                          (arm-side-effect-free-form-p bform)
                          (let ((bvar (arm2-lexical-reference-p bform)))
-                           (and bvar (arm2-var-not-set-by-form-p bvar cform))))))
+                           (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
            (adest nil)
            (bdest nil)
            (cdest nil)
@@ -3391,7 +3553,8 @@
 
 
 (defun arm2-four-untargeted-reg-forms (seg aform areg bform breg cform creg dform dreg)
-  (let* ((bnode (nx2-node-gpr-p breg))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (bnode (nx2-node-gpr-p breg))
          (cnode (nx2-node-gpr-p creg))
          (dnode (nx2-node-gpr-p dreg))
          (atriv (or (null aform) 
@@ -3412,22 +3575,22 @@
                       (or (arm-side-effect-free-form-p aform)
                           (let ((avar (arm2-lexical-reference-p aform)))
                             (and avar 
-                                 (arm2-var-not-set-by-form-p avar bform)
-                                 (arm2-var-not-set-by-form-p avar cform)
-                                 (arm2-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or
                        (arm-side-effect-free-form-p bform)
                        (let ((bvar (arm2-lexical-reference-p bform)))
                          (and bvar
-                              (arm2-var-not-set-by-form-p bvar cform)
-                              (arm2-var-not-set-by-form-p bvar dform))))))
+                              (nx2-var-not-set-by-form-p bvar cform)
+                              (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or
                        (arm-side-effect-free-form-p cform)
                        (let ((cvar (arm2-lexical-reference-p cform)))
                          (and cvar
-                              (arm2-var-not-set-by-form-p cvar dform))))))
+                              (nx2-var-not-set-by-form-p cvar dform))))))
          (adest nil)
          (bdest nil)
          (cdest nil)
@@ -3521,7 +3684,6 @@
 (defun arm2-multiple-value-body (seg form)
   (let* ((lab (backend-get-next-label))
          (*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
          (old-stack (arm2-encode-stack)))
     (with-arm-local-vinsn-macros (seg)
       (arm2-open-undo $undomvexpect)
@@ -3565,8 +3727,8 @@
     (let* ((op (acode-operator form)))
       (if (eql op (%nx1-operator fixnum))
         (let* ((val (if unboxed
-                      (cadr form)
-                      (ash (cadr form) arm::fixnumshift))))
+                      (car (acode-operands form))
+                      (ash (car (acode-operands form)) arm::fixnumshift))))
           (if (or (arm::encode-arm-immediate val)
                   (arm::encode-arm-immediate (- val)))
             (logand val #xffffffff)))
@@ -3580,7 +3742,7 @@
   (when (acode-p form)
     (let* ((operator (acode-operator form)))
       (if (member operator *arm2-operator-supports-u8-target*)
-        (values operator (acode-operand 1 form))))))
+        (values operator (car (acode-operands form)))))))
 
 (defun arm2-compare-u8 (seg vreg xfer form u8constant cr-bit true-p u8-operator)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -3628,19 +3790,20 @@
               (unless (or jconst (eq cr-bit arm::arm-cond-eq))
                 (setq cr-bit (arm2-cr-bit-for-reversed-comparison cr-bit)))
               (^ cr-bit true-p))
-            (if (and (eq cr-bit arm::arm-cond-eq) 
-                     (or jconst iconst))
-              (arm2-test-reg-%izerop 
-               seg 
-               vreg 
-               xfer 
-               (arm2-one-untargeted-reg-form 
-                seg 
-                (if jconst i j) 
-                arm::arg_z) 
-               cr-bit 
-               true-p 
-               (or jconst iconst))
+            (if (or jconst iconst)
+              (progn
+                (unless (or jconst (eq cr-bit arm::arm-cond-eq))
+                  (setq cr-bit (arm2-cr-bit-for-reversed-comparison cr-bit)))                (arm2-test-reg-%izerop 
+                  seg 
+                  vreg 
+                  xfer 
+                  (arm2-one-untargeted-reg-form 
+                   seg 
+                   (if jconst i j) 
+                   arm::arg_z) 
+                  cr-bit 
+                  true-p 
+                  (or jconst iconst)))
               (multiple-value-bind (ireg jreg) (arm2-two-untargeted-reg-forms seg i arm::arg_y j arm::arg_z)
                 (arm2-compare-registers seg vreg xfer ireg jreg cr-bit true-p)))))))))
 
@@ -3739,9 +3902,9 @@
 
 
 (defun arm2-immediate-form-p (form)
-  (if (and (consp form)
-           (or (eq (%car form) (%nx1-operator immediate))
-               (eq (%car form) (%nx1-operator simple-function))))
+  (if (and (acode-p form)
+           (or (eq (acode-operator form) (%nx1-operator immediate))
+               (eq (acode-operator form) (%nx1-operator simple-function))))
     t))
 
 (defun arm2-test-%izerop (seg vreg xfer form cr-bit true-p)
@@ -3774,30 +3937,28 @@
 (defun arm2-lexical-reference-ea (form &optional (no-closed-p t))
   (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (if (eq (acode-operator form) (%nx1-operator lexical-reference))
-      (let* ((addr (var-ea (%cadr form))))
+      (let* ((addr (var-ea (car (acode-operands form)))))
         (if (typep addr 'lreg)
           addr
           (unless (and no-closed-p (addrspec-vcell-p addr ))
             addr))))))
 
 
-(defun arm2-vpush-register (seg src &optional why info attr)
+(defun arm2-vpush-register (seg src)
   (with-arm-local-vinsn-macros (seg)
     (prog1
       (! vpush-register src)
       (arm2-regmap-note-store src *arm2-vstack*)
-      (arm2-new-vstack-lcell (or why :node) *arm2-target-lcell-size* (or attr 0) info)
       (arm2-adjust-vstack *arm2-target-node-size*))))
 
 (defun arm2-vpush-register-arg (seg src)
-  (arm2-vpush-register seg src :outgoing-argument))
+  (arm2-vpush-register seg src))
 
 
 (defun arm2-vpop-register (seg dest)
   (with-arm-local-vinsn-macros (seg)
     (prog1
       (! vpop-register dest)
-      (setq *arm2-top-vstack-lcell* (lcell-parent *arm2-top-vstack-lcell*))
       (arm2-adjust-vstack (- *arm2-target-node-size*)))))
 
 
@@ -3943,7 +4104,15 @@
                          (#.hard-reg-class-fpr-mode-single
                           (unless *arm2-reckless*
                             (! trap-unless-single-float src))
-                          (! get-single dest src)))))))
+                          (! get-single dest src))
+                                                  (#.hard-reg-class-fpr-mode-complex-single-float
+                          (unless *arm2-reckless*
+                            (! trap-unless-typecode= src arm::subtag-complex-single-float))
+                          (! get-complex-single-float dest src))
+                         (#.hard-reg-class-fpr-mode-complex-double-float
+                          (unless *arm2-reckless*
+                            (! trap-unless-typecode= src arm::subtag-complex-double-float))
+                          (! get-complex-double-float dest src)))))))
                 (if dest-gpr
                   (case dest-mode
                     (#.hard-reg-class-gpr-mode-node
@@ -3951,8 +4120,12 @@
                        (case src-mode
                          (#.hard-reg-class-fpr-mode-double
                           (! double->heap dest src))
+                         (#.hard-reg-class-fpr-mode-complex-double-float
+                            (! complex-double-float->heap dest src))
                          (#.hard-reg-class-fpr-mode-single
-                          (! single->node dest src))))))
+                          (! single->node dest src))
+                         (#.hard-reg-class-fpr-mode-complex-single-float
+                            (! complex-single-float->node dest src))))))
                   (if (and src-fpr dest-fpr)
                     (unless (and (eql dest-fpr src-fpr)
                                  (eql dest-mode src-mode))
@@ -3963,16 +4136,33 @@
                             (! single-to-single dest src))
                            (#.hard-reg-class-fpr-mode-double
                             (if *arm2-float-safety*
-                              (! single-to-double-safe dest src)
+                              (with-fp-target (src dest) (temp :double-float)
+                                (! clear-pending-fpu-exceptions)
+                                (! single-to-double temp src)
+                                (! trap-if-fpu-exception)
+                                (! double-to-double dest temp))
                               (! single-to-double dest src)))))
                         (#.hard-reg-class-fpr-mode-double
                          (case dest-mode
                            (#.hard-reg-class-fpr-mode-single
                             (if *arm2-float-safety*
-                              (! double-to-single-safe dest src)
+                              (with-fp-target (dest src) (temp :single-float)
+                                (! clear-pending-fpu-exceptions)
+                                (! double-to-single temp src)
+                                (! trap-if-fpu-execption)
+                                (! single-to-single dest temp))
                               (! double-to-single dest src)))
                            (#.hard-reg-class-fpr-mode-double
-                            (! double-to-double dest src))))))))))))))))
+                            (! double-to-double dest src))
+                           ))
+                        (#.hard-reg-class-fpr-mode-complex-single-float
+                           (case dest-mode
+                             (#.hard-reg-class-fpr-mode-complex-single-float
+                              (! complex-single-float-to-complex-single-float dest src))))
+                        (#.hard-reg-class-fpr-mode-complex-double-float
+                           (case dest-mode
+                             (#.hard-reg-class-fpr-mode-complex-double-float
+                              (! complex-double-float-to-complex-double-float dest src))))))))))))))))
   
 (defun arm2-unreachable-store (&optional vreg)
   ;; I don't think that anything needs to be done here,
@@ -3987,25 +4177,24 @@
 
 ;;; bind vars to initforms, as per let*, &aux.
 (defun arm2-seq-bind (seg vars initforms)
-  (dolist (var vars)
-    (arm2-seq-bind-var seg var (pop initforms))))
+    (dolist (var vars)
+      (arm2-seq-bind-var seg var (pop initforms))))
 
 (defun arm2-dynamic-extent-form (seg curstack val &aux (form val))
   (when (acode-p form)
-    (with-note (form seg curstack) ; note this rebinds form/seg/curstack so can't setq
+    (arm-with-note (form seg curstack) ; note this rebinds form/seg/curstack so can't setq
       (with-arm-local-vinsn-macros (seg)
-	(let* ((op (acode-operator form)))
+	(let* ((op (acode-operator form))
+               (operands (acode-operands form)))
 	  (cond ((eq op (%nx1-operator list))
-		 (let* ((*arm2-vstack* *arm2-vstack*)
-			(*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
-		   (arm2-set-nargs seg (arm2-formlist seg (%cadr form) nil))
+		 (let* ((*arm2-vstack* *arm2-vstack*))
+		   (arm2-set-nargs seg (arm2-formlist seg (car operands) nil))
 		   (arm2-open-undo $undostkblk curstack)
 		   (! stack-cons-list))
 		 (setq val arm::arg_z))
 		((eq op (%nx1-operator list*))
-		 (let* ((arglist (%cadr form)))                   
-		   (let* ((*arm2-vstack* *arm2-vstack*)
-			  (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+		 (let* ((arglist (car operands)))
+		   (let* ((*arm2-vstack* *arm2-vstack*))
 		     (arm2-arglist seg arglist))
 		   (when (car arglist)
 		     (arm2-set-nargs seg (length (%car arglist)))
@@ -4013,7 +4202,7 @@
 		     (arm2-open-undo $undostkblk curstack))
 		   (setq val arm::arg_z)))
 		((eq op (%nx1-operator multiple-value-list))
-		 (arm2-multiple-value-body seg (%cadr form))
+		 (arm2-multiple-value-body seg (car operands))
 		 (arm2-open-undo $undostkblk curstack)
 		 (! stack-cons-list)
 		 (setq val arm::arg_z))
@@ -4021,7 +4210,7 @@
 		 (let* ((y ($ arm::arg_y))
 			(z ($ arm::arg_z))
 			(result ($ arm::arg_z)))
-		   (arm2-two-targeted-reg-forms seg (%cadr form) y (%caddr form) z)
+		   (arm2-two-targeted-reg-forms seg (car operands) y (cadr operands) z)
 		   (arm2-open-undo $undostkblk )
 		   (! make-stack-cons result y z) 
 		   (setq val result)))
@@ -4033,11 +4222,11 @@
 		     (arm2-open-undo $undostkblk)
 		     (setq val node))))
 		((eq op (%nx1-operator %new-ptr))
-		 (let* ((clear-form (caddr form))
+		 (let* ((clear-form (cadr operands))
 			(cval (nx2-constant-form-value clear-form)))
 		   (if cval
 		       (progn 
-			 (arm2-one-targeted-reg-form seg (%cadr form) ($ arm::arg_z))
+			 (arm2-one-targeted-reg-form seg (car operands) ($ arm::arg_z))
 			 (if (nx-null cval)
 			     (! make-stack-block)
 			     (! make-stack-block0)))
@@ -4046,7 +4235,7 @@
 			       (done-label (backend-get-next-label))
 			       (rval ($ arm::arg_z))
 			       (rclear ($ arm::arg_y)))
-			   (arm2-two-targeted-reg-forms seg (%cadr form) rval clear-form rclear)
+			   (arm2-two-targeted-reg-forms seg (car operands) rval clear-form rclear)
 			   (! compare-to-nil crf rclear)
 			   (! cbranch-false (aref *backend-labels* stack-block-0-label) crf arm::arm-cond-eq)
 			   (! make-stack-block)
@@ -4057,29 +4246,27 @@
 		 (arm2-open-undo $undostkblk)
 		 (setq val ($ arm::arg_z)))
 		((eq op (%nx1-operator make-list))
-		 (arm2-two-targeted-reg-forms seg (%cadr form) ($ arm::arg_y) (%caddr form) ($ arm::arg_z))
+		 (arm2-two-targeted-reg-forms seg (car (acode-operands form)) ($ arm::arg_y) (cadr (acode-operands form)) ($ arm::arg_z))
 		 (arm2-open-undo $undostkblk curstack)
 		 (! make-stack-list)
 		 (setq val arm::arg_z))       
 		((eq op (%nx1-operator vector))
-		 (let* ((*arm2-vstack* *arm2-vstack*)
-			(*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
-		   (arm2-set-nargs seg (arm2-formlist seg (%cadr form) nil))
+		 (let* ((*arm2-vstack* *arm2-vstack*))
+		   (arm2-set-nargs seg (arm2-formlist seg (car operands) nil))
 		   (! make-stack-vector))
 		 (arm2-open-undo $undostkblk)
 		 (setq val arm::arg_z))
 		((eq op (%nx1-operator %gvector))
 		 (let* ((*arm2-vstack* *arm2-vstack*)
-			(*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
-			(arglist (%cadr form)))
+			(arglist (car (acode-operands form))))
 		   (arm2-set-nargs seg (arm2-formlist seg (append (car arglist) (reverse (cadr arglist))) nil))
 		   (! make-stack-gvector))
 		 (arm2-open-undo $undostkblk)
 		 (setq val arm::arg_z)) 
 		((eq op (%nx1-operator closed-function)) 
-		 (setq val (arm2-make-closure seg (cadr form) t))) ; can't error
+		 (setq val (arm2-make-closure seg (car operands) t))) ; can't error
 		((eq op (%nx1-operator %make-uvector))
-		 (destructuring-bind (element-count subtag &optional (init 0 init-p)) (%cdr form)
+		 (destructuring-bind (element-count subtag &optional (init 0 init-p)) operands
 		   (if init-p
 		       (progn
 			 (arm2-three-targeted-reg-forms seg element-count ($ arm::arg_x) subtag ($ arm::arg_y) init ($ arm::arg_z))
@@ -4090,16 +4277,18 @@
 		   (arm2-open-undo $undostkblk)
 		   (setq val ($ arm::arg_z)))))))))
   val)
-
+;;; this far
 (defun arm2-addrspec-to-reg (seg addrspec reg)
   (if (memory-spec-p addrspec)
     (arm2-stack-to-register seg addrspec reg)
     (arm2-copy-register seg reg addrspec)))
   
-(defun arm2-seq-bind-var (seg var val)  
+(defun arm2-seq-bind-var (seg var val)
+
   (with-arm-local-vinsn-macros (seg)
     (let* ((sym (var-name var))
            (bits (nx-var-bits var))
+           (ea nil)
            (closed-p (and (%ilogbitp $vbitclosed bits)
                           (%ilogbitp $vbitsetq bits)))
            (curstack (arm2-encode-stack))
@@ -4124,13 +4313,7 @@
                      (setq puntval (arm2-puntable-binding-p var val)))
               (progn
                 (nx-set-var-bits var (%ilogior (%ilsl $vbitpunted 1) bits))
-                (let* ((type (var-inittype var)))
-                  (if (and type (not (eq t type)))
-                    (nx2-replace-var-refs var
-                                          (make-acode (%nx1-operator typed-form)
-                                                      type
-                                                      puntval))
-                    (nx2-replace-var-refs var puntval)))
+                (nx2-replace-var-refs var puntval)
                 (arm2-set-var-ea seg var puntval))
               (progn
                 (let* ((vloc *arm2-vstack*)
@@ -4142,15 +4325,13 @@
                       (if (memory-spec-p val)
                         (with-node-temps () (temp)
                           (arm2-addrspec-to-reg seg val temp)
-                          (arm2-vpush-register seg temp :node var bits))
-                        (arm2-vpush-register seg val :node var bits)))
+                          (arm2-vpush-register seg temp))
+                        (arm2-vpush-register seg val)))
                     (if reg
                       (arm2-one-targeted-reg-form seg val reg)
-                      (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg val arm::arg_z) :node var bits)))
-                  (arm2-set-var-ea seg var (or reg (arm2-vloc-ea vloc closed-p)))
-                  (if reg
-                    (arm2-note-var-cell var reg)
-                    (arm2-note-top-cell var))
+                      (or (setq ea (arm2-nfp-bind seg var val))
+                          (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg val arm::arg_z)))))
+                  (arm2-set-var-ea seg var (or ea reg (arm2-vloc-ea vloc closed-p)))
                   (when make-vcell
                     (with-node-temps () (vcell closed)
                         (arm2-stack-to-register seg vloc closed)
@@ -4166,7 +4347,7 @@
 ;;; Never make a vcell if this is an inherited var.
 ;;; If the var's inherited, its bits won't be a fixnum (and will
 ;;; therefore be different from what NX-VAR-BITS returns.)
-(defun arm2-bind-var (seg var vloc &optional lcell &aux 
+(defun arm2-bind-var (seg var vloc &aux 
                           (bits (nx-var-bits var)) 
                           (closed-p (and (%ilogbitp $vbitclosed bits) (%ilogbitp $vbitsetq bits)))
                           (closed-downward (if closed-p (%ilogbitp $vbitcloseddownward bits)))
@@ -4190,19 +4371,15 @@
                 (arm2-open-undo $undostkblk))
               (! make-vcell vcell closed))
             (arm2-register-to-stack seg vcell vloc)))
-        (when lcell
-          (setf (lcell-kind lcell) :node
-                (lcell-attributes lcell) bits
-                (lcell-info lcell) var)
-          (arm2-note-var-cell var lcell))          
+          
         (arm2-set-var-ea seg var (arm2-vloc-ea vloc closed-p))        
         closed-downward))))
 
 (defun arm2-set-var-ea (seg var ea)
   (setf (var-ea var) ea)
   (when (and *arm2-record-symbols* (or (typep ea 'lreg) (typep ea 'fixnum)))
-    (let* ((start (arm2-emit-note seg :begin-variable-scope)))
-      (push (list var (var-name var) start (close-vinsn-note start))
+    (let* ((start (enqueue-vinsn-note seg :begin-variable-scope var)))
+      (push (list var (var-name var) start nil)
             *arm2-recorded-symbols*)))
   ea)
 
@@ -4211,15 +4388,13 @@
     (when (and *arm2-record-symbols*
                (or (logbitp $vbitspecial bits)
                    (not (logbitp $vbitpunted bits))))
-      (let ((endnote (%car (%cdddr (assq var *arm2-recorded-symbols*)))))
-        (unless endnote (compiler-bug "arm2-close-var for ~s ?" (var-name var)))
-        (setf (vinsn-note-class endnote) :end-variable-scope)
-        (append-dll-node (vinsn-note-label endnote) seg)))))
+      (let* ((info (%cdr (assq var *arm2-recorded-symbols*))))
+        (unless info (compiler-bug "arm2-close-var for ~s ?" (var-name var)))
+        (setf (caddr info) (close-vinsn-note seg (cadr info)))))))
 
 (defun arm2-load-ea-p (ea)
   (or (typep ea 'fixnum)
-      (typep ea 'lreg)
-      (typep ea 'lcell)))
+      (typep ea 'lreg)))
 
 (defun arm2-dbind (seg value sym)
   (with-arm-local-vinsn-macros (seg)
@@ -4228,7 +4403,7 @@
            (self-p (unless ea-p (and (or
                                       (eq (acode-operator value) (%nx1-operator bound-special-ref))
                                       (eq (acode-operator value) (%nx1-operator special-ref)))
-                                     (eq (cadr value) sym)))))
+                                     (eq (car (acode-operands value)) sym)))))
       (cond ((eq sym '*interrupt-level*)
              (let* ((fixval (acode-fixnum-form-p value)))
                (cond ((eql fixval 0) (if *arm2-open-code-inline*
@@ -4259,9 +4434,6 @@
                  (arm2-store-immediate seg (arm2-symbol-value-cell sym) ($ arm::arg_y))
                  (! bind)))
              (arm2-open-undo $undospecial)))
-      (arm2-new-vstack-lcell :special-value *arm2-target-lcell-size* 0 sym)
-      (arm2-new-vstack-lcell :special *arm2-target-lcell-size* (ash 1 $vbitspecial) sym)
-      (arm2-new-vstack-lcell :special-link *arm2-target-lcell-size* 0 sym)
       (arm2-adjust-vstack (* 3 *arm2-target-node-size*)))))
 
 ;;; Store the contents of EA - which denotes either a vframe location
@@ -4354,13 +4526,11 @@
                 (! mem-set-c-address val-target ptr-reg offval)
                 (if for-value
                   (<- (set-regspec-mode val-target (gpr-mode-name-value :address)))))
-              (progn
-                (! temp-push-unboxed-word ptr-reg)
-                (arm2-open-undo $undostkblk)
+              (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                (arm2-push-register seg  ptr-reg)
                 (multiple-value-bind (address node) (address-and-node-regs)
                   (with-imm-target (address) (ptr-reg :address)
-                    (! temp-pop-unboxed-word ptr-reg)
-                    (arm2-close-undo)
+                    (arm2-pop-register seg ptr-reg)
                     (! mem-set-c-address address ptr-reg offval)
                     (if for-value
                       (<- node)))))))
@@ -4386,26 +4556,24 @@
                             xval-reg val-reg))))
                 ;; Offset's non-constant.  Temp-push the pointer, evaluate
                 ;; and unbox the offset, load the value, pop the pointer.
-                (progn
+                (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
                   (with-imm-target () (ptr-reg :address)
                     (arm2-one-targeted-reg-form seg ptr ptr-reg)
-                    (! temp-push-unboxed-word ptr-reg)
-                    (arm2-open-undo $undostkblk))
+                    (arm2-push-register seg ptr-reg))
                   (with-imm-target () (off-reg :signed-natural)
                     (! fixnum->signed-natural off-reg (arm2-one-targeted-reg-form seg offset ($ arm::arg_z)))
                     (with-imm-target (off-reg) (val-reg :signed-natural)
                       (arm2-lri seg val-reg intval)
                       (with-imm-target (off-reg val-reg) (ptr-reg :address)
-                        (! temp-pop-unboxed-word ptr-reg)
-                        (arm2-close-undo)
+                        (arm2-pop-register seg ptr-reg)
                         (setq xptr-reg ptr-reg
                               xoff-reg off-reg
                               xval-reg val-reg))))))
               ;; No intval; maybe constant-offset.
               (with-imm-target () (ptr-reg :address)
+                (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
                 (arm2-one-targeted-reg-form seg ptr ptr-reg)
-                (! temp-push-unboxed-word ptr-reg)
-                (arm2-open-undo $undostkblk)
+                (arm2-push-register seg ptr-reg)
                 (progn
                   (if (not constant-offset)
                     (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
@@ -4417,12 +4585,11 @@
                           (arm2-vpop-register seg temp)
                           (! fixnum->signed-natural off-reg temp)))
                       (with-imm-target (arm::imm0 off-reg) (ptr-reg :address)
-                        (! temp-pop-unboxed-word ptr-reg)
-                        (arm2-close-undo)
+                        (arm2-pop-register seg ptr-reg)
                         (setq xptr-reg ptr-reg
                               xoff-reg off-reg
                               xval-reg address
-                              node-arg_z node)))))))
+                              node-arg_z node))))))))
             (! mem-set-address xval-reg xptr-reg xoff-reg)
             (when for-value
               (if node-arg_z
@@ -4435,7 +4602,7 @@
 (defun arm2-memory-store-displaced (seg valreg basereg displacement size)
   (with-arm-local-vinsn-macros (seg)
     (case size
-      (8 (! mem-set-c-doubleword valreg basereg displacement))
+      ;;(8 (! mem-set-c-doubleword valreg basereg displacement))
       (4 (! mem-set-c-fullword valreg basereg displacement))
       (2 (! mem-set-c-halfword valreg basereg displacement))
       (1 (! mem-set-c-byte valreg basereg displacement)))))
@@ -4443,7 +4610,7 @@
 (defun arm2-memory-store-indexed (seg valreg basereg idxreg size)
   (with-arm-local-vinsn-macros (seg)
     (case size
-      (8 (! mem-set-doubleword valreg basereg idxreg))
+      ;;(8 (! mem-set-doubleword valreg basereg idxreg))
       (4 (! mem-set-fullword valreg basereg idxreg))
       (2 (! mem-set-halfword valreg basereg idxreg))
       (1 (! mem-set-byte valreg basereg idxreg)))))
@@ -4473,7 +4640,7 @@
 
           (and offval (%i> (integer-length offval) 11) (setq offval nil))
           (if offval
-                                        ; Easier: need one less register than in the general case.
+            ;; Easier: need one less register than in the general case.
             (with-imm-target () (ptr-reg :address)
               (arm2-one-targeted-reg-form seg ptr ptr-reg)
               (if intval
@@ -4489,13 +4656,12 @@
                             (4 (if signed :s32 :u32))
                             (2 (if signed :s16 :u16))
                             (1 (if signed :s8 :u8))))))))
-                (progn
-                  (! temp-push-unboxed-word ptr-reg)
-                  (arm2-open-undo $undostkblk)
+                (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                  (arm2-push-register seg ptr-reg)
+                  
                   (val-to-argz-and-imm0)                  
                   (with-imm-target (arm::imm0) (ptr-reg :address)
-                    (! temp-pop-unboxed-word ptr-reg)
-                    (arm2-close-undo)
+                    (arm2-pop-register seg ptr-reg)
                     (arm2-memory-store-displaced seg arm::imm0 ptr-reg offval size)                    
                     (if for-value
                       (<- arm::arg_z))))))
@@ -4520,43 +4686,41 @@
                               xval-reg val-reg))))
                                         ; Offset's non-constant.  Temp-push the pointer, evaluate
                                         ; and unbox the offset, load the value, pop the pointer.
-                  (progn
+                  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
                     (with-imm-target () (ptr-reg :address)
-                      (arm2-one-targeted-reg-form seg ptr ptr-reg)
-                      (! temp-push-unboxed-word ptr-reg)
-                      (arm2-open-undo $undostkblk))
-                    (with-imm-target () (off-reg :s32)
-                      (! fixnum->signed-natural off-reg (arm2-one-targeted-reg-form seg offset ($ arm::arg_z)))
-                      (with-imm-target (off-reg) (val-reg :s32)
-                        (arm2-lri seg val-reg intval)
-                        (with-imm-target (off-reg val-reg) (ptr-reg :address)
-                          (! temp-pop-unboxed-word ptr-reg)
-                          (arm2-close-undo)
-                          (setq xptr-reg ptr-reg
-                                xoff-reg off-reg
-                                xval-reg val-reg))))))
+                        (arm2-one-targeted-reg-form seg ptr ptr-reg)
+                        (arm2-push-register seg ptr-reg)
+                      (with-imm-target () (off-reg :s32)
+                        (! fixnum->signed-natural off-reg (arm2-one-targeted-reg-form seg offset ($ arm::arg_z)))
+                        (with-imm-target (off-reg) (val-reg :s32)
+                          (arm2-lri seg val-reg intval)
+                          (with-imm-target (off-reg val-reg) (ptr-reg :address)
+                            (arm2-pop-register seg ptr-reg)
+                            (setq xptr-reg ptr-reg
+                                  xoff-reg off-reg
+                                  xval-reg val-reg)))))))
                 ;; No intval; maybe constant-offset.
                 (with-imm-target () (ptr-reg :address)
-                  (arm2-one-targeted-reg-form seg ptr ptr-reg)
-                  (! temp-push-unboxed-word ptr-reg)
-                  (arm2-open-undo $undostkblk)
-                  (progn
-                    (if (not constant-offset)
-                      (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
-                    (val-to-argz-and-imm0)
-                    (with-imm-target (arm::imm0) (off-reg :signed-natural)
-                      (if constant-offset
-                        (arm2-lri seg off-reg constant-offset)
-                        (with-node-temps (arm::arg_z) (temp)
-                          (arm2-vpop-register seg temp)
-                          (! fixnum->signed-natural off-reg temp)))
-                      (with-imm-target (arm::imm0 off-reg) (ptr-reg :address)
-                        (! temp-pop-unboxed-word ptr-reg)
-                        (arm2-close-undo)
-                        (setq xptr-reg ptr-reg
-                              xoff-reg off-reg
-                              xval-reg arm::imm0
-                              node-arg_z t))))))
+                  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                    (arm2-one-targeted-reg-form seg ptr ptr-reg)
+                    (arm2-push-register seg ptr-reg)
+                    (progn
+                      (if (not constant-offset)
+                        (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
+                      (val-to-argz-and-imm0)
+                      (with-imm-target (arm::imm0) (off-reg :signed-natural)
+                        (if constant-offset
+                          (arm2-lri seg off-reg constant-offset)
+                          (with-node-temps (arm::arg_z) (temp)
+                              (arm2-vpop-register seg temp)
+                            (! fixnum->signed-natural off-reg temp)))
+                        (with-imm-target (arm::imm0 off-reg) (ptr-reg :address)
+                          (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                            (arm2-pop-register seg ptr-reg))
+                          (setq xptr-reg ptr-reg
+                                xoff-reg off-reg
+                                xval-reg arm::imm0
+                                node-arg_z t)))))))
               (arm2-memory-store-indexed seg xval-reg xptr-reg xoff-reg size)
               (when for-value
                 (if node-arg_z
@@ -4584,17 +4748,15 @@
 (defun arm2-encoding-vstack-depth (encoding)
   (svref encoding 2))
 
-(defun arm2-encoding-vstack-top (encoding)
-  (svref encoding 3))
+
 
 (defun arm2-encode-stack ()
-  (vector *arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*))
+  (vector *arm2-undo-count* *arm2-cstack* *arm2-vstack* ))
 
 (defun arm2-decode-stack (encoding)
   (values (arm2-encoding-undo-count encoding)
           (arm2-encoding-cstack-depth encoding)
-          (arm2-encoding-vstack-depth encoding)
-          (arm2-encoding-vstack-top encoding)))
+          (arm2-encoding-vstack-depth encoding)))
 
 (defun arm2-equal-encodings-p (a b)
   (dotimes (i 3 t)
@@ -4611,13 +4773,19 @@
 (defun arm2-close-undo (&aux
                         (new-count (%i- *arm2-undo-count* 1))
                         (i (aref *arm2-undo-stack* new-count)))
-  (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*)
+  (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* )
     (arm2-decode-stack i))
   (set-fill-pointer 
    *arm2-undo-stack*
    (set-fill-pointer *arm2-undo-because* new-count)))
 
 
+(defun arm2-nfp-ref-p (form)
+  (let* ((op (if (acode-p form) (acode-operator form))))
+    (if (or (eq op (%nx1-operator inherited-arg)) 
+            (eq op (%nx1-operator lexical-reference)))
+      (let* ((var (car (acode-operands form))))
+        (not (rassoc var *arm2-nfp-vars*))))))
 
 
 
@@ -4626,8 +4794,9 @@
 (defun arm2-trivial-p (form &aux op bits)
   (setq form (nx-untyped-form form))
   (and
-   (consp form)
-   (not (eq (setq op (%car form)) (%nx1-operator call)))
+   (acode-p form)
+   (not (eq (setq op (acode-operator form)) (%nx1-operator call)))
+   (not (arm2-nfp-ref-p form))
    (or
     (nx-null form)
     (nx-t form)
@@ -4638,7 +4807,7 @@
     (eq op (%nx1-operator bound-special-ref))
     (and (or (eq op (%nx1-operator inherited-arg)) 
              (eq op (%nx1-operator lexical-reference)))
-         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (cadr form))))
+         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (car (acode-operands form)))))
              (neq (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
                   (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))))
 
@@ -4647,7 +4816,7 @@
     (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
-        (%cadr form)))))
+        (car (acode-operands form))))))
 
 
 
@@ -4681,21 +4850,21 @@
     (^)))
 
 #|
-(defun arm2-ref-symbol-value (seg vreg xfer sym check-boundp)  
-  (with-arm-local-vinsn-macros (seg vreg xfer)
-    (when vreg
-      (if (eq sym '*interrupt-level*)
-        (ensuring-node-target (target vreg)
-          (! ref-interrupt-level target))
-        (let* ((src ($ arm::arg_z))
-               (dest ($ arm::arg_z)))
-          (arm2-store-immediate seg (arm2-symbol-value-cell sym) src)
-          (if check-boundp
-            (! ref-symbol-value dest src)
-            (! %ref-symbol-value dest src))
-          (<- dest))))
-    (^)))
-||#
+               (defun arm2-ref-symbol-value (seg vreg xfer sym check-boundp)  
+(with-arm-local-vinsn-macros (seg vreg xfer)
+(when vreg
+(if (eq sym '*interrupt-level*)
+(ensuring-node-target (target vreg)
+(! ref-interrupt-level target))
+(let* ((src ($ arm::arg_z))
+(dest ($ arm::arg_z)))
+(arm2-store-immediate seg (arm2-symbol-value-cell sym) src)
+(if check-boundp
+(! ref-symbol-value dest src)
+(! %ref-symbol-value dest src))
+(<- dest))))
+(^)))
+               ||#
 
 ;;; Should be less eager to box result
 (defun arm2-extract-charcode (seg vreg xfer char safe)
@@ -4711,7 +4880,7 @@
 
 (defun arm2-reference-list (seg vreg xfer listform safe refcdr)
   (if (arm2-form-typep listform 'list)
-    (setq safe nil))                    ; May also have been passed as NIL.
+    (setq safe nil))     ; May also have been passed as NIL.
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((src (arm2-one-untargeted-reg-form seg listform arm::arg_z)))
       (when safe
@@ -4753,7 +4922,6 @@
     (if (null vreg)
       (dolist (f initforms) (arm2-form seg nil nil f))
       (let* ((*arm2-vstack* *arm2-vstack*)
-             (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
              (arch (backend-target-arch *target-backend*))
              (n (length initforms))
              (nntriv (let* ((count 0)) 
@@ -4765,8 +4933,8 @@
         (declare (fixnum n nntriv))
         (cond ( (or *arm2-open-code-inline* (> nntriv 3))
                (arm2-formlist seg initforms nil)
-               (arm2-lri seg arm::imm0 header)
-               (! %arm-gvector vreg arm::imm0 (ash n (arch::target-word-shift arch))))
+                (arm2-lri seg arm::imm0 header)
+                (! %arm-gvector vreg arm::imm0 (ash n (arch::target-word-shift arch))))
               (t
                (let* ((pending ())
                       (vstack *arm2-vstack*))
@@ -4796,21 +4964,21 @@
                          (! misc-set-c-node reg target index)))))
                  (! vstack-discard nntriv))
                ))))
-     (^)))
+    (^)))
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
 ;;; as in the case of synthesized toplevel functions in .pfsl files.
-(defun arm2-acode-needs-memoization (valform)
-  (if (arm2-form-typep valform 'fixnum)
-    nil
-    (let* ((val (acode-unwrapped-form-value valform)))
-      (if (or (nx-t val)
-              (nx-null val)
-              (and (acode-p val)
-                   (let* ((op (acode-operator val)))
-                     (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
-        nil
-        t))))
+               (defun arm2-acode-needs-memoization (valform)
+                 (if (arm2-form-typep valform 'fixnum)
+                   nil
+                   (let* ((val (acode-unwrapped-form-value valform)))
+                     (if (or (nx-t val)
+                             (nx-null val)
+                             (and (acode-p val)
+                                  (let* ((op (acode-operator val)))
+                                    (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
+                       nil
+                       t))))
 
 (defun arm2-modify-cons (seg vreg xfer ptrform valform safe setcdr returnptr)
   (if (arm2-form-typep ptrform 'cons)
@@ -4848,13 +5016,12 @@
       (if (arm-constant-form-p uwf)
         (arm2-branch seg (arm2-cd-true xfer) nil)
         (with-crf-target () crf
-          (arm2-form seg crf xfer form))))))
+                         (arm2-form seg crf xfer form))))))
 
       
 (defun arm2-branch (seg xfer crf &optional cr-bit true-p)
   (declare (notinline arm2-branch))
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+  (let* ((*arm2-vstack* *arm2-vstack*))
     (with-arm-local-vinsn-macros (seg)
       (setq xfer (or xfer 0))
       (when (logbitp $backend-mvpass-bit xfer) ;(arm2-mvpass-p cd)
@@ -4916,14 +5083,14 @@
   (if xfer (logbitp $backend-compound-branch-target-bit xfer)))
 
 (defun arm2-cd-true (xfer)
- (if (arm2-cd-compound-p xfer)
-   (ldb  $backend-compound-branch-true-byte xfer)
-  xfer))
+  (if (arm2-cd-compound-p xfer)
+    (ldb  $backend-compound-branch-true-byte xfer)
+    xfer))
 
 (defun arm2-cd-false (xfer)
- (if (arm2-cd-compound-p xfer)
-   (ldb  $backend-compound-branch-false-byte xfer)
-   xfer))
+  (if (arm2-cd-compound-p xfer)
+    (ldb  $backend-compound-branch-false-byte xfer)
+    xfer))
 
 (defun arm2-make-compound-cd (tpart npart &optional mvpass-p)
   (dpb (or npart 0) $backend-compound-branch-false-byte
@@ -4933,7 +5100,7 @@
 (defun arm2-invert-cd (cd)
   (if (arm2-cd-compound-p cd)
     (arm2-make-compound-cd (arm2-cd-false cd) (arm2-cd-true cd) (logbitp $backend-mvpass-bit cd))
-    cd))
+                   cd))
 
 
 
@@ -4943,7 +5110,7 @@
          (numundo (%i- *arm2-undo-count* (arm2-encoding-undo-count old-stack))))
     (declare (fixnum numundo))
     (with-arm-local-vinsn-macros (seg vreg xfer)
-      (if (arm2-equal-encodings-p current-stack old-stack)
+      (if (arm2-equal-encodings-p  current-stack old-stack)
         (arm2-form seg vreg xfer body)
         (if (eq xfer $backend-return)
           (progn
@@ -4951,7 +5118,7 @@
             (dotimes (i numundo) (arm2-close-undo)))
           (if (arm2-mvpass-p xfer)
             (progn
-              (arm2-mvpass seg body) ; presumed to be ok
+              (arm2-mvpass seg body)    ; presumed to be ok
               (let* ((*arm2-returning-values* :pass))
                 (arm2-nlexit seg xfer numundo)
                 (^))
@@ -4962,9 +5129,6 @@
               ;; some other case where it can't ($test, $vpush.)  The
               ;; case of a null vd can certainly avoid it; the check
               ;; of numundo is to keep $acc boxed in case of nthrow.
-              (when (null vreg)
-                (arm2-form seg nil nil body)
-                (setq body (make-acode (%nx1-operator nil))))
               (arm2-form  seg (if (or vreg (not (%izerop numundo))) arm::arg_z) nil body)
               (arm2-unwind-set seg xfer old-stack)
               (when vreg (<- arm::arg_z))
@@ -4972,14 +5136,13 @@
 
 
 (defun arm2-unwind-set (seg xfer encoding)
-  (multiple-value-bind (target-catch target-cstack target-vstack target-vstack-lcell)
-                       (arm2-decode-stack encoding)
+  (multiple-value-bind (target-catch target-cstack target-vstack)
+      (arm2-decode-stack encoding)
     (arm2-unwind-stack seg xfer target-catch target-cstack target-vstack)
     (arm2-regmap-note-vstack-delta target-vstack *arm2-vstack*)
     (setq *arm2-undo-count* target-catch 
           *arm2-cstack* target-cstack
-          *arm2-vstack* target-vstack
-          *arm2-top-vstack-lcell* target-vstack-lcell)))
+          *arm2-vstack* target-vstack)))
 
 (defun arm2-unwind-stack (seg xfer target-catch target-cstack target-vstack)
   (let* ((current-catch *arm2-undo-count*)
@@ -4992,7 +5155,7 @@
     (when (neq 0 diff)
       (setq exit-vstack (arm2-nlexit seg xfer diff))
       (multiple-value-setq (target current-cstack current-vstack)
-                           (arm2-decode-stack (aref *arm2-undo-stack* target-catch))))
+        (arm2-decode-stack (aref *arm2-undo-stack* target-catch))))
     (if (%i< 0 (setq diff (%i- current-cstack target-cstack)))
       (with-arm-local-vinsn-macros (seg)
         (! adjust-sp diff)))
@@ -5007,19 +5170,20 @@
 ;;; are involved (but the subprims restore them from the last catch frame.)
 ;;; *** there are currently only subprims to handle the "1 frame" case; add more ***
 (defun arm2-do-return (seg)
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+  (let* ((*arm2-vstack* *arm2-vstack*))
     (with-arm-local-vinsn-macros (seg)
       (progn
         (arm2-set-vstack (arm2-unwind-stack seg $backend-return 0 0 #x7fffff))
         (if *arm2-returning-values*
           (progn
-             (arm2-restore-nvrs seg t)
-                 (arm2-restore-non-volatile-fprs seg)                 
-                 (! nvalret))
+            (arm2-restore-nvrs seg t)
+            (arm2-restore-non-volatile-fprs seg)
+            (! restore-nfp)                 
+            (! nvalret))
           (progn
             (arm2-restore-nvrs seg nil)
-            (arm2-restore-non-volatile-fprs seg)            
+            (arm2-restore-non-volatile-fprs seg)
+            (! restore-nfp)            
             (! popj)))))
     nil))
 
@@ -5088,29 +5252,7 @@
   (dolist (var (%car auxen))
     (arm2-close-var seg var)))
 
-(defun arm2-close-structured-var (seg var)
-  (if (arm2-structured-var-p var)
-    (apply #'arm2-close-structured-lambda seg (cdr var))
-    (arm2-close-var seg var)))
 
-(defun arm2-close-structured-lambda (seg whole req opt rest keys auxen)
-  (if whole
-    (arm2-close-var seg whole))
-  (dolist (var req)
-    (arm2-close-structured-var seg var))
-  (dolist (var (%car opt))
-    (arm2-close-structured-var seg var))
-  (dolist (var (%caddr opt))
-    (when var
-      (arm2-close-var seg var)))
-  (if rest
-    (arm2-close-structured-var seg rest))
-  (dolist (var (%cadr keys))
-    (arm2-close-structured-var seg var))
-  (dolist (var (%caddr keys))
-    (if var (arm2-close-var seg var)))
-  (dolist (var (%car auxen))
-    (arm2-close-var seg var)))
 
 
 (defun arm2-init-regvar (seg var reg addr)
@@ -5118,42 +5260,6 @@
     (arm2-stack-to-register seg addr reg)
     (arm2-set-var-ea seg var (make-wired-lreg reg :class (hard-regspec-class reg) :mode (get-regspec-mode reg)))))
 
-(defun arm2-bind-structured-var (seg var vloc lcell &optional context)
-  (declare (ignore context))
-  (if (not (arm2-structured-var-p var))
-    (let* ((reg (nx2-assign-register-var var)))
-      (if reg
-        (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
-        (arm2-bind-var seg var vloc lcell)))
-    (compiler-bug "Old destructuring code ...")))
-
-(defun arm2-bind-structured-lambda (seg lcells vloc context whole req opt rest keys auxen
-                        &aux (nkeys (list-length (%cadr keys))))
-  (declare (fixnum vloc))
-  (when whole
-    (arm2-bind-structured-var seg whole vloc (pop lcells))
-    (incf vloc *arm2-target-node-size*))
-  (dolist (arg req)
-    (arm2-bind-structured-var seg arg vloc (pop lcells) context)
-    (incf vloc *arm2-target-node-size*))
-  (when opt
-   (if (arm2-hard-opt-p opt)
-     (setq vloc (apply #'arm2-structured-initopt seg lcells vloc context opt)
-           lcells (nthcdr (ash (length (car opt)) 1) lcells))
-     (dolist (var (%car opt))
-       (arm2-bind-structured-var seg var vloc (pop lcells) context)
-       (incf vloc *arm2-target-node-size*))))
-  (when rest
-    (arm2-bind-structured-var seg rest vloc (pop lcells) context)
-    (incf vloc *arm2-target-node-size*))
-  (when keys
-    (apply #'arm2-structured-init-keys seg lcells vloc context keys)
-    (setq vloc (%i+ vloc (* *arm2-target-node-size* (+ nkeys nkeys)))))
-  (arm2-seq-bind seg (%car auxen) (%cadr auxen)))
-
-(defun arm2-structured-var-p (var)
-  (and (consp var) (or (eq (%car var) *nx-lambdalist*)
-                       (eq (%car var) (%nx1-operator lambda-list)))))
 
 (defun arm2-simple-var (var &aux (bits (cadr var)))
   (if (or (%ilogbitp $vbitclosed bits)
@@ -5234,7 +5340,7 @@
                 (if (%i> cstack target-cstack)
                   (with-arm-local-vinsn-macros (seg)
                     (! adjust-sp (%i- cstack target-cstack))))
-                ; else what's going on? $sp-stkcons, for one thing
+                                        ; else what's going on? $sp-stkcons, for one thing
                 (setq cstack target-cstack)))
             (popnlispareas)))
         vstack))))
@@ -5259,41 +5365,7 @@
                 (! unbind-interrupt-level)))
             (compiler-bug "unknown payback token ~s" r)))))))
 
-(defun arm2-spread-lambda-list (seg listform whole req opt rest keys)
-  (with-arm-local-vinsn-macros (seg)
-    (let* ((numopt (length (%car opt)))
-           (nkeys (length (%cadr keys)))
-           (numreq (length req))
-           (vtotal numreq)
-           (old-top *arm2-top-vstack-lcell*)
-           (listreg ($ arm::arg_z))
-           (doadlword (dpb nkeys (byte 8 16) (dpb numopt (byte 8 8) (dpb numreq (byte 8 0) 0 )))))
-      (declare (fixnum numopt nkeys numreq vtotal doadlword))
-      (when (or (> numreq 255) (> numopt 255) (> nkeys 255))
-        (compiler-bug "A lambda list can contain a maximum of 255 required, 255 optional, and 255 keywords args"))
-      (if (fixnump listform)
-        (arm2-store-ea seg listform listreg)
-        (arm2-one-targeted-reg-form seg listform listreg))
-      (when whole
-        (arm2-vpush-register seg listreg :reserved))
-      (when keys
-        (setq doadlword (%ilogior2 (ash 1 25) doadlword))
-        (incf  vtotal (%ilsl 1 nkeys))
-        (if (%car keys)                 ; &allow-other-keys
-          (setq doadlword (%ilogior doadlword (ash 1 26))))
-        (arm2-store-immediate seg (%car (%cdr (%cdr (%cdr (%cdr keys))))) arm::temp2))
-      (when opt
-        (setq vtotal (%i+ vtotal numopt))
-        (when (arm2-hard-opt-p opt)
-          (setq doadlword (logior doadlword (ash 1 29)))
-          (setq vtotal (%i+ vtotal numopt))))
-      (when rest
-        (setq doadlword (%ilogior2 (ash 1 27) doadlword) vtotal (%i+ vtotal 1)))
-      (arm2-reserve-vstack-lcells vtotal)
-      (! load-adl doadlword)
-      (! debind)
-      (arm2-set-vstack (%i+ *arm2-vstack* (* *arm2-target-node-size* vtotal)))
-      (arm2-collect-lcells :reserved old-top))))
+
 
 
 (defun arm2-tailcallok (xfer)
@@ -5304,12 +5376,7 @@
 (defun arm2-mv-p (cd)
   (or (eq cd $backend-return) (arm2-mvpass-p cd)))
 
-(defun arm2-expand-note (header note)
-  (let* ((lab (vinsn-note-label note)))
-    (case (vinsn-note-class note)
-      ((:begin-variable-scope :end-variable-scope
-        :source-location-begin :source-location-end)
-       (setf (vinsn-label-info lab) (arm::emit-lap-label header lab))))))
+
 
 
 (defun arm2-expand-vinsns (header current &optional sections)
@@ -5319,8 +5386,7 @@
       (let* ((id (vinsn-label-id v)))
         (if (or (typep id 'fixnum) (null id))
           (when (or t (vinsn-label-refs v) (null id))
-            (setf (vinsn-label-info v) (arm::emit-lap-label current v)))
-          (arm2-expand-note current id)))
+            (setf (vinsn-label-info v) (arm::emit-lap-label current v)))))
       (arm2-expand-vinsn v current sections)))
   ;;; This doesn't have too much to do with anything else that's
   ;;; going on here, but it needs to happen before the lregs
@@ -5331,8 +5397,7 @@
            (ea (var-ea var)))
       (when (typep ea 'lreg)
         (setf (var-ea var) (lreg-value ea)))))
-  (free-logical-registers)
-  (arm2-free-lcells))
+  (free-logical-registers))
 
 ;;; It's not clear whether or not predicates, etc. want to look
 ;;; at an lreg or just at its value slot.
@@ -5351,6 +5416,7 @@
          (nvp (vinsn-template-nvp template))
          (predicate (getf (vinsn-annotation vinsn) :predicate))
          (unique-labels ())
+         (notes (vinsn-notes vinsn))
          (operand-insert-functions arm::*arm-vinsn-insert-functions*))
     (declare (fixnum nvp))
     (dotimes (i nvp)
@@ -5451,8 +5517,27 @@
                          (expand-form subform))))))))
       (declare (dynamic-extent #'expand-form #'parse-operand-form #'expand-insn-form #'eval-predicate))
                                         ;(format t "~& vinsn = ~s" vinsn)
+      (when notes
+        (let* ((lab ()))
+          (dolist (note notes)
+            (unless (eq :close (vinsn-note-class note))
+              (when (eq :source-location-begin
+                        (vinsn-note-class note))
+                (push note *arm2-emitted-source-notes*))
+              (when (null lab)
+                (setq lab (arm::make-lap-label note))
+                (arm::emit-lap-label current note))
+              (setf (vinsn-note-address note) lab)))))
       (dolist (form (vinsn-template-body template))
         (expand-form form ))
+      (when notes
+        (let* ((lab ()))
+          (dolist (note notes)
+            (when (eq :close (vinsn-note-class note))
+              (when (null lab)
+                (setq lab (arm::make-lap-label note))
+                (arm::emit-lap-label current note))
+              (setf (vinsn-note-address note) lab)))))
       (setf (vinsn-variable-parts vinsn) nil)
       (when vp
         (free-varparts-vector vp))))
@@ -5483,6 +5568,7 @@
       (when tail-p
         (arm2-restore-nvrs seg nil)
         (arm2-restore-non-volatile-fprs seg)
+        (! restore-nfp)
         (arm2-restore-full-lisp-context seg))
       (if tail-p
         (! jump-subprim subprim)
@@ -5510,17 +5596,17 @@
 (eval-when (:compile-toplevel :execute :load-toplevel)
 
 
-(defmacro defarm2 (name locative arglist &body forms)
-  (multiple-value-bind (body decls)
-                       (parse-body forms nil t)
-    (destructuring-bind (vcode-block dest control &rest other-args) arglist
-      (let* ((fun `(nfunction ,name 
-                              (lambda (,vcode-block ,dest ,control ,@other-args) ,@decls 
-                                      (block ,name (with-arm-local-vinsn-macros (,vcode-block ,dest ,control) ,@body))))))
-        `(progn
-           (record-source-file ',name 'function)
-           (svset *arm2-specials* (%ilogand #.operator-id-mask (%nx1-operator ,locative)) ,fun))))))
-)
+  (defmacro defarm2 (name locative arglist &body forms)
+    (multiple-value-bind (body decls)
+        (parse-body forms nil t)
+      (destructuring-bind (vcode-block dest control &rest other-args) arglist
+        (let* ((fun `(nfunction ,name 
+                      (lambda (,vcode-block ,dest ,control ,@other-args) ,@decls 
+                              (block ,name (with-arm-local-vinsn-macros (,vcode-block ,dest ,control) ,@body))))))
+          `(progn
+            (record-source-file ',name 'function)
+            (svset *arm2-specials* (%ilogand #.operator-id-mask (%nx1-operator ,locative)) ,fun))))))
+  )
 
 (defun arm2-allocate-global-fprs (varsets)
   (do* ((done nil)
@@ -5531,26 +5617,26 @@
        ((or done (null varsets)) (1+ last-allocated-double))
     (let* ((need-double
             (dolist (var varset)
-              (when (eq (var-declared-unboxed-type var) 'double-float)
+              (when (eq (var-declared-type var) 'double-float)
                 (return t)))))
       (if need-double
         (do* ((i 0 (1+ i))
-              (regmask (target-fpr-mask i :double-float)
-                       (target-fpr-mask i :double-float)))
+              (regmask (target-fpr-mask i hard-reg-class-fpr-mode-double)
+                       (target-fpr-mask i hard-reg-class-fpr-mode-double)))
              ((> regmask mask) (setq done t))
           (when (eql regmask (logand mask regmask))
             (setq mask (logandc2 mask regmask))
             (let* ((double (make-hard-fp-reg (+ (hard-regspec-value arm::d8) i) hard-reg-class-fpr-mode-double))
                    (single (make-hard-fp-reg (+ (hard-regspec-value arm::s16) (ash i -1)) hard-reg-class-fpr-mode-single)))
               (dolist (var varset)
-                (if (eq 'double-float (var-declared-unboxed-type var))
+                (if (eq 'double-float (var-declared-type var))
                   (setf (var-nvr var) double)
                   (setf (var-nvr var) single)))
               (setq last-allocated-double i)
               (return))))
         (do* ((i 0 (1+ i))
-              (regmask (target-fpr-mask i :single-float)
-                       (target-fpr-mask i :single-float)))
+              (regmask (target-fpr-mask i hard-reg-class-fpr-mode-single)
+                       (target-fpr-mask i hard-reg-class-fpr-mode-single)))
              ((> regmask mask) (setq done t))
           (when (eql regmask (logand mask regmask))
             (setq mask (logandc2 mask regmask))
@@ -5591,21 +5677,18 @@
            pregs
            no-regs
            (nsaved-fprs 0)
-           (reserved-lcells nil)
-           (*arm2-vstack* 0))
+           (*arm2-vstack* 0)
+           (*arm2-nfp-depth* *arm2-nfp-depth*)
+           (*arm2-nfp-vars* *arm2-nfp-vars*))
       (declare (type (unsigned-byte 16) num-req num-opt num-inh))
       (with-arm-p2-declarations p2decls
         (setq *arm2-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
-        (unless no-regs
-          (let* ((fp-vars (nx2-select-fpr-candidates (afunc-all-vars afunc))))
-            (when fp-vars
-              (setq nsaved-fprs (arm2-allocate-global-fprs fp-vars)))))
         (multiple-value-setq (pregs reglocatives) 
          
           (nx2-afunc-allocate-global-registers afunc (unless no-regs *arm2-nvrs*)))
-        (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
-        (when keys ;; Ensure keyvect is the first immediate
+        (@ (backend-get-next-label))    ; generic self-reference label, should be label #1
+        (when keys;; Ensure keyvect is the first immediate
           (backend-immediate-index (%cadr (%cdddr keys))))
         (when code-note
           (arm2-code-coverage-entry seg code-note))
@@ -5628,7 +5711,6 @@
                 ;; received.  If there's an upper bound, enforce it.
                 
                 (when rev-fixed
-                  (arm2-reserve-vstack-lcells num-fixed)
                   (if (arm::encode-arm-immediate num-fixed)
                     (! check-min-nargs num-fixed)
                     (! check-min-nargs-large num-fixed)))
@@ -5642,7 +5724,6 @@
                 ;; If there were &optional args, initialize their values
                 ;; to NIL.  All of the argregs get vpushed as a result of this.
                 (when opt
-                  (arm2-reserve-vstack-lcells num-opt)
                   (! default-optionals (+ num-fixed num-opt)))
                 (when keys
                   (unless opt
@@ -5650,11 +5731,9 @@
                   (let* ((keyvect (%car (%cdr (%cdr (%cdr (%cdr keys))))))
                          (flags (the fixnum (logior (the fixnum (if rest 4 0)) 
                                                     (the fixnum (if (or methodp allow-other-keys-p) 1 0)))))
-                         (nkeys (length keyvect))
                          (nprev (+ num-fixed num-opt)))
-                    (declare (fixnum flags nkeys nprev))
-                    (dotimes (i (the fixnum (+ nkeys nkeys)))
-                      (arm2-new-vstack-lcell :reserved *arm2-target-lcell-size* 0 nil))
+                    (declare (fixnum flags nprev))
+
                     (backend-immediate-index keyvect)
                     (arm2-lri seg arm::arg_y (ash flags *arm2-target-fixnum-shift*))
                     (arm2-lri seg arm::imm0 (ash nprev *arm2-target-fixnum-shift*))
@@ -5684,11 +5763,8 @@
                             (! heap-rest-arg)
                             (if (and (not keys) (= 0 num-opt))
                               (! req-heap-rest-arg)
-                              (! heap-cons-rest-arg)))))
-                      ; Make an lcell for the &rest arg
-                      (arm2-reserve-vstack-lcells 1))))
+                              (! heap-cons-rest-arg))))))))
                 (when hardopt
-                  (arm2-reserve-vstack-lcells num-opt)
                   (arm2-lri seg arm::imm0 (ash num-opt *arm2-target-fixnum-shift*))
 
                   ;; .SPopt-supplied-p wants nargs to contain the
@@ -5710,6 +5786,7 @@
                   (setq optsupvloc (- *arm2-vstack* (* num-opt *arm2-target-node-size*)))))))
           ;; Caller's context is saved; *arm2-vstack* is valid.  Might still have method-var
           ;; to worry about.
+          (! save-nfp)
 
           (arm2-save-non-volatile-fprs seg nsaved-fprs)
           (unless (= 0 pregs)
@@ -5745,18 +5822,17 @@
                     (arm2-copy-register seg reg arg-reg-num)
                     (setf (var-ea var) reg))))))
           (setq *arm2-entry-vsp-saved-p* t)
-#|
+          #|                            ;
           (when stack-consed-rest
-            (if rest-ignored-p
-              (if nil (arm2-jsrA5 $sp-popnlisparea))
-              (progn
-                (arm2-open-undo $undostkblk))))
-|#
+          (if rest-ignored-p
+          (if nil (arm2-jsrA5 $sp-popnlisparea))
+          (progn
+          (arm2-open-undo $undostkblk))))
+          |#
           (when stack-consed-rest
             (arm2-open-undo $undostkblk))
           (setq *arm2-entry-vstack* *arm2-vstack*)
-          (setq reserved-lcells (arm2-collect-lcells :reserved))
-          (arm2-bind-lambda seg reserved-lcells req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars))
+          (arm2-bind-lambda seg  req opt rest keys auxen optsupvloc arg-regs lexprp inherited-vars))
         (when method-var (arm2-heap-cons-next-method-var seg method-var))
         (arm2-form seg vreg xfer body)
         (arm2-close-lambda seg req opt rest keys auxen)
@@ -5809,7 +5885,8 @@
     (arm2-use-operator (%nx1-operator values) seg vreg xfer forms)
     (if (null vreg)
       (arm2-use-operator (%nx1-operator progn) seg vreg xfer forms)
-      (let* ((float-p (= (hard-regspec-class vreg) hard-reg-class-fpr))
+      (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+             (float-p (= (hard-regspec-class vreg) hard-reg-class-fpr))
              (crf-p (= (hard-regspec-class vreg) hard-reg-class-crf))
              (node-p (unless (or float-p crf-p)
                        (= (get-regspec-mode vreg) hard-reg-class-gpr-mode-node)))
@@ -5875,9 +5952,7 @@
   (arm2-form seg vreg xfer form))
 
 
-(defarm2 arm2-%primitive %primitive (seg vreg xfer &rest ignore)
-  (declare (ignore seg vreg xfer ignore))
-  (compiler-bug "You're probably losing big: using %primitive ..."))
+
 
 (defarm2 arm2-consp consp (seg vreg xfer cc form)
   (if (null vreg)
@@ -5944,8 +6019,7 @@
       (dolist (form all-on-stack (^)) (arm2-form seg nil nil form))
       (if (null subtag)
         (progn                            ; Vpush everything and call subprim
-          (let* ((*arm2-vstack* *arm2-vstack*)
-                 (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+          (let* ((*arm2-vstack* *arm2-vstack*))
             (arm2-set-nargs seg (arm2-formlist seg all-on-stack nil))
             (! gvector))
           (<- arm::arg_z)
@@ -6028,12 +6102,10 @@
 (defarm2 arm2-%ineg %ineg (seg vreg xfer n)
   (let* ((src (arm2-one-untargeted-reg-form seg n arm::arg_z)))
     (when vreg
-      (ensuring-node-target (target vreg)
-        (if *arm2-open-code-inline*
-          (! negate-fixnum-overflow-inline target src)
-          (progn
-            (! negate-fixnum-overflow-ool ($ arm::arg_z) src)
-            (arm2-copy-register seg target ($ arm::arg_z))))))
+      (with-crf-target () crf
+        (ensuring-node-target (target vreg)
+          (! negate-fixnum-set-flags target crf src)
+          (arm2-check-fixnum-overflow seg crf target))))
     (^)))
 
 (defarm2 arm2-%%ineg %%ineg (seg vreg xfer n)
@@ -6260,18 +6332,30 @@
 
 
 (defarm2 arm2-numcmp numcmp (seg vreg xfer cc form1 form2)
-  (or (acode-optimize-numcmp seg vreg xfer cc form1 form2 *arm2-trust-declarations*)
-      (let* ((name (ecase (cadr cc)
-                     (:eq '=-2)
-                     (:ne '/=-2)
-                     (:lt '<-2)
-                     (:le '<=-2)
-                     (:gt '>-2)
-                     (:ge '>=-2))))
-        (if (or (arm2-explicit-non-fixnum-type-p form1)
-                (arm2-explicit-non-fixnum-type-p form2))
-          (arm2-binary-builtin seg vreg xfer name form1 form2)
-          (arm2-inline-numcmp seg vreg xfer cc name form1 form2)))))
+  (let* ((name (ecase (car (acode-operands cc))
+                 (:eq '=-2)
+                 (:ne '/=-2)
+                 (:lt '<-2)
+                 (:le '<=-2)
+                 (:gt '>-2)
+                 (:ge '>=-2))))
+    (if (or (arm2-explicit-non-fixnum-type-p form1)
+            (arm2-explicit-non-fixnum-type-p form2))
+      (arm2-binary-builtin seg vreg xfer name form1 form2)
+      (arm2-inline-numcmp seg vreg xfer cc name form1 form2))))
+
+(defun arm2-branch-unless-arg-fixnum (seg reg label)
+  (with-arm-local-vinsn-macros (seg)
+    (with-crf-target () crf
+      (! test-fixnum crf reg)
+      (! cbranch-false label crf arm::arm-cond-eq))))
+
+(defun arm2-branch-unless-both-args-fixnums (seg x y label)
+  (with-arm-local-vinsn-macros (seg)
+    (with-crf-target () crf
+      (! test-fixnums crf x y)
+      (! cbranch-false label crf arm::arm-cond-eq))))
+  
 
 (defun arm2-inline-numcmp (seg vreg xfer cc name form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -6289,12 +6373,12 @@
                (continue (backend-get-next-label)))
           (if otherform
             (unless (acode-fixnum-form-p otherform)
-              (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line)))
+              (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line)))
             (if (acode-fixnum-form-p form1)
-              (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line))
+              (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line))
               (if (acode-fixnum-form-p form2)
-                (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
-                (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
+                (arm2-branch-unless-arg-fixnum seg ($ arm::arg_y) (aref *backend-labels* out-of-line))  
+                (arm2-branch-unless-both-args-fixnums seg ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
           (with-crf-target () crf
                            (if otherform
                              (! compare-immediate crf ($ arm::arg_z) 0)
@@ -6337,18 +6421,7 @@
   (let* ((ea-or-form (var-ea varnode)))
     (if (and (acode-punted-var-p varnode) (not (fixnump ea-or-form)))
       (arm2-form seg vreg xfer ea-or-form)
-      (let* ((cell (arm2-lookup-var-cell varnode)))
-        (if (and cell (typep cell 'lcell))
-          (if (arm2-ensure-lcell-offset cell (logand ea-or-form #xffff))
-            (and nil (format t "~& could use cell ~s for var ~s" cell (var-name varnode)))
-            (if (logbitp arm2-debug-verbose-bit *arm2-debug-mask*)
-              (compiler-bug "wrong ea for lcell for var ~s: got ~d, expected ~d" 
-                     (var-name varnode) (calc-lcell-offset cell) (logand ea-or-form #xffff))))
-          (if (not cell)
-            (when (memory-spec-p ea-or-form)
-              (if (logbitp arm2-debug-verbose-bit *arm2-debug-mask*)
-                (format t "~& no lcell for ~s." (var-name varnode))))))
-        
+      (progn      
         (unless (or (typep ea-or-form 'lreg) (fixnump ea-or-form))
           (compiler-bug "bogus ref to var ~s (~s) : ~s " varnode (var-name varnode) ea-or-form))
         (arm2-do-lexical-reference seg vreg ea-or-form)
@@ -6357,11 +6430,16 @@
 (defarm2 arm2-setq-lexical setq-lexical (seg vreg xfer varspec form)
   (let* ((ea (var-ea varspec)))
     ;(unless (fixnump ea) (compiler-bug "setq lexical is losing BIG"))
+    (if (and (memory-spec-p ea)
+             (eql (memspec-type ea) memspec-nfp-offset))
+      (let* ((reg (arm2-one-untargeted-reg-form seg form (arm2-reg-for-nfp-set vreg ea))))
+        (arm2-nfp-set seg reg ea)
+        (when vreg (arm2-copy-register seg vreg reg)))
     (let* ((valreg (arm2-one-untargeted-reg-form seg form (if (and (register-spec-p ea) 
                                                                    (or (null vreg) (eq ea vreg)))
                                                             ea
                                                             arm::arg_z))))
-      (arm2-do-lexical-setq seg vreg ea valreg))
+      (arm2-do-lexical-setq seg vreg ea valreg)))
     (^)))
 
 (defarm2 arm2-fixnum fixnum (seg vreg xfer value)
@@ -6460,7 +6538,7 @@
       (rplacd tag (cons (backend-get-next-label) (cons encstack (cadr (cddr (cddr tag)))))))
     (dolist (form body)
       (if (eq (acode-operator form) tagop)
-        (let ((tag (cddr form)))
+        (let ((tag (cdar (acode-operands form))))
           (@ (car tag)))
         (arm2-form seg nil nil form)))
     (arm2-nil seg vreg xfer)))
@@ -6469,7 +6547,7 @@
   (when (and (null vreg)
              (acode-p fn)
              (eq (acode-operator fn) (%nx1-operator immediate)))
-    (let* ((name (cadr fn)))
+    (let* ((name (car (acode-operands fn))))
       (when (memq name *warn-if-function-result-ignored*)
         (p2-whine *arm2-cur-afunc*  :result-ignored name))))
   (arm2-call-fn seg vreg xfer fn arglist spread-p))
@@ -6480,7 +6558,7 @@
 
 
 (defarm2 arm2-lexical-function-call lexical-function-call (seg vreg xfer afunc arglist &optional spread-p)
-  (arm2-call-fn seg vreg xfer (list (%nx1-operator simple-function) afunc)
+  (arm2-call-fn seg vreg xfer (make-acode (%nx1-operator simple-function) afunc)
                 (arm2-augment-arglist afunc arglist (if spread-p 1 $numarmargregs))
                 spread-p))
 
@@ -6502,6 +6580,7 @@
     (when tail-p
       (arm2-restore-nvrs seg nil)
       (arm2-restore-non-volatile-fprs seg)
+      (! restore-nfp)
       (arm2-restore-full-lisp-context seg))
     #+nil
     (unless idx-subprim
@@ -6541,7 +6620,7 @@
                                (null (getf (vinsn-annotation next) :predicate))
                                (vinsn-attribute-p next :predicatable)
                                (or (eq lab (dll-node-succ next))
-                                   (not (vinsn-attribute-p next :jump :call :subprim-call :jumpLR))))
+                                   (not (vinsn-attribute-p next :jump :call  :jumpLR))))
                     (return))
                   (setq vinsn-p t))))
         (multiple-value-bind (branch-true-p branch-condition cond-operand-index)
@@ -6557,7 +6636,7 @@
             (let* ((condition (if branch-true-p (logxor 1 branch-condition) branch-condition)))
               (do* ((next (dll-node-succ branch) (dll-node-succ next)))
                    ((eq next lab)
-                    (remove-dll-node branch)
+                    (elide-vinsn branch)
                     (remove-dll-node lab)
                     t)
                 (cond ((typep next 'vinsn-label))
@@ -6607,15 +6686,17 @@
                   (let* ((reg (arm2-one-untargeted-reg-form seg (make-acode (%nx1-operator lexical-reference) var) arm::arg_z)))
                     (! lock-constant-pool)
                     (with-imm-target () (idx :u32)
-                      (! skip-unless-fixnum-in-range idx reg min span  (aref *backend-labels* defaultlabel))
-
-                      (unless single-clause
-                        (! ijmp idx)
-                        (do* ((val min (1+ val)))
-                             ((> val max) (! nop))
-                          (declare (fixnum val))
-                          (let* ((info (assoc val all)))
-                            (! non-barrier-jump (aref *backend-labels* (if info (cadr info) defaultlabel))))))
+                      (with-crf-target () flags
+                        (arm2-branch-unless-arg-fixnum seg reg (aref *backend-labels* defaultlabel))
+                        (! set-carry-if-fixnum-in-range idx flags reg min span)
+                        (! cbranch-false (aref *backend-labels* defaultlabel) flags arm::arm-cond-lo)
+                        (unless single-clause
+                          (! ijmp idx)
+                          (do* ((val min (1+ val)))
+                               ((> val max) (! nop))
+                            (declare (fixnum val))
+                            (let* ((info (assoc val all)))
+                              (! non-barrier-jump (aref *backend-labels* (if info (cadr info) defaultlabel)))))))
                       (! unlock-constant-pool)
                       (let* ((target (if (arm2-mvpass-p xfer)
                                        (logior $backend-mvpass-mask endlabel)
@@ -6627,8 +6708,7 @@
                             (@ lab)
                             (multiple-value-setq (*arm2-undo-count*
                                                   *arm2-cstack*
-                                                  *arm2-vstack*
-                                                  *arm2-top-vstack-lcell*)
+                                                  *arm2-vstack*)
                               (arm2-decode-stack entry-stack))
                             (when (arm2-mvpass-p xfer)
                               (arm2-open-undo $undomvexpect))
@@ -6636,8 +6716,7 @@
                         (@ defaultlabel)
                         (multiple-value-setq (*arm2-undo-count*
                                               *arm2-cstack*
-                                              *arm2-vstack*
-                                              *arm2-top-vstack-lcell*)
+                                              *arm2-vstack*)
                           (arm2-decode-stack entry-stack))
                         (when (arm2-mvpass-p xfer)
                           (arm2-open-undo $undomvexpect)) 
@@ -6657,7 +6736,6 @@
       (or (arm2-generate-casejump seg vreg xfer ranges trueforms var otherwise)
           (let* ((cstack *arm2-cstack*)
                  (vstack *arm2-vstack*)
-                 (top-lcell *arm2-top-vstack-lcell*)
                  (entry-stack (arm2-encode-stack))
                  (true-stack nil)
                  (false-stack nil)
@@ -6731,7 +6809,6 @@
                 (setq true-stack (arm2-encode-stack))
                 (setq *arm2-cstack* cstack)
                 (arm2-set-vstack vstack)
-                (setq *arm2-top-vstack-lcell* top-lcell)
                 (if false-is-goto (arm2-unreachable-store))
                 (progn
                   (if (and (not need-else) nil)
@@ -6755,13 +6832,13 @@
                     (arm2-branch seg (if (and xfer (neq xfer $backend-mvpass-mask)) xfer (if (not same-stack-effects) endlabel)) vreg))
                   (unless same-stack-effects
                     (@ true-cleanup-label)
-                    (multiple-value-setq (true *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*)
+                    (multiple-value-setq (true *arm2-cstack* *arm2-vstack* )
                       (arm2-decode-stack true-stack))
                     (let* ((*arm2-returning-values* :pass))
                       (arm2-nlexit seg xfer 1)
                       (^)))
                   (arm2-close-undo)
-                  (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack* *arm2-top-vstack-lcell*) 
+                  (multiple-value-setq (*arm2-undo-count* *arm2-cstack* *arm2-vstack*) 
                     (arm2-decode-stack entry-stack)))
                 (if (and (not need-else) (backend-crf-p vreg) nil)
                   (@+ endlabel)
@@ -6803,7 +6880,6 @@
     (dolist (form arglist)
       (arm2-form seg vreg nil form)) 
     (let* ((*arm2-vstack* *arm2-vstack*)
-           (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
            (nargs (arm2-formlist seg arglist nil)))
       (arm2-set-nargs seg nargs)
       (! list)
@@ -6815,7 +6891,6 @@
     (dolist (arg (apply #'append arglist))
       (arm2-form seg nil nil arg))
     (let* ((*arm2-vstack* *arm2-vstack*)
-           (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
            (nargs (arm2-arglist seg arglist)))
       (declare (fixnum nargs))
       (when (> nargs 1)
@@ -6855,6 +6930,7 @@
           (arm2-copy-register seg target r2))))
     (^)))
 
+
 (defun arm2-inline-add2 (seg vreg xfer form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (arm2-two-targeted-reg-forms seg form1 ($ arm::arg_y) form2 ($ arm::arg_z))
@@ -6862,15 +6938,13 @@
            (done (backend-get-next-label)))
       (ensuring-node-target (target vreg)
         (if (acode-fixnum-form-p form1)
-          (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line))
+          (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line))
           (if (acode-fixnum-form-p form2)
-            (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
-            (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line))))
-        (if *arm2-open-code-inline*
-          (! fixnum-add-overflow-inline-skip ($ arm::arg_z) ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* done))
-          (progn
-            (! fixnum-add-overflow-ool ($ arm::arg_z) ($ arm::arg_y) ($ arm::arg_z))
-            (-> done)))
+            (arm2-branch-unless-arg-fixnum seg ($ arm::arg_y) (aref *backend-labels* out-of-line))  
+            (arm2-branch-unless-both-args-fixnums seg ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line))))
+        (with-crf-target () flags
+          (! fixnum-add-set-flags ($ arm::arg_z) flags ($ arm::arg_y) ($ arm::arg_z))
+          (arm2-check-fixnum-overflow seg flags ($ arm::arg_z) done))
         (@ out-of-line)
         (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-plus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
@@ -6884,15 +6958,14 @@
            (done (backend-get-next-label)))
       (ensuring-node-target (target vreg)
         (if (acode-fixnum-form-p form1)
-          (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line))
+          (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line))
           (if (acode-fixnum-form-p form2)
-            (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
-            (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line))))
-        (if *arm2-open-code-inline*
-          (! fixnum-sub-overflow-inline-skip ($ arm::arg_z) ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* done))
-          (progn
-            (! fixnum-sub-overflow-ool ($ arm::arg_z)($ arm::arg_y) ($ arm::arg_z))
-            (-> done)))
+            (arm2-branch-unless-arg-fixnum seg ($ arm::arg_y) (aref *backend-labels* out-of-line))  
+            (arm2-branch-unless-both-args-fixnums seg ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line))))
+        (with-crf-target () flags
+          (! fixnum-sub-set-flags ($ arm::arg_z) flags ($ arm::arg_y) ($ arm::arg_z))
+          (arm2-check-fixnum-overflow seg flags ($ arm::arg_z) done))
+        
         (@ out-of-line)
         (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-minus) ($ arm::arg_y) ($ arm::arg_z))
         (@ done)
@@ -6910,22 +6983,19 @@
     
 
 (defarm2 arm2-add2 add2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-add2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (if (or (arm2-explicit-non-fixnum-type-p form1)
-              (arm2-explicit-non-fixnum-type-p form2))
-        (arm2-binary-builtin seg vreg xfer '+-2 form1 form2)
-        (arm2-inline-add2 seg vreg xfer form1 form2))))
+  (if (or (arm2-explicit-non-fixnum-type-p form1)
+          (arm2-explicit-non-fixnum-type-p form2))
+    (arm2-binary-builtin seg vreg xfer '+-2 form1 form2)
+    (arm2-inline-add2 seg vreg xfer form1 form2)))
 
 (defarm2 arm2-sub2 sub2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-sub2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (if (or (arm2-explicit-non-fixnum-type-p form1)
-              (arm2-explicit-non-fixnum-type-p form2))
-        (arm2-binary-builtin seg vreg xfer '--2 form1 form2)
-        (arm2-inline-sub2 seg vreg xfer form1 form2))))
+  (if (or (arm2-explicit-non-fixnum-type-p form1)
+          (arm2-explicit-non-fixnum-type-p form2))
+    (arm2-binary-builtin seg vreg xfer '--2 form1 form2)
+    (arm2-inline-sub2 seg vreg xfer form1 form2)))
 
 (defarm2 arm2-mul2 mul2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-mul2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (arm2-binary-builtin seg vreg xfer '*-2 form1 form2)))
+  (arm2-binary-builtin seg vreg xfer '*-2 form1 form2))
 
 
 (defarm2 arm2-div2 div2 (seg vreg xfer form1 form2)
@@ -6955,12 +7025,12 @@
           (ensuring-node-target (target vreg)
             (if otherform
               (unless (acode-fixnum-form-p otherform)
-                (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line)))
+                (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line)))
               (if (acode-fixnum-form-p form1)
-                (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line))
+                (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line))
                 (if (acode-fixnum-form-p form2)
-                  (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
-                  (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
+                  (arm2-branch-unless-arg-fixnum seg ($ arm::arg_y) (aref *backend-labels* out-of-line))  
+                  (arm2-branch-unless-both-args-fixnums seg ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
             (if otherform
               (! logior-immediate ($ arm::arg_z) ($ arm::arg_z) (logand #xffffffff unboxed-fixval))
               (! %logior2 ($ arm::arg_z) ($ arm::arg_z) ($ arm::arg_y)))
@@ -6974,60 +7044,57 @@
           (^))))))
 
 (defarm2 arm2-logior2 logior2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logior2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (if (or (arm2-explicit-non-fixnum-type-p form1)
-              (arm2-explicit-non-fixnum-type-p form2))
-        (arm2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
-        (arm2-inline-logior2 seg vreg xfer form1 form2))))
+  (if (or (arm2-explicit-non-fixnum-type-p form1)
+          (arm2-explicit-non-fixnum-type-p form2))
+    (arm2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
+    (arm2-inline-logior2 seg vreg xfer form1 form2)))
 
 (defarm2 arm2-logxor2 logxor2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logxor2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (arm2-binary-builtin seg vreg xfer 'logxor-2 form1 form2)))
+  (arm2-binary-builtin seg vreg xfer 'logxor-2 form1 form2))
 
 (defun arm2-inline-logand2 (seg vreg xfer form1 form2)
   (with-arm-local-vinsn-macros (seg vreg xfer)
-  (let* ((fix1 (acode-fixnum-form-p form1))
-         (fix2 (acode-fixnum-form-p form2)))
-    (if (and fix1 fix2)
-      (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logand fix1 fix2))
-      (let* ((fixval (or fix1 fix2))
-             (unboxed-fixval (if fixval (ash fixval *arm2-target-fixnum-shift*)))
-             (ok-imm (and unboxed-fixval
-                          (or (arm::encode-arm-immediate unboxed-fixval)
-                              (arm::encode-arm-immediate (lognot unboxed-fixval)))))
-             (otherform (if ok-imm (if fix1 form2 form1)))
-             (out-of-line (backend-get-next-label))
-             (done (backend-get-next-label)))
-        (if otherform
-          (arm2-one-targeted-reg-form seg otherform ($ arm::arg_z))
-          (arm2-two-targeted-reg-forms  seg form1 ($ arm::arg_y) form2 ($ arm::arg_z)))
-        (ensuring-node-target (target vreg)
+    (let* ((fix1 (acode-fixnum-form-p form1))
+           (fix2 (acode-fixnum-form-p form2)))
+      (if (and fix1 fix2)
+        (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer (logand fix1 fix2))
+        (let* ((fixval (or fix1 fix2))
+               (unboxed-fixval (if fixval (ash fixval *arm2-target-fixnum-shift*)))
+               (ok-imm (and unboxed-fixval
+                            (or (arm::encode-arm-immediate unboxed-fixval)
+                                (arm::encode-arm-immediate (lognot unboxed-fixval)))))
+               (otherform (if ok-imm (if fix1 form2 form1)))
+               (out-of-line (backend-get-next-label))
+               (done (backend-get-next-label)))
           (if otherform
-            (unless (acode-fixnum-form-p otherform)
-              (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line)))
-            (if (acode-fixnum-form-p form1)
-              (! branch-unless-arg-fixnum ($ arm::arg_z) (aref *backend-labels* out-of-line))
-              (if (acode-fixnum-form-p form2)
-                (! branch-unless-arg-fixnum ($ arm::arg_y) (aref *backend-labels* out-of-line))  
-                (! branch-unless-both-args-fixnums ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
-          (if otherform
-            (! logand-immediate ($ arm::arg_z) ($ arm::arg_z) (logand #xffffffff unboxed-fixval))
-            (! %logand2 ($ arm::arg_z) ($ arm::arg_z) ($ arm::arg_y)))
-          (-> done)
-          (@ out-of-line)
-          (if otherform
-            (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
+            (arm2-one-targeted-reg-form seg otherform ($ arm::arg_z))
+            (arm2-two-targeted-reg-forms  seg form1 ($ arm::arg_y) form2 ($ arm::arg_z)))
+          (ensuring-node-target (target vreg)
+            (if otherform
+              (unless (acode-fixnum-form-p otherform)
+                (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line)))
+              (if (acode-fixnum-form-p form1)
+                (arm2-branch-unless-arg-fixnum seg ($ arm::arg_z) (aref *backend-labels* out-of-line))
+                (if (acode-fixnum-form-p form2)
+                  (arm2-branch-unless-arg-fixnum seg ($ arm::arg_y) (aref *backend-labels* out-of-line))  
+                  (arm2-branch-unless-both-args-fixnums seg ($ arm::arg_y) ($ arm::arg_z) (aref *backend-labels* out-of-line)))))
+            (if otherform
+              (! logand-immediate ($ arm::arg_z) ($ arm::arg_z) (logand #xffffffff unboxed-fixval))
+              (! %logand2 ($ arm::arg_z) ($ arm::arg_z) ($ arm::arg_y)))
+            (-> done)
+            (@ out-of-line)
+            (if otherform
+              (arm2-lri seg ($ arm::arg_y) (ash fixval *arm2-target-fixnum-shift*)))
             (! call-subprim-2 ($ arm::arg_z) (arm::arm-subprimitive-offset '.SPbuiltin-logand) ($ arm::arg_y) ($ arm::arg_z))          
             (@ done)
             (arm2-copy-register seg target ($ arm::arg_z)))
-        (^))))))
+          (^))))))
 
 (defarm2 arm2-logand2 logand2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logand2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (if (or (arm2-explicit-non-fixnum-type-p form1)
-              (arm2-explicit-non-fixnum-type-p form2))
-        (arm2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-        (arm2-inline-logand2 seg vreg xfer form1 form2))))
+  (if (or (arm2-explicit-non-fixnum-type-p form1)
+          (arm2-explicit-non-fixnum-type-p form2))
+    (arm2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+    (arm2-inline-logand2 seg vreg xfer form1 form2)))
 
 
 
@@ -7065,99 +7132,179 @@
       (arm2-vset seg vreg xfer keyword v i n (not *arm2-reckless*))
       (arm2-ternary-builtin seg vreg xfer '%aset1 v i n))))
 
-(defarm2 arm2-%i+ %i+ (seg vreg xfer form1 form2 &optional overflow)
-  (when overflow
-    (let* ((type *arm2-target-half-fixnum-type*))
-      (when (and (arm2-form-typep form1 type)
-                 (arm2-form-typep form2 type))
-        (setq overflow nil))))
-  (let* ((fix1 (acode-fixnum-form-p form1))
-         (fix2 (acode-fixnum-form-p form2))
-         (sum (and fix1 fix2 (if overflow (+ fix1 fix2) (%i+ fix1 fix2)))))
-    (cond ((null vreg) 
-           (arm2-form seg nil nil form1) 
-           (arm2-form seg nil xfer form2))
-          (sum
-           (if (nx1-target-fixnump sum)
-             (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer sum)
-             (arm2-use-operator (%nx1-operator immediate) seg vreg xfer sum)))
-          (overflow
-           (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)
+(defun arm2-fixnum-add (seg vreg xfer form1 form2 overflow)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (when overflow
+      (let* ((type *arm2-target-half-fixnum-type*))
+        (when (and (arm2-form-typep form1 type)
+                   (arm2-form-typep form2 type))
+          (setq overflow nil))))
+    (let* ((fix1 (acode-fixnum-form-p form1))
+           (fix2 (acode-fixnum-form-p form2))
+           (sum (and fix1 fix2 (if overflow (+ fix1 fix2) (%i+ fix1 fix2))))
+           (other (unless sum
+                    (if (and
+                         fix1
+                         (typep (ash fix1 *arm2-target-fixnum-shift*)
+                                '(signed-byte 32))
+                         (or (arm::encode-arm-immediate
+                              (ash fix1 *arm2-target-fixnum-shift*))
+                             (arm::encode-arm-immediate
+                              (- (ash fix1 *arm2-target-fixnum-shift*)))))
+                      form2
+                      (if (and fix2
+                               (typep (ash fix2 *arm2-target-fixnum-shift*)
+                                      '(signed-byte 32))
+                               (or (arm::encode-arm-immediate
+                                    (ash fix2 *arm2-target-fixnum-shift*))
+                                   (arm::encode-arm-immediate
+                                    (- (ash fix2 *arm2-target-fixnum-shift*)))))
+                        form1))))
+           (constant (and other (ash (or fix1 fix2) *arm2-target-fixnum-shift*)))
+           r1
+           r2)
+      (cond ((null vreg) 
+             (arm2-form seg nil nil form1) 
+             (arm2-form seg nil xfer form2))
+            (sum
+             (if (nx1-target-fixnump sum)
+               (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer sum)
+               (arm2-use-operator (%nx1-operator immediate) seg vreg xfer sum)))
+            ((eql 0 constant)
+             (arm2-form seg vreg xfer other))
+            (t
+             (if constant
+               (setq r1 (arm2-one-untargeted-reg-form seg other arm::arg_z))
+               (multiple-value-setq (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)))
              (ensuring-node-target (target vreg)
-               (if *arm2-open-code-inline*
-                 (! fixnum-add-overflow-inline target r1 r2)
-                 (progn
-                   (! fixnum-add-overflow-ool ($ arm::arg_z) r1 r2)
-                   (arm2-copy-register seg target ($ arm::arg_z)))))
-             (^)))
-          (t                              
-           ;; There isn't any "addi" that checks for overflow, which is
-           ;; why we didn't bother.
-           (let* ((other (if (and fix1
-                                  (typep (ash fix1 *arm2-target-fixnum-shift*)
-                                         '(signed-byte 32))
-                                  (or (arm::encode-arm-immediate
-                                       (ash fix1 *arm2-target-fixnum-shift*))
-                                      (arm::encode-arm-immediate
-                                       (- (ash fix1 *arm2-target-fixnum-shift*)))))
-                           form2
-                           (if (and fix2
-                                    (typep (ash fix2 *arm2-target-fixnum-shift*)
-                                           '(signed-byte 32))
-                                    (or (arm::encode-arm-immediate
-                                         (ash fix2 *arm2-target-fixnum-shift*))
-                                        (arm::encode-arm-immediate
-                                         (- (ash fix2 *arm2-target-fixnum-shift*)))))
-                             form1))))
-             (if (and fix1 fix2)
-               (arm2-lri seg vreg (ash (+ fix1 fix2) *arm2-target-fixnum-shift*))
-               (if other
-                 (let* ((constant (ash (or fix1 fix2) *arm2-target-fixnum-shift*))
-                        (reg (arm2-one-untargeted-reg-form seg other (if (and vreg (node-reg-p vreg)) vreg arm::arg_z))))
-                   (if (zerop constant)
-                     (<- reg)
-                     (ensuring-node-target (target vreg)
-                       (! add-immediate target reg constant))))
-                 (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)
-                   (ensuring-node-target (target vreg)
-                     (! fixnum-add target r1 r2)))))
-             (^))))))
+               (cond ((null overflow)
+                      (if constant
+                        (! add-immediate target r1 constant)
+                        (! fixnum-add target r1 r2)))
+                     (t
+                      (with-crf-target () flags
+                        (if constant
+                          (! add-immediate-set-flags target flags r1 constant)
+                          (! fixnum-add-set-flags target flags r1 r2))
+                        (arm2-check-fixnum-overflow seg flags target)))))
+               (^))))))
+
+
+
+(defarm2 arm2-fixnum-add-overflow fixnum-add-overflow (seg vreg xfer form1 form2)
+  (arm2-fixnum-add seg vreg xfer form1 form2 t))
+
+(defarm2 arm2-fixnum-add-no-overflow fixnum-add-no-overflow (seg vreg xfer form1 form2)
+  (arm2-fixnum-add seg vreg xfer form1 form2 nil))
+    
+
+(defun arm2-fixnum-sub (seg vreg xfer form1 form2 overflow)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (when overflow
+      (let* ((type *arm2-target-half-fixnum-type*))
+        (when (and (arm2-form-typep form1 type)
+                   (arm2-form-typep form2 type))
+          (setq overflow nil))))
+    (let* ((fix1 (acode-fixnum-form-p form1))
+           (fix2 (acode-fixnum-form-p form2))
+           (diff (and fix1 fix2 (if overflow (- fix1 fix2) (%i- fix1 fix2))))
+           (other (unless diff
+                    (if (and
+                         fix1
+                         (typep (ash fix1 *arm2-target-fixnum-shift*)
+                                '(signed-byte 32))
+                         (arm::encode-arm-immediate
+                              (ash fix1 *arm2-target-fixnum-shift*)))
+                      form2
+                      (if (and fix2
+                               (typep (ash fix2 *arm2-target-fixnum-shift*)
+                                      '(signed-byte 32))
+                               (or (arm::encode-arm-immediate
+                                    (ash fix2 *arm2-target-fixnum-shift*))
+                                   (arm::encode-arm-immediate
+                                    (- (ash fix2 *arm2-target-fixnum-shift*)))))
+                        form1))))
+           (constant (and other (ash (or fix1 fix2) *arm2-target-fixnum-shift*)))
+           r1
+           r2)
+      (cond ((null vreg) 
+             (arm2-form seg nil nil form1) 
+             (arm2-form seg nil xfer form2))
+            (diff
+             (if (nx1-target-fixnump diff)
+               (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
+               (arm2-use-operator (%nx1-operator immediate) seg vreg xfer diff)))
+            ((eql 0 constant)
+             (arm2-form seg vreg xfer other))
+            (t
+             (if constant
+               (setq r1 (arm2-one-untargeted-reg-form seg other arm::arg_z))
+               (multiple-value-setq (r1 r2) (arm2-two-untargeted-reg-forms seg form1 arm::arg_y form2 arm::arg_z)))
+             (ensuring-node-target (target vreg)
+               (cond ((null overflow)
+                      (if constant
+                        (if fix1
+                          (! fixnum-sub-from-constant target constant r1)
+                          (! fixnum-sub-constant target r1 constant))
+                        (! fixnum-sub target r1 r2)))
+                     (t
+                      (with-crf-target () flags
+                        (if constant
+                          (if fix1
+                            (! fixnum-sub-from-constant-set-flags target flags constant r1)
+                            (! fixnum-sub-constant-set-flags target flags r1 constant))
+                          (! fixnum-sub-set-flags target flags r1 r2))
+                        (arm2-check-fixnum-overflow seg flags target)))))
+               (^))))))
+
+#||
+(defun arm2-fixnum-sub (seg vreg xfer num1 num2 overflow)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (when overflow
+      (let* ((type *arm2-target-half-fixnum-type*))
+        (when (and (arm2-form-typep num1 type)
+                   (arm2-form-typep num2 type))
+          (setq overflow nil))))
+    (let* ((v1 (acode-fixnum-form-p num1))
+           (v2 (acode-fixnum-form-p num2))
+           (diff (and v1 v2 (if overflow (- v1 v2) (%i- v1 v2)))))
+      (if diff
+        (if (nx1-target-fixnump diff)
+          (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
+          (arm2-use-operator (%nx1-operator immediate) seg vreg xfer diff))
+        (if (and v2 (neq v2 most-negative-fixnum))
+          (arm2-use-operator (%nx1-operator %i+) seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
+          (if (eq v2 0)
+            (arm2-form seg vreg xfer num1)
+            (cond
+              ((null vreg)
+               (arm2-form seg nil nil num1)
+               (arm2-form seg nil xfer num2))
+              (overflow
+               (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg num1 arm::arg_y num2 arm::arg_z)
+                 (ensuring-node-target (target vreg)
+                   (if *arm2-open-code-inline*
+                     (! fixnum-sub-overflow-inline target r1 r2)
+                     (progn
+                       (! fixnum-sub-overflow-ool ($ arm::arg_z) r1 r2)
+                       (arm2-copy-register seg target ($ arm::arg_z)))))
+                 (^)))
+              (t
+               (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg num1 arm::arg_y num2 arm::arg_z)
+                 (ensuring-node-target (target vreg)
+                   (! fixnum-sub target r1 r2))
+                 (^))))))))))
+||#
 
 (defarm2 arm2-%i- %i- (seg vreg xfer num1 num2 &optional overflow)
-  (when overflow
-    (let* ((type *arm2-target-half-fixnum-type*))
-      (when (and (arm2-form-typep num1 type)
-                 (arm2-form-typep num2 type))
-        (setq overflow nil))))
-  (let* ((v1 (acode-fixnum-form-p num1))
-         (v2 (acode-fixnum-form-p num2))
-         (diff (and v1 v2 (if overflow (- v1 v2) (%i- v1 v2)))))
-    (if diff
-      (if (nx1-target-fixnump diff)
-        (arm2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
-        (arm2-use-operator (%nx1-operator immediate) seg vreg xfer diff))
-      (if (and v2 (neq v2 most-negative-fixnum))
-        (arm2-use-operator (%nx1-operator %i+) seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
-        (if (eq v2 0)
-          (arm2-form seg vreg xfer num1)
-          (cond
-           ((null vreg)
-            (arm2-form seg nil nil num1)
-            (arm2-form seg nil xfer num2))
-           (overflow
-            (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg num1 arm::arg_y num2 arm::arg_z)
-               (ensuring-node-target (target vreg)
-                 (if *arm2-open-code-inline*
-                   (! fixnum-sub-overflow-inline target r1 r2)
-                   (progn
-                     (! fixnum-sub-overflow-ool ($ arm::arg_z) r1 r2)
-                     (arm2-copy-register seg target ($ arm::arg_z)))))
-              (^)))
-           (t
-            (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg num1 arm::arg_y num2 arm::arg_z)
-              (ensuring-node-target (target vreg)
-                (! fixnum-sub target r1 r2))
-              (^)))))))))
+  (arm2-fixnum-sub seg vreg xfer num1 num2 overflow))
+
+(defarm2 arm2-fixnum-sub-no-overflow fixnum-sub-no-overflow (seg vreg xfer num1 num2)
+  (arm2-fixnum-sub seg vreg xfer num1 num2 nil))
+
+(defarm2 arm2-fixnum-sub-overflow fixnum-sub-overflow (seg vreg xfer num1 num2)
+  (arm2-fixnum-sub seg vreg xfer num1 num2 t))
+
 
 (defarm2 arm2-%i* %i* (seg vreg xfer num1 num2)
   (if (null vreg)
@@ -7170,8 +7317,7 @@
       (^))))
 
 (defarm2 arm2-nth-value nth-value (seg vreg xfer n form)
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+  (let* ((*arm2-vstack* *arm2-vstack*))
     (let* ((nreg (arm2-one-untargeted-reg-form seg n arm::arg_z)))
       (unless (acode-fixnum-form-p n)
         (! trap-unless-fixnum nreg))
@@ -7193,8 +7339,7 @@
         (arm2-use-operator (%nx1-operator prog1) seg vreg xfer forms)
         (arm2-nil seg vreg xfer))
       (progn
-        (let* ((*arm2-vstack* *arm2-vstack*)
-               (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+        (let* ((*arm2-vstack* *arm2-vstack*))
           (arm2-set-nargs seg (arm2-formlist seg forms nil)))
         (let* ((*arm2-returning-values* t))
           (^))))))
@@ -7212,7 +7357,6 @@
 
 (defarm2 arm2-let* let* (seg vreg xfer vars vals body p2decls &aux
                              (old-stack (arm2-encode-stack)))
-  (arm2-check-lcell-depth)
   (with-arm-p2-declarations p2decls
     (arm2-seq-bind seg vars vals)
     (arm2-undo-body seg vreg xfer body old-stack))
@@ -7228,33 +7372,17 @@
       (arm2-lri seg arm::imm0 nbytes)
       (! fitvals)
       (arm2-set-vstack (%i+ vloc nbytes))
-      (let* ((old-top *arm2-top-vstack-lcell*)
-             (lcells (progn (arm2-reserve-vstack-lcells n) (arm2-collect-lcells :reserved old-top))))
-        (dolist (var vars)
-          (let* ((lcell (pop lcells))
-                 (reg (nx2-assign-register-var var)))
-            (if reg
-              (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
-              (arm2-bind-var seg var vloc lcell))          
-            (setq vloc (%i+ vloc *arm2-target-node-size*)))))
+      (dolist (var vars)
+        (let* ((reg (nx2-assign-register-var var)))
+          (if reg
+            (arm2-init-regvar seg var reg (arm2-vloc-ea vloc))
+            (arm2-bind-var seg var vloc ))          
+          (setq vloc (%i+ vloc *arm2-target-node-size*))))
       (arm2-undo-body seg vreg xfer body old-stack)
       (dolist (var vars)
         (arm2-close-var seg var)))))
 
-(defarm2 arm2-debind debind (seg vreg xfer lambda-list bindform req opt rest keys auxen whole body p2decls cdr-p)
-  (declare (ignore lambda-list))
-  (when cdr-p
-    (compiler-bug "Unsupported: old destructuring code, cdr-p case."))
-  (let* ((old-stack (arm2-encode-stack))
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
-         (vloc *arm2-vstack*))
-    (with-arm-p2-declarations p2decls      
-      (arm2-bind-structured-lambda
-       seg 
-       (arm2-spread-lambda-list seg bindform whole req opt rest keys)
-       vloc (arm2-vloc-ea vloc) whole req opt rest keys auxen)
-      (arm2-undo-body seg vreg xfer body old-stack)
-      (arm2-close-structured-lambda seg whole req opt rest keys auxen))))
+
 
 (defarm2 arm2-multiple-value-prog1 multiple-value-prog1 (seg vreg xfer forms)
   (if (or (not (arm2-mv-p xfer)) (arm2-single-valued-form-p (%car forms)))
@@ -7262,8 +7390,7 @@
     (if (null (cdr forms))
       (arm2-form seg vreg xfer(car forms))
       (progn
-        (let* ((*arm2-vstack* *arm2-vstack*)
-               (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+        (let* ((*arm2-vstack* *arm2-vstack*))
           (arm2-multiple-value-body seg (%car forms))
           (arm2-open-undo $undostkblk)
           (! save-values))
@@ -7372,7 +7499,7 @@
           (arm2-compare-single-float-registers seg vreg xfer r1 r2 cr-bit true-p))))))
  
 (eval-when (:compile-toplevel :execute)
-  (defmacro defarm2-df-op (fname opname vinsn safe-vinsn)
+  (defmacro defarm2-df-op (fname opname vinsn)
     `(defarm2 ,fname ,opname (seg vreg xfer f0 f1)
        (if (null vreg)
          (progn
@@ -7381,21 +7508,20 @@
          (with-fp-target () (r1 :double-float)
            (with-fp-target (r1) (r2 :double-float)
              (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg f0 r1 f1 r2)
-               (if (= (hard-regspec-class vreg) hard-reg-class-fpr)
-                 (if *arm2-float-safety*
-                   (with-fp-target (r1 r2) (result :double-float)
-                     (! ,safe-vinsn result r1 r2)
-                     (<- result))
-                   (! ,vinsn vreg r1 r2))
+               (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double)
+                        (not *arm2-float-safety*))
+                 (! ,vinsn vreg r1 r2)
                  (with-fp-target (r1 r2) (result :double-float)
-                   (if *arm2-float-safety*
-                     (! ,safe-vinsn result r1 r2)
-                     (! ,vinsn result r1 r2))
-                   (ensuring-node-target (target vreg)
-                     (arm2-copy-register seg target result))))
+                   (when *arm2-float-safety*
+                     (! clear-pending-fpu-exceptions))
+                   (! ,vinsn result r1 r2)
+                   (when *arm2-float-safety*
+                     (! trap-if-fpu-exception))
+                   (<- result)))
                (^)))))))
-  
-  (defmacro defarm2-sf-op (fname opname vinsn safe-vinsn)
+
+  (defmacro defarm2-sf-op (fname opname vinsn)
     `(defarm2 ,fname ,opname (seg vreg xfer f0 f1)
        (if (null vreg)
          (progn
@@ -7404,30 +7530,29 @@
          (with-fp-target () (r1 :single-float)
            (with-fp-target (r1) (r2 :single-float)
              (multiple-value-bind (r1 r2) (arm2-two-untargeted-reg-forms seg f0 r1 f1 r2)
-               (if (= (hard-regspec-class vreg) hard-reg-class-fpr)
-                 (if *arm2-float-safety*
-                   (with-fp-target (r1 r2) (result :single-float)
-                     (! ,safe-vinsn result r1 r2)
-                     (<- result))
-                   (! ,vinsn vreg r1 r2))
+               (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single)
+                        (not *arm2-float-safety*))
+                 (! ,vinsn vreg r1 r2)
                  (with-fp-target (r1 r2) (result :single-float)
-                   (if *arm2-float-safety*
-                     (! ,safe-vinsn result r1 r2)
-                     (! ,vinsn result r1 r2))
-                   (ensuring-node-target (target vreg)
-                     (arm2-copy-register seg target result))))
+                   (when *arm2-float-safety*
+                     (! clear-pending-fpu-exceptions))
+                   (! ,vinsn result r1 r2)
+                   (when *arm2-float-safety*
+                     (! trap-if-fpu-exception))
+                   (<- result)))
                (^)))))))
 )
 
-(defarm2-df-op arm2-%double-float+-2 %double-float+-2 double-float+-2 double-float+-2-safe)
-(defarm2-df-op arm2-%double-float--2 %double-float--2 double-float--2 double-float-2-safe)
-(defarm2-df-op arm2-%double-float*-2 %double-float*-2 double-float*-2 double-float*-2-safe)
-(defarm2-df-op arm2-%double-float/-2 %double-float/-2 double-float/-2 double-float/-2-safe)
+(defarm2-df-op arm2-%double-float+-2 %double-float+-2 double-float+-2)
+(defarm2-df-op arm2-%double-float--2 %double-float--2 double-float--2)
+(defarm2-df-op arm2-%double-float*-2 %double-float*-2 double-float*-2)
+(defarm2-df-op arm2-%double-float/-2 %double-float/-2 double-float/-2)
 
-(defarm2-sf-op arm2-%short-float+-2 %short-float+-2 single-float+-2 single-float+-2-safe)
-(defarm2-sf-op arm2-%short-float--2 %short-float--2 single-float--2 single-float--2-safe)
-(defarm2-sf-op arm2-%short-float*-2 %short-float*-2 single-float*-2 single-float*-2-safe)
-(defarm2-sf-op arm2-%short-float/-2 %short-float/-2 single-float/-2 single-float/-2-safe)
+(defarm2-sf-op arm2-%short-float+-2 %short-float+-2 single-float+-2)
+(defarm2-sf-op arm2-%short-float--2 %short-float--2 single-float--2)
+(defarm2-sf-op arm2-%short-float*-2 %short-float*-2 single-float*-2)
+(defarm2-sf-op arm2-%short-float/-2 %short-float/-2 single-float/-2)
 
 (defun arm2-get-float (seg vreg xfer ptr offset double-p fp-reg)
   (with-arm-local-vinsn-macros (seg vreg xfer)
@@ -7478,31 +7603,33 @@
                    (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
                         (= (get-regspec-mode vreg) (if double-p hard-reg-class-fpr-mode-double hard-reg-class-fpr-mode-single))))
                (cond (immoffset
-                      (arm2-push-register
-                       seg
-                       (arm2-one-untargeted-reg-form seg
-                                                     ptr
-                                                     ptr-reg))
-                      (arm2-one-targeted-reg-form seg newval fp-reg)
-                      (arm2-pop-register seg ptr-reg)
-                      (if double-p
-                        (! mem-set-c-double-float fp-reg ptr-reg fixoffset)
-                        (! mem-set-c-single-float fp-reg ptr-reg fixoffset)))
-                     (t
-                      (with-imm-target (ptr-reg) (offset-reg :s32)
+                      (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
                         (arm2-push-register
                          seg
                          (arm2-one-untargeted-reg-form seg
                                                        ptr
                                                        ptr-reg))
-                        (arm2-push-register
-                         seg
-                         (arm2-one-untargeted-reg-form seg
-                                                       offset
-                                                       arm::arg_z))
                         (arm2-one-targeted-reg-form seg newval fp-reg)
-                        (arm2-pop-register seg arm::arg_z)
-                        (arm2-pop-register seg ptr-reg)
+                        (arm2-pop-register seg ptr-reg))
+                      (if double-p
+                        (! mem-set-c-double-float fp-reg ptr-reg fixoffset)
+                        (! mem-set-c-single-float fp-reg ptr-reg fixoffset)))
+                     (t
+                      (with-imm-target (ptr-reg) (offset-reg :s32)
+                        (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                          (arm2-push-register
+                           seg
+                           (arm2-one-untargeted-reg-form seg
+                                                         ptr
+                                                         ptr-reg))
+                          (arm2-push-register
+                           seg
+                           (arm2-one-untargeted-reg-form seg
+                                                         offset
+                                                         arm::arg_z))
+                          (arm2-one-targeted-reg-form seg newval fp-reg)
+                          (arm2-pop-register seg arm::arg_z)
+                          (arm2-pop-register seg ptr-reg))
                         (! fixnum->signed-natural offset-reg arm::arg_z)
                         (if double-p
                           (! mem-set-double-float fp-reg ptr-reg offset-reg)
@@ -7510,7 +7637,8 @@
                (<- fp-reg))
               (t
                (cond (immoffset
-                      (let* ((rnew ($ arm::arg_z)))
+                      (let* ((rnew ($ arm::arg_z))
+                             (*arm2-nfp-depth* *arm2-nfp-depth*))
                         (arm2-push-register
                          seg
                          (arm2-one-untargeted-reg-form seg
@@ -7525,23 +7653,24 @@
                             (! mem-set-c-single-float fp-reg ptr-reg fixoffset)))))
                      (t
                       (let* ((roffset ($ arm::arg_y))
-                             (rnew ($ arm::arg_z)))
+                             (rnew ($ arm::arg_z))
+                             (*arm2-nfp-depth* *arm2-nfp-depth*))
                         (arm2-push-register
                          seg
                          (arm2-one-untargeted-reg-form
                           seg
                           ptr ptr-reg))
                         (arm2-two-targeted-reg-forms seg
-                                                   offset roffset
-                                                   newval rnew)
+                                                     offset roffset
+                                                     newval rnew)
                         (arm2-pop-register seg ptr-reg)
                         (with-imm-target (ptr-reg) (offset-reg :s32)
                           (with-imm-temps (ptr-reg offset-reg) ()
                             (! fixnum->signed-natural offset-reg roffset)
                             (arm2-copy-register seg fp-reg rnew))
-                        (if double-p
-                          (! mem-set-double-float fp-reg ptr-reg offset-reg)
-                          (! mem-set-single-float fp-reg ptr-reg offset-reg))))))
+                          (if double-p
+                            (! mem-set-double-float fp-reg ptr-reg offset-reg)
+                            (! mem-set-single-float fp-reg ptr-reg offset-reg))))))
                (<- arm::arg_z)))
         (^)))))
 
@@ -7555,6 +7684,7 @@
 
 (defarm2 arm2-immediate-get-ptr immediate-get-ptr (seg vreg xfer ptr offset)
   (let* ((triv-p (arm2-trivial-p offset))
+         (*arm2-nfp-depth* *arm2-nfp-depth*)
          (dest vreg)
          (offval (acode-fixnum-form-p offset)))
     (cond ((not vreg)
@@ -7573,12 +7703,10 @@
                      (! fixnum->signed-natural x (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
                    (! mem-ref-natural dest src x))
                  (progn
-                   (! temp-push-unboxed-word src)
-                   (arm2-open-undo $undostkblk)
+                   (arm2-push-register seg src)
                    (let* ((oreg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
                      (with-imm-temps () (src x)
-                       (! temp-pop-unboxed-word src)
-                       (arm2-close-undo)
+                       (arm2-pop-register seg src)
                        (! fixnum->signed-natural x oreg)
                        (! mem-ref-natural dest src x))))))) 
            (^)))))
@@ -7593,8 +7721,7 @@
            (bit-shift (if (and byte-index (< byte-index #x8000))
                         (logand 31 (+ 25 (logand offval 7))))))
       (if bit-shift
-        (with-imm-target ()
-          (src-reg :address)
+        (with-imm-target () (src-reg :address)
           (arm2-one-targeted-reg-form seg ptr src-reg)
           (if (node-reg-p vreg)
             (! mem-ref-c-bit-fixnum vreg src-reg byte-index (logand 31 (+ bit-shift
@@ -7604,17 +7731,16 @@
               (! mem-ref-c-bit dest src-reg  byte-index bit-shift)
               (<- dest))))
         (let* ((triv-p (arm2-trivial-p offset))
-               (offset-reg nil))
+               (offset-reg nil)
+               (*arm2-nfp-depth* *arm2-nfp-depth*))
           (with-imm-target ()
             (src-reg :address)
             (arm2-one-targeted-reg-form seg ptr src-reg)
             (unless triv-p
-              (! temp-push-unboxed-word src-reg)
-              (arm2-open-undo $undostkblk))
+              (arm2-push-register seg src-reg))
             (setq offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z))
             (unless triv-p
-              (! temp-pop-unboxed-word src-reg)
-              (arm2-close-undo))
+              (arm2-pop-register seg src-reg))
             (if (node-reg-p vreg)
               (! mem-ref-bit-fixnum vreg src-reg offset-reg)
               (with-imm-target ()
@@ -7655,12 +7781,10 @@
                          (if (acode-fixnum-form-p offset)
                            (arm2-lri seg offset-reg (acode-fixnum-form-p offset))
                            (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
-                         (progn
-                           (! temp-push-unboxed-word src-reg)
-                           (arm2-open-undo $undostkblk)
+                         (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                           (arm2-push-register seg src-reg)
                            (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z))
-                           (! temp-pop-unboxed-word src-reg)
-                           (arm2-close-undo)))
+                           (arm2-pop-register seg src-reg)))
                        (! mem-ref-fullword dest src-reg offset-reg)))))
                 (if (node-reg-p vreg)
                   (! box-fixnum vreg dest)
@@ -7672,7 +7796,7 @@
                   (with-imm-target (dest) (src-reg :address)
                    (arm2-one-targeted-reg-form seg ptr src-reg)
                      (case size
-                       (8 (! mem-ref-c-signed-doubleword dest src-reg offval))
+                       ;;(8 (! mem-ref-c-signed-doubleword dest src-reg offval))
                        (4 (! mem-ref-c-signed-fullword dest src-reg offval))
                        (2 (! mem-ref-c-s16 dest src-reg offval))
                        (1 (! mem-ref-c-s8 dest src-reg offval)))))
@@ -7684,14 +7808,12 @@
                        (if (acode-fixnum-form-p offset)
                          (arm2-lri seg offset-reg (acode-fixnum-form-p offset))
                          (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
-                       (progn
-                         (! temp-push-unboxed-word src-reg)
-                         (arm2-open-undo $undostkblk)
+                       (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                         (arm2-push-register seg src-reg)
                          (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z))
-                         (! temp-pop-unboxed-word src-reg)
-                         (arm2-close-undo)))
+                         (arm2-pop-register seg src-reg)))
                   (case size
-                    (8 (! mem-ref-signed-doubleword dest src-reg offset-reg))
+                    ;;(8 (! mem-ref-signed-doubleword dest src-reg offset-reg))
                     (4 (! mem-ref-signed-fullword dest src-reg offset-reg))
                     (2 (! mem-ref-s16 dest src-reg offset-reg))
                     (1 (! mem-ref-s8 dest src-reg offset-reg)))))))
@@ -7708,7 +7830,7 @@
                   (with-imm-target (dest) (src-reg :address)
                     (arm2-one-targeted-reg-form seg ptr src-reg)
                     (case size
-                      (8 (! mem-ref-c-doubleword dest src-reg offval))
+                      ;;(8 (! mem-ref-c-doubleword dest src-reg offval))
                       (4 (! mem-ref-c-fullword dest src-reg offval))
                       (2 (! mem-ref-c-u16 dest src-reg offval))
                       (1 (! mem-ref-c-u8 dest src-reg offval)))))
@@ -7720,14 +7842,12 @@
                        (if (acode-fixnum-form-p offset)
                          (arm2-lri seg offset-reg (acode-fixnum-form-p offset))
                          (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z)))
-                       (progn
-                         (! temp-push-unboxed-word src-reg)
-                         (arm2-open-undo $undostkblk)
+                       (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+                         (arm2-push-register seg src-reg)
                          (! fixnum->signed-natural offset-reg (arm2-one-untargeted-reg-form seg offset arm::arg_z))
-                         (! temp-pop-unboxed-word src-reg)
-                         (arm2-close-undo)))
+                         (arm2-pop-register seg src-reg)))
                   (case size
-                    (8 (! mem-ref-doubleword dest src-reg offset-reg))
+                    ;;(8 (! mem-ref-doubleword dest src-reg offset-reg))
                     (4 (! mem-ref-fullword dest src-reg offset-reg))
                     (2 (! mem-ref-u16 dest src-reg offset-reg))
                     (1 (! mem-ref-u8 dest src-reg offset-reg)))))))
@@ -7762,9 +7882,9 @@
                             (arm2-load-ea-p val)))
                    (progn
                      (%rplaca pair (arm2-vloc-ea *arm2-vstack*))
-                     (arm2-vpush-register seg val :reserved))
-                 (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg val arm::arg_z) :reserved))
-                 (%rplacd pair *arm2-top-vstack-lcell*)))
+                     (arm2-vpush-register seg val))
+                 (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg val arm::arg_z)))
+                 ))
               (t (arm2-seq-bind-var seg var val)
                  (%rplaca valcopy nil)))
         (setq valcopy (%cdr valcopy)))
@@ -7839,15 +7959,7 @@
           (dolist (var real-vars)
             (arm2-close-var seg var)))))))
 
-;;; Make a function call (e.g., to mapcar) with some of the toplevel arguments
-;;; stack-consed (downward) closures.  Bind temporaries to these closures so
-;;; that tail-recursion/non-local exits work right.
-;;; (all of the closures are distinct: FLET and LABELS establish dynamic extent themselves.)
-(defarm2 arm2-with-downward-closures with-downward-closures (seg vreg xfer tempvars closures callform)
-  (let* ((old-stack (arm2-encode-stack)))
-    (arm2-seq-bind seg tempvars closures)
-    (arm2-undo-body seg vreg xfer callform old-stack)
-    (dolist (v tempvars) (arm2-close-var seg v))))
+
 
 
 (defarm2 arm2-local-return-from local-return-from (seg vreg xfer blocktag value)
@@ -7861,7 +7973,6 @@
          (dest-stack  (cdr tagdata))
          (need-break (neq cur-stack dest-stack)))
     (let* ((*arm2-vstack* *arm2-vstack*)
-           (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
            (*arm2-cstack* *arm2-cstack*))
       (if 
         (or
@@ -7962,8 +8073,7 @@
 
 (defarm2 arm2-throw throw (seg vreg xfer tag valform )
   (declare (ignorable vreg xfer))
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*))
+  (let* ((*arm2-vstack* *arm2-vstack*))
     (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg tag arm::arg_z))
     (if (arm2-trivial-p valform)
       (progn
@@ -8169,7 +8279,8 @@
 
 
 (defarm2 arm2-general-aset3 general-aset3 (seg vreg xfer arr i j k new)
-  (let* ((atype0 (acode-form-type arr t))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*)
+         (atype0 (acode-form-type arr t))
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
@@ -8528,39 +8639,30 @@
 (defarm2 arm2-unwind-protect unwind-protect (seg vreg xfer protected-form cleanup-form)
   (let* ((cleanup-label (backend-get-next-label))
          (protform-label (backend-get-next-label))
-         (old-stack (arm2-encode-stack))
-         (ilevel '*interrupt-level*))
+         (old-stack (arm2-encode-stack)))
     (! lock-constant-pool)
     (! nmkunwind)
     (arm2-open-undo $undointerruptlevel)
-    (arm2-new-vstack-lcell :special-value *arm2-target-lcell-size* 0 ilevel)
-    (arm2-new-vstack-lcell :special *arm2-target-lcell-size* (ash 1 $vbitspecial) ilevel)
-    (arm2-new-vstack-lcell :special-link *arm2-target-lcell-size* 0 ilevel)
     (arm2-adjust-vstack (* 3 *arm2-target-node-size*))    
     (! non-barrier-jump (aref *backend-labels* cleanup-label))
     (-> protform-label)
     (! unlock-constant-pool)
     (@ cleanup-label)
     (let* ((*arm2-vstack* *arm2-vstack*)
-           (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
            (*arm2-cstack* (%i+ *arm2-cstack* arm::lisp-frame.size)))
-      (arm2-open-undo $undostkblk)      ; saved fpr vector
+      ;;(arm2-open-undo $undostkblk)      ; saved fpr vector
       (arm2-open-undo $undostkblk)      ; tsp frame created by nthrow.
       (! save-cleanup-context)
       (setq *arm2-cstack* (%i+ *arm2-cstack*
                                arm::lisp-frame.size))       ; the frame we just pushed
       (arm2-form seg nil nil cleanup-form)
       (arm2-close-undo)
-      (arm2-close-undo)
+      ;;(arm2-close-undo)
       (! restore-cleanup-context)
       (! jump-return-pc)) ; blr
     (arm2-open-undo)
     (@ protform-label)
-    (arm2-new-vstack-lcell :special-value *arm2-target-lcell-size* 0 ilevel)
-    (arm2-new-vstack-lcell :special *arm2-target-lcell-size* (ash 1 $vbitspecial) ilevel)
-    (arm2-new-vstack-lcell :special-link *arm2-target-lcell-size* 0 ilevel)
     (arm2-adjust-vstack (* 3 *arm2-target-node-size*))
-
     (arm2-undo-body seg vreg xfer protected-form old-stack)))
 
 (defarm2 arm2-progv progv (seg vreg xfer symbols values body)
@@ -8601,14 +8703,13 @@
                 (arm2-compare-registers seg vreg xfer other-target abs-target cr-bit true-p))))
           ; Neither expression is obviously a constant-valued macptr.
           (with-imm-target () (target-a :address)
+            (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
             (arm2-one-targeted-reg-form seg x target-a)
-            (! temp-push-unboxed-word target-a)
-            (arm2-open-undo $undostkblk)
+            (arm2-push-register seg target-a)
             (arm2-one-targeted-reg-form seg y target-a)
             (with-imm-target (target-a) (target-b :address)
-              (! temp-pop-unboxed-word target-b)
-              (arm2-close-undo)
-              (arm2-compare-registers seg vreg xfer target-b target-a cr-bit true-p))))))))
+              (arm2-pop-register seg target-b)
+              (arm2-compare-registers seg vreg xfer target-b target-a cr-bit true-p)))))))))
 
 (defarm2 arm2-set-bit %set-bit (seg vreg xfer ptr offset newval)
   (let* ((offval (acode-fixnum-form-p offset))
@@ -8632,25 +8733,21 @@
                 (! mem-set-c-bit-1 src byte-index mask))
               (when vreg
                 (arm2-form seg vreg nil newval)))
-            (progn
+            (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
               (unless triv-val
-                (! temp-push-unboxed-word src)
-                (arm2-open-undo $undostkblk))
+                (arm2-push-register seg src))
               (let* ((target (arm2-one-untargeted-reg-form seg newval arm::arg_z)))
                 (unless triv-val
-                  (! temp-pop-unboxed-word src)
-                  (arm2-close-undo))
+                  (arm2-pop-register seg src))
                 (! mem-set-c-bit src byte-index (+ 24 bit-index) target)
                 (<- target)))))
-        (progn
+        (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
           (unless (and triv-val triv-offset)
-            (! temp-push-unboxed-word src)
-            (arm2-open-undo $undostkblk))
+            (arm2-push-register seg src))
           (multiple-value-bind (idx-reg val-reg)
               (arm2-two-untargeted-reg-forms seg offset arm::arg_y newval arm::arg_z)
             (unless (and triv-val triv-offset)
-              (! temp-pop-unboxed-word src)
-              (arm2-close-undo ))
+              (arm2-pop-register seg src))
             (! mem-set-bit src idx-reg val-reg)
             (<- val-reg)))))
     (^)))
@@ -8674,10 +8771,9 @@
           (with-imm-target (ptr-reg) (result :address)
             (! add-immediate result ptr-reg fixnum-by)
             (<- result))
-          (progn
+          (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
             (unless triv-by
-              (! temp-push-unboxed-word ptr-reg)
-              (arm2-open-undo $undostkblk))
+              (arm2-push-register seg ptr-reg))
             (with-imm-target (ptr-reg) (by-reg :s32)
               (let* ((mask *available-backend-imm-temps*)
                      (*available-backend-imm-temps* mask))
@@ -8686,8 +8782,7 @@
                 (arm2-one-targeted-reg-form seg by by-reg)
                 (setq *available-backend-imm-temps* mask)
                 (unless triv-by
-                  (! temp-pop-unboxed-word ptr-reg)
-                  (arm2-close-undo))
+                  (arm2-pop-register seg ptr-reg))
                 (with-imm-target () (result :address)
                   (! fixnum-add result ptr-reg by-reg)
                   (<- result))))))
@@ -8700,53 +8795,7 @@
 
 
 
-(defarm2 arm2-eabi-syscall eabi-syscall (seg vreg xfer idx argspecs argvals resultspec)
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
-         (*arm2-cstack* *arm2-cstack*)
-         (nextarg 0))
-    (declare (fixnum nextarg))
-    (! alloc-c-frame (the fixnum (length argvals)))
-    (arm2-open-undo $undo-arm-c-frame)
-    ;; Evaluate each form into the C frame, according to the matching argspec.
-    (do* ((specs argspecs (cdr specs))
-          (vals argvals (cdr vals)))
-         ((null specs))
-      (declare (list specs vals))
-      (let* ((valform (car vals))
-             (spec (car specs))
-             (absptr (acode-absolute-ptr-p valform)))
-        (case spec
-          (:address
-           (with-imm-target ()
-             (ptr :address)
-             (if absptr
-               (arm2-lri seg ptr absptr)
-               (arm2-one-targeted-reg-form seg valform ptr))
-             (! set-eabi-c-arg ptr nextarg)))
-          (t
-           (! set-eabi-c-arg
-              (with-imm-target ()
-                (valreg :natural)
-                (arm2-unboxed-integer-arg-to-reg seg valform valreg spec))
-              nextarg)))
-        (incf nextarg)))
-    (arm2-form seg arm::arg_z nil idx)
-    (! eabi-syscall) 
-    (arm2-close-undo)
-    (when vreg
-      (if (eq resultspec :void)
-        (<- nil)
-        (<- (set-regspec-mode arm::imm0 (gpr-mode-name-value
-                                         (case resultspec
-                                           (:address :address)
-                                           (:signed-byte :s8)
-                                           (:unsigned-byte :u8)
-                                           (:signed-halfword :s16)
-                                           (:unsigned-halfword :u16)
-                                           (:signed-fullword :s32)
-                                           (t :u32)))))))
-    (^)))
+
 
 
 
@@ -8760,206 +8809,164 @@
           (arm2-one-targeted-reg-form seg arg target))
       (^)))))
 
-;;; Address to call is on top of the vstack.  Leave it there.
-(defun arm2-eabi-hard-float-ff-call (seg  argspecs argvals soft-label continue-label)
-  (with-arm-local-vinsn-macros (seg)
-    (let* ((next-fp-arg-word 0)
-           (next-arg-word 0)
-           (*arm2-vstack* *arm2-vstack*)
-           (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
-           (*arm2-cstack* *arm2-cstack*))
-      (dolist (spec argspecs)
-        (case spec
+      
+(defun arm2-eabi-ff-call-simple (seg vreg xfer address argspec argval resultspec)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (if argspec
+      (let* ((push-vinsn (arm2-push-register seg (arm2-one-untargeted-reg-form seg address arm::arg_z))))
+        (case argspec
           ((:signed-doubleword :unsigned-doubleword)
-           (if (oddp next-arg-word)
-             (incf next-arg-word 3)
-             (incf next-arg-word 2)))
+           (arm2-one-targeted-reg-form seg argval arm::arg_z)
+           (if (eq argspec :singed-doubleword)
+             (! gets64)
+             (! getu64)))
+          (:address
+           (arm2-one-targeted-reg-form seg argval ($ 0 :mode :address)))
           (:double-float
-           (if (<= next-fp-arg-word 14)
-             (if (oddp next-fp-arg-word)
-               (incf next-fp-arg-word 3)
-               (incf next-fp-arg-word 2))
-             (if (oddp next-arg-word)
-               (incf next-arg-word 3)
-               (incf next-arg-word 2))))
+           (arm2-one-targeted-reg-form seg argval ($ 0
+                                                     :class :fpr
+                                                     :mode :double-float)))
           (:single-float
-           (if (< next-fp-arg-word 16)
-             (incf next-fp-arg-word)
-             (incf next-arg-word)))
-          (t
-           (if (typep spec 'fixnum)
-             (incf next-arg-word spec)
-             (incf next-arg-word)))))
-      (! branch-if-soft-float (aref *backend-labels* soft-label))
-      (! alloc-eabi-c-frame (+ next-arg-word 16))
-      (arm2-open-undo $undo-arm-c-frame)
-      (setq next-fp-arg-word 0
-            next-arg-word 16)
-      (do* ((specs argspecs (cdr specs))
-            (vals argvals (cdr vals)))
-           ((null specs))
-        (declare (list specs vals))
-        (let* ((valform (car vals))
-               (spec (car specs))
-               (absptr (acode-absolute-ptr-p valform)))
-          (case spec
-            (:double-float
-             (with-fp-target () (df :double-float)
-               (arm2-one-targeted-reg-form seg valform df)
-               (cond ((<= next-fp-arg-word 14)
-                      (when (oddp next-fp-arg-word)
-                        (incf next-fp-arg-word))
-                      (! set-double-eabi-c-arg df next-fp-arg-word)
-                      (incf next-fp-arg-word 2))
-                     (t
-                      (when (oddp next-arg-word)
-                        (incf next-arg-word))
-                      (! set-double-eabi-c-arg df next-arg-word)
-                      (incf next-arg-word 2)))))
-            (:single-float
-             (with-fp-target () (sf :single-float)
-               (arm2-one-targeted-reg-form seg valform sf)
-               (cond ((< next-fp-arg-word 16)
-                      (! set-single-eabi-c-arg sf next-fp-arg-word)
-                      (incf next-fp-arg-word))
-                     (t
-                      (! set-single-eabi-c-arg sf next-arg-word)
-                      (incf next-arg-word)))))
-            ((:signed-doubleword :unsigned-doubleword)
-             (arm2-one-targeted-reg-form seg valform ($ arm::arg_z))
-             (if (eq spec :signed-doubleword)
-               (! gets64)
-               (! getu64))
-             (when (oddp next-arg-word)
-               (incf next-arg-word))
-             (! set-eabi-c-arg ($ arm::imm0) next-arg-word)
-             (incf next-arg-word)
-             (! set-eabi-c-arg ($ arm::imm1) next-arg-word)
-             (incf next-arg-word))
-            (:address
-             (with-imm-target () (ptr :address)
-               (if absptr
-                 (arm2-lri seg ptr absptr)
-                 (arm2-form seg ptr nil valform))
-               (! set-eabi-c-arg ptr next-arg-word)
-               (incf next-arg-word)))
+           (arm2-one-targeted-reg-form seg argval ($ 0
+                                                     :class :fpr
+                                                     :mode :single-float)))
+          (t (arm2-unboxed-integer-arg-to-reg seg argval 0 argspec)))
+        (arm2-elide-pushes seg push-vinsn (arm2-pop-register seg arm::arg_z)))
+      (arm2-one-targeted-reg-form seg address arm::arg_z))
+    (! eabi-ff-call-simple)
+    (when vreg
+      (cond ((eq resultspec :void) (<- nil))
+            ((eq resultspec :double-float)
+             (<- ($  arm::d0 :class :fpr :mode :double-float)))
+            ((eq resultspec :single-float)
+             (<- ($ arm::s0 :class :fpr :mode :single-float)))
+            ((eq resultspec :unsigned-doubleword)
+             (ensuring-node-target (target vreg)
+               (! makeu64)
+               (arm2-copy-register seg target arm::arg_z)))
+            ((eq resultspec :signed-doubleword)
+             (ensuring-node-target (target vreg)
+               (! makes64)
+               (arm2-copy-register seg target arm::arg_z)))
             (t
-             (if (typep spec 'fixnum)
-               (with-imm-target () (addr :address)
-                 (arm2-form seg addr nil valform)
-                 (with-imm-target (addr) (valreg :natural)
-                   (dotimes (i spec)
-                     (! mem-ref-c-natural valreg addr (* i *arm2-target-node-size*))
-                     (! set-eabi-c-arg valreg next-arg-word)
-                     (incf next-arg-word))))
-               (with-imm-target () (valreg :natural)
-                 (let* ((reg (arm2-unboxed-integer-arg-to-reg seg valform valreg spec)))
-                   (! set-eabi-c-arg reg next-arg-word)
-                   (incf next-arg-word))))))))
-      (arm2-vpop-register seg ($ arm::arg_z))
-      (! eabi-ff-callhf) 
-      (arm2-close-undo)
-      (-> continue-label))))
-      
-      
-          
+             (<- (make-wired-lreg arm::imm0
+                                  :mode
+                                  (gpr-mode-name-value
+                                   (case resultspec
+                                     (:address :address)
+                                     (:signed-byte :s8)
+                                     (:unsigned-byte :u8)
+                                     (:signed-halfword :s16)
+                                     (:unsigned-halfword :u16)
+                                     (:signed-fullword :s32)
+                                     (t :u32))))))))
+    (^)))
+
            
 (defarm2 arm2-eabi-ff-call eabi-ff-call (seg vreg xfer address argspecs argvals resultspec &optional monitor)
   (declare (ignore monitor))
-  (let* ((*arm2-vstack* *arm2-vstack*)
-         (*arm2-top-vstack-lcell* *arm2-top-vstack-lcell*)
-         (*arm2-cstack* *arm2-cstack*)
-         (next-arg-word 0)
-         (natural-64-bit-alignment
-          (case (backend-target-os *target-backend*)
-            (:darwinarm nil)
-            (t t)))
-         (soft-label (backend-get-next-label))
-         (continue-label (backend-get-next-label)))
-      (declare (fixnum next-arg-word))
-      (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg address arm::arg_z))
-      (when (or (eq resultspec :single-float)
-                (eq resultspec :double-float)
-                (dolist (spec argspecs)
-                  (when (or (eq spec :single-float)
-                            (eq spec :double-float))
-                    (return t))))
-        (arm2-eabi-hard-float-ff-call seg argspecs argvals soft-label continue-label))
-      (@ soft-label)
-      (dolist (argspec argspecs)
-        (case argspec
-          ((:double-float :unsigned-doubleword :signed-doubleword)
-           (when (and natural-64-bit-alignment (oddp next-arg-word))
-             (incf next-arg-word))
-           (incf next-arg-word 2))
-          (t (incf next-arg-word))))
-      (! alloc-eabi-c-frame next-arg-word)
-      (arm2-open-undo $undo-arm-c-frame)
-
-      ;; Evaluate each form into the C frame, according to the
-      ;; matching argspec.
-      (setq next-arg-word 0)
-      (do* ((specs argspecs (cdr specs))
-            (vals argvals (cdr vals)))
-           ((null specs))
-        (declare (list specs vals))
-        (let* ((valform (car vals))
-               (spec (car specs))
-               (absptr (acode-absolute-ptr-p valform)))
+  (if (and (< (length argspecs) 2)
+           (not (typep (car argspecs) 'fixnum)))
+    (arm2-eabi-ff-call-simple seg vreg xfer address (car argspecs) (car argvals) resultspec)
+    (progn
+      (let* ((*arm2-vstack* *arm2-vstack*)
+             (*arm2-cstack* *arm2-cstack*)
+             (next-arg-word 0)
+             (next-fp-arg-word 0))
+        (declare (fixnum next-arg-word))
+        (arm2-vpush-register seg (arm2-one-untargeted-reg-form seg address arm::arg_z))
+        (dolist (spec argspecs)
           (case spec
-            (:double-float
-             (with-fp-target () (df :double-float)
-               (when (and natural-64-bit-alignment (oddp next-arg-word))
-                 (incf next-arg-word))
-               (arm2-one-targeted-reg-form seg valform df)
-               (! set-double-eabi-c-arg df next-arg-word)
-               (incf next-arg-word 2)))
-            (:single-float
-             (with-fp-target () (sf :single-float)
-               (arm2-one-targeted-reg-form seg valform sf)
-               (! set-single-eabi-c-arg sf next-arg-word)
-               (incf next-arg-word)))
             ((:signed-doubleword :unsigned-doubleword)
-             (arm2-one-targeted-reg-form seg valform ($ arm::arg_z))
-             (if (eq spec :signed-doubleword)
-               (! gets64)
-               (! getu64))
-             (when (and natural-64-bit-alignment (oddp next-arg-word))
-               (incf next-arg-word))
-             (! set-eabi-c-arg ($ arm::imm0) next-arg-word)
-             (incf next-arg-word)
-             (! set-eabi-c-arg ($ arm::imm1) next-arg-word)
-             (incf next-arg-word))
-            (:address
-             (with-imm-target () (ptr :address)
-               (if absptr
-                 (arm2-lri seg ptr absptr)
-                 (arm2-form seg ptr nil valform))
-               (! set-eabi-c-arg ptr next-arg-word)
+             (if (oddp next-arg-word)
+               (incf next-arg-word 3)
+               (incf next-arg-word 2)))
+            (:double-float
+             (if (<= next-fp-arg-word 14)
+               (if (oddp next-fp-arg-word)
+                 (incf next-fp-arg-word 3)
+                 (incf next-fp-arg-word 2))
+               (if (oddp next-arg-word)
+                 (incf next-arg-word 3)
+                 (incf next-arg-word 2))))
+            (:single-float
+             (if (< next-fp-arg-word 16)
+               (incf next-fp-arg-word)
                (incf next-arg-word)))
             (t
              (if (typep spec 'fixnum)
-               (with-imm-target () (addr :address)
-                 (arm2-form seg addr nil valform)
-                 (with-imm-target (addr) (valreg :natural)
-                   (dotimes (i spec)
-                     (! mem-ref-c-natural valreg addr (* i *arm2-target-node-size*))
-                     (! set-eabi-c-arg valreg next-arg-word)
-                     (incf next-arg-word))))
-               (with-imm-target () (valreg :natural)
-                 (let* ((reg (arm2-unboxed-integer-arg-to-reg seg valform valreg spec)))
-                   (! set-eabi-c-arg reg next-arg-word)
-                   (incf next-arg-word))))))))
-      (arm2-vpop-register seg ($ arm::arg_z))
-      (! eabi-ff-call) 
-      (arm2-close-undo)
-      (case resultspec
-        (:double-float
-         
-         (! gpr-pair-to-double-float ($ arm::d0 :class :fpr :mode :double-float)  arm::imm0 arm::imm1))
-        (:single-float
-         (! gpr-to-single-float ($ arm::s0 :class :fpr :mode :single-float)  arm::imm0)))
-      (@ continue-label)
+               (incf next-arg-word spec)
+               (incf next-arg-word)))))
+        (! alloc-eabi-c-frame (+ next-arg-word 16))
+        (arm2-open-undo $undo-arm-c-frame)
+        (setq next-fp-arg-word 0
+              next-arg-word 16)
+        (do* ((specs argspecs (cdr specs))
+              (vals argvals (cdr vals)))
+             ((null specs))
+          (declare (list specs vals))
+          (let* ((valform (car vals))
+                 (spec (car specs))
+                 (absptr (acode-absolute-ptr-p valform)))
+            (case spec
+              (:double-float
+               (with-fp-target () (df :double-float)
+                 (arm2-one-targeted-reg-form seg valform df)
+                 (cond ((<= next-fp-arg-word 14)
+                        (when (oddp next-fp-arg-word)
+                          (incf next-fp-arg-word))
+                        (! set-double-eabi-c-arg df next-fp-arg-word)
+                        (incf next-fp-arg-word 2))
+                       (t
+                        (when (oddp next-arg-word)
+                          (incf next-arg-word))
+                        (! set-double-eabi-c-arg df next-arg-word)
+                        (incf next-arg-word 2)))))
+              (:single-float
+               (with-fp-target () (sf :single-float)
+                 (arm2-one-targeted-reg-form seg valform sf)
+                 (cond ((< next-fp-arg-word 16)
+                        (! set-single-eabi-c-arg sf next-fp-arg-word)
+                        (incf next-fp-arg-word))
+                       (t
+                        (! set-single-eabi-c-arg sf next-arg-word)
+                        (incf next-arg-word)))))
+              ((:signed-doubleword :unsigned-doubleword)
+               (arm2-one-targeted-reg-form seg valform ($ arm::arg_z))
+               (if (eq spec :signed-doubleword)
+                 (! gets64)
+                 (! getu64))
+               (when (oddp next-arg-word)
+                 (incf next-arg-word))
+               (! set-eabi-c-arg ($ arm::imm0) next-arg-word)
+               (incf next-arg-word)
+               (! set-eabi-c-arg ($ arm::imm1) next-arg-word)
+               (incf next-arg-word))
+              (:address
+               (with-imm-target () (ptr :address)
+                 (if absptr
+                   (arm2-lri seg ptr absptr)
+                   (arm2-form seg ptr nil valform))
+                 (! set-eabi-c-arg ptr next-arg-word)
+                 (incf next-arg-word)))
+              (t
+               (if (typep spec 'fixnum)
+                 (with-imm-target () (addr :address)
+                   (arm2-form seg addr nil valform)
+                   (with-imm-target (addr) (valreg :natural)
+                     (dotimes (i spec)
+                       (! mem-ref-c-natural valreg addr (* i *arm2-target-node-size*))
+                       (! set-eabi-c-arg valreg next-arg-word)
+                       (incf next-arg-word))))
+                 (with-imm-target () (valreg :natural)
+                   (let* ((reg (arm2-unboxed-integer-arg-to-reg seg valform valreg spec)))
+                     (! set-eabi-c-arg reg next-arg-word)
+                     (incf next-arg-word))))))))
+        (arm2-vpop-register seg ($ arm::arg_z))
+        (! eabi-ff-callhf) 
+        (arm2-close-undo))
+     
+
       (when vreg
         (cond ((eq resultspec :void) (<- nil))
               ((eq resultspec :double-float)
@@ -8986,7 +8993,7 @@
                                        (:unsigned-halfword :u16)
                                        (:signed-fullword :s32)
                                        (t :u32))))))))
-      (^)))
+  (^))))
 
 
 
@@ -9188,6 +9195,7 @@
   (cond ((arm2-tailcallok xfer)
          (arm2-restore-nvrs seg nil)
          (arm2-restore-non-volatile-fprs seg)
+         (! restore-nfp)
 	 (arm2-restore-full-lisp-context seg)
 	 (! %current-frame-ptr ($ arm::arg_z))
 	 (! jump-return-pc))
@@ -9248,16 +9256,12 @@
                     (make-wired-lreg (hard-regspec-value vreg)
                                      :class hard-reg-class-fpr
                                      :mode hard-reg-class-fpr-mode-double))))
-        (if *arm2-float-safety*
-          (! double-to-single-safe vreg dreg)
-          (! double-to-single vreg dreg))
+        (arm2-copy-register seg vreg dreg)
         (^))
       (with-fp-target () (argreg :double-float)
         (arm2-one-targeted-reg-form seg arg argreg)
         (with-fp-target ()  (sreg :single-float)
-          (if *arm2-float-safety*
-            (! double-to-single-safe sreg argreg)
-            (! double-to-single sreg argreg))
+          (arm2-copy-register seg sreg argreg)
           (<- sreg)
           (^))))))
 
@@ -9297,9 +9301,11 @@
       (unless (or (acode-fixnum-form-p arg)
                   *arm2-reckless*)
         (! trap-unless-fixnum r))
-      (if *arm2-float-safety*
-        (! fixnum->single-safe dreg r)
-        (! fixnum->single dreg r))
+      (when *arm2-float-safety*
+        (! clear-pending-fpu-exceptions))
+      (! fixnum->single dreg r)
+      (when *arm2-float-safety*
+        (! trap-if-fpu-exception))
       (<- dreg)
       (^))))
 
@@ -9309,8 +9315,8 @@
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
-                              (typep (cadr form) 'real))
-                       (cadr form)))))
+                              (typep (car (acode-operands form)) 'real))
+                       (car (acode-operands form))))))
          (dconst (and real (ignore-errors (float real 0.0d0)))))
     (if dconst
       (arm2-immediate seg vreg xfer dconst)
@@ -9340,8 +9346,8 @@
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
-                              (typep (cadr form) 'real))
-                       (cadr form)))))
+                              (typep (car (acode-operands form)) 'real))
+                       (car (acode-operands form))))))
          (sconst (and real (ignore-errors (float real 0.0f0)))))
     (if sconst
       (arm2-immediate seg vreg xfer sconst)
@@ -9374,6 +9380,22 @@
 	   (format t "~&~d: ~s" i (uvref f j))))
 	(t (report-bad-arg f 'function))))
 
+(defun arm2-complex-single-float-access (seg vreg xfer arg offset)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (cond ((null vreg) (arm2-form seg vreg xfer arg))
+          (t (with-fp-target () (target :single-float)
+               (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                        (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+               (setq target vreg))
+             (! %complex-single-float-access target (arm2-one-untargeted-reg-form seg arg arm::arg_z) offset)
+             (<- target)
+             )
+             (^)))))
+
+
+
+
+
 	
 ;------
 
@@ -9389,10 +9411,8 @@
                 nil))
 
 (defarm2 arm2-ash ash (seg vreg xfer num amt)
-  (or (acode-optimize-ash seg vreg xfer num amt *arm2-trust-declarations*)
-      (progn
-        (arm2-two-targeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
-        (arm2-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))))
+  (arm2-two-targeted-reg-forms seg num ($ arm::arg_y) amt ($ arm::arg_z))
+  (arm2-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))
 
 
 (defarm2 arm2-fixnum-ash fixnum-ash (seg vreg xfer num amt)
@@ -9469,3 +9489,118 @@
 
 (defarm2 arm2-nil nil (seg vreg xfer)
   (arm2-nil seg vreg xfer))
+
+(defarm2 arm2-ivector-typecode-p ivector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (arm2-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! ivector-typecode-p target (arm2-one-untargeted-reg-form seg val arm::arg_z)))
+           (^))))
+
+(defarm2 arm2-gvector-typecode-p gvector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (arm2-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! gvector-typecode-p target (arm2-one-untargeted-reg-form seg val arm::arg_z)))
+           (^))))
+
+
+(defarm2 arm2-%complex-single-float-realpart %complex-single-float-realpart (seg vreg xfer arg)
+  (if (null vreg)
+    (arm2-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-realpart target (arm2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+
+(defarm2 arm2-%complex-single-float-imagpart %complex-single-float-imagpart (seg vreg xfer arg)
+  (if (null vreg)
+    (arm2-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-imagpart target (arm2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+
+(defarm2 arm2-%complex-double-float-realpart %complex-double-float-realpart (seg vreg xfer arg)
+  (if (null vreg)
+    (arm2-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-realpart target (arm2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+
+(defarm2 arm2-%complex-double-float-imagpart %complex-double-float-imagpart (seg vreg xfer arg)
+  (if (null vreg)
+    (arm2-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-imagpart target (arm2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defarm2 arm2-%make-complex-single-float %make-complex-single-float (seg vreg xfer r i)
+    (if (null vreg)
+    (progn
+      (arm2-form seg nil nil r)
+      (arm2-form seg nil xfer i))
+    (with-fp-target () (target :complex-single-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-complex-single-float))
+        (setq target vreg))
+      (arm2-two-targeted-reg-forms seg
+                                   r ($ (* 2 (%hard-regspec-value target))
+                                        :class :fpr
+                                        :mode :single-float)
+                                   i ($ (1+ (* 2 (%hard-regspec-value target)))
+                                        :class :fpr
+                                        :mode :single-float))
+      (<- target)
+      (^))))
+
+(defarm2 arm2-%make-complex-double-float %make-complex-double-float (seg vreg xfer r i)
+    (if (null vreg)
+    (progn
+      (arm2-form seg nil nil r)
+      (arm2-form seg nil xfer i))
+    (with-fp-target () (target :complex-double-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-complex-double-float))
+        (setq target vreg))
+      (arm2-two-targeted-reg-forms seg
+                                   r ($ (%hard-regspec-value target)
+                                        :class :fpr
+                                        :mode :double-float)
+                                   i ($ (1+  (%hard-regspec-value target))
+                                        :class :fpr
+                                        :mode :double-float))
+      (<- target)
+      (^))))
+
+                                   
+(defarm2 arm2-complex complex (seg vreg xfer r i)
+  (arm2-call-fn seg vreg xfer (make-acode (%nx1-operator immediate) 'complex)
+                (list nil (list i r)) nil))
+
+(defarm2 arm2-realpart realpart (seg vreg xfer n)
+  (arm2-call-fn  seg vreg xfer (make-acode (%nx1-operator immediate) 'realpart)
+                 (list nil (list n)) nil))
+
+(defarm2 arm2-imagpart imagpart (seg vreg xfer n)
+  (arm2-call-fn  seg vreg xfer (make-acode (%nx1-operator immediate) 'imagpart)
+                 (list nil (list n)) nil))

@@ -64,6 +64,14 @@
   (slwi dest idx 1)
   (addi dest dest ppc32::misc-dfloat-offset))
 
+
+(define-ppc32-vinsn scale-128bit-misc-index (((dest :u32))
+                                             ((idx :imm) ; A fixnum
+                                              )
+                                             ())
+  (slwi dest idx 2)
+  (addi dest dest ppc32::complex-double-float.realpart))
+
 (define-ppc32-vinsn scale-1bit-misc-index (((word-index :u32)
 					    (bitnum :u8)) ; (unsigned-byte 5)
 					   ((idx :imm) ; A fixnum
@@ -166,6 +174,77 @@
 					    (v :lisp)
 					    (scaled-idx :u32)))
   (stfdx val v scaled-idx))
+
+
+(define-ppc32-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
+                                                    ((v :lisp)
+                                                     (scaled-idx :u32))
+                                                    ((idx2 :u32)))
+  (addi idx2 scaled-idx 4)
+  (lfsx dest v scaled-idx)
+  (lfsx (:apply 1+ (:apply %hard-regspec-value dest)) v idx2))
+
+
+
+(define-ppc32-vinsn misc-ref-c-complex-single-float  (((dest :complex-single-float))
+					      ((v :lisp)
+					       (idx :u32const))
+					      ())
+  (lfs dest (:apply + ppc32::complex-single-float.realpart (:apply ash idx 3)) v)
+  (lfs (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply + (+ ppc32::complex-single-float.realpart 4) (:apply ash idx 3)) v))
+
+(define-ppc32-vinsn misc-set-c-complex-single-float (((val :complex-single-float))
+					     ((v :lisp)
+					      (idx :u32const)))
+  (stfs val (:apply + ppc32::complex-single-float.realpart (:apply ash idx 3)) v)
+  (stfs (:apply 1+ (:apply %hard-regspec-value val))
+        (:apply + (+ ppc32::complex-single-float.realpart 4) (:apply ash idx 3))
+        v))
+
+(define-ppc32-vinsn misc-set-complex-single-float (()
+                                                   ((val :complex-single-float)
+                                                    (v :lisp)
+                                                    (scaled-idx :u32))
+                                                   ((idx2 :u32)))
+  (addi idx2 scaled-idx 4)
+  (stfsx val v scaled-idx)
+  (stfsx val v idx2))
+
+ 
+(define-ppc32-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
+					    ((v :lisp)
+					     (scaled-idx :u32))
+					    ((idx2 :u32)))
+  (addi idx2 scaled-idx 8)
+  (lfdx dest v scaled-idx)
+  (lfdx (:apply 1+ (:apply %hard-regspec-value dest)) v idx2))
+
+
+(define-ppc32-vinsn misc-ref-c-complex-double-float  (((dest :complex-double-float))
+					      ((v :lisp)
+					       (idx :u32const))
+					      ())
+  (lfd dest (:apply + ppc32::complex-double-float.realpart (:apply ash idx 4)) v)
+  (lfd (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply + (+ ppc32::complex-double-float.realpart 8) (:apply ash idx 4)) v))
+
+(define-ppc32-vinsn misc-set-c-complex-double-float (((val :complex-double-float))
+					     ((v :lisp)
+					      (idx :u32const)))
+  (stfd val (:apply + ppc32::complex-double-float.realpart (:apply ash idx 4)) v)
+  (stfd (:apply 1+ (:apply %hard-regspec-value val))
+        (:apply + (+ ppc32::complex-double-float.realpart 8) (:apply ash idx 4))
+        v))
+
+(define-ppc32-vinsn misc-set-complex-double-float (()
+                                                   ((val :complex-double-float)
+                                                    (v :lisp)
+                                                    (scaled-idx :u32))
+                                                   ((idx2 :u32)))
+  (addi idx2 scaled-idx 8)
+  (stfdx val v scaled-idx)
+  (stfdx val v idx2))
 
 (define-ppc32-vinsn misc-set-c-single-float (((val :single-float))
 					     ((v :lisp)
@@ -863,14 +942,20 @@
 (define-ppc32-vinsn require-number (()
                                     ((object :lisp))
                                     ((crf0 (:crf 0))
-                                     (tag :u8)))
+                                     (tag :u8)
+                                     (crf1 :crf)
+                                     (crf2 :crf)))
   :again
   (clrlwi. tag object (- ppc32::nbits-in-word ppc32::nlisptagbits))
   (beq+ crf0 :got-it)
   (cmpwi crf0 tag ppc32::tag-misc)
   (bne crf0 :no-got)
   (lbz tag ppc32::misc-subtag-offset object)
+  (cmpwi crf1 tag ppc32::subtag-complex-double-float)
+  (cmpwi crf2 tag ppc32::subtag-complex-single-float)
   (cmplwi crf0 tag ppc32::max-numeric-subtag)
+  (beq crf1 :got-it)
+  (beq crf2 :got-it)
   (ble+ crf0 :got-it)
   :no-got
   (uuo_intcerr arch::error-object-not-number object)
@@ -1375,6 +1460,28 @@
   :do-trap
   (twnei tag ppc32::subtag-double-float))
 
+
+(define-ppc32-vinsn trap-unless-complex-single-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)
+                                                       (crf :crf)))
+  (clrlwi tag object (- ppc32::nbits-in-word ppc32::nlisptagbits))
+  (cmpwi crf tag ppc32::tag-misc)
+  (bne crf :do-trap)
+  (lbz tag ppc32::misc-subtag-offset object)
+  :do-trap
+  (twnei tag ppc32::subtag-complex-single-float))
+
+(define-ppc32-vinsn trap-unless-complex-double-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)
+                                                       (crf :crf)))
+  (clrlwi tag object (- ppc32::nbits-in-word ppc32::nlisptagbits))
+  (cmpwi crf tag ppc32::tag-misc)
+  (bne crf :do-trap)
+  (lbz tag ppc32::misc-subtag-offset object)
+  :do-trap
+  (twnei tag ppc32::subtag-complex-double-float))
 
 (define-ppc32-vinsn trap-unless-array-header (()
                                               ((object :lisp))
@@ -1913,6 +2020,26 @@
                 (:apply %hard-regspec-value src)))
    (fmr dest src)))
 
+(define-ppc32-vinsn copy-complex-double-float (((dest :complex-double-float))
+                                               ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmr dest src)
+   (fmr (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply 1+ (:apply %hard-regspec-value src)))))
+
+(define-ppc32-vinsn copy-complex-single-float (((dest :complex-single-float))
+                                               ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmr dest src)
+   (fmr (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply 1+ (:apply %hard-regspec-value src)))))
+
+
+
 (define-ppc32-vinsn vcell-ref (((dest :lisp))
 			       ((vcell :lisp)))
   (lwz dest ppc32::misc-data-offset vcell))
@@ -1962,7 +2089,7 @@
                                        ((src :lisp)))
   (lwz dest ppc32::single-float.value src))
 
-(define-ppc32-vinsn (call-subprim :call :subprim-call) (()
+(define-ppc32-vinsn (call-subprim :call :subprim) (()
                                                         ((spno :s32const)))
   (bla spno))
 
@@ -1972,22 +2099,22 @@
 
 ;;; Same as "call-subprim", but gives us a place to 
 ;;; track args, results, etc.
-(define-ppc32-vinsn (call-subprim-0 :call :subprim-call) (((dest t))
+(define-ppc32-vinsn (call-subprim-0 :call :subprim) (((dest t))
                                                           ((spno :s32const)))
   (bla spno))
 
-(define-ppc32-vinsn (call-subprim-1 :call :subprim-call) (((dest t))
+(define-ppc32-vinsn (call-subprim-1 :call :subprim) (((dest t))
                                                           ((spno :s32const)
                                                            (z t)))
   (bla spno))
   
-(define-ppc32-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
+(define-ppc32-vinsn (call-subprim-2 :call :subprim) (((dest t))
                                                           ((spno :s32const)
                                                            (y t)
                                                            (z t)))
   (bla spno))
 
-(define-ppc32-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
+(define-ppc32-vinsn (call-subprim-3 :call :subprim) (((dest t))
                                                           ((spno :s32const)
                                                            (x t)
                                                            (y t)
@@ -2461,6 +2588,19 @@
   (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
   (stfd fpreg ppc32::double-float.value result)  )
 
+(define-ppc32-vinsn complex-double->heap (((result :lisp)) ; tagged as a double-float
+                                  ((fpreg :complex-double-float)) 
+                                  ((header-temp :u32)))
+  (li header-temp (arch::make-vheader ppc32::complex-double-float.element-count ppc32::subtag-complex-double-float))
+  (la ppc::allocptr (- ppc32::fulltag-misc ppc32::complex-double-float.size) ppc::allocptr)
+  (twllt ppc::allocptr ppc::allocbase)
+  (stw header-temp ppc32::misc-header-offset ppc::allocptr)
+  (mr result ppc::allocptr)
+  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
+  (stfd fpreg ppc32::complex-double-float.realpart result)
+  (stfd (:apply 1+ (:apply %hard-regspec-value fpreg))
+        ppc32::complex-double-float.imagpart result))
+
 
 ;;; This is about as bad as heap-consing a double-float.  (In terms of
 ;;; verbosity).  Wouldn't kill us to do either/both out-of-line, but
@@ -2478,6 +2618,20 @@
   (stfs fpreg ppc32::single-float.value result))
 
 
+(define-ppc32-vinsn complex-single->node (((result :lisp)) ; tagged as a single-float
+				  ((fpreg :complex-single-float))
+				  ((header-temp :u32)))
+  (li header-temp (arch::make-vheader ppc32::complex-single-float.element-count ppc32::subtag-complex-single-float))
+  (la ppc::allocptr (- ppc32::fulltag-misc ppc32::complex-single-float.size) ppc::allocptr)
+  (twllt ppc::allocptr ppc::allocbase)
+  (stw header-temp ppc32::misc-header-offset ppc::allocptr)
+  (mr result ppc::allocptr)
+  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
+  (stfs fpreg ppc32::complex-single-float.realpart result)
+  (stfs (:apply 1+ (:apply %hard-regspec-value fpreg))
+        ppc32::complex-single-float.imagpart result))
+
+
 ;;; "dest" is preallocated, presumably on a stack somewhere.
 (define-ppc32-vinsn store-double (()
                                   ((dest :lisp)
@@ -2489,6 +2643,21 @@
                                 ((source :lisp))
                                 ())
   (lfd target ppc32::double-float.value source))
+
+(define-ppc32-vinsn get-complex-double (((target :complex-double-float))
+                                        ((source :lisp))
+				())
+  (lfd target ppc32::complex-double-float.realpart source)
+  (lfd (:apply 1+ (:apply %hard-regspec-value target))
+       ppc32::complex-double-float.imagpart source))
+
+(define-ppc32-vinsn get-complex-single (((target :complex-single-float))
+                                        ((source :lisp))
+				())
+  (lfs target ppc32::complex-single-float.realpart source)
+  (lfs (:apply 1+ (:apply %hard-regspec-value target))
+       ppc32::complex-single-float.imagpart source))
+
 
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
@@ -2638,30 +2807,11 @@
   (clrrwi dest temp ppc32::nfixnumtagbits))
 
 
-(define-ppc32-vinsn negate-fixnum-overflow-inline (((dest :lisp))
-                                                   ((src :imm))
-                                                   ((unboxed :s32)
-                                                    (header :u32)))
-  (nego. dest src)
-  (bns+ :done)
-  (mtxer ppc::rzero)
-  (srawi unboxed dest ppc32::fixnumshift)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc32::fixnumshift))))
-  (li header ppc32::one-digit-bignum-header)
-  (la ppc::allocptr (- ppc32::fulltag-misc 8) ppc::allocptr)
-  (twllt ppc::allocptr ppc::allocbase)
-  (stw header ppc32::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
-  (stw unboxed ppc32::misc-data-offset dest)
-  :done)
+(define-ppc32-vinsn negate-fixnum-set-flags (((dest :lisp)
+                                              (flags (:crf 0)))
+                                             ((src :imm)))
+  (nego. dest src))
 
-(define-ppc32-vinsn negate-fixnum-overflow-ool (()
-                                                ((src :imm))
-                                                )
-  (nego. ppc::arg_z src)
-  (bsola- .SPfix-overflow)
-  :done)
   
                                                   
                                        
@@ -2917,55 +3067,14 @@
                                  (y t)))
   (add dest x y))
 
+(define-ppc32-vinsn fixnum-add-set-flags (((dest t)
+                                           (cr0 (:crf 0)))
+                                          ((x t)
+                                           (y t)))
+  (addo. dest x y))
 
-(define-ppc32-vinsn fixnum-add-overflow-ool (()
-                                             ((x :imm)
-                                              (y :imm))
-                                             ((cr0 (:crf 0))))
-  (addo. ppc::arg_z x y)
-  (bsola- .SPfix-overflow))
 
-(define-ppc32-vinsn fixnum-add-overflow-inline (((dest :lisp))
-                                                ((x :imm)
-                                                 (y :imm))
-                                                ((cr0 (:crf 0))
-                                                 (unboxed :s32)
-                                                 (header :u32)))
-  (addo. dest x y)
-  (bns+ cr0 :done)
-  (mtxer ppc::rzero)
-  (srawi unboxed dest ppc32::fixnumshift)
-  (li header ppc32::one-digit-bignum-header)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc32::fixnumshift))))
-  (la ppc::allocptr (- ppc32::fulltag-misc 8) ppc::allocptr)
-  (twllt ppc::allocptr ppc::allocbase)
-  (stw header ppc32::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
-  (stw unboxed ppc32::misc-data-offset dest)
-  :done)
-
-(define-ppc32-vinsn fixnum-add-overflow-inline-skip (((dest :lisp))
-                                                ((x :imm)
-                                                 (y :imm)
-                                                 (target :label))
-                                                ((cr0 (:crf 0))
-                                                 (unboxed :s32)
-                                                 (header :u32)))
-  (addo. dest x y)
-  (bns+ cr0 target)
-  (mtxer ppc::rzero)
-  (srawi unboxed dest ppc32::fixnumshift)
-  (li header ppc32::one-digit-bignum-header)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc32::fixnumshift))))
-  (la ppc::allocptr (- ppc32::fulltag-misc 8) ppc::allocptr)
-  (twllt ppc::allocptr ppc::allocbase)
-  (stw header ppc32::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
-  (stw unboxed ppc32::misc-data-offset dest)
-  (b target))
-  
+ 
 
   
 
@@ -2974,6 +3083,12 @@
                                 ((x t)
                                  (y t)))
   (subf dest y x))
+
+(define-ppc32-vinsn fixnum-sub-set-flags (((dest t)
+                                           (flags (:crf 0)))
+                                          ((x t)
+                                           (y t)))
+  (subfo. dest y x))
 
 (define-ppc32-vinsn fixnum-sub-from-constant (((dest :imm))
                                               ((x :s16const)
@@ -2989,16 +3104,12 @@
   (subo. ppc::arg_z x y)
   (bsola- .SPfix-overflow))
 
-(define-ppc32-vinsn fixnum-sub-overflow-inline (((dest :lisp))
-                                                ((x :imm)
-                                                 (y :imm))
-                                                ((cr0 (:crf 0))
-                                                 (unboxed :s32)
-                                                 (header :u32)))
-  (subo. dest x y)
-  (bns+ cr0 :done)
+(define-ppc32-vinsn handle-fixnum-overflow-inline (((dest :lisp))
+                                                   ((src :imm))
+                                                   ((unboxed :s32)
+                                                    (header :u32)))
   (mtxer ppc::rzero)
-  (srawi unboxed dest ppc32::fixnumshift)
+  (srawi unboxed src ppc32::fixnumshift)
   (li header ppc32::one-digit-bignum-header)
   (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc32::fixnumshift))))
   (la ppc::allocptr (- ppc32::fulltag-misc 8) ppc::allocptr)
@@ -3006,29 +3117,8 @@
   (stw header ppc32::misc-header-offset ppc::allocptr)
   (mr dest ppc::allocptr)
   (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
-  (stw unboxed ppc32::misc-data-offset dest)
-  :done)
+  (stw unboxed ppc32::misc-data-offset dest))
 
-(define-ppc32-vinsn fixnum-sub-overflow-inline-skip (((dest :lisp))
-                                                     ((x :imm)
-                                                      (y :imm)
-                                                      (target :label))
-                                                     ((cr0 (:crf 0))
-                                                      (unboxed :s32)
-                                                      (header :u32)))
-  (subo. dest x y)
-  (bns+ cr0 target)
-  (mtxer ppc::rzero)
-  (srawi unboxed dest ppc32::fixnumshift)
-  (li header ppc32::one-digit-bignum-header)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc32::fixnumshift))))
-  (la ppc::allocptr (- ppc32::fulltag-misc 8) ppc::allocptr)
-  (twllt ppc::allocptr ppc::allocbase)
-  (stw header ppc32::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrwi ppc::allocptr ppc::allocptr ppc32::ntagbits)
-  (stw unboxed ppc32::misc-data-offset dest)
-  (b target))
 
 ;;; This is, of course, also "subtract-immediate."
 (define-ppc32-vinsn add-immediate (((dest t))
@@ -3081,7 +3171,7 @@
   
   
 ;; Boundp, fboundp stuff.
-(define-ppc32-vinsn (ref-symbol-value :call :subprim-call)
+(define-ppc32-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (bla .SPspecrefcheck))
@@ -3103,7 +3193,7 @@
   :done
   (tweqi dest ppc32::unbound-marker))
 
-(define-ppc32-vinsn (%ref-symbol-value :call :subprim-call)
+(define-ppc32-vinsn (%ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (bla .SPspecref))
@@ -3125,7 +3215,7 @@
   :done
   )
 
-(define-ppc32-vinsn (setq-special :call :subprim-call)
+(define-ppc32-vinsn (setq-special :call :subprim)
     (()
      ((sym :lisp)
       (val :lisp)))
@@ -3146,6 +3236,112 @@
   :bad 
   (uuo_interr arch::error-udf sym)
   :good)
+
+
+
+(define-ppc32-vinsn save-nfp (()
+                              ()
+                              ((temp :imm)))
+  ((:pred  > (:apply ppc2-max-nfp-depth) 0)
+   (stwu ppc::sp (:apply - (:apply + (:apply ppc2-max-nfp-depth) 8)) ppc::sp)
+   (lwz temp ppc32::tcr.nfp ppc32::rcontext)
+   (stw temp 4 ppc::sp)
+   (stw ppc::sp ppc32::tcr.nfp ppc32::rcontext)))
+
+(define-ppc32-vinsn restore-nfp (()
+                                 ()
+                                 ((temp :imm)))
+  ((:pred  > (:apply ppc2-max-nfp-depth) 0)
+   (lwz temp 4 ppc::sp)
+   (stw temp ppc32::tcr.nfp ppc32::rcontext)
+   (lwz ppc::sp 0 ppc::sp)))
+
+(define-ppc32-vinsn (nfp-store-complex-double-float :nfp :set) (()
+                                                                ((val :complex-double-float)
+                                                                 (nfp :imm)
+                                                                 (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (stfd val (:apply + offset 16) nfp)
+  (stfd (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 24) nfp))
+
+(define-ppc32-vinsn (nfp-load-complex-double-float :nfp :ref) (((val :complex-double-float))
+                                                               (
+                                                                (nfp :imm)
+                                                                (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (lfd val (:apply + offset 16) nfp)
+  (lfd (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 24) nfp))
+
+(define-ppc32-vinsn (nfp-store-complex-single-float :nfp :set) (()
+                                                                ((val :complex-single-float)
+                                                                 (nfp :imm)
+                                                                 (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (stfs val (:apply + offset 16) nfp)
+  (stfs (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 20) nfp))
+
+(define-ppc32-vinsn (nfp-load-complex-single-float :nfp :ref) (((val :complex-single-float))
+                                                               (
+                                                                (nfp :imm)
+                                                                (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (lfs val (:apply + offset 16) nfp)
+  (lfs (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 20) nfp))
+
+
+
+(define-ppc32-vinsn (nfp-store-double-float :nfp :set) (()
+                                                        ((val :double-float)
+                                                         (nfp :imm)
+                                                         (offset :u16const))
+                                                        )
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (stfd val (:apply + offset 16) nfp))
+
+(define-ppc32-vinsn (nfp-load-double-float :nfp :ref) (((val :double-float))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (lfd val (:apply + offset 16) nfp))
+
+
+
+(define-ppc32-vinsn (nfp-store-single-float :nfp :set) (()
+                                                        ((val :single-float)
+                                                         (nfp (:u32 #.ppc::nargs))
+                                                         (offset :u16const)))
+                                            
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (stfs val (:apply + offset 16) nfp))
+
+(define-ppc32-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (lfs val (:apply + offset 16) nfp))
+
+(define-ppc32-vinsn (nfp-store-unboxed-word :nfp :set) (()
+                                                        ((w :u32)
+                                                         (nfp :imm)
+                                                         (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (stw w (:apply + offset 16) nfp))
+
+(define-ppc32-vinsn (nfp-load-unboxed-word :nfp :ref) (((w :u32))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (lwz nfp ppc32::tcr.nfp ppc32::rcontext))
+  (lwz w (:apply + offset 16) nfp))
 
 (define-ppc32-vinsn (temp-push-unboxed-word :push :word :tsp)
     (()
@@ -3245,7 +3441,7 @@
                                   ())
   (mr dest ppc32::rcontext))
 
-(define-ppc32-vinsn (dpayback :call :subprim-call) (()
+(define-ppc32-vinsn (dpayback :call :subprim) (()
                                                     ((n :s16const))
                                                     ((temp (:u32 #.ppc::imm0))))
   ((:pred > n 1)
@@ -3310,7 +3506,7 @@
   (twllt ppc::sp imm))
 
 ;;; Do the same thing via a subprim call.
-(define-ppc32-vinsn (save-lisp-context-vsp-ool :call :subprim-call)
+(define-ppc32-vinsn (save-lisp-context-vsp-ool :call :subprim)
     (()
      ()
      ((imm (:u32 #.ppc::imm0))))
@@ -3359,7 +3555,7 @@
 
 ;; Vpush the argument registers.  We got at least "min-fixed" args;
 ;; that knowledge may help us generate better code.
-(define-ppc32-vinsn (save-lexpr-argregs :call :subprim-call)
+(define-ppc32-vinsn (save-lexpr-argregs :call :subprim)
     (()
      ((min-fixed :u16const))
      ((crfx :crf)
@@ -3531,7 +3727,7 @@
 
 ;;; "n" is the sum of the number of required args + 
 ;;; the number of &optionals.  
-(define-ppc32-vinsn (default-optionals :call :subprim-call) (()
+(define-ppc32-vinsn (default-optionals :call :subprim) (()
                                                              ((n :u16const)))
   (li ppc::imm0 (:apply ash n 2))
   (bla .SPdefault-optional-args))
@@ -3653,7 +3849,7 @@
   (slwi code imm ppc32::fixnumshift))
 
 ;;; Clobbers LR
-(define-ppc32-vinsn (%debug-trap :call :subprim-call) (()
+(define-ppc32-vinsn (%debug-trap :call :subprim) (()
                                                        ())
   (bla .SPbreakpoint)
   )
@@ -3711,8 +3907,8 @@
                                             ((cr0 (:crf 0))))
   (andis. dest x high))
 
-(define-ppc32-vinsn %natural-logand-low-c (((dest :u64))
-                                           ((x :u64) (low :u16const))
+(define-ppc32-vinsn %natural-logand-low-c (((dest :u32))
+                                           ((x :u32) (low :u16const))
                                            ((cr0 (:crf 0))))
   (andi. dest x low))
 
@@ -3762,7 +3958,7 @@
 
 ;;; Subprim calls.  Done this way for the benefit of VINSN-OPTIMIZE.
 (defmacro define-ppc32-subprim-call-vinsn ((name &rest other-attrs) spno)
-  `(define-ppc32-vinsn (,name :call :subprim-call ,@other-attrs) (() ())
+  `(define-ppc32-vinsn (,name :call :subprim ,@other-attrs) (() ())
     (bla ,spno)))
 
 (defmacro define-ppc32-subprim-jump-vinsn ((name &rest other-attrs) spno)
@@ -3883,7 +4079,7 @@
 
 (define-ppc32-subprim-call-vinsn (gvector) .SPgvector)
 
-(define-ppc32-vinsn (nth-value :call :subprim-call) (((result :lisp))
+(define-ppc32-vinsn (nth-value :call :subprim) (((result :lisp))
                                                      ())
   (bla .SPnthvalue))
 
@@ -3937,12 +4133,12 @@
 
 (define-ppc32-subprim-call-vinsn (makes64) .SPmakes64)
 
-(define-ppc32-vinsn (poweropen-syscall :call :subprim-call) (()
+(define-ppc32-vinsn (poweropen-syscall :call :subprim) (()
                                                           ())
   (stw ppc::rzero ppc32::c-frame.crsave ppc::sp)
   (bla .SPpoweropen-syscall))
 
-(define-ppc32-vinsn (poweropen-syscall-s64 :call :subprim-call) (()
+(define-ppc32-vinsn (poweropen-syscall-s64 :call :subprim) (()
                                                               ())
   (stw ppc::sp ppc32::c-frame.crsave ppc::sp)
   (bla .SPpoweropen-syscall))
@@ -4031,25 +4227,20 @@
   (mr ppc::nargs save-nargs)
   :done)
   
+(define-ppc32-vinsn test-fixnum (((flags (:crf 0)))
+                                 ((x t))
+                                 ((tag :u8)))
+  (andi. tag x ppc32::fixnummask))
 
 
-(define-ppc32-vinsn branch-unless-arg-fixnum (()
-                                              ((arg :lisp)
-                                               (lab :label))
-                                              ((cr0 (:crf 0))
-                                               (tag :u8)))
-  (clrlwi. tag arg (- ppc32::nbits-in-word ppc32::nlisptagbits))
-  (bne cr0 lab))
+(define-ppc32-vinsn test-fixnums (((flags (:crf 0)))
+                                 ((x t)
+                                  (y t))
+                                 ((tag :u8)))
+  (or tag x y)
+  (andi. tag tag ppc32::fixnummask))
+  
 
-(define-ppc32-vinsn branch-unless-both-args-fixnums (()
-                                              ((arg0 :lisp)
-                                               (arg1 :lisp)
-                                               (lab :label))
-                                              ((cr0 (:crf 0))
-                                               (tag :u8)))
-  (clrlwi tag arg0 (- ppc32::nbits-in-word ppc32::nlisptagbits))
-  (rlwimi. tag arg1 ppc32::nlisptagbits 28 29)
-  (bne cr0 lab))
 
 (define-ppc32-vinsn %ilognot (((dest :imm))
                               ((src :imm)))
@@ -4089,6 +4280,52 @@
                                              ((temp :imm)))
   (add temp idx idx)
   (stfdx val base temp))
+
+(define-ppc32-vinsn ivector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u32)))
+  (clrlwi temp src (- 32 ppc32::ntagbits ppc32::fixnumshift))
+  (cmpwi temp (ash ppc32::fulltag-immheader ppc32::fixnumshift))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (beq :done)
+  (mr dest ppc::rzero)
+  :done)
+
+(define-ppc32-vinsn gvector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u32)))
+  (clrlwi temp src (- 32 ppc32::ntagbits ppc32::fixnumshift))
+  (cmpwi temp (ash ppc32::fulltag-nodeheader ppc32::fixnumshift))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (beq :done)
+  (mr dest ppc::rzero)
+  :done)
+
+
+(define-ppc32-vinsn %complex-single-float-realpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (fmr dest src))
+ 
+(define-ppc32-vinsn %complex-single-float-imagpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (fmr dest (:apply 1+ (:apply %hard-regspec-value src))))
+
+(define-ppc32-vinsn %complex-double-float-realpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (fmr dest src))
+
+(define-ppc32-vinsn %complex-double-float-imagpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (fmr dest (:apply 1+ (:apply %hard-regspec-value src))))
+
+
+
 
 ;;; In case ppc32::*ppc-opcodes* was changed since this file was compiled.
 (queue-fixup

@@ -132,29 +132,31 @@
 /*  element size - like all non-CL-array fulltag-immheader types - is 32 bits. */
 
 #define subtag_bit_vector IMM_SUBTAG(31)
-#define subtag_double_float_vector IMM_SUBTAG(30)
-#define subtag_s16_vector IMM_SUBTAG(29)
-#define subtag_u16_vector IMM_SUBTAG(28)
+#define subtag_complex_double_float_vector IMM_SUBTAG(30)
+#define subtag_complex_single_float_vector IMM_SUBTAG(29)
+#define subtag_double_float_vector IMM_SUBTAG(28)
+#define subtag_s16_vector IMM_SUBTAG(27)
+#define subtag_u16_vector IMM_SUBTAG(26)
 #define min_16_bit_ivector_subtag subtag_u16_vector
 #define max_16_bit_ivector_subtag subtag_s16_vector
 
-#define subtag_s8_vector IMM_SUBTAG(26)
-#define subtag_u8_vector IMM_SUBTAG(25)
+#define subtag_s8_vector IMM_SUBTAG(25)
+#define subtag_u8_vector IMM_SUBTAG(24)
 #define min_8_bit_ivector_subtag subtag_u8_vector
-#define max_8_bit_ivector_subtag IMM_SUBTAG(27)
+#define max_8_bit_ivector_subtag subtag_s8_vector
 
-#define subtag_simple_base_string IMM_SUBTAG(24)
-#define subtag_fixnum_vector IMM_SUBTAG(23)
-#define subtag_s32_vector IMM_SUBTAG(22)
-#define subtag_u32_vector IMM_SUBTAG(21)
-#define subtag_single_float_vector IMM_SUBTAG(20)
-#define max_32_bit_ivector_subtag IMM_SUBTAG(24)
+#define subtag_simple_base_string IMM_SUBTAG(23)
+#define subtag_fixnum_vector IMM_SUBTAG(22)
+#define subtag_s32_vector IMM_SUBTAG(21)
+#define subtag_u32_vector IMM_SUBTAG(20)
+#define subtag_single_float_vector IMM_SUBTAG(19)
+#define max_32_bit_ivector_subtag subtag_simple_base_string
 #define min_cl_ivector_subtag subtag_single_float_vector
 
 
-#define subtag_vectorH NODE_SUBTAG(20)
-#define subtag_arrayH NODE_SUBTAG(19)
-#define subtag_simple_vector NODE_SUBTAG(21)	/*  Only one such subtag) */
+#define subtag_vectorH NODE_SUBTAG(30)
+#define subtag_arrayH NODE_SUBTAG(29)
+#define subtag_simple_vector NODE_SUBTAG(31)	/*  Only one such subtag) */
 #define min_vector_subtag subtag_vectorH
 #define min_array_subtag subtag_arrayH
 
@@ -167,6 +169,8 @@
 #define subtag_dead_macptr IMM_SUBTAG(4)
 #define subtag_code_vector IMM_SUBTAG(5)
 #define subtag_creole IMM_SUBTAG(6)
+#define subtag_complex_single_float IMM_SUBTAG(8)
+#define subtag_complex_double_float IMM_SUBTAG(9)
 
 #define max_non_array_imm_subtag ((19<<ntagbits)|fulltag_immheader)
 
@@ -193,6 +197,23 @@ typedef struct double_float {
   LispObj value_high;
   LispObj value_low;
 } double_float;
+
+typedef struct complex_single_float {
+  LispObj header;
+  LispObj pad;
+  LispObj realpart;
+  LispObj imagpart;
+} complex_single_float;
+
+typedef struct complex_double_float {
+  LispObj header;
+  LispObj pad;
+  LispObj realpart_high;
+  LispObj realpart_low;
+  LispObj imagpart_high;
+  LispObj imagpart_low;
+} complex_double_float;
+
 
 typedef struct single_float {
   LispObj header;
@@ -239,7 +260,7 @@ typedef struct catch_frame {
   LispObj db_link;
   LispObj regs[8];
   LispObj xframe;
-  LispObj tsp_segment;
+  LispObj nfp;
 } catch_frame;
 
 #define catch_frame_element_count ((sizeof(catch_frame)/sizeof(LispObj))-1)
@@ -317,6 +338,7 @@ typedef struct tcr {
   LispObj *tlb_pointer;
   unsigned shutdown_count;
   void *safe_ref_address;
+  void *nfp;
 } TCR;
 
 /* 
@@ -328,9 +350,9 @@ typedef struct tcr {
 #define heap_segment_size 0x00010000
 #define log2_heap_segment_size 16
 
-#define ABI_VERSION_MIN 1039
-#define ABI_VERSION_CURRENT 1039
-#define ABI_VERSION_MAX 1039
+#define ABI_VERSION_MIN 1040
+#define ABI_VERSION_CURRENT 1040
+#define ABI_VERSION_MAX 1040
 
 #endif
 

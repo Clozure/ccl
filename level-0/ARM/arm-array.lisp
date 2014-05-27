@@ -31,7 +31,7 @@
                   arm::max-16-bit-ivector-subtag)
                (eql arm::max-32-bit-ivector-subtag arm::subtag-simple-base-string)
                (eql arm::max-16-bit-ivector-subtag arm::subtag-s16-vector)
-               (eql arm::max-8-bit-ivector-subtag 223))))
+               (eql arm::max-8-bit-ivector-subtag 207))))
 
 
 (defarmlapfunction %init-misc ((val arg_y)
@@ -62,6 +62,10 @@
   (b @u32)                              ;macptr
   (b @u32)                              ;dead-macptr
   (b @u32)                              ;code-vector, 5
+  (b @u32)                              ;creole object, whatever that is
+  (b @u32)                              ;xcode-vector
+  (b @u32)                              ;complex-single-float
+  (b @u32)                              ;complex-double-float (9)
   (b @bad)
   (b @bad)
   (b @bad)
@@ -71,22 +75,18 @@
   (b @bad)
   (b @bad)
   (b @bad)
-  (b @bad)
-  (b @bad)
-  (b @bad)
-  (b @bad)
-  (b @bad)
-  (b @single-float-vector)              ;20
+  (b @single-float-vector)              ;19
   (b @u32)
   (b @s32)
   (b @fixnum)
   (b @string)
   (b @u8)
   (b @s8)
-  (b @string8)
   (b @u16)
   (b @s16)
   (b @double-float-vector)
+  (b @complex-single-float-vector)
+  (b @complex-double-float-vector)
   (b @bit-vector)
   @dispatch
   (add pc lr (:lsl imm2 (:$ arm::word-shift)))
@@ -214,6 +214,7 @@
   (extract-typecode imm0 val)
   (cmp imm0 (:$ arm::subtag-double-float))
   (bne @bad)
+  @64-bit-common
   (ldrd imm0 (:@ val (:$ arm::double-float.value)))
   (mov imm2 (:$ arm::misc-dfloat-offset))
   @double-float-loop
@@ -221,7 +222,29 @@
   (strd imm0 (:@ miscobj imm2))
   (add imm2 imm2 (:$ 8))
   (bne @double-float-loop)
-  (return-lisp-frame imm0))
+  (return-lisp-frame imm0)
+  @complex-double-float-vector
+  (extract-typecode imm0 val)
+  (cmp imm0 (:$ arm::subtag-complex-double-float))
+  (bne @bad)
+  (add lr val (:$ arm::complex-double-float.realpart))
+  (fldmiad d0 lr 2)
+  (mov imm2 (:$ arm::complex-double-float.realpart))
+  @complex-double-float-vector-loop
+  (subs temp1 temp1 '1)
+  (bmi @complex-double-float-vector-done)
+  (add lr miscobj imm2)
+  (fstmiad d0 lr 2)
+  (add imm2 imm2 (:$ 16))
+  (b @complex-double-float-vector-loop)
+  @complex-double-float-vector-done
+  (return-lisp-frame imm0)
+  @complex-single-float-vector
+  (extract-subtag imm0 val)
+  (cmp imm0 (:$ arm::subtag-complex-single-float))
+  (bne @bad)
+  (b @64-bit-common))
+
 
 
 
@@ -238,10 +261,11 @@
     (ldr a (:@ temp (:$ target::arrayH.data-vector)))
     (ldrb imm0 (:@ a (:$ target::misc-subtag-offset)))
     (cmp imm0 (:$ target::subtag-vectorH))
+    (cmpne imm0 (:$ target::subtag-arrayH))
     (ldr disp (:@ temp (:$ target::arrayH.displacement)))
     (mov temp a)
     (add offset offset disp)
-    (ble  @loop)
+    (beq  @loop)
     (mov temp0 vsp)
     (vpush1 a)
     (vpush1 offset)
@@ -533,4 +557,6 @@
   (vpop1 temp1)
   (spjump .SPaset3))
   
+
+;;; If argument is an ivector typecode, return it else return 0.
 

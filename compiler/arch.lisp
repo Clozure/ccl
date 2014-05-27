@@ -242,6 +242,8 @@
   storage-class-crfbit                  ; bit within condition register field : 0-3
   storage-class-u64			; (unsigned-byte 64)
   storage-class-s64			; (signed-byte 64)
+  storage-class-complex-double-float
+  storage-class-complex-single-float
 )
 
 
@@ -278,7 +280,7 @@
   (package-name ())
   (t-offset ())
   (array-data-size-function ())
-  (numeric-type-name-to-typecode-function ())
+  fpr-mask-function
   (subprims-base ())
   (subprims-shift ())
   (subprims-table ())

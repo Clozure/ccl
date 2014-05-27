@@ -122,6 +122,20 @@
   (or (cdr (assq name *mode-name-value-alist*))
       (error "Unknown gpr mode name: ~s" name)))
 
+(defvar *fpr-mode-name-value-alist*
+  `((:double-float . ,hard-reg-class-fpr-mode-double)
+    (:single-float . ,hard-reg-class-fpr-mode-single)
+    (:complex-double-float . ,hard-reg-class-fpr-mode-complex-double-float)
+    (:complex-single-float . ,hard-reg-class-fpr-mode-complex-single-float)))
+
+(defun fpr-mode-name-value (name)
+  (or (cdr (assoc name *fpr-mode-name-value-alist* :test #'eq))
+      (error "Unknown FPR mode name ~s." name)))
+
+(defun fpr-mode-value-name (value)
+  (or (car (rassoc value *fpr-mode-name-value-alist* :test #'eq))
+      (error "Unknown FPR mode value ~s." value)))
+
 (defparameter *mode-specifier-types*
   (vector
    (specifier-type t)                   ;:lisp
@@ -247,23 +261,14 @@
   (and (= (hard-regspec-class reg) hard-reg-class-fpr)
        (= (get-regspec-mode reg) hard-reg-class-fpr-mode-single)))
 
-(defun target-fpr-mask (fpreg mode-name)
-  (target-arch-case
-   (:arm
-    (ecase mode-name
-      (:double-float (ash 3 (ash fpreg 1)))
-      (:single-float (ash 1 fpreg))))
-   (t
-    (ash 1 fpreg))))
+(defun target-fpr-mask (fpreg mode)
+  (funcall
+   (arch::target-fpr-mask-function (backend-target-arch *target-backend*))
+   fpreg
+   mode))
 
 (defun fpr-mask-for-vreg (vreg)
-  (let* ((value (hard-regspec-value vreg)))
-    (target-arch-case
-     (:arm
-      (if (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-single)
-        (ash 1 value)
-        (ash 3 (ash value 1))))
-     (t (ash 1 value)))))
+  (target-fpr-mask (hard-regspec-value vreg) (get-regspec-mode vreg)))
 
 (defun use-fp-reg (fpr)
     (setq *available-backend-fp-temps* (logand *available-backend-fp-temps* (lognot (fpr-mask-for-vreg fpr)))))
@@ -272,17 +277,16 @@
 
 (defun available-fp-temp (mask &optional (mode-name :double-float))
   (do* ((regno 0 (1+ regno))
-        (regmask (target-fpr-mask regno mode-name)  (target-fpr-mask regno mode-name)))
+        (mode (fpr-mode-name-value mode-name))
+        (regmask (target-fpr-mask regno mode)  (target-fpr-mask regno mode)))
        ((> regmask mask) (error "Bug: ran out of fp registers."))
     (when (eql regmask (logand mask regmask))
-      (let* ((mode (if (eq mode-name :double-float) 
-                     hard-reg-class-fpr-mode-double
-                     hard-reg-class-fpr-mode-single)))
-        (return (make-hard-fp-reg regno mode))))))
+      (return (make-hard-fp-reg regno mode)))))
 
 (defun select-fp-temp (mode-name)
   (do* ((i 0 (1+ i))
-        (fpr-mask (target-fpr-mask i mode-name) (target-fpr-mask i mode-name)))
+        (mode (fpr-mode-name-value mode-name))
+        (fpr-mask (target-fpr-mask i mode) (target-fpr-mask i mode)))
        ((> fpr-mask *available-backend-fp-temps*) (compiler-bug "Bug: ran out of fp registers."))
     (when (= fpr-mask (logand fpr-mask *available-backend-fp-temps*))
       (return i))))

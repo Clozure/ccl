@@ -465,7 +465,13 @@ sprint_lisp_object(LispObj o, int depth)
           }
 #ifdef PPC64
         } else if (header_subtag(o) == subtag_single_float) {
-          sprintf(numbuf, "%f", o>>32);
+          union {
+            unsigned u;
+            float f;
+          } u;
+          
+          u.u = (unsigned)(o>>32L);
+          sprintf(numbuf, "%f", u.f);
           add_c_string(numbuf);
 #endif
         } else {

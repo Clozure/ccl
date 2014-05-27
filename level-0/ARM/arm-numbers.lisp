@@ -165,11 +165,15 @@
 
 
 (defarmlapfunction called-for-mv-p ()
+  (ldr temp0 (:@ rcontext (:$ arm::tcr.nfp)))
+  (mov imm1 sp)
+  (cmp temp0 imm1)
+  (ldreq imm1 (:@ imm1 (:$ 0)))
+  (ldr imm1 (:@ imm1 (:$ arm::lisp-frame.savelr)))
   (ref-global imm0 ret1valaddr)
-  (ldr imm1 (:@ sp (:$ arm::lisp-frame.savelr)))
   (cmp imm1 imm0)
   (mov arg_z 'nil)
-  (add arg_z arg_z (:$ arm::t-offset))
+  (addeq arg_z arg_z (:$ arm::t-offset))
   (bx lr))
 
 ;;; n1 and n2 must be positive (esp non zero)
@@ -285,4 +289,47 @@
     (box-fixnum arg_z imm2)
     (bx lr)))
 
+(defarmlapfunction %make-complex-double-float ((r arg_y) (i arg_z))
+  (build-lisp-frame)                    ; need to use lr.
+  (add lr r (:$ arm::misc-dfloat-offset))
+  (fldd d0 (:@ lr (:$ 0)))
+  (add lr i (:$ arm::misc-dfloat-offset))
+  (fldd d1 (:@ lr (:$ 0)))
+  (mov imm0 (:$ (ash arm::complex-double-float.element-count arm::num-subtag-bits)))
+  (orr imm0 imm0 (:$ arm::subtag-complex-double-float))
+  (sub allocptr allocptr (:$ (- arm::complex-double-float.size arm::fulltag-misc)))
+  (ldr arg_z (:@ rcontext (:$ arm::tcr.save-allocbase)))
+  (cmp allocptr arg_z)
+  (bhi @no-trap)
+  (uuo-alloc-trap)
+  @no-trap
+  (str imm0 (:@ allocptr (:$ arm::misc-header-offset)))
+  (mov arg_z allocptr)
+  (bic allocptr allocptr (:$ arm::fulltagmask))
+  (add lr arg_z (:$ arm::complex-double-float.realpart))
+  (fstd d0 (:@ lr (:$ 0)))
+  (fstd d1 (:@ lr (:$ (- arm::complex-double-float.imagpart arm::complex-double-float.realpart))))
+  (return-lisp-frame))
+
+(defarmlapfunction %make-complex-single-float ((r arg_y) (i arg_z))
+  (build-lisp-frame)                    ; need to use lr.
+  (add lr r (:$ arm::misc-data-offset))
+  (flds s0 (:@ lr (:$ 0)))
+  (add lr i (:$ arm::misc-data-offset))
+  (flds s1 (:@ lr (:$ 0)))
+  (mov imm0 (:$ (ash arm::complex-single-float.element-count arm::num-subtag-bits)))
+  (orr imm0 imm0 (:$ arm::subtag-complex-single-float))
+  (sub allocptr allocptr (:$ (- arm::complex-single-float.size arm::fulltag-misc)))
+  (ldr arg_z (:@ rcontext (:$ arm::tcr.save-allocbase)))
+  (cmp allocptr arg_z)
+  (bhi @no-trap)
+  (uuo-alloc-trap)
+  @no-trap
+  (str imm0 (:@ allocptr (:$ arm::misc-header-offset)))
+  (mov arg_z allocptr)
+  (bic allocptr allocptr (:$ arm::fulltagmask))
+  (add lr arg_z (:$ arm::complex-single-float.realpart))
+  (fstd d0 (:@ lr (:$ 0)))
+  (return-lisp-frame))
+               
 ; End of arm-numbers.lisp

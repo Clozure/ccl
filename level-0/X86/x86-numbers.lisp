@@ -299,5 +299,51 @@
     (box-fixnum imm0 arg_z)
     (single-value-return)))
 
+
+;;; These things (or something like them) should get inlined soon.
+;;; Recall that (COMPLEX SINGLE-FLOAT) and (COMPLEX DOUBLE-FLOAT)
+;;; objects are viewed as having 32-bit elements and are viewed
+;;  as having some extra words for alignment.
+(defx86lapfunction %make-complex-double-float ((r arg_y) (i arg_z))
+  (movsd (@ target::misc-dfloat-offset (% r)) (% xmm0))
+  (movsd (@ target::misc-dfloat-offset (% i)) (% xmm1))
+  (unpcklpd (% xmm1) (% xmm0))
+  (movl ($ (logior (ash 6 x8664::num-subtag-bits) x8664::subtag-complex-double-float)) (%l imm0))
+  (movl ($ (- (* 3 16) x8664::fulltag-misc)) (%l imm1))
+  (subq (% imm1) (:rcontext x8664::tcr.save-allocptr))
+  (movq (:rcontext x8664::tcr.save-allocptr) (% allocptr))
+  (cmpq (:rcontext x8664::tcr.save-allocbase) (% allocptr))
+  (ja @no-trap)
+  (uuo-alloc)
+  @no-trap
+  (movq (% imm0) (@ x8664::misc-header-offset (% temp0)))
+  (andb ($ (lognot x8664::fulltagmask)) (:rcontext x8664::tcr.save-allocptr))
+  (movq (% allocptr) (% arg_z))
+  (movdqa (% xmm0) (@ x8664::complex-double-float.realpart (% arg_z)))
+  (single-value-return))
+
+(defx86lapfunction %make-complex-single-float ((r arg_y) (i arg_z))
+  (movd (% r) (% xmm0))
+  (psrlq ($ 32) (% xmm0))
+  (movd (% i) (% xmm1))
+  (psrlq ($ 32) (% xmm1))
+  (unpcklps (% xmm1) (% xmm0))
+  (movl ($ (logior (ash 2 x8664::num-subtag-bits) x8664::subtag-complex-single-float)) (%l imm0))
+  (movl ($ (- (* 1 16) x8664::fulltag-misc)) (%l imm1))
+  (subq (% imm1) (:rcontext x8664::tcr.save-allocptr))
+  (movq (:rcontext x8664::tcr.save-allocptr) (% allocptr))
+  (cmpq (:rcontext x8664::tcr.save-allocbase) (% allocptr))
+  (ja @no-trap)
+  (uuo-alloc)
+  @no-trap
+  (movq (% imm0) (@ x8664::misc-header-offset (% temp0)))
+  (andb ($ (lognot x8664::fulltagmask)) (:rcontext x8664::tcr.save-allocptr))
+  (movq (% allocptr) (% arg_z))
+  (movq (% xmm0) (@ x8664::complex-single-float.realpart (% arg_z)))
+  (single-value-return))
+                                               
+
+
+  
 ;;; End of x86-numbers.lisp
 ) ; #+x8664-target

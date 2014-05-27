@@ -145,33 +145,36 @@ define_node_subtag(complex,3)
 max_numeric_subtag = subtag_complex
 
 define_imm_subtag(bit_vector,31)
-define_imm_subtag(double_float_vector,30)
-define_imm_subtag(s16_vector,29)
-define_imm_subtag(u16_vector,28)
+define_imm_subtag(complex_double_float_vector,30)
+define_imm_subtag(complex_single_float_vector,29)                
+define_imm_subtag(double_float_vector,29)
+define_imm_subtag(s16_vector,27)
+define_imm_subtag(u16_vector,26)
 min_16_bit_ivector_subtag = subtag_u16_vector
 max_16_bit_ivector_subtag = subtag_s16_vector
-define_imm_subtag(s8_vector,26)
-define_imm_subtag(u8_vector,25)
+define_imm_subtag(s8_vector,25)
+        define_imm_subtag(u8_vector,24)
 min_8_bit_ivector_subtag = subtag_u8_vector
-max_8_bit_ivector_subtag = fulltag_immheader|(27<<ntagbits)
-define_imm_subtag(simple_base_string,24)
-define_imm_subtag(fixnum_vector,23)
-define_imm_subtag(s32_vector,22)
-define_imm_subtag(u32_vector,21)
-define_imm_subtag(single_float_vector,20)
-max_32_bit_ivector_subtag = fulltag_immheader|(24<<ntagbits)
+max_8_bit_ivector_subtag = subtag_s8_vector
+define_imm_subtag(simple_base_string,23)
+define_imm_subtag(fixnum_vector,22)
+define_imm_subtag(s32_vector,21)
+define_imm_subtag(u32_vector,20)
+define_imm_subtag(single_float_vector,19)
+max_32_bit_ivector_subtag = subtag_simple_base_string
 min_cl_ivector_subtag = subtag_single_float_vector
 
-define_node_subtag(arrayH,19)
-define_node_subtag(vectorH,20)
-define_node_subtag(simple_vector,21)
-min_vector_subtag = subtag_vectorH
-min_array_subtag = subtag_arrayH
+define_node_subtag(arrayH,29)
+define_node_subtag(vectorH,30)
+define_node_subtag(simple_vector,31)
+
 
 define_imm_subtag(macptr,3)
 min_non_numeric_imm_subtag = subtag_macptr
 define_imm_subtag(dead_macptr,4)
 define_imm_subtag(xcode_vector,7)
+define_imm_subtag(complex_single_float,8)
+define_imm_subtag(complex_double_float,9)
 
 define_subtag(unbound,fulltag_imm,6)
 unbound_marker = subtag_unbound
@@ -237,6 +240,22 @@ cons_bias = fulltag_cons
          _word(pad)
          _dword(value)
         _endstructf
+	
+        _structf(complex_single_float)
+         _word(pad)
+         _word(realpart)
+         _word(imagpart)
+        _endstructf
+
+        _structf(complex_double_float)
+         _word(pad)
+         _struct_label(realpart)
+         _word(realpart_low)
+         _word(realpart_high)
+         _struct_label(imagpart)
+         _word(imagpart_low)
+         _word(imagpart_high)
+        _endstructf
 
 	_structf(macptr)
          _node(address)
@@ -254,6 +273,8 @@ cons_bias = fulltag_cons
 	 _node(db_link)	   /* head of special-binding chain */
 	 _node(xframe)	   /* exception frame chain */
 	 _node(pc)	   /* TRA of catch exit or cleanup form */
+         _node(nfp)
+         _node(pad)        /* to align */
 	_endstructf
 
 	_struct(_function,-misc_bias)
@@ -336,6 +357,9 @@ def_header(symbol_header,symbol.element_count,subtag_symbol)
 def_header(value_cell_header,1,subtag_value_cell)
 def_header(macptr_header,macptr.element_count,subtag_macptr)
 def_header(vectorH_header,vectorH.element_count,subtag_vectorH)
+def_header(complex_double_float_header,complex_double_float.element_count,subtag_complex_double_float)
+def_header(complex_single_float_header,complex_single_float.element_count,subtag_complex_single_float)
+        
 
 	include(errors.s)
 
@@ -390,7 +414,7 @@ ifdef(`WIN_32',`
          _node(interrupt_pending)
 	 _node(next_method_context)
          _node(next_tsp)
-         _node(safe_ref_address)
+         _node(nfp)
          _node(save_tsp)        /* TSP when in foreign code */
          _node(save_vsp)        /* VSP when in foreign code */
          _node(save_ebp)        /* lisp EBP when in foreign code */
@@ -435,7 +459,8 @@ ifdef(`WIN_32',`
          _word(io_datum)
          _node(next)            /* in doubly-linked list */
          _node(prev)            /* in doubly-linked list */
-	_ends
+         _node(safe_ref_address)
+        _ends
 ',`
 /*  Thread context record.  */
 
@@ -500,6 +525,7 @@ ifdef(`WIN_32',`
          _word(allocated)
          _word(pending_io_info)
          _word(io_datum)
+         _node(nfp)
         _ends
 ')
 

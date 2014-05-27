@@ -71,12 +71,28 @@
                        (require-type val '(signed-byte 64)))
                       (#.x8664::subtag-u64-vector
                        (require-type val '(unsigned-byte 64)))
+                      (#.x8664::subtag-complex-single-float-vector
+                       (if (eql (typecode val) x8664::subtag-complex-single-float)
+                         val
+                         
+                         (report-bad-arg  val '(complex single-float))))
                       (t (report-bad-arg uvector
                                          '(or (simple-array fixnum (*))
                                            (simple-array double-float (*))
                                            (simple-array (signed-byte 64) (*))
-                                           (simple-array (unsigned-byte 64) (*))))))
+                                           (simple-array (unsigned-byte 64) (*))
+                                           (simple-array (complex single-float) (*))))))
                     uvector))
+
+(defx86lapfunction %init-ivector128 ((len arg_x) (value arg_y) (vector arg_z))
+  (movdqa (@ x8664::complex-double-float.realpart (% value)) (% xmm0))
+  (jmp @test)
+  @loop
+  (movdqa (% xmm0) (@ x8664::complex-double-float.realpart (% vector) (% len) 2))
+  @test
+  (subq ($ x8664::fixnumone) (% len))
+  (jns @loop)
+  (single-value-return))
   
 
 (eval-when (:compile-toplevel :execute)
@@ -130,43 +146,45 @@
     (if (or (= fulltag x8664::fulltag-nodeheader-0)
             (= fulltag x8664::fulltag-nodeheader-1))
       (%init-gvector len val uvector)
-      (if (= fulltag x8664::ivector-class-64-bit)
-        (%init-ivector64 typecode len val uvector)
-        (if (= fulltag x8664::ivector-class-32-bit)
-          (%init-ivector32 typecode len val uvector)
-          ;; Value must be a fixnum, 1, 8, 16 bits
-          (case typecode
-            (#.x8664::subtag-u16-vector
-             (%init-ivector-u16 len
-                                (require-type val '(unsigned-byte 16))
-                                uvector))
-            (#.x8664::subtag-s16-vector
-             (%init-ivector-u16 len
-                                (logand (the (signed-byte 16)
-                                          (require-type val '(signed-byte 16)))
-                                        #xffff)
-                                uvector))
-            (#.x8664::subtag-u8-vector
-             (let* ((v0 (require-type val '(unsigned-byte 8)))
-                    (l0 (ash (the fixnum (1+ len)) -1)))
-               (declare (type (unsigned-byte 8) v0)
-                        (type index l0))
-               (%init-ivector-u16 l0
-                                  (logior (the (unsigned-byte 16) (ash v0 8))
-                                          v0)
-                                  uvector)))
-            (#.x8664::subtag-s8-vector
-             (let* ((v0 (logand #xff
-                                (the (signed-byte 8)
-                                  (require-type val '(signed-byte 8)))))
-                    (l0 (ash (the fixnum (1+ len)) -1)))
-               (declare (type (unsigned-byte 8) v0)
-                        (type index l0))
-               (%init-ivector-u16 l0
-                                  (logior (the (unsigned-byte 16) (ash v0 8))
-                                          v0)
-                                  uvector)))
-            (#.x8664::subtag-bit-vector
+      (if (= typecode x8664::subtag-complex-double-float-vector)
+        (%init-ivector128 len (if (eql (typecode val) x8664::subtag-complex-double-float) val (error 'type-error :expected-type '(complex double-float) :datum val))  uvector)
+        (if (= fulltag x8664::ivector-class-64-bit)
+          (%init-ivector64 typecode len val uvector)
+          (if (= fulltag x8664::ivector-class-32-bit)
+            (%init-ivector32 typecode len val uvector)
+            ;; Value must be a fixnum, 1, 8, 16 bits
+            (case typecode
+              (#.x8664::subtag-u16-vector
+               (%init-ivector-u16 len
+                                  (require-type val '(unsigned-byte 16))
+                                  uvector))
+              (#.x8664::subtag-s16-vector
+               (%init-ivector-u16 len
+                                  (logand (the (signed-byte 16)
+                                            (require-type val '(signed-byte 16)))
+                                          #xffff)
+                                  uvector))
+              (#.x8664::subtag-u8-vector
+               (let* ((v0 (require-type val '(unsigned-byte 8)))
+                      (l0 (ash (the fixnum (1+ len)) -1)))
+                 (declare (type (unsigned-byte 8) v0)
+                          (type index l0))
+                 (%init-ivector-u16 l0
+                                    (logior (the (unsigned-byte 16) (ash v0 8))
+                                            v0)
+                                    uvector)))
+              (#.x8664::subtag-s8-vector
+               (let* ((v0 (logand #xff
+                                  (the (signed-byte 8)
+                                    (require-type val '(signed-byte 8)))))
+                      (l0 (ash (the fixnum (1+ len)) -1)))
+                 (declare (type (unsigned-byte 8) v0)
+                          (type index l0))
+                 (%init-ivector-u16 l0
+                                    (logior (the (unsigned-byte 16) (ash v0 8))
+                                            v0)
+                                    uvector)))
+              (#.x8664::subtag-bit-vector
                (let* ((v0 (case val
                             (1 -1)
                             (0 0)
@@ -175,12 +193,12 @@
                  (declare (type (unsigned-byte 8) v0)
                           (type index l0))
                  (%%init-ivector64  l0 v0 uvector)))
-            (t (report-bad-arg uvector
-                               '(or simple-bit-vector
+              (t (report-bad-arg uvector
+                                 '(or simple-bit-vector
                                    (simple-array (signed-byte 8) (*))
                                    (simple-array (unsigned-byte 8) (*))
                                    (simple-array (signed-byte 16) (*))
-                                   (simple-array (unsigned-byte 16) (*)))))))))))
+                                   (simple-array (unsigned-byte 16) (*))))))))))))
              
 
 )

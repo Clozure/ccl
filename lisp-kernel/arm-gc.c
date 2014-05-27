@@ -289,11 +289,14 @@ mark_root(LispObj n)
       total_size_in_bytes = 4 + element_count;
     } else if (subtag <= max_16_bit_ivector_subtag) {
       total_size_in_bytes = 4 + (element_count<<1);
-    } else if (subtag == subtag_double_float_vector) {
-      total_size_in_bytes = 8 + (element_count<<3);
-    } else {
+    } else if (subtag == subtag_complex_double_float_vector) {
+      total_size_in_bytes = 8 + (element_count<<4);
+    } else if (subtag == subtag_bit_vector) {
       total_size_in_bytes = 4 + ((element_count+7)>>3);
+    } else {
+      total_size_in_bytes = 8 + (element_count<<3);
     }
+      
 
 
     suffix_dnodes = ((total_size_in_bytes+(dnode_size-1))>>dnode_shift) -1;
@@ -454,10 +457,12 @@ rmark(LispObj n)
         total_size_in_bytes = 4 + element_count;
       } else if (subtag <= max_16_bit_ivector_subtag) {
         total_size_in_bytes = 4 + (element_count<<1);
-      } else if (subtag == subtag_double_float_vector) {
-        total_size_in_bytes = 8 + (element_count<<3);
-      } else {
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
+      } else if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 4 + ((element_count+7)>>3);
+      } else {
+        total_size_in_bytes = 8 + (element_count<<3);
       }
 
 
@@ -611,10 +616,12 @@ rmark(LispObj n)
         total_size_in_bytes = 4 + element_count;
       } else if (subtag <= max_16_bit_ivector_subtag) {
         total_size_in_bytes = 4 + (element_count<<1);
-      } else if (subtag == subtag_double_float_vector) {
-        total_size_in_bytes = 8 + (element_count<<3);
-      } else {
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
+      } else if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 4 + ((element_count+7)>>3);
+      } else {
+        total_size_in_bytes = 8 + (element_count<<3);
       }
 
 
@@ -694,16 +701,19 @@ skip_over_ivector(natural start, LispObj header)
     subtag = header_subtag(header),
     nbytes;
 
-  if (subtag <= max_32_bit_ivector_subtag) {
+  if (nodeheader_tag_p(fulltag_of(header)) ||
+      (subtag <= max_32_bit_ivector_subtag)) {
     nbytes = element_count << 2;
   } else if (subtag <= max_8_bit_ivector_subtag) {
     nbytes = element_count;
   } else if (subtag <= max_16_bit_ivector_subtag) {
     nbytes = element_count << 1;
-  } else if (subtag == subtag_double_float_vector) {
-    nbytes = 4 + (element_count << 3);
-  } else {
+  } else if (subtag == subtag_bit_vector) {
     nbytes = (element_count+7) >> 3;
+  } else if (subtag == subtag_complex_double_float_vector) {
+    nbytes = 4 + (element_count << 4);
+  } else {
+    nbytes = 4 + (element_count << 3);
   }
   return ptr_from_lispobj(start+(~7 & (nbytes + 4 + 7)));
 }
@@ -894,6 +904,8 @@ mark_cstack_area(area *a)
       current += sizeof(lisp_frame)/sizeof(LispObj);
     } else if ((header == stack_alloc_marker) || (header == 0)) {
       current += 2;
+    } else if ((header & fixnummask) == 0) {
+      current = (LispObj *)header;
     } else if (nodeheader_tag_p(fulltag_of(header))) {
       natural elements = header_element_count(header);
 
@@ -1182,6 +1194,8 @@ forward_cstack_area(area *a)
       current += sizeof(lisp_frame)/sizeof(LispObj);
     } else if ((header == stack_alloc_marker) || (header == 0)) {
       current += 2;
+    } else if ((header & fixnummask) == 0) {
+      current = (LispObj *)header;
     } else if (nodeheader_tag_p(fulltag_of(header))) {
       natural elements = header_element_count(header);
 
@@ -1404,6 +1418,8 @@ compact_dynamic_heap()
             imm_dnodes = (((elements+2)+3)>>2);
           } else if (tag == subtag_bit_vector) {
             imm_dnodes = (((elements+32)+63)>>6);
+          } else if (tag == subtag_complex_double_float_vector) {
+            imm_dnodes = (elements*2)+1;
           } else {
             imm_dnodes = elements+1;
           }
@@ -1447,44 +1463,46 @@ compact_dynamic_heap()
 natural
 unboxed_bytes_in_range(LispObj *start, LispObj *end)
 {
-    natural total=0, elements, tag, subtag, bytes;
-    LispObj header;
+  natural total=0, elements, tag, subtag, bytes;
+  LispObj header;
 
-    while (start < end) {
-      header = *start;
-      tag = fulltag_of(header);
+  while (start < end) {
+    header = *start;
+    tag = fulltag_of(header);
     
-      if ((nodeheader_tag_p(tag)) ||
-          (immheader_tag_p(tag))) {
-        elements = header_element_count(header);
-        if (nodeheader_tag_p(tag)) {
-          start += ((elements+2) & ~1);
-        } else {
-          subtag = header_subtag(header);
-
-          if (subtag <= max_32_bit_ivector_subtag) {
-            bytes = 4 + (elements<<2);
-          } else if (subtag <= max_8_bit_ivector_subtag) {
-            bytes = 4 + elements;
-          } else if (subtag <= max_16_bit_ivector_subtag) {
-            bytes = 4 + (elements<<1);
-          } else if (subtag == subtag_double_float_vector) {
-            bytes = 8 + (elements<<3);
-          } else {
-            bytes = 4 + ((elements+7)>>3);
-          }
-
-
-          bytes = (bytes+dnode_size-1) & ~(dnode_size-1);
-          total += bytes;
-          start += (bytes >> node_shift);
-        }
+    if ((nodeheader_tag_p(tag)) ||
+        (immheader_tag_p(tag))) {
+      elements = header_element_count(header);
+      if (nodeheader_tag_p(tag)) {
+        start += ((elements+2) & ~1);
       } else {
-        start += 2;
+        subtag = header_subtag(header);
+
+        if (subtag <= max_32_bit_ivector_subtag) {
+          bytes = 4 + (elements<<2);
+        } else if (subtag <= max_8_bit_ivector_subtag) {
+          bytes = 4 + elements;
+        } else if (subtag <= max_16_bit_ivector_subtag) {
+          bytes = 4 + (elements<<1);
+        } else if (subtag == subtag_complex_double_float_vector) {
+          bytes = 8 + (elements<<4);
+        } else if (subtag == subtag_bit_vector) {
+          bytes = 4 + ((elements+7)>>3);
+        } else {
+          bytes = 8 + (elements<<3);
+        }
+          
+          
+        bytes = (bytes+dnode_size-1) & ~(dnode_size-1);
+        total += bytes;
+        start += (bytes >> node_shift);
       }
+    } else {
+      start += 2;
     }
-    return total;
   }
+  return total;
+}
 
 
   /* 
@@ -1666,6 +1684,8 @@ purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to)
       copy_ivector_reference(&(frame->savefn), low, high, to);
       purify_locref(&(frame->savelr), low, high, to);
       current += sizeof(lisp_frame)/sizeof(LispObj);
+    } else if ((header & fixnummask) == 0) {
+      current = (LispObj *)header;
     } else if ((header == stack_alloc_marker) || (header == 0)) {
       current += 2;
     } else if (nodeheader_tag_p(fulltag_of(header))) {
@@ -1884,6 +1904,8 @@ impurify_cstack_area(area *a, LispObj low, LispObj high, int delta)
       current += sizeof(lisp_frame)/sizeof(LispObj);
     } else if ((header == stack_alloc_marker) || (header == 0)) {
       current += 2;
+    } else if ((header & fixnummask) == 0) {
+      current = (LispObj *) header;
     } else if (nodeheader_tag_p(fulltag_of(header))) {
       natural elements = header_element_count(header);
 

@@ -495,6 +495,9 @@
          (defppcsubprim .SPprogvrestore)
          )))))
 
+(defun fpr-mask (regno mode)
+  (cond ((< mode ccl::hard-reg-class-fpr-mode-complex-double-float)
+         (ash 1 regno))
+        (t (ash 3 regno))))
 
-  
 (provide "PPC-ARCH")

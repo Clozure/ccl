@@ -24,12 +24,12 @@
 ; error.
 
 (defun %array-is-header (array)
-  (let* ((typecode (typecode array)))
-    (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
+  (if (typep array 'array)
+    (let* ((typecode (typecode array)))
+      (declare (fixnum typecode))
       (or (= typecode target::subtag-arrayH)
-          (= typecode target::subtag-vectorH)))))
+          (= typecode target::subtag-vectorH)))
+    (report-bad-arg array 'array)))
 
 (defun %set-fill-pointer (vectorh new)
   (setf (%svref vectorh target::vectorh.logsize-cell) new))
@@ -52,10 +52,11 @@
      character
      (unsigned-byte 8)
      (signed-byte 8)
-     unused
      (unsigned-byte 16)
      (signed-byte 16)
      double-float
+     (complex single-float)
+     (complex double-float)
      bit))
 
 #+ppc64-target
@@ -73,7 +74,7 @@
      (unsigned-byte 32)
      (unsigned-byte 64)
      unused
-     unused
+     (complex double-float)
      short-float
      fixnum
      unused
@@ -83,7 +84,7 @@
      unused
      unused
      character
-     unused
+     (complex single-float)
      unused
      unused
      unused
@@ -102,10 +103,11 @@
      character
      (unsigned-byte 8)
      (signed-byte 8)
-     unused
      (unsigned-byte 16)
      (signed-byte 16)
      double-float
+     (complex single-float)
+     (complex double-float)
      bit))
 
 #+x8664-target
@@ -121,7 +123,7 @@
     unused
     unused
     unused
-    unused
+    (complex double-float)
     (signed-byte 16)
     (unsigned-byte 16)
     character
@@ -164,7 +166,7 @@
     unused
     unused
     unused
-    unused
+    (complex single-float)
     fixnum
     (signed-byte 64)
     (unsigned-byte 64)
@@ -181,10 +183,11 @@
      character
      (unsigned-byte 8)
      (signed-byte 8)
-     unused
      (unsigned-byte 16)
      (signed-byte 16)
      double-float
+     (complex single-float)
+     (complex double-float)
      bit))
 
 
@@ -228,62 +231,72 @@
    to the argument, this happens for complex arrays."
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
+    (if (or (>= (the (unsigned-byte 8) (gvector-typecode-p typecode))
+                target::subtag-arrayH)
+            (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                target::min-cl-ivector-subtag))
       (if (or (= typecode target::subtag-arrayH)
               (= typecode target::subtag-vectorH))
-        (logbitp $arh_adjp_bit (the fixnum (%svref array target::arrayH.flags-cell)))))))
+        (logbitp $arh_adjp_bit (the fixnum (%svref array target::arrayH.flags-cell))))
+      (report-bad-arg array 'array))))
 
 (defun array-displacement (array)
   "Return the values of :DISPLACED-TO and :DISPLACED-INDEX-offset
    options to MAKE-ARRAY, or NIL and 0 if not a displaced array."
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
-      (if (and (<= typecode target::subtag-vectorH)
-	       (logbitp $arh_exp_disp_bit
-			(the fixnum (%svref array target::arrayH.flags-cell))))
-	  (values (%svref array target::arrayH.data-vector-cell)
-		  (%svref array target::arrayH.displacement-cell))
-	  (values nil 0)))))
+    (if (and (or (= typecode target::subtag-arrayH)
+                 (= typecode target::subtag-vectorH))
+             (logbitp $arh_exp_disp_bit
+                      (the fixnum (%svref array target::arrayH.flags-cell))))
+      (values (%svref array target::arrayH.data-vector-cell)
+              (%svref array target::arrayH.displacement-cell))
+      (if (array-typecode-p typecode)
+        (values nil 0)
+        (report-bad-arg array 'array)))))
 
 (defun array-data-and-offset (array)
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
-      (if (<= typecode target::subtag-vectorH)
-        (%array-header-data-and-offset array)
-        (values array 0)))))
+    (if (or (= typecode target::subtag-arrayH)
+            (= typecode target::subtag-vectorH))
+      (%array-header-data-and-offset array)
+      (if (or (= typecode target::subtag-simple-vector)
+              (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                  target::min-cl-ivector-subtag))
+        (values array 0)
+        (report-bad-arg array 'array)))))
 
 (defun array-data-offset-subtype (array)
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
-      (if (<= typecode target::subtag-vectorH)
-        (do* ((header array data)
-              (offset (%svref header target::arrayH.displacement-cell)
-                      (+ offset 
-                         (the fixnum 
-                              (%svref header target::arrayH.displacement-cell))))
-              (data (%svref header target::arrayH.data-vector-cell)
-                    (%svref header target::arrayH.data-vector-cell)))
-             ((> (the fixnum (typecode data)) target::subtag-vectorH)
-              (values data offset (typecode data)))
-          (declare (fixnum offset)))
-        (values array 0 typecode)))))
+    (if (or (= typecode target::subtag-vectorH)
+            (= typecode target::subtag-arrayH))
+      (do* ((header array data)
+            (offset (%svref header target::arrayH.displacement-cell)
+                    (+ offset 
+                       (the fixnum 
+                         (%svref header target::arrayH.displacement-cell))))
+            (data (%svref header target::arrayH.data-vector-cell)
+                  (%svref header target::arrayH.data-vector-cell)))
+           ((> (the fixnum (typecode data)) target::subtag-vectorH)
+            (values data offset (typecode data)))
+        (declare (fixnum offset)))
+      (if (or (= typecode target::subtag-simple-vector)
+              (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                  target::min-cl-ivector-subtag))
+        (values array 0 typecode)
+        (report-bad-arg array 'array)))))
   
 
 (defun array-has-fill-pointer-p (array)
   "Return T if the given ARRAY has a fill pointer, or NIL otherwise."
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (>= typecode target::min-array-subtag)
-      (and (= typecode target::subtag-vectorH)
-             (logbitp $arh_fill_bit (the fixnum (%svref array target::vectorH.flags-cell))))
-      (report-bad-arg array 'array))))
+    (if (= typecode target::subtag-vectorH)
+      (logbitp $arh_fill_bit (the fixnum (%svref array target::vectorH.flags-cell)))
+      (unless (array-typecode-p typecode)
+        (report-bad-arg array 'array)))))
 
 
 (defun fill-pointer (array)
@@ -318,12 +331,14 @@
   "Return the total number of elements in the Array."
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
-      (if (or (= typecode target::subtag-arrayH)
+    (if (or (= typecode target::subtag-arrayH)
               (= typecode target::subtag-vectorH))
         (%svref array target::vectorH.physsize-cell)
-        (uvsize array)))))
+      (if (or (= typecode target::subtag-simple-vector)
+            (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                target::min-cl-ivector-subtag))
+        (uvsize array)
+        (report-bad-arg array 'array)))))
 
       
 
@@ -334,8 +349,7 @@
     (declare (fixnum axis-number))
     (let* ((typecode (typecode array)))
       (declare (fixnum typecode))
-      (if (< typecode target::min-array-subtag)
-        (report-bad-arg array 'array)
+      (if (array-typecode-p typecode)
         (if (= typecode target::subtag-arrayH)
           (let* ((rank (%svref array target::arrayH.rank-cell)))
             (declare (fixnum rank))
@@ -347,14 +361,14 @@
             (%err-disp $XNDIMS array axis-number)
             (if (= typecode target::subtag-vectorH)
               (%svref array target::vectorH.physsize-cell)
-              (uvsize array))))))))
+              (uvsize array))))
+        (report-bad-arg array 'array)))))
 
 (defun array-dimensions (array)
   "Return a list whose elements are the dimensions of the array"
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
+    (if (array-typecode-p typecode)
       (if (= typecode target::subtag-arrayH)
         (let* ((rank (%svref array target::arrayH.rank-cell))
                (dims ()))
@@ -365,18 +379,19 @@
             (push (%svref array (the fixnum (+ target::arrayH.dim0-cell i))) dims)))
         (list (if (= typecode target::subtag-vectorH)
                 (%svref array target::vectorH.physsize-cell)
-                (uvsize array)))))))
+                (uvsize array))))
+      (report-bad-arg array 'array))))
 
 
 (defun array-rank (array)
   "Return the number of dimensions of ARRAY."
   (let* ((typecode (typecode array)))
     (declare (fixnum typecode))
-    (if (< typecode target::min-array-subtag)
-      (report-bad-arg array 'array)
+    (if (array-typecode-p typecode)
       (if (= typecode target::subtag-arrayH)
         (%svref array target::arrayH.rank-cell)
-        1))))
+        1)
+      (report-bad-arg array 'array))))
 
 (defun vector-push (elt vector)
   "Attempt to set the element of ARRAY designated by its fill pointer
@@ -540,8 +555,10 @@ minimum number of elements to add if it must be extended."
 
 (defun %aref1 (v i)
   (let* ((typecode (typecode v)))
-    (declare (fixnum typecode))
-    (if (> typecode target::subtag-vectorH)
+    (declare (type (unsigned-byte 8)  typecode))
+    (if (or (= typecode target::subtag-simple-vector)
+            (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                target::min-cl-ivector-subtag))
       (uvref v i)
       (if (= typecode target::subtag-vectorH)
         (multiple-value-bind (data offset)
@@ -561,8 +578,10 @@ minimum number of elements to add if it must be extended."
 
 (defun %aset1 (v i new)
   (let* ((typecode (typecode v)))
-    (declare (fixnum typecode))
-    (if (> typecode target::subtag-vectorH)
+    (declare (type (unsigned-byte 8) typecode))
+    (if (or (= typecode target::subtag-simple-vector)
+            (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                target::min-cl-ivector-subtag))
       (setf (uvref v i) new)
       (if (= typecode target::subtag-vectorH)
         (multiple-value-bind (data offset)
@@ -619,9 +638,12 @@ minimum number of elements to add if it must be extended."
           (%aref3 a (%lexpr-ref subs n 0) (%lexpr-ref subs n 1) (%lexpr-ref subs n 2))
           (let* ((typecode (typecode a)))
             (declare (fixnum typecode))
-            (if (>= typecode target::min-vector-subtag)
+            (if (or (>= (the (unsigned-byte 8) (gvector-typecode-p typecode))
+                        target::subtag-vectorH)
+                    (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                        target::min-cl-ivector-subtag))
               (%err-disp $XNDIMS a n)
-              (if (< typecode target::min-array-subtag)
+              (if (/= typecode target::subtag-arrayH)
                 (report-bad-arg a 'array)
                 ;;  This typecode is Just Right ...
                 (progn
@@ -652,11 +674,14 @@ minimum number of elements to add if it must be extended."
               (%aset3 a (%lexpr-ref subs&val count 0) (%lexpr-ref subs&val count 1) (%lexpr-ref subs&val count 2) val)
               (let* ((typecode (typecode a)))
                 (declare (fixnum typecode))
-                (if (>= typecode target::min-vector-subtag)
+                (if (or (>= (the (unsigned-byte 8) (gvector-typecode-p typecode))
+                        target::subtag-vectorH)
+                    (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                        target::min-cl-ivector-subtag))
                   (%err-disp $XNDIMS a nsubs)
-                  (if (< typecode target::min-array-subtag)
+                  (if (/= typecode target::subtag-arrayH)
                     (report-bad-arg a 'array)
-                                        ;  This typecode is Just Right ...
+                    ;;  This typecode is Just Right ...
                     (progn
                       (unless (= (the fixnum (%svref a target::arrayH.rank-cell)) nsubs)
                         (%err-disp $XNDIMS a nsubs))
@@ -814,7 +839,10 @@ minimum number of elements to add if it must be extended."
        target::subtag-simple-vector))
     (numeric-ctype
      (if (eq (numeric-ctype-complexp ctype) :complex)
-       target::subtag-simple-vector
+       (case (numeric-ctype-format ctype)
+         (single-float target::subtag-complex-single-float-vector)
+         (double-float target::subtag-complex-double-float-vector)
+         (t target::subtag-simple-vector))
        (case (numeric-ctype-class ctype)
 	 (integer
 	  (let* ((low (numeric-ctype-low ctype))

@@ -243,6 +243,7 @@ define(`xfn',`temp1')
 define(`allocptr',`temp0')		
 define(`stack_temp',`mm7')
 
+
 		
 define(`fp0',`xmm0')		
 define(`fp1',`xmm1')		
@@ -455,14 +456,13 @@ subtag_$1 = ($2 | ($3 << ntagbits))
 define_subtag(arrayH,fulltag_nodeheader_0,10)
 define_subtag(vectorH,fulltag_nodeheader_1,10)
 define_subtag(simple_vector,fulltag_nodeheader_1,11)
-min_vector_subtag = subtag_vectorH
-min_array_subtag = subtag_arrayH
         
 	
 ivector_class_64_bit = fulltag_immheader_2
 ivector_class_32_bit = fulltag_immheader_1
 ivector_class_other_bit = fulltag_immheader_0
 
+define_subtag(complex_single_float_vector,ivector_class_64_bit,11)        
 define_subtag(fixnum_vector,ivector_class_64_bit,12)
 define_subtag(s64_vector,ivector_class_64_bit,13)
 define_subtag(u64_vector,ivector_class_64_bit,14)
@@ -472,13 +472,15 @@ define_subtag(simple_base_string,ivector_class_32_bit,12)
 define_subtag(s32_vector,ivector_class_32_bit,13)
 define_subtag(u32_vector,ivector_class_32_bit,14)
 define_subtag(single_float_vector,ivector_class_32_bit,15)
-	
+
+define_subtag(complex_double_float_vector,ivector_class_other_bit,9)
 define_subtag(s16_vector,ivector_class_other_bit,10)
 define_subtag(u16_vector,ivector_class_other_bit,11)
 define_subtag(s8_vector,ivector_class_other_bit,13)
 define_subtag(u8_vector,ivector_class_other_bit,14)
 define_subtag(bit_vector,ivector_class_other_bit,15)
 
+min_cl_ivector_subtag = subtag_complex_double_float_vector
 
 /* There's some room for expansion in non-array ivector space.   */
 define_subtag(macptr,ivector_class_64_bit,1)
@@ -486,6 +488,8 @@ define_subtag(dead_macptr,ivector_class_64_bit,2)
 define_subtag(bignum,ivector_class_32_bit,1)
 define_subtag(double_float,ivector_class_32_bit,2)
 define_subtag(xcode_vector,ivector_class_32_bit,3)
+define_subtag(complex_single_float,ivector_class_32_bit,4)
+define_subtag(complex_double_float,ivector_class_32_bit,5)
 
         
 /* Note the difference between (e.g) fulltag_function - which  */
@@ -569,7 +573,18 @@ define_subtag(function_boundary_marker,fulltag_imm_1,15)
 	 _word(value)
          _word(val_low)
 	_endstructf
-	
+
+        _structf(complex_single_float)
+         _word(realpart)
+         _word(imagpart)
+        _endstructf
+
+        _structf(complex_double_float)
+         _node(pad)
+         _field(realpart,8)
+         _field(imagpart,8)
+        _endstructf
+        
 	_structf(macptr)
 	 _node(address)
          _node(domain)
@@ -623,6 +638,8 @@ define_subtag(function_boundary_marker,fulltag_imm_1,15)
 	 _node(_save0)
 	 _node(xframe)		/* exception frame chain   */
 	 _node(pc)		/* TRA of catch exit or cleanup form   */
+         _node(nfp)
+         _node(pad)
 	_endstructf
 
 
@@ -685,6 +702,8 @@ $1 = ($2<<num_subtag_bits)|$3')
 	def_header(value_cell_header,1,subtag_value_cell	)
 	def_header(macptr_header,macptr.element_count,subtag_macptr)
 	def_header(vectorH_header,vectorH.element_count,subtag_vectorH)
+        def_header(complex_single_float_header,2,subtag_complex_single_float)
+        def_header(complex_double_float_header,6,subtag_complex_double_float)
 
 	include(errors.s)
 
@@ -772,6 +791,7 @@ TCR_BIAS = 0
          _node(safe_ref_address)
          _node(pending_io_info)
          _node(io_datum)
+         _node(nfp)
 	_ends
 
         _struct(win64_context,0)

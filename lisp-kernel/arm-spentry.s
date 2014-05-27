@@ -199,20 +199,30 @@ _spentry(builtin_eql)
         __(mov arg_z,#nil_value)
         __(bx lr)
 3:      __(cmp imm0,#subtag_bignum)
+        __(beq 4f)
+        __(cmp imm0,#subtag_complex_single_float)
+        __(cmpne imm0,#subtag_complex_double_float)
         __(bne 9f)
+        __(cmp imm0,#subtag_complex_single_float)
+        __(moveq temp0,#2<<fixnumshift)
+        __(moveq imm2,#complex_single_float.realpart)       
+        __(movne temp0,#4<<fixnumshift)
+        __(movne imm2,#complex_double_float.realpart)
+        __(b 6f)        
+4:              
         __(getvheader(imm0,arg_y))
         __(getvheader(imm1,arg_z))
         __(cmp imm0,imm1)
         __(bne 9f)
         __(header_length(temp0,imm0))
         __(mov imm2,#misc_data_offset)
-4:      __(ldr imm0,[arg_y,imm2])
+6:      __(ldr imm0,[arg_y,imm2])
         __(ldr imm1,[arg_z,imm2])
         __(cmp imm0,imm1)
         __(bne 9f)
         __(add imm2,imm2,#node_size)
         __(subs temp0,temp0,#fixnumone)
-        __(bne 4b)                
+        __(bne 6b)                
 8:      __(mov arg_z,#nil_value)
         __(add arg_z,arg_z,#t_offset)
         __(bx lr)
@@ -221,11 +231,15 @@ _spentry(builtin_eql)
         
 _spentry(builtin_length)
         __(extract_typecode(imm0,arg_z))
-        __(cmp imm0,#min_vector_subtag)
+        __(cmp imm0,#subtag_vectorH)
         __(ldreq arg_z,[arg_z,#vectorH.logsize])
         __(bxeq lr)
+        __(cmp imm0,#subtag_simple_vector)
+        __(beq 0f)
+        __(ivector_typecode_p(imm1,imm0,imm2))
+        __(cmp imm1,#min_cl_ivector_subtag)        
         __(blo 1f)
-        __(vector_length(arg_z,arg_z,imm0))
+0:      __(vector_length(arg_z,arg_z,imm0))
         __(bx lr)
 1:      __(cmp imm0,#tag_list)
         __(bne 8f)
@@ -251,13 +265,18 @@ _spentry(builtin_length)
 
 _spentry(builtin_seqtype)
         __(extract_typecode(imm0,arg_z))
-        __(cmp imm0,#min_vector_subtag)
-        __(movge arg_z,#nil_value)
+        __(mov arg_y,arg_z)
+        __(mov arg_z,#nil_value)
+        __(cmp imm0,#subtag_vectorH)
+        __(cmpne imm0,#subtag_simple_vector)
+        __(bxeq lr)
+        __(ivector_typecode_p(imm1,imm0,imm2))
+        __(cmp imm1,#min_cl_ivector_subtag)
         __(bxge lr)
         __(cmp imm0,#tag_list)
-        __(moveq arg_z,#nil_value)
         __(addeq arg_z,arg_z,#t_offset)
         __(bxeq lr)
+        __(mov arg_z,arg_y)
         __(jump_builtin(_builtin_seqtype,1))
 
 /* This is usually inlined these days */
@@ -366,16 +385,22 @@ _spentry(builtin_logxor)
 
 _spentry(builtin_aref1)
         __(extract_typecode(imm0,arg_y))
-        __(cmp imm0,#min_vector_subtag)
         __(box_fixnum(arg_x,imm0))
-        __(bgt _SPsubtag_misc_ref)
+        __(cmp imm0,#subtag_simple_vector)
+        __(beq _SPsubtag_misc_ref)
+        __(ivector_typecode_p(imm1,imm0,imm2))
+        __(cmp imm1,#min_cl_ivector_subtag)
+        __(bge _SPsubtag_misc_ref)
         __(jump_builtin(_builtin_aref1,2))
 
 _spentry(builtin_aset1)
         __(extract_typecode(imm0,arg_x))
-        __(cmp imm0,#min_vector_subtag)
         __(box_fixnum(temp0,imm0))
-        __(bgt _SPsubtag_misc_set)
+        __(cmp imm0,#subtag_simple_vector)
+        __(beq _SPsubtag_misc_set)
+        __(ivector_typecode_p(imm1,imm0,imm2))
+        __(cmp imm1,#min_cl_ivector_subtag) 
+        __(bge _SPsubtag_misc_set)
         __(jump_builtin(_builtin_aset1,3))
                 	
 
@@ -1227,11 +1252,15 @@ _spentry(stack_misc_alloc)
         __(cmp arg_z,#max_16_bit_ivector_subtag<<fixnumshift)
         __(movle imm1,arg_y,lsr #1)
         __(ble 8f)
-        __(cmp arg_z,#subtag_double_float_vector<<fixnumshift)
-        __(moveq imm1,arg_y,lsl #1)
+        __(cmp arg_z,#subtag_complex_double_float_vector<<fixnumshift)
+        __(moveq imm1,arg_y,lsl #2)
         __(addeq imm1,imm1,#node_size)
-        __(addne imm1,arg_y,#7<<fixnumshift)
-        __(movne imm1,imm1,lsr#3+fixnumshift)
+        __(beq 8f)
+        __(cmp arg_z,#subtag_bit_vector<<fixnumshift)
+        __(movne imm1,arg_y,lsl #1)
+        __(addne imm1,imm1,#node_size)
+        __(addeq imm1,arg_y,#7<<fixnumshift)
+        __(moveq imm1,imm1,lsr#3+fixnumshift)
 8:      __(dnode_align(imm1,imm1,node_size))
 9:      
         __(ldr temp0,[rcontext,tcr.cs_limit])
@@ -1411,6 +1440,9 @@ _spentry(check_fpu_exception)
 _spentry(discard_stack_object)
         new_local_labels()        
         __(ldr imm0,[sp,#0])
+        __(tst imm0,#fixnummask)
+        __(moveq sp,imm0)
+        __(bxeq lr)
         __(cmp imm0,#stack_alloc_marker)
         __(ldreq sp,[sp,#node_size])
         __(bxeq lr)
@@ -1442,7 +1474,10 @@ local_label(ivector):
         __(addeq imm0,imm0,#7)
         __(moveq imm0,imm0,lsr #3)
         __(beq local_label(out))
-        /* The infamous 'stack-consed double-float vector' case */
+        __(cmp imm1,#subtag_complex_double_float_vector)
+        __(mov imm0,imm0,lsr #num_subtag_bits-(dnode_shift+1))
+        __(beq local_label(out))
+        /* 64-bit case.  Barely infamous at all */
         __(mov imm0,imm0,lsr #num_subtag_bits-dnode_shift)
         __(b local_label(out))
 
@@ -1976,12 +2011,16 @@ _spentry(misc_alloc)
         __(mov imm2,arg_y,lsr #1)
         __(cmp imm1,#max_16_bit_ivector_subtag)
         __(ble 1f)
+        __(cmp imm1,#subtag_complex_double_float_vector)
+        __(moveq imm2,arg_y,lsl #2)
+        __(addeq imm2,imm2,#node_size)
+        __(beq 1f)
+        __(cmp imm1,#subtag_bit_vector)
+        __(addeq imm2,arg_y,#7<<fixnumshift)
+        __(moveq imm2,imm2,lsr #3+fixnumshift)
+        __(beq 1f)
         __(mov imm2,arg_y,lsl #1)
         __(add imm2,imm2,#node_size)
-        __(cmp imm1,#subtag_double_float_vector)
-        __(beq 1f)
-        __(add imm2,arg_y,#7<<fixnumshift)
-        __(mov imm2,imm2,lsr #3+fixnumshift)
         /* imm2 now = byte count.  Add 4 for header, 7 to align, then clear */
         /* low three bits.  */
 1:
@@ -2546,7 +2585,11 @@ _spentry(unbind_to)
                          
 _spentry(progvrestore)
         __(skip_stack_vector(imm0,imm1,sp))
-        __(ldr imm0,[imm0,#lisp_frame.size+(9*8)+node_size]) /* 7*8 = size of saved FPR vector, with header */
+        ifdef(`use_lisp_nvfprs',`
+        __(ldr imm0,[imm0,#lisp_frame.size+(9*8)+node_size])
+        ',` 
+        __(ldr imm0,[imm0,#lisp_frame.size+node_size])
+        ')
         __(cmp imm0,#0)
         __(unbox_fixnum(imm0,imm0))
         __(bne _SPunbind_n)
@@ -2677,8 +2720,9 @@ _spentry(aref2)
         __(ldr arg_y,[arg_y,#arrayH.data_vector])
         __(extract_subtag(imm1,arg_y))
         __(cmp imm1,#subtag_vectorH)
+        __(cmpne imm1,#subtag_arrayH)        
         __(add arg_z,arg_z,imm0)
-        __(bgt C(misc_ref_common))
+        __(bne C(misc_ref_common))
         __(b 0b)
  
 /* temp0 = array, arg_x = i, arg_y = j, arg_z = k */
@@ -2724,8 +2768,9 @@ _spentry(aref3)
         __(ldr arg_y,[arg_y,#arrayH.data_vector])
         __(extract_subtag(imm1,arg_y))
         __(cmp imm1,#subtag_vectorH)
+        __(cmpne imm1,#subtag_arrayH)
         __(add arg_z,arg_x,arg_z)
-        __(bgt C(misc_ref_common))
+        __(bne C(misc_ref_common))
         __(b 0b)
 
 
@@ -2764,8 +2809,9 @@ _spentry(aset2)
         __(ldr arg_x,[arg_x,#arrayH.data_vector])
         __(extract_subtag(imm1,arg_x))
         __(cmp imm1,#subtag_vectorH)
+        __(cmpne imm1,#subtag_arrayH)
         __(add arg_y,arg_y,imm0)
-        __(bgt C(misc_set_common))
+        __(bne C(misc_set_common))
         __(b 0b)
 
                  
@@ -2811,8 +2857,9 @@ _spentry(aset3)
         __(ldr arg_x,[arg_x,#arrayH.data_vector])
         __(extract_subtag(imm1,arg_x))
         __(cmp imm1,#subtag_vectorH)
+        __(cmpne imm1,#subtag_arrayH)
         __(add arg_y,arg_y,temp0)
-        __(bgt C(misc_set_common))
+        __(bne C(misc_set_common))
         __(b 0b)
 
 
@@ -3060,7 +3107,36 @@ _spentry(sdiv32)
         __(ldr lr,[sp,#lisp_frame.savelr])
         __(discard_lisp_frame())
         __(bx lr)
+
+_spentry(eabi_ff_call_simple)
+        __(build_lisp_frame(temp0))
+        __(mov fn,#0)
+        __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
+        __(str sp,[rcontext,#tcr.last_lisp_frame])
+        __(mov arg_x,rcontext)  /* preserved by C */
+        __(test_fixnum(arg_z))
+        __(str allocptr,[arg_x,#tcr.save_allocptr])
+        __(moveq lr,arg_z,asr #fixnumshift)
+        __(ldrne lr,[arg_z,#misc_data_offset])
+        __(mov r3,#TCR_STATE_FOREIGN)
+        __(str r3,[arg_x,#tcr.valence])
+        __(blx lr)
+        __(mov rcontext,arg_x)
+        __(str arg_y,[rcontext,#tcr.last_lisp_frame])
+        __(mov arg_x,#0)
+        __(mov arg_y,#0)
+        __(mov arg_z,#0)
+        __(mov temp0,#0)
+        __(mov temp1,#0)
+        __(mov temp2,#0)
+        __(mov allocptr,#VOID_ALLOCPTR)
+        __(str fn,[rcontext,#tcr.valence])
+        __(ldr allocptr,[rcontext,#tcr.save_allocptr])
+        __(check_pending_interrupt(temp2))
+        __(return_lisp_frame(temp2))
+
         
+                
 
 _spentry(eabi_ff_callhf)
         __(add imm0,sp,#8)
@@ -3070,7 +3146,6 @@ _spentry(eabi_ff_callhf)
         __(add imm2,sp,#16<<2)
         __(stm imm2,{imm0-imm1})
         __(mov sp,imm2)
-_spentry(eabi_ff_call)
         __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
         __(stmdb vsp!,{arg_y,arg_x,temp0,temp1,temp2})
         __(str vsp,[rcontext,#tcr.save_vsp])
@@ -3104,6 +3179,9 @@ _spentry(eabi_ff_call)
         __(blx r4)
         __(adr temp1,1f)
         __(fldd double_float_zero,[temp1])
+       ifdef(`old_double_float_zero',`
+        __(fcpyd old_double_float_zero,double_float_zero)
+        ')
         __(mov temp1,#0)
         __(mov temp2,#0)
         __(mov arg_z,#0)
@@ -3329,6 +3407,9 @@ _spentry(eabi_callback)
         __(push_foreign_fprs())
         __(adr imm0,1f)
         __(fldd double_float_zero,[imm0])
+       ifdef(`old_double_float_zero',`
+        __(fcpyd old_double_float_zero,double_float_zero)
+        ')
         __(mov arg_x,#0)
         __(mov temp0,#0)
         __(mov temp1,#0)
@@ -3447,7 +3528,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* 44 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 45 nil  */
 	__(b local_label(misc_ref_invalid)) /* 46 misc  */
-	__(b local_label(misc_ref_invalid)) /* 47 immheader  */
+	__(b local_label(misc_ref_u32))     /* 47 complex_single_float  */
 	__(b local_label(misc_ref_invalid)) /* 48 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 49 cons  */
 	__(b local_label(misc_ref_node)) /* 4a hash_vector  */
@@ -3455,7 +3536,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* 4c odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 4d nil  */
 	__(b local_label(misc_ref_invalid)) /* 4e misc  */
-	__(b local_label(misc_ref_invalid)) /* 4f immheader  */
+	__(b local_label(misc_ref_u32))     /* 4f complex_double_float  */
 	/* 50-5f  */
 	__(b local_label(misc_ref_invalid)) /* 50 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 51 cons  */
@@ -3535,29 +3616,29 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* 97 immheader  */
 	__(b local_label(misc_ref_invalid)) /* 98 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 99 cons  */
-	__(b local_label(misc_ref_node)) /* 9a arrayN  */
+	__(b local_label(misc_ref_invalid)) /* 9a nodeheader  */
 	__(b local_label(misc_ref_invalid)) /* 9b imm  */
 	__(b local_label(misc_ref_invalid)) /* 9c odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* 9d nil  */
 	__(b local_label(misc_ref_invalid)) /* 9e misc  */
-	__(b local_label(misc_ref_invalid)) /* 9f immheader  */
+	__(b local_label(misc_ref_single_float_vector)) /* 9f single_float_vector  */
 	/* a0-af  */
 	__(b local_label(misc_ref_invalid)) /* a0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* a1 cons  */
-	__(b local_label(misc_ref_node)) /* a2 vectorH  */
+	__(b local_label(misc_ref_invalid)) /* a2 nodeheader  */
 	__(b local_label(misc_ref_invalid)) /* a3 imm  */
 	__(b local_label(misc_ref_invalid)) /* a4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* a5 nil  */
 	__(b local_label(misc_ref_invalid)) /* a6 misc  */
-	__(b local_label(misc_ref_single_float_vector)) /* a7 sf_vector  */
+	__(b local_label(misc_ref_u32)) /* a7 u32  */
 	__(b local_label(misc_ref_invalid)) /* a8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* a9 cons  */
-	__(b local_label(misc_ref_node)) /* aa simple_vector  */
+	__(b local_label(misc_ref_invalid)) /* aa nodeheader  */
 	__(b local_label(misc_ref_invalid)) /* ab imm  */
 	__(b local_label(misc_ref_invalid)) /* ac odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* ad nil  */
 	__(b local_label(misc_ref_invalid)) /* ae misc  */
-	__(b local_label(misc_ref_u32)) /* af u32  */
+	__(b local_label(misc_ref_s32)) /* af s32  */
 	/* b0-bf  */
 	__(b local_label(misc_ref_invalid)) /* b0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* b1 cons  */
@@ -3566,7 +3647,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* b4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* b5 nil  */
 	__(b local_label(misc_ref_invalid)) /* b6 misc  */
-	__(b local_label(misc_ref_s32)) /* b7 s32  */
+	__(b local_label(misc_ref_fixnum_vector)) /* b7 fixnum_vector  */
 	__(b local_label(misc_ref_invalid)) /* b8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* b9 cons  */
 	__(b local_label(misc_ref_invalid)) /* ba nodeheader  */
@@ -3574,7 +3655,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* bc odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* bd nil  */
 	__(b local_label(misc_ref_invalid)) /* be misc  */
-	__(b local_label(misc_ref_fixnum_vector)) /* bf fixnum_vector  */
+	__(b local_label(misc_ref_new_string)) /* bf simple_base_string  */
 	/* c0-cf  */
 	__(b local_label(misc_ref_invalid)) /* c0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* c1 cons  */
@@ -3583,7 +3664,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* c4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* c5 nil  */
 	__(b local_label(misc_ref_invalid)) /* c6 misc  */
-	__(b local_label(misc_ref_new_string)) /* c7 new_string  */
+	__(b local_label(misc_ref_u8)) /* c7 u8  */
 	__(b local_label(misc_ref_invalid)) /* c8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* c9 cons  */
 	__(b local_label(misc_ref_invalid)) /* ca nodeheader  */
@@ -3591,7 +3672,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* cc odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* cd nil  */
 	__(b local_label(misc_ref_invalid)) /* ce misc  */
-	__(b local_label(misc_ref_u8)) /* cf u8  */
+	__(b local_label(misc_ref_s8)) /* cf s8  */
 	/* d0-df  */
 	__(b local_label(misc_ref_invalid)) /* d0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* d1 cons  */
@@ -3600,7 +3681,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* d4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* d5 nil  */
 	__(b local_label(misc_ref_invalid)) /* d6 misc  */
-	__(b local_label(misc_ref_s8))      /* d7 s8  */
+	__(b local_label(misc_ref_u16))      /* d7 u16  */
 	__(b local_label(misc_ref_invalid)) /* d8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* d9 cons  */
 	__(b local_label(misc_ref_invalid)) /* da nodeheader  */
@@ -3608,7 +3689,7 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* dc odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* dd nil  */
 	__(b local_label(misc_ref_invalid)) /* de misc  */
-	__(b local_label(misc_ref_old_string)) /* df (old)subtag_simple_base_string  */
+	__(b local_label(misc_ref_s16)) /* df s16  */
 	/* e0-ef  */
 	__(b local_label(misc_ref_invalid)) /* e0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* e1 cons  */
@@ -3617,27 +3698,27 @@ local_label(misc_ref_jmp):
 	__(b local_label(misc_ref_invalid)) /* e4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* e5 nil  */
 	__(b local_label(misc_ref_invalid)) /* e6 misc  */
-	__(b local_label(misc_ref_u16)) /* e7 u16  */
+	__(b local_label(misc_ref_double_float_vector)) /* e7 df vector  */
 	__(b local_label(misc_ref_invalid)) /* e8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* e9 cons  */
-	__(b local_label(misc_ref_invalid)) /* ea nodeheader  */
+	__(b local_label(misc_ref_node))    /* ea arrayH  */
 	__(b local_label(misc_ref_invalid)) /* eb imm  */
 	__(b local_label(misc_ref_invalid)) /* ec odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* ed nil  */
 	__(b local_label(misc_ref_invalid)) /* ee misc  */
-	__(b local_label(misc_ref_s16)) /* ef s16  */
+	__(b local_label(misc_ref_complex_single_float_vector)) /* ef complex sf vector  */
 	/* f0-ff  */
 	__(b local_label(misc_ref_invalid)) /* f0 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* f1 cons  */
-	__(b local_label(misc_ref_invalid)) /* f2 nodeheader  */
+	__(b local_label(misc_ref_node))    /* f2 vectorH  */
 	__(b local_label(misc_ref_invalid)) /* f3 imm  */
 	__(b local_label(misc_ref_invalid)) /* f4 odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* f5 nil  */
 	__(b local_label(misc_ref_invalid)) /* f6 misc  */
-	__(b local_label(misc_ref_double_float_vector)) /* f7 df vector  */
+	__(b local_label(misc_ref_complex_double_float_vector)) /* f7 complex df vector  */
 	__(b local_label(misc_ref_invalid)) /* f8 even_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* f9 cons  */
-	__(b local_label(misc_ref_invalid)) /* fa nodeheader  */
+	__(b local_label(misc_ref_node))    /* fa simple_vector  */
 	__(b local_label(misc_ref_invalid)) /* fb imm  */
 	__(b local_label(misc_ref_invalid)) /* fc odd_fixnum  */
 	__(b local_label(misc_ref_invalid)) /* fd nil  */
@@ -3683,6 +3764,24 @@ local_label(misc_ref_double_float_vector):
 	__(Misc_Alloc_Fixed(arg_z,imm2,double_float.size))
 	__(strd imm0,imm1,[arg_z,#double_float.value])
 	__(bx lr)
+local_label(misc_ref_complex_single_float_vector): 
+	__(mov imm2,arg_z,lsl #1)
+	__(add imm2,imm2,#misc_dfloat_offset)
+	__(ldrd imm0,imm1,[arg_y,imm2])
+        __(movc16(imm2,complex_single_float_header))
+        __(Misc_Alloc_Fixed(arg_z,imm2,complex_single_float.size))
+        __(strd imm0,imm1,[arg_z,#complex_single_float.realpart])
+        __(bx lr)                
+local_label(misc_ref_complex_double_float_vector):
+        __(build_lisp_frame(imm0))
+        __(add lr,arg_y,#complex_double_float.realpart)
+        __(add lr,lr,arg_z,lsl #2)
+        __(fldmiad lr,{d0-d1})
+        __(movc16(imm2,complex_double_float_header))
+        __(Misc_Alloc_Fixed(arg_z,imm2,complex_double_float.size))
+        __(add lr,arg_z,#complex_double_float.realpart)
+        __(fstmiad lr,{d0-d1})
+        __(return_lisp_frame(imm0))
 local_label(misc_ref_bit_vector):
 	__(mov imm1,#nbits_in_word-1)
 	__(and imm1,imm1,arg_z,lsr #2)
@@ -3813,7 +3912,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* 44 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 45 nil  */
 	__(b local_label(misc_set_invalid)) /* 46 misc  */
-	__(b local_label(misc_set_invalid)) /* 47 immheader  */
+	__(b local_label(misc_set_u32))     /* 47 complex_single_float  */
 	__(b local_label(misc_set_invalid)) /* 48 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 49 cons  */
 	__(b _SPgvset) /* 4a hash_vector  */
@@ -3821,7 +3920,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* 4c odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 4d nil  */
 	__(b local_label(misc_set_invalid)) /* 4e misc  */
-	__(b local_label(misc_set_invalid)) /* 4f immheader  */
+	__(b local_label(misc_set_u32))     /* 4f complex_double_float  */
 	/* 50-5f  */
 	__(b local_label(misc_set_invalid)) /* 50 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 51 cons  */
@@ -3901,29 +4000,29 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* 97 immheader  */
 	__(b local_label(misc_set_invalid)) /* 98 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 99 cons  */
-	__(b _SPgvset) /* 9a arrayH  */
+	__(b local_label(misc_set_invalid)) /* 9a nodeheader  */
 	__(b  local_label(misc_set_invalid)) /* 9b imm  */
 	__(b local_label(misc_set_invalid)) /* 9c odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* 9d nil  */
 	__(b local_label(misc_set_invalid)) /* 9e misc  */
-	__(b local_label(misc_set_invalid)) /* 9f immheader  */
+	__(b local_label(misc_set_single_float_vector)) /* 9f sf vector  */
 	/* a0-af  */
 	__(b local_label(misc_set_invalid)) /* a0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* a1 cons  */
-	__(b _SPgvset) /* a2 vectorH  */
+	__(b local_label(misc_set_invalid)) /* a2 nodeheader  */
 	__(b  local_label(misc_set_invalid)) /* a3 imm  */
 	__(b local_label(misc_set_invalid)) /* a4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* a5 nil  */
 	__(b local_label(misc_set_invalid)) /* a6 misc  */
-	__(b local_label(misc_set_single_float_vector)) /* a7 sf vector  */
+	__(b local_label(misc_set_u32)) /* a7 sf u32  */
 	__(b local_label(misc_set_invalid)) /* a8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* a9 cons  */
-	__(b _SPgvset) /* aa vectorH  */
+	__(b local_label(misc_set_invalid)) /* aa nodeheader  */
 	__(b  local_label(misc_set_invalid)) /* ab imm  */
 	__(b local_label(misc_set_invalid)) /* ac odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* ad nil  */
 	__(b local_label(misc_set_invalid)) /* ae misc  */
-	__(b local_label(misc_set_u32)) /* af u32  */
+	__(b local_label(misc_set_s32)) /* af s32  */
 	/* b0-bf  */
 	__(b local_label(misc_set_invalid)) /* b0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* b1 cons  */
@@ -3932,7 +4031,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* b4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* b5 nil  */
 	__(b local_label(misc_set_invalid)) /* b6 misc  */
-	__(b local_label(misc_set_s32)) /* b7 s32  */
+	__(b local_label(misc_set_fixnum_vector)) /* b7 fixnum_vector  */
 	__(b local_label(misc_set_invalid)) /* b8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* b9 cons  */
 	__(b local_label(misc_set_invalid)) /* ba nodeheader  */
@@ -3940,7 +4039,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* bc odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* bd nil  */
 	__(b local_label(misc_set_invalid)) /* be misc  */
-	__(b local_label(misc_set_fixnum_vector)) /* bf fixnum_vector  */
+	__(b local_label(misc_set_new_string)) /* bf new_string  */
 	/* c0-cf  */
 	__(b local_label(misc_set_invalid)) /* c0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* c1 cons  */
@@ -3949,7 +4048,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* c4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* c5 nil  */
 	__(b local_label(misc_set_invalid)) /* c6 misc  */
-	__(b local_label(misc_set_new_string)) /* c7 new_string  */
+	__(b local_label(misc_set_u8)) /* c7 u8  */
 	__(b local_label(misc_set_invalid)) /* c8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* c9 cons  */
 	__(b local_label(misc_set_invalid)) /* ca nodeheader  */
@@ -3957,7 +4056,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* cc odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* cd nil  */
 	__(b local_label(misc_set_invalid)) /* ce misc  */
-	__(b local_label(misc_set_u8)) /* cf u8  */
+	__(b local_label(misc_set_s8)) /* cf s8  */
 	/* d0-df  */
 	__(b local_label(misc_set_invalid)) /* d0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* d1 cons  */
@@ -3966,7 +4065,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* d4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* d5 nil  */
 	__(b local_label(misc_set_invalid)) /* d6 misc  */
-	__(b local_label(misc_set_s8)) /* d7 s8  */
+	__(b local_label(misc_set_u16))     /* d7 u16  */
 	__(b local_label(misc_set_invalid)) /* d8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* d9 cons  */
 	__(b local_label(misc_set_invalid)) /* da nodeheader  */
@@ -3974,7 +4073,7 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* dc odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* dd nil  */
 	__(b local_label(misc_set_invalid)) /* de misc  */
-	__(b local_label(misc_set_old_string)) /* df (old) simple_base_string  */
+	__(b local_label(misc_set_s16))     /* df s16  */
 	/* e0-ef  */
 	__(b local_label(misc_set_invalid)) /* e0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* e1 cons  */
@@ -3983,27 +4082,27 @@ local_label(misc_set_jmp):
 	__(b local_label(misc_set_invalid)) /* e4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* e5 nil  */
 	__(b local_label(misc_set_invalid)) /* e6 misc  */
-	__(b local_label(misc_set_u16)) /* e7 u16  */
+	__(b local_label(misc_set_double_float_vector)) /* e7 df vector  */
 	__(b local_label(misc_set_invalid)) /* e8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* e9 cons  */
-	__(b local_label(misc_set_invalid)) /* ea nodeheader  */
+	__(b _SPgvset)                      /* ea arrayH  */
 	__(b local_label(misc_set_invalid)) /* eb imm  */
 	__(b local_label(misc_set_invalid)) /* ec odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* ed nil  */
 	__(b local_label(misc_set_invalid)) /* ee misc  */
-	__(b local_label(misc_set_s16)) /* ef s16  */
+	__(b local_label(misc_set_complex_single_float_vector)) /* ef complex_sf_vector  */
 	/* f0-ff  */
 	__(b local_label(misc_set_invalid)) /* f0 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* f1 cons  */
-	__(b local_label(misc_set_invalid)) /* f2 nodeheader  */
+	__(b _SPgvset)                      /* f2 vectorH  */
 	__(b local_label(misc_set_invalid)) /* f3 imm  */
 	__(b local_label(misc_set_invalid)) /* f4 odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* f5 nil  */
 	__(b local_label(misc_set_invalid)) /* f6 misc  */
-	__(b local_label(misc_set_double_float_vector)) /* f7 df vector  */
+	__(b local_label(misc_set_complex_double_float_vector)) /* f7 complex_df vector  */
 	__(b local_label(misc_set_invalid)) /* f8 even_fixnum  */
 	__(b local_label(misc_set_invalid)) /* f9 cons  */
-	__(b local_label(misc_set_invalid)) /* fa nodeheader  */
+	__(b _SPgvset)                      /* fa simple_vector  */
 	__(b local_label(misc_set_invalid)) /* fb imm  */
 	__(b local_label(misc_set_invalid)) /* fc odd_fixnum  */
 	__(b local_label(misc_set_invalid)) /* fd nil  */
@@ -4163,6 +4262,26 @@ local_label(misc_set_double_float_vector):
 	__(add imm2,imm2,#misc_dfloat_offset)
 	__(strd imm0,imm1,[arg_x,imm2])
 	__(bx lr)
+local_label(misc_set_complex_single_float_vector):      
+        __(extract_subtag(imm2,arg_z))
+        __(cmp imm2,#subtag_complex_single_float)
+        __(bne local_label(set_bad))
+	__(ldrd imm0,imm1,[arg_z,#misc_dfloat_offset])
+	__(mov imm2,arg_y,lsl #1)
+	__(add imm2,imm2,#misc_dfloat_offset)
+	__(strd imm0,imm1,[arg_x,imm2])
+	__(bx lr)
+local_label(misc_set_complex_double_float_vector):
+        __(extract_subtag(imm2,arg_z))
+        __(cmp imm2,#subtag_complex_double_float)
+        __(bne local_label(set_bad))
+        __(build_lisp_frame(imm0))
+        __(add lr,arg_z,#complex_double_float.realpart)
+        __(fldmiad lr,{d0-d1})
+        __(add lr,arg_x,#complex_double_float.realpart)
+        __(add lr,lr,arg_y,lsl #2)
+        __(fstmiad lr,{d0-d1})
+        __(return_lisp_frame(imm0))
 local_label(misc_set_invalid):  
 	__(mov temp0,#XSETBADVEC)        
 	__(set_nargs(4))
@@ -4196,9 +4315,11 @@ local_label(throw_all_values):
         __(ldr temp1,[temp0,#catch_frame.mvflag])
         __(ldr imm0,[temp0,#catch_frame.xframe])        
         __(ldr imm1,[temp0,#catch_frame.last_lisp_frame])
+        __(ldr arg_y,[temp0,#catch_frame.nfp])
         __(cmp temp1,#0)
         __(str imm0,[rcontext,#tcr.xframe])
         __(str imm1,[rcontext,#tcr.last_lisp_frame])
+        __(str arg_y,[rcontext,#tcr.nfp])
         __(add imm0,vsp,nargs)
         __(sub sp,temp0,#fulltag_misc)
         __(ldr imm1,[sp,#catch_frame.size+lisp_frame.savevsp])
@@ -4237,6 +4358,8 @@ local_label(_nthrow1v_nextframe):
         __(str arg_y,[rcontext,#tcr.catch_top])
         __(ldr arg_y,[temp0,#catch_frame.xframe])
         __(str arg_y,[rcontext,#tcr.xframe])
+        __(ldr arg_y,[temp0,#catch_frame.nfp])
+        __(str arg_y,[rcontext,#tcr.nfp])
         __(beq local_label(_nthrow1v_dont_unbind))
         __(do_unbind_to(imm1,temp1,arg_x,arg_y))
 local_label(_nthrow1v_dont_unbind):
@@ -4317,6 +4440,8 @@ local_label(nthrownv_nextframe):
         __(str arg_y,[rcontext,#tcr.catch_top])
         __(ldr arg_y,[temp0,#catch_frame.xframe])
         __(str arg_y,[rcontext,#tcr.xframe])
+        __(ldr arg_y,[temp0,#catch_frame.nfp])
+        __(str arg_y,[rcontext,#tcr.nfp])
         __(beq local_label(nthrownv_dont_unbind))
         __(do_unbind_to(imm1,temp1,arg_x,arg_y))
 local_label(nthrownv_dont_unbind):
@@ -4345,9 +4470,11 @@ local_label(nthrownv_skip):
 local_label(nthrownv_do_unwind):
         __(ldr arg_x,[temp0,#catch_frame.xframe])
         __(ldr arg_z,[temp0,#catch_frame.last_lisp_frame])
+        __(ldr imm1,[temp0,#catch_frame.nfp])
         __(sub sp,temp0,#fulltag_misc)
         __(str arg_x,[rcontext,#tcr.xframe])
         __(str arg_z,[rcontext,#tcr.last_lisp_frame])
+        __(str imm1,[rcontext,#tcr.nfp])
         __(add sp,sp,#catch_frame.size)
         __(add imm1,nargs,#node_size)
         __(mov arg_z,sp)
@@ -4604,6 +4731,9 @@ _exportfn(C(start_lisp))
         __(push_foreign_fprs())
         __(adr imm0,1f)
         __(fldd double_float_zero,[imm0])
+       ifdef(`old_double_float_zero',`
+        __(fcpyd old_double_float_zero,double_float_zero)
+        ')
         __(mov imm0,#TCR_STATE_LISP)
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
@@ -4656,6 +4786,9 @@ _exportfn(C(init_lisp))
         __(push_foreign_fprs())
         __(adr imm0,1b)
         __(fldd double_float_zero,[imm0])
+       ifdef(`old_double_float_zero',`
+        __(fcpyd old_double_float_zero,double_float_zero)
+        ')
         __(mov imm0,#TCR_STATE_LISP)
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
@@ -4719,6 +4852,9 @@ _exportfn(C(os_main))
         __(push_foreign_fprs())
         __(adr imm0,1b)
         __(fldd double_float_zero,[imm0])
+       ifdef(`old_double_float_zero',`
+        __(fcpyd old_double_float_zero,double_float_zero)
+        ')
         __(mov imm0,#TCR_STATE_LISP)
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
@@ -4876,7 +5012,7 @@ local_label(start):
         .long _SPkeyword_bind
         .long _SPudiv32
         .long _SPsdiv32
-        .long _SPeabi_ff_call
+        .long _SPeabi_ff_call_simple
         .long _SPdebind
         .long _SPeabi_callback
         .long _SPeabi_ff_callhf

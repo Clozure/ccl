@@ -190,6 +190,20 @@
 				   dest
 				   0
 				   (the fixnum (ash n 3))))
+        (#.target::subtag-complex-single-float-vector
+         (%copy-ivector-to-ivector src
+                                   (the fixnum (+ (- target::complex-single-float.realpart target::misc-data-offset)
+                                                  (the fixnum (ash start 3))))
+                                   dest
+                                   (- target::complex-single-float.realpart target::misc-data-offset)
+                                   (the fixnum (ash n 3))))
+        (#.target::subtag-complex-double-float-vector
+         (%copy-ivector-to-ivector src
+                                   (the fixnum (+ (- target::complex-double-float.realpart target::misc-data-offset)
+                                                  (the fixnum (ash start 4))))
+                                   dest
+                                   (- target::complex-double-float.realpart target::misc-data-offset)
+                                   (the fixnum (ash n 4))))
 	(#.target::subtag-bit-vector
 	 ;; We can probably do a byte at a time if (not (logtest start 7))
 	 (if (not (logtest start 7))

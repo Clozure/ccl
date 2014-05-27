@@ -408,6 +408,17 @@
       (dolist (,pair ,listx)
         (when (and ,pair (eq (car ,pair) ,itemx)) (return ,pair))))))
 
+(define-compiler-macro getf (plist item &optional missing)
+  (let* ((i (gensym))
+         (l (gensym))
+         (m (gensym)))
+    `(do* ((,l ,plist (cddr ,l))
+           (,i ,item)
+           (,m ,missing))
+      ((null ,l) ,m)
+      (if (eq ,i (car ,l))
+        (return (cadr ,l))))))
+
 (define-compiler-macro caar (form)
   `(car (car ,form)))
 
@@ -1775,12 +1786,21 @@
 
 
 (define-compiler-macro arrayp (arg)
-  `(>= (the fixnum (typecode ,arg))
-    ,(nx-lookup-target-uvector-subtag :array-header)))
+  (let* ((typecode (gensym)))
+    `(let* ((,typecode (typecode ,arg)))
+      (or (>= (the (unsigned-byte 8) (gvector-typecode-p ,typecode))
+           ,(nx-lookup-target-uvector-subtag :array-header))
+       (>= (the (unsigned-byte 8) (ivector-typecode-p ,typecode))
+        ,(nx-lookup-target-uvector-subtag :min-cl-ivector-subtag))))))
+
 
 (define-compiler-macro vectorp (arg)
-  `(>= (the fixnum (typecode ,arg))
-    ,(nx-lookup-target-uvector-subtag :vector-header)))
+  (let* ((typecode (gensym)))
+    `(let* ((,typecode (typecode ,arg)))
+      (or (>= (the (unsigned-byte 8) (gvector-typecode-p ,typecode))
+           ,(nx-lookup-target-uvector-subtag :vector-header))
+       (>= (the (unsigned-byte 8) (ivector-typecode-p ,typecode))
+        ,(nx-lookup-target-uvector-subtag :min-cl-ivector-subtag))))))
 
 
 
@@ -1865,7 +1885,12 @@
   `(eql (typecode ,n) ,(nx-lookup-target-uvector-subtag :ratio)))
 
 (define-compiler-macro complexp (n)
-  `(eql (typecode ,n) ,(nx-lookup-target-uvector-subtag :complex)))
+  (let* ((typecode (gensym)))
+    `(let* ((,typecode (typecode ,n)))
+      (or (eql ,typecode ,(nx-lookup-target-uvector-subtag :complex))
+       (eql ,typecode ,(nx-lookup-target-uvector-subtag :complex-single-float))
+       (eql ,typecode ,(nx-lookup-target-uvector-subtag :complex-double-float))))))
+
 
 (define-compiler-macro macptrp (n)
   `(eql (typecode ,n) ,(nx-lookup-target-uvector-subtag :macptr)))

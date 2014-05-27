@@ -1693,9 +1693,9 @@ Will differ from *compiling-file* during an INCLUDE")
   (fasl-dump-form (%svref v target::ratio.denom-cell)))
 
 (defun fasl-dump-complex (v)
-  (fasl-out-opcode $fasl-complex v)
-  (fasl-dump-form (%svref v target::complex.realpart-cell))
-  (fasl-dump-form (%svref v target::complex.imagpart-cell)))
+  (fasl-out-opcode $fasl-complex v)  
+  (fasl-dump-form (realpart v))
+  (fasl-dump-form (imagpart v)))
 
 (defun fasl-dump-bit-vector (v)
   (let* ((n (uvsize v)))

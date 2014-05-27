@@ -35,10 +35,27 @@
 
 (declare-arch-specific-macro %denominator)
 
-(declare-arch-specific-macro %realpart)
 
-(declare-arch-specific-macro %imagpart)
+(defmacro %realpart (x)
+  (let* ((thing (gensym))
+         (complex-single-float-tag (nx-lookup-target-uvector-subtag :complex-single-float))
+         (complex-double-float-tag (nx-lookup-target-uvector-subtag :complex-double-float)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (,complex-single-float-tag (ccl::%complex-single-float-realpart ,thing))
+        (,complex-double-float-tag (ccl::%complex-double-float-realpart ,thing))
+        (t (ccl::%svref ,thing 0))))))
 
+
+(defmacro %imagpart (x)
+  (let* ((thing (gensym))
+         (complex-single-float-tag (nx-lookup-target-uvector-subtag :complex-single-float))
+         (complex-double-float-tag (nx-lookup-target-uvector-subtag :complex-double-float)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (,complex-single-float-tag (ccl::%complex-single-float-imagpart ,thing))
+        (,complex-double-float-tag (ccl::%complex-double-float-imagpart ,thing))
+        (t (ccl::%svref ,thing 1))))))
 
 (defmacro with-stack-double-floats (specs &body body)
   (collect ((binds)

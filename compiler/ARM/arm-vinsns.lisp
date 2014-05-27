@@ -200,7 +200,14 @@
   (mov lr (:$ 0)))
 
 
-
+(define-arm-vinsn (misc-ref-complex-double-float :predicatable :sets-lr)
+    (((dest :complex-double-float))
+     ((v :lisp)
+      (unscaled-idx :imm)))
+  (add arm::lr v (:$ arm::misc-dfloat-offset))
+  (add arm::lr arm::lr (:lsl unscaled-idx (:$ 2)))
+  (fldmiad dest arm::lr   2)
+  (mov lr (:$ 0)))
 
 (define-arm-vinsn (misc-ref-c-double-float :predicatable :sets-lr)
     (((dest :double-float))
@@ -984,9 +991,12 @@
   (orr numtags numtags (:$ (logand #xffff0000 arm::numeric-tags-mask)))
   (ldrbeq tag (:@ object (:$ arm::misc-subtag-offset)))
   (cmp tag (:$ 31))
-  (movhi tag (:$ arm::fulltag-nil))     ;not a number
+  (movhi mask (:$ 0))     ;not a number
   (tst numtags (:lsl mask tag))
   (bne :ok)
+  (cmp tag (:$ arm::subtag-complex-double-float))
+  (cmpne  tag (:$ arm::subtag-complex-single-float))
+  (beq :ok)
   (uuo-cerror-reg-not-xtype object (:$ arm::xtype-number))
   :ok)
 
@@ -1315,6 +1325,24 @@
   :ok)
 
 
+(define-arm-vinsn clear-pending-fpu-exceptions (()
+                                                ()
+                                                ((imm :u32)))
+  (fmrx imm :fpscr)
+  (bic imm imm (:$ #xff))
+  (fmxr :fpscr imm))
+
+(define-arm-vinsn trap-if-fpu-exception (()
+                                         ()
+                                         ((signaled :u32)
+                                          (enabled :u32)))
+  (fmrx signaled :fpscr)
+  (ldr enabled (:@ rcontext (:$ arm::tcr.lisp-fpscr)))
+  (ands signaled signaled (:lsr enabled (:$ 8)))
+  (beq :no-trap)
+  (uuo-fpu-exception signaled enabled)
+  :no-trap)
+                                        
 
 (define-arm-vinsn (fixnum->double :predicatable)
     (((dest :double-float))
@@ -1334,18 +1362,7 @@
   (fmsr dest imm)
   (fsitos dest dest))
 
-(define-arm-vinsn (fixnum->single-safe :call :subprim-call)
-    (((dest :single-float))
-     ((src :lisp))
-     ((imm :s32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (mov imm (:asr src (:$ arm::fixnumshift)))
-  (fmsr dest imm)
-  (fsitos dest dest)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (shift-left-variable-word :predicatable)
     (((dest :u32))
@@ -1568,17 +1585,7 @@
       (y :double-float)))
   (faddd result x y))
 
-(define-arm-vinsn (double-float+-2-safe :call :subprim-call)
-    (((result :double-float))
-     ((x :double-float)
-      (y :double-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (faddd result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (double-float--2 :predicatable)
     (((result :double-float))
@@ -1586,17 +1593,7 @@
       (y :double-float)))
   (fsubd result x y))
 
-(define-arm-vinsn (double-float-2-safe :call :subprim-call)
-    (((result :double-float))
-     ((x :double-float)
-      (y :double-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fsubd result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (double-float*-2 :predicatable)
     (((result :double-float))
@@ -1604,17 +1601,7 @@
       (y :double-float)))
   (fmuld result x y))
 
-(define-arm-vinsn (double-float*-2-safe :call :subprim-call)
-    (((result :double-float))
-     ((x :double-float)
-      (y :double-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fmuld result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (double-float/-2 :predicatable)
     (((result :double-float))
@@ -1622,17 +1609,7 @@
       (y :double-float)))
   (fdivd result x y))
 
-(define-arm-vinsn (double-float/-2-safe :call :subprim-call)
-    (((result :double-float))
-     ((x :double-float)
-      (y :double-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fdivd result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (double-float-negate :predicatable) (((dest :double-float))
                                                        ((src :double-float)))
@@ -1654,17 +1631,7 @@
      ())
   (fadds result x y))
 
-(define-arm-vinsn (single-float+-2-safe :call :subprim-call)
-    (((result :single-float))
-     ((x :single-float)
-      (y :single-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fadds result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (single-float--2 :predicatable)
     (((result :single-float))
@@ -1672,17 +1639,7 @@
       (y :single-float)))
   (fsubs result x y))
 
-(define-arm-vinsn (single-float--2-safe :call :subprim-call)
-    (((result :single-float))
-     ((x :single-float)
-      (y :single-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fsubs result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (single-float*-2 :predicatable)
     (((result :single-float))
@@ -1690,17 +1647,7 @@
       (y :single-float)))
   (fmuls result x y))
 
-(define-arm-vinsn (single-float*-2-safe :call :subprim-call)
-    (((result :single-float))
-     ((x :single-float)
-      (y :single-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fmuls result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (single-float/-2 :predicatable)
     (((result :single-float))
@@ -1708,17 +1655,7 @@
       (y :single-float)))
   (fdivs result x y))
 
-(define-arm-vinsn (single-float/-2-safe :call :subprim-call)
-    (((result :single-float))
-     ((x :single-float)
-      (y :single-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fdivs result x y)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (single-float-negate :predicatable) (((dest :single-float))
                                                        ((src :single-float)))
@@ -1923,6 +1860,24 @@
                 (:apply %hard-regspec-value src)))
    (fcpys dest src)))
 
+(define-arm-vinsn (complex-single-float-to-complex-single-float :predicatable)
+    (((dest :complex-single-float))
+     ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fcpyd dest src)))
+
+(define-arm-vinsn (complex-double-float-to-complex-double-float :predicatable)
+    (((dest :complex-double-float))
+     ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fcpyd dest src)
+   (fcpyd (:apply 1+ (:apply %hard-regspec-value dest))
+          (:apply 1+ (:apply %hard-regspec-value src)))))
+
 (define-arm-vinsn (vcell-ref :predicatable)
     (((dest :lisp))
      ((vcell :lisp)))
@@ -1992,7 +1947,7 @@
      ((src :lisp)))
   (ldr dest (:@ src (:$ arm::single-float.value))))
 
-(define-arm-vinsn (call-subprim :call :subprim-call) (()
+(define-arm-vinsn (call-subprim :call :subprim) (()
                                                       ((spno :s32const)))
   (sploadlr spno)
   (blx lr))
@@ -2003,25 +1958,25 @@
 
 ;;; Same as "call-subprim", but gives us a place to 
 ;;; track args, results, etc.
-(define-arm-vinsn (call-subprim-0 :call :subprim-call) (((dest t))
+(define-arm-vinsn (call-subprim-0 :call :subprim) (((dest t))
                                                         ((spno :s32const)))
   (sploadlr spno)
   (blx lr))
 
-(define-arm-vinsn (call-subprim-1 :call :subprim-call) (((dest t))
+(define-arm-vinsn (call-subprim-1 :call :subprim) (((dest t))
                                                         ((spno :s32const)
                                                          (z t)))
   (sploadlr spno)
   (blx lr))
   
-(define-arm-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
+(define-arm-vinsn (call-subprim-2 :call :subprim) (((dest t))
                                                         ((spno :s32const)
                                                          (y t)
                                                          (z t)))
   (sploadlr spno)
   (blx lr))
 
-(define-arm-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
+(define-arm-vinsn (call-subprim-3 :call :subprim) (((dest t))
                                                         ((spno :s32const)
                                                          (x t)
                                                          (y t)
@@ -2063,18 +2018,14 @@
                                       ())
   (:unlock-constant-pool))
 
-(define-arm-vinsn (skip-unless-fixnum-in-range :branch)
-    (((idx :u32))
+(define-arm-vinsn set-carry-if-fixnum-in-range
+    (((idx :u32)
+      (flags :crf))
      ((reg :imm)
       (minval :s32const)
-      (maxval :u32const)
-
-
-      (default :label))
+      (maxval :u32const))
      ((temp :s32)))
-  (tst reg (:$ arm::fixnummask))
   (mov idx (:asr reg (:$  arm::fixnumshift)))
-  (bne default)
   ((:not (:pred zerop minval))
    ((:pred arm::encode-arm-immediate minval)
     (sub idx idx (:$ minval)))
@@ -2114,8 +2065,7 @@
        (orr temp temp (:$ (:apply logand #xff0000 maxval))))
       ((:not (:pred = 0 (:apply logand #xff000000 maxval)))
        (orr temp temp (:$ (:apply logand #xff000000 maxval)))))
-    (cmp idx temp)))
-  (bhs default))
+    (cmp idx temp))))
 
 (define-arm-vinsn (ijmp :branch) (()
                                   ((idx :u32)))
@@ -2566,6 +2516,25 @@
   (fstd fpreg (:@ lr (:$ 0)))
   (mov lr (:$ 0)))
 
+(define-arm-vinsn (complex-double-float->heap :sets-lr) (((result :lisp)) ; tagged as a double-float
+                                ((fpreg :complex-double-float)) 
+                                ((header-temp (:u32 #.arm::imm0))
+                                 (high (:u32 #.arm::imm1))))
+  (mov header-temp (:$ (logand #xff00 arm::complex-double-float-header)))
+  (orr header-temp header-temp (:$ (logand #xff arm::complex-double-float-header)))
+  (sub allocptr allocptr (:$ (- arm::complex-double-float.size arm::fulltag-misc)))
+  (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
+  (cmp allocptr result)
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
+  (mov result allocptr)
+  (bic allocptr allocptr (:$ arm::fulltagmask))
+  (add lr result (:$ arm::complex-double-float.realpart))
+  (fstmiad fpreg lr 2)
+  (mov lr (:$ 0)))
+
 
 ;;; This is about as bad as heap-consing a double-float.  (In terms of
 ;;; verbosity).  Wouldn't kill us to do either/both out-of-line, but
@@ -2590,6 +2559,25 @@
   (fsts fpreg (:@ lr (:$ 0)))
   (mov lr (:$ 0)))
 
+(define-arm-vinsn (complex-single-float->node :sets-lr)
+    (((result :lisp)) ; tagged as a complex-single-float
+     ((fpreg :complex-single-float))
+     ((header-temp :u32)))
+  (mov header-temp (:$ (logand #xff00 arm::complex-single-float-header)))
+  (orr header-temp header-temp (:$ (logand #xff arm::complex-single-float-header)))
+  (sub allocptr allocptr (:$ (- arm::complex-single-float.size arm::fulltag-misc)))
+  (ldr result (:@ rcontext (:$ arm::tcr.save-allocbase)))
+  (cmp allocptr result)
+  (bhi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (str header-temp (:@ allocptr (:$ arm::misc-header-offset)))
+  (mov result allocptr)
+  (bic allocptr allocptr (:$ arm::fulltagmask))
+  (add lr result (:$ arm::complex-single-float.realpart))
+  (fstd fpreg (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
+
 
 
 ;;; "dest" is preallocated, presumably on a stack somewhere.
@@ -2606,6 +2594,20 @@
      ((source :lisp)))
   (add lr source (:$ arm::double-float.value))
   (fldd target (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
+
+(define-arm-vinsn (get-complex-single-float :predicatable :sets-lr)
+    (((target :complex-single-float))
+     ((source :lisp)))
+  (add lr source (:$ arm::complex-single-float.realpart))
+  (fldd target (:@ lr (:$ 0)))
+  (mov lr (:$ 0)))
+
+(define-arm-vinsn (get-complex-double-float :predicatable :sets-lr)
+    (((target :complex-double-float))
+     ((source :lisp)))
+  (add lr source (:$ arm::complex-double-float.realpart))
+  (fldmiad target lr 2)
   (mov lr (:$ 0)))
 
 ;;; Extract a double-float value, typechecking in the process.
@@ -2631,31 +2633,13 @@
                                     ((arg :double-float)))
   (fcvtsd result arg))
 
-(define-arm-vinsn (double-to-single-safe :call :subprim-call)
-    (((result :single-float))
-     ((arg :double-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fcvtsd result arg)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn single-to-double (((result :double-float))
                                     ((arg :single-float)))
   (fcvtds result arg))
 
-(define-arm-vinsn (single-to-double-safe :call :subprim-call)
-    (((result :double-float))
-     ((arg :single-float))
-     ((imm :u32)))
-  (fmrx imm :fpscr)
-  (bic imm imm (:$ #xff))
-  (fmxr :fpscr imm)
-  (fcvtds result arg)
-  (sploadlr .SPcheck-fpu-exception)
-  (blx lr))
+
 
 (define-arm-vinsn (store-single :predicatable :sets-lr)
     (()
@@ -2796,35 +2780,11 @@
   (bic dest temp (:$ arm::fixnummask)))
 
 
-(define-arm-vinsn negate-fixnum-overflow-inline (((dest :lisp))
-                                                 ((src :imm))
-                                                 ((unboxed :s32)
-                                                  (header :u32)))
-  (rsbs dest src (:$ 0))
-  (bvc :done)
-  (mov unboxed (:asr dest (:$ arm::fixnumshift)))
-  (eor unboxed unboxed (:$ #xc0000000))
-  (mov header (:$ (logand #xff00 arm::one-digit-bignum-header)))
-  (orr header header (:$ (logand #xff arm::one-digit-bignum-header)))
-  (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
-  (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
-  (cmp allocptr dest)
-  (bhi :no-trap)
-  (uuo-alloc-trap)
-  :no-trap
-  (str header (:@ allocptr (:$ arm::misc-header-offset)))
-  (mov dest allocptr)
-  (bic allocptr allocptr (:$ arm::fulltagmask))
-  (str unboxed (:@ dest (:$ arm::misc-data-offset)))
-  :done)
-
-(define-arm-vinsn (negate-fixnum-overflow-ool :call :subprim-call)
-    (((result (:lisp #.arm::arg_z)))
-     ((src :imm))
-     )
-  (rsbs arm::arg_z src (:$ 0))
-  (sploadlrvs .SPfix-overflow)
-  (blxvs lr))
+(define-arm-vinsn negate-fixnum-set-flags  (((dest :lisp)
+                                             (flags :crf))
+                                            ((src :imm)))
+  (rsbs dest src (:$ 0)))
+  
   
                                                   
                                        
@@ -3050,22 +3010,25 @@
       (y t)))
   (add dest x y))
 
+(define-arm-vinsn fixnum-add-set-flags (((dest t)
+                                         (flags :crf))
+                                        ((x t)
+                                         (y t)))
+  (adds dest x y))
 
-(define-arm-vinsn fixnum-add-overflow-ool (((result (:lisp #.arm::arg_z)))
-                                           ((x :imm)
-                                            (y :imm))
-                                           ())
-  (adds arm::arg_z x y)
-  (sploadlrvs .SPfix-overflow)
-  (blxvs lr))
+(define-arm-vinsn fixnum-sub-set-flags (((dest t)
+                                         (flags :crf))
+                                        ((x t)
+                                         (y t)))
+  (subs dest x y))
 
-(define-arm-vinsn fixnum-add-overflow-inline (((dest :lisp))
-                                              ((x :imm)
-                                               (y :imm))
-                                              ((unboxed :s32)
-                                               (header :u32)))
-  (adds dest x y)
-  (bvc :done)
+
+
+
+(define-arm-vinsn handle-fixnum-overflow-inline (((dest :lisp))
+                                                 ((src :imm))
+                                                 ((unboxed :s32)
+                                                  (header :u32)))
   (mov unboxed (:asr dest (:$ arm::fixnumshift)))
   (mov header (:$ (logand #xff00 arm::one-digit-bignum-header)))
   (orr header header (:$ (logand #xff arm::one-digit-bignum-header)))
@@ -3079,32 +3042,8 @@
   (str header (:@ allocptr (:$ arm::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
-  (str unboxed (:@ dest (:$ arm::misc-data-offset)))
-  :done)
+  (str unboxed (:@ dest (:$ arm::misc-data-offset))))
 
-(define-arm-vinsn fixnum-add-overflow-inline-skip (((dest :lisp))
-                                                   ((x :imm)
-                                                    (y :imm)
-                                                    (target :label))
-                                                   ((unboxed :s32)
-                                                    (header :u32)))
-  (adds dest x y)
-  (bvc target)
-  (mov unboxed (:asr dest (:$ arm::fixnumshift)))
-  (mov header (:$ (logand #xff00 arm::one-digit-bignum-header)))
-  (orr header header (:$ (logand #xff arm::one-digit-bignum-header)))
-  (eor unboxed unboxed (:$ #xc0000000))
-  (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
-  (ldr dest (:@ rcontext (:$ arm::tcr.save-allocptr)))
-  (cmp allocptr dest)
-  (bhi :no-trap)
-  (uuo-alloc-trap)
-  :no-trap
-  (str header (:@ allocptr (:$ arm::misc-header-offset)))
-  (mov dest allocptr)
-  (bic allocptr allocptr (:$ arm::fulltagmask))
-  (str unboxed (:@ dest (:$ arm::misc-data-offset)))
-  (b target))
   
 
   
@@ -3116,70 +3055,41 @@
       (y t)))
   (sub dest x y))
 
+
+(define-arm-vinsn fixnum-sub-set-flags
+    (((dest t)
+      (flags :crf))
+     ((x t)
+      (y t)))
+  (subs dest x y))
+
+(define-arm-vinsn (fixnum-sub-constant :predicatable) (((dest t))
+                                                       ((x t)
+                                                        (y :s32const)))
+  (sub dest x (:$ y)))
+
+(define-arm-vinsn fixnum-sub-constant-set-flags (((dest t)
+                                                  (flags :crf))
+                                                 ((x t)
+                                                  (y :s32const)))
+  (subs dest x (:$ y)))
+                                                       
+
 (define-arm-vinsn (fixnum-sub-from-constant :predicatable)
     (((dest :imm))
-     ((x :s16const)
+     ((x :s32const)
       (y :imm)))
-  (rsb dest y (:$ (:apply ash x arm::fixnumshift))))
+  (rsb dest y (:$ x)))
 
 
-
-
-(define-arm-vinsn (fixnum-sub-overflow-ool :call :subprim-call)
-    (((result (:lisp #.arm::arg_z)))
-     ((x :imm)
+(define-arm-vinsn fixnum-sub-from-constant-set-flags
+    (((dest :imm)
+      (flags :crf))
+     ((x :s32const)
       (y :imm)))
-  (subs arm::arg_z x y)
-  (sploadlrvs .SPfix-overflow)
-  (blxvs lr))
+  (rsbs dest y (:$ x)))
 
-(define-arm-vinsn fixnum-sub-overflow-inline (((dest :lisp))
-                                              ((x :imm)
-                                               (y :imm))
-                                              ((cr0 (:crf 0))
-                                               (unboxed :s32)
-                                               (header :u32)))
-  (subs dest x y)
-  (bvc :done)
-  (mov unboxed (:asr dest (:$ arm::fixnumshift)))
-  (mov header (:$ (logand #xff00 arm::one-digit-bignum-header)))
-  (orr header header (:$ (logand #xff arm::one-digit-bignum-header)))
-  (eor unboxed unboxed (:$ #xc0000000))
-  (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
-  (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
-  (cmp allocptr dest)
-  (bhi :no-trap)
-  (uuo-alloc-trap)
-  :no-trap
-  (str header (:@ allocptr (:$ arm::misc-header-offset)))
-  (mov dest allocptr)
-  (bic allocptr allocptr (:$ arm::fulltagmask))
-  (str unboxed (:@ dest (:$ arm::misc-data-offset)))
-  :done)
 
-(define-arm-vinsn fixnum-sub-overflow-inline-skip (((dest :lisp))
-                                                   ((x :imm)
-                                                    (y :imm)
-                                                    (target :label))
-                                                   ((unboxed :s32)
-                                                    (header :u32)))
-  (subs dest x y)
-  (bvc target)
-  (mov unboxed (:asr dest (:$ arm::fixnumshift)))
-  (mov header (:$ (logand #xff00 arm::one-digit-bignum-header)))
-  (orr header header (:$ (logand #xff arm::one-digit-bignum-header)))
-  (eor unboxed unboxed (:$ #xc0000000))
-  (sub allocptr allocptr (:$ (- arm::dnode-size arm::fulltag-misc)))
-  (ldr dest (:@ rcontext (:$ arm::tcr.save-allocbase)))
-  (cmp allocptr dest)
-  (bhi :no-trap)
-  (uuo-alloc-trap)
-  :no-trap
-  (str header (:@ allocptr (:$ arm::misc-header-offset)))
-  (mov dest allocptr)
-  (bic allocptr allocptr (:$ arm::fulltagmask))
-  (str unboxed (:@ dest (:$ arm::misc-data-offset)))
-  (b target))
 
 ;;; This is, of course, also "subtract-immediate."
 (define-arm-vinsn (add-immediate :predicatable)
@@ -3187,6 +3097,13 @@
      ((src t)
       (imm :s32const)))
   (add dest src (:$ imm)))
+
+(define-arm-vinsn add-immediate-set-flags
+    (((dest t)
+      (crf :crf))
+     ((src t)
+      (imm :s32const)))
+  (adds dest src (:$ imm)))
 
 (define-arm-vinsn (multiply-fixnums :predicatable)
     (((dest :imm))
@@ -3218,7 +3135,7 @@
   
   
 ;; Boundp, fboundp stuff.
-(define-arm-vinsn (ref-symbol-value :call :subprim-call)
+(define-arm-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (sploadlr .SPspecrefcheck)
@@ -3241,7 +3158,7 @@
   (uuo-error-unbound src)
   :bound)
 
-(define-arm-vinsn (%ref-symbol-value :call :subprim-call)
+(define-arm-vinsn (%ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (sploadlr .SPspecref)
@@ -3260,7 +3177,7 @@
   (cmp dest (:$ arm::subtag-no-thread-local-binding))
   (ldreq dest (:@ src (:$ arm::symbol.vcell))))
 
-(define-arm-vinsn (setq-special :call :subprim-call)
+(define-arm-vinsn (setq-special :call :subprim)
     (()
      ((sym :lisp)
       (val :lisp)))
@@ -3281,61 +3198,125 @@
   (uuo-error-udf sym)
   :defined)
 
-(define-arm-vinsn (temp-push-unboxed-word :push :word :csp :predicatable)
-    
+
+(define-arm-vinsn save-nfp (()
+                            ()
+                            ((temp :imm)))
+  ((:pred  > (:apply arm2-max-nfp-depth) 0)
+   ;; screw: handle > 4K case
+   (str sp (:@! sp (:$ (:apply - (:apply + (:apply arm2-max-nfp-depth) 8)))))
+   (ldr temp (:@ rcontext (:$ arm::tcr.nfp)))
+   (str temp (:@ sp (:$ 4)))
+   (str sp (:@ rcontext (:$ arm::tcr.nfp)))))
+
+(define-arm-vinsn restore-nfp (()
+                               ()
+                               ((temp :imm)))
+  ((:pred > (:apply  arm2-max-nfp-depth) 0)
+   (ldr temp (:@ sp (:$ 4)))
+   (str temp (:@ rcontext (:$ arm::tcr.nfp)))
+   (ldr sp (:@ sp (:$ 0)))))
+
+
+(define-arm-vinsn (nfp-store-double-float :nfp :set) (()
+                                                      ((val :double-float)
+                                                       (offset :u16const)))
+  (fstd val (:@ sp (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-store-double-float-nested :nfp :set) (()
+                                                             ((val :double-float)
+                                                              (offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (fstd val (:@ lr (:$ (:apply + 8 offset)))))
+
+
+(define-arm-vinsn (nfp-load-double-float :nfp :ref)  (((val :double-float))
+                                                      ((offset :u16const)))
+  (fldd val (:@ sp (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-load-double-float-nested :nfp :ref) (((val :double-float))
+                                                            ((offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (fldd val (:@ lr (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-store-complex-double-float :nfp :set :doubleword)
     (()
-     ((w :u32))
-     ((header :u32)))
-  (mov header (:$ (ash 1 arm::num-subtag-bits)))
-  (orr header header (:$ arm::subtag-u32-vector))
-  (str header (:@! sp (:$ (- arm::dnode-size))))
-  (str w (:@ sp (:$ 4))))
+     ((val :complex-double-float)
+      (offset :u16const)))
+  (fstd val (:@ sp (:$ (:apply + 8 offset))))
+  (fstd (:apply 1+ (:apply %hard-regspec-value val))
+        (:@ sp (:$ (:apply + 8 8 offset)))))
 
-(define-arm-vinsn (temp-pop-unboxed-word :pop :word :csp :predicatable)
-    
-    (((w :u32))
-     ())
-  (ldr w (:@ sp (:$ 4)))
-  (add sp sp (:$ arm::dnode-size)))
-
-(define-arm-vinsn (temp-push-double-float :push :doubleword :csp :predicatable)
-    
+(define-arm-vinsn (nfp-store-complex-double-float-nested :nfp :set :doubleword)
     (()
-     ((d :double-float))
-     ((header :u32)))
-  (mov header (:$ (logand #xff00 arm::double-float-header)))
-  (orr header header (:$ (logand #xff arm::double-float-header)))
-  (str header (:@! sp (:$ (- (* 2 arm::dnode-size)))))
-  (fstd d (:@ sp (:$ 8))))
+     ((val :complex-double-float)
+      (offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (fstd val (:@ lr (:$ (:apply + 8 offset))))
+  (fstd (:apply 1+ (:apply %hard-regspec-value val))
+        (:@ lr (:$ (:apply + 8 8 offset)))))
+  
 
-(define-arm-vinsn (temp-pop-double-float :pop :doubleword :csp :predicatable)
-    
-    (()
-     ((d :double-float)))
-  (fldd d (:@ sp (:$ 8)))
-  (add sp sp (:$ (* 2 arm::dnode-size))))
+(define-arm-vinsn (nfp-load-complex-double-float :nfp :ref :doubleword)
+    (((val :complex-double-float))
+     ((offset :u16const)))
+  (fldd val (:@ sp (:$ (:apply + 8 offset))))
+  (fldd (:apply 1+ (:apply %hard-regspec-value val))
+        (:@ sp (:$ (:apply + 8 8 offset)))))
 
+(define-arm-vinsn (nfp-load-complex-double-float-nested :nfp :ref :doubleword)
+    (((val :complex-double-float))
+     ((offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (fldd val (:@ lr (:$ (:apply + 8 offset))))
+  (fldd (:apply 1+ (:apply %hard-regspec-value val))
+        (:@ lr (:$ (:apply + 8 8 offset)))))
 
-(define-arm-vinsn (temp-push-single-float :push :word :csp :predicatable)
-    
-    (()
-     ((s :single-float))
-     ((header :u32)))
-  (mov header (:$ (logand #xff00 arm::single-float-header)))
-  (orr header header (:$ (logand #xff arm::single-float-header)))
-  (str header (:@! sp (:$ (- arm::dnode-size))))
-  (fsts s (:@ sp (:$ 4))))
-
-
-(define-arm-vinsn (temp-pop-single-float :pop :word :csp :predicatable)
-    
-    (()
-     ((s :single-float)))
-  (flds s (:@ sp (:$ 4)))
-  (add sp sp (:$ arm::dnode-size)))
+(define-arm-vinsn (nfp-store-single-float :nfp :set) (()
+                                                      ((val :single-float)
+                                                       (offset :u16const)))
+  (fsts val (:@ sp (:$ (:apply + 8 offset)))))
 
 
 
+
+(define-arm-vinsn (nfp-store-single-float-nested :nfp :set) (()
+                                                             ((val :single-float)
+                                                              (offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (fsts val (:@ lr (:$ (:apply + 8 offset)))))
+
+
+
+(define-arm-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
+                                                     ((offset :u16const)))
+  (flds val (:@ sp (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-load-single-float-nested :nfp :ref) (((val :single-float))
+                                                            ((offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (flds val (:@ lr (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-store-unboxed-word :nfp :set) (()
+                                                      ((val :u32)
+                                                       (offset :u16const)))
+  (str val (:@ sp (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-store-unboxed-word-nested :nfp :set) (()
+                                                             ((val :u32)
+                                                              (offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (str val (:@ lr (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-load-unboxed-word :nfp :ref) (((val :u32))
+                                                     ((offset :u16const)))
+  (ldr val (:@ sp (:$ (:apply + 8 offset)))))
+
+(define-arm-vinsn (nfp-load-unboxed-word-nested :nfp :ref) (((val :u32))
+                                                            ((offset :u16const)))
+  (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
+  (ldr val (:@ lr (:$ (:apply + 8 offset)))))
+  
 (define-arm-vinsn (%current-frame-ptr :predicatable)
     (((dest :imm))
      ())
@@ -3346,7 +3327,7 @@
      ())
   (mov dest rcontext))
 
-(define-arm-vinsn (dpayback :call :subprim-call) (()
+(define-arm-vinsn (dpayback :call :subprim) (()
                                                   ((n :s16const))
                                                   ((temp (:u32 #.arm::imm0))))
   ((:pred > n 1)
@@ -3658,7 +3639,7 @@
 
 ;;; "n" is the sum of the number of required args + 
 ;;; the number of &optionals.  
-(define-arm-vinsn (default-optionals :call :subprim-call) (()
+(define-arm-vinsn (default-optionals :call :subprim) (()
                                                            ((n :u16const)))
   (mov imm0 (:$ (:apply ash n 2)))
   (sploadlr .SPdefault-optional-args)
@@ -3899,7 +3880,7 @@
 
 ;;; Subprim calls.  Done this way for the benefit of VINSN-OPTIMIZE.
 (defmacro define-arm-subprim-call-vinsn ((name &rest other-attrs) spno)
-  `(define-arm-vinsn (,name :call :subprim-call ,@other-attrs) (() ())
+  `(define-arm-vinsn (,name :call :subprim ,@other-attrs) (() ())
     (sploadlr ,spno)
     (blx lr)))
 
@@ -3970,7 +3951,7 @@
 (define-arm-subprim-call-vinsn (make-stack-vector)  .SPmkstackv)
 
 (define-arm-subprim-call-vinsn (make-stack-gvector)  .SPstkgvector)
-(define-arm-vinsn (make-stack-closure :call :subprim-call) (() ())
+(define-arm-vinsn (make-stack-closure :call :subprim) (() ())
   (sploadlr .SPstkgvector)
   (blx lr)
   (ldr lr (:@ arg_z (:$ arm::function.codevector)))
@@ -4022,7 +4003,7 @@
 
 (define-arm-subprim-call-vinsn (discard-temp-frame) .SPdiscard_stack_object)
 
-(define-arm-vinsn (nth-value :call :subprim-call) (((result :lisp))
+(define-arm-vinsn (nth-value :call :subprim) (((result :lisp))
                                                    ())
   (sploadlr .SPnthvalue)
   (blx lr))
@@ -4136,7 +4117,7 @@
 
 (define-arm-subprim-call-vinsn (unbind-interrupt-level) .SPunbind-interrupt-level)
 
-(define-arm-subprim-call-vinsn (eabi-ff-call) .SPeabi-ff-call)
+(define-arm-subprim-call-vinsn (eabi-ff-call-simple) .SPeabi-ff-call-simple)
 
 (define-arm-subprim-call-vinsn (eabi-ff-callhf) .SPeabi-ff-callhf)
 
@@ -4169,27 +4150,16 @@
                                 ((src :lisp)))
   (tst src (:$ arm::fixnummask)))
                   
+(define-arm-vinsn test-fixnums (((dest :crf))
+                                ((x :lisp)
+                                 (y :lisp))
+                                ((temp :u32)))
+  (orr temp x y)
+  (tst temp (:$ arm::fixnummask)))
   
 
 
-(define-arm-vinsn branch-unless-arg-fixnum (()
-                                            ((arg :lisp)
-                                             (lab :label))
-                                            ())
-  (tst arg (:$ arm::fixnummask))
-  (bne lab))
 
-
-
-
-(define-arm-vinsn branch-unless-both-args-fixnums (()
-                                                   ((arg0 :lisp)
-                                                    (arg1 :lisp)
-                                                    (lab :label))
-                                                   ((tag :u8)))
-  (orr tag arg0 arg1)
-  (tst tag (:$ arm::fixnummask))
-  (bne lab))
 
 (define-arm-vinsn %ilognot (((dest :imm))
                             ((src :imm))
@@ -4224,13 +4194,62 @@
   (add temp base (:lsl idx (:$ 1)))
   (fstd val (:@ temp (:$ 0))))
 
-(define-arm-vinsn (branch-if-soft-float :branch) (()
-                                                  ((lab :label))
-                                                  ((temp :imm)))
+(define-arm-vinsn check-soft-float (((flags :crf))
+                                    ()
+                                    ((temp :u32)))
   (mov temp (:$ (- arm::nil-value arm::fulltag-nil)))
   (ldr temp (:@ temp (:$ (arm::%kernel-global 'arm::float-abi))))
-  (tst temp temp)
-  (beq lab))
+  (tst temp temp))
+
+;;; Do something that sets the Z bit
+(define-arm-vinsn set-eq-bit (((flags :crf))
+                              ())
+  (cmp sp sp))
+
+(define-arm-vinsn ivector-typecode-p (((dest :lisp))
+                                      ((src :lisp))
+                                      ((temp :u32)))
+
+  (and temp src (:$ (logior arm::tagmask (ash arm::fulltagmask arm::fixnumshift))))
+  (cmp temp (:$ (ash arm::fulltag-immheader arm::fixnumshift)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (moveq dest src))
+  (movne dest (:$ 0)))
+
+(define-arm-vinsn gvector-typecode-p (((dest :lisp))
+                                      ((src :lisp))
+                                      ((temp :u32)))
+
+  (and temp src (:$ (logior arm::tagmask (ash arm::fulltagmask arm::fixnumshift))))
+  (cmp temp (:$ (ash arm::fulltag-nodeheader arm::fixnumshift)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (moveq dest src))
+  (movne dest (:$ 0)))
+
+(define-arm-vinsn %complex-single-float-realpart  (((dest :single-float))
+                                                   ((src :complex-single-float)))
+  (fcpys dest (:apply * 2 (:apply %hard-regspec-value src))))
+
+(define-arm-vinsn %complex-single-float-imagpart  (((dest :single-float))
+                                                   ((src :complex-single-float)))
+  (fcpys dest (:apply 1+ (:apply * 2 (:apply %hard-regspec-value src)))))
+
+(define-arm-vinsn %complex-double-float-realpart  (((dest :double-float))
+                                                   ((src :complex-double-float)))
+  (fcpyd dest src))
+
+(define-arm-vinsn %complex-double-float-imagpart  (((dest :double-float))
+                                                   ((src :complex-double-float)))
+  (fcpyd dest (:apply 1+ (:apply %hard-regspec-value src))))
+
+  
+
+
+
 
 ;;; In case arm::*arm-opcodes* was changed since this file was compiled.
 #+maybe-never

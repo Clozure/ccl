@@ -1073,10 +1073,14 @@ in stvx and lvx instructions within the body."
     (and. ,mask ,was ,mask)))
                                            
 (defppclapmacro u32-ref (dest index vector)
-  `(lwz ,dest (+ (* 4 ,index) target::misc-data-offset) ,vector))
+  `(lwz ,dest (+ (* 4 ,index) ,(target-arch-case
+                                (:ppc32 ppc32::misc-data-offset)
+                                (:ppc64 ppc64::misc-data-offset))) ,vector))
 
 (defppclapmacro u32-set (new-value index vector)
-  `(stw ,new-value (+ (* 4 ,index) target::misc-data-offset) ,vector))
+  `(stw ,new-value (+ (* 4 ,index) ,(target-arch-case
+                                (:ppc32 ppc32::misc-data-offset)
+                                (:ppc64 ppc64::misc-data-offset))) ,vector))
 
 (provide "PPC-LAPMACROS")
 

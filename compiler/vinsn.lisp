@@ -55,6 +55,7 @@
 (defmethod make-load-form ((v vinsn-template) &optional env)
   (make-load-form-saving-slots v :environment env))
 
+(defstatic *empty-vinsn-template* (make-vinsn-template))
 
 (defun get-vinsn-template-cell (name templates)
   (let* ((n (intern (string name) *ccl-package*)))
@@ -78,6 +79,7 @@
   (fprs-set 0)
   (gprs-read 0)
   (fprs-read 0)
+  (notes ())
 )
 
 (def-standard-initial-binding *vinsn-freelist* (make-dll-node-freelist))
@@ -101,7 +103,9 @@
 	      (vinsn-gprs-set vinsn) 0
 	      (vinsn-fprs-set vinsn) 0
               (vinsn-gprs-read vinsn) 0
-              (vinsn-fprs-read vinsn) 0)
+              (vinsn-fprs-read vinsn) 0
+              (vinsn-notes vinsn) nil)
+        
         vinsn)
       (%make-vinsn template))))
 
@@ -147,10 +151,12 @@
 (defstruct (vinsn-note
             (:constructor %make-vinsn-note)
             (:print-function print-vinsn-note))
-  (label (make-vinsn-label nil))
+  (address nil)                           ; lap label
   (peer nil :type (or null vinsn-note))
   (class nil)
   (info nil :type (or null simple-vector)))
+
+
 
 
 (defun print-vinsn-note (n s d)
@@ -161,17 +167,23 @@
       (when info (format s " / ~S" info)))))
   
 (defun make-vinsn-note (class info)
-  (let* ((n (%make-vinsn-note :class class :info (if info (apply #'vector info))))
-         (lab (vinsn-note-label n)))
-    (setf (vinsn-label-id lab) n)
-    n))
+  (%make-vinsn-note :class class :info (if info (apply #'vector info))))
 
-(defun close-vinsn-note (n)
-  (let* ((end (%make-vinsn-note :peer n)))
-    (setf (vinsn-label-id (vinsn-note-label end)) end
-          (vinsn-note-peer end) n
-          (vinsn-note-peer n) end)
-    end))
+(defun enqueue-vinsn-note (seg class &rest info)
+  (let* ((note (make-vinsn-note class info)))
+    (push note (dll-header-info seg))
+    note))
+
+(defun close-vinsn-note (seg n)
+  (let* ((vinsn (last-vinsn seg)))
+    (unless vinsn
+      (nx-error "No last vinsn in ~s." seg))
+    (let* ((end (%make-vinsn-note :peer n :class :close)))
+      #+debug
+      (format t "~& adding note ~s to vinsn ~s, closing ~s" end vinsn n)
+      (push end (vinsn-notes vinsn))      
+      (setf (vinsn-note-peer n) end))))
+
         
 
 (defun vinsn-vreg-description (value spec)
@@ -233,14 +245,22 @@
          (opsym (if (cdr results) :== :=))
          (infix (and (= (length args) 2) (template-infix-p template)))
          (opname (vinsn-template-name template)))
+    (when (and (vinsn-attribute-p v :subprim)
+               (typep (car args) 'integer))
+      (let* ((spinfo (find (car args)
+                           (arch::target-subprims-table
+                            (backend-target-arch *target-backend*))
+                           :key #'subprimitive-info-offset)))
+        (when spinfo
+          (setf (car args) (subprimitive-info-name spinfo)))))
     (print-unreadable-object (v stream)
       (if results (format stream "~A ~S " (if (cdr results) results (car results)) opsym))
       (if infix
         (format stream "~A ~A ~A" (car args) opname (cadr args))
         (format stream "~A~{ ~A~}" opname args))
       (let* ((annotation (vinsn-annotation v)))
-	(when annotation
-	  (format stream " ||~a|| " annotation))))))
+        (when annotation
+          (format stream " ||~a|| " annotation))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 (defparameter *known-vinsn-attributes*
@@ -249,7 +269,7 @@
     :branch				; a conditional branch
     :call				; a jump that returns
     :align				; aligns FOLLOWING label
-    :subprim-call			; A subprimitive call; bashes some volatile registers
+    :subprim                            ; first argument is a subprim address
     :jumpLR				; Jumps to the LR, possibly stopping off at a function along the way.
     :lrsave				; saves LR in LOC-PC
     :lrrestore				; restores LR from LOC-PC
@@ -271,7 +291,7 @@
     :constant-ref
     :sets-cc                            ; vinsn sets condition codes based on result
     :discard                            ; adjusts a stack pointer
-    :sp
+    :nfp                                ; references the nfp
     :predicatable                       ; all instructions can be predicated, no instructions set or test condition codes.
     :sets-lr                            ; uses the link register, if there is one.
     )))
@@ -296,16 +316,35 @@
          (pool.data *vinsn-varparts*) v)
    nil))
 
+(defun distribute-vinsn-notes (notes pred succ)
+  (or (null notes)
+      (and (dolist (note notes t)
+             (unless (if (eq :close (vinsn-note-class note))
+                       (typep pred 'vinsn)
+                       (typep succ 'vinsn))
+               (return nil)))
+           (dolist (note notes t)
+             (if (eq :close (vinsn-note-class note))
+               (push note (vinsn-notes pred))
+               (push note (vinsn-notes succ)))))))
+
 (defun elide-vinsn (vinsn)
-  (let* ((nvp (vinsn-template-nvp (vinsn-template vinsn)))
-	 (vp (vinsn-variable-parts vinsn)))
-    (dotimes (i nvp)
-      (let* ((v (svref vp i)))
-	(when (typep v 'lreg)
-	  (setf (lreg-defs v) (delete vinsn (lreg-defs v)))
-	  (setf (lreg-refs v) (delete vinsn (lreg-refs v))))))
-    (free-varparts-vector vp)
-    (remove-dll-node vinsn)))
+  (let* ((template (vinsn-template vinsn))
+             (nvp (vinsn-template-nvp template))
+             (vp (vinsn-variable-parts vinsn)))
+        (dotimes (i nvp)
+          (let* ((v (svref vp i)))
+            (when (typep v 'vinsn-label)
+              (setf (vinsn-label-refs v)
+                    (delete vinsn (vinsn-label-refs v))))
+            (when (typep v 'lreg)
+              (setf (lreg-defs v) (delete vinsn (lreg-defs v)))
+              (setf (lreg-refs v) (delete vinsn (lreg-refs v))))))
+        (free-varparts-vector vp)
+        (setf (vinsn-variable-parts vinsn) nil)
+        (if (distribute-vinsn-notes (vinsn-notes vinsn) (vinsn-pred vinsn) (vinsn-succ vinsn))
+          (remove-dll-node vinsn)
+          (setf (vinsn-template vinsn) *empty-vinsn-template*))))
     
 (defun encode-vinsn-attributes (attribute-list)
   (flet ((attribute-weight (k)
@@ -434,16 +473,11 @@
                 (use-node-temp value) 
                 :class hard-reg-class-gpr
                 :mode hard-reg-class-gpr-mode-node))
-        (:double-float (let* ((lreg (make-wired-lreg
+        ((:single-float :double-float :complex-double-float :complex-single-float)
+         (let* ((lreg (make-wired-lreg
                                      value
                                      :class hard-reg-class-fpr
-                                     :mode hard-reg-class-fpr-mode-double)))
-                         (use-fp-reg lreg)
-                         lreg))
-        (:single-float (let* ((lreg (make-wired-lreg
-                                     value
-                                     :class hard-reg-class-fpr
-                                     :mode hard-reg-class-fpr-mode-single)))
+                                     :mode (fpr-mode-name-value class))))
                          (use-fp-reg lreg)
                          lreg)))
       (ecase class
@@ -456,14 +490,10 @@
          (make-unwired-lreg (select-imm-temp)
 			    :class hard-reg-class-gpr
 			    :mode (gpr-mode-name-value class)))
-        (:double-float
-         (make-unwired-lreg (select-fp-temp :double-float)
+        ((:double-float :single-float :complex-double-float :complex-single-float)
+         (make-unwired-lreg (select-fp-temp class)
                             :class hard-reg-class-fpr
-                            :mode hard-reg-class-fpr-mode-double))
-        (:single-float
-         (make-unwired-lreg (select-fp-temp :single-float)
-                            :class hard-reg-class-fpr
-                            :mode hard-reg-class-fpr-mode-double))
+                            :mode (fpr-mode-name-value class)))
         (:lisp 
          (make-unwired-lreg 
 	  (select-node-temp) 
@@ -481,14 +511,19 @@
     vinsn))
 
 (defun %emit-vinsn (vlist name vinsn-table &rest vregs)
-  (append-dll-node (select-vinsn name vinsn-table vregs) vlist))
+  (let* ((vinsn (select-vinsn name vinsn-table vregs))
+         (notes (dll-header-info vlist)))
+    (when notes
+      (dolist (note notes (setf (dll-header-info vlist) nil))
+        (push note (vinsn-notes vinsn))))
+    (append-dll-node vinsn vlist)))
 
 (defun varpart-matches-reg (varpart-value class regval spec)
   (setq spec (if (atom spec) spec (car spec)))
   (and
    (or
     (and (eq class hard-reg-class-fpr)
-	 (memq spec '(:single-float :double-float)))
+	 (memq spec '(:single-float :double-float :complex-single-float :complex-double-float)))
     (and (eq class hard-reg-class-gpr)
 	 (memq spec '(:u32 :s32 :u16 :s16 :u8 :s8 :lisp :address :imm))))
    (eq (hard-regspec-value varpart-value) regval)))
@@ -624,7 +659,16 @@
 
 (defun make-condnode (id)
   (init-dll-header (%make-condnode id)))
-	  
+
+
+;;; A node that ends with a CALL, followed by an implicit or explict jump.
+(defstruct (callnode (:include jumpnode)
+                     (:constructor %make-callnode (id)))
+  (mycall))
+                              
+(defun make-callnode (id)
+  (init-dll-header (%make-callnode id)))
+
 ;;; A node that terminates with a return i.e., a jump-return-pc or
 ;;; jump-subprim.
 (defstruct (returnnode (:include fgn)
@@ -671,6 +715,7 @@
 	   current)))
     (setq currtype (cond ((vinsn-label-p current) :label)
                          ((vinsn-attribute-p current :branch) :branch)
+                         ((vinsn-attribute-p current :call) :call)
                          ((vinsn-attribute-p current :jump) :jump)
                          ((vinsn-attribute-p current :jumplr) :jumplr)))
     (case currtype
@@ -678,13 +723,14 @@
        (unless (eq prevtype :label)
          (let* ((lab (aref *backend-labels* (backend-get-next-label))))
            (insert-dll-node-after lab current))))
-      (:branch
+      ((:branch :call)
        (unless (eq prevtype :jump)
          (let* ((lab
                  (if (eq prevtype :label)
                    (dll-node-succ current)
                    (aref *backend-labels* (backend-get-next-label))))
                 (jump (select-vinsn "JUMP" *backend-vinsns* (list lab))))
+           (push jump (vinsn-label-refs lab))
            (unless (eq prevtype :label)
              (insert-dll-node-after lab current))
            (insert-dll-node-after jump current))))
@@ -693,7 +739,9 @@
 	 (let* ((lab (dll-node-succ current)))
 	   (when (vinsn-label-p lab)
              (insert-dll-node-after
-              (select-vinsn "JUMP" *backend-vinsns* (list lab))
+              (let* ((jump (select-vinsn "JUMP" *backend-vinsns* (list lab))))
+                (push jump (vinsn-label-refs lab))
+                jump)
 	      current))))))))
 
 
@@ -719,9 +767,12 @@
 	    (let* ((id (vinsn-label-id label))
 		   (node (if (vinsn-attribute-p last :jumpLR)
 			   (make-returnnode id)
-			   (if (vinsn-attribute-p (dll-node-pred last) :branch)
-			     (make-condnode id)
-			     (make-jumpnode id)))))
+                           (let* ((pred (dll-node-pred last)))
+                             (if (vinsn-attribute-p pred :branch)
+                               (make-condnode id)
+                               (if (vinsn-attribute-p pred :call)
+                                 (make-callnode id)
+                                 (make-jumpnode id)))))))
               (declare (fixnum id))
 	      (insert-dll-node-after label node last)
 	      (push node nodes))))
@@ -736,7 +787,23 @@
 		     (branchtarget (branch-target-node branch)))
 		(setf (condnode-condbranch node) branch)
 		(pushnew node (fgn-inedges branchtarget))))))))))
-  
+
+(defun linearize-flow-graph (fg header)
+  (do* ((head (car fg) (car tail))
+        (tail (cdr fg) (cdr tail)))
+       ((null head) header)
+    (multiple-value-bind (first last) (detach-dll-nodes head)
+      (when first
+        (insert-dll-node-before first header last)
+        (when (and (vinsn-attribute-p last :jump)
+                   (eq (car tail) (branch-target-node last)))
+          (let* ((lab (car tail)))
+            (when (null (setf (vinsn-label-refs lab)
+                              (delete last (vinsn-label-refs lab))))
+              (remove-dll-node lab)))
+          (elide-vinsn last))))))
+                   
+    
                          
 (defun delete-unreferenced-labels (labels)
   (delete #'(lambda (l)
@@ -788,15 +855,17 @@
                           (not (null (vinsn-label-refs next))))
                  (setq eliding nil))))
            (cond (eliding
-                    (setq won t)
-                    (let* ((operands (vinsn-variable-parts element)))
-                      (dotimes (i (length operands) (elide-vinsn element))
-                        (let* ((op (svref operands i)))
-                          (when (typep op 'vinsn-label)
-                            (setf (vinsn-label-refs op)
-                                  (delete element (vinsn-label-refs op))))))))
-                   (t (setq eliding (vinsn-attribute-p element :jump))))))))))
+                  (setq won t)
+                  (let* ((operands (vinsn-variable-parts element)))
+                    (dotimes (i (length operands) (elide-vinsn element))
+                      (let* ((op (svref operands i)))
+                        (when (typep op 'vinsn-label)
+                          (setf (vinsn-label-refs op)
+                                (delete element (vinsn-label-refs op))))))))
+                 (t (setq eliding (vinsn-attribute-p element :jump))))))))))
          
+
+(defvar *nx-create-flow-graph* nil)
 
 (defun optimize-vinsns (header)
   ;; Delete unreferenced labels that the compiler might have emitted.
@@ -821,9 +890,17 @@
             (return)))))
     (maximize-jumps header)
     (delete-unreferenced-labels labels)
-    ;;(normalize-vinsns header)
     (eliminate-dead-code header)
-  ))
+    (when *nx-create-flow-graph*
+      (normalize-vinsns header)
+      (let* ((fg (create-flow-graph header)))
+        (dolist (n fg (let* ((*nx-create-flow-graph* nil))
+                        (break "Not working yet.")))
+          (terpri)
+          (show-fgn n))
+        (linearize-flow-graph fg header)
+        (show-vinsns header 0)) 
+)))
 
 (defun show-vinsns (vinsns indent)
   (do-dll-nodes (n vinsns)

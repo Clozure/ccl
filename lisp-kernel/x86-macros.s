@@ -173,12 +173,14 @@ define(`Make_Catch',`
 	__(movd %mm0,catch_frame.link(%imm0))
 	__(movl `$'$1,catch_frame.mvflag(%imm0))
 	__(movd rcontext(tcr.xframe),%mm0)
+        __(movd rcontext(tcr.nfp),%mm2)
 	__(movl %esp,catch_frame.esp(%imm0))
 	__(movl %ebp,catch_frame.ebp(%imm0))
         __(movd rcontext(tcr.foreign_sp),%stack_temp)
 	__(movd %stack_temp,catch_frame.foreign_sp(%imm0))
 	__(movd %mm1,catch_frame.db_link(%imm0))
 	__(movd %mm0,catch_frame.xframe(%imm0))
+        __(movd %mm2,catch_frame.nfp(%imm0))
 	__(movl %xfn,catch_frame.pc(%imm0))
 	__(movl %imm0,rcontext(tcr.catch_top))
 ')',`
@@ -194,6 +196,7 @@ define(`Make_Catch',`
 	__(movq %rbp,catch_frame.rbp(%imm2))
         __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
+        __(movq rcontext(tcr.nfp),%imm1)       
 	__ifndef(`WINDOWS')
 	__(movq %save3,catch_frame._save3(%imm2))
 	__endif
@@ -202,6 +205,7 @@ define(`Make_Catch',`
 	__(movq %save0,catch_frame._save0(%imm2))
 	__(movq %imm0,catch_frame.xframe(%imm2))
 	__(movq %stack_temp,catch_frame.foreign_sp(%imm2))
+        __(movq %imm1,catch_frame.nfp(%imm2))
 	__(movq %xfn,catch_frame.pc(%imm2))
 	__(movq %imm2,rcontext(tcr.catch_top))
 ')')	
@@ -217,10 +221,12 @@ define(`nMake_Catch',`
 	__(addl $node_size,catch_frame.esp(%imm0))
 	__(movl `$'$1,catch_frame.mvflag(%imm0))
 	__(movd rcontext(tcr.xframe),%mm0)
+        __(movd rcontext(tcr.nfp),%mm2)
 	__(movl %ebp,catch_frame.ebp(%imm0))
         __(movd rcontext(tcr.foreign_sp),%stack_temp)
 	__(movd %mm1,catch_frame.db_link(%imm0))
 	__(movd %mm0,catch_frame.xframe(%imm0))
+        __(movd %mm2,catch_frame.nfp(%imm0))
 	__(movd %stack_temp,catch_frame.foreign_sp(%imm0))
 	__(movl %xfn,catch_frame.pc(%imm0))
 	__(movl %imm0,rcontext(tcr.catch_top))
@@ -235,6 +241,7 @@ define(`nMake_Catch',`
 	__(movq `$'$1,catch_frame.mvflag(%imm2))
 	__(movq %imm0,catch_frame.rsp(%imm2))
 	__(movq rcontext(tcr.xframe),%imm0)
+        __(movq rcontext(tcr.nfp),%mm0)
 	__(movq %rbp,catch_frame.rbp(%imm2))
         __(movq rcontext(tcr.foreign_sp),%stack_temp)
 	__(movq %imm1,catch_frame.db_link(%imm2))
@@ -245,6 +252,7 @@ define(`nMake_Catch',`
 	__(movq %save1,catch_frame._save1(%imm2))
 	__(movq %save0,catch_frame._save0(%imm2))
 	__(movq %imm0,catch_frame.xframe(%imm2))
+        __(movq %mm0,catch_frame.nfp(%imm2))
 	__(movq %stack_temp,catch_frame.foreign_sp(%imm2))
 	__(movq %xfn,catch_frame.pc(%imm2))
 	__(movq %imm2,rcontext(tcr.catch_top))
@@ -735,7 +743,29 @@ define(`windows_cstack_probe',`
         __(orl `$'0,-0xf000($2))
 macro_label(done):      
 ')
-
-
-        __endif                
+        __endif
+        
+/* If $1 is a  an ivector typecode, copy $1 to $2 else set $2 to 0.
+   $1 and $2 should be byte registers, typically %imm0_b and %imm0_bh */  
+define(`ivector_typecode_p',`
+        __ifdef(`X8664')
+        __(movl $1,$3)
+        __(andl $fulltagmask,$3)
+        __(movl $((1<<fulltag_immheader_0)|(1<<fulltag_immheader_1)|(1<<fulltag_immheader_2)),$2)
+        __(bt $3,$2)
+        __(movl $1,$2)
+        __(movl $`0',$3)
+        __(cmovael $3,$2)
+        __else
+        new_macro_labels()
+        __(movb $1,$2)
+        __(andb $fulltagmask,$2)
+        __(cmpb $fulltag_immheader,$2)
+        __(movb $1,$2)
+        __(je macro_label(done))
+        __(movb `$'0,$2)
+macro_label(done):
+        __endif
+        ')
+        
                         

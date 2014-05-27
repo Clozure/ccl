@@ -112,6 +112,10 @@
   (with-xp-registers-and-gpr-offset (xp register-number) (registers offset)
     (values (%get-signed-long registers offset))))
 
+(defun xp-gpr-unsigned-long (xp register-number)
+  (with-xp-registers-and-gpr-offset (xp register-number) (registers offset)
+    (values (%get-signed-long registers offset))))
+
 (defun xp-gpr-signed-doubleword (xp register-number)
   (with-xp-registers-and-gpr-offset (xp register-number) (registers offset)
     (values (%%get-signed-longlong registers offset))))

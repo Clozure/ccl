@@ -274,7 +274,7 @@ local_label(misc_ref_jmp):
 	.quad local_label(misc_ref_node) /* 46 istruct   */
 	.quad local_label(misc_ref_invalid) /* 47 immheader_0   */
 	.quad local_label(misc_ref_invalid) /* 48 odd_fixnum   */
-	.quad local_label(misc_ref_invalid) /* 49 immheader_1   */
+	.quad local_label(misc_ref_u32)     /* 49 complex_single_float   */
 	.quad local_label(misc_ref_invalid) /* 4a immheader_2   */
 	.quad local_label(misc_ref_invalid) /* 4b nil   */
 	.quad local_label(misc_ref_invalid) /* 4c tra_1   */
@@ -291,7 +291,7 @@ local_label(misc_ref_jmp):
 	.quad local_label(misc_ref_node) /* 56 value_cell   */
 	.quad local_label(misc_ref_invalid) /* 57 immheader_0   */
 	.quad local_label(misc_ref_invalid) /* 58 odd_fixnum   */
-	.quad local_label(misc_ref_invalid) /* 59 immheader_1   */
+	.quad local_label(misc_ref_u32)     /* 59 complex_double_float   */
 	.quad local_label(misc_ref_invalid) /* 5a immheader_2   */
 	.quad local_label(misc_ref_invalid) /* 5b nil   */
 	.quad local_label(misc_ref_invalid) /* 5c tra_1   */
@@ -357,7 +357,7 @@ local_label(misc_ref_jmp):
 	.quad local_label(misc_ref_invalid) /* 94 tra_0   */
 	.quad local_label(misc_ref_function) /* 95 function_vector   */
 	.quad local_label(misc_ref_invalid) /* 96 nodeheader_1   */
-	.quad local_label(misc_ref_invalid) /* 97 immheader_0   */
+	.quad local_label(misc_ref_complex_double_float_vector) /* 97 complex_double_float_vector   */
 	.quad local_label(misc_ref_invalid) /* 98 odd_fixnum   */
 	.quad local_label(misc_ref_invalid) /* 99 immheader_1   */
 	.quad local_label(misc_ref_invalid) /* 9a immheader_2   */
@@ -394,7 +394,7 @@ local_label(misc_ref_jmp):
 	.quad local_label(misc_ref_u16) /* b7 immheader_0   */
 	.quad local_label(misc_ref_invalid) /* b8 odd_fixnum   */
 	.quad local_label(misc_ref_invalid) /* b9 immheader_1   */
-	.quad local_label(misc_ref_invalid) /* ba immheader_2   */
+	.quad local_label(misc_ref_complex_single_float_vector) /* ba complex_single_float_vector   */
 	.quad local_label(misc_ref_invalid) /* bb nil   */
 	.quad local_label(misc_ref_invalid) /* bc tra_1   */
 	.quad local_label(misc_ref_invalid) /* bd misc   */
@@ -491,6 +491,18 @@ local_label(misc_ref_double_float_vector):
 	__(Misc_Alloc_Fixed(%arg_z,double_float.size))
 	__(movsd %fp1,double_float.value(%arg_z))
 	__(ret)
+local_label(misc_ref_complex_double_float_vector):      
+        __(movdqa complex_double_float.realpart(%arg_y,%arg_z,2),%xmm0)
+        __(movl $complex_double_float_header,%imm0_l)
+        __(Misc_Alloc_Fixed(%arg_z,complex_double_float.size))
+        __(movdqa %xmm0,complex_double_float.realpart(%arg_z))
+        __(ret)
+local_label(misc_ref_complex_single_float_vector):
+        __(movq complex_single_float.realpart(%arg_y,%arg_z),%xmm0)
+        __(movl $complex_single_float_header,%imm0_l)
+        __(Misc_Alloc_Fixed(%arg_z,complex_single_float.size))
+        __(movq %xmm0,complex_single_float.realpart(%arg_z))
+        __(ret)        
 local_label(misc_ref_fixnum_vector):	
 	__(movq misc_data_offset(%arg_y,%arg_z),%imm0)
         __(box_fixnum(%imm0,%arg_z))
@@ -714,7 +726,7 @@ local_label(misc_set_jmp):
 	.quad _SPgvset /* 46 istruct   */
 	.quad local_label(misc_set_invalid) /* 47 immheader_0   */
 	.quad local_label(misc_set_invalid)	/* 48 odd_fixnum   */
-	.quad local_label(misc_set_invalid)	/* 49 immheader_1   */
+	.quad local_label(misc_set_u32)	     /* 49 complex_single_float   */
 	.quad local_label(misc_set_invalid)  /* 4a immheader_2   */
 	.quad local_label(misc_set_invalid) /* 4b nil   */
 	.quad local_label(misc_set_invalid)	/* 4c tra_1   */
@@ -731,7 +743,7 @@ local_label(misc_set_jmp):
 	.quad _SPgvset /* 56 value_cell   */
 	.quad local_label(misc_set_invalid) /* 57 immheader_0   */
 	.quad local_label(misc_set_invalid)	/* 58 odd_fixnum   */
-	.quad local_label(misc_set_invalid)	/* 59 immheader_1   */
+	.quad local_label(misc_set_u32)	/* 59 complex_double_float   */
 	.quad local_label(misc_set_invalid)  /* 5a immheader_2   */
 	.quad local_label(misc_set_invalid) /* 5b nil   */
 	.quad local_label(misc_set_invalid)	/* 5c tra_1   */
@@ -797,7 +809,7 @@ local_label(misc_set_jmp):
 	.quad local_label(misc_set_invalid)	/* 94 tra_0   */
 	.quad local_label(misc_set_function) /* 95 function_vector   */
 	.quad local_label(misc_set_invalid) /* 96 nodeheader_1   */
-	.quad local_label(misc_set_invalid) /* 97 immheader_0   */
+	.quad local_label(misc_set_complex_double_float_vector) /* 97 complex_double_float_vector   */
 	.quad local_label(misc_set_invalid)	/* 98 odd_fixnum   */
 	.quad local_label(misc_set_invalid)	/* 99 immheader_1   */
 	.quad local_label(misc_set_invalid)  /* 9a immheader_2   */
@@ -834,7 +846,7 @@ local_label(misc_set_jmp):
 	.quad local_label(misc_set_u16) /* b7 immheader_0   */
 	.quad local_label(misc_set_invalid)	/* b8 odd_fixnum   */
 	.quad local_label(misc_set_invalid)	/* b9 immheader_1   */
-	.quad local_label(misc_set_invalid) /* ba immheader_2   */
+	.quad local_label(misc_set_complex_single_float_vector) /* ba complex_single_float_vector   */
 	.quad local_label(misc_set_invalid) /* bb nil   */
 	.quad local_label(misc_set_invalid)	/* bc tra_1   */
 	.quad local_label(misc_set_invalid)	/* bd misc   */
@@ -985,6 +997,20 @@ local_label(misc_set_double_float_vector):
 	__(movq double_float.value(%arg_z),%imm0)
 	__(movq %imm0,misc_dfloat_offset(%arg_x,%arg_y))
 	__(ret)
+local_label(misc_set_complex_double_float_vector):
+        __(extract_typecode(%arg_z,%imm0))
+        __(cmpb $subtag_complex_double_float,%imm0_b)
+        __(jne local_label(misc_set_bad))
+        __(movdqa complex_double_float.realpart(%arg_z),%xmm0)
+        __(movdqa %xmm0,complex_double_float.realpart(%arg_x,%arg_y,2))
+        __(ret)
+local_label(misc_set_complex_single_float_vector):              
+        __(extract_typecode(%arg_z,%imm0))
+        __(cmpb $subtag_complex_single_float,%imm0_b)
+        __(jne local_label(misc_set_bad))
+        __(movq complex_single_float.realpart(%arg_z),%xmm0)
+        __(movq %xmm0,complex_single_float.realpart(%arg_x,%arg_y))
+        __(ret)
 local_label(misc_set_s32):	
 	__(movq %arg_z,%imm0)
 	__(movq %arg_y,%imm1)
@@ -1228,6 +1254,8 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
 	__(movq catch_frame.xframe(%temp0),%imm1)
         __(movq %imm0,rcontext(tcr.foreign_sp))
 	__(movq %imm1,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%imm0)
+        __(movq %imm0,rcontext(tcr.nfp))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.link(%temp0),%imm1)
 	__(movq catch_frame._save0(%temp0),%save0)
@@ -1274,6 +1302,8 @@ local_label(_threw_multiple_push_test):
         __(movq %imm0,rcontext(tcr.foreign_sp))        
 	__(movq catch_frame.xframe(%temp0),%imm0)
 	__(movq %imm0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%imm0)
+        __(movq %imm0,rcontext(tcr.nfp))
 	__(movq %imm1,%rsp)
 	__(movq catch_frame.link(%temp0),%imm1)		
 	__(movq catch_frame._save0(%temp0),%save0)
@@ -1320,6 +1350,8 @@ local_label(_nthrowv_dont_unbind):
 	__(jne local_label(_nthrowv_skip))
 	__(movq catch_frame.xframe(%temp0),%save0)
 	__(movq %save0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%save0)
+        __(movq %save0,rcontext(tcr.nfp))
 	__(leaq (%rsp,%nargs_q),%save1)
 	__(movq catch_frame.rsp(%temp0),%save2)
 	__(movq %nargs_q,%save0)
@@ -1334,6 +1366,8 @@ local_label(_nthrowv_push_test):
 	__(jns local_label(_nthrowv_push_loop))
 	__(movq catch_frame.xframe(%temp0),%save0)
 	__(movq %save0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%save0)
+        __(movq %save0,rcontext(tcr.nfp))
 	__(movq %save2,%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
 	__ifndef(`TCR_IN_GPR')
@@ -1366,6 +1400,8 @@ local_label(_nthrowv_do_unwind):
         __(movq catch_frame.xframe(%temp0),%stack_temp)
 	__(movq catch_frame.rsp(%temp0),%arg_x)
         __(movq %stack_temp,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%stack_temp)
+        __(movq %stack_temp,rcontext(tcr.nfp))
 	__(movq catch_frame.foreign_sp(%temp0),%stack_temp)
         __(movq %stack_temp,rcontext(tcr.foreign_sp))        
 	/* Discard the catch frame, so we can build a temp frame   */
@@ -1463,9 +1499,13 @@ local_label(_nthrow1v_dont_unbind):
 	__(jne local_label(_nthrow1v_skip))
 	__(movq catch_frame.xframe(%temp0),%save0)
 	__(movq %save0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%save0)
+        __(movq %save0,rcontext(tcr.nfp))
 	__(leaq (%rsp,%nargs_q),%save1)
 	__(movq catch_frame.xframe(%temp0),%save0)
 	__(movq %save0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%save0)
+        __(movq %save0,rcontext(tcr.nfp))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
 	__ifndef(`TCR_IN_GPR')
@@ -1489,6 +1529,8 @@ local_label(_nthrow1v_do_unwind):
 	
 	__(movq catch_frame.xframe(%temp0),%save0)
 	__(movq %save0,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%save0)
+        __(movq %save0,rcontext(tcr.nfp))
 	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame._save1(%temp0),%save1)
 	__(movq catch_frame._save2(%temp0),%save2)
@@ -2178,10 +2220,15 @@ _spentry(stack_misc_alloc)
 	__(unbox_fixnum(%arg_y,%imm1))
 	/* ivector_class_other_bit: 16, 8, or 1 ...   */
 	__(cmpb $subtag_bit_vector,%imm0_b)
-	__(jne local_label(stack_misc_alloc_8))
+	__(jne local_label(stack_misc_alloc_128))
 	__(addq $7,%imm1)
 	__(shrq $3,%imm1)
 	__(jmp local_label(stack_misc_alloc_alloc_ivector))
+local_label(stack_misc_alloc_128):      
+        __(cmpb $subtag_complex_double_float_vector,%imm0_b)
+        __(jne local_label(stack_misc_alloc_8))
+        __(shlq $4,%imm1)
+	__(jmp local_label(stack_misc_alloc_alloc_ivector))        
 local_label(stack_misc_alloc_8):	
 	__(cmpb $subtag_simple_base_string,%imm0_b)
 	__(jb local_label(stack_misc_alloc_16))
@@ -2956,12 +3003,17 @@ _spentry(misc_alloc)
 	__(cmpb $ivector_class_32_bit,%imm1_b)
 	__(jz local_label(misc_alloc_32))
 	__(unbox_fixnum(%arg_y,%imm1))
-	/* ivector_class_other_bit: 16, 8, or 1 ...   */
+	/* ivector_class_other_bit: ``128, 16, 8, or 1 ...   */
 	__(cmpb $subtag_bit_vector,%imm0_b)
-	__(jne local_label(misc_alloc_8))
+	__(jne local_label(misc_alloc_128))
 	__(addq $7,%imm1)
 	__(shrq $3,%imm1)
 	__(jmp local_label(misc_alloc_alloc_vector))
+local_label(misc_alloc_128):    
+        __(cmpb $subtag_complex_double_float_vector,%imm0_b)
+        __(jne local_label(misc_alloc_8))
+        __(shlq $4,%imm1)
+	__(jmp local_label(misc_alloc_alloc_vector))                
 local_label(misc_alloc_8):	
 	__(cmpb $subtag_simple_base_string,%imm0_b)
 	__(jae local_label(misc_alloc_alloc_vector))
@@ -3886,7 +3938,7 @@ __(tra(4))
         __(je 9f)
         __(jmp 0b)
 5:      __(cmpb $subtag_bignum,%imm0_b)
-        __(jne 9f)
+        __(jne 0f)
         __(getvheader(%arg_y,%imm2))
         __(cmpq misc_header_offset(%arg_z),%imm2)
         __(jne 9f)
@@ -3901,7 +3953,28 @@ __(tra(4))
 8:	__(movl $t_value,%arg_z_l)
 	__(ret)
 9:	__(movl $nil_value,%arg_z_l)
-	__(ret)	
+	__(ret)
+0:      __(cmpb $subtag_complex_single_float,%imm0_b)
+        __(jne 1f)
+        __(movl complex_single_float.realpart(%arg_y),%imm0_l)
+        __(cmpl complex_single_float.realpart(%arg_z),%imm0_l)
+        __(jne 9b)
+        __(movl complex_single_float.imagpart(%arg_y),%imm0_l)
+        __(cmpl complex_single_float.imagpart(%arg_z),%imm0_l)
+        __(jne 9b)
+        __(movl $t_value,%arg_z_l)
+        __(ret)
+1:      __(cmpb $subtag_complex_double_float,%imm0_b)
+        __(jne 9b)
+        __(movq complex_double_float.realpart(%arg_y),%imm0)
+        __(cmpq complex_double_float.realpart(%arg_z),%imm0)
+        __(jne 9b)
+        __(movq complex_double_float.imagpart(%arg_y),%imm0)
+        __(cmpq complex_double_float.imagpart(%arg_z),%imm0)
+        __(jne 9b)
+        __(movl $t_value,%arg_z_l)
+        __(ret)
+        
 _endsubp(builtin_eql)
 
 _spentry(builtin_length)
@@ -3911,11 +3984,15 @@ _spentry(builtin_length)
 	__(cmpb $tag_misc,%imm0_b)
 	__(jnz 8f)
 	__(extract_subtag(%arg_z,%imm0))
-	__(rcmpb(%imm0_b,$min_vector_subtag))
+        __(cmpb $subtag_simple_vector,%imm0_b)
+        __(je 0f)
+        __(cmpb $subtag_vectorH,%imm0_b)
+        __(je 1f)
+        __(ivector_typecode_p(%imm0_l,%imm1_l,%imm2_l))
+	__(rcmpb(%imm1_b,$min_cl_ivector_subtag))
 	__(jb 8f)
-	__(je 1f)
 	/* (simple-array * (*))   */
-	__(movq %arg_z,%arg_y)
+0:      __(movq %arg_z,%arg_y)
 	__(vector_length(%arg_y,%arg_z))
 	__(ret)
 1:	/* vector header   */
@@ -3955,9 +4032,14 @@ _spentry(builtin_seqtype)
 	__(cmpb $tag_misc,%imm0_b)
 	__(jne 2f)
 	__(movb misc_subtag_offset(%arg_z),%imm0_b)
-	__(rcmpb(%imm0_b,$min_vector_subtag))
+        __(cmpb $subtag_simple_vector,%imm0_b)
+        __(je 0f)
+        __(cmpb $subtag_vectorH,%imm0_b)
+        __(je 0f)
+        __(ivector_typecode_p(%imm0_l,%imm1_l,%imm2_l))
+	__(rcmpb(%imm1_b,$min_cl_ivector_subtag))
 	__(jb 2f)
-	__(movl $nil_value,%arg_z_l)
+0:      __(movl $nil_value,%arg_z_l)
 	__(ret)
 1:	__(movl $t_value,%arg_z_l)
 	__(ret)
@@ -4081,8 +4163,11 @@ _endsubp(builtin_logxor)
 _spentry(builtin_aset1)
 	__(extract_typecode(%arg_x,%imm0))
 	__(box_fixnum(%imm0,%temp0))
-	__(cmpb $min_vector_subtag,%imm0_b)
-	__(ja _SPsubtag_misc_set)
+	__(cmpb $subtag_simple_vector,%imm0_b)
+        __(je _SPsubtag_misc_set)
+        __(ivector_typecode_p(%imm0_l,%imm1_l,%imm2_l))
+        __(cmp $min_cl_ivector_subtag,%imm1_b)
+	__(jae _SPsubtag_misc_set)
 	__(jump_builtin(_builtin_aset1,3))
 _endsubp(builtin_aset1)
 
@@ -4135,9 +4220,12 @@ _endsubp(builtin_ash)
 
 _spentry(builtin_aref1)
 	__(extract_typecode(%arg_y,%imm0))
-	__(cmpb $min_vector_subtag,%imm0_b)
-	__(box_fixnum_no_flags(%imm0,%arg_x))
-	__(ja _SPsubtag_misc_ref)
+	__(box_fixnum(%imm0,%arg_x))
+	__(cmpb $subtag_simple_vector,%imm0_b)
+        __(je _SPsubtag_misc_ref)
+        __(ivector_typecode_p(%imm0_l,%imm1_l,%imm2_l))
+        __(cmp $min_cl_ivector_subtag,%imm1_b)
+	__(jae _SPsubtag_misc_ref)
 	__(jump_builtin(_builtin_aref1,2))
 _endsubp(builtin_aref1)
 

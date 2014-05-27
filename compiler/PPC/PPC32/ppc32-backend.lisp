@@ -130,23 +130,24 @@
                'darwin32::expand-ff-call
                :ff-call-struct-return-by-implicit-arg-function
                #+linuxppc-target
-               linux32::record-type-returns-structure-as-first-arg
+               'linux32::record-type-returns-structure-as-first-arg
                #+darwinppc-target
-               darwin32::record-type-returns-structure-as-first-arg
+               'darwin32::record-type-returns-structure-as-first-arg
                :callback-bindings-function
                #+linuxppc-target
-               linux32::generate-callback-bindings
+               'linux32::generate-callback-bindings
                #+darwinppc-target
-               darwin32::generate-callback-bindings
+               'darwin32::generate-callback-bindings
                :callback-return-value-function
                #+linuxppc-target
-               linux32::generate-callback-return-value
+               'linux32::generate-callback-return-value
                #+darwinppc-target
-               darwin32::generate-callback-return-value
+               'darwin32::generate-callback-return-value
                )))
     (install-standard-foreign-types ftd)
     (use-interface-dir :libc ftd)
     (setf (backend-target-foreign-type-data *ppc32-backend*) ftd)))
+
 
 (pushnew *ppc32-backend* *known-backends* :key #'backend-name)
 

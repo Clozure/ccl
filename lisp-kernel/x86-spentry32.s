@@ -158,7 +158,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* 44 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* 45 tra  */
         .long local_label(misc_ref_invalid) /* 46 misc  */
-        .long local_label(misc_ref_invalid) /* 47 immheader  */
+        .long local_label(misc_ref_u32)     /* 47 complex_single_float  */
         .long local_label(misc_ref_invalid) /* 48 even_fixnum  */
         .long local_label(misc_ref_invalid) /* 49 cons  */
         .long local_label(misc_ref_node) /* 4a hash_vector  */
@@ -166,7 +166,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* 4c odd_fixnum  */
         .long local_label(misc_ref_invalid) /* 4d tra  */
         .long local_label(misc_ref_invalid) /* 4e misc  */
-        .long local_label(misc_ref_invalid) /* 4f immheader  */
+        .long local_label(misc_ref_u32)     /* 4f complex_double_float  */
         /* 50-5f  */
         .long local_label(misc_ref_invalid) /* 50 even_fixnum  */
         .long local_label(misc_ref_invalid) /* 51 cons  */
@@ -246,29 +246,29 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* 97 immheader  */
         .long local_label(misc_ref_invalid) /* 98 even_fixnum  */
         .long local_label(misc_ref_invalid) /* 99 cons  */
-        .long local_label(misc_ref_node) /* 9a arrayH  */
+        .long local_label(misc_ref_invalid) /* 9a nodeheader  */
         .long local_label(misc_ref_invalid) /* 9b imm  */
         .long local_label(misc_ref_invalid) /* 9c odd_fixnum  */
         .long local_label(misc_ref_invalid) /* 9d tra  */
         .long local_label(misc_ref_invalid) /* 9e misc  */
-        .long local_label(misc_ref_invalid) /* 9f immheader  */
+        .long local_label(misc_ref_single_float_vector) /* 9f sf vector  */
         /* a0-af  */
         .long local_label(misc_ref_invalid) /* a0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* a1 cons  */
-        .long local_label(misc_ref_node) /* a2 vectorH  */
+        .long local_label(misc_ref_invalid) /* a2 nodeheade  */
         .long local_label(misc_ref_invalid) /* a3 imm  */
         .long local_label(misc_ref_invalid) /* a4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* a5 tra  */
         .long local_label(misc_ref_invalid) /* a6 misc  */
-        .long local_label(misc_ref_single_float_vector) /* a7 sf_vector  */
+        .long local_label(misc_ref_u32) /* a7 u32  */
         .long local_label(misc_ref_invalid) /* a8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* a9 cons  */
-        .long local_label(misc_ref_node) /* aa simple_vector  */
+        .long local_label(misc_ref_invalid) /* aa nodeheader  */
         .long local_label(misc_ref_invalid) /* ab imm  */
         .long local_label(misc_ref_invalid) /* ac odd_fixnum  */
         .long local_label(misc_ref_invalid) /* ad tra  */
         .long local_label(misc_ref_invalid) /* ae misc  */
-        .long local_label(misc_ref_u32) /* af u32  */
+        .long local_label(misc_ref_s32) /* af s32  */
         /* b0-bf  */
         .long local_label(misc_ref_invalid) /* b0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* b1 cons  */
@@ -277,7 +277,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* b4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* b5 tra  */
         .long local_label(misc_ref_invalid) /* b6 misc  */
-        .long local_label(misc_ref_s32) /* b7 s32  */
+        .long local_label(misc_ref_fixnum_vector) /* b7 fixnum_vector  */
         .long local_label(misc_ref_invalid) /* b8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* b9 cons  */
         .long local_label(misc_ref_invalid) /* ba nodeheader  */
@@ -285,7 +285,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* bc odd_fixnum  */
         .long local_label(misc_ref_invalid) /* bd tra  */
         .long local_label(misc_ref_invalid) /* be misc  */
-        .long local_label(misc_ref_fixnum_vector) /* bf fixnum_vector  */
+        .long local_label(misc_ref_string) /* bf simple_base_string  */
         /* c0-cf  */
         .long local_label(misc_ref_invalid) /* c0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* c1 cons  */
@@ -294,7 +294,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* c4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* c5 tra  */
         .long local_label(misc_ref_invalid) /* c6 misc  */
-        .long local_label(misc_ref_string) /* c7 simple_base_string  */
+        .long local_label(misc_ref_u8) /* c7 u8  */
         .long local_label(misc_ref_invalid) /* c8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* c9 cons  */
         .long local_label(misc_ref_invalid) /* ca nodeheader  */
@@ -302,7 +302,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* cc odd_fixnum  */
         .long local_label(misc_ref_invalid) /* cd tra  */
         .long local_label(misc_ref_invalid) /* ce misc  */
-        .long local_label(misc_ref_u8) /* cf u8  */
+        .long local_label(misc_ref_s8) /* cf s8 */
         /* d0-df  */
         .long local_label(misc_ref_invalid) /* d0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* d1 cons  */
@@ -311,7 +311,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* d4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* d5 tra  */
         .long local_label(misc_ref_invalid) /* d6 misc  */
-        .long local_label(misc_ref_s8)      /* d7 s8  */
+        .long local_label(misc_ref_u16)      /* d7 u16 vector  */
         .long local_label(misc_ref_invalid) /* d8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* d9 cons  */
         .long local_label(misc_ref_invalid) /* da nodeheader  */
@@ -319,7 +319,7 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* dc odd_fixnum  */
         .long local_label(misc_ref_invalid) /* dd tra  */
         .long local_label(misc_ref_invalid) /* de misc  */
-        .long local_label(misc_ref_invalid) /* df immheader  */
+        .long local_label(misc_ref_s16) /* df s16  */
         /* e0-ef  */
         .long local_label(misc_ref_invalid) /* e0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* e1 cons  */
@@ -328,27 +328,27 @@ local_label(misc_ref_jmp):
         .long local_label(misc_ref_invalid) /* e4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* e5 tra  */
         .long local_label(misc_ref_invalid) /* e6 misc  */
-        .long local_label(misc_ref_u16) /* e7 u16  */
+        .long local_label(misc_ref_double_float_vector) /* e7 df  */
         .long local_label(misc_ref_invalid) /* e8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* e9 cons  */
-        .long local_label(misc_ref_invalid) /* ea nodeheader  */
+        .long local_label(misc_ref_node) /* ea arrayH  */
         .long local_label(misc_ref_invalid) /* eb imm  */
         .long local_label(misc_ref_invalid) /* ec odd_fixnum  */
         .long local_label(misc_ref_invalid) /* ed tra  */
         .long local_label(misc_ref_invalid) /* ee misc  */
-        .long local_label(misc_ref_s16) /* ef s16  */
+        .long local_label(misc_ref_complex_single_float_vector) /* ef complex sf vectir  */
         /* f0-ff  */
         .long local_label(misc_ref_invalid) /* f0 even_fixnum  */
         .long local_label(misc_ref_invalid) /* f1 cons  */
-        .long local_label(misc_ref_invalid) /* f2 nodeheader  */
+        .long local_label(misc_ref_node) /* f2 vectorH  */
         .long local_label(misc_ref_invalid) /* f3 imm  */
         .long local_label(misc_ref_invalid) /* f4 odd_fixnum  */
         .long local_label(misc_ref_invalid) /* f5 tra  */
         .long local_label(misc_ref_invalid) /* f6 misc  */
-        .long local_label(misc_ref_double_float_vector) /* f7 df vector  */
+        .long local_label(misc_ref_complex_double_float_vector) /* f7 complex df vector  */
         .long local_label(misc_ref_invalid) /* f8 even_fixnum  */
         .long local_label(misc_ref_invalid) /* f9 cons  */
-        .long local_label(misc_ref_invalid) /* fa nodeheader  */
+        .long local_label(misc_ref_node) /* fa simple_vector  */
         .long local_label(misc_ref_invalid) /* fb imm  */
         .long local_label(misc_ref_invalid) /* fc odd_fixnum  */
         .long local_label(misc_ref_invalid) /* fd tra  */
@@ -397,6 +397,20 @@ local_label(misc_ref_double_float_vector):
 	__(Misc_Alloc_Fixed(%arg_z,double_float.size))
 	__(movsd %fp1,double_float.value(%arg_z))
 	__(ret)
+local_label(misc_ref_complex_double_float_vector):      
+        __(movdqu complex_double_float.realpart(%arg_y,%arg_z,4),%xmm0)
+        __(movl $complex_double_float_header,%imm0)
+        __(movd %imm0,%mm0)
+        __(Misc_Alloc_Fixed(%arg_z,complex_double_float.size))
+        __(movdqu %xmm0,complex_double_float.realpart(%arg_z))
+        __(ret)
+local_label(misc_ref_complex_single_float_vector):      
+        __(movq complex_single_float.realpart(%arg_y,%arg_z,2),%xmm0)
+        __(movl $complex_single_float_header,%imm0)
+        __(movd %imm0,%mm0)
+        __(Misc_Alloc_Fixed(%arg_z,complex_single_float.size))
+        __(movq %xmm0,complex_single_float.realpart(%arg_z))
+        __(ret)        
 local_label(misc_ref_fixnum_vector):
 	__(movl misc_data_offset(%arg_y,%arg_z),%imm0)
 	__(box_fixnum(%imm0,%arg_z))
@@ -593,7 +607,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* 44 odd_fixnum  */
         .long local_label(misc_set_invalid) /* 45 tra  */
         .long local_label(misc_set_invalid) /* 46 misc  */
-        .long local_label(misc_set_invalid) /* 47 immheader  */
+        .long local_label(misc_set_u32)     /* 47 complex_single_float  */
         .long local_label(misc_set_invalid) /* 48 even_fixnum  */
         .long local_label(misc_set_invalid) /* 49 cons  */
         .long _SPgvset /* 4a hash_vector  */
@@ -601,7 +615,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* 4c odd_fixnum  */
         .long local_label(misc_set_invalid) /* 4d tra  */
         .long local_label(misc_set_invalid) /* 4e misc  */
-        .long local_label(misc_set_invalid) /* 4f immheader  */
+        .long local_label(misc_set_u32)     /* 4f complex_double_float  */
         /* 50-5f  */
         .long local_label(misc_set_invalid) /* 50 even_fixnum  */
         .long local_label(misc_set_invalid) /* 51 cons  */
@@ -681,29 +695,29 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* 97 immheader  */
         .long local_label(misc_set_invalid) /* 98 even_fixnum  */
         .long local_label(misc_set_invalid) /* 99 cons  */
-        .long _SPgvset /* 9a arrayH  */
+        .long local_label(misc_set_invalid) /* 9a nodeheader  */
         .long local_label(misc_set_invalid) /* 9b imm  */
         .long local_label(misc_set_invalid) /* 9c odd_fixnum  */
         .long local_label(misc_set_invalid) /* 9d tra  */
         .long local_label(misc_set_invalid) /* 9e misc  */
-        .long local_label(misc_set_invalid) /* 9f immheader  */
+        .long local_label(misc_set_single_float_vector) /* 9f sf_vector  */
         /* a0-af  */
         .long local_label(misc_set_invalid) /* a0 even_fixnum  */
         .long local_label(misc_set_invalid) /* a1 cons  */
-        .long _SPgvset /* a2 vectorH  */
+        .long local_label(misc_set_invalid) /* a2 nodeheader  */
         .long local_label(misc_set_invalid) /* a3 imm  */
         .long local_label(misc_set_invalid) /* a4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* a5 tra  */
         .long local_label(misc_set_invalid) /* a6 misc  */
-        .long local_label(misc_set_single_float_vector) /* a7 sf_vector  */
+        .long local_label(misc_set_u32) /* a7 u32  */
         .long local_label(misc_set_invalid) /* a8 even_fixnum  */
         .long local_label(misc_set_invalid) /* a9 cons  */
-        .long _SPgvset /* aa simple_vector  */
+        .long local_label(misc_set_invalid) /* aa nodeheader  */
         .long local_label(misc_set_invalid) /* ab imm  */
         .long local_label(misc_set_invalid) /* ac odd_fixnum  */
         .long local_label(misc_set_invalid) /* ad tra  */
         .long local_label(misc_set_invalid) /* ae misc  */
-        .long local_label(misc_set_u32) /* af u32  */
+        .long local_label(misc_set_s32) /* af s32  */
         /* b0-bf  */
         .long local_label(misc_set_invalid) /* b0 even_fixnum  */
         .long local_label(misc_set_invalid) /* b1 cons  */
@@ -712,7 +726,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* b4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* b5 tra  */
         .long local_label(misc_set_invalid) /* b6 misc  */
-        .long local_label(misc_set_s32) /* b7 s32  */
+        .long local_label(misc_set_fixnum_vector) /* b7 fixnum_vector  */
         .long local_label(misc_set_invalid) /* b8 even_fixnum  */
         .long local_label(misc_set_invalid) /* b9 cons  */
         .long local_label(misc_set_invalid) /* ba nodeheader  */
@@ -720,7 +734,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* bc odd_fixnum  */
         .long local_label(misc_set_invalid) /* bd tra  */
         .long local_label(misc_set_invalid) /* be misc  */
-        .long local_label(misc_set_fixnum_vector) /* bf fixnum_vector  */
+        .long local_label(misc_set_string) /* bf simple base-string  */
         /* c0-cf  */
         .long local_label(misc_set_invalid) /* c0 even_fixnum  */
         .long local_label(misc_set_invalid) /* c1 cons  */
@@ -729,7 +743,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* c4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* c5 tra  */
         .long local_label(misc_set_invalid) /* c6 misc  */
-        .long local_label(misc_set_string) /* c7 simple_base_string  */
+        .long local_label(misc_set_u8) /* c7 u8  */
         .long local_label(misc_set_invalid) /* c8 even_fixnum  */
         .long local_label(misc_set_invalid) /* c9 cons  */
         .long local_label(misc_set_invalid) /* ca nodeheader  */
@@ -737,7 +751,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* cc odd_fixnum  */
         .long local_label(misc_set_invalid) /* cd tra  */
         .long local_label(misc_set_invalid) /* ce misc  */
-        .long local_label(misc_set_u8) /* cf u8  */
+        .long local_label(misc_set_s8) /* cf s8  */
         /* d0-df  */
         .long local_label(misc_set_invalid) /* d0 even_fixnum  */
         .long local_label(misc_set_invalid) /* d1 cons  */
@@ -746,7 +760,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* d4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* d5 tra  */
         .long local_label(misc_set_invalid) /* d6 misc  */
-        .long local_label(misc_set_s8)      /* d7 s8  */
+        .long local_label(misc_set_u16)      /* d7 u16  */
         .long local_label(misc_set_invalid) /* d8 even_fixnum  */
         .long local_label(misc_set_invalid) /* d9 cons  */
         .long local_label(misc_set_invalid) /* da nodeheader  */
@@ -754,7 +768,7 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* dc odd_fixnum  */
         .long local_label(misc_set_invalid) /* dd tra  */
         .long local_label(misc_set_invalid) /* de misc  */
-        .long local_label(misc_set_invalid) /* df immheader  */
+        .long local_label(misc_set_s16) /* df s16  */
         /* e0-ef  */
         .long local_label(misc_set_invalid) /* e0 even_fixnum  */
         .long local_label(misc_set_invalid) /* e1 cons  */
@@ -763,27 +777,27 @@ local_label(misc_set_jmp):
         .long local_label(misc_set_invalid) /* e4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* e5 tra  */
         .long local_label(misc_set_invalid) /* e6 misc  */
-        .long local_label(misc_set_u16) /* e7 u16  */
+        .long local_label(misc_set_double_float_vector) /* e7 df vector  */
         .long local_label(misc_set_invalid) /* e8 even_fixnum  */
         .long local_label(misc_set_invalid) /* e9 cons  */
-        .long local_label(misc_set_invalid) /* ea nodeheader  */
+        .long _SPgvset /* ea arrayH  */
         .long local_label(misc_set_invalid) /* eb imm  */
         .long local_label(misc_set_invalid) /* ec odd_fixnum  */
         .long local_label(misc_set_invalid) /* ed tra  */
         .long local_label(misc_set_invalid) /* ee misc  */
-        .long local_label(misc_set_s16) /* ef s16  */
+        .long local_label(misc_set_complex_single_float_vector) /* ef complex sf vector  */
         /* f0-ff  */
         .long local_label(misc_set_invalid) /* f0 even_fixnum  */
         .long local_label(misc_set_invalid) /* f1 cons  */
-        .long local_label(misc_set_invalid) /* f2 nodeheader  */
+        .long _SPgvset /* f2 vectorH  */
         .long local_label(misc_set_invalid) /* f3 imm  */
         .long local_label(misc_set_invalid) /* f4 odd_fixnum  */
         .long local_label(misc_set_invalid) /* f5 tra  */
         .long local_label(misc_set_invalid) /* f6 misc  */
-        .long local_label(misc_set_double_float_vector) /* f7 df vector  */
+        .long local_label(misc_set_complex_double_float_vector) /* f7 complex df vector  */
         .long local_label(misc_set_invalid) /* f8 even_fixnum  */
         .long local_label(misc_set_invalid) /* f9 cons  */
-        .long local_label(misc_set_invalid) /* fa nodeheader  */
+        .long _SPgvset /* fa simple_vector  */
         .long local_label(misc_set_invalid) /* fb imm  */
         .long local_label(misc_set_invalid) /* fc odd_fixnum  */
         .long local_label(misc_set_invalid) /* fd tra  */
@@ -881,6 +895,20 @@ local_label(misc_set_double_float_vector):
 	__(movsd double_float.value(%arg_z),%fp0)
 	__(movsd %fp0,misc_dfloat_offset(%temp0,%arg_y,2))
 	__(ret)
+local_label(misc_set_complex_double_float_vector):      
+        __(extract_typecode(%arg_z,%imm0))
+        __(cmpb $subtag_complex_double_float,%imm0_b)
+        __(jne local_label(misc_set_bad))
+        __(movdqu complex_double_float.realpart(%arg_z),%xmm0)
+        __(movdqu %xmm0,complex_double_float.realpart(%temp0,%arg_y,4))
+        __(ret) 
+local_label(misc_set_complex_single_float_vector):      
+        __(extract_typecode(%arg_z,%imm0))
+        __(cmpb $subtag_complex_single_float,%imm0_b)
+        __(jne local_label(misc_set_bad))
+        __(movq complex_single_float.realpart(%arg_z),%xmm0)
+        __(movq %xmm0,complex_single_float.realpart(%temp0,%arg_y,2))
+        __(ret) 	
 local_label(misc_set_fixnum_vector):
 	__(unbox_fixnum(%arg_z,%imm0))
 	__(testb $fixnummask,%arg_z_b)
@@ -1233,7 +1261,9 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
 	__(movl catch_frame.foreign_sp(%arg_y),%imm0)
         __(movl %imm0,rcontext(tcr.foreign_sp))
 	__(movl catch_frame.xframe(%arg_y),%imm0)
+        __(movd catch_frame.nfp(%arg_y),%mm3)
 	__(movl %imm0,rcontext(tcr.xframe))
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(movl catch_frame.esp(%arg_y),%esp)
 	__(movl catch_frame.link(%arg_y),%imm0)
 	__(movl %imm0,rcontext(tcr.catch_top))
@@ -1272,7 +1302,9 @@ local_label(_threw_multiple_push_test):
 	__(movl catch_frame.foreign_sp(%arg_y),%imm0)
         __(movl %imm0,rcontext(tcr.foreign_sp))        
 	__(movl catch_frame.xframe(%arg_y),%imm0)
+        __(movd catch_frame.nfp(%arg_y),%mm3)
 	__(movl %imm0,rcontext(tcr.xframe))
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(movl %temp1,%esp)
 	__(movl catch_frame.link(%arg_y),%temp1)
 	__(movl %temp1,rcontext(tcr.catch_top))
@@ -1314,7 +1346,9 @@ local_label(_nthrowv_dont_unbind):
 	__(test %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrowv_skip))
 	__(movl catch_frame.xframe(%temp0),%arg_y)
+        __(movd catch_frame.nfp(%temp0),%mm3)
 	__(movl %arg_y,rcontext(tcr.xframe))
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(lea (%esp,%nargs),%arg_y)
 	__(movl catch_frame.esp(%temp0),%arg_z)
 	__(movd %nargs,%mm2)
@@ -1330,6 +1364,8 @@ local_label(_nthrowv_push_test):
 	__(movd %mm2,%nargs)
 	__(movl catch_frame.xframe(%temp0),%arg_y)
 	__(movl %arg_y,rcontext(tcr.xframe))
+        __(movd catch_frame.nfp(%temp0),%mm3)
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(movl %arg_z,%esp)
 	__(movl catch_frame.ebp(%temp0),%ebp)
 	__(movd catch_frame.foreign_sp(%temp0),%stack_temp)
@@ -1349,6 +1385,8 @@ local_label(_nthrowv_do_unwind):
 	__(movl catch_frame.ebp(%temp0),%ebp)
         __(movd catch_frame.xframe(%temp0),%stack_temp)
         __(movd %stack_temp,rcontext(tcr.xframe))
+        __(movd catch_frame.nfp(%temp0),%mm3)
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(movl catch_frame.esp(%temp0),%arg_z)
 	__(movd catch_frame.foreign_sp(%temp0),%stack_temp)
         __(movd %stack_temp,rcontext(tcr.foreign_sp))        
@@ -1450,6 +1488,8 @@ local_label(_nthrow1v_dont_unbind):
 	__(jne local_label(_nthrow1v_skip))
 	__(movl catch_frame.xframe(%temp1),%arg_y)
 	__(movl %arg_y,rcontext(tcr.xframe))
+        __(movd catch_frame.nfp(%temp1),%mm3)
+        __(movd %mm3,rcontext(tcr.nfp))
 	__(movl catch_frame.esp(%temp1),%esp)
 	__(movl catch_frame.ebp(%temp1),%ebp)
 	__(movd catch_frame.foreign_sp(%temp1),%stack_temp)
@@ -1465,6 +1505,8 @@ local_label(_nthrow1v_do_unwind):
 /* multiple-value case. */
 	__(movl catch_frame.xframe(%temp1),%arg_y)
 	__(movl %arg_y,rcontext(tcr.xframe))
+	__(movd catch_frame.nfp(%temp1),%mm3)
+	__(movd %mm3,rcontext(tcr.nfp))
 	__(movl catch_frame.ebp(%temp1),%ebp)
 	__(movl catch_frame.esp(%temp1),%esp)
 	__(movd catch_frame.foreign_sp(%temp1),%stack_temp)
@@ -2151,11 +2193,16 @@ _spentry(stack_misc_alloc)
 	__(jbe local_label(stack_misc_alloc_8))
 	__(cmpb $max_16_bit_ivector_subtag,%imm0_b)
 	__(jbe local_label(stack_misc_alloc_16))
-	__(cmpb $subtag_double_float_vector,%imm0_b)
-	__(jne local_label(stack_misc_alloc_1))
-	/* double-float vector case */
+        __(cmpb $subtag_complex_double_float_vector,%imm0_b)
+        __(je local_label(stack_misc_alloc_128))
+	__(cmpb $subtag_bit_vector,%imm0_b)
+	__(je local_label(stack_misc_alloc_1))
+	/* double-float/complex single float vector case */
 	__(imul $2,%arg_y,%imm0)
 	__(jmp local_label(stack_misc_alloc_alloc_ivector))
+local_label(stack_misc_alloc_128):      
+        __(imul $4,%arg_y,%imm0)
+	__(jmp local_label(stack_misc_alloc_alloc_ivector))                
 local_label(stack_misc_alloc_1):
 	__(unbox_fixnum(%arg_y,%imm0))
 	__(addl $7,%imm0)
@@ -3039,10 +3086,15 @@ _spentry(misc_alloc)
 	__(jbe local_label(misc_alloc_8))
 	__(cmpb $max_16_bit_ivector_subtag,%imm0_b)
 	__(jbe local_label(misc_alloc_16))
-	__(cmpb $subtag_double_float_vector,%imm0_b)
-	__(jne local_label(misc_alloc_1))
-	/* double-float vector case */
+        __(cmpb $subtag_bit_vector,%imm0_b)
+	__(je local_label(misc_alloc_1))
+        __(cmpb $subtag_complex_double_float_vector,%imm0_b)
+        __(je local_label(misc_alloc_128))
+	/* double-float/complex single-float vector case */
 	__(imul $2,%arg_y,%imm0)
+	__(jmp local_label(misc_alloc_alloc_vector))
+local_label(misc_alloc_128):      
+        __(imul $4,%arg_y,%imm0)
 	__(jmp local_label(misc_alloc_alloc_vector))
 local_label(misc_alloc_1):
 	__(unbox_fixnum(%arg_y,%imm0))
@@ -4098,7 +4150,34 @@ __(tra(5))
         __(je 9f)
         __(jmp 0b)
 6:      __(cmpb $subtag_bignum,%imm0_b)
+        __(je 0f)
+        __(cmpb $subtag_complex_double_float,%imm0_b)
+        __(je 2f)
+        __(cmpb $subtag_complex_single_float,%imm0_b)
         __(jne 9f)
+1:      __(movl complex_single_float.realpart(%arg_y),%imm0)
+        __(cmpl complex_single_float.realpart(%arg_z),%imm0)
+        __(jne 9f)
+1:      __(movl complex_single_float.imagpart(%arg_y),%imm0)
+        __(cmpl complex_single_float.imagpart(%arg_z),%imm0)
+        __(jne 9f)
+      	__(movl $t_value,%arg_z)
+	__(ret)
+2:      __(movl complex_double_float.realpart_low(%arg_y),%imm0)
+        __(cmpl complex_double_float.realpart_low(%arg_z),%imm0)
+        __(jne 9f)
+        __(movl complex_double_float.realpart_high(%arg_y),%imm0)
+        __(cmpl complex_double_float.realpart_high(%arg_z),%imm0)
+        __(jne 9f)  
+        __(movl complex_double_float.imagpart_low(%arg_y),%imm0)
+        __(cmpl complex_double_float.imagpart_low(%arg_z),%imm0)
+        __(jne 9f)
+        __(movl complex_double_float.imagpart_high(%arg_y),%imm0)
+        __(cmpl complex_double_float.imagpart_high(%arg_z),%imm0)
+        __(jne 9f)
+      	__(movl $t_value,%arg_z)
+	__(ret)
+0:              
         __(getvheader(%arg_y,%imm0))
         __(cmpl misc_header_offset(%arg_z),%imm0)
         __(jne 9f)
@@ -4122,11 +4201,15 @@ _spentry(builtin_length)
 	__(cmpl $tag_misc,%imm0)
 	__(jnz 8f)
 	__(extract_subtag(%arg_z,%imm0_b))
-	__(rcmpb(%imm0_b,$min_vector_subtag))
+        __(rcmpb(%imm0_b,$subtag_vectorH))
+        __(je 1f)
+        __(rcmpb(%imm0_b,$subtag_simple_vector))
+        __(je 0f)
+        __(ivector_typecode_p(%imm0_b,%imm0_bh))
+	__(rcmpb(%imm0_bh,$min_cl_ivector_subtag))
 	__(jb 8f)
-	__(je 1f)
 	/* (simple-array * (*)) */
-	__(movl %arg_z,%arg_y)
+0:      __(movl %arg_z,%arg_y)
 	__(vector_length(%arg_y,%arg_z))
 	__(ret)
 1:	/* vector header */
@@ -4167,9 +4250,14 @@ _spentry(builtin_seqtype)
 	__(cmpb $tag_misc,%imm0_b)
 	__(jne 2f)
 	__(movb misc_subtag_offset(%arg_z),%imm0_b)
-	__(rcmpb(%imm0_b,$min_vector_subtag))
+        __(cmpb $subtag_simple_vector,%imm0_b)
+        __(je 0f)
+        __(cmpb $subtag_vectorH,%imm0_b)
+        __(je 0f)
+        __(ivector_typecode_p(%imm0_b,%imm0_bh))
+	__(rcmpb(%imm0_bh,$min_cl_ivector_subtag))
 	__(jb 2f)
-	__(movl $nil_value,%arg_z)
+0:      __(movl $nil_value,%arg_z)
 	__(ret)
 1:	__(movl $t_value,%arg_z)
 	__(ret)
@@ -4289,8 +4377,11 @@ _endsubp(builtin_logxor)
 _spentry(aset1)
 	__(extract_typecode(%temp0,%imm0))
 	__(box_fixnum(%imm0,%temp1))
-	__(cmpb $min_vector_subtag,%imm0_b)
-	__(ja _SPsubtag_misc_set)
+	__(cmpb $subtag_simple_vector,%imm0_b)
+        __(je _SPsubtag_misc_set)
+        __(ivector_typecode_p(%imm0_b,%imm0_bh))
+        __(cmp $min_cl_ivector_subtag,%imm0_bh)
+	__(jae _SPsubtag_misc_set)
 	/* push frame... */
 	__(pop %temp1)
 	__(push $reserved_frame_marker)
@@ -4355,8 +4446,11 @@ _endsubp(builtin_ash)
 _spentry(builtin_aref1)
 	__(extract_typecode(%arg_y,%imm0))
 	__(box_fixnum_no_flags(%imm0,%temp0))
-	__(cmpb $min_vector_subtag,%imm0_b)
-	__(ja _SPsubtag_misc_ref)
+        __(cmpb $subtag_simple_vector,%imm0_b)
+        __(je _SPsubtag_misc_ref)
+        __(ivector_typecode_p(%imm0_b,%imm0_bh))
+	__(cmpb $min_cl_ivector_subtag,%imm0_bh)
+	__(jae _SPsubtag_misc_ref)
 	__(jump_builtin(_builtin_aref1,2))
 _endsubp(builtin_aref1)
 
@@ -4685,8 +4779,11 @@ _spentry(aref2)
         __(movl arrayH.data_vector(%arg_y),%arg_y)
         __(extract_subtag(%arg_y,%imm0_b))
         __(cmpb $subtag_vectorH,%imm0_b)
-        __(ja C(misc_ref_common))
-        __(jmp 6b)
+        __(je 6b)
+        __(cmpb $subtag_arrayH,%imm0_b)
+        __(je 6b)
+        __(jmp C(misc_ref_common))
+
 0:	__(uuo_error_reg_not_fixnum(Rarg_y))
 1:	__(uuo_error_reg_not_fixnum(Rarg_z))
 2:      __(uuo_error_reg_not_type(Rtemp0,error_object_not_array_2d))
@@ -4728,9 +4825,11 @@ _spentry(aref3)
 8:	__(addl arrayH.displacement(%arg_y),%arg_z)
 	__(movl arrayH.data_vector(%arg_y),%arg_y)
 	__(extract_subtag(%arg_y,%imm0_b))
-	__(cmpb $subtag_vectorH,%imm0_b)
-	__(ja C(misc_ref_common))
-	__(jmp 8b)
+        __(cmpb $subtag_vectorH,%imm0_b)
+        __(je 6b)
+        __(cmpb $subtag_arrayH,%imm0_b)
+        __(je 6b)
+        __(jmp C(misc_ref_common))
 0:	__(uuo_error_reg_not_fixnum(Rtemp0))
 1:	__(uuo_error_reg_not_fixnum(Rarg_y))
 2:	__(uuo_error_reg_not_fixnum(Rarg_z))
@@ -4763,11 +4862,13 @@ _spentry(aset2)
 	__(xorl %temp1,%temp1)
 6:      __(addl arrayH.displacement(%temp0),%arg_y)
         __(movl arrayH.data_vector(%temp0),%temp0)
-        __(extract_subtag(%temp0,%imm0_b))
+        __(extract_subtag(%temp0,%imm0_b))        
         __(cmpb $subtag_vectorH,%imm0_b)
-        __(ja C(misc_set_common))
-        __(jmp 6b)
-0:	__(uuo_error_reg_not_fixnum(Rtemp0))
+        __(je 6b)
+        __(cmpb $subtag_arrayH,%imm0_b)
+        __(je 6b)
+        __(jmp C(misc_set_common))
+w0:	__(uuo_error_reg_not_fixnum(Rtemp0))
 1:	__(uuo_error_reg_not_fixnum(Rarg_y))
 2:      __(uuo_error_reg_not_type(Rtemp1,error_object_not_array_2d))
 3:	__(uuo_error_array_bounds(Rtemp0,Rtemp1))
@@ -4810,8 +4911,12 @@ _spentry(aset3)
 	__(movl arrayH.data_vector(%temp0),%temp0)
 	__(extract_subtag(%temp0,%imm0_b))
 	__(cmpb $subtag_vectorH,%imm0_b)
-	__(ja C(misc_set_common))
-	__(jmp 8b)
+        __(je 6b)
+	__(cmpb $subtag_vectorH,%imm0_b)
+        __(je 6b)
+	__(cmpb $subtag_arrayH,%imm0_b)        
+        __(je 6b)
+	__(jmp C(misc_set_common))
 0:	__(pop %temp0)	/* supplied i */
 	__(uuo_error_reg_not_fixnum(Rtemp0))
 1:	__(uuo_error_reg_not_fixnum(Rtemp0))

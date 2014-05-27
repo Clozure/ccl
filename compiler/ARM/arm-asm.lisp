@@ -840,7 +840,7 @@
      #x0d200b00
      #x0ff00f00
      ())
-   (define-arm-instruction fstmiad (:sd :rnw :srcount)
+   (define-arm-instruction fstmiad (:dd :rnw :drcount)
      #x0c800b00
      #x0fd00f00
      ())
@@ -1857,6 +1857,9 @@
     (cond (p
            (add-avi-operand avi encoded-type (list p))
            nil)
+          ((and (consp form) (eq (car form) :apply))
+           (add-avi-operand avi encoded-type (simplify-arm-vinsn-application form vinsn-params))
+           nil)
           (t           
            (set-avi-opcode-field avi bytespec (need-arm-gpr form))))))
 
@@ -1865,6 +1868,9 @@
     (cond (p
            (add-avi-operand avi encoded-type (list p))
            nil)
+          ((and (consp form) (eq (car form) :apply))
+           (add-avi-operand avi encoded-type (simplify-arm-vinsn-application form vinsn-params))
+           nil)
           (t           
            (set-avi-opcode-field avi bytespec (need-arm-dfpr form))))))
 
@@ -1872,6 +1878,9 @@
   (let* ((p (position form vinsn-params)))
     (cond (p
            (add-avi-operand avi encoded-type (list p))
+           nil)
+          ((and (consp form) (eq (car form) :apply))
+           (add-avi-operand avi encoded-type (simplify-arm-vinsn-application form vinsn-params))
            nil)
           (t
            (let* ((val (need-arm-sfpr form)))

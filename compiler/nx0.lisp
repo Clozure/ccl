@@ -68,8 +68,16 @@
 
 (defvar *nx-lambdalist* (make-symbol "lambdalist"))
 
+  
+
+  
 (defmacro make-nx-nil () `(make-acode ,(%nx1-operator nil)))
 (defmacro make-nx-t () `(make-acode ,(%nx1-operator t)))
+
+
+(defmethod print-object ((a acode) stream)
+  (print-unreadable-object (a stream :type t)
+    (format stream "~a ~s" (string-downcase (acode-operator-name (acode-operator a))) (acode-operands a))))
 
 (defun %nx-null (x)
   (let* ((x (acode-unwrapped-form x)))
@@ -111,48 +119,7 @@
 (defvar *cross-compiling* nil "bootstrapping")
 
 
-(defparameter *nx-operator-result-types*
-  '((#.(%nx1-operator list) . list)
-    (#.(%nx1-operator memq) . list)
-    (#.(%nx1-operator %temp-list) . list)
-    (#.(%nx1-operator assq) . list)
-    (#.(%nx1-operator cons) . cons)
-    (#.(%nx1-operator rplaca) . cons)
-    (#.(%nx1-operator %rplaca) . cons)
-    (#.(%nx1-operator rplacd) . cons)
-    (#.(%nx1-operator %rplacd) . cons)
-    (#.(%nx1-operator %temp-cons) . cons)
-    (#.(%nx1-operator %i+) . fixnum)
-    (#.(%nx1-operator %i-) . fixnum)
-    (#.(%nx1-operator %i*) . fixnum)
-    (#.(%nx1-operator %ilsl) . fixnum)
-    (#.(%nx1-operator %ilsr) . fixnum)
-    (#.(%nx1-operator %iasr) . fixnum)
-    (#.(%nx1-operator %ilogior2) . fixnum)
-    (#.(%nx1-operator %ilogand2) . fixnum)
-    (#.(%nx1-operator %ilogxor2) . fixnum)
-    (#.(%nx1-operator %code-char) . character)
-    (#.(%nx1-operator schar) . character)
-    (#.(%nx1-operator length) . fixnum)
-    (#.(%nx1-operator uvsize) . fixnum)
-    (#.(%nx1-operator %double-float/-2) . double-float)
-    (#.(%nx1-operator %double-float/-2!) . double-float) ; no such operator
-    (#.(%nx1-operator %double-float+-2) . double-float)
-    (#.(%nx1-operator %double-float+-2!) . double-float)
-    (#.(%nx1-operator %double-float--2) . double-float)
-    (#.(%nx1-operator %double-float--2!) . double-float)
-    (#.(%nx1-operator %double-float*-2) . double-float)
-    (#.(%nx1-operator %double-float*-2!) . double-float)
-    (#.(%nx1-operator %short-float/-2) . single-float)
-    (#.(%nx1-operator %short-float+-2) . single-float)
-    (#.(%nx1-operator %short-float--2) . single-float)
-    (#.(%nx1-operator %short-float*-2) . single-float)
-    (#.(%nx1-operator %double-to-single) . single-float)
-    (#.(%nx1-operator %single-to-double) . double-float)
-    (#.(%nx1-operator %fixnum-to-single) . single-float)
-    (#.(%nx1-operator %fixnum-to-double) . double-float)
-    (#.(%nx1-operator char-code) . #.`(integer 0 (,char-code-limit)))
-   ))
+
 
 (defparameter *nx-operator-result-types-by-name*
   '((%ilognot . fixnum)
@@ -355,6 +322,16 @@ function to the indicated name is true.")
         (funcall hook env)
         t))))
 
+(defun nx-float-safety (env)
+  (or (eql (safety-optimize-quantity env) 3)
+      (let* ((hook (getf (policy.misc *nx-current-compiler-policy*) :detect-floating-point-excption)))
+        (when hook
+          (if (functionp hook)
+            (funcall hook env)
+            t)))))
+
+
+
 #-bccl
 (defun nx1-default-operator ()
  (or (gethash *nx-sfname* *nx1-operators*)
@@ -448,7 +425,7 @@ function to the indicated name is true.")
       (values
        (if optype 
          (subtypep optype (nx-target-type type))
-         (if opval-p (typep (%cadr form) (nx-target-type type))))))))
+         (if opval-p (typep (car (acode-operands form)) (nx-target-type type))))))))
 
 (defun nx-acode-form-type (form env)
   (acode-form-type form (nx-trust-declarations env)))
@@ -459,78 +436,136 @@ function to the indicated name is true.")
         (%nx1-operator mul2)
         (%nx1-operator div2)))
 
+(defparameter *acode-operator-types* (make-array (1+ operator-id-mask) :initial-element t)) ; initialized by next-nx-defops
 
+
+(defparameter *acode-simple-type-inferrers* (make-array (1+ operator-id-mask) :initial-element nil))
+
+(defmacro def-simple-type-infer (name operator-list trust-decls arglist &body body)
+  (when (atom operator-list)
+    (setq operator-list (list operator-list)))
+  (multiple-value-bind (lambda-list whole-var) (normalize-lambda-list arglist t)
+    (unless whole-var (setq whole-var (gensym)))
+    (multiple-value-bind (body decls)
+        (parse-body body nil t)
+      (collect ((let-body))
+        (dolist (operator operator-list)
+          (let-body `(setf (svref *acode-simple-type-inferrers*  (logand operator-id-mask (%nx1-operator ,operator))) fun)))
+        (let* ((operands (gensym "OPERANDS")))
+          (multiple-value-bind (bindings binding-decls)
+
+              (%destructure-lambda-list lambda-list operands nil nil
+                                        :cdr-p nil
+                                        :whole-p nil
+                                        :use-whole-var t
+                                        :default-initial-value nil)
+              
+            `(let* ((fun (nfunction ,name 
+                                    (lambda (,whole-var &optional (,trust-decls t))
+                                      (declare (ignorable ,trust-decls))
+                                      (block ,name
+                                        (let* ((,operands (acode-operands ,whole-var))
+                                               ,@(nreverse bindings))
+                                          ,@(when binding-decls `((declare ,@binding-decls)))
+                                          ,@decls
+                                          ,@body))))))
+              ,@(let-body))))))))
+
+(defun acode-assert-type (form typespec)
+  (setf (acode.asserted-type form)
+        (nx-target-type typespec)))
+
+(def-simple-type-infer infer-fixnum fixnum trust-decls (val)
+  `(integer ,val ,val))
+
+(def-simple-type-infer infer-immediate immediate trust-decls (val)
+  (type-of val))
+
+(def-simple-type-infer infer-progn progn trust-decls (forms)
+  (acode-form-type (car (last forms)) trust-decls))
+
+(def-simple-type-infer infer-typed-form typed-form trust-decls (&whole w type form &optional check)
+  (declare (ignorable w form))
+  (if (or trust-decls check)
+    type
+    '*))
+
+(def-simple-type-infer infer-let (let let) trust-decls (vars vals body p2decls)
+  (declare (ignore vars vals))
+  (acode-form-type body (logtest $decl_trustdecls p2decls)))
+
+(def-simple-type-infer infer-ff-call (ff-call eabi-ff-call poweropen-ff-call i386-ff-call) trust-decls (address argspecs argvals resultspec &optional monitor)
+  (declare (ignore address argspecs argvals monitor))
+  (case resultspec
+    (:unsigned-byte '(unsigned-byte 8))
+    (:signed-byte '(signed-byte 8))
+    (:unsigned-halfword '(unsigned-byte 16))
+    (:signed-halfword '(signed-byte 16))
+    (:unsigned-fullword '(unsigned-byte 32))
+    (:signed-fullword '(signed-byte 32))
+    (:unsigned-doubleword '(unsigned-byte 64))
+    (:signed-doubleword '(signed-byte 64))
+    (:single-float 'single-float)
+    (:double-float 'double-float)
+    (:address 'macptr)
+    (otherwise '*)))
+
+
+(def-simple-type-infer infer-lambda-bind lambda-bind trust-decls
+    (vals req rest keys-p auxen body p2decls)
+  (declare (ignore vals req rest keys-p auxen))
+  (acode-form-type body (logtest $decl_trustdecls p2decls)))
+
+(def-simple-type-infer infer-if if trust-decls (test true false)
+  (declare (ignore test))
+  (type-specifier (specifier-type `(or ,(acode-form-type true trust-decls) ,(acode-form-type false trust-decls)))))
+
+
+;;; If a type declaration applied to a reference, the reference is
+;;; likely encapsulate in a TYPED-FORM and we won't reach this code.
+;;; The only case that we handle here is that where the variable is
+;;; never SETQed and we can tell something about the type of its
+;;; initial value.
+(def-simple-type-infer infer-lexical-reference lexical-reference trust-decls (var)
+  (acode-var-type var trust-decls))
+
+
+(def-simple-type-infer infer-aref (%aref1 simple-typed-aref2 general-aref2 simple-typed-aref3 general-aref3) trust-decls (array &rest args)
+  (declare (ignore args))
+  (let* ((atype (acode-form-type array trust-decls))
+         (actype (if atype (specifier-type atype))))
+    (if (typep actype 'array-ctype)
+      (type-specifier (array-ctype-specialized-element-type actype))
+      '*)))
+
+(def-simple-type-infer infer-typed-form typed-form trust-decls (type form &optional check)
+  (declare (ignore form))
+  (if (or trust-decls check)
+    type
+    '*))
 
 (defun acode-form-type (form trust-decls &optional (assert t))
-  (let* ((typespec
-          (if (nx-null form)
-            'null
-            (if (nx-t form)
-              'boolean
-              (nx-target-type 
-               (if (acode-p form)
-                 (let* ((op (acode-operator form)))
-                   (if (eq op (%nx1-operator fixnum))
-                     (let* ((val (cadr form)))
-                       `(integer ,val ,val))
-                     (if (eq op (%nx1-operator immediate))
-                       (type-of (%cadr form))
-                       (and trust-decls
-                            (if (eq op (%nx1-operator type-asserted-form))
-                              (progn
-                                (setq assert nil)
-                                (%cadr form))
-                              (if (eq op (%nx1-operator typed-form))
-                                (destructuring-bind (type subform &optional check) (%cdr form)                                  
-                                  (when (and assert (null check))
-                                    (setf (%car form) (%nx1-operator type-asserted-form)
-                                          (%cadr form)
-                                          (type-specifier
-                                           (specifier-type `(and ,type ,(acode-form-type subform trust-decls assert))))
-                                          assert nil))
-                                  (%cadr form))
-                                (if (eq op (%nx1-operator lexical-reference))
-                                  (locally (declare (special *nx-in-frontend*))
-                                    (if *nx-in-frontend*
-                                      (setq assert nil)
-                                      (let* ((var (cadr form))
-                                             (bits (nx-var-bits var))
-                                             (punted (logbitp $vbitpunted bits)))
-                                        (if (or punted
-                                                (eql 0 (nx-var-root-nsetqs var)))
-                                          (var-inittype var)))))
-                                  (if (or (eq op (%nx1-operator %aref1))
-                                          (eq op (%nx1-operator simple-typed-aref2))
-                                          (eq op (%nx1-operator general-aref2))
-                                          (eq op (%nx1-operator simple-typed-aref3))
-                                          (eq op (%nx1-operator general-aref3)))
-                                    (let* ((atype (acode-form-type (cadr form) t))
-                                           (actype (if atype (specifier-type atype))))
-                                      (if (typep actype 'array-ctype)
-                                        (type-specifier (array-ctype-specialized-element-type
-                                                         actype))))
-                                    (if (member op *numeric-acode-ops*)
-                                      (multiple-value-bind (f1 f2)
-                                          (nx-binop-numeric-contagion (cadr form)
-                                                                      (caddr form)
-                                                                      trust-decls)
-                                        (if (and (acode-form-typep f1 'real trust-decls)
-                                                 (acode-form-typep f2 'real trust-decls))
+  (declare (ignorable assert))  
+  (if (not (acode-p form))
+    t
+    (or (acode.asserted-type form)
+        (acode-assert-type
+         form
+         (nx-target-type 
+          (let* ((op (acode-operator form))
+                 (op-id (logand  op operator-id-mask))
+                 (type (svref *acode-operator-types* op-id)))
+            (declare (fixnum op op-id))
+            (if (not (eq type :infer))
+              type
+              (let* ((fn (svref *acode-simple-type-inferrers* op-id)))
+                (if fn
+                  (let* ((inferred (nx-target-type (funcall fn form trust-decls))))
+                    (when (eql (acode-operator form) op-id)
+                      (acode-assert-type form inferred))
+                    inferred)
+                  t)))))))))
 
-                                          (if (or (acode-form-typep f1 'double-float trust-decls)
-                                                  (acode-form-typep f2 'double-float trust-decls))
-                                            'double-float
-                                            (if (or (acode-form-typep f1 'single-float trust-decls)
-                                                    (acode-form-typep f2 'single-float trust-decls))
-                                              'single-float
-                                              'float))))
-                                      (cdr (assq op *nx-operator-result-types*)))))))))))))))))
-    (if (or (null typespec) (eq typespec '*)) (setq typespec t))
-    (when (and (acode-p form) (typep (acode-operator form) 'fixnum) assert)
-      (let* ((new (cons typespec (cons (cons (%car form) (%cdr form)) nil))))
-        (setf (%car form) (%nx1-operator type-asserted-form)
-              (%cdr form) new)))
-    typespec))
 
 (defun nx-binop-numeric-contagion (form1 form2 trust-decls)
   (cond ((acode-form-typep form1 'double-float trust-decls)
@@ -591,17 +626,17 @@ function to the indicated name is true.")
 ; Strip off any type info or "punted" lexical references.
 ; ??? Is it true that the "value" of the punted reference is unwrapped ? ???
 (defun acode-unwrapped-form (form) 
-  (while (and (consp (setq form (nx-untyped-form form)))
-           (eq (%car form) (%nx1-operator lexical-reference))
-           (acode-punted-var-p (cadr form)))
-    (setq form (var-ea (cadr form))))
+  (while (and (acode-p (setq form (nx-untyped-form form)))
+           (eq (acode-operator form) (%nx1-operator lexical-reference))
+           (acode-punted-var-p (car (acode-operands form))))
+    (setq form (var-ea (car (acode-operands form)))))
   form)
 
 (defun acode-fixnum-form-p (x)
   (setq x (acode-unwrapped-form-value x))
   (if (acode-p x)
     (if (eq (acode-operator x) (%nx1-operator fixnum)) 
-      (cadr x))))
+      (car (acode-operands x)))))
 
 (defun acode-xxx-form-p (x fixnum-supertype)
   (or (acode-fixnum-form-p x)
@@ -609,8 +644,8 @@ function to the indicated name is true.")
 	(setq x (acode-unwrapped-form-value x))
 	(if (acode-p x)
 	  (if (and (eq (acode-operator x) (%nx1-operator immediate))
-		   (typep (cadr x) fixnum-supertype))
-	    (cadr x))))))
+		   (typep (car (acode-operands x)) fixnum-supertype))
+	    (car (acode-operands x)))))))
 
 (defun acode-integer-form-p (x)
   (acode-xxx-form-p x 'integer))
@@ -675,7 +710,7 @@ function to the indicated name is true.")
   (if (acode-p x)
     (let* ((op (acode-operator x)))
       (if (eql op (%nx1-operator fixnum))
-        (let* ((val (cadr x)))
+        (let* ((val (car (acode-operands x))))
           (if (target-word-size-case
                (32 (typep val '(signed-byte #.(- 16 2))))
                (64 (typep val '(signed-byte #.(- 16 3)))))
@@ -694,7 +729,7 @@ function to the indicated name is true.")
   (if (acode-p x)
     (let* ((op (acode-operator x)))
       (if (eql op (%nx1-operator fixnum))
-        (let* ((val (cadr x)))
+        (let* ((val (car (acode-operands x))))
           (if (target-word-size-case
                (32 (typep val '(signed-byte #.(- 32 2))))
                (64 (typep val '(signed-byte #.(- 32 3)))))
@@ -713,7 +748,7 @@ function to the indicated name is true.")
       (and trust-decls
            (acode-p form)
            (eq (acode-operator form) (%nx1-operator typed-form))
-           (subtypep (cadr form) 'fixnum))))
+           (subtypep (car (acode-operands  form)) 'fixnum))))
 
 
 (defun nx-acode-fixnum-type-p (form env)
@@ -723,24 +758,25 @@ function to the indicated name is true.")
   (and trust-decls
        (acode-p form)
        (eq (acode-operator form) (%nx1-operator typed-form))
-       (subtypep (cadr form) *nx-target-natural-type*)))
+       (subtypep (car (acode-operands form)) *nx-target-natural-type*)))
 
 (defun nx-acode-natural-type-p (form env)
   (acode-natural-type-p form (nx-trust-declarations env)))
 
-; Is acode-expression the result of alphatizing (%int-to-ptr <integer>) ?
+;;; Is acode-expression the result of alphatizing (%int-to-ptr <integer>) ?
 (defun acode-absolute-ptr-p (acode-expression &optional skip)
   (and (acode-p acode-expression)
        (or skip (prog1 (eq (acode-operator acode-expression) (%nx1-operator %macptrptr%))
-                  (setq acode-expression (%cadr acode-expression))))
-       (eq (acode-operator acode-expression) (%nx1-operator %consmacptr%))
-       (eq (acode-operator (setq acode-expression (%cadr acode-expression))) 
-           (%nx1-operator %immediate-int-to-ptr))
-       (let ((op (acode-operator (setq acode-expression (%cadr acode-expression)))))
-         (if (or (eq op (%nx1-operator fixnum))
-                 (and (eq op (%nx1-operator immediate))
-                      (integerp (%cadr acode-expression))))
-           (%cadr acode-expression)))))
+                     (setq acode-expression (car (acode-operands acode-expression)))))
+          (eq (acode-operator acode-expression) (%nx1-operator %consmacptr%))
+          (eq (acode-operator (setq acode-expression (car (acode-operands acode-expression))))
+              (%nx1-operator %immediate-int-to-ptr))
+          (let* ((op (acode-operator (setq acode-expression (car (acode-operands acode-expression)))))
+                 (operands (acode-operands acode-expression)))
+            (if (or (eq op (%nx1-operator fixnum))
+                    (and (eq op (%nx1-operator immediate))
+                         (integerp (car operands))))
+              (car operands)))))
 
 (defun specifier-type-if-known (typespec &optional env &key whine values)
   (handler-case (if values (values-specifier-type typespec env) (specifier-type typespec env))
@@ -832,7 +868,8 @@ function to the indicated name is true.")
                 (if (nx-tailcalls env) $decl_tailcalls 0)
                 (if (nx-open-code-in-line env) $decl_opencodeinline 0)
                 (if (nx-inhibit-safety-checking env) $decl_unsafe 0)
-                (if (nx-trust-declarations env) $decl_trustdecls 0)))))))
+                (if (nx-trust-declarations env) $decl_trustdecls 0)
+                (if (nx-float-safety env) $decl_float_safety 0)))))))
 
 #|     
 (defun nx-find-misc-decl (declname env)
@@ -1056,23 +1093,23 @@ function to the indicated name is true.")
 ;;; can be punted.
 
 (defun nx1-note-var-binding (var initform)
-  (let* ((inittype (nx-acode-form-type initform *nx-lexical-environment*))
-         (init (nx-untyped-form initform))
+  (let* ((init (nx-untyped-form initform))
          (bits (nx-var-bits var)))
     (when (%ilogbitp $vbitspecial bits) (nx-record-xref-info :binds (var-name var)))
-    (when inittype (setf (var-inittype var) inittype))
     (when (and (not (%ilogbitp $vbitspecial bits))
                (acode-p init))
+      (setf (var-initform var) initform)
       (let* ((op (acode-operator init)))
         (if (eq op (%nx1-operator lexical-reference))
-          (let* ((target (%cadr init))
+          (let* ((target (car (acode-operands init)))
                  (setq-count (nx-var-root-nsetqs target)))
             (cons var (cons setq-count target)))
           (if (and (%ilogbitp $vbitdynamicextent bits)
                    (or (eq op (%nx1-operator closed-function))
                        (eq op (%nx1-operator simple-function))))
-            (let* ((afunc (%cadr init)))
-              (setf (afunc-fn-downward-refcount afunc)
+            (let* ((afunc (car (acode-operands init))))
+              (setf (afunc-fn-downward-refcount afunc
+)
                     (afunc-fn-refcount afunc)
                     (afunc-bits afunc) (logior (ash 1 $fbitdownward) (ash 1 $fbitbounddownward)
                                                (the fixnum (afunc-bits afunc))))
@@ -1151,7 +1188,7 @@ function to the indicated name is true.")
     (when (and (%ilogbitp $vbitdynamicextent bits)
                (or (eq op (%nx1-operator closed-function))
                    (eq op (%nx1-operator simple-function))))
-      (let* ((afunc (cadr val)))
+      (let* ((afunc (car (acode-operands val))))
         (setf (afunc-bits afunc) (%ilogior (%ilsl $fbitbounddownward 1) (afunc-bits afunc))
               (afunc-fn-downward-refcount afunc) 1))) 
     nil))
@@ -1802,7 +1839,7 @@ Or something. Right? ~s ~s" var varbits))
   (if (consp form)
     (let* ((val (if (or (eq (acode-operator form) (%nx1-operator fixnum))
 			(eq (acode-operator form) (%nx1-operator immediate)))
-		  (cadr form))))
+		  (car (acode-operands form)))))
       (and (typep val *nx-target-natural-type*) val))))
 
 (defun nx-u32-constant-p (form)
@@ -1810,7 +1847,7 @@ Or something. Right? ~s ~s" var varbits))
   (if (consp form)
     (let* ((val (if (or (eq (acode-operator form) (%nx1-operator fixnum))
 			(eq (acode-operator form) (%nx1-operator immediate)))
-		  (cadr form))))
+		  (car (acode-operands form)))))
       (and (typep val '(unsigned-byte 32)) val))))
 
 (defun nx-u31-constant-p (form)
@@ -1818,7 +1855,7 @@ Or something. Right? ~s ~s" var varbits))
   (if (consp form)
     (let* ((val (if (or (eq (acode-operator form) (%nx1-operator fixnum))
 			(eq (acode-operator form) (%nx1-operator immediate)))
-		  (cadr form))))
+		  (car (acode-operands form)))))
       (and (typep val '(unsigned-byte 31)) val))))
 
 
@@ -1919,7 +1956,7 @@ Or something. Right? ~s ~s" var varbits))
 (defun nx1-call (context sym args &optional spread-p global-only inhibit-inline)
   (nx1-verify-length args 0 nil)
   (when (and (acode-p sym) (eq (acode-operator sym) (%nx1-operator immediate)))
-    (multiple-value-bind (valid name) (valid-function-name-p (%cadr sym))
+    (multiple-value-bind (valid name) (valid-function-name-p (car (acode-operands sym)))
       (when valid
 	(setq global-only t sym name))))
   (let ((args-in-regs (if spread-p 1 (backend-num-arg-regs *target-backend*))))
@@ -1970,7 +2007,7 @@ Or something. Right? ~s ~s" var varbits))
 	(errors-p nil)
 	(result-type t))
     (when (and (acode-p fn) (eq (acode-operator fn) (%nx1-operator immediate)))
-      (multiple-value-bind (valid name) (valid-function-name-p (%cadr fn))
+      (multiple-value-bind (valid name) (valid-function-name-p (car (acode-operands fn)))
 	(when valid
 	  (setq fn name global-only t))))
     (when (non-nil-symbol-p fn)
@@ -2669,15 +2706,8 @@ Or something. Right? ~s ~s" var varbits))
 					(nx-form-type (%cadr args) env)
 					env)
 		    t))
-		(let* ((op (gethash (%car form) *nx1-operators*)))
-		  (or (and op (cdr (assq op *nx-operator-result-types*)))
-		      (and (not op)(cdr (assq (car form) *nx-operator-result-types-by-name*)))
-		      #+no (and (memq (car form) *numeric-ops*)
-			   (grovel-numeric-form form env))
-		      #+no (and (memq (car form) *logical-ops*)
-			   (grovel-logical-form form env))
-		      (nx-declared-result-type (%car form) env (%cdr form))
-		      t))))
+		  (or (nx-declared-result-type (%car form) env (%cdr form))
+		      t)))
 	    t))
 	t))))
 
@@ -2693,31 +2723,7 @@ Or something. Right? ~s ~s" var varbits))
              (or (not not-complex)
                  (neq (numeric-ctype-complexp ctype) :complex))))))
 
-(defun grovel-numeric-form (form env)
-  (let* ((op (car form))
-         (args (cdr form)))
-    (if (every #'(lambda (x) (nx-form-typep x 'float env)) args)
-      (if (some #'(lambda (x) (nx-form-typep x 'double-float env)) args)
-        'double-float
-        'single-float)
-      (if (every #'(lambda (x) (nx-form-typep x 'integer env)) args)
-        (if (or (eq op '/) (eq op '/-2))
-          t
-          'integer)))))
 
-;; now e.g. logxor of 3 known fixnums is inline as is (logior a (logxor b c))
-;; and (the fixnum (+ a (logxor b c)))
-
-(defun grovel-logical-form (form env)
-  (when (nx-trust-declarations env)
-    (let (;(op (car form))
-          type)
-      (dolist (arg (cdr form))
-        (let ((it (nx-form-type arg env)))          
-          (if (not (subtypep it 'fixnum))
-            (return (setq type nil))
-            (setq type 'fixnum))))
-      type)))
 
 (defun nx-form-typep (arg type &optional (env *nx-lexical-environment*))
   (setq type (nx-target-type (type-expand type)))
@@ -2744,17 +2750,8 @@ Or something. Right? ~s ~s" var varbits))
        (and (nx-trust-declarations env)
             (subtypep *nx-form-type* *nx-target-natural-type*)))))
 
-(defun nx-binary-boole-op (context whole env arg-1 arg-2 fixop intop naturalop)
-  (let* ((use-fixop (nx-binary-fixnum-op-p arg-1 arg-2 env t))
-	 (use-naturalop (nx-binary-natural-op-p arg-1 arg-2 env)))
-    (if (or use-fixop use-naturalop intop)
-      (make-acode (%nx1-operator typed-form)
-                  (if use-fixop *nx-target-fixnum-type*
-                    (if use-naturalop *nx-target-natural-type* 'integer))
-                  (make-acode (if use-fixop fixop (if use-naturalop naturalop intop))
-                              (nx1-form :value arg-1)
-                              (nx1-form :value arg-2)))
-      (nx1-treat-as-call context whole))))
+
+
 
 (defun nx-global-p (sym &optional (env *nx-lexical-environment*))
   (or 

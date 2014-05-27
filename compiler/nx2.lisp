@@ -150,14 +150,9 @@
                                      (ash 1 $vbitclosed))))
             (if (logbitp $vbitsetq bits)
               (setf (var-refs v) (ash (var-refs v) 2))
-              (unless (var-declared-unboxed-type v)
-                (let* ((inittype (var-inittype v)))
-                  (when inittype
-                    (if (subtypep inittype 'double-float)
-                      (setf (var-declared-unboxed-type v) 'double-float)
-                      (if (subtypep inittype 'single-float)
-                        (setf (var-declared-unboxed-type v) 'single-float)))))))
-            (let* ((type (var-declared-unboxed-type v)))
+              (unless (var-declared-type v)
+))
+            (let* ((type (var-declared-type v)))
               (when (and (or (eq type 'single-float)
                              (eq type 'double-float))
                          (logbitp $vbitsetq bits))
@@ -171,7 +166,7 @@
   (if form
     (or (nx-null form)
         (nx-t form)
-        (and (consp form)
+        (and (acode-p form)
              (or (eq (acode-operator form) (%nx1-operator immediate))
                  (eq (acode-operator form) (%nx1-operator fixnum))
                  (eq (acode-operator form) (%nx1-operator simple-function)))))))
@@ -181,7 +176,7 @@
     (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
-        (%cadr form)))))
+        (car (acode-operands form))))))
 
 (defun nx2-acode-call-p (form)
   (when (acode-p form)
@@ -203,54 +198,56 @@
 
 (defun nx2-setqed-var-not-set-by-form-p (var form &optional closed)
   (setq form (acode-unwrapped-form form))
-  (or (atom form)
+  (or (not (acode-p form))
       (nx2-constant-form-p form)
       (nx2-lexical-reference-p form)
       (let ((op (acode-operator form))
+            (operands (acode-operands form))
             (subforms nil))
         (if (eq op (%nx1-operator setq-lexical))
-          (and (neq var (cadr form))
-               (nx2-setqed-var-not-set-by-form-p var (caddr form)))
+          (and (neq var (car operands))
+               (nx2-setqed-var-not-set-by-form-p var (cadr operands)))
           (and (or (not closed)
                    (logbitp operator-side-effect-free-bit op))
                (flet ((not-set-in-formlist (formlist)
                         (dolist (subform formlist t)
                           (unless (nx2-setqed-var-not-set-by-form-p var subform closed) (return)))))
                  (if
-                   (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
-                         ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
+                   (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms operands))
+                         ((%ilogbitp operator-acode-list-bit op) (setq subforms (car operands))))
                    (not-set-in-formlist subforms)
                    (and (or (eq op (%nx1-operator call))
                             (eq op (%nx1-operator lexical-function-call)))
-                        (nx2-setqed-var-not-set-by-form-p var (cadr form))
-                        (setq subforms (caddr form))
+                        (nx2-setqed-var-not-set-by-form-p var (car operands))
+                        (setq subforms (cadr operands))
                         (not-set-in-formlist (car subforms))
                         (not-set-in-formlist (cadr subforms))))))))))
 
 (defun nx2-var-not-reffed-by-form-p (var form &optional closed)
   (setq form (acode-unwrapped-form form))
   (unless (eq var (nx2-lexical-reference-p form))
-    (or (atom form)
+    (or (not (acode-p form))
         (nx2-lexical-reference-p form)  ;not us
         (nx2-constant-form-p form)
         (let ((op (acode-operator form))
+              (operands (acode-operands form))
               (subforms nil))
           (if (eq op (%nx1-operator setq-lexical))
-            (and (neq var (cadr form))
-                 (nx2-var-not-reffed-by-form-p var (caddr form)))
+            (and (neq var (car operands))
+                 (nx2-var-not-reffed-by-form-p var (cadr operands)))
             (and (or (not closed)
                      (logbitp operator-side-effect-free-bit op))
                  (flet ((not-reffed-in-formlist (formlist)
                           (dolist (subform formlist t)
                             (unless (nx2-var-not-reffed-by-form-p var subform closed) (return)))))
                    (if
-                     (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
-                           ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
+                     (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms operands))
+                           ((%ilogbitp operator-acode-list-bit op) (setq subforms (car operands))))
                      (not-reffed-in-formlist subforms)
                      (and (or (eq op (%nx1-operator call))
                               (eq op (%nx1-operator lexical-function-call)))
-                          (nx2-var-not-reffed-by-form-p var (cadr form))
-                          (setq subforms (caddr form))
+                          (nx2-var-not-reffed-by-form-p var (car operands))
+                          (setq subforms (cadr operands))
                           (not-reffed-in-formlist (car subforms))
                           (not-reffed-in-formlist (cadr subforms)))))))))))
 
@@ -274,7 +271,7 @@
   (let* ((alambda (afunc-acode afunc)))
     (when (and (acode-p alambda)
                (eq (acode-operator alambda) (%nx1-operator lambda-list)))
-      (destructuring-bind (req opt rest keys &rest ignore) (cdr alambda)
+      (destructuring-bind (req opt rest keys &rest ignore) (acode-operands alambda)
         (declare (ignore ignore))
         (when (or (dolist (sp (caddr opt))
                     (when sp (return t)))
@@ -319,7 +316,7 @@
 (defun acode-immediate-operand (x)
   (let* ((x (acode-unwrapped-form x)))
     (if (eq (acode-operator x) (%nx1-operator immediate))
-      (cadr x)
+      (car (acode-operands x))
       (compiler-bug "not an immediate: ~s" x))))
 
 (defun nx2-constant-index-ok-for-type-keyword (idx keyword)
@@ -375,7 +372,7 @@
            (values t t))
           ((or (eql op (%nx1-operator fixnum))
                (eql op (%nx1-operator immediate)))
-           (values (cadr form) t))
+           (values (car (acode-operands form)) t))
           (t (values nil nil)))))
 
 (defun acode-constant-fold-binop (seg vreg xfer x y function)
@@ -394,334 +391,10 @@
                                     result)
               t)))))))
 
-;;; Return non-nil iff we can do something better than a subprim call
-;;; to .SPbuiltin-ash.
-(defun acode-optimize-ash (seg vreg xfer num amt trust-decls &optional (result-type 'integer))
-  (let* ((unsigned-natural-type *nx-target-natural-type*)
-         (target-fixnum-type *nx-target-fixnum-type*)
-         (max (target-word-size-case (32 32) (64 64)))
-         (maxbits (target-word-size-case
-                   (32 29)
-                   (64 60)))
-         (const-num (acode-integer-form-p num))
-         (const-amt (acode-integer-form-p amt))
-         (shifted (and const-num const-amt (ash const-num const-amt))))
-    (cond (shifted
-           (if (nx1-target-fixnump shifted)
-             (backend-use-operator (%nx1-operator fixnum) seg vreg xfer shifted)
-             (backend-use-operator (%nx1-operator immediate) seg vreg xfer shifted))
-           t)
-          ((eql const-amt 0)
-           (backend-use-operator (%nx1-operator require-integer) seg vreg xfer num)
-           t)
-          ((and (fixnump const-amt) (< const-amt 0))
-           (if (acode-form-typep num target-fixnum-type trust-decls)
-             (progn
-               (backend-use-operator (%nx1-operator %iasr)
-                                     seg
-                                     vreg
-                                     xfer
-                                     (make-acode (%nx1-operator fixnum)
-                                                 (- const-amt))
-                                     num)
-               t)
-             (if (acode-form-typep num unsigned-natural-type trust-decls)
-               (progn
-                 (if (< (- const-amt) max)
-                   (backend-use-operator (%nx1-operator natural-shift-right)
-                                         seg
-                                         vreg
-                                         xfer
-                                         num
-                                         (make-acode (%nx1-operator fixnum)
-                                                   (- const-amt)))
-                   (progn
-                     (backend-use-operator (target-word-size-case
-                                            (32 (%nx1-operator require-u32))
-                                            (64 (%nx1-operator require-u64)))
-                                           seg
-                                           nil
-                                           nil
-                                           num)
-                     (backend-use-operator (%nx1-operator fixnum)
-                                           seg
-                                           vreg
-                                           xfer
-                                           0)))
-                 t))))
-          ((and (fixnump const-amt)
-                (<= 0 const-amt maxbits)
-                (or (acode-form-typep num `(signed-byte ,(- (1+ maxbits) const-amt)) trust-decls)
-                      (and (acode-form-typep num 'fixnum trust-decls)
-                           trust-decls
-                           (subtypep result-type 'fixnum))))
-           (progn
-             (backend-use-operator (%nx1-operator %ilsl)
-                                   seg
-                                   vreg
-                                   xfer
-                                   (make-acode (%nx1-operator fixnum)
-                                               const-amt)
-                                   num)
-             t))
-          ((and (fixnump const-amt)
-                (< 0 const-amt max)
-                (acode-form-typep num unsigned-natural-type trust-decls)
-                trust-decls
-                (subtypep result-type unsigned-natural-type))
-           (backend-use-operator (%nx1-operator natural-shift-left)
-                                 seg
-                                 vreg
-                                 xfer
-                                 num
-                                 amt)
-           t)
-          ((typep const-num target-fixnum-type)
-           (let* ((field-width (1+ (integer-length const-num)))
-                    ;; num fits in a `(signed-byte ,field-width)
-                    (max-shift (- (1+ maxbits) field-width)))
-               (when (acode-form-typep amt `(mod ,(1+ max-shift)) trust-decls)
-                 (backend-use-operator (%nx1-operator %ilsl)
-                                       seg
-                                       vreg
-                                       xfer
-                                       amt
-                                       (make-acode (%nx1-operator fixnum)
-                                                   const-num))
-                 t)))
-          (t
-           (let* ((numtype (specifier-type (acode-form-type num trust-decls)))
-                  (amttype (specifier-type (acode-form-type amt trust-decls)))
-                  (fixtype (specifier-type target-fixnum-type)))
-             (if (and (typep numtype 'numeric-ctype)
-                      (csubtypep numtype fixtype)
-                      (typep amttype 'numeric-ctype)
-                      (csubtypep amttype fixtype))
-               (let* ((highnum (numeric-ctype-high numtype))
-                      (lownum (numeric-ctype-low numtype))
-                      (widenum (if (> (integer-length highnum)
-                                      (integer-length lownum))
-                                 highnum
-                                 lownum))
-                      (maxleft (numeric-ctype-high amttype)))
-                 (when (and (>= (numeric-ctype-low amttype)
-                                (target-word-size-case
-                                 (32 -31)
-                                 (64 -63)))
-                            (< maxleft
-                               (arch::target-nbits-in-word (backend-target-arch *target-backend*)))
-                            (typep (ignore-errors (ash widenum maxleft))
-                                   target-fixnum-type))
-                   (backend-use-operator (%nx1-operator fixnum-ash)
-                                         seg
-                                         vreg
-                                         xfer
-                                         num
-                                         amt)
-                   t))))))))
 
 
 
 
-(defun acode-optimize-logand2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
-  (declare (ignore result-type))        ;see below
-  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logand)
-      (let* ((unsigned-natural-type *nx-target-natural-type*)
-             (target-fixnum-type *nx-target-fixnum-type*))
-        (cond ((eql (acode-fixnum-form-p num1) -1)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num2)
-               t)
-              ((eql (acode-fixnum-form-p num2) -1)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1)
-               t)
-              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
-                    (acode-form-typep num2 target-fixnum-type trust-decls))
-               (backend-use-operator (%nx1-operator %ilogand2)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
-                    (acode-form-typep num2 unsigned-natural-type trust-decls))
-               (backend-use-operator (%nx1-operator %natural-logand)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              ;; LOGAND of a natural integer N and a signed integer
-              ;; is a natural integer <= N, and there may be cases
-              ;; where we want to truncate a larger result to the
-              ;; machine word size based on the result type.  Later.
-              (t nil)))))
-
-(defun acode-optimize-logior2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
-  (declare (ignorable result-type))
-  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logior)
-      (let* ((unsigned-natural-type *nx-target-natural-type*)
-             (target-fixnum-type *nx-target-fixnum-type*))
-        (cond ((eql (acode-fixnum-form-p num1) 0)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num2)
-               t)
-              ((eql (acode-fixnum-form-p num2) 0)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1)
-               t)
-              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
-                    (acode-form-typep num2 target-fixnum-type trust-decls))
-               (backend-use-operator (%nx1-operator %ilogior2)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
-                    (acode-form-typep num2 unsigned-natural-type trust-decls))
-               (backend-use-operator (%nx1-operator %natural-logior)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              (t nil)))))
-
-(defun acode-optimize-logxor2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'integer))
-  (declare (ignorable result-type))
-  (or (acode-constant-fold-binop seg vreg xfer num1 num2 'logxor)
-      (let* ((unsigned-natural-type *nx-target-natural-type*)
-             (target-fixnum-type *nx-target-fixnum-type*))
-        (cond ((eql (acode-fixnum-form-p num1) 0)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num2)
-               t)
-              ((eql (acode-fixnum-form-p num2) 0)
-               (backend-use-operator (%nx1-operator require-integer)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1)
-               t)
-              ((and (acode-form-typep num1 target-fixnum-type trust-decls)
-                    (acode-form-typep num2 target-fixnum-type trust-decls))
-               (backend-use-operator (%nx1-operator %ilogxor2)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              ((and (acode-form-typep num1 unsigned-natural-type trust-decls)
-                    (acode-form-typep num2 unsigned-natural-type trust-decls))
-               (backend-use-operator (%nx1-operator %natural-logxor)
-                                     seg
-                                     vreg
-                                     xfer
-                                     num1
-                                     num2)
-               t)
-              (t nil)))))
-
-
-
-(defun acode-optimize-add2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
-  (declare (ignorable result-type))
-  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '+)
-      (multiple-value-bind (num1 num2)
-          (nx-binop-numeric-contagion num1 num2 trust-decls)
-        (if (and (acode-form-typep num1 'double-float trust-decls)
-                 (acode-form-typep num2 'double-float trust-decls))
-          (progn
-            (backend-use-operator (%nx1-operator %double-float+-2)
-                                  seg
-                                  vreg
-                                  xfer
-                                  num1
-                                  num2)
-            t)
-          (if (and (acode-form-typep num1 'single-float trust-decls)
-                   (acode-form-typep num2 'single-float trust-decls))
-            (progn
-              (backend-use-operator (%nx1-operator %short-float+-2)
-                                    seg
-                                    vreg
-                                    xfer
-                                    num1
-                                    num2)
-              t)
-            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
-                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
-              (progn
-                (backend-use-operator (%nx1-operator %i+)
-                                      seg
-                                      vreg
-                                      xfer
-                                      num1
-                                      num2
-                                      t)
-                t)))))))
-
-(defun acode-optimize-sub2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
-  (declare (ignorable result-type))
-  (or (acode-constant-fold-binop seg vreg xfer num1 num2 '-)
-      (multiple-value-bind (num1 num2)
-          (nx-binop-numeric-contagion num1 num2 trust-decls)
-        (if (and (acode-form-typep num1 'double-float trust-decls)
-                 (acode-form-typep num2 'double-float trust-decls))
-          (progn
-            (backend-use-operator (%nx1-operator %double-float--2)
-                                  seg
-                                  vreg
-                                  xfer
-                                  num1
-                                  num2)
-            t)
-          (if (and (acode-form-typep num1 'single-float trust-decls)
-                   (acode-form-typep num2 'single-float trust-decls))
-            (progn
-              (backend-use-operator (%nx1-operator %short-float--2)
-                                    seg
-                                    vreg
-                                    xfer
-                                    num1
-                                    num2)
-              t)
-            (if (and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
-                     (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
-              (progn
-                (if (eql (acode-constant-p num1) 0)
-                  (backend-use-operator (%nx1-operator %ineg) seg vreg xfer num2)
-                  (backend-use-operator (%nx1-operator %i-)
-                                        seg
-                                        vreg
-                                        xfer
-                                        num1
-                                        num2
-                                        t))
-                t)))))))
-        
 
         
 (defun acode-optimize-mul2 (seg vreg xfer num1 num2 trust-decls &optional (result-type 'number))
@@ -818,7 +491,7 @@
                        (acode-p unwrapped)
                        (or (eq (acode-operator unwrapped) (%nx1-operator mul2))
                            (eq (acode-operator unwrapped) (%nx1-operator %i*)))
-                       (setq f1 (acode-fixnum-form-p (cadr unwrapped)))
+                       (setq f1 (acode-fixnum-form-p (car (acode-operands unwrapped))))
                        (typep (setq f1/f2 (/ f1 f2)) 'fixnum))
                 (progn
                   (backend-use-operator (%nx1-operator mul2)
@@ -826,40 +499,10 @@
                                         vreg
                                         xfer
                                         (make-acode (%nx1-operator fixnum) f1/f2)
-                                        (caddr unwrapped))
+                                        (cadr (acode-operands unwrapped)))
                   t))))))))
 
-(defun acode-optimize-numcmp (seg vreg xfer cc num1 num2 trust-decls &optional (result-type 'boolean))
-  (declare (ignorable result-type))
-  (let* ((c1 (acode-real-constant-p num1))
-         (c2 (acode-real-constant-p num2)))
 
-    (if (and c1 c2 (svref (backend-p2-dispatch *target-backend*) (logand (%nx1-operator nil) operator-id-mask)))
-      (let* ((name (ecase (cadr cc)
-                     (:eq '=-2)
-                     (:ne '/=-2)
-                     (:lt '<-2)
-                     (:le '<=-2)
-                     (:gt '>-2)
-                     (:ge '>=-2))))
-        (backend-use-operator (if (funcall name c1 c2) (%nx1-operator t) (%nx1-operator nil)) seg vreg xfer)
-        t)
-      (cond ((and (acode-form-typep num1 *nx-target-fixnum-type* trust-decls)
-                  (acode-form-typep num2 *nx-target-fixnum-type* trust-decls))
-             (backend-use-operator (%nx1-operator %i<>) seg vreg xfer cc num1 num2)
-             t)
-            ((and (acode-form-typep num1 *nx-target-natural-type* trust-decls)
-                  (acode-form-typep num2 *nx-target-natural-type* trust-decls))
-             (backend-use-operator (%nx1-operator %natural<>) seg vreg xfer cc num1 num2)
-             t)
-            ((and (acode-form-typep num1 'double-float trust-decls)
-                  (acode-form-typep num2 'double-float trust-decls))
-             (backend-use-operator (%nx1-operator double-float-compare) seg vreg xfer cc num1 num2)
-             t)
-            ((and (acode-form-typep num1 'single-float trust-decls)
-                  (acode-form-typep num2 'single-float trust-decls))
-             (backend-use-operator (%nx1-operator short-float-compare) seg vreg xfer cc num1 num2)
-             t)))))
 
 (defun acode-optimize-minus1 (seg vreg xfer form trust-decls &optional (result-type 'number))
   (declare (ignorable result-type))
@@ -889,14 +532,14 @@
              (when (acode-p form)
                (let* ((op (acode-operator form)))
                  (cond ((eql op (%nx1-operator eq))
-                        (destructuring-bind (cc x y) (cdr form)
+                        (destructuring-bind (cc x y) (acode-operands form)
                           (when (eq :eq (acode-immediate-operand cc))
                             (if (setq var (nx2-lexical-reference-p x))
                               (setq fixval (acode-fixnum-form-p y))
                               (if (setq var (nx2-lexical-reference-p y))
                                 (setq fixval (acode-fixnum-form-p x)))))))
                        ((eql op (%nx1-operator %izerop))
-                        (destructuring-bind (cc val) (cdr form)
+                        (destructuring-bind (cc val) (acode-operands form)
                           (when (eq :eq (acode-immediate-operand cc))
                             (setq var (nx2-lexical-reference-p val)
                                   fixval 0)))))))
@@ -909,7 +552,7 @@
         (values var (list val))
         (if (and (acode-p form) (eql (acode-operator form) (%nx1-operator or)))
           (collect ((vals))
-            (let* ((clauselist (cadr form)))
+            (let* ((clauselist (car (acode-operands  form))))
               (if (multiple-value-setq (var val) (is-simple-comparison-of-var-to-fixnum (car clauselist)))
                 (progn
                   (vals val)
@@ -953,7 +596,7 @@
                                (not (eql (acode-operator form)
                                          (%nx1-operator if))))
                          (setq otherwise original)
-                         (destructuring-bind (test true false) (cdr form)
+                         (destructuring-bind (test true false) (acode-operands form)
                            (multiple-value-bind (v vals)
                                (nx2-is-comparison-of-var-to-fixnums test)
                              (cond ((eq v var)
@@ -963,3 +606,17 @@
                                    (t (setq otherwise original)))))))))
             (descend false))
           (values (ranges) (trueforms) var otherwise))))))
+
+(defun acode-var-type (var trust-decls)
+  (do* ((var var bits)
+        (bits (var-bits var) (var-bits var)))
+       ((typep bits 'fixnum)
+        (or (var-type var)
+            (setf (var-type var)
+                  (let* ((initform (var-initform var)))
+                    (cond ((and initform (not (logbitp $vbitsetq bits)))
+                           (acode-form-type initform trust-decls))
+                          ((and trust-decls (var-declared-type var)))
+                          (t '*))))))))
+
+            

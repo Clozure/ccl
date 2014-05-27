@@ -333,11 +333,20 @@
                                (cons (simplify-constraint opname)
                                      (mapcar #'simplify-form opvals))
                                (if (keywordp opname)
-                                 (progn
-                                   (list opname
-                                         (if (eq opname :anchored-uuo)
-                                           (simplify-form (car opvals))
-                                           (simplify-operand (car opvals)))))
+                                 (case opname
+                                   (:if
+                                     (destructuring-bind (test true false) opvals
+                                       (list opname
+                                             (simplify-constraint test)
+                                             (simplify-form true)
+                                             (simplify-form false))))
+                                   (:progn
+                                     (cons opname (mapcar #'simplify-form opvals)))
+                                   (t
+                                    (list opname
+                                          (if (eq opname :anchored-uuo)
+                                            (simplify-form (car opvals))
+                                            (simplify-operand (car opvals))))))
                                  (let* ((name (string opname)))
                                    (multiple-value-bind (opnum types)
                                        (funcall opcode-lookup form backend)

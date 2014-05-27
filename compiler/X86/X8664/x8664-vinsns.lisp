@@ -67,11 +67,26 @@
                                              (scaled-idx :imm)))
   (movsd (:@ x8664::misc-data-offset (:%q v) (:%q scaled-idx)) (:%xmm dest)))
 
+(define-x8664-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
+                                                    ((v :lisp)
+                                                     (scaled-idx :imm)))
+  (movq (:@ x8664::misc-data-offset (:%q v) (:%q scaled-idx)) (:%xmm dest)))
+
+(define-x8664-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
+                                                    ((v :lisp)
+                                                     (scaled-idx :imm)))
+  (movapd (:@ x8664::misc-data-offset (:%q v) (:%q scaled-idx) 2) (:%xmm dest)))
+
 (define-x8664-vinsn misc-ref-c-double-float  (((dest :double-float))
                                               ((v :lisp)
                                              (idx :s32const)))
   (movsd (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
 
+
+(define-x8664-vinsn misc-ref-c-complex-single--float  (((dest :complex-single-float))
+                                                       ((v :lisp)
+                                                        (idx :s32const)))
+  (movq (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-node  (((dest :lisp))
                                     ((v :lisp)
@@ -104,6 +119,20 @@
 				    (unscaled-idx :imm))
 				   ())
   (movsd (:%xmm val) (:@ x8664::misc-data-offset (:%q  v) (:%q unscaled-idx))))
+
+(define-x8664-vinsn misc-set-complex-single-float (()
+				   ((val :complex-single-float)
+				    (v :lisp)
+				    (unscaled-idx :imm))
+				   ())
+  (movq (:%xmm val) (:@ x8664::misc-data-offset (:%q  v) (:%q unscaled-idx))))
+
+(define-x8664-vinsn misc-set-complex-double-float (()
+                                                   ((val :complex-double-float)
+                                                    (v :lisp)
+                                                    (unscaled-idx :imm))
+				   ())
+  (movapd (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q  v) (:%q unscaled-idx) 2)))
 
 (define-x8664-vinsn misc-ref-u8 (((dest :u8))
                                  ((v :lisp)
@@ -807,6 +836,41 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-tag (:%q object) (:$ub x8664::subtag-double-float))))
 
+(define-x8664-vinsn trap-unless-complex-double-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8664::tagmask) (:%l tag))
+  (cmpl (:$b x8664::tag-misc) (:%l tag))
+  (jne :have-tag)
+  (movsbl (:@ x8664::misc-subtag-offset (:%q object)) (:%l tag))
+  :have-tag
+  (cmpl (:$b x8664::subtag-complex-double-float) (:%l tag))
+  (jne :bad)
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%q object) (:$ub x8664::subtag-complex-double-float))))
+
+(define-x8664-vinsn trap-unless-complex-single-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8664::tagmask) (:%l tag))
+  (cmpl (:$b x8664::tag-misc) (:%l tag))
+  (jne :have-tag)
+  (movsbl (:@ x8664::misc-subtag-offset (:%q object)) (:%l tag))
+  :have-tag
+  (cmpl (:$b x8664::subtag-complex-single-float) (:%l tag))
+  (jne :bad)
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%q object) (:$ub x8664::subtag-complex-single-float))))
+
+
+
+
 (define-x8664-vinsn trap-unless-macptr (()
                                         ((object :lisp))
                                         ((tag :u8)))
@@ -1123,7 +1187,7 @@
   (testq (:%q dest) (:%q src))
   (movq (:%q src) (:%q dest))
   (jnz :maybe-bignum)
-  (sarq (:$ub x8664::fixnumshift) (:%q dest))
+  (shrq (:$ub x8664::fixnumshift) (:%q dest))
   (jmp :done)
   :maybe-bignum
   (andl (:$b x8664::tagmask) (:%l dest))
@@ -1206,9 +1270,9 @@
   (jmp (:@ spno)))
 
 ;;; Call a subprimitive using a tail-aligned CALL instruction.
-(define-x8664-vinsn (call-subprim :call :subprim-call) (()
-							((spno :s32const))
-							((entry (:label 1))))
+(define-x8664-vinsn (call-subprim :call :subprim) (()
+                                                   ((spno :s32const))
+                                                   ((entry (:label 1))))
   (:talign 4)
   (call (:@ spno))
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
@@ -1261,15 +1325,11 @@
 
 (define-x8664-vinsn handle-fixnum-overflow-inline
     (()
-     ((val :lisp)
-      (no-overflow :label))
+     ((val :lisp))
      ((header (:u64 #.x8664::imm0))
       (scaled-size (:u64 #.x8664::imm1))
       (bigits (:u64 #.x8664::imm2))
       (freeptr (:lisp #.x8664::allocptr))))
-  (jo :overflow)
-  (:uuo-section)
-  :overflow
   (movq (:%q val) (:%q bigits))
   (btcq (:$ub 63) (:%q bigits))
   (sarq (:$ub x8664::fixnumshift) (:%q bigits))
@@ -1288,8 +1348,7 @@
   ((:not (:pred = freeptr
                 (:apply %hard-regspec-value val)))
    (movq (:%q freeptr) (:%q val)))
-  (movq (:%q bigits) (:@ x8664::misc-data-offset (:%q val)))
-  (jmp no-overflow))
+  (movq (:%q bigits) (:@ x8664::misc-data-offset (:%q val))))
 
 (define-x8664-vinsn %set-z-flag-if-s64-fits-in-fixnum (((dest :imm))
                                                        ((src :s64))
@@ -1355,56 +1414,7 @@
   (imulq (:$b x8664::fixnumone) (:%q src)(:%q dest)))
 
 
-(define-x8664-vinsn (fix-fixnum-overflow-ool :call :subprim-call)
-    (((val :lisp))
-     ((val :lisp))
-     ((unboxed (:s64 #.x8664::imm1))
-      (header (:u64 #.x8664::imm0))
-      (entry (:label 1))))
-  (jo :overflow)
-  :done
-  (:uuo-section)
-  ((:not (:pred = x8664::arg_z
-                (:apply %hard-regspec-value val)))
-   :overflow
-   (movq (:%q val) (:%q x8664::arg_z)))
-  (:talign 4)
-  ((:pred = x8664::arg_z
-          (:apply %hard-regspec-value val))
-   :overflow)
-  (call (:@ .SPfix-overflow))
-  (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn))
-  ((:not (:pred = x8664::arg_z
-                (:apply %hard-regspec-value val)))
-   (movq (:%q x8664::arg_z) (:%q val)))
-  (jmp :done))
-
-(define-x8664-vinsn (fix-fixnum-overflow-ool-and-branch :call :subprim-call)
-    (((val :lisp))
-     ((val :lisp)
-      (lab :label))
-     ((unboxed (:s64 #.x8664::imm1))
-      (header (:u64 #.x8664::imm0))
-      (entry (:label 1))))
-  (jo :overflow)
-  (jmp lab)
-  (:uuo-section)
-  ((:not (:pred = x8664::arg_z
-                (:apply %hard-regspec-value val)))
-     :overflow
-   (movq (:%q val) (:%q x8664::arg_z)))
-  (:talign 4)
-  ((:pred = x8664::arg_z
-          (:apply %hard-regspec-value val))
-   :overflow)
-  (call (:@ .SPfix-overflow))
-  (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn))
-  ((:not (:pred = x8664::arg_z
-                (:apply %hard-regspec-value val)))
-   (movq (:%q x8664::arg_z) (:%q val)))
-  (jmp lab))
-
-(define-x8664-vinsn return-or-fix-overflow (()
+(define-x8664-vinsn (return-or-fix-overflow :jumpLR)(()
                                             ())
   (jo :fix)
   (:byte #xf3) (ret)
@@ -1494,7 +1504,6 @@
       (idx :u32const))
      ())
   (popq (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q vector))))
-
                                            
 (define-x8664-vinsn (push-argregs :push :node :vsp) (()
                                                       ())
@@ -1693,6 +1702,15 @@
                                 ((source :lisp)))
   (movsd (:@  x8664::double-float.value (:%q source)) (:%xmm result)))
 
+(define-x8664-vinsn get-complex-double-float (((result :complex-double-float))
+                                              ((source :lisp)))
+  (movdqa (:@  x8664::complex-double-float.realpart (:%q source)) (:%xmm result)))
+
+(define-x8664-vinsn get-complex-single-float (((result :complex-single-float))
+                                              ((source :lisp)))
+  (movq (:@  x8664::complex-single-float.realpart (:%q source)) (:%xmm result)))
+
+
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
 ;;; instead of replicating it ..
@@ -1729,6 +1747,14 @@
 (define-x8664-vinsn copy-single-float (((dest :single-float))
                                        ((src :single-float)))
   (movss (:%xmm src) (:%xmm dest)))
+
+(define-x8664-vinsn copy-complex-single-float (((dest :complex-single-float))
+                                               ((src :complex-single-float)))
+  (movq (:%xmm src) (:%xmm dest)))
+
+(define-x8664-vinsn copy-complex-double-float (((dest :complex-double-float))
+                                               ((src :complex-double-float)))
+  (movapd (:%xmm src) (:%xmm dest)))
 
 
 (define-x8664-vinsn copy-single-to-double (((dest :double-float))
@@ -1931,7 +1957,7 @@
 
 
 (defmacro define-x8664-subprim-lea-jmp-vinsn ((name &rest other-attrs) spno)
-  `(define-x8664-vinsn (,name :call :subprim-call ,@other-attrs) (() () ((entry (:label 1))))
+  `(define-x8664-vinsn (,name :call :subprim ,@other-attrs) (() () ((entry (:label 1))))
     (leaq (:@ (:^ :back) (:%q x8664::fn)) (:%q x8664::ra0))
     (:talign 4)
     (jmp (:@ ,spno))
@@ -1939,7 +1965,7 @@
     (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn))))
 
 (defmacro define-x8664-subprim-call-vinsn ((name &rest other-attrs) spno)
-  `(define-x8664-vinsn (,name :call :subprim-call ,@other-attrs) (() () ((entry (:label 1))))
+  `(define-x8664-vinsn (,name :call :subprim ,@other-attrs) (() () ((entry (:label 1))))
     (:talign 4)
     (call (:@ ,spno))
     :back
@@ -1949,18 +1975,20 @@
   `(define-x8664-vinsn (,name :jumpLR ,@other-attrs) (() ())
     (jmp (:@ ,spno))))
 
-(define-x8664-vinsn (nthrowvalues :call :subprim-call) (()
+(define-x8664-vinsn (nthrowvalues :call :subprim) (()
                                                         ((lab :label)))
   (leaq (:@ (:^ lab) (:%q x8664::fn)) (:%q x8664::ra0))
   (jmp (:@ .SPnthrowvalues)))
 
-(define-x8664-vinsn (nthrow1value :call :subprim-call) (()
+(define-x8664-vinsn (nthrow1value :call :subprim) (()
                                                         ((lab :label)))
   (leaq (:@ (:^ lab) (:%q x8664::fn)) (:%q x8664::ra0))
   (jmp (:@ .SPnthrow1value)))
 
 
+
 (define-x8664-subprim-lea-jmp-vinsn (bind-interrupt-level-0) .SPbind-interrupt-level-0)
+
 
 (define-x8664-vinsn bind-interrupt-level-0-inline (()
                                                    ()
@@ -2025,7 +2053,7 @@
      ())
   (ret))
 
-(define-x8664-vinsn (nmkcatchmv :call :subprim-call) (()
+(define-x8664-vinsn (nmkcatchmv :call :subprim) (()
                                                      ((lab :label))
                                                      ((entry (:label 1))))
   (leaq (:@ (:^ lab)  (:%q x8664::fn)) (:%q x8664::xfn))
@@ -2034,7 +2062,7 @@
   :back
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
 
-(define-x8664-vinsn (nmkcatch1v :call :subprim-call) (()
+(define-x8664-vinsn (nmkcatch1v :call :subprim) (()
                                                      ((lab :label))
                                                      ((entry (:label 1))))
   (leaq (:@ (:^ lab)  (:%q x8664::fn)) (:%q x8664::xfn))
@@ -2044,14 +2072,14 @@
   (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
 
 
-(define-x8664-vinsn (make-simple-unwind :call :subprim-call) (()
+(define-x8664-vinsn (make-simple-unwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leaq (:@ (:^ protform-lab) (:%q x8664::fn)) (:%q x8664::ra0))
   (leaq (:@ (:^ cleanup-lab)  (:%q x8664::fn)) (:%q x8664::xfn))
   (jmp (:@ .SPmkunwind)))
 
-(define-x8664-vinsn (nmkunwind :call :subprim-call) (()
+(define-x8664-vinsn (nmkunwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leaq (:@ (:^ protform-lab) (:%q x8664::fn)) (:%q x8664::ra0))
@@ -2061,7 +2089,7 @@
 ;;; "old" mkunwind.  Used by PROGV, since the binding of *interrupt-level*
 ;;; on entry to the new mkunwind confuses the issue.
 
-(define-x8664-vinsn (mkunwind :call :subprim-call) (()
+(define-x8664-vinsn (mkunwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leaq (:@ (:^ protform-lab) (:%q x8664::fn)) (:%q x8664::ra0))
@@ -2127,7 +2155,7 @@
   (addq (:$b (- x8664::fulltag-function x8664::fulltag-misc)) (:%q closure)))
 
 
-(define-x8664-vinsn (ref-symbol-value :call :subprim-call)
+(define-x8664-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val))))
      ((entry (:label 1))))
@@ -2160,7 +2188,7 @@
   (:anchored-uuo (uuo-error-unbound (:%q src))))
 
 
-(define-x8664-vinsn (%ref-symbol-value :call :subprim-call)
+(define-x8664-vinsn (%ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val))))
      ((entry (:label 1))))
@@ -2196,10 +2224,31 @@
   (movl (:$l (arch::make-vheader x8664::double-float.element-count x8664::subtag-double-float)) (:%l x8664::imm0.l))
   (movl (:$l (- x8664::double-float.size x8664::fulltag-misc)) (:%l x8664::imm1.l)))
 
+(define-x8664-vinsn setup-complex-double-float-allocation (()
+                                                   ())
+  (movl (:$l (arch::make-vheader 6 x8664::subtag-complex-double-float)) (:%l x8664::imm0.l))
+  (movl (:$l (- x8664::complex-double-float.size x8664::fulltag-misc)) (:%l x8664::imm1.l)))
+
+(define-x8664-vinsn setup-complex-single-float-allocation (()
+                                                   ())
+  (movl (:$l (arch::make-vheader 2 x8664::subtag-complex-single-float)) (:%l x8664::imm0.l))
+  (movl (:$l (- x8664::complex-single-float.size x8664::fulltag-misc)) (:%l x8664::imm1.l)))
+
 (define-x8664-vinsn set-double-float-value (()
                                             ((node :lisp)
                                              (val :double-float)))
   (movsd (:%xmm val) (:@ x8664::double-float.value (:%q node))))
+
+(define-x8664-vinsn set-complex-double-float-value (()
+                                                    ((node :lisp)
+                                                     (val :complex-double-float)))
+  (movdqa (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q node))))
+
+(define-x8664-vinsn set-complex-single-float-value (()
+                                                    ((node :lisp)
+                                                     (val :complex-single-float)))
+  (movq (:%xmm val) (:@ x8664::complex-single-float.realpart (:%q node))))
+
 
 (define-x8664-vinsn word-index-and-bitnum-from-index (((word-index :u64)
                                                        (bitnum :u8))
@@ -2260,6 +2309,99 @@
 				  ((src :lisp))
 				  ())
   (movq (:@ x8664::macptr.address (:%q src)) (:%q addr)))
+
+(define-x8664-vinsn save-nfp (()
+                              ()
+                              ((temp :imm)))
+  ((:pred > (:apply x862-max-nfp-depth) 0)
+   (movq (:rcontext x8664::tcr.foreign-sp) (:%mmx x8664::stack-temp))
+   (:if (:pred < (:apply + 16 (:apply x862-max-nfp-depth)) 128)
+     (subq (:$b (:apply + 16 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp))
+     (subq (:$l (:apply + 16 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp)))
+   (movq (:rcontext x8664::tcr.foreign-sp) (:%q temp))
+   (movq (:%mmx x8664::stack-temp) (:@ (:%q temp)))
+   (movq (:rcontext x8664::tcr.nfp) (:%mmx x8664::stack-temp))
+   (movq (:%mmx x8664::stack-temp) (:@ 8 (:%q temp)))
+   (movq (:% temp) (:rcontext x8664::tcr.nfp))))
+
+
+(define-x8664-vinsn restore-nfp (()
+                                 ()
+                                 ((temp :imm)))
+  ((:pred > (:apply x862-max-nfp-depth) 0)
+   (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+   (movq (:@ 8 (:%q temp)) (:%mmx x8664::stack-temp))
+   (movq (:@ (:%q temp)) (:%q temp))
+   (movq (:%q temp) (:rcontext x8664::tcr.foreign-sp))
+   (movq (:%mmx x8664::stack-temp)(:rcontext x8664::tcr.nfp))))
+
+(define-x8664-vinsn (nfp-store-unboxed-word :nfp :set) (()
+                                                        ((val :u64)
+                                                         (offset :u16const))
+                                                        ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movq (:%q val) (:@ (:apply + 16 offset) (:% nfp))))
+
+
+(define-x8664-vinsn (nfp-load-unboxed-word :nfp :ref) (((val :u64))
+                                           ((offset :u16const)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q val))
+  (movq (:@ (:apply + 16 offset) (:% val)) (:%q val)))
+
+(define-x8664-vinsn (nfp-store-single-float :nfp :set) (()
+                                            ((val :single-float)
+                                             (offset :u16const))
+                                            ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movss (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+(define-x8664-vinsn (nfp-store-double-float :nfp :set) (()
+                                            ((val :double-float)
+                                             (offset :u16const))
+                                            ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movsd (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+
+(define-x8664-vinsn (nfp-load-double-float :nfp :ref) (((val :double-float))
+                                           ((offset :u16const))
+                                           ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movsd (:@ (:apply + 16 offset) (:% val)) (:%xmm val)))
+
+
+(define-x8664-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
+                                           ((offset :u16const))
+                                           ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movss (:@ (:apply + 16 offset) (:% val)) (:%xmm val)))
+
+(define-x8664-vinsn (nfp-store-complex-single-float :nfp :set) (()
+                                                   ((val :complex-single-float)
+                                                    (offset :u16const))
+                                                   ((nfp :imm)))
+  (movl (:rcontext x8664::tcr.nfp) (:%l nfp))
+  (movq (:%xmm val) (:@ (:apply + 8 offset) (:%l nfp))))
+
+(define-x8664-vinsn (nfp-load-complex-single-float :nfp :ref) (((val :complex-single-float))
+                                                   ((offset :u16const))
+                                                   ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
+  (movq (:@ (:apply + 8 offset) (:% nfp)) (:%xmm val)))
+
+
+(define-x8664-vinsn (nfp-store-complex-double-float :nfp :set) (()
+                                                   ((val :complex-double-float)
+                                                    (offset :u16const))
+                                                   ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:% nfp))
+  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+(define-x8664-vinsn (nfp-load-complex-double-float :nfp :ref) (((val :complex-double-float))
+                                                   ((offset :u16const))
+                                                   ((nfp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:% nfp))
+  (movdqu (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
 
 (define-x8664-vinsn (temp-push-unboxed-word :push :word :csp)
     (()
@@ -3026,10 +3168,15 @@
   (jne :have-tag)
   (movzbl (:@ x8664::misc-subtag-offset (:%q object)) (:%l tag))
   :have-tag
+  (cmpl (:$b x8664::subtag-complex-single-float) (:%l tag))
+  (jz :good)
+  (cmpl (:$b x8664::subtag-complex-double-float) (:%l tag))
+  (jz :good)
   (rcmpl (:%l tag) (:$b 64))
   (jae :bad)
   (btq (:%q tag) (:%q mask))
   (jae :bad)
+  :good
   (:anchored-uuo-section :again)
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%q object) (:$ub arch::error-object-not-number))))
@@ -3298,13 +3445,12 @@
     (movq (:%q x) (:%q dest))
     (xorq (:%q y) (:%q dest)))))
 
-(define-x8664-subprim-call-vinsn (integer-sign) .SPinteger-sign)
 
 (define-x8664-vinsn vcell-ref (((dest :lisp))
 			       ((vcell :lisp)))
   (movq (:@ x8664::misc-data-offset (:%q vcell)) (:%q dest)))
 
-(define-x8664-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
+(define-x8664-vinsn (call-subprim-3 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (x t)
 							   (y t)
@@ -3523,7 +3669,7 @@
                                  ())
   (movq (:rcontext x8664::tcr.linear) (:%q dest)))
 
-(define-x8664-vinsn (setq-special :call :subprim-call)
+(define-x8664-vinsn (setq-special :call :subprim)
     (()
      ((sym :lisp)
       (val :lisp))
@@ -3602,10 +3748,18 @@
   ((:not (:and (:pred >= amount -128) (:pred <= amount 127)))
    (addq (:$l amount) (:%q x8664::rsp))))
 
-(define-x8664-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
+(define-x8664-vinsn (call-subprim-2 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (y t)
 							   (z t))
+                                                          ((entry (:label 1))))
+  (:talign 4)
+  (call (:@ spno))
+  (leaq (:@ (:^ entry) (:% x8664::rip)) (:%q x8664::fn)))
+
+(define-x8664-vinsn (call-subprim-1 :call :subprim) (((dest t))
+							  ((spno :s32const)
+							   (x t))
                                                           ((entry (:label 1))))
   (:talign 4)
   (call (:@ spno))
@@ -3922,10 +4076,10 @@
 
 (define-x8664-subprim-lea-jmp-vinsn (bind)  .SPbind)
 
-(define-x8664-vinsn (dpayback :call :subprim-call) (()
-                                                    ((n :s16const))
-                                                    ((temp (:u32 #.x8664::imm0))
-                                                     (entry (:label 1))))
+(define-x8664-vinsn (dpayback :call) (()
+                                      ((n :s16const))
+                                      ((temp (:u32 #.x8664::imm0))
+                                       (entry (:label 1))))
   ((:pred > n 0)
    ((:pred > n 1)
     (movl (:$l n) (:%l temp))
@@ -4592,21 +4746,21 @@
   (addq (:%q dim1) (:%q dim2))
   (leaq (:@ (:%q k) (:%q dim2)) (:%q dest)))
 
-(define-x8664-vinsn branch-unless-both-args-fixnums (()
-                                                     ((a :lisp)
-                                                      (b :lisp)
-                                                      (dest :label))
-                                                     ((tag :u8)))
+(define-x8664-vinsn set-z-flag-if-arg-fixnum (()
+                                              ((arg :imm)))
+  (testb (:$b x8664::fixnummask) (:%b arg)))
+
+(define-x8664-vinsn set-z-flag-if-both-args-fixnums (()
+                                                     ((a :imm)
+                                                      (b :imm))
+                                                     ((tag :u32)))
   (movl (:%l a) (:%l tag))
   (orl (:%l b) (:%l tag))
-  (testb (:$b x8664::fixnummask) (:%b tag))
-  (jne dest))
+  (testb (:$b x8664::fixnummask) (:%b tag)))
 
-(define-x8664-vinsn branch-unless-arg-fixnum (()
-                                              ((a :lisp)
-                                               (dest :label)))
-  (testb (:$b x8664::fixnummask) (:%b a))
-  (jne dest))
+
+
+
 
 (define-x8664-vinsn fixnum->single-float (((f :single-float))
                                           ((arg :lisp))
@@ -4714,14 +4868,11 @@
   (pushq (:@ x8664::node-size (:%q x8664::rbp)))
   (movq (:@ (:%q x8664::rbp)) (:%q x8664::rbp)))
 
-(define-x8664-vinsn (skip-unless-fixnum-in-range :branch)
+(define-x8664-vinsn set-carry-if-fixnum-in-range
     (((idx :u32))
      ((reg :imm)
       (minval :s32const)
-      (maxval :u32const)
-      (default :label)))
-  (testl (:$l x8664::fixnummask) (:%l reg))
-  (jne default)
+      (maxval :u32const)))
   (movq (:%q reg) (:%q idx))
   (sarq (:$ub x8664::fixnumshift) (:%q idx))
   ((:not (:pred zerop minval))
@@ -4732,8 +4883,7 @@
   ((:pred < maxval 128)
    (cmpq (:$b maxval) (:%q idx)))
   ((:pred >= maxval 128)
-   (cmpq (:$l maxval) (:%q idx)))
-  (jae default))
+   (cmpq (:$l maxval) (:%q idx))))
 
 (define-x8664-vinsn (ijmp :branch) (((idx :u32))
                                     ((idx :u32)
@@ -4754,10 +4904,90 @@
   (:long (:^ label)))
 
 
+(define-x8664-vinsn ivector-typecode-p  (((dest :lisp))
+                                         ((src :lisp))
+                                         ((temp :u32)
+                                          (mask :u32)))
+  (movl (:%l src) (:%l temp))
+  (shrl (:$ub x8664::fixnumshift) (:%l temp))
+  (andl (:$b x8664::fulltagmask) (:%l temp))
+  (movl (:$l (logior (ash 1 x8664::fulltag-immheader-0)
+                     (ash 1 x8664::fulltag-immheader-1)
+                     (ash 1 x8664::fulltag-immheader-2))) (:%l mask))
+  (btl (:%l temp) (:%l mask))
+  (movl (:$l 0)  (:%l mask))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movl (:%l src) (:%l dest)))
+  (cmovael (:%l mask) (:%l dest)))
+
+(define-x8664-vinsn gvector-typecode-p  (((dest :lisp))
+                                         ((src :lisp))
+                                         ((temp :u32)
+                                          (mask :u32)))
+  (movl (:%l src) (:%l temp))
+  (shrl (:$ub x8664::fixnumshift) (:%l temp))
+  (andl (:$b x8664::fulltagmask) (:%l temp))
+  (movl (:$l (logior (ash 1 x8664::fulltag-nodeheader-0)
+                    (ash 1 x8664::fulltag-nodeheader-1))) (:%l mask))
+  (btl (:%l temp) (:%l mask))
+  (movl (:$l 0)  (:%l mask))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movl (:%l src) (:%l dest)))
+  (cmovael (:%l mask) (:%l dest)))
+
+(define-x8664-vinsn  %complex-single-float-realpart
+    (((dest :single-float))
+     ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movss (:%xmm src) (:%xmm dest))))
+
+(define-x8664-vinsn  %complex-single-float-imagpart
+    (((dest :single-float))
+     ((src :complex-single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
+   (movapd (:%xmm src) (:%xmm dest)))
+  (psrlq (:$ub 32) (:%xmm dest)))
+
+(define-x8664-vinsn  %complex-double-float-realpart
+    (((dest :double-float))
+     ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movsd (:%xmm src) (:%xmm dest))))
+
+(define-x8664-vinsn  %complex-double-float-imagpart
+    (((dest :double-float))
+     ((src :complex-double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
+   (movapd (:%xmm src) (:%xmm dest)))
+  (shufpd (:$ub 1) (:%xmm target::fpzero) (:%xmm dest)))
+
+
+(define-x8664-vinsn %make-complex-single-float
+    (((dest :complex-single-float))
+     ((r :single-float)
+      (i :single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (movss (:%xmm r) (:%xmm dest)))
+  (unpcklps (:%xmm i) (:%xmm dest)))
+
+(define-x8664-vinsn %make-complex-double-float
+    (((dest :complex-double-float))
+     ((r :double-float)
+     (i :double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (:movupd (:%xmm r) (:%xmm dest)))
+  (shufpd (:$ub 0) (:%xmm i) (:%xmm dest)))
   
-  
-  
-  
+
+
 
 (queue-fixup
  (fixup-x86-vinsn-templates

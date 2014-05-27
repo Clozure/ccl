@@ -59,7 +59,7 @@
 (defx86lapfunction %symptr->symbol ((symptr arg_z))
   (movw ($ (ash 1 x8664::fulltag-symbol)) (% imm0.w))
   (btw (%w symptr) (% imm0.w))
-  (jb.pt @ok)
+  (jb @ok)
   (uuo-error-reg-not-tag (% symptr) ($ x8664::fulltag-symbol))
   @ok
   (cmpq ($ (+ (target-nil-value) x8664::nilsym-offset)) (% symptr))

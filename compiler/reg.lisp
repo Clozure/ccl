@@ -87,10 +87,15 @@
 ; "mode" values for FPRs. 
 (defconstant hard-reg-class-fpr-mode-double 0)          ; unboxed IEEE double
 (defconstant hard-reg-class-fpr-mode-single 1)          ; unboxed IEEE single
+(defconstant hard-reg-class-fpr-mode-complex-double-float 2)
+(defconstant hard-reg-class-fpr-mode-complex-single-float 3)
 
 ; "type" values for FPRs - type of SOURCE may be encoded herein
 (defconstant hard-reg-class-fpr-type-double 0)          ;  IEEE double
 (defconstant hard-reg-class-fpr-type-single 1)          ; IEEE single
+(defconstant hard-reg-class-fpr-type-comples-double-float 2)
+(defconstant hard-reg-class-fpr-type-complex-single-float 3)
+  
 
 
 (defmacro set-regspec-mode (regspec mode)
@@ -214,15 +219,38 @@
   `(logior (ash -1 28) (the fixnum ,thing)))
 
 ;;; Bits 24-26 (inclusive) of a memory-spec define the type of memory-spec in question.
-(defconstant memspec-type-byte (byte 3 24))
+(defconstant memspec-type-byte (byte 2 24))
 (defmacro memspec-type (memspec)
   `(ldb memspec-type-byte (the fixnum ,memspec)))
+
+(defconstant memspec-single-ref-bit 26)
+(defmacro memspec-single-ref-p (memspec)
+  `(logbitp  memspec-single-ref-bit ,memspec))
 
 ;;; A slot in the value-stack frame.  This needs to get interpreted
 ;;; relative to the top of the vsp.  The low 15 bits denote the
 ;;; offset in the frame; the low 2 bits are always clear, since the
 ;;; vstack is always aligned on a 32-bit boundary.
 (defconstant memspec-frame-address 0)
+
+;;; Something relative to the NFP.  NFP offsets are always (at least)
+;;; 8-byte aligned, so the low 3 bits encode the type of object stored
+;;; at that address.
+(defconstant memspec-nfp-offset 1)
+
+(defconstant memspec-nfp-type-natural 0)
+(defconstant memspec-nfp-type-double-float 1)
+(defconstant memspec-nfp-type-single-float 2)
+(defconstant memspec-nfp-type-complex-double-float 3)
+(defconstant memspec-nfp-type-complex-single-float 4)
+
+(defmacro make-nfp-address (offset type &optional single-ref)
+  `(make-memory-spec
+    (dpb
+     memspec-nfp-offset
+     memspec-type-byte
+     (logior ,offset ,type ,(if single-ref (ash 1 memspec-single-ref-bit) 0)))))
+    
 
 
 ;;; Address-specs - whether memory- or register-based - might be used to indicate the

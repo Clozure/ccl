@@ -2923,7 +2923,8 @@
     #+64-bit-target (unsigned-byte 64)
     #+64-bit-target fixnum
     #+64-bit-target (signed-byte 64)
-    character  short-float double-float))
+    character  short-float double-float
+    #||(complex short-float) (complex double-float)||#))
 
 (defun specialize-array-type (type)
   (let* ((eltype (array-ctype-element-type type))
@@ -3742,7 +3743,7 @@
 (defun array-%%typep (object type)
   (let* ((typecode (typecode object)))
     (declare (type (unsigned-byte 8) typecode))
-    (and (>= typecode target::subtag-arrayH)
+    (and (array-typecode-p typecode)
          (ecase (array-ctype-complexp type)
            ((t) (not (simple-array-p object)))
            ((nil) (simple-array-p object))
@@ -4080,6 +4081,7 @@
 )
 
 
+
 (let* ((builtin-translations 
         `((array . array)
           (simple-array . simple-array)
@@ -4121,6 +4123,7 @@
 
 
        
+
 (precompute-types '((mod 2) (mod 4) (mod 16) (mod #x100) (mod #x10000)
                     #-cross-compiling
 		    (mod #x100000000)
@@ -4130,6 +4133,8 @@
 		    (signed-byte 8) (signed-byte 16) (signed-byte 32)
                     (signed-byte 64)
                     (or function symbol)
+                    (complex single-float)
+                    (complex double-float)
                     ))
 
 
@@ -4154,7 +4159,9 @@
           ;; Root Of All Evil
           t
           ;; Numbers:
-          number real ratio complex rational fixnum
+          number real ratio complex (complex-single-float (complex single-float))
+          (complex-double-float (complex double-float))
+          rational fixnum
           ;;  Integers:
           signed-byte  unsigned-byte bit bignum integer
           ;;  Floats
@@ -4193,10 +4200,13 @@
           ;; Sequence types
           sequence list  cons null
           
- )
+           )
                                                          
-        ))
-)
+        )))
+
+(setq specialized-array-element-types
+      (append specialized-array-element-types
+              '((complex short-float) (complex double-float))))
 ;(setq *type-system-initialized* t)
 
 

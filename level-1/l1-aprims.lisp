@@ -519,9 +519,13 @@ terminate the list"
   (element-subtype-type (element-type-subtype type)))
 
 (defun upgraded-complex-part-type (type &optional env)
-  (declare (ignore env))
-  (declare (ignore type))               ; Ok, ok.  So (upgraded-complex-part-type 'bogus) is 'REAL. So ?
-  'real)
+  (let* ((specifier (standardized-type-specifier type env)))
+    (when specifier
+      (let* ((cspec (if (atom specifier) specifier (car specifier))))
+        (if (or (eq cspec 'single-float)
+                (eq cspec 'double-float))
+          cspec
+          'real))))) ; Ok, ok.  So (upgraded-complex-part-type 'bogus) is 'REAL. So ?
 
 
 #+ppc32-target
@@ -534,10 +538,11 @@ terminate the list"
       base-char                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
-      base-char
       (unsigned-byte 16)
       (signed-byte 16)
       double-float
+      (complex single-float)
+      (complex double-float)
       bit))
   
   ;; given uvector subtype - what is the corresponding element-type
@@ -558,10 +563,11 @@ terminate the list"
       base-char                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
-      base-char
       (unsigned-byte 16)
       (signed-byte 16)
       double-float
+      (complex single-float)
+      (complex double-float)
       bit))
   
   ;; given uvector subtype - what is the corresponding element-type
@@ -706,10 +712,11 @@ terminate the list"
       base-char                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
-      base-char
       (unsigned-byte 16)
       (signed-byte 16)
       double-float
+      (complex single-float)
+      (complex double-float)
       bit))
   
   ;; given uvector subtype - what is the corresponding element-type

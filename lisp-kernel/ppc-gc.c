@@ -275,10 +275,12 @@ mark_root(LispObj n)
       total_size_in_bytes = 4 + element_count;
     } else if (subtag <= max_16_bit_ivector_subtag) {
       total_size_in_bytes = 4 + (element_count<<1);
-    } else if (subtag == subtag_double_float_vector) {
-      total_size_in_bytes = 8 + (element_count<<3);
-    } else {
+    } else if (subtag == subtag_complex_double_float_vector) {
+            total_size_in_bytes = 8 + (element_count<<4);
+    } else if (subtag ==subtag_bit_vector) {
       total_size_in_bytes = 4 + ((element_count+7)>>3);
+    } else {
+      total_size_in_bytes = 8 + (element_count<<3);
     }
 #endif
 
@@ -530,10 +532,12 @@ rmark(LispObj n)
         total_size_in_bytes = 4 + element_count;
       } else if (subtag <= max_16_bit_ivector_subtag) {
         total_size_in_bytes = 4 + (element_count<<1);
-      } else if (subtag == subtag_double_float_vector) {
-        total_size_in_bytes = 8 + (element_count<<3);
-      } else {
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
+      } else if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 4 + ((element_count+7)>>3);
+      } else {
+        total_size_in_bytes = 8 + (element_count<<3);
       }
 #endif
 
@@ -705,10 +709,12 @@ rmark(LispObj n)
         total_size_in_bytes = 4 + element_count;
       } else if (subtag <= max_16_bit_ivector_subtag) {
         total_size_in_bytes = 4 + (element_count<<1);
-      } else if (subtag == subtag_double_float_vector) {
+      } else if (subtag == subtag_complex_double_float_vector) {
         total_size_in_bytes = 8 + (element_count<<3);
-      } else {
+      } else if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 4 + ((element_count+7)>>3);
+      } else {
+        total_size_in_bytes = 8 + (element_count<<3);
       }
 #endif
 
@@ -804,6 +810,8 @@ skip_over_ivector(natural start, LispObj header)
   default:
     if (subtag == subtag_bit_vector) {
       nbytes = (element_count+7)>>3;
+    } else if (subtag == subtag_complex_double_float_vector) {
+      nbytes = element_count << 4;
     } else {
       nbytes = element_count << 1;
     }
@@ -1564,6 +1572,8 @@ compact_dynamic_heap()
             imm_dnodes = (((elements+2)+3)>>2);
           } else if (tag == subtag_bit_vector) {
             imm_dnodes = (((elements+32)+63)>>6);
+          } else if (tag == subtag_complex_double_float_vector) {
+            imm_dnodes = (elements*2)+1;
           } else {
             imm_dnodes = elements+1;
           }
@@ -1650,10 +1660,13 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end)
             bytes = 4 + elements;
           } else if (subtag <= max_16_bit_ivector_subtag) {
             bytes = 4 + (elements<<1);
-          } else if (subtag == subtag_double_float_vector) {
-            bytes = 8 + (elements<<3);
-          } else {
+          } else if (subtag == subtag_complex_double_float_vector) {
+            bytes = 8 + (elements<<4);
+
+          } else if (subtag = subtag_bit_vector) {
             bytes = 4 + ((elements+7)>>3);
+          } else {
+            bytes = 8 + (elements<<4);
           }
 #endif
 

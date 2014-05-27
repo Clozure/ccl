@@ -494,6 +494,7 @@ define(`mkcatch',`
 	__(TSP_Alloc_Fixed_Unboxed(catch_frame.size))
 	__(la nargs,tsp_frame.data_offset+fulltag_misc(tsp))
         __(str(imm4,catch_frame.header(nargs)))
+        __(ldr(imm4,tcr.nfp(rcontext)))
 	__(str(arg_z,catch_frame.catch_tag(nargs)))
 	__(str(imm0,catch_frame.link(nargs)))
 	__(str(imm2,catch_frame.mvflag(nargs)))
@@ -508,7 +509,7 @@ define(`mkcatch',`
         __(str(seventh_nvr,catch_frame.regs+6*node_size(nargs)))
         __(str(eighth_nvr,catch_frame.regs+7*node_size(nargs)))
 	__(str(imm3,catch_frame.xframe(nargs)))
-	__(str(rzero,catch_frame.tsp_segment(nargs)))
+         __(str(imm4,catch_frame.nfp(nargs)))
 	__(Set_TSP_Frame_Boxed())
 	__(str(nargs,tcr.catch_top(rcontext)))
         __(li nargs,0)
@@ -742,3 +743,21 @@ define(`aligned_bignum_size',`((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1)
 define(`suspend_now',`
 	__(uuo_interr(error_propagate_suspend,rzero))
 ')
+
+define(`ivector_typecode_p',`
+	new_macro_labels()
+        ifdef(`PPC64',`
+         __(clrldi $3,$2,64-nlowtagbits)
+         __(cmpdi $3,lowtag_immheader)
+         __(mr $1,$2)
+         __(beq macro_label(done))
+         __(mr $1,rzero)
+        ',`
+         __(clrlwi $3,$2,32-ntagbits)
+         __(cmpwi $3,fulltag_immheader)
+         __(mr $1,$2)
+         __(beq macro_label(done))
+         __(mr $1,rzero)
+        ')
+macro_label(done):
+        ')

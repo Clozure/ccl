@@ -312,16 +312,10 @@ incremented by the second argument, DELTA, which defaults to 1."
     `(setq ,place (+ ,place ,delta))
     (multiple-value-bind (dummies vals newval setter getter)
         (get-setf-method place env)
-      (let ((d (gensym))
-            ;; Doesn't propagate inferred types, but better than nothing.
-            (d-type (cond ((constantp delta) (type-of delta))
-                          ((and (consp delta) (eq (car delta) 'the)) (cadr delta))
-                          (t t)))
-            (v-type (if (and (consp place) (eq (car place) 'the)) (cadr place) t)))
+      (let ((d (gensym)))
         `(let* (,@(mapcar #'list dummies vals)
                 (,d ,delta)
                 (,(car newval) (+ ,getter ,d)))
-           (declare (type ,d-type ,d) (type ,v-type ,(car newval)))
            ,setter)))))
 
 (defmacro decf (place &optional (delta 1) &environment env)

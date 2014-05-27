@@ -1814,6 +1814,7 @@ to replace that class with ~s" name old-class new-class)
   (make-istruct-class 'ptaskstate *istruct-class*)
   (make-istruct-class 'entry *istruct-class*)
   (make-istruct-class 'foreign-object-domain *istruct-class*)
+  (make-istruct-class 'acode)
 
   
   (make-istruct-class 'slot-id *istruct-class*)
@@ -1858,6 +1859,8 @@ to replace that class with ~s" name old-class new-class)
   (make-istruct-class 'shlib *istruct-class*)
 
   (make-built-in-class 'complex (find-class 'number))
+  (make-built-in-class 'complex-single-float (find-class 'complex))
+  (make-built-in-class 'complex-double-float (find-class 'complex))  
   (make-built-in-class 'real (find-class 'number))
   (defstatic *float-class* (make-built-in-class 'float (find-class 'real)))
   (defstatic *double-float-class* (make-built-in-class 'double-float (find-class 'float)))
@@ -1886,11 +1889,10 @@ to replace that class with ~s" name old-class new-class)
   (defstatic *standard-char-class* (make-built-in-class 'standard-char *base-char-class*))
   
   (defstatic *keyword-class* (make-built-in-class 'keyword *symbol-class*))
-  
-  (make-built-in-class 'list (find-class 'sequence))
+
+  (make-built-in-class  'list (find-class 'sequence))
   (defstatic *cons-class* (make-built-in-class 'cons (find-class 'list)))
   (defstatic *null-class* (make-built-in-class 'null *symbol-class* (find-class 'list)))
-  
   (defstatic *vector-class* (make-built-in-class 'vector *array-class* (find-class 'sequence)))
   (defstatic *simple-array-class* (make-built-in-class 'simple-array *array-class*))
   (make-built-in-class 'simple-1d-array *vector-class* *simple-array-class*)
@@ -1914,6 +1916,8 @@ to replace that class with ~s" name old-class new-class)
     (make-built-in-class 'simple-short-float-vector (find-class 'short-float-vector) (find-class 'simple-1d-array))
     (alias-class 'simple-long-float-vector (find-class 'simple-double-float-vector))
     (alias-class 'simple-single-float-vector (find-class 'simple-short-float-vector))
+    (make-built-in-class 'complex-single-float-vector *vector-class*)
+    (make-built-in-class 'complex-double-float-vector *vector-class*)
     )
 
   #+x8664-target
@@ -1943,6 +1947,8 @@ to replace that class with ~s" name old-class new-class)
   (make-built-in-class 'base-string (find-class 'string))
   (make-built-in-class 'simple-string (find-class 'string) (find-class 'simple-1d-array))
   (make-built-in-class 'simple-base-string (find-class 'base-string) (find-class 'simple-string))
+  (make-built-in-class 'simple-complex-single-float-vector (find-class 'complex-single-float-vector) (find-class 'simple-1d-array))
+  (make-built-in-class 'simple-complex-double-float-vector (find-class 'complex-double-float-vector) (find-class 'simple-1d-array))
   (make-built-in-class 'general-vector *vector-class*)
   (make-built-in-class 'simple-vector (find-class 'general-vector) (find-class 'simple-1d-array))
 
@@ -1983,10 +1989,11 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'base-string)
             (find-class 'unsigned-byte-vector)
             (find-class 'byte-vector)
-            *t-class*                   ; old base-string
             (find-class 'unsigned-word-vector)
             (find-class 'word-vector)
             (find-class 'double-float-vector)
+            (find-class 'complex-single-float-vector)
+            (find-class 'complex-double-float-vector)
             (find-class 'bit-vector)))
 
   #+ppc64-target
@@ -2033,10 +2040,11 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'base-string)
             (find-class 'unsigned-byte-vector)
             (find-class 'byte-vector)
-            *t-class*
             (find-class 'unsigned-word-vector)
             (find-class 'word-vector)
             (find-class 'double-float-vector)
+            (find-class 'complex-single-float-vector)
+            (find-class 'complex-double-float-vector)
             (find-class 'bit-vector)))
 
   #+x8664-target
@@ -2104,10 +2112,11 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'base-string)
             (find-class 'unsigned-byte-vector)
             (find-class 'byte-vector)
-            *t-class*                   ; old base-string
             (find-class 'unsigned-word-vector)
             (find-class 'word-vector)
             (find-class 'double-float-vector)
+            (find-class 'complex-single-float-vector)
+            (find-class 'complex-double-float-vector)
             (find-class 'bit-vector)))
 
 
@@ -2366,6 +2375,10 @@ to replace that class with ~s" name old-class new-class)
           ;; further dispatching.
           (map-subtag target::subtag-ratio ratio)
           (map-subtag target::subtag-complex complex)
+          (map-subtag target::subtag-complex-single-float complex-single-float)
+          (map-subtag target::subtag-complex-double-float complex-double-float)
+          (map-subtag target::subtag-complex-single-float-vector simple-complex-single-float-vector)
+          (map-subtag target::subtag-complex-double-float-vector simple-complex-double-float-vector)
           (map-subtag target::subtag-catch-frame catch-frame)
           (map-subtag target::subtag-hash-vector hash-table-vector)
           (map-subtag target::subtag-value-cell value-cell)

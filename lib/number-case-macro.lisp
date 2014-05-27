@@ -20,15 +20,43 @@
 ;;;;;;;;;
 ;; support fns and vars for number-case
 
+;;; We don't recognize a very large set of type specifiers - just
+;;; a few symbols that can be mapped to primitive types.  (Not
+;;; all of those symbols are necessarily valid type specifiers!)
 (defun type-name-to-code (name)
-  (funcall (arch::target-numeric-type-name-to-typecode-function
-            (backend-target-arch *target-backend*))
-           name))
+  (let* ((arch (backend-target-arch *target-backend*)))
+    (case name
+      (fixnum (arch::target-fixnum-tag arch))
+      ((short-float single-float) (arch::target-single-float-tag arch))
+      ((double-float long-float) (arch::target-double-float-tag arch))
+      (t (let* ((key (case name
+                       (ratio :ratio)
+                       (bignum :bignum)
+                       (complex-rational :complex)
+                       (complex-single-float :complex-single-float)
+                       (complex-double-float :complex-double-float))))
+           (or (and key (cdr (assoc key (arch::target-uvector-subtags arch))))
+               (error "Can't determine typecode of ~s for architecture ~a."
+                      name (arch::target-name arch))))))))
 
-(defvar nd-onions `((integer fixnum bignum) (rational fixnum bignum ratio)
-                    (float double-float short-float)
-                    (real fixnum bignum ratio double-float short-float)
-                    (number fixnum bignum ratio double-float short-float complex)))
+(defparameter nd-onions `((integer fixnum bignum) (rational fixnum bignum ratio)
+                          (float double-float single-float)
+                          (real fixnum bignum ratio double-float single-float)
+                          (complex complex-single-float complex-double-float complex-rational)
+                          (number fixnum bignum ratio double-float short-float complex-single-float complex-double-float complex-rational)))
+
+
+;;; This is just used to generate more succint error messages.
+(defparameter canonical-numeric-union-types
+  '((integer fixnum bignum)
+    (rational integer ratio)
+    (float short-float double-float)
+    (float single-float double-float) 
+    (float short-float long-float)
+    (float single-float long-float)
+    (real float rational)
+    (complex complex-single-float complex-double-float complex-rational)
+    (number real complex)))
 
 (defun nd-diff (x y) ; things in x that are not in y
   (let ((res))
@@ -36,14 +64,28 @@
       (when (not (memq e y))(push e res)))
     res))
 
+
+;;; Try to use canonical names for things that're effectively
+;;; implicit unions.  Rinse.  Repeat.
 (defun nd-type-compose (selectors)
-  ;; this could do better but probably not worth the trouble - only
-  ;; for require-type error
-  (or (dolist (union nd-onions)
-        (if (when (eq (length selectors)(length (cdr union)))
-              (dolist (e selectors t)(if (not (memq e (cdr union)))(return))))
-          (return (car union))))
-      (cons 'or selectors)))
+  (dolist (union canonical-numeric-union-types)
+    (destructuring-bind  (u &rest members) union
+      (if (not (memq u selectors))
+        (when (dolist (m members t)
+              (unless (memq m selectors)
+                (return nil)))
+          (push u selectors)))
+      (when (memq u selectors)
+        (dolist (m members)
+          (setq selectors (delete m selectors))))))
+  (setq selectors
+        (nsubst '(complex single-float) 'complex-single-float
+                (nsubst '(complex-double-float) 'complex-double-float
+                        (nsubst '(complex rational) 'complex-rational
+                                selectors))))
+  (if (cdr selectors)
+    (cons 'or selectors)
+    (car selectors)))
 
 
 

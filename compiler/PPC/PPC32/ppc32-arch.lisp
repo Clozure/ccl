@@ -171,34 +171,32 @@
 ;;; with that subtag whose element size isn't an integral number of bits and ending with those whose
 ;;; element size - like all non-CL-array fulltag-immheader types - is 32 bits.
 (define-imm-subtag bit-vector 31)
-(define-imm-subtag double-float-vector 30)
-(define-imm-subtag s16-vector 29)
-(define-imm-subtag u16-vector 28)
+(define-imm-subtag complex-double-float-vector 30)
+(define-imm-subtag complex-single-float-vector 29)
+(define-imm-subtag double-float-vector 28)
+(define-imm-subtag s16-vector 27)
+(define-imm-subtag u16-vector 26)
 (defconstant min-16-bit-ivector-subtag subtag-u16-vector)
 (defconstant max-16-bit-ivector-subtag subtag-s16-vector)
 
-
-;;(define-imm-subtag simple-base-string 27)
-(define-imm-subtag s8-vector 26)
-(define-imm-subtag u8-vector 25)
+(define-imm-subtag s8-vector 25)
+(define-imm-subtag u8-vector 24)
 (defconstant min-8-bit-ivector-subtag subtag-u8-vector)
-(defconstant max-8-bit-ivector-subtag (logior fulltag-immheader (ash 27 ntagbits)))
+(defconstant max-8-bit-ivector-subtag subtag-s8-vector)
 
-(define-imm-subtag simple-base-string 24)
-(define-imm-subtag fixnum-vector 23)
-(define-imm-subtag s32-vector 22)
-(define-imm-subtag u32-vector 21)
-(define-imm-subtag single-float-vector 20)
-(defconstant max-32-bit-ivector-subtag (logior fulltag-immheader (ash 24 ntagbits)))
+(define-imm-subtag simple-base-string 23)
+(define-imm-subtag fixnum-vector 22)
+(define-imm-subtag s32-vector 21)
+(define-imm-subtag u32-vector 20)
+(define-imm-subtag single-float-vector 19)
+(defconstant max-32-bit-ivector-subtag subtag-simple-base-string)
 (defconstant min-cl-ivector-subtag subtag-single-float-vector)
 
-(define-node-subtag vectorH 20)
-(define-node-subtag arrayH 19)
-(assert (< subtag-arrayH subtag-vectorH min-cl-ivector-subtag))
-(define-node-subtag simple-vector 21)   ; Only one such subtag
+(define-node-subtag vectorH 30)
+(define-node-subtag arrayH 29)
+(define-node-subtag simple-vector 31)   ; Only one such subtag
 (assert (< subtag-arrayH subtag-vectorH subtag-simple-vector))
-(defconstant min-vector-subtag subtag-vectorH)
-(defconstant min-array-subtag subtag-arrayH)
+
 
 ;;; So, we get the remaining subtags (n: (n > max-numeric-subtag) & (n < min-array-subtag))
 ;;; for various immediate/node object types.
@@ -210,6 +208,9 @@
 (define-imm-subtag code-vector 5)
 (define-imm-subtag creole-object 6)
 (define-imm-subtag xcode-vector 7)  ; code-vector for cross-development
+(define-imm-subtag complex-single-float 8)
+(define-imm-subtag complex-double-float 9)
+
 
 (defconstant max-non-array-imm-subtag (logior (ash 19 ntagbits) fulltag-immheader))
 
@@ -275,6 +276,21 @@
   value
   val-low)
 
+(define-fixedsized-object complex-single-float
+  pad
+  realpart
+  imagpart)
+
+(define-fixedsized-object complex-double-float
+  pad
+  realpart-high
+  realpart-low
+  imagpart-high
+  imagpart-low)
+
+(defconstant complex-double-float.realpart complex-double-float.realpart-high)
+(defconstant complex-double-float.imagpart complex-double-float.imagpart-high)
+
 (define-fixedsized-object complex
   realpart
   imagpart
@@ -315,7 +331,7 @@
   save-save1
   save-save0
   xframe                                ; exception-frame link
-  tsp-segment                           ; mostly padding, for now.
+  nfp
 )
 
 (define-fixedsized-object lock
@@ -460,6 +476,7 @@
   tlb-pointer
   shutdown-count
   safe-ref-address
+  nfp
 )
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
@@ -542,9 +559,8 @@
 (define-header value-cell-header value-cell.element-count subtag-value-cell)
 (define-header macptr-header macptr.element-count subtag-macptr)
 
-(defconstant yield-syscall
-  #+darwinppc-target -60
-  #+linuxppc-target #$__NR_sched_yield)
+
+
 )
 
 
@@ -664,6 +680,8 @@
     (:single-float . ,subtag-single-float)
     (:double-float . ,subtag-double-float)
     (:complex . ,subtag-complex  )
+    (:complex-single-float . ,subtag-complex-single-float)
+    (:complex-double-float . ,subtag-complex-double-float)    
     (:symbol . ,subtag-symbol)
     (:function . ,subtag-function )
     (:code-vector . ,subtag-code-vector)
@@ -692,9 +710,12 @@
     (:unsigned-32-bit-vector . ,subtag-u32-vector )
     (:single-float-vector . ,subtag-single-float-vector)
     (:double-float-vector . ,subtag-double-float-vector )
+    (:complex-single-float-vector . ,subtag-complex-single-float-vector)
+    (:complex-double-float-vector . ,subtag-complex-double-float-vector)
     (:simple-vector . ,subtag-simple-vector )
     (:vector-header . ,subtag-vectorH)
-    (:array-header . ,subtag-arrayH)))
+    (:array-header . ,subtag-arrayH)
+    (:min-cl-ivector-subtag ,.min-cl-ivector-subtag)))
 
 
 ;;; This should return NIL unless it's sure of how the indicated
@@ -713,7 +734,10 @@
              :simple-vector)))
         (ccl::numeric-ctype
          (if (eq (ccl::numeric-ctype-complexp element-type) :complex)
-           :simple-vector
+           (case (ccl::numeric-ctype-format element-type)
+             (single-float :complex-single-float-vector)
+             (double-float :complex-double-float-vector)
+             (t :simple-vector))
            (case (ccl::numeric-ctype-class element-type)
              (integer
               (let* ((low (ccl::numeric-ctype-low element-type))
@@ -754,7 +778,9 @@
         (ash element-count 1)
         (if (= subtag subtag-bit-vector)
           (ash (+ element-count 7) -3)
-          (+ 4 (ash element-count 3)))))))
+          (if (= subtag subtag-complex-double-float-vector)
+            (+ 4 (ash element-count 4))
+            (+ 4 (ash element-count 3))))))))
 
 (defparameter *ppc32-target-arch*
   (arch::make-target-arch :name :ppc32
@@ -795,21 +821,14 @@
                                                   :double-float
                                                   :bignum
                                                   :simple-string)
-                          :64-bit-ivector-types '(:double-float-vector)
+                          :64-bit-ivector-types '(:double-float-vector
+                                                  :complex-single-float-vector)
                           :array-type-name-from-ctype-function
                           #'ppc32-array-type-name-from-ctype
                           :package-name "PPC32"
                           :t-offset t-offset
                           :array-data-size-function #'ppc32-misc-byte-count
-                          :numeric-type-name-to-typecode-function
-                          #'(lambda (type-name)
-                              (ecase type-name
-                                (fixnum tag-fixnum)
-                                (bignum subtag-bignum)
-                                ((short-float single-float) subtag-single-float)
-                                ((long-float double-float) subtag-double-float)
-                                (ratio subtag-ratio)
-                                (complex subtag-complex)))
+                          :fpr-mask-function 'ppc::fpr-mask
                           :subprims-base ppc::*ppc-subprims-base*
                           :subprims-shift ppc::*ppc-subprims-shift*
                           :subprims-table ppc::*ppc-subprims*
@@ -854,10 +873,20 @@
   `(ccl::%svref ,x ppc32::ratio.denom-cell))
 
 (defppc32archmacro ccl::%realpart (x)
-  `(ccl::%svref ,x ppc32::complex.realpart-cell))
+  (let* ((thing (gensym)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (#.ppc32::subtag-complex-single-float (ccl::%complex-single-float-realpart ,thing))
+        (#.ppc32::subtag-complex-double-float (ccl::%complex-double-float-realpart ,thing))
+        (t (ccl::%svref ,thing ppc32::complex.realpart-cell))))))
                     
 (defppc32archmacro ccl::%imagpart (x)
-  `(ccl::%svref ,x ppc32::complex.imagpart-cell))
+  (let* ((thing (gensym)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (#.ppc32::subtag-complex-single-float (ccl::%complex-single-float-imagpart ,thing))
+        (#.ppc32::subtag-complex-double-float (ccl::%complex-double-float-imagpart ,thing))
+        (t (ccl::%svref ,thing ppc32::complex.realpart-cell))))))
 
 ;;;
 (defppc32archmacro ccl::%get-single-float-from-double-ptr (ptr offset)
@@ -941,10 +970,10 @@
       ,@body)))
 
 (defconstant arg-check-trap-pc-limit 8)
-
+;;
 (defconstant fasl-version #x60)
 (defconstant fasl-max-version #x60)
 (defconstant fasl-min-version #x60)
-(defparameter *image-abi-version* 1039)
+(defparameter *image-abi-version* 1040)
 
 (provide "PPC32-ARCH")

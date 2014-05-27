@@ -75,16 +75,14 @@
 
 (defun print-lreg (l s d)
   (declare (ignore d))
-  (print-unreadable-object (l s :type t)
+ (print-unreadable-object (l s :type t)
     (format s "~d" (lreg-id l))
     (let* ((value (lreg-value l))
            (class (lreg-class l))
 	   (mode-name (if (eq class hard-reg-class-gpr)
 			(car (rassoc (lreg-mode l) *mode-name-value-alist*))
                         (if (eq class hard-reg-class-fpr)
-                          (case (lreg-mode l)
-                            (#.hard-reg-class-fpr-mode-double "DOUBLE")
-                            (#.hard-reg-class-fpr-mode-single "SINGLE"))))))
+                          (string (fpr-mode-value-name (lreg-mode l)))))))
       (format s " ~a "
               (case class
                 (#.hard-reg-class-fpr "FPR")
@@ -208,6 +206,8 @@
     (:crf . ,arch::storage-class-crf)
     (:crbit . ,arch::storage-class-crbit)
     (:crfbit . ,arch::storage-class-crfbit)
+    (:complex-double-float . ,arch::storage-class-complex-double-float)
+    (:complex-single-float . ,arch::storage-class-complex-double-float)
     (t . nil)))
     
 (defun spec-class->storage-class (class-name)
@@ -256,10 +256,7 @@
 (defun note-vinsn-sets-fpr-lreg (vinsn fpr)
   (setf (vinsn-fprs-set vinsn) (logior (vinsn-fprs-set vinsn)
                                        (target-fpr-mask (hard-regspec-value fpr)
-                                                        (if (eql (get-regspec-mode fpr)
-                                                                 hard-reg-class-fpr-mode-single)
-                                                          :single-float
-                                                          :double-float)))))
+                                                        (get-regspec-mode fpr)))))
 
 (defun note-vinsn-refs-gpr (vinsn gpr)
   (when (and (fboundp 'vinsn-gprs-read)
@@ -271,10 +268,7 @@
              (> (uvsize vinsn) 8))
     (setf (vinsn-fprs-read vinsn) (logior (vinsn-fprs-read vinsn)
                                        (target-fpr-mask (hard-regspec-value fpr)
-                                                        (if (eql (get-regspec-mode fpr)
-                                                                 hard-reg-class-fpr-mode-single)
-                                                          :single-float
-                                                          :double-float))))))
+                                                        (get-regspec-mode fpr))))))
 
 
 (defun match-vreg (vreg spec vinsn vp n)

@@ -149,6 +149,12 @@
     (shrq ($ 3) (% imm1))
     (jmp @uvector-next)
     @not-bit
+    (cmpb ($ x8664::subtag-complex-double-float-vector) (% imm1.b))
+    (jne @not-complex-double-float-vector)
+    (shrq ($ x8664::num-subtag-bits) (% imm1))
+    (shlq ($ x8664::fulltag-function) (% imm1))
+    (jmp @uvector-next)
+    @not-complex-double-float-vector
     (rcmpb (% imm1.b) ($ (- x8664::min-8-bit-ivector-subtag 256)))
     (jb @16)
     (shrq ($ x8664::num-subtag-bits) (% imm1))
@@ -265,6 +271,12 @@
     (shrq ($ 3) (% imm1))
     (jmp @uvector-next)
     @not-bit
+    (cmpb ($ x8664::subtag-complex-double-float-vector) (% imm1.b))
+    (jne @not-complex-double-float-vector)
+    (shrq ($ x8664::num-subtag-bits) (% imm1))
+    (shlq ($ 4) (% imm1))
+    (jmp @uvector-next)
+    @not-complex-double-float-vector
     (rcmpb (% imm1.b) ($ (- x8664::min-8-bit-ivector-subtag 256)))
     (jb @16)
     (shrq ($ x8664::num-subtag-bits) (% imm1))

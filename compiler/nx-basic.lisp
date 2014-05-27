@@ -42,6 +42,9 @@
 (defparameter *nx-32-bit-natural-type* '(unsigned-byte 32))
 (defparameter *nx-64-bit-natural-type* '(unsigned-byte 64))
 (defparameter *nx-target-fixnum-type* 'fixnum)
+(defparameter *nx-target-half-fixnum-type*
+  #+32-bit-target '(signed-byte 29)
+  #+64-bit-target '(signed-byte 60))
 
 (defparameter *nx-target-natural-type*
   #+32-bit-target *nx-32-bit-natural-type*
@@ -61,21 +64,17 @@
 
 
 
-;; In lieu of a slot in acode.  Don't reference this variable elsewhere because I'm
-;; hoping to make it go away.
-(defparameter *nx-acode-note-map* nil)
-
-(defun acode-note (acode &aux (hash *nx-acode-note-map*))
-  (and hash (gethash acode hash)))
+;;; the acode.info slot of an acode node might be used as
+;;; a plist someday.
+(defun acode-note (acode)
+  (acode.info acode))
 
 (defun (setf acode-note) (note acode)
   (when note
-    (assert *nx-acode-note-map*)
     ;; Only record if have a unique key
-    (unless (or (atom acode)
-                (nx-null acode)
+    (unless (or (nx-null acode)
                 (nx-t acode))
-      (setf (gethash acode *nx-acode-note-map*) note))))
+      (setf (acode.info acode) note))))
 
 
 (defstruct (code-note (:constructor %make-code-note))
@@ -199,7 +198,9 @@
                      (or (>= debug 2)
                          (>= safety 2)
                          (> debug speed)
-                         (> safety speed))))) ; extensions
+                         (> safety speed)))))
+               :detect-floating-point-exectptions
+               (lambda (env) (> (safety-optimize-quantity env) 1)) ; extensions
                )))
   (defun new-compiler-policy (&key (allow-tail-recursion-elimination nil atr-p)
                                    (inhibit-register-allocation nil ira-p)
@@ -211,7 +212,8 @@
                                    (force-boundp-checks nil fb-p)
                                    (allow-constant-substitution nil acs-p)
                                    (declarations-typecheck nil dt-p)
-                                   (strict-structure-typechecking nil sst-p))
+                                   (strict-structure-typechecking nil sst-p)
+                                   (detect-floating-point-exceptions nil fpx-p))
     (let ((p (copy-uvector policy)))
       (if atr-p (setf (policy.allow-tail-recursion-elimination p) allow-tail-recursion-elimination))
       (if ira-p (setf (policy.inhibit-register-allocation p) inhibit-register-allocation))
@@ -224,8 +226,11 @@
       (if acs-p (setf (policy.allow-constant-substitution p) allow-constant-substitution))
       (if dt-p (setf (policy.declarations-typecheck p) declarations-typecheck))
       (if sst-p (setf (getf (policy.misc p) :strict-structure-typechecking) strict-structure-typechecking))
+      (if fpx-p (setf (getf (policy.misc p) :detect-floating-point-exceptions)
+                      detect-floating-point-exceptions))
       p))
   (defun %default-compiler-policy () policy))
+
 
 (%include "ccl:compiler;lambda-list.lisp")
 
@@ -1114,9 +1119,7 @@
     (setq op 'lambda))
   `(,op ,(decomp-lambda-list req opt rest keys auxen) ,(decomp-form body)))
 
-(defdecomp debind (op ll form req opt rest keys auxen whole body p2decls cdr-p)
-  (declare (ignore ll p2decls cdr-p))
-  `(,op ,(decomp-lambda-list req opt rest keys auxen whole) ,(decomp-form form) ,(decomp-form body)))
+
 
 (defdecomp lambda-bind (op vals req rest keys-p auxen body p2decls)
   (declare (ignore keys-p p2decls))

@@ -155,6 +155,7 @@
 
 
 (defun pv-map-vectors (alist reverse-mapping)
+  #-cross-compiling
   (dolist (pair alist)
     (unless (and (consp pair)
                  (typep (car pair) '(signed-byte 30))

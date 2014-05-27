@@ -199,5 +199,12 @@
 (defconstant x86-direction-flag-bit 10)
 (defconstant x86-overflow-flag-bit 11)
 
+;;; We can use SSE2/XMM registers to represent scalars or vectors
+;;; of up to 2 elements.
+(defun fpr-mask (regno mode)
+  (declare (ignore mode))
+  (ash 1 regno))
+
 
 (provide "X86-ARCH")
+

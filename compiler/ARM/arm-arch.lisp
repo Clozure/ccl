@@ -155,7 +155,7 @@
 (defarmsfpr s29 61)
 (defarmsfpr s30 62)
 (defarmsfpr s31 63)
-(defarmsfpr single-float-zero s14)
+(defarmsfpr single-float-zero s30)
 
 ;;; The first 16 double-float registers overlap pairs of single-float
 ;;; registers (d0 overlaps s0-s1, d15 overlaps s30-s31, etc.)
@@ -180,7 +180,7 @@
 (defarmdfpr d14 78)
 (defarmdfpr d15 79)
 
-(defarmdfpr double-float-zero d7)
+(defarmdfpr double-float-zero d15)
 )
 
 
@@ -435,7 +435,7 @@
              (defarmsubprim .SPkeyword-bind)
              (defarmsubprim .SPudiv32)
              (defarmsubprim .SPsdiv32)
-             (defarmsubprim .SPeabi-ff-call)
+             (defarmsubprim .SPeabi-ff-call-simple)
              (defarmsubprim .SPdebind)
              (defarmsubprim .SPeabi-callback)
              (defarmsubprim .SPeabi-ff-callhf)
@@ -579,34 +579,32 @@
 ;;; with that subtag whose element size isn't an integral number of bits and ending with those whose
 ;;; element size - like all non-CL-array fulltag-immheader types - is 32 bits.
 (define-imm-subtag bit-vector 31)
-(define-imm-subtag double-float-vector 30)
-(define-imm-subtag s16-vector 29)
-(define-imm-subtag u16-vector 28)
+(define-imm-subtag complex-double-float-vector 30)
+(define-imm-subtag complex-single-float-vector 29)
+(define-imm-subtag double-float-vector 28)
+(define-imm-subtag s16-vector 27)
+(define-imm-subtag u16-vector 26)
 (defconstant min-16-bit-ivector-subtag subtag-u16-vector)
 (defconstant max-16-bit-ivector-subtag subtag-s16-vector)
 
 
-;;(define-imm-subtag simple-base-string 27)
-(define-imm-subtag s8-vector 26)
-(define-imm-subtag u8-vector 25)
+(define-imm-subtag s8-vector 25)
+(define-imm-subtag u8-vector 24)
 (defconstant min-8-bit-ivector-subtag subtag-u8-vector)
-(defconstant max-8-bit-ivector-subtag (logior fulltag-immheader (ash 27 ntagbits)))
+(defconstant max-8-bit-ivector-subtag (logior fulltag-immheader (ash 25 ntagbits)))
 
-(define-imm-subtag simple-base-string 24)
-(define-imm-subtag fixnum-vector 23)
-(define-imm-subtag s32-vector 22)
-(define-imm-subtag u32-vector 21)
-(define-imm-subtag single-float-vector 20)
-(defconstant max-32-bit-ivector-subtag (logior fulltag-immheader (ash 24 ntagbits)))
+(define-imm-subtag simple-base-string 23)
+(define-imm-subtag fixnum-vector 22)
+(define-imm-subtag s32-vector 21)
+(define-imm-subtag u32-vector 20)
+(define-imm-subtag single-float-vector 19)
+(defconstant max-32-bit-ivector-subtag (logior fulltag-immheader (ash 23 ntagbits)))
 (defconstant min-cl-ivector-subtag subtag-single-float-vector)
 
-(define-node-subtag vectorH 20)
-(define-node-subtag arrayH 19)
-(assert (< subtag-arrayH subtag-vectorH min-cl-ivector-subtag))
-(define-node-subtag simple-vector 21)   ; Only one such subtag
+(define-node-subtag vectorH 30)
+(define-node-subtag arrayH 29)
+(define-node-subtag simple-vector 31)   ; Only one such subtag
 (assert (< subtag-arrayH subtag-vectorH subtag-simple-vector))
-(defconstant min-vector-subtag subtag-vectorH)
-(defconstant min-array-subtag subtag-arrayH)
 
 ;;; So, we get the remaining subtags (n: (n < min-array-subtag))
 ;;; for various immediate/node object types.
@@ -617,6 +615,8 @@
 (define-imm-subtag code-vector 5)
 (define-imm-subtag creole-object 6)
 (define-imm-subtag xcode-vector 7)  ; code-vector for cross-development
+(define-imm-subtag complex-single-float 8)
+(define-imm-subtag complex-double-float 9)
 
 (defconstant max-non-array-imm-subtag (logior (ash 19 ntagbits) fulltag-immheader))
 
@@ -683,6 +683,21 @@
   val-low
   val-high)
 
+(define-fixedsized-object complex-single-float
+  pad
+  realpart
+  imagpart)
+
+(define-fixedsized-object complex-double-float
+  pad
+  realpart-low
+  realpart-high
+  imagpart-low
+  imagpart-high)
+
+(defconstant complex-double-float.realpart complex-double-float.realpart-low)
+(defconstant complex-double-float.imagpart complex-double-float.imagpart-low)
+
 (defconstant double-float.value double-float.val-low)
 (defconstant double-float.value-cell double-float.val-low-cell)
 
@@ -718,8 +733,7 @@
   db-link                               ; value of dynamic-binding link on thread entry.
   xframe                                ; exception-frame link
   last-lisp-frame
-  code-vector                           ; may not be useful
-
+  nfp
 )
 
 (define-fixedsized-object lock
@@ -871,6 +885,7 @@
   shutdown-count
   safe-ref-address
   architecture-version                  ;keep in each TCR for ease of access.
+  nfp
 )
 
 
@@ -913,6 +928,8 @@
 
 (define-header single-float-header single-float.element-count subtag-single-float)
 (define-header double-float-header double-float.element-count subtag-double-float)
+(define-header complex-single-float-header complex-single-float.element-count subtag-complex-single-float)
+(define-header complex-double-float-header complex-double-float.element-count subtag-complex-double-float)
 (define-header one-digit-bignum-header 1 subtag-bignum)
 (define-header two-digit-bignum-header 2 subtag-bignum)
 (define-header three-digit-bignum-header 3 subtag-bignum)
@@ -1038,12 +1055,21 @@
 		  ,@(inits)
 		  ,@body)))
 
+(defun arm-fpr-mask (value mode)
+  (ecase (ccl::fpr-mode-value-name mode)
+    (:single-float (ash 1 value))
+    ((:double-float :complex-single-float) (ash 3 (ash value 1)))
+    (:complex-double-float (ash 15 (ash value 2)))))
+
+
 (defparameter *arm-target-uvector-subtags*
   `((:bignum . ,subtag-bignum)
     (:ratio . ,subtag-ratio)
     (:single-float . ,subtag-single-float)
     (:double-float . ,subtag-double-float)
     (:complex . ,subtag-complex  )
+    (:complex-single-float . ,subtag-complex-single-float)
+    (:complex-double-float . ,subtag-complex-double-float)
     (:symbol . ,subtag-symbol)
     (:function . ,subtag-function )
     (:code-vector . ,subtag-code-vector)
@@ -1072,11 +1098,20 @@
     (:unsigned-32-bit-vector . ,subtag-u32-vector )
     (:single-float-vector . ,subtag-single-float-vector)
     (:double-float-vector . ,subtag-double-float-vector )
+    (:complex-single-float-vector . ,subtag-complex-single-float-vector)
+    (:complex-double-float-vector . ,subtag-complex-double-float-vector)
     (:simple-vector . ,subtag-simple-vector )
     (:vector-header . ,subtag-vectorH)
     (:array-header . ,subtag-arrayH)
     (:xfunction . ,subtag-xfunction)
-    (:pseudofunction . ,subtag-pseudofunction)))
+    (:pseudofunction . ,subtag-pseudofunction)
+    ;;; Defining the smallest cl ivector tag this way
+    ;;; lets us use NX-LOOKUP-TARGET-UVECTOR-SUBTAG and
+    ;;; is easier to bootsrtap than adding a slot to the
+    ;; ARCH structure would be.
+    (:min-cl-ivector-subtag . ,min-cl-ivector-subtag)
+    
+    ))
 
 
 ;;; This should return NIL unless it's sure of how the indicated
@@ -1095,7 +1130,10 @@
              :simple-vector)))
         (ccl::numeric-ctype
          (if (eq (ccl::numeric-ctype-complexp element-type) :complex)
-           :simple-vector
+           (case (ccl::numeric-ctype-format element-type)
+             (single-float :complex-single-float-vector)
+             (double-float :complex-double-float-vector)
+             (t :simple-vector))
            (case (ccl::numeric-ctype-class element-type)
              (integer
               (let* ((low (ccl::numeric-ctype-low element-type))
@@ -1136,7 +1174,9 @@
         (ash element-count 1)
         (if (= subtag subtag-bit-vector)
           (ash (+ element-count 7) -3)
-          (+ 4 (ash element-count 3)))))))
+          (if (= subtag subtag-complex-double-float-vector)
+            (+ 4 (ash element-count 4))
+            (+ 4 (ash element-count 3))))))))
 
 (defparameter *arm-target-arch*
   (progn
@@ -1179,21 +1219,13 @@
                                                     :double-float
                                                     :bignum
                                                     :simple-string)
-                            :64-bit-ivector-types '(:double-float-vector)
+                            :64-bit-ivector-types '(:double-float-vector :complex-single-float-vector)
                             :array-type-name-from-ctype-function
                             #'arm-array-type-name-from-ctype
                             :package-name "ARM"
                             :t-offset t-offset
                             :array-data-size-function #'arm-misc-byte-count
-                            :numeric-type-name-to-typecode-function
-                            #'(lambda (type-name)
-                                (ecase type-name
-                                  (fixnum tag-fixnum)
-                                  (bignum subtag-bignum)
-                                  ((short-float single-float) subtag-single-float)
-                                  ((long-float double-float) subtag-double-float)
-                                  (ratio subtag-ratio)
-                                  (complex subtag-complex)))
+                            :fpr-mask-function 'arm-fpr-mask
                             :subprims-base arm::*arm-subprims-base*
                             :subprims-shift arm::*arm-subprims-shift*
                             :subprims-table arm::*arm-subprims*
@@ -1237,11 +1269,9 @@
 (defarmarchmacro ccl::%denominator (x)
   `(ccl::%svref ,x arm::ratio.denom-cell))
 
-(defarmarchmacro ccl::%realpart (x)
-  `(ccl::%svref ,x arm::complex.realpart-cell))
-                    
-(defarmarchmacro ccl::%imagpart (x)
-  `(ccl::%svref ,x arm::complex.imagpart-cell))
+
+
+
 
 ;;;
 (defarmarchmacro ccl::%get-single-float-from-double-ptr (ptr offset)
@@ -1420,9 +1450,9 @@
 (defconstant numeric-tags-mask (logior real-tags-mask (ash 1 subtag-complex)))
 
   
-(defconstant fasl-version #x63)
-(defconstant fasl-max-version #x63)
-(defconstant fasl-min-version #x63)
-(defparameter *image-abi-version* 1042)
+(defconstant fasl-version #x64)
+(defconstant fasl-max-version #x64)
+(defconstant fasl-min-version #x64)
+(defparameter *image-abi-version* 1043)
 
 (provide "ARM-ARCH")

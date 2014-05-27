@@ -36,8 +36,21 @@
 (defparameter *ppc2-ppc32-half-fixnum-type* '(signed-byte 29))
 (defparameter *ppc2-ppc64-half-fixnum-type* `(signed-byte 60))
 (defparameter *ppc2-target-half-fixnum-type* nil)
+(defparameter *ppc2-nfp-depth* 0)
+(defparameter *ppc2-max-nfp-depth* 0)
+
+(defun ppc2-max-nfp-depth ()
+  (let* ((frame-size--1 (1- (target-arch-case
+                             (:ppc32 ppc32::lisp-frame.size)
+                             (:ppc64 ppc64::lisp-frame.size)))))
+    (logandc2 (+ *ppc2-max-nfp-depth* frame-size--1) frame-size--1)))
 
 
+(defun ppc2-open-c-frames ()
+  (let* ((count 0))
+    (dotimes (i *ppc2-undo-count* count)
+      (when (eql $undo-ppc-c-frame (aref *ppc2-undo-because* i))
+        (incf count)))))
 
   
 
@@ -60,19 +73,19 @@
          (retvreg-var (gensym))
          (label-var (gensym)))
     `(macrolet ((! (,template-name-var &rest ,args-var)
-                  (let* ((,template-temp (get-vinsn-template-cell ,template-name-var (backend-p2-vinsn-templates *target-backend*))))
-                    (unless ,template-temp
-                      (warn "VINSN \"~A\" not defined" ,template-name-var))
-                    `(%emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var))))
-       (macrolet ((<- (,retvreg-var)
-                    `(ppc2-copy-register ,',segvar ,',vreg-var ,,retvreg-var))
-                  (@  (,labelnum-var)
-                    `(backend-gen-label ,',segvar ,,labelnum-var))
-                  (-> (,label-var)
-                    `(! jump (aref *backend-labels* ,,label-var)))
-                  (^ (&rest branch-args)
-                    `(ppc2-branch ,',segvar ,',xfer-var ,',vreg-var ,@branch-args))
-                  (? (&key (class :gpr)
+                 (let* ((,template-temp (get-vinsn-template-cell ,template-name-var (backend-p2-vinsn-templates *target-backend*))))
+                   (unless ,template-temp
+                     (warn "VINSN \"~A\" not defined" ,template-name-var))
+                   `(%emit-vinsn ,',segvar ',,template-name-var (backend-p2-vinsn-templates *target-backend*) ,@,args-var))))
+      (macrolet ((<- (,retvreg-var)
+                   `(ppc2-copy-register ,',segvar ,',vreg-var ,,retvreg-var))
+                 (@  (,labelnum-var)
+                   `(backend-gen-label ,',segvar ,,labelnum-var))
+                 (-> (,label-var)
+                   `(! jump (aref *backend-labels* ,,label-var)))
+                 (^ (&rest branch-args)
+                   `(ppc2-branch ,',segvar ,',xfer-var ,',vreg-var ,@branch-args))
+                 (? (&key (class :gpr)
                           (mode :lisp))
                    (let* ((class-val
                            (ecase class
@@ -81,7 +94,10 @@
                              (:crf hard-reg-class-crf)))
                           (mode-val
                            (if (eq class :gpr)
-                             (gpr-mode-name-value mode)
+                             (if (or (eq mode :natural)
+                                     (eq mode :signed-natural))
+                               `(gpr-mode-name-value ',mode)
+                               (gpr-mode-name-value mode))
                              (if (eq class :fpr)
                                (if (eq mode :single-float)
                                  hard-reg-class-fpr-mode-single
@@ -90,7 +106,7 @@
                      `(make-unwired-lreg nil
                        :class ,class-val
                        :mode ,mode-val)))
-                  ($ (reg &key (class :gpr) (mode :lisp))
+                 ($ (reg &key (class :gpr) (mode :lisp))
                    (let* ((class-val
                            (ecase class
                              (:gpr hard-reg-class-gpr)
@@ -98,7 +114,10 @@
                              (:crf hard-reg-class-crf)))
                           (mode-val
                            (if (eq class :gpr)
-                             (gpr-mode-name-value mode)
+                             (if (or (eq mode :natural)
+                                     (eq mode :signed-natural))
+                               `(gpr-mode-name-value ',mode)
+                               (gpr-mode-name-value mode))
                              (if (eq class :fpr)
                                (if (eq mode :single-float)
                                  hard-reg-class-fpr-mode-single
@@ -107,7 +126,7 @@
                      `(make-wired-lreg ,reg
                        :class ,class-val
                        :mode ,mode-val))))
-         ,@body))))
+        ,@body))))
 
 
 
@@ -125,7 +144,7 @@
 (defvar *ppc2-open-code-inline* nil)
 (defvar *ppc2-register-restore-count* 0)
 (defvar *ppc2-register-restore-ea* nil)
-(defvar *ppc2-compiler-register-save-label* nil)
+(defvar *ppc2-compiler-register-save-note* nil)
 (defvar *ppc2-valid-register-annotations* 0)
 (defvar *ppc2-register-annotation-types* nil)
 (defvar *ppc2-register-ea-annotations* nil)
@@ -316,7 +335,7 @@
 
 
 (defun acode-condition-to-ppc-cr-bit (cond)
-  (condition-to-ppc-cr-bit (cadr cond)))
+  (condition-to-ppc-cr-bit (car (acode-operands cond))))
 
 (defun condition-to-ppc-cr-bit (cond)
   (case cond
@@ -385,7 +404,7 @@
            (*encoded-reg-value-byte* (byte 5 0))           
            (*ppc2-open-code-inline* nil)
            (*ppc2-register-restore-count* nil)
-           (*ppc2-compiler-register-save-label* nil)
+           (*ppc2-compiler-register-save-note* nil)
            (*ppc2-valid-register-annotations* 0)
            (*ppc2-register-ea-annotations* (ppc2-make-stack 16))
            (*ppc2-register-restore-ea* nil)
@@ -442,7 +461,9 @@
            (*ppc2-vcells* (ppc2-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
            (*ppc2-fcells* (afunc-fcells afunc))
            *ppc2-recorded-symbols*
-           (*ppc2-emitted-source-notes* '()))
+           (*ppc2-emitted-source-notes* '())
+           (*ppc2-nfp-depth* 0)
+           (*ppc2-max-nfp-depth* 0))
       (set-fill-pointer
        *backend-labels*
        (set-fill-pointer
@@ -490,8 +511,8 @@
                      (ppc2-fixup-fwd-refs afunc))
                    (setf (afunc-all-vars afunc) nil)
                    (setf (afunc-argsword afunc) bits)
-                   (let* ((regsave-label (if (typep *ppc2-compiler-register-save-label* 'vinsn-note)
-                                           (vinsn-label-info (vinsn-note-label *ppc2-compiler-register-save-label*))))
+                   (let* ((regsave-label (if (typep *ppc2-compiler-register-save-note* 'vinsn-note)
+                                           (vinsn-note-address *ppc2-compiler-register-save-note*)))
                           (regsave-reg (if regsave-label (- 32 *ppc2-register-restore-count*)))
                           (regsave-addr (if regsave-label (- *ppc2-register-restore-ea*))))
                      (setf (afunc-lfun afunc)
@@ -618,8 +639,7 @@
               (aref vec l) (svref text-ends idx))))))
 
 (defun ppc2-vinsn-note-label-address (note &optional start-p sym)
-  (let* ((label (vinsn-note-label note))
-         (lap-label (if label (vinsn-label-info label))))
+  (let* ((lap-label (vinsn-note-address note)))
     (if lap-label
       (lap-label-address lap-label)
       (compiler-bug "Missing or bad ~s label: ~s" 
@@ -668,7 +688,7 @@
 (defun ppc2-save-nvrs (seg n)
   (declare (fixnum n))
   (when (> n 0)
-    (setq *ppc2-compiler-register-save-label* (ppc2-emit-note seg :regsave))
+    (setq *ppc2-compiler-register-save-note* (enqueue-vinsn-note seg :regsave))
     (with-ppc-local-vinsn-macros (seg)
       (if *ppc2-open-code-inline*
 	(! save-nvrs-individually (- 32 n))
@@ -910,50 +930,11 @@
     (! load-vframe-address dest *ppc2-vstack*)))
 
 
-(defun ppc2-structured-initopt (seg lcells vloc context vars inits spvars)
-  (with-ppc-local-vinsn-macros (seg)
-    (dolist (var vars vloc)
-      (let* ((initform (pop inits))
-             (spvar (pop spvars))
-             (spvloc (%i+ vloc *ppc2-target-node-size*))
-             (var-lcell (pop lcells))
-             (sp-reg ($ ppc::arg_z))
-             (sp-lcell (pop lcells)))
-        (unless (nx-null initform)
-          (ppc2-stack-to-register seg (ppc2-vloc-ea spvloc) sp-reg)
-          (let ((skipinitlabel (backend-get-next-label)))
-            (with-crf-target () crf
-              (ppc2-compare-register-to-nil seg crf (ppc2-make-compound-cd 0 skipinitlabel) sp-reg ppc::ppc-eq-bit t))
-            (ppc2-register-to-stack seg (ppc2-one-untargeted-reg-form seg initform ($ ppc::arg_z)) (ppc2-vloc-ea vloc))
-            (@ skipinitlabel)))
-        (ppc2-bind-structured-var seg var vloc var-lcell context)
-        (when spvar
-          (ppc2-bind-var seg spvar spvloc sp-lcell)))
-      (setq vloc (%i+ vloc (* 2 *ppc2-target-node-size*))))))
 
 
 
-(defun ppc2-structured-init-keys (seg lcells vloc context allow-others keyvars keysupp keyinits keykeys)
-  (declare (ignore keykeys allow-others))
-  (with-ppc-local-vinsn-macros (seg)
-    (dolist (var keyvars)
-      (let* ((spvar (pop keysupp))
-             (initform (pop keyinits))
-             (sploc (%i+ vloc *ppc2-target-node-size*))
-             (var-lcell (pop lcells))
-             (sp-reg ($ ppc::arg_z))
-             (sp-lcell (pop lcells)))
-        (unless (nx-null initform)
-          (ppc2-stack-to-register seg (ppc2-vloc-ea sploc) sp-reg)
-          (let ((skipinitlabel (backend-get-next-label)))
-            (with-crf-target () crf
-              (ppc2-compare-register-to-nil seg crf (ppc2-make-compound-cd 0 skipinitlabel) sp-reg ppc::ppc-eq-bit t))
-            (ppc2-register-to-stack seg (ppc2-one-untargeted-reg-form seg initform ($ ppc::arg_z)) (ppc2-vloc-ea vloc))
-            (@ skipinitlabel)))
-        (ppc2-bind-structured-var seg var vloc var-lcell context)
-        (when spvar
-          (ppc2-bind-var seg spvar sploc sp-lcell)))
-      (setq vloc (%i+ vloc (* 2 *ppc2-target-node-size*))))))
+
+
 
 (defun ppc2-vloc-ea (n &optional vcell-p)
   (setq n (make-memory-spec (dpb memspec-frame-address memspec-type-byte n)))
@@ -967,42 +948,38 @@
            (svref *ppc2-specials* (%ilogand #.operator-id-mask (acode-operator form))))
       (compiler-bug "ppc2-form ? ~s" form)))
 
-(defmacro with-note ((form-var seg-var &rest other-vars) &body body)
+(defmacro ppc-with-note ((form-var seg-var &rest other-vars) &body body)
   (let* ((note (gensym "NOTE"))
          (code-note (gensym "CODE-NOTE"))
          (source-note (gensym "SOURCE-NOTE"))
          (start (gensym "START"))
-         (end (gensym "END"))
-         (with-note-body (gensym "WITH-NOTE-BODY")))
-    `(flet ((,with-note-body (,form-var ,seg-var ,@other-vars) ,@body))
+         (ppc-with-note-body (gensym "PPC-WITH-NOTE-BODY")))
+    `(flet ((,ppc-with-note-body (,form-var ,seg-var ,@other-vars) ,@body))
        (let ((,note (acode-note ,form-var)))
          (if ,note
-           (let* ((,code-note (and (code-note-p ,note) ,note))
+           (let* ((,code-note (and ,note (code-note-p ,note) ,note))
                   (,source-note (if ,code-note
                                   (code-note-source-note ,note)
                                   ,note))
                   (,start (and ,source-note
-                               (ppc2-emit-note ,seg-var :source-location-begin ,source-note))))
+                               (enqueue-vinsn-note ,seg-var :source-location-begin ,source-note))))
              (prog2
                  (when ,code-note
                    (with-ppc-local-vinsn-macros (,seg-var)
                      (ppc2-store-immediate ,seg-var ,code-note ppc::temp0)
                      (! misc-set-c-node ($ ppc::rzero) ($ ppc::temp0) 1)))
-                 (,with-note-body ,form-var ,seg-var ,@other-vars)
+                 (,ppc-with-note-body ,form-var ,seg-var ,@other-vars)
                (when ,source-note
-                 (let ((,end (ppc2-emit-note ,seg-var :source-location-end)))
-                   (setf (vinsn-note-peer ,start) ,end
-                         (vinsn-note-peer ,end) ,start)
-                   (push ,start *ppc2-emitted-source-notes*)))))
-           (,with-note-body ,form-var ,seg-var ,@other-vars))))))
+                 (close-vinsn-note ,seg-var ,start))))
+           (,ppc-with-note-body ,form-var ,seg-var ,@other-vars))))))
 
 (defun ppc2-toplevel-form (seg vreg xfer form)
   (let* ((code-note (acode-note form))
-         (args (if code-note `(,@(%cdr form) ,code-note) (%cdr form))))
+         (args (if code-note `(,@(acode-operands form) ,code-note) (acode-operands form))))
     (apply (ppc2-acode-operator-function form) seg vreg xfer args)))
 
 (defun ppc2-form (seg vreg xfer form)
-  (with-note (form seg vreg xfer)
+  (ppc-with-note (form seg vreg xfer)
     (if (nx-null form)
       (ppc2-nil seg vreg xfer)
       (if (nx-t form)
@@ -1011,22 +988,23 @@
               (op (acode-operator form)))
           (if (and (null vreg)
                    (%ilogbitp operator-acode-subforms-bit op)
-                   (%ilogbitp operator-assignment-free-bit op))
-            (dolist (f (%cdr form) (ppc2-branch seg xfer nil))
+                   (%ilogbitp operator-assignment-free-bit op)
+                   (%ilogbitp operator-side-effect-free-bit op))
+            (dolist (f (acode-operands form) (ppc2-branch seg xfer nil))
               (ppc2-form seg nil nil f ))
-            (apply fn seg vreg xfer (%cdr form))))))))
+            (apply fn seg vreg xfer (acode-operands form))))))))
 
 ;;; dest is a float reg - form is acode
 (defun ppc2-form-float (seg freg xfer form)
   (declare (ignore xfer))
-  (with-note (form seg freg)
+  (ppc-with-note (form seg freg)
     (when (or (nx-null form)(nx-t form))(compiler-bug "ppc2-form to freg ~s" form))
     (when (and (= (get-regspec-mode freg) hard-reg-class-fpr-mode-double)
                (ppc2-form-typep form 'double-float))
                                         ; kind of screwy - encoding the source type in the dest register spec
       (set-node-regspec-type-modes freg hard-reg-class-fpr-type-double))
     (let* ((fn (ppc2-acode-operator-function form)))
-      (apply fn seg freg nil (%cdr form)))))
+      (apply fn seg freg nil (acode-operands form)))))
 
 
 
@@ -1041,36 +1019,6 @@
   (declare (dynamic-extent forms))
   (apply (svref *ppc2-specials* (%ilogand operator-id-mask op)) seg vreg xfer forms))
 
-;;; Returns true iff lexical variable VAR isn't setq'ed in FORM.
-;;; Punts a lot ...
-(defun ppc2-var-not-set-by-form-p (var form)
-  (or (not (%ilogbitp $vbitsetq (nx-var-bits var)))
-      (ppc2-setqed-var-not-set-by-form-p var form)))
-
-(defun ppc2-setqed-var-not-set-by-form-p (var form)
-  (setq form (acode-unwrapped-form form))
-  (or (atom form)
-      (ppc-constant-form-p form)
-      (ppc2-lexical-reference-p form)
-      (let ((op (acode-operator form))
-            (subforms nil))
-        (if (eq op (%nx1-operator setq-lexical))
-          (and (neq var (cadr form))
-               (ppc2-setqed-var-not-set-by-form-p var (caddr form)))
-          (and (%ilogbitp operator-side-effect-free-bit op)
-               (flet ((not-set-in-formlist (formlist)
-                        (dolist (subform formlist t)
-                          (unless (ppc2-setqed-var-not-set-by-form-p var subform) (return)))))
-                 (if
-                   (cond ((%ilogbitp operator-acode-subforms-bit op) (setq subforms (%cdr form)))
-                         ((%ilogbitp operator-acode-list-bit op) (setq subforms (cadr form))))
-                   (not-set-in-formlist subforms)
-                   (and (or (eq op (%nx1-operator call))
-                            (eq op (%nx1-operator lexical-function-call)))
-                        (ppc2-setqed-var-not-set-by-form-p var (cadr form))
-                        (setq subforms (caddr form))
-                        (not-set-in-formlist (car subforms))
-                        (not-set-in-formlist (cadr subforms))))))))))
   
 (defun ppc2-nil (seg vreg xfer)
   (with-ppc-local-vinsn-macros (seg vreg xfer)
@@ -1098,26 +1046,6 @@
 
 (defun ppc2-set-vstack (new)
   (setq *ppc2-vstack* new))
-
-
-;;; Emit a note at the end of the segment.
-(defun ppc2-emit-note (seg class &rest info)
-  (declare (dynamic-extent info))
-  (let* ((note (make-vinsn-note class info)))
-    (append-dll-node (vinsn-note-label note) seg)
-    note))
-
-;;; Emit a note immediately before the target vinsn.
-(defun ppc-prepend-note (vinsn class &rest info)
-  (declare (dynamic-extent info))
-  (let* ((note (make-vinsn-note class info)))
-    (insert-dll-node-before (vinsn-note-label note) vinsn)
-    note))
-
-(defun ppc2-close-note (seg note)
-  (let* ((end (close-vinsn-note note)))
-    (append-dll-node (vinsn-note-label end) seg)
-    end))
 
 
 
@@ -1198,10 +1126,10 @@
     (^)))
 
 (defun ppc2-register-constant-p (form)
-  (and (consp form)
+  (and (acode-p form)
            (or (memq form *ppc2-vcells*)
                (memq form *ppc2-fcells*))
-           (%cdr form)))
+           (car (acode-operands form))))
 
 (defun ppc2-store-immediate (seg imm dest)
   (with-ppc-local-vinsn-macros (seg)
@@ -1230,15 +1158,15 @@
   (let ((current-stack (ppc2-encode-stack)))
     (while (and (acode-p form) (or (eq (acode-operator form) (%nx1-operator progn))
                                    (eq (acode-operator form) (%nx1-operator local-tagbody))))
-      (setq form (caadr form)))
+      (setq form (caar  (acode-operands form))))
     (when (acode-p form)
       (let ((op (acode-operator form)))
         (if (and (eq op (%nx1-operator local-go))
-                 (ppc2-equal-encodings-p (%caddr (%cadr form)) current-stack))
-          (%cadr (%cadr form))
+                 (ppc2-equal-encodings-p (%caddr (car (acode-operands form))) current-stack))
+          (%cadr (car (acode-operands form)))
           (if (and (eq op (%nx1-operator local-return-from))
-                   (nx-null (caddr form)))
-            (let ((tagdata (car (cadr form))))
+                   (nx-null (cadr (acode-operands form))))
+            (let ((tagdata (car (car (acode-operands form)))))
               (and (ppc2-equal-encodings-p (cdr tagdata) current-stack)
                    (null (caar tagdata))
                    (< 0 (cdar tagdata) $backend-mvpass)
@@ -1252,7 +1180,7 @@
         (let ((op (acode-operator form)))
           (or (%ilogbitp operator-single-valued-bit op)
               (and (eql op (%nx1-operator values))
-                   (let ((values (cadr form)))
+                   (let ((values (car (acode-operands form))))
                      (and values (null (cdr values)))))
               nil                       ; Learn about functions someday
               )))))
@@ -1317,6 +1245,7 @@
              (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
              (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
              (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+             (is-128-bit (eq type-keyword :complex-double-float-vector))
              (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
              (vreg-class (hard-regspec-class vreg))
              (vreg-mode
@@ -1452,57 +1381,75 @@
                      (! misc-ref-u16 temp src idx-reg))))
                (! box-fixnum target temp))))
           (is-64-bit
-           (with-fp-target () (fp-val :double-float)
-             (with-imm-target () (temp :u64)
-               (if (and (eql vreg-class hard-reg-class-fpr)
-                        (eql vreg-mode hard-reg-class-fpr-mode-double))
-                 (setq fp-val vreg)
-                 (if (eql vreg-class hard-reg-class-gpr)
-                   (if (or (and is-signed
-                                (eql vreg-mode hard-reg-class-gpr-mode-s64))
-                           (and (not is-signed)
-                                (eql vreg-mode hard-reg-class-gpr-mode-u64)))
-                     (setf temp vreg temp-is-vreg t)
-                     (if is-signed
-                       (set-regspec-mode temp hard-reg-class-gpr-mode-s64)))))
-               (case type-keyword
-                 (:double-float-vector
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-double-float fp-val src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-double-float fp-val src idx-reg)))
-                  (if (eq vreg-class hard-reg-class-fpr)
-                    (<- fp-val)
-                    (ensuring-node-target (target vreg)
-                      (! double->heap target fp-val))))
-                 ((:signed-64-bit-vector :fixnum-vector)
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-s64 temp src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-s64 temp src idx-reg)))
-                  (if (eq type-keyword :fixnum-vector)
-                    (ensuring-node-target (target vreg)
-                      (! box-fixnum target temp))
-                    (unless temp-is-vreg
-                      (ensuring-node-target (target vreg)
-                        (! s64->integer target temp)))))
-                 (t
-                  (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-ref-c-u64 temp src index-known-fixnum)
-                    (with-imm-target () idx-reg
-                      (if index-known-fixnum
-                        (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
-                        (! scale-64bit-misc-index idx-reg unscaled-idx))
-                      (! misc-ref-u64  temp src idx-reg)))
-                  (unless temp-is-vreg
-                    (ensuring-node-target (target vreg)
-                      (! u64->integer target temp))))))))
+           (case type-keyword
+             (:double-float-vector
+              (with-fp-target () (fp-val :double-float)
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-double))
+                  (setq fp-val vreg))
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-double-float fp-val src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-double-float fp-val src idx-reg)))
+                (<- fp-val)))
+             (:complex-single-float-vector
+              (with-fp-target () (fp-val :complex-single-float)
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+                  (setq fp-val vreg))
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-complex-single-float fp-val src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-complex-single-float fp-val src idx-reg)))
+                (<- fp-val)))
+             ((:signed-64-bit-vector :fixnum-vector)
+              (with-imm-target () (temp :s64)
+                (if (and (eql (hard-regspec-class vreg) hard-reg-class-gpr)
+                         (eql (get-regspec-mode vreg) hard-reg-class-gpr-mode-s64))
+                  (setq temp vreg))
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-s64 temp src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-s64 temp src idx-reg)))
+                (<- temp)))
+             (t
+              (with-imm-target () (temp :u64)
+                (if (and index-known-fixnum (<= index-known-fixnum (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-u64 temp src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (ppc2-absolute-natural seg idx-reg nil (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum 3)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-u64  temp src idx-reg)))
+                (<- temp)))))
+          (is-128-bit
+           (with-fp-target () (fp-val :complex-double-float)
+                (if (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+                  (setq fp-val vreg))
+                (if (and index-known-fixnum
+                         (<= index-known-fixnum (- (ash (arch::target-max-64-bit-constant-index arch) -1) 4)))
+                  (! misc-ref-c-complex-double-float fp-val src index-known-fixnum)
+                  (with-imm-target () idx-reg
+                    (if index-known-fixnum
+                      (ppc2-absolute-natural seg idx-reg nil
+                                             (+
+                                              (target-arch-case
+                                               (:ppc64 ppc64::complex-double-float.realpart)
+                                               (:ppc32 ppc32::complex-double-float.realpart))
+                                              (ash index-known-fixnum 4)))
+                      (! scale-128bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-complex-double-float fp-val src idx-reg)))
+                (<- fp-val)))
           (t
            (unless is-1-bit
              (nx-error "~& unsupported vector type: ~s"
@@ -1793,7 +1740,7 @@
   (if (and (acode-p (setq form (acode-unwrapped-form form)))
            (or (eq (acode-operator form) (%nx1-operator immediate))
                (eq (acode-operator form) (%nx1-operator fixnum))))
-    (let* ((val (%cadr form))
+    (let* ((val (car (acode-operands form)))
            (typep (cond ((eq type-keyword :signed-32-bit-vector)
                          (typep val '(signed-byte 32)))
                         ((eq type-keyword :single-float-vector)
@@ -1822,6 +1769,7 @@
          (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
          (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
          (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+         (is-128-bit (eq type-keyword :complex-double-float-vector))
          (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
          (vreg-class (if vreg (hard-regspec-class vreg)))
          (vreg-mode (if (or (eql vreg-class hard-reg-class-gpr)
@@ -1844,7 +1792,15 @@
            (cond (is-64-bit
                   (if (eq type-keyword :double-float-vector)
                     (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-double)
-                    (make-unwired-lreg next-imm-target :mode (if is-signed hard-reg-class-gpr-mode-s64 hard-reg-class-gpr-mode-u64))))
+                    (if (eq type-keyword :complex-single-float-vector)
+                      (make-unwired-lreg next-fp-target
+                                         :class hard-reg-class-fpr
+                                         :mode hard-reg-class-fpr-mode-complex-single-float)
+                      (make-unwired-lreg next-imm-target :mode (if is-signed hard-reg-class-gpr-mode-s64 hard-reg-class-gpr-mode-u64)))))
+                 (is-128-bit
+                  (make-unwired-lreg next-fp-target
+                                     :class hard-reg-class-fpr
+                                     :mode hard-reg-class-fpr-mode-complex-double-float))
                  (is-32-bit
                   (if (eq type-keyword :single-float-vector)
                     (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-single)
@@ -1864,50 +1820,57 @@
                   (if (eq type-keyword :double-float-vector)
                     (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-double))
-                      (if is-signed
-                        (and (eql vreg-class hard-reg-class-gpr)
-                                 (eql vreg-mode hard-reg-class-gpr-mode-s64))
-                        (and (eql vreg-class hard-reg-class-gpr)
-                                 (eql vreg-mode hard-reg-class-gpr-mode-u64)))))
-                   (is-32-bit
-                    (if (eq type-keyword :single-float-vector)
+                    (if (eq type-keyword :complex-single-float-vector)
                       (and (eql vreg-class hard-reg-class-fpr)
-                               (eql vreg-mode hard-reg-class-fpr-mode-single))
+                           (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
                       (if is-signed
                         (and (eql vreg-class hard-reg-class-gpr)
-                                 (or (eql vreg-mode hard-reg-class-gpr-mode-s32)
-                                     (eql vreg-mode hard-reg-class-gpr-mode-s64)))
+                             (eql vreg-mode hard-reg-class-gpr-mode-s64))
                         (and (eql vreg-class hard-reg-class-gpr)
-                                 (or (eql vreg-mode hard-reg-class-gpr-mode-u32)
-                                     (eql vreg-mode hard-reg-class-gpr-mode-u64)
-                                     (eql vreg-mode hard-reg-class-gpr-mode-s64))))))
-                   (is-16-bit
+                             (eql vreg-mode hard-reg-class-gpr-mode-u64))))))
+                 (is-128-bit
+                  (if (eq type-keyword :complex-double-float-vector)
+                    (and (eql vreg-class hard-reg-class-fpr)
+                           (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))))
+                 (is-32-bit
+                  (if (eq type-keyword :single-float-vector)
+                    (and (eql vreg-class hard-reg-class-fpr)
+                         (eql vreg-mode hard-reg-class-fpr-mode-single))
                     (if is-signed
                       (and (eql vreg-class hard-reg-class-gpr)
-                               (or (eql vreg-mode hard-reg-class-gpr-mode-s16)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s64)))
+                           (or (eql vreg-mode hard-reg-class-gpr-mode-s32)
+                               (eql vreg-mode hard-reg-class-gpr-mode-s64)))
                       (and (eql vreg-class hard-reg-class-gpr)
-                               (or (eql vreg-mode hard-reg-class-gpr-mode-u16)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-u32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-u64)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s64)))))
-                   (t
-                    (if is-signed
-                      (and (eql vreg-class hard-reg-class-gpr)
-                               (or (eql vreg-mode hard-reg-class-gpr-mode-s8)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s16)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s64)))
-                      (and (eql vreg-class hard-reg-class-gpr)
-                               (or (eql vreg-mode hard-reg-class-gpr-mode-u8)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-u16)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-u32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-u64)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s16)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s32)
-                                   (eql vreg-mode hard-reg-class-gpr-mode-s64))))))
+                           (or (eql vreg-mode hard-reg-class-gpr-mode-u32)
+                               (eql vreg-mode hard-reg-class-gpr-mode-u64)
+                               (eql vreg-mode hard-reg-class-gpr-mode-s64))))))
+                 (is-16-bit
+                  (if is-signed
+                    (and (eql vreg-class hard-reg-class-gpr)
+                         (or (eql vreg-mode hard-reg-class-gpr-mode-s16)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s64)))
+                    (and (eql vreg-class hard-reg-class-gpr)
+                         (or (eql vreg-mode hard-reg-class-gpr-mode-u16)
+                             (eql vreg-mode hard-reg-class-gpr-mode-u32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-u64)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s64)))))
+                 (t
+                  (if is-signed
+                    (and (eql vreg-class hard-reg-class-gpr)
+                         (or (eql vreg-mode hard-reg-class-gpr-mode-s8)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s16)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s64)))
+                    (and (eql vreg-class hard-reg-class-gpr)
+                         (or (eql vreg-mode hard-reg-class-gpr-mode-u8)
+                             (eql vreg-mode hard-reg-class-gpr-mode-u16)
+                             (eql vreg-mode hard-reg-class-gpr-mode-u32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-u64)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s16)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s32)
+                             (eql vreg-mode hard-reg-class-gpr-mode-s64))))))
                lreg
                acc))))))
 
@@ -1919,6 +1882,7 @@
            (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
            (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
            (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+           (is-128-bit (eq type-keyword :complex-double-float-vector))
            (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
            (result-is-node-gpr (and (eql (hard-regspec-class result-reg)
                                          hard-reg-class-gpr)
@@ -1935,6 +1899,13 @@
                      (! get-double? reg result-reg)
                      (! get-double reg result-reg))
                    reg)
+                 (if (eq type-keyword :complex-single-float-vector)
+                   (let* ((reg (make-unwired-lreg next-fp-target :class hard-reg-class-fpr :mode hard-reg-class-fpr-mode-complex-single-float)))
+                   (if safe
+                     (! trap-unless-complex-single-float result-reg))
+                   (! get-complex-single reg result-reg)
+                     
+                   reg)
                  (if is-signed
                    (let* ((reg (make-unwired-lreg next-imm-target :mode hard-reg-class-gpr-mode-s64)))
                      (if (eq type-keyword :fixnum-vector)
@@ -1946,7 +1917,14 @@
                      reg)
                    (let* ((reg (make-unwired-lreg next-imm-target :mode hard-reg-class-gpr-mode-u64)))
                      (! unbox-u64 reg result-reg)
-                     reg))))
+                     reg)))))
+              (is-128-bit
+                                  (let* ((reg (make-unwired-lreg next-fp-target :class hard-reg-class-fpr :mode hard-reg-class-fpr-mode-complex-double-float)))
+                   (if safe
+                     (! trap-unless-complex-double-float result-reg))
+                   (! get-complex-double reg result-reg)
+                     
+                   reg))
               (is-32-bit
                ;; Generally better to use a GPR for the :SINGLE-FLOAT-VECTOR
                ;; case here.
@@ -2021,6 +1999,7 @@
            (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
            (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
            (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+           (is-128-bit (eq type-keyword :complex-double-float-vector))
            (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector))))
       (cond ((and is-node node-value-needs-memoization)
              (unless (and (eql (hard-regspec-value src) ppc::arg_x)
@@ -2049,18 +2028,37 @@
                                (arch::target-max-64-bit-constant-index arch)))
                     (if (eq type-keyword :double-float-vector)
                       (! misc-set-c-double-float unboxed-val-reg src index-known-fixnum)
+                      (if (eq type-keyword :complex-single-float-vector)
+                        (! misc-set-c-complex-single-float unboxed-val-reg src index-known-fixnum)
                       (if is-signed
                         (! misc-set-c-s64 unboxed-val-reg src index-known-fixnum)
-                        (! misc-set-c-u64 unboxed-val-reg src index-known-fixnum)))
+                        (! misc-set-c-u64 unboxed-val-reg src index-known-fixnum))))
                     (progn
                       (if index-known-fixnum
                         (ppc2-absolute-natural seg scaled-idx nil (+ (arch::target-misc-dfloat-offset arch) (ash index-known-fixnum 3)))
                         (! scale-64bit-misc-index scaled-idx unscaled-idx))
                       (if (eq type-keyword :double-float-vector)
                         (! misc-set-double-float unboxed-val-reg src scaled-idx)
-                        (if is-signed
-                          (! misc-set-s64 unboxed-val-reg src scaled-idx)
-                          (! misc-set-u64 unboxed-val-reg src scaled-idx))))))
+                        (if (eq type-keyword :complex-single-float-vector)
+                          (! misc-set-complex-single-float unboxed-val-reg src scaled-idx)
+                          (if is-signed
+                            (! misc-set-s64 unboxed-val-reg src scaled-idx)
+                            (! misc-set-u64 unboxed-val-reg src scaled-idx)))))))
+                 (is-128-bit
+                  (if (and index-known-fixnum
+                           (<= index-known-fixnum
+                               (- (ash (arch::target-max-64-bit-constant-index arch) -1) 4)))
+                    (! misc-set-c-complex-double-float unboxed-val-reg src index-known-fixnum)
+                    (progn
+                      (if index-known-fixnum
+                        (ppc2-absolute-natural seg scaled-idx nil
+                                               (+
+                                                (target-arch-case
+                                                 (:ppc32 ppc32::complex-double-float.realpart)
+                                                 (:ppc64 ppc64::complex-double-float.realpart))
+                                                (ash index-known-fixnum 4)))
+                        (! scale-misc-128-bit-index scaled-idx unscaled-idx))
+                      (! misc-set-complex-double-float unboxed-val-reg src scaled-idx))))
                  (is-32-bit
                   (if (and index-known-fixnum
                            (<= index-known-fixnum
@@ -2223,7 +2221,7 @@
                              (and lexref 
                                   (neq lexref rest)
                                   (dolist (val rest-values t)
-                                    (unless (ppc2-var-not-set-by-form-p lexref val)
+                                    (unless (nx2-var-not-set-by-form-p lexref val)
                                       (return))))))))
                 (unless (or (eq op (%nx1-operator lexical-function-call))
                             (independent-of-all-values fn-form))
@@ -2269,7 +2267,7 @@
                              (not spread-p)
                              (flet ((all-simple (args)
                                       (dolist (arg args t)
-                                        (when (and arg (not (ppc2-var-not-set-by-form-p lexref arg)))
+                                        (when (and arg (not (nx2-var-not-set-by-form-p lexref arg)))
                                           (return)))))
                                (and (all-simple (car arglist))
                                     (all-simple (cadr arglist))
@@ -2282,8 +2280,8 @@
                  (eq 0 *ppc2-undo-count*)
                  (acode-p fn)
                  (eq (acode-operator fn) (%nx1-operator immediate))
-                 (symbolp (cadr fn)))
-        (setq fn (ppc2-tail-call-alias fn (%cadr fn) arglist)))
+                 (symbolp (car (acode-operands fn))))
+        (setq fn (ppc2-tail-call-alias fn (car (acode-operands fn)) arglist)))
       
       (if (and (eq xfer $backend-return) (not (ppc2-tailcallok xfer)))
         (progn
@@ -2342,14 +2340,14 @@
 (defun ppc2-invoke-fn (seg fn nargs spread-p xfer)
   (with-ppc-local-vinsn-macros (seg)
     (let* ((f-op (acode-unwrapped-form-value fn))
-           (immp (and (consp f-op)
-                      (eq (%car f-op) (%nx1-operator immediate))))
-           (symp (and immp (symbolp (%cadr f-op))))
+           (immp (and (acode-p f-op)
+                      (eq (acode-operator f-op) (%nx1-operator immediate))))
+           (symp (and immp (symbolp (car (acode-operands f-op)))))
            (label-p (and (fixnump fn) 
                          (locally (declare (fixnum fn))
                            (and (= fn -1) (- fn)))))
            (tail-p (eq xfer $backend-return))
-           (func (if (consp f-op) (%cadr f-op)))
+           (func (if (acode-p f-op) (car (acode-operands f-op))))
            (a-reg nil)
            (lfunp (and (acode-p f-op) 
                        (eq (acode-operator f-op) (%nx1-operator simple-function))))
@@ -2380,7 +2378,8 @@
               (when *ppc2-register-restore-count*
                 (with-imm-temps () (vsp0)
                   (! fixnum-add vsp0 ppc::vsp ppc::nargs)
-                  (ppc2-restore-nvrs seg *ppc2-register-restore-ea* *ppc2-register-restore-count* vsp0)))))))
+                  (ppc2-restore-nvrs seg *ppc2-register-restore-ea* *ppc2-register-restore-count* vsp0))))
+            (! restore-nfp))))
       (if spread-p
         (progn
           (ppc2-set-nargs seg (%i- nargs 1))
@@ -2587,15 +2586,15 @@
 (defun ppc2-immediate-function-p (f)
   (setq f (acode-unwrapped-form-value f))
   (and (acode-p f)
-       (or (eq (%car f) (%nx1-operator immediate))
-           (eq (%car f) (%nx1-operator simple-function)))))
+       (or (eq (acode-operator f) (%nx1-operator immediate))
+           (eq (acode-operator f) (%nx1-operator simple-function)))))
 
 (defun ppc-constant-form-p (form)
   (setq form (nx-untyped-form form))
   (if form
     (or (nx-null form)
         (nx-t form)
-        (and (consp form)
+        (and (acode-p form)
              (or (eq (acode-operator form) (%nx1-operator immediate))
                  (eq (acode-operator form) (%nx1-operator fixnum))
                  (eq (acode-operator form) (%nx1-operator simple-function)))))))
@@ -2607,18 +2606,18 @@
          (or (acode-fixnum-form-p (setq form (acode-unwrapped-form form)))
              (and (acode-p form)
                   (eq (acode-operator form) (%nx1-operator immediate))
-                  (setq form (%cadr form))
+                  (setq form (car (acode-operands form)))
                   (if (typep form 'integer)
                     form)))))
     (and val (%typep val (mode-specifier-type mode)) val)))
 
 
 (defun ppc-side-effect-free-form-p (form)
-  (when (consp (setq form (acode-unwrapped-form-value form)))
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (or (ppc-constant-form-p form)
         ;(eq (acode-operator form) (%nx1-operator bound-special-ref))
         (if (eq (acode-operator form) (%nx1-operator lexical-reference))
-          (not (%ilogbitp $vbitsetq (nx-var-bits (%cadr form))))))))
+          (not (%ilogbitp $vbitsetq (nx-var-bits (car (acode-operands form)))))))))
 
 (defun ppc2-formlist (seg stkargs &optional revregargs)
   (with-ppc-local-vinsn-macros (seg)  
@@ -2709,7 +2708,7 @@
                 ($ ppc::rzero)
                 (if (and (acode-p form) 
                          (eq (acode-operator form) (%nx1-operator immediate)) 
-                         (setq reg (ppc2-register-constant-p (cadr form))))
+                         (setq reg (ppc2-register-constant-p (car (acode-operands form)))))
                   reg
                   (if (and (acode-p form)
                            (eq (acode-operator form) (%nx1-operator %current-tcr)))
@@ -2722,38 +2721,58 @@
 
 (defun ppc2-push-register (seg areg)
   (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
-         (a-double (if a-float (= (get-regspec-mode areg) hard-reg-class-fpr-mode-double)))
+         (float-mode (if a-float (fpr-mode-value-name (get-regspec-mode areg))))
          (a-node (unless a-float (= (get-regspec-mode areg) hard-reg-class-gpr-mode-node)))
          vinsn)
     (with-ppc-local-vinsn-macros (seg)
       (if a-node
         (setq vinsn (ppc2-vpush-register seg areg :node-temp))
-        (progn
+        (let* ((nfp (if (zerop *ppc2-undo-count*) ppc::sp ppc::nargs))
+               (offset *ppc2-nfp-depth*)
+               (size 8))
           (setq vinsn
                 (if a-float
-                  (if a-double
-                    (! temp-push-double-float areg)
-                    (! temp-push-single-float areg))
-                  (! temp-push-unboxed-word areg)))
-          (ppc2-open-undo $undostkblk)))
+                  (case float-mode
+                    (:double-float
+                     (! nfp-store-double-float areg nfp offset))
+                    (:single-float
+                     (! nfp-store-single-float areg nfp offset))
+                    (:complex-single-float
+                     (! nfp-store-complex-single-float areg nfp offset))
+                    (:complex-double-float
+                     (incf size 8)
+                     (! nfp-store-complex-double-float areg nfp offset)))
+                  (! nfp-store-unboxed-word areg nfp offset)))
+          (incf offset size)
+          (setq *ppc2-nfp-depth* offset)
+          (when (> offset *ppc2-max-nfp-depth*)
+            (setq *ppc2-max-nfp-depth* offset))))
       vinsn)))
 
 (defun ppc2-pop-register (seg areg)
   (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
-         (a-double (if a-float (= (get-regspec-mode areg) hard-reg-class-fpr-mode-double)))
+         (float-mode (if a-float (fpr-mode-value-name (get-regspec-mode areg))))
          (a-node (unless a-float (= (get-regspec-mode areg) hard-reg-class-gpr-mode-node)))
          vinsn)
     (with-ppc-local-vinsn-macros (seg)
       (if a-node
         (setq vinsn (ppc2-vpop-register seg areg))
-        (progn
+        (let* ((offset (- *ppc2-nfp-depth* 8))
+               (nfp (if (= *ppc2-undo-count* 0) ppc::sp ppc::nargs)))
           (setq vinsn
                 (if a-float
-                  (if a-double
-                    (! temp-pop-double-float areg)
-                    (! temp-pop-single-float areg))
-                  (! temp-pop-unboxed-word areg)))
-          (ppc2-close-undo)))
+                  (case float-mode
+                    (:double-float
+                     (! nfp-load-double-float areg nfp offset))
+                    (:single-float
+                     (! nfp-load-single-float areg nfp offset))
+                    (:complex-double-float
+                     (decf offset 8)
+                     (! nfp-load-complex-double-float areg nfp offset))
+                    (:complex-single-float
+                     (! nfp-load-complex-single-float areg nfp offset)))
+                  (! nfp-load-unboxed-word areg nfp offset)))
+          (setq *ppc2-nfp-depth* offset)))
       vinsn)))
 
 (defun ppc2-acc-reg-for (reg)
@@ -2762,6 +2781,13 @@
              (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node))
       ($ ppc::arg_z)
       reg)))
+
+(defun ppc2-copy-fpr (seg dest src)
+  (with-ppc-local-vinsn-macros (seg)
+    (case (fpr-mode-value-name (get-regspec-mode src))
+      ((:single-float double-float) (! copy-fpr dest src))
+      (:complex-double-float (! copy-complex-double-float dest src))
+      (:complex-single-float (! copy-complex-single-float dest src)))))
 
 ;;; The compiler often generates superfluous pushes & pops.  Try to
 ;;; eliminate them.
@@ -2801,7 +2827,7 @@
   (let* ((avar (ppc2-lexical-reference-p aform))
          (atriv (and (ppc2-trivial-p bform) (nx2-node-gpr-p breg)))
          (aconst (and (not atriv) (or (ppc-side-effect-free-form-p aform)
-                                      (if avar (ppc2-var-not-set-by-form-p avar bform)))))
+                                      (if avar (nx2-var-not-set-by-form-p avar bform)))))
          (apushed (not (or atriv aconst))))
     (progn
       (unless aconst
@@ -2823,7 +2849,7 @@
            (bdest breg)
            (atriv (and (ppc2-trivial-p bform) (nx2-node-gpr-p breg)))
            (aconst (and (not atriv) (or (ppc-side-effect-free-form-p aform)
-                                        (if avar (ppc2-var-not-set-by-form-p avar bform)))))
+                                        (if avar (nx2-var-not-set-by-form-p avar bform)))))
            (apushed (not (or atriv aconst))))
       (progn
         (unless aconst
@@ -2861,20 +2887,20 @@
                       (or (ppc-side-effect-free-form-p aform)
                           (let ((avar (ppc2-lexical-reference-p aform)))
                             (and avar 
-                                 (ppc2-var-not-set-by-form-p avar bform)
-                                 (ppc2-var-not-set-by-form-p avar cform)
-                                 (ppc2-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or (ppc-side-effect-free-form-p bform)
                           (let ((bvar (ppc2-lexical-reference-p bform)))
                             (and bvar
-                                 (ppc2-var-not-set-by-form-p bvar cform)
-                                 (ppc2-var-not-set-by-form-p bvar dform))))))
+                                 (nx2-var-not-set-by-form-p bvar cform)
+                                 (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or (ppc-side-effect-free-form-p cform)
                           (let ((cvar (ppc2-lexical-reference-p cform)))
                             (and cvar
-                                 (ppc2-var-not-set-by-form-p cvar dform))))))
+                                 (nx2-var-not-set-by-form-p cvar dform))))))
          (apushed nil)
          (bpushed nil)
          (cpushed nil))
@@ -2920,13 +2946,13 @@
                       (or (ppc-side-effect-free-form-p aform)
                           (let ((avar (ppc2-lexical-reference-p aform)))
                             (and avar 
-                                 (ppc2-var-not-set-by-form-p avar bform)
-                                 (ppc2-var-not-set-by-form-p avar cform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform))))))
          (bconst (and (not btriv)
                       (or
                        (ppc-side-effect-free-form-p bform)
                        (let ((bvar (ppc2-lexical-reference-p bform)))
-                         (and bvar (ppc2-var-not-set-by-form-p bvar cform))))))
+                         (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
          (apushed nil)
          (bpushed nil))
     (if (and aform (not aconst))
@@ -2964,13 +2990,13 @@
                         (or (ppc-side-effect-free-form-p aform)
                             (let ((avar (ppc2-lexical-reference-p aform)))
                               (and avar 
-                                   (ppc2-var-not-set-by-form-p avar bform)
-                                   (ppc2-var-not-set-by-form-p avar cform))))))
+                                   (nx2-var-not-set-by-form-p avar bform)
+                                   (nx2-var-not-set-by-form-p avar cform))))))
            (bconst (and (not btriv)
                         (or
                          (ppc-side-effect-free-form-p bform)
                          (let ((bvar (ppc2-lexical-reference-p bform)))
-                           (and bvar (ppc2-var-not-set-by-form-p bvar cform))))))
+                           (and bvar (nx2-var-not-set-by-form-p bvar cform))))))
            (adest areg)
            (bdest breg)
            (cdest creg)
@@ -3017,22 +3043,22 @@
                       (or (ppc-side-effect-free-form-p aform)
                           (let ((avar (ppc2-lexical-reference-p aform)))
                             (and avar 
-                                 (ppc2-var-not-set-by-form-p avar bform)
-                                 (ppc2-var-not-set-by-form-p avar cform)
-                                 (ppc2-var-not-set-by-form-p avar dform))))))
+                                 (nx2-var-not-set-by-form-p avar bform)
+                                 (nx2-var-not-set-by-form-p avar cform)
+                                 (nx2-var-not-set-by-form-p avar dform))))))
          (bconst (and (not btriv)
                       (or
                        (ppc-side-effect-free-form-p bform)
                        (let ((bvar (ppc2-lexical-reference-p bform)))
                          (and bvar
-                              (ppc2-var-not-set-by-form-p bvar cform)
-                              (ppc2-var-not-set-by-form-p bvar dform))))))
+                              (nx2-var-not-set-by-form-p bvar cform)
+                              (nx2-var-not-set-by-form-p bvar dform))))))
          (cconst (and (not ctriv)
                       (or
                        (ppc-side-effect-free-form-p cform)
                        (let ((cvar (ppc2-lexical-reference-p cform)))
                          (and cvar
-                              (ppc2-var-not-set-by-form-p cvar dform))))))
+                              (nx2-var-not-set-by-form-p cvar dform))))))
          (adest areg)
          (bdest breg)
          (cdest creg)
@@ -3264,9 +3290,9 @@
 
 
 (defun ppc2-immediate-form-p (form)
-  (if (and (consp form)
-           (or (eq (%car form) (%nx1-operator immediate))
-               (eq (%car form) (%nx1-operator simple-function))))
+  (if (and (acode-p form)
+           (or (eq (acode-operator form) (%nx1-operator immediate))
+               (eq (acode-operator form) (%nx1-operator simple-function))))
     t))
 
 (defun ppc2-test-%izerop (seg vreg xfer form cr-bit true-p)
@@ -3304,7 +3330,7 @@
 (defun ppc2-lexical-reference-ea (form &optional (no-closed-p t))
   (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (if (eq (acode-operator form) (%nx1-operator lexical-reference))
-      (let* ((addr (var-ea (%cadr form))))
+      (let* ((addr (var-ea (car (acode-operands form)))))
         (if (typep addr 'lreg)
           addr
           (unless (and no-closed-p (addrspec-vcell-p addr ))
@@ -3362,9 +3388,9 @@
                 ;; lots of redundancy here.
                 (target-word-size-case
                  (32
-                  (case dest-mode
+                  (ecase dest-mode
                     (#.hard-reg-class-gpr-mode-node ; boxed result.
-                     (case src-mode
+                     (ecase src-mode
                        (#.hard-reg-class-gpr-mode-node
                         (unless (eql  dest-gpr src-gpr)
                           (! copy-gpr dest src)))
@@ -3384,11 +3410,11 @@
                         (! macptr->heap dest src))))
                     ((#.hard-reg-class-gpr-mode-u32
                       #.hard-reg-class-gpr-mode-address)
-                     (case src-mode
+                     (ecase src-mode
                        (#.hard-reg-class-gpr-mode-node
                         (let* ((src-type (get-node-regspec-type-modes src)))
                           (declare (fixnum src-type))
-                          (case dest-mode
+                          (ecase dest-mode
                             (#.hard-reg-class-gpr-mode-u32
                              (! unbox-u32 dest src))
                             (#.hard-reg-class-gpr-mode-address
@@ -3408,7 +3434,7 @@
                          #.hard-reg-class-gpr-mode-s8)
                         (! u8->u32 dest src))))
                     (#.hard-reg-class-gpr-mode-s32
-                     (case src-mode
+                     (ecase src-mode
                        (#.hard-reg-class-gpr-mode-node
                         (! unbox-s32 dest src))
                        ((#.hard-reg-class-gpr-mode-u32
@@ -3435,7 +3461,7 @@
                         (unless (eql dest-gpr src-gpr)
                           (! copy-gpr dest src)))))
                     (#.hard-reg-class-gpr-mode-s16
-                     (case src-mode
+                     (ecase src-mode
                        (#.hard-reg-class-gpr-mode-node
                         (! unbox-s16 dest src))
                        (#.hard-reg-class-gpr-mode-s8
@@ -3460,7 +3486,8 @@
                         (! unbox-s8 dest src))
                        (t
                         (unless (eql dest-gpr src-gpr)
-                          (! copy-gpr dest src)))))))
+                          (! copy-gpr dest src)))))
+))
                  (64
                   (case dest-mode
                     (#.hard-reg-class-gpr-mode-node ; boxed result.
@@ -3598,18 +3625,39 @@
                          (#.hard-reg-class-fpr-mode-single
                           (unless *ppc2-reckless*
                             (! trap-unless-single-float src))
-                          (! get-single dest src)))))))
+                          (! get-single dest src))
+                         (#.hard-reg-class-fpr-mode-complex-double-float
+                          (unless *ppc2-reckless*
+                            (! trap-unless-complex-double-float src))
+                          (! get-complex-double dest src))
+                         (#.hard-reg-class-fpr-mode-complex-single-float
+                          (unless *ppc2-reckless*
+                            (! trap-unless-complex-single-float src))
+                          (! get-complex-single dest src)))))))
                 (if dest-gpr
                   (case dest-mode
                     (#.hard-reg-class-gpr-mode-node
                      (case src-mode
                        (#.hard-reg-class-fpr-mode-double
                         (! double->heap dest src))
+                       (#.hard-reg-class-fpr-mode-complex-double-float
+                        (! complex-double->heap dest src))
                        (#.hard-reg-class-fpr-mode-single
-                        (! single->node dest src)))))
+                        (! single->node dest src))
+                       (#.hard-reg-class-fpr-mode-complex-single-float
+                        (! complex-single->node dest src)))))
                   (if (and src-fpr dest-fpr)
                     (unless (eql dest-fpr src-fpr)
-                      (! copy-fpr dest src))))))))))))
+                      (if (and (or (eql src-mode hard-reg-class-fpr-mode-double)
+                                   (eql src-mode hard-reg-class-fpr-mode-single))
+                               (or (eql dest-mode hard-reg-class-fpr-mode-double)
+                                   (eql dest-mode hard-reg-class-fpr-mode-single)))
+                        (! copy-fpr dest src)
+                        (if (eql src-mode dest-mode)
+                          (if (eql src-mode hard-reg-class-fpr-mode-complex-single-float)
+                            (! copy-complex-single-float dest src)
+                            (if (eql src-mode hard-reg-class-fpr-mode-complex-double-float)
+                              (! copy-complex-double-float dest src))))))))))))))))
   
 (defun ppc2-unreachable-store (&optional vreg)
   ;; I don't think that anything needs to be done here,
@@ -3629,18 +3677,19 @@
 
 (defun ppc2-dynamic-extent-form (seg curstack val &aux (form val))
   (when (acode-p form)
-    (with-note (form seg curstack) ; note this rebinds form/seg/curstack so can't setq
+    (ppc-with-note (form seg curstack) ; note this rebinds form/seg/curstack so can't setq
       (with-ppc-local-vinsn-macros (seg)
-	(let* ((op (acode-operator form)))
+	(let* ((op (acode-operator form))
+               (operands (acode-operands form)))
 	  (cond ((eq op (%nx1-operator list))
 		 (let* ((*ppc2-vstack* *ppc2-vstack*)
 			(*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*))
-		   (ppc2-set-nargs seg (ppc2-formlist seg (%cadr form) nil))
+		   (ppc2-set-nargs seg (ppc2-formlist seg (car operands) nil))
 		   (ppc2-open-undo $undostkblk curstack)
 		   (! stack-cons-list))
 		 (setq val ppc::arg_z))
 		((eq op (%nx1-operator list*))
-		 (let* ((arglist (%cadr form)))                   
+		 (let* ((arglist (car operands)))                   
 		   (let* ((*ppc2-vstack* *ppc2-vstack*)
 			  (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*))
 		     (ppc2-arglist seg arglist))
@@ -3650,7 +3699,7 @@
 		     (ppc2-open-undo $undostkblk curstack))
 		   (setq val ppc::arg_z)))
 		((eq op (%nx1-operator multiple-value-list))
-		 (ppc2-multiple-value-body seg (%cadr form))
+		 (ppc2-multiple-value-body seg (car operands))
 		 (ppc2-open-undo $undostkblk curstack)
 		 (! stack-cons-list)
 		 (setq val ppc::arg_z))
@@ -3658,7 +3707,7 @@
 		 (let* ((y ($ ppc::arg_y))
 			(z ($ ppc::arg_z))
 			(result ($ ppc::arg_z)))
-		   (ppc2-two-targeted-reg-forms seg (%cadr form) y (%caddr form) z)
+		   (ppc2-two-targeted-reg-forms seg (car operands) y (cadr operands) z)
 		   (ppc2-open-undo $undostkblk )
 		   (! make-tsp-cons result y z) 
 		   (setq val result)))
@@ -3670,11 +3719,11 @@
 		     (ppc2-open-undo $undostkblk)
 		     (setq val node))))
 		((eq op (%nx1-operator %new-ptr))
-		 (let* ((clear-form (caddr form))
+		 (let* ((clear-form (cadr operands))
 			(cval (nx2-constant-form-value clear-form)))
 		   (if cval
 		       (progn 
-			 (ppc2-one-targeted-reg-form seg (%cadr form) ($ ppc::arg_z))
+			 (ppc2-one-targeted-reg-form seg (car operands) ($ ppc::arg_z))
 			 (if (nx-null cval)
 			     (! make-stack-block)
 			     (! make-stack-block0)))
@@ -3683,7 +3732,7 @@
 			       (done-label (backend-get-next-label))
 			       (rval ($ ppc::arg_z))
 			       (rclear ($ ppc::arg_y)))
-			   (ppc2-two-targeted-reg-forms seg (%cadr form) rval clear-form rclear)
+			   (ppc2-two-targeted-reg-forms seg (car operands) rval clear-form rclear)
 			   (! compare-to-nil crf rclear)
 			   (! cbranch-false (aref *backend-labels* stack-block-0-label) crf ppc::ppc-eq-bit)
 			   (! make-stack-block)
@@ -3694,29 +3743,29 @@
 		 (ppc2-open-undo $undostkblk)
 		 (setq val ($ ppc::arg_z)))
 		((eq op (%nx1-operator make-list))
-		 (ppc2-two-targeted-reg-forms seg (%cadr form) ($ ppc::arg_y) (%caddr form) ($ ppc::arg_z))
+		 (ppc2-two-targeted-reg-forms seg (car operands) ($ ppc::arg_y) (cadr operands) ($ ppc::arg_z))
 		 (ppc2-open-undo $undostkblk curstack)
 		 (! make-stack-list)
 		 (setq val ppc::arg_z))       
 		((eq op (%nx1-operator vector))
 		 (let* ((*ppc2-vstack* *ppc2-vstack*)
 			(*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*))
-		   (ppc2-set-nargs seg (ppc2-formlist seg (%cadr form) nil))
+		   (ppc2-set-nargs seg (ppc2-formlist seg (car operands) nil))
 		   (! make-stack-vector))
 		 (ppc2-open-undo $undostkblk)
 		 (setq val ppc::arg_z))
 		((eq op (%nx1-operator %gvector))
 		 (let* ((*ppc2-vstack* *ppc2-vstack*)
 			(*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
-			(arglist (%cadr form)))
+			(arglist (car operands)))
 		   (ppc2-set-nargs seg (ppc2-formlist seg (append (car arglist) (reverse (cadr arglist))) nil))
 		   (! make-stack-gvector))
 		 (ppc2-open-undo $undostkblk)
 		 (setq val ppc::arg_z)) 
 		((eq op (%nx1-operator closed-function)) 
-		 (setq val (ppc2-make-closure seg (cadr form) t))) ; can't error
+		 (setq val (ppc2-make-closure seg (car operands) t))) ; can't error
 		((eq op (%nx1-operator %make-uvector))
-		 (destructuring-bind (element-count subtag &optional (init 0 init-p)) (%cdr form)
+		 (destructuring-bind (element-count subtag &optional (init 0 init-p)) operands
 		   (if init-p
 		       (progn
 			 (ppc2-three-targeted-reg-forms seg element-count ($ ppc::arg_x) subtag ($ ppc::arg_y) init ($ ppc::arg_z))
@@ -3832,8 +3881,8 @@
 (defun ppc2-set-var-ea (seg var ea)
   (setf (var-ea var) ea)
   (when (and *ppc2-record-symbols* (or (typep ea 'lreg) (typep ea 'fixnum)))
-    (let* ((start (ppc2-emit-note seg :begin-variable-scope)))
-      (push (list var (var-name var) start (close-vinsn-note start))
+    (let* ((start (enqueue-vinsn-note seg :begin-variable-scope)))
+      (push (list var (var-name var) start nil)
             *ppc2-recorded-symbols*)))
   ea)
 
@@ -3842,10 +3891,9 @@
     (when (and *ppc2-record-symbols*
                (or (logbitp $vbitspecial bits)
                    (not (logbitp $vbitpunted bits))))
-      (let ((endnote (%car (%cdddr (assq var *ppc2-recorded-symbols*)))))
-        (unless endnote (compiler-bug "ppc2-close-var for ~s ?" (var-name var)))
-        (setf (vinsn-note-class endnote) :end-variable-scope)
-        (append-dll-node (vinsn-note-label endnote) seg)))))
+      (let* ((info (%cdr (assq var *ppc2-recorded-symbols*))))
+        (unless info (compiler-bug "ppc2-close-var for ~s ?" (var-name var)))
+        (setf (caddr info) (close-vinsn-note seg (cadr info)))))))
 
 (defun ppc2-load-ea-p (ea)
   (or (typep ea 'fixnum)
@@ -3859,7 +3907,7 @@
            (self-p (unless ea-p (and (or
                                       (eq (acode-operator value) (%nx1-operator bound-special-ref))
                                       (eq (acode-operator value) (%nx1-operator special-ref)))
-                                     (eq (cadr value) sym)))))
+                                     (eq (car (acode-operands value)) sym)))))
       (cond ((eq sym '*interrupt-level*)
              (let* ((fixval (acode-fixnum-form-p value)))
                (cond ((eql fixval 0) (if *ppc2-open-code-inline*
@@ -3996,9 +4044,9 @@
             (! mem-set-c-address address ppc::rzero absptr)
             (if for-value
               (<- node)))
-          ; No absolute ptr (which is presumably a rare case anyway.)
+                                        ; No absolute ptr (which is presumably a rare case anyway.)
           (if offval
-            ; Easier: need one less register than in the general case.
+                                        ; Easier: need one less register than in the general case.
             (with-imm-target () (ptr-reg :address)
               (ppc2-one-targeted-reg-form seg ptr ptr-reg)
               (if intval
@@ -4010,12 +4058,10 @@
                   (if for-value
                     (<- (set-regspec-mode val-target (gpr-mode-name-value :address)))))
                 (progn
-                  (! temp-push-unboxed-word ptr-reg)
-                  (ppc2-open-undo $undostkblk)
+                  (ppc2-push-register seg ptr-reg)
                   (multiple-value-bind (address node) (address-and-node-regs)
                     (with-imm-target (address) (ptr-reg :address)
-                      (! temp-pop-unboxed-word ptr-reg)
-                      (ppc2-close-undo)
+                      (ppc2-pop-register seg ptr-reg)
                       (! mem-set-c-address address ptr-reg offval)
                       (if for-value
                         (<- node)))))))
@@ -4041,13 +4087,12 @@
                         (setq xptr-reg ptr-reg
                               xoff-reg off-reg
                               xval-reg val-reg))))
-                  ; Offset's non-constant.  Temp-push the pointer, evaluate
-                  ; and unbox the offset, load the value, pop the pointer.
+                                        ; Offset's non-constant.  Temp-push the pointer, evaluate
+                                        ; and unbox the offset, load the value, pop the pointer.
                   (progn
                     (with-imm-target () (ptr-reg :address)
                       (ppc2-one-targeted-reg-form seg ptr ptr-reg)
-                      (! temp-push-unboxed-word ptr-reg)
-                      (ppc2-open-undo $undostkblk))
+                      (ppc2-push-register seg ptr-reg))
                     (with-imm-target () (off-reg :signed-natural)
                       (! fixnum->signed-natural off-reg (ppc2-one-targeted-reg-form seg offset ($ ppc::arg_z)))
                       (with-imm-target (off-reg) (val-reg :signed-natural)
@@ -4055,33 +4100,30 @@
                           (setq val-reg ppc::rzero)
                           (ppc2-lri seg val-reg intval))
                         (with-imm-target (off-reg val-reg) (ptr-reg :address)
-                          (! temp-pop-unboxed-word ptr-reg)
-                          (ppc2-close-undo)
+                          (ppc2-pop-register seg ptr-reg)
                           (setq xptr-reg ptr-reg
                                 xoff-reg off-reg
                                 xval-reg val-reg))))))
                 ;; No intval; maybe constant-offset.
                 (with-imm-target () (ptr-reg :address)
                   (ppc2-one-targeted-reg-form seg ptr ptr-reg)
-                  (! temp-push-unboxed-word ptr-reg)
-                  (ppc2-open-undo $undostkblk)
+                  (ppc2-push-register seg  ptr-reg)
                   (progn
                     (if (not constant-offset)
                       (ppc2-vpush-register seg (ppc2-one-untargeted-reg-form seg offset ppc::arg_z)))
                     (multiple-value-bind (address node) (address-and-node-regs)
                       (with-imm-target (address) (off-reg :s32)
-                                       (if constant-offset
-                                         (ppc2-lri seg off-reg constant-offset)
-                                         (with-node-temps (ppc::arg_z) (temp)
-                                           (ppc2-vpop-register seg temp)
-                                           (! fixnum->signed-natural off-reg temp)))
-                                       (with-imm-target (ppc::imm0 off-reg) (ptr-reg :address)
-                                                        (! temp-pop-unboxed-word ptr-reg)
-                                                        (ppc2-close-undo)
-                            (setq xptr-reg ptr-reg
-                                  xoff-reg off-reg
-                                  xval-reg address
-                                  node-arg_z node)))))))
+                        (if constant-offset
+                          (ppc2-lri seg off-reg constant-offset)
+                          (with-node-temps (ppc::arg_z) (temp)
+                            (ppc2-vpop-register seg temp)
+                            (! fixnum->signed-natural off-reg temp)))
+                        (with-imm-target (ppc::imm0 off-reg) (ptr-reg :address)
+                          (ppc2-pop-register seg ptr-reg)
+                          (setq xptr-reg ptr-reg
+                                xoff-reg off-reg
+                                xval-reg address
+                                node-arg_z node)))))))
               (! mem-set-address xval-reg xptr-reg xoff-reg)
               (when for-value
                 (if node-arg_z
@@ -4184,12 +4226,10 @@
                               (2 (if signed :s16 :u16))
                               (1 (if signed :s8 :u8))))))))
                   (progn
-                    (! temp-push-unboxed-word ptr-reg)
-                    (ppc2-open-undo $undostkblk)
+                    (ppc2-push-register seg ptr-reg)
                     (val-to-argz-and-imm0)                  
                     (with-imm-target (ppc::imm0) (ptr-reg :address)
-                      (! temp-pop-unboxed-word ptr-reg)
-                      (ppc2-close-undo)
+                      (ppc2-pop-register seg ptr-reg)
                       (ppc2-memory-store-displaced seg ppc::imm0 ptr-reg offval size)                    
                       (if for-value
                         (<- ppc::arg_z))))))
@@ -4219,8 +4259,7 @@
                     (progn
                       (with-imm-target () (ptr-reg :address)
                         (ppc2-one-targeted-reg-form seg ptr ptr-reg)
-                        (! temp-push-unboxed-word ptr-reg)
-                        (ppc2-open-undo $undostkblk))
+                        (ppc2-push-register seg ptr-reg))
                       (with-imm-target () (off-reg :s32)
                         (! fixnum->signed-natural off-reg (ppc2-one-targeted-reg-form seg offset ($ ppc::arg_z)))
                         (with-imm-target (off-reg) (val-reg :s32)
@@ -4228,16 +4267,14 @@
                             (setq val-reg ppc::rzero)
                             (ppc2-lri seg val-reg intval))
                           (with-imm-target (off-reg val-reg) (ptr-reg :address)
-                            (! temp-pop-unboxed-word ptr-reg)
-                            (ppc2-close-undo)
+                            (ppc2-pop-register seg ptr-reg)
                             (setq xptr-reg ptr-reg
                                   xoff-reg off-reg
                                   xval-reg val-reg))))))
                   ;; No intval; maybe constant-offset.
                   (with-imm-target () (ptr-reg :address)
                     (ppc2-one-targeted-reg-form seg ptr ptr-reg)
-                    (! temp-push-unboxed-word ptr-reg)
-                    (ppc2-open-undo $undostkblk)
+                    (ppc2-push-register seg ptr-reg)
                     (progn
                         (if (not constant-offset)
                           (ppc2-vpush-register seg (ppc2-one-untargeted-reg-form seg offset ppc::arg_z)))
@@ -4249,8 +4286,7 @@
                               (ppc2-vpop-register seg temp)
                               (! fixnum->signed-natural off-reg temp)))
                           (with-imm-target (ppc::imm0 off-reg) (ptr-reg :address)
-                            (! temp-pop-unboxed-word ptr-reg)
-                            (ppc2-close-undo)
+                            (ppc2-pop-register seg ptr-reg)
                             (setq xptr-reg ptr-reg
                                   xoff-reg off-reg
                                   xval-reg ppc::imm0
@@ -4324,8 +4360,8 @@
 (defun ppc2-trivial-p (form &aux op bits)
   (setq form (nx-untyped-form form))
   (and
-   (consp form)
-   (not (eq (setq op (%car form)) (%nx1-operator call)))
+   (acode-p form)
+   (not (eq (setq op (acode-operator form)) (%nx1-operator call)))
    (or
     (nx-null form)
     (nx-t form)
@@ -4336,7 +4372,7 @@
     (eq op (%nx1-operator bound-special-ref))
     (and (or (eq op (%nx1-operator inherited-arg)) 
              (eq op (%nx1-operator lexical-reference)))
-         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (cadr form))))
+         (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits (car (acode-operands form)))))
              (neq (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
                   (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1)) bits)))))))
 
@@ -4345,7 +4381,7 @@
     (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
       (when (or (eq op (%nx1-operator lexical-reference))
                 (eq op (%nx1-operator inherited-arg)))
-        (%cadr form)))))
+        (car (acode-operands form))))))
 
 
 
@@ -4754,20 +4790,25 @@
                  (when mask
                    (with-imm-temps () (vsp0)
                      (! fixnum-add vsp0 ppc::vsp ppc::nargs)
-                     (ppc2-restore-nvrs seg ea mask vsp0)))
+                     (ppc2-restore-nvrs seg ea mask vsp0)
+                     (! restore-nfp)))
                  (! nvalret)))
           (if (null mask)
             (if *ppc2-open-code-inline*
               (progn
+                (! restore-nfp)
                 (! restore-full-lisp-context)
                 (! jump-return-pc))
-              (! popj))
+              (progn
+                (! restore-nfp)
+                (! popj)))
             (if (and foldp (setq label (assq *ppc2-vstack* *ppc2-popreg-labels*)))
               (-> (cdr label))
               (let* ((new-label (backend-get-next-label)))
                 (@ new-label)
                 (push (cons *ppc2-vstack* new-label) *ppc2-popreg-labels*)
                 (ppc2-set-vstack (ppc2-restore-nvrs seg ea mask))
+                (! restore-nfp)
                 (if *ppc2-open-code-inline*
                   (progn
                     (! restore-full-lisp-context)
@@ -4840,29 +4881,7 @@
   (dolist (var (%car auxen))
     (ppc2-close-var seg var)))
 
-(defun ppc2-close-structured-var (seg var)
-  (if (ppc2-structured-var-p var)
-    (apply #'ppc2-close-structured-lambda seg (cdr var))
-    (ppc2-close-var seg var)))
 
-(defun ppc2-close-structured-lambda (seg whole req opt rest keys auxen)
-  (if whole
-    (ppc2-close-var seg whole))
-  (dolist (var req)
-    (ppc2-close-structured-var seg var))
-  (dolist (var (%car opt))
-    (ppc2-close-structured-var seg var))
-  (dolist (var (%caddr opt))
-    (when var
-      (ppc2-close-var seg var)))
-  (if rest
-    (ppc2-close-structured-var seg rest))
-  (dolist (var (%cadr keys))
-    (ppc2-close-structured-var seg var))
-  (dolist (var (%caddr keys))
-    (if var (ppc2-close-var seg var)))
-  (dolist (var (%car auxen))
-    (ppc2-close-var seg var)))
 
 
 (defun ppc2-init-regvar (seg var reg addr)
@@ -4870,52 +4889,7 @@
     (ppc2-stack-to-register seg addr reg)
     (ppc2-set-var-ea seg var ($ reg))))
 
-(defun ppc2-bind-structured-var (seg var vloc lcell &optional context)
-  (if (not (ppc2-structured-var-p var))
-    (let* ((reg (nx2-assign-register-var var)))
-      (if reg
-        (ppc2-init-regvar seg var reg (ppc2-vloc-ea vloc))
-        (ppc2-bind-var seg var vloc lcell)))
-    (let* ((v2 (%cdr var))
-           (v v2)
-           (vstack *ppc2-vstack*)
-           (whole (pop v))
-           (req (pop v))
-           (opt (pop v))
-           (rest (pop v))
-           (keys (pop v)))
-      
-      (apply #'ppc2-bind-structured-lambda seg 
-             (ppc2-spread-lambda-list seg (ppc2-vloc-ea vloc) whole req opt rest keys context)
-             vstack context v2))))
 
-(defun ppc2-bind-structured-lambda (seg lcells vloc context whole req opt rest keys auxen
-                        &aux (nkeys (list-length (%cadr keys))))
-  (declare (fixnum vloc))
-  (when whole
-    (ppc2-bind-structured-var seg whole vloc (pop lcells))
-    (incf vloc *ppc2-target-node-size*))
-  (dolist (arg req)
-    (ppc2-bind-structured-var seg arg vloc (pop lcells) context)
-    (incf vloc *ppc2-target-node-size*))
-  (when opt
-   (if (ppc2-hard-opt-p opt)
-     (setq vloc (apply #'ppc2-structured-initopt seg lcells vloc context opt)
-           lcells (nthcdr (ash (length (car opt)) 1) lcells))
-     (dolist (var (%car opt))
-       (ppc2-bind-structured-var seg var vloc (pop lcells) context)
-       (incf vloc *ppc2-target-node-size*))))
-  (when rest
-    (ppc2-bind-structured-var seg rest vloc (pop lcells) context)
-    (incf vloc *ppc2-target-node-size*))
-  (when keys
-    (apply #'ppc2-structured-init-keys seg lcells vloc context keys)
-    (setq vloc (%i+ vloc (* *ppc2-target-node-size* (+ nkeys nkeys)))))
-  (ppc2-seq-bind seg (%car auxen) (%cadr auxen)))
-
-(defun ppc2-structured-var-p (var)
-  (and (consp var) (or (eq (%car var) *nx-lambdalist*)
-                       (eq (%car var) (%nx1-operator lambda-list)))))
 
 (defun ppc2-simple-var (var &aux (bits (cadr var)))
   (if (or (%ilogbitp $vbitclosed bits)
@@ -5073,12 +5047,7 @@
 (defun ppc2-mv-p (cd)
   (or (eq cd $backend-return) (ppc2-mvpass-p cd)))
 
-(defun ppc2-expand-note (note)
-  (let* ((lab (vinsn-note-label note)))
-    (case (vinsn-note-class note)
-      ((:regsave :begin-variable-scope :end-variable-scope
-        :source-location-begin :source-location-end)
-       (setf (vinsn-label-info lab) (emit-lap-label lab))))))
+
 
 (defun ppc2-expand-vinsns (header)
   (do-dll-nodes (v header)
@@ -5086,8 +5055,7 @@
       (let* ((id (vinsn-label-id v)))
         (if (or (typep id 'fixnum) (null id))
           (when (or t (vinsn-label-refs v) (null id))
-            (setf (vinsn-label-info v) (emit-lap-label v)))
-          (ppc2-expand-note id)))
+            (setf (vinsn-label-info v) (emit-lap-label v)))))
       (ppc2-expand-vinsn v)))
   ;;; This doesn't have too much to do with anything else that's
   ;;; going on here, but it needs to happen before the lregs
@@ -5113,6 +5081,7 @@
   (let* ((template (vinsn-template vinsn))
          (vp (vinsn-variable-parts vinsn))
          (nvp (vinsn-template-nvp template))
+         (notes (vinsn-notes vinsn))
          (unique-labels ()))
     (declare (fixnum nvp))
     (dotimes (i nvp)
@@ -5177,9 +5146,28 @@
                        (dolist (subform (cdr f))
                          (expand-form subform))))))))
       (declare (dynamic-extent #'expand-form #'parse-operand-form #'expand-insn-form #'eval-predicate))
-      ;(format t "~& vinsn = ~s" vinsn)
+      ;;(format t "~& vinsn = ~s" vinsn)
+      (when notes
+        (let* ((lab ()))
+          (dolist (note notes)
+            (unless (eq :close (vinsn-note-class note))
+              (when (eq :source-location-begin
+                        (vinsn-note-class note))
+                (push note *ppc2-emitted-source-notes*))
+              (when (null lab)
+                (setq lab (make-lap-label note))
+                (emit-lap-label note))
+              (setf (vinsn-note-address note) lab)))))
       (dolist (form (vinsn-template-body template))
         (expand-form form ))
+      (when notes
+        (let* ((lab ()))
+          (dolist (note notes)
+            (when (eq :close (vinsn-note-class note))
+              (when (null lab)
+                (setq lab (make-lap-label note))
+                (emit-lap-label note))
+              (setf (vinsn-note-address note) lab)))))
       (setf (vinsn-variable-parts vinsn) nil)
       (when vp
         (free-varparts-vector vp)))))
@@ -5205,6 +5193,7 @@
            (tail-p (ppc2-tailcallok xfer)))
       (when tail-p
         (ppc2-restore-nvrs seg *ppc2-register-restore-ea* *ppc2-register-restore-count*)
+        (! restore-nfp)
         (ppc2-restore-full-lisp-context seg))
       (if idx-subprim
         (setq subprim idx-subprim)
@@ -5389,6 +5378,7 @@
                   (setq optsupvloc (- *ppc2-vstack* (* num-opt *ppc2-target-node-size*)))))))
           ;; Caller's context is saved; *ppc2-vstack* is valid.  Might still have method-var
           ;; to worry about.
+          (! save-nfp)
           (unless (= 0 pregs)
             ;; Save NVRs; load constants into any that get constants.
             (ppc2-save-nvrs seg pregs)
@@ -5555,9 +5545,7 @@
   (ppc2-form seg vreg xfer form))
 
 
-(defppc2 ppc2-%primitive %primitive (seg vreg xfer &rest ignore)
-  (declare (ignore seg vreg xfer ignore))
-  (compiler-bug "You're probably losing big: using %primitive ..."))
+
 
 (defppc2 ppc2-consp consp (seg vreg xfer cc form)
   (if (null vreg)
@@ -5719,15 +5707,47 @@
           (if vreg (ensuring-node-target (target vreg) (! %logxor2 target r1 r2)))))
       (^)))))
 
+(defun ppc2-branch-unless-arg-fixnum (seg reg label)
+  (with-ppc-local-vinsn-macros (seg)
+    (let* ((flags (make-hard-crf-reg 0)))
+      (! test-fixnum flags reg)
+      (! cbranch-false label flags ppc::ppc-eq-bit))))
+
+(defun ppc2-branch-unless-both-args-fixnums (seg x y label)
+  (with-ppc-local-vinsn-macros (seg)
+    (let* ((flags (make-hard-crf-reg 0)))
+      (! test-fixnums flags x y)
+      (! cbranch-false label flags ppc::ppc-eq-bit))))
+
+
+(defun ppc2-check-fixnum-overflow (seg crf target &optional labelno)
+  (with-ppc-local-vinsn-macros  (seg)
+    (let* ((no-overflow (backend-get-next-label))
+           (label (if labelno (aref *backend-labels* labelno))))
+      (! cbranch-false (or label (aref *backend-labels* no-overflow)) crf ppc::ppc-so-bit)
+      (if *ppc2-open-code-inline*
+        (! handle-fixnum-overflow-inline target target)
+        (let* ((target-other (not (eql (hard-regspec-value target)
+                                       ppc::arg_z)))
+               (arg (if target-other
+                      (make-wired-lreg ppc::arg_z)
+                      target))
+               (result (make-wired-lreg ppc::arg_z)))
+          (when target-other
+            (ppc2-copy-register seg arg target))
+          (! call-subprim-1 result (subprim-name->offset '.SPfix-overflow) arg)
+          (when target-other
+            (ppc2-copy-register seg target result))))        
+      (when labelno (-> labelno))
+      (@ no-overflow))))
+
 (defppc2 ppc2-%ineg %ineg (seg vreg xfer n)
   (let* ((src (ppc2-one-untargeted-reg-form seg n ppc::arg_z)))
     (when vreg
       (ensuring-node-target (target vreg)
-        (if *ppc2-open-code-inline*
-          (! negate-fixnum-overflow-inline target src)
-          (progn
-            (! negate-fixnum-overflow-ool src)
-            (ppc2-copy-register seg target ($ ppc::arg_z))))))
+        (let* ((flags (make-hard-crf-reg 0)))
+          (! negate-fixnum-set-flags target flags src)
+          (ppc2-check-fixnum-overflow seg flags target))))
     (^)))
 
 (defppc2 ppc2-%%ineg %%ineg (seg vreg xfer n)
@@ -5941,7 +5961,7 @@
     (ppc2-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
 (defppc2 ppc2-numcmp numcmp (seg vreg xfer cc form1 form2)
-  (let* ((name (ecase (cadr cc)
+  (let* ((name (ecase (car (acode-operands cc))
                  (:eq '=-2)
                  (:ne '/=-2)
                  (:lt '<-2)
@@ -5968,12 +5988,12 @@
                (done (backend-get-next-label)))
           (if otherform
             (unless (acode-fixnum-form-p otherform)
-              (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
+              (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
             (if (acode-fixnum-form-p form1)
-              (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line))
+              (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line))
               (if (acode-fixnum-form-p form2)
-                (! branch-unless-arg-fixnum ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
-                (! branch-unless-both-args-fixnums ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
+                (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
+                (ppc2-branch-unless-both-args-fixnums seg ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
           (with-imm-target () (b31-reg :natural)
             (if otherform
               (if true-p
@@ -6141,7 +6161,7 @@
       (rplacd tag (cons (backend-get-next-label) (cons encstack (cadr (cddr (cddr tag)))))))
     (dolist (form body)
       (if (eq (acode-operator form) tagop)
-        (let ((tag (cddr form)))
+        (let ((tag (cdar (acode-operands form))))
           (@ (car tag)))
         (ppc2-form seg nil nil form)))
     (ppc2-nil seg vreg xfer)))
@@ -6150,7 +6170,7 @@
   (when (and (null vreg)
              (acode-p fn)
              (eq (acode-operator fn) (%nx1-operator immediate)))
-    (let* ((name (cadr fn)))
+    (let* ((name (car (acode-operands fn))))
       (when (memq name *warn-if-function-result-ignored*)
         (p2-whine *ppc2-cur-afunc*  :result-ignored name))))
   (ppc2-call-fn seg vreg xfer fn arglist spread-p))
@@ -6161,7 +6181,7 @@
 
 
 (defppc2 ppc2-lexical-function-call lexical-function-call (seg vreg xfer afunc arglist &optional spread-p)
-  (ppc2-call-fn seg vreg xfer (list (%nx1-operator simple-function) afunc)
+  (ppc2-call-fn seg vreg xfer (make-acode (%nx1-operator simple-function) afunc)
                 (ppc2-augment-arglist afunc arglist (if spread-p 1 $numppcargregs))
                 spread-p))
 
@@ -6180,6 +6200,7 @@
                 (t (subprim-name->offset '.SPcallbuiltin))))))
     (when tail-p
       (ppc2-restore-nvrs seg *ppc2-register-restore-ea* *ppc2-register-restore-count*)
+      (! restore-nfp)
       (ppc2-restore-full-lisp-context seg))
     (unless idx-subprim
       (! lri ppc::imm0 (ash idx *ppc2-target-fixnum-shift*))
@@ -6377,15 +6398,13 @@
            (done (backend-get-next-label)))
       (ensuring-node-target (target vreg)
         (if (acode-fixnum-form-p form1)
-          (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line))
+          (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line))
           (if (acode-fixnum-form-p form2)
-            (! branch-unless-arg-fixnum ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
-            (! branch-unless-both-args-fixnums ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line))))
-        (if *ppc2-open-code-inline*
-          (! fixnum-add-overflow-inline-skip ($ ppc::arg_z) ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* done))
-          (progn
-            (! fixnum-add-overflow-ool ($ ppc::arg_y) ($ ppc::arg_z))
-            (-> done)))
+            (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
+            (ppc2-branch-unless-both-args-fixnums seg ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line))))
+        (let* ((flags (make-hard-crf-reg 0)))
+          (! fixnum-add-set-flags ($ ppc::arg_z) flags ($ ppc::arg_y) ($ ppc::arg_z))
+          (ppc2-check-fixnum-overflow seg flags ($ ppc::arg_z) done))
         (@ out-of-line)
         (! call-subprim-2 ($ ppc::arg_z) (subprim-name->offset '.SPbuiltin-plus) ($ ppc::arg_y) ($ ppc::arg_z))
         (@ done)
@@ -6399,15 +6418,13 @@
            (done (backend-get-next-label)))
       (ensuring-node-target (target vreg)
         (if (acode-fixnum-form-p form1)
-          (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line))
+          (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line))
           (if (acode-fixnum-form-p form2)
-            (! branch-unless-arg-fixnum ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
-            (! branch-unless-both-args-fixnums ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line))))
-        (if *ppc2-open-code-inline*
-          (! fixnum-sub-overflow-inline-skip ($ ppc::arg_z) ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* done))
-          (progn
-            (! fixnum-sub-overflow-ool ($ ppc::arg_y) ($ ppc::arg_z))
-            (-> done)))
+            (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
+            (ppc2-branch-unless-both-args-fixnums seg ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line))))
+        (let* ((flags (make-hard-crf-reg 0)))
+          (! fixnum-sub-set-flags ($ ppc::arg_z) flags ($ ppc::arg_y) ($ ppc::arg_z))
+          (ppc2-check-fixnum-overflow seg flags ($ ppc::arg_z) done))
         (@ out-of-line)
         (! call-subprim-2 ($ ppc::arg_z) (subprim-name->offset '.SPbuiltin-minus) ($ ppc::arg_y) ($ ppc::arg_z))
         (@ done)
@@ -6425,70 +6442,16 @@
     
 
 (defppc2 ppc2-add2 add2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *ppc2-trust-declarations*)
-    (if (and (ppc2-form-typep form1 'double-float)
-             (ppc2-form-typep form2 'double-float))
-      (ppc2-use-operator (%nx1-operator %double-float+-2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (ppc2-form-typep form1 'single-float)
-               (ppc2-form-typep form2 'single-float))
-        (ppc2-use-operator (%nx1-operator %short-float+-2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (if (and (ppc2-form-typep form1 'fixnum)
-                 (ppc2-form-typep form2 'fixnum))
-          (ppc2-use-operator (%nx1-operator %i+)
-                             seg
-                             vreg
-                             xfer
-                             form1
-                             form2
-                             t)
-          (if (or (ppc2-explicit-non-fixnum-type-p form1)
-                  (ppc2-explicit-non-fixnum-type-p form2))
-            (ppc2-binary-builtin seg vreg xfer '+-2 form1 form2)
-            (ppc2-inline-add2 seg vreg xfer form1 form2)))))))
+  (if (or (ppc2-explicit-non-fixnum-type-p form1)
+          (ppc2-explicit-non-fixnum-type-p form2))
+    (ppc2-binary-builtin seg vreg xfer '+-2 form1 form2)
+    (ppc2-inline-add2 seg vreg xfer form1 form2)))
 
 (defppc2 ppc2-sub2 sub2 (seg vreg xfer form1 form2)
-  (multiple-value-bind (form1 form2)
-      (nx-binop-numeric-contagion form1 form2 *ppc2-trust-declarations*)
-    (if (and (ppc2-form-typep form1 'double-float)
-             (ppc2-form-typep form2 'double-float))
-      (ppc2-use-operator (%nx1-operator %double-float--2)
-                         seg
-                         vreg
-                         xfer
-                         form1
-                         form2)
-      (if (and (ppc2-form-typep form1 'single-float)
-               (ppc2-form-typep form2 'single-float))
-        (ppc2-use-operator (%nx1-operator %short-float--2)
-                           seg
-                           vreg
-                           xfer
-                           form1
-                           form2)
-        (if (and (ppc2-form-typep form1 'fixnum)
-                 (ppc2-form-typep form2 'fixnum))
-          (ppc2-use-operator (%nx1-operator %i-)
-                             seg
-                             vreg
-                             xfer
-                             form1
-                             form2
-                             t)
-          (if (or (ppc2-explicit-non-fixnum-type-p form1)
-                  (ppc2-explicit-non-fixnum-type-p form2))
-            (ppc2-binary-builtin seg vreg xfer '--2 form1 form2)
-            (ppc2-inline-sub2 seg vreg xfer form1 form2)))))))
+  (if (or (ppc2-explicit-non-fixnum-type-p form1)
+          (ppc2-explicit-non-fixnum-type-p form2))
+    (ppc2-binary-builtin seg vreg xfer '--2 form1 form2)
+    (ppc2-inline-sub2 seg vreg xfer form1 form2)))
 
 (defppc2 ppc2-mul2 mul2 (seg vreg xfer form1 form2)
   (multiple-value-bind (form1 form2)
@@ -6540,14 +6503,14 @@
                    (acode-p unwrapped)
                    (or (eq (acode-operator unwrapped) (%nx1-operator mul2))
                        (eq (acode-operator unwrapped) (%nx1-operator %i*)))
-                   (setq f1 (acode-fixnum-form-p (cadr unwrapped)))
+                   (setq f1 (acode-fixnum-form-p (car (acode-operands unwrapped))))
                    (typep (setq f1/f2 (/ f1 f2)) 'fixnum))
             (ppc2-use-operator (%nx1-operator mul2)
                                seg
                                vreg
                                xfer
                                (make-acode (%nx1-operator fixnum) f1/f2)
-                               (caddr unwrapped))
+                               (cadr (acode-operands unwrapped)))
             (ppc2-binary-builtin seg vreg xfer '/-2 form1 form2)))))))
 
 (defppc2 ppc2-logbitp logbitp (seg vreg xfer bitnum int)
@@ -6574,12 +6537,12 @@
           (ensuring-node-target (target vreg)
             (if otherform
               (unless (acode-fixnum-form-p otherform)
-                (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
+                (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
               (if (acode-fixnum-form-p form1)
-                (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line))
+                (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line))
                 (if (acode-fixnum-form-p form2)
-                  (! branch-unless-arg-fixnum ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
-                  (! branch-unless-both-args-fixnums ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
+                  (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
+                  (ppc2-branch-unless-both-args-fixnums seg ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
             (if otherform
               (if high
                 (! logior-high ($ ppc::arg_z) ($ ppc::arg_z) high)
@@ -6595,15 +6558,13 @@
           (^))))))
 
 (defppc2 ppc2-logior2 logior2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logior2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
-      (if (or (ppc2-explicit-non-fixnum-type-p form1)
-              (ppc2-explicit-non-fixnum-type-p form2))
-        (ppc2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
-        (ppc2-inline-logior2 seg vreg xfer form1 form2))))
+  (if (or (ppc2-explicit-non-fixnum-type-p form1)
+          (ppc2-explicit-non-fixnum-type-p form2))
+    (ppc2-binary-builtin seg vreg xfer 'logior-2 form1 form2)
+    (ppc2-inline-logior2 seg vreg xfer form1 form2)))
 
 (defppc2 ppc2-logxor2 logxor2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logxor2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
-      (ppc2-binary-builtin seg vreg xfer 'logxor-2 form1 form2)))
+  (ppc2-binary-builtin seg vreg xfer 'logxor-2 form1 form2))
 
 (defun ppc2-inline-logand2 (seg vreg xfer form1 form2)
   (with-ppc-local-vinsn-macros (seg vreg xfer)
@@ -6626,12 +6587,12 @@
         (ensuring-node-target (target vreg)
           (if otherform
             (unless (acode-fixnum-form-p otherform)
-              (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
+              (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line)))
             (if (acode-fixnum-form-p form1)
-              (! branch-unless-arg-fixnum ($ ppc::arg_z) (aref *backend-labels* out-of-line))
+              (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_z) (aref *backend-labels* out-of-line))
               (if (acode-fixnum-form-p form2)
-                (! branch-unless-arg-fixnum ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
-                (! branch-unless-both-args-fixnums ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
+                (ppc2-branch-unless-arg-fixnum seg ($ ppc::arg_y) (aref *backend-labels* out-of-line))  
+                (ppc2-branch-unless-both-args-fixnums seg ($ ppc::arg_y) ($ ppc::arg_z) (aref *backend-labels* out-of-line)))))
           (if otherform
             (if (or high low)
               (if high
@@ -6654,11 +6615,10 @@
         (^))))))
 
 (defppc2 ppc2-logand2 logand2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-logand2 seg vreg xfer form1 form2 *ppc2-trust-declarations*)
-      (if (or (ppc2-explicit-non-fixnum-type-p form1)
-              (ppc2-explicit-non-fixnum-type-p form2))
-        (ppc2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
-        (ppc2-inline-logand2 seg vreg xfer form1 form2))))
+  (if (or (ppc2-explicit-non-fixnum-type-p form1)
+          (ppc2-explicit-non-fixnum-type-p form2))
+    (ppc2-binary-builtin seg vreg xfer 'logand-2 form1 form2)
+    (ppc2-inline-logand2 seg vreg xfer form1 form2)))
 
 
 
@@ -6696,104 +6656,118 @@
       (ppc2-vset seg vreg xfer keyword v i n (not *ppc2-reckless*))
       (ppc2-ternary-builtin seg vreg xfer '%aset1 v i n))))
 
-(defppc2 ppc2-%i+ %i+ (seg vreg xfer form1 form2 &optional overflow)
-  (when overflow
-    (let* ((type *ppc2-target-half-fixnum-type*))
-      (when (and (ppc2-form-typep form1 type)
-                 (ppc2-form-typep form2 type))
-        (setq overflow nil))))
-  (let* ((fix1 (acode-fixnum-form-p form1))
-         (fix2 (acode-fixnum-form-p form2))
-         (sum (and fix1 fix2 (if overflow (+ fix1 fix2) (%i+ fix1 fix2)))))
-    (cond ((null vreg) 
-           (ppc2-form seg nil nil form1) 
-           (ppc2-form seg nil xfer form2))
-          (sum
-           (if (nx1-target-fixnump sum)
-             (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer sum)
-             (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer sum)))
-          (overflow
-           (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
-             (ensuring-node-target (target vreg)
-               (if *ppc2-open-code-inline*
-                 (! fixnum-add-overflow-inline target r1 r2)
-                 (progn
-                   (! fixnum-add-overflow-ool r1 r2)
-                   (ppc2-copy-register seg target ($ ppc::arg_z)))))
-             (^)))
-          (t                              
-           ;; There isn't any "addi" that checks for overflow, which is
-           ;; why we didn't bother.
-           (let* ((other (if (and fix1
-                                  (typep (ash fix1 *ppc2-target-fixnum-shift*)
-                                         '(signed-byte 32)))
-                           form2
-                           (if (and fix2
-                                    (typep (ash fix2 *ppc2-target-fixnum-shift*)
-                                           '(signed-byte 32)))
-                             form1))))
-             (if (and fix1 fix2)
-               (ppc2-lri seg vreg (ash (+ fix1 fix2) *ppc2-target-fixnum-shift*))
-               (if other
-                 (let* ((constant (ash (or fix1 fix2) *ppc2-target-fixnum-shift*))
-                        (reg (ppc2-one-untargeted-reg-form seg other ppc::arg_z))
-                        (high (ldb (byte 16 16) constant))
-                        (low (ldb (byte 16 0) constant)))
-                   (declare (fixnum high low))
-                   (if (zerop constant)
-                     (<- reg)
-                     (progn
-                       (if (logbitp 15 low) (setq high (ldb (byte 16 0) (1+ high))))
-                       (if (and (eq vreg reg) (not (zerop high)))
-                         (with-node-temps (vreg) (temp)
-                           (! add-immediate temp reg high low)
-                           (<- temp))
-                         (ensuring-node-target (target vreg)
-                           (! add-immediate target reg high low))))))
-                 (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
-                   (ensuring-node-target (target vreg)
-                     (! fixnum-add target r1 r2)))))
-             (^))))))
-
-(defppc2 ppc2-%i- %i- (seg vreg xfer num1 num2 &optional overflow)
-  (when overflow
-    (let* ((type *ppc2-target-half-fixnum-type*))
-      (when (and (ppc2-form-typep num1 type)
-                 (ppc2-form-typep num2 type))
-        (setq overflow nil))))
-  (let* ((v1 (acode-fixnum-form-p num1))
-         (v2 (acode-fixnum-form-p num2))
-         (diff (and v1 v2 (if overflow (- v1 v2) (%i- v1 v2)))))
-    (if diff
-      (if (nx1-target-fixnump diff)
-        (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
-        (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer diff))
-      (if (and v2 (neq v2 most-negative-fixnum))
-        (ppc2-use-operator (%nx1-operator %i+) seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
-        (if (eq v2 0)
-          (ppc2-form seg vreg xfer num1)
-          (cond
-           ((null vreg)
-            (ppc2-form seg nil nil num1)
-            (ppc2-form seg nil xfer num2))
-           (overflow
-            (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg num1 ppc::arg_y num2 ppc::arg_z)
+(defun ppc2-fixnum-add (seg vreg xfer form1 form2 overflow)
+  (with-ppc-local-vinsn-macros (seg vreg xfer)
+    (when overflow
+      (let* ((type *ppc2-target-half-fixnum-type*))
+        (when (and (ppc2-form-typep form1 type)
+                   (ppc2-form-typep form2 type))
+          (setq overflow nil))))
+    (let* ((fix1 (acode-fixnum-form-p form1))
+           (fix2 (acode-fixnum-form-p form2))
+           (sum (and fix1 fix2 (if overflow (+ fix1 fix2) (%i+ fix1 fix2)))))
+      (cond ((null vreg) 
+             (ppc2-form seg nil nil form1) 
+             (ppc2-form seg nil xfer form2))
+            (sum
+             (if (nx1-target-fixnump sum)
+               (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer sum)
+               (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer sum)))
+            (overflow
+             (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
                (ensuring-node-target (target vreg)
-                 (if *ppc2-open-code-inline*
-                   (! fixnum-sub-overflow-inline target r1 r2)
-                   (progn
-                     (! fixnum-sub-overflow-ool r1 r2)
-                     (ppc2-copy-register seg target ($ ppc::arg_z)))))
-              (^)))
-           ((and v1 (<= (integer-length v1) (- 15 *ppc2-target-fixnum-shift*)))
-            (ensuring-node-target (target vreg)
-              (! fixnum-sub-from-constant target v1 (ppc2-one-untargeted-reg-form seg num2 ppc::arg_z)))
-            (^))
-           (t
-            (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg num1 ppc::arg_y num2 ppc::arg_z)
-              (ensuring-node-target (target vreg)
-                (! fixnum-sub target r1 r2))
-              (^)))))))))
+                 (let* ((flags (make-hard-crf-reg 0)))
+                   (! fixnum-add-set-flags target flags r1 r2)
+                   (ppc2-check-fixnum-overflow seg flags target)))
+               (^)))
+            (t                              
+             ;; There isn't any "addi" that checks for overflow, which is
+             ;; why we didn't bother.
+             (let* ((other (if (and fix1
+                                    (typep (ash fix1 *ppc2-target-fixnum-shift*)
+                                           '(signed-byte 32)))
+                             form2
+                             (if (and fix2
+                                      (typep (ash fix2 *ppc2-target-fixnum-shift*)
+                                             '(signed-byte 32)))
+                               form1))))
+               (if (and fix1 fix2)
+                 (ppc2-lri seg vreg (ash (+ fix1 fix2) *ppc2-target-fixnum-shift*))
+                 (if other
+                   (let* ((constant (ash (or fix1 fix2) *ppc2-target-fixnum-shift*))
+                          (reg (ppc2-one-untargeted-reg-form seg other ppc::arg_z))
+                          (high (ldb (byte 16 16) constant))
+                          (low (ldb (byte 16 0) constant)))
+                     (declare (fixnum high low))
+                     (if (zerop constant)
+                       (<- reg)
+                       (progn
+                         (if (logbitp 15 low) (setq high (ldb (byte 16 0) (1+ high))))
+                         (if (and (eq vreg reg) (not (zerop high)))
+                           (with-node-temps (vreg) (temp)
+                             (! add-immediate temp reg high low)
+                             (<- temp))
+                           (ensuring-node-target (target vreg)
+                             (! add-immediate target reg high low))))))
+                   (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg form1 ppc::arg_y form2 ppc::arg_z)
+                     (ensuring-node-target (target vreg)
+                       (! fixnum-add target r1 r2)))))
+               (^)))))))
+
+
+
+(defppc2 ppc2-fixnum-add-overflow fixnum-add-overflow (seg vreg xfer form1 form2)
+  (ppc2-fixnum-add seg vreg xfer form1 form2 t))
+
+(defppc2 ppc2-fixnum-add-no-overflow fixnum-add-no-overflow (seg vreg xfer form1 form2)
+  (ppc2-fixnum-add seg vreg xfer form1 form2 nil))
+
+(defun ppc2-fixnum-sub (seg vreg xfer num1 num2 overflow)
+  (with-ppc-local-vinsn-macros (seg vreg xfer)
+    (when overflow
+      (let* ((type *ppc2-target-half-fixnum-type*))
+        (when (and (ppc2-form-typep num1 type)
+                   (ppc2-form-typep num2 type))
+          (setq overflow nil))))
+    (let* ((v1 (acode-fixnum-form-p num1))
+           (v2 (acode-fixnum-form-p num2))
+           (diff (and v1 v2 (if overflow (- v1 v2) (%i- v1 v2)))))
+      (if diff
+        (if (nx1-target-fixnump diff)
+          (ppc2-use-operator (%nx1-operator fixnum) seg vreg xfer diff)
+          (ppc2-use-operator (%nx1-operator immediate) seg vreg xfer diff))
+        (if (and v2 (neq v2 most-negative-fixnum))
+          (ppc2-fixnum-add seg vreg xfer num1 (make-acode (%nx1-operator fixnum) (- v2)) overflow) 
+          (if (eq v2 0)
+            (ppc2-form seg vreg xfer num1)
+            (cond
+              ((null vreg)
+               (ppc2-form seg nil nil num1)
+               (ppc2-form seg nil xfer num2))
+              (overflow
+               (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg num1 ppc::arg_y num2 ppc::arg_z)
+                 (ensuring-node-target (target vreg)
+                   (let* ((flags (make-hard-crf-reg 0)))
+                     (! fixnum-sub-set-flags target flags r1 r2)
+                     (ppc2-check-fixnum-overflow seg flags target))
+                   )
+                 (^)))
+              ((and v1 (<= (integer-length v1) (- 15 *ppc2-target-fixnum-shift*)))
+               (ensuring-node-target (target vreg)
+                 (! fixnum-sub-from-constant target v1 (ppc2-one-untargeted-reg-form seg num2 ppc::arg_z)))
+               (^))
+              (t
+               (multiple-value-bind (r1 r2) (ppc2-two-untargeted-reg-forms seg num1 ppc::arg_y num2 ppc::arg_z)
+                 (ensuring-node-target (target vreg)
+                   (! fixnum-sub target r1 r2))
+                 (^))))))))))
+
+
+(defppc2 ppc2-fixnum-sub-no-overflow fixnum-sub-no-overflow (seg vreg xfer num1 num2)
+  (ppc2-fixnum-sub seg vreg xfer num1 num2 nil))
+
+(defppc2 ppc2-fixnum-sub-overflow fixnum-sub-overflow (seg vreg xfer num1 num2)
+  (ppc2-fixnum-sub seg vreg xfer num1 num2 t))
 
 (defppc2 ppc2-%i* %i* (seg vreg xfer num1 num2)
   (if (null vreg)
@@ -6886,18 +6860,7 @@
       (dolist (var vars)
         (ppc2-close-var seg var)))))
 
-(defppc2 ppc2-debind debind (seg vreg xfer lambda-list bindform req opt rest keys auxen whole body p2decls cdr-p)
-  (declare (ignore lambda-list))
-  (let* ((old-stack (ppc2-encode-stack))
-         (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
-         (vloc *ppc2-vstack*))
-    (with-ppc-p2-declarations p2decls      
-      (ppc2-bind-structured-lambda
-       seg 
-       (ppc2-spread-lambda-list seg bindform whole req opt rest keys nil cdr-p)
-       vloc (ppc2-vloc-ea vloc) whole req opt rest keys auxen)
-      (ppc2-undo-body seg vreg xfer body old-stack)
-      (ppc2-close-structured-lambda seg whole req opt rest keys auxen))))
+
 
 (defppc2 ppc2-multiple-value-prog1 multiple-value-prog1 (seg vreg xfer forms)
   (if (or (not (ppc2-mv-p xfer)) (ppc2-single-valued-form-p (%car forms)))
@@ -7507,15 +7470,7 @@
           (dolist (var real-vars)
             (ppc2-close-var seg var)))))))
 
-;;; Make a function call (e.g., to mapcar) with some of the toplevel arguments
-;;; stack-consed (downward) closures.  Bind temporaries to these closures so
-;;; that tail-recursion/non-local exits work right.
-;;; (all of the closures are distinct: FLET and LABELS establish dynamic extent themselves.)
-(defppc2 ppc2-with-downward-closures with-downward-closures (seg vreg xfer tempvars closures callform)
-  (let* ((old-stack (ppc2-encode-stack)))
-    (ppc2-seq-bind seg tempvars closures)
-    (ppc2-undo-body seg vreg xfer callform old-stack)
-    (dolist (v tempvars) (ppc2-close-var seg v))))
+
 
 
 (defppc2 ppc2-local-return-from local-return-from (seg vreg xfer blocktag value)
@@ -7672,9 +7627,7 @@
       (^))))
 
 
-(defppc2 ppc2-fixnum-overflow fixnum-overflow (seg vreg xfer form)
-  (destructuring-bind (op n0 n1) (acode-unwrapped-form form)
-    (ppc2-use-operator op seg vreg xfer n0 n1 (make-nx-t))))
+
 
 
 
@@ -8369,54 +8322,7 @@
 
 
 
-(defppc2 ppc2-eabi-syscall eabi-syscall (seg vreg xfer idx argspecs argvals resultspec &optional monitor-exception-ports)
-  (declare (ignore monitor-exception-ports))
-  (let* ((*ppc2-vstack* *ppc2-vstack*)
-         (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
-         (*ppc2-cstack* *ppc2-cstack*)
-         (nextarg 0))
-    (declare (fixnum nextarg))
-    (! alloc-eabi-c-frame (the fixnum (length argvals)))
-    (ppc2-open-undo $undo-ppc-c-frame)
-    ;; Evaluate each form into the C frame, according to the matching argspec.
-    (do* ((specs argspecs (cdr specs))
-          (vals argvals (cdr vals)))
-         ((null specs))
-      (declare (list specs vals))
-      (let* ((valform (car vals))
-             (spec (car specs))
-             (absptr (acode-absolute-ptr-p valform)))
-        (case spec
-          (:address
-           (with-imm-target ()
-             (ptr :address)
-             (if absptr
-               (ppc2-lri seg ptr absptr)
-               (ppc2-one-targeted-reg-form seg valform ptr))
-             (! set-eabi-c-arg ptr nextarg)))
-          (t
-           (! set-eabi-c-arg
-              (with-imm-target ()
-                (valreg :natural)
-                (ppc2-unboxed-integer-arg-to-reg seg valform valreg spec))
-              nextarg)))
-        (incf nextarg)))
-    (ppc2-form seg ppc::arg_z nil idx)
-    (! eabi-syscall) 
-    (ppc2-close-undo)
-    (when vreg
-      (if (eq resultspec :void)
-        (<- nil)
-        (<- (set-regspec-mode ppc::imm0 (gpr-mode-name-value
-                                         (case resultspec
-                                           (:address :address)
-                                           (:signed-byte :s8)
-                                           (:unsigned-byte :u8)
-                                           (:signed-halfword :s16)
-                                           (:unsigned-halfword :u16)
-                                           (:signed-fullword :s32)
-                                           (t :u32)))))))
-    (^)))
+
 
 
 ;;; Caller has allocated poweropen stack frame.
@@ -8545,36 +8451,7 @@
 
     (^)))
 
-(defppc2 ppc2-poweropen-syscall poweropen-syscall (seg vreg xfer idx argspecs argvals resultspec &optional monitor-exception-ports)
-  (declare (ignore monitor-exception-ports))
-  (let* ((*ppc2-vstack* *ppc2-vstack*)
-         (*ppc2-top-vstack-lcell* *ppc2-top-vstack-lcell*)
-         (*ppc2-cstack* *ppc2-cstack*))
-    (! alloc-c-frame (the fixnum
-                       (+ (the fixnum (length argvals))
-                          (the fixnum
-                            (let* ((n 0))
-                              (declare (fixnum n))
-                              (dolist (spec argspecs n)
-                                (if (typep spec 'unsigned-byte)
-                                  (incf n (the fixnum
-                                            (1- (the fixnum spec))))))))
-                          (the fixnum
-                            (count-if
-                             #'(lambda (x)
-                                 (member x
-                                         '(:double-float
-                                           :unsigned-doubleword
-                                           :signed-doubleword)))
-                             argspecs)))))
-    (ppc2-open-undo $undo-ppc-c-frame)
-    (ppc2-poweropen-foreign-args seg argspecs argvals)
-    (ppc2-form seg ppc::arg_z nil idx)
-    (if (eq resultspec :signed-doubleword)
-      (! poweropen-syscall-s64)
-      (! poweropen-syscall))
-    (ppc2-close-undo)
-    (ppc2-poweropen-foreign-return seg vreg xfer resultspec)))
+
 
 (defun ppc2-identity (seg vreg xfer arg)
   (with-ppc-local-vinsn-macros (seg vreg xfer)
@@ -9042,6 +8919,7 @@
 (defppc2 ppc2-%current-frame-ptr %current-frame-ptr (seg vreg xfer)
   (cond ((ppc2-tailcallok xfer)
 	 (ppc2-restore-nvrs seg *ppc2-register-restore-ea* *ppc2-register-restore-count*)
+         (! restore-nfp)
 	 (ppc2-restore-full-lisp-context seg)
 	 (! %current-frame-ptr ($ ppc::arg_z))
 	 (! jump-return-pc))
@@ -9165,8 +9043,8 @@
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
-                              (typep (cadr form) 'real))
-                       (cadr form)))))
+                              (typep (car (acode-operands form)) 'real))
+                       (car (acode-operands form))))))
          (dconst (and real (ignore-errors (float real 0.0d0)))))
     (if dconst
       (ppc2-immediate seg vreg xfer dconst)
@@ -9196,8 +9074,8 @@
                      (if (and (acode-p form)
                               (eq (acode-operator form)
                                   (%nx1-operator immediate))
-                              (typep (cadr form) 'real))
-                       (cadr form)))))
+                              (typep (car (acode-operands form)) 'real))
+                       (car (acode-operands form))))))
          (sconst (and real (ignore-errors (float real 0.0f0)))))
     (if sconst
       (ppc2-immediate seg vreg xfer sconst)
@@ -9227,10 +9105,8 @@
   (^))
 
 (defppc2 ppc2-ash ash (seg vreg xfer num amt)
-  (or (acode-optimize-ash seg vreg xfer num amt *ppc2-trust-declarations*)
-      (progn
-        (ppc2-two-targeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
-        (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))))
+  (ppc2-two-targeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
+  (ppc2-fixed-call-builtin seg vreg xfer nil (subprim-name->offset '.SPbuiltin-ash)))
 
 (defppc2 ppc2-fixnum-ash fixnum-ash (seg vreg xfer num amt)
   (multiple-value-bind (rnum ramt) (ppc2-two-untargeted-reg-forms seg num ($ ppc::arg_y) amt ($ ppc::arg_z))
@@ -9328,4 +9204,114 @@
 (defppc2 ppc2-t t (seg vreg xfer)
   (ppc2-t seg vreg xfer))
 
-   
+(defppc2 ppc2-ivector-typecode-p ivector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (ppc2-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! ivector-typecode-p target (ppc2-one-untargeted-reg-form seg val ppc::arg_z)))
+           (^))))
+
+
+
+(defppc2 ppc2-gvector-typecode-p gvector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (ppc2-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! gvector-typecode-p target (ppc2-one-untargeted-reg-form seg val ppc::arg_z)))
+           (^))))
+
+(defppc2 ppc2-%complex-single-float-realpart %complex-single-float-realpart (seg vreg xfer arg)
+(if (null vreg)
+    (ppc2-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-realpart target (ppc2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defppc2 ppc2-%complex-single-float-imagpart %complex-single-float-imagpart (seg vreg xfer arg)
+(if (null vreg)
+    (ppc2-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-imagpart target (ppc2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defppc2 ppc2-%complex-double-float-realpart %complex-double-float-realpart (seg vreg xfer arg)
+(if (null vreg)
+    (ppc2-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-realpart target (ppc2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defppc2 ppc2-%complex-double-float-imagpart %complex-double-float-imagpart (seg vreg xfer arg)
+  (if (null vreg)
+    (ppc2-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-imagpart target (ppc2-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defppc2 ppc2-%make-complex-single-float %make-complex-single-float (seg vreg xfer r i)
+    (if (null vreg)
+    (progn
+      (ppc2-form seg nil nil r)
+      (ppc2-form seg nil xfer i))
+    (with-fp-target () (target :complex-single-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-complex-single-float))
+        (setq target vreg))
+      (ppc2-two-targeted-reg-forms seg
+                                   r ($ (* 2 (%hard-regspec-value target))
+                                        :class :fpr
+                                        :mode :single-float)
+                                   i ($ (1+ (* 2 (%hard-regspec-value target)))
+                                        :class :fpr
+                                        :mode :single-float))
+      (<- target)
+      (^))))
+
+(defppc2 ppc2-%make-complex-double-float %make-complex-double-float (seg vreg xfer r i)
+    (if (null vreg)
+    (progn
+      (ppc2-form seg nil nil r)
+      (ppc2-form seg nil xfer i))
+    (with-fp-target () (target :complex-double-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg) hard-reg-class-fpr-mode-complex-double-float))
+        (setq target vreg))
+      (ppc2-two-targeted-reg-forms seg
+                                   r ($ (%hard-regspec-value target)
+                                        :class :fpr
+                                        :mode :double-float)
+                                   i ($ (1+  (%hard-regspec-value target))
+                                        :class :fpr
+                                        :mode :double-float))
+      (<- target)
+      (^))))
+
+(defppc2 ppc2-complex complex (seg vreg xfer r i)
+  (ppc2-call-fn seg vreg xfer (make-acode (%nx1-operator immediate) 'complex)
+                (list nil (list i r)) nil))
+
+(defppc2 ppc2-realpart realpart (seg vreg xfer n)
+  (ppc2-call-fn  seg vreg xfer (make-acode (%nx1-operator immediate) 'realpart)
+                 (list nil (list n)) nil))
+
+(defppc2 ppc2-imagpart imagpart (seg vreg xfer n)
+  (ppc2-call-fn  seg vreg xfer (make-acode (%nx1-operator immediate) 'imagpart)
+                 (list nil (list n)) nil))

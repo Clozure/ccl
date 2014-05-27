@@ -554,10 +554,12 @@ mark_root(LispObj n)
       total_size_in_bytes = 4 + element_count;
     } else if (subtag <= max_16_bit_ivector_subtag) {
       total_size_in_bytes = 4 + (element_count<<1);
-    } else if (subtag == subtag_double_float_vector) {
-      total_size_in_bytes = 8 + (element_count<<3);
-    } else {
+    } else if (subtag == subtag_complex_double_float_vector) {
+      total_size_in_bytes = 8 + (element_count<<4);
+    } else if (subtag == subtag_bit_vector) {
       total_size_in_bytes = 4 + ((element_count+7)>>3);
+    } else {
+      total_size_in_bytes = 8 + (element_count<<3);
     }
 #endif
 
@@ -1028,6 +1030,8 @@ rmark(LispObj n)
       } else {
         total_size_in_bytes = 8 + (element_count<<1);
       }
+
+
     }
 #else
     if (tag_n == fulltag_tra) {
@@ -1189,6 +1193,8 @@ skip_over_ivector(natural start, LispObj header)
   default:
     if (subtag == subtag_bit_vector) {
       nbytes = (element_count+7)>>3;
+    } else if (subtag == subtag_complex_double_float_vector) {
+      nbytes = element_count << 4;
     } else if (subtag >= min_8_bit_ivector_subtag) {
       nbytes = element_count;
     } else {
@@ -1203,10 +1209,12 @@ skip_over_ivector(natural start, LispObj header)
     nbytes = element_count;
   } else if (subtag <= max_16_bit_ivector_subtag) {
     nbytes = element_count << 1;
-  } else if (subtag == subtag_double_float_vector) {
-    nbytes = 4 + (element_count << 3);
-  } else {
+  } else if (subtag == subtag_complex_double_float_vector) {
+    nbytes = 4 + (element_count << 4);
+  } else if (subtag == subtag_bit_vector) {
     nbytes = (element_count+7) >> 3;
+  } else {
+    nbytes = 4 + (element_count << 3);
   }
   return ptr_from_lispobj(start+(~7 & (nbytes + 4 + 7)));
 #endif
@@ -2086,6 +2094,8 @@ compact_dynamic_heap()
           case ivector_class_other_bit:
             if (tag == subtag_bit_vector) {
               imm_dnodes = (((elements+64)+127)>>7);
+            } else if (tag == subtag_complex_double_float_vector) {
+              imm_dnodes = elements+1;
 	    } else if (tag >= min_8_bit_ivector_subtag) {
 	      imm_dnodes = (((elements+8)+15)>>4);
             } else {
@@ -2102,6 +2112,8 @@ compact_dynamic_heap()
             imm_dnodes = (((elements+2)+3)>>2);
           } else if (tag == subtag_bit_vector) {
             imm_dnodes = (((elements+32)+63)>>6);
+          } else if (tag == subtag_complex_double_float_vector) {
+            imm_dnodes = (elements * 2)+1;
           } else {
             imm_dnodes = elements+1;
           }
@@ -2189,6 +2201,8 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end, Boolean include_functions)
         default:
           if (subtag == subtag_bit_vector) {
             bytes = 8 + ((elements+7)>>3);
+          } else if (subtag == subtag_complex_double_float_vector) {
+            bytes = 8 + (elements<<4);
 	  } else if (subtag >= min_8_bit_ivector_subtag) {
 	    bytes = 8 + elements;
           } else {
@@ -2197,17 +2211,19 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end, Boolean include_functions)
         }
 #endif
 #ifdef X8632
-          if (subtag <= max_32_bit_ivector_subtag) {
-            bytes = 4 + (elements<<2);
-          } else if (subtag <= max_8_bit_ivector_subtag) {
-            bytes = 4 + elements;
-          } else if (subtag <= max_16_bit_ivector_subtag) {
-            bytes = 4 + (elements<<1);
-          } else if (subtag == subtag_double_float_vector) {
-            bytes = 8 + (elements<<3);
-          } else {
-            bytes = 4 + ((elements+7)>>3);
-          }
+        if (subtag <= max_32_bit_ivector_subtag) {
+          bytes = 4 + (elements<<2);
+        } else if (subtag <= max_8_bit_ivector_subtag) {
+          bytes = 4 + elements;
+        } else if (subtag <= max_16_bit_ivector_subtag) {
+          bytes = 4 + (elements<<1);
+        } else if (subtag == subtag_bit_vector) {
+          bytes = 4 + ((elements+7)>>3);
+        } else if (subtag == subtag_complex_double_float_vector) {
+          bytes = 8 + (elements<<4);
+        } else {
+                    bytes = 8 + (elements<<3);
+        }
 #endif
 
         bytes = (bytes+dnode_size-1) & ~(dnode_size-1);

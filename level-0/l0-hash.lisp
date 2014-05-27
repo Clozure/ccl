@@ -148,6 +148,7 @@
     (when (logbitp $nhash_track_keys_bit flags)
       (setf (nhash.vector.flags vector) (logior (ash 1 $nhash_key_moved_bit) flags)))))
 
+#-cross-compiling
 ;;;
 ;;; This is a fairly straightforward translation of the "one-at-a-time"
 ;;; hash function described at:
@@ -167,7 +168,11 @@
           fixnum (ash fixnum -8)
           hash (+ hash (the fixnum (ash hash 10)))
           hash (logxor hash (the fixnum (ash hash -6))))))
-          
+
+#+cross-compiling
+(defun mixup-hash-code (code)
+  (logand code target::target-most-positive-fixnum))
+
 (defun rotate-hash-code (fixnum)
   (declare (fixnum fixnum))
   (let* ((low-3 (logand 7 fixnum))
@@ -185,7 +190,7 @@
   #.(- (ash 1 $nhash_track_keys_bit)))
 
 (defconstant $nhash-clear-key-bits-mask #xfffff)
-
+(defparameter *nil-hash* nil)
 
 (defun %hash-symbol (sym)
   (if sym    
@@ -199,7 +204,8 @@
             (if consp
               (setf (%car cell) hash)
               (setf (%svref vector target::symbol.plist-cell) hash)))))
-    +nil-hash+))
+    (or *nil-hash*
+        (setq *nil-hash* (mixup-hash-code (%pname-hash "NIL" 3))))))
               
 ;;; Hash on address, or at least on some persistent, immutable
 ;;; attribute of the key.  If all keys are fixnums or immediates (or if

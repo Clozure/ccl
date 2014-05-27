@@ -125,29 +125,30 @@
 
 (defun complexp (x)
   "Return true if OBJECT is a COMPLEX, and NIL otherwise."
-  (= (the fixnum (typecode x)) target::subtag-complex))
+  (let* ((code (typecode x)))
+    (declare (type (unsigned-byte 8) code))
+    (or 
+     (= code target::subtag-complex)
+     (= code target::subtag-complex-single-float)
+     (= code target::subtag-complex-double-float))))
+
+(defun complex-single-float-p (x)
+  (eql (typecode x) target::subtag-complex-single-float))
+
+(defun complex-double-float-p (x)
+  (eql (typecode x) target::subtag-complex-double-float))
 
 (defun numberp (x)
   "Return true if OBJECT is a NUMBER, and NIL otherwise."
-  (let* ((typecode (typecode x)))
-    (declare (fixnum typecode))
-    (and (< typecode (- target::nbits-in-word target::fixnumshift))
-         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
-                    typecode)
-                  (logior (ash 1 target::tag-fixnum)
-                          (ash 1 target::subtag-bignum)
-                          (ash 1 target::subtag-single-float)
-                          (ash 1 target::subtag-double-float)
-                          (ash 1 target::subtag-ratio)
-                          (ash 1 target::subtag-complex))))))
+  (or (realp x) (complexp x)))
 
 (defun arrayp (x)
   "Return true if OBJECT is an ARRAY, and NIL otherwise."
-  (>= (the fixnum (typecode x)) target::min-array-subtag))
+  (arrayp x))
 
 (defun vectorp (x)
   "Return true if OBJECT is a VECTOR, and NIL otherwise."
-  (>= (the fixnum (typecode x)) target::min-vector-subtag))
+  (vectorp x))
 
 
 (defun stringp (x)
@@ -183,7 +184,9 @@
     (if (or (= typecode target::subtag-arrayH)
             (= typecode target::subtag-vectorH))
       (%array-header-simple-p thing)
-      (> typecode target::subtag-vectorH))))
+      (or (= typecode target::subtag-simple-vector)
+          (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+              target::min-cl-ivector-subtag)))))
 
 (defun macptrp (x)
   (= (the fixnum (typecode x)) target::subtag-macptr))
@@ -200,10 +203,12 @@
   #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-nodeheader)
   #+x8664-target
-  (let* ((fulltag (logand (the fixnum (typecode x)) x8664::fulltagmask)))
+  (let* ((fulltag (fulltag x)))
     (declare (fixnum fulltag))
-    (or (= fulltag x8664::fulltag-nodeheader-0)
-        (= fulltag x8664::fulltag-nodeheader-1)))
+    (when (= fulltag x8664::fulltag-misc)
+      (setq fulltag (logand (the (unsigned-byte 8) (typecode x)) x8664::fulltagmask))
+      (or (= fulltag x8664::fulltag-nodeheader-0)
+          (= fulltag x8664::fulltag-nodeheader-1))))
   )
 
 
@@ -308,8 +313,18 @@
   (let* ((x-type (typecode x))
 	 (y-type (typecode y)))
     (declare (fixnum x-type y-type))
-    (if (and (>= x-type target::subtag-vectorH)
-	     (>= y-type target::subtag-vectorH))
+    (if (and (or (>= (the (unsigned-byte 8)
+                       (gvector-typecode-p x-type))
+                     target::subtag-vectorH)
+                 (>= (the (unsigned-byte 8)
+                       (ivector-typecode-p x-type))
+                     target::min-cl-ivector-subtag))
+	     (or (>= (the (unsigned-byte 8)
+                       (gvector-typecode-p y-type))
+                     target::subtag-vectorH)
+                 (>= (the (unsigned-byte 8)
+                       (ivector-typecode-p y-type))
+                     target::min-cl-ivector-subtag)))
       (let* ((x-simple (if (= x-type target::subtag-vectorH)
                          (ldb target::arrayH.flags-cell-subtag-byte 
                               (the fixnum (%svref x target::arrayH.flags-cell)))
@@ -394,9 +409,9 @@
     internal-structure                  ; 16
     value-cell                          ; 17
     xfunction                           ; 18
-    array-header                        ; 19
-    vector-header                       ; 20
-    simple-vector                       ; 21
+    bogus                               ; 19
+    bogus                               ; 20
+    bogus                               ; 21
     bogus                               ; 22
     bogus                               ; 23
     bogus                               ; 24
@@ -404,9 +419,9 @@
     bogus                               ; 26
     bogus                               ; 27
     bogus                               ; 28
-    bogus                               ; 29
-    bogus                               ; 30
-    bogus                               ; 31
+    array-header                        ; 29
+    vector-header                       ; 30
+    simple-vector                       ; 31
     ))
 
 
@@ -418,10 +433,10 @@
     dead-macptr                         ; 4
     code-vector                         ; 5
     creole-object                       ; 6
-    ;; 8-19 are unused
+    ;; some are unused
     xcode-vector                        ; 7
-    bogus                               ; 8
-    bogus                               ; 9
+    (complex single-float)              ; 8
+    (complex double-float)              ; 9
     bogus                               ; 10
     bogus                               ; 11
     bogus                               ; 12
@@ -431,18 +446,18 @@
     bogus                               ; 16
     bogus                               ; 17
     bogus                               ; 18
-    bogus                               ; 19
-    simple-short-float-vector           ; 20
-    simple-unsigned-long-vector         ; 21
-    simple-signed-long-vector           ; 22
-    simple-fixnum-vector                ; 23
-    simple-base-string                  ; 24
-    simple-unsigned-byte-vector         ; 25
-    simple-signed-byte-vector           ; 26
-    bogus                               ; 27
-    simple-unsigned-word-vector         ; 28
-    simple-signed-word-vector           ; 29
-    simple-double-float-vector          ; 30
+    simple-short-float-vector           ; 19
+    simple-unsigned-long-vector         ; 20
+    simple-signed-long-vector           ; 21
+    simple-fixnum-vector                ; 22
+    simple-base-string                  ; 23
+    simple-unsigned-byte-vector         ; 24
+    simple-signed-byte-vector           ; 25
+    simple-unsigned-word-vector         ; 26
+    simple-signed-word-vector           ; 27
+    simple-double-float-vector          ; 28
+    simple-complex-single-float-vector  ; 29
+    simple-complex-double-float-vector  ; 30
     simple-bit-vector                   ; 31
     ))
 
@@ -513,11 +528,11 @@
     bogus
     bogus
     bogus
+    complex-single-float
     bogus
     bogus
     bogus
-    bogus
-    bogus
+    complex-double-float
     bogus
     bogus
     bogus
@@ -540,7 +555,7 @@
     simple-unsigned-long-vector
     simple-unsigned-doubleword-vector
     bogus
-    bogus
+    simple-complex-double-float-vector
     simple-short-float-vector
     simple-fixnum-vector
     bogus
@@ -550,7 +565,7 @@
     bogus
     bogus
     simple-base-string
-    bogus
+    simple-complex-single-float-vector
     bogus
     bogus
     bogus
@@ -693,9 +708,9 @@
     internal-structure                  ; 16
     value-cell                          ; 17
     xfunction                           ; 18
-    array-header                        ; 19
-    vector-header                       ; 20
-    simple-vector                       ; 21
+    nil                                 ; 19
+    nil                                 ; 20
+    nil                                 ; 21
     bogus                               ; 22
     bogus                               ; 23
     bogus                               ; 24
@@ -703,9 +718,9 @@
     bogus                               ; 26
     bogus                               ; 27
     bogus                               ; 28
-    bogus                               ; 29
-    bogus                               ; 30
-    bogus                               ; 31
+    array-header                        ; 29
+    vector-header                       ; 30
+    simple-vector                       ; 31
     ))
 
 
@@ -718,8 +733,8 @@
     code-vector                         ; 5
     creole-object                       ; 6
     xcode-vector                        ; 7
-    bogus                               ; 8
-    bogus                               ; 9
+    complex-single-float                ; 8
+    complex-double-float                ; 9
     bogus                               ; 10
     bogus                               ; 11
     bogus                               ; 12
@@ -729,18 +744,18 @@
     bogus                               ; 16
     bogus                               ; 17
     bogus                               ; 18
-    bogus                               ; 19
-    simple-short-float-vector           ; 20
-    simple-unsigned-long-vector         ; 21
-    simple-signed-long-vector           ; 22
-    simple-fixnum-vector                ; 23
-    simple-base-string                  ; 24
-    simple-unsigned-byte-vector         ; 25
-    simple-signed-byte-vector           ; 26
-    bogus                               ; 27
-    simple-unsigned-word-vector         ; 28
-    simple-signed-word-vector           ; 29
-    simple-double-float-vector          ; 30
+    simple-short-float-vector           ; 19
+    simple-unsigned-long-vector         ; 20
+    simple-signed-long-vector           ; 21
+    simple-fixnum-vector                ; 22
+    simple-base-string                  ; 23
+    simple-unsigned-byte-vector         ; 24
+    simple-signed-byte-vector           ; 25
+    simple-unsigned-word-vector         ; 26
+    simple-signed-word-vector           ; 27
+    simple-double-float-vector          ; 28
+    simple-complex-single-float-vector  ; 29
+    simple-complex-double-float-vector  ; 30
     simple-bit-vector                   ; 31
     ))
 
@@ -842,7 +857,7 @@
     bogus
     bogus
     bogus
-    bogus
+    simple-complex-double-float-vector
     simple-signed-word-vector
     simple-unsigned-word-vector
     bogus
@@ -855,8 +870,8 @@
     bignum
     double-float
     xcode-vector
-    bogus
-    bogus
+    complex-single-float
+    complex-double-float
     bogus
     bogus
     bogus
@@ -880,7 +895,7 @@
     bogus
     bogus
     bogus
-    bogus
+    simple-complex-single-float-vector
     simple-fixnum-vector
     simple-signed-doubleword-vector
     simple-unsigned-doubleword-vector
@@ -1044,9 +1059,14 @@
 
 ;;; 1 if by land, 2 if by sea.
 (defun sequence-type (x)
-  (unless (>= (the fixnum (typecode x)) target::min-vector-subtag)
-    (or (listp x)
-        (report-bad-arg x 'sequence))))
+  (let* ((typecode (typecode x)))
+    (declare (type (unsigned-byte 8) typecode))
+    (unless (or (= typecode target::subtag-vectorH)
+                (= typecode target::subtag-simple-vector)
+                (>= (the (unsigned-byte 8) (ivector-typecode-p typecode))
+                    target::min-cl-ivector-subtag))
+      (or (listp x)
+          (report-bad-arg x 'sequence)))))
 
 (defun uvectorp (x)
   (= (the fixnum (fulltag x)) target::fulltag-misc))

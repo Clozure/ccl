@@ -354,9 +354,10 @@ macro_label(next):
         __(fstmfdd sp!,{d7-d15})
 ')
 
-/* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
+/* Save the lisp non-volatile FPRs. This 
    FPRs. */
 define(`push_lisp_fprs',`
+        ifdef(`use_lisp_nvfprs',`
         new_macro_labels()
         __(b macro_label(next))
 macro_label(data):      
@@ -365,6 +366,7 @@ macro_label(next):
         __(flds single_float_zero,[pc,#-12])
         __(fstmfdd sp!,{d7-d15})
         __(fcpys single_float_zero,s15)
+')
 ')
         
 /* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
@@ -376,22 +378,28 @@ define(`pop_foreign_fprs',`
 
 /* Pop the lisp non-volatile FPRs */        
 define(`pop_lisp_fprs',`
+        ifdef(`use_lisp_nvfprs',`
         __(fldmfdd sp!,{d7-d15})
         __(fcpys single_float_zero,s15)
+        ')
 ')
 
 /* Reload the non-volatile lisp FPRs (d8-d15) from the stack-consed vector
    on top of the stack, leaving the vector in place.  d7 winds up with
    a denormalized float in it, if anything cares. */
 define(`restore_lisp_fprs',`
+        ifdef(`use_lisp_nvfprs',`
         __(fldmfdd $1,{d7-d15})
         __(fcpys single_float_zero,s15)
+        ')
 ')                
 
 /* discard the stack-consed vector which contains a set of 8 non-volatile
    FPRs. */
 define(`discard_lisp_fprs',`
+        ifdef(`use_lisp_nvfprs',`
         __(add sp,sp,#9*8)
+        ')
 ')                        
         
 define(`mkcatch',`
@@ -403,8 +411,7 @@ define(`mkcatch',`
         __(dnode_align(imm1,imm1,node_size))
         __(stack_allocate_zeroed_ivector(imm0,imm1))
         __(movc16(imm0,make_header(catch_frame.element_count,subtag_catch_frame)))
-        __(movs temp2,fn)
-        __(ldrne temp2,[temp2,_function.codevector])
+        __(ldr temp2,[rcontext,#tcr.nfp])
         __(ldr temp1,[rcontext,#tcr.last_lisp_frame])
 	__(ldr imm1,[rcontext,#tcr.catch_top])
         /* imm2 is mvflag */
@@ -549,8 +556,10 @@ define(`suspend_now',`
 define(`skip_stack_vector',`
         new_macro_labels()
         __(ldr $1,[$3])
+        __(tst $1,#fixnummask)
+        __(beq macro_label(done))
         __(extract_fulltag($2,$1))        
-        __(cmp $2,#fulltag_immheader)
+        __(cmp $2,#fulltag_nodeheader)
         __(extract_lowbyte($2,$1))
         __(mov $1,$1,lsr #num_subtag_bits)
         __(moveq $1,$1,lsl #2)
@@ -563,16 +572,20 @@ define(`skip_stack_vector',`
         __(cmp $2,#max_16_bit_ivector_subtag)
         __(movle $1,$1,lsl #1)
         __(ble macro_label(bytes))
-        __(cmp $2,subtag_double_float_vector)
-        __(moveq $1,$1,lsl #3)
-        __(addeq $1,$1,#4)
+        __(cmp $2,#subtag_complex_double_float_vector)
+        __(moveq $1,$1,lsl #4)
         __(beq macro_label(bytes))
-        __(add $1,$1,#7)
-        __(mov $1,$1,lsr #3)
+        __(cmp $2,#subtag_bit_vector)
+        __(addeq $1,$1,#7)
+        __(moveq $1,$1,lsr #3)
+        __(beq macro_label(bytes))
+        __(mov $1,$1,lsl #3)
+        __(add $1,$1,#4)
 macro_label(bytes):     
         __(add $1,$1,#node_size+(dnode_size-1))
         __(bic $1,$1,#fulltagmask)
         __(add $1,$1,$3)
+macro_label(done):              
         ')
 
 /* This may need to be inlined.  $1=link, $2=saved sym idx, $3 = tlb, $4 = value */
@@ -588,3 +601,15 @@ define(`do_unbind_to',`
         __(str $1,[rcontext,#tcr.db_link])
         ')                
 
+/* If $2 is an (unboxed) ivector typecode, return it in $1, else
+   return $0 in $1.  Use $3 as a temporary. */
+
+define(`ivector_typecode_p',`
+        __(and $3,$2,#fulltagmask)
+        __(cmp $3,#fulltag_immheader)
+        ifelse($1,$2,`',`mov $1,$2')
+        __(movne $1,#0)')
+	
+
+
+        

@@ -83,12 +83,14 @@
 #define subtag_u64_vector CL_ARRAY_SUBTAG(ivector_class_64_bit,2)
 #define subtag_fixnum_vector CL_ARRAY_SUBTAG(ivector_class_64_bit,3)
 #define subtag_double_float_vector CL_ARRAY_SUBTAG(ivector_class_64_bit,4)
+#define subtag_complex_single_float_vector CL_ARRAY_SUBTAG(ivector_class_64_bit,5)
 #define subtag_s32_vector CL_ARRAY_SUBTAG(ivector_class_32_bit,1)
 #define subtag_u32_vector CL_ARRAY_SUBTAG(ivector_class_32_bit,2)
 #define subtag_single_float_vector CL_ARRAY_SUBTAG(ivector_class_32_bit,3)
 #define subtag_simple_base_string CL_ARRAY_SUBTAG(ivector_class_32_bit,5)
 #define subtag_s16_vector CL_ARRAY_SUBTAG(ivector_class_other_bit,1)
 #define subtag_u16_vector CL_ARRAY_SUBTAG(ivector_class_other_bit,2)
+#define subtag_complex_double_float_vector CL_ARRAY_SUBTAG(ivector_class_other_bit,3)
 #define subtag_bit_vector CL_ARRAY_SUBTAG(ivector_class_other_bit,7)
 #define subtag_s8_vector CL_ARRAY_SUBTAG(ivector_class_8_bit,1)
 #define subtag_u8_vector CL_ARRAY_SUBTAG(ivector_class_8_bit,2)
@@ -100,7 +102,8 @@
 #define subtag_xcode_vector SUBTAG(ivector_class_32_bit,1)
 #define subtag_bignum SUBTAG(ivector_class_32_bit,2)
 #define subtag_double_float SUBTAG(ivector_class_32_bit,3)
-
+#define subtag_complex_single_float SUBTAG(ivector_class_32_bit,4)
+#define subtag_complex_double_float SUBTAG(ivector_class_32_bit,5)
 
 /*
  Size doesn't matter for non-CL-array gvectors; I can't think of a good
@@ -289,6 +292,7 @@ typedef struct tcr {
   LispObj* tlb_pointer;
   natural shutdown_count;
   void *safe_ref_address;
+  void *nfp;
 } TCR;
 
 #define t_offset -(sizeof(lispsymbol))
@@ -302,6 +306,6 @@ typedef struct tcr {
 #define heap_segment_size 0x00020000L
 #define log2_heap_segment_size 17L
 
-#define ABI_VERSION_MIN 1039
-#define ABI_VERSION_CURRENT 1039
-#define ABI_VERSION_MAX 1039
+#define ABI_VERSION_MIN 1040
+#define ABI_VERSION_CURRENT 1040
+#define ABI_VERSION_MAX 1040

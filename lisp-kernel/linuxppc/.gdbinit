@@ -1,30 +1,7 @@
 directory lisp-kernel
 
-define header32
-x/x $arg0-6
-end
-
-define header64
-x/x $arg0-12
-end
-
-define lisp_string32
-x/s ($arg0-2)
-end
-
-define lisp_string64
-x/s (($arg0)-4)
-end
-
-define pname32
-lisp_string32 (*($arg0-2))
-end
-
-# GDB's expression parser seems to have difficulty
-# with this unless the temporary is used.
-define pname64
-set $temp=*((long *)((long)($arg0-4)))
-lisp_string64 $temp
+define pl
+ call print_lisp_object($arg0)
 end
 
 define ada 

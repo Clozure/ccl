@@ -40,8 +40,12 @@
   (cmpw cr0 imm0 imm1)
   (extract-lowbyte imm1 imm1)
   (cmpwi cr1 imm1 ppc32::subtag-macptr)
+  (cmpwi cr3 imm1 ppc32::subtag-complex-double-float)
+  (cmpwi cr4 imm1 ppc32::subtag-complex-single-float)
   (cmpwi cr2 imm1 ppc32::max-numeric-subtag)
   (beq cr1 @macptr)
+  (beq cr3 @complex-double)
+  (beq cr4 @complex-single)
   (bne cr0 @lose)
   (bgt cr2 @lose)
   (cmpwi cr0 imm1 ppc32::subtag-ratio)
@@ -96,6 +100,14 @@
   (bne cr1 @bignum-next)
   (li arg_z (+ ppc32::t-offset (target-nil-value)))
   (blr)
+  @complex-single
+  (li imm0 2)
+  (li imm1 ppc32::complex-single-float.realpart)
+  (b @bignum-next)
+  @complex-double
+  (li imm0 4)
+  (li imm1 ppc32::complex-double-float.realpart)
+  (b @bignum-next)
   @node
   ;; Have either a ratio or a complex.  In either case, corresponding
   ;; elements of both objects must be EQL.  Recurse on the first
@@ -135,13 +147,17 @@
   (cmpd cr0 imm0 imm1)
   (extract-lowbyte imm1 imm1)
   (cmpdi cr1 imm1 ppc64::subtag-macptr)
-  (cmpdi cr2 imm1 ppc64::subtag-bignum)
+  (cmpdi cr2 imm1 ppc64::subtag-bignum) 
   (cmpdi cr3 imm1 ppc64::subtag-double-float)
+  (cmpdi cr6 imm1 ppc64::subtag-complex-single-float)
+  (cmpdi cr7 imm1 ppc64::subtag-complex-double-float)
   (beq cr1 @macptr)
   (cmpdi cr4 imm1 ppc64::subtag-complex)
   (cmpdi cr5 imm1 ppc64::subtag-ratio)
   (bne cr0 @lose)
   (beq cr2 @bignum)
+  (beq cr6 @complex-single)
+  (beq cr7 @complex-double)
   (beq cr3 @double-float)
   (beq cr4 @complex)
   (beq cr5 @ratio)
@@ -182,6 +198,14 @@
   (ld x ppc64::ratio.denom x)
   (ld y ppc64::ratio.denom y)
   (b @tail)
+  @complex-single
+  (li imm0 2)
+  (li imm1 ppc64::complex-single-float.realpart)
+  (b @bignum-next)
+  @complex-double
+  (li imm0 4)
+  (li imm1 ppc64::complex-double-float.realpart)
+  (b @bignum-next)
   @bignum
   ;; Way back when, we got x's header into imm0.  We know that y's
   ;; header is identical.  Use the element-count from imm0 to control
@@ -213,36 +237,37 @@
   (cmpw cr0 x y)
   (extract-fulltag imm0 x)
   (extract-fulltag imm1 y)
-  (cmpw cr1 imm0 imm1)
-  (cmpwi cr2 imm0 ppc32::fulltag-cons)
-  (cmpwi cr3 imm0 ppc32::fulltag-misc)
-  (beq cr0 @win)
+  (beq @win)
+  (cmpw imm0 imm1)
+  (bne @lose)
+  (cmpwi cr0 imm0 ppc32::fulltag-cons)
+  (cmpwi cr1 imm0 ppc32::fulltag-misc)
+  (beq @cons)
   (bne cr1 @lose)
-  (beq cr2 @cons)
-  (bne cr3 @lose)
+  ;; both X and are uvectors.  If either is a vector header,
+  ;; let hairy-equal figure it out.  Otherwise, they need to
+  ;; have the same subtag
   (extract-subtag imm0 x)
+  (cmpwi imm0 ppc32::subtag-vectorH)  
   (extract-subtag imm1 y)
-  (cmpwi cr0 imm0 ppc32::subtag-macptr)
-  (cmpwi cr2 imm0 ppc32::subtag-istruct)
-  (cmpwi cr1 imm0 ppc32::subtag-vectorH)
-  (cmpw cr3 imm0 imm1)
-  (ble cr0 @eql)
-  (cmplwi cr0 imm1 ppc32::subtag-vectorH)
-  (beq cr2 @same)
-  (blt cr1 @lose)
-  (bge cr0 @go)
+  (cmpwi cr1 imm1 ppc32::subtag-vectorH)
+  (beq @go)
+  (cmpw imm0 imm1)
+  (beq cr1 @go)
+  (bne @lose)
+  (cmpwi imm0 ppc32::subtag-simple-base-string)
+  (cmpwi cr1 imm0 ppc32::subtag-bit-vector)
+  (cmpwi cr2 imm0 ppc32::subtag-istruct) ;pathname, maybe
+  (beq cr0 @go)
+  (beq cr1 @go)
+  (beq cr2 @go)
+  (ba .SPbuiltin-eql)
   @lose
   (li arg_z (target-nil-value))
   (blr)
-  @same
-  (bne cr3 @lose)
   @go
   (set-nargs 2)
   (lwz fname 'hairy-equal nfn)
-  (ba .SPjmpsym)
-  @eql
-  (set-nargs 2)
-  (lwz fname 'eql nfn)
   (ba .SPjmpsym)
   @cons
   (%car temp0 x)

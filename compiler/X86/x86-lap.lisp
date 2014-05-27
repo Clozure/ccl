@@ -1450,6 +1450,7 @@ execute them very quickly.")
 	     (shift (arch::target-word-shift arch))
 	     (code-words (ash code-bytes (- shift))))
 	(target-word-size-case
+         (64)
 	 (32
 	  (let* ((ncode (- code-words nconstants)))
 	    (when (>= ncode #x8000)

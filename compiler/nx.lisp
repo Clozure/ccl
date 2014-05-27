@@ -218,7 +218,7 @@
 (defparameter *nx-discard-xref-info-hook* nil)
 
 (defparameter *nx-in-frontend* nil)
-(defparameter *nx-rewrite-acode* nil)
+(defparameter *nx-rewrite-acode* t)
 
 
 (defun compile-named-function (def &key name env policy load-time-eval-token target
@@ -239,8 +239,6 @@
           (*nx-current-note* function-note)
           (*record-pc-mapping* (and source-notes record-pc-mapping))
           (*compile-code-coverage* (and source-notes compile-code-coverage))
-	  (*nx-acode-note-map* (and (or *record-pc-mapping* *compile-code-coverage*)
-                                    (make-hash-table :test #'eq :shared nil)))
           (*nx-current-code-note* (and *compile-code-coverage*
                                        (make-code-note :form def :source-note function-note)))
           (env (new-lexical-environment env)))
@@ -250,6 +248,10 @@
              (target-word-size-case
               (32 *nx-32-bit-fixnum-type*)
               (64 *nx-64-bit-fixnum-type*)))
+            (*nx-target-half-fixnum-type*
+             (target-word-size-case
+              (32 '(signed-byte 29))
+              (64 '(signed-byte 60))))
             (*nx-target-natural-type*
                (target-word-size-case
                 (32 *nx-32-bit-natural-type*)

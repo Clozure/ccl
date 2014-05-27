@@ -2107,7 +2107,18 @@ main
   lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
   lisp_global(MANAGED_STATIC_REFIDX) = (LispObj)managed_static_refidx;
   lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
+#ifdef ANDROID
+  /* In some versions of Android, atexit() generates a runtime warning
+     about the dangers of using atexit() with shared libraries.
+     Android is what it is.  It's a steaming pile of what it is, in fact.
+  */
+  {
+    extern int __cxa_atexit(void (*) (void *), void *, void *);
+    __cxa_atexit(lazarus, NULL, NULL);
+  }
+#else
   atexit(lazarus);
+#endif
 #ifdef ARM
 #ifdef LINUX
 #ifdef SET_INITIAL_THREAD_AFFINITY

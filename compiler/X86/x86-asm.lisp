@@ -3044,6 +3044,26 @@
    (def-x86-opcode movapd ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
      #x0f29 #o000 #x0 #x66)
 
+   ;; unpcklpd
+   (def-x86-opcode unpcklpd ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f14 #o300 #x0 #x66)
+
+   ;; unpcklps
+   (def-x86-opcode unpcklps ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f14 #o300 #x0)
+   
+   ;; movhpd
+   (def-x86-opcode movhpd ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
+     #x0f16 #o000 #x0 #x66)
+   (def-x86-opcode movhpd ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+     #x0f17 #o000 #x0 #x66)
+
+   ;; movlpd
+   (def-x86-opcode movlpd ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
+     #x0f12 #o000 #x0 #x66)
+   (def-x86-opcode movlpd ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
+     #x0f13 #o000 #x0 #x66)
+
    ;; movaps
    (def-x86-opcode movaps ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
      #x0f28 #o300 #x0)
@@ -3326,6 +3346,7 @@
    
    ;; psrlw
 
+
    ;; pmuludq
    (def-x86-opcode pmuludq ((:regmmx :insert-mmx-rm) (:regmmx :insert-mmx-reg))
      #x0ff4 #o300 #x0)
@@ -3349,6 +3370,14 @@
    ;; psrad
    (def-x86-opcode psrad ((:regmmx :insert-mmx-rm) (:regmmx :insert-mmx-reg))
      #x0fe2 #o300 #x0)
+
+   ;; shufpd
+   (def-x86-opcode shufpd ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0fc6 #o300 #x0 #x66)
+
+   ;; shufps
+   (def-x86-opcode shufps ((:imm8 :insert-imm8) (:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0fc6 #o300 #x0)
 
 ;;; End of list of useful mmx instructions
 

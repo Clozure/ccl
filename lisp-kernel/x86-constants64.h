@@ -100,13 +100,13 @@
 #define subtag_arrayH SUBTAG(fulltag_nodeheader_0,10L)
 #define subtag_vectorH SUBTAG(fulltag_nodeheader_1,10L)
 #define subtag_simple_vector SUBTAG(fulltag_nodeheader_1,11L)
-#define min_vector_subtag subtag_vectorH	
 
 #define ivector_class_64_bit fulltag_immheader_2
 #define ivector_class_32_bit fulltag_immheader_1
 #define ivector_class_other_bit fulltag_immheader_0
 
 
+#define subtag_complex_xingle_float_vector SUBTAG(ivector_class_64_bit,12L)
 #define subtag_fixnum_vector SUBTAG(ivector_class_64_bit,12L)
 #define subtag_s64_vector SUBTAG(ivector_class_64_bit,13L)
 #define subtag_u64_vector SUBTAG(ivector_class_64_bit,14L)
@@ -117,6 +117,7 @@
 #define subtag_u32_vector SUBTAG(ivector_class_32_bit,14L)
 #define subtag_single_float_vector SUBTAG(ivector_class_32_bit,15L)
 
+#define subtag_complex_double_float_vector SUBTAG(ivector_class_other_bit,9L)
 #define subtag_s16_vector SUBTAG(ivector_class_other_bit,10L)
 #define subtag_u16_vector SUBTAG(ivector_class_other_bit,11L)
 #define subtag_s8_vector SUBTAG(ivector_class_other_bit,13L)
@@ -131,6 +132,9 @@
 #define subtag_bignum SUBTAG(ivector_class_32_bit,0)
 #define subtag_double_float SUBTAG(ivector_class_32_bit,1)
 #define subtag_xcode_vector SUBTAG(ivector_class_32_bit,2)
+#define subtag_complex_single_float SUBTAG(ivector_class_32_bit,4)
+#define subtag_complex_double_float SUBTAG(ivector_class_32_bit,5)
+
 
 /* Note the difference between (e.g) fulltag_function - which
    defines what the low 4 bytes of a function pointer look like -
@@ -327,6 +331,7 @@ typedef struct tcr {
   void *safe_ref_address;
   void *pending_io_info;
   void *io_datum;
+  void *nfp;
 } TCR;
 
 #define t_offset (t_value-nil_value)

@@ -554,7 +554,7 @@
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
     #+arm-target (%set-fpscr-status 0)
-    (%setf-short-float TEMP (#_sinf n))
+    (%setf-short-float TEMP (external-call "sinf" :single-float n :single-float))
     (%sf-check-exception-1 'sin n (%ffi-exception-status))
     (%setf-short-float result TEMP)))
 
@@ -770,7 +770,7 @@
                 :operands (list n)))
     (%setf-double-float result TEMP)))
 
-#+(and 32-bit-target (not windows target))
+#+(and 32-bit-target (not windows-target))
 (defun %single-float-exp! (n result)
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))

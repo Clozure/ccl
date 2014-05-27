@@ -44,11 +44,13 @@
 (defconstant cdb-hash-mask (1- (ash 1 29)))
 
 (defun cdb-hash (buf len)
-  (declare (fixnum len))
+  (declare (type (unsigned-byte 29) len))
   (let* ((h 5381))
-    (declare (fixnum h))
+    (declare (type (unsigned-byte 29) h))
     (dotimes (i len (logand h cdb-hash-mask))
-      (setq h (+ h (the fixnum (logand cdb-hash-mask (ash h 5)))))
+      (declare (type (unsigned-byte 29) i))
+      (setq h (+ h (the (unsigned-byte 29) (logand cdb-hash-mask (the (signed-byte 30) (ash h 5))))))
+
       (setq h (logxor (the (unsigned-byte 8) (%get-unsigned-byte buf i)) h)))))
 
 (defconstant cdbm-hplist 1000)

@@ -156,6 +156,9 @@
 (defarmlapfunction %%frame-backlink ((p arg_z))
   (check-nargs 1)
   (ldr imm0 (:@ p))
+  (tst imm0 (:$ arm::fixnummask))
+  (moveq arg_z imm0)
+  (bxeq lr)
   (cmp imm0 (:$ arm::lisp-frame-marker))
   (addeq arg_z p (:$ arm::lisp-frame.size))
   (bxeq lr)
@@ -191,11 +194,15 @@
   (cmp imm1 (:$ arm::max-16-bit-ivector-subtag))
   (movls imm0 (:lsl imm0 (:$ 1)))
   (bls @align)
-  (cmp imm1 (:$ arm::subtag-double-float-vector))
-  (moveq imm0 (:lsl imm0 (:$ 3)))
+  (cmp imm1 (:$ arm::subtag-bit-vector))
+  (addeq imm0 imm0 (:$ 7))
+  (moveq imm0 (:lsr imm0 (:$ 3)))
   (beq @align)
-  (add imm0 imm0 (:$ 7))
-  (mov imm0 (:lsr imm0 (:$ 3)))
+  (cmp imm1 (:$ arm::subtag-complex-double-float-vector))
+  (moveq imm0 (:lsl imm0 (:$ 4)))
+  (beq @align)
+  
+  (mov imm0 (:lsl imm0 (:$ 3)))
   (b @align))
  
   
@@ -304,139 +311,12 @@
   (movlo arg_z (:lsl imm0 (:$ arm::fixnumshift)))
   (return-lisp-frame))
 
-(defarmlapfunction %do-ff-call ((tag arg_x) (result arg_y) (entry arg_z))
-  (stmdb (:! vsp) (tag result))
-  (sploadlr .SPeabi-ff-call)
-  (blx lr)
-  (ldmia (:! vsp) (tag result))
-  (macptr-ptr imm2 result)
-  (str imm0 (:@ imm2 (:$ 0)))
-  (str imm1 (:@ imm2 (:$ 4)))
-  (vpush1 tag)
-  (mov arg_z 'nil)
-  (vpush1 arg_z)
-  (set-nargs 1)
-  (sploadlr .SPthrow)
-  (blx lr))
+
   
-(defun %ff-call (entry &rest specs-and-vals)
-  (declare (dynamic-extent specs-and-vals))
-  (let* ((len (length specs-and-vals))
-         (total-words 0))
-    (declare (fixnum len total-words))
-    (let* ((result-spec (or (car (last specs-and-vals)) :void))
-           (nargs (ash (the fixnum (1- len)) -1)))
-      (declare (fixnum nargs))
-      (if (and (arm-hard-float-p)
-               (or (eq result-spec :double-float)
-                   (eq result-spec :single-float)
-                   (let* ((specs specs-and-vals))
-                     (dotimes (i nargs)
-                       (let* ((spec (car specs)))
-                         (when (or (eq spec :double-float)
-                                   (eq spec :single-float))
-                           (return t)))))))
-        (%ff-call-hard-float entry specs-and-vals)
-               
-        (ecase result-spec
-          ((:address :unsigned-doubleword :signed-doubleword
-                     :single-float :double-float
-                     :signed-fullword :unsigned-fullword
-                     :signed-halfword :unsigned-halfword
-                     :signed-byte :unsigned-byte
-                     :void)
-           (do* ((i 0 (1+ i))
-                 (specs specs-and-vals (cddr specs))
-                 (spec (car specs) (car specs)))
-                ((= i nargs))
-             (declare (fixnum i))
-             (case spec
-               ((:address :single-float
-                          :signed-fullword :unsigned-fullword
-                          :signed-halfword :unsigned-halfword
-                          :signed-byte :unsigned-byte)
-                (incf total-words))
-               ((:double-float :unsigned-doubleword :signed-doubleword)
-                #-darwin-target
-                (setq total-words (+ total-words (logand total-words 1)))
-                (incf total-words 2))
-
-               (t (if (typep spec 'unsigned-byte)
-                    (incf total-words spec)
-                    (error "unknown arg spec ~s" spec)))))
-           ;; It's necessary to ensure that the C frame is the youngest thing on
-           ;; the foreign stack here.
-           (let* ((tag (cons nil nil)))
-             (declare (dynamic-extent tag))
-             (%stack-block ((result 8))
-               (catch tag
-                 (with-macptrs ((argptr))
-                   (with-variable-c-frame
-                       total-words frame
-                       (%setf-macptr-to-object argptr frame)
-                       (let* ((arg-offset 8))
-                         (declare (fixnum arg-offset))
-                         (do* ((i 0 (1+ i))
-                               (specs specs-and-vals (cddr specs))
-                               (spec (car specs) (car specs))
-                               (val (cadr specs) (cadr specs)))
-                              ((= i nargs))
-                           (declare (fixnum i))
-                           (case spec
-                             (:address
-                              (setf (%get-ptr argptr arg-offset) val)
-                              (incf arg-offset 4))
-                             (:signed-doubleword
-                              #-darwin-target
-                              (when (logtest 7 arg-offset)
-                                (incf arg-offset 4))
-                              (setf (%%get-signed-longlong argptr arg-offset) val)
-                              (incf arg-offset 8))
-                             ((:signed-fullword :signed-halfword :signed-byte)
-                              (setf (%get-signed-long argptr arg-offset) val)
-                              (incf arg-offset 4))
-                             (:unsigned-doubleword
-                              #-darwin-target
-                              (when (logtest 7 arg-offset)
-                                (incf arg-offset 4))
-                              (setf (%%get-unsigned-longlong argptr arg-offset) val)
-                              (incf arg-offset 8))
-                             ((:unsigned-fullword :unsigned-halfword :unsigned-byte)
-                              (setf (%get-unsigned-long argptr arg-offset) val)
-                              (incf arg-offset 4))
-                             (:double-float
-                              #-darwin-target
-                              (when (logtest 7 arg-offset)
-                                (incf arg-offset 4))
-                              (setf (%get-double-float argptr arg-offset) val)
-                              (incf arg-offset 8))
-                             (:single-float
-                              (setf (%get-single-float argptr arg-offset) val)
-                              (incf arg-offset 4))
-                             (t
-                              (let* ((p 0))
-                                (declare (fixnum p))
-                                (dotimes (i (the fixnum spec))
-                                  (setf (%get-ptr argptr arg-offset) (%get-ptr val p))
-                                  (incf p 4)
-                                  (incf arg-offset 4)))))))
-                       (%do-ff-call tag result entry))))
-               (ecase result-spec
-                 (:void nil)
-                 (:address (%get-ptr result 0))
-                 (:unsigned-byte (%get-unsigned-byte result 0))
-                 (:signed-byte (%get-signed-byte result 0))
-                 (:unsigned-halfword (%get-unsigned-word result 0))
-                 (:signed-halfword (%get-signed-word result 0))
-                 (:unsigned-fullword (%get-unsigned-long result 0))
-                 (:signed-fullword (%get-signed-long result 0))
-                 (:unsigned-doubleword (%%get-unsigned-longlong result 0))
-                 (:signed-doubleword (%%get-signed-longlong result 0))
-                 (:single-float (%get-single-float result 0))
-                 (:double-float (%get-double-float result 0)))))))))))
 
 
-(defarmlapfunction %do-ff-call-hard-float ((tag arg_x) (result arg_y) (entry arg_z))
+;;; We only support hard-float conventions
+(defarmlapfunction %do-ff-call ((tag arg_x) (result arg_y) (entry arg_z))
   (stmdb (:! vsp) (tag result))
   (sploadlr .SPeabi-ff-callhf)
   (blx lr)
@@ -452,7 +332,8 @@
   (sploadlr .SPthrow)
   (blx lr))
 
-(defun %ff-call-hard-float (entry specs-and-vals)
+(defun %ff-call (entry &rest specs-and-vals)
+  (declare (dynamic-extent specs-and-vals))
   (let* ((len (length specs-and-vals))
          (total-words 0)
          (fp-words 16))
@@ -560,7 +441,7 @@
                                   (setf (%get-ptr argptr arg-offset) (%get-ptr val p))
                                   (incf p 4)
                                   (incf arg-offset 4)))))))
-                         (%do-ff-call-hard-float tag result entry))))
+                         (%do-ff-call tag result entry))))
              (ecase result-spec
                (:void nil)
                (:address (%get-ptr result 0))

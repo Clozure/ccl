@@ -3834,7 +3834,8 @@
     (funcall (ioblock-read-char-function ioblock) ioblock)))
 
 
-(defmethod stream-read-char-no-hang ((stream basic-character-input-stream))
+(defmethod
+    stream-read-char-no-hang ((stream basic-character-input-stream))
   (let* ((ioblock (basic-stream-ioblock stream)))
     (with-ioblock-input-locked (ioblock)
       (values
@@ -4837,6 +4838,9 @@
                      )))
       (setf (basic-stream.state stream) ioblock)
       stream)))
+
+(defmethod stream-read-char-no-hang ((s string-input-stream))
+  (stream-read-char s))
 
 (defun string-stream-string (s)
   (let* ((class (if (typep s 'basic-stream) (%wrapper-class (basic-stream.wrapper s)))))

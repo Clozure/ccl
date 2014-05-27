@@ -107,6 +107,20 @@
 				   ())
   (movsd (:%xmm val) (:@ x8632::misc-dfloat-offset (:%l v) (:%l unscaled-idx) 2)))
 
+(define-x8632-vinsn misc-set-complex-single-float (()
+				   ((val :complex-single-float)
+				    (v :lisp)
+				    (unscaled-idx :imm))
+				   ())
+  (movq (:%xmm val) (:@ x8632::complex-single-float.realpart (:%l  v) (:%l unscaled-idx))))
+
+(define-x8632-vinsn misc-set-complex-double-float (()
+                                                   ((val :complex-double-float)
+                                                    (v :lisp)
+                                                    (unscaled-idx :imm))
+				   ())
+  (movdqu (:%xmm val) (:@ x8632::complex-double-float.realpart (:%l  v) (:%l unscaled-idx) 2)))
+
 (define-x8632-vinsn misc-ref-u8 (((dest :u8))
                                  ((v :lisp)
                                   (scaled-idx :s32)))
@@ -141,6 +155,21 @@
                                            ((v :lisp)
                                             (scaled-idx :s32)))
   (movss (:@ x8632::misc-data-offset (:%l v) (:%l scaled-idx)) (:%xmm dest)))
+
+(define-x8632-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
+                                                    ((v :lisp)
+                                                     (scaled-idx :imm)))
+  (movq (:@ x8632::complex-single-float.realpart (:%l v) (:%l scaled-idx)) (:%xmm dest)))
+
+(define-x8632-vinsn misc-ref-c-complex-single--float  (((dest :complex-single-float))
+                                                       ((v :lisp)
+                                                        (idx :s32const)))
+  (movq (:@ (:apply + x8632::complex-single-float.realpart (:apply ash idx x8632::word-shift)) (:%l v)) (:%xmm dest)))
+
+(define-x8632-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
+                                                    ((v :lisp)
+                                                     (scaled-idx :imm)))
+  (movdqu (:@ x8632::complex-double-float.realpart (:%l v) (:%l scaled-idx) 2) (:%xmm dest)))
 
 (define-x8632-vinsn misc-ref-s32 (((dest :s32))
                                   ((v :lisp)
@@ -226,7 +255,7 @@
   (movl (:$l val) (:@ (:apply + x8632::misc-data-offset (:apply ash idx 2)) (:%l v))))
 
 ;;; xxx don't know if this is right
-(define-x8632-vinsn set-closure-forward-reference (()
+(define-x8632-vinsn set-closure-iorward-reference (()
                                                    ((val :lisp)
                                                     (closure :lisp)
                                                     (idx :s32const)))
@@ -253,20 +282,19 @@
 (define-x8632-vinsn set-nargs (()
 			       ((n :u16const))
                                ((casualty (:lisp #.x8632::nargs))))
-  ((:pred = n 0)
-   (xorl (:%l x8632::nargs) (:%l x8632::nargs)))
-  ((:not (:pred = n 0))
-   (movl (:$l (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs))))
+  (:if (:pred = n 0)
+    (xorl (:%l x8632::nargs) (:%l x8632::nargs))
+    (movl (:$l (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs))))
+
 
 (define-x8632-vinsn check-exact-nargs (()
                                        ((n :u16const)))
   :resume
-  ((:pred = n 0)
-   (testl (:%l x8632::nargs) (:%l x8632::nargs)))
-  ((:and (:pred > n 0) (:pred < n 32))
-   (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs)))
-  ((:pred >= n 32)
-   (cmpl (:$l (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs)))
+  (:if (:pred = n 0)
+    (testl (:%l x8632::nargs) (:%l x8632::nargs))
+    (:if (:pred < n 32)
+      (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs))
+      (cmpl (:$l (:apply ash n x8632::fixnumshift)) (:%l x8632::nargs))))
   (jne :bad)
   (:anchored-uuo-section :resume)
   :bad
@@ -275,15 +303,15 @@
 (define-x8632-vinsn check-min-nargs (()
 				     ((min :u16const)))
   :resume
-  ((:pred = min 1)
-   (testl (:%l x8632::nargs) (:%l x8632::nargs))
-   (je :toofew))
-  ((:not (:pred = min 1))
-   ((:and (:pred > min 1) (:pred < min 32))
-    (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::fixnumshift))))
-   ((:pred >= min 32)
-    (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::fixnumshift))))
-   (jb :toofew))
+  (:if (:pred = min 1)
+    (:progn
+      (testl (:%l x8632::nargs) (:%l x8632::nargs))
+      (je :toofew))
+    (:progn
+      (:if (:pred < min 32)
+        (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::fixnumshift)))
+        (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::fixnumshift))))
+      (jb :toofew)))
   (:anchored-uuo-section :resume)
   :toofew
   (:anchored-uuo (uuo-error-too-few-args)))
@@ -291,9 +319,8 @@
 (define-x8632-vinsn check-max-nargs (()
 				     ((n :u16const)))
   :resume
-  ((:pred < n 32)
-   (rcmpl (:%l x8632::nargs) (:$b (:apply ash n x8632::fixnumshift))))
-  ((:pred >= n 32)
+  (:if (:pred < n 32)
+   (rcmpl (:%l x8632::nargs) (:$b (:apply ash n x8632::fixnumshift)))
    (rcmpl (:%l x8632::nargs) (:$l (:apply ash n x8632::fixnumshift))))
   (ja :bad)
   (:anchored-uuo-section :resume)
@@ -304,18 +331,17 @@
                                          ((min :u16const)
                                           (max :u16const)))
   :resume
-  ((:pred = min 1)
-   (testl (:%l x8632::nargs) (:%l x8632::nargs))
-   (je :toofew))
-  ((:not (:pred = min 1))
-   ((:pred < min 32)
-    (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::word-shift))))
-   ((:pred >= min 32)
-    (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::word-shift))))
-   (jb :toofew))
-  ((:pred < max 32)
-   (rcmpl (:%l x8632::nargs) (:$b (:apply ash max x8632::word-shift))))
-  ((:pred >= max 32)
+  (:if (:pred = min 1)
+    (:progn
+      (testl (:%l x8632::nargs) (:%l x8632::nargs))
+      (je :toofew))
+    (:progn
+      (:if (:pred < min 32)
+        (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::word-shift)))
+        (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::word-shift))))
+      (jb :toofew)))
+  (:if (:pred < max 32)
+   (rcmpl (:%l x8632::nargs) (:$b (:apply ash max x8632::word-shift)))
    (rcmpl (:%l x8632::nargs) (:$l (:apply ash max x8632::word-shift))))
   (ja :toomany)
   
@@ -328,10 +354,9 @@
 
 (define-x8632-vinsn default-1-arg (()
                                    ((min :u16const)))
-  ((:pred < min 32)
-   (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::fixnumshift))))
-  ((:pred >= min 32)
-   (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::fixnumshift))))
+  (:if (:pred < min 32)
+    (rcmpl (:%l x8632::nargs) (:$b (:apply ash min x8632::fixnumshift)))
+    (rcmpl (:%l x8632::nargs) (:$l (:apply ash min x8632::fixnumshift))))
   (jne :done)
   ((:pred >= min 2)
    (pushl (:%l x8632::arg_y)))
@@ -342,10 +367,9 @@
 
 (define-x8632-vinsn default-2-args (()
 				    ((min :u16const)))
-  ((:pred < (:apply 1+ min) 32)
-   (rcmpl (:%l x8632::nargs) (:$b (:apply ash (:apply 1+ min) x8632::fixnumshift))))
-  ((:pred >= (:apply 1+ min) 32)
-   (rcmpl (:%l x8632::nargs) (:$l (:apply ash (:apply 1+ min) x8632::fixnumshift))))
+  (:if (:pred < (:apply 1+ min) 32)
+    (rcmpl (:%l x8632::nargs) (:$b (:apply ash (:apply 1+ min) x8632::fixnumshift)))
+    (rcmpl (:%l x8632::nargs) (:$l (:apply ash (:apply 1+ min) x8632::fixnumshift))))
   (ja :done)
   (je :one)
   ;; We got "min" args; arg_y & arg_z default to nil
@@ -369,18 +393,16 @@
                                        ((temp :u32)
 					(nargs (:lisp #.x8632::nargs))))
   (movl (:%l x8632::nargs) (:%l temp))
-  ((:pred < n 32)
-   (rcmpl (:%l x8632::nargs) (:$b (:apply ash n x8632::fixnumshift))))
-  ((:pred >= n 32)
-   (rcmpl (:%l x8632::nargs) (:$l (:apply ash n x8632::fixnumshift))))
+  (:if (:pred < n 32)
+    (rcmpl (:%l x8632::nargs) (:$b (:apply ash n x8632::fixnumshift)))
+    (rcmpl (:%l x8632::nargs) (:$l (:apply ash n x8632::fixnumshift))))
   (jae :done)
   :loop
   (addl (:$b x8632::fixnumone) (:%l temp))
   (pushl (:$l (:apply target-nil-value)))
-  ((:pred < n 32)
-   (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l temp)))
-  ((:pred >= n 32)
-   (cmpl (:$l (:apply ash n x8632::fixnumshift)) (:%l temp)))
+  (:if (:pred < n 32)
+    (cmpl (:$b (:apply ash n x8632::fixnumshift)) (:%l temp))
+    (cmpl (:$l (:apply ash n x8632::fixnumshift)) (:%l temp)))
   (jne :loop)
   :done)
 
@@ -431,10 +453,9 @@
 (define-x8632-vinsn (vpush-fixnum :push :node :vsp)
     (()
      ((const :s32const)))
-  ((:and  (:pred < const 128) (:pred >= const -128))
-   (pushl (:$b const)))
-  ((:not (:and  (:pred < const 128) (:pred >= const -128)))
-   (pushl (:$l const))))
+  (:if (:and  (:pred < const 128) (:pred >= const -128))
+    (pushl (:$b const))
+    (pushl (:$l const))))
 
 (define-x8632-vinsn vframe-load (((dest :lisp))
 				 ((frame-offset :u16const)
@@ -450,18 +471,16 @@
 (define-x8632-vinsn compare-vframe-offset-to-fixnum (()
                                                      ((frame-offset :u16const)
                                                       (fixval :s32const)))
-  ((:and (:pred < fixval 128) (:pred >= fixval -128))
-   (cmpl (:$b fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
-  ((:not (:and (:pred < fixval 128) (:pred >= fixval -128)))
-   (cmpl (:$l fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
+  (:if (:and (:pred < fixval 128) (:pred >= fixval -128))
+    (cmpl (:$b fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))
+    (cmpl (:$l fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
 
 (define-x8632-vinsn add-constant-to-vframe-offset (()
                                                    ((frame-offset :u16const)
                                                     (constant :s32const)))
-  ((:and (:pred < constant 128) (:pred >= constant -128))
-   (addl (:$b constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
-  ((:not (:and (:pred < constant 128) (:pred >= constant -128)))
-   (addl (:$l constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
+  (:if (:and (:pred < constant 128) (:pred >= constant -128))
+    (addl (:$b constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))
+    (addl (:$l constant) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
 
 (define-x8632-vinsn compare-value-cell-to-nil (()
                                                ((vcell :lisp)))
@@ -545,18 +564,16 @@
 (define-x8632-vinsn (lri :constant-ref) (((dest :imm))
                                          ((intval :s32const))
                                          ())
-  ((:pred = intval 0)
-   (xorl (:%l dest) (:%l dest)))
-  ((:not (:pred = intval 0))
+  (:if (:pred = intval 0)
+   (xorl (:%l dest) (:%l dest))
    (movl (:$l intval) (:%l dest))))
 
 (define-x8632-vinsn (lriu :constant-ref) (((dest :imm))
-                                         ((intval :u32const))
-                                         ())
-  ((:pred = intval 0)
-   (xorl (:%l dest) (:%l dest)))
-  ((:not (:pred = intval 0))
-   (movl (:$l intval) (:%l dest))))
+                                          ((intval :u32const))
+                                          ())
+  (:if (:pred = intval 0)
+    (xorl (:%l dest) (:%l dest))
+    (movl (:$l intval) (:%l dest))))
 
 ;;; In the following trap/branch-unless vinsns, it might be worth
 ;;; trying to use byte instructions when the args are known to be
@@ -714,6 +731,38 @@
   :bad
   (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-double-float))))
 
+(define-x8632-vinsn trap-unless-complex-double-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :bad)
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
+  (cmpl (:$b x8632::subtag-complex-double-float) (:%l tag))
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-complex-double-float))))
+
+(define-x8632-vinsn trap-unless-complex-single-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :bad)
+  (movsbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
+  (cmpl (:$b x8632::subtag-complex-single-float) (:%l tag))
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l object) (:$ub x8632::subtag-complex-single-float))))
+
 (define-x8632-vinsn trap-unless-macptr (()
                                         ((object :lisp))
                                         ((tag :u8)))
@@ -802,14 +851,11 @@
 
 (define-x8632-vinsn extract-fulltag-fixnum (((tag :imm))
                                             ((object :lisp)))
-  ((:pred =
-	  (:apply %hard-regspec-value tag)
-	  (:apply %hard-regspec-value object))
-   (shll (:$ub x8632::fixnumshift) (:%l object)))
-  ((:not (:pred =
-		(:apply %hard-regspec-value tag)
-		(:apply %hard-regspec-value object)))
-   (imull (:$b x8632::fixnumone) (:%l object) (:%l tag)))
+  (:if (:pred =
+              (:apply %hard-regspec-value tag)
+              (:apply %hard-regspec-value object))
+    (shll (:$ub x8632::fixnumshift) (:%l object))
+    (imull (:$b x8632::fixnumone) (:%l object) (:%l tag)))
   (andl (:$b (ash x8632::fulltagmask x8632::fixnumshift)) (:%l tag)))
 
 (define-x8632-vinsn extract-typecode (((tag :u32))
@@ -849,12 +895,11 @@
   (cmovccl (:$ub crbit) (:%l temp) (:%l dest)))
 
 (define-x8632-vinsn compare-s32-constant (()
-                                            ((val :imm)
-                                             (const :s32const)))
-  ((:or  (:pred < const -128) (:pred > const 127))
-   (rcmpl (:%l val) (:$l const)))
-  ((:not (:or  (:pred < const -128) (:pred > const 127)))
-   (rcmpl (:%l val) (:$b const))))
+                                          ((val :imm)
+                                           (const :s32const)))
+  (:if (:or  (:pred < const -128) (:pred > const 127))
+    (rcmpl (:%l val) (:$l const))
+    (rcmpl (:%l val) (:$b const))))
 
 (define-x8632-vinsn compare-u31-constant (()
                                           ((val :u32)
@@ -867,14 +912,11 @@
 (define-x8632-vinsn compare-u8-constant (()
                                          ((val :u8)
                                           (const :u8const)))
-  ((:pred = (:apply %hard-regspec-value val) x8632::eax)
-   (rcmpb (:%accb val) (:$b const)))
-  ((:and (:pred > (:apply %hard-regspec-value val) x8632::eax)
-	 (:pred <= (:apply %hard-regspec-value val) x8632::ebx))
-   (rcmpb (:%b val) (:$b const)))
-  ((:pred > (:apply %hard-regspec-value val) x8632::ebx)
-   (rcmpl (:%l val) (:$l const)))
-  )
+  (:if (:pred = (:apply %hard-regspec-value val) x8632::eax)
+    (rcmpb (:%accb val) (:$b const))
+    (:if (:pred <= (:apply %hard-regspec-value val) x8632::ebx)
+      (rcmpb (:%b val) (:$b const))
+      (rcmpl (:%l val) (:$l const)))))
 
 (define-x8632-vinsn cons (((dest :lisp))
                           ((car :lisp)
@@ -1040,11 +1082,11 @@
 
 (define-x8632-vinsn zero-extend-u8 (((dest :s32))
                                     ((src :u8)))
-  ((:pred < (:apply %hard-regspec-value src) 4)
-   (movzbl (:%b src) (:%l dest)))
-  ((:pred >= (:apply %hard-regspec-value src) 4)
-   (movl (:%l src) (:%l dest))
-   (movzbl (:%b dest) (:%l dest))))
+  (:if (:pred < (:apply %hard-regspec-value src) 4)
+   (movzbl (:%b src) (:%l dest))
+  (:progn
+    (movl (:%l src) (:%l dest))
+    (movzbl (:%b dest) (:%l dest)))))
   
 
 (define-x8632-vinsn zero-extend-u16 (((dest :s32))
@@ -1073,28 +1115,25 @@
                                 (val t))
                                ((val t)
                                 (const :s32const)))
-  ((:and (:pred >= const -128) (:pred <= const 127))
-   (andl (:$b const) (:%l val)))
-  ((:not (:and (:pred >= const -128) (:pred <= const 127)))
-   (andl (:$l const) (:%l val))))
+  (:if (:and (:pred >= const -128) (:pred <= const 127))
+    (andl (:$b const) (:%l val))
+    (andl (:$l const) (:%l val))))
 
 (define-x8632-vinsn %logior-c (((dest t)
                                 (val t))
                                ((val t)
                                 (const :s32const)))
-  ((:and (:pred >= const -128) (:pred <= const 127))
-   (orl (:$b const) (:%l val)))
-  ((:not (:and (:pred >= const -128) (:pred <= const 127)))
-   (orl (:$l const) (:%l val))))
+  (:if (:and (:pred >= const -128) (:pred <= const 127))
+    (orl (:$b const) (:%l val))
+    (orl (:$l const) (:%l val))))
 
 (define-x8632-vinsn %logxor-c (((dest t)
                                 (val t))
                                ((val t)
                                 (const :s32const)))
-  ((:and (:pred >= const -128) (:pred <= const 127))
-   (xorl (:$b const) (:%l val)))
-  ((:not (:and (:pred >= const -128) (:pred <= const 127)))
-   (xorl (:$l const) (:%l val))))
+  (:if (:and (:pred >= const -128) (:pred <= const 127))
+    (xorl (:$b const) (:%l val))
+    (xorl (:$l const) (:%l val))))
 
 (define-x8632-vinsn character->fixnum (((dest :lisp))
 				       ((src :lisp))
@@ -1104,10 +1143,9 @@
                 (:apply %hard-regspec-value src)))
    (movl (:%l src) (:%l dest)))
 
-  ((:pred <= (:apply %hard-regspec-value dest) x8632::ebx)
-   (xorb (:%b dest) (:%b dest)))
-  ((:pred > (:apply %hard-regspec-value dest) x8632::ebx)
-   (andl (:$l -256) (:%l dest)))
+  (:if (:pred <= (:apply %hard-regspec-value dest) x8632::ebx)
+    (xorb (:%b dest) (:%b dest))
+    (andl (:$l -256) (:%l dest)))
   (shrl (:$ub (- x8632::charcode-shift x8632::fixnumshift)) (:%l dest)))
 
 (define-x8632-vinsn compare (()
@@ -1119,35 +1157,13 @@
                                    ((val :imm)))
   (negl (:% val)))
 
-;;; This handles the 1-bit overflow from addition/subtraction/unary negation
-(define-x8632-vinsn set-bigits-and-header-for-fixnum-overflow
-    (()
-     ((val :lisp)
-      (no-overflow
-       :label))
-     ((imm (:u32 #.x8632::imm0))))
-  (jno no-overflow)
-  (movl (:%l val) (:%l imm))
-  (sarl (:$ub x8632::fixnumshift) (:%l imm))
-  (xorl (:$l #xc0000000) (:%l imm))
-  ;; stash bignum digit
-  (movd (:%l imm) (:%mmx x8632::mm1))
-  ;; set header
-  (movl (:$l x8632::one-digit-bignum-header) (:%l imm))
-  (movd (:%l imm) (:%mmx x8632::mm0))
-  ;; need 8 bytes of aligned memory for 1 digit bignum
-  (movl (:$l (- 8 x8632::fulltag-misc)) (:%l imm)))
+
 
 (define-x8632-vinsn handle-fixnum-overflow-inline
     (()
-     ((val :lisp)
-      (no-overflow
-       :label))
+     ((val :lisp))
      ((imm (:u32 #.x8632::imm0))
       (freeptr (:lisp #.x8632::allocptr))))
-  (jo :overflow)
-  (:uuo-section)
-  :overflow
   (movl (:%l val) (:%l imm))
   (sarl (:$ub x8632::fixnumshift) (:%l imm))
   (xorl (:$l #xc0000000) (:%l imm))
@@ -1169,8 +1185,7 @@
   ((:not (:pred = freeptr
 		(:apply %hard-regspec-value val)))
    (movl (:%l freeptr) (:%l val)))
-  (movd (:%mmx x8632::mm1) (:@ x8632::misc-data-offset (:%l val)))
-  (jmp no-overflow))
+  (movd (:%mmx x8632::mm1) (:@ x8632::misc-data-offset (:%l val))))
 
   
 (define-x8632-vinsn set-bigits-after-fixnum-overflow (()
@@ -1232,45 +1247,10 @@
   ;;(imull (:$b x8632::fixnumone) (:%l src) (:%l dest))
   (leal (:@ (:%l src) x8632::fixnumone) (:%l dest)))
 
-(define-x8632-vinsn (fix-fixnum-overflow-ool :call)
-    (((val :lisp))
-     ((val :lisp))
-     ((unboxed (:s32 #.x8632::imm0))
-      ;; we use %mm0 for header in subprim
-      (entry (:label 1))))
-  (jno :done)
-  ((:not (:pred = x8632::arg_z
-                (:apply %hard-regspec-value val)))
-   (movl (:%l val) (:%l x8632::arg_z)))
-  (:talign 5)
-  (call (:@ .SPfix-overflow))
-  (movl (:$self 0) (:%l x8632::fn))
-  ((:not (:pred = x8632::arg_z
-                (:apply %hard-regspec-value val)))
-   (movl (:%l x8632::arg_z) (:%l val)))
-  :done)
 
-(define-x8632-vinsn (fix-fixnum-overflow-ool-and-branch :call)
-    (((val :lisp))
-     ((val :lisp)
-      (lab :label))
-     ((unboxed (:s32 #.x8632::imm0))
-      ;; we use %mm0 for header in subprim
-      (entry (:label 1))))
-  (jno lab)
-  ((:not (:pred = x8632::arg_z
-                (:apply %hard-regspec-value val)))
-   (movl (:%l val) (:%l x8632::arg_z)))
-  (:talign 5)
-  (call (:@ .SPfix-overflow))
-  (movl (:$self 0) (:%l x8632::fn))
-  ((:not (:pred = x8632::arg_z
-                (:apply %hard-regspec-value val)))
-   (movl (:%l x8632::arg_z) (:%l val)))
-  (jmp lab))
 
-(define-x8632-vinsn return-or-fix-overflow (()
-                                            ())
+(define-x8632-vinsn (return-or-fix-overflow :jumpLR) (()
+                                                      ())
   (jo :fix)
   (:byte #xf3) (ret)
   :fix
@@ -1279,23 +1259,19 @@
 (define-x8632-vinsn add-constant (((dest :imm))
                                   ((dest :imm)
                                    (const :s32const)))
-  ((:and (:pred >= const -128) (:pred <= const 127))
-   (addl (:$b const) (:%l dest)))
-  ((:not (:and (:pred >= const -128) (:pred <= const 127)))
-   (addl (:$l const) (:%l dest))))
+  (:if (:and (:pred >= const -128) (:pred <= const 127))
+    (addl (:$b const) (:%l dest))
+    (addl (:$l const) (:%l dest))))
 
 (define-x8632-vinsn add-constant3 (((dest :imm))
                                    ((src :imm)
                                     (const :s32const)))
-  ((:pred = (:apply %hard-regspec-value dest)
+  (:if (:pred = (:apply %hard-regspec-value dest)
           (:apply %hard-regspec-value src))
-   ((:and (:pred >= const -128) (:pred <= const 127))
-    (addl (:$b const) (:%l dest)))
-   ((:not (:and (:pred >= const -128) (:pred <= const 127)))
-    (addl (:$l const) (:%l dest))))
-  ((:not (:pred = (:apply %hard-regspec-value dest)
-                (:apply %hard-regspec-value src)))
-   (leal (:@ const (:%l src)) (:%l dest))))
+    (:if (:and (:pred >= const -128) (:pred <= const 127))
+      (addl (:$b const) (:%l dest))
+      (addl (:$l const) (:%l dest)))
+    (leal (:@ const (:%l src)) (:%l dest))))
 
 (define-x8632-vinsn fixnum-add2  (((dest :imm))
                                   ((dest :imm)
@@ -1383,8 +1359,7 @@
    :done))
 
 (define-x8632-vinsn (call-label :call) (()
-					((label :label))
-                                        ((entry (:label 1))))
+					((label :label)))
   (:talign 5)
   (call label)
   (movl (:$self 0) (:%l x8632::fn)))
@@ -1535,6 +1510,14 @@
                                 ((source :lisp)))
   (movsd (:@ x8632::double-float.value (:%l source)) (:%xmm result)))
 
+(define-x8632-vinsn get-complex-double-float (((result :complex-double-float))
+                                              ((source :lisp)))
+  (movdqu (:@  x8632::complex-double-float.realpart (:%l source)) (:%xmm result)))
+
+(define-x8632-vinsn get-complex-single-float (((result :complex-single-float))
+                                              ((source :lisp)))
+  (movq (:@  x8632::complex-single-float.realpart (:%l source)) (:%xmm result)))
+
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
 ;;; instead of replicating it ..
@@ -1558,7 +1541,7 @@
 
   (:anchored-uuo-section :resume)
   :bad
-  (:anchored-uuo (uuo-error-reg-not-tag (:%q source) (:$ub x8632::subtag-double-float))))
+  (:anchored-uuo (uuo-error-reg-not-tag (:%l source) (:$ub x8632::subtag-double-float))))
 
 (define-x8632-vinsn copy-double-float (((dest :double-float))
                                        ((src :double-float)))
@@ -1567,6 +1550,14 @@
 (define-x8632-vinsn copy-single-float (((dest :single-float))
                                        ((src :single-float)))
   (movss (:%xmm src) (:%xmm dest)))
+
+(define-x8632-vinsn copy-complex-single-float (((dest :complex-single-float))
+                                               ((src :complex-single-float)))
+  (movq (:%xmm src) (:%xmm dest)))
+ 
+(define-x8632-vinsn copy-complex-double-float (((dest :complex-double-float))
+                                               ((src :complex-double-float)))
+  (movapd (:%xmm src) (:%xmm dest)))
 
 (define-x8632-vinsn copy-single-to-double (((dest :double-float))
                                            ((src :single-float)))
@@ -1687,7 +1678,7 @@
 ;; implicit temp0 arg
 (define-x8632-vinsn (call-known-function :call) (()
 						 ()
-                                                 ((entry (:label 1))))
+                                                 ())
   (:talign 5)
   (call (:%l x8632::temp0))
   (movl (:$self 0) (:%l x8632::fn)))
@@ -1698,8 +1689,7 @@
 
 (define-x8632-vinsn (list :call) (()
                                   ()
-				  ((entry (:label 1))
-				   (temp (:lisp #.x8632::temp0))))
+				  ((temp (:lisp #.x8632::temp0))))
   (leal (:@ (:^ :back) (:%l x8632::fn)) (:%l x8632::temp0))
   (:talign 5)
   (jmp (:@ .SPconslist))
@@ -1711,12 +1701,10 @@
                                                (header :s32const))
                                               ((tempa :imm)
                                                (tempb :imm)))
-  ((:and (:pred >= (:apply + aligned-size x8632::dnode-size) -128)
-         (:pred <= (:apply + aligned-size x8632::dnode-size) 127))
+  (:if (:and (:pred >= (:apply + aligned-size x8632::dnode-size) -128)
+             (:pred <= (:apply + aligned-size x8632::dnode-size) 127))
    (subl (:$b (:apply + aligned-size x8632::dnode-size))
-         (:@ (:%seg :rcontext) x8632::tcr.next-tsp)))
-  ((:not (:and (:pred >= (:apply + aligned-size x8632::dnode-size) -128)
-               (:pred <= (:apply + aligned-size x8632::dnode-size) 127)))
+         (:@ (:%seg :rcontext) x8632::tcr.next-tsp))
    (subl (:$l (:apply + aligned-size x8632::dnode-size))
          (:@ (:%seg :rcontext) x8632::tcr.next-tsp)))
   (movl (:@ (:%seg :rcontext) x8632::tcr.save-tsp) (:%l tempb))
@@ -1793,10 +1781,9 @@
     (addl (:$l (:apply ash nwords x8632::word-shift)) (:%l x8632::esp)))))
 
 (defmacro define-x8632-subprim-lea-jmp-vinsn ((name &rest other-attrs) spno)
-  `(define-x8632-vinsn (,name :call :subprim-call ,@other-attrs) (()
+  `(define-x8632-vinsn (,name :call :subprim ,@other-attrs) (()
 								  ()
-								  ((entry (:label 1))
-								   (ra (:lisp #.x8632::ra0))))
+								  ((ra (:lisp #.x8632::ra0))))
     (leal (:@ (:^ :back) (:%l x8632::fn)) (:%l ra))
     (:talign 5)
     (jmp (:@ ,spno))
@@ -1804,7 +1791,7 @@
     (movl (:$self 0) (:%l x8632::fn))))
 
 (defmacro define-x8632-subprim-call-vinsn ((name &rest other-attrs) spno)
-  `(define-x8632-vinsn (,name :call :subprim-call ,@other-attrs) (() () ((entry (:label 1))))
+  `(define-x8632-vinsn (,name :call :subprim ,@other-attrs) (() () ())
     (:talign 5)
     (call (:@ ,spno))
     :back
@@ -1814,17 +1801,25 @@
   `(define-x8632-vinsn (,name :jumpLR ,@other-attrs) (() ())
     (jmp (:@ ,spno))))
 
-(define-x8632-vinsn (nthrowvalues :call :subprim-call) (()
+;;; xxx don't know if this is right
+(define-x8632-vinsn set-closure-forward-reference (()
+                                                   ((val :lisp)
+                                                    (closure :lisp)
+                                                    (idx :s32const)))
+  (movl (:%l val) (:@ (:apply + x8632::misc-data-offset (:apply ash idx x8632::word-shift)) (:%l closure))))
+
+(define-x8632-vinsn (nthrowvalues :call :subprim) (()
                                                         ((lab :label))
 							((ra (:lisp #.x8632::ra0))))
   (leal (:@ (:^ lab) (:%l x8632::fn)) (:%l ra))
   (jmp (:@ .SPnthrowvalues)))
 
-(define-x8632-vinsn (nthrow1value :call :subprim-call) (()
+(define-x8632-vinsn (nthrow1value :call :subprim) (()
                                                         ((lab :label))
 							((ra (:lisp #.x8632::ra0))))
   (leal (:@ (:^ lab) (:%l x8632::fn)) (:%l ra))
   (jmp (:@ .SPnthrow1value)))
+
 
 (define-x8632-vinsn set-single-c-arg (()
                                       ((arg :single-float)
@@ -1948,7 +1943,7 @@
   (ret))
 
 ;;; xxx
-(define-x8632-vinsn (nmkcatchmv :call :subprim-call) (()
+(define-x8632-vinsn (nmkcatchmv :call :subprim) (()
 						      ((lab :label))
 						      ((entry (:label 1))
 						       (xfn (:lisp #.x8632::xfn))))
@@ -1958,10 +1953,9 @@
   :back
   (movl (:$self 0) (:%l x8632::fn)))
 
-(define-x8632-vinsn (nmkcatch1v :call :subprim-call) (()
+(define-x8632-vinsn (nmkcatch1v :call :subprim) (()
                                                      ((lab :label))
-                                                     ((entry (:label 1))
-						      (xfn (:lisp #.x8632::xfn))))
+                                                     ((xfn (:lisp #.x8632::xfn))))
   (leal (:@ (:^ lab)  (:%l x8632::fn)) (:%l x8632::xfn))
   (:talign 5)
   (call (:@ .SPmkcatch1v))
@@ -1969,14 +1963,14 @@
   (movl (:$self 0) (:%l x8632::fn)))
 
 
-(define-x8632-vinsn (make-simple-unwind :call :subprim-call) (()
+(define-x8632-vinsn (make-simple-unwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
   (leal (:@ (:^ cleanup-lab)  (:%l x8632::fn)) (:%l x8632::xfn))
   (jmp (:@ .SPmkunwind)))
 
-(define-x8632-vinsn (nmkunwind :call :subprim-call) (()
+(define-x8632-vinsn (nmkunwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
@@ -2574,6 +2568,10 @@
   (jne :have-tag)
   (movzbl (:@ x8632::misc-subtag-offset (:%l object)) (:%l tag))
   :have-tag
+  (cmpl (:$b x8632::subtag-complex-single-float) (:%l tag))
+  (jz :good)
+  (cmpl (:$b x8632::subtag-complex-double-float) (:%l tag))
+  (jz :good)
   (cmpl (:$b (1- (- x8632::nbits-in-word x8632::fixnumshift))) (:%l tag))
   (movl (:$l (ash (logior (ash 1 x8632::tag-fixnum)
                           (ash 1 x8632::subtag-single-float)
@@ -2586,7 +2584,7 @@
   (addl (:$b x8632::fixnumshift) (:%l tag))
   (btl (:%l tag) (:%l mask))
   (jnc :bad)
-
+  :good
   (:anchored-uuo-section :again)
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub arch::error-object-not-number))))
@@ -2845,11 +2843,17 @@
 
 ;;; 3d-unscaled-index
 
-(define-x8632-vinsn branch-unless-both-args-fixnums (()
+(define-x8632-vinsn set-z-flag-if-arg-fixnum (()
+                                              ((arg :lisp)))
+  ((:pred <= (:apply %hard-regspec-value arg) x8632::ebx)
+   (testb (:$b x8632::fixnummask) (:%b arg)))
+  ((:pred > (:apply %hard-regspec-value arg) x8632::ebx)
+   (testl (:$l x8632::fixnummask) (:%l arg))))
+
+(define-x8632-vinsn set-z-flag-if-both-args-fixnums (()
                                                      ((a :lisp)
-                                                      (b :lisp)
-                                                      (dest :label))
-                                                     ((tag :u8)))
+                                                      (b :lisp))
+                                                     ((tag :u32)))
   (movl (:%l a) (:%l tag))
   (orl (:%l b) (:%l tag))
   ((:pred = (:apply %hard-regspec-value tag) x8632::eax)
@@ -2858,17 +2862,9 @@
 	 (:pred <= (:apply %hard-regspec-value tag) x8632::ebx))
    (testb (:$b x8632::fixnummask) (:%b tag)))
   ((:pred > (:apply %hard-regspec-value tag) x8632::ebx)
-   (testl (:$l x8632::fixnummask) (:%l tag)))
-  (jne dest))
+   (testl (:$l x8632::fixnummask) (:%l tag))))
+                                              
 
-(define-x8632-vinsn branch-unless-arg-fixnum (()
-                                              ((a :lisp)
-                                               (dest :label)))
-  ((:pred <= (:apply %hard-regspec-value a) x8632::ebx)
-   (testb (:$b x8632::fixnummask) (:%b a)))
-  ((:pred > (:apply %hard-regspec-value a) x8632::ebx)
-   (testl (:$l x8632::fixnummask) (:%l a)))
-  (jne dest))
 
 (define-x8632-vinsn fixnum->single-float (((f :single-float))
                                           ((arg :lisp))
@@ -2929,11 +2925,17 @@
    (addl (:$l amount) (:%l x8632::esp))))
 
 
-(define-x8632-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
+(define-x8632-vinsn (call-subprim-1 :call :subprim) (((dest t))
+							  ((spno :s32const)
+							   (x t)))
+  (:talign 5)
+  (call (:@ spno))
+  (movl (:$self 0) (:%l x8632::fn)))
+
+(define-x8632-vinsn (call-subprim-2 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (y t)
-							   (z t))
-                                                          ((entry (:label 1))))
+							   (z t)))
   (:talign 5)
   (call (:@ spno))
   (movl (:$self 0) (:%l x8632::fn)))
@@ -3051,7 +3053,6 @@
     (xorl (:%l y) (:%l dest)))))
 
 
-(define-x8632-subprim-call-vinsn (integer-sign) .SPinteger-sign)
 
 (define-x8632-subprim-call-vinsn (misc-ref) .SPmisc-ref)
 
@@ -3082,6 +3083,18 @@
   (movd (:%l x8632::imm0) (:%mmx x8632::mm0))
   (movl (:$l (- x8632::double-float.size x8632::fulltag-misc)) (:%l x8632::imm0)))
 
+(define-x8632-vinsn setup-complex-single-float-allocation (()
+                                                            ())
+  (movl (:$l (arch::make-vheader x8632::complex-single-float.element-count x8632::subtag-complex-single-float)) (:%l x8632::imm0))
+  (movd (:%l x8632::imm0) (:%mmx x8632::mm0))
+  (movl (:$l (- x8632::complex-single-float.size x8632::fulltag-misc)) (:%l x8632::imm0)))
+
+(define-x8632-vinsn setup-complex-double-float-allocation (()
+                                                           ())
+  (movl (:$l (arch::make-vheader x8632::complex-double-float.element-count x8632::subtag-complex-double-float)) (:%l x8632::imm0))
+  (movd (:%l x8632::imm0) (:%mmx x8632::mm0))
+  (movl (:$l (- x8632::complex-double-float.size x8632::fulltag-misc)) (:%l x8632::imm0)))
+
 (define-x8632-vinsn set-single-float-value (()
                                             ((node :lisp)
                                              (val :single-float)))
@@ -3091,6 +3104,17 @@
                                             ((node :lisp)
                                              (val :double-float)))
   (movsd (:%xmm val) (:@ x8632::double-float.value (:%l node))))
+
+(define-x8632-vinsn set-complex-double-float-value (()
+                                                    ((node :lisp)
+                                                     (val :complex-double-float)))
+  (movdqu (:%xmm val) (:@ x8632::complex-double-float.realpart (:%l node))))
+
+(define-x8632-vinsn set-complex-single-float-value (()
+                                                    ((node :lisp)
+                                                     (val :complex-single-float)))
+  (movq (:%xmm val) (:@ x8632::complex-single-float.realpart (:%l node))))
+
 
 (define-x8632-vinsn word-index-and-bitnum-from-index (((word-index :u32)
                                                        (bitnum :u8))
@@ -3397,12 +3421,11 @@
   (movl (:$self 0) (:%l x8632::fn)))
 
 ;;; xxx probably wrong
-(define-x8632-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
+(define-x8632-vinsn (call-subprim-3 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (x t)
 							   (y t)
-							   (z t))
-                                                          ((entry (:label 1))))
+							   (z t)))
   (:talign 5)
   (call (:@ spno))
   (movl (:$self 0) (:%l x8632::fn)))
@@ -3425,7 +3448,7 @@
 ;;; "old" mkunwind.  Used by PROGV, since the binding of *interrupt-level*
 ;;; on entry to the new mkunwind confuses the issue.
 
-(define-x8632-vinsn (mkunwind :call :subprim-call) (()
+(define-x8632-vinsn (mkunwind :call :subprim) (()
                                                      ((protform-lab :label)
                                                       (cleanup-lab :label)))
   (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
@@ -3484,7 +3507,7 @@
   (nop))
 
 
-(define-x8632-vinsn (ref-symbol-value :call :subprim-call)
+(define-x8632-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (:talign 5)
@@ -3511,7 +3534,7 @@
   :bad
   (:anchored-uuo (uuo-error-unbound (:%l src))))
 
-(define-x8632-vinsn (%ref-symbol-value :call :subprim-call)
+(define-x8632-vinsn (%ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (:talign 5)
@@ -3546,18 +3569,19 @@
 
 (define-x8632-subprim-lea-jmp-vinsn (bind)  .SPbind)
 
-(define-x8632-vinsn (dpayback :call :subprim-call) (()
+(define-x8632-vinsn (dpayback :call :subprim) (()
                                                     ((n :s16const))
                                                     ((temp (:u32 #.x8632::imm0))
                                                      (entry (:label 1))))
   ((:pred > n 0)
-   ((:pred > n 1)
-    (movl (:$l n) (:%l temp))
-    (:talign 5)
-    (call (:@ .SPunbind-n)))
-   ((:pred = n 1)
-    (:talign 5)
-    (call (:@ .SPunbind)))
+   (:if (:pred > n 1)
+     (:progn
+       (movl (:$l n) (:%l temp))
+       (:talign 5)
+       (call (:@ .SPunbind-n)))
+     (:progn
+       (:talign 5)
+       (call (:@ .SPunbind))))
    (movl (:$self 0) (:%l x8632::fn))))
 
 (define-x8632-subprim-jump-vinsn (tail-call-sym-gen) .SPtcallsymgen)
@@ -3640,11 +3664,10 @@
                                  ())
   (movl (:@ (:%seg :rcontext) x8632::tcr.linear) (:%l dest)))
 
-(define-x8632-vinsn (setq-special :call :subprim-call)
+(define-x8632-vinsn (setq-special :call :subprim)
     (()
      ((sym :lisp)
-      (val :lisp))
-     ((entry (:label 1))))
+      (val :lisp)))
   (:talign 5)
   (call (:@ .SPspecset))
   (movl (:$self 0) (:%l x8632::fn)))
@@ -4144,7 +4167,106 @@
 
   
 
-  
+(define-x8632-vinsn save-nfp (()
+                              ()
+                              ((temp :imm)))
+  ((:pred > (:apply x862-max-nfp-depth) 0)
+   (movd (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%mmx x8632::stack-temp))
+   (:if (:pred < (:apply + 16 (:apply x862-max-nfp-depth)) 128)
+     (subl (:$b (:apply + 16 (:apply x862-max-nfp-depth))) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
+     (subl (:$l (:apply + 16 (:apply x862-max-nfp-depth))) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
+   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l temp))
+   (movd (:%mmx x8632::stack-temp) (:@ (:%l temp)))
+   (movd (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%mmx x8632::stack-temp))
+   (movd (:%mmx x8632::stack-temp) (:@ 4 (:%l temp)))
+   (movl (:% temp) (:@ (:%seg :rcontext) x8632::tcr.nfp))))
+
+
+(define-x8632-vinsn restore-nfp (()
+                                 ()
+                                 ((temp :imm)))
+  ((:pred > (:apply x862-max-nfp-depth) 0)
+   (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l temp))
+   (movd (:@ 4 (:%l temp)) (:%mmx x8632::stack-temp))
+   (movl (:@ (:%l temp)) (:%l temp))
+   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp))
+   (movd (:%mmx x8632::stack-temp)(:@ (:%seg :rcontext) x8632::tcr.nfp))))
+
+(define-x8632-vinsn (nfp-store-unboxed-word :nfp :set) (()
+                                                        ((val :u32)
+                                                         (offset :u16const))
+                                                        ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movl (:%l val) (:@ (:apply + 16 offset) (:% nfp))))
+
+
+(define-x8632-vinsn (nfp-load-unboxed-word :nfp :ref) (((val :u32))
+                                                       ((offset :u16const)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l val))
+  (movl (:@ (:apply + 16 offset) (:% val)) (:%l val)))
+
+(define-x8632-vinsn (nfp-store-single-float :nfp :set) (()
+                                                        ((val :single-float)
+                                                         (offset :u16const))
+                                            ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movss (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+(define-x8632-vinsn (nfp-store-double-float :nfp :set) (()
+                                                        ((val :double-float)
+                                                         (offset :u16const))
+                                                        ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movsd (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+
+(define-x8632-vinsn (nfp-load-double-float :nfp :ref) (((val :double-float))
+                                                       ((offset :u16const))
+                                                       ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movsd (:@ (:apply + 16 offset) (:% val)) (:%xmm val)))
+
+
+(define-x8632-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
+                                                       ((offset :u16const))
+                                                       ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movss (:@ (:apply + 16 offset) (:% val)) (:%xmm val)))
+
+(define-x8632-vinsn (nfp-store-complex-single-float :nfp :set) (()
+                                                                ((val :complex-single-float)
+                                                                 (offset :u16const))
+                                                                ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movq (:%xmm val) (:@ (:apply + 16 offset) (:%l nfp))))
+
+(define-x8632-vinsn nfp-load-complex-single-float (((val :complex-single-float))
+                                                   ((offset :u16const))
+                                                   ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movq (:@ (:apply + 16 offset) (:%l nfp)) (:%xmm val)))
+
+
+(define-x8632-vinsn (nfp-store-complex-double-float :nfp :set) (()
+                                                                ((val :complex-double-float)
+                                                                 (offset :u16const))
+                                                                ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:%l nfp))))
+
+(define-x8632-vinsn (nfp-load-complex-double-float :nfp :ref) (((val :complex-double-float))
+                                                               ((offset :u16const))
+                                                               ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (movdqu (:@ (:apply + 16 offset) (:%l nfp)) (:%xmm val)))
+
+(define-x8632-vinsn nfp-compare-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (cmpl (:%l reg) (:@ (:apply + offset 16) (:%l nfp))))
+
 (define-x8632-vinsn (temp-push-unboxed-word :push :word :csp)
     (()
      ((w :u32))
@@ -4162,6 +4284,8 @@
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l w))
   (movl (:@ 8 (:%l w)) (:%l w))
   (addl (:$b 16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
+
+
 
 (define-x8632-vinsn (temp-pop-temp1-as-unboxed-word :pop :word :csp)
     (()
@@ -4321,14 +4445,11 @@
   (pushl (:@ x8632::node-size (:%l x8632::ebp)))
   (movl (:@ (:% x8632::ebp)) (:% x8632::ebp)))
 
-(define-x8632-vinsn (skip-unless-fixnum-in-range :branch)
+(define-x8632-vinsn set-carry-if-fixnum-in-range
     (((idx :u32))
      ((reg :imm)
       (minval :s32const)
-      (maxval :u32const)
-      (default :label)))
-  (testl (:$l x8632::fixnummask) (:%l reg))
-  (jne default)
+      (maxval :u32const)))
   (movl (:%l reg) (:%l idx))
   (sarl (:$ub x8632::fixnumshift) (:%l idx))
   ((:not (:pred zerop minval))
@@ -4339,8 +4460,7 @@
   ((:pred < maxval 128)
    (cmpl (:$b maxval) (:%l idx)))
   ((:pred >= maxval 128)
-   (cmpl (:$l maxval) (:%l idx)))
-  (jae default))
+   (cmpl (:$l maxval) (:%l idx))))
 
 (define-x8632-vinsn (ijmp :branch) (((reg :u32))
                                     ((reg :u32)
@@ -4358,6 +4478,84 @@
                                ((label :label)))
   (:uuo-section)
   (:long (:^ label)))
+
+(define-x8632-vinsn ivector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u32)))
+  (movl (:% src) (:% temp))
+  (andl (:$l (logior (ash x8632::fulltagmask x8632::fixnumshift) x8632::tagmask)) (:% temp))
+  (cmpl (:$l (ash x8632::fulltag-immheader x8632::fixnumshift)) (:% temp))
+  (movl (:$l 0) (:% temp))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+     (cmovel (:% src) (:% dest)))
+  (cmovnel (:% temp) (:% dest)))
+                                        
+(define-x8632-vinsn gvector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u32)))
+  (movl (:% src) (:% temp))
+  (andl (:$l (logior (ash x8632::fulltagmask x8632::fixnumshift) x8632::tagmask)) (:% temp))
+  (cmpl (:$l (ash x8632::fulltag-nodeheader x8632::fixnumshift)) (:% temp))
+  (movl (:$l 0) (:% temp))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+     (cmovel (:% src) (:% dest)))
+  (cmovnel (:% temp) (:% dest)))
+
+
+(define-x8632-vinsn  %complex-single-float-realpart
+    (((dest :single-float))
+     ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movss (:%xmm src) (:%xmm dest))))
+
+(define-x8632-vinsn  %complex-single-float-imagpart
+    (((dest :single-float))
+     ((src :complex-single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
+   (movapd (:%xmm src) (:%xmm dest)))
+  (psrlq (:$ub 32) (:%xmm dest)))
+
+(define-x8632-vinsn  %complex-double-float-realpart
+    (((dest :double-float))
+     ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (movsd (:%xmm src) (:%xmm dest))))
+
+(define-x8632-vinsn  %complex-double-float-imagpart
+    (((dest :double-float))
+     ((src :complex-double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
+   (movapd (:%xmm src) (:%xmm dest)))
+  (shufpd (:$ub 1) (:%xmm target::fpzero) (:%xmm dest)))
+
+
+(define-x8632-vinsn %make-complex-single-float
+    (((dest :complex-single-float))
+     ((r :single-float)
+      (i :single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (movss (:%xmm r) (:%xmm dest)))
+  (unpcklps (:%xmm i) (:%xmm dest)))
+
+(define-x8632-vinsn %make-complex-double-float
+    (((dest :complex-double-float))
+     ((r :double-float)
+     (i :double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (:movupd (:%xmm r) (:%xmm dest)))
+  (shufpd (:$ub 0) (:%xmm i) (:%xmm dest)))
+  
+
+
+
 
 (queue-fixup
  (fixup-x86-vinsn-templates

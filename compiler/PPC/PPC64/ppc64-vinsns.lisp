@@ -66,6 +66,14 @@
 					    ())
   (addi dest idx ppc64::misc-data-offset))
 
+(define-ppc64-vinsn scale-128bit-misc-index (((dest :u64))
+					    ((idx :imm) ; A fixnum
+					     )
+                                             ())
+  (add dest idx idx)
+  (addi dest dest ppc64::complex-double-float.realpart))
+
+
 (define-ppc64-vinsn scale-1bit-misc-index (((word-index :s64)
 					    (bitnum :u8)) ; (unsigned-byte 5)
 					   ((idx :imm) ; A fixnum
@@ -213,10 +221,78 @@
 					    (scaled-idx :u32)))
   (stfdx val v scaled-idx))
 
+(define-ppc64-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
+					    ((v :lisp)
+					     (scaled-idx :u32))
+					    ((idx2 :u32)))
+  (addi idx2 scaled-idx 4)
+  (lfsx dest v scaled-idx)
+  (lfsx (:apply 1+ (:apply %hard-regspec-value dest)) v idx2))
+
+
+(define-ppc64-vinsn misc-ref-c-complex-single-float  (((dest :complex-single-float))
+					      ((v :lisp)
+					       (idx :u32const))
+					      ())
+  (lfs dest (:apply + ppc64::complex-single-float.realpart (:apply ash idx 3)) v)
+  (lfs (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply + (+ ppc64::complex-single-float.realpart 4) (:apply ash idx 3)) v))
+
+(define-ppc64-vinsn misc-set-c-complex-single-float (((val :complex-single-float))
+					     ((v :lisp)
+					      (idx :u32const)))
+  (stfs val (:apply + ppc64::complex-single-float.realpart (:apply ash idx 3)) v)
+  (stfs (:apply 1+ (:apply %hard-regspec-value val))
+        (:apply + (+ ppc64::complex-single-float.realpart 4) (:apply ash idx 3))
+        v))
+
+(define-ppc64-vinsn misc-set-complex-single-float (()
+                                                   ((val :complex-single-float)
+                                                    (v :lisp)
+                                                    (scaled-idx :u32))
+                                                   ((idx2 :u32)))
+  (addi idx2 scaled-idx 4)
+  (stfsx val v scaled-idx)
+  (stfsx val v idx2))
+
 (define-ppc64-vinsn misc-set-c-single-float (((val :single-float))
 					     ((v :lisp)
 					      (idx :u32const)))
   (stfs val (:apply + ppc64::misc-data-offset (:apply ash idx 2)) v))
+
+(define-ppc64-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
+					    ((v :lisp)
+					     (scaled-idx :u32))
+					    ((idx2 :u32)))
+  (addi idx2 scaled-idx 8)
+  (lfdx dest v scaled-idx)
+  (lfdx (:apply 1+ (:apply %hard-regspec-value dest)) v idx2))
+
+
+(define-ppc64-vinsn misc-ref-c-complex-double-float  (((dest :complex-double-float))
+					      ((v :lisp)
+					       (idx :u32const))
+					      ())
+  (lfd dest (:apply + ppc64::complex-double-float.realpart (:apply ash idx 4)) v)
+  (lfd (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply + (+ ppc64::complex-double-float.realpart 8) (:apply ash idx 4)) v))
+
+(define-ppc64-vinsn misc-set-c-complex-double-float (((val :complex-double-float))
+					     ((v :lisp)
+					      (idx :u32const)))
+  (stfd val (:apply + ppc64::complex-double-float.realpart (:apply ash idx 4)) v)
+  (stfd (:apply 1+ (:apply %hard-regspec-value val))
+        (:apply + (+ ppc64::complex-double-float.realpart 8) (:apply ash idx 4))
+        v))
+
+(define-ppc64-vinsn misc-set-complex-double-float (()
+                                                   ((val :complex-double-float)
+                                                    (v :lisp)
+                                                    (scaled-idx :u32))
+                                                   ((idx2 :u32)))
+  (addi idx2 scaled-idx 8)
+  (stfdx val v scaled-idx)
+  (stfdx val v idx2))
 
 (define-ppc64-vinsn misc-set-single-float (()
 					   ((val :single-float)
@@ -997,10 +1073,14 @@
   (bne crf0 :have-typecode)
   (lbz tag ppc64::misc-subtag-offset object)
   :have-typecode
+  (cmpdi crf0 tag ppc64::subtag-complex-double-float)
+  (cmpdi crf1 tag ppc64::subtag-complex-single-float)
   (ori mask mask (logior (ash 1 ppc64::subtag-ratio)
                          (ash 1 ppc64::fulltag-odd-fixnum)
                          (ash 1 ppc64::subtag-single-float)
                          (ash 1 ppc64::fulltag-even-fixnum)))
+  (beq crf0 :got-it)
+  (beq crf1 :got-it)
   (cmpdi crf1 tag ppc64::subtag-double-float)
   (oris mask mask (ash 1 (- ppc64::subtag-complex 16)))
   (srd mask mask tag)
@@ -1473,6 +1553,28 @@
   (lbz tag ppc64::misc-subtag-offset object)
   :do-trap
   (tdnei tag ppc64::subtag-double-float))
+
+(define-ppc64-vinsn trap-unless-complex-double-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)
+                                                       (crf :crf)))
+  (clrldi tag object (- ppc64::nbits-in-word ppc64::ntagbits))
+  (cmpdi crf tag ppc64::fulltag-misc)
+  (bne crf :do-trap)
+  (lbz tag ppc64::misc-subtag-offset object)
+  :do-trap
+  (tdnei tag ppc64::subtag-complex-double-float))
+
+(define-ppc64-vinsn trap-unless-complex-single-float (()
+                                                      ((object :lisp))
+                                                      ((tag :u8)
+                                                       (crf :crf)))
+  (clrldi tag object (- ppc64::nbits-in-word ppc64::ntagbits))
+  (cmpdi crf tag ppc64::fulltag-misc)
+  (bne crf :do-trap)
+  (lbz tag ppc64::misc-subtag-offset object)
+  :do-trap
+  (tdnei tag ppc64::subtag-complex-single-float))
 
 (define-ppc64-vinsn trap-unless-array-header (()
                                               ((object :lisp))
@@ -1950,6 +2052,24 @@
                 (:apply %hard-regspec-value src)))
    (fmr dest src)))
 
+(define-ppc64-vinsn copy-complex-double-float (((dest :complex-double-float))
+                                               ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmr dest src)
+   (fmr (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply 1+ (:apply %hard-regspec-value src)))))
+
+(define-ppc64-vinsn copy-complex-single-float (((dest :complex-single-float))
+                                               ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmr dest src)
+   (fmr (:apply 1+ (:apply %hard-regspec-value dest))
+        (:apply 1+ (:apply %hard-regspec-value src)))))
+
 (define-ppc64-vinsn vcell-ref (((dest :lisp))
 			       ((vcell :lisp)))
   (ld dest ppc64::misc-data-offset vcell))
@@ -2005,7 +2125,7 @@
                                        ((src :lisp)))
   (srdi dest  src 32))
 
-(define-ppc64-vinsn (call-subprim :call :subprim-call) (()
+(define-ppc64-vinsn (call-subprim :call :subprim) (()
 							((spno :s32const)))
   (bla spno))
 
@@ -2015,22 +2135,22 @@
 
 ;;; Same as "call-subprim", but gives us a place to 
 ;;; track args, results, etc.
-(define-ppc64-vinsn (call-subprim-0 :call :subprim-call) (((dest t))
+(define-ppc64-vinsn (call-subprim-0 :call :subprim) (((dest t))
 							  ((spno :s32const)))
   (bla spno))
 
-(define-ppc64-vinsn (call-subprim-1 :call :subprim-call) (((dest t))
+(define-ppc64-vinsn (call-subprim-1 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (z t)))
   (bla spno))
   
-(define-ppc64-vinsn (call-subprim-2 :call :subprim-call) (((dest t))
+(define-ppc64-vinsn (call-subprim-2 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (y t)
 							   (z t)))
   (bla spno))
 
-(define-ppc64-vinsn (call-subprim-3 :call :subprim-call) (((dest t))
+(define-ppc64-vinsn (call-subprim-3 :call :subprim) (((dest t))
 							  ((spno :s32const)
 							   (x t)
 							   (y t)
@@ -2483,6 +2603,31 @@
   (rldicr ppc::allocptr ppc::allocptr 0 (- 63 ppc64::ntagbits))
   (stfd fpreg ppc64::double-float.value result)  )
 
+(define-ppc64-vinsn complex-double->heap (((result :lisp)) ; tagged as a double-float
+                                          ((fpreg :complex-double-float)) 
+                                          ((header-temp :u32)))
+  (li header-temp (arch::make-vheader 6  ppc64::subtag-complex-double-float))
+  (la ppc::allocptr (- ppc64::fulltag-misc ppc64::complex-double-float.size) ppc::allocptr)
+  (tdlt ppc::allocptr ppc::allocbase)
+  (std header-temp ppc64::misc-header-offset ppc::allocptr)
+  (mr result ppc::allocptr)
+  (rldicr ppc::allocptr ppc::allocptr 0 (- 63 ppc64::ntagbits))
+  (stfd fpreg ppc64::complex-double-float.realpart result)
+  (stfd (:apply 1+ (:apply %hard-regspec-value fpreg))
+        ppc64::complex-double-float.imagpart result) )
+
+(define-ppc64-vinsn complex-single->node (((result :lisp)) ; tagged as a double-float
+                                          ((fpreg :complex-single-float)) 
+                                          ((header-temp :u32)))
+  (li header-temp (arch::make-vheader 2  ppc64::subtag-complex-single-float))
+  (la ppc::allocptr (- ppc64::fulltag-misc ppc64::complex-single-float.size) ppc::allocptr)
+  (tdlt ppc::allocptr ppc::allocbase)
+  (std header-temp ppc64::misc-header-offset ppc::allocptr)
+  (mr result ppc::allocptr)
+  (rldicr ppc::allocptr ppc::allocptr 0 (- 63 ppc64::ntagbits))
+  (stfs fpreg ppc64::complex-single-float.realpart result)
+  (stfs (:apply 1+ (:apply %hard-regspec-value fpreg))
+        ppc64::complex-single-float.imagpart result) )
 
 (define-ppc64-vinsn single->node (((result :lisp)) ; tagged as a single-float
 				  ((fpreg :single-float)))
@@ -2501,6 +2646,23 @@
 				((source :lisp))
 				())
   (lfd target ppc64::double-float.value source))
+
+
+
+(define-ppc64-vinsn get-complex-double (((target :complex-double-float))
+				((source :lisp))
+				())
+  (lfd target ppc64::complex-double-float.realpart source)
+  (lfd (:apply 1+ (:apply %hard-regspec-value target))
+       ppc64::complex-double-float.imagpart source))
+
+(define-ppc64-vinsn get-complex-single (((target :complex-single-float))
+                                        ((source :lisp))
+				())
+  (lfs target ppc64::complex-single-float.realpart source)
+  (lfs (:apply 1+ (:apply %hard-regspec-value target))
+       ppc64::complex-single-float.imagpart source))
+
 
 ;;; Extract a double-float value, typechecking in the process.
 ;;; IWBNI we could simply call the "trap-unless-typecode=" vinsn here,
@@ -2651,33 +2813,12 @@
   (rldicr dest temp 0 (- 63 ppc64::nfixnumtagbits)))
 
 
-(define-ppc64-vinsn negate-fixnum-overflow-inline (((dest :lisp))
-						   ((src :imm))
-						   ((unboxed :s64)
-						    (header :u64)))
-  (nego. dest src)
-  (bns+ :done)
-  (mtxer ppc::rzero)
-  (sradi unboxed dest ppc64::fixnumshift)
-  (li header ppc64::two-digit-bignum-header)
-  (rotldi unboxed unboxed 32)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
-  (la ppc::allocptr (- ppc64::fulltag-misc 16) ppc::allocptr)
-  (tdlt ppc::allocptr ppc::allocbase)
-  (std header ppc64::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
-  (std unboxed ppc64::misc-data-offset dest)
-  :done)
-
-(define-ppc64-vinsn negate-fixnum-overflow-ool (()
-						((src :imm))
-						)
-  (nego. ppc::arg_z src)
-  (bsola- .SPfix-overflow)
-  :done)
-  
-                                                  
+(define-ppc64-vinsn negate-fixnum-set-flags (((dest :lisp)
+                                              (flags (:crf 0)))
+                                             ((src :imm)))
+  (nego. dest src))
+ 
+                                                 
                                        
 (define-ppc64-vinsn negate-fixnum-no-ovf (((dest :lisp))
 					  ((src :imm)))
@@ -2862,56 +3003,13 @@
 				 (y t)))
   (add dest x y))
 
+(define-ppc64-vinsn fixnum-add-set-flags (((dest t)
+                                           (cr0 (:crf 0)))
+                                          ((x t)
+                                           (y t)))
+  (addo. dest x y))
 
-(define-ppc64-vinsn fixnum-add-overflow-ool (()
-					     ((x :imm)
-					      (y :imm))
-					     ((cr0 (:crf 0))))
-  (addo. ppc::arg_z x y)
-  (bsola- .SPfix-overflow))
 
-(define-ppc64-vinsn fixnum-add-overflow-inline (((dest :lisp))
-						((x :imm)
-						 (y :imm))
-						((cr0 (:crf 0))
-						 (unboxed :s64)
-						 (header :u64)))
-  (addo. dest x y)
-  (bns+ cr0 :done)
-  (mtxer ppc::rzero)
-  (sradi unboxed dest ppc64::fixnumshift)
-  (li header ppc64::two-digit-bignum-header)
-  (rotldi unboxed unboxed 32)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
-  (la ppc::allocptr (- ppc64::fulltag-misc 16) ppc::allocptr)
-  (tdlt ppc::allocptr ppc::allocbase)
-  (std header ppc64::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
-  (std unboxed ppc64::misc-data-offset dest)
-  :done)
-
-(define-ppc64-vinsn fixnum-add-overflow-inline-skip (((dest :lisp))
-                                                     ((x :imm)
-                                                      (y :imm)
-                                                      (done :label))
-                                                     ((cr0 (:crf 0))
-                                                      (unboxed :s64)
-                                                      (header :u64)))
-  (addo. dest x y)
-  (bns+ cr0 done)
-  (mtxer ppc::rzero)
-  (sradi unboxed dest ppc64::fixnumshift)
-  (li header ppc64::two-digit-bignum-header)
-  (rotldi unboxed unboxed 32)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
-  (la ppc::allocptr (- ppc64::fulltag-misc 16) ppc::allocptr)
-  (tdlt ppc::allocptr ppc::allocbase)
-  (std header ppc64::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
-  (std unboxed ppc64::misc-data-offset dest)
-  (b done))
   
 
   
@@ -2921,63 +3019,17 @@
 				((x t)
 				 (y t)))
   (subf dest y x))
-
+(define-ppc64-vinsn fixnum-sub-set-flags (((dest t)
+                                           (flags (:crf 0)))
+                                          ((x t)
+                                           (y t)))
+  (subfo. dest y x))
 (define-ppc64-vinsn fixnum-sub-from-constant (((dest :imm))
 					      ((x :s16const)
 					       (y :imm)))
   (subfic dest y (:apply ash x ppc64::fixnumshift)))
 
 
-
-
-(define-ppc64-vinsn fixnum-sub-overflow-ool (()
-					     ((x :imm)
-					      (y :imm)))
-  (subo. ppc::arg_z x y)
-  (bsola- .SPfix-overflow))
-
-(define-ppc64-vinsn fixnum-sub-overflow-inline (((dest :lisp))
-						((x :imm)
-						 (y :imm))
-						((cr0 (:crf 0))
-						 (unboxed :s64)
-						 (header :u64)))
-  (subo. dest x y)
-  (bns+ cr0 :done)
-  (mtxer ppc::rzero)
-  (sradi unboxed dest ppc64::fixnumshift)
-  (li header ppc64::two-digit-bignum-header)
-  (rotldi unboxed unboxed 32)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
-  (la ppc::allocptr (- ppc64::fulltag-misc 16) ppc::allocptr)
-  (tdlt ppc::allocptr ppc::allocbase)
-  (std header ppc64::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
-  (std unboxed ppc64::misc-data-offset dest)
-  :done)
-
-(define-ppc64-vinsn fixnum-sub-overflow-inline-skip (((dest :lisp))
-                                                     ((x :imm)
-                                                      (y :imm)
-                                                      (done :label))
-                                                     ((cr0 (:crf 0))
-                                                      (unboxed :s64)
-                                                      (header :u64)))
-  (subo. dest x y)
-  (bns+ cr0 done)
-  (mtxer ppc::rzero)
-  (sradi unboxed dest ppc64::fixnumshift)
-  (li header ppc64::two-digit-bignum-header)
-  (rotldi unboxed unboxed 32)
-  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
-  (la ppc::allocptr (- ppc64::fulltag-misc 16) ppc::allocptr)
-  (tdlt ppc::allocptr ppc::allocbase)
-  (std header ppc64::misc-header-offset ppc::allocptr)
-  (mr dest ppc::allocptr)
-  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
-  (std unboxed ppc64::misc-data-offset dest)
-  (b done))
 
 ;;; This is, of course, also "subtract-immediate."
 (define-ppc64-vinsn add-immediate (((dest t))
@@ -2990,6 +3042,22 @@
     (addi dest dest lower)))
   ((:and (:pred = upper 0) (:not (:pred = lower 0)))
    (addi dest src lower)))
+
+(define-ppc64-vinsn handle-fixnum-overflow-inline (((dest :lisp))
+                                                   ((src :imm))
+                                                   ((unboxed :s32)
+                                                    (header :u32)))
+  (mtxer ppc::rzero)
+  (sradi unboxed src ppc64::fixnumshift)
+  (li header ppc64::one-digit-bignum-header)
+  (rotldi unboxed unboxed 32)
+  (xoris unboxed unboxed (logand #xffff (ash #xffff (- 32 16 ppc64::fixnumshift))))
+  (la ppc::allocptr (- ppc64::fulltag-misc 8) ppc::allocptr)
+  (tdlt ppc::allocptr ppc::allocbase)
+  (std header ppc64::misc-header-offset ppc::allocptr)
+  (mr dest ppc::allocptr)
+  (clrrdi ppc::allocptr ppc::allocptr ppc64::ntagbits)
+  (std unboxed ppc64::misc-data-offset dest))
 
 ;This must unbox one reg, but hard to tell which is better.
 ;(The one with the smaller absolute value might be)
@@ -3029,7 +3097,7 @@
   :done)
                              
 ;;; Boundp, fboundp stuff.
-(define-ppc64-vinsn (ref-symbol-value :call :subprim-call)
+(define-ppc64-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (bla .SPspecrefcheck))
@@ -3051,7 +3119,7 @@
   :done
   (tdeqi dest ppc64::unbound-marker))
 
-(define-ppc64-vinsn (%ref-symbol-value :call :subprim-call)
+(define-ppc64-vinsn (%ref-symbol-value :call :subprim)
     (((val :lisp))
      ((sym (:lisp (:ne val)))))
   (bla .SPspecref))
@@ -3073,7 +3141,7 @@
   :done
   )
 
-(define-ppc64-vinsn (setq-special :call :subprim-call)
+(define-ppc64-vinsn (setq-special :call :subprim)
     (()
      ((sym :lisp)
       (val :lisp)))
@@ -3094,6 +3162,109 @@
   :bad 
   (uuo_interr arch::error-udf sym)
   :good)
+
+(define-ppc64-vinsn save-nfp (()
+                              ()
+                              ((temp :imm)))
+  ((:pred  > (:apply ppc2-max-nfp-depth) 0)
+   (stdu ppc::sp (:apply - (:apply + (:apply ppc2-max-nfp-depth) 16)) ppc::sp)
+   (ld temp ppc64::tcr.nfp ppc64::rcontext)
+   (std temp 8 ppc::sp)
+   (std ppc::sp ppc64::tcr.nfp ppc64::rcontext)))
+
+(define-ppc64-vinsn restore-nfp (()
+                                 ()
+                                 ((temp :imm)))
+  ((:pred  > (:apply ppc2-max-nfp-depth) 0)
+   (ld temp 8 ppc::sp)
+   (std temp ppc64::tcr.nfp ppc64::rcontext)
+   (ld ppc::sp 0 ppc::sp)))
+
+(define-ppc64-vinsn (nfp-store-complex-double-float :nfp :set) (()
+                                                                ((val :complex-double-float)
+                                                                 (nfp :imm)
+                                                                 (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (stfd val (:apply + offset 16) nfp)
+  (stfd (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 25) nfp))
+
+(define-ppc64-vinsn (nfp-load-complex-double-float :nfp :ref) (((val :complex-double-float))
+                                                               (
+                                                                (nfp :imm)
+                                                                (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (lfd val (:apply + offset 16) nfp)
+  (lfd (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 24) nfp))
+
+(define-ppc64-vinsn (nfp-store-complex-single-float :nfp :set) (()
+                                                                ((val :complex-single-float)
+                                                                 (nfp :imm)
+                                                                 (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (stfs val (:apply + offset 16) nfp)
+  (stfs (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 20) nfp))
+
+(define-ppc64-vinsn (nfp-load-complex-single-float :nfp :ref) (((val :complex-single-float))
+                                                               (
+                                                                (nfp :imm)
+                                                                (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (lfs val (:apply + offset 16) nfp)
+  (lfs (:apply 1+ (:apply %hard-regspec-value val)) (:apply + offset 20) nfp))
+
+
+
+(define-ppc64-vinsn (nfp-store-double-float :nfp :set) (()
+                                                        ((val :double-float)
+                                                         (nfp :imm)
+                                                         (offset :u16const))
+                                                        )
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (stfd val (:apply + offset 16) nfp))
+
+(define-ppc64-vinsn (nfp-load-double-float :nfp :ref) (((val :double-float))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (lfd val (:apply + offset 16) nfp))
+
+
+
+(define-ppc64-vinsn (nfp-store-single-float :nfp :set) (()
+                                                        ((val :single-float)
+                                                         (nfp (:u32 #.ppc::nargs))
+                                                         (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (stfs val (:apply + offset 16) nfp))
+
+(define-ppc64-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (lfs val (:apply + offset 16) nfp))
+
+(define-ppc64-vinsn (nfp-store-unboxed-word :nfp :set) (()
+                                                        ((w :u64)
+                                                         (nfp :imm)
+                                                         (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (std w (:apply + offset 16) nfp))
+
+(define-ppc64-vinsn (nfp-load-unboxed-word :nfp :ref) (((w :u64))
+                                                       ((nfp :imm)
+                                                        (offset :u16const)))
+  ((:pred /= ppc::sp (:apply %hard-regspec-value nfp))
+   (ld nfp ppc64::tcr.nfp ppc64::rcontext))
+  (ld w (:apply + offset 16) nfp))
 
 (define-ppc64-vinsn (temp-push-unboxed-word :push :word :tsp)
     (()
@@ -3233,7 +3404,7 @@
 				  ())
   (mr dest ppc64::rcontext))
 
-(define-ppc64-vinsn (dpayback :call :subprim-call) (()
+(define-ppc64-vinsn (dpayback :call :subprim) (()
                                                     ((n :s16const))
                                                     ((temp (:u32 #.ppc::imm0))))
   ((:pred > n 1)
@@ -3303,7 +3474,7 @@
   (tdllt ppc::sp imm))
 
 ;;; Do the same thing via a subprim call.
-(define-ppc64-vinsn (save-lisp-context-vsp-ool :call :subprim-call)
+(define-ppc64-vinsn (save-lisp-context-vsp-ool :call :subprim)
     (()
      ()
      ((imm (:u64 #.ppc::imm0))))
@@ -3352,7 +3523,7 @@
 
 ;;; Vpush the argument registers.  We got at least "min-fixed" args;
 ;;; that knowledge may help us generate better code.
-(define-ppc64-vinsn (save-lexpr-argregs :call :subprim-call)
+(define-ppc64-vinsn (save-lexpr-argregs :call :subprim)
     (()
      ((min-fixed :u16const))
      ((crfx :crf)
@@ -3522,7 +3693,7 @@
 
 ;;; "n" is the sum of the number of required args + 
 ;;; the number of &optionals.  
-(define-ppc64-vinsn (default-optionals :call :subprim-call) (()
+(define-ppc64-vinsn (default-optionals :call :subprim) (()
 							     ((n :u16const)))
   (li ppc::imm0 (:apply ash n ppc64::word-shift))
   (bla .SPdefault-optional-args))
@@ -3650,7 +3821,7 @@
   (sldi code imm ppc64::fixnumshift))
 
 ;;; Clobbers LR
-(define-ppc64-vinsn (%debug-trap :call :subprim-call) (()
+(define-ppc64-vinsn (%debug-trap :call :subprim) (()
 						       ())
   (bla .SPbreakpoint)
   )
@@ -3755,7 +3926,7 @@
 
 ;;; Subprim calls.  Done this way for the benefit of VINSN-OPTIMIZE.
 (defmacro define-ppc64-subprim-call-vinsn ((name &rest other-attrs) spno)
-  `(define-ppc64-vinsn (,name :call :subprim-call ,@other-attrs) (() ())
+  `(define-ppc64-vinsn (,name :call :subprim ,@other-attrs) (() ())
     (bla ,spno)))
 
 (defmacro define-ppc64-subprim-jump-vinsn ((name &rest other-attrs) spno)
@@ -3872,7 +4043,7 @@
 
 (define-ppc64-subprim-call-vinsn (gvector) .SPgvector)
 
-(define-ppc64-vinsn (nth-value :call :subprim-call) (((result :lisp))
+(define-ppc64-vinsn (nth-value :call :subprim) (((result :lisp))
 						     ())
   (bla .SPnthvalue))
 
@@ -3925,12 +4096,12 @@
 
 (define-ppc64-subprim-call-vinsn (makes64) .SPmakes64)
 
-(define-ppc64-vinsn (poweropen-syscall :call :subprim-call) (()
+(define-ppc64-vinsn (poweropen-syscall :call :subprim) (()
 							  ())
   (stw ppc::rzero ppc64::c-frame.crsave ppc::sp)
   (bla .SPpoweropen-syscall))
 
-(define-ppc64-vinsn (poweropen-syscall-s64 :call :subprim-call) (()
+(define-ppc64-vinsn (poweropen-syscall-s64 :call :subprim) (()
 							      ())
   (std ppc::sp ppc64::c-frame.crsave ppc::sp)
   (bla .SPpoweropen-syscall))
@@ -4020,30 +4191,24 @@
   :done)
 
 (define-ppc64-vinsn fixnum->fpr (((f :double-float))
-                                          ((fixnum :imm))
-                                          ((imm :s64)))
+                                 ((fixnum :imm))
+                                 ((imm :s64)))
   (srawi imm fixnum ppc64::fixnumshift)
   (std imm -8 ppc::sp)
   (lfd f -8 ppc::sp)
   (fcfid f f))
 
-(define-ppc64-vinsn branch-unless-arg-fixnum (()
-                                              ((arg :lisp)
-                                               (lab :label))
-                                              ((cr0 (:crf 0))
-                                               (tag :u8)))
-  (clrldi. tag arg (- ppc64::nbits-in-word ppc64::nlisptagbits))
-  (bne cr0 lab))
+(define-ppc64-vinsn test-fixnum (((flags (:crf 0)))
+                                 ((x t))
+                                 ((tag :u8)))
+  (andi. tag x ppc64::fixnummask))
 
-(define-ppc64-vinsn branch-unless-both-args-fixnums (()
-                                              ((arg0 :lisp)
-                                               (arg1 :lisp)
-                                               (lab :label))
-                                              ((cr0 (:crf 0))
-                                               (tag :u8)))
-  (clrldi tag arg0 (- ppc64::nbits-in-word ppc64::nlisptagbits))
-  (rldimi. tag arg1 ppc64::nlisptagbits 58)
-  (bne cr0 lab))
+(define-ppc64-vinsn test-fixnums (((flags (:crf 0)))
+                                 ((x t)
+                                  (y t))
+                                 ((tag :u8)))
+  (or tag x y)
+  (andi. tag tag ppc64::fixnummask))
   
 (define-ppc64-vinsn %ilognot (((dest :imm))
                               ((src :imm)))
@@ -4079,8 +4244,83 @@
                                               (val :double-float)))
   (stfdx val base idx))
 
+(define-ppc64-vinsn ivector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u64)
+                                         (mask :u64)))
+  (srdi temp src ppc64::fixnumshift)
+  
+  (clrldi temp temp (- 64 ppc64::ntagbits))
+  (li mask 1)
+  (sld mask mask temp)
+  (andi. mask mask (logior (ash 1 ppc64::fulltag-immheader-0)
+                           (ash 1 ppc64::fulltag-immheader-1)
+                           (ash 1 ppc64::fulltag-immheader-2)
+                           (ash 1 ppc64::fulltag-immheader-3)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (bne :done)
+  (mr dest ppc::rzero)
+  :done)
+
+(define-ppc64-vinsn gvector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u64)
+                                         (mask :u64)))
+  (srdi temp src ppc64::fixnumshift)
+  
+  (clrldi temp temp (- 64 ppc64::ntagbits))
+  (li mask 1)
+  (sld mask mask temp)
+  (andi. mask mask (logior (ash 1 ppc64::fulltag-nodeheader-0)
+                           (ash 1 ppc64::fulltag-nodeheader-1)
+                           (ash 1 ppc64::fulltag-nodeheader-2)
+                           (ash 1 ppc64::fulltag-nodeheader-3)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (bne :done)
+  (mr dest ppc::rzero)
+  :done)
+
+(define-ppc64-vinsn %complex-single-float-realpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (fmr dest src))
+
+(define-ppc64-vinsn %complex-single-float-imagpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (fmr dest (:apply 1+ (:apply %hard-regspec-value src))))
+
+(define-ppc64-vinsn %complex-double-float-realpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (fmr dest src))
+
+(define-ppc64-vinsn %complex-double-float-imagpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (fmr dest (:apply 1+ (:apply %hard-regspec-value src))))
+
+(define-ppc64-vinsn %complex-double-float-access (((dest :double-float))
+                                                  ((src :lisp)
+                                                   (offset :s16const)))
+  (lfd dest offset src))
+
 ;;; In case ppc64::*ppc-opcodes* was changed since this file was compiled.
 (queue-fixup
  (fixup-vinsn-templates *ppc64-vinsn-templates* ppc::*ppc-opcode-numbers*))
 
 (provide "PPC64-VINSNS")
+
+
+
+
+
+
+
+
+
+
+
+

@@ -295,8 +295,14 @@
 
 
 (defppclapfunction called-for-mv-p ()
+  (mr imm1 sp)
+  (ldr imm2 target::tcr.nfp target::rcontext)
+  (cmpr imm1 imm2)
   (ref-global imm0 ret1valaddr)
-  (ldr imm1 target::lisp-frame.savelr sp)
+  (bne @notnfp)
+  (ldr imm1 0 imm1)
+  @notnfp
+  (ldr imm1 target::lisp-frame.savelr imm1)
   (eq->boolean arg_z imm0 imm1 imm0)
   (blr))
 
@@ -492,6 +498,33 @@
     #+ppc32-target
     (clrlwi imm0 imm0 3)		;don't want negative fixnums
     (box-fixnum arg_z imm0)
-    (blr)))    
+    (blr)))
+
+
+(defppclapfunction %make-complex-double-float ((r arg_y) (i arg_z))
+  (get-double-float fp0 r)
+  (get-double-float fp1 i)
+  (li imm0 (logior (ash #+ppc32-target 5 #+ppc64-target 6 8) target::subtag-complex-double-float))
+  (subi allocptr allocptr (- #+ppc32=target 24 #+ppc64-target 32 target::fulltag-misc))
+  (twllt allocptr allocbase)
+  (str imm0 target::misc-header-offset allocptr)
+  (mr arg_z allocptr)
+  (clrrri allocptr allocptr target::ntagbits)
+  (stfd fp0 target::complex-double-float.realpart arg_z)
+  (stfd fp1 target::complex-double-float.imagpart arg_z)
+  (blr))
+
+(defppclapfunction %make-complex-single-float ((r arg_y) (i arg_z))
+  (get-single-float fp0 r)
+  (get-single-float fp1 i)
+  (li imm0 (logior (ash #+ppc32-target 3 #+ppc64-target 2 8) target::subtag-complex-single-float))
+  (subi allocptr allocptr (- 16 target::fulltag-misc))
+  (twllt allocptr allocbase)
+  (str imm0 target::misc-header-offset allocptr)
+  (mr arg_z allocptr)
+  (clrrri allocptr allocptr target::ntagbits)
+  (stfs fp0 target::complex-single-float.realpart arg_z)
+  (stfs fp1 target::complex-single-float.imagpart arg_z)
+  (blr))
 
 ; End of ppc-numbers.lisp

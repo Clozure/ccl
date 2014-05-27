@@ -170,7 +170,13 @@
 	       symbol-macrolet
                ;; These are implementation-specific special forms :
 	       nfunction
-	       ppc-lap-function fbind
+               #+ppc-target
+	       ppc-lap-function
+               #+arm-target
+               arm-lap-function
+               #+x86-target
+               x86-lap-function
+               fbind
                with-c-frame with-variable-c-frame))
   (%macro-have sym sym))
 

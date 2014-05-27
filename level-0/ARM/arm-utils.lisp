@@ -139,12 +139,14 @@
     (cmp subtag (:$ arm::max-16-bit-ivector-subtag))
     (movls header (:lsr header (:$ 1)))
     (bls @bump)
-    (cmp subtag (:$ arm::subtag-double-float-vector))
-    (movls header (:lsl header (:$ 1)))
-    (bls @bump)
-    (mov header (:lsr header (:$ 2)))
-    (add header header (:$ 7))
-    (mov header (:lsr header (:$ 3)))
+    (cmp subtag (:$ arm::subtag-complex-double-float-vector))
+    (moveq header (:lsl header (:$ 2)))
+    (beq @bump)
+    (cmp subtag (:$ arm::subtag-bit-vector))
+    (moveq header (:lsr header (:$ 2)))
+    (addeq header header (:$ 7))
+    (moveq header (:lsr header (:$ 3)))
+    (movne header (:lsl header (:$ 1))) 
     @bump
     (add header header (:$ (+ 4 7)))
     (bic header header (:$ arm::fulltagmask))
@@ -242,12 +244,14 @@
     (cmp subtag (:$ arm::max-16-bit-ivector-subtag))
     (movls header (:lsr header (:$ 1)))
     (bls @bump)
-    (cmp subtag (:$ arm::subtag-double-float-vector))
-    (movls header (:lsl header (:$ 1)))
-    (bls @bump)
-    (mov header (:lsr header (:$ 2)))
-    (add header header (:$ 7))
-    (mov header (:lsr header (:$ 3)))
+    (cmp subtag (:$ arm::subtag-complex-double-float-vector))
+    (moveq header (:lsl header (:$ 2)))
+    (beq @bump)
+    (cmp subtag (:$ arm::subtag-bit-vector))
+    (moveq header (:lsr header (:$ 2)))
+    (addeq header header (:$ 7))
+    (moveq header (:lsr header (:$ 3)))
+    (movne header (:lsl header (:$ 1)))
     @bump
     (mov imm2 obj)
     (add header header (:$ (+ 4 7)))
@@ -410,7 +414,7 @@ be somewhat larger than what was specified)."
 
 
 (defarmlapfunction allow-heap-allocation ((arg arg_z))
-  "If ARG is true, signal an ALLOCATION-DISABLED condition on attempts
+  "If ARG is false, signal an ALLOCATION-DISABLED condition on attempts
 at heap allocation."
   (:arglist (arg))
   (check-nargs 1)

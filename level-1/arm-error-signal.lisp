@@ -82,6 +82,22 @@
    (arm::subtag-double-float-vector . (simple-array double-float (*)))
    (arm::subtag-bit-vector . simple-bit-vector)))
 
+;;; Return a pointer to the saved VFP info a ucontext's mcontext,
+;;; and the FPSCR values in that info as an unsigned 32-bit integer.
+;;; Return a null pointer an 0 if this info can't be found.
+(defun xp-vfp-info (xp)
+  (let* ((p (pref xp :ucontext.uc_regspace)))
+    (loop
+      (let* ((magic (%get-unsigned-long p)))
+        (case magic
+          (#x56465001                    ;VFP magic
+           (%incf-ptr p 8)
+           (return (values p (%get-unsigned-long p (* 32 8)))))
+          ((#x12ef842a #x5065cf03)      ;IWMMXT or CRUNCH magic
+           (%incf-ptr p (%get-unsigned-long p 4)))
+          (otherwise
+           (return (values #-cross-compiling +null-ptr+ #+cross-compiling (%null-ptr)  0))))))))
+
 (defun xp-argument-list (xp)
   (let ((nargs (xp-gpr-lisp xp arm::nargs))     ; tagged as a fixnum (how convenient)
         (arg-x (xp-gpr-lisp xp arm::arg_x))
@@ -115,6 +131,29 @@
     ;; handle_uuo() (in the lisp kernel) will not bump the PC here.
     (setf (xp-gpr-lisp xp arm::pc) (uvref f 0))))
 
+(defun preceding-fpu-instruction (xp)
+  (let* ((f (xp-gpr-lisp xp arm::fn)))
+    (when (typep f 'function)
+      (let* ((idx
+              (loop (let* ((pc (xp-gpr-lisp xp arm::pc))
+                           (entry (%svref f 0))
+                           (d (- pc entry)))
+                      (when (and (eql pc (xp-gpr-lisp xp arm::pc))
+                                 (eql entry (%svref f 0)))
+                        (return d)))))
+             (cv (%svref f 1)))
+        (declare (fixnum idx))
+        (do* ((i (1- idx) (1- i)))
+             ((< i 0))
+          (declare (fixnum i))
+          (let* ((inst (uvref cv i))
+                 (masked (logand inst #x0f000f00)))
+            (when (and (or (eql masked #x0e000b00)
+                           (eql masked #x0e000a00))
+                       ;; Ignore fmxr, fmrx ...
+                       (not (eql #x10 (logand inst #xff))))
+              (return inst))))))))
+             
   
 (defcallback %xerr-disp (:address xp
                                   :signed-fullword error-number
@@ -243,16 +282,17 @@
                               (setf (xp-gpr-lisp xp dest-reg)
                                     (fv.addr eep-or-fv))))))
                         (5              ;fpu
-                         (let* ((reginfo (xp-gpr-lisp xp (ldb (byte 4 8) uuo)))
-                                (instruction (logand (xp-gpr-signed-long xp (ldb (byte 4 12) uuo)) (1- (ash 1 32))))
-                                (condition-name (fp-condition-name-from-fpscr-status (aref reginfo 0))))
-                           (if condition-name
+                         (let* ((vfp-regs (xp-vfp-info xp))
+                                (status (xp-gpr-unsigned-long xp (ldb (byte 4 8) uuo)))
+                                (instruction (preceding-fpu-instruction xp))
+                                (condition-name (fp-condition-name-from-fpscr-status status)))
+                           (if (and condition-name instruction)
                              (let* ((template (find-arm-instruction-template instruction))
                                     (operation (if template (arithmetic-error-operation-from-instruction template) 'unknown))
-                                    (operands (if template (arithmetic-error-operands-from-instruction template instruction reginfo xp))))
+                                    (operands (if template (arithmetic-error-operands-from-instruction template instruction vfp-regs xp))))
                                (%error condition-name `(:operation ,operation :operands ,operands) frame-ptr))
-                             (%error "FPU exception, fpscr = ~d" (list (aref reginfo 0)) frame-ptr)))
-                         )
+                             (%error "FPU exception, fpscr = ~d" (list status) frame-ptr))
+                         ))
                         (6              ;array rank
                          (%err-disp-internal $XNDIMS
                                              (list

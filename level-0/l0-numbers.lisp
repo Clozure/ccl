@@ -98,30 +98,26 @@
 
 
 ; Destructive primitives.
-(macrolet ((defdestructive-df-op (non-destructive-name destructive-name op)
+(macrolet ((defdestructive-df-op (destructive-name op)
              `(progn
-                (defun ,non-destructive-name (x y)
-                  (,destructive-name x y (%make-dfloat)))
                 (defun ,destructive-name (x y result)
                   (declare (double-float x y result))
-                  (%setf-double-float result (the double-float (,op x y)))))))
-  (defdestructive-df-op %double-float+-2 %double-float+-2! +)
-  (defdestructive-df-op %double-float--2 %double-float--2! -)
-  (defdestructive-df-op %double-float*-2 %double-float*-2! *)
-  (defdestructive-df-op %double-float/-2 %double-float/-2! /))
+                  (%setf-double-float result (the double-float (,op (the double-float x) (the double-float y))))))))
+  (defdestructive-df-op %double-float+-2! +)
+  (defdestructive-df-op %double-float--2! -)
+  (defdestructive-df-op %double-float*-2! *)
+  (defdestructive-df-op %double-float/-2! /))
 
 #-64-bit-target
-(macrolet ((defdestructive-sf-op (non-destructive-name destructive-name op)
+(macrolet ((defdestructive-sf-op (destructive-name op)
              `(progn
-                (defun ,non-destructive-name (x y)
-                  (,destructive-name x y (%make-sfloat)))
                 (defun ,destructive-name (x y result)
                   (declare (short-float x y result))
                   (%setf-short-float result (the short-float (,op x y)))))))
-  (defdestructive-sf-op %short-float+-2 %short-float+-2! +)
-  (defdestructive-sf-op %short-float--2 %short-float--2! -)
-  (defdestructive-sf-op %short-float*-2 %short-float*-2! *)
-  (defdestructive-sf-op %short-float/-2 %short-float/-2! /))
+  (defdestructive-sf-op %short-float+-2! +)
+  (defdestructive-sf-op %short-float--2! -)
+  (defdestructive-sf-op %short-float*-2! *)
+  (defdestructive-sf-op %short-float/-2! /))
 
 
 (defun %negate (x)
@@ -133,7 +129,7 @@
      #+64-bit-target (%short-float-negate x))
     (bignum (negate-bignum x))
     (ratio (%make-ratio (%negate (%numerator x)) (%denominator x)))
-    (complex (%make-complex (%negate (%realpart X))(%negate (%imagpart X))) )))
+    (complex (complex (%negate (%realpart X))(%negate (%imagpart X))) )))
 
 (defun %double-float-zerop (n)
   (zerop (the double-float n)))
@@ -546,8 +542,8 @@
                       (n (+ (* x dy) (%numerator y))))
                  (%make-ratio n dy)))))
     (complex (number-case y
-               (complex (canonical-complex (+ (%realpart x) (%realpart y))
-                                           (+ (%imagpart x) (%imagpart y))))
+               (complex (complex (+ (%realpart x) (%realpart y))
+                                 (+ (%imagpart x) (%imagpart y))))
                ((rational float) (complex (+ (%realpart x) y) (%imagpart x)))))
     (ratio (number-case y
              (ratio
@@ -619,8 +615,8 @@
                       (n (- (* x dy) (%numerator y))))
                  (%make-ratio n dy)))))
     (complex (number-case y
-               (complex (canonical-complex (- (%realpart x) (%realpart y))
-                                           (- (%imagpart x) (%imagpart y))))
+               (complex (complex (- (%realpart x) (%realpart y))
+                                 (- (%imagpart x) (%imagpart y))))
                ((rational float) (complex (- (%realpart x) y) (%imagpart x)))))
     (ratio (number-case y
              (ratio
@@ -694,7 +690,7 @@
 			   nn
 			   (%make-ratio nn nd)))))))
 	 (complex*real (x y)
-	   (canonical-complex (* (%realpart x) y) (* (%imagpart x) y))))
+	   (complex (* (%realpart x) y) (* (%imagpart x) y))))
     (number-case x
       (double-float (number-case y
                       (double-float (* (the double-float x)(the double-float y)))
@@ -734,7 +730,7 @@
 	                         (ix (%imagpart x))
 	                         (ry (%realpart y))
 	                         (iy (%imagpart y)))
-	                    (canonical-complex (- (* rx ry) (* ix iy)) (+ (* rx iy) (* ix ry)))))
+	                    (complex (- (* rx ry) (* ix iy)) (+ (* rx iy) (* ix ry)))))
                  (real (complex*real x y))))
       (ratio (number-case y
                (ratio (let* ((nx (%numerator x))
@@ -803,12 +799,12 @@
 		    (if (> (abs ,ry) (abs ,iy))
 		      (let* ((,r (/ ,iy ,ry))
 			     (,dn (* ,ry (+ 1 (* ,r ,r)))))
-			(canonical-complex (/ ,x ,dn)
-					   (/ (- (* ,x ,r)) ,dn)))
+			(complex (/ ,x ,dn)
+                                 (/ (- (* ,x ,r)) ,dn)))
 		      (let* ((,r (/ ,ry ,iy))
 			     (,dn (* ,iy (+ 1 (* ,r ,r)))))
-			(canonical-complex (/ (* ,x ,r) ,dn)
-					   (/ (- ,x) ,dn))))))))
+			(complex (/ (* ,x ,r) ,dn)
+                                 (/ (- ,x) ,dn))))))))
     (number-case x
       (double-float (number-case y
 		      (double-float (/ (the double-float x) (the double-float y)))
@@ -845,14 +841,14 @@
 			    (if (> (abs ry) (abs iy))
 			      (let* ((r (/ iy ry))
 				     (dn (+ ry (* r iy))))
-				(canonical-complex (/ (+ rx (* ix r)) dn)
+				(complex (/ (+ rx (* ix r)) dn)
 						   (/ (- ix (* rx r)) dn)))
 			      (let* ((r (/ ry iy))
 				     (dn (+ iy (* r ry))))
-				(canonical-complex (/ (+ (* rx r) ix) dn)
+				(complex (/ (+ (* rx r) ix) dn)
 						   (/ (- (* ix r) rx) dn))))))
 		 ((rational float)
-		  (canonical-complex (/ (%realpart x) y) (/ (%imagpart x) y)))))
+		  (complex (/ (%realpart x) y) (/ (%imagpart x) y)))))
       (ratio (number-case y
 	       (double-float (rat-dfloat / x y))
 	       (short-float (rat-sfloat / x y))
@@ -1157,14 +1153,14 @@
                                      (f2))
            (let ((res (%unary-truncate (%double-float/-2! fnum ,divisor f2))))
              (values res 
-                     (%double-float--2 fnum (%double-float*-2! (%double-float res f2) ,divisor f2))))))
+                     (- (the double-float fnum) (the double-float  (%double-float*-2! (%double-float res f2) ,divisor f2)))))))
        (truncate-rat-sfloat (number divisor)
          #+32-bit-target
          `(target::with-stack-short-floats ((fnum ,number)
                                             (f2))
            (let ((res (%unary-truncate (%short-float/-2! fnum ,divisor f2))))
              (values res 
-                     (%short-float--2 fnum (%short-float*-2! (%short-float res f2) ,divisor f2)))))
+                     (- (the single-float fnum) (the single-float (%short-float*-2! (%short-float res f2) ,divisor f2))))))
          #+64-bit-target
          `(let* ((temp (%short-float ,number))
                  (res (%unary-truncate (/ (the short-float temp)
@@ -1212,9 +1208,9 @@
                         (target::with-stack-short-floats ((f2))
                           (let ((res (%unary-truncate (%short-float/-2! number divisor f2))))
                             (values res 
-                                    (%short-float--2
-                                     number 
-                                     (%short-float*-2! (%short-float res f2) divisor f2)))))
+                                    (-
+                                     (the single-float number)
+                                     (the single-float (%short-float*-2! (%short-float res f2) divisor f2))))))
                         #+64-bit-target
                         (let ((res (%unary-truncate
                                     (/ (the short-float number)
@@ -1229,9 +1225,9 @@
                                                           (f2))
                           (let ((res (%unary-truncate (%short-float/-2! number fdiv f2))))
                             (values res 
-                                    (%short-float--2 
-                                     number 
-                                     (%short-float*-2! (%short-float res f2) fdiv f2)))))
+                                    (-
+                                     (the single-float number)
+                                     (the single-float (%short-float*-2! (%short-float res f2) fdiv f2))))))
                         #+64-bit-target
                         (let* ((fdiv (%short-float divisor))
                                (res (%unary-truncate
@@ -1245,9 +1241,9 @@
                                                    (f2))
                           (let* ((res (%unary-truncate (%double-float/-2! fnum divisor f2))))
                             (values res
-                                    (%double-float--2
-                                     fnum
-                                     (%double-float*-2! (%double-float res f2) divisor f2)))))))))
+                                    (-
+                                     (the double-float fnum)
+                                     (the double-float (%double-float*-2! (%double-float res f2) divisor f2))))))))))
       (double-float (if (eql divisor 1)
                       (let ((res (%unary-truncate number)))
                         (values res (- number res)))
@@ -1257,16 +1253,16 @@
                                                     (f2))
                            (let ((res (%unary-truncate (%double-float/-2! number fdiv f2))))
                              (values res 
-                                     (%double-float--2 
-                                      number 
-                                      (%double-float*-2! (%double-float res f2) fdiv f2))))))                        
+                                     (-
+                                      (the double-float number)
+                                      (the double-float (%double-float*-2! (%double-float res f2) fdiv f2)))))))                        
                         (double-float
                          (with-stack-double-floats ((f2))
                            (let ((res (%unary-truncate (%double-float/-2! number divisor f2))))
                              (values res 
-                                     (%double-float--2
-                                      number 
-                                      (%double-float*-2! (%double-float res f2) divisor f2)))))))))
+                                     (-
+                                      (the double-float number)
+                                      (the double-float  (%double-float*-2! (%double-float res f2) divisor f2))))))))))
       (ratio (number-case divisor
                (double-float (truncate-rat-dfloat number divisor))
                (short-float (truncate-rat-sfloat number divisor))
@@ -1606,37 +1602,36 @@
   (number-case realpart
     (short-float
       (number-case imagpart
-         (short-float (canonical-complex realpart imagpart))
-         (double-float (canonical-complex (%double-float realpart) imagpart))
-         (rational (canonical-complex realpart (%short-float imagpart)))))
+         (short-float (%make-complex-single-float realpart imagpart))
+         (double-float (%make-complex-double-float (%double-float realpart) imagpart))
+         (rational (%make-complex-single-float realpart (%short-float imagpart)))))
     (double-float 
      (number-case imagpart
-       (double-float (canonical-complex
-                      (the double-float realpart)
-                      (the double-float imagpart)))
-       (short-float (canonical-complex realpart (%double-float imagpart)))
-       (rational (canonical-complex
-                              (the double-float realpart)
-                              (the double-float (%double-float imagpart))))))
+       (double-float (%make-complex-double-float realpart imagpart))
+       ((short-float rational) (%make-complex-double-float  realpart (%double-float imagpart)))))
     (rational (number-case imagpart
-                (double-float (canonical-complex
-                               (the double-float (%double-float realpart))
-                               (the double-float imagpart)))
-                (short-float (canonical-complex (%short-float realpart) imagpart))
+                (double-float (%make-complex-double-float
+                               (%double-float realpart)
+                               imagpart))
+                (short-float (%make-complex-single-float (%short-float realpart) imagpart))
                 (rational (canonical-complex realpart imagpart))))))  
 
 ;; #-PPC IN L1-NUMBERS.LISP
 (defun realpart (number)
   "Extract the real part of a number."
   (number-case number
-    (complex (%realpart number))
+    (complex-single-float (%complex-single-float-realpart number))
+    (complex-double-float (%complex-double-float-realpart number))
+    (complex (%svref number target::complex.realpart-cell))
     (number number)))
 
 ;; #-PPC IN L1-NUMBERS.LISP
 (defun imagpart (number)
   "Extract the imaginary part of a number."
   (number-case number
-    (complex (%imagpart number))
+    (complex-single-float (%complex-single-float-imagpart number))
+    (complex-double-float (%complex-double-float-imagpart number))
+    (complex (%svref number target::complex.imagpart-cell))
     (float (* 0 number))
     (rational 0)))
 

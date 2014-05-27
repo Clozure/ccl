@@ -94,15 +94,18 @@ define_cl_array_subtag(s64_vector,ivector_class_64_bit,1)
 define_cl_array_subtag(u64_vector,ivector_class_64_bit,2)
 define_cl_array_subtag(fixnum_vector,ivector_class_64_bit,3)        
 define_cl_array_subtag(double_float_vector,ivector_class_64_bit,4)
+define_cl_array_subtag(complex_single_float_vector,ivector_class_64_bit,5)
 define_cl_array_subtag(s32_vector,ivector_class_32_bit,1)
 define_cl_array_subtag(u32_vector,ivector_class_32_bit,2)
 define_cl_array_subtag(single_float_vector,ivector_class_32_bit,3)
 define_cl_array_subtag(simple_base_string,ivector_class_32_bit,5)
 define_cl_array_subtag(s16_vector,ivector_class_other_bit,1)
 define_cl_array_subtag(u16_vector,ivector_class_other_bit,2)
+define_cl_array_subtag(complex_double_float_vector,ivector_class_other_bit,3)
 define_cl_array_subtag(bit_vector,ivector_class_other_bit,7)
 define_cl_array_subtag(s8_vector,ivector_class_8_bit,1)
 define_cl_array_subtag(u8_vector,ivector_class_8_bit,2)
+min_cl_ivector_subtag = subtag_s8_vector        
 /* There's some room for expansion in non-array ivector space. */
 define_subtag(macptr,ivector_class_64_bit,1)
 define_subtag(dead_macptr,ivector_class_64_bit,2)
@@ -110,6 +113,8 @@ define_subtag(code_vector,ivector_class_32_bit,0)
 define_subtag(xcode_vector,ivector_class_32_bit,1)
 define_subtag(bignum,ivector_class_32_bit,2)
 define_subtag(double_float,ivector_class_32_bit,3)
+define_subtag(complex_single_float,ivector_class_32_bit,4)
+define_subtag(complex_double_float,ivector_class_32_bit,5)
 
 
 
@@ -196,6 +201,17 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 	 _word(value)
          _word(val_low)
 	_endstructf
+
+        _structf(complex_single_float)
+         _word(realpart)
+         _word(imagpart)
+        _endstructf
+
+        _structf(complex_double_float)
+         _field(pad,8)
+         _field(realpart,8)
+         _field(imagpart,8)
+        _endstructf
 	
 	_structf(macptr)
 	 _node(address)
@@ -236,7 +252,7 @@ max_1_bit_constant_index = ((0x7fff + misc_data_offset)<<5)
 	 _node(db_link)		/* head of special-binding chain */
 	 _field(regs,8*node_size)	/* save7-save0 */
 	 _node(xframe)		/* exception frame chain */
-	 _node(tsp_segment)	/* maybe someday; padding for now */
+	 _node(nfp)             
 	_endstructf
 
 
@@ -352,7 +368,9 @@ $1 = ($2<<num_subtag_bits)|$3')
 	def_header(value_cell_header,1,subtag_value_cell	)
 	def_header(macptr_header,macptr.element_count,subtag_macptr)
 	def_header(vectorH_header,vectorH.element_count,subtag_vectorH)
-
+        def_header(complex_single_float_header,2,subtag_complex_single_float)
+        def_header(complex_double_float_header,6,subtag_complex_double_float)
+        
 	include(errors.s)
 
 /* Symbol bits that we care about */
@@ -444,6 +462,7 @@ TCR_BIAS = 0
          _node(tlb_pointer)     /* Consider using tcr+N as tlb_pointer */
 	 _node(shutdown_count)
          _node(safe_ref_address)
+         _node(nfp)
 	_ends
 
 TCR_FLAG_BIT_FOREIGN = fixnum_shift

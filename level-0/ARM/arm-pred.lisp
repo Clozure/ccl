@@ -35,9 +35,9 @@
   (check-nargs 2)
   @top
   (cmp x y)
+  (beq @win)
   (extract-fulltag imm0 x)
   (extract-fulltag imm1 y)
-  (beq @win)
   (cmp imm0 imm1)
   (bne @lose)
   (cmp imm0 (:$ arm::fulltag-cons))
@@ -81,18 +81,67 @@
   (extract-subtag imm1 y)
   (cmp imm0 (:$ arm::subtag-vectorH))
   (cmpne imm1 (:$ arm::subtag-vectorH))
+  ;; If either a vector header, let HAIRY-EQUAL deal with them
   (beq @hairy)
-  (cmp imm0 (:$ arm::subtag-macptr))
-  (bgt @same)
-  (set-nargs 2)
-  (ldr fname (:@ nfn 'eql))
-  (ldr nfn (:@ fname (:$ arm::symbol.fcell)))
-  (ldr pc (:@ nfn (:$ arm::function.entrypoint)))
-  @same
-  (cmp imm1 imm0)
+  ;; If both are istructs (and potentially pathnames),
+  ;; try HAIRY-EQUAL
+  (cmp imm0 (:$ arm::subtag-istruct))
+  (cmpeq imm1 (:$ arm::subtag-istruct))
+  (beq @hairy)
+  (getvheader imm0 x)
+  (getvheader imm1 y)
+  (cmp imm0 imm1)
+  (spjumpne .SPbuiltin-eql)
+  (and imm0 imm0 (:$ #xff))
+  (cmp imm0 (:$ arm::subtag-bit-vector))
+  (beq @bit-vector)
+  (cmp imm0 (:$ arm::subtag-simple-base-string))
+  (spjumpne .SPbuiltin-eql)
+  (header-length temp0 imm1)
+  @compare-words
+  (mov imm2 (:$ arm::misc-data-offset))
+  (b @string-next)
+  @string-loop
+  (ldr imm0 (:@ x imm2))
+  (ldr imm1 (:@ y imm2))
+  (cmp imm0 imm1)
   (bne @lose)
+  (add imm2 imm2 (:$ arm::node-size))
+  @string-next
+  (subs temp0 temp0 (:$ arm::fixnumone))
+  (bge @string-loop) 
+  (mov arg_z 'nil)
+  (add arg_z arg_z (:$ arm::t-offset))
+  (bx lr)
   @hairy
   (set-nargs 2)
   (ldr fname (:@ nfn 'hairy-equal))
   (ldr nfn (:@ fname (:$ arm::symbol.fcell)))
-  (ldr pc (:@ nfn (:$ arm::function.entrypoint))))
+  (ldr pc (:@ nfn (:$ arm::function.entrypoint)))
+  @bit-vector
+  ;; Go backwards through the bitvectors, comparing
+  ;; each 32-bit word.  If the number of bits isn't
+  ;; a multiple of 32, we have to mask the last words.
+  (header-size imm2 imm1)
+  (mov imm1 (:lsr imm2 (:$ 5)))
+  (box-fixnum temp0 imm1)
+  (ands imm2 imm2 (:$ 31))
+  (beq @compare-words)
+  (mov imm0 (:$ 1))
+  (mov imm2 (:lsl imm0 imm2))
+  (sub imm2 imm2 (:$ 1))
+  (add imm1 temp0 (:$ arm::misc-data-offset))
+  (ldr imm0 (:@ x imm1))
+  (ldr imm1 (:@ y imm1))
+  (and imm0 imm0 imm2)
+  (and imm1 imm1 imm2)
+  (cmp imm1 imm0)
+  (beq @compare-words)
+  (b @lose))
+
+
+
+
+  
+  
+  

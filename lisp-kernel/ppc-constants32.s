@@ -174,39 +174,39 @@ max_numeric_subtag = subtag_complex
 /* element size - like all non-CL-array fulltag-immheader types - is 32 bits. */
 
 	define_imm_subtag(bit_vector,31)
-	define_imm_subtag(double_float_vector,30)
-	define_imm_subtag(s16_vector,29)
-	define_imm_subtag(u16_vector,28)
+        define_imm_subtag(complex_double_float_vector,30)
+        define_imm_subtag(complex_single_float_vector,29)
+	define_imm_subtag(double_float_vector,28)
+	define_imm_subtag(s16_vector,27)
+	define_imm_subtag(u16_vector,26)
 min_16_bit_ivector_subtag = subtag_u16_vector
 max_16_bit_ivector_subtag = subtag_s16_vector
-	define_imm_subtag(s8_vector,26)
-	define_imm_subtag(u8_vector,25)
+	define_imm_subtag(s8_vector,25)
+	define_imm_subtag(u8_vector,24)
 min_8_bit_ivector_subtag = subtag_u8_vector
-max_8_bit_ivector_subtag = fulltag_immheader|(27<<ntagbits)
-        define_imm_subtag(simple_base_string,24)
-        define_imm_subtag(fixnum_vector,23)
-	define_imm_subtag(s32_vector,22)
-	define_imm_subtag(u32_vector,21)
-	define_imm_subtag(single_float_vector,20)
-max_32_bit_ivector_subtag = fulltag_immheader|(24<<ntagbits)
+max_8_bit_ivector_subtag = subtag_s8_vector
+        define_imm_subtag(simple_base_string,23)
+        define_imm_subtag(fixnum_vector,22)
+	define_imm_subtag(s32_vector,21)
+	define_imm_subtag(u32_vector,20)
+	define_imm_subtag(single_float_vector,19)
 min_cl_ivector_subtag = subtag_single_float_vector
+max_32_bit_ivector_subtag = subtag_simple_base_string        
 
 
-	define_node_subtag(vectorH,20)
-	define_node_subtag(arrayH,19)
-	define_node_subtag(simple_vector,21)
-min_vector_subtag = subtag_vectorH
-min_array_subtag = subtag_arrayH
+	define_node_subtag(vectorH,30)
+	define_node_subtag(arrayH,29)
+	define_node_subtag(simple_vector,31)
 
 /* So, we get the remaining subtags (n: (n > max-numeric-subtag) & (n < min-array-subtag)) */
 /* for various immediate/node object types. */
 
 	define_imm_subtag(macptr,3)
-min_non_numeric_imm_subtag = subtag_macptr
-
 	define_imm_subtag(dead_macptr,4)
 	define_imm_subtag(code_vector,5)
 	define_imm_subtag(creole,6)
+        define_imm_subtag(complex_single_float,8)
+        define_imm_subtag(complex_double_float,9)
 
 max_non_array_imm_subtag = (18<<ntagbits)|fulltag_immheader
 
@@ -242,6 +242,22 @@ max_non_array_node_subtag = (18<<ntagbits)|fulltag_immheader
 	 _dword(value)
 	_endstructf
 
+        _structf(complex_single_float)
+         _word(pad)
+         _word(realpart)
+         _word(imagpart)
+        _endstructf
+
+        _structf(complex_double_float)
+         _word(pad)
+         _struct_label(realpart)
+         _word(realpart_high)
+         _word(realpart_low)
+         _struct_label(imagpart)
+         _word(imagpart_high)
+         _word(imagpart_low)
+        _endstructf
+        
 	_structf(symbol)
 	 _node(pname)
 	 _node(vcell)
@@ -260,7 +276,7 @@ max_non_array_node_subtag = (18<<ntagbits)|fulltag_immheader
 	 _node(db_link)		/* head of special-binding chain */
 	 _field(regs,8*node_size)	/* save7-save0 */
 	 _node(xframe)		/* exception frame chain */
-	 _node(tsp_segment)	/* maybe someday; padding for now */
+	 _node(nfp)	
 	_endstructf
 
 	_structf(macptr)
@@ -376,6 +392,8 @@ $1 = ($2<<num_subtag_bits)|$3')
 	def_header(value_cell_header,1,subtag_value_cell	)
 	def_header(macptr_header,macptr.element_count,subtag_macptr)
 	def_header(vectorH_header,vectorH.element_count,subtag_vectorH)
+        def_header(complex_double_float_header,5,subtag_complex_double_float)
+        def_header(complex_single_float_header,3,subtag_complex_single_float)
 
 	include(errors.s)
 
@@ -467,6 +485,7 @@ TCR_BIAS = 0
          _node(tlb_pointer)     /* Consider using tcr+N as tlb_pointer */
 	 _node(shutdown_count)
          _node(safe_ref_address)
+         _node(nfp)
 	_ends
 
 TCR_FLAG_BIT_FOREIGN = fixnum_shift

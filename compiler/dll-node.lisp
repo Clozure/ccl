@@ -27,6 +27,7 @@
 (defstruct (dll-header
             (:include dll-node)
             (:constructor %make-dll-header))
+  info
 )
 
 
@@ -34,7 +35,8 @@
 (defmacro dll-header-first (h) `(dll-header-succ ,h))
 
 (defun init-dll-header (h)
-  (setf (dll-header-first h) h
+  (setf (dll-header-info h) nil
+        (dll-header-first h) h
 	(dll-header-last h) h))
 
 (defun make-dll-header ()

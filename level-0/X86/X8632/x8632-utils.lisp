@@ -133,8 +133,10 @@
     (jbe @8)
     (cmpb ($ x8632::max-16-bit-ivector-subtag) (% imm0.b))
     (jbe @16)
-    (cmpb ($ x8632::subtag-double-float-vector) (% imm0.b))
-    (je @double-float)
+    (cmpb ($ x8632::subtag-complex-double-float-vector) (% imm0.b))
+    (je @complex-double-float-vector)
+    (cmpb ($ x8632::subtag-bit-vector) (% imm0.b))
+    (jne @double-float)
     ;; if we get here, it's a bit vector
     (shrl ($ x8632::num-subtag-bits) (% imm0))
     (add ($ 7) (% imm0))
@@ -143,6 +145,10 @@
     @double-float
     (shrl ($ x8632::num-subtag-bits) (% imm0))
     (shll ($ 3) (% imm0))
+    (jmp @uvector-next)
+    @complex-double-float-vector
+    (shrl ($ x8632::num-subtag-bits) (% imm0))
+    (shll ($ 4) (% imm0))
     (jmp @uvector-next)
     @8
     (shrl ($ x8632::num-subtag-bits) (% imm0))
@@ -237,8 +243,10 @@
     (jbe @8)
     (cmpb ($ x8632::max-16-bit-ivector-subtag) (% imm0.b))
     (jbe @16)
-    (cmpb ($ x8632::subtag-double-float-vector) (% imm0.b))
-    (je @double-float)
+    (cmpb ($ x8632::subtag-complex-double-float-vector) (% imm0.b))
+    (je @complex-double-float-vector)
+    (cmpb ($ x8632::subtag-bit-vector) (% imm0.b))
+    (jne @double-float)
     ;; if we get here, it's a bit vector
     (shrl ($ x8632::num-subtag-bits) (% imm0))
     (add ($ 7) (% imm0))
@@ -247,6 +255,10 @@
     @double-float
     (shrl ($ x8632::num-subtag-bits) (% imm0))
     (shll ($ 3) (% imm0))
+    (jmp @uvector-next)
+    @complex-double-float-vector
+    (shrl ($ x8632::num-subtag-bits) (% imm0))
+    (shll ($ 4) (% imm0))
     (jmp @uvector-next)
     @8
     (shrl ($ x8632::num-subtag-bits) (% imm0))

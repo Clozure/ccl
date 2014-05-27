@@ -351,13 +351,12 @@
 (define-subtag arrayH fulltag-nodeheader-0 10)
 (define-subtag vectorH fulltag-nodeheader-1 10)
 (define-subtag simple-vector fulltag-nodeheader-1 11)
-(defconstant min-vector-subtag  subtag-vectorH)
-(defconstant min-array-subtag  subtag-arrayH)
 
 (defconstant ivector-class-64-bit  fulltag-immheader-2)
 (defconstant ivector-class-32-bit  fulltag-immheader-1)
 (defconstant ivector-class-other-bit  fulltag-immheader-0)
 
+(define-subtag complex-single-float-vector ivector-class-64-bit 11)
 (define-subtag fixnum-vector ivector-class-64-bit 12)
 (define-subtag s64-vector ivector-class-64-bit 13)
 (define-subtag u64-vector ivector-class-64-bit 14)
@@ -367,9 +366,12 @@
 (define-subtag s32-vector ivector-class-32-bit 13)
 (define-subtag u32-vector ivector-class-32-bit 14)
 (define-subtag single-float-vector ivector-class-32-bit 15)
-	
+
+(define-subtag complex-double-float-vector ivector-class-other-bit 9)
 (define-subtag s16-vector ivector-class-other-bit 10)
 (define-subtag u16-vector ivector-class-other-bit 11)
+
+(defconstant min-cl-ivector-subtag subtag-complex-double-float-vector)
 
 (define-subtag s8-vector ivector-class-other-bit 13)
 (define-subtag u8-vector ivector-class-other-bit 14)
@@ -384,6 +386,8 @@
 (define-subtag bignum ivector-class-32-bit 1)
 (define-subtag double-float ivector-class-32-bit 2)
 (define-subtag xcode-vector ivector-class-32-bit 3)
+(define-subtag complex-single-float ivector-class-32-bit 4)
+(define-subtag complex-double-float ivector-class-32-bit 5)
 
 
         
@@ -507,6 +511,18 @@
   realpart
   imagpart
 )
+
+(define-fixedsized-object complex-single-float ()
+  value)
+
+(defconstant complex-single-float.realpart complex-single-float.value)
+(defconstant complex-single-float.imagpart (+ complex-single-float.value 4))
+
+(define-fixedsized-object complex-double-float ()
+  pad
+  realpart
+  imagpart)
+
 
 ;;; There are two kinds of macptr; use the length field of the header if you
 ;;; need to distinguish between them
@@ -728,6 +744,7 @@
   safe-ref-address
   pending-io-info
   io-datum
+  nfp
 )
 
 (defconstant tcr.single-float-convert.value (+ 4 tcr.single-float-convert))
@@ -863,6 +880,8 @@
     (:single-float . ,subtag-single-float)
     (:double-float . ,subtag-double-float)
     (:complex . ,subtag-complex  )
+    (:complex-single-float . ,subtag-complex-single-float)
+    (:complex-double-float . ,subtag-complex-double-float)
     (:symbol . ,subtag-symbol)
     (:function . ,subtag-function )
     (:xcode-vector . ,subtag-xcode-vector)
@@ -893,8 +912,11 @@
     (:single-float-vector . ,subtag-single-float-vector)
     (:double-float-vector . ,subtag-double-float-vector )
     (:simple-vector . ,subtag-simple-vector )
+    (:complex-single-float-vector . ,subtag-complex-single-float-vector)
+    (:complex-double-float-vector . ,subtag-complex-double-float-vector)
     (:vector-header . ,subtag-vectorH)
-    (:array-header . ,subtag-arrayH)))
+    (:array-header . ,subtag-arrayH)
+    (:min-cl-ivector-subtag . ,min-cl-ivector-subtag)))
 
 ;;; This should return NIL unless it's sure of how the indicated
 ;;; type would be represented (in particular, it should return
@@ -912,7 +934,10 @@
              :simple-vector)))
         (ccl::numeric-ctype
          (if (eq (ccl::numeric-ctype-complexp element-type) :complex)
-           :simple-vector
+           (case (ccl::numeric-ctype-format element-type)
+             (single-float :complex-single-float-vector)
+             (double-float :complex-double-float-vector)
+             (t :simple-vector))
            (case (ccl::numeric-ctype-class element-type)
              (integer
               (let* ((low (ccl::numeric-ctype-low element-type))
@@ -965,9 +990,11 @@
       (t
        (if (= subtag subtag-bit-vector)
          (ash (+ 7 element-count) -3)
-         (if (>= subtag min-8-bit-ivector-subtag)
-           element-count
-           (ash element-count 1)))))))
+         (if (= subtag subtag-complex-double-float-vector)
+           (ash element-count 4)
+           (if (>= subtag min-8-bit-ivector-subtag)
+             element-count
+             (ash element-count 1))))))))
 
 (defparameter *x8664-subprims-shift* 3)
 (defconstant x8664-subprims-base #x15000)
@@ -1182,6 +1209,7 @@
                                                   :bignum
                                                   :simple-string)
                           :64-bit-ivector-types '(:double-float-vector
+                                                  :complex-single-float-vector
                                                   :unsigned-64-bit-vector
                                                   :signed-64-bit-vector
                                                   :fixnum-vector)
@@ -1190,15 +1218,7 @@
                           :package-name "X8664"
                           :t-offset t-offset
                           :array-data-size-function #'x8664-misc-byte-count
-                          :numeric-type-name-to-typecode-function
-                          #'(lambda (type-name)
-                              (ecase type-name
-                                (fixnum tag-fixnum)
-                                (bignum subtag-bignum)
-                                ((short-float single-float) subtag-single-float)
-                                ((long-float double-float) subtag-double-float)
-                                (ratio subtag-ratio)
-                                (complex subtag-complex)))
+                          :fpr-mask-function 'x86::fpr-mask
                           :subprims-base x8664-subprims-base
                           :subprims-shift x8664::*x8664-subprims-shift*
                           :subprims-table x8664::*x8664-subprims*
@@ -1243,10 +1263,20 @@
   `(ccl::%svref ,x x8664::ratio.denom-cell))
 
 (defx8664archmacro ccl::%realpart (x)
-  `(ccl::%svref ,x x8664::complex.realpart-cell))
+  (let* ((thing (gensym)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (#.x8664::subtag-complex-single-float (ccl::%complex-single-float-realpart ,thing))
+        (#.x8664::subtag-complex-double-float (ccl::%complex-double-float-realpart ,thing))
+        (t (ccl::%svref ,thing x8664::complex.realpart-cell))))))
                     
 (defx8664archmacro ccl::%imagpart (x)
-  `(ccl::%svref ,x x8664::complex.imagpart-cell))
+  (let* ((thing (gensym)))
+    `(let* ((,thing ,x))
+      (case (ccl::typecode ,thing)
+        (#.x8664::subtag-complex-single-float (ccl::%complex-single-float-imagpart ,thing))
+        (#.x8664::subtag-complex-double-float (ccl::%complex-double-float-imagpart ,thing))
+        (t (ccl::%svref ,thing x8664::complex.imagpart-cell))))))
 
 ;;;
 (defx8664archmacro ccl::%get-single-float-from-double-ptr (ptr offset)

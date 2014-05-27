@@ -3929,3 +3929,12 @@ stream-output-timeout set to TIMEOUT."
 (defmacro with-standard-initial-bindings (&body body)
   `(with-initial-bindings (standard-initial-bindings) ,@body))
 
+;;; True if TYPECODE denotes some sort of CL array.
+(defmacro array-typecode-p (code)
+  (let* ((typecode (gensym)))
+    `(let* ((,typecode ,code))
+      (or
+       (>= (the (unsigned-byte 8) (ivector-typecode-p ,typecode))
+        ,(nx-lookup-target-uvector-subtag :min-cl-ivector-subtag))
+       (>= (the (unsigned-byte 8) (gvector-typecode-p ,typecode))
+           ,(nx-lookup-target-uvector-subtag :array-header))))))

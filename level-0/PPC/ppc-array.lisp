@@ -36,7 +36,7 @@
                   ppc32::max-16-bit-ivector-subtag)
                (eql ppc32::max-32-bit-ivector-subtag ppc32::subtag-simple-base-string)
                (eql ppc32::max-16-bit-ivector-subtag ppc32::subtag-s16-vector)
-               (eql ppc32::max-8-bit-ivector-subtag 223))))
+               (eql ppc32::max-8-bit-ivector-subtag 207))))
 
 #+ppc32-target
 (defppclapfunction %init-misc ((val arg_y)
@@ -50,8 +50,8 @@
   (beqlr cr3)                           ; Silly 0-length case
   (li imm4 ppc32::misc-data-offset)
   (bne cr0 @imm)
-  ; Node vector.  Don't need to memoize, since initial value is
-  ; older than vector.
+  ;; Node vector.  Don't need to memoize, since initial value is
+  ;; older than vector.
   @node-loop
   (cmpwi cr0 imm3 1)
   (subi imm3 imm3 1)
@@ -70,9 +70,45 @@
   (ble cr1 @32)
   (ble cr2 @8)
   (ble cr3 @16)
+  (cmpwi cr0 imm2 ppc32::subtag-bit-vector)
+  (cmpwi cr1 imm2 ppc32::subtag-complex-double-float-vector)
+  (beq cr0 @bit)
+  (beq cr1 @complex-double-float)
+  ;; Complex single-float vector
+  (cmpwi imm0 ppc32::subtag-complex-single-float)
+  (bne @bad)
+  (lfs fp0 ppc32::complex-single-float.realpart val)
+  (lfs fp1 ppc32::complex-single-float.imagpart val)
+  (li imm4 ppc32::complex-single-float.realpart)
+  @complex-single-float-loop
+  (cmpwi cr0 imm3 1)
+  (subi imm3 imm3 1)
+  (stfsx fp0 miscobj imm4)
+  (la imm4 4 imm4)
+  (stfsx fp1 miscobj imm4)
+  (la imm4 4 imm4)
+  (bne cr0 @complex-single-float-loop)
+  (blr)
+  @complex-double-float
+  (cmpwi imm0 ppc32::subtag-complex-double-float)
+  (bne @bad)
+  (lfd fp0 ppc32::complex-double-float.realpart val)
+  (lfd fp1 ppc32::complex-double-float.imagpart val)
+  (li imm4 ppc32::complex-double-float.realpart)
+  @complex-double-float-loop
+  (cmpwi cr0 imm3 1)
+  (subi imm3 imm3 1)
+  (stfdx fp0 miscobj imm4)
+  (la imm4 8 imm4)
+  (stfdx fp1 miscobj imm4)
+  (la imm4 8 imm4)
+  (bne cr0 @complex-double-float-loop)
+  (blr)
+  @bit
   ; Bit vector.
   (cmplwi cr0 val '1)
   (la imm3 31 imm3)
+
   (srwi imm3 imm3 5)
   (unbox-fixnum imm0 val)
   (neg imm0 imm0)
@@ -165,7 +201,6 @@
   (cmpwi cr0 imm2 ppc32::subtag-s8-vector)
   (la imm3 3 imm3)
   (srwi imm3 imm3 2)
-  (beq cr2 @char8)                      ; ppc32::max-8-bit-ivector-subtag
   (beq cr0 @s8)
   (extract-unsigned-byte-bits. imm0 val 8)
   (unbox-fixnum imm0 val)
@@ -217,15 +252,17 @@
   (bne cr0 @node-loop)
   (blr)
   @imm
-  (extract-typecode imm0 val)		
+  (extract-typecode imm0 val)
   (cmpdi cr0 imm1 ppc64::ivector-class-64-bit)
   (cmpdi cr1 imm1 ppc64::ivector-class-32-bit)
   (cmpdi cr2 imm1 ppc64::ivector-class-8-bit)
   (cmpdi cr7 imm0 ppc64::tag-fixnum)
   (cmpdi cr5 imm0 ppc64::subtag-bignum)
+  (cmpdi cr6 imm2 ppc64::subtag-complex-double-float-vector)
   (beq cr0 @64)
   (beq cr1 @32)
   (beq cr2 @8)
+  (beq cr6 @complex-double-float)
   ;; u16, s16, or bit-vector.  Val must be a fixnum.
   (cmpdi cr0 imm2 ppc64::subtag-u16-vector)
   (cmpdi cr1 imm2 ppc64::subtag-s16-vector)
@@ -244,10 +281,27 @@
   (save-lisp-context)
   (set-nargs 3)
   (call-symbol %err-disp)
+  @complex-double-float
+  (cmpdi imm0 ppc64::subtag-complex-double-float)
+  (bne @bad)
+  (lfd fp0 ppc64::complex-double-float.realpart val)
+  (lfd fp1 ppc64::complex-double-float.imagpart val)
+  (li imm4 ppc64::complex-double-float.realpart)
+  @complex-double-float-loop
+  (cmpdi cr0 imm3 1)
+  (subi imm3 imm3 1)
+  (stfdx fp0 miscobj imm4)
+  (la imm4 8 imm4)
+  (stfdx fp1 miscobj imm4)
+  (la imm4 8 imm4)
+  (bne cr0 @complex-double-float-loop)
+  (blr)
   @64
+  (cmpdi cr4 imm2 ppc64::subtag-complex-single-float-vector)
   (cmpdi cr3 imm2 ppc64::subtag-fixnum-vector)
   (cmpdi cr1 imm2 ppc64::subtag-double-float-vector)
   (cmpdi cr2 imm2 ppc64::subtag-s64-vector)
+  (beq cr4 @complex-single-float)
   (beq cr3 @fixnum)
   (beq cr1 @dfloat)
   (bne cr2 @u64)
@@ -261,7 +315,12 @@
   (rotldi imm0 imm0 32)
   (beq @set-64)
   (b @bad)
-@fixnum
+  @complex-single-float
+  (cmpdi imm0 ppc64::subtag-complex-single-float)
+  (bne @bad)
+  (ld imm0 ppc64::complex-single-float.realpart val)
+  (b @set-64)
+  @fixnum
   (unbox-fixnum imm0 val)
   (beq cr7 @set-64)                     ; all fixnums are (SIGNED-BYTE 64)
   (b  @bad)                        ; as are 2-digit bignums
@@ -568,6 +627,8 @@
     (beq cr3 @32-bit)
     (beq cr4 @64-bit)
     (beq cr5 @1-bit)
+    ;;; The bit-vector case is ignored, but we should probably
+    ;;; try to handle (VECTOR (COMPLEX DOUBLE-FLOAT)).
     (srdi imm1 start-offset 2)
     (la imm1 ppc64::misc-data-offset imm1)
     @16-loop
@@ -653,10 +714,12 @@
     (ldr a target::arrayH.data-vector temp)
     (lbz imm0 target::misc-subtag-offset a)
     (cmpri cr0 imm0 target::subtag-vectorH)
+    (cmpri cr1 imm0 target::subtag-arrayH)
     (ldr disp target::arrayH.displacement temp)
     (mr temp a)
     (add offset offset disp)
-    (ble cr0 @loop)
+    (beq cr0 @loop)
+    (beq cr1 @loop)
     (vpush a)
     (vpush offset)
     (set-nargs 2)

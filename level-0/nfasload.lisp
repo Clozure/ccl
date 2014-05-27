@@ -701,11 +701,10 @@
     (setf (faslstate.faslval s) r)))
 
 (deffaslop $fasl-complex (s)
-  (let* ((c (%alloc-misc target::complex.element-count
-                         target::subtag-complex)))
+  (let* ((realpart (%fasl-expr s))
+         (imagpart (%fasl-expr s))
+         (c (complex realpart imagpart)))
     (%epushval s c)
-    (setf (%svref c target::complex.realpart-cell) (%fasl-expr s)
-          (%svref c target::complex.imagpart-cell) (%fasl-expr s))
     (setf (faslstate.faslval s) c)))
 
 (deffaslop $fasl-t-vector (s)
