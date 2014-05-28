@@ -1805,8 +1805,38 @@
         (! check-misc-bound unscaled-idx src))
       (arm2-vref1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum))))
 
+(defun arm2-1d-vref (seg vreg xfer type-keyword vector index safe)
+  (with-arm-local-vinsn-macros (seg vreg xfer)
+    (let* ((simple-case (backend-get-next-label))
+           (common-case (backend-get-next-label)))
+      (multiple-value-bind (src unscaled-idx)
+          (arm2-two-untargeted-reg-forms seg vector ($ arm::arg_y) index ($ arm::arg_z))
+        (with-crf-target () crf
+          (! set-z-if-vector-header crf src)
+          (arm2-branch seg (arm2-make-compound-cd simple-case 0) crf arm::arm-cond-eq nil)
+          (when safe
+            (! trap-unless-fixnum unscaled-idx)
+            (! check-vector-header-bound src unscaled-idx)
+            (when (typep safe 'fixnum)
+              (! trap-unless-vector-type src safe)))
+          (! deref-vector-header src unscaled-idx)
+          (-> common-case)
+          (@ simple-case)
+          (when safe
+            (if (typep safe 'fixnum)
+              (! trap-unless-simple-1d-array src safe))
+            (! trap-unless-fixnum unscaled-idx)
+            (! check-misc-bound unscaled-idx src))
+          (@ common-case)
+          (arm2-vref1 seg vreg xfer type-keyword src unscaled-idx nil))))))
+        
+        
 
-(defun arm2-aset2-via-gvset (seg vreg xfer  array i j new safe type-keyword  constval)
+
+
+
+
+(defun arm2-aset2-via-gvset (seg vreg xfer  array i j new safe type-keyword  constval &optional (simple t))
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
@@ -1821,12 +1851,15 @@
                                     new val-reg)
       (when safe
         (when (typep safe 'fixnum)
-          (with-node-target (src unscaled-i unscaled-j val-reg) expected 
-            (! lri expected
-               (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                         (ash 1 $arh_simple_bit))
-                    arm::fixnumshift))
-            (! trap-unless-simple-array-2 src expected)))
+          (with-node-target (src unscaled-i unscaled-j val-reg) expected
+            (if simple
+              (progn
+                (! lri expected
+                   (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                             (ash 1 $arh_simple_bit))
+                        arm::fixnumshift))
+                (! trap-unless-simple-array-2 src expected))
+              (! trap-unless-typed-array-2 src safe))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -1839,11 +1872,15 @@
               (! 2d-dim1 dim1 src))
             (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
           (let* ((v ($ arm::arg_x)))
-            (! array-data-vector-ref v src)
+            (if simple
+              (! array-data-vector-ref v src)
+              (progn
+                (arm2-copy-register seg v src)
+                (! deref-vector-header v idx-reg)))
             (arm2-vset1 seg vreg xfer type-keyword v idx-reg nil val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval t)))))))
       
   
-(defun arm2-aset2 (seg vreg xfer  array i j new safe type-keyword dim0 dim1)
+(defun arm2-aset2 (seg vreg xfer  array i j new safe type-keyword dim0 dim1 &optional (simple t))
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
@@ -1852,7 +1889,7 @@
            (constval (arm2-constant-value-ok-for-type-keyword type-keyword new))
            (needs-memoization (and is-node (arm2-acode-needs-memoization new))))
       (if needs-memoization
-        (arm2-aset2-via-gvset seg vreg xfer array i j new safe type-keyword constval)
+        (arm2-aset2-via-gvset seg vreg xfer array i j new safe type-keyword constval simple)
         (let* ((constidx
                 (and *arm2-reckless*
                      dim0 dim1 i-known-fixnum j-known-fixnum
@@ -1887,11 +1924,14 @@
                   (when safe      
                     (when (typep safe 'fixnum)
                       (with-node-target (src node-val unscaled-i unscaled-j) expected
-                        (! lri expected
-                           (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                     (ash 1 $arh_simple_bit))
-                                arm::fixnumshift))
-                        (! trap-unless-simple-array-2 src expected)))
+                        (if simple
+                          (progn
+                            (! lri expected
+                               (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                                         (ash 1 $arh_simple_bit))
+                                    arm::fixnumshift))
+                            (! trap-unless-simple-array-2 src expected))
+                          (! trap-unless-typed-array-2 src safe))))
                     (unless i-known-fixnum
                       (! trap-unless-fixnum unscaled-i))
                     (unless j-known-fixnum
@@ -1904,11 +1944,16 @@
                           (! 2d-dim1 dim1 src))
                         (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
                       (with-node-target (idx-reg node-val) v
-                        (! array-data-vector-ref v src)
-                        (arm2-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))))))
+                        (if safe
+                          (! array-data-vector-ref v src)
+                          (progn
+                            (setq v src)
+                            (! deref-vector-header src idx-reg)))
+                        (arm2-vset1 seg vreg xfer type-keyword 
+v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))))))
 
 
-(defun arm2-aset3 (seg vreg xfer  array i j k new safe type-keyword  dim0 dim1 dim2)
+(defun arm2-aset3 (seg vreg xfer  array i j k new safe type-keyword  dim0 dim1 dim2 &optional (simple t))
   (with-arm-local-vinsn-macros (seg target)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
@@ -1960,17 +2005,20 @@
 
           (when safe      
             (when (typep safe 'fixnum)
-              (let* ((expected (if constidx
-                                 (with-node-target (src val-reg) expected
-                                   expected)
-                                 (with-node-target (src unscaled-i unscaled-j unscaled-k val-reg) expected
-                                   expected))))
-                (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                          (ash 1 $arh_simple_bit))
-                                     arm::fixnumshift))
-              (! trap-unless-simple-array-3
-                 src
-                 expected)))
+              (if simple
+                (let* ((expected (if constidx
+                                   
+                                   (with-node-target (src val-reg) expected
+                                     expected)
+                                   (with-node-target (src unscaled-i unscaled-j unscaled-k val-reg) expected
+                                     expected))))
+                  (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                                            (ash 1 $arh_simple_bit))
+                                       arm::fixnumshift))
+                  (! trap-unless-simple-array-3
+                     src
+                     expected))
+                (! trap-unless-typed-array-3 src safe)))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
             (unless j-known-fixnum
@@ -1986,10 +2034,14 @@
                     (! 3d-dims dim1 dim2 src))
                   (! 3d-unscaled-index idx-reg dim1 dim2 unscaled-i unscaled-j unscaled-k))
                 (let* ((v ($ arm::arg_x)))
-                  (! array-data-vector-ref v src)
+                  (if simple
+                    (! array-data-vector-ref v src)
+                    (progn
+                      (arm2-copy-register seg v src)
+                      (! deref-vector-header v idx-reg v idx-reg)))
                   (arm2-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization))))))))))
 
-(defun arm2-aref2 (seg vreg xfer array i j safe typekeyword &optional dim0 dim1)
+(defun arm2-aref2 (seg vreg xfer array i j safe typekeyword &optional dim0 dim1(simple t))
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
@@ -2021,10 +2073,13 @@
               (setq *available-backend-node-temps* (logandc2 *available-backend-node-temps*
                                                              (ash 1 (hard-regspec-value unscaled-j)))))
             (with-node-target (src) expected
-              (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                        (ash 1 $arh_simple_bit))
-                                   arm::fixnumshift))
-              (! trap-unless-simple-array-2 src expected))))
+              (if simple
+                (progn
+                  (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                                            (ash 1 $arh_simple_bit))
+                                       arm::fixnumshift))
+                  (! trap-unless-simple-array-2 src expected))
+                (! trap-unless-typed-array-2 src safe)))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -2037,12 +2092,16 @@
               (! 2d-dim1 dim1 src))
             (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
           (with-node-target (idx-reg src) v
-            (! array-data-vector-ref v src)
+            (if simple
+              (! array-data-vector-ref v src)
+              (progn
+                (setq v src)
+                (! deref-vector-header src idx-reg)))
             (arm2-vref1 seg vreg xfer typekeyword v idx-reg constidx)))))))
 
 
 
-(defun arm2-aref3 (seg vreg xfer array i j k safe typekeyword &optional dim0 dim1 dim2)
+(defun arm2-aref3 (seg vreg xfer array i j k safe typekeyword  dim0 dim1 dim2  &optional (simple t))
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
@@ -2073,15 +2132,17 @@
                                            k arm::arg_z)))
       (when safe        
         (when (typep safe 'fixnum)
-          (let* ((expected (if constidx
-                             (with-node-target (src) expected
-                               expected)
-                             (with-node-target (src unscaled-i unscaled-j unscaled-k) expected
-                               expected))))
-            (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                      (ash 1 $arh_simple_bit))
-                                 arm::fixnumshift))
-            (! trap-unless-simple-array-3 src expected)))
+          (if simple
+            (let* ((expected (if constidx
+                               (with-node-target (src) expected
+                                 expected)
+                               (with-node-target (src unscaled-i unscaled-j unscaled-k) expected
+                                 expected))))
+              (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
+                                        (ash 1 $arh_simple_bit))
+                                   arm::fixnumshift))
+              (! trap-unless-simple-array-3 src expected))
+            (! trap-unless-typed-array-3 src safe)))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -2097,7 +2158,11 @@
                 (! 3d-dims dim1 dim2 src))
               (! 3d-unscaled-index idx-reg dim1 dim2 unscaled-i unscaled-j unscaled-k))))
         (with-node-target (idx-reg) v
-          (! array-data-vector-ref v src)
+          (if simple
+            (! array-data-vector-ref v src)
+            (progn
+              (arm2-copy-register seg v src)
+              (! deref-vector-header v idx-reg)))
           (arm2-vref1 seg vreg xfer typekeyword v idx-reg constidx))))))
 
 
@@ -2488,6 +2553,50 @@
             (unless index-known-fixnum
               (! trap-unless-fixnum unscaled-idx))
             (! check-misc-bound unscaled-idx src)))
+        (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization)))))
+
+(defun arm2-1d-vset (seg vreg xfer type-keyword vector index value safe)
+  (with-arm-local-vinsn-macros (seg)
+    (let* ((arch (backend-target-arch *target-backend*))
+           (simple-case (backend-get-next-label))
+           (common-case (backend-get-next-label))
+           (is-node (member type-keyword (arch::target-gvector-types arch)))
+           (constval (arm2-constant-value-ok-for-type-keyword type-keyword value))
+           (needs-memoization (and is-node (arm2-acode-needs-memoization value)))
+           (index-known-fixnum (acode-fixnum-form-p index)))
+      (let* ((src ($ arm::arg_x))
+             (unscaled-idx ($ arm::arg_y))
+             (result-reg ($ arm::arg_z)))
+        (cond (needs-memoization
+               (arm2-three-targeted-reg-forms seg
+                                              vector src
+                                              index unscaled-idx
+                                              value result-reg))
+              (t
+               (multiple-value-setq (src unscaled-idx result-reg)
+                   (arm2-three-untargeted-reg-forms seg
+                                                    vector src
+                                                    index unscaled-idx
+                                                    value (arm2-target-reg-for-aset vreg type-keyword)))))
+        (with-crf-target () crf
+          (! set-z-if-vector-header crf src)
+          (arm2-branch seg (arm2-make-compound-cd simple-case 0) crf arm::arm-cond-eq nil))
+          (when safe
+            (! trap-unless-fixnum unscaled-idx)
+            (! check-vector-header-bound src unscaled-idx)
+            (when (typep safe 'fixnum)
+              (! trap-unless-vector-type src safe)))
+          (! deref-vector-header src unscaled-idx)
+          (-> common-case)
+          (@ simple-case)
+          (when safe
+            (if (typep safe 'fixnum)
+              (! trap-unless-simple-1d-array src safe))
+            (! trap-unless-fixnum unscaled-idx)
+            (! check-misc-bound unscaled-idx src))
+          (@ common-case)
+
+
         (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization)))))
 
 
@@ -7100,36 +7209,52 @@
 
 (defarm2 arm2-%aref1 %aref1 (seg vreg xfer v i)
   (let* ((vtype (acode-form-type v t))
-         (atype (if vtype (specifier-type vtype)))
-         (keyword (if (and atype
-                           (let* ((dims (array-ctype-dimensions atype)))
-                             (or (eq dims '*)
-                                 (and (not (atom dims))
-                                      (= (length dims) 1))))
-                           (not (array-ctype-complexp atype)))
-                    (funcall
+         (atype (if vtype (let* ((a (specifier-type vtype)))
+                            (if (typep a 'array-ctype) a))))
+         (maybe-1d (and atype
+                        (let* ((dims (array-ctype-dimensions atype)))
+                          (or (eq dims '*)
+                              (and (not (atom dims))
+                                   (= (length dims) 1))))))
+         
+         (complexp (and atype (array-ctype-complexp atype)))
+         (keyword (and atype
+                       (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
-                        atype))))
-    (if keyword
-      (arm2-vref  seg vreg xfer keyword v i (not *arm2-reckless*))
+                        atype)))
+         (typecode (and keyword (not *arm2-reckless*)
+                        (nx-lookup-target-uvector-subtag keyword))))
+    (if (and maybe-1d keyword)
+      (if (not complexp)
+        (arm2-vref  seg vreg xfer keyword v i typecode)
+        (arm2-1d-vref seg vreg xfer keyword v i typecode))
       (arm2-binary-builtin seg vreg xfer '%aref1 v i))))
 
 (defarm2 arm2-%aset1 aset1 (seg vreg xfer v i n)
-  (let* ((vtype (acode-form-type v t))
-         (atype (if vtype (specifier-type vtype)))
-         (keyword (if (and atype
-                           (let* ((dims (array-ctype-dimensions atype)))
-                             (or (eq dims '*)
-                                 (and (not (atom dims))
-                                      (= (length dims) 1))))
-                           (not (array-ctype-complexp atype)))
-                    (funcall
+  (let*   ((vtype (acode-form-type v t))
+         (atype (if vtype (let* ((a (specifier-type vtype)))
+                            (if (typep a 'array-ctype) a))))
+         (maybe-1d (and atype
+                        (let* ((dims (array-ctype-dimensions atype)))
+                          (or (eq dims '*)
+                              (and (not (atom dims))
+                                   (= (length dims) 1))))))
+         
+         (complexp (and atype (array-ctype-complexp atype)))
+         (keyword (and atype
+                       (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
-                        atype))))
-    (if keyword
-      (arm2-vset seg vreg xfer keyword v i n (not *arm2-reckless*))
+                        atype)))
+         (typecode (and keyword (not *arm2-reckless*)
+                        (nx-lookup-target-uvector-subtag keyword))))
+
+    (if (and maybe-1d keyword)
+      (if (not complexp)
+        (arm2-vset seg vreg xfer keyword v i n typecode)
+
+        (arm2-1d-vset seg vreg xfer keyword v i n typecode))
       (arm2-ternary-builtin seg vreg xfer '%aset1 v i n))))
 
 (defun arm2-fixnum-add (seg vreg xfer form1 form2 overflow)
@@ -8139,11 +8264,12 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
 	 (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
 				(= 2 (length dims))))
-                       (not (array-ctype-complexp atype))
+                 
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -8163,7 +8289,7 @@
                            (make-nx-nil)
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword        ;(make-acode (%nx1-operator immediate) )
-                         (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1))))
+                         (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1) simple)))
           (t
            (arm2-three-targeted-reg-forms seg
                                           arr ($ arm::arg_x)
@@ -8192,11 +8318,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
-				(= 3 (length dims))))
-                       (not (array-ctype-complexp atype))
+				(= 3 (length dims))))               
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -8220,7 +8346,8 @@
                          keyword ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0)
                          (if (typep dim1 'fixnum) dim1)
-                         (if (typep dim2 'fixnum) dim2))))
+                         (if (typep dim2 'fixnum) dim2)
+                         simple)))
           (t
            (arm2-four-targeted-reg-forms seg
                                          arr ($ arm::temp0)
@@ -8243,11 +8370,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
 				(= 2 (length dims))))
-                       (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -8268,7 +8395,8 @@
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword
                          (if (typep dim0 'fixnum) dim0)
-                         (if (typep dim1 'fixnum) dim1))))
+                         (if (typep dim1 'fixnum) dim1)
+                         simple)))
           (t
            (arm2-four-targeted-reg-forms seg
                                          arr ($ arm::temp0)
@@ -8284,11 +8412,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (unless (atom dims)
 			     (= 3 (length dims))))
-                       (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -8312,7 +8440,8 @@
                          keyword
                          (if (typep dim0 'fixnum) dim0)
                          (if (typep dim1 'fixnum) dim1)
-                         (if (typep dim2 'fixnum) dim2))))
+                         (if (typep dim2 'fixnum) dim2)
+                         simple)))
           (t
            (arm2-push-register seg (arm2-one-untargeted-reg-form seg arr ($ arm::arg_z)))
            (arm2-four-targeted-reg-forms seg

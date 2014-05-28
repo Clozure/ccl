@@ -173,7 +173,6 @@
                (let* ((condition (ldb (byte 4 28) arg))
                       (uuo (ldb (byte 28 0) arg))
                       (format (ldb (byte 4 0) uuo)))
-                 (declare (fixnum condition uuo format))
                  (case format
                    ((2 10)              ; uuo-format-[c]error-lisptag
                     (%error (make-condition
@@ -312,10 +311,11 @@
                                  (type-specifier
                                   (array-ctype-element-type
                                    (specifier-type (svref *arm-xtype-specifiers* subtag))))))
+
                            (%error (make-condition
                                     'type-error
                                     :datum array
-                                    :expected-type `(simple-array ,element-type))
+                                    :expected-type `(,(if (logbitp $arh_simple_bit flags) 'simple-array 'array) ,element-type))
                                    nil
                                    frame-ptr)))                        
                         (t
