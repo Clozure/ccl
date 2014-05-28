@@ -102,7 +102,7 @@
    :default-startup-file-name "level-1.lafsl"
    :subdirs '("ccl:level-0;ARM;")
    :compiler-target-name :linuxarm
-   :image-base-address #x50000000
+   :image-base-address #x10000000
    :nil-relative-symbols arm::*arm-nil-relative-symbols*
    :static-space-init-function 'arm-initialize-static-space
    :purespace-reserve (ash 64 20)
@@ -140,7 +140,7 @@
    :default-startup-file-name "level-1.aafsl"
    :subdirs '("ccl:level-0;ARM;")
    :compiler-target-name :androidarm
-   :image-base-address #x50000000
+   :image-base-address #x10000000
    :nil-relative-symbols arm::*arm-nil-relative-symbols*
    :static-space-init-function 'arm-initialize-static-space
    :purespace-reserve (ash 64 20)
