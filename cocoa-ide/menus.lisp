@@ -113,6 +113,11 @@
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Listener" (objc:@selector #/showListener:) #@"l")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Show System Console" (objc:@selector #/toggleConsole:) #@"")
+    (let ((menu-item
+           (#/addItemWithTitle:action:keyEquivalent: menu #@"Wrap Lines to Window" (objc:@selector #/toggleWindowLineWrapping:) #@"")))
+      (if *wrap-lines-to-window*
+          (#/setState: menu-item #$NSOnState)
+          (#/setState: menu-item #$NSOffState)))
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Bring All to Front" (objc:@selector #/arrangeInFront:) #@"")
     menu))

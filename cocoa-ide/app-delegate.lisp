@@ -285,3 +285,55 @@
     (setf *hemlock-commands-window-controller*
 	  (make-instance 'hemlock-commands-window-controller)))
   (#/showWindow: *hemlock-commands-window-controller* +null-ptr+))
+
+
+(defun set-window-line-wrapping (window wrapping)
+  (let* ((pane (slot-value window 'pane))
+         (text-view (slot-value pane 'text-view))
+         (scroll-view (#/enclosingScrollView text-view))
+         (content-size (#/contentSize scroll-view))
+         (container (#/textContainer text-view)))
+    (#/setMinSize: text-view content-size)
+    (setf (slot-value window 'wrap-lines-to-window) wrapping)
+    (cond (wrapping
+           (let ((size (ns:make-ns-size (ns:ns-size-width content-size)
+                                        large-number-for-text)))
+             (#/setContainerSize: container size)
+             (#/setConstrainedFrameSize: text-view size)
+             (#/setWidthTracksTextView: container t)
+             (#/setHorizontallyResizable: text-view nil)
+             (#/setHasHorizontalScroller: scroll-view nil)))
+          (t
+           (#/setContainerSize: container (ns:make-ns-size large-number-for-text
+                                                           large-number-for-text))
+           (#/setWidthTracksTextView: container nil)
+           (#/setHorizontallyResizable: text-view t)
+           (#/setHasHorizontalScroller: scroll-view t)))
+    text-view))
+
+(defun enable-window-line-wrapping (window)
+  (set-window-line-wrapping window t))
+
+(defun disable-window-line-wrapping (window)
+  (set-window-line-wrapping window nil))
+
+(objc:defmethod (#/toggleWindowLineWrapping: :void) ((self hemlock-frame)
+                                                     sender)
+  (with-slots (wrap-lines-to-window) self
+    (cond (wrap-lines-to-window
+           (disable-window-line-wrapping self)
+           (#/setState: sender #$NSOffState))
+          (t
+           (enable-window-line-wrapping self)
+           (#/setState: sender #$NSOnState)))))
+
+(objc:defmethod (#/validateMenuItem: :<BOOL>) ((self hemlock-frame)
+                                               item)
+  (let* ((action (#/action item))
+         (wrapping (slot-value self 'wrap-lines-to-window)))
+    (cond ((eql action (@selector #/toggleWindowLineWrapping:))
+           (if wrapping
+               (#/setState: item #$NSOnState)
+               (#/setState: item #$NSOffState))
+           t)
+          (t #+cocotron t #-cocotron (call-next-method item)))))

@@ -2129,7 +2129,9 @@
      (pane :foreign-type :id)
      (echo-area-buffer :initform nil :accessor hemlock-frame-echo-area-buffer)
      (echo-area-stream :initform nil :accessor hemlock-frame-echo-area-stream)
-     (is-dup :initform nil))
+     (is-dup :initform nil)
+     (wrap-lines-to-window :initform *wrap-lines-to-window*
+                           :accessor wrap-lines-to-window))
   (:metaclass ns:+ns-object))
 (declaim (special hemlock-frame))
 
@@ -3678,3 +3680,4 @@
                                (when (probe-file lpath)
                                  lpath))))))))
   +null-ptr+)
+
