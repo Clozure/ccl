@@ -59,7 +59,7 @@
           (#/setAutoresizingMask: text-view #$NSViewWidthSizable)
           (#/setTypingAttributes: text-view (create-text-attributes 
 				  :font (default-font :name *default-font-name* :size *default-font-size*)
-				  :line-break-mode :char))
+				  :line-break-mode *default-line-break-mode*))
           (#/setDocumentView: scrollview text-view)
           (ns:with-ns-size (container-size 1.0f7 1.0f7)
           (let* ((layout (#/layoutManager text-view))

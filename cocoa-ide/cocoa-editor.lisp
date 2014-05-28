@@ -76,7 +76,7 @@
     p))
 
 (defun rme-create-text-attributes (&key (font *editor-font*)
-				   (line-break-mode :char)
+				   (line-break-mode *default-line-break-mode*)
 				   (color nil)
 				   (obliqueness nil)
 				   (stroke-width nil))
