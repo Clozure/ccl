@@ -449,7 +449,7 @@
       (let* ((code (char-code char)))
         (setf (acode-operator w) (%nx1-operator fixnum)
               (acode-operands w) (list code)
-              (acode.asserted-type w) nil))))
+              (acode.asserted-type w) nil)))))
 
 (def-acode-rewrite acode-rewrite-logior (logior2 %ilogior2 %natural-logior) asserted-type  (&whole w x y) 
   (or (acode-constant-fold-numeric-binop  w x y 'logior)
@@ -488,7 +488,7 @@
                                  (%nx1-operator fixnum)
                                  (%nx1-operator immediate))
             (acode-operands w) (list negated)
-            (acode.asserted-type w) nil)))))
+            (acode.asserted-type w) nil))))
 
 (def-acode-rewrite rewrite-type-asserted-form type-asserted-form asserted-type (&whole w type form &optional check)
   (declare (ignore check))
