@@ -951,10 +951,10 @@ handle_fault(TCR *tcr, ExceptionInformation *xp, siginfo_t *info, int old_valenc
 #endif
   Boolean valid = IS_PAGE_FAULT(info,xp);
 
-  if (tcr->safe_ref_address != NULL) {
+  if (TCR_AUX(tcr)->safe_ref_address != NULL) {
     xpGPR(xp,Iimm0) = 0;
     xpPC(xp) = xpGPR(xp,Ira0);
-    tcr->safe_ref_address = NULL;
+    TCR_AUX(tcr)->safe_ref_address = NULL;
     return true;
   }
 
