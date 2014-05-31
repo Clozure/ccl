@@ -3311,7 +3311,8 @@
                             ((temp :imm)))
   ((:pred  > (:apply arm2-max-nfp-depth) 0)
    ;; screw: handle > 4K case
-   (str sp (:@! sp (:$ (:apply - (:apply + (:apply arm2-max-nfp-depth) 8)))))
+   (mov temp sp)
+   (str temp (:@! sp (:$ (:apply - (:apply + (:apply arm2-max-nfp-depth) 8)))))
    (ldr temp (:@ rcontext (:$ arm::tcr.nfp)))
    (str temp (:@ sp (:$ 4)))
    (str sp (:@ rcontext (:$ arm::tcr.nfp)))))
