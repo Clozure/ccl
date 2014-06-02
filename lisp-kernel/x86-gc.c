@@ -536,9 +536,12 @@ mark_root(LispObj n)
     } else if (tag_n == ivector_class_32_bit) {
       total_size_in_bytes = 8 + (element_count<<2);
     } else {
-      /* ivector_class_other_bit contains 8, 16-bit arrays & bitvector */
+      /* ivector_class_other_bit contains 8, 16-bit arrays,
+         complex_double_float_vector and bitvector */
       if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 8 + ((element_count+7)>>3);
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
       } else if (subtag >= min_8_bit_ivector_subtag) {
 	total_size_in_bytes = 8 + element_count;
       } else {
@@ -742,9 +745,11 @@ rmark(LispObj n)
       } else if (tag_n == ivector_class_32_bit) {
         total_size_in_bytes = 8 + (element_count<<2);
       } else {
-        /* ivector_class_other_bit contains 16-bit arrays & bitvector */
+        /* ivector_class_other_bit contains 8/16/128-bit arrays & bitvector */
         if (subtag == subtag_bit_vector) {
           total_size_in_bytes = 8 + ((element_count+7)>>3);
+        } else if (subtag == subtag_complex_double_float_vector) {
+          total_size_in_bytes = 8 + (element_count << 4);
 	} else if (subtag >= min_8_bit_ivector_subtag) {
 	  total_size_in_bytes = 8 + element_count;
         } else {
@@ -759,10 +764,12 @@ rmark(LispObj n)
 	total_size_in_bytes = 4 + element_count;
       } else if (subtag <= max_16_bit_ivector_subtag) {
 	total_size_in_bytes = 4 + (element_count<<1);
-      } else if (subtag == subtag_double_float_vector) {
-	total_size_in_bytes = 8 + (element_count<<3);
-      } else {
+      } else if (subtag == subtag_bit_vector) {
 	total_size_in_bytes = 4 + ((element_count+7)>>3);
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
+      } else {
+	total_size_in_bytes = 8 + (element_count<<3);
       }
 #endif
 
@@ -1022,9 +1029,11 @@ rmark(LispObj n)
     } else if (tag_n == ivector_class_32_bit) {
       total_size_in_bytes = 8 + (element_count<<2);
     } else {
-      /* ivector_class_other_bit contains 16-bit arrays & bitvector */
+      /* ivector_class_other_bit contains 8/16/128-bit arrays & bitvector */
       if (subtag == subtag_bit_vector) {
         total_size_in_bytes = 8 + ((element_count+7)>>3);
+      } else if (subtag == subtag_complex_double_float_vector) {
+        total_size_in_bytes = 8 + (element_count<<4);
       } else if (subtag >= min_8_bit_ivector_subtag) {
         total_size_in_bytes = 8 + element_count;
       } else {
@@ -2222,7 +2231,7 @@ unboxed_bytes_in_range(LispObj *start, LispObj *end, Boolean include_functions)
         } else if (subtag == subtag_complex_double_float_vector) {
           bytes = 8 + (elements<<4);
         } else {
-                    bytes = 8 + (elements<<3);
+          bytes = 8 + (elements<<3);
         }
 #endif
 
