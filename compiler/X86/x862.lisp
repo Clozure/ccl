@@ -8760,13 +8760,15 @@
 
 (defx862 x862-let* let* (seg vreg xfer vars vals body p2decls &aux
                              (old-stack (x862-encode-stack)))
-  (with-x86-p2-declarations p2decls
-    (x862-seq-bind seg vars vals)
-    (x862-undo-body seg vreg xfer body old-stack))
-  (dolist (v vars) (x862-close-var seg v)))
+  (let* ((*x862-nfp-depth* *x862-nfp-depth*))
+    (with-x86-p2-declarations p2decls
+      (x862-seq-bind seg vars vals)
+      (x862-undo-body seg vreg xfer body old-stack))
+    (dolist (v vars) (x862-close-var seg v))))
 
 (defx862 x862-multiple-value-bind multiple-value-bind (seg vreg xfer vars valform body p2decls)
   (let* ((n (list-length vars))
+         (*x862-nfp-depth* *x862-nfp-depth*)
          (vloc *x862-vstack*)
          (nbytes (* n *x862-target-node-size*))
          (old-stack (x862-encode-stack)))
@@ -9919,6 +9921,7 @@
 
 (defx862 x862-lambda-bind lambda-bind (seg vreg xfer vals req rest keys-p auxen body p2decls)
   (let* ((old-stack (x862-encode-stack))
+         (*x862-nfp-depth* *x862-nfp-depth*)
          (nreq (list-length req))
          (rest-arg (nthcdr nreq vals))
          (apply-body (x862-eliminate-&rest body rest keys-p auxen rest-arg)))
