@@ -633,6 +633,17 @@
   (sete (:%b x8632::al))
   (orb (:%b x8632::ah) (:%b x8632::al)))
 
+(define-x8632-vinsn set-z-if-uvector-type (((crf :crf))
+                                           ((thing :lisp)
+                                            (type :u8const))
+                                           ((tag :u8)))
+  (movl (:%l thing) (:%l  tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :done)
+  (cmpb (:$b type) (:@ x8632::misc-subtag-offset (:%l thing)))
+  :done)
+
 (define-x8632-vinsn trap-unless-uvector (()
                                          ((object :lisp))
                                          ((tag :u8)))
@@ -799,6 +810,35 @@
   (:anchored-uuo-section :resume)
   :bad
   (:anchored-uuo (uuo-error-vector-bounds (:%l idx) (:%l v))))
+
+(define-x8632-vinsn set-z-if-header-type (((crf :crf))
+                                          ((src :lisp)
+                                           (type :u8const))
+                                          ((flags :u32)))
+  (movl (:@ x8632::vectorH.flags (:%q  src)) (:%l flags))
+  (shrl (:$ub (+ x8632::fixnumshift 8)) (:%l flags))
+  (cmpb (:$b type) (:%b flags)))
+
+(define-x8632-vinsn deref-vector-header (((vector :lisp)
+                                          (index :lisp))
+                                         ((vector :lisp)
+                                          (index :lisp)))
+  :again
+  (addl (:@ x8632::vectorH.displacement (:%l vector)) (:%l index))
+  (btw (:$ub (+ x8632::fixnumshift $arh_disp_bit)) (:@ x8632::vectorH.flags (:%l vector)))
+  (movl (:@ x8632::vectorH.data-vector (:%l vector)) (:%l vector))
+  (jb :again))
+
+(define-x8632-vinsn check-vector-header-bound (()
+                                               ((v :lisp)
+                                                (idx :imm)))
+  :resume
+  (cmpl (:@ x8632::vectorH.physsize (:%l v)) (:%l idx))
+  (jae :bad)
+    (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-vector-bounds (:%l idx) (:%l v))))
+
 
 (define-x8632-vinsn %cdr (((dest :lisp))
 			  ((src :lisp)))

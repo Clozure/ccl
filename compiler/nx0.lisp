@@ -670,8 +670,9 @@ function to the indicated name is true.")
   (or (car (rassoc subtag (arch::target-uvector-subtags (backend-target-arch *target-backend*))))
       (nx-error "Subtag ~s not native on target ~s"
                 subtag (backend-target-arch-name *target-backend*))))
-
 (defun nx-error-for-simple-2d-array-type (type-keyword)
+  (declare (special arch::error-object-not-simple-array-complex-single-float-2d
+                    arch::error-object-not-simple-array-complex-double-float-2d))
   (ecase type-keyword
     (:simple-vector arch::error-object-not-simple-array-t-2d)
     (:simple-string arch::error-object-not-simple-array-char-2d)
@@ -686,9 +687,14 @@ function to the indicated name is true.")
     (:signed-64-bit-vector arch::error-object-not-simple-array-s64-2d)
     (:double-float-vector arch::error-object-not-simple-array-double-float-2d)
     (:single-float-vector arch::error-object-not-simple-array-single-float-2d)
-    (:fixnum-vector arch::error-object-not-simple-array-fixnum-2d)))
+    (:fixnum-vector arch::error-object-not-simple-array-fixnum-2d)
+    (:complex-double-float-vector arch::error-object-not-simple-array-complex-double-float-2d)
+    (:complex-single-float-vector arch::error-object-not-simple-array-complex-single-float-2d)))
 
 (defun nx-error-for-simple-3d-array-type (type-keyword)
+  ;; Forward refs/bootstrapping:
+  (declare (special arch::error-object-not-simple-array-complex-single-float-3d
+                    arch::error-object-not-simple-array-complex-double-float-3d))
   (ecase type-keyword
     (:simple-vector arch::error-object-not-simple-array-t-3d)
     (:simple-string arch::error-object-not-simple-array-char-3d)
@@ -703,7 +709,9 @@ function to the indicated name is true.")
     (:signed-64-bit-vector arch::error-object-not-simple-array-s64-3d)
     (:double-float-vector arch::error-object-not-simple-array-double-float-3d)
     (:single-float-vector arch::error-object-not-simple-array-single-float-3d)
-    (:fixnum-vector arch::error-object-not-simple-array-fixnum-3d)))
+    (:fixnum-vector arch::error-object-not-simple-array-fixnum-3d)
+    (:complex-simple-float-vector arch::error-object-not-simple-array-complex-single-float-3d)
+    (:complex-double-float-vector arch::error-object-not-simple-array-complex-double-float-3d)))
 
 (defun acode-s16-constant-p (x)
   (setq x (acode-unwrapped-form x))

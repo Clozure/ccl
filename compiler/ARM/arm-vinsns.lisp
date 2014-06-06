@@ -1531,7 +1531,7 @@
                                        ((flags :u32)))
   :again
   (ldr flags (:@ vector (:$ arm::vectorH.flags)))
-  (tst flags (:$ (ash 1 $arh_disp_bit)))
+  (tst flags (:$ (ash 1 (+ arm::fixnumshift $arh_disp_bit))))
   (ldr flags (:@ vector (:$ arm::vectorH.displacement)))
   (add index index flags)
   (ldr vector (:@ vector (:$ arm::vectorH.data-vector)))

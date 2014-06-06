@@ -904,6 +904,25 @@
   :bad
   (:anchored-uuo (uuo-error-vector-bounds (:%q idx) (:%q v))))
 
+(define-x8664-vinsn check-vector-header-bound (()
+                                               ((v :lisp)
+                                                (idx :imm)))
+  :resume
+  (cmpq (:@ x8664::vectorH.physsize (:%q v)) (:%q idx))
+  (jae :bad)
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-vector-bounds (:%q idx) (:%q v))))
+
+(define-x8664-vinsn deref-vector-header (((vector :lisp)
+                                          (index :lisp))
+                                         ((vector :lisp)
+                                          (index :lisp)))
+  :again
+  (addq (:@ x8664::vectorH.displacement (:%q vector)) (:%q index))
+  (btw (:$ub (+ x8664::fixnumshift $arh_disp_bit)) (:@ x8664::vectorH.flags (:%q vector)))
+  (movq (:@ x8664::vectorH.data-vector (:%q vector)) (:%q vector))
+  (jb :again))
 
 
 (define-x8664-vinsn %cdr (((dest :lisp))
@@ -4428,6 +4447,26 @@
                                           (amt :u8const)))
   (shrq (:$ub amt) (:%q dest)))
 
+(define-x8664-vinsn set-z-if-uvector-type (((crf :crf))
+                                           ((src :lisp)
+                                            (type :u8const))
+                                           ((tag :u8)))
+  (movl (:%l src) (:%l tag))
+  (andl (:$b x8664::tagmask) (:%l tag))
+  (cmpl (:$b x8664::tag-misc) (:%l tag))
+  (jne :done)
+  (cmpb (:$b type) (:@ x8664::misc-subtag-offset (:%q src)))
+  :done)
+
+(define-x8664-vinsn set-z-if-header-type (((crf :crf))
+                                          ((src :lisp)
+                                           (type :u8const))
+                                          ((flags :u32)))
+  (movl (:@ x8664::vectorH.flags (:%q  src)) (:%l flags))
+  (shrl (:$ub (+ x8664::fixnumshift 8)) (:%l flags))
+  (cmpb (:$b type) (:%b flags))
+)
+
 (define-x8664-vinsn trap-unless-simple-array-2 (()
                                                 ((object :lisp)
                                                  (expected-flags :u32const)
@@ -4448,6 +4487,28 @@
   (:anchored-uuo-section :again)
   :bad
   (:anchored-uuo (uuo-error-reg-not-type (:%q object) (:$ub type-error))))
+
+(define-x8664-vinsn set-z-if-typed-array (((crf :crf))
+                                            ((object :lisp)
+                                             (expected-type :u8const)
+                                             (rank :u8const))
+                                            ((tag :u8)))
+  :again
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8664::tagmask) (:%l tag))
+  (cmpl (:$b x8664::tag-misc) (:%l tag))
+  (jne :notz)
+  (cmpb (:$b x8664::subtag-arrayH) (:@ x8664::misc-subtag-offset (:%q object)))
+  (jne :notz)
+  (cmpq (:$b (:apply ash rank x8664::fixnumshift)) (:@ x8664::arrayH.rank (:%q object)))
+  (jne :notz)
+  (movl  (:@ x8664::arrayH.flags (:%q object)) (:%l tag))
+  (shrl (:$ub (+ x8664::fixnumshift 8)) (:%l tag))
+  (cmpb (:$b expected-type) (:%b tag))
+  :notz
+)
+
+
 
 (define-x8664-vinsn trap-unless-simple-array-3 (()
                                                 ((object :lisp)

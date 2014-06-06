@@ -2118,9 +2118,52 @@
           (! check-misc-bound unscaled-idx src))
         (x862-vref1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum)))))
 
+(defun x862-1d-vref (seg vreg xfer type-keyword vector index safe)
+  (with-x86-local-vinsn-macros (seg vreg xfer)
+    (let* ((simple-case (backend-get-next-label))
+           (common-case (backend-get-next-label))
+           (error-case (backend-get-next-label)))
+      (multiple-value-bind (src unscaled-idx)
+          (x862-two-targeted-reg-forms seg vector ($ *x862-arg-y*) index ($ *x862-arg-z*))
+        (with-crf-target () crf
+           (! set-z-if-uvector-type crf src (target-arch-case (:x8632 x8632::subtag-vectorH) (:x8664 x8664::subtag-vectorH)))
+        (x862-branch seg (x862-make-compound-cd 0 simple-case)  x86::x86-e-bits t)
+        (when safe
+          (! trap-unless-fixnum unscaled-idx)
+          (! check-vector-header-bound src unscaled-idx)
+          (when (typep safe 'fixnum)
+            (! set-z-if-header-type crf src safe)
+            (x862-branch seg (x862-make-compound-cd 0 error-case) x86::x86-e-bits t)))
+        (! deref-vector-header src unscaled-idx)
+        (-> common-case)
+        (when (typep safe 'fixnum)
+          (@ error-case)
+          (x862-copy-register seg ($ *x862-arg-y*) src)
+          (! ref-constant ($ *x862-arg-z*) (x86-immediate-label
+                                           `(vector ,(element-subtype-type safe))))
+          (let* ((boxed-errno (ash $xwrongtype *x862-target-fixnum-shift*)))
+            (target-arch-case
+             (:x8664 (x862-absolute-natural seg ($ x8664::arg_x) nil boxed-errno))
+             (:x8632
+              (! reserve-outgoing-frame)
+              (! vpush-fixnum boxed-errno)))
+            (! set-nargs 3)
+            (! call-subprim (subprim-name->offset '.SPksignalerr))))
+        (@ simple-case)
+        (when safe
+          (when (typep safe 'fixnum)
+            (! set-z-if-uvector-type crf src safe)
+            (x862-branch seg (x862-make-compound-cd 0 error-case) x86::x86-e-bits t))
+          (! trap-unless-fixnum unscaled-idx)
+          (! check-misc-bound unscaled-idx src))
+        (@ common-case)
+        (x862-vref1 seg vreg xfer type-keyword src unscaled-idx nil))))))
 
 
-(defun x862-aset2 (seg vreg xfer  array i j new safe type-keyword  dim0 dim1)
+
+
+
+(defun x862-aset2 (seg vreg xfer  array i j new safe type-keyword  dim0 dim1 &optional (simple t))
   (target-arch-case
    (:x8632 (error "not for x8632 yet")))
   (with-x86-local-vinsn-macros (seg target)
@@ -2131,6 +2174,7 @@
            (constval (x862-constant-value-ok-for-type-keyword type-keyword new))
            (needs-memoization (and is-node (x862-acode-needs-memoization new)))
            (src)
+           (continue-label (backend-get-next-label))
            (unscaled-i)
            (unscaled-j)
            (val-reg (x862-target-reg-for-aset vreg type-keyword))
@@ -2166,11 +2210,22 @@
             (use-imm-temp (hard-regspec-value val-reg)))
           (when safe      
             (when (typep safe 'fixnum)
-              (! trap-unless-simple-array-2
-                 src
-                 (dpb safe target::arrayH.flags-cell-subtag-byte
-                      (ash 1 $arh_simple_bit))
-                 (nx-error-for-simple-2d-array-type type-keyword)))
+              (if simple
+                (! trap-unless-simple-array-2
+                   src
+                   (dpb safe target::arrayH.flags-cell-subtag-byte
+                        (ash 1 $arh_simple_bit))
+                   (nx-error-for-simple-2d-array-type type-keyword))
+                (with-crf-target () crf
+                  (! set-z-if-typed-array crf src safe 2)
+                  (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+            (x862-copy-register seg ($ x8664::arg_y) src)
+            (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                              `(array ,(element-subtype-type safe) (* *))))
+            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+            (! set-nargs 3)
+            (! call-subprim (subprim-name->offset '.SPksignalerr))
+            (@ continue-label))))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
             (unless j-known-fixnum
@@ -2186,11 +2241,15 @@
                     (! 2d-dim1 dim1 src))
                   (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j)))
               (let* ((v ($ x8664::arg_x)))
-                (! array-data-vector-ref v src)
+                (if simple
+                  (! array-data-vector-ref v src)
+                  (progn
+                    (x862-copy-register seg v src)
+                    (! deref-vector-header v idx-reg)))
                 (x862-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (x862-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))
 
 
-(defun x862-aset3 (seg vreg xfer  array i j k new safe type-keyword  dim0 dim1 dim2)
+(defun x862-aset3 (seg vreg xfer  array i j k new safe type-keyword  dim0 dim1 dim2 &optional (simple t))
   (target-arch-case
    (:x8632 (error "not for x8632 yet")))
   (with-x86-local-vinsn-macros (seg target)
@@ -2202,6 +2261,7 @@
            (constval (x862-constant-value-ok-for-type-keyword type-keyword new))
            (needs-memoization (and is-node (x862-acode-needs-memoization new)))
            (src)
+           (continue-label (backend-get-next-label))
            (unscaled-i)
            (unscaled-j)
            (unscaled-k)
@@ -2243,11 +2303,22 @@
         
           (when safe      
             (when (typep safe 'fixnum)
-              (! trap-unless-simple-array-3
-                 src
-                 (dpb safe target::arrayH.flags-cell-subtag-byte
-                      (ash 1 $arh_simple_bit))
-                 (nx-error-for-simple-3d-array-type type-keyword)))
+              (if simple
+                (! trap-unless-simple-array-3
+                   src
+                   (dpb safe target::arrayH.flags-cell-subtag-byte
+                        (ash 1 $arh_simple_bit))
+                   (nx-error-for-simple-3d-array-type type-keyword)))
+              (with-crf-target () crf
+                (! set-z-if-typed-array crf src safe 3)
+                (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+                (x862-copy-register seg ($ x8664::arg_y) src)
+                (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                                  `(array ,(element-subtype-type safe) (* * *))))
+                (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+                (! set-nargs 3)
+                (! call-subprim (subprim-name->offset '.SPksignalerr))
+                (@ continue-label)))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
             (unless j-known-fixnum
@@ -2266,11 +2337,15 @@
                       (! 3d-dims dim1 dim2 src))
                     (! 3d-unscaled-index idx-reg dim1 dim2 unscaled-i unscaled-j unscaled-k)))
                 (let* ((v ($ x8664::arg_x)))
-                  (! array-data-vector-ref v src)
+                  (if simple
+                    (! array-data-vector-ref v src)
+                    (progn
+                      (x862-copy-register seg v src)
+                      (! deref-vector-header v idx-reg)))
                   (x862-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (x862-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization))))))))))
 
 
-(defun x862-aref2 (seg vreg xfer array i j safe typekeyword &optional dim0 dim1)
+(defun x862-aref2 (seg vreg xfer array i j safe typekeyword &optional dim0 dim1 (simple t))
   (target-arch-case
    (:x8632 (error "not for x8632 yet")))
   (with-x86-local-vinsn-macros (seg vreg xfer)
@@ -2279,6 +2354,7 @@
            (src)
            (unscaled-i)
            (unscaled-j)
+           (continue-label (backend-get-next-label))
            (constidx
             (and dim0 dim1 i-known-fixnum j-known-fixnum
                  (>= i-known-fixnum 0)
@@ -2295,11 +2371,22 @@
                                            j *x862-arg-z*)))
       (when safe        
         (when (typep safe 'fixnum)
-          (! trap-unless-simple-array-2
-             src
-             (dpb safe target::arrayH.flags-cell-subtag-byte
-                  (ash 1 $arh_simple_bit))
-             (nx-error-for-simple-2d-array-type typekeyword)))
+          (if simple
+            (! trap-unless-simple-array-2
+               src
+               (dpb safe target::arrayH.flags-cell-subtag-byte
+                    (ash 1 $arh_simple_bit))
+               (nx-error-for-simple-2d-array-type typekeyword)))
+          (with-crf-target () crf
+            (! set-z-if-typed-array crf src safe 2)
+            (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+            (x862-copy-register seg ($ x8664::arg_y) src)
+            (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                              `(array ,(element-subtype-type safe) (* *))))
+            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+            (! set-nargs 3)
+            (! call-subprim (subprim-name->offset '.SPksignalerr))
+            (@ continue-label)))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -2312,10 +2399,14 @@
               (! 2d-dim1 dim1 src))
             (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
           (with-node-target (idx-reg) v
-            (! array-data-vector-ref v src)
+            (if simple
+              (! array-data-vector-ref v src)
+              (progn
+                (x862-copy-register seg v src)
+                (! deref-vector-header v idx-reg)))
             (x862-vref1 seg vreg xfer typekeyword v idx-reg constidx)))))))
 
-(defun x862-aref3 (seg vreg xfer array i j k safe typekeyword &optional dim0 dim1 dim2)
+(defun x862-aref3 (seg vreg xfer array i j k safe typekeyword &optional dim0 dim1 dim2  (simple t))
   (target-arch-case
    (:x8632 (error "not for x8632 yet")))
   (with-x86-local-vinsn-macros (seg vreg xfer)
@@ -2323,6 +2414,7 @@
            (j-known-fixnum (acode-fixnum-form-p j))
            (k-known-fixnum (acode-fixnum-form-p k))
            (src)
+           (continue-label (backend-get-next-label))
            (unscaled-i)
            (unscaled-j)
            (unscaled-k)
@@ -2347,11 +2439,22 @@
                                            k *x862-arg-z*)))
       (when safe        
         (when (typep safe 'fixnum)
-          (! trap-unless-simple-array-3
-             src
-             (dpb safe target::arrayH.flags-cell-subtag-byte
-                  (ash 1 $arh_simple_bit))
-             (nx-error-for-simple-3d-array-type typekeyword)))
+          (if simple
+            (! trap-unless-simple-array-3
+               src
+               (dpb safe target::arrayH.flags-cell-subtag-byte
+                    (ash 1 $arh_simple_bit))
+               (nx-error-for-simple-3d-array-type typekeyword))
+            (with-crf-target () crf
+              (! set-z-if-typed-array crf src safe 3)
+              (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+              (x862-copy-register seg ($ x8664::arg_y) src)
+              (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                              `(array ,(element-subtype-type safe) (* * *))))
+            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+            (! set-nargs 3)
+            (! call-subprim (subprim-name->offset '.SPksignalerr))
+            (@ continue-label))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -2367,7 +2470,11 @@
                 (! 3d-dims dim1 dim2 src))
               (! 3d-unscaled-index idx-reg dim1 dim2 unscaled-i unscaled-j unscaled-k))))
         (with-node-target (idx-reg) v
-          (! array-data-vector-ref v src)
+          (if simple
+            (! array-data-vector-ref v src)
+            (progn
+              (x862-copy-register seg v src)
+              (! deref-vector-header v idx-reg)))
           (x862-vref1 seg vreg xfer typekeyword v idx-reg constidx))))))
 
 
@@ -2910,6 +3017,92 @@
 		(! check-misc-bound unscaled-idx src))
 	      (! check-misc-bound unscaled-idx src))))
         (x862-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (when result-reg (x862-unboxed-reg-for-aset seg type-keyword result-reg safe constval)) constval needs-memoization)))))
+
+
+(defun x862-1d-vset (seg vreg xfer type-keyword vector index value safe)
+  (with-x86-local-vinsn-macros (seg)
+    (let* ((arch (backend-target-arch *target-backend*))
+           (simple-case (backend-get-next-label))
+           (common-case (backend-get-next-label))
+           (error-case (backend-get-next-label))
+           (is-node (member type-keyword (arch::target-gvector-types arch)))
+           (constval (x862-constant-value-ok-for-type-keyword type-keyword value))
+           (needs-memoization (and is-node (x862-acode-needs-memoization value))))
+
+      (let* ((src (target-arch-case
+		   (:x8632 ($ x8632::temp0))
+		   (:x8664 ($ x8664::arg_x))))
+             (unscaled-idx ($ *x862-arg-y*))
+             (result-reg ($ *x862-arg-z*)))
+        (cond (needs-memoization
+               (x862-three-targeted-reg-forms seg
+                                              vector src
+                                              index unscaled-idx
+                                              value result-reg))
+              (t
+               (setq result-reg (x862-target-reg-for-aset vreg type-keyword))
+	       (target-arch-case
+		(:x8632
+		 (with-node-temps (src) ()
+		   (x862-three-targeted-reg-forms seg
+						  vector src
+						  index unscaled-idx
+						  value result-reg)))
+		(:x8664
+                 (multiple-value-setq (src unscaled-idx result-reg)
+                   (x862-three-targeted-reg-forms seg
+                                                    vector src
+                                                    index unscaled-idx
+                                                    value result-reg))))))
+        (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
+               (value (if (eql (hard-regspec-class result-reg)
+                               hard-reg-class-gpr)
+                        (hard-regspec-value result-reg)))
+               (result-is-imm nil))
+          (when (and value (logbitp value *available-backend-imm-temps*))
+            (target-arch-case
+             (:x8664
+              (setq *available-backend-imm-temps* (bitclr value *available-backend-imm-temps*)))
+             (:x8632
+              (setq result-is-imm t)
+              (x862-push-register seg result-reg))))
+          (with-crf-target () crf
+            (! set-z-if-uvector-type crf src (target-arch-case (:x8632 x8632::subtag-vectorH) (:x8664 x8664::subtag-vectorH)))
+            (x862-branch seg (x862-make-compound-cd 0 simple-case)  x86::x86-e-bits t)                               
+            (when safe
+              (! trap-unless-fixnum unscaled-idx)
+              (! check-vector-header-bound src unscaled-idx)
+              (when (typep safe 'fixnum)
+                (! set-z-if-header-type crf src safe)
+                (x862-branch seg (x862-make-compound-cd error-case 0) x86::x86-e-bits nil)))
+            (! deref-vector-header src unscaled-idx)
+            (-> common-case)
+            (when (typep safe 'fixnum)
+              (@ error-case)
+              (! ref-constant ($ *x862-arg-z*) (x86-immediate-label
+                                                `(vector ,(element-subtype-type safe))))
+              (let* ((boxed-errno (ash $xwrongtype *x862-target-fixnum-shift*)))
+                (x862-copy-register seg *x862-arg-y*  src)
+                (target-arch-case
+                 (:x8664 (x862-absolute-natural seg ($ x8664::arg_x) nil boxed-errno))
+                 (:x8632
+                  (! reserve-outgoing-frame)
+                  (! vpush-fixnum boxed-errno)))
+                (! set-nargs 3)
+                (! call-subprim (subprim-name->offset '.SPksignalerr))))
+            (@ simple-case)
+            (when safe
+              (when (typep safe 'fixnum)
+                (! set-z-if-uvector-type crf src safe)
+                (x862-branch seg (x862-make-compound-cd 0 error-case) x86::x86-e-bits t))
+              (! trap-unless-fixnum unscaled-idx)
+              (! check-misc-bound unscaled-idx src))
+            (@ common-case)
+            (when result-is-imm
+              (target-arch-case
+               (:x8632 (x862-pop-register seg result-reg))))))
+        (x862-vset1 seg vreg xfer type-keyword src unscaled-idx nil result-reg (when result-reg (x862-unboxed-reg-for-aset seg type-keyword result-reg safe constval)) constval needs-memoization)))))
+
 
 
 
@@ -8330,36 +8523,47 @@
   (let* ((vtype (acode-form-type v t))
          (ctype (if vtype (specifier-type vtype)))
          (atype (if (array-ctype-p ctype) ctype))
-         (keyword (if (and atype
-                           (let* ((dims (array-ctype-dimensions atype)))
-                             (or (eq dims '*)
-                                 (and (not (atom dims))
-                                      (= (length dims) 1))))
-                           (not (array-ctype-complexp atype)))
-                    (funcall
-                        (arch::target-array-type-name-from-ctype-function
-                         (backend-target-arch *target-backend*))
-                        atype))))
-    (if keyword
-      (x862-vref  seg vreg xfer keyword v i (unless *x862-reckless*
-                                              (nx-lookup-target-uvector-subtag keyword)))
-      (x862-binary-builtin seg vreg xfer '%aref1 v i))))
+         (maybe-1d (and atype
+                        (let* ((dims (array-ctype-dimensions atype)))
+                          (or (eq dims '*)
+                              (and (not (atom dims))
+                                   (= (length dims) 1))))))
+         
+         (complexp (and atype (array-ctype-complexp atype)))
+         (keyword (and atype
+                                         (funcall
+                                          (arch::target-array-type-name-from-ctype-function
+                                           (backend-target-arch *target-backend*))
+                                          atype))))
+    (if (and maybe-1d keyword)
+      (if (not complexp)
+        (x862-vref  seg vreg xfer keyword v i (unless *x862-reckless*
+                                                (nx-lookup-target-uvector-subtag keyword)))
+          (x862-1d-vref  seg vreg xfer keyword v i (unless *x862-reckless*
+                                                     (nx-lookup-target-uvector-subtag keyword))))
+          (x862-binary-builtin seg vreg xfer '%aref1 v i))))
 
 (defx862 x862-%aset1 aset1 (seg vreg xfer v i n)
   (let* ((vtype (acode-form-type v t))
          (atype (if vtype (specifier-type vtype)))
-         (keyword (if (and atype
-                           (let* ((dims (array-ctype-dimensions atype)))
-                             (or (eq dims '*)
-                                 (and (not (atom dims))
-                                      (= (length dims) 1))))
-                           (not (array-ctype-complexp atype)))
-                    (funcall
+         (maybe-1d (and atype
+                        (let* ((dims (array-ctype-dimensions atype)))
+                          (or (eq dims '*)
+                              (and (not (atom dims))
+                                   (= (length dims) 1))))))
+         (complexp (and atype (array-ctype-complexp atype)))
+         (keyword (and atype
+                       (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
-                        atype))))
-    (if keyword
-      (x862-vset seg vreg xfer keyword v i n (not *x862-reckless*))
+                        atype)))
+         (typecode (and keyword (not *x862-reckless*)
+                        (nx-lookup-target-uvector-subtag keyword)))
+         )
+    (if (and maybe-1d keyword)
+      (if (not complexp)
+        (x862-vset seg vreg xfer keyword v i n typecode)
+        (x862-1d-vset seg vreg xfer keyword v i n typecode))
       (target-arch-case
        (:x8632
 	(with-x86-local-vinsn-macros (seg vreg xfer)
@@ -9403,11 +9607,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
 				(= 2 (length dims))))
-                       (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -9427,7 +9631,7 @@
                            nil
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword ;(make-acode (%nx1-operator immediate) )
-                         (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1))))
+                         (if (typep dim0 'fixnum) dim0) (if (typep dim1 'fixnum) dim1) simple)))
           (t
            (x862-three-targeted-reg-forms seg
                                           arr (target-arch-case
@@ -9460,11 +9664,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
-				(= 3 (length dims))))
-                       (not (array-ctype-complexp atype))
+				(= 3 (length dims))))                       
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -9488,7 +9692,8 @@
                          keyword ;(make-acode (%nx1-operator immediate) )
                          (if (typep dim0 'fixnum) dim0)
                          (if (typep dim1 'fixnum) dim1)
-                         (if (typep dim2 'fixnum) dim2))))
+                         (if (typep dim2 'fixnum) dim2)
+                         simple)))
           (t
            (x862-four-targeted-reg-forms seg
                                          arr ($ *x862-temp0*)
@@ -9504,11 +9709,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (and (typep dims 'list)
 				(= 2 (length dims))))
-                       (not (array-ctype-complexp atype))
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -9529,7 +9734,8 @@
                            (nx-lookup-target-uvector-subtag keyword ))
                          keyword
                          (if (typep dim0 'fixnum) dim0)
-                         (if (typep dim1 'fixnum) dim1))))
+                         (if (typep dim1 'fixnum) dim1)
+                         simple)))
           (t
            (x862-four-targeted-reg-forms seg
                                          arr ($ *x862-temp0*)
@@ -9545,11 +9751,11 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
+         (simple (not (array-ctype-complexp atype)))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (unless (atom dims)
-			     (= 3 (length dims))))
-                       (not (array-ctype-complexp atype))
+			     (= 3 (length dims))))                       
                        (funcall
                         (arch::target-array-type-name-from-ctype-function
                          (backend-target-arch *target-backend*))
@@ -9573,7 +9779,8 @@
                          keyword
                          (if (typep dim0 'fixnum) dim0)
                          (if (typep dim1 'fixnum) dim1)
-                         (if (typep dim2 'fixnum) dim2))))
+                         (if (typep dim2 'fixnum) dim2)
+                         simple)))
           (t
            (x862-push-register seg (x862-one-untargeted-reg-form seg arr ($ *x862-arg-z*)))
            (x862-four-targeted-reg-forms seg

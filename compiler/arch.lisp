@@ -208,6 +208,10 @@
   vector-fixnum
   vector-single-float
   vector-double-float
+  simple-array-complex-single-float-2d
+  simple-array-complex-single-float-3d
+  simple-array-complex-double-float-2d
+  simple-array-complex-double-float-3d
   
   ;; Sentinel
   unused-max-type-error
