@@ -7506,14 +7506,16 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
 (defarm2 arm2-let* let* (seg vreg xfer vars vals body p2decls &aux
                              (old-stack (arm2-encode-stack)))
-  (with-arm-p2-declarations p2decls
-    (arm2-seq-bind seg vars vals)
-    (arm2-undo-body seg vreg xfer body old-stack))
+  (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
+    (with-arm-p2-declarations p2decls
+      (arm2-seq-bind seg vars vals)
+      (arm2-undo-body seg vreg xfer body old-stack)))
   (dolist (v vars) (arm2-close-var seg v)))
 
 (defarm2 arm2-multiple-value-bind multiple-value-bind (seg vreg xfer vars valform body p2decls)
   (let* ((n (list-length vars))
          (vloc *arm2-vstack*)
+         (*arm2-nfp-depth* *arm2-nfp-depth*)
          (nbytes (* n *arm2-target-node-size*))
          (old-stack (arm2-encode-stack)))
     (with-arm-p2-declarations p2decls
@@ -8012,6 +8014,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
 (defarm2 arm2-let let (seg vreg xfer vars vals body p2decls)
   (let* ((old-stack (arm2-encode-stack))
+         (*arm2-nfp-depth* *arm2-nfp-depth*)
          (val nil)
          (bits nil)
          (valcopy vals))
