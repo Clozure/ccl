@@ -80,7 +80,10 @@
    (arm::subtag-s8-vector . (simple-array (signed-byte 8) (*)))   
    (arm::subtag-u16-vector . (simple-array (unsigned-byte 16) (*)))
    (arm::subtag-double-float-vector . (simple-array double-float (*)))
-   (arm::subtag-bit-vector . simple-bit-vector)))
+   (arm::subtag-bit-vector . simple-bit-vector)
+   (arm::subtag-complex-single-float-vector . (simple-array (complex single-float) (*)))
+   (arm::subtag-complex-double-float-vector . (simple-array (complex double-float) (*)))))
+  
 
 ;;; Return a pointer to the saved VFP info a ucontext's mcontext,
 ;;; and the FPSCR values in that info as an unsigned 32-bit integer.

@@ -235,6 +235,16 @@
   (fstd val (:@ lr (:$ 0)))
   (mov lr (:$ 0)))
 
+(define-arm-vinsn (misc-set-complex-double-float :predicatable :sets-lr)
+    (()
+     ((val :complex-double-float)
+      (v :lisp)
+      (unscaled-idx :imm)))             ; a fixnum
+  (add lr v (:$ arm::misc-dfloat-offset))
+  (add lr lr (:lsl unscaled-idx (:$ 2)))
+  (fstmiad val lr 2)
+  (mov lr (:$ 0)))
+
 (define-arm-vinsn (misc-set-c-single-float :predicatable)
     (()
      ((val :single-float)

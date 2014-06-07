@@ -2199,13 +2199,13 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
          (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
          (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
          (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+         (is-128-bit (eq type-keyword :complex-double-float-vector))
          (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
          (vreg-class (if vreg (hard-regspec-class vreg)))
          (vreg-mode (if (or (eql vreg-class hard-reg-class-gpr)
                             (eql vreg-class hard-reg-class-fpr))
                       (get-regspec-mode vreg)))
          (next-imm-target (available-imm-temp  *available-backend-imm-temps*))
-         (next-fp-target (available-fp-temp *available-backend-fp-temps*))
          (acc (make-wired-lreg arm::arg_z)))
     (cond ((or is-node
                is-1-bit
@@ -2219,12 +2219,14 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
           ;; Usually.
           ((null vreg)
            (cond (is-64-bit
-                  (if (eq type-keyword :double-float-vector)
-                    (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-double)
-                    (make-unwired-lreg next-imm-target :mode (if is-signed hard-reg-class-gpr-mode-s64 hard-reg-class-gpr-mode-u64))))
+                  (ecase type-keyword
+                    (:double-float-vector (available-fp-temp *available-backend-fp-temps* :double-float))
+                    (:complex-single-float-vector (available-fp-temp *available-backend-fp-temps* :complex-single-float))))
+                 (is-128-bit
+                  (available-fp-temp *available-backend-fp-temps* :complex-double-float))
                  (is-32-bit
                   (if (eq type-keyword :single-float-vector)
-                    (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-single)
+                    (available-fp-temp *available-backend-fp-temps* :single-float)
                     (make-unwired-lreg next-imm-target :mode (if is-signed hard-reg-class-gpr-mode-s32 hard-reg-class-gpr-mode-u32))))
                  (is-16-bit
                   (make-unwired-lreg next-imm-target :mode (if is-signed hard-reg-class-gpr-mode-s16 hard-reg-class-gpr-mode-u16)))
@@ -2241,11 +2243,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                   (if (eq type-keyword :double-float-vector)
                     (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-double))
-                      (if is-signed
-                        (and (eql vreg-class hard-reg-class-gpr)
-                                 (eql vreg-mode hard-reg-class-gpr-mode-s64))
-                        (and (eql vreg-class hard-reg-class-gpr)
-                                 (eql vreg-mode hard-reg-class-gpr-mode-u64)))))
+                      ))
                    (is-32-bit
                     (if (eq type-keyword :single-float-vector)
                       (and (eql vreg-class hard-reg-class-fpr)
@@ -2288,6 +2286,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                lreg
                acc))))))
 
+
+
 (defun arm2-unboxed-reg-for-aset (seg type-keyword result-reg safe constval)
   (with-arm-local-vinsn-macros (seg)
     (let* ((arch (backend-target-arch *target-backend*))
@@ -2296,22 +2296,36 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
            (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
            (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+           (is-128-bit (eq type-keyword :complex-double-float-vector))
            (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector)))
            (result-is-node-gpr (and (eql (hard-regspec-class result-reg)
                                          hard-reg-class-gpr)
                                     (eql (get-regspec-mode result-reg)
                                          hard-reg-class-gpr-mode-node)))
-           (next-imm-target (available-imm-temp *available-backend-imm-temps*))
-           (next-fp-target (available-fp-temp *available-backend-fp-temps*)))
+           (next-imm-target (available-imm-temp *available-backend-imm-temps*)))
       (if (or is-node (not result-is-node-gpr))
         result-reg
-        (cond (is-64-bit
-               (if (eq type-keyword :double-float-vector)
-                 (let* ((reg (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-double)))
-                   (if safe
-                     (! get-double? reg result-reg)
-                     (! get-double reg result-reg))
-                   reg)))
+        (cond (is-128-bit
+               (let* ((reg (available-fp-temp *available-backend-fp-temps* :complex-double-float)))
+                 (when reg
+                   (! trap-unless-typecode= result-reg reg arm::subtag-complex-double-float))
+                 (! get-complex-double-float reg result-reg)
+                 reg))
+                        
+              (is-64-bit
+               (case type-keyword
+                 (:double-float-vector
+                  (let* ((reg (available-fp-temp *available-backend-fp-temps* :double-float)))
+                    (if safe
+                      (! get-double? reg result-reg)
+                      (! get-double reg result-reg))
+                    reg))
+                 (:complex-single-float-vector
+                  (let* ((reg (available-fp-temp *available-backend-fp-temps* :complex-single-float)))
+                    (when safe
+                      (! trap-unless-typecode= result-reg arm::subtag-complex-single-float))
+                    (! get-complex-single-float reg result-reg)
+                    reg))))
               (is-32-bit
                ;; Generally better to use a GPR for the :SINGLE-FLOAT-VECTOR
                ;; case here.
@@ -2382,7 +2396,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (is-16-bit (member type-keyword (arch::target-16-bit-ivector-types arch)))
            (is-32-bit (member type-keyword (arch::target-32-bit-ivector-types arch)))
            (is-64-bit (member type-keyword (arch::target-64-bit-ivector-types arch)))
+           (is-128-bit (eq type-keyword :complex-double-float-vector))
            (is-signed (member type-keyword '(:signed-8-bit-vector :signed-16-bit-vector :signed-32-bit-vector :signed-64-bit-vector :fixnum-vector))))
+
       (cond ((and is-node node-value-needs-memoization)
              (unless (and (eql (hard-regspec-value src) arm::arg_x)
                           (eql (hard-regspec-value unscaled-idx) arm::arg_y)
@@ -2401,7 +2417,15 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                  (! misc-set-node val-reg src scaled-idx))))
             (t
              (cond
+               (is-128-bit
+                (with-imm-target () scaled-idx
+                  (if index-known-fixnum
+                    (unless unscaled-idx
+                      (setq unscaled-idx scaled-idx)                      
+                      (arm2-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm::fixnumshift))))
+                  (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx)))
                (is-64-bit
+                ;; :double-float-vector, :complex-single-float-vector 
                 (with-imm-target (arm::imm0 arm::imm1) scaled-idx
                   (if (and index-known-fixnum
                            (<= index-known-fixnum
@@ -3219,7 +3243,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 (defun arm2-copy-fpr (seg dest src)
   ;; src and dest are distinct FPRs with the same mode.
   (with-arm-local-vinsn-macros (seg)
-    (case (fpr-mode-name-value (get-regspec-mode src))
+    (case (fpr-mode-value-name (get-regspec-mode src))
       (:single-float (! simgle-to-single dest src))
       (:double-float (! double-to-double dest src))
       (:complex-single-float (! complex-single-float-to-complex-single-float
@@ -3295,7 +3319,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                             used-fprs)
                              (return r)))))
                    (when free-fpr
-                     (let* ((reg (make-wired-lreg free-fpr :class :fpr :mode mode))
+                     (let* ((reg (make-wired-lreg free-fpr :class hard-reg-class-fpr :mode mode))
                             (save (arm2-copy-fpr seg reg pushed-reg))
                                   (restore (arm2-copy-fpr seg popped-reg reg)))
                        (remove-dll-node save)
@@ -5077,17 +5101,17 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
 ;;; Heap-allocated constants -might- need memoization: they might be newly-created,
 ;;; as in the case of synthesized toplevel functions in .pfsl files.
-               (defun arm2-acode-needs-memoization (valform)
-                 (if (arm2-form-typep valform 'fixnum)
-                   nil
-                   (let* ((val (acode-unwrapped-form-value valform)))
-                     (if (or (nx-t val)
-                             (nx-null val)
-                             (and (acode-p val)
-                                  (let* ((op (acode-operator val)))
-                                    (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
-                       nil
-                       t))))
+(defun arm2-acode-needs-memoization (valform)
+  (if (arm2-form-typep valform 'fixnum)
+    nil
+    (let* ((val (acode-unwrapped-form-value valform)))
+      (if (or (nx-t val)
+              (nx-null val)
+              (and (acode-p val)
+                   (let* ((op (acode-operator val)))
+                     (or (eq op (%nx1-operator fixnum)) #|(eq op (%nx1-operator immediate))|#))))
+        nil
+        t))))
 
 (defun arm2-modify-cons (seg vreg xfer ptrform valform safe setcdr returnptr)
   (if (arm2-form-typep ptrform 'cons)
@@ -5125,7 +5149,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
       (if (arm-constant-form-p uwf)
         (arm2-branch seg (arm2-cd-true xfer) nil)
         (with-crf-target () crf
-                         (arm2-form seg crf xfer form))))))
+          (arm2-form seg crf xfer form))))))
 
       
 (defun arm2-branch (seg xfer crf &optional cr-bit true-p)
@@ -5209,7 +5233,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 (defun arm2-invert-cd (cd)
   (if (arm2-cd-compound-p cd)
     (arm2-make-compound-cd (arm2-cd-false cd) (arm2-cd-true cd) (logbitp $backend-mvpass-bit cd))
-                   cd))
+    cd))
 
 
 
