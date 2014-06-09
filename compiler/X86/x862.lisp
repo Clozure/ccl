@@ -446,19 +446,23 @@
     (with-x86-local-vinsn-macros (seg vreg)
       (if (eq vreg :push)
         (if (memory-spec-p ea)
-          (if (addrspec-vcell-p ea)
+          (if (eql (memspec-type ea) memspec-nfp-offset)
             (with-node-target () target
-              (x862-stack-to-register seg ea target)
-              (! vcell-ref target target)
+              (x862-nfp-ref seg target ea)
               (! vpush-register target))
-            (let* ((offset (memspec-frame-address-offset ea))
-                   (reg (x862-register-for-frame-offset offset)))
-              (if reg
-                (progn
-                  (! vpush-register reg)
-                  (x862-regmap-note-store reg *x862-vstack*))
-                (! vframe-push offset *x862-vstack*))))
-          (! vpush-register ea))
+            (if (addrspec-vcell-p ea)
+              (with-node-target () target
+                (x862-stack-to-register seg ea target)
+                (! vcell-ref target target)
+                (! vpush-register target))
+              (let* ((offset (memspec-frame-address-offset ea))
+                     (reg (x862-register-for-frame-offset offset)))
+                (if reg
+                  (progn
+                    (! vpush-register reg)
+                    (x862-regmap-note-store reg *x862-vstack*))
+                  (! vframe-push offset *x862-vstack*)))))
+            (! vpush-register ea))
         (if (memory-spec-p ea)
           (if (eql (memspec-type ea) memspec-nfp-offset)
             (x862-nfp-ref seg vreg ea)
