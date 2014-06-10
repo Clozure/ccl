@@ -65,7 +65,7 @@
 
 ;;;; Macros.
 
-;;; The following Macros exist to make it easy to acces the Syntax primitives
+;;; The following Macros exist to make it easy to access the Syntax primitives
 ;;; without uglifying the code.  They were originally written by Maddox.
 ;;; 
 
@@ -1201,7 +1201,7 @@
 (defindent "etypecase" 1)
 (defindent "eval-when" 1)
 (defindent "flet" 1)
-(defindent "if" 1)
+(defindent "if" nil)
 (defindent "labels" 1)
 (defindent "lambda" 1)
 (defindent "let" 1)
@@ -1318,13 +1318,13 @@
 (defun strip-package-prefix (string)
   (let* ((p (position #\: string :from-end t)))
     (if p
-      (subseq string (1+ p))
-      string)))
+        (subseq string (1+ p))
+        string)))
 ;;;
 (defun lisp-indentation (mark)
   "Compute number of spaces which mark should be indented according to
-   local context and lisp grinding conventions.  This assumes mark is at the
-   beginning of the line to be indented."
+  local context and lisp grinding conventions.  This assumes mark is at the
+  beginning of the line to be indented."
   (with-mark ((m mark)
 	      (temp mark))
     ;; See if we are in a quoted context.
@@ -1345,12 +1345,20 @@
 	(let* ((fname (nstring-upcase
                        (strip-package-prefix (region-to-string (region fstart m)))))
 	       (special-args (or (gethash fname *special-forms*)
-				 (and (> (length fname) 2)
-				      (string= fname "DEF" :end1 3)
-				      (value indent-defanything))
+                                 (and (> (length fname) 2)
+                                      (string= fname "DEF" :end1 3)
+                                      (value indent-defanything))
                                  (and (> (length fname) 4)
                                       (string= fname "WITH-" :end1 5)
-                                      (value indent-with-anything)))))
+                                      (value indent-with-anything))
+                                 ; If it names a macro, look for &body in its lambda list
+                                 (let* ((pkgname (package-at-mark fstart))
+                                        (pkg (when pkgname (find-package pkgname)))
+                                        (string (region-to-string (region fstart m)))
+                                        (sym (case-insensitive-string-to-symbol string pkg)))
+                                   (when (macro-function sym)
+                                     (let ((arglist (ccl::arglist sym)))
+                                       (position '&body arglist)))))))
 	  (declare (simple-string fname))
 	  ;; Now that we have the form name, did it have special syntax?
 	  (cond (special-args
@@ -1598,9 +1606,9 @@
 	(count (or p 1)))
     (pre-command-parse-check point)
     (if (minusp count)
-	(end-of-defun-command (- count))
-	(unless (top-level-offset point (- count))
-	  (editor-error)))))
+      (end-of-defun-command (- count))
+      (unless (top-level-offset point (- count))
+        (editor-error)))))
 
 (defcommand "Select to Beginning of Defun" (p)
   "Move the point to the beginning of a top-level form, extending the selection.
