@@ -544,6 +544,22 @@ function to the indicated name is true.")
     type
     '*))
 
+(defun ctype-specifier (thing)
+  (when thing (type-specifier thing)))
+
+;;; Accepts a type specifier; returns an integer CTYPE or NIL.
+(defun bounded-integer-type-p (typespec)
+  (let* ((ctype (specifier-type-if-known(nx-target-type typespec))))
+    (and (typep ctype 'numeric-ctype)
+         (not (eq :complex (numeric-ctype-complexp ctype)))
+         (eq (numeric-ctype-class ctype) 'integer)
+         (let* ((low (numeric-ctype-low ctype))
+                (high (numeric-ctype-high ctype)))
+           (and low (not (eq low '*))
+                high (not (eq high '*))
+                ctype)))))
+
+
 (defun acode-form-type (form trust-decls &optional (assert t))
   (declare (ignorable assert))  
   (if (not (acode-p form))
@@ -557,15 +573,53 @@ function to the indicated name is true.")
                  (type (svref *acode-operator-types* op-id)))
             (declare (fixnum op op-id))
             (if (not (eq type :infer))
-              type
+              (or type '*)
               (let* ((fn (svref *acode-simple-type-inferrers* op-id)))
                 (if fn
                   (let* ((inferred (nx-target-type (funcall fn form trust-decls))))
                     (when (eql (acode-operator form) op-id)
                       (acode-assert-type form inferred))
-                    inferred)
+                    (or inferred '*))
                   t)))))))))
 
+
+(defun bounded-integer-type-for-addition (type1 type2)
+  (let* ((t1 (bounded-integer-type-p type1))
+         (t2 (if t1 (bounded-integer-type-p type2))))
+    (when t2
+      (specifier-type `(integer
+                        ,(+ (numeric-ctype-low t1) (numeric-ctype-low t2))
+                        ,(+ (numeric-ctype-high t1) (numeric-ctype-high t2)))))))
+
+(defun bounded-integer-type-for-subtraction (type1 type2)
+  (let* ((t1 (bounded-integer-type-p type1))
+         (t2 (if t1 (bounded-integer-type-p type2))))
+    (when t2
+      (specifier-type
+       `(integer
+         ,(- (numeric-ctype-low t1) (numeric-ctype-high t2))
+         ,(- (numeric-ctype-high t1) (numeric-ctype-low t2)))))))
+         
+
+
+(defun bounded-integer-type-for-multiplication (type1 type2)
+  (let* ((t1 (bounded-integer-type-p type1))
+         (t2 (if t1 (bounded-integer-type-p type2))))
+    (when t2
+      (specifier-type `(integer
+                        ,(* (numeric-ctype-low t1) (numeric-ctype-low t2))
+                        ,(* (numeric-ctype-high t1) (numeric-ctype-high t2)))))))
+
+(defun bounded-integer-type-for-ash (type1 type2)
+  (let* ((t1 (bounded-integer-type-p type1))
+         (t2 (if t1 (bounded-integer-type-p type2))))
+    ;; It's not worth trying to be too precise here if the shift count
+    ;; is at all large.
+    (when (and t2 (csubtypep t2 (specifier-type '(signed-byte 16))))
+      (specifier-type `(integer
+                        ,(ash (numeric-ctype-low t1) (numeric-ctype-low t2))
+                        ,(ash (numeric-ctype-high t1) (numeric-ctype-high t2)))))))
+                        
 
 (defun nx-binop-numeric-contagion (form1 form2 trust-decls)
   (cond ((acode-form-typep form1 'double-float trust-decls)

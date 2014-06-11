@@ -8264,8 +8264,7 @@
   (^))
 
 (defx862 x862-minus1 minus1 (seg vreg xfer form)
-  (or (acode-optimize-minus1 seg vreg xfer form *x862-trust-declarations*)
-      (x862-unary-builtin seg vreg xfer '%negate form)))
+  (x862-unary-builtin seg vreg xfer '%negate form))
 
 (defx862 x862-%double-float-negate %double-float-negate (seg vreg xfer form)
   (if (and vreg
@@ -8401,12 +8400,10 @@
     (x862-inline-sub2 seg vreg xfer form1 form2)))
 
 (defx862 x862-mul2 mul2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-mul2 seg vreg xfer form1 form2 *x862-trust-declarations*)
-      (x862-binary-builtin seg vreg xfer '*-2 form1 form2)))
+  (x862-binary-builtin seg vreg xfer '*-2 form1 form2))
 
 (defx862 x862-div2 div2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-div2 seg vreg xfer form1 form2 *x862-trust-declarations*)
-      (x862-binary-builtin seg vreg xfer '/-2 form1 form2)))
+  (x862-binary-builtin seg vreg xfer '/-2 form1 form2))
 
 (defx862 x862-logbitp logbitp (seg vreg xfer bitnum int)
   (x862-binary-builtin seg vreg xfer 'logbitp bitnum int))

@@ -7033,8 +7033,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (^))
 
 (defarm2 arm2-minus1 minus1 (seg vreg xfer form)
-  (or (acode-optimize-minus1 seg vreg xfer form *arm2-trust-declarations*)
-      (arm2-unary-builtin seg vreg xfer '%negate form)))
+  (arm2-unary-builtin seg vreg xfer '%negate form))
 
 (defarm2 arm2-%double-float-negate %double-float-negate (seg vreg xfer form)
   (with-fp-target () (r1 :double-float)
@@ -7132,8 +7131,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
 
 (defarm2 arm2-div2 div2 (seg vreg xfer form1 form2)
-  (or (acode-optimize-div2 seg vreg xfer form1 form2 *arm2-trust-declarations*)
-      (arm2-binary-builtin seg vreg xfer '/-2 form1 form2)))
+  (arm2-binary-builtin seg vreg xfer '/-2 form1 form2))
 
 (defarm2 arm2-logbitp logbitp (seg vreg xfer bitnum int)
   (arm2-binary-builtin seg vreg xfer 'logbitp bitnum int))

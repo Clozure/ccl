@@ -718,15 +718,7 @@
 
 
 (defnx1 nx1-*-2 ((*-2)) context (&environment env num1 num2)
-  (if (nx-binary-fixnum-op-p num1 num2 env)
-    (make-acode (%nx1-operator %i*) (nx1-form :value num1 env) (nx1-form :value num2 env))
-    (if (and (nx-form-typep num1 'double-float env)
-             (nx-form-typep num2 'double-float env))
-      (make-acode (%nx1-operator %double-float*-2) (nx1-form :value num1 env) (nx1-form :value num2 env))
-      (if (and (nx-form-typep num1 'short-float env)
-               (nx-form-typep num2 'short-float env))
-        (make-acode (%nx1-operator %short-float*-2) (nx1-form :value num1 env) (nx1-form :value num2 env))
-        (make-acode (%nx1-operator mul2) (nx1-form :value num1 env) (nx1-form :value num2 env))))))
+  (make-acode (%nx1-operator mul2) (nx1-form :value num1 env) (nx1-form :value num2 env)))
 
 (defnx1 nx1-%negate ((%negate)) context (num &environment env)
   (if (nx-form-typep num 'fixnum env)
