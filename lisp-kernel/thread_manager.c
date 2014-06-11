@@ -825,28 +825,20 @@ allocate_tcr()
 TCR *
 allocate_tcr()
 {
-  TCR *tcr,  *next;
+  TCR *tcr;
+
+  tcr = calloc(1, sizeof(TCR));
+  if (tcr == NULL)
+    allocation_failure(true, sizeof(TCR));
+
 #ifdef DARWIN
-  extern Boolean use_mach_exception_handling;
-#ifdef DARWIN
-  extern TCR* darwin_allocate_tcr(void);
-  extern void darwin_free_tcr(TCR *);
-#endif
-  kern_return_t kret;
-  mach_port_t 
-    thread_exception_port,
-    task_self = mach_task_self();
-#endif
-  for (;;) {
-#ifdef DARWIN
-    tcr = darwin_allocate_tcr();
-#else
-    tcr = calloc(1, sizeof(TCR));
-#endif
-#ifdef DARWIN
+  {
+    extern Boolean use_mach_exception_handling;
+    kern_return_t kret;
+    mach_port_t thread_exception_port;
+
     if (use_mach_exception_handling) {
-      if (mach_port_allocate(task_self,
-                             MACH_PORT_RIGHT_RECEIVE,
+      if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE,
                              &thread_exception_port) == KERN_SUCCESS) {
         tcr->io_datum = (void *)((natural)thread_exception_port);
         associate_tcr_with_exception_port(thread_exception_port,tcr);
@@ -854,10 +846,10 @@ allocate_tcr()
         Fatal("Can't allocate Mach exception port for thread.", "");
       }
     }
-
-#endif
-    return tcr;
   }
+#endif
+
+  return tcr;
 }
 #endif
 
@@ -1355,7 +1347,6 @@ __declspec(dllexport)
 shutdown_thread_tcr(void *arg)
 {
 #ifdef DARWIN
-  extern void darwin_free_tcr(TCR *);
   extern void darwin_exception_cleanup(TCR *);
 #endif
   TCR *tcr = TCR_FROM_TSD(arg),*current=get_tcr(0);
@@ -1446,7 +1437,8 @@ shutdown_thread_tcr(void *arg)
 #endif
 #endif
 #ifdef DARWIN
-    darwin_free_tcr(tcr);
+    free(tcr);
+    tcr = NULL;
 #endif
     UNLOCK(lisp_global(TCR_AREA_LOCK),current);
 #ifdef HAVE_TLS
@@ -2362,9 +2354,6 @@ normalize_dead_tcr_areas(TCR *tcr)
 void
 free_freed_tcrs ()
 {
-#ifdef DARWIN
-  extern void darwin_free_tcr(TCR *);
-#endif
   TCR *current, *next;
 
   for (current = freed_tcrs; current; current = next) {
@@ -2374,11 +2363,7 @@ free_freed_tcrs ()
     /* We sort of have TLS in that the TEB is per-thread.  We free the
      * tcr aux vector elsewhere. */
 #else
-#ifdef DARWIN
-    darwin_free_tcr(current);
-#else
     free(current);
-#endif
 #endif
 #endif
   }
