@@ -3313,7 +3313,7 @@ setup_signal_frame(mach_port_t thread,
 TCR *
 find_tcr_from_exception_port(mach_port_t port)
 {
-    mach_port_context_t context = 0;
+    mach_vm_address_t context = 0;
     kern_return_t kret;
 
     kret = mach_port_get_context(mach_task_self(), port, &context);
@@ -3327,7 +3327,7 @@ associate_tcr_with_exception_port(mach_port_t port, TCR *tcr)
     kern_return_t kret;
     
     kret = mach_port_set_context(mach_task_self(),
-				 port, (mach_port_context_t)tcr);
+				 port, (mach_vm_address_t)tcr);
     MACH_CHECK_ERROR("associating TCR with exception port", kret);
 }
 
