@@ -95,28 +95,6 @@ do_intn()
   __asm volatile("int $0xcd");
 }
 
-#ifdef DARWIN
- typedef kern_return_t (*like_mach_port_get_context)(mach_port_t,mach_port_t,mach_vm_address_t *);
-
-typedef kern_return_t (*like_mach_port_set_context)(mach_port_t,mach_port_t,mach_vm_address_t);
-
-like_mach_port_get_context Pmach_port_get_context = NULL;
-like_mach_port_set_context Pmach_port_set_context = NULL;
-
-Boolean use_mach_port_context_functions = false;
-
-void
-darwin_early_exception_init()
-{
-  Pmach_port_get_context = dlsym(RTLD_DEFAULT, "mach_port_get_context");
-  Pmach_port_set_context = dlsym(RTLD_DEFAULT, "mach_port_set_context");
-  if ((Pmach_port_set_context != NULL) &&
-      (Pmach_port_get_context != NULL)) {
-    use_mach_port_context_functions = true;
-  }
-}
-#endif
-
 void
 x86_early_exception_init()
 {
@@ -2385,9 +2363,6 @@ void
 exception_init()
 {
   x86_early_exception_init();
-#ifdef DARWIN
-  darwin_early_exception_init();
-#endif
   install_pmcl_exception_handlers();
 }
 
@@ -3333,83 +3308,37 @@ setup_signal_frame(mach_port_t thread,
   Some exceptions could and should be handled here directly.
 */
 
-
-
-
 #define DARWIN_EXCEPTION_HANDLER signal_handler
-
-#define EXCEPTION_PORT_BUCKETS 109
-
-TCR *
-exception_port_map[EXCEPTION_PORT_BUCKETS];
-
-pthread_mutex_t 
-exception_port_map_lock = PTHREAD_MUTEX_INITIALIZER;
 
 TCR *
 find_tcr_from_exception_port(mach_port_t port)
 {
-  if (use_mach_port_context_functions) {
-    mach_vm_address_t addr = 0;
+    mach_port_context_t context = 0;
     kern_return_t kret;
 
-    kret = Pmach_port_get_context(mach_task_self(),port,&addr);
-    MACH_CHECK_ERROR("finding TCR from exception port",kret);
-    return (TCR *)((natural)addr);
-  } else {
-    TCR *tcr = NULL;
-    pthread_mutex_lock(&exception_port_map_lock);
-
-    tcr = exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS];
-
-    while (tcr) {
-      if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
-        break;
-      }
-      tcr = (TCR *)tcr->pending_io_info;
-    }
-    pthread_mutex_unlock(&exception_port_map_lock);
-    return tcr;
-  }
+    kret = mach_port_get_context(mach_task_self(), port, &context);
+    MACH_CHECK_ERROR("finding TCR from exception port", kret);
+    return (TCR *)context;
 }
 
 void
 associate_tcr_with_exception_port(mach_port_t port, TCR *tcr)
 {
-  if (use_mach_port_context_functions) {
     kern_return_t kret;
     
-    kret = Pmach_port_set_context(mach_task_self(),port,(mach_vm_address_t)((natural)tcr));
-    MACH_CHECK_ERROR("associating TCR with exception port",kret);
-  } else {
-    int b = (unsigned)port % EXCEPTION_PORT_BUCKETS;
-    pthread_mutex_lock(&exception_port_map_lock);
-    
-    tcr->pending_io_info = (void *)(exception_port_map[b]);
-    exception_port_map[b] = tcr;
-    pthread_mutex_unlock(&exception_port_map_lock);
-  }
+    kret = mach_port_set_context(mach_task_self(),
+				 port, (mach_port_context_t)tcr);
+    MACH_CHECK_ERROR("associating TCR with exception port", kret);
 }
 
 void
 disassociate_tcr_from_exception_port(mach_port_t port)
 {
-  if (use_mach_port_context_functions) {
-    TCR **prev = &(exception_port_map[(unsigned)port % EXCEPTION_PORT_BUCKETS]),
-      *tcr;
-    pthread_mutex_lock(&exception_port_map_lock);
+  kern_return_t kret;
 
-    while((tcr = *prev) != NULL) {
-      if (TCR_TO_EXCEPTION_PORT(tcr) == port) {
-        *prev = (TCR *)tcr->pending_io_info;
-        break;
-      }
-      prev = (TCR **)&(tcr->pending_io_info);
-    }
-    pthread_mutex_unlock(&exception_port_map_lock);
-  }
+  kret = mach_port_set_context(mach_task_self(), port, 0);
+  MACH_CHECK_ERROR("disassociating TCR with exception port", kret);
 }
-  
 
 kern_return_t
 catch_exception_raise_state(mach_port_t exception_port,
@@ -3738,21 +3667,19 @@ darwin_exception_init(TCR *tcr)
 void
 darwin_exception_cleanup(TCR *tcr)
 {
+  mach_port_t exception_port;
   void *fxs = tcr->native_thread_info;
-  extern Boolean use_mach_exception_handling;
 
   if (fxs) {
     tcr->native_thread_info = NULL;
     free(fxs);
   }
-  if (use_mach_exception_handling) {
-    mach_port_t task_self = mach_task_self(),
-      exception_port = TCR_TO_EXCEPTION_PORT(tcr);
 
-    disassociate_tcr_from_exception_port(exception_port);
-    mach_port_deallocate(task_self,exception_port);
-    mach_port_destroy(task_self,exception_port);
-  }
+  exception_port = TCR_TO_EXCEPTION_PORT(tcr);
+  disassociate_tcr_from_exception_port(exception_port);
+  mach_port_deallocate(mach_task_self(), exception_port);
+  /* Theoretically not needed, I guess... */
+  mach_port_destroy(mach_task_self(), exception_port);
 }
 
 

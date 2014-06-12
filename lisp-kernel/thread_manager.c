@@ -833,18 +833,16 @@ allocate_tcr()
 
 #ifdef DARWIN
   {
-    extern Boolean use_mach_exception_handling;
     kern_return_t kret;
     mach_port_t thread_exception_port;
 
-    if (use_mach_exception_handling) {
-      if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE,
-                             &thread_exception_port) == KERN_SUCCESS) {
-        tcr->io_datum = (void *)((natural)thread_exception_port);
-        associate_tcr_with_exception_port(thread_exception_port,tcr);
-      } else {
-        Fatal("Can't allocate Mach exception port for thread.", "");
-      }
+    kret = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE,
+			      &thread_exception_port);
+    if (kret != KERN_SUCCESS) {
+      Fatal("Can't allocate Mach exception port for thread.", "");
+    } else {
+      tcr->io_datum = (void *)((natural)thread_exception_port);
+      associate_tcr_with_exception_port(thread_exception_port,tcr);
     }
   }
 #endif
@@ -1531,10 +1529,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   TCR_AUX(tcr)->errno_loc = (int *)(&errno);
   tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
 #ifdef DARWIN
-  extern Boolean use_mach_exception_handling;
-  if (use_mach_exception_handling) {
-    darwin_exception_init(tcr);
-  }
+  darwin_exception_init(tcr);
 #endif
 #ifdef LINUX
   linux_exception_init(tcr);
