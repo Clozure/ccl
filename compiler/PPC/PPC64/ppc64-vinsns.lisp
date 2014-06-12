@@ -4193,7 +4193,7 @@
 (define-ppc64-vinsn fixnum->fpr (((f :double-float))
                                  ((fixnum :imm))
                                  ((imm :s64)))
-  (srawi imm fixnum ppc64::fixnumshift)
+  (sradi imm fixnum ppc64::fixnumshift)
   (std imm -8 ppc::sp)
   (lfd f -8 ppc::sp)
   (fcfid f f))
