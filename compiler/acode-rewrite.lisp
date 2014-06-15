@@ -525,7 +525,7 @@
 (def-acode-rewrite acode-rewrite-cxr (%car %cdr car cdr) asserted-type (&whole w cell)
   (rewrite-acode-form cell)
   (multiple-value-bind (val constantp) (acode-constant-p cell)
-    (when (and constantp (typep val 'list))
+    (when (and constantp (typep val 'list) (not (and *load-time-eval-token* (eq (car val) *load-time-eval-token*))))
       (let* ((op (acode-operator w)))
         (acode-rewrite-as-constant-ref w (if (or (eql op (%nx1-operator car))
                                                  (eql op (%nx1-operator %car)))
