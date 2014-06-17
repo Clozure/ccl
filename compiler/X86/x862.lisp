@@ -1569,6 +1569,7 @@
 (defun x862-existing-reg-for-var (var)
   (let* ((ea (var-ea var)))
     (if (and (memory-spec-p ea)
+             (not (eql (memspec-type ea) memspec-nfp-offset))
              (not (addrspec-vcell-p ea)))
       (let* ((offset (memspec-frame-address-offset ea))
              (mask *x862-gpr-locations-valid-mask*)
@@ -4432,6 +4433,7 @@
                            (when (eql 1 (var-refs var)) (var-ea var)))))
                    (offset (and ea
                                 (memory-spec-p ea)
+                                (not (eql (memspec-type ea) memspec-nfp-offset))
                                 (not (addrspec-vcell-p ea))
                                 (memspec-frame-address-offset ea)))
                    (reg (unless (and offset nil) (x862-one-untargeted-reg-form seg (if js32 i j) *x862-arg-z*)))
@@ -5223,7 +5225,8 @@
     val))
 
 (defun x862-addrspec-to-reg (seg addrspec reg)
-  (if (memory-spec-p addrspec)
+  (if (and (memory-spec-p addrspec)
+           (not (eql (memspec-type addrspec) memspec-nfp-offset)))
     (x862-stack-to-register seg addrspec reg)
     (x862-copy-register seg reg addrspec)))
   
@@ -5398,7 +5401,7 @@
 
 (defun x862-store-ea (seg ea reg)
   (if (typep ea 'fixnum)
-    (if (memory-spec-p ea)
+    (if (and (memory-spec-p ea) (not (eql (memspec-type ea) memspec-nfp-offset)))
       (x862-stack-to-register seg ea reg)
       (x862-copy-register seg reg ea))
     (if (typep ea 'lreg)
@@ -7780,6 +7783,7 @@
   (when (and (memory-spec-p ea)
              (null vreg)
              (not (addrspec-vcell-p ea))
+             (not (eql (memspec-type ea) memspec-nfp-offset))
              (acode-p (setq form (acode-unwrapped-form form))))
     (let* ((offset (memspec-frame-address-offset ea)))
       (unless (x862-register-for-frame-offset offset)
