@@ -287,7 +287,7 @@ reaphashv(LispObj hashv)
           ! ref_bit(markbits, dnode)) {
 	pairp[0] = slot_unbound;
 	pairp[1] = empty_value;
-        hashp->count += (1<<fixnumshift);
+        hashp->count -= (1<<fixnumshift);
         if (!keys_frozen) {
           hashp->deleted_count += (1<<fixnumshift);
         }
