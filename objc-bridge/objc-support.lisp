@@ -726,14 +726,9 @@ NSObjects describe themselves in more detail than others."
 
 (defloadvar *tagged-instance-class-indices* ())
 
+
 (defun %safe-get-objc-class (instance)
-  (let* ((tcr (%current-tcr)))
-    (without-interrupts
-     (unwind-protect
-          (progn
-            (setf (%fixnum-ref tcr target::tcr.safe-ref-address) 1)
-            (objc-message-send instance "class"))
-       (setf (%fixnum-ref tcr target::tcr.safe-ref-address) 0)))))
+  (#_object_getClass instance))
 
 (defun lookup-tagged-instance-class (instance)
   (let* ((tag (tagged-objc-instance-p instance)))
