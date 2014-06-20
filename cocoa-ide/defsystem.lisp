@@ -74,6 +74,7 @@
     "cocoa-defaults"
     "cocoa-typeout"
     "console-window"
+    "console-log"
     "cocoa-window"
     "cocoa-doc"
     "compile-hemlock"

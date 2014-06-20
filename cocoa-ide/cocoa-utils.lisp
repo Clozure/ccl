@@ -144,8 +144,13 @@
     (map-windows #'(lambda (w) (push w ret)))
     (nreverse ret)))
 
+#+IGNORE
+;Wow. Nothing like shooting a sparrow with a cannon.
 (defun front-window ()
   (map-windows #'(lambda (win) (return-from front-window win))))
+
+(defun front-window ()
+  (#/keyWindow *NSApp*))
 
 (defun target ()
   "Returns the second window in the list returned by (windows)."
@@ -389,6 +394,18 @@ was clicked."
 	 (flags (#_CGEventGetFlags event)))
     (prog1
 	(logtest flags #$kCGEventFlagMaskShift)
+      (#_CFRelease event))))
+
+#+windows-target
+(defun caps-lock-key-now-p ()
+  (logbitp 15 (#_GetAsyncKeyState #$VK_CAPITAL)))
+
+#+darwin-target
+(defun caps-lock-key-now-p ()
+  (let* ((event (#_CGEventCreate +null-ptr+))
+	 (flags (#_CGEventGetFlags event)))
+    (prog1
+	(logtest flags #$kCGEventFlagMaskAlphaShift)
       (#_CFRelease event))))
 
 ;;; I would remove this, but I think that people use it...
