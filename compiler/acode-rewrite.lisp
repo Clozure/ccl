@@ -294,7 +294,7 @@
                  (rewrite-acode-form w))
                 ((and c2 (> c2 0) (< c2 (ash 1 24)) (eql (logcount c2) 1)
                       (acode-form-typep form1 'integer trust-decls))
-                 (setq shift-count (1- (integer-length c1)))
+                 (setq shift-count (1- (integer-length c2)))
                  (setf (acode-operator w) (%nx1-operator ash)
                        (cadr (acode-operands w)) (make-acode (%nx1-operator fixnum) shift-count)
                        (acode.asserted-type w) nil)
