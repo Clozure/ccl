@@ -2651,11 +2651,16 @@ argument lisp string."
 	    (install-foreign-objc-class classptr nil)
 	    (objc-private-class-id classptr)))))))
 
+;;; Apple invented tags in 10.7, in which the CF version number was 635.0d0
+(defloadvar  *objc-runtime-uses-tags*
+  (>= #&kCFCoreFoundationVersionNumber 635.0d0))
+
 (defun tagged-objc-instance-p (p)
-  (let* ((tag (logand (the natural (%ptr-to-int p)) #xf)))
-    (declare (fixnum tag))
-    (if (logbitp 0 tag)
-      tag)))
+  (when *objc-runtime-uses-tags*
+    (let* ((tag (logand (the natural (%ptr-to-int p)) #xf)))
+      (declare (fixnum tag))
+      (if (logbitp 0 tag)
+        tag))))
 
 (defun %objc-instance-class-index (p)
   (unless (%null-ptr-p p)
