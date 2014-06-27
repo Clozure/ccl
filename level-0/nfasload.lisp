@@ -701,8 +701,8 @@
     (setf (faslstate.faslval s) r)))
 
 (deffaslop $fasl-complex (s)
-  (let* ((realpart (%fasl-expr s))
-         (imagpart (%fasl-expr s))
+  (let* ((realpart (%fasl-expr-preserve-epush s))
+         (imagpart (%fasl-expr-preserve-epush  s))
          (c (complex realpart imagpart)))
     (%epushval s c)
     (setf (faslstate.faslval s) c)))
