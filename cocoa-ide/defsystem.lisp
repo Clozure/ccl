@@ -67,8 +67,16 @@
     "cg"
     "cf-utils"))
 
+(defvar *use-pre-lion-search-files* nil "User-settable parameter to prefer old search-files behavior,
+  even if you're running on Lion or later. Must set this to true BEFORE doing (require :cocoa-application).")
+
+(defun use-pre-lion-search-files ()
+  (or *use-pre-lion-search-files*
+      (< (parse-integer (software-version) :junk-allowed t) 11) ; no choice on pre-lion systems
+      ))
+
 (defparameter *ide-files*
-  '(;"ide-bundle" - loaded by hand above
+  `(;"ide-bundle" - loaded by hand above
     "constants"
     "cocoa-utils"
     "cocoa-defaults"
@@ -81,7 +89,9 @@
     "hemlock"  ;; treated specially below, compile-hemlock must come before.
     "cocoa-editor"
     "cocoa-listener"
-    "cocoa-grep"
+    ,(if (use-pre-lion-search-files)
+         "cocoa-grep-pre-lion"
+         "cocoa-grep")
     "cocoa-backtrace"
     "inspector"
     "project"
@@ -96,7 +106,9 @@
     "menus"
     "app-delegate"
     "ide-self-update"
-    "search-files"
+    ,(if (use-pre-lion-search-files)
+         "search-files-pre-lion"
+         "search-files")
     "start"
     ))
 

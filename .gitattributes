@@ -24,6 +24,7 @@ cocoa-ide/build-application.lisp -text
 cocoa-ide/builder-utilities.lisp -text
 cocoa-ide/ccl-ide.lisp -text
 cocoa-ide/cocoa-doc.lisp -text
+cocoa-ide/cocoa-grep-pre-lion.lisp -text
 cocoa-ide/cocoa-grep.lisp -text
 cocoa-ide/cocoa-remote-lisp.lisp -text
 cocoa-ide/cocoa-utils.lisp -text
@@ -51,6 +52,9 @@ cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/designable.nib
 cocoa-ide/ide-contents/Resources/English.lproj/ProgressWindow.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/designable.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/SearchFiles.nib/keyedobjects.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFilesPreLion.nib/classes.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFilesPreLion.nib/info.nib -text
+cocoa-ide/ide-contents/Resources/English.lproj/SearchFilesPreLion.nib/keyedobjects.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/classes.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/info.nib -text
 cocoa-ide/ide-contents/Resources/English.lproj/apropos.nib/keyedobjects.nib -text
@@ -92,6 +96,7 @@ cocoa-ide/preferences-views.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
 cocoa-ide/project.lisp -text
+cocoa-ide/search-files-pre-lion.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
 cocoa-ide/xapropos.lisp -text
