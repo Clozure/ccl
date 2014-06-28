@@ -15,6 +15,9 @@
 
 ;; @class typeout-view
 ;;
+
+(defparameter *default-line-break-mode* :char ":char or :word")
+
 (defclass typeout-view (ns:ns-view)
   ((scroll-view :foreign-type :id :reader typeout-view-scroll-view)
    (text-view :foreign-type :id :reader typeout-view-text-view))

@@ -22,8 +22,6 @@
   (def-cocoa-default *default-font-size* :float 12.0f0 "Size of font to use in editor windows, as a positive SINGLE-FLOAT")
   (def-cocoa-default *tab-width* :int 8 "Width of editor tab stops, in characters"))
 
-(defparameter *default-line-break-mode* :char ":char or :word")
-
 (defclass cocoa-ide (application)
   ())
 
