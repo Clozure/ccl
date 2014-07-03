@@ -216,7 +216,7 @@
 
                             ((and (subtypep t1 target-fixnum-type)
                                   (subtypep t2 target-fixnum-type))
-                             (setq newtype (ctype-specifier (bounded-integer-type-for-addition t1 t2)))
+                             (setq newtype (or (ctype-specifier (bounded-integer-type-for-addition t1 t2)) 'integer))
                              (if (or
                                   (subtypep newtype target-fixnum-type)
                                   (and trust-decls
@@ -225,7 +225,7 @@
                                (%nx1-operator fixnum-add-overflow)))
                             ((and (subtypep t1 target-natural-type)
                                   (subtypep t2 target-natural-type)
-                                  (or (subtypep (setq newtype (ctype-specifier (bounded-integer-type-for-addition t1 t2))) target-natural-type)
+                                  (or (subtypep (setq newtype (or (ctype-specifier (bounded-integer-type-for-addition t1 t2)) 'unsigned-byte)) target-natural-type)
                                       (and trust-decls
                                            (subtypep asserted-type target-natural-type))))
                              (%nx1-operator %natural+)))))
@@ -254,9 +254,12 @@
                             ((and (subtypep t1 target-fixnum-type)
                                   (subtypep t2 target-fixnum-type))
                              (if (or (subtypep (setq newtype
-                                                     (ctype-specifier
-                                                      (bounded-integer-type-for-subtraction t1 t2)))
-                                               target-fixnum-type)
+                                                     (or
+                                                      (ctype-specifier
+                                                       (bounded-integer-type-for-subtraction t1 t2))
+                                                      'integer))
+                   target-fixnum-type)
+
                                      (and trust-decls
                                           (subtypep asserted-type target-fixnum-type)))
                                (%nx1-operator fixnum-sub-no-overflow)
@@ -264,8 +267,9 @@
                             ((and (subtypep t1 target-natural-type)
                                   (subtypep t2 target-natural-type)
                                   (or (subtypep (setq newtype
-                                                      (ctype-specifier
-                                                       (bounded-integer-type-for-subtraction t1 t2)))
+                                                      (or
+                                                       (ctype-specifier
+                                                       (bounded-integer-type-for-subtraction t1 t2)) 'integer))
                                                 target-natural-type)
                                       (and trust-decls
                                            (subtypep asserted-type target-natural-type))))
@@ -311,7 +315,8 @@
                                       (%nx1-operator %short-float*-2))
                                      ((let* ((multype (bounded-integer-type-for-multiplication t1 t2))
                                              (target-fixnum-type *nx-target-fixnum-type*))
-                                        (and multype (subtypep (setq newtype (ctype-specifier multype))
+                                        (and multype (subtypep (setq newtype
+                                                                     (ctype-specifier multype))
                                                                target-fixnum-type)
                                              (subtypep t1 target-fixnum-type)
                                              (subtypep t2 target-fixnum-type)))
@@ -373,7 +378,7 @@
                              (%nx1-operator %%ineg)
                              (%nx1-operator %ineg))
                            (acode.asserted-type w)
-                           (type-specifier result-type))))))))))
+                           (or (ctype-specifier result-type) 'integer))))))))))
 
 (def-acode-rewrite acode-rewrite-realpart realpart asserted-type (&whole w arg) 
   (let* ((trust-decls *acode-rewrite-trust-declarations*))
