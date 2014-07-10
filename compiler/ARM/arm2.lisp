@@ -396,7 +396,7 @@
                (setq reg (available-fp-temp *available-backend-fp-temps*
                                             :complex-single-float)
                      nfp-bits memspec-nfp-type-complex-single-float))
-              ((subtypep type 'complex-douuble-float)
+              ((subtypep type 'complex-double-float)
                (setq reg (available-fp-temp *available-backend-fp-temps*
                                             :complex-double-float)
                      nfp-bits memspec-nfp-type-complex-double-float)))
