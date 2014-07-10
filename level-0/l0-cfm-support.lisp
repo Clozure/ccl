@@ -181,7 +181,8 @@
 
 (defun soname-ptr-from-link-map (map)
   (let* ((path (pref map :link_map.l_name)))
-    (if (%null-ptr-p path)
+    (if (or (%null-ptr-p path)
+            (not (eql (%get-unsigned-byte path 0) (char-code #\/))))
       (let* ((p (malloc 1)))
         (setf (%get-unsigned-byte p 0) 0)
         p)
