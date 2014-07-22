@@ -172,7 +172,7 @@
              :xon/xoff
              :none)))))))
 
-(defmethod print-object ((s fd-stream) out)
+(defmethod print-object ((s serial-stream) out)
   (print-unreadable-object (s out :type t :identity t)
     (let* ((ioblock (stream-ioblock s nil))
            (fd (and ioblock (ioblock-device ioblock)))
