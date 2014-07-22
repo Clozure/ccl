@@ -62,7 +62,7 @@
 ;;;
 (defmacro define-search-kind (kind lambda-list documentation &body forms)
   `(progn
-     (push ,documentation *search-pattern-documentation*)
+     (pushnew ,documentation *search-pattern-documentation* :test #'string-equal)
      (setf (gethash ,kind *search-pattern-experts*)
            #'(lambda ,lambda-list ,@forms))))
 
@@ -439,38 +439,39 @@
 (define-search-kind :string-insensitive (direction pattern old)
   ":string-insensitive - Pattern is a string to do a case-insensitive
   search for."
-  (unless old (setq old (make-string-insensitive-search-pattern)))
-  (setf (search-pattern-kind old) :string-insensitive
-	(search-pattern-direction old) direction
-	(search-pattern-pattern old) pattern)
-  (let* ((folded-string (string-upcase pattern)))
-    (declare (simple-string folded-string))
-    (cond
-     ((find #\newline folded-string)
-      (make-insensitive-newline-pattern old folded-string)
-      (setf (search-pattern-search-function old)
-	    (if (eq direction :forward)
-		#'insensitive-find-newline-once-forward-method
-		#'insensitive-find-newline-once-backward-method))
-      (setf (search-pattern-reclaim-function old) #'identity))
-     (t
-      (case direction
-	(:forward
-	 (setf (search-pattern-search-function old)
-	       #'insensitive-find-string-once-forward-method))
-	(t
-	 (setf (search-pattern-search-function old)
-	       #'insensitive-find-string-once-backward-method)
-	 (setq folded-string (nreverse folded-string))))
-      (let ((hashed-string (search-hash-string folded-string)))
-	(setf (string-insensitive-hashed-string old) hashed-string
-	      (string-insensitive-folded-string old) folded-string)
-	(setf (string-insensitive-jumps old)
-	      (compute-boyer-moore-jumps hashed-string #'svref))
-	(setf (search-pattern-reclaim-function old)
-	      #'(lambda (p)
-		  (dispose-search-vector (string-insensitive-jumps p))))))))
-  old)
+  (unless (zerop (length pattern))
+    (unless old (setq old (make-string-insensitive-search-pattern)))
+    (setf (search-pattern-kind old) :string-insensitive
+          (search-pattern-direction old) direction
+          (search-pattern-pattern old) pattern)
+    (let* ((folded-string (string-upcase pattern)))
+      (declare (simple-string folded-string))
+      (cond
+       ((find #\newline folded-string)
+        (make-insensitive-newline-pattern old folded-string)
+        (setf (search-pattern-search-function old)
+              (if (eq direction :forward)
+                  #'insensitive-find-newline-once-forward-method
+                  #'insensitive-find-newline-once-backward-method))
+        (setf (search-pattern-reclaim-function old) #'identity))
+       (t
+        (case direction
+          (:forward
+           (setf (search-pattern-search-function old)
+                 #'insensitive-find-string-once-forward-method))
+          (t
+           (setf (search-pattern-search-function old)
+                 #'insensitive-find-string-once-backward-method)
+           (setq folded-string (nreverse folded-string))))
+        (let ((hashed-string (search-hash-string folded-string)))
+          (setf (string-insensitive-hashed-string old) hashed-string
+                (string-insensitive-folded-string old) folded-string)
+          (setf (string-insensitive-jumps old)
+                (compute-boyer-moore-jumps hashed-string #'svref))
+          (setf (search-pattern-reclaim-function old)
+                #'(lambda (p)
+                    (dispose-search-vector (string-insensitive-jumps p))))))))
+    old))
 
 (defun insensitive-find-string-once-forward-method (pattern line start)
   (let* ((hashed-string (string-insensitive-hashed-string pattern))
@@ -552,37 +553,38 @@
 (define-search-kind :string-sensitive (direction pattern old)
   ":string-sensitive - Pattern is a string to do a case-sensitive
   search for."
-  (unless old (setq old (make-string-sensitive-search-pattern)))
-  (setf (search-pattern-kind old) :string-sensitive
-	(search-pattern-direction old) direction
-	(search-pattern-pattern old) pattern)
-  (let* ((string (coerce pattern 'simple-vector)))
-    (declare (simple-vector string))
-    (cond
-     ((find #\newline string)
-      (make-sensitive-newline-pattern old string)
-      (setf (search-pattern-search-function old)
-	    (if (eq direction :forward)
-		#'sensitive-find-newline-once-forward-method
-		#'sensitive-find-newline-once-backward-method))
-      (setf (search-pattern-reclaim-function old) #'identity))
-     (t
-      (case direction
-	(:forward
-	 (setf (search-pattern-search-function old)
-	       #'sensitive-find-string-once-forward-method))
-	(t
-	 (setf (search-pattern-search-function old)
-	       #'sensitive-find-string-once-backward-method)
-	 (setq string (nreverse string))))
-      (setf (string-sensitive-string old) string)
-      (setf (string-sensitive-jumps old)
-	    (compute-boyer-moore-jumps
-	     string #'(lambda (v i) (char-code (svref v i)))))
-      (setf (search-pattern-reclaim-function old)
-	    #'(lambda (p)
-		(dispose-search-vector (string-sensitive-jumps p)))))))
-  old)
+  (unless (zerop (length pattern))
+    (unless old (setq old (make-string-sensitive-search-pattern)))
+    (setf (search-pattern-kind old) :string-sensitive
+          (search-pattern-direction old) direction
+          (search-pattern-pattern old) pattern)
+    (let* ((string (coerce pattern 'simple-vector)))
+      (declare (simple-vector string))
+      (cond
+       ((find #\newline string)
+        (make-sensitive-newline-pattern old string)
+        (setf (search-pattern-search-function old)
+              (if (eq direction :forward)
+                  #'sensitive-find-newline-once-forward-method
+                  #'sensitive-find-newline-once-backward-method))
+        (setf (search-pattern-reclaim-function old) #'identity))
+       (t
+        (case direction
+          (:forward
+           (setf (search-pattern-search-function old)
+                 #'sensitive-find-string-once-forward-method))
+          (t
+           (setf (search-pattern-search-function old)
+                 #'sensitive-find-string-once-backward-method)
+           (setq string (nreverse string))))
+        (setf (string-sensitive-string old) string)
+        (setf (string-sensitive-jumps old)
+              (compute-boyer-moore-jumps
+               string #'(lambda (v i) (char-code (svref v i)))))
+        (setf (search-pattern-reclaim-function old)
+              #'(lambda (p)
+                  (dispose-search-vector (string-sensitive-jumps p)))))))
+    old))
 
 
 (defun sensitive-find-string-once-forward-method (pattern line start)
