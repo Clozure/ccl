@@ -395,8 +395,6 @@ lisp-kernel/constants.h -text
 lisp-kernel/darwinarm/Makefile -text
 lisp-kernel/darwinx8632/.gdbinit -text
 lisp-kernel/darwinx8632/Makefile -text
-lisp-kernel/darwinx8632/exports -text
-lisp-kernel/darwinx8664/exports -text
 lisp-kernel/freebsdx8632/.gdbinit -text
 lisp-kernel/freebsdx8632/Makefile -text
 lisp-kernel/freebsdx8632/e_exp.c -text
@@ -413,6 +411,7 @@ lisp-kernel/linuxx8632/.gdbinit -text
 lisp-kernel/linuxx8632/Makefile -text
 lisp-kernel/lisp_globals.s -text
 lisp-kernel/mach-o-image.c -text
+lisp-kernel/mach_exc.defs -text
 lisp-kernel/os-darwin.h -text
 lisp-kernel/os-freebsd.h -text
 lisp-kernel/os-linux.h -text

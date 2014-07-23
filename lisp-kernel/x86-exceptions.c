@@ -3341,17 +3341,30 @@ disassociate_tcr_from_exception_port(mach_port_t port)
 }
 
 kern_return_t
-catch_exception_raise_state(mach_port_t exception_port,
-                            exception_type_t exception,
-                            exception_data_t code_vector,
-                            mach_msg_type_number_t code_count,
-                            int * flavor,
-                            thread_state_t in_state,
-                            mach_msg_type_number_t in_state_count,
-                            thread_state_t out_state,
-                            mach_msg_type_number_t * out_state_count)
+catch_mach_exception_raise(mach_port_t exception_port,
+                           mach_port_t thread,
+                           mach_port_t task,
+                           exception_type_t exception,
+                           mach_exception_data_t code,
+                           mach_msg_type_number_t code_count)
 {
-  int signum = 0, code = *code_vector;
+  abort();
+  return KERN_FAILURE;
+}
+
+kern_return_t
+catch_mach_exception_raise_state(mach_port_t exception_port,
+                                 exception_type_t exception,
+                                 mach_exception_data_t code,
+                                 mach_msg_type_number_t code_count,
+                                 int *flavor,
+                                 thread_state_t in_state,
+                                 mach_msg_type_number_t in_state_count,
+                                 thread_state_t out_state,
+                                 mach_msg_type_number_t *out_state_count)
+{
+  int64_t code0 = code[0];
+  int signum = 0;
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
   mach_port_t thread = (mach_port_t)((natural)tcr->native_thread_id);
   kern_return_t kret, call_kret;
@@ -3361,93 +3374,90 @@ catch_exception_raise_state(mach_port_t exception_port,
     *out_ts = (native_thread_state_t*)out_state;
   mach_msg_type_number_t thread_state_count;
 
-
-
-  if (1) {
-    if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
-    } 
-    if ((code == EXC_I386_GPFLT) &&
-        ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
-      kret = do_pseudo_sigreturn(thread, tcr, out_ts);
+  if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_EXCEPTION);
+  } 
+  if ((code0 == EXC_I386_GPFLT) &&
+      ((natural)(ts_pc(ts)) == (natural)pseudo_sigreturn)) {
+    kret = do_pseudo_sigreturn(thread, tcr, out_ts);
 #if 0
-      fprintf(dbgout, "Exception return in 0x%x\n",tcr);
+    fprintf(dbgout, "Exception return in 0x%x\n",tcr);
 #endif
-    } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
-      CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
-      kret = 17;
-    } else {
-      switch (exception) {
-      case EXC_BAD_ACCESS:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGBUS;
-        }
-        break;
-        
-      case EXC_BAD_INSTRUCTION:
-        if (code == EXC_I386_GPFLT) {
-          signum = SIGSEGV;
-        } else {
-          signum = SIGILL;
-        }
-        break;
-          
-      case EXC_SOFTWARE:
-        signum = SIGILL;
-        break;
-        
-      case EXC_ARITHMETIC:
-        signum = SIGFPE;
-	if (code == EXC_I386_DIV)
-	  code = FPE_INTDIV;
-        break;
-        
-      default:
-        break;
-      }
-#if WORD_SIZE==64
-      if ((signum==SIGFPE) && 
-          (code != FPE_INTDIV) && 
-          (tcr->valence != TCR_STATE_LISP)) {
-        mach_msg_type_number_t thread_state_count = x86_FLOAT_STATE64_COUNT;
-        x86_float_state64_t fs;
-
-        thread_get_state(thread,
-                         x86_FLOAT_STATE64,
-                         (thread_state_t)&fs,
-                         &thread_state_count);
-        
-        if (! (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN_FPE))) {
-          tcr->flags |= (1<<TCR_FLAG_BIT_FOREIGN_FPE);
-          tcr->lisp_mxcsr = (fs.__fpu_mxcsr & ~MXCSR_STATUS_MASK);
-        }
-        fs.__fpu_mxcsr &= ~MXCSR_STATUS_MASK;
-        fs.__fpu_mxcsr |= MXCSR_CONTROL_MASK;
-        thread_set_state(thread,
-                         x86_FLOAT_STATE64,
-                         (thread_state_t)&fs,
-                         x86_FLOAT_STATE64_COUNT);
-        *out_state_count = NATIVE_THREAD_STATE_COUNT;
-        *out_ts = *ts;
-        return KERN_SUCCESS;
-      }
-#endif
-      if (signum) {
-        kret = setup_signal_frame(thread,
-                                  (void *)DARWIN_EXCEPTION_HANDLER,
-                                  signum,
-                                  code,
-                                  tcr, 
-                                  ts,
-                                  out_ts);
-        
+  } else if (tcr->flags & (1<<TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
+    CLR_TCR_FLAG(tcr,TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
+    kret = 17;
+  } else {
+    switch (exception) {
+    case EXC_BAD_ACCESS:
+      if (code0 == EXC_I386_GPFLT) {
+	signum = SIGSEGV;
       } else {
-        kret = 17;
+	signum = SIGBUS;
       }
+      break;
+      
+    case EXC_BAD_INSTRUCTION:
+      if (code0 == EXC_I386_GPFLT) {
+	signum = SIGSEGV;
+      } else {
+	signum = SIGILL;
+      }
+      break;
+      
+    case EXC_SOFTWARE:
+      signum = SIGILL;
+      break;
+      
+    case EXC_ARITHMETIC:
+      signum = SIGFPE;
+      if (code0 == EXC_I386_DIV)
+	code0 = FPE_INTDIV;
+      break;
+      
+    default:
+      break;
+    }
+#if WORD_SIZE==64
+    if ((signum==SIGFPE) && 
+	(code0 != FPE_INTDIV) && 
+	(tcr->valence != TCR_STATE_LISP)) {
+      mach_msg_type_number_t thread_state_count = x86_FLOAT_STATE64_COUNT;
+      x86_float_state64_t fs;
+      
+      thread_get_state(thread,
+		       x86_FLOAT_STATE64,
+		       (thread_state_t)&fs,
+		       &thread_state_count);
+      
+      if (! (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN_FPE))) {
+	tcr->flags |= (1<<TCR_FLAG_BIT_FOREIGN_FPE);
+	tcr->lisp_mxcsr = (fs.__fpu_mxcsr & ~MXCSR_STATUS_MASK);
+      }
+      fs.__fpu_mxcsr &= ~MXCSR_STATUS_MASK;
+      fs.__fpu_mxcsr |= MXCSR_CONTROL_MASK;
+      thread_set_state(thread,
+		       x86_FLOAT_STATE64,
+		       (thread_state_t)&fs,
+		       x86_FLOAT_STATE64_COUNT);
+      *out_state_count = NATIVE_THREAD_STATE_COUNT;
+      *out_ts = *ts;
+      return KERN_SUCCESS;
+    }
+#endif
+    if (signum) {
+      kret = setup_signal_frame(thread,
+				(void *)DARWIN_EXCEPTION_HANDLER,
+				signum,
+				code0,
+				tcr, 
+				ts,
+				out_ts);
+      
+    } else {
+      kret = 17;
     }
   }
+  
   if (kret) {
     *out_state_count = 0;
     *flavor = 0;
@@ -3456,6 +3466,24 @@ catch_exception_raise_state(mach_port_t exception_port,
   }
   return kret;
 }
+
+kern_return_t
+catch_mach_exception_raise_state_identity(mach_port_t exception_port,
+                                          mach_port_t thread,
+                                          mach_port_t task,
+                                          exception_type_t exception,
+                                          mach_exception_data_t code,
+                                          mach_msg_type_number_t code_count,
+                                          int *flavor,
+                                          thread_state_t old_state,
+                                          mach_msg_type_number_t old_count,
+                                          thread_state_t new_state,
+                                          mach_msg_type_number_t *new_count)
+{
+  abort();
+  return KERN_FAILURE;
+}
+
 
 
 
@@ -3470,11 +3498,11 @@ static mach_port_t mach_exception_thread = (mach_port_t)0;
 void *
 exception_handler_proc(void *arg)
 {
-  extern boolean_t exc_server();
+  extern boolean_t mach_exc_server();
   mach_port_t p = (mach_port_t)((natural)arg);
 
   mach_exception_thread = pthread_mach_thread_np(pthread_self());
-  mach_msg_server(exc_server, 256, p, 0);
+  mach_msg_server(mach_exc_server, 256, p, 0);
   /* Should never return. */
   abort();
 }
@@ -3548,7 +3576,7 @@ tcr_establish_exception_port(TCR *tcr, mach_port_t thread)
   kret = thread_swap_exception_ports(thread,
 				     LISP_EXCEPTIONS_HANDLED_MASK,
 				     lisp_port,
-				     EXCEPTION_STATE,
+				     MACH_EXCEPTION_CODES | EXCEPTION_STATE,
 #if WORD_SIZE==64
                                      x86_THREAD_STATE64,
 #else

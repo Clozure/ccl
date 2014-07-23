@@ -87,7 +87,11 @@ lib/*~.*
 library/*fsl
 library/*~.*
 lisp-kernel/*~.*
+lisp-kernel/darwinx8632/mach_exc.h
+lisp-kernel/darwinx8632/mach_exc_server.c
 lisp-kernel/darwinx8632/probes.h
+lisp-kernel/darwinx8664/mach_exc.h
+lisp-kernel/darwinx8664/mach_exc_server.c
 lisp-kernel/darwinx8664/probes.h
 lisp-kernel/linuxppc/*~.*
 lisp-kernel/linuxppc64/*~.*

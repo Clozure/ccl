@@ -24,8 +24,7 @@ MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic")
 VPATH = ..
 RM = /bin/rm
 LD = ld
-LDFLAGS =  -macosx_version_min $(OSVERSION) -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000 \
- -exported_symbols_list exports
+LDFLAGS =  -macosx_version_min $(OSVERSION) -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
@@ -55,7 +54,7 @@ COBJ  = pmcl-kernel.o gc-common.o bits.o  \
 	x86-exceptions.o unix-calls.o mach-o-image.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o x86_print.o xlbt.o
-KERNELOBJ= imports.o $(COBJ) x86-asmutils32.o 
+KERNELOBJ= imports.o $(COBJ) x86-asmutils32.o mach_exc_server.o
 
 SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s x86-constants32.s lisp_globals.s
 
@@ -98,6 +97,13 @@ probes.h: probes.d
 
 
 thread_manager.o: thread_manager.c 
+
+mach_exc_server.o: mach_exc_server.c mach_exc.h
+
+mach_exc.h mach_exc_server.c: mach_exc.defs
+	mig -arch i386 -header /dev/null -user /dev/null \
+		-sheader mach_exc.h -server mach_exc_server.c \
+		 $<
 
 cclean:
 	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../dx86cl 

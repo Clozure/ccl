@@ -29,8 +29,7 @@ CC=cc
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
 LDFLAGS = -macosx_version_min $(OSVERSION) -arch x86_64 -dynamic \
-	  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 \
-	  -exported_symbols_list exports
+	  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
 
 AS = as
 M4 = gm4
@@ -54,7 +53,7 @@ ASFLAGS = -arch x86_64 -g
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
 	   -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
 CDEBUG = -g
-COPT = -O2
+COPT = -O0
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
@@ -76,7 +75,7 @@ COBJ  = pmcl-kernel.o gc-common.o x86-gc.o bits.o  x86-exceptions.o \
 	mach-o-image.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
-KERNELOBJ= imports.o $(COBJ) x86-asmutils64.o 
+KERNELOBJ= imports.o $(COBJ) x86-asmutils64.o mach_exc_server.o
 
 SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s \
 	x86-constants64.s lisp_globals.s
@@ -113,6 +112,13 @@ probes.h: probes.d
 	dtrace -h -s $<
 
 thread_manager.o: thread_manager.c 
+
+mach_exc_server.o: mach_exc_server.c mach_exc.h
+
+mach_exc.h mach_exc_server.c: mach_exc.defs
+	mig -arch x86_64 -header /dev/null -user /dev/null \
+		-sheader mach_exc.h -server mach_exc_server.c \
+		 $<
 
 cclean:
 	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../dx86cl64 
