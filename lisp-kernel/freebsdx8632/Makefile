@@ -41,9 +41,6 @@ COBJ  = pmcl-kernel.o gc-common.o  x86-gc.o bits.o  x86-exceptions.o \
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
 KERNELOBJ= $(COBJ) x86-asmutils32.o  imports.o
 
-PLATFORM_OBJ = e_exp.o e_expf.o
-PLATFORM_HEADERS = fdlibm.h
-
 SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s \
 	x86-constants32.s lisp_globals.s
 
@@ -70,19 +67,17 @@ OSLIBS = -lm -lthr $(CROSS)
 LINKSCRIPTFILE = # 
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)
 
-../../fx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(PLATFORM_OBJ) $(LINKSCRIPTFILE)
-	$(CC) -m32 $(CDEBUG)  -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(PLATFORM_OBJ) $(OSLIBS)
+../../fx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(LINKSCRIPTFILE)
+	$(CC) -m32 $(CDEBUG)  -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
 $(COBJ): $(CHEADERS)
 $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
-$(PLATFORM_OBJ): $(PLATFORM_HEADERS)
-
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) $(PLATFORM_OBJ) ../../fx86cl
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../fx86cl
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)

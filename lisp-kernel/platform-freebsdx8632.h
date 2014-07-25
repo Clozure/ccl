@@ -41,14 +41,14 @@ typedef struct __ucontext ExceptionInformation;
 #define REG_ESP 18
 
 
-#include "freebsdx8632/fpu.h"
+#include <machine/fpu.h>
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
 #define eflags_register(xp) xpGPR(xp,Iflags)
 #define xpPC(x) xpGPR(x,Iip)
-#define xpMMXreg(x,n) *((natural *)(&(((struct ccl_savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
-#define xpXMMregs(x)(&(((struct ccl_savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
+#define xpMMXreg(x,n) *((natural *)(&(((struct savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_fp[n])))
+#define xpXMMregs(x)(&(((struct savexmm *)(&(x)->uc_mcontext.mc_fpstate))->sv_xmm[0]))
 #define xpMXCSR(x) ((struct savefpu *)((x)->uc_mcontext.mc_fpstate)->sv_env.en_mxcsr)
 extern void freebsd_sigreturn(ExceptionInformation *);
 #define SIGNUM_FOR_INTN_TRAP SIGBUS

@@ -756,10 +756,7 @@
   (declare (double-float n result))
   (with-stack-double-floats ((temp))
     #+arm-target (%set-fpscr-status 0)
-    #-freebsdx8632-target
     (%setf-double-float TEMP (#_exp n))
-    #+freebsdx8632-target
-    (%setf-double-float TEMP (external-call "__ieee754_exp" :double-float n :double-float))
     (%df-check-exception-1 'exp n (%ffi-exception-status))
     #+linux-target
     (and (infinity-p TEMP)
@@ -775,10 +772,7 @@
   (declare (single-float n result))
   (target::with-stack-short-floats ((temp))
     #+arm-target (%set-fpscr-status 0)
-    #-freebsdx8632-target
     (%setf-short-float TEMP (#_expf n))
-    #+freebsdx8632-target
-    (%setf-short-float TEMP (external-call "__ieee754_expf" :single-float n :single-float))
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
     #+linux-target
     (and (infinity-p TEMP)

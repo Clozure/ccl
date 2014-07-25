@@ -1135,7 +1135,7 @@ freebsd_decode_vector_fp_exception(siginfo_t *info, ExceptionInformation *xp)
 #ifdef X8664
     struct savefpu *fpu = (struct savefpu *) &(xp->uc_mcontext.mc_fpstate);
 #else
-    struct ccl_savexmm *fpu = (struct ccl_savexmm *) &(xp->uc_mcontext.mc_fpstate);
+    struct savexmm *fpu = (struct savexmm *) &(xp->uc_mcontext.mc_fpstate);
 #endif
     uint32_t mxcsr = fpu->sv_env.en_mxcsr;
 
