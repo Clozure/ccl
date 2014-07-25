@@ -24,6 +24,8 @@
 #define LOWMEM_BIAS (0)
 #endif
 
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "macros.h"
 
@@ -88,8 +90,6 @@ void wperror(char *);
 #endif
 
 void ensure_static_conses(ExceptionInformation *, TCR *,natural);
-
-#include <stdio.h>
 
 extern FILE *dbgout;
 
