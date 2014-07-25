@@ -249,11 +249,11 @@ typedef struct tcr {
   struct tcr* prev;
   struct {
     float f;
-    u_int32_t tag;
+    uint32_t tag;
   } single_float_convert;
   union {
     double d;
-    struct {u_int32_t h, l;} words;
+    struct {uint32_t h, l;} words;
   } lisp_fpscr;			/* lisp thread's fpscr (in low word) */
   special_binding* db_link;	/* special binding chain head */
   LispObj catch_top;		/* top catch frame */
