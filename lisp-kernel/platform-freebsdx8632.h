@@ -40,8 +40,8 @@ typedef struct __ucontext ExceptionInformation;
 #define REG_EFL 17
 #define REG_ESP 18
 
-
-#include <machine/fpu.h>
+#include <sys/types.h>
+#include <machine/npx.h>
 #define xpGPRvector(x) ((natural *)(&((x)->uc_mcontext)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
