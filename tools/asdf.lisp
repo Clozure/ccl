@@ -1,5 +1,5 @@
 ;;; -*- mode: Common-Lisp; Base: 10 ; Syntax: ANSI-Common-Lisp ; buffer-read-only: t; -*-
-;;; This is ASDF 3.1.2: Another System Definition Facility.
+;;; This is ASDF 3.1.3: Another System Definition Facility.
 ;;;
 ;;; Feedback, bug reports, and patches are all welcome:
 ;;; please mail to <asdf-devel@common-lisp.net>.
@@ -402,7 +402,7 @@ or when loading the package is optional."
                        (imported)
                        (t (push name intern)))))))
         (labels ((sort-names (names)
-                   (sort names #'string<))
+                   (sort (copy-list names) #'string<))
                  (table-keys (table)
                    (loop :for k :being :the :hash-keys :of table :collect k))
                  (when-relevant (key value)
@@ -845,8 +845,8 @@ UNINTERN -- Remove symbols here from PACKAGE."
 
 (uiop/package:define-package :uiop/common-lisp
   (:nicknames :uoip/cl :asdf/common-lisp :asdf/cl)
-  (:use #-genera :common-lisp #+genera :future-common-lisp :uiop/package)
-  (:reexport :common-lisp)
+  (:use :uiop/package)
+  (:use-reexport #-genera :common-lisp #+genera :future-common-lisp)
   (:recycle :uiop/common-lisp :uoip/cl :asdf/common-lisp :asdf/cl :asdf)
   #+allegro (:intern #:*acl-warn-save*)
   #+cormanlisp (:shadow #:user-homedir-pathname)
@@ -855,7 +855,7 @@ UNINTERN -- Remove symbols here from PACKAGE."
    #:logical-pathname #:translate-logical-pathname
    #:make-broadcast-stream #:file-namestring)
   #+genera (:shadowing-import-from :scl #:boolean)
-  #+genera (:export #:boolean #:ensure-directories-exist)
+  #+genera (:export #:boolean #:ensure-directories-exist #:read-sequence #:write-sequence)
   #+mcl (:shadow #:user-homedir-pathname))
 (in-package :uiop/common-lisp)
 
@@ -935,9 +935,20 @@ UNINTERN -- Remove symbols here from PACKAGE."
 
 #+genera
 (eval-when (:load-toplevel :compile-toplevel :execute)
+  (unless (fboundp 'lambda)
+    (defmacro lambda (&whole form &rest bvl-decls-and-body)
+      (declare (ignore bvl-decls-and-body)(zwei::indentation 1 1))
+      `#',(cons 'lisp::lambda (cdr form))))
   (unless (fboundp 'ensure-directories-exist)
     (defun ensure-directories-exist (path)
-      (fs:create-directories-recursively (pathname path)))))
+      (fs:create-directories-recursively (pathname path))))
+  (unless (fboundp 'read-sequence)
+    (defun read-sequence (sequence stream &key (start 0) end)
+      (scl:send stream :string-in nil sequence start end)))
+  (unless (fboundp 'write-sequence)
+    (defun write-sequence (sequence stream &key (start 0) end)
+      (scl:send stream :string-out sequence start end)
+      sequence)))
 
 #.(or #+mcl ;; the #$ doesn't work on other lisps, even protected by #+mcl, so we use this trick
       (read-from-string
@@ -1213,7 +1224,7 @@ Returns two values: \(A B C\) and \(1 2 3\)."
 
 ;;; Characters
 (with-upgradability () ;; base-char != character on ECL, LW, SBCL, Genera. LW also has SIMPLE-CHAR.
-  (defconstant +non-base-chars-exist-p+ (not (subtypep 'character 'base-char)))
+  (defconstant +non-base-chars-exist-p+ #.(not (subtypep 'character 'base-char)))
   #-scl ;; In SCL, all characters seem to be 16-bit base-char, but this flag gets set somehow???
   (when +non-base-chars-exist-p+ (pushnew :non-base-chars-exist-p *features*)))
 
@@ -1390,7 +1401,7 @@ and EVAL that in a (FUNCTION ...) context."
     (etypecase fun
       (function fun)
       ((or boolean keyword character number pathname) (constantly fun))
-      (hash-table (lambda (x) (gethash x fun)))
+      (hash-table #'(lambda (x) (gethash x fun)))
       (symbol (fdefinition fun))
       (cons (if (eq 'lambda (car fun))
                 (eval fun)
@@ -1750,10 +1761,13 @@ then returning the non-empty string value of the variable"
   (defun operating-system ()
     "The operating system of the current host"
     (first-feature
-     '(:cygwin (:win :windows :mswindows :win32 :mingw32) ;; try cygwin first!
+     '(:cygwin
+       (:win :windows :mswindows :win32 :mingw32) ;; try cygwin first!
        (:linux :linux :linux-target) ;; for GCL at least, must appear before :bsd
        (:macosx :macosx :darwin :darwin-target :apple) ; also before :bsd
-       (:solaris :solaris :sunos) (:bsd :bsd :freebsd :netbsd :openbsd) :unix
+       (:solaris :solaris :sunos)
+       (:bsd :bsd :freebsd :netbsd :openbsd :dragonfly)
+       :unix
        :genera)))
 
   (defun architecture ()
@@ -2552,7 +2566,7 @@ when used with MERGE-PATHNAMES* with defaults BASE-PATHNAME, returns MAYBE-SUBPA
     "if MAYBE-SUBPATH is a pathname that is under BASE-PATHNAME, return a pathname object that
 when used with MERGE-PATHNAMES* with defaults BASE-PATHNAME, returns MAYBE-SUBPATH."
     (let ((sub (when maybe-subpath (pathname maybe-subpath)))
-	  (base (when base-pathname (ensure-absolute-pathname (pathname base-pathname)))))
+          (base (when base-pathname (ensure-absolute-pathname (pathname base-pathname)))))
       (or (and base (subpathp sub base)) sub)))
 
   (defun call-with-enough-pathname (maybe-subpath defaults-pathname thunk)
@@ -3297,13 +3311,14 @@ in an atomic way if the implementation allows."
                                     directory-pathname (unix:get-unix-error-msg errno))))
     #+cormanlisp (win32:delete-directory directory-pathname)
     #+ecl (si:rmdir directory-pathname)
+    #+genera (fs:delete-directory directory-pathname)
     #+lispworks (lw:delete-directory directory-pathname)
     #+mkcl (mkcl:rmdir directory-pathname)
     #+sbcl #.(if-let (dd (find-symbol* :delete-directory :sb-ext nil))
                `(,dd directory-pathname) ;; requires SBCL 1.0.44 or later
                `(progn (require :sb-posix) (symbol-call :sb-posix :rmdir directory-pathname)))
     #+xcl (symbol-call :uiop :run-program `("rmdir" ,(native-namestring directory-pathname)))
-    #-(or abcl allegro clisp clozure cmu cormanlisp digitool ecl gcl lispworks mkcl sbcl scl xcl)
+    #-(or abcl allegro clisp clozure cmu cormanlisp digitool ecl gcl genera lispworks mkcl sbcl scl xcl)
     (error "~S not implemented on ~S" 'delete-empty-directory (implementation-type))) ; genera
 
   (defun delete-directory-tree (directory-pathname &key (validate nil validatep) (if-does-not-exist :error))
@@ -3337,7 +3352,7 @@ If you're suicidal or extremely confident, just use :VALIDATE T."
           (error "~S was asked to delete ~S but the directory does not exist"
               'delete-filesystem-tree directory-pathname))
          (:ignore nil)))
-      #-(or allegro cmu clozure sbcl scl)
+      #-(or allegro cmu clozure genera sbcl scl)
       ((os-unix-p) ;; On Unix, don't recursively walk the directory and delete everything in Lisp,
        ;; except on implementations where we can prevent DIRECTORY from following symlinks;
        ;; instead spawn a standard external program to do the dirty work.
@@ -3347,7 +3362,7 @@ If you're suicidal or extremely confident, just use :VALIDATE T."
        #+allegro (symbol-call :excl.osi :delete-directory-and-files
                               directory-pathname :if-does-not-exist if-does-not-exist)
        #+clozure (ccl:delete-directory directory-pathname)
-       #+genera (error "~S not implemented on ~S" 'delete-directory-tree (implementation-type))
+       #+genera (fs:delete-directory directory-pathname :confirm nil)
        #+sbcl #.(if-let (dd (find-symbol* :delete-directory :sb-ext nil))
                   `(,dd directory-pathname :recursive t) ;; requires SBCL 1.0.44 or later
                   '(error "~S requires SBCL 1.0.44 or later" 'delete-directory-tree))
@@ -3995,7 +4010,9 @@ Upon success, the KEEP form is evaluated and the file is is deleted unless it ev
            (beforef (gensym "BEFORE"))
            (afterf (gensym "AFTER")))
       `(flet (,@(when before
-                  `((,beforef (,@(when streamp `(,stream)) ,@(when pathnamep `(,pathname))) ,@before)))
+                  `((,beforef (,@(when streamp `(,stream)) ,@(when pathnamep `(,pathname)))
+                       ,@(when after `((declare (ignorable ,pathname))))
+                       ,@before)))
               ,@(when after
                   (assert pathnamep)
                   `((,afterf (,pathname) ,@after))))
@@ -4120,7 +4137,7 @@ This is designed to abstract away the implementation specific quit forms."
     #+(or cmu scl) (unix:unix-exit code)
     #+ecl (si:quit code)
     #+gcl (system:quit code)
-    #+genera (error "You probably don't want to Halt the Machine. (code: ~S)" code)
+    #+genera (error "~S: You probably don't want to Halt Genera. (code: ~S)" 'quit code)
     #+lispworks (lispworks:quit :status code :confirm nil :return nil :ignore-errors-p t)
     #+mcl (progn code (ccl:quit)) ;; or should we use FFI to call libc's exit(3) ?
     #+mkcl (mk-ext:quit :exit-code code)
@@ -4144,8 +4161,8 @@ This is designed to abstract away the implementation specific quit forms."
     (declare (ignorable stream count condition))
     #+abcl
     (loop :for i :from 0
-	  :for frame :in (sys:backtrace (or count most-positive-fixnum)) :do
-	    (safe-format! stream "~&~D: ~A~%" i frame))
+          :for frame :in (sys:backtrace (or count most-positive-fixnum)) :do
+            (safe-format! stream "~&~D: ~A~%" i frame))
     #+allegro
     (let ((*terminal-io* stream)
           (*standard-output* stream)
@@ -4169,20 +4186,20 @@ This is designed to abstract away the implementation specific quit forms."
       (debug:backtrace (or count most-positive-fixnum) stream))
     #+(or ecl mkcl)
     (let* ((top (si:ihs-top))
-	   (repeats (if count (min top count) top))
-	   (backtrace (loop :for ihs :from 0 :below top
+           (repeats (if count (min top count) top))
+           (backtrace (loop :for ihs :from 0 :below top
                             :collect (list (si::ihs-fun ihs)
                                            (si::ihs-env ihs)))))
       (loop :for i :from 0 :below repeats
-	    :for frame :in (nreverse backtrace) :do
-	      (safe-format! stream "~&~D: ~S~%" i frame)))
+            :for frame :in (nreverse backtrace) :do
+              (safe-format! stream "~&~D: ~S~%" i frame)))
     #+gcl
     (let ((*debug-io* stream))
       (ignore-errors
        (with-safe-io-syntax ()
-	 (if condition
-	     (conditions::condition-backtrace condition)
-	     (system::simple-backtrace)))))
+         (if condition
+             (conditions::condition-backtrace condition)
+             (system::simple-backtrace)))))
     #+lispworks
     (let ((dbg::*debugger-stack*
             (dbg::grab-stack nil :how-many (or count most-positive-fixnum)))
@@ -4196,8 +4213,8 @@ This is designed to abstract away the implementation specific quit forms."
      stream)
     #+xcl
     (loop :for i :from 0 :below (or count most-positive-fixnum)
-	  :for frame :in (extensions:backtrace-as-list) :do
-	    (safe-format! stream "~&~D: ~S~%" i frame)))
+          :for frame :in (extensions:backtrace-as-list) :do
+            (safe-format! stream "~&~D: ~S~%" i frame)))
 
   (defun print-backtrace (&rest keys &key stream count condition)
     "Print a backtrace"
@@ -4297,14 +4314,14 @@ if we are not called from a directly executable image."
       ;; SBCL and Allegro already separate user arguments from implementation arguments.
       #-(or sbcl allegro)
       (unless (eq *image-dumped-p* :executable)
-	;; LispWorks command-line processing isn't transparent to the user
-	;; unless you create a standalone executable; in that case,
-	;; we rely on cl-launch or some other script to set the arguments for us.
-	#+lispworks (return *command-line-arguments*)
-	;; On other implementations, on non-standalone executables,
-	;; we trust cl-launch or whichever script starts the program
-	;; to use -- as a delimiter between implementation arguments and user arguments.
-	#-lispworks (setf arguments (member "--" arguments :test 'string-equal)))
+        ;; LispWorks command-line processing isn't transparent to the user
+        ;; unless you create a standalone executable; in that case,
+        ;; we rely on cl-launch or some other script to set the arguments for us.
+        #+lispworks (return *command-line-arguments*)
+        ;; On other implementations, on non-standalone executables,
+        ;; we trust cl-launch or whichever script starts the program
+        ;; to use -- as a delimiter between implementation arguments and user arguments.
+        #-lispworks (setf arguments (member "--" arguments :test 'string-equal)))
       (rest arguments)))
 
   (defun argv0 ()
@@ -4339,7 +4356,7 @@ immediately to the surrounding restore process if allowed to continue.
 
 Then, comes the restore process itself:
 First, call each function in the RESTORE-HOOK,
-in the order they were registered with REGISTER-RESTORE-HOOK.
+in the order they were registered with REGISTER-IMAGE-RESTORE-HOOK.
 Second, evaluate the prelude, which is often Lisp text that is read,
 as per EVAL-INPUT.
 Third, call the ENTRY-POINT function, if any is specified, with no argument.
@@ -4384,7 +4401,7 @@ of the function will be returned rather than interpreted as a boolean designatin
                                 (dump-hook *image-dump-hook*)
                                 #+clozure prepend-symbols #+clozure (purify t)
                                 #+sbcl compression
-                                #+(and sbcl windows) application-type)
+                                #+(and sbcl os-windows) application-type)
     "Dump an image of the current Lisp environment at pathname FILENAME, with various options.
 
 First, finalize the image, by evaluating the POSTLUDE as per EVAL-INPUT, then calling each of
@@ -4458,7 +4475,7 @@ or COMPRESSION on SBCL, and APPLICATION-TYPE on SBCL/Windows."
               (when compression (list :compression compression))
               ;;--- only save runtime-options for standalone executables
               (when executable (list :toplevel #'restore-image :save-runtime-options t))
-              #+(and sbcl windows) ;; passing :application-type :gui will disable the console window.
+              #+(and sbcl os-windows) ;; passing :application-type :gui will disable the console window.
               ;; the default is :console - only works with SBCL 1.1.15 or later.
               (when application-type (list :application-type application-type)))))
     #-(or allegro clisp clozure cmu gcl lispworks sbcl scl)
@@ -5295,7 +5312,7 @@ It returns a process-info plist with possible keys:
     #+(or allegro clozure cmu (and lispworks os-unix) sbcl scl)
     (%wait-process-result
      (apply '%run-program (%normalize-system-command command) :wait t keys))
-    #+(or abcl cormanlisp clisp ecl gcl (and lispworks os-windows) mkcl xcl)
+    #+(or abcl cormanlisp clisp ecl gcl genera (and lispworks os-windows) mkcl xcl)
     (let ((%command (%redirected-system-command command input output error-output directory)))
       #+(and lispworks os-windows)
       (system:call-system %command :current-directory directory :wait t)
@@ -5312,6 +5329,8 @@ It returns a process-info plist with possible keys:
                     (*error-output* *stderr*))
                 (ext:system %command))
         #+gcl (system:system %command)
+        #+genera (error "~S not supported on Genera, cannot run ~S"
+                        '%system %command)
         #+mcl (ccl::with-cstrs ((%%command %command)) (_system %%command))
         #+mkcl (mkcl:system %command)
         #+xcl (system:%run-shell-command %command))))
@@ -6342,7 +6361,7 @@ this function tries to locate the Windows FOLDER for one of
     "Map the VALIDATOR across the .conf files in DIRECTORY, the TAG will
 be applied to the results to yield a configuration form.  Current
 values of TAG include :source-registry and :output-translations."
-    (let ((files (sort (ignore-errors
+    (let ((files (sort (ignore-errors ;; SORT w/o COPY-LIST is OK: DIRECTORY returns a fresh list
                         (remove-if
                          'hidden-pathname-p
                          (directory* (make-pathname :name *wild* :type "conf" :defaults directory))))
@@ -6568,7 +6587,8 @@ directive.")
    :uiop/run-program :uiop/lisp-build
    :uiop/configuration :uiop/backward-driver))
 
-#+mkcl (provide :uiop)
+;; Provide both lowercase and uppercase, to satisfy more people.
+(provide "uiop") (provide "UIOP")
 ;;;; -------------------------------------------------------------------------
 ;;;; Handle upgrade as forward- and backward-compatibly as possible
 ;; See https://bugs.launchpad.net/asdf/+bug/485687
@@ -6638,7 +6658,7 @@ previously-loaded version of ASDF."
          ;; "3.4.5.67" would be a development version in the official branch, on top of 3.4.5.
          ;; "3.4.5.0.8" would be your eighth local modification of official release 3.4.5
          ;; "3.4.5.67.8" would be your eighth local modification of development version 3.4.5.67
-         (asdf-version "3.1.2")
+         (asdf-version "3.1.3")
          (existing-version (asdf-version)))
     (setf *asdf-version* asdf-version)
     (when (and existing-version (not (equal asdf-version existing-version)))
@@ -6650,26 +6670,26 @@ previously-loaded version of ASDF."
 
 (when-upgrading ()
   (let ((redefined-functions ;; gf signature and/or semantics changed incompatibly. Oops.
-	  ;; NB: it's too late to do anything about functions in UIOP!
-	  ;; If you introduce some critically incompatibility there, you must change name.
+          ;; NB: it's too late to do anything about functions in UIOP!
+          ;; If you introduce some critically incompatibility there, you must change name.
           '(#:component-relative-pathname #:component-parent-pathname ;; component
             #:source-file-type
             #:find-system #:system-source-file #:system-relative-pathname ;; system
-	    #:find-component ;; find-component
-	    #:explain #:perform #:perform-with-restarts #:input-files #:output-files ;; action
-	    #:component-depends-on #:operation-done-p #:component-depends-on
-	    #:traverse ;; backward-interface
+            #:find-component ;; find-component
+            #:explain #:perform #:perform-with-restarts #:input-files #:output-files ;; action
+            #:component-depends-on #:operation-done-p #:component-depends-on
+            #:traverse ;; backward-interface
             #:map-direct-dependencies #:reduce-direct-dependencies #:direct-dependencies ;; plan
-	    #:operate  ;; operate
-	    #:parse-component-form ;; defsystem
-	    #:apply-output-translations ;; output-translations
-	    #:process-output-translations-directive
-	    #:inherit-source-registry #:process-source-registry ;; source-registry
-	    #:process-source-registry-directive
-	    #:trivial-system-p)) ;; bundle
-	(redefined-classes
+            #:operate  ;; operate
+            #:parse-component-form ;; defsystem
+            #:apply-output-translations ;; output-translations
+            #:process-output-translations-directive
+            #:inherit-source-registry #:process-source-registry ;; source-registry
+            #:process-source-registry-directive
+            #:trivial-system-p)) ;; bundle
+        (redefined-classes
           ;; redefining the classes causes interim circularities
-	  ;; with the old ASDF during upgrade, and many implementations bork
+          ;; with the old ASDF during upgrade, and many implementations bork
           '((#:compile-concatenated-source-op (#:operation) ()))))
     (loop :for name :in redefined-functions
           :for sym = (find-symbol* name :asdf nil) :do
@@ -6677,12 +6697,12 @@ previously-loaded version of ASDF."
               ;; On CLISP we seem to be unable to fmakunbound and define a function in the same fasl. Sigh.
               #-clisp (fmakunbound sym)))
     (labels ((asym (x) (multiple-value-bind (s p) (if (consp x) (values (car x) (cadr x)) (values x :asdf))
-			 (find-symbol* s p nil)))
-	     (asyms (l) (mapcar #'asym l)))
+                         (find-symbol* s p nil)))
+             (asyms (l) (mapcar #'asym l)))
       (loop* :for (name superclasses slots) :in redefined-classes
-	     :for sym = (find-symbol* name :asdf nil)
-	     :when (and sym (find-class sym))
-	     :do (eval `(defclass ,sym ,(asyms superclasses) ,(asyms slots)))))))
+             :for sym = (find-symbol* name :asdf nil)
+             :when (and sym (find-class sym))
+             :do (eval `(defclass ,sym ,(asyms superclasses) ,(asyms slots)))))))
 
 
 ;;; Self-upgrade functions
@@ -7143,8 +7163,9 @@ in which the system specification (.asd file) is located."
   (:use :uiop/common-lisp :uiop :asdf/upgrade)
   (:export #:get-file-stamp #:compute-file-stamp #:register-file-stamp
            #:set-asdf-cache-entry #:unset-asdf-cache-entry #:consult-asdf-cache
-	   #:do-asdf-cache #:normalize-namestring
-           #:call-with-asdf-cache #:with-asdf-cache #:*asdf-cache*))
+           #:do-asdf-cache #:normalize-namestring
+           #:call-with-asdf-cache #:with-asdf-cache #:*asdf-cache*
+           #:clear-configuration-and-retry #:retry))
 (in-package :asdf/cache)
 
 ;;; This stamp cache is useful for:
@@ -7180,8 +7201,17 @@ in which the system specification (.asd file) is located."
     (let ((fun (if key #'(lambda () (consult-asdf-cache key thunk)) thunk)))
       (if (and *asdf-cache* (not override))
           (funcall fun)
-          (let ((*asdf-cache* (make-hash-table :test 'equal)))
-            (funcall fun)))))
+          (loop
+            (restart-case
+                (let ((*asdf-cache* (make-hash-table :test 'equal)))
+                  (return (funcall fun)))
+              (retry ()
+                :report (lambda (s)
+                          (format s (compatfmt "~@<Retry ASDF operation.~@:>"))))
+              (clear-configuration-and-retry ()
+                :report (lambda (s)
+                          (format s (compatfmt "~@<Retry ASDF operation after resetting the configuration.~@:>")))
+                (clear-configuration)))))))
 
   (defmacro with-asdf-cache ((&key key override) &body body)
     `(call-with-asdf-cache #'(lambda () ,@body) :override ,override :key ,key))
@@ -7308,8 +7338,8 @@ of which is a system object.")
   (defun clear-defined-systems ()
     ;; Invalidate all systems but ASDF itself, if registered.
     (loop :for name :being :the :hash-keys :of *defined-systems*
-	  :unless (equal name "asdf")
-	    :do (clear-defined-system name)))
+          :unless (equal name "asdf")
+            :do (clear-defined-system name)))
 
   (register-hook-function '*post-upgrade-cleanup-hook* 'clear-defined-systems nil)
 
@@ -7562,82 +7592,73 @@ but not loaded in memory"
 Returns five values: FOUNDP FOUND-SYSTEM PATHNAME PREVIOUS PREVIOUS-TIME
 FOUNDP is true when a system was found,
 either a new unregistered one or a previously registered one.
-FOUND-SYSTEM when not null is a SYSTEM object that may be REGISTER-SYSTEM'ed as is
-PATHNAME when not null is a path from where to load the system,
+FOUND-SYSTEM when not null is a SYSTEM object that may be REGISTER-SYSTEM'ed.
+PATHNAME when not null is a path from which to load the system,
 either associated with FOUND-SYSTEM, or with the PREVIOUS system.
 PREVIOUS when not null is a previously loaded SYSTEM object of same name.
 PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded."
-    (with-asdf-cache (:key `(locate-system ,name))
-      (let* ((name (coerce-name name))
-             (in-memory (system-registered-p name)) ; load from disk if absent or newer on disk
-             (previous (cdr in-memory))
-             (previous (and (typep previous 'system) previous))
-             (previous-time (car in-memory))
-             (found (search-for-system-definition name))
-             (found-system (and (typep found 'system) found))
-             (pathname (ensure-pathname
-                        (or (and (typep found '(or pathname string)) (pathname found))
-                            (and found-system (system-source-file found-system))
-                            (and previous (system-source-file previous)))
-                        :want-absolute t :resolve-symlinks *resolve-symlinks*))
-             (foundp (and (or found-system pathname previous) t)))
-        (check-type found (or null pathname system))
-        (unless (check-not-old-asdf-system name pathname)
-          (cond
-            (previous (setf found nil pathname nil))
-            (t
-             (setf found (sysdef-preloaded-system-search "asdf"))
-             (assert (typep found 'system))
-             (setf found-system found pathname nil))))
-        (values foundp found-system pathname previous previous-time))))
+    (let* ((name (coerce-name name))
+           (in-memory (system-registered-p name)) ; load from disk if absent or newer on disk
+           (previous (cdr in-memory))
+           (previous (and (typep previous 'system) previous))
+           (previous-time (car in-memory))
+           (found (search-for-system-definition name))
+           (found-system (and (typep found 'system) found))
+           (pathname (ensure-pathname
+                      (or (and (typep found '(or pathname string)) (pathname found))
+                          (and found-system (system-source-file found-system))
+                          (and previous (system-source-file previous)))
+                      :want-absolute t :resolve-symlinks *resolve-symlinks*))
+           (foundp (and (or found-system pathname previous) t)))
+      (check-type found (or null pathname system))
+      (unless (check-not-old-asdf-system name pathname)
+        (cond
+          (previous (setf found nil pathname nil))
+          (t
+           (setf found (sysdef-preloaded-system-search "asdf"))
+           (assert (typep found 'system))
+           (setf found-system found pathname nil))))
+      (values foundp found-system pathname previous previous-time)))
 
   (defmethod find-system ((name string) &optional (error-p t))
     (with-asdf-cache (:key `(find-system ,name))
       (let ((primary-name (primary-system-name name)))
         (unless (equal name primary-name)
           (find-system primary-name nil)))
-      (loop
-        (restart-case
-            (multiple-value-bind (foundp found-system pathname previous previous-time)
-                (locate-system name)
-              (when (and found-system (eq found-system previous)
-                         (or (first (gethash `(find-system ,name) *asdf-cache*))
-                             (and *immutable-systems* (gethash name *immutable-systems*))))
-                (return found-system))
-              (assert (eq foundp (and (or found-system pathname previous) t)))
-              (let ((previous-pathname (and previous (system-source-file previous)))
-                    (system (or previous found-system)))
-                (when (and found-system (not previous))
-                  (register-system found-system))
-                (when (and system pathname)
-                  (setf (system-source-file system) pathname))
-                (when (and pathname
-                           (let ((stamp (get-file-stamp pathname)))
-                             (and stamp
-                                  (not (and previous
-                                            (or (pathname-equal pathname previous-pathname)
-                                                (and pathname previous-pathname
-                                                     (pathname-equal
-                                                      (physicalize-pathname pathname)
-                                                      (physicalize-pathname previous-pathname))))
-                                            (stamp<= stamp previous-time))))))
-                  ;; only load when it's a pathname that is different or has newer content, and not an old asdf
-                  (load-asd pathname :name name)))
-              (let ((in-memory (system-registered-p name))) ; try again after loading from disk if needed
-                (return
-                  (cond
-                    (in-memory
-                     (when pathname
-                       (setf (car in-memory) (get-file-stamp pathname)))
-                     (cdr in-memory))
-                    (error-p
-                     (error 'missing-component :requires name))))))
-          (reinitialize-source-registry-and-retry ()
-            :report (lambda (s)
-                      (format s (compatfmt "~@<Retry finding system ~A after reinitializing the source-registry.~@:>") name))
-	    (unset-asdf-cache-entry `(locate-system ,name))
-            (initialize-source-registry)))))))
-
+      (or (and *immutable-systems* (gethash name *immutable-systems*)
+               (cdr (system-registered-p name)))
+          (multiple-value-bind (foundp found-system pathname previous previous-time)
+              (locate-system name)
+            (assert (eq foundp (and (or found-system pathname previous) t)))
+            (let ((previous-pathname (and previous (system-source-file previous)))
+                  (system (or previous found-system)))
+              (when (and found-system (not previous))
+                (register-system found-system))
+              (when (and system pathname)
+                (setf (system-source-file system) pathname))
+              (when (and pathname
+                         (let ((stamp (get-file-stamp pathname)))
+                           (and stamp
+                                (not (and previous
+                                          (or (pathname-equal pathname previous-pathname)
+                                              (and pathname previous-pathname
+                                                   (pathname-equal
+                                                    (physicalize-pathname pathname)
+                                                    (physicalize-pathname previous-pathname))))
+                                          (stamp<= stamp previous-time))))))
+                ;; only load when it's a pathname that is different or has newer content, and not an old asdf
+                (load-asd pathname :name name)))
+            (let ((in-memory (system-registered-p name))) ; try again after loading from disk if needed
+              (cond
+                (in-memory
+                 (when pathname
+                   (setf (car in-memory) (get-file-stamp pathname)))
+                 (cdr in-memory))
+                (error-p
+                 (error 'missing-component :requires name))
+                (t ;; not found: don't keep negative cache, see lp#1335323
+                 (unset-asdf-cache-entry `(locate-system ,name))
+                 (return-from find-system nil)))))))))
 ;;;; -------------------------------------------------------------------------
 ;;;; Finding components
 
@@ -7747,10 +7768,10 @@ PREVIOUS-TIME when not null is the time at which the PREVIOUS system was loaded.
                 (and (typep c 'missing-dependency)
                      (eq (missing-required-by c) component)
                      (equal (missing-requires c) name))))
-	  (unless (component-parent component)
-	    (let ((name (coerce-name name)))
-	      (unset-asdf-cache-entry `(find-system ,name))
-	      (unset-asdf-cache-entry `(locate-system ,name))))))))
+          (unless (component-parent component)
+            (let ((name (coerce-name name)))
+              (unset-asdf-cache-entry `(find-system ,name))
+              (unset-asdf-cache-entry `(locate-system ,name))))))))
 
 
   (defun resolve-dependency-spec (component dep-spec)
@@ -9048,7 +9069,8 @@ The default operation may change in the future if we implement a
 component-directed strategy for how to load or compile systems.")
 
   (defmethod component-depends-on ((o prepare-op) (s system))
-    `((,*load-system-operation* ,@(component-sideway-dependencies s))))
+    (loop :for (o . cs) :in (call-next-method)
+          :collect (cons (if (eq o 'load-op) *load-system-operation* o) cs)))
 
   (defclass build-op (non-propagating-operation) ()
     (:documentation "Since ASDF3, BUILD-OP is the recommended 'master' operation,
@@ -9059,7 +9081,8 @@ as a symbol or as a string later read as a symbol (after loading the defsystem-d
 if NIL is specified (the default), BUILD-OP falls back to the *LOAD-SYSTEM-OPERATION*
 that will load the system in the current image, and its typically LOAD-OP."))
   (defmethod component-depends-on ((o build-op) (c component))
-    `((,(or (component-build-operation c) *load-system-operation*) ,c)))
+    `((,(or (component-build-operation c) *load-system-operation*) ,c)
+      ,@(call-next-method)))
 
   (defun make (system &rest keys)
     "The recommended way to interact with ASDF3.1 is via (ASDF:MAKE :FOO).
@@ -9163,8 +9186,8 @@ the implementation's REQUIRE rather than by internal ASDF mechanisms."))
   (defun restart-upgraded-asdf ()
     ;; If we're in the middle of something, restart it.
     (when *asdf-cache*
-      (let ((l (loop* :for (x y) :being :the hash-keys :of *asdf-cache*
-                      :when (eq x 'find-system) :collect y)))
+      (let ((l (loop :for k :being :the hash-keys :of *asdf-cache*
+                     :when (eq (first k) 'find-system) :collect (second k))))
         (clrhash *asdf-cache*)
         (dolist (s l) (find-system s nil)))))
   (register-hook-function '*post-upgrade-restart-hook* 'restart-upgraded-asdf))
@@ -10683,7 +10706,7 @@ To continue, push :asdf-use-unsafe-mac-bundle-op onto *FEATURES*.~%~T~
 Please report to ASDF-DEVEL if this works for you.")))
 
 
-;;; Backward compatibility with pre-3.1.1 names
+;;; Backward compatibility with pre-3.1.2 names
 (defclass fasl-op (selfward-operation)
   ((selfward-operation :initform 'compile-bundle-op :allocation :class)))
 (defclass load-fasl-op (selfward-operation)
@@ -10976,7 +10999,7 @@ Please use UIOP:RUN-PROGRAM instead."
 (in-package :asdf/package-inferred-system)
 
 (with-upgradability ()
-  (defparameter *defpackage-forms* '(cl:defpackage uiop:define-package))
+  (defparameter *defpackage-forms* '(defpackage define-package))
 
   (defun initial-package-inferred-systems-table ()
     (let ((h (make-hash-table :test 'equal)))
@@ -11222,11 +11245,13 @@ otherwise return a default system name computed from PACKAGE-NAME."
    #:package-inferred-system-missing-package-error
    #:operation-definition-warning #:operation-definition-error
 
-   #:try-recompiling
+   #:try-recompiling ; restarts
    #:retry
-   #:accept                     ; restarts
+   #:accept
    #:coerce-entry-to-directory
    #:remove-entry-from-registry
+   #:clear-configuration-and-retry
+
 
    #:*encoding-detection-hook*
    #:*encoding-external-format-hook*
@@ -11262,14 +11287,15 @@ otherwise return a default system name computed from PACKAGE-NAME."
    #:user-source-registry
    #:system-source-registry
    #:user-source-registry-directory
-   #:system-source-registry-directory))
+   #:system-source-registry-directory
+   ))
 
 ;;;; ---------------------------------------------------------------------------
 ;;;; ASDF-USER, where the action happens.
 
 (uiop/package:define-package :asdf/user
   (:nicknames :asdf-user)
-  ;; NB: releases before 3.1.1 this :use'd only uiop/package instead of uiop below.
+  ;; NB: releases before 3.1.2 this :use'd only uiop/package instead of uiop below.
   ;; They also :use'd uiop/common-lisp, that reexports common-lisp and is not included in uiop.
   ;; ASDF3 releases from 2.27 to 2.31 called uiop asdf-driver and asdf/foo uiop/foo.
   ;; ASDF1 and ASDF2 releases (2.26 and earlier) create a temporary package
