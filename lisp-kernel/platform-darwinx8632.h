@@ -28,8 +28,6 @@
 typedef mcontext_t MCONTEXT_T;
 typedef ucontext_t ExceptionInformation;
 
-#include "standard-inttypes.h"
-
 #define MAXIMUM_MAPPABLE_MEMORY ((1U<<31)-2*heap_segment_size)
 #define IMAGE_BASE_ADDRESS 0x04000000
 
@@ -80,8 +78,6 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 #include <mach/mach_error.h>
 #include <mach/machine/thread_state.h>
 #include <mach/machine/thread_status.h>
-
-pthread_mutex_t *mach_exception_lock;
 
 #include "os-darwin.h"
 

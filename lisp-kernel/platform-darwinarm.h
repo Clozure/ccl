@@ -25,9 +25,6 @@
 
 typedef ucontext_t ExceptionInformation;
 
-#include "standard-inttypes.h"
-
-
 #define MAXIMUM_MAPPABLE_MEMORY (256<<20) /* uh, no */
 #define IMAGE_BASE_ADDRESS 0x04001000
 

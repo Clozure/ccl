@@ -433,10 +433,8 @@ lisp-kernel/platform-solarisx86.h -text
 lisp-kernel/platform-win32.h -text
 lisp-kernel/platform-win64.h -text
 lisp-kernel/probes.d -text
-lisp-kernel/solaris-inttypes.h -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/solarisx86/Makefile -text
-lisp-kernel/standard-inttypes.h -text
 lisp-kernel/static-linuxppc/ccl-platform.h -text
 lisp-kernel/unix-calls.c -text
 lisp-kernel/win32/.gdbinit -text
@@ -448,7 +446,6 @@ lisp-kernel/win64/Makefile -text
 lisp-kernel/win64/pei-x86-64.x -text
 lisp-kernel/win64/yasm-redefinition.patch -text
 lisp-kernel/windows-calls.c -text
-lisp-kernel/windows-inttypes.h -text
 lisp-kernel/x86-asmutils32.s -text
 lisp-kernel/x86-constants32.h -text
 lisp-kernel/x86-constants32.s -text

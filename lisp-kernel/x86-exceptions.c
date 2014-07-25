@@ -130,7 +130,7 @@ update_bytes_allocated(TCR* tcr, void *cur_allocptr)
 {
   char *last = tcr->last_allocptr;
   char *current = cur_allocptr;
-  u64_t *bytes_allocated = (u64_t *)&TCR_AUX(tcr)->bytes_allocated;
+  uint64_t *bytes_allocated = (uint64_t *)&TCR_AUX(tcr)->bytes_allocated;
 
   if (last && (tcr->save_allocbase != ((void *)VOID_ALLOCPTR))) {
     *bytes_allocated += last - current;

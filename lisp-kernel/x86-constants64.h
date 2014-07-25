@@ -283,13 +283,13 @@ typedef struct tcr {
   struct tcr* next;
   struct tcr* prev;
   struct {
-    u32_t tag;
+    uint32_t tag;
     float f;
   } single_float_convert;
   struct tcr* linear;
   LispObj *save_fp;            /* RBP when in foreign code */
-  u32_t lisp_mxcsr;
-  u32_t foreign_mxcsr;
+  uint32_t lisp_mxcsr;
+  uint32_t foreign_mxcsr;
   special_binding* db_link;	/* special binding chain head */
   LispObj catch_top;		/* top catch frame */
   LispObj* save_vsp;  /* VSP when in foreign code */

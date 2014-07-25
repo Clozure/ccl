@@ -18,30 +18,25 @@
 #ifndef __lisptypes__
 #define __lisptypes__
 
+#include <stdint.h>
 
 #if WORD_SIZE == 64
-typedef u64_t LispObj;
-typedef u64_t natural;
-typedef s64_t signed_natural;
-typedef u64_t unsigned_of_pointer_size;
+typedef uint64_t LispObj;
+typedef uint64_t natural;
+typedef int64_t signed_natural;
 #else
-typedef u32_t LispObj;
-typedef u32_t natural;
-typedef s32_t signed_natural;
-typedef u32_t unsigned_of_pointer_size;
+typedef uint32_t LispObj;
+typedef uint32_t natural;
+typedef int32_t signed_natural;
 #endif
 
-
-typedef u32_t lisp_char_code;
+typedef int32_t lisp_char_code;
 
 typedef int OSStatus, OSErr;
 #define noErr ((OSErr) 0)
 typedef int Boolean;
 typedef void *LogicalAddress;
 typedef char *Ptr, *BytePtr, *StringPtr;
-typedef unsigned int UInt32;
-
-
 
 #define true 1
 #define false 0

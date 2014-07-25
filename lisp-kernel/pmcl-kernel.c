@@ -1157,7 +1157,7 @@ usage_exit(char *herald, int exit_status, char* other_args)
     fputs(other_args, dbgout);
   }
   fprintf(dbgout, "\t-R, --heap-reserve <n>: reserve <n> (default: %lld)\n",
-	  (u64_t) reserved_area_size);
+	  (long long)reserved_area_size);
   fprintf(dbgout, "\t\t bytes for heap expansion\n");
   fprintf(dbgout, "\t-S, --stack-size <n>: set  size of initial thread's control stack to <n>\n");
   fprintf(dbgout, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");

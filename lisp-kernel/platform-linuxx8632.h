@@ -22,9 +22,6 @@
 
 typedef struct ucontext ExceptionInformation;
 
-#include "standard-inttypes.h"
-
-
 #define MAXIMUM_MAPPABLE_MEMORY (9U<<28)
 #define IMAGE_BASE_ADDRESS 0x10000000
 

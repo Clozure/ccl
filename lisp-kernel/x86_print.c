@@ -322,7 +322,7 @@ sprint_symbol(LispObj o)
 LispObj
 nth_immediate(LispObj o, unsigned n)
 {
-  u16_t imm_word_count = *(u16_t *)(o + misc_data_offset);
+  uint16_t imm_word_count = *(uint16_t *)(o + misc_data_offset);
   natural *constants = (natural *)((char *)o + misc_data_offset + (imm_word_count << 2));
   LispObj result = (LispObj)(constants[n-1]);
 

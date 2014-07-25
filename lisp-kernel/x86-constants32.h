@@ -346,8 +346,8 @@ typedef struct tcr {
   LispObj save2;
   LispObj save3;
   LispObj *save_fp;		/* EBP when in foreign code */
-  u32_t lisp_mxcsr;
-  u32_t foreign_mxcsr;
+  uint32_t lisp_mxcsr;
+  uint32_t foreign_mxcsr;
   special_binding *db_link;     /* special binding chain head */
   LispObj catch_top;            /* top catch frame */
   LispObj *save_vsp;		  /* VSP when in foreign code */

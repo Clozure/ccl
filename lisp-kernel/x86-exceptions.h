@@ -17,7 +17,7 @@
 #ifndef X86_EXCEPTIONS_H
 #define X86_EXCEPTIONS_H 1
 
-typedef u8_t opcode, *pc;
+typedef uint8_t opcode, *pc;
 
 void switch_to_foreign_stack(void*, ...);
 
