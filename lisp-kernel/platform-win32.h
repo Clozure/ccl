@@ -46,7 +46,7 @@ typedef CONTEXT ExceptionInformation;
 #define xpPC(x) xpGPR(x,Iip)
 #define eflags_register(xp) xp->EFlags
 #define xpFPRvector(x) ((natural *)(&(x->ExtendedRegisters[10*16])))
-#define xpMMXreg(x,n)  (*((u64_t *)(&(x->FloatSave.RegisterArea[10*(n)]))))
+#define xpMMXreg(x,n)  (*((uint64_t *)(&(x->FloatSave.RegisterArea[10*(n)]))))
 #define xpMXCSRptr(x) ((DWORD *)(&(x->ExtendedRegisters[24])))
 #define xpMXCSR(x) (*xpMXCSRptr(x))
 
