@@ -606,9 +606,21 @@ function to the indicated name is true.")
   (let* ((t1 (bounded-integer-type-p type1))
          (t2 (if t1 (bounded-integer-type-p type2))))
     (when t2
-      (specifier-type `(integer
-                        ,(* (numeric-ctype-low t1) (numeric-ctype-low t2))
-                        ,(* (numeric-ctype-high t1) (numeric-ctype-high t2)))))))
+      (and (csubtypep t1 (specifier-type '(signed-byte 64)))
+           (csubtypep t2 (specifier-type '(signed-byte 64)))
+           (let* ((t1low (numeric-ctype-low t1))
+                  (t1high (numeric-ctype-high t1))
+                  (t2low (numeric-ctype-low t2))
+                  (t2high (numeric-ctype-high t2))
+                  (p0 (* t1low t2low))
+                  (p1 (* t1low t2high))
+                  (p2 (* t1high t2low))
+                  (p3 (* t1high t2high))
+                  (min (min p0 p1 p2 p3))
+                  (max (max p0 p1 p2 p3)))
+             (specifier-type `(integer
+                               ,min
+                               ,max)))))))
 
 (defun bounded-integer-type-for-ash (type1 type2)
   (let* ((t1 (bounded-integer-type-p type1))
