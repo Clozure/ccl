@@ -58,15 +58,24 @@
               (:eval (eval-string param))
               (:load (load-file param)))))))))
 
+(defloadvar *did-show-marketing-blurb* nil)
+
+(defparameter *marketing-blurb* "
+CCL is developed and maintained by Clozure Associates. For more information
+about CCL visit http://ccl.clozure.com.  To enquire about Clozure's Common Lisp
+consulting services e-mail info@clozure.com or visit http://www.clozure.com.
+
+")
 
 (defun listener-function ()
-  (progn
-    (unless (or *inhibit-greeting* *quiet-flag*)
-      (format t "~&Welcome to ~A ~A!~%"
-	      (lisp-implementation-type)
-	      (lisp-implementation-version)))
-    (toplevel-loop)))
-
+  (unless (or *inhibit-greeting* *quiet-flag*)
+    (format t "~&Welcome to ~A ~A!~%"
+	    (lisp-implementation-type)
+	    (lisp-implementation-version))
+    (unless *did-show-marketing-blurb*
+      (write-string *marketing-blurb* t)
+      (setq *did-show-marketing-blurb* t)))
+  (toplevel-loop))
 
 (defun make-mcl-listener-process (procname
                                   input-stream
