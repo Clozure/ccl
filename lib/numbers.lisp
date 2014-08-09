@@ -427,33 +427,7 @@
 	      (setq n0 (lcm-2 n0 (%lexpr-ref numbers count i))))))))))
 
 
-#|
-(defun rationalize (x)
-  (etypecase x
-    (rational x)
-    (real
-     (cond ((minusp x) (- (rationalize (- x))))
-	   ((zerop x) 0)
-	   (t
-	    (let ((eps (etypecase x
-			 (single-float single-float-epsilon)
-			 (double-float double-float-epsilon)))
-		  (y ())
-		  (a ()))
-	      (do ((xx x (setq y (/ (float 1.0 x) (- xx (float a x)))))
-		   (num (setq a (truncate x))
-			(+ (* (setq a (truncate y)) num) onum))
-		   (den 1 (+ (* a den) oden))
-		   (onum 1 num)
-		   (oden 0 den))
-		  ((and (not (zerop den))
-			(not (> (abs (/ (- x (/ (float num x)
-						(float den x)))
-					x))
-				eps)))
-		   (integer-/-integer num den)))))))))
-|#
-
+	   
 (defun rationalize (number)
   "Converts any REAL to a RATIONAL.  Floats are converted to a simple rational
   representation exploiting the assumption that floats are only accurate to
