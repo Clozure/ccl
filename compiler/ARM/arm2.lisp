@@ -4918,7 +4918,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
     (if (or (eq op (%nx1-operator inherited-arg)) 
             (eq op (%nx1-operator lexical-reference)))
       (let* ((var (car (acode-operands form))))
-        (not (rassoc var *arm2-nfp-vars*))))))
+        (not (null (rassoc var *arm2-nfp-vars*)))))))
 
 
 
@@ -7356,21 +7356,14 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (fix2 (acode-fixnum-form-p form2))
            (diff (and fix1 fix2 (if overflow (- fix1 fix2) (%i- fix1 fix2))))
            (other (unless diff
-                    (if (and
-                         fix1
-                         (typep (ash fix1 *arm2-target-fixnum-shift*)
-                                '(signed-byte 32))
-                         (arm::encode-arm-immediate
-                              (ash fix1 *arm2-target-fixnum-shift*)))
-                      form2
-                      (if (and fix2
+                    (if (and fix2
                                (typep (ash fix2 *arm2-target-fixnum-shift*)
                                       '(signed-byte 32))
                                (or (arm::encode-arm-immediate
                                     (ash fix2 *arm2-target-fixnum-shift*))
                                    (arm::encode-arm-immediate
                                     (- (ash fix2 *arm2-target-fixnum-shift*)))))
-                        form1))))
+                        form1)))
            (constant (and other (ash (or fix1 fix2) *arm2-target-fixnum-shift*)))
            r1
            r2)
