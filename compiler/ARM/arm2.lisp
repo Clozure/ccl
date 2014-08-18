@@ -3244,7 +3244,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   ;; src and dest are distinct FPRs with the same mode.
   (with-arm-local-vinsn-macros (seg)
     (case (fpr-mode-value-name (get-regspec-mode src))
-      (:single-float (! simgle-to-single dest src))
+      (:single-float (! single-to-single dest src))
       (:double-float (! double-to-double dest src))
       (:complex-single-float (! complex-single-float-to-complex-single-float
                                 dest src))
