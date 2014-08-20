@@ -2308,7 +2308,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
         (cond (is-128-bit
                (let* ((reg (available-fp-temp *available-backend-fp-temps* :complex-double-float)))
                  (when reg
-                   (! trap-unless-typecode= result-reg reg arm::subtag-complex-double-float))
+                   (! trap-unless-typecode= result-reg arm::subtag-complex-double-float))
                  (! get-complex-double-float reg result-reg)
                  reg))
                         
