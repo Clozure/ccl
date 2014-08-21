@@ -5594,7 +5594,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                          (operands (cdr f)))
                     (setf (arm::lap-instruction-opcode-high insn) (car opcode)
                           (arm::lap-instruction-opcode-low insn) (cdr opcode))
-                    (when predicate
+                    (when (and predicate (eq current code))
                       (funcall (svref operand-insert-functions
                                       (arm::encode-vinsn-field-type :cond))
                                insn
