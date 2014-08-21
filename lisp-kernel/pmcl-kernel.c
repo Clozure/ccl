@@ -2083,6 +2083,8 @@ main
 #if defined (__ARM_PCS_VFP)
  /* would be nice if there was a way to test for this (armhf) at runtime */
   lisp_global(FLOAT_ABI) = 1 << fixnumshift;
+#else
+  fprintf(dbgout,"lisp kernel support for the ARM soft-float ABI has been deprecated\n");
 #endif
 #endif
 #if STATIC
