@@ -131,9 +131,8 @@
 }
 
 - (NSData *)dataRepresentationOfType:(NSString *)aType {
-  [[textView string] 
-    dataUsingEncoding: NSASCIIStringEncoding
-    allowLossyConversion: YES];
+  return [[textView string] dataUsingEncoding:NSASCIIStringEncoding
+			 allowLossyConversion:YES];
 }
 
 - (BOOL)loadDataRepresentation:(NSData *)data ofType:(NSString *)aType {
@@ -205,12 +204,12 @@
 
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
 {
-  [NSArray arrayWithObject:@"clear display"];
+  return [NSArray arrayWithObject:@"clear display"];
 }
 
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
 {
-  [NSArray arrayWithObject:@"clear display"];
+  return [NSArray arrayWithObject:@"clear display"];
 }
 
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag

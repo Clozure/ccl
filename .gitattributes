@@ -1,10 +1,10 @@
 * text=auto !eol
 cocoa-ide/README -text
+cocoa-ide/altconsole/AltConsole-Info.plist -text
 cocoa-ide/altconsole/AltConsoleDocument.h -text
 cocoa-ide/altconsole/AltConsoleDocument.m -text
 cocoa-ide/altconsole/AltConsoleDocumentController.h -text
 cocoa-ide/altconsole/AltConsoleDocumentController.m -text
-cocoa-ide/altconsole/Info.plist -text
 cocoa-ide/altconsole/Makefile -text
 cocoa-ide/altconsole/main.m -text
 cocoa-ide/altconsole/resource/AltConsole.nib/classes.nib -text

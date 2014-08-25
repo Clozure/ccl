@@ -24,7 +24,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-@interface AltConsoleDocument : NSDocument
+@interface AltConsoleDocument : NSDocument <NSToolbarDelegate, NSTextViewDelegate>
 {
   NSFileHandle *in, *out, *err;
   NSTextView *textView;
