@@ -895,7 +895,7 @@
                   ((csubtypep type (specifier-type 'float))
                    (float object 1.0s0))                		
                   ((csubtypep type (specifier-type 'complex))
-                   (coerce-to-complex object  output-type-spec)))))
+                   (coerce-to-complex object  (type-specifier type))))))
            (unless res                  ;(and res (%typep res type))
              (error "~S can't be coerced to type ~S." object output-type-spec))
            res))
