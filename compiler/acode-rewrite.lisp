@@ -344,7 +344,6 @@
                    (setq f1 (acode-fixnum-form-p (car (acode-operands unwrapped))))
                    (typep (setq f1/f2 (/ f1 f2)) 'fixnum))
                 (progn
-                  (break "here")
                   (setf (acode-operator w) (%nx1-operator mul2)
                         (acode-operands w) (list (make-acode (%nx1-operator fixnum) f1/f2)
                                                  (cadr (acode-operands unwrapped)))
