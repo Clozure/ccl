@@ -2210,7 +2210,7 @@
         (let* ((op (acode-operator body)))
           (if (or (eq op (%nx1-operator lexical-function-call))
                   (eq op (%nx1-operator call)))
-            (destructuring-bind (fn-form (stack-args reg-args) &optional spread-p) (car (acode-operands body))
+            (destructuring-bind (fn-form (stack-args reg-args) &optional spread-p) (acode-operands body)
                (unless (and (eq spread-p t)
                            (eq (ppc2-lexical-reference-p (%car reg-args)) rest))
                 (return nil))
