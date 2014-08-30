@@ -1934,7 +1934,6 @@
     (multiple-value-bind (ok req opttail resttail keytail) (verify-lambda-list lambda-list)
       (declare (ignore req opttail))
       (when (and ok (or (eq (%car resttail) '&lexpr)
-                        (eq (%car resttail) '&rest)
                         (eq (%car keytail) '&key)))
         (return-from nx1-lambda-bind (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args))))
     (let* ((*nx-lexical-environment* body-environment)
@@ -1972,14 +1971,18 @@
                       arglist (%cdr arglist))))
             (if arglist
               (when (and (not keys) (not rest))
-                (nx-error "Extra args ~s for (LAMBDA ~s ...)" args lambda-list)))
+                (nx-error "Extra args ~s for (LAMBDA ~s ...)" args lambda-list))
+              (when rest
+                (push rest vars*) (push (make-nx-nil) vals*)
+                (nx1-punt-bindings (cons rest nil) (cons (make-nx-nil) nil))
+                (setq rest nil)))
             (destructuring-bind (&optional auxvars auxvals) auxen
               (let ((vars!% (nreconc vars* auxvars))
                     (vals!& (nreconc vals* auxvals)))
                 (make-acode (%nx1-operator lambda-bind)
                             (append (nreverse vals) arglist)
                             (nreverse vars)
-                            nil
+                            rest
                             nil
                             (list vars!% vals!&)
                             body
