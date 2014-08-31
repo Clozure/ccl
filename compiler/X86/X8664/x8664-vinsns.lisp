@@ -2405,7 +2405,7 @@
 (define-x8664-vinsn (nfp-load-complex-single-float :nfp :ref) (((val :complex-single-float))
                                                                ((offset :u16const)
                                                                 (nfp :imm)))
-  (movq (:@ (:apply + 8 offset) (:% nfp)) (:%xmm val)))
+  (movq (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
 
 
 (define-x8664-vinsn (nfp-store-complex-double-float :nfp :set) (()
