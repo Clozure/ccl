@@ -2602,6 +2602,12 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                                     vector src
                                                     index unscaled-idx
                                                     value (arm2-target-reg-for-aset vreg type-keyword)))))
+          (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
+                 (value (if (eql (hard-regspec-class result-reg)
+                                 hard-reg-class-gpr)
+                          (hard-regspec-value result-reg))))
+            (when (and value (logbitp value *available-backend-imm-temps*))
+              (setq *available-backend-imm-temps* (bitclr value *available-backend-imm-temps*)))
         (with-crf-target () crf
           (! set-z-if-vector-header crf src)
           (arm2-branch seg (arm2-make-compound-cd simple-case 0) crf arm::arm-cond-eq nil))
@@ -2621,7 +2627,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
           (@ common-case)
 
 
-        (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization)))))
+        (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
 
 
 (defun arm2-tail-call-alias (immref sym &optional arglist)
