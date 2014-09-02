@@ -2679,7 +2679,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                  nil)))
                   (return nil))))
             (if (eq op (%nx1-operator local-block))
-              (setq body (car (acode-operands body)))
+              (setq body (cadr (acode-operands body)))
               (if (and (eq op (%nx1-operator if))
                        (eq (arm2-lexical-reference-p (car (acode-operands body))) rest))
                 (setq body (car (cdr (acode-operands body))))

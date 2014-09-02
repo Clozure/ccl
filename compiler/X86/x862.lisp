@@ -3160,7 +3160,7 @@
                                  nil)))
                   (return nil))))
             (if (eq op (%nx1-operator local-block))
-              (setq body (cadr body))
+              (setq body (cadr (acode-operands body)))
               (if (and (eq op (%nx1-operator if))
                        (eq (nx2-lexical-reference-p (car (acode-operands body))) rest))
                 (setq body (car (cdr (acode-operands body))))
