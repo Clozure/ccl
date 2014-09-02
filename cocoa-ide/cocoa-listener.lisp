@@ -576,7 +576,7 @@
         (let* ((layout (#/objectAtIndex: layout-managers i)))
           (#/setBackgroundLayoutEnabled: layout nil))))
     (#/setDelegate: window controller)
-    (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
+    (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) controller)
     (setf (slot-value controller 'sequence)
           (slot-value self 'dupcount))
     (#/setShouldCascadeWindows: controller nil)
