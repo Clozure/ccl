@@ -2544,6 +2544,30 @@
   ((sequence :foreign-type :int))
   (:metaclass ns:+ns-object))
 
+;;; In certain cases, an NSTextView's selection changes without going
+;;; through setSelectedRange: or similar methods.  In post-10.6
+;;; systems, one of these cases is the find panel.  Synch up the
+;;; selections between the NSTextView and the Hemlock buffer here.
+(objc:defmethod (#/textViewDidChangeSelection: :void)
+    ((self hemlock-editor-window-controller) notification)
+  (let* ((hv (hemlock-view self))
+	 (buffer (hi:hemlock-view-buffer hv))
+	 (tv (#/object notification)))
+    (with-view-selection-info (tv buffer)
+      (let* ((range (#/selectedRange tv))
+	     (v0 (ns:ns-range-location range))
+	     (v1 (+ v0 (ns:ns-range-length range))))
+	(multiple-value-bind (b0 b1) (hi:buffer-selection-range buffer)
+	  ;; If the selections differ, synch them up.
+	  (unless (and (= b0 v0)
+		       (= b1 v1))
+	    (let ((point (hi:buffer-point buffer)))
+	      (hi:move-to-absolute-position point v0)
+	      (when (> v1 v0)
+		(let ((mark (hi:copy-mark point :right-inserting)))
+		  (hi:move-to-absolute-position mark v1)
+		  (hemlock::%buffer-push-buffer-mark buffer mark t))))))))))
+
 (objc:defmethod #/windowTitleForDocumentDisplayName: ((self hemlock-editor-window-controller) docname)
   (let* ((seq (slot-value self 'sequence)))
     (if (zerop seq)
@@ -3069,7 +3093,7 @@
       ;;(#/setDelegate: window self)
       (#/setDelegate: window controller)
       (setf (slot-value controller 'sequence) dupcount)
-      (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) self)
+      (#/setDelegate: (text-pane-text-view (slot-value window 'pane)) controller)
       (#/addWindowController: self controller)
       (#/release controller)
       (#/setShouldCascadeWindows: controller nil)
