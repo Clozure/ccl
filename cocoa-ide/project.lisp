@@ -343,9 +343,10 @@
                                                  (system (current-system-item
                                                           self)))
                                                 :key #'cdr)))))
+
            (%make-nsstring (if (consp dependency)
-                             (second dependency)
-                             dependency))))))
+                             (namestring (asdf/component::component-pathname (second dependency)))
+                             (namestring (asdf/component::component-pathname dependency))))))))
 
 (objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>)
                 ((self project-window-controller) outline-view item)
