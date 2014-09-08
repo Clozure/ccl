@@ -1187,8 +1187,10 @@
 ; if not pretty print a space before dot
 
 (defun circularity-process (xp object interior-cdr? &aux (not-pretty (not *print-pretty*)))
+  (declare (ftype function invalid-hash-key-p))
   (unless (or (numberp object)
 	      (characterp object)
+              (invalid-hash-key-p object)
 	      (and (symbolp object)	;Reader takes care of sharing.
 		   (or (null *print-gensym*) (symbol-package object))))
     (let ((id (gethash object *circularity-hash-table*)))

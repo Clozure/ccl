@@ -46,7 +46,9 @@
   (declaim (inline %hash-symbol))
   (declaim (inline hash-mod))
   (declaim (inline set-hash-key-conditional set-hash-value-conditional))
-  (declaim (inline hash-lock-free-p lock-free-gethash)))
+  (declaim (inline hash-lock-free-p lock-free-gethash))
+  (declaim (inline invalid-hash-key-p)))
+
 
 #+eq-hash-monitor
 (progn
@@ -1127,13 +1129,16 @@ before doing so.")
      (unlock-hash-table hash nil)
      hash)))
 
+(defun invalid-hash-key-p (key)
+  ;; Anything else ?
+  (or (eq key free-hash-marker)
+      (eq key deleted-hash-key-marker)))
 
 (defun puthash (key hash default &optional (value default))
   (declare (optimize (speed 3) (space 0)))
   (unless (typep hash 'hash-table)
     (report-bad-arg hash 'hash-table))
-  (when (or (eq key free-hash-marker)
-            (eq key deleted-hash-key-marker))
+  (when (invalid-hash-key-p key)
     (error "Can't use ~s as a hash-table key" key))
   (when (hash-lock-free-p hash)
     (return-from puthash (lock-free-puthash key hash value)))
