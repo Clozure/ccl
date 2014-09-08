@@ -296,7 +296,7 @@
                          (eql vreg-mode hard-reg-class-gpr-mode-u32))
               (setq reg (available-imm-temp
                          *available-backend-imm-temps*
-                         :u32)))
+                         :natural)))            
             (setq vinsn
                   (! nfp-load-unboxed-word reg offset nfp)))
         (#. memspec-nfp-type-double-float
@@ -349,11 +349,13 @@
            (vreg-mode (if vreg (get-regspec-mode vreg))))
       (ecase type
         (#. memspec-nfp-type-natural
-            (if (and (eql vreg-class hard-reg-class-gpr)
-                     (eql vreg-mode hard-reg-class-gpr-mode-u32))
+            (if (and (eql vreg-class hard-reg-class-gpr)                     
+                     (eql vreg-mode (target-word-size-case
+                                     (64 hard-reg-class-gpr-mode-u64)
+                                     (32 hard-reg-class-gpr-mode-u32))))
               vreg
               (make-unwired-lreg
-               (available-imm-temp *available-backend-imm-temps* :u32))))
+               (available-imm-temp *available-backend-imm-temps* :natural))))
         (#. memspec-nfp-type-double-float
             (if (and (eql vreg-class hard-reg-class-fpr)
                      (eql vreg-mode hard-reg-class-fpr-mode-double))
@@ -405,11 +407,11 @@
       (let* ((type (acode-var-type var *x862-trust-declarations*))
              (reg nil)
              (nfp-bits 0))
-        (cond ((and (subtypep type '(unsigned-byte 32))
+        (cond ((and (subtypep type *nx-target-natural-type*)
                     NIL
-                    (not (subtypep type '(signed-byte 30))))
+                    (not (subtypep type *nx-target-fixnum-type*)))
                (setq reg (available-imm-temp
-                          *available-backend-imm-temps* :u32)
+                          *available-backend-imm-temps* :natural)
                      nfp-bits memspec-nfp-type-natural))
               ((subtypep type 'single-float)
                (setq reg (available-fp-temp *available-backend-fp-temps*
@@ -3784,7 +3786,7 @@
         (setq vinsn (x862-vpush-register seg areg inhibit-note))
         (let* ((offset *x862-nfp-depth*)
                (size 16)
-               (nfp (x862-nfp-reg seg)))
+               (nfp (if (target-arch-case (:x8664 t) (:x8632 a-float))(x862-nfp-reg seg))))
           (setq vinsn
                 (if a-float
                   (ecase (fpr-mode-value-name mode)
@@ -3792,7 +3794,9 @@
                     (:double-float (! nfp-store-double-float areg offset nfp))
                     (:complex-single-float (! nfp-store-complex-single-float areg offset nfp))
                     (:complex-double-float (! nfp-store-complex-double-float areg offset nfp)))
-                  (! nfp-store-unboxed-word areg offset nfp)))
+                  (target-arch-case
+                   (:x8664 (! nfp-store-unboxed-word areg offset nfp))
+                   (:x8632 (! nfp-store-unboxed-word areg offset)))))
           (incf offset size)
           (push vinsn *x862-all-nfp-pushes*)
           (setq *x862-nfp-depth* offset))))
@@ -3810,7 +3814,8 @@
       (if a-node
         (setq vinsn (x862-vpop-register seg areg))
         (let* ((offset (- *x862-nfp-depth* 16))
-               (nfp (x862-nfp-reg seg)))
+               (nfp (if (target-arch-case (:x8664 t) (:x8632 a-float))
+                      (x862-nfp-reg seg))))
           (setq vinsn
                 (if a-float
                   (ecase (fpr-mode-value-name mode)
@@ -3818,7 +3823,11 @@
                     (:double-float (! nfp-load-double-float areg offset nfp))
                     (:complex-single-float (! nfp-load-complex-single-float areg offset nfp))
                     (:complex-double-float (! nfp-load-complex--float areg offset nfp)))
-                  (! nfp-load-unboxed-word areg offset nfp)))
+                  (target-arch-case
+                   (:x8664
+                    (! nfp-load-unboxed-word areg offset nfp))
+                   (:x8632
+                    (! nfp-load-unboxed-word areg offset)))))
           (setq *x862-nfp-depth* offset)))
       vinsn)))
 
@@ -10763,10 +10772,18 @@
                (u31y (and (typep fix-y '(unsigned-byte 31)) fix-y)))
           (if (not (or u31x u31y))
             (with-imm-target () (xreg :natural)
-	      (with-additional-imm-reg ()
+              (target-arch-case
+               (:x8664
 		(with-imm-target (xreg) (yreg :natural)
 		  (x862-two-targeted-reg-forms seg x xreg y yreg)
 		  (! %natural+ xreg yreg)))
+               (:x8632
+                (let* ((*x862-nfp-depth* *x862-nfp-depth*)
+                       (offset *x862-nfp-depth*))
+                  (x862-one-targeted-reg-form seg x xreg)
+                  (x862-push-register seg xreg)
+                  (x862-one-targeted-reg-form seg y xreg)
+                  (! nfp-add-natural-register offset xreg))))
               (<- xreg))
             (let* ((other (if u31x y x)))
               (with-imm-target () (other-reg :natural)
@@ -10787,11 +10804,19 @@
         (let* ((u31y (and (typep fix-y '(unsigned-byte 31)) fix-y)))
           (if (not u31y)
 	    (with-imm-target () (xreg :natural)
-	      (with-additional-imm-reg ()
+	      (target-arch-case
+               (:x8664
 		(with-imm-target (xreg) (yreg :natural)
 		  (x862-two-targeted-reg-forms seg x xreg y yreg)
-		  (! %natural- xreg yreg))
-		(<- xreg)))
+		  (! %natural- xreg yreg)))
+               (:x8632
+                (let* ((*x862-nfp-depth* *x862-nfp-depth*)
+                       (offset *x862-nfp-depth*))
+                  (x862-one-targeted-reg-form seg x xreg)
+                  (x862-push-register seg xreg)
+                  (x862-one-targeted-reg-form seg y xreg)
+                  (! nfp-subtract-natural-register offset xreg))))
+		(<- xreg))
             (progn
               (with-imm-target () (xreg :natural)
                 (x862-one-targeted-reg-form seg x xreg)
@@ -10813,10 +10838,18 @@
                (constant (or u31x u31y)))
           (if (not constant)
             (with-imm-target () (xreg :natural)
-	      (with-additional-imm-reg ()
+	      (target-arch-case
+               (:x8664
 		(with-imm-target (xreg) (yreg :natural)
 		  (x862-two-targeted-reg-forms seg x xreg y yreg)
 		  (! %natural-logior xreg yreg)))
+               (:x8632
+                (let* ((*x862-nfp-depth* *x862-nfp-depth*)
+                       (offset *x862-nfp-depth*))
+                  (x862-one-targeted-reg-form seg x xreg)
+                  (x862-push-register seg xreg)
+                  (x862-one-targeted-reg-form seg y xreg)
+                  (! nfp-logior-natural-register offset xreg))))
               (<- xreg))
             (let* ((other (if u31x y x)))
               (with-imm-target () (other-reg :natural)
@@ -10839,10 +10872,18 @@
                (constant (or u32x u32y)))
           (if (not constant)
             (with-imm-target () (xreg :natural)
-	      (with-additional-imm-reg ()
+	      (target-arch-case
+               (:x8664
 		(with-imm-target (xreg) (yreg :natural)
 		  (x862-two-targeted-reg-forms seg x xreg y yreg)
 		  (! %natural-logxor xreg yreg)))
+               (:x8632
+                (let* ((*x862-nfp-depth* *x862-nfp-depth*)
+                       (offset *x862-nfp-depth*))
+                  (x862-one-targeted-reg-form seg x xreg)
+                  (x862-push-register seg xreg)
+                  (x862-one-targeted-reg-form seg y xreg)
+                  (! nfp-logxor-natural-register offset xreg))))
               (<- xreg))
             (let* ((other (if u32x y x)))
               (with-imm-target () (other-reg :natural)
@@ -10865,10 +10906,18 @@
                (constant (or u31x u31y)))
           (if (not constant)
             (with-imm-target () (xreg :natural)
-	      (with-additional-imm-reg ()
+	      (target-arch-case
+               (:x8664
 		(with-imm-target (xreg) (yreg :natural)
 		  (x862-two-targeted-reg-forms seg x xreg y yreg)
 		  (! %natural-logand xreg yreg)))
+               (:x8632
+                (let* ((*x862-nfp-depth* *x862-nfp-depth*)
+                       (offset *x862-nfp-depth*))
+                  (x862-one-targeted-reg-form seg x xreg)
+                  (x862-push-register seg xreg)
+                  (x862-one-targeted-reg-form seg y xreg)
+                  (! nfp-logand-natural-register offset xreg))))
               (<- xreg))
             (let* ((other (if u31x y x)))
               (with-imm-target () (other-reg :natural)

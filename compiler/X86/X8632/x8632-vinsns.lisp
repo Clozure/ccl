@@ -4237,15 +4237,17 @@
 
 (define-x8632-vinsn (nfp-store-unboxed-word :nfp :set) (()
                                                         ((val :u32)
-                                                         (offset :u16const)
-                                                         (nfp :imm)))
-  (movl (:%l val) (:@ (:apply + 16 offset) (:% nfp))))
+                                                         (offset :u16const)))
+  (movd (:%l val) (:%mmx x8632::stack-temp))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l val))
+  (movd (:%mmx x8632::stack-temp) (:@ (:apply + 16 offset) (:% val)))
+  (movd (:%mmx x8632::stack-temp) (:% val)))
 
 
 (define-x8632-vinsn (nfp-load-unboxed-word :nfp :ref) (((val :u32))
-                                                       ((offset :u16const)
-                                                        (nfp :imm)))
-  (movl (:@ (:apply + 16 offset) (:% nfp)) (:%l val)))
+                                                       ((offset :u16const)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l val))
+  (movl (:@ (:apply + 16 offset) (:% val)) (:%l val)))
 
 (define-x8632-vinsn (nfp-store-single-float :nfp :set)
  (()
@@ -4301,6 +4303,45 @@
                                                   ((nfp :lisp))) ; sic
   (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
   (cmpl (:%l reg) (:@ (:apply + offset 16) (:%l nfp))))
+
+(define-x8632-vinsn nfp-logior-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (orl (:@ (:apply + offset 16) (:%l nfp)) (:%l reg)))
+
+(define-x8632-vinsn nfp-logand-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (andl (:@ (:apply + offset 16) (:%l nfp)) (:%l reg)))
+
+(define-x8632-vinsn nfp-logxor-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (xorl (:@ (:apply + offset 16) (:%l nfp)) (:%l reg)))
+
+(define-x8632-vinsn nfp-add-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (addl (:@ (:apply + offset 16) (:%l nfp)) (:%l reg)))
+
+(define-x8632-vinsn nfp-subtract-natural-register (()
+                                                  ((offset :u16const)
+                                                   (reg :u32))
+                                                  ((nfp :lisp))) ; sic
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l nfp))
+  (subl (:%l reg) (:@ (:apply + offset 16) (:%l nfp)))
+  (movl (:@ (:apply + offset 16) (:%l nfp)) (:%l reg)))
+
+
+
 
 (define-x8632-vinsn (temp-push-unboxed-word :push :word :csp)
     (()
