@@ -70,14 +70,16 @@
 
 (defun rewrite-acode-form (form &optional (type t))
   (when (acode-p form)
-    (let* ((op (acode-operator form))
-           (rewrite (svref *acode-rewrite-functions* (logand op operator-id-mask))))
-      (if rewrite
-        (funcall rewrite form type)
-        (if (logbitp operator-acode-subforms-bit op)
-          (dolist (operand (acode-operands form))
-            (rewrite-acode-form operand))
-          (format t "~&can't rewrite ~s : ~s" (acode-operator-name op) form))))))
+    (unless (acode-walked form)
+      (setf (acode-walked form) t)
+      (let* ((op (acode-operator form))
+             (rewrite (svref *acode-rewrite-functions* (logand op operator-id-mask))))
+        (if rewrite
+          (funcall rewrite form type)
+          (if (logbitp operator-acode-subforms-bit op)
+            (dolist (operand (acode-operands form))
+              (rewrite-acode-form operand))
+            (format t "~&can't rewrite ~s : ~s" (acode-operator-name op) form)))))))
 
 (defun acode-wrap-in-unary-op (form op)
   (let* ((new (make-acode* (acode-operator form) (acode-operands form))))
@@ -170,6 +172,7 @@
            (let* ((c2 (acode-real-constant-p form2)))
              (if c2
                (setf (acode-operator form2) (%nx1-operator immediate)
+                     (acode.asserted-type form2) nil
                      (acode-operands form2) (cons (float c2 0.0d0) nil))
                (if (acode-form-typep form2 'fixnum trust-decls)
                  (acode-wrap-in-unary-op form2 (%nx1-operator %fixnum-to-double)))))))
@@ -177,6 +180,7 @@
          (let* ((c1 (acode-real-constant-p form1)))
            (if c1
                (setf (acode-operator form1) (%nx1-operator immediate)
+                     (acode.asserted-type form1) nil
                      (acode-operands form1) (cons (float c1 0.0d0) nil))
              (if (acode-form-typep form1 'fixnum trust-decls)
                (acode-wrap-in-unary-op form1 (%nx1-operator %fixnum-to-double))))))
@@ -185,6 +189,7 @@
            (let* ((c2 (acode-real-constant-p form2)))
              (if c2
                (setf (acode-operator form2) (%nx1-operator immediate)
+                     (acode.asserted-type form2) nil
                      (acode-operands form2) (cons (float c2 0.0f0) nil))
                (if (acode-form-typep form2 'fixnum trust-decls)
                  (acode-wrap-in-unary-op form2 (%nx1-operator %fixnum-to-single)))))))
@@ -192,6 +197,7 @@
          (let* ((c1 (acode-real-constant-p form1)))
              (if c1
                (setf (acode-operator form1) (%nx1-operator immediate)
+                     (acode.asserted-type form1) nil
                      (acode-operands form1) (cons (float c1 0.0f0) nil))
                (if (acode-form-typep form1 'fixnum trust-decls)
                  (acode-wrap-in-unary-op form1 (%nx1-operator %fixnum-to-single))))))))

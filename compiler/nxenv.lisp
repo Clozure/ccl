@@ -31,7 +31,7 @@
   acode.operator                        ; fixnum
   acode.operands                        ; list, elements often acode
   acode.asserted-type                   ; NIL or type specifier.
-  acode.info                            ; plist: notes, etc
+  acode.info                            ; cons of "walked" marker, notr
   )
   
 (def-accessors (var) %svref
@@ -484,7 +484,7 @@
 ; Stuff having to do with lisp:
 
 (defmacro make-acode* (operator operands)
-  `(%istruct 'acode ,operator ,operands nil nil))
+  `(%istruct 'acode ,operator ,operands nil (cons nil nil)))
 
 (defmacro make-acode (operator &rest args)
   `(make-acode* ,operator (list ,@args)))

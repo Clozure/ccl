@@ -67,14 +67,21 @@
 ;;; the acode.info slot of an acode node might be used as
 ;;; a plist someday.
 (defun acode-note (acode)
-  (acode.info acode))
+  (when (acode-p acode)
+    (cdr (acode.info acode))))
 
 (defun (setf acode-note) (note acode)
-  (when note
+  (when (and note (acode-p acode))
     ;; Only record if have a unique key
     (unless (or (nx-null acode)
                 (nx-t acode))
-      (setf (acode.info acode) note))))
+      (setf (cdr (acode.info acode)) note))))
+
+(defun acode-walked (acode)
+  (car (acode.info acode)))
+
+(defun (setf acode-walked) (val acode)
+  (setf (car (acode.info acode)) val))
 
 
 (defstruct (code-note (:constructor %make-code-note))
