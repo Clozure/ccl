@@ -595,7 +595,7 @@ terminate the list"
     (unsigned-byte 32)
     (unsigned-byte 64)
     bogus
-    bogus
+    (complex double-float)
     single-float
     fixnum
     bogus
@@ -605,7 +605,7 @@ terminate the list"
     bogus
     bogus
     base-char
-    bogus
+    (complex single-float)
     bogus
     bogus
     bogus
@@ -628,7 +628,7 @@ terminate the list"
 #+x8664-target
 (progn
 
-  ;;; 1, 8, 16-bit element types
+  ;;; other element types
   (defparameter *immheader-0-array-element-types*
     #(bogus
       bogus
@@ -639,10 +639,10 @@ terminate the list"
       bogus
       bogus
       bogus
-      bogus
+      (complex double-float)
       (signed-byte 16)
       (unsigned-byte 16)
-      base-char
+      bogus
       (signed-byte 8)
       (unsigned-byte 8)
       bit))
@@ -679,7 +679,7 @@ terminate the list"
       bogus
       bogus
       bogus
-      bogus
+      (complex single-float)
       fixnum
       (signed-byte 64)
       (unsigned-byte 64)
