@@ -3548,7 +3548,7 @@
     (let* ((doc (if pathname
                   (#/openDocumentWithContentsOfURL:display:error:
                    (#/sharedDocumentController ns:ns-document-controller)
-                   (pathname-to-url pathname)
+                   (pathname-to-url (truename pathname))
                    #$YES
                    perror)
                   (let ((*last-document-created* nil))
