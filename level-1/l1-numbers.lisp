@@ -758,7 +758,7 @@
     #+arm-target (%set-fpscr-status 0)
     (%setf-double-float TEMP (#_exp n))
     (%df-check-exception-1 'exp n (%ffi-exception-status))
-    #+linux-target
+    #+(or linux-target freebsdx8632-target)
     (and (infinity-p TEMP)
          (not (infinity-p n))
          (get-fpu-mode :overflow)
@@ -774,7 +774,7 @@
     #+arm-target (%set-fpscr-status 0)
     (%setf-short-float TEMP (#_expf n))
     (%sf-check-exception-1 'exp n (%ffi-exception-status))
-    #+linux-target
+    #+(or linux-target freebsdx8632-target)
     (and (infinity-p TEMP)
          (not (infinity-p n))
          (get-fpu-mode :overflow)
