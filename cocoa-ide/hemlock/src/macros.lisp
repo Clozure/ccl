@@ -169,7 +169,23 @@
       `(setf ,place (delete ,hook-fun ,place))))
 
 
-
+;; Meta-point etc. support
+(ccl::define-definition-type hemlock-command (ccl::function-definition-type))
+
+;; This is also used as test of whether the dt applies to name.
+(defmethod ccl::definition-base-name ((dt hemlock-command-definition-type) name)
+  (declare (special *command-names*))
+  (let ((entry (and (stringp name) (getstring name *command-names*))))
+    (and entry (command-function entry))))
+
+(defmethod ccl::definition-bound-p ((dt hemlock-command-definition-type) name)
+  (declare (special *command-names*))
+  (getstring name *command-names*))
+
+(defmethod ccl::definition-same-p ((dt hemlock-command-definition-type) name1 name2)
+  (equalp name1 name2))
+
+
 ;;;; DEFCOMMAND.
 
 ;;; Defcommand  --  Public
@@ -218,6 +234,7 @@
     `(eval-when (:load-toplevel :execute)
        (defun ,function-name ,lambda-list ,function-doc
               ,@forms)
+       (ccl:record-source-file ,command-name 'hemlock-command)
        (make-command ,command-name ,command-doc ',function-name ,@extra-args)
        ',function-name)))
 

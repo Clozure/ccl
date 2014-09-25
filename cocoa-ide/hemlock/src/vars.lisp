@@ -153,6 +153,21 @@
 
 (declaim (special *global-variable-names*))
 
+(ccl::define-definition-type hemlock-variable ())
+
+(defmethod ccl::definition-base-name ((dt hemlock-variable-definition-type) name)
+  (and (stringp name)
+       (or (getstring name *global-variable-names*)
+           ;; Yeah, should check for different syms in different modes, but in practice there aren't
+           ;; any because we always use string-to-variable
+           (loop for mode-obj in (string-table-values *mode-names*)
+		;; mode-obj is nil at startup, while creating first mode
+	        thereis (and mode-obj (getstring name (mode-object-variables mode-obj)))))))
+
+(defmethod ccl::definition-same-p ((dt hemlock-variable-definition-type) name1 name2)
+  (equalp name1 name2))
+
+
 ;;; DEFHVAR  --  Public
 ;;;
 ;;;    Define a Hemlock variable somewhere.
@@ -160,6 +175,9 @@
 (defun defhvar (name documentation &key mode buffer (hooks nil hook-p)
 		     (value nil value-p))
   (let* ((symbol-name (string-to-variable name)) var)
+    ;; Unfortunately this is used both at toplevel and at runtime.  make a guess.
+    (when (and ccl:*loading-file-source-file* (not buffer))
+      (ccl:record-source-file name 'hemlock-variable))
     (cond
      (mode
       (let* ((mode-obj (get-mode-object mode)))

@@ -468,7 +468,7 @@
 
    ;; from macros.lisp
    #:invoke-hook #:value #:setv #:hlet #:string-to-variable #:add-hook #:remove-hook
-   #:defcommand #:with-mark #:use-buffer #:editor-error
+   #:hemlock-command #:defcommand #:with-mark #:use-buffer #:editor-error
    #:editor-error-format-string #:editor-error-format-arguments #:do-strings
    #:command-case #:reprompt #:with-output-to-mark #:with-input-from-region
    #:handle-lisp-errors #:with-pop-up-display
@@ -613,7 +613,7 @@
 
    ;; vars.lisp
    #:variable-value #:variable-hooks #:variable-documentation #:variable-name
-   #:hemlock-bound-p #:defhvar #:delete-variable
+   #:hemlock-variable #:hemlock-bound-p #:defhvar #:delete-variable
 
    #:input-stream-reading-line
 
@@ -631,6 +631,8 @@
    #:move-point-for-click
    #:edit-definition
    #:*isearch-is-global*
+   #:hemlock-command
+   #:hemlock-variable
    ))
 
 
