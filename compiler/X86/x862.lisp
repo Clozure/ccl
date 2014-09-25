@@ -2070,9 +2070,9 @@
                   (ensuring-node-target (target vreg)
                     (x862-box-u64 seg target u64-reg)))))))
           (is-128-bit
-           (with-fp-target () (fp-val :complex-single-float)
+           (with-fp-target () (fp-val :complex-double-float)
              (if (and (eql vreg-class hard-reg-class-fpr)
-                      (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+                      (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
                (setq fp-val vreg))
              (if index-known-fixnum
                (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-arch-case (:x8632 2) (:x8664 3)))))
@@ -2828,7 +2828,7 @@
 	     (cond
                (is-128-bit
                 (if index-known-fixnum
-		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3))))
+		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 1))))
                       (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx)))
                 (is-64-bit
                 (if (eq type-keyword :complex-single-float-vector)

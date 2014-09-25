@@ -70,12 +70,12 @@
 (define-x8664-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
                                                     ((v :lisp)
                                                      (scaled-idx :imm)))
-  (movq (:@ x8664::misc-data-offset (:%q v) (:%q scaled-idx)) (:%xmm dest)))
+  (movq (:@ x8664::complex-single-float.realpart (:%q v) (:%q scaled-idx)) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
                                                     ((v :lisp)
                                                      (scaled-idx :imm)))
-  (movapd (:@ x8664::misc-data-offset (:%q v) (:%q scaled-idx) 2) (:%xmm dest)))
+  (movapd (:@ x8664::complex-double-float.realpart (:%q v) (:%q scaled-idx) 2) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-c-double-float  (((dest :double-float))
                                               ((v :lisp)
@@ -83,10 +83,10 @@
   (movsd (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
 
 
-(define-x8664-vinsn misc-ref-c-complex-single--float  (((dest :complex-single-float))
+(define-x8664-vinsn misc-ref-c-complex-single-float  (((dest :complex-single-float))
                                                        ((v :lisp)
                                                         (idx :s32const)))
-  (movq (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
+  (movq (:@ (:apply + x8664::complex-single-float.realpart (:apply ash idx x8664::word-shift)) (:%q v)) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-node  (((dest :lisp))
                                     ((v :lisp)
@@ -125,7 +125,7 @@
 				    (v :lisp)
 				    (unscaled-idx :imm))
 				   ())
-  (movq (:%xmm val) (:@ x8664::misc-data-offset (:%q  v) (:%q unscaled-idx))))
+  (movq (:%xmm val) (:@ x8664::complex-single-float.realpart (:% q  v) (:%q unscaled-idx))))
 
 (define-x8664-vinsn misc-set-complex-double-float (()
                                                    ((val :complex-double-float)
