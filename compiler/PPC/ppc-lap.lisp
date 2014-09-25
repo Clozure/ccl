@@ -42,7 +42,7 @@
   `(progn
      (setf (ppc-lap-macro-function ',name)
            (nfunction (ppc-lap-macro ,name) ,(parse-macro name arglist body)))
-     (record-source-file ',name 'ppc-lap)
+     (record-source-file ',name 'lap-macro)
      ',name))
 
 (defvar *ppc-lap-constants* ())

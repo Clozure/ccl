@@ -226,7 +226,7 @@
   `(progn
      (setf (x86-lap-macro-function ',name)
            (nfunction (x86-lap-macro ,name) ,(ccl::parse-macro name arglist body)))
-     (record-source-file ',name 'x86-lap)
+     (record-source-file ',name 'lap-macro)
      ',name))
 
 (defun x86-lap-macroexpand-1 (form)

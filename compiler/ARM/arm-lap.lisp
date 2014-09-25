@@ -39,7 +39,7 @@
   `(progn
      (setf (arm-lap-macro-function ',name)
            (nfunction (arm-lap-macro ,name) ,(parse-macro name arglist body)))
-     (record-source-file ',name 'arm-lap)
+     (record-source-file ',name 'lap-macro)
      ',name))
 
 (defvar *arm-lap-lfun-bits* 0)
