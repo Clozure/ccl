@@ -556,6 +556,10 @@ commands but aren't")
     (%break-message msg c)
     (break-loop c)))
 
+(defvar *show-condition-context* t
+  "The type of conditions which should include the execution context as part of their error-output message.
+   E.g. value of 'error will prevent warnings from including the calling function and process in the warning message")
+
 (defun %break-message (msg condition &optional (error-pointer *top-error-frame*) (prefixchar #\>))
   (let ((*print-circle* *error-print-circle*)
         ;(*print-prett*y nil)
@@ -571,6 +575,7 @@ commands but aren't")
         (*signal-printing-errors* nil)
         (s (make-indenting-string-output-stream prefixchar nil))
         (sub (make-string-output-stream))
+        (show-context (typep condition *show-condition-context*))
         (indent 0))
     (format s "~A~@[ ~A:~] " prefixchar msg)
     (setf (indenting-string-output-stream-indent s) (setq indent (column s)))
@@ -578,15 +583,17 @@ commands but aren't")
     ;(format s "~A" condition) ; evil if circle
     (report-condition condition sub)
     (format s "~A" (get-output-stream-string sub))
-    (if (not (and (typep condition 'simple-program-error)
-                  (simple-program-error-context condition)))
+    (if (and show-context
+             (not (and (typep condition 'simple-program-error)
+                       (simple-program-error-context condition))))
       (format *error-output* "~&~A~%~A While executing: ~S"
               (get-output-stream-string s) prefixchar (%real-err-fn-name error-pointer))
       (format *error-output* "~&~A"
               (get-output-stream-string s)))
-    (if *current-process*
-      (format *error-output* ", in process ~a(~d).~%" (process-name *current-process*) (process-serial-number *current-process*))
-      (format *error-output* ", in an uninitialized process~%"))
+    (when show-context
+      (if *current-process*
+        (format *error-output* ", in process ~a(~d).~%" (process-name *current-process*) (process-serial-number *current-process*))
+        (format *error-output* ", in an uninitialized process~%")))
   (force-output *error-output*)))
 					; returns NIL
 
