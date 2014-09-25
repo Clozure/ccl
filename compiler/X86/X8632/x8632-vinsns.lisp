@@ -112,14 +112,14 @@
 				    (v :lisp)
 				    (unscaled-idx :imm))
 				   ())
-  (movq (:%xmm val) (:@ x8632::complex-single-float.realpart (:%l  v) (:%l unscaled-idx))))
+  (movq (:%xmm val) (:@ x8632::complex-single-float.realpart (:%l  v) (:%l unscaled-idx) 2)))
 
 (define-x8632-vinsn misc-set-complex-double-float (()
                                                    ((val :complex-double-float)
                                                     (v :lisp)
                                                     (unscaled-idx :imm))
-				   ())
-  (movdqu (:%xmm val) (:@ x8632::complex-double-float.realpart (:%l  v) (:%l unscaled-idx) 2)))
+ 				   ())
+  (movdqu (:%xmm val) (:@ x8632::complex-double-float.realpart (:%l  v) (:%l unscaled-idx) 4)))
 
 (define-x8632-vinsn misc-ref-u8 (((dest :u8))
                                  ((v :lisp)
@@ -159,9 +159,9 @@
 (define-x8632-vinsn misc-ref-complex-single-float  (((dest :complex-single-float))
                                                     ((v :lisp)
                                                      (scaled-idx :imm)))
-  (movq (:@ x8632::complex-single-float.realpart (:%l v) (:%l scaled-idx)) (:%xmm dest)))
+  (movq (:@ x8632::complex-single-float.realpart (:%l v) (:%l scaled-idx) 2) (:%xmm dest)))
 
-(define-x8632-vinsn misc-ref-c-complex-single--float  (((dest :complex-single-float))
+(define-x8632-vinsn misc-ref-c-complex-single-float  (((dest :complex-single-float))
                                                        ((v :lisp)
                                                         (idx :s32const)))
   (movq (:@ (:apply + x8632::complex-single-float.realpart (:apply ash idx x8632::word-shift)) (:%l v)) (:%xmm dest)))
@@ -169,7 +169,7 @@
 (define-x8632-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
                                                     ((v :lisp)
                                                      (scaled-idx :imm)))
-  (movdqu (:@ x8632::complex-double-float.realpart (:%l v) (:%l scaled-idx) 2) (:%xmm dest)))
+  (movdqu (:@ x8632::complex-double-float.realpart (:%l v) (:%l scaled-idx) 4) (:%xmm dest)))
 
 (define-x8632-vinsn misc-ref-s32 (((dest :s32))
                                   ((v :lisp)
