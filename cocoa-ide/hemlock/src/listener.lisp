@@ -42,9 +42,6 @@
            (t
             (message "Ignoring \"package:\" file option ~a" thing)
             nil))))
-    (when name
-      (ignore-errors (let* ((*package* *package*))
-                       (apply 'ccl::old-in-package (if (atom thing) (list thing) thing)))))
     (defhvar "Current Package"
       "The package used for evaluation of Lisp in this buffer."
       :buffer buffer
