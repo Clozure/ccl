@@ -86,6 +86,9 @@
     (when (boundp sym)
       (princ ",  Value: ")
       (prin1 (symbol-value sym)))
+    (when (find-class sym nil)
+      (princ ", Class: ")
+      (prin1 (find-class sym)))
     (terpri)))
 
   
