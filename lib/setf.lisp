@@ -544,7 +544,7 @@ decremented by the second argument, DELTA, which defaults to 1."
 ;;;;;;;
 
 (define-setf-method getf (plist prop &optional (default () default-p)
-                                     &aux (prop-p (not (quoted-form-p prop)))
+                                     &aux (prop-p (not (constantp prop env)))
                                      &environment env)
  (multiple-value-bind (vars vals stores store-form access-form)
                       (get-setf-method plist env)
