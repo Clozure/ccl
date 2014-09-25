@@ -125,7 +125,7 @@
 				    (v :lisp)
 				    (unscaled-idx :imm))
 				   ())
-  (movq (:%xmm val) (:@ x8664::complex-single-float.realpart (:% q  v) (:%q unscaled-idx))))
+  (movq (:%xmm val) (:@ x8664::complex-single-float.realpart (:%q  v) (:%q unscaled-idx))))
 
 (define-x8664-vinsn misc-set-complex-double-float (()
                                                    ((val :complex-double-float)
