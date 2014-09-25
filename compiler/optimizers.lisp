@@ -2468,7 +2468,7 @@
       (let* ((r (gensym)))
         `(let* ((,r ,ref))
           (or (package-ref.pkg ,ref)
-           (%kernel-restart $xnopkg (package-ref.pkg ,r)))))
+           (%kernel-restart $xnopkg (package-ref.name ,r)))))
       w)))
 
 
