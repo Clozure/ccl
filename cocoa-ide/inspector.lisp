@@ -222,7 +222,10 @@ Make preferences for fonts, key commands
     (#/reloadData (table-view wc))))
 
 (defun ninspect (object)
-  (execute-in-gui #'(lambda () (make-inspector object))))
+  (let ((package *package*))
+    (execute-in-gui #'(lambda ()
+                        (let ((*package* package))
+                          (make-inspector object))))))
 
 
 #|
