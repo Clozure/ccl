@@ -1768,7 +1768,7 @@
      #x0f7f #o0 0)
    (def-x86-opcode movq ((:anymem :insert-memory) (:regmmx :insert-mmx-reg))
      #x0f6f #o0 0)
-   (def-x86-opcode movq ((:regxmm :insert-xmm-reg) (:regxmm :insert-xmm-rm))
+   (def-x86-opcode movq ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
      #x0f7e #o300 0 #xf3)
    (def-x86-opcode movq ((:anymem :insert-memory) (:regxmm :insert-xmm-reg))
      #x0f7e #o000 0 #xf3)
