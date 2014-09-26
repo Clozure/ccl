@@ -173,7 +173,8 @@
 						       combo-box
 						       (index :<NSI>nteger))
   (with-slots (packages) combo-box
-    (let* ((pkg-name (package-name (svref packages index))))
+    (let* ((pkg-name (and packages
+			  (package-name (svref packages index)))))
       (if pkg-name
 	(#/autorelease (%make-nsstring pkg-name))
 	+null-ptr+))))
