@@ -2553,6 +2553,7 @@
   (let* ((hv (hemlock-view self))
 	 (buffer (hi:hemlock-view-buffer hv))
 	 (tv (#/object notification)))
+   (unless (> (buffer-edit-level buffer) 0) ;; if editing, hemlock position is the master position.
     (with-view-selection-info (tv buffer)
       (let* ((range (#/selectedRange tv))
 	     (v0 (ns:ns-range-location range))
@@ -2566,7 +2567,7 @@
 	      (when (> v1 v0)
 		(let ((mark (hi:copy-mark point :right-inserting)))
 		  (hi:move-to-absolute-position mark v1)
-		  (hemlock::%buffer-push-buffer-mark buffer mark t))))))))))
+		  (hemlock::%buffer-push-buffer-mark buffer mark t)))))))))))
 
 (objc:defmethod #/windowTitleForDocumentDisplayName: ((self hemlock-editor-window-controller) docname)
   (let* ((seq (slot-value self 'sequence)))
