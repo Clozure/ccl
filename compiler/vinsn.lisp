@@ -491,9 +491,11 @@
 			    :class hard-reg-class-gpr
 			    :mode (gpr-mode-name-value class)))
         ((:double-float :single-float :complex-double-float :complex-single-float)
-         (make-unwired-lreg (select-fp-temp class)
-                            :class hard-reg-class-fpr
-                            :mode (fpr-mode-name-value class)))
+         (let* ((lreg (make-unwired-lreg (select-fp-temp class)
+                                         :class hard-reg-class-fpr
+                                         :mode (fpr-mode-name-value class))))
+           (use-fp-reg lreg)
+           lreg))
         (:lisp 
          (make-unwired-lreg 
 	  (select-node-temp) 
