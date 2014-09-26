@@ -3822,7 +3822,7 @@
                     (:single-float (! nfp-load-single-float areg offset nfp))
                     (:double-float (! nfp-load-double-float areg offset nfp))
                     (:complex-single-float (! nfp-load-complex-single-float areg offset nfp))
-                    (:complex-double-float (! nfp-load-complex--float areg offset nfp)))
+                    (:complex-double-float (! nfp-load-complex-double-float areg offset nfp)))
                   (target-arch-case
                    (:x8664
                     (! nfp-load-unboxed-word areg offset nfp))
