@@ -295,7 +295,7 @@
                  (note-vinsn-sets-gpr vinsn vreg-value)
                  (note-vinsn-refs-gpr vinsn vreg-value))
 	       (use-imm-temp vreg-value))
-	      ((:single-float :double-float)
+	      ((:single-float :double-float :complex-single-float :complex-double-float)
 	       (use-fp-reg vreg)
 	       (if result-p
                  (note-vinsn-sets-fpr-lreg vinsn vreg)
