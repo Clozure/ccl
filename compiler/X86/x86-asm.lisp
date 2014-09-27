@@ -3151,7 +3151,22 @@
    (def-x86-opcode movss ((:regxmm :insert-xmm-reg) (:anymem :insert-memory))
      #x0f11 #o000 #x0 #xf3)
 
+   ;; addpd
+   (def-x86-opcode addpd ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f58 #o300 #x0 #x66)
+
+   ;; addps
+   (def-x86-opcode addps ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f58 #o300 #x0)
    
+   ;; subpd
+   (def-x86-opcode subpd ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f5c #o300 #x0 #x66)
+
+   ;; subps
+   (def-x86-opcode subps ((:regxmm :insert-xmm-rm) (:regxmm :insert-xmm-reg))
+     #x0f5c #o300 #x0)
+
 ;;; cvtsd2si.  This does rounding (as opposed to truncation).
    (def-x86-opcode (cvtsd2siq :cpu64) ((:regxmm :insert-xmm-rm) (:reg64 :insert-modrm-reg))
      #x0f2d #o300 #x48 #xf2)

@@ -1648,6 +1648,64 @@
    (movsd (:%xmm x) (:%xmm result)))
   (divsd (:%xmm y) (:%xmm result)))
 
+
+(define-x8664-vinsn complex-double-float+-2 (((result :complex-double-float))
+                                             ((x :complex-double-float)
+                                              (y :complex-double-float)))
+  ((:pred =
+          (:apply %hard-regspec-value result)
+          (:apply %hard-regspec-value x))
+   (addpd (:%xmm y) (:%xmm result)))
+  ((:and (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value x)))
+         (:pred =
+                (:apply %hard-regspec-value result)
+                (:apply %hard-regspec-value y)))
+   (addpd (:%xmm x) (:%xmm result)))
+  ((:and (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value x)))
+         (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value y))))
+   (movapd (:%xmm x) (:%xmm result))
+   (addpd (:%xmm y) (:%xmm result))))
+
+;;; Caller guarantees (not (eq y result))
+(define-x8664-vinsn complex-double-float--2 (((result :complex-double-float))
+				     ((x :complex-double-float)
+				      (y :complex-double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value result)
+                (:apply %hard-regspec-value x)))
+   (movapd (:%xmm x) (:%xmm result)))
+  (subpd (:%xmm y) (:%xmm result)))
+
+(define-x8664-vinsn complex-double-float*-2 (((result :complex-double-float))
+                                             ((x :complex-double-float)
+                                              (y :complex-double-float))
+                                             ((b :double-float)
+                                              (ix :double-float)
+                                              (iy :double-float)))
+  (movapd (:%xmm x) (:%xmm ix))
+  (shufpd (:$ub 1) (:%xmm x8664::fpzero) (:%xmm ix))
+  (movapd (:%xmm y) (:%xmm iy))
+  (shufpd (:$ub 1) (:%xmm x8664::fpzero) (:%xmm iy))
+  (movsd (:%xmm y) (:%xmm result))
+  (mulsd (:%xmm x) (:%xmm result))
+  (movsd (:%xmm iy) (:%xmm b))
+  (mulsd (:%xmm ix) (:%xmm b))
+  (subsd (:%xmm b) (:%xmm result))
+  (mulsd (:%xmm x) (:%xmm iy))
+  (mulsd (:%xmm y) (:%xmm ix))
+  (addsd (:%xmm ix) (:%xmm iy))
+  (shufpd (:$ub 0) (:%xmm iy) (:%xmm result)))
+         
+  
+                                             
+  
+
+
 (define-x8664-vinsn single-float+-2 (((result :single-float))
 				     ((x :single-float)
 				      (y :single-float)))
@@ -1711,6 +1769,58 @@
                 (:apply %hard-regspec-value x)))
    (movss (:%xmm x) (:%xmm result)))
   (divss (:%xmm y) (:%xmm result)))
+
+(define-x8664-vinsn complex-single-float+-2 (((result :complex-single-float))
+                                             ((x :complex-single-float)
+                                              (y :complex-single-float)))
+  ((:pred =
+          (:apply %hard-regspec-value result)
+          (:apply %hard-regspec-value x))
+   (addps (:%xmm y) (:%xmm result)))
+  ((:and (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value x)))
+         (:pred =
+                (:apply %hard-regspec-value result)
+                (:apply %hard-regspec-value y)))
+   (addps (:%xmm x) (:%xmm result)))
+  ((:and (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value x)))
+         (:not (:pred =
+                      (:apply %hard-regspec-value result)
+                      (:apply %hard-regspec-value y))))
+   (movq (:%xmm x) (:%xmm result))
+   (addps (:%xmm y) (:%xmm result))))
+
+;;; Caller guarantees (not (eq y result))
+(define-x8664-vinsn complex-single-float--2 (((result :complex-single-float))
+				     ((x :complex-single-float)
+				      (y :complex-single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value result)
+                (:apply %hard-regspec-value x)))
+   (movq (:%xmm x) (:%xmm result)))
+  (subps (:%xmm y) (:%xmm result)))
+
+(define-x8664-vinsn complex-single-float*-2 (((result :complex-single-float))
+                                             ((x :complex-single-float)
+                                              (y :complex-single-float))
+                                             ((b :single-float)
+                                              (ix :single-float)
+                                              (iy :single-float)))
+  (movq (:%xmm x) (:%xmm ix))
+  (psrlq (:$ub 32) (:%xmm ix))
+  (movq (:%xmm y) (:%xmm iy))
+  (psrlq (:$ub 32)  (:%xmm iy))
+  (movss(:%xmm y) (:%xmm result))
+  (mulss (:%xmm x) (:%xmm result))
+  (movss (:%xmm iy) (:%xmm b))
+  (mulss (:%xmm ix) (:%xmm b))
+  (subss (:%xmm b) (:%xmm result))
+  (mulss (:%xmm x) (:%xmm iy))
+  (mulss (:%xmm y) (:%xmm ix))
+  (addss (:%xmm ix) (:%xmm iy))
+  (unpcklps (:%xmm iy) (:%xmm result)))
 
 (define-x8664-vinsn get-single (((result :single-float))
                                 ((source :lisp)))
