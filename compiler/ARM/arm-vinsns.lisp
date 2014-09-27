@@ -28,6 +28,8 @@
 (defmacro define-arm-vinsn (vinsn-name (results args &optional temps) &body body)
   (%define-vinsn *arm-backend* vinsn-name results args temps body))
 
+(defun arm-quad-to-double (q)
+  (* 2 (%hard-regspec-value q)))
 
 ;;; Non-volatile FPRs.
 (define-arm-vinsn (push-nvfprs :push :multiple :doubleword :csp :predicatable)
@@ -206,7 +208,7 @@
       (unscaled-idx :imm)))
   (add arm::lr v (:$ arm::misc-dfloat-offset))
   (add arm::lr arm::lr (:lsl unscaled-idx (:$ 2)))
-  (fldmiad dest arm::lr   2)
+  (fldmiad (:apply arm-quad-to-double dest) arm::lr   2)
   (mov lr (:$ 0)))
 
 (define-arm-vinsn (misc-ref-c-double-float :predicatable :sets-lr)
@@ -242,7 +244,7 @@
       (unscaled-idx :imm)))             ; a fixnum
   (add lr v (:$ arm::misc-dfloat-offset))
   (add lr lr (:lsl unscaled-idx (:$ 2)))
-  (fstmiad val lr 2)
+  (fstmiad (:apply arm-quad-to-double val) lr 2)
   (mov lr (:$ 0)))
 
 (define-arm-vinsn (misc-set-c-single-float :predicatable)
@@ -1683,7 +1685,73 @@
   (fnegd dest src))
 
 
+(define-arm-vinsn (complex-double-float+-2 :predicatable) (((result :complex-double-float))
+                                                          ((x :complex-double-float)
+                                                           (y :complex-double-float)))
+  (faddd (:apply arm-quad-to-double result) (:apply arm-quad-to-double x) (:apply arm-quad-to-double y))
+  (faddd (:apply 1+ (:apply arm-quad-to-double result))
+         (:apply 1+ (:apply arm-quad-to-double  x))
+         (:apply 1+ (:apply arm-quad-to-double y))))
 
+
+(define-arm-vinsn (complex-double-float--2 :predicatable) (((result :complex-double-float))
+                                                          ((x :complex-double-float)
+                                                           (y :complex-double-float)))
+  (fsubd (:apply arm-quad-to-double result) (:apply arm-quad-to-double x) (:apply arm-quad-to-double y))
+  (fsubd (:apply 1+ (:apply arm-quad-to-double result))
+         (:apply 1+ (:apply arm-quad-to-double  x))
+         (:apply 1+ (:apply arm-quad-to-double  y))))
+
+(define-arm-vinsn (complex-double-float*-2 :predicatable) (((result :complex-double-float))
+                                                          ((x :complex-double-float)
+                                                           (y :complex-double-float))
+                                                           ((t0 :double-float)
+                                                            (t1 :double-float)))
+  (fmuld t0 (:apply arm-quad-to-double x) (:apply arm-quad-to-double y))
+  (fmuld t1 (:apply 1+ (:apply arm-quad-to-double x)) (:apply 1+ (:apply arm-quad-to-double y)))
+  (fsubd (:apply arm-quad-to-double result) t0 t1)
+  (fmuld t0 (:apply arm-quad-to-double x) (:apply 1+ (:apply arm-quad-to-double y)))
+  (fmuld t1 (:apply arm-quad-to-double y) (:apply 1+ (:apply arm-quad-to-double x)))
+  (faddd (:apply 1+ (:apply arm-quad-to-double result)) t0 t1))
+         
+                                                           
+
+(define-arm-vinsn (complex-single-float*-2 :predicatable) (((result :complex-single-float))
+                                                          ((x :complex-single-float)
+                                                           (y :complex-single-float))
+                                                           ((t0 :single-float)
+                                                            (t1 :single-float)))
+  (fmuls t0 (:apply * 2 (:apply %hard-regspec-value x)) (:apply * 2 (:apply %hard-regspec-value  y)))
+  (fmuls t1 (:apply 1+ (:apply * 2 (:apply %hard-regspec-value x)))  (:apply 1+ (:apply * 2 (:apply %hard-regspec-value y))))
+  (fsubs (:apply * 2 (:apply %hard-regspec-value result)) t0 t1)
+  (fmuls t0 (:apply * 2 (:apply %hard-regspec-value x)) (:apply 1+ (:apply * 2 (:apply %hard-regspec-value y))))
+  (fmuls t1 (:apply * 2 (:apply %hard-regspec-value y)) (:apply 1+ (:apply * 2 (:apply %hard-regspec-value x))))
+  (fadds (:apply 1+ (:apply * 2 (:apply %hard-regspec-value result))) t0 t1))
+
+
+(define-arm-vinsn (complex-single-float+-2 :predicatable) (((result :complex-single-float))
+                                                          ((x :complex-single-float)
+                                                           (y :complex-single-float)))
+  (fadds (:apply * 2 (:apply %hard-regspec-value result))
+          (:apply * 2 (:apply %hard-regspec-value x))
+          (:apply * 2 (:apply %hard-regspec-value y)))
+  (fadds (:apply 1+ (:apply * 2 (:apply %hard-regspec-value result)))
+         (:apply 1+ (:apply * 2 (:apply %hard-regspec-value x)))
+         (:apply 1+ (:apply * 2 (:apply %hard-regspec-value y)))))
+
+(define-arm-vinsn (complex-single-float--2 :predicatable) (((result :complex-single-float))
+                                                          ((x :complex-single-float)
+                                                           (y :complex-single-float)))
+  (fsubs (:apply * 2 (:apply %hard-regspec-value result))
+          (:apply * 2 (:apply %hard-regspec-value x))
+          (:apply * 2 (:apply %hard-regspec-value y)))
+  (fsubs (:apply 1+ (:apply * 2 (:apply %hard-regspec-value result)))
+         (:apply 1+ (:apply * 2 (:apply %hard-regspec-value x)))
+         (:apply 1+ (:apply * 2 (:apply %hard-regspec-value y)))))
+
+
+  
+  
 (define-arm-vinsn single-float-compare (((crf :crf))
                                         ((arg0 :single-float)
                                          (arg1 :single-float))
@@ -1941,9 +2009,10 @@
   ((:not (:pred =
                 (:apply %hard-regspec-value dest)
                 (:apply %hard-regspec-value src)))
-   (fcpyd dest src)
-   (fcpyd (:apply 1+ (:apply %hard-regspec-value dest))
-          (:apply 1+ (:apply %hard-regspec-value src)))))
+   (fcpyd (:apply arm-quad-to-double dest)
+          (:apply arm-quad-to-double src))
+   (fcpyd (:apply 1+ (:apply arm-quad-to-double dest))
+          (:apply 1+ (:apply arm-quad-to-double  src)))))
 
 (define-arm-vinsn (vcell-ref :predicatable)
     (((dest :lisp))
@@ -2599,7 +2668,7 @@
   (mov result allocptr)
   (bic allocptr allocptr (:$ arm::fulltagmask))
   (add lr result (:$ arm::complex-double-float.realpart))
-  (fstmiad fpreg lr 2)
+  (fstmiad (:apply arm-quad-to-double fpreg) lr 2)
   (mov lr (:$ 0)))
 
 
@@ -2674,7 +2743,7 @@
     (((target :complex-double-float))
      ((source :lisp)))
   (add lr source (:$ arm::complex-double-float.realpart))
-  (fldmiad target lr 2)
+  (fldmiad (:apply arm-quad-to-double target) lr 2)
   (mov lr (:$ 0)))
 
 ;;; Extract a double-float value, typechecking in the process.
@@ -3361,8 +3430,8 @@
     (()
      ((val :complex-double-float)
       (offset :u16const)))
-  (fstd val (:@ sp (:$ (:apply + 8 offset))))
-  (fstd (:apply 1+ (:apply %hard-regspec-value val))
+  (fstd (:apply arm-quad-to-double val) (:@ sp (:$ (:apply + 8 offset))))
+  (fstd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ sp (:$ (:apply + 8 8 offset)))))
 
 (define-arm-vinsn (nfp-store-complex-double-float-nested :nfp :set :doubleword)
@@ -3370,24 +3439,24 @@
      ((val :complex-double-float)
       (offset :u16const)))
   (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
-  (fstd val (:@ lr (:$ (:apply + 8 offset))))
-  (fstd (:apply 1+ (:apply %hard-regspec-value val))
+  (fstd (:apply arm-quad-to-double val) (:@ lr (:$ (:apply + 8 offset))))
+  (fstd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ lr (:$ (:apply + 8 8 offset)))))
   
 
 (define-arm-vinsn (nfp-load-complex-double-float :nfp :ref :doubleword)
     (((val :complex-double-float))
      ((offset :u16const)))
-  (fldd val (:@ sp (:$ (:apply + 8 offset))))
-  (fldd (:apply 1+ (:apply %hard-regspec-value val))
+  (fldd (:apply arm-quad-to-double val) (:@ sp (:$ (:apply + 8 offset))))
+  (fldd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ sp (:$ (:apply + 8 8 offset)))))
 
 (define-arm-vinsn (nfp-load-complex-double-float-nested :nfp :ref :doubleword)
     (((val :complex-double-float))
      ((offset :u16const)))
   (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
-  (fldd val (:@ lr (:$ (:apply + 8 offset))))
-  (fldd (:apply 1+ (:apply %hard-regspec-value val))
+  (fldd (:apply arm-quad-to-double val) (:@ lr (:$ (:apply + 8 offset))))
+  (fldd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ lr (:$ (:apply + 8 8 offset)))))
 
 (define-arm-vinsn (nfp-store-single-float :nfp :set) (()
@@ -4358,11 +4427,11 @@
 
 (define-arm-vinsn %complex-double-float-realpart  (((dest :double-float))
                                                    ((src :complex-double-float)))
-  (fcpyd dest src))
+  (fcpyd dest (:apply arm-quad-to-double src)))
 
 (define-arm-vinsn %complex-double-float-imagpart  (((dest :double-float))
                                                    ((src :complex-double-float)))
-  (fcpyd dest (:apply 1+ (:apply %hard-regspec-value src))))
+  (fcpyd dest (:apply 1+ (:apply arm-quad-to-double src))))
 
   
 
