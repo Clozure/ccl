@@ -1443,7 +1443,7 @@ unsigned IP address."
     (setf (pref namelenp :int) +host-address-string-len+)
     #+windows-target
     (if (zerop (#_WSAAddressToStringA (sockaddr ip-socket-address)
-                                      (sockaddr-length socket-address)
+                                      (sockaddr-length ip-socket-address)
                                       (%null-ptr) namep namelenp))
         (%str-from-ptr namep (pref namelenp :int))
         (error "cannot convert host address to string, error ~A" (%get-winsock-error)))))
@@ -1591,6 +1591,7 @@ errorp may be passed as NIL to return NIL if no match was found."
                                                  (parse-foreign-type '(:struct :sockaddr_un)) :sun_path)))
                                               8))
 
+#-windows-target
 (defun copy-string-to-sockaddr_un (name sockaddr)
   "Copy a pathname to a sockaddr_un object, returning the length of
 the resulting sockaddr."
