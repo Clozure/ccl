@@ -254,6 +254,7 @@
     swank-loader
     remote-lisp
     asdf
+    sockets
     defsystem
     jp-encode
     cn-encode

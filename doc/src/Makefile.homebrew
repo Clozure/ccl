@@ -1,0 +1,37 @@
+# -*- coding: unix -*-
+# Use xsltproc and an XSL stylesheet to translate DocBook XML to HTML
+# This require GNU "make", GNU "tar", Posix "find", Posix "date", and
+# "bzip2".  All those external dependencies are, of course, less than
+# ideal.
+
+# for Linux (Fedora; other distros may require some tweaking.)
+
+# The pathname to the xsltproc executable.  Since most alternate
+# translators use Java, this makefile would need to be rewritten to use
+# anything but xsltproc.
+
+XSLTPROC = xsltproc
+
+
+# On a new system or when using a new version of xsltproc or of the
+# stylesheet packages, it's a good idea to run with --load-trace and
+# peruse the output to  make sure that none of the stylesheets are being
+# pulled over the network.  It's a significant expense, compounded by
+# the fact that they aren't cached across invocations of xsltproc.  If they
+# are, you should make sure that the correct catalog file is being used
+# (see below), and, if so, that its contents are correct.
+#EXTRAPARAMS= --xinclude --nonet --load-trace
+EXTRAPARAMS= --xinclude --nonet
+
+# The catalog file tells the translator where to find XSL stylesheets on the
+# local system.  The first choice here is what should be used for builds
+# which are going to take place on the clozure.com server.  The second is
+# for when you have installed docbook on OS X using the fink package manager.
+# If neither applies, comment both out, and the translator will automagically
+# look on the web for the stylesheets, instead.
+
+
+export XML_CATALOG_FILES = xsl/catalog-homebrew
+
+include makefile-common
+

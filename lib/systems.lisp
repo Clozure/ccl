@@ -221,6 +221,7 @@
     (fasload          "ccl:xdump;fasload"        ("ccl:xdump;fasload.lisp"))
     (loop             "ccl:library;loop"         ("ccl:library;loop.lisp"))
     (linux-files      "ccl:l1f;linux-files"      ("ccl:level-1;linux-files.lisp"))
+    (sockets          "ccl:library;sockets"      ("ccl:library;sockets.lisp"))
     (source-files     "ccl:bin;source-files"     ("ccl:lib;source-files.lisp"))
     (swink            "ccl:bin;swink"            ("ccl:lib;swink.lisp"))
     (cover            "ccl:bin;cover"            ("ccl:library;cover.lisp"))

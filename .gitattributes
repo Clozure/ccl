@@ -143,6 +143,7 @@ doc/release-notes-1.2.txt -text
 doc/release-notes.txt -text
 doc/src/Makefile.debian -text
 doc/src/Makefile.fedora -text
+doc/src/Makefile.homebrew -text
 doc/src/Makefile.macports -text
 doc/src/about.xml -text
 doc/src/build.xml -text
@@ -184,6 +185,7 @@ doc/src/xsl/catalog -text
 doc/src/xsl/catalog-debian -text
 doc/src/xsl/catalog-fedora -text
 doc/src/xsl/catalog-fink -text
+doc/src/xsl/catalog-homebrew -text
 doc/src/xsl/catalog-macports -text
 doc/src/xsl/directory-fixes.xsl -text
 doc/src/xsl/footer.xsl -text
@@ -303,6 +305,7 @@ examples/jfli/jfli.jar -text
 examples/jfli/jfli.lisp -text
 examples/jfli/jni-lw.lisp -text
 examples/mswin.lisp -text
+examples/sockets/socket-test.lisp -text
 level-0/ARM/arm-array.lisp -text
 level-0/ARM/arm-bignum.lisp -text
 level-0/ARM/arm-clos.lisp -text
@@ -362,6 +365,7 @@ library/oprofile.txt -text
 library/remote-lisp.lisp -text
 library/sequence-utils.lisp -text
 library/serial-streams.lisp -text
+library/sockets.lisp -text
 library/swank-loader.lisp -text
 library/x86-win64-syscalls.lisp -text
 library/x8664-solaris-syscalls.lisp -text

@@ -20,6 +20,16 @@
       another process, typically (but not necessarily) a TCP/IP
       network connection to a client or server running on some other
       machine on the network.</para>
+
+      <para>IPv6 is supported by the :internet6 address family.
+      Applications should use the <xref linkend="f_resolve-address"/>
+      function to translate host and port specifications to socket
+      addresses.  While host and port numbers can still be dealt with
+      separately, it is preferable to use <xref
+      linkend="c_socket-address"/> instances to specify socket
+      endpoints for unified parsing of string representations and
+      printing.</para>
+      
       <para>All symbols mentioned in this chapter are exported from
       the CCL package. As of version 0.13, these symbols are
       additionally exported from the OPENMCL-SOCKET package.</para>
@@ -106,11 +116,12 @@
 
 	<refsynopsisdiv>
 	  <synopsis><function>make-socket</function> &key;
-	  address-family type connect eol format remote-host
-	  remote-port local-host local-port local-filename
-	  remote-filename keepalive reuse-address nodelay broadcast
-	  linger backlog input-timeout output-timeout connect-timeout
-	  auto-close deadline</synopsis>
+	  address-family type connect eol format remote-address
+	  remote-host remote-port local-address local-host local-port
+	  local-filename remote-filename keepalive reuse-address
+	  nodelay broadcast linger backlog input-timeout
+	  output-timeout connect-timeout auto-close
+	  deadline</synopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
@@ -121,9 +132,10 @@
 	      <term>address-family</term>
 
 	      <listitem>
-		<para>The address/protocol family of this socket. Currently
-		only :internet (the default), meaning IP, and :file,
-		referring to UNIX domain addresses, are supported.</para>
+		<para>The address/protocol family of this
+		socket. Currently, :internet (the default), meaning
+		IPv4, :internet6, meaning IPv6, and :file, referring
+		to UNIX domain addresses, are supported.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -171,11 +183,23 @@
 	    </varlistentry>
 
 	    <varlistentry>
+	      <term>remote</term>
+
+	      <listitem>
+		<para>For TCP streams, it specifies the socket address
+		to connect to, specified as socket-address instance.
+		Ignored for listener sockets. For UDP sockets, it can
+		be used to specify a default address for subsequent calls
+		to send-to or receive-from.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
 	      <term>remote-host</term>
 
 	      <listitem>
-		<para>Required for TCP streams, it specifies the host to
-		connect to (in any format acceptable to lookup-hostname).
+		<para>For TCP streams, it specifies the host to
+		connect to (in any format acceptable to resolve-address).
 		Ignored for listener sockets. For UDP sockets, it can be
 		used to specify a default host for subsequent calls to
 		send-to or receive-from.</para>
@@ -186,8 +210,8 @@
 	      <term>remote-port</term>
 
 	      <listitem>
-		<para>Required for TCP streams, it specifies the port to
-		connect to (in any format acceptable to lookup-port).
+		<para>For TCP streams, it specifies the port to
+		connect to (in any format acceptable to resolve-address).
 		Ignored for listener sockets. For UDP sockets, it can be
 		used to specify a default port for subsequent calls to for
 		subsequent calls to send-to or receive-from.</para>
@@ -198,10 +222,21 @@
 	      <term>remote-filename</term>
 
 	      <listitem>
-		<para>Required for file-socket streams, it specifies the
+		<para>For file-socket streams, it specifies the
 		name of a file in the local filesystem (e.g., NOT mounted
 		via NFS, AFP, SMB, ...) which names and controls access to a
 		UNIX-domain socket.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>local-address</term>
+
+	      <listitem>
+		<para>Allows you to specify a local address for a
+		listener or UDP socket, for the case where you want to
+		restrict connections to those coming to a specific local
+		address for security reasons.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -210,7 +245,7 @@
 
 	      <listitem>
 		<para>Allows you to specify a local host address for a
-		listener or UDP socket, for the rare case where you want to
+		listener or UDP socket, for the case where you want to
 		restrict connections to those coming to a specific local
 		address for security reasons.</para>
 	      </listitem>
@@ -230,7 +265,7 @@
 	      <term>local-filename</term>
 
 	      <listitem>
-		<para>Required for file-listener-sockets. Specifies the name
+		<para>For file-listener-sockets, specifies the name
 		of a file in the local filesystem which is used to name a
 		UNIX-domain socket. The actual filesystem file should not
 		previously exist when the file-listener-socket is created;
@@ -375,7 +410,13 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Creates and returns a new socket</para>
+	  <para>Creates and returns a new socket.  For :passive
+	  sockets, the :local-address, :local-port or :local-filename
+	  arguments are required, depending on the type of the socket.
+	  For :active sockets, either the :remote-address, the
+	  :remote-host and :remote-port, or the :remote-filename
+	  arguments must be present, depending on the socket
+	  type.</para>
 	</refsect1>
       </refentry>
 
@@ -429,6 +470,146 @@
 	  (e.g. :keepalive, :nodelay, etc.) The original listener socket
 	  continues to be open listening for more connections, so you can
 	  call accept-connection on it again.</para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_resolve-address">
+	<indexterm zone="f_resolve-address">
+	  <primary>resolve-address</primary>
+	</indexterm>
+	<refnamediv>
+	  <refname>RESOLVE-ADDRESS</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>resolve-address</function> &key; host
+	  port socket-type connect address-family numeric-host-p
+	  numeric-service-p singlep errorp</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>host</term>
+
+	      <listitem>
+		<para>Specification of the host, as a string.  This
+		can be either a host name such as
+		&#34;clozure.com&#34; or any of the literal address
+		forms accepted by getaddrinfo().</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>port</term>
+
+	      <listitem>
+		<para>Specification of the port.  This
+		can be either a service name such as
+		&#34;http&#34; or a port number.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>socket-type</term>
+
+	      <listitem>
+		<para>Service type for port lookups, can be either
+		:stream for TCP services or :datagram for UDP.
+		Defaults to :stream.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>connect</term>
+
+	      <listitem>
+		<para>Specifies how the returned <xref
+		linkend="c_socket-address"/> instances will be used.
+		If :active is passed, which is the default, the host
+		address will default to the address of the loopback
+		interface of the local host if not specified.  When
+		:passive is used, the host address will default to the
+		wildcard address for the given address family.  This
+		parameter has no effect if the :host parameter is
+		used.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>address-family</term>
+
+	      <listitem>
+		<para>Specifies the address family that should be
+		returned, can be specified as either :internet or
+		:internet6.  If it is specified, only addresses of
+		that family are returned.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>numeric-host-p</term>
+
+	      <listitem>
+		<para>If this argument is true, no host name lookups
+		will be performed for the host address.  A numeric
+		address literal must be passed in this case.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>numeric-port-p</term>
+
+	      <listitem>
+		<para>If this argument is true, no service name
+		lookups will be performed for the port address.  A
+		numeric port number must be passed in this
+		case.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>singlep</term>
+
+	      <listitem>
+		<para>If this argument is set to a true value, which
+		is the default, only the first matching address is
+		returned.  If it is passed as NIL, all matching
+		addresses are returned as a list.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>errorp</term>
+
+	      <listitem>
+		<para>If this argument is set to a true value, which
+		is the default, an error is signalled if the given
+		host and/or port combination did not yield any
+		matches.  If it is passed as NIL, the function returns
+		NIL if no addresses matched the supplied
+		arguments.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>Converts a host and/or port specification to one or
+	  more <xref linkend="c_socket-address"/> instances.  This
+	  function uses the getaddrinfo() system function underneath
+	  which knows how to translate all standard address and port
+	  formats and appropriately orders adresses for hosts with
+	  multiple addresses.  It returns the best matching
+	  translation or, if the :singlep argument is passed as false,
+	  or all matching translations for the given parameter
+	  combination.</para>
 	</refsect1>
       </refentry>
 
@@ -502,7 +683,8 @@
 	      <term>ipaddr</term>
 
 	      <listitem>
-		<para>A 32-bit integer representing an internet host address</para>
+		<para>A 32-bit integer representing an IPv4 host
+		address</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -522,7 +704,7 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Converts a 32-bit unsigned IP address into octets.</para>
+	  <para>Converts a 32-bit unsigned IPv4 address into octets.</para>
 	</refsect1>
       </refentry>
 
@@ -549,7 +731,7 @@
 	      <term>ipaddr</term>
 
 	      <listitem>
-		<para>a 32-bit integer representing an internet host address</para>
+		<para>a 32-bit integer representing an IPv4 host address</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -567,7 +749,7 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Converts a 32-bit unsigned IP address into a host name
+	  <para>Converts a 32-bit unsigned IPv4 address into a host name
 	  string</para>
 	</refsect1>
       </refentry>
@@ -598,7 +780,7 @@
 		<para>Specifies the host. It can be either a host name
 		string such as &#34;clozure.com&#34;, or a dotted address
 		string such as &#34;192.168.0.1&#34;, or a 32-bit unsigned
-		IP address such as 3232235521.</para>
+		IPv4 address such as 3232235521.</para>
 	      </listitem>
 	    </varlistentry>
 	  </variablelist>
@@ -607,8 +789,10 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Converts a host spec in any of the acceptable formats into a
-	  32-bit unsigned IP address</para>
+	  <para>Converts a host spec in any of the acceptable formats
+	  into a 32-bit unsigned IPv4 address.  IPv6-enabled
+	  applications should use the <xref
+	  linkend="f_resolve-address"/> function instead.</para>
 	</refsect1>
       </refentry>
 
@@ -635,10 +819,11 @@
 	      <term>port</term>
 
 	      <listitem>
-		<para>Specifies the port. It can be either a string, such as
-		&#34;http&#34; or a symbol, such as :http, or an unsigned
-		port number. Note that a string is case-sensitive. A symbol
-		is lowercased before lookup.</para>
+		<para>Specifies the port. It can be either a string,
+		such as &#34;http&#34; or a symbol, such as :http, or
+		an unsigned port number. Note that a string is
+		case-sensitive. A symbol is lowercased before
+		lookup.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -726,6 +911,17 @@
 		data is to be stored. The default is 0.</para>
 	      </listitem>
 	    </varlistentry>
+
+	    <varlistentry>
+	      <term>want-socket-address-p</term>
+
+	      <listitem>
+		<para>Indicates that the address of the sender of the
+		data should be returned as a <xref
+		linkend="c_socket-address"/> instance rather than as
+		separate host and port values.</para>
+	      </listitem>
+	    </varlistentry>
 	  </variablelist>
 	</refsect1>
 
@@ -733,8 +929,10 @@
 	  <title>Description</title>
 
 	  <para>Reads a UDP packet from a socket. If no packets are
-	  available, waits for a packet to arrive. Returns four values:</para>
+	  available, waits for a packet to arrive.</para>
 
+          <para>If :want-socket-address-p is NIL, which is the
+          default, four values are returned:</para>
 	  <orderedlist continuation="restarts" inheritnum="ignore">
 	    <listitem>
 	      <para>The buffer with the data</para>
@@ -745,11 +943,29 @@
 	    </listitem>
 
 	    <listitem>
-	      <para>The 32-bit unsigned IP address of the sender of the data</para>
+	      <para>The 32-bit unsigned IPv4 address or the 16 byte
+	      IPv6 addresss of the sender of the data</para>
 	    </listitem>
 
 	    <listitem>
 	      <para>The port number of the sender of the data</para>
+	    </listitem>
+	  </orderedlist>
+
+          <para>If :want-socket-address-p is true, three values are
+          returned:</para>
+	  <orderedlist continuation="restarts" inheritnum="ignore">
+	    <listitem>
+	      <para>The buffer with the data</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>The number of bytes read</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>The <xref linkend="c_socket-address"/> instance of
+	      the sender of the data.</para>
 	    </listitem>
 	  </orderedlist>
 	</refsect1>
@@ -766,9 +982,9 @@
 	</refnamediv>
 
 	<refsynopsisdiv>
-	  <synopsis><function>send-to</function>
-	  (socket udp-socket) buffer size &key; remote-host
-	  remote-port offset</synopsis>
+	  <synopsis><function>send-to</function> (socket udp-socket)
+	  buffer size &key; remote remote-host remote-port
+	  offset</synopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
@@ -797,6 +1013,17 @@
 
 	      <listitem>
 		<para>Number of octets to send</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>remote</term>
+
+	      <listitem>
+		<para>The remote address to send the packet to, as a
+		<xref linkend="c_socket-address"/> instance. The
+		default is the remote address specified in the call to
+		make-socket.</para>
 	      </listitem>
 	    </varlistentry>
 
@@ -958,7 +1185,7 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Returns the 32-bit unsigned IP address of the remote host,
+	  <para>Returns the 32-bit unsigned IPv4 address of the remote host,
 	  or NIL if the socket is not connected.</para>
 	</refsect1>
       </refentry>
@@ -1032,7 +1259,8 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Returns 32-bit unsigned IP address of the local host.</para>
+	  <para>Returns 32-bit unsigned IPv4 address or the 16 byte
+	  IPv6 address of the local host.</para>
 	</refsect1>
       </refentry>
 
@@ -1084,7 +1312,7 @@
 
 	<refsynopsisdiv>
 	  <synopsis><function>socket-address-family</function>
-	  socket</synopsis>
+	  thing</synopsis>
 	</refsynopsisdiv>
 
 	<refsect1>
@@ -1092,10 +1320,11 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term>thing</term>
 
 	      <listitem>
-		<para>The socket</para>
+		<para>The socket or socket-address for which the
+		address family is to be queried.</para>
 	      </listitem>
 	    </varlistentry>
 	  </variablelist>
@@ -1104,7 +1333,86 @@
 	<refsect1>
 	  <title>Description</title>
 
-	  <para>Returns :internet or :file, as appropriate.</para>
+	  <para>Returns :internet, :internet6 or :file, as appropriate.</para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_socket-address-host">
+	<indexterm zone="f_socket-address-host">
+	  <primary>socket-address-host</primary>
+	</indexterm>
+	<refnamediv>
+	  <refname>SOCKET-ADDRESS-HOST</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>socket-address-host</function>
+	  socket-address</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>socket-address</term>
+
+	      <listitem>
+		<para>The socket-address for which the
+		host address is to be queried.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>Returns the host portion of the given socket-address.
+	  For :internet addresses, this is a 32-bit integer.  For
+	  :internet6 addresses, an array of 16 bytes returned.  For
+	  :file addresses, it is the file name string.</para>
+	</refsect1>
+      </refentry>
+
+      <refentry id="f_socket-address-port">
+	<indexterm zone="f_socket-address-port">
+	  <primary>socket-address-port</primary>
+	</indexterm>
+	<refnamediv>
+	  <refname>SOCKET-ADDRESS-PORT</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Function</refclass>
+	</refnamediv>
+
+	<refsynopsisdiv>
+	  <synopsis><function>socket-address-port</function>
+	  socket-address</synopsis>
+	</refsynopsisdiv>
+
+	<refsect1>
+	  <title>Arguments and Values</title>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>socket-address</term>
+
+	      <listitem>
+		<para>The socket-address for which the
+		port number is to be queried.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</refsect1>
+
+	<refsect1>
+	  <title>Description</title>
+
+	  <para>Returns the port number of the given socket-address.
+	  This function is available only for :internet and :internet6
+	  socket addresses.</para>
 	</refsect1>
       </refentry>
 
@@ -1217,6 +1525,28 @@
 	  <para>returns :stream for tcp-stream and listener-socket, and
 	  :datagram for udp-socket.</para>
 	</refsect1>
+      </refentry>
+
+      <refentry id="c_socket-address">
+	<indexterm zone="c_socket-address">
+	  <primary>socket-address</primary>
+	</indexterm>
+	<refnamediv>
+	  <refname>SOCKET-ADDRESS</refname>
+	  <refpurpose></refpurpose>
+	  <refclass>Class</refclass>
+	</refnamediv>
+
+	<refsect1>
+	  <title>Description</title>
+
+          <para>Representation of a socket endpoint address.
+          Instances of this class are used to encapsulate the host and
+          port of an IP socket endpoint or the filename of a file
+          socket.  They can be created by applications from a possibly
+          symbolic address representation by the <xref
+          linkend="f_resolve-address"/> function.</para>
+        </refsect1>
       </refentry>
 
       <refentry id="c_socket-error">

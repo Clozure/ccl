@@ -388,6 +388,7 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (require "JP-ENCODE")
       (require "CN-ENCODE")
       (require "LISPEQU") ; Shouldn't need this at load time ...
+      (require "SOCKETS")
       )
     (setq *%fasload-verbose* nil)
     )

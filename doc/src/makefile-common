@@ -1,7 +1,7 @@
 # -*- coding: unix -*-
 
 ifdef COMMIT
-SVN=/usr/bin/svn
+SVN=svn
 else
 SVN=/bin/true
 endif
@@ -38,7 +38,7 @@ PARENT = ../ccl-documentation.html
 XSLTPROCVERSION = $(shell $(XSLTPROC) --version | head -n 1)
 
 # Try to determine the svn revishion
-SVNREV = $(shell /usr/bin/svnversion)
+SVNREV = $(shell svnversion)
 
 
 .PHONY: all clean distclean show
