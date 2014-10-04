@@ -3183,7 +3183,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                     (:complex-double-float
                      (incf offset 8)
                      (if nested
-                       (! nfp-store-oomplex-double-float-nested areg offset)
+                       (! nfp-store-complex-double-float-nested areg offset)
                        (! nfp-store-complex-double-float areg  offset)))
                     (:single-float
                      (if nested
