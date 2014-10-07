@@ -2080,3 +2080,25 @@ before doing so.")
 
 (defun enumerate-hash-keys (hash out)
   (enumerate-hash-keys-and-values hash out nil))
+
+
+(defun release-thread-private-hash-table (hash)
+  (unless (and (typep hash 'hash-table)
+               (not (nhash.read-only hash))
+               (not (hash-lock-free-p hash)))
+    (error "~&~s is not a thread-private hash table. " hash))
+  (store-gvector-conditional nhash.owner hash *current-process* nil))
+
+(defun acquire-thread-private-hash-table (hash)
+  (unless (and (typep hash 'hash-table)
+               (not (nhash.read-only hash))
+               (not (hash-lock-free-p hash)))
+    (error "~&~s is not a thread-private hash table. " hash))
+  (store-gvector-conditional nhash.owner hash *current-process* nil))
+
+(defun thread-private-hash-table-owner (hash)
+  (unless (and (typep hash 'hash-table)
+               (not (nhash.read-only hash))
+               (not (hash-lock-free-p hash)))
+    (error "~&~s is not a thread-private hash table. " hash))
+  (nash.owner hash))
