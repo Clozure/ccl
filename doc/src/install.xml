@@ -525,7 +525,7 @@ joe:ccl>
         <literal>provide</literal>, access to foreign interface
         information (see <link linkend="The-Interface-Database">The
         Interface Database</link>) and the Lisp build process (see
-        <link linkend="Building-CCL">Building &CCL; from its Source
+        <link linkend="Building-CCL-from-source">Building &CCL; from its Source
         Code</link>). Specifically, it needs to set up logical
         pathname translations for the <literal>"ccl:"</literal>
         logical host.  If this logical host isn't defined (or isn't

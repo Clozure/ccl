@@ -308,7 +308,7 @@ r24 (save7) = ()
 
     <refentry id="v_warn-if-redefine-kernel">
 	  <indexterm zone="v_warn-if-redefine-kernel">
-	    <primary>*warn-if-redefine-kernel</primary>
+	    <primary>*warn-if-redefine-kernel*</primary>
 	  </indexterm>
 
 	  <refnamediv>

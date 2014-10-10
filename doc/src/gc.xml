@@ -54,8 +54,8 @@
 that provided by earlier &CCL; versions.</para>
     </sect1>
 
-    <sect1 id="The-Ephemeral-GC">
-      <title>The Ephemeral GC</title>
+    <sect1 id="Ephemeral-GC">
+      <title>Ephemeral GC</title>
       <para>For many programs, the following observations are true to
       a very large degree:</para>
 
@@ -603,13 +603,13 @@ that provided by earlier &CCL; versions.</para>
 	</refsect1>
       </refentry>
 
-      <refentry id="f_configure-gcc">
-	<indexterm zone="f_configure-gcc">
-	  <primary>configure-gcc</primary>
+      <refentry id="f_configure-egc">
+	<indexterm zone="f_configure-egc">
+	  <primary>configure-egc</primary>
 	</indexterm>
 
 	<refnamediv>
-	  <refname>CONFIGURE-GCC</refname>
+	  <refname>CONFIGURE-EGC</refname>
 	  <refpurpose></refpurpose>
 	  <refclass>Function</refclass>
 	</refnamediv>

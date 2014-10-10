@@ -128,7 +128,7 @@ oshirion:ccl mikel$
 
       <para>You can interrupt computations, trigger breaks, and select
         restarts from the Lisp menu. You can also display a backtrace or
-        open the <link linkend="section_inspector_window">Inspector
+        open the <link linkend="ide-inspector-window">Inspector
           window</link>.</para>
 
       <sect3>
@@ -175,13 +175,12 @@ oshirion:ccl mikel$
         Apropos window to quickly find function names and other useful
         symbols. The Processes window lists all threads running in the
         current Lisp session. If you double-click a process entry, &CCL;
-        opens an <link linkend="section_inspector_window">Inspector
+        opens an <link linkend="ide-inspector-window">Inspector
           window</link> on that process.</para>
     </sect2>
 
     <sect2 id="ide-inspector-window">
       <title>The Inspector Window</title>
-      <anchor id="section_inspector_window"/>
       <para>The Inspector window displays information about a Lisp
         value. The information displayed varies from the very simple, in
         the case of a simple data value such as a character, to the
@@ -234,7 +233,6 @@ oshirion:ccl mikel$
 
   <!-- ================================================================ -->
   <sect1 id="application-builder"><title>The Application Builder</title>
-    <anchor id="application_builder"/>
     <para>One important feature of the IDE currently has no Cocoa user
       interface: the application builder. The application builder
       constructs a

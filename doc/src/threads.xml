@@ -3273,7 +3273,7 @@ Type :? for other options.
 
     <refentry id="v_request-terminal-input-via-break">
 	  <indexterm zone="v_request-terminal-input-via-break">
-	    <primary>request-terminal-input-via-break</primary>
+	    <primary>*request-terminal-input-via-break*</primary>
 	  </indexterm>
 
 	  <refnamediv>

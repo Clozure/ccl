@@ -30,7 +30,7 @@
       <para>All of the symbols defined in the MOP specification
       (whether implemented or not) are exported from the "CCL" package
       and from an "OPENMCL-MOP" package.</para>
-      <para><informaltable><tgroup cols="2" colsep="1"
+      <para><table><title>MOP Implementation Status</title><tgroup cols="2" colsep="1"
       rowsep="1"><colspec align="center" colname="col0" /><colspec
       align="center" colname="col1" /><thead><row><entry
       align="center" valign="top"><para>construct</para></entry><entry
@@ -319,7 +319,7 @@
       align="center"
       valign="top"><para>writer-method-class</para></entry><entry
       align="center"
-      valign="top"><para>+</para></entry></row></tbody></tgroup></informaltable></para>
+      valign="top"><para>+</para></entry></row></tbody></tgroup></table></para>
       
       <para>Note that those generic functions whose status is "-" in
       the table above deal with the internals of generic function

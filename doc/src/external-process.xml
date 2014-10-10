@@ -128,7 +128,7 @@
 
 		<listitem>
                   <para>Sets a specific sharing mode
-                  (see <xref linkend="Stream-SHARING"/>) for any streams created
+                  (see <xref linkend="Additional-Open-Keywords"/>) for any streams created
                   within RUN-PROGRAM when INPUT, OUTPUT or ERROR are requested
                   to be a :STREAM.</para>
 		</listitem>

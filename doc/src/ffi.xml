@@ -86,7 +86,7 @@
           name <code>:NS-RECT</code> is a name for the type that
           corresponds to <code>NS:NS-RECT</code>, and you can
           use <code>:NS-RECT</code> as a type designator
-          in <link linkend="anchor_rlet"><code>RLET</code></link> forms to
+          in <link linkend="m_rlet"><code>RLET</code></link> forms to
           specify a structure of type <code>NS-RECT</code>.</para>
         </listitem>
         <listitem>
@@ -3835,7 +3835,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <para>
 	      Allocates a block of foreign memory suitable to hold the foreign
 	      type described by <code>typespec</code>, in the same manner
-	      as <link linkend="anchor_make-record">MAKE-RECORD</link>. In
+	      as <link linkend="m_make-record">MAKE-RECORD</link>. In
 	      addition, <code>MAKE-GCABLE-RECORD</code> marks the
 	      returned object gcable; in other words, it informs the garbage
 	      collector that it may reclaim the object when it becomes
@@ -3844,7 +3844,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
         <para>In all other respects, <code>MAKE-GCABLE-RECORD</code> works
           the same way
-          as <link linkend="anchor_make-record">MAKE-RECORD</link></para>
+          as <link linkend="m_make-record">MAKE-RECORD</link></para>
 
         <para> When using gcable pointers, it's important to remember the
           distinction between a <code>MACPTR</code> object (which is a
@@ -3877,7 +3877,6 @@ reverse_int_ptr_ptrtest(int **ptrs)
       <refmeta>
       <refentrytitle>
 	MAKE-RECORD
-	<anchor id="anchor_make-record"/>
       </refentrytitle>
       </refmeta>
 	  <refnamediv>
@@ -4204,7 +4203,6 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refmeta>
 	    <refentrytitle>
 	      RLET
-	      <anchor id="anchor_rlet"/>
 	    </refentrytitle>
 	  </refmeta>
 

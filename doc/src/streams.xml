@@ -1089,7 +1089,7 @@
       </refentry>
     </sect2>
   </sect1>
-  <sect1>
+  <sect1 id="Lisp-Standard-Streams-and-OS-Standard-Streams">
     <title>Lisp Standard Streams and OS Standard Streams</title>
     <para>
       In normal interactive usage, the input and output sides of the
