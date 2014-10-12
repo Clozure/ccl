@@ -1229,6 +1229,11 @@ Type :? for other options.
 	    <synopsis><function>process-run-function</function>
 	      process-specifier function &rest; args => process</synopsis>
 
+	  </refsynopsisdiv>
+
+	  <refsect1>
+	    <title>Arguments and Values</title>
+
 	    <variablelist>
 	      <varlistentry>
 	        <term>process-specifier</term>
@@ -1246,13 +1251,6 @@ Type :? for other options.
 		      </para>
 	        </listitem>
 	      </varlistentry>
-	    </variablelist>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Arguments and Values</title>
-
-	    <variablelist>
 	      <varlistentry>
 	        <term>name</term>
 	        <listitem>
@@ -1841,6 +1839,12 @@ Type :? for other options.
 	  <refsynopsisdiv>
 	    <synopsis><function>process-whostate</function> process
 	      => whostate</synopsis>
+	  </refsynopsisdiv>
+
+
+	  <refsect1>
+	    <title>Description</title>
+
 	    <variablelist>
 	      <varlistentry>
 	        <term>process</term>
@@ -1856,10 +1860,6 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
-	  </refsynopsisdiv>
-
-	  <refsect1>
-	    <title>Description</title>
 
 	    <para>This information is primarily for the benefit of
 	      debugging tools.  <varname>whostate</varname> is a terse report
