@@ -205,7 +205,9 @@ definition type NAME"
                      (neq x 'setf)
                      (not (keywordp x)))
             (setq name x)))))
-  (canonical-maybe-setf-name name))
+  (if (setf-function-name-p name)
+    (canonical-maybe-setf-name name)
+    (and (symbolp name) name)))
 
 (defmethod definition-bound-p ((dt function-definition-type) name)
   (and (or (symbolp name) (setf-function-name-p name))
