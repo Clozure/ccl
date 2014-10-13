@@ -2365,19 +2365,17 @@ has immediate effect."
 (defmacro defpackage (name &rest options)
   "Defines a new package called PACKAGE. Each of OPTIONS should be one of the 
    following: 
-    (NICKNAMES {package-name}*)
-
-    (SIZE <integer>)
-    (SHADOW {symbol-name}*)
-    (SHADOWING-IMPORT-FROM <package-name> {symbol-name}*)
-    (USE {package-name}*)
-    (IMPORT-FROM <package-name> {symbol-name}*)
-    (INTERN {symbol-name}*)
-    (EXPORT {symbol-name}*)
-    (IMPLEMENT {package-name}*)
-    (LOCK boolean)
-    (DOCUMENTATION doc-string)
-   All options except SIZE, LOCK, and :DOCUMENTATION can be used multiple 
+    (:NICKNAMES {package-name}*)
+    (:SIZE <integer>)
+    (:EXTERNAL-SIZE <integer>)
+    (:SHADOW {symbol-name}*)
+    (:SHADOWING-IMPORT-FROM <package-name> {symbol-name}*)
+    (:USE {package-name}*)
+    (:IMPORT-FROM <package-name> {symbol-name}*)
+    (:INTERN {symbol-name}*)
+    (:EXPORT {symbol-name}*)
+    (:DOCUMENTATION doc-string)
+   All options except SIZE and DOCUMENTATION can be used multiple 
    times."
   (let* ((size nil)
          (all-names-size 0)
