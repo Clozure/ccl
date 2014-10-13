@@ -616,7 +616,7 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>a list of all lisp processes (threads)
 		        known to &CCL;.</para>
@@ -672,7 +672,7 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 	        
 	        <listitem>
 		      <para>a string, used to identify the process.</para>
@@ -680,7 +680,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>persistent</term>
+	        <term><parameter>persistent</parameter></term>
 	        
 	        <listitem>
 		      <para>if true, requests that information about the process
@@ -691,7 +691,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>priority</term>
+	        <term><parameter>priority</parameter></term>
 	        
 	        <listitem>
 		      <para>ignored.  It
@@ -701,7 +701,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>class</term>
+	        <term><parameter>class</parameter></term>
 	        
 	        <listitem>
 		      <para>the class of process object to create;
@@ -711,7 +711,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>initargs</term>
+	        <term><parameter>initargs</parameter></term>
 	        
 	        <listitem>
 		      <para>Any additional initargs to pass to MAKE-INSTANCE. The default is ().</para>
@@ -719,7 +719,7 @@ Type :? for other options.
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>stack-size</term>
+	        <term><parameter>stack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>the size, in bytes, of the newly-created process's
@@ -730,7 +730,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>vstack-size</term>
+	        <term><parameter>vstack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>the size, in bytes, of the newly-created process's
@@ -741,7 +741,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>tstack-size</term>
+	        <term><parameter>tstack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>the size, in bytes, of the newly-created process's
@@ -751,7 +751,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>use-standard-initial-bindings</term>
+	        <term><parameter>use-standard-initial-bindings</parameter></term>
 	        
 	        <listitem>
 		      <para>when true, the global "standard initial
@@ -767,21 +767,21 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>initial-bindings</term>
+	        <term><parameter>initial-bindings</parameter></term>
 	        
 	        <listitem>
-		      <para>an alist of (<varname>symbol</varname> .
-		        <varname>valueform</varname>) pairs, which can be
+		      <para>an alist of (<parameter>symbol</parameter> .
+		        <parameter>valueform</parameter>) pairs, which can be
 		        used to initialize special variable bindings in the new
-		        thread. Each <varname>valueform</varname> is used to
+		        thread. Each <parameter>valueform</parameter> is used to
 		        compute the value of a new binding of
-		        <varname>symbol</varname> in the execution environment of
+		        <parameter>symbol</parameter> in the execution environment of
 		        the newly-created thread.  The default is nil.</para>
 	        </listitem>
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        
 	        <listitem>
 		      <para>the newly-created process.</para>
@@ -794,7 +794,7 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Creates and returns a new lisp process (thread) with the
-	      specified attributes. <varname>process</varname> will not begin
+	      specified attributes. <parameter>process</parameter> will not begin
 	      execution immediately; it will need to be
 	      <emphasis>preset</emphasis> (given
 	      an initial function to run, as by
@@ -803,12 +803,12 @@ Type :? for other options.
 	      (allowed to execute, as by <xref linkend="f_process-enable"/>)
 	      before it&#39;s able to actually do anything.</para>
 
-	    <para>If <varname>valueform</varname> is a function, it is
+	    <para>If <parameter>valueform</parameter> is a function, it is
 	      called, with no arguments, in the execution environment of the
 	      newly-created thread; the primary value it returns is used for
-	      the binding of the corresponding <varname>symbol</varname>.</para>
+	      the binding of the corresponding <parameter>symbol</parameter>.</para>
 
-	    <para>Otherwise, <varname>valueform</varname> is evaluated in the
+	    <para>Otherwise, <parameter>valueform</parameter> is evaluated in the
 	      execution
 	      environment of the newly-created thread, and the resulting value
 	      is used.</para>
@@ -846,17 +846,17 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
-		      <para>T if <varname>process</varname> had been runnable
+		      <para>T if <parameter>process</parameter> had been runnable
 		        and is now suspended; NIL otherwise.  That is, T if
-		        <varname>process</varname>'s
+		        <parameter>process</parameter>'s
 		        <xref linkend="f_process-suspend-count"/>
 		        transitioned from 0 to 1.</para>
 	        </listitem>
@@ -867,7 +867,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Suspends <varname>process</varname>, preventing it from
+	    <para>Suspends <parameter>process</parameter>, preventing it from
 	      running, and stopping it if it was already running. This is a fairly
 	      expensive operation, because it involves a few
 	      calls to the OS.  It also risks creating deadlock if used
@@ -878,10 +878,10 @@ Type :? for other options.
 	      Each
 	      call to <function>process-suspend</function> must be reversed by
 	      a matching call to <xref linkend="f_process-resume"/>
-	      before <varname>process</varname> is able to run.  What
+	      before <parameter>process</parameter> is able to run.  What
 	      <function>process-suspend</function> actually does is increment
 	      the <xref linkend="f_process-suspend-count"/> of
-	      <varname>process</varname>.
+	      <parameter>process</parameter>.
 	    </para>
 
 	    <para>A process can't suspend itself, though this once
@@ -901,10 +901,10 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Notes</title>
 	    <para><function>process-suspend</function> was previously called
-	      <function>process-disable</function>.
+	      <code>process-disable</code>.
 	      <xref linkend="f_process-enable"/>
 	      now names a function for which there is no
-	      obvious inverse, so <function>process-disable</function>
+	      obvious inverse, so <code>process-disable</code>
 	      is no longer
 	      defined.</para>
 	  </refsect1>
@@ -932,17 +932,17 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
-		      <para>T if <varname>process</varname> had been suspended
+		      <para>T if <parameter>process</parameter> had been suspended
 		        and is now runnable; NIL otherwise.  That is, T if
-		        <varname>process</varname>'s
+		        <parameter>process</parameter>'s
 		        <xref linkend="f_process-suspend-count"/>
 		        transitioned from  to 0.
 		      </para>
@@ -960,7 +960,7 @@ Type :? for other options.
 	      effect if the process is not suspended.  What
 	      <function>process-resume</function> actually does is decrement
 	      the <xref linkend="f_process-suspend-count"/> of
-	      <varname>process</varname>, to a minimum of 0.</para>
+	      <parameter>process</parameter>, to a minimum of 0.</para>
 	  </refsect1>
 
 	  <refsect1>
@@ -1007,18 +1007,18 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>The number of "outstanding"
 		        <xref linkend="f_process-suspend"/> calls on
-		        <varname>process</varname>, or NIL if
-		        <varname>process</varname> has expired.
+		        <parameter>process</parameter>, or NIL if
+		        <parameter>process</parameter> has expired.
 		      </para>
 	        </listitem>
 	      </varlistentry>
@@ -1075,13 +1075,13 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>function</term>
+	        <term><parameter>function</parameter></term>
 	        <listitem>
 		      <para>a function, designated by itself or by a symbol
 		        which names it.
@@ -1089,14 +1089,14 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>args</term>
+	        <term><parameter>args</parameter></term>
 	        <listitem>
 		      <para>a list of values, appropriate as arguments to
-		        <varname>function</varname>.</para>
+		        <parameter>function</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>undefined.</para>
 	        </listitem>
@@ -1108,11 +1108,11 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Typically used to initialize a newly-created or newly-reset
-	      process, setting things up so that when <varname>process</varname>
+	      process, setting things up so that when <parameter>process</parameter>
 	      becomes enabled, it will begin execution by
-	      applying <varname>function</varname> to <varname>args</varname>.
+	      applying <parameter>function</parameter> to <parameter>args</parameter>.
 	      <function>process-preset</function> does not enable
-	      <varname>process</varname>,
+	      <parameter>process</parameter>,
 	      although a process must be <function>process-preset</function>
 	      before it can be enabled.  Processes are normally enabled by
 	      <xref linkend="f_process-enable"/>.
@@ -1153,13 +1153,13 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>timeout</term>
+	        <term><parameter>timeout</parameter></term>
 	        <listitem>
 		      <para>a time interval in seconds.  May be any
 		        non-negative real number the <function>floor</function> of
@@ -1167,7 +1167,7 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>undefined.</para>
 	        </listitem>
@@ -1178,17 +1178,17 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Tries to begin the execution of <varname>process</varname>.
-	      An error is signaled if <varname>process</varname> has never
+	    <para>Tries to begin the execution of <parameter>process</parameter>.
+	      An error is signaled if <parameter>process</parameter> has never
 	      been <xref linkend="f_process-preset"/>.  Otherwise,
-	      <varname>process</varname> invokes its initial function.
+	      <parameter>process</parameter> invokes its initial function.
 	    </para>
 	    
 	    <para><function>process-enable</function> attempts to
-	      synchronize with <varname>process</varname>, which is presumed
+	      synchronize with <parameter>process</parameter>, which is presumed
 	      to be reset or in the act of resetting itself.  If this attempt
 	      is not successful within the time interval specified by
-	      <varname>timeout</varname>, a continuable error is signaled,
+	      <parameter>timeout</parameter>, a continuable error is signaled,
 	      which offers the opportunity to continue waiting.
 	    </para>
 
@@ -1236,39 +1236,39 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process-specifier</term>
+	        <term><parameter>process-specifier</parameter></term>
 	        <listitem>
 		      <para>
-		        <varname>name</varname> | 
-		        (&key; <varname>name</varname>
-		        <varname>persistent</varname>
-		        <varname>priority</varname>
-		        <varname>class</varname>
-			<varname>initargs</varname>
-		        <varname>stack-size</varname>
-		        <varname>vstack-size</varname>
-		        <varname>tstack-size</varname>)
+		        <parameter>name</parameter> | 
+		        (&key; <parameter>name</parameter>
+		        <parameter>persistent</parameter>
+		        <parameter>priority</parameter>
+		        <parameter>class</parameter>
+			<parameter>initargs</parameter>
+		        <parameter>stack-size</parameter>
+		        <parameter>vstack-size</parameter>
+		        <parameter>tstack-size</parameter>)
 		      </para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 	        <listitem>
 		      <para>a string, used to identify the process.
 		        Passed to <function>make-process</function>.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>function</term>
+	        <term><parameter>function</parameter></term>
 	        <listitem>
 		      <para>a function, designated by itself or by a symbol
 		        which names it.  Passed to
-		        <function>preset-process</function>.
+		        <function>process-preset</function>.
 		      </para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>persistent</term>
+	        <term><parameter>persistent</parameter></term>
 	        
 	        <listitem>
 		      <para>a boolean, passed to <function>make-process</function>.
@@ -1277,7 +1277,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>priority</term>
+	        <term><parameter>priority</parameter></term>
 	        
 	        <listitem>
 		      <para>ignored.</para>
@@ -1285,7 +1285,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>class</term>
+	        <term><parameter>class</parameter></term>
 	        
 	        <listitem>
 		      <para>a subclass of CCL:PROCESS.  Passed to
@@ -1294,7 +1294,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>initargs</term>
+	        <term><parameter>initargs</parameter></term>
 	        
 	        <listitem>
 		      <para>a list of any additional initargs to pass to
@@ -1303,7 +1303,7 @@ Type :? for other options.
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>stack-size</term>
+	        <term><parameter>stack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>a size, in bytes.  Passed to
@@ -1312,7 +1312,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>vstack-size</term>
+	        <term><parameter>vstack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>a size, in bytes.  Passed to
@@ -1321,7 +1321,7 @@ Type :? for other options.
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>tstack-size</term>
+	        <term><parameter>tstack-size</parameter></term>
 	        
 	        <listitem>
 		      <para>a size, in bytes.  Passed to
@@ -1330,7 +1330,7 @@ Type :? for other options.
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>the newly-created process.</para>
 	        </listitem>
@@ -1345,7 +1345,7 @@ Type :? for other options.
 	      <xref linkend="f_make-process"/>,
 	      presets it via <xref linkend="f_process-preset"/>, and
 	      enables it via <xref linkend="f_process-enable"/>.  This means
-	      that <varname>process</varname> will immediately begin to
+	      that <parameter>process</parameter> will immediately begin to
 	      execute.
 	      <function>process-run-function</function> is
 	      the simplest way to create and run a process.
@@ -1386,31 +1386,31 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>function</term>
+	        <term><parameter>function</parameter></term>
 	        <listitem>
 		      <para>a function.
 		      </para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>args</term>
+	        <term><parameter>args</parameter></term>
 	        <listitem>
 		      <para>a list of values, appropriate as arguments to
-		        <varname>function</varname>.</para>
+		        <parameter>function</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
-		      <para>the result of applying <varname>function</varname>
-		        to <varname>args</varname> if <varname>process</varname>
-		        is the <function>current-process</function>, otherwise
+		      <para>the result of applying <parameter>function</parameter>
+		        to <parameter>args</parameter> if <parameter>process</parameter>
+		        is the <varname>*current-process*</varname>, otherwise
 		        NIL.</para>
 	        </listitem>
 	      </varlistentry>
@@ -1420,15 +1420,15 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Arranges for <varname>process</varname>
-	      to apply <varname>function</varname> to <varname>args</varname> at
+	    <para>Arranges for <parameter>process</parameter>
+	      to apply <parameter>function</parameter> to <parameter>args</parameter> at
 	      some point in the near future (interrupting whatever
-	      <varname>process</varname>
-	      was doing.) If <varname>function</varname> returns normally,
-	      <varname>process</varname> resumes
+	      <parameter>process</parameter>
+	      was doing.) If <parameter>function</parameter> returns normally,
+	      <parameter>process</parameter> resumes
 	      execution at the point at which it was interrupted.</para>
 
-	    <para><varname>process</varname> must be in an enabled state in
+	    <para><parameter>process</parameter> must be in an enabled state in
 	      order to respond
 	      to a <function>process-interrupt</function> request.  It's
 	      perfectly legal for a process to call
@@ -1464,7 +1464,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Notes</title>
 
-	    <para>It would probably be better for <varname>result</varname>
+	    <para>It would probably be better for <parameter>result</parameter>
 	      to always be NIL, since the present behavior is inconsistent.
 	    </para>
 
@@ -1543,19 +1543,19 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>kill-option</term>
+	        <term><parameter>kill-option</parameter></term>
 	        <listitem>
 		      <para>an internal argument, must be nil.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>undefined.</para>
 	        </listitem>
@@ -1566,20 +1566,20 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Causes <varname>process</varname> to cleanly exit
+	    <para>Causes <parameter>process</parameter> to cleanly exit
 	      from any ongoing computation and enter a state where it can be
 	      <xref linkend="f_process-preset"/>. This
 	      is implemented by signaling a condition of type PROCESS-RESET;
 	      user-defined condition handlers should generally refrain from
 	      attempting to handle conditions of this type.</para>
 
-            <para>The <varname>kill-option</varname> argument is for internal
+            <para>The <parameter>kill-option</parameter> argument is for internal
             use only and should not be specified by user code</para>
 
 	    <para>A process can meaningfully reset itself.</para>
 
 	    <para>There is in general no way to know precisely when
-	      <varname>process</varname>
+	      <parameter>process</parameter>
 	      has completed the act of resetting or killing itself; a process
 	      which has either entered the limbo of the reset state or exited
 	      has few ways of communicating either fact.
@@ -1627,14 +1627,14 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread), which
 		      may not be the current process.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>undefined.</para>
 	        </listitem>
@@ -1683,13 +1683,13 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>undefined.</para>
 	        </listitem>
@@ -1701,7 +1701,7 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>
-	      Causes <varname>process</varname> to cleanly exit
+	      Causes <parameter>process</parameter> to cleanly exit
 	      from any ongoing computation, and then exit.
 	    </para>
 	  </refsect1>
@@ -1740,13 +1740,13 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>condition</term>
+	        <term><parameter>condition</parameter></term>
 	        <listitem>
 		      <para>a lisp condition.  The default is NIL.</para>
 	        </listitem>
@@ -1758,16 +1758,16 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Entirely equivalent to calling
-	      (<xref linkend="f_process-interrupt"/> <varname>process</varname>
+	      (<xref linkend="f_process-interrupt"/> <parameter>process</parameter>
 	      (<function>lambda</function> ()
-	      (<function>abort</function> <varname>condition</varname>))).
-	      Causes <varname>process</varname> to transfer control to the
+	      (<function>abort</function> <parameter>condition</parameter>))).
+	      Causes <parameter>process</parameter> to transfer control to the
 	      applicable handler or restart for <function>abort</function>.</para>
 
-	    <para>If <varname>condition</varname> is non-NIL,
+	    <para>If <parameter>condition</parameter> is non-NIL,
 	      <function>process-abort</function> does not consider any
 	      handlers which are explicitly bound to conditions other than
-	      <varname>condition</varname>.</para>
+	      <parameter>condition</parameter>.</para>
 	  </refsect1>
 
 	  <refsect1>
@@ -1847,30 +1847,30 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>process</term>
+	        <term><parameter>process</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread).</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>whostate</term>
+	        <term><parameter>whostate</parameter></term>
 	        <listitem>
 		      <para>a string which describes the "state" of
-		        <varname>process</varname>.</para>
+		        <parameter>process</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
 
 	    <para>This information is primarily for the benefit of
-	      debugging tools.  <varname>whostate</varname> is a terse report
-	      on what <varname>process</varname> is doing, or not doing,
+	      debugging tools.  <parameter>whostate</parameter> is a terse report
+	      on what <parameter>process</parameter> is doing, or not doing,
 	      and why.</para>
 
 	    <para>If the process is currently waiting in a call to
 	      <xref linkend="f_process-wait"/> or
 	      <xref linkend="f_process-wait-with-timeout"/>, its
 	      <function>process-whostate</function> will be the value
-	      which was passed to that function as <varname>whostate</varname>.
+	      which was passed to that function as <parameter>whostate</parameter>.
 	    </para>
 	  </refsect1>
 
@@ -1963,7 +1963,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>whostate</term>
+	        <term><parameter>whostate</parameter></term>
 
 	        <listitem>
 		      <para>a string, which will be the value of
@@ -1972,7 +1972,7 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>function</term>
+	        <term><parameter>function</parameter></term>
 	        <listitem>
 		      <para>a function, designated by itself or by a symbol
 		        which names it.
@@ -1980,14 +1980,14 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>args</term>
+	        <term><parameter>args</parameter></term>
 	        <listitem>
 		      <para>a list of values, appropriate as arguments to
-		        <varname>function</varname>.</para>
+		        <parameter>function</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>NIL.</para>
 	        </listitem>
@@ -1999,8 +1999,8 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Causes the current lisp process (thread) to repeatedly
-	      apply <varname>function</varname> to
-	      <varname>args</varname> until the call returns a true result, then
+	      apply <parameter>function</parameter> to
+	      <parameter>args</parameter> until the call returns a true result, then
 	      returns NIL. After
 	      each failed call, yields the CPU as if by
 	      <xref linkend="f_process-allow-schedule"/>.</para>
@@ -2052,7 +2052,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>whostate</term>
+	        <term><parameter>whostate</parameter></term>
 	        <listitem>
 		      <para>a string, which will be the value of
 		        <xref linkend="f_process-whostate"/>
@@ -2060,7 +2060,7 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>ticks</term>
+	        <term><parameter>ticks</parameter></term>
 	        <listitem>
 		      <para>either a positive integer expressing a duration
 		        in "ticks" (see <xref linkend="v_ticks-per-second"/>),
@@ -2068,26 +2068,26 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>function</term>
+	        <term><parameter>function</parameter></term>
 	        <listitem>
 		      <para>a function, designated by itself or by a symbol
 		        which names it.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>args</term>
+	        <term><parameter>args</parameter></term>
 	        <listitem>
 		      <para>a list of values, appropriate as arguments to
-		        <varname>function</varname>.</para>
+		        <parameter>function</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>T if <function>process-wait-with-timeout</function>
-		        returned because its <varname>function</varname> returned
+		        returned because its <parameter>function</parameter> returned
 		        true, or NIL if it returned because the duration
-		        <varname>ticks</varname> has been exceeded.</para>
+		        <parameter>ticks</parameter> has been exceeded.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2096,13 +2096,13 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>If <varname>ticks</varname> is NIL, behaves exactly like
+	    <para>If <parameter>ticks</parameter> is NIL, behaves exactly like
 	      <xref linkend="f_process-wait"/>, except for returning T.
-	      Otherwise, <varname>function</varname> will be tested repeatedly,
+	      Otherwise, <parameter>function</parameter> will be tested repeatedly,
 	      in the same
 	      kind of test/yield loop as in <xref linkend="f_process-wait"/>
-	      until either <varname>function</varname> returns true,
-	      or the duration <varname>ticks</varname> has been exceeded.
+	      until either <parameter>function</parameter> returns true,
+	      or the duration <parameter>ticks</parameter> has been exceeded.
 	    </para>
 
 	    <para> Having already read the descriptions of
@@ -2151,16 +2151,16 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2169,7 +2169,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Executes <varname>body</varname>
+	    <para>Executes <parameter>body</parameter>
 	      in an environment in which <xref linkend="f_process-interrupt"/>
 	      requests are
 	      deferred. As noted in the description of
@@ -2213,16 +2213,16 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2231,7 +2231,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Executes <varname>body</varname>
+	    <para>Executes <parameter>body</parameter>
 	      in an environment in which <xref linkend="f_process-interrupt"/>
 	      requests have immediate effect.
 	    </para>
@@ -2260,17 +2260,17 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 	        <listitem>
 		      <para>any lisp object; saved as part of
-		        <varname>lock</varname>.  Typically a string or symbol
+		        <parameter>lock</parameter>.  Typically a string or symbol
 		        which may appear in the <xref linkend="f_process-whostate"/>s
-		        of threads which are waiting for <varname>lock</varname>.
+		        of threads which are waiting for <parameter>lock</parameter>.
 		      </para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>lock</term>
+	        <term><parameter>lock</parameter></term>
 	        <listitem>
 		      <para>a newly-allocated object of type CCL:LOCK.</para>
 	        </listitem>
@@ -2283,7 +2283,7 @@ Type :? for other options.
 
 	    <para>Creates and returns a lock object, which can
 	      be used to synchronize access to some shared resource.
-	      <varname>lock</varname> is
+	      <parameter>lock</parameter> is
 	      initially in a &#34;free&#34; state; a lock can also be
 	      &#34;owned&#34; by a
 	      thread.</para>
@@ -2328,22 +2328,22 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>lock</term>
+	        <term><parameter>lock</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:LOCK.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2352,12 +2352,12 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Waits until <varname>lock</varname> is either free or
+	    <para>Waits until <parameter>lock</parameter> is either free or
 	      owned by the calling
-	      thread, then executes <varname>body</varname> with the
-	      lock owned by the calling thread. If <varname>lock</varname>
+	      thread, then executes <parameter>body</parameter> with the
+	      lock owned by the calling thread. If <parameter>lock</parameter>
 	      was free when <function>with-lock-grabbed</function> was called,
-	      it is restored to a free state after <varname>body</varname>
+	      it is restored to a free state after <parameter>body</parameter>
 	      is executed.</para>
 	  </refsect1>
 
@@ -2399,7 +2399,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>lock</term>
+	        <term><parameter>lock</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:LOCK.</para>
 	        </listitem>
@@ -2410,7 +2410,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Blocks until <varname>lock</varname> is owned by the
+	    <para>Blocks until <parameter>lock</parameter> is owned by the
 	      calling thread.</para>
 
 	    <para>The macro <xref linkend="m_with-lock-grabbed"/>
@@ -2457,7 +2457,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>lock</term>
+	        <term><parameter>lock</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:LOCK.</para>
 	        </listitem>
@@ -2469,13 +2469,13 @@ Type :? for other options.
 	    <title>Description</title>
 
 	    <para>Signals an error of type CCL:LOCK-NOT-OWNER if
-	      <varname>lock</varname>
+	      <parameter>lock</parameter>
 	      is not already owned by the calling thread; otherwise, undoes the
 	      effect of one previous 
 	      <xref linkend="f_grab-lock"/>.  If this means that
 	      <function>release-lock</function> has now been called on
-	      <varname>lock</varname> the same number of times as
-	      <xref linkend="f_grab-lock"/> has, <varname>lock</varname>
+	      <parameter>lock</parameter> the same number of times as
+	      <xref linkend="f_grab-lock"/> has, <parameter>lock</parameter>
 	      becomes free.</para>
 	  </refsect1>
 
@@ -2517,15 +2517,15 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>lock</term>
+	        <term><parameter>lock</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:LOCK.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
-		      <para>T if <varname>lock</varname> has been obtained,
+		      <para>T if <parameter>lock</parameter> has been obtained,
 		        or NIL if it has not.</para>
 	        </listitem>
 	      </varlistentry>
@@ -2535,9 +2535,9 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Tests whether <varname>lock</varname>
+	    <para>Tests whether <parameter>lock</parameter>
 	      can be obtained without blocking - that is, either
-	      <varname>lock</varname> is already free, or it is already owned
+	      <parameter>lock</parameter> is already free, or it is already owned
 	      by <xref linkend="v_current-process"/>.  If it can,
 	      causes it to
 	      be owned by the calling lisp process (thread) and returns T.
@@ -2585,7 +2585,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>read-write-lock</term>
+	        <term><parameter>read-write-lock</parameter></term>
 	        <listitem>
 		      <para>a newly-allocated object of type
 		        CCL:READ-WRITE-LOCK.</para>
@@ -2602,7 +2602,7 @@ Type :? for other options.
 	      of lisp processes (threads) which act as "readers"; or, it may
 	      belong to at most one process which acts as a "writer".  A
 	      read-write lock may never be held by a reader at the same time as
-	      a writer.  Initially, <varname>read-write-lock</varname> has
+	      a writer.  Initially, <parameter>read-write-lock</parameter> has
 	      no readers and no writers.</para>
 	  </refsect1>
 
@@ -2652,23 +2652,23 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>read-write-lock</term>
+	        <term><parameter>read-write-lock</parameter></term>
 	        <listitem>
 		      <para>an object of type
 		        CCL:READ-WRITE-LOCK.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2677,15 +2677,15 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Waits until <varname>read-write-lock</varname> has no
+	    <para>Waits until <parameter>read-write-lock</parameter> has no
 	      writer,
 	      ensures that <xref linkend="v_current-process"/> is a
-	      reader of it, then executes <varname>body</varname>.
+	      reader of it, then executes <parameter>body</parameter>.
 	    </para>
 
-	    <para>After executing <varname>body</varname>, if
+	    <para>After executing <parameter>body</parameter>, if
 	      <xref linkend="v_current-process"/> was not a reader of
-	      <varname>read-write-lock</varname> before
+	      <parameter>read-write-lock</parameter> before
 	      <function>with-read-lock</function> was called, the lock is
 	      released.  If it was already a reader, it remains one.</para>
 	  </refsect1>
@@ -2727,23 +2727,23 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>read-write-lock</term>
+	        <term><parameter>read-write-lock</parameter></term>
 	        <listitem>
 		      <para>an object of type
 		        CCL:READ-WRITE-LOCK.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -2752,15 +2752,15 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Waits until <varname>read-write-lock</varname> has no
+	    <para>Waits until <parameter>read-write-lock</parameter> has no
 	      readers and no writer other than <xref linkend="v_current-process"/>,
 	      then ensures that <xref linkend="v_current-process"/> is the
-	      writer of it.  With the lock held, executes <varname>body</varname>.
+	      writer of it.  With the lock held, executes <parameter>body</parameter>.
 	    </para>
 
-	    <para>After executing <varname>body</varname>, if
+	    <para>After executing <parameter>body</parameter>, if
 	      <xref linkend="v_current-process"/> was not the writer of
-	      <varname>read-write-lock</varname> before
+	      <parameter>read-write-lock</parameter> before
 	      <function>with-write-lock</function> was called, the lock is
 	      released.  If it was already the writer, it remains the
 	      writer.</para>
@@ -2803,7 +2803,7 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>semaphore</term>
+	        <term><parameter>semaphore</parameter></term>
 	        <listitem>
 		      <para>a newly-allocated object of type CCL:SEMAPHORE.</para>
 	        </listitem>
@@ -2818,7 +2818,7 @@ Type :? for other options.
 	      A semaphore has an associated "count" which may be incremented
 	      and decremented atomically; incrementing it represents sending
 	      a signal, and decrementing it represents handling that signal.
-	      <varname>semaphore</varname> has an initial count of 0.</para>
+	      <parameter>semaphore</parameter> has an initial count of 0.</para>
 	  </refsect1>
 
 	  <refsect1>
@@ -2859,13 +2859,13 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>semaphore</term>
+	        <term><parameter>semaphore</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:SEMAPHORE.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>an integer representing an error identifier
 		        which was returned by the underlying OS call.</para>
@@ -2877,7 +2877,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Atomically increments <varname>semaphore</varname>'s
+	    <para>Atomically increments <parameter>semaphore</parameter>'s
 	      "count" by 1; this
 	      may enable a waiting thread to resume execution.</para>
 	  </refsect1>
@@ -2900,7 +2900,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Notes</title>
 
-	    <para><varname>result</varname> should probably be interpreted
+	    <para><parameter>result</parameter> should probably be interpreted
 	      and acted on by <function>signal-semaphore</function>, because
 	      it is not likely to be meaningful to a lisp program, and the
 	      most common cause of failure is a type error.</para>
@@ -2929,13 +2929,13 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>semaphore</term>
+	        <term><parameter>semaphore</parameter></term>
 	        <listitem>
 		      <para>an object of type CCL:SEMAPHORE.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>an integer representing an error identifier
 		        which was returned by the underlying OS call.</para>
@@ -2947,7 +2947,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Waits until <varname>semaphore</varname>
+	    <para>Waits until <parameter>semaphore</parameter>
 	      has a positive count that can be
 	      atomically decremented; this will succeed exactly once for each
 	      corresponding call to SIGNAL-SEMAPHORE.</para>
@@ -2971,7 +2971,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Notes</title>
 
-	    <para><varname>result</varname> should probably be interpreted
+	    <para><parameter>result</parameter> should probably be interpreted
 	      and acted on by <function>wait-on-semaphore</function>, because
 	      it is not likely to be meaningful to a lisp program, and the
 	      most common cause of failure is a type error.</para>
@@ -3001,13 +3001,13 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>semaphore</term>
+	        <term><parameter>semaphore</parameter></term>
 	        <listitem>
 		      <para>An object of type CCL:SEMAPHORE.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>timeout</term>
+	        <term><parameter>timeout</parameter></term>
 	        <listitem>
 		      <para>a time interval in seconds.  May be any
 		        non-negative real number the <function>floor</function> of
@@ -3015,12 +3015,12 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>T if <function>timed-wait-on-semaphore</function>
 		        returned because it was able to decrement the count of
-		        <varname>semaphore</varname>; NIL if it returned because
-		        the duration <varname>timeout</varname> has been
+		        <parameter>semaphore</parameter>; NIL if it returned because
+		        the duration <parameter>timeout</parameter> has been
 		        exceeded.</para>
 	        </listitem>
 	      </varlistentry>
@@ -3030,10 +3030,10 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Waits until <varname>semaphore</varname>
+	    <para>Waits until <parameter>semaphore</parameter>
 	      has a positive count that can be
 	      atomically decremented, or until the duration
-	      <varname>timeout</varname> has
+	      <parameter>timeout</parameter> has
 	      elapsed.</para>
 	  </refsect1>
 
@@ -3074,7 +3074,7 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>fd</term>
+	        <term><parameter>fd</parameter></term>
 	        <listitem>
 		      <para>a file descriptor, which is a non-negative integer
 		        used by the OS to refer to an open file, socket, or similar
@@ -3082,7 +3082,7 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>timeout</term>
+	        <term><parameter>timeout</parameter></term>
 	        <listitem>
 		      <para>either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.</para>
 	        </listitem>
@@ -3093,13 +3093,13 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Wait until input is available on <varname>fd</varname>.
+	    <para>Wait until input is available on <parameter>fd</parameter>.
 	      This uses the <function>select()</function> system call, and is
 	      generally a fairly
 	      efficient way of blocking while waiting for input. More
 	      accurately, <function>process-input-wait</function>
 	      waits until it&#39;s possible to read
-	      from fd without blocking, or until <varname>timeout</varname>, if
+	      from fd without blocking, or until <parameter>timeout</parameter>, if
 	      it is not NIL, has been exceeded.</para>
 
 	    <para>
@@ -3154,7 +3154,7 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>fd</term>
+	        <term><parameter>fd</parameter></term>
 	        <listitem>
 		      <para>a file descriptor, which is a non-negative integer
 		        used by the OS to refer to an open file, socket, or similar
@@ -3162,7 +3162,7 @@ Type :? for other options.
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>timeout</term>
+	        <term><parameter>timeout</parameter></term>
 	        <listitem>
 		      <para>either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.</para>
 	        </listitem>
@@ -3173,7 +3173,7 @@ Type :? for other options.
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Wait until output is possible on <varname>fd</varname> or until <varname>timeout</varname>, if
+	    <para>Wait until output is possible on <parameter>fd</parameter> or until <parameter>timeout</parameter>, if
 	      it is not NIL, has been exceeded.
 	      This uses the <function>select()</function> system call, and is
 	      generally a fairly
@@ -3231,16 +3231,16 @@ Type :? for other options.
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 	        <listitem>
 		      <para>an implicit progn.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 	        <listitem>
 		      <para>the primary value returned by
-		        <varname>body</varname>.</para>
+		        <parameter>body</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -3251,7 +3251,7 @@ Type :? for other options.
 
 	    <para>Requests exclusive read access to the standard terminal
 	      stream, <varname>*terminal-io*</varname>.  Executes
-	      <varname>body</varname> in an environment with that access.
+	      <parameter>body</parameter> in an environment with that access.
 	    </para>
 	  </refsect1>
 
@@ -3344,7 +3344,7 @@ Type :? for other options.
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>p</term>
+	        <term><parameter>p</parameter></term>
 	        <listitem>
 		      <para>a lisp process (thread), designated either by
 		        an integer which matches its
@@ -3364,7 +3364,7 @@ Type :? for other options.
 	      process.</para>
 
 	    <para>The command yields control of terminal input to the
-	      process <varname>p</varname>, which must have used
+	      process <parameter>p</parameter>, which must have used
 	      <xref linkend="m_with-terminal-input"/> to request access to the
 	      terminal input stream.</para>
 	  </refsect1>
@@ -3408,7 +3408,7 @@ Type :? for other options.
 
 	<variablelist>
 	  <varlistentry>
-	    <term>process</term>
+	    <term><parameter>process</parameter></term>
 	    <listitem>
 	      <para>a process, typically created by <xref
 	      linkend="f_process-run-function"/> or by <xref
@@ -3416,14 +3416,14 @@ Type :? for other options.
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>default</term>
+	    <term><parameter>default</parameter></term>
 	    <listitem>
 	      <para>A default value to be returned if the specified
 	      process doesn't exit normally.</para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>values</term>
+	    <term><parameter>values</parameter></term>
 	    <listitem>
 	      <para>The values returned by the specified process's
 	      initial function if that function returns, or the value

@@ -2057,7 +2057,7 @@ delete-buffer invokes when deleting a buffer . This is setf-able.
                 <refsect1>
                     <title>Description</title>
                     <para>
-delete-buffer removes buffer from <link linkend="f_all-buffers">(all-buffers)</link> and its name
+delete-buffer removes buffer from (<xref linkend="f_all-buffers"/>) and its name
 from <link linkend="v_buffer-names">*buffer-names*</link>.  Before buffer is deleted, this invokes
 the functions on buffer returned by buffer-delete-hook and those found
 in Delete Buffer Hook. If buffer is the current-buffer, or if it is
@@ -3700,7 +3700,7 @@ variable name signal an error when the variable is undefined.
                     </para>
                     <variablelist>
                         <varlistentry>
-                            <term>string-name</term>
+                            <term><parameter>string-name</parameter></term>
                             <listitem>
                                 <para>
 The string name of the variable to define.
@@ -3708,7 +3708,7 @@ The string name of the variable to define.
                             </listitem>
                         </varlistentry>
                         <varlistentry>
-                            <term>documentation</term>
+                            <term><parameter>documentation</parameter></term>
                             <listitem>
                                 <para>
 The documentation string for the variable.
@@ -3716,7 +3716,7 @@ The documentation string for the variable.
                             </listitem>
                         </varlistentry>
                         <varlistentry>
-                            <term>:mode, :buffer</term>
+                            <term><parameter>mode</parameter>, <parameter>buffer</parameter></term>
                             <listitem>
                                 <para>
 If buffer is supplied, the variable is local to that buffer.  If mode is supplied, it is local to that mode.  If neither is supplied, it is global.
@@ -3724,7 +3724,7 @@ If buffer is supplied, the variable is local to that buffer.  If mode is supplie
                             </listitem>
                         </varlistentry>
                         <varlistentry>
-                            <term>:value</term>
+                            <term><parameter>value</parameter></term>
                             <listitem>
                                 <para>
 This is the initial value for the variable, which defaults to nil.
@@ -3732,7 +3732,7 @@ This is the initial value for the variable, which defaults to nil.
                             </listitem>
                         </varlistentry>
                         <varlistentry>
-                            <term>:hooks</term>
+                            <term><parameter>hooks</parameter></term>
                             <listitem>
                                 <para>
 This is the initial list of functions to call when someone sets the variable's value. These functions execute before Hemlock establishes the new value. See variable-value for the arguments passed to the hook functions.

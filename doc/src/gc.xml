@@ -277,14 +277,14 @@ that provided by earlier &CCL; versions.</para>
 
         <variablelist>
           <varlistentry>
-            <term>type</term>
+            <term><parameter>type</parameter></term>
             <listitem>
               <para>The type of population, one of <literal>:LIST</literal> (the default) or <literal>:ALIST</literal></para>
             </listitem>
           </varlistentry>
 
           <varlistentry>
-            <term>initial-contents</term>
+            <term><parameter>initial-contents</parameter></term>
             <listitem>
               <para> A sequence of elements (or conses, for <literal>:alist</literal>) to be used to initialize the
               population. The sequence itself (and the conses in case of an
@@ -445,7 +445,7 @@ that provided by earlier &CCL; versions.</para>
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>new-threshold</term>
+	      <term><parameter>new-threshold</parameter></term>
 
 	      <listitem>
 		<para>The requested new lisp-heap-gc-threshold.</para>
@@ -511,7 +511,7 @@ that provided by earlier &CCL; versions.</para>
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>arg</term>
+	      <term><parameter>arg</parameter></term>
 
 	      <listitem>
 		<para>a generalized boolean</para>
@@ -625,7 +625,7 @@ that provided by earlier &CCL; versions.</para>
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>generation-0-size</term>
+	      <term><parameter>generation-0-size</parameter></term>
 
 	      <listitem>
 		<para>the requested threshold size of the youngest
@@ -634,7 +634,7 @@ that provided by earlier &CCL; versions.</para>
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>generation-1-size</term>
+	      <term><parameter>generation-1-size</parameter></term>
 
 	      <listitem>
 		<para>the requested threshold size of the middle generation,
@@ -643,7 +643,7 @@ that provided by earlier &CCL; versions.</para>
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>generation-2-size</term>
+	      <term><parameter>generation-2-size</parameter></term>
 
 	      <listitem>
 		<para>the requested threshold size of the oldest generation,
@@ -686,7 +686,7 @@ that provided by earlier &CCL; versions.</para>
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>arg</term>
+	      <term><parameter>arg</parameter></term>
 
 	      <listitem>
 		<para>a generalized boolean</para>

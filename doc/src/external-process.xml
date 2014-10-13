@@ -86,7 +86,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>program</term>
+		<term><parameter>program</parameter></term>
 
 		<listitem>
 		  <para>A string or pathname which denotes an executable file.
@@ -96,7 +96,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>args</term>
+		<term><parameter>args</parameter></term>
 
 		<listitem>
 		  <para>A list of simple-strings</para>
@@ -104,7 +104,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>wait</term>
+		<term><parameter>wait</parameter></term>
 
 		<listitem>
 		  <para>Indicates whether or not run-program should wait for
@@ -114,7 +114,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>pty</term>
+		<term><parameter>pty</parameter></term>
 
 		<listitem>
 		  <para>This option is accepted but currently ignored;
@@ -124,7 +124,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>sharing</term>
+		<term><parameter>sharing</parameter></term>
 
 		<listitem>
                   <para>Sets a specific sharing mode
@@ -135,7 +135,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>input</term>
+		<term><parameter>input</parameter></term>
 
 		<listitem>
 		  <para>Selects the input source used by the EXTERNAL-PROCESS.
@@ -175,7 +175,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>if-input-does-not-exist</term>
+		<term><parameter>if-input-does-not-exist</parameter></term>
 
 		<listitem>
 		  <para>If the input argument specifies the name of an
@@ -185,7 +185,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>output</term>
+		<term><parameter>output</parameter></term>
 
 		<listitem>
 		  <para>Specifies where standard output from the external
@@ -194,7 +194,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>if-output-exists</term>
+		<term><parameter>if-output-exists</parameter></term>
 
 		<listitem>
 		  <para>If output is specified as a string or pathname, this
@@ -204,7 +204,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>error</term>
+		<term><parameter>error</parameter></term>
 
 		<listitem>
 		  <para>Specifies where error output from the external process
@@ -215,7 +215,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>if-error-exists</term>
+		<term><parameter>if-error-exists</parameter></term>
 
 		<listitem>
 		  <para>Analogous to if-output-exists.</para>
@@ -223,7 +223,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>status-hook</term>
+		<term><parameter>status-hook</parameter></term>
 
 		<listitem>
 		  <para>A user-defined function of one argument (the
@@ -234,7 +234,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>external-format</term>
+		<term><parameter>external-format</parameter></term>
 
 		<listitem>
 		  <para>
@@ -246,7 +246,7 @@
 		</listitem>
 	      </varlistentry>
 	      <varlistentry>
-		<term>env</term>
+		<term><parameter>env</parameter></term>
 		<listitem>
 		  <para>
 		    New OS environment variable bindings for the
@@ -261,7 +261,7 @@
 		</listitem>
 	      </varlistentry>
 	      <varlistentry>
-		<term>>silently-ignore-catastrophic-failures</term>
+		<term><parameter>>silently-ignore-catastrophic-failures</parameter></term>
 		<listitem>
 		  <para>
 		    If NIL, signal an error if run-program is unable
@@ -269,7 +269,7 @@
 		    start the same as failure from the program itself,
 		    by setting the status and exit-code
 		    fields. Default is
-		    *silently-ignore-catastrophic-failure-in-run-program*.
+		    <varname>*silently-ignore-catastrophic-failure-in-run-program*</varname>.
 		  </para>
 		</listitem>
 	      </varlistentry>
@@ -313,7 +313,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
@@ -321,14 +321,14 @@
 	      </varlistentry>
 
 	      <varlistentry>
-		<term>signal</term>
+		<term><parameter>signal</parameter></term>
 
 		<listitem>
 		  <para>A small integer.</para>
 		</listitem>
 	      </varlistentry>
 	      <varlistentry>
-		<term>error-if-exited</term>
+		<term><parameter>error-if-exited</parameter></term>
 
 		<listitem>
 		  <para>A boolean, by default T.</para>
@@ -341,8 +341,8 @@
 	    <title>Description</title>
 
 	    <para>
-	      Sends <varname>signal</varname> to the external process
-	      <varname>proc</varname>. (Typically, it would only be
+	      Sends <parameter>signal</parameter> to the external process
+	      <parameter>proc</parameter>. (Typically, it would only be
 	      useful to call this function if the EXTERNAL-PROCESS was
 	      created with :WAIT NIL.)
 	    </para>
@@ -351,7 +351,7 @@
 	      error is signaled.
 	    </para>
 	    <para>
-	      However, if <varname>error-if-exited</varname> is nil,
+	      However, if <parameter>error-if-exited</parameter> is nil,
 	      and the attempt to signal the external process fails
 	      because the external process has already exited, the
 	      function will return nil rather than signaling an error.
@@ -381,7 +381,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
@@ -421,7 +421,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
@@ -460,7 +460,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
@@ -500,7 +500,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>
@@ -540,7 +540,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		<term>proc</term>
+		<term><parameter>proc</parameter></term>
 
 		<listitem>
 		  <para>An EXTERNAL-PROCESS, as returned by RUN-PROGRAM.</para>

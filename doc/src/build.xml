@@ -39,9 +39,9 @@
     <para>The following terms are used in subsequent sections; it
       may be helpful to refer to these definitions.</para>
 
-    <para><indexterm><primary>fasl
-          files</primary></indexterm><glossterm linkend="fasl-file">fasl
-        files</glossterm> are the object files produced
+    <para>
+
+     <glossterm linkend="fasl-file">fasl files</glossterm> are the object files produced
       by <literal>compile-file</literal>.  fasl files store the
       machine code associated with function definitions and the
       external representation of other lisp objects in a compact,
@@ -52,9 +52,7 @@
       see
       <xref linkend="Platform-specific-filename-conventions"/> </para>
 
-    <para>The <indexterm><primary>lisp
-          kernel</primary></indexterm> <glossterm linkend="lisp_kernel">Lisp
-        kernel</glossterm> is a C program with a fair amount of
+    <para>The <glossterm linkend="lisp_kernel">Lisp kernel</glossterm> is a C program with a fair amount of
       platform-specific assembly language code. Its basic job is to
       map a lisp heap image into memory, transfer control to some
       compiled lisp code that the image contains, handle any
@@ -64,9 +62,7 @@
       files on different platforms; see
       <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
-    <para>A <indexterm><primary>heap
-          image</primary></indexterm> <glossterm linkend="lisp_image">heap
-        image</glossterm> is a file that can be quickly mapped into a
+    <para>A <glossterm linkend="lisp_image">heap image</glossterm> is a file that can be quickly mapped into a
       process's address space. Conceptually, it's not too different
       from an executable file or shared library in the OS's native
       format (ELF or Mach-O/dyld format); for historical reasons,
@@ -77,8 +73,8 @@
       standard full heap image files on different platforms; see
       <xref linkend="Platform-specific-filename-conventions"/>.</para>
 
-    <para>A <indexterm><primary>bootstrapping
-          image</primary></indexterm> bootstrapping image is a minimal
+    <para>A bootstrapping image (<xref linkend="Generating-a-bootstrapping-image"/>)
+      is a minimal
       heap image used in the process of building &CCL; itself.  The
       bootstrapping image contains just enough code to load the rest
       of &CCL; from fasl files.  It may help to think of the
@@ -91,7 +87,7 @@
     <para>Each supported platform (and possibly a few
       as-yet-unsupported ones) has a uniquely named subdirectory of
       <literal>ccl/lisp-kernel/</literal>; each such
-      <indexterm><primary>kernel build directory</primary></indexterm>
+      kernel build directory
       contains a Makefile and may contain some auxiliary files (linker
       scripts, etc.) that are used to build the lisp kernel on a
       particular platform.The platform-specific name of the kernel

@@ -470,7 +470,7 @@ r24 (save7) = ()
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>reglist</term>
+	        <term><parameter>reglist</parameter></term>
 
 	        <listitem>
 		      <para>A list of vector register names (vr0 .. vr31).</para>
@@ -478,7 +478,7 @@ r24 (save7) = ()
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 
 	        <listitem>
 		      <para>A sequence of PPC LAP instructions.</para>
@@ -522,7 +522,7 @@ r24 (save7) = ()
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>base</term>
+	        <term><parameter>base</parameter></term>
 
 	        <listitem>
 		      <para>Any available general-purpose register.</para>
@@ -530,7 +530,7 @@ r24 (save7) = ()
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>n</term>
+	        <term><parameter>n</parameter></term>
 
 	        <listitem>
 		      <para>An integer between 1 and 254, inclusive. (Should
@@ -540,7 +540,7 @@ r24 (save7) = ()
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 
 	        <listitem>
 		      <para>A sequence of PPC LAP instructions.</para>

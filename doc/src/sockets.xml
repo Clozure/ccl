@@ -129,7 +129,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>address-family</term>
+	      <term><parameter>address-family</parameter></term>
 
 	      <listitem>
 		<para>The address/protocol family of this
@@ -140,7 +140,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>type</term>
+	      <term><parameter>type</parameter></term>
 
 	      <listitem>
 		<para>One of :stream (the default) to request a
@@ -150,7 +150,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>connect</term>
+	      <term><parameter>connect</parameter></term>
 
 	      <listitem>
 		<para>This argument is only relevant to sockets of type
@@ -160,7 +160,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>eol</term>
+	      <term><parameter>eol</parameter></term>
 
 	      <listitem>
 		<para>This argument is currently ignored (it is accepted for
@@ -169,7 +169,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>format</term>
+	      <term><parameter>format</parameter></term>
 
 	      <listitem>
 		<para>One of :text (the default), :binary, or :bivalent.
@@ -183,7 +183,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote</term>
+	      <term><parameter>remote</parameter></term>
 
 	      <listitem>
 		<para>For TCP streams, it specifies the socket address
@@ -195,7 +195,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote-host</term>
+	      <term><parameter>remote-host</parameter></term>
 
 	      <listitem>
 		<para>For TCP streams, it specifies the host to
@@ -207,7 +207,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote-port</term>
+	      <term><parameter>remote-port</parameter></term>
 
 	      <listitem>
 		<para>For TCP streams, it specifies the port to
@@ -219,7 +219,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote-filename</term>
+	      <term><parameter>remote-filename</parameter></term>
 
 	      <listitem>
 		<para>For file-socket streams, it specifies the
@@ -230,7 +230,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>local-address</term>
+	      <term><parameter>local-address</parameter></term>
 
 	      <listitem>
 		<para>Allows you to specify a local address for a
@@ -241,7 +241,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>local-host</term>
+	      <term><parameter>local-host</parameter></term>
 
 	      <listitem>
 		<para>Allows you to specify a local host address for a
@@ -252,7 +252,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>local-port</term>
+	      <term><parameter>local-port</parameter></term>
 
 	      <listitem>
 		<para>Specify a local port for a socket. Most useful for
@@ -262,7 +262,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>local-filename</term>
+	      <term><parameter>local-filename</parameter></term>
 
 	      <listitem>
 		<para>For file-listener-sockets, specifies the name
@@ -276,7 +276,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>keepalive</term>
+	      <term><parameter>keepalive</parameter></term>
 
 	      <listitem>
 		<para>If true, enables the periodic transmission of
@@ -285,7 +285,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>reuse-address</term>
+	      <term><parameter>reuse-address</parameter></term>
 
 	      <listitem>
 		<para>If true, allows the reuse of local ports in listener
@@ -295,7 +295,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>nodelay</term>
+	      <term><parameter>nodelay</parameter></term>
 
 	      <listitem>
 		<para>If true, disables Nagle&#39;s algorithm, which tries
@@ -308,7 +308,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>broadcast</term>
+	      <term><parameter>broadcast</parameter></term>
 
 	      <listitem>
 		<para>If true, requests permission to broadcast datagrams on
@@ -317,7 +317,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>linger</term>
+	      <term><parameter>linger</parameter></term>
 
 	      <listitem>
 		<para>If specified and non-nil, should be the number of
@@ -327,7 +327,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>backlog</term>
+	      <term><parameter>backlog</parameter></term>
 
 	      <listitem>
 		<para>For a listener socket, specifies the number of
@@ -338,7 +338,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>input-timeout</term>
+	      <term><parameter>input-timeout</parameter></term>
 
 	      <listitem>
 		<para>The number of seconds before an input operation
@@ -352,7 +352,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>output-timeout</term>
+	      <term><parameter>output-timeout</parameter></term>
 
 	      <listitem>
 		<para>The number of seconds before an output operation
@@ -366,7 +366,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>connect-timeout</term>
+	      <term><parameter>connect-timeout</parameter></term>
 
 	      <listitem>
 		<para>The number of seconds before a connection
@@ -381,7 +381,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>auto-close</term>
+	      <term><parameter>auto-close</parameter></term>
 
 	      <listitem>
 		<para>When non-nil, any resulting socket stream will
@@ -391,7 +391,7 @@
 	      </listitem>
 	    </varlistentry>
 	    <varlistentry>
-	      <term>deadline</term>
+	      <term><parameter>deadline</parameter></term>
 
 	      <listitem>
 		<para>Specifies an absolute time in
@@ -440,7 +440,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The listener-socket to listen on.</para>
@@ -448,7 +448,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>wait</term>
+	      <term><parameter>wait</parameter></term>
 
 	      <listitem>
 		<para>If true (the default), and there are no connections
@@ -494,7 +494,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>host</term>
+	      <term><parameter>host</parameter></term>
 
 	      <listitem>
 		<para>Specification of the host, as a string.  This
@@ -505,7 +505,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>port</term>
+	      <term><parameter>port</parameter></term>
 
 	      <listitem>
 		<para>Specification of the port.  This
@@ -515,7 +515,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>socket-type</term>
+	      <term><parameter>socket-type</parameter></term>
 
 	      <listitem>
 		<para>Service type for port lookups, can be either
@@ -525,7 +525,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>connect</term>
+	      <term><parameter>connect</parameter></term>
 
 	      <listitem>
 		<para>Specifies how the returned <xref
@@ -541,7 +541,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>address-family</term>
+	      <term><parameter>address-family</parameter></term>
 
 	      <listitem>
 		<para>Specifies the address family that should be
@@ -552,7 +552,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>numeric-host-p</term>
+	      <term><parameter>numeric-host-p</parameter></term>
 
 	      <listitem>
 		<para>If this argument is true, no host name lookups
@@ -562,7 +562,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>numeric-port-p</term>
+	      <term><parameter>numeric-port-p</parameter></term>
 
 	      <listitem>
 		<para>If this argument is true, no service name
@@ -573,7 +573,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>singlep</term>
+	      <term><parameter>singlep</parameter></term>
 
 	      <listitem>
 		<para>If this argument is set to a true value, which
@@ -584,7 +584,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>errorp</term>
+	      <term><parameter>errorp</parameter></term>
 
 	      <listitem>
 		<para>If this argument is set to a true value, which
@@ -633,7 +633,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>dotted</term>
+	      <term><parameter>dotted</parameter></term>
 
 	      <listitem>
 		<para>A string representing an IP address in the
@@ -642,7 +642,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>errorp</term>
+	      <term><parameter>errorp</parameter></term>
 
 	      <listitem>
 		<para>If true (the default) an error is signaled if dotted
@@ -680,7 +680,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>ipaddr</term>
+	      <term><parameter>ipaddr</parameter></term>
 
 	      <listitem>
 		<para>A 32-bit integer representing an IPv4 host
@@ -689,7 +689,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>values</term>
+	      <term><parameter>values</parameter></term>
 
 	      <listitem>
 		<para>If false (the default), returns a string in the form
@@ -728,7 +728,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>ipaddr</term>
+	      <term><parameter>ipaddr</parameter></term>
 
 	      <listitem>
 		<para>a 32-bit integer representing an IPv4 host address</para>
@@ -736,7 +736,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>ignore-cache</term>
+	      <term><parameter>ignore-cache</parameter></term>
 
 	      <listitem>
 		<para>This argument is ignored (it is accepted for
@@ -774,7 +774,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>host</term>
+	      <term><parameter>host</parameter></term>
 
 	      <listitem>
 		<para>Specifies the host. It can be either a host name
@@ -816,7 +816,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>port</term>
+	      <term><parameter>port</parameter></term>
 
 	      <listitem>
 		<para>Specifies the port. It can be either a string,
@@ -828,7 +828,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>protocol</term>
+	      <term><parameter>protocol</parameter></term>
 
 	      <listitem>
 		<para>Must be one of &#34;tcp&#34; or &#34;udp&#34;.</para>
@@ -865,7 +865,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket to read from</para>
@@ -873,7 +873,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>size</term>
+	      <term><parameter>size</parameter></term>
 
 	      <listitem>
 		<para>Maximum number of bytes to read. If the packet is
@@ -882,7 +882,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>buffer</term>
+	      <term><parameter>buffer</parameter></term>
 
 	      <listitem>
 		<para>If specified, must be an octet vector
@@ -893,7 +893,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>extract</term>
+	      <term><parameter>extract</parameter></term>
 
 	      <listitem>
 		<para>If true, the subsequence of the buffer corresponding
@@ -904,7 +904,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>offset</term>
+	      <term><parameter>offset</parameter></term>
 
 	      <listitem>
 		<para>Specifies the start offset into the buffer at which
@@ -913,7 +913,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>want-socket-address-p</term>
+	      <term><parameter>want-socket-address-p</parameter></term>
 
 	      <listitem>
 		<para>Indicates that the address of the sender of the
@@ -992,7 +992,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket to write to</para>
@@ -1000,7 +1000,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>buffer</term>
+	      <term><parameter>buffer</parameter></term>
 
 	      <listitem>
 		<para>A vector containing the data to send. It must be
@@ -1009,7 +1009,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>size</term>
+	      <term><parameter>size</parameter></term>
 
 	      <listitem>
 		<para>Number of octets to send</para>
@@ -1017,7 +1017,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote</term>
+	      <term><parameter>remote</parameter></term>
 
 	      <listitem>
 		<para>The remote address to send the packet to, as a
@@ -1028,7 +1028,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote-host</term>
+	      <term><parameter>remote-host</parameter></term>
 
 	      <listitem>
 		<para>The host to send the packet to, in any format
@@ -1038,7 +1038,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>remote-port</term>
+	      <term><parameter>remote-port</parameter></term>
 
 	      <listitem>
 		<para>The port to send the packet to, in any format
@@ -1048,7 +1048,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>offset</term>
+	      <term><parameter>offset</parameter></term>
 
 	      <listitem>
 		<para>The offset in the buffer where the packet data starts</para>
@@ -1084,7 +1084,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket to shut down (typically a tcp-stream)</para>
@@ -1092,7 +1092,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>direction</term>
+	      <term><parameter>direction</parameter></term>
 
 	      <listitem>
 		<para>One of :input to disallow further input, or :output to
@@ -1131,7 +1131,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1173,7 +1173,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1210,7 +1210,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1247,7 +1247,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1284,7 +1284,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1320,7 +1320,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>thing</term>
+	      <term><parameter>thing</parameter></term>
 
 	      <listitem>
 		<para>The socket or socket-address for which the
@@ -1357,7 +1357,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket-address</term>
+	      <term><parameter>socket-address</parameter></term>
 
 	      <listitem>
 		<para>The socket-address for which the
@@ -1397,7 +1397,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket-address</term>
+	      <term><parameter>socket-address</parameter></term>
 
 	      <listitem>
 		<para>The socket-address for which the
@@ -1436,7 +1436,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1473,7 +1473,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1510,7 +1510,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket</para>
@@ -1592,7 +1592,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket-error</term>
+	      <term><parameter>socket-error</parameter></term>
 
 	      <listitem>
 		<para>the condition</para>
@@ -1628,7 +1628,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket-error</term>
+	      <term><parameter>socket-error</parameter></term>
 
 	      <listitem>
 		<para>the condition</para>
@@ -1670,7 +1670,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket-error</term>
+	      <term><parameter>socket-error</parameter></term>
 
 	      <listitem>
 		<para>the condition</para>
@@ -1708,7 +1708,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>socket</term>
+	      <term><parameter>socket</parameter></term>
 
 	      <listitem>
 		<para>The socket to close</para>
@@ -1716,7 +1716,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>abort</term>
+	      <term><parameter>abort</parameter></term>
 
 	      <listitem>
 		<para>If false (the default), closes the socket in an
@@ -1759,7 +1759,7 @@
 
 	  <variablelist>
 	    <varlistentry>
-	      <term>var</term>
+	      <term><parameter>var</parameter></term>
 
 	      <listitem>
 		<para>variable to bind</para>
@@ -1767,7 +1767,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>make-socket-args</term>
+	      <term><parameter>make-socket-args</parameter></term>
 
 	      <listitem>
 		<para>arguments suitable for passing to make-socket</para>
@@ -1775,7 +1775,7 @@
 	    </varlistentry>
 
 	    <varlistentry>
-	      <term>body</term>
+	      <term><parameter>body</parameter></term>
 
 	      <listitem>
 		<para>body to execute</para>

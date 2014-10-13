@@ -1174,13 +1174,11 @@ L1
         <para>Certain types of objects are treated a little specially:</para>
 	    <orderedlist>
 	      <listitem>
-	        <para>To support a feature called <emphasis>GCTWA
-                <footnote>
-		          <para>I believe that the acronym comes from MACLISP,
+	        <para>To support a feature called <emphasis>GCTWA</emphasis>
+                (an acronym that I believe comes from MACLISP,
 		            where it stood for "Garbage Collection of Truly
-		            Worthless Atoms".</para>
-                </footnote>
-	            , </emphasis>the vector that contains the internal
+		            Worthless Atoms"),
+                   the vector that contains the internal
 	          symbols of the current package is marked on entry to the
 	          mark phase, but the symbols themselves are not marked at
 	          this time. Near the end of the mark phase, symbols
@@ -1341,10 +1339,10 @@ L1
         generations. To avoid the need to scan those (often large) other
         generations looking for such intergenerational references, the
         runtime system must note all such intergenerational references
-        at the point where they're created (via Setf).<footnote><para>This is
+        at the point where they're created (via Setf). (This is
             sometimes called "The Write Barrier": all assignments which
             might result in intergenerational references must be noted, as
-            if the other generations were write-protected.</para></footnote> The
+            if the other generations were write-protected). The
         set of pointers that may contain intergenerational references is
         sometimes called <emphasis>the remembered set</emphasis>.</para>
       <para>In &CCL;'s EGC, the heap is organized exactly the same
@@ -1390,11 +1388,11 @@ L1
         to and exit from the binding of a special variable), all setfs
         that might introduce an intergenerational reference must be
         memoized.
-        <footnote><para>Note that the implicit setfs that occur when
+        Note that the implicit setfs that occur when
         initializing an object - as in the case of a call to cons or
         vector - can't introduce intergenerational references, since
         the newly created object is always younger than the objects
-        used to initialize it.</para></footnote> It's always safe to
+        used to initialize it. It's always safe to
         push any cons cell or gvector locative onto the memo stack;
         it's never safe to push anything else.
       </para>

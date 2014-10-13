@@ -179,7 +179,7 @@ will be addressed.
         Clozure CL application
         in the <literal>ccl</literal> directory.  If you use a shell,
         you can set the value of the
-        <varname>CCL_DEFAULT_DIRECTORY</varname> environment variable
+        <filename>CCL_DEFAULT_DIRECTORY</filename> environment variable
         to explicitly indicate the location of
         the <literal>ccl</literal> directory. If you choose to do
         that, then the <literal>ccl</literal> directory and the Clozure CL
@@ -193,7 +193,7 @@ will be addressed.
       <ulink url="ftp://clozure.com/pub/release/1.7/"/>.
       Download and extract
       one on your local disk.  Then edit the &CCL; shell script to set
-      the value of <varname>CCL_DEFAULT_DIRECTORY</varname> and start
+      the value of <filename>CCL_DEFAULT_DIRECTORY</filename> and start
       up the appropriate &CCL; kernel. See <xref
       linkend="The-ccl-Shell-Script"/> for more information about the
       &CCL; shell scripts.</para>
@@ -525,7 +525,7 @@ joe:ccl>
         <literal>provide</literal>, access to foreign interface
         information (see <link linkend="The-Interface-Database">The
         Interface Database</link>) and the Lisp build process (see
-        <link linkend="Building-CCL-from-source">Building &CCL; from its Source
+        <link linkend="building-ccl-from-source">Building &CCL; from its Source
         Code</link>). Specifically, it needs to set up logical
         pathname translations for the <literal>"ccl:"</literal>
         logical host.  If this logical host isn't defined (or isn't
@@ -550,11 +550,11 @@ joe:ccl>
       <orderedlist>
 	<listitem>
 	  <para>Copy the script to a directory that is on your
-	  <varname>PATH</varname>.  This is often
+	  <filename>PATH</filename>.  This is often
 	  <literal>/usr/local/bin</literal> or
 	  <literal>~/bin</literal>.  It is better to do this than to
 	  add <literal>ccl/scripts</literal> to your
-	  <varname>PATH</varname>, because the script needs to be edited,
+	  <filename>PATH</filename>, because the script needs to be edited,
 	  and editing it in-place means that Subversion sees the script as
 	  modified..</para>
 	</listitem>

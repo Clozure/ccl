@@ -86,7 +86,7 @@
           name <code>:NS-RECT</code> is a name for the type that
           corresponds to <code>NS:NS-RECT</code>, and you can
           use <code>:NS-RECT</code> as a type designator
-          in <link linkend="m_rlet"><code>RLET</code></link> forms to
+          in <xref linkend="m_rlet"/> forms to
           specify a structure of type <code>NS-RECT</code>.</para>
         </listitem>
         <listitem>
@@ -255,7 +255,7 @@
           keywords:</para>
 	    <variablelist>
 	      <varlistentry>
-	        <term>:UNSIGNED-BYTE</term>
+	        <term><code>:UNSIGNED-BYTE</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (UNSIGNED-BYTE 8)</para>
@@ -263,7 +263,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:SIGNED-BYTE</term>
+	        <term><code>:SIGNED-BYTE</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (SIGNED-BYTE 8)</para>
@@ -271,7 +271,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:UNSIGNED-HALFWORD</term>
+	        <term><code>:UNSIGNED-HALFWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (UNSIGNED-BYTE 16)</para>
@@ -279,7 +279,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:SIGNED-HALFWORD</term>
+	        <term><code>:SIGNED-HALFWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (SIGNED-BYTE 16)</para>
@@ -287,7 +287,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:UNSIGNED-FULLWORD</term>
+	        <term><code>:UNSIGNED-FULLWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (UNSIGNED-BYTE 32)</para>
@@ -295,7 +295,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:SIGNED-FULLWORD</term>
+	        <term><code>:SIGNED-FULLWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (SIGNED-BYTE 32)</para>
@@ -303,7 +303,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:UNSIGNED-DOUBLEWORD</term>
+	        <term><code>:UNSIGNED-DOUBLEWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (UNSIGNED-BYTE 64)</para>
@@ -311,7 +311,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:SIGNED-DOUBLEWORD</term>
+	        <term><code>:SIGNED-DOUBLEWORD</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type (SIGNED-BYTE 64)</para>
@@ -319,7 +319,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:SINGLE-FLOAT</term>
+	        <term><code>:SINGLE-FLOAT</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type SINGLE-FLOAT</para>
@@ -327,7 +327,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:DOUBLE-FLOAT</term>
+	        <term><code>:DOUBLE-FLOAT</code></term>
 
 	        <listitem>
 		      <para>The argument/return value is of type DOUBLE-FLOAT</para>
@@ -335,7 +335,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:ADDRESS</term>
+	        <term><code>:ADDRESS</code></term>
 
 	        <listitem>
 		      <para>The argument/return values
@@ -344,7 +344,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>:VOID</term>
+	        <term><code>:VOID</code></term>
 
 	        <listitem>
 		      <para>or NIL Not valid as an argument type specifier; specifies
@@ -661,7 +661,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -669,7 +669,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>offset</term>
+		          <term><parameter>offset</parameter></term>
 
 		          <listitem>
 		            <para>A fixnum</para>
@@ -715,7 +715,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -723,7 +723,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>bit-offset</term>
+		          <term><parameter>bit-offset</parameter></term>
 
 		          <listitem>
 		            <para>A fixnum</para>
@@ -766,14 +766,14 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>ptr</term>
+	        <term><parameter>ptr</parameter></term>
 
 	        <listitem>
 		      <para>A MACPTR</para>
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>bit-offset</term>
+		          <term><parameter>bit-offset</parameter></term>
 
 		          <listitem>
 		            <para>A fixnum</para>
@@ -781,7 +781,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>width</term>
+		          <term><parameter>width</parameter></term>
 
 		          <listitem>
 		            <para>A positive fixnum</para>
@@ -821,7 +821,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>int</term>
+		          <term><parameter>int</parameter></term>
 
 		          <listitem>
 		            <para>An (unsigned-byte 32)</para>
@@ -864,7 +864,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -872,7 +872,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>delta</term>
+		          <term><parameter>delta</parameter></term>
 
 		          <listitem>
 		            <para>A fixnum</para>
@@ -913,7 +913,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -976,7 +976,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -1017,7 +1017,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>dest-ptr</term>
+		          <term><parameter>dest-ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -1025,7 +1025,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>src-ptr</term>
+		          <term><parameter>src-ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -1066,7 +1066,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -1074,7 +1074,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>delta</term>
+		          <term><parameter>delta</parameter></term>
 
 		          <listitem>
 		            <para>A fixnum</para>
@@ -1117,7 +1117,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>var</term>
+		          <term><parameter>var</parameter></term>
 
 		          <listitem>
 		            <para>A symbol (variable name)</para>
@@ -1125,7 +1125,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>expr</term>
+		          <term><parameter>expr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR-valued expression</para>
@@ -1168,7 +1168,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>var</term>
+		          <term><parameter>var</parameter></term>
 
 		          <listitem>
 		            <para>A symbol (variable name)</para>
@@ -1176,7 +1176,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>expr</term>
+		          <term><parameter>expr</parameter></term>
 
 		          <listitem>
 		            <para>An expression which should evaluate to a non-negative
@@ -1219,7 +1219,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>string</term>
+		          <term><parameter>string</parameter></term>
 
 		          <listitem>
 			        <para>A lisp string</para>
@@ -1262,7 +1262,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>var</term>
+		          <term><parameter>var</parameter></term>
 
 		          <listitem>
 		            <para>A symbol (variable name)</para>
@@ -1270,7 +1270,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>string</term>
+		          <term><parameter>string</parameter></term>
 
 		          <listitem>
 		            <para>An expression which should evaluate to a lisp string</para>
@@ -1332,7 +1332,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>varI</term>
+		          <term><parameter>varI</parameter></term>
 
 		          <listitem>
 		            <para>A symbol (variable name)</para>
@@ -1340,7 +1340,7 @@
 		        </varlistentry>
 
 		        <varlistentry>
-		          <term>stringI</term>
+		          <term><parameter>stringI</parameter></term>
 
 		          <listitem>
 		            <para>An expression which should evaluate to a lisp string</para>
@@ -1381,7 +1381,7 @@
 
 		      <variablelist>
 		        <varlistentry>
-		          <term>ptr</term>
+		          <term><parameter>ptr</parameter></term>
 
 		          <listitem>
 		            <para>A MACPTR</para>
@@ -1409,8 +1409,8 @@
 	        <term>Description</term>
 
 	        <listitem>
-		      <para>Returns a lisp string of length <varname>length</varname>,
-		        whose contents are initialized from the bytes at<varname> ptr.</varname>
+		      <para>Returns a lisp string of length <parameter>length</parameter>,
+		        whose contents are initialized from the bytes at<parameter> ptr.</parameter>
 		      </para>
 	        </listitem>
 	      </varlistentry>
@@ -1419,8 +1419,9 @@
 	        <term>Arguments</term>
 
 	        <listitem>
-		      <para><variablelist><varlistentry><term>ptr</term><listitem><para>A
-		                MACPTR</para></listitem></varlistentry><varlistentry><term>length</term><listitem><para>a
+		      <para><variablelist><varlistentry><term><parameter>ptr</parameter></term><listitem><para>A
+		                MACPTR</para></listitem></varlistentry>
+				<varlistentry><term><parameter>length</parameter></term><listitem><para>a
 		                non-negative fixnum</para></listitem></varlistentry></variablelist></para>
 	        </listitem>
 	      </varlistentry>
@@ -3074,7 +3075,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>library</term>
+	        <term><parameter>library</parameter></term>
 
 	        <listitem>
 		      <para>either an object of type SHLIB, or a string which
@@ -3083,7 +3084,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>completely</term>
+	        <term><parameter>completely</parameter></term>
 
 	        <listitem>
 		      <para>a boolean.  The default is T.</para>
@@ -3095,11 +3096,11 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>If <varname>completely</varname> is T, sets the
-	      reference count of <varname>library</varname> to 0.  Otherwise,
+	    <para>If <parameter>completely</parameter> is T, sets the
+	      reference count of <parameter>library</parameter> to 0.  Otherwise,
 	      decrements it by 1.  In either case, if the reference count
 	      becomes 0, <function>close-shared-library</function>
-	      frees all memory resources consumed <varname>library</varname>
+	      frees all memory resources consumed <parameter>library</parameter>
 	      and
 	      causes any EXTERNAL-ENTRY-POINTs known to be defined by it to
 	      become unresolved.</para>
@@ -3131,7 +3132,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>A symbol which can be made into a special variable</para>
@@ -3139,7 +3140,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg-type-specifer</term>
+	        <term><parameter>arg-type-specifer</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords,
@@ -3155,7 +3156,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>var</term>
+	        <term><parameter>var</parameter></term>
 
 	        <listitem>
 		      <para>A symbol (lisp variable), which will be bound to a
@@ -3164,7 +3165,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>body</term>
+	        <term><parameter>body</parameter></term>
 
 	        <listitem>
 		      <para>A sequence of lisp forms, which should return a value
@@ -3177,7 +3178,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Proclaims <varname>name</varname>
+	    <para>Proclaims <parameter>name</parameter>
 	      to be a special variable; sets its value to a
 	      MACPTR which, when called by foreign code, calls a lisp function
 	      which expects foreign arguments of the specified types and which
@@ -3185,7 +3186,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      variables which correspond to foreign arguments of type :ADDRESS
 	      are bound to stack-allocated MACPTRs.</para>
 	    
-	    <para>If <varname>name</varname>
+	    <para>If <parameter>name</parameter>
 	      is already a callback function pointer, its value is
 	      not changed; instead, it&#39;s arranged
 	      that an
@@ -3195,7 +3196,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <para><function>defcallback</function>
 	      returns the callback pointer, e.g., the
-	      value of <varname>name</varname>.</para>
+	      value of <parameter>name</parameter>.</para>
 	  </refsect1>
     </refentry>
 
@@ -3222,7 +3223,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 	        
 	        <listitem>
 		      <para>NIL or a keyword; the keyword may contain
@@ -3231,7 +3232,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>foreign-type-spec</term>
+	        <term><parameter>foreign-type-spec</parameter></term>
 	        
 	        <listitem>
 		      <para>A foreign type specifier, whose syntax is (loosely)
@@ -3257,8 +3258,8 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <para>Note that there are two separate namespaces for foreign
 	      type names, one for the names of ordinary types and one for
 	      the names of structs and unions.  Which one
-	      <varname>name</varname> refers to depends on
-	      <varname>foreign-type-spec</varname> in the obvious manner.
+	      <parameter>name</parameter> refers to depends on
+	      <parameter>foreign-type-spec</parameter> in the obvious manner.
 	    </para>
 	  </refsect1>
     </refentry>
@@ -3287,7 +3288,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 	        <listitem>
 		      <para>
 		        a simple-string which names an external symbol.
@@ -3296,12 +3297,12 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>entry</term>
+	        <term><parameter>entry</parameter></term>
 	        <listitem>
 		      <para>
 		        an object of type EXTERNAL-ENTRY-POINT which maintains
 		        the address of the foreign symbol named by
-		        <varname>name</varname>.
+		        <parameter>name</parameter>.
 		      </para>
 	        </listitem>
 	      </varlistentry>
@@ -3312,7 +3313,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <title>Description</title>
 
 	    <para>If there is already an EXTERNAL-ENTRY-POINT for
-	      the symbol named by <varname>name</varname>, finds it and
+	      the symbol named by <parameter>name</parameter>, finds it and
 	      returns it.  If not, creates one and returns it.</para>
 
 	    <para>Tries to resolve the entry point to a memory address,
@@ -3348,7 +3349,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>A lisp string. See external, above.</para>
@@ -3356,7 +3357,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg-type-specifer</term>
+	        <term><parameter>arg-type-specifer</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3366,7 +3367,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg</term>
+	        <term><parameter>arg</parameter></term>
 
 	        <listitem>
 		      <para>A lisp value of type indicated by the corresponding
@@ -3375,7 +3376,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>result-type-specifier</term>
+	        <term><parameter>result-type-specifier</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3423,7 +3424,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>entrypoint</term>
+	        <term><parameter>entrypoint</parameter></term>
 	        
 	        <listitem>
 		      <para>A fixnum or MACPTR</para>
@@ -3431,7 +3432,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg-type-keyword</term>
+	        <term><parameter>arg-type-keyword</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3440,7 +3441,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg</term>
+	        <term><parameter>arg</parameter></term>
 
 	        <listitem>
 		      <para>A lisp value of type indicated by the corresponding
@@ -3449,7 +3450,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>result-type-keyword</term>
+	        <term><parameter>result-type-keyword</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3495,7 +3496,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>entrypoint</term>
+	        <term><parameter>entrypoint</parameter></term>
 
 	        <listitem>
 		      <para>A fixnum or MACPTR</para>
@@ -3503,7 +3504,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg-type-specifer</term>
+	        <term><parameter>arg-type-specifer</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3513,7 +3514,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>arg</term>
+	        <term><parameter>arg</parameter></term>
 
 	        <listitem>
 		      <para>A lisp value of type indicated by the corresponding
@@ -3522,7 +3523,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>result-type-specifier</term>
+	        <term><parameter>result-type-specifier</parameter></term>
 
 	        <listitem>
 		      <para>One of the foreign argument-type keywords, described
@@ -3568,7 +3569,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>A lisp string.</para>
@@ -3611,7 +3612,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>A lisp string.</para>
@@ -3652,7 +3653,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>ptr</term>
+	        <term><parameter>ptr</parameter></term>
 
 	        <listitem>
 		      <para>A <code>MACPTR</code> that points to a block of
@@ -3706,14 +3707,14 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>element-count</term>
+	        <term><parameter>element-count</parameter></term>
 
 	        <listitem>
 		      <para>A positive integer.</para>
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>element-type</term>
+	        <term><parameter>element-type</parameter></term>
 
 	        <listitem>
 		      <para>A type specifier.
@@ -3722,7 +3723,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>vector</term>
+	        <term><parameter>vector</parameter></term>
 
 	        <listitem>
 		      <para>A lisp vector.  The initial contents are
@@ -3730,7 +3731,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>mactpr</term>
+	        <term><parameter>mactpr</parameter></term>
 
 	        <listitem>
 		      <para>A pointer to the first byte of data stored
@@ -3739,7 +3740,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>size</term>
+	        <term><parameter>size</parameter></term>
 
 	        <listitem>
 		      <para>The size of the returned vector in octets.
@@ -3794,7 +3795,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>typespec</term>
+	        <term><parameter>typespec</parameter></term>
 
 	        <listitem>
 		      <para>A foreign type specifier, or a keyword which is used
@@ -3803,10 +3804,10 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>initforms</term>
+	        <term><parameter>initforms</parameter></term>
 
 	        <listitem>
-		      <para>If the type denoted by <varname>typespec</varname>
+		      <para>If the type denoted by <parameter>typespec</parameter>
 		        is scalar, a single value appropriate for that type;
 		        otherwise, a list of alternating field names and
 		        values appropriate for the types of those fields.</para>
@@ -3814,7 +3815,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 
 	        <listitem>
 		      <para>
@@ -3835,7 +3836,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <para>
 	      Allocates a block of foreign memory suitable to hold the foreign
 	      type described by <code>typespec</code>, in the same manner
-	      as <link linkend="m_make-record">MAKE-RECORD</link>. In
+	      as <xref linkend="m_make-record"/>. In
 	      addition, <code>MAKE-GCABLE-RECORD</code> marks the
 	      returned object gcable; in other words, it informs the garbage
 	      collector that it may reclaim the object when it becomes
@@ -3897,7 +3898,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>typespec</term>
+	        <term><parameter>typespec</parameter></term>
 
 	        <listitem>
 		      <para>A foreign type specifier, or a keyword which is used
@@ -3906,10 +3907,10 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>initforms</term>
+	        <term><parameter>initforms</parameter></term>
 
 	        <listitem>
-		      <para>If the type denoted by <varname>typespec</varname>
+		      <para>If the type denoted by <parameter>typespec</parameter>
 		        is scalar, a single value appropriate for that type;
 		        otherwise, a list of alternating field names and
 		        values appropriate for the types of those fields.</para>
@@ -3917,7 +3918,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>result</term>
+	        <term><parameter>result</parameter></term>
 
 	        <listitem>
 		      <para>
@@ -3935,7 +3936,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    <para>
 	      Expands into code which allocates and initializes
 	      an instance of the type 
-	      denoted by <varname>typespec</varname>, on the foreign
+	      denoted by <parameter>typespec</parameter>, on the foreign
 	      heap.  The record is allocated using the C function
 	      <function>malloc</function>, and the user of
 	      <function>make-record</function> must explicitly call
@@ -3944,24 +3945,24 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    </para>
 
 	    <para>
-	      If <varname>initforms</varname> is provided, its value
+	      If <parameter>initforms</parameter> is provided, its value
 	      or values are used in the initialization.  When the type
-	      is a scalar, <varname>initforms</varname> is either a single
+	      is a scalar, <parameter>initforms</parameter> is either a single
 	      value which can be coerced to that type, or no value, in which
-	      case binary 0 is used.  When the type is a <type>struct</type>,
-	      <varname>initforms</varname> is a list, giving field names
+	      case binary 0 is used.  When the type is a <code>struct</code>,
+	      <parameter>initforms</parameter> is a list, giving field names
 	      and the values for each.  Each field is treated in the same way
 	      as a scalar is: If a value for it is given, it must be
 	      coerceable to the field's type; if not, binary 0 is used.
 	    </para>
 
 	    <para>
-	      When the type is an array, <varname>initforms</varname> may
+	      When the type is an array, <parameter>initforms</parameter> may
 	      not be provided, because <function>make-record</function>
 	      cannot initialize its values.  <function>make-record</function>
-	      is also unable to initialize fields of a <type>struct</type>
+	      is also unable to initialize fields of a <code>struct</code>
 	      which are themselves
-	      <type>struct</type>s.  The user of
+	      <code>struct</code>s.  The user of
 	      <function>make-record</function> should set these values
 	      by another means.
 	    </para>
@@ -3979,7 +3980,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <para>
 	      It is inconvenient that <function>make-record</function> is a
-	      macro, because this means that <varname>typespec</varname>
+	      macro, because this means that <parameter>typespec</parameter>
 	      cannot be a variable; it must be an immediate value.
 	    </para>
 	    
@@ -4018,7 +4019,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	    
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>	
+	        <term><parameter>name</parameter></term>	
 	        <listitem>
 		      <para>A SIMPLE-STRING which is presumed to be the so-name of
 		        or a filesystem path to the library.</para>
@@ -4026,10 +4027,10 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 	      
 	      <varlistentry>
-	        <term>library</term>
+	        <term><parameter>library</parameter></term>
 	        <listitem>
 		      <para>An object of type SHLIB which describes the
-		        library denoted by <varname>name</varname>.</para>
+		        library denoted by <parameter>name</parameter>.</para>
 	        </listitem>
 	      </varlistentry>
 	    </variablelist>
@@ -4038,7 +4039,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>If the library denoted by <varname>name</varname> can
+	    <para>If the library denoted by <parameter>name</parameter> can
 	      be loaded by the
 	      operating system, returns an object of type SHLIB that describes
 	      the library; if the library is already open, increments a
@@ -4118,7 +4119,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>ptr</term>
+	        <term><parameter>ptr</parameter></term>
 
 	        <listitem>
 		      <para><link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link>.</para>
@@ -4126,7 +4127,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>accessor-form</term>
+	        <term><parameter>accessor-form</parameter></term>
 
 	        <listitem>
 		      <para>a keyword which names a foreign type or record, as
@@ -4176,7 +4177,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>eep</term>
+	        <term><parameter>eep</parameter></term>
 
 	        <listitem>
 		      <para>An EXTERNAL-ENTRY-POINT, as obtained by the EXTERNAL
@@ -4224,7 +4225,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>var</term>
+	        <term><parameter>var</parameter></term>
 
 	        <listitem>
 		      <para>A symbol (a lisp variable)</para>
@@ -4232,7 +4233,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>typespec</term>
+	        <term><parameter>typespec</parameter></term>
 
 	        <listitem>
 		      <para>A foreign type specifier or foreign record name.</para>
@@ -4240,7 +4241,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
           <varlistentry>
-	        <term>initforms</term>
+	        <term><parameter>initforms</parameter></term>
 
 	        <listitem>
 		      <para>As described above, for
@@ -4253,13 +4254,13 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	  <refsect1>
 	    <title>Description</title>
 
-	    <para>Executes <varname>body</varname>
+	    <para>Executes <parameter>body</parameter>
 	      in an environment in which each var is bound
 	      to <link linkend="Referencing-and-Using-Foreign-Memory-Addresses">a MACPTR</link> encapsulating the
 	      address of a stack-allocated foreign memory block, allocated and
 	      initialized from typespec and initforms as per
 	      <xref linkend="m_make-record"/>.
-	      Returns whatever value(s) <varname>body</varname>
+	      Returns whatever value(s) <parameter>body</parameter>
 	      returns.</para>
 	    
 	    <para>Record fields that aren&#39;t explicitly initialized have
@@ -4291,7 +4292,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>var</term>
+	        <term><parameter>var</parameter></term>
 
 	        <listitem>
 		      <para>A symbol (a lisp variable)</para>
@@ -4299,7 +4300,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>typespec</term>
+	        <term><parameter>typespec</parameter></term>
 
 	        <listitem>
 		      <para>A foreign type specifier or foreign record name.</para>
@@ -4307,7 +4308,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>initforms</term>
+	        <term><parameter>initforms</parameter></term>
 
 	        <listitem>
 		      <para>As described above, for ccl:make-record</para>
@@ -4356,7 +4357,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>object</term>
+	        <term><parameter>object</parameter></term>
 
 	        <listitem>
 		      <para>A CLOS object of a class for which there exists
@@ -4457,7 +4458,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>dir-id</term>
+	        <term><parameter>dir-id</parameter></term>
 
 	        <listitem>
 		      <para>A keyword whose pname, mapped to lower case, names a
@@ -4502,7 +4503,7 @@ reverse_int_ptr_ptrtest(int **ptrs)
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>dir-id</term>
+	        <term><parameter>dir-id</parameter></term>
 
 	        <listitem>
 		      <para>A keyword whose pname, mapped to lower case, names a

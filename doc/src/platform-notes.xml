@@ -440,7 +440,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>a string which is the name of an existing
@@ -450,11 +450,11 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>value</term>
+	        <term><parameter>value</parameter></term>
 
 	        <listitem>
 		      <para>if there is an environment variable named
-		        <varname>name</varname>, its value, as a string; if there
+		        <parameter>name</parameter>, its value, as a string; if there
 		        is not, NIL</para>
 	        </listitem>
 	      </varlistentry>
@@ -466,7 +466,7 @@
 
 	    <para>
 	      Looks up the value of the environment variable named by
-	      <varname>name</varname>, in the OS environment.
+	      <parameter>name</parameter>, in the OS environment.
 	    </para>
 	  </refsect1>
     </refentry>
@@ -491,7 +491,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>name</term>
+	        <term><parameter>name</parameter></term>
 
 	        <listitem>
 		      <para>a string which is the name of a new or existing
@@ -501,17 +501,17 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>value</term>
+	        <term><parameter>value</parameter></term>
 
 	        <listitem>
 		      <para>a string, to be the new value of the
 		        environment variable
-		        named by <varname>name</varname></para>
+		        named by <parameter>name</parameter></para>
 	        </listitem>
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>errno</term>
+	        <term><parameter>errno</parameter></term>
 
 	        <listitem>
 		      <para>zero if the function call completes successfully;
@@ -527,7 +527,7 @@
 
 	    <para>
 	      Sets the value of the environment variable named by
-	      <varname>name</varname>, in the OS environment.  If there is
+	      <parameter>name</parameter>, in the OS environment.  If there is
 	      no such environment
 	      variable, creates it.
 	    </para>
@@ -555,7 +555,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>path</term>
+	        <term><parameter>path</parameter></term>
 
 	        <listitem>
 		      <para>a string, an absolute pathname in Posix format - with
@@ -596,7 +596,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>uid</term>
+	        <term><parameter>uid</parameter></term>
 
 	        <listitem>
 		      <para>a non-negative integer, identifying a specific user
@@ -635,7 +635,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>uid</term>
+	        <term><parameter>uid</parameter></term>
 
 	        <listitem>
 		      <para>a non-negative integer, identifying a specific user
@@ -644,7 +644,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>errno</term>
+	        <term><parameter>errno</parameter></term>
 
 	        <listitem>
 		      <para>zero if the function call completes successfully;
@@ -687,7 +687,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>gid</term>
+	        <term><parameter>gid</parameter></term>
 
 	        <listitem>
 		      <para>a non-negative integer, identifying a specific
@@ -696,7 +696,7 @@
 	      </varlistentry>
 
 	      <varlistentry>
-	        <term>errno</term>
+	        <term><parameter>errno</parameter></term>
 
 	        <listitem>
 		      <para>zero if the function call completes successfully;
@@ -739,7 +739,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>pid</term>
+	        <term><parameter>pid</parameter></term>
 
 	        <listitem>
 		      <para>a non-negative integer, identifying an OS process</para>
@@ -778,7 +778,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>uid</term>
+	        <term><parameter>uid</parameter></term>
 
 	        <listitem>
 		      <para>a non-negative integer, identifying a specific user
@@ -786,7 +786,7 @@
 	        </listitem>
 	      </varlistentry>
 	      <varlistentry>
-	        <term>path</term>
+	        <term><parameter>path</parameter></term>
 
 	        <listitem>
 		      <para>a string, an absolute pathname in Posix format - with
@@ -801,10 +801,10 @@
 
 	    <para>
 	      Looks up and returns the defined home directory of the user
-	      identified by <varname>uid</varname>.  This value comes from the
-	      OS user database, not from the <varname>$HOME</varname>
+	      identified by <parameter>uid</parameter>.  This value comes from the
+	      OS user database, not from the <filename>$HOME</filename>
 	      environment variable.  Returns NIL if there is no user with
-	      the ID <varname>uid</varname>.
+	      the ID <parameter>uid</parameter>.
 	    </para>
 	  </refsect1>
     </refentry>
@@ -830,7 +830,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>command-line</term>
+	        <term><parameter>command-line</parameter></term>
 
 	        <listitem><para>a string, obeying all the whitespace and
 	            escaping
@@ -840,7 +840,7 @@
 	    </variablelist>
 	    <variablelist>
 	      <varlistentry>
-	        <term>exit-code</term>
+	        <term><parameter>exit-code</parameter></term>
 
 	        <listitem><para>a non-negative integer, returned as the exit
 	            code of a subprocess; zero indicates success</para></listitem>
@@ -855,12 +855,12 @@
 	      Invokes the Posix function <function>system()</function>, which
 	      invokes the user's default system shell (such as
 	      sh or tcsh) as a new process, and has that shell execute
-	      <varname>command-line</varname>.
+	      <parameter>command-line</parameter>.
 	    </para>
 	    
 	    <para>
 	      If the shell was able to find the command specified in
-	      <varname>command-line</varname>, then <varname>exit-code</varname>
+	      <parameter>command-line</parameter>, then <parameter>exit-code</parameter>
 	      is the exit code of that command.  If not, it is the exit
 	      code of the shell itself.
 	    </para>
@@ -900,7 +900,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-	        <term>class-name</term>
+	        <term><parameter>class-name</parameter></term>
 
 	        <listitem>
 		      <para>a string which denotes an existing class name, or a
@@ -946,7 +946,7 @@
 
 	    <variablelist>
 	      <varlistentry>
-		    <term>string</term>
+		    <term><parameter>string</parameter></term>
 
 		    <listitem>
 		      <para>a string constant, used to canonically refer to an
@@ -988,7 +988,7 @@
 	    <variablelist>
 
 	      <varlistentry>
-		    <term>name-and-result-type</term>
+		    <term><parameter>name-and-result-type</parameter></term>
             
 		    <listitem>
 		      <para>either an Objective-C message name, for methods
@@ -1000,7 +1000,7 @@
 	      </varlistentry>
           
 	      <varlistentry>
-		    <term>receiver-arg-and-class</term>
+		    <term><parameter>receiver-arg-and-class</parameter></term>
             
 		    <listitem>
 		      <para>a two-element list whose first element is a
@@ -1016,7 +1016,7 @@
 	      </varlistentry>
           
 	      <varlistentry>
-		    <term>other-args</term>
+		    <term><parameter>other-args</parameter></term>
             
 		    <listitem>
 		      <para>either variable names (denoting parameters of
@@ -1064,7 +1064,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-		      <term>selector</term>
+		      <term><parameter>selector</parameter></term>
 
 		      <listitem>
 		        <para>either a string which represents the name of the
@@ -1077,7 +1077,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-		      <term>class-name</term>
+		      <term><parameter>class-name</parameter></term>
 
 		      <listitem>
 		        <para>either a string which names an existing ObjC class
@@ -1214,7 +1214,7 @@
 	      
 	      <variablelist>
 	        <varlistentry>
-		      <term>:string</term>
+		      <term><parameter>:string</parameter></term>
 		      
 		      <listitem>
 		        <para>

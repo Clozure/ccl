@@ -229,7 +229,7 @@
 	      
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream-list</term>
+	          <term><parameter>stream-list</parameter></term>
 	          <listitem>
 		        <para>A list of open file streams.  This is a copy of
 		          an internal list so it may be destructively
@@ -278,7 +278,7 @@
 	      
 	      <variablelist>
 	        <varlistentry>
-	          <term>file-stream</term>
+	          <term><parameter>file-stream</parameter></term>
 	          <listitem>
 		        <para>A file stream.</para>
 	          </listitem>
@@ -330,7 +330,7 @@
 	      
 	      <variablelist>
 	        <varlistentry>
-	          <term>file-stream</term>
+	          <term><parameter>file-stream</parameter></term>
 	          <listitem>
 		        <para>A file stream.</para>
 	          </listitem>
@@ -617,7 +617,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>a stream, presumably a fundamental-input-stream.</para>
@@ -625,7 +625,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>list</term>
+	          <term><parameter>list</parameter></term>
 
 	          <listitem>
 		        <para>a list. When a STREAM-READ-LIST method is called by
@@ -635,7 +635,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>count</term>
+	          <term><parameter>count</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-READ-LIST method
@@ -676,7 +676,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>a stream, presumably a fundamental-output-stream.</para>
@@ -684,7 +684,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>list</term>
+	          <term><parameter>list</parameter></term>
 
 	          <listitem>
 		        <para>a list. When a STREAM-WRITE-LIST method is called by
@@ -694,7 +694,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>count</term>
+	          <term><parameter>count</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-WRITE-LIST
@@ -734,7 +734,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>a stream, presumably a fundamental-input-stream</para>
@@ -742,7 +742,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>vector</term>
+	          <term><parameter>vector</parameter></term>
 
 	          <listitem>
 		        <para>a vector. When a STREAM-READ-VECTOR method is called
@@ -752,7 +752,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>start</term>
+	          <term><parameter>start</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-READ-VECTOR
@@ -763,7 +763,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>end</term>
+	          <term><parameter>end</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-READ-VECTOR
@@ -807,7 +807,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>a stream, presumably a fundamental-output-stream</para>
@@ -815,7 +815,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>vector</term>
+	          <term><parameter>vector</parameter></term>
 
 	          <listitem>
 		        <para>a vector. When a STREAM-WRITE-VECTOR method is called
@@ -825,7 +825,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>start</term>
+	          <term><parameter>start</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-WRITE-VECTOR
@@ -836,7 +836,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>end</term>
+	          <term><parameter>end</parameter></term>
 
 	          <listitem>
 		        <para>a non-negative integer. When a STREAM-WRITE-VECTOR
@@ -877,8 +877,8 @@
 	    <refsect1>
 	      <title>Method Signatures</title>
 
-	      <synopsis><function>ccl::stream-device</function>
-	        (s stream) direction => fd</synopsis>
+	      <code><function>ccl::stream-device</function>
+	        (s stream) direction => fd</code>
 	    </refsect1>
 
 	    <refsect1>
@@ -886,25 +886,25 @@
 	      
 	      <variablelist>
 	        <varlistentry>
-	          <term>s</term>
+	          <term><parameter>s</parameter></term>
 	          <listitem>
 		        <para>a stream.</para>
 	          </listitem>
 	        </varlistentry>
 	        <varlistentry>
-	          <term>direction</term>
+	          <term><parameter>direction</parameter></term>
 	          <listitem>
 		        <para>either :INPUT or :OUTPUT.</para>
 	          </listitem>
 	        </varlistentry>
 	        <varlistentry>
-	          <term>fd</term>
+	          <term><parameter>fd</parameter></term>
 	          <listitem>
 		        <para>a file descriptor, which is a non-negative integer
 		          used by the OS to refer to an open file, socket, or similar
 		          I/O connection.  NIL if there is no file descriptor associated
-		          with <varname>s</varname> in the direction given by
-		          <varname>direction</varname>.</para>
+		          with <parameter>s</parameter> in the direction given by
+		          <parameter>direction</parameter>.</para>
 	          </listitem>
 	        </varlistentry>
 	      </variablelist>
@@ -914,9 +914,9 @@
 	      <title>Description</title>
 
 	      <para>Returns the file descriptor associated with
-	        <varname>s</varname> in the direction given by
-	        <varname>direction</varname>.  It is necessary to specify
-	        <varname>direction</varname> because the input and output
+	        <parameter>s</parameter> in the direction given by
+	        <parameter>direction</parameter>.  It is necessary to specify
+	        <parameter>direction</parameter> because the input and output
 	        file descriptors may be different; the most common case is when
 	        one of them has been redirected by the Unix shell.</para>
 	    </refsect1>
@@ -951,7 +951,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>An input stream. The method defined on
@@ -961,7 +961,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>ivector</term>
+	          <term><parameter>ivector</parameter></term>
 
 	          <listitem>
 		        <para>Any ivector.</para>
@@ -969,7 +969,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>start-octet</term>
+	          <term><parameter>start-octet</parameter></term>
 
 	          <listitem>
 		        <para>A non-negative integer.</para>
@@ -977,7 +977,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>max-octets</term>
+	          <term><parameter>max-octets</parameter></term>
 
 	          <listitem>
 		        <para>A non-negative integer. The return value may be less
@@ -1016,7 +1016,7 @@
 
 	      <variablelist>
 	        <varlistentry>
-	          <term>stream</term>
+	          <term><parameter>stream</parameter></term>
 
 	          <listitem>
 		        <para>An input stream. The method defined on
@@ -1026,7 +1026,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>ivector</term>
+	          <term><parameter>ivector</parameter></term>
 
 	          <listitem>
 		        <para>Any ivector</para>
@@ -1034,7 +1034,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>start-octet</term>
+	          <term><parameter>start-octet</parameter></term>
 
 	          <listitem>
 		        <para>A non-negative integer.</para>
@@ -1042,7 +1042,7 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term>max-octet</term>
+	          <term><parameter>max-octet</parameter></term>
 
 	          <listitem>
 		        <para>A non-negative integer.</para>

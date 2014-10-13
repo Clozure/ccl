@@ -31,20 +31,21 @@
 
     <para>
       &CCL;'s tracing facility is invoked by an extended version of the Common Lisp
-      <varname>trace</varname> macro.  Extensions allow tracing of methods, as well as finer control
+      <code>trace</code> macro.  Extensions allow tracing of methods, as well as finer control
       over tracing actions.
     </para>
 
-    <para>
-      <indexterm zone="trace"/>
-      <command><varname id="trace">TRACE</varname> {<replaceable>keyword</replaceable>
-        <replaceable>global-value</replaceable>}* {<replaceable>spec</replaceable> |
-        (<replaceable>spec</replaceable> {<replaceable>keyword</replaceable>
-        <replaceable>local-value</replaceable>}*)}* [Macro]</command>
-    </para>
+      <refentry id="m_trace"><indexterm zone="m_trace"><primary>trace</primary></indexterm>
+        <refnamediv><refname>TRACE</refname><refpurpose></refpurpose><refclass>Macro</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>TRACE</function> {<replaceable>keyword </replaceable> 
+         <replaceable>global-value</replaceable>}* {<replaceable>spec</replaceable> |
+        (<replaceable>spec</replaceable> {<replaceable>keyword </replaceable>
+        <replaceable>local-value</replaceable>}*)}*</synopsis></refsynopsisdiv>
+   <refsect1>
+    <title>Description</title>
 
     <para>
-      The <varname>trace</varname> macro encapsulates the functions named by
+      The <code>trace</code> macro encapsulates the functions named by
       <replaceable>spec</replaceable>s, causing trace actions to take place on entry and
       exit from each function.  The default actions print a message on function entry and
       exit. <replaceable>Keyword</replaceable>/<replaceable>value</replaceable> options
@@ -52,22 +53,22 @@
     </para>
 
     <para>
-      Invoking <varname>(trace)</varname> without arguments returns a list of functions being traced.
+      Invoking <code>(trace)</code> without arguments returns a list of functions being traced.
     </para>
     
     <para>
       A <replaceable>spec</replaceable> is either a symbol that is the name of a function, or an
-      expression of the form <varname>(setf <replaceable>symbol</replaceable>)</varname>, or a
-      specific method of a generic function in the form <varname>(:method
+      expression of the form <code>(setf <replaceable>symbol</replaceable>)</code>, or a
+      specific method of a generic function in the form <code>(:method
         <replaceable>gf-name</replaceable> {<replaceable>qualifier</replaceable>}*
-        ({<replaceable>specializer</replaceable>}*))</varname>, where a
-      <replaceable>specializer</replaceable> can be the name of a class or an <varname>EQL</varname>
+        ({<replaceable>specializer</replaceable>}*))</code>, where a
+      <replaceable>specializer</replaceable> can be the name of a class or an <code>EQL</code>
       specializer.
     </para>
 
     <para>
       A <replaceable>spec</replaceable> can also be a string naming a package, or equivalently a
-      list <varname>(:package <replaceable>package-name</replaceable>)</varname>, in order to
+      list <code>(:package <replaceable>package-name</replaceable>)</code>, in order to
       request that all functions in the package to be traced.
     </para>
 
@@ -84,7 +85,7 @@
     <variablelist>
 
       <varlistentry>
-	    <term><varname>:methods {T | nil}</varname></term>
+	    <term><code>:methods {T | nil}</code></term>
 	    <listitem>
 	      <para> If true, and if applied to a <replaceable>spec</replaceable> naming a generic
 	        function, arranges to trace all the methods of the generic function in addition to the
@@ -94,8 +95,8 @@
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:inside <replaceable>outside-spec</replaceable>
-	        | ({<replaceable>outside-spec</replaceable>}*)</varname></term>
+	    <term><code>:inside <replaceable>outside-spec</replaceable>
+	        | ({<replaceable>outside-spec</replaceable>}*)</code></term>
 	    <listitem>
 	      <para>Inhibits all trace actions unless the current
 	        invocation of the function being traced is inside one of the
@@ -108,160 +109,160 @@
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:if <replaceable>form</replaceable></varname></term>
-	    <term><varname>:condition <replaceable>form</replaceable></varname></term>
+	    <term><code>:if <replaceable>form</replaceable></code></term>
+	    <term><code>:condition <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered, and inhibits all trace actions if <replaceable>form</replaceable>
-	        returns nil. The form may reference the lexical variable <varname>ccl::args</varname>,
-	        which is a list of the arguments in this call. <varname>:condition</varname> is just a
-	        synonym for <varname>:if</varname>, though if both are specified, both must return non-nil.
+	        returns nil. The form may reference the lexical variable <code>ccl::args</code>,
+	        which is a list of the arguments in this call. <code>:condition</code> is just a
+	        synonym for <code>:if</code>, though if both are specified, both must return non-nil.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:before-if <replaceable>form</replaceable></varname></term>
+	    <term><code>:before-if <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered, and inhibits the entry trace actions if
 	        <replaceable>form</replaceable> returns nil.  The form may reference the lexical variable
-	        <varname>ccl::args</varname>, which is a list of the arguments in this call. If both
-	        <varname>:if</varname> and <varname>:before-if</varname> are specified, both must return
+	        <code>ccl::args</code>, which is a list of the arguments in this call. If both
+	        <code>:if</code> and <code>:before-if</code> are specified, both must return
 	        non-nil in order for the before entry actions to happen.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:after-if <replaceable>form</replaceable></varname></term>
+	    <term><code>:after-if <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para> Evaluates <replaceable>form</replaceable> whenever the function being traced has
 	        just exited, and inhibits the exit trace actions if <replaceable>form</replaceable>
-	        returns nil.  The form may reference the lexical variable <varname>ccl::vals</varname>,
-	        which is a list of values returned by this call. If both <varname>:if</varname> and
-	        <varname>:after-if</varname> are specified, both must return non-nil in order for the
+	        returns nil.  The form may reference the lexical variable <code>ccl::vals</code>,
+	        which is a list of values returned by this call. If both <code>:if</code> and
+	        <code>:after-if</code> are specified, both must return non-nil in order for the
 	        after exit actions to happen.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:print-before <replaceable>form</replaceable></varname></term>
+	    <term><code>:print-before <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para> Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered, and prints the result before printing the standard entry message.
-	        The form may reference the lexical variable <varname>ccl::args</varname>, which is a list
-	        of the arguments in this call.  To see multiple forms, use <varname>values</varname>:
-	        <varname>:print-before (values (one-thing) (another-thing))</varname>.
+	        The form may reference the lexical variable <code>ccl::args</code>, which is a list
+	        of the arguments in this call.  To see multiple forms, use <code>values</code>:
+	        <code>:print-before (values (one-thing) (another-thing))</code>.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:print-after <replaceable>form</replaceable></varname></term>
+	    <term><code>:print-after <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para> Evaluates <replaceable>form</replaceable> whenever the function being traced has
 	        just exited, and prints the result after printing the standard exit message.  The form may
-	        reference the lexical variable <varname>ccl::vals</varname>, which is a list of values
-	        returned by this call. To see multiple forms, use <varname>values</varname>:
-	        <varname>:print-after (values (one-thing) (another-thing))</varname>.
+	        reference the lexical variable <code>ccl::vals</code>, which is a list of values
+	        returned by this call. To see multiple forms, use <code>values</code>:
+	        <code>:print-after (values (one-thing) (another-thing))</code>.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:print <replaceable>form</replaceable></varname></term>
+	    <term><code>:print <replaceable>form</replaceable></code></term>
 	    <listitem>
-	      <para>Equivalent to <varname>:print-before <replaceable>form</replaceable> :print-after <replaceable>form</replaceable></varname>.
+	      <para>Equivalent to <code>:print-before <replaceable>form</replaceable> :print-after <replaceable>form</replaceable></code>.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:eval-before <replaceable>form</replaceable></varname></term>
+	    <term><code>:eval-before <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered.  The form may reference the lexical variable
-	        <varname>ccl::args</varname>, which is a list of the arguments in this call.
+	        <code>ccl::args</code>, which is a list of the arguments in this call.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:eval-after <replaceable>form</replaceable></varname></term>
+	    <term><code>:eval-after <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being has just
-	        exited.  The form may reference the lexical variable <varname>ccl::vals</varname>, which
+	        exited.  The form may reference the lexical variable <code>ccl::vals</code>, which
 	        is a list of values returned by this call.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:eval <replaceable>form</replaceable></varname></term>
+	    <term><code>:eval <replaceable>form</replaceable></code></term>
 	    <listitem>
-	      <para>Equivalent to <varname>:eval-before <replaceable>form</replaceable>
-	          :eval-after <replaceable>form</replaceable></varname>.
+	      <para>Equivalent to <code>:eval-before <replaceable>form</replaceable>
+	          :eval-after <replaceable>form</replaceable></code>.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:break-before <replaceable>form</replaceable></varname></term>
+	    <term><code>:break-before <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered, and if the result is non-nil, enters a debugger break loop.  The form
-	        may reference the lexical variable <varname>ccl::args</varname>, which is a list of the
+	        may reference the lexical variable <code>ccl::args</code>, which is a list of the
 	        arguments in this call.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:break-after <replaceable>form</replaceable></varname></term>
+	    <term><code>:break-after <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being traced has
 	        just exited, and if the result is non-nil, enters a debugger break loop. The form may
-	        reference the lexical variable <varname>ccl::vals</varname>, which is a list of values
+	        reference the lexical variable <code>ccl::vals</code>, which is a list of values
 	        returned by this call.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:break <replaceable>form</replaceable></varname></term>
+	    <term><code>:break <replaceable>form</replaceable></code></term>
 	    <listitem>
-	      <para>Equivalent to <varname>:break-before <replaceable>form</replaceable> :break-after <replaceable>form</replaceable></varname>.
+	      <para>Equivalent to <code>:break-before <replaceable>form</replaceable> :break-after <replaceable>form</replaceable></code>.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:backtrace-before <replaceable>form</replaceable></varname></term>
-	    <term><varname>:backtrace <replaceable>form</replaceable></varname></term>
+	    <term><code>:backtrace-before <replaceable>form</replaceable></code></term>
+	    <term><code>:backtrace <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being traced is
 	        about to be entered.  The form may reference the lexical variable
-	        <varname>ccl::args</varname>, which is a list of the arguments in this call. The value
+	        <code>ccl::args</code>, which is a list of the arguments in this call. The value
 	        returned by <replaceable>form</replaceable> is intepreted as follows:
 	      </para>
 
 	      <variablelist>
 
 	        <varlistentry>
-	          <term><varname>nil</varname></term>
+	          <term><code>nil</code></term>
 	          <listitem><para>does nothing</para></listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>:detailed</varname></term>
+	          <term><code>:detailed</code></term>
 	          <listitem><para>prints a detailed backtrace to
 	              <varname>*trace-output*</varname>.</para></listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>(:detailed <replaceable>integer</replaceable>)</varname></term>
+	          <term><code>(:detailed <replaceable>integer</replaceable>)</code></term>
 	          <listitem><para>prints the top <replaceable>integer</replaceable> frames of detailed
 	              backtrace to <varname>*trace-output*</varname>.
 	          </para></listitem>
@@ -281,18 +282,18 @@
 	        </varlistentry>
 	      </variablelist>
 	      <para>
-	        Note that unlike with the other options, <varname>:backtrace</varname> is equivalent to
-	        <varname>:backtrace-before</varname> only, not both before and after, since it's usually
+	        Note that unlike with the other options, <code>:backtrace</code> is equivalent to
+	        <code>:backtrace-before</code> only, not both before and after, since it's usually
 	        not helpful to print the same backtrace both before and after the function call.
 	      </para>
 	    </listitem>
       </varlistentry>
 
       <varlistentry>
-	    <term><varname>:backtrace-after <replaceable>form</replaceable></varname></term>
+	    <term><code>:backtrace-after <replaceable>form</replaceable></code></term>
 	    <listitem>
 	      <para>Evaluates <replaceable>form</replaceable> whenever the function being traced has
-	        just exited.  The form may reference the lexical variable <varname>ccl::vals</varname>,
+	        just exited.  The form may reference the lexical variable <code>ccl::vals</code>,
 	        which is a list of values returned by this call. The value returned by
 	        <replaceable>form</replaceable> is intepreted as follows:
 	      </para>
@@ -300,18 +301,18 @@
 	      <variablelist>
 
 	        <varlistentry>
-	          <term><varname>nil</varname></term>
+	          <term><code>nil</code></term>
 	          <listitem><para>does nothing</para></listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>:detailed</varname></term>
+	          <term><code>:detailed</code></term>
 	          <listitem><para>prints a detailed backtrace to
 	              <varname>*trace-output*</varname>.</para></listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>(:detailed <replaceable>integer</replaceable>)</varname></term>
+	          <term><code>(:detailed <replaceable>integer</replaceable>)</code></term>
 	          <listitem><para>prints the top <replaceable>integer</replaceable> frames of detailed
 	              backtrace to <varname>*trace-output*</varname>.
 	          </para></listitem>
@@ -334,29 +335,29 @@
       </varlistentry>
 
       <varlistentry>
-        <term><varname>:before</varname> <replaceable>action</replaceable></term>
+        <term><code>:before</code> <replaceable>action</replaceable></term>
         <listitem>
 	      <para>specifies the action to be taken just before the traced function is entered.  <replaceable>action</replaceable> is one of:</para>
 
 	      <variablelist>
 	        <varlistentry>
-	          <term><varname>:print</varname></term>
+	          <term><code>:print</code></term>
 	          <listitem>
 		        <para>The default, prints a short indented message showing the function name and the invocation arguments</para>
 	          </listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>:break</varname></term>
+	          <term><code>:break</code></term>
 	          <listitem>
-		        <para>Equivalent to <varname>:before :print :break-before t</varname></para>
+		        <para>Equivalent to <code>:before :print :break-before t</code></para>
 	          </listitem>
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>:backtrace</varname></term>
+	          <term><code>:backtrace</code></term>
 	          <listitem>
-		        <para>Equivalent to <varname>:before :print :backtrace-before t</varname></para>
+		        <para>Equivalent to <code>:before :print :backtrace-before t</code></para>
 	          </listitem>
 	        </varlistentry>
 
@@ -379,14 +380,14 @@
 
       <varlistentry>
 
-        <term><varname>:after</varname> <replaceable>action</replaceable></term>
+        <term><code>:after</code> <replaceable>action</replaceable></term>
         <listitem>
 
 	      <para>specifies the action to be taken just after the traced function exits.  <replaceable>action</replaceable> is one of:</para>
 
 	      <variablelist>
 	        <varlistentry>
-	          <term><varname>:print</varname></term>
+	          <term><code>:print</code></term>
 	          <listitem>
 	            <para>The default, prints a short indented message showing the function name and the
 	              returned values </para>
@@ -394,16 +395,16 @@
 	        </varlistentry>
 
 	        <varlistentry>
-	          <term><varname>:break</varname></term>
+	          <term><code>:break</code></term>
 	          <listitem>
-	            <para>Equivalent to <varname>:after :print :break-after t</varname></para>
+	            <para>Equivalent to <code>:after :print :break-after t</code></para>
 	          </listitem>
 	        </varlistentry>
 
 		    <varlistentry>
-		      <term><varname>:backtrace</varname></term>
+		      <term><code>:backtrace</code></term>
 		      <listitem>
-		        <para>Equivalent to <varname>:after :print :backtrace-after t</varname></para>
+		        <para>Equivalent to <code>:after :print :backtrace-after t</code></para>
 		      </listitem>
 		    </varlistentry>
 
@@ -425,60 +426,80 @@
       </varlistentry>
 
     </variablelist>
+   </refsect1>
+   </refentry>
 
-
-    <para>
-      <indexterm zone="trace-level"/>
-      <command><varname id="trace-level">CCL:*TRACE-LEVEL*</varname>    [Variable]</command>
-    </para>
+    <refentry id="v_trace-level"><indexterm zone="v_trace-level"><primary>*trace-level*</primary></indexterm>
+      <refnamediv><refname>*TRACE-LEVEL*</refname><refpurpose></refpurpose><refclass>Variable</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><varname>CCL:*TRACE-LEVEL*</varname></synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
 
     <para>Variable bound to the current nesting level during execution of before and after trace actions.  The default printing actions use it to determine the amount of indentation.</para>
+   </refsect1>
+   </refentry>
 
-    <para>
-      <indexterm zone="trace-max-indent"/>
-      <command><varname id="trace-max-indent">CCL:*TRACE-MAX-INDENT*</varname>    [Variable]</command>
-    </para>
+    <refentry id="v_trace-max-indent"><indexterm zone="v_trace-max-indent"><primary>*trace-max-indent*</primary></indexterm>
+      <refnamediv><refname>*TRACE-MAX-INDENT*</refname><refpurpose></refpurpose><refclass>Variable</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><varname id="v_trace-max-ident">CCL:*TRACE-MAX-INDENT*</varname></synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
 
     <para>The default before and after print actions will not indent by more than the value of <varname>ccl:*trace-max-indent*</varname> regardless of the current trace level.</para>
+   </refsect1>
+   </refentry>
 
-    <para>
-      <indexterm zone="trace-function"/>
-      <command><varname id="trace-function">CCL:TRACE-FUNCTION</varname> <replaceable>spec</replaceable> &key; {<replaceable>keyword</replaceable> <replaceable>value</replaceable>}*    [Function]</command>
-    </para>
-    
+
+    <refentry id="f_trace-function"><indexterm zone="f_trace-function"><primary>trace-function</primary></indexterm>
+      <refnamediv><refname>TRACE-FUNCTION</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><function>CCL:TRACE-FUNCTION</function> <replaceable>spec</replaceable> &key; {<replaceable>keyword</replaceable> <replaceable>value</replaceable>}*</synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
+
     <para>
       This is a functional version of the TRACE macro.  <replaceable>spec</replaceable> and
       <replaceable>keyword</replaceable>s are as for TRACE, except that all arguments are evaluated.
     </para>
+   </refsect1>
+   </refentry>
 
-    <para>
-      <indexterm zone="trace-print-level"/>
-      <command><varname id="trace-print-level">CCL:*TRACE-PRINT-LEVEL*</varname>   [Variable]</command>
-    </para>
+
+    <refentry id="v_trace-print-level"><indexterm zone="v_trace-print-level"><primary>*trace-print-level*</primary></indexterm>
+      <refnamediv><refname>*TRACE-PRINT-LEVEL*</refname><refpurpose></refpurpose><refclass>Variable</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><varname>CCL:*TRACE-PRINT-LEVEL*</varname></synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
 
     <para>The default print actions bind <varname>CL:*PRINT-LEVEL*</varname> to this value while
       printing. Note that this rebinding is only in effect during the default entry and exit messages.
-      It does not apply to printing of <varname>:print-before/:print-after</varname> forms or any
+      It does not apply to printing of <code>:print-before/:print-after</code> forms or any
       explicit printing done by user code.</para>
 
-    <para>
-      <indexterm zone="trace-print-length"/>
-      <command><varname id="trace-print-length">CCL:*TRACE-PRINT-LENGTH*</varname>    [Variable]</command>
-    </para>
+   </refsect1>
+   </refentry>
+
+
+    <refentry id="v_trace-print-length"><indexterm zone="v_trace-print-length"><primary>*trace-print-length*</primary></indexterm>
+      <refnamediv><refname>*TRACE-PRINT-LENGTH*</refname><refpurpose></refpurpose><refclass>Variable</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><varname>CCL:*TRACE-PRINT-LENGTH*</varname></synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
     
     <para>The default print actions bind <varname>CL:*PRINT-LENGTH*</varname> to this value while
       printing. Note that this rebinding is only in effect during the default entry and exit messages.
-      It does not apply to printing of <varname>:print-before/:print-after</varname> forms or any
+      It does not apply to printing of <code>:print-before/:print-after</code> forms or any
       explicit printing done by user code.</para>
 
-    <para>
-      <indexterm zone="trace-bar-frequency"/>
-      <command><varname id="trace-bar-frequency">CCL:*TRACE-BAR-FREQUENCY*</varname>    [Variable]</command>
-    </para>
+   </refsect1>
+   </refentry>
+
+    <refentry id="v_trace-bar-frequency"><indexterm zone="v_trace-bar-frequency"><primary>*trace-bar-frequency*</primary></indexterm>
+      <refnamediv><refname>*TRACE-BAR-FREQUENCY*</refname><refpurpose></refpurpose><refclass>Variable</refclass></refnamediv>
+       <refsynopsisdiv><synopsis><varname>CCL:*TRACE-BAR-FREQUENCY*</varname></synopsis></refsynopsisdiv>
+    <refsect1><title>Description</title>
 
     <para>By default, this is nil. If non-nil it should be a integer,
     and the default entry and exit messages will print a | instead of
     space every this many levels of indentation.</para>
+
+   </refsect1>
+   </refentry>
+
 
 
   </sect1>
@@ -512,8 +533,8 @@
       <refname>ADVISE</refname>
       <refpurpose>
 	Add a piece of advice to the function or method specified by
-	<varname>spec</varname> according to
-	<varname>form</varname>.
+	<parameter>spec</parameter> according to
+	<parameter>form</parameter>.
       </refpurpose>
       <refclass>Macro</refclass>
     </refnamediv>
@@ -526,7 +547,7 @@
       <title>Arguments and Values</title>
       <variablelist>
 	<varlistentry>
-	  <term>spec</term>
+	  <term><parameter>spec</parameter></term>
 	  <listitem>
 	    <para>
 	      A specification of the function on which to put the
@@ -539,7 +560,7 @@
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>form</term>
+	  <term><parameter>form</parameter></term>
 	  <listitem>
 	    <para>
 	      A form to execute before, after, or around the advised
@@ -551,7 +572,7 @@
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>name</term>
+	  <term><parameter>name</parameter></term>
 	  <listitem>
 	    <para>
 	      A name that identifies the piece of advice.
@@ -559,7 +580,7 @@
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>when</term>
+	  <term><parameter>when</parameter></term>
 	  <listitem>
 	    <para>
 	      An argument that specifies when the piece of advice is
@@ -613,8 +634,8 @@
     <refnamediv>
       <refname>UNADVISE</refname>
       <refpurpose>
-	Remove the piece or pieces of advice matching <varname>spec</varname>,
-	<varname>when</varname>, and <varname>name</varname>.
+	Remove the piece or pieces of advice matching <parameter>spec</parameter>,
+	<parameter>when</parameter>, and <parameter>name</parameter>.
       </refpurpose>
       <refclass>Macro</refclass>
     </refnamediv>
@@ -654,8 +675,8 @@
     <refnamediv>
       <refname>ADVISEDP</refname>
       <refpurpose>
-	Return a list of the pieces of advice matching <varname>spec</varname>,
-	<varname>when</varname>, and <varname>name</varname>.
+	Return a list of the pieces of advice matching <parameter>spec</parameter>,
+	<parameter>when</parameter>, and <parameter>name</parameter>.
       </refpurpose>
       <refclass>Macro</refclass>
     </refnamediv>
@@ -687,29 +708,29 @@
   </sect1>
 
   <sect1 id="Directory"><title>Directory</title>
-  <para>&CCL;'s <varname>DIRECTORY</varname> function accepts the following
+  <para>&CCL;'s <function>DIRECTORY</function> function accepts the following
 implementation-dependent keyword arguments:</para>
   <variablelist>
   <varlistentry>
-     <term><varname>:files</varname> <replaceable>boolean</replaceable></term>
+     <term><code>:files</code> <replaceable>boolean</replaceable></term>
      <listitem>
        <para> If true, includes regular (non-directory) files in DIRECTORY's output.  Defaults to T.</para>
      </listitem>
   </varlistentry>
   <varlistentry>
-     <term><varname>:directories</varname> <replaceable>boolean</replaceable></term>
+     <term><code>:directories</code> <replaceable>boolean</replaceable></term>
      <listitem>
        <para> If true, includes directories in DIRECTORY's output.  Defaults to NIL.</para>
      </listitem>
   </varlistentry>
   <varlistentry>
-     <term><varname>:all</varname> <replaceable>boolean</replaceable></term>
+     <term><code>:all</code> <replaceable>boolean</replaceable></term>
      <listitem>
        <para> If true, includes files and directories whose names start with a dot character in DIRECTORY's output.  (Entries whose name is "." or ".." are never included.) Defaults to T.</para>
      </listitem>
   </varlistentry>
   <varlistentry>
-     <term><varname>:follow-links</varname> <replaceable>boolean</replaceable></term>
+     <term><code>:follow-links</code> <replaceable>boolean</replaceable></term>
      <listitem>
        <para> If true, includes the TRUENAMEs of symbolic or hard links in DIRECTORY's output; if false, includes the link filenames without attempting to resolve them. Defaults to T.</para>
        <para>Note that legacy HFS alias files are treated as plain files.</para>
@@ -888,7 +909,7 @@ implementation-dependent keyword arguments:</para>
 	
 	<variablelist>
 	  <varlistentry>
-	    <term>domain</term>
+	    <term><parameter>domain</parameter></term>
 	    <listitem>
 	      <para>This is used to indicate where the external
 	      format is to be used.  Its value can be almost
@@ -904,7 +925,7 @@ implementation-dependent keyword arguments:</para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>character-encoding</term>
+	    <term><parameter>character-encoding</parameter></term>
 	    <listitem>
 	      <para>A keyword that specifies the character encoding
 	      for the external format. <xref
@@ -923,7 +944,7 @@ implementation-dependent keyword arguments:</para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>line-termination</term>
+	    <term><parameter>line-termination</parameter></term>
 	    <listitem>
 	      <para>A keyword that indicates a line termination
 	      keyword <xref linkend="Line-Termination-Keywords"/>.
@@ -933,7 +954,7 @@ implementation-dependent keyword arguments:</para>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
-	    <term>external-format</term>
+	    <term><parameter>external-format</parameter></term>
 	    <listitem>
 	      <para>An external-format object as described above.</para>
 	    </listitem>
@@ -1447,9 +1468,9 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
   <refsect1><title>Description</title>
   <para>
     Returns the number of characters that would be produced by
-    decoding <varname>vector</varname> (or the subsequence thereof
-    delimited by <varname>start</varname> and <varname>end</varname>)
-    according to <varname>external-format</varname>.
+    decoding <parameter>vector</parameter> (or the subsequence thereof
+    delimited by <parameter>start</parameter> and <parameter>end</parameter>)
+    according to <parameter>external-format</parameter>.
   </para>
   </refsect1>
 </refentry>
@@ -1480,25 +1501,25 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 
   <refsect1><title>Description</title>
   <para>
-    Decodes the octets in <varname>vector</varname> (or the subsequence
-    of it delimited by <varname>start</varname> and
-    <varname>end</varname>) into a string according
-    to <varname>external-format</varname>.
+    Decodes the octets in <parameter>vector</parameter> (or the subsequence
+    of it delimited by <parameter>start</parameter> and
+    <parameter>end</parameter>) into a string according
+    to <parameter>external-format</parameter>.
   </para>
   <para>
-    If <varname>string</varname> is supplied, output will be written into it.
-    It must be large enough to hold the decoded characters.  If <varname>
-    string</varname> is not supplied, a new string will be allocated to
+    If <parameter>string</parameter> is supplied, output will be written into it.
+    It must be large enough to hold the decoded characters.  If <parameter>
+    string</parameter> is not supplied, a new string will be allocated to
     hold the decoded characters.
   </para>
   <para>
     Returns, as multiple values, the decoded string and the position in
-    <varname>vector</varname> where the decoding ended.
+    <parameter>vector</parameter> where the decoding ended.
   </para>
   <para>
-    Sequences of octets in <varname>vector</varname> that cannot be
+    Sequences of octets in <parameter>vector</parameter> that cannot be
     decoded into characters according to
-    <varname>external-format</varname> will be decoded as
+    <parameter>external-format</parameter> will be decoded as
     #\Replacement_Character.
   </para>
   </refsect1>
@@ -1532,29 +1553,29 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 
   <refsect1><title>Description</title>
   <para>
-    Encodes <varname>string</varname> (or the substring delimited by
-    <varname>start</varname> and <varname>end</varname>)
-    into <varname>external-format</varname> and returns, as multiple
+    Encodes <parameter>string</parameter> (or the substring delimited by
+    <parameter>start</parameter> and <parameter>end</parameter>)
+    into <parameter>external-format</parameter> and returns, as multiple
     values, a vector of octets containing the encoded data and an integer
     that specifies the offset into the vector where the encoded data ends.
   </para>
   <para>
-    When <varname>use-byte-order-mark</varname> is true, a byte-order mark
+    When <parameter>use-byte-order-mark</parameter> is true, a byte-order mark
     will be included in the encoded data.
   </para>
   <para>
-    If <varname>vector</varname> is supplied, output will be written
+    If <parameter>vector</parameter> is supplied, output will be written
     to it.  It must be of type (simple-array (unsigned-byte 8)) and be
     large enough to hold the encoded data.  If it is not supplied, the function
     will allocate a new vector.
   </para>
   <para>
-    If <varname>vector-offset</varname> is supplied, data will be written
+    If <parameter>vector-offset</parameter> is supplied, data will be written
     into the output vector starting at that offset.
   </para>
   <para>
-    Characters in <varname>string</varname> that cannot be encoded
-    into <varname>external-format</varname> will be replaced with an
+    Characters in <parameter>string</parameter> that cannot be encoded
+    into <parameter>external-format</parameter> will be replaced with an
     encoding-dependent replacement character
     (#\Replacement_Character or #\Sub) before being encoded and written
     into the output vector.
@@ -1589,12 +1610,12 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
   <refsect1><title>Description</title>
   <para>
     Returns the number of octets required to encode
-    <varname>string</varname> (or the substring delimited by
-    <varname>start</varname> and <varname>end</varname>) into
-    <varname>external-format</varname>.
+    <parameter>string</parameter> (or the substring delimited by
+    <parameter>start</parameter> and <parameter>end</parameter>) into
+    <parameter>external-format</parameter>.
   </para>
   <para>
-    When <varname>use-byte-order-mark</varname> is true, the returned
+    When <parameter>use-byte-order-mark</parameter> is true, the returned
     size will include space for a byte-order marker.
   </para>
   </refsect1>
@@ -1625,16 +1646,15 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 
       <para>&CCL; sets up logical pathname translations for logical hosts:  <literal>ccl</literal> and <literal>home</literal></para>
 
-      <indexterm><primary>CCL Logical Host</primary></indexterm>
-      <para>The <literal>CCL</literal> logical host should point to the
-        <literal>ccl</literal> directory.  It is used for a variety of
+      <para>The <filename>CCL</filename> logical host should point to the
+        <filename>ccl</filename> directory.  It is used for a variety of
         purposes by &CCL; including: locating &CCL; source code,
         <literal>require</literal> and <literal>provide</literal>, accessing
         foreign function information, and the &CCL; build process. It
         is set to the value of the environment variable
-        <varname>CCL_DEFAULT_DIRECTORY</varname>, which is set by the
+        <filename>CCL_DEFAULT_DIRECTORY</filename>, which is set by the
         openmcl shell script <xref linkend="The-ccl-Shell-Script"/>.  If
-        <varname>CCL_DEFAULT_DIRECTORY</varname> is not set, then it is set
+        <filename>CCL_DEFAULT_DIRECTORY</filename> is not set, then it is set
         to the directory containing the current heap image.</para>
     </sect2>
     <sect2 id="pathname-namestrings">
@@ -1702,7 +1722,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 	  Any quoting or escaping of special characters will be removed.
 	</para>
 	<para>
-	  For example, suppose that <varname>p</varname> is a pathname made
+	  For example, suppose that <parameter>p</parameter> is a pathname made
 	  by <literal>(make-pathname :name "a.b" :type "c")</literal>.
 	  Then, <literal>(native-translated-namestring p)</literal> evaluates
 	  to "a.b.c".  By contrast, <literal>(namestring p)</literal> evaluates
@@ -1730,8 +1750,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 	
 	<refsect1><title>Description</title>
 	<para>
-	  Executes <varname>forms</varname> in an environemt in which each
-	  <varname>var</varname> is bound to a stack-allocated foreign
+	  Executes <parameter>forms</parameter> in an environemt in which each
+	  <parameter>var</parameter> is bound to a stack-allocated foreign
 	  pointer which refers to a C-style string suitable for passing
 	  to foreign code which expects a filename argument.
 	</para>
@@ -1765,8 +1785,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       
       <para>Pathname strings are treated as null-terminated strings
         coded in the encoding named by the value returned by the function
-      <varname>CCL:PATHNAME-ENCODING-NAME</varname>.  This value may be changed
-      with <varname>SETF</varname>.</para>
+      <function>CCL:PATHNAME-ENCODING-NAME</function>.  This value may be changed
+      with <function>SETF</function>.</para>
     </sect2>
     <sect2 id="pathnames-on-freebsd">
       <title>FreeBSD</title>
@@ -1793,8 +1813,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       structure in memory.</para>
 
     <para>&CCL; provides the
-      functions <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
-      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> to support
+      functions <function>CCL:MAP-FILE-TO-IVECTOR</function>
+      and <function>CCL:MAP-FILE-TO-OCTET-VECTOR</function> to support
       memory-mapping. These functions return vectors whose contents are
       the contents of memory-mapped files. Reading an element of such a
       vector returns data from the corresponding position in the
@@ -1818,53 +1838,51 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       the vector's elements to point to the file's contents on disk
       directly, without copying them into memory first.</para>
 
-    <para>The vectors returned by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
-      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> are read-only; any
+    <para>The vectors returned by <function>CCL:MAP-FILE-TO-IVECTOR</function>
+      and <function>CCL:MAP-FILE-TO-OCTET-VECTOR</function> are read-only; any
       attempt to change an element of a vector returned by these
       functions results in a memory-access error. &CCL; does not
       currently support writing data to memory-mapped files.</para>
 
-    <para>Vectors created by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>
-      and <varname>CCL:MAP-FILE-TO-OCTET-VECTOR</varname> are required to
+    <para>Vectors created by <function>CCL:MAP-FILE-TO-IVECTOR</function>
+      and <function>CCL:MAP-FILE-TO-OCTET-VECTOR</function> are required to
       respect &CCL;'s limit on the total size of an array. That means
       that you cannot use these functions to create a vector longer
       than <varname>ARRAY-TOTAL-SIZE-LIMIT</varname>, even if the filesystem
       supports file sizes that are larger. The value
-      of <varname>ARRAY-TOTAL-SIZE-LIMIT</varname> is <varname>(EXPT 2 24)</varname>
-      on 32-but platforms; and <varname>(EXPT 2 56)</varname> on 64-bit
+      of <varname>ARRAY-TOTAL-SIZE-LIMIT</varname> is <code>(EXPT 2 24)</code>
+      on 32-but platforms; and <code>(EXPT 2 56)</code> on 64-bit
       platforms.</para>
 
-    <para>
-      <indexterm zone="map-file-to-ivector"/>
-      <command><varname id="map-file-to-ivector">CCL:MAP-FILE-TO-IVECTOR</varname>
-        <parameter>pathname</parameter>
-        <parameter>element-type</parameter>
-        [Function]</command>
-    </para>
+
+      <refentry id="f_map-file-to-ivector"><indexterm zone="m_map-file-to-ivector"><primary>map-file-to-ivector</primary></indexterm>
+        <refnamediv><refname>MAP-FILE-TO-IVECTOR</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>CCL:MAP-FILE-TO-IVECTOR</function> <parameter>pathname</parameter> <parameter>element-type</parameter></synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
 
     <variablelist>
       <varlistentry>
-        <term><varname>pathname</varname></term>
+        <term><parameter>pathname</parameter></term>
         <listitem>
           <para>The pathname of the file to be memory-mapped.</para>
         </listitem>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>element-type</varname></term>
+        <term><parameter>element-type</parameter></term>
         <listitem>
           <para>The element-type of the vector to be
             created. Specified as
             a <glossterm linkend="type-specifier">type-specifier</glossterm>
-            that names a subtype of either <varname>SIGNED-BYTE</varname>
-            or <varname>UNSIGNED-BYTE</varname>.</para>
+            that names a subtype of either <code>SIGNED-BYTE</code>
+            or <code>UNSIGNED-BYTE</code>.</para>
         </listitem>
       </varlistentry>
     </variablelist>
 
 
     <para>
-      The <varname>map-file-to-ivector</varname> function tries to
+      The <function>map-file-to-ivector</function> function tries to
       open the file at <parameter>pathname</parameter> for reading. If
       successful, the function maps the file's contents to a range of
       virtual addresses. If successful, it returns a read-only vector
@@ -1875,62 +1893,71 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 
     <para>The returned vector is
       a <glossterm linkend="displaced-array">displaced-array</glossterm>
-      whose element-type is <varname>(UPGRADED-ARRAY-ELEMENT-TYPE
-        element-type)</varname>. The target of the displaced array is a
-      vector of type <varname>(SIMPLE-ARRAY element-type (*))</varname> whose
+      whose element-type is <code>(UPGRADED-ARRAY-ELEMENT-TYPE
+        element-type)</code>. The target of the displaced array is a
+      vector of type <code>(SIMPLE-ARRAY element-type (*))</code> whose
       elements are the contents of the memory-mapped file.</para>
 
     <para>Because of alignment issues, the mapped file's contents
       start a few bytes (4 bytes on 32-bit platforms, 8 bytes on
       64-bit platforms) into the vector. The displaced array returned
-      by <varname>CCL:MAP-FILE-TO-IVECTOR</varname> hides this overhead, but
+      by <function>CCL:MAP-FILE-TO-IVECTOR</function> hides this overhead, but
       it's usually more efficient to operate on the underlying simple
       1-dimensional array.  Given a displaced array (like the value
-      returned by <varname>CCL:MAP-FILE-TO-IVECTOR</varname>), the function
-      <varname>ARRAY-DISPLACEMENT</varname> returns the underlying array and
+      returned by <function>CCL:MAP-FILE-TO-IVECTOR</function>), the function
+      <function>ARRAY-DISPLACEMENT</function> returns the underlying array and
       the displacement index in elements.
     </para>
 
     <para>Currently, &CCL; supports only read operations on
       memory-mapped files. If you try to change the contents of an array
-      returned by <varname>map-file-to-ivector</varname>, &CCL; signals
+      returned by <function>map-file-to-ivector</function>, &CCL; signals
       a memory error.</para>
 
-    <para>
-      <indexterm zone="unmap-ivector"/>
-      <command><varname id="unmap-ivector">CCL:UNMAP-IVECTOR</varname>
-        <parameter>displaced-array</parameter>
-        [Function]</command>
-    </para>
+    </refsect1>
+    </refentry>
+
+      <refentry id="f_unmap-ivector"><indexterm zone="f_unmap-ivector"><primary>unmap-ivector</primary></indexterm>
+        <refnamediv><refname>UNMAP-IVECTOR</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>CCL:UNMAP-IVECTOR</function> <parameter>displaced-array</parameter>
+         </synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
 
     <para>If the argument is a displaced-array returned
-      by <varname>map-file-to-ivector</varname>, and if it has not yet
+      by <function>map-file-to-ivector</function>, and if it has not yet
       been unmapped by this function,
-      then <varname>unmap-ivector</varname> undoes the memory mapping,
+      then <function>unmap-ivector</function> undoes the memory mapping,
       closes the mapped file, and changes the displaced-array so that its
       target is an empty vector (of length zero).</para>
 
-    <para>
-      <indexterm zone="map-file-to-octet-vector"/>
-      <command><varname id="map-file-to-octet-vector">CCL:MAP-FILE-TO-OCTET-VECTOR</varname>
-        <parameter>pathname</parameter>
-        [Function]</command>
-    </para>
+    </refsect1>
+    </refentry>
 
-    <para>This function is a synonym for <varname>(CCL:MAP-FILE-TO-IVECTOR
-        pathname '(UNSIGNED-BYTE 8))</varname> It is provided as a convenience
+      <refentry id="f_map-file-to-octet-vector"><indexterm zone="f_map-file-to-octet-vector"><primary>map-file-to-octet-vector</primary></indexterm>
+        <refnamediv><refname>MAP-FILE-TO-OCTET-VECTOR</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>CCL:MAP-FILE-TO-OCTET-VECTOR</function> <parameter>displaced-array</parameter>
+         </synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
+
+    <para>This function is a synonym for <code>(CCL:MAP-FILE-TO-IVECTOR
+        pathname '(UNSIGNED-BYTE 8))</code> It is provided as a convenience
       for the common case of memory-mapping a file as a vector of
       bytes.</para>
 
-    <para>
-      <indexterm zone="unmap-octet-vector"/>
-      <command><varname id="unmap-octet-vector">CCL:UNMAP-OCTET-VECTOR</varname>
-        <parameter>displaced-array</parameter>
-        [Function]</command>
-    </para>
+    </refsect1>
+    </refentry>
+
+      <refentry id="f_unmap-octet-vector"><indexterm zone="f_unmap-octet-vector"><primary>unmap-octet-vector</primary></indexterm>
+        <refnamediv><refname>UNMAP-OCTET-VECTOR</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>CCL:UNMAP-OCTET-VECTOR</function> <parameter>displaced-array</parameter>
+         </synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
 
     <para>This function is a synonym
-      for <varname>(CCL:UNMAP-IVECTOR)</varname></para>
+      for <function>CCL:UNMAP-IVECTOR</function></para>
+    </refsect1>
+    </refentry>
+
   </sect1>
 
   <!-- ============================================================ -->
@@ -1945,8 +1972,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       in one thread changes it for all threads.</para> 
 
     <para>Attempting to dynamically rebind a static variable (for
-      instance, by using <varname>LET</varname>, or using the variable name as
-      a parameter in a <varname>LAMBDA</varname> form) signals an
+      instance, by using <code>LET</code>, or using the variable name as
+      a parameter in a <code>LAMBDA</code> form) signals an
       error. Static variables are shared global resources; a dynamic
       binding is private to a single thread.</para>
 
@@ -1963,33 +1990,33 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       access to a special variable that has not been declared
       static.</para>
 
-    <para>
-      <indexterm zone="defstatic"/>
-      <command><varname id="defstatic">DEFSTATIC</varname>
-        <parameter>var</parameter>
+
+      <refentry id="m_defstatic"><indexterm zone="m_defstatic"><primary>defstatic</primary></indexterm>
+        <refnamediv><refname>DEFSTATIC</refname><refpurpose></refpurpose><refclass>Macro</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>DEFSTATIC</function> <parameter>var</parameter>
         <parameter>value</parameter>
         &key;
         <parameter>doc-string</parameter>
-        [Macro]</command>
-    </para>
-    
+         </synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
+
     <variablelist>
       <varlistentry>
-        <term><varname>var</varname></term>
+        <term><parameter>var</parameter></term>
         <listitem>
           <para>The name of the new static variable.</para>
         </listitem>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>value</varname></term>
+        <term><parameter>value</parameter></term>
         <listitem>
           <para>The initial value of the new static variable.</para>
         </listitem>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>doc-string</varname></term>
+        <term><parameter>doc-string</parameter></term>
         <listitem>
           <para>A documentation string that is assigned to the new
             variable.</para>
@@ -2000,11 +2027,15 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     <para>Proclaims the
       variable <glossterm linkend="special_variable">special</glossterm>,
       assigns the variable the supplied value, and assigns
-      the <varname>doc-string</varname> to the
-      variable's <varname>VARIABLE</varname> documentation. Marks the
+      the <parameter>doc-string</parameter> to the
+      variable's <code>VARIABLE</code> documentation. Marks the
       variable static, preventing any attempt to dynamically rebind
-      it. Any attempt to dynamically rebind <varname>var</varname>
+      it. Any attempt to dynamically rebind <parameter>var</parameter>
       signals an error.</para>
+    </refsect1>
+    </refentry>
+
+
   </sect1>
 
   <!-- ============================================================ -->
@@ -2119,10 +2150,13 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       command-line parameter to the <literal>ccl</literal>
       or <literal>ccl64</literal> script.</para>
 
-    <para>
-      <indexterm zone="save-application"/>
-      <command><varname id="save-application">SAVE-APPLICATION</varname>
-        <parameter>filename</parameter>
+
+
+
+
+      <refentry id="f_save-application"><indexterm zone="f_save-application"><primary>save-application</primary></indexterm>
+        <refnamediv><refname>SAVE-APPLICATION</refname><refpurpose></refpurpose><refclass>Function</refclass></refnamediv>
+        <refsynopsisdiv><synopsis><function>SAVE-APPLICATION</function>         <parameter>filename</parameter>
         &key;
         <parameter>toplevel-function</parameter>
         <parameter>init-file</parameter>
@@ -2134,12 +2168,12 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
         <parameter>(mode #o644)</parameter>
         <parameter>prepend-kernel</parameter>
         <parameter>native</parameter>
-        [Function]</command>
-    </para>
+         </synopsis></refsynopsisdiv>
+     <refsect1><title>Description</title>
     
     <variablelist>
       <varlistentry>
-        <term><varname>filename</varname></term>
+        <term><parameter>filename</parameter></term>
         <listitem>
           <para>The pathname of the file to be created when &CCL;
             saves the application.</para>
@@ -2147,7 +2181,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>toplevel-function</varname></term>
+        <term><parameter>toplevel-function</parameter></term>
         <listitem>
           <para>The function to be executed after startup is
             complete. The toplevel is a function of no arguments that
@@ -2161,7 +2195,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
 
       <varlistentry>
-        <term><varname>init-file</varname></term>
+        <term><parameter>init-file</parameter></term>
         <listitem>
           <para>The pathname of a Lisp file to be loaded when the
             image starts up. You can place initialization expressions in
@@ -2171,7 +2205,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>error-handler</varname></term>
+        <term><parameter>error-handler</parameter></term>
         <listitem>
           <para>The error-handling mode for the saved image. The
             supplied value determines what happens when an error is not
@@ -2187,7 +2221,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
 
       <varlistentry>
-        <term><varname>application-class</varname></term>
+        <term><parameter>application-class</parameter></term>
         <listitem>
           <para>The CLOS class that represents the saved Lisp
             application. Normally you don't need to supply this
@@ -2200,7 +2234,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
       
       <varlistentry>
-        <term><varname>clear-clos-caches</varname></term>
+        <term><parameter>clear-clos-caches</parameter></term>
         <listitem>
           <para>If true, ensures that CLOS caches are emptied before
             saving the image. Normally you don't need to supply this
@@ -2210,7 +2244,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
         </listitem>
      </varlistentry>
      <varlistentry>
-        <term><varname>purify</varname></term>
+        <term><parameter>purify</parameter></term>
         <listitem>
           <para>
 	    When true, calls (in effect) <code>purify</code> before
@@ -2223,7 +2257,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
 
      <varlistentry>
-        <term><varname>impurify</varname></term>
+        <term><parameter>impurify</parameter></term>
         <listitem>
           <para>
 	    If true, calls (in effect) <code>impurify</code> before
@@ -2240,7 +2274,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
 
      <varlistentry>
-        <term><varname>mode</varname></term>
+        <term><parameter>mode</parameter></term>
         <listitem>
           <para>
 	    A number specifying the mode (permission bits) of the output file.
@@ -2249,7 +2283,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </varlistentry>
 
      <varlistentry>
-        <term><varname>prepend-kernel</varname></term>
+        <term><parameter>prepend-kernel</parameter></term>
         <listitem>
           <para>Specifies the file to prepend to the saved heap
 	  image.  A value of <literal>t</literal> means to prepend
@@ -2270,7 +2304,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       </listitem>
       </varlistentry>
      <varlistentry>
-        <term><varname>native</varname></term>
+        <term><parameter>native</parameter></term>
         <listitem>
           <para>If true, saves the image as a native (ELF, Mach-O, PE)
           shared library.  (On platforms where this isn't yet supported,
@@ -2281,6 +2315,9 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       
       
     </variablelist>
+
+    </refsect1>
+    </refentry>
 
     <para></para>
   </sect1>
@@ -2311,7 +2348,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       <title>Arguments and Values</title>
       <variablelist>
 	<varlistentry>
-	  <term>out-file</term>
+	  <term><parameter>out-file</parameter></term>
 	  <listitem>
 	    <para>
 	      Name of the file in which to store the concatenation.
@@ -2319,7 +2356,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>fasl-files</term>
+	  <term><parameter>fasl-files</parameter></term>
 	  <listitem>
 	    <para>
 	      List of names of fasl files to concatenate.
@@ -2327,7 +2364,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>:if-exists</term>
+	  <term><parameter>if-exists</parameter></term>
 	  <listitem>
 	    <para>
 	      As for <function>OPEN</function>, defaults to <literal>
@@ -2374,8 +2411,8 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     Floating-point exceptions are generally enabled and detected.  By
     default, threads start up with overflow, division-by-zero, and
     invalid enabled, and the rounding mode is set to nearest. The
-    functions <varname>SET-FPU-MODE</varname> and
-    <varname>GET-FPU-MODE</varname> provide user control over
+    functions <function>SET-FPU-MODE</function> and
+    <function>GET-FPU-MODE</function> provide user control over
     floating-point behavior.
   </para>
 
@@ -2401,7 +2438,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       <title>Arguments and Values</title>
       <variablelist>
 	<varlistentry>
-	  <term>mode</term>
+	  <term><parameter>mode</parameter></term>
 	  <listitem>
 	    <para>
 	      One of the keywords :rounding-mode, :overflow,
@@ -2415,7 +2452,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
     <refsect1>
       <title>Description</title>
       <para>
-	If <varname>mode</varname> is supplied, returns the value of
+	If <parameter>mode</parameter> is supplied, returns the value of
 	the corresponding control flag for the current thread.
       </para>
       <para>
@@ -2470,7 +2507,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       <title>Arguments and Values</title>
       <variablelist>
 	<varlistentry>
-	  <term>rounding-mode</term>
+	  <term><parameter>rounding-mode</parameter></term>
 	  <listitem>
 	    <para>
 	      If supplied, must be one of :nearest, :zero, :positive, or
@@ -2479,7 +2516,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
 	  </listitem>
 	</varlistentry>
 	<varlistentry>
-	  <term>overflow, underflow, division-by-zero, invalid, inexact</term>
+	  <term><parameter>overflow</parameter>, <parameter>underflow</parameter>, <parameter>division-by-zero</parameter>, <parameter>invalid</parameter>, <parameter>inexact</parameter></term>
 	  <listitem>
 	    <para>NIL to mask the exception, T to signal it.</para>
 	  </listitem>
@@ -2529,7 +2566,7 @@ to and from vectors of type (simple-array (unsigned-byte 8)).</para>
       <title>Arguments and Values</title>
       <variablelist>
 	<varlistentry>
-	  <term>object</term>
+	  <term><parameter>object</parameter></term>
 	  <listitem>
 	    <para>
 	      Any memory-allocated lisp object.
@@ -3021,7 +3058,7 @@ Then you can see the coverage information in the definition of
   <refsect1><title>Arguments and Values</title>
   <variablelist>
     <varlistentry>
-      <term>output-file</term>
+      <term><parameter>output-file</parameter></term>
       <listitem>
 	<para>
           Pathname for the output index file.
@@ -3030,18 +3067,18 @@ Then you can see the coverage information in the definition of
     </varlistentry>
     
     <varlistentry>
-      <term>html</term>
+      <term><parameter>html</parameter></term>
       <listitem>
 	<para>
 	  If non-nil (the default), this will generate an HTML report, consisting of
-	  an index file in <varname>output-file</varname> and, in the same directory,
+	  an index file in <parameter>output-file</parameter> and, in the same directory,
           one html file for each instrumented source file that has been loaded in the
           current session.
 	</para>
       </listitem>
     </varlistentry>
     <varlistentry>
-      <term>tags</term>
+      <term><parameter>tags</parameter></term>
       <listitem>
 	<para>
 	  If non-nil, this should be a hash table mapping arbitrary keys (tags) to incremental coverage deltas.  The
@@ -3051,7 +3088,7 @@ Then you can see the coverage information in the definition of
       </listitem>
     </varlistentry>
     <varlistentry>
-      <term>external-format</term>
+      <term><parameter>external-format</parameter></term>
       <listitem>
 	<para>
 	  Controls the external format of the html files.
@@ -3059,13 +3096,13 @@ Then you can see the coverage information in the definition of
       </listitem>
     </varlistentry>
     <varlistentry>
-      <term>statistics</term>
+      <term><parameter>statistics</parameter></term>
       <listitem>
 	<para>
 	  If non-nil (the default), a comma-separated file is 
 	  generated with the summary of statistics. You can specify a
 	  filename for the statistics argument, otherwise
-	  "statistics.csv" is created in the directory of <varname>output-file</varname>.
+	  "statistics.csv" is created in the directory of <parameter>output-file</parameter>.
           See documentation of coverage-statistics below for a
 	  description of the values in the statistics file.
 	</para>
@@ -3351,7 +3388,7 @@ Then you can see the coverage information in the definition of
     <para>
       Returns a sequence of <literal>ccl:coverage-statistics</literal> objects, one for each
       source file, containing the same information as that written to
-      the statistics file by <literal>ccl:report-coverage</literal>. The following
+      the statistics file by <function>ccl:report-coverage</function>. The following
       accessors are defined for <literal>ccl:coverage-statistics</literal> objects:
       <variablelist>
       <varlistentry>
@@ -3509,7 +3546,7 @@ Then you can see the coverage information in the definition of
       returned by functions such as <literal>ccl:get-coverage</literal>.  Incremental
       coverage uses an abbreviated format
       and is missing some of the information in a full snapshot, and therefore cannot be passed to
-      functions documented to accept a <varname>snapshot</varname>, only to functions
+      functions documented to accept a <parameter>snapshot</parameter>, only to functions
       specifically documented to accept incremental coverage deltas.
      </para>
   </refsect1>
@@ -3536,7 +3573,7 @@ Then you can see the coverage information in the definition of
   <refsect1><title>Arguments and Values</title>
   <variablelist>
     <varlistentry>
-      <term>collection</term>
+      <term><parameter>collection</parameter></term>
        <listitem>
          <para>
           A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
@@ -3545,7 +3582,7 @@ Then you can see the coverage information in the definition of
         </listitem>
     </varlistentry>
     <varlistentry>
-      <term>sources</term>
+      <term><parameter>sources</parameter></term>
        <listitem>
          <para>
           A list of pathnames and/or source-notes, the latter representing a range within a file.
@@ -3594,7 +3631,7 @@ Then you can see the coverage information in the definition of
   <refsect1><title>Arguments and Values</title>
   <variablelist>
     <varlistentry>
-      <term>collection</term>
+      <term><parameter>collection</parameter></term>
        <listitem>
          <para>
           A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
@@ -3603,7 +3640,7 @@ Then you can see the coverage information in the definition of
         </listitem>
     </varlistentry>
     <varlistentry>
-      <term>directory</term>
+      <term><parameter>directory</parameter></term>
        <listitem>
          <para>
           The pathname of a subversion working directory.
@@ -3611,7 +3648,7 @@ Then you can see the coverage information in the definition of
         </listitem>
     </varlistentry>
     <varlistentry>
-      <term>revision</term>
+      <term><parameter>revision</parameter></term>
        <listitem>
          <para>
           The revision to compare to the working directory, an integer or another
