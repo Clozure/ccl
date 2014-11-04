@@ -27,7 +27,6 @@
                     style-mask
                     #$NSBackingStoreBuffered
                     #$YES)))
-      (#/setIdentifier: window #@"window content view")
       window)))
 
 (defun %scroll-view (frame)
