@@ -339,10 +339,6 @@
       (incorporate (%pathname-name key))
       (incorporate (%pathname-type key))
       (mixup-hash-code hash))))
-    
-
-         
-    
 
 (defun update-hash-flags (hash vector addressp)
   (when addressp
@@ -1755,17 +1751,12 @@ before doing so.")
          (%ilogxor (%%equalphash (realpart key)) (%%equalphash (imagpart key))))
         ((hash-table-p key)
          (equalphash-hash-table key))
-        ((typep key 'simple-string)
-         (%string-hash-folding-case 0 key (length key)))
-        ((typep key 'string)
-         (multiple-value-bind (data offset) (array-data-and-offset key)
-           (%string-hash-folding-case offset data (length key))))
         ((pathnamep key)
          (%hash-pathname key))
         ((or (istructp key)
              (structurep key))  ; was (gvectorp key)
          (%%equalphash-structure 11 key))
-        ((or (arrayp key)) ;(uvectorp key)) ;??
+        ((arrayp key)
          (%%equalphash-array 11 key))
         ((consp key)
          (%%equalphash-aux 11 key))
