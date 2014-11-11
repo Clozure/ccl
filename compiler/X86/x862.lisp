@@ -40,7 +40,7 @@
 (defparameter *x862-max-nfp-depth* 0)
 (defparameter *x862-all-nfp-pushes* ())
 (defparameter *x862-nfp-vars* ())
-(defparameter *x862-nfp-reg* ())
+
 
 
 (defun x862-max-nfp-depth ()
@@ -288,8 +288,7 @@
            (vreg-class (hard-regspec-class vreg))
            (vreg-mode (get-regspec-mode vreg))
            (vinsn nil)
-           (reg vreg)
-           (nfp (x862-nfp-reg seg)))
+           (reg vreg))
       (ecase type
         (#. memspec-nfp-type-natural
             (unless (and (eql vreg-class hard-reg-class-gpr)
@@ -298,7 +297,7 @@
                          *available-backend-imm-temps*
                          :natural)))            
             (setq vinsn
-                  (! nfp-load-unboxed-word reg offset nfp)))
+                  (! nfp-load-unboxed-word reg offset)))
         (#. memspec-nfp-type-double-float
             (unless (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-double))
@@ -306,7 +305,7 @@
                          *available-backend-fp-temps*
                          :double-float)))
             (setq vinsn
-                  (! nfp-load-double-float reg offset nfp)))
+                  (! nfp-load-double-float reg offset)))
         (#. memspec-nfp-type-single-float
             (unless (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-single))
@@ -314,7 +313,7 @@
                          *available-backend-fp-temps*
                          :single-float)))
             (setq vinsn
-                  (! nfp-load-single-float  reg offset nfp)))    
+                  (! nfp-load-single-float  reg offset)))    
         (#. memspec-nfp-type-complex-double-float
             (unless (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
@@ -322,7 +321,7 @@
                          *available-backend-fp-temps*
                          :complex-double-float)))
             (setq vinsn
-                  (! nfp-load-complex-double-float reg offset nfp)))
+                  (! nfp-load-complex-double-float reg offset)))
         (#. memspec-nfp-type-complex-single-float
             (unless (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
@@ -330,7 +329,7 @@
                          *available-backend-fp-temps*
                          :complex-single-float)))
             (setq vinsn
-                  (! nfp-load-complex-single-float  reg offset nfp))))
+                  (! nfp-load-complex-single-float  reg offset))))
       (when (memspec-single-ref-p ea)
         (let* ((push-vinsn
                 (find offset *x862-all-nfp-pushes*
@@ -383,22 +382,22 @@
       
 (defun x862-nfp-set (seg reg ea)
   (with-x86-local-vinsn-macros (seg )
-    (let* ((offset (logand #xfff8 ea))
-           (nfp (x862-nfp-reg seg)))
+    (let* ((offset (logand #xfff8 ea)))
       (ecase (logand #x7 ea)
         (#. memspec-nfp-type-natural
-            (! nfp-store-unboxed-word reg offset nfp))
+            (! nfp-store-unboxed-word reg offset))
         (#. memspec-nfp-type-double-float
-            (! nfp-store-double-float reg offset nfp))
+            (! nfp-store-double-float reg offset))
         (#. memspec-nfp-type-single-float
-            (! nfp-store-single-float  reg offset nfp))    
+            (! nfp-store-single-float  reg offset))    
         (#. memspec-nfp-type-complex-double-float
-           (! nfp-store-complex-double-float reg offset nfp))
+           (! nfp-store-complex-double-float reg offset))
         (#. memspec-nfp-type-complex-single-float
-            (! nfp-store-complex-single-float  reg offset nfp))))))
+            (! nfp-store-complex-single-float  reg offset))))))
 
 ;;; Depending on the variable's type and other attributes, maybe
 ;;; push it on the NFP.  Return the nfp-relative EA if we push it.
+
 (defun x862-nfp-bind (seg var initform)
   (let* ((bits (nx-var-bits var)))
     (unless (logtest bits (logior (ash 1 $vbitspecial)
@@ -407,28 +406,30 @@
       (let* ((type (acode-var-type var *x862-trust-declarations*))
              (reg nil)
              (nfp-bits 0))
-        (cond ((and (subtypep type *nx-target-natural-type*)
-                    NIL
-                    (not (subtypep type *nx-target-fixnum-type*)))
-               (setq reg (available-imm-temp
-                          *available-backend-imm-temps* :natural)
-                     nfp-bits memspec-nfp-type-natural))
-              ((subtypep type 'single-float)
-               (setq reg (available-fp-temp *available-backend-fp-temps*
-                                            :single-float)
-                     nfp-bits memspec-nfp-type-single-float))
-              ((subtypep type 'double-float)
-               (setq reg (available-fp-temp *available-backend-fp-temps*
-                                            :double-float)
-                     nfp-bits memspec-nfp-type-double-float))
-              ((subtypep type 'complex-single-float)
-               (setq reg (available-fp-temp *available-backend-fp-temps*
-                                            :complex-single-float)
-                     nfp-bits memspec-nfp-type-complex-single-float))
-              ((subtypep type 'complex-double-float)
-               (setq reg (available-fp-temp *available-backend-fp-temps*
-                                            :complex-double-float)
-                     nfp-bits memspec-nfp-type-complex-double-float)))
+        (unless (and (acode-constant-p initform)
+                     (not (logbitp $vbitsetq bits)))
+          (cond ((and (subtypep type *nx-target-natural-type*)
+                      NIL
+                      (not (subtypep type *nx-target-fixnum-type*)))
+                 (setq reg (available-imm-temp
+                            *available-backend-imm-temps* :natural)
+                       nfp-bits memspec-nfp-type-natural))
+                ((subtypep type 'single-float)
+                 (setq reg (available-fp-temp *available-backend-fp-temps*
+                                              :single-float)
+                       nfp-bits memspec-nfp-type-single-float))
+                ((subtypep type 'double-float)
+                 (setq reg (available-fp-temp *available-backend-fp-temps*
+                                              :double-float)
+                       nfp-bits memspec-nfp-type-double-float))
+                ((subtypep type 'complex-single-float)
+                 (setq reg (available-fp-temp *available-backend-fp-temps*
+                                              :complex-single-float)
+                       nfp-bits memspec-nfp-type-complex-single-float))
+                ((subtypep type 'complex-double-float)
+                 (setq reg (available-fp-temp *available-backend-fp-temps*
+                                              :complex-double-float)
+                       nfp-bits memspec-nfp-type-complex-double-float))))
         (when reg
           (let* ((vinsn (x862-push-register
                          seg
@@ -716,7 +717,6 @@
 					  (:x8632 x8632-temp-fp-regs)
 					  (:x8664 x8664-temp-fp-regs)))
            (*x862-nfp-depth* 0)
-           (*x862-nfp-reg* ())
            (*x862-max-nfp-depth* ())
            (*x862-all-nfp-pushes* ())
            (*x862-nfp-vars* ())
@@ -961,22 +961,11 @@
   (declaim (inline x862-invalidate-regmap)))
 
 (defun x862-invalidate-regmap ()
-  (setq *x862-nfp-reg* nil)
   (setq *x862-gpr-locations-valid-mask* 0))
 
-(defun x862-nfp-reg (seg)
-  (with-x86-local-vinsn-macros (seg)
-    (or *x862-nfp-reg*
-        (let* ((reg (target-arch-case (:x8664 x8664::temp1) (:x8632 x8632::nargs))))
-          (! load-nfp reg)
-          (setq *x862-nfp-reg* reg)))))
+
 
 (defun x862-update-regmap (vinsn)
-  (when *x862-nfp-reg*
-    (when (or (vinsn-attribute-p vinsn :call)
-              (logbitp (hard-regspec-value *x862-nfp-reg*)
-                       (vinsn-gprs-set vinsn)))
-      (setq *x862-nfp-reg* nil)))
   (if (vinsn-attribute-p vinsn :call)
     (x862-invalidate-regmap)
     (setq *x862-gpr-locations-valid-mask*
@@ -3785,18 +3774,15 @@
       (if a-node
         (setq vinsn (x862-vpush-register seg areg inhibit-note))
         (let* ((offset *x862-nfp-depth*)
-               (size 16)
-               (nfp (if (target-arch-case (:x8664 t) (:x8632 a-float))(x862-nfp-reg seg))))
+               (size 16))
           (setq vinsn
                 (if a-float
                   (ecase (fpr-mode-value-name mode)
-                    (:single-float (! nfp-store-single-float areg offset nfp))
-                    (:double-float (! nfp-store-double-float areg offset nfp))
-                    (:complex-single-float (! nfp-store-complex-single-float areg offset nfp))
-                    (:complex-double-float (! nfp-store-complex-double-float areg offset nfp)))
-                  (target-arch-case
-                   (:x8664 (! nfp-store-unboxed-word areg offset nfp))
-                   (:x8632 (! nfp-store-unboxed-word areg offset)))))
+                    (:single-float (! nfp-store-single-float areg offset))
+                    (:double-float (! nfp-store-double-float areg offset))
+                    (:complex-single-float (! nfp-store-complex-single-float areg offset))
+                    (:complex-double-float (! nfp-store-complex-double-float areg offset)))
+                  (! nfp-store-unboxed-word areg offset)))
           (incf offset size)
           (push vinsn *x862-all-nfp-pushes*)
           (setq *x862-nfp-depth* offset))))
@@ -3813,21 +3799,15 @@
     (with-x86-local-vinsn-macros (seg)
       (if a-node
         (setq vinsn (x862-vpop-register seg areg))
-        (let* ((offset (- *x862-nfp-depth* 16))
-               (nfp (if (target-arch-case (:x8664 t) (:x8632 a-float))
-                      (x862-nfp-reg seg))))
+        (let* ((offset (- *x862-nfp-depth* 16)))
           (setq vinsn
                 (if a-float
                   (ecase (fpr-mode-value-name mode)
-                    (:single-float (! nfp-load-single-float areg offset nfp))
-                    (:double-float (! nfp-load-double-float areg offset nfp))
-                    (:complex-single-float (! nfp-load-complex-single-float areg offset nfp))
-                    (:complex-double-float (! nfp-load-complex-double-float areg offset nfp)))
-                  (target-arch-case
-                   (:x8664
-                    (! nfp-load-unboxed-word areg offset nfp))
-                   (:x8632
-                    (! nfp-load-unboxed-word areg offset)))))
+                    (:single-float (! nfp-load-single-float areg offset))
+                    (:double-float (! nfp-load-double-float areg offset))
+                    (:complex-single-float (! nfp-load-complex-single-float areg offset))
+                    (:complex-double-float (! nfp-load-complex-double-float areg offset)))
+                  (! nfp-load-unboxed-word areg offset)))
           (setq *x862-nfp-depth* offset)))
       vinsn)))
 
