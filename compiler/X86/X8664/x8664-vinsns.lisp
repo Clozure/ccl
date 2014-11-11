@@ -2473,7 +2473,7 @@
                                                          (offset :u16const)))
   (movd (:%q val) (:%mmx x8664::stack-temp))
   (movq (:rcontext x8664::tcr.nfp) (:%q val))
-  (movd (:%mmx x8664::stack-temp)(:@ (:apply + 16 offset) (:% val)))
+  (movq (:%mmx x8664::stack-temp)(:@ (:apply + 16 offset) (:% val)))
   (movd (:%mmx x8664::stack-temp) (:%q val)))
 
 
