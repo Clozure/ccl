@@ -1,0 +1,362 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Characters and External Formats"
+  (para "All characters and strings in {CCL} fully support Unicode by
+    using UTF-32. There is only one {code character} type and one
+    {code string} type in {CCL}.  There has been a lot of discussion
+    about this decision which can be found by searching the
+    openmcl-devel archives at {link
+    http://clozure.com/pipermail/openmcl-devel/}.  Suffice it to say
+    that we decided that the simplicity and speed advantages of only
+    supporting UTF-32 outweigh the space disadvantage.")
+
+    (defsection "Characters"
+	(glossentry "code point"
+		    "A value in the Unicode code space; that is, a
+                   non-negative integer below {variable
+                   char-code-limit} (#x110000).")
+      "There is one {code character} type in {CCL}.
+    All {code character}s are {code base-char}s.  {variable
+    char-code-limit} is now {code #x110000}, which means that all
+    Unicode characters can be directly represented.  As of Unicode
+    5.0, only about 100,000 of 1,114,112 possible {code char-code}s
+    are actually defined. The function {function code-char} knows that
+    certain ranges of code values (notably {code #xd800}-{code
+    #xddff}) will never be valid character codes and will return {code
+    nil} for arguments in that range, but may return a non-{code nil}
+    value (an undefined/non-standard {code character} object) for
+    other unassigned code values.
+
+    {CCL} supports character names of the form {code u+xxxx}-where
+    {code x} is a sequence of one or more hex digits.  The value of
+    the hex digits denotes the code of the character.  The {code +}
+    character is optional, so {code #\\u+0020}, {code #\\U0020}, and
+    {code #\\U+20} all refer to the {code #\\Space} character.
+
+    Characters with codes in the range {code #xa0}-{code #x7ff} also
+    have symbolic names These are the names from the Unicode standard
+    with spaces replaced by underscores.  So {code
+    #\\Greek_Capital_Letter_Epsilon} can be used to refer to the
+    character whose {function char-code} is {code #x395}.  To see the
+    complete list of supported character names, look just below the
+    definition for {function ccl::register-character-name} in {code
+    ccl:level-1;l1-reader.lisp}.")
+
+    (defsection "External Formats"
+	(para "The standard functions {code open}, {code load}, and
+    {code compile-file} all accept an {code :external-format} keyword
+    argument.  The value of {code :external-format} can be
+    {code :default} (the default value), a line termination
+    keyword (see {section Line Termination Keywords}), a character
+    encoding keyword (see {section Character Encodings}), an
+    external-format object created using {function
+    make-external-format}, or a plist with the keys {code :domain},
+    {code :character-encoding} and {code :line-termination}.  If
+    {param argument} is a plist, the result of {code (apply
+    #'make-external-format {param argument})} will be used.")
+
+      "If {code :default} is specified, then the value of {variable
+    *default-external-format*} is used.  If no line-termination is
+    specified, then the value of {variable *default-line-termination*}
+    is used, which defaults to {code :unix}.  If no character encoding
+    is specified, then {variable *default-file-character-encoding*} is
+    used for file streams and {variable
+    *default-socket-character-encoding*} is used for socket streams.
+    The default, default character encoding is {code nil} which is a
+    synonym for {code :iso-8859-1}.
+
+    Note that the set of keywords used to denote {code character-encoding}s
+    and the set of keywords used to denote line-termination
+    conventions is disjoint: a keyword denotes at most a character
+    encoding or a line termination convention, but never both.
+
+    EXTERNAL-FORMATs are objects (structures) with two read-only
+    fields that can be accessed via the functions: {code
+    external-format-line-termination} and {code
+    external-format-character-encoding}."
+
+      (definition (:variable *default-external-format*) "ccl:*default-external-format*" nil
+		  (defsection "Description"
+		      "The value of this variable is used
+	        when {code :external-format} is unspecified or specified
+	        as {code :default}. It can meaningfully be given any value
+	        that can be used as an external-format (except for the
+	        value {code :default}.)
+
+	        The initial value of this variable in {CCL} is
+	        {code :unix}, which is equivalent to
+	        {code (:line-termination :unix)}, among other
+	        things."))
+
+      (definition (:variable *default-line-termination*) "ccl:*default-line-termination*" nil
+		  (defsection "Description"
+		      "The value of this variable is used when an
+                external-format doesn't specify a line-termination
+                convention (or specifies it as {code :default}.) It can
+                meaningfully be given any value that can be used as a
+                line termination keyword
+                (see {section Line Termination Keywords}).
+
+	        The initial value of this variable
+	        in {CCL} is {code :unix}."))
+
+      (definition (:function make-external-format)
+	  "make-external-format {code &key} domain character-encoding line-termination"
+	"Either creates a new external format object, or
+	return an existing one with the same specified slot
+	values."
+	(defsection "Arguments and Values"
+	    (listing :definition
+		     (item "{param domain}" ccldoc::=> "This is used
+	      to indicate where the external format is to be used.
+	      Its value can be almost anything.  It defaults to {code
+	      NIL}.  There are two domains that have a pre-defined
+	      meaning in {CCL}: {code :file} indicates encoding for a
+	      file in the file system and {code :socket} indicates i/o
+	      to/from a socket.  The value of {param domain} affects
+	      the default values for {param character-encoding} and
+	      {param line-termination}.")
+		     (item "{param character-encoding}" ccldoc::=> "A
+	      keyword that specifies the character encoding for the
+	      external format. {section Character Encodings}.
+	      Defaults to {code :default} which means if {param
+	      domain} is {code :file} use the value of the variable
+	      {variable *default-file-character-encoding*} and if
+	      {param domain} is {code :socket}, use the value of the
+	      variable {variable *default-socket-character-encoding*}.
+	      The initial value of both of these variables is {code
+	      NIL}, which means the {code :iso-8859-1} encoding.")
+		     (item "{param line-termination}" ccldoc::=> "A
+	      keyword that indicates a line termination keyword
+	      {section Line Termination Keywords}.  Defaults to
+	      {code :default} which means use the value of the
+	      variable {variable *default-line-termination*}.")
+		     (item "{param external-format}" ccldoc::=> "An
+		     external-format object as described above.")))
+
+	(defsection "Description"
+	    (para "Despite the function's name, it doesn't necessarily
+	create a new, unique {code external-format} object: two calls to
+	{function make-external-format} with the same arguments made in the same
+	dynamic environment return the same (eq) object."))))
+    
+    (defsection "Line Termination Keywords"
+	(para "Line termination keywords indicate which characters are
+  used to indicate the end of a line.  On input, the external line
+  termination characters are replaced by {code #\\Newline} and on
+  output, {code #\\Newline}s are converted to the external line
+  termination characters.")
+
+      (table "Line Termination Keywords"
+        (row (item "keyword") (item "character(s)"))
+	(row (item "{code :unix}") (item "{code #\\Linefeed}"))
+	(row (item "{code :macos}") (item "{code #\\Return}"))
+	(row (item "{code :cr}") (item "{code #\\Return}"))
+	(row (item "{code :crlf}") (item "{code #\\Return #\\Linefeed}"))
+	(row (item "{code :cp/m}") (item "{code #\\Return #\\Linefeed}"))
+	(row (item "{code :msdos}") (item "{code #\\Return #\\Linefeed}"))
+	(row (item "{code :dos}") (item "{code #\\Return #\\Linefeed}"))
+	(row (item "{code :windows}") (item "{code #\\Return #\\Linefeed}"))
+	(row (item "{code :inferred}") (item "see below"))
+	(row (item "{code :unicode}") (item "{code #\\Line_Separator}")))
+      
+      (para "{code :inferred} means that a stream's line-termination
+  convention is determined by looking at the contents of a file.  It
+  is only useful for {code file-stream}s that're open for
+  {code :input} or {code :io}.  The first buffer full of data is
+  examined, and if a {code #\\Return} character occurs before any
+  {code #\\Linefeed} character, then the line termination type is set
+  to {code :windows} if that {code #\\Return} character is immediately
+  followed by a {code #\\Linefeed} character and to {code :macos}
+  otherwise.  If a {code #\\Return} character isn't found in the
+  buffer or if {code #\\Return} is preceded by {code #\\Linefeed}, the
+  file's line terminationt type is set to {code :unix}."))
+    
+    (defsection "Character Encodings"
+	"Internally, all characters and strings in {CCL} are in
+    UTF-32.  Externally, files or socket streams may encode characters
+    in a wide variety of ways.  The International Organization for
+    Standardization, widely known as ISO, defines many of these
+    character encodings.  {CCL} implements some of these encodings as
+    detailed below.  These encodings are part of the specification of
+    external formats (see {section External Formats}).  When reading
+    from a stream, characters are converted from the specified
+    external character encoding to UTF-32.  When writing to a stream,
+    characters are converted from UTF-32 to the specified character
+    encoding.
+
+    Internally, {code character-encoding}s are objects (structures)
+    that are named by character encoding keywords ({code :iso-8859-1},
+    {code :utf-8}, etc.).  The structures contain attributes of the encoding
+    and functions used to encode/decode external data, but unless
+    you are trying to define or debug an encoding, there is little reason
+    to know much about the {code character-encoding} objects and it is
+    usually preferable to refer to a character encoding by its name."
+
+      (para "The set of character encodings supported by {CCL} can be
+      retrieved by calling {function describe-character-encodings}.")
+
+      (definition (:function describe-character-encodings) "describe-character-encodings" nil
+        (defsection "Description"
+          (para "Writes descriptions of all defined character encodings
+	  to {variable *terminal-io*}.  These descriptions
+	  include the names of the encoding’s aliases and a doc string
+	  which briefly describes each encoding’s properties and
+	  intended use.")))
+
+      (defsection "Encoding Problems"
+	  (para "When a character cannot be encoded or decoded according to a
+      specified external format, the character in question will be replaced with
+      an encoding-specific replacement character.  This will be
+      {code #\\Replacement_Character} if the destination external format includes
+      such a character; otherwise the replacement character will be {code #\\Sub}.")
+        (para "The presence of a replacement character
+      typically indicates that something got lost in
+      translation: either data was not encoded properly or there was a
+      bug in the decoding process."))
+
+        (defsection "Byte Order Marks"
+	  "The endianness of a character encoding is sometimes
+      explicit, and sometimes not.  For example,
+      {code :utf-16be} indicates big-endian, but
+      {code :utf-16} does not specify endianness.  A byte
+      order mark is a special character that may appear at the
+      beginning of a stream of encoded characters to specify the
+      endianness of a multi-byte character encoding.  (It may also be
+      used with UTF-8 character encodings, where it is simply used to
+      indicate that the encoding is UTF-8.)
+
+      {CCL} writes a byte order mark as the first character
+      of a file or socket stream when the endianness of the character
+      encoding is not explicit.  {CCL} also expects a byte order
+      mark on input from streams where the endianness is not
+      explicit. If a byte order mark is missing from input data, that
+      data is assumed to be in big-endian order.
+
+      A byte order mark from a UTF-8 encoded input stream is not
+      treated specially and just appears as a normal character from
+      the input stream.  It is probably a good idea to skip over this
+      character.")
+
+      
+      (defsection "Selected Character Encodings"
+	  (para "A few commonly-used encodings are described here.  For the
+     complete list, call {function describe-character-encodings}. Most
+     encodings have aliases, e.g. the encoding named
+     {code :iso-8859-1} can also be referred to by the
+     names {code :latin1} and {code :ibm819},
+     among others.  Where possible, the keywordized name of an
+     encoding is equivalent to the preferred MIME charset name (and
+     the aliases are all registered IANA charset names.)")
+        (listing :definition
+                 (item "{code :utf-8}" ccldoc::=> "An 8-bit, variable-length character encoding in
+       which characters with CHAR-CODEs in the range #x00-#x7f can be
+       encoded in a single octet; characters with larger code values
+       can be encoded in 2 to 4 bytes.
+
+       {CCL} uses this encoding for {variable *terminal-io*} and for all streams whose
+       EXTERNAL-FORMAT isn't explicitly specified.  The default for
+       {variable *terminal-io*} can be set via the
+       {code -K} command-line argument (see {section Command Line Options}).")
+
+		 (item "{code :iso-8859-1}" ccldoc::=> "An 8-bit, fixed-width character encoding in
+       which all character codes map to their Unicode
+       equivalents. Intended to support most characters used in most
+       Western European languages.
+
+       ISO-8859-1 just covers the first 256 Unicode code
+       points, where the first 128 code points are equivalent to
+       US-ASCII.  That should be pretty much equivalent to what
+       earliers versions of {CCL} did that only supported 8-bit characters,
+       but it may not be optimal for users working in a particular
+       locale.
+
+       Aliases: {code :iso_8859-1, :latin1, :l1,
+       :ibm819, :cp819, :csisolatin1}")
+		
+		 (item "{code :us-ascii}" ccldoc::=> "An 7-bit, fixed-width character encoding in
+       which all character codes map to their Unicode
+       equivalents. 
+
+       Aliases: {code :csascii, :cp637, :ibm637, :us,
+       :iso646-us, :ascii, :iso-ir-6}")
+
+		 (item "{code :utf-16}" ccldoc::=> "A 16-bit, variable-length encoding in which
+       characters with CHAR-CODEs less than #x10000 can be encoded in
+       a single 16-bit word and characters with larger codes can be
+       encoded in a pair of 16-bit words.  The endianness of the
+       encoded data is indicated by the endianness of a
+       byte-order-mark character (#u+feff) prepended to the data; in
+       the absence of such a character on input, the data is assumed
+       to be in big-endian order. Output is written in native
+       byte-order with a leading byte-order mark.")))
+
+      (defsection "Encoding and Decoding Strings"
+
+	  "{CCL} provides functions to encode and decode strings to
+           and from vectors of type (simple-array (unsigned-byte 8))."
+	
+        (definition (:function count-characters-in-octet-vector)
+	    "count-characters-in-octet-vector vector {code &key} start end external-format" nil
+		 "Returns the number of characters that would be
+    produced by decoding {param vector} (or the subsequence thereof
+    delimited by {param start} and {param end}) according to {param
+    external-format}.")
+
+        (definition (:function decode-string-from-octets)
+	    "decode-string-from-octets vector {code &key} start end external-format string" nil
+	    (defsection "Description"
+		"Decodes the octets in {param vector} (or the
+    subsequence of it delimited by {param start} and {param end}) into
+    a string according to {param external-format}.
+
+    If {param string} is supplied, output will be written into it.  It
+    must be large enough to hold the decoded characters.  If {param
+    string} is not supplied, a new string will be allocated to hold
+    the decoded characters.
+
+    Returns, as multiple values, the decoded string and the position
+    in {param vector} where the decoding ended.
+
+    Sequences of octets in {param vector} that cannot be decoded into
+    characters according to {param external-format} will be decoded as
+    {code #\\Replacement_Character}."))
+	
+        (definition (:function encode-string-to-octets)
+	    "encode-string-to-octets string &key start end external-format use-byte-order-mark vector vector-offset" nil
+	  "Encodes {param string} (or the substring of it delimited by
+           {param start} and {param end}) into {param vector} according to
+           {param external-format}.
+           It returns, as multiple values, the vector of octets
+           containing the encoded data and an integer that specifies
+           the offset into the vector where the encoded data ends.
+  
+	   When {param use-byte-order-mark} is true, a byte-order mark
+           will be included in the encoded data.
+
+	  If {param vector} is supplied, output will be written to it.
+          It must be of type {code (simple-array (unsigned-byte 8))}
+          and be large enough to hold the encoded data.  If it is not
+          supplied, the function will allocate a new vector to hold
+          the output.
+
+	  If {param vector-offset} is supplied, data will be written
+          into the output vector starting at that offset.
+
+	  Characters in {param string} that cannot be encoded into
+          {param external-format} will be replaced with an
+          encoding-dependent replacement character
+          (either {code #\\Replacement_Character} or {code #\\Sub)} before
+          being encoded and written into the output vector.")
+
+        (definition (:function string-size-in-octets)
+	    "string-size-in-octets string &key start end external-format use-byte-order-mark" nil
+	  "Returns the number of octets required to encode {param
+           string} (or the substring delimited by {code :start} and
+           {code :end}) according to {code :external-format}.
+
+	   When {param use-byte-order-mark} is true, the returned size
+           will include the space needed for a byte-order marker.")))
+
+) ;chapter
+

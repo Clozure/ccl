@@ -1,0 +1,124 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(glossary-section "Glossary of Terms"
+  (glossentry "application bundle"
+   (para "A specially-structured directory that Mac OS X
+		recognizes as a
+		launchable "
+    (term "Cocoa") "
+		application. Graphical applications on Mac OS X are
+		represented as application bundles."))
+  (glossentry "Cocoa"
+   (para "The standard user-interface libraries and frameworks
+		provided by Apple for development of applications on Mac OS
+		X."))
+  (glossentry "creator code"
+   (para "A four-character identifier used in Mac OS X to uniquely
+		identify an application."))
+  (glossentry "displaced array"
+   (para "An array with no storage of its own for elements, which
+		points to the storage of another array, called its
+		target. Reading or writing the elements of the displaced array
+		returns or changes the contents of the target."))
+  (glossentry "fasl file"
+   (para #:|A file containing compiled lisp code that the Lisp is
+		able to quickly load and use. A "fast-load" file.|))
+  (glossentry "Hemlock"
+   (para "A text editor, written in Common Lisp, similar in
+		features to Emacs. Hemlock was originally developed as part of
+		CMU Common Lisp. A portable version of Hemlock is built into
+		the {CCL} "
+    (term "IDE") "."))
+  (glossentry "IDE"
+   (para #:|"Integrated Development Environment". In the context of
+		{CCL}, "the IDE" refers to the experimental |
+    (term "Cocoa") "
+		windowing development environment provided in source form with
+		{CCL} distributions."))
+  (glossentry "heap image"
+   (para "The in-memory state of a running Lisp system, containing
+		functions, data structures, variables, and so on. Also, a file
+		containing archived versions of these data in a format that
+		can be loaded and reconstituted by the
+		Lisp "
+    (term "lisp kernel") ". A
+		working {CCL} system consists of the kernel and
+		a "
+    (term "heap image") "."))
+  (glossentry "InterfaceBuilder"
+   (para "An application supplied by Apple with their developer
+		tools that can be used to interactively build user-interface
+		elements for "
+    (term "Cocoa") "
+		applications."))
+  (glossentry "lisp kernel"
+   (para "The binary executable program that implements the lowest
+		levels of the Lisp system. A working {CCL} system consists of
+		the kernel and
+		a "
+    (term "heap image") "."))
+  (glossentry "listener window"
+   (para "In the " (term "IDE") ",
+		a "
+    (term "Cocoa") "
+		window that contains a pseudo-terminal session that
+		communicates with a Lisp "
+    (term "REPL") "."))
+  (glossentry "memory-mapped file"
+   (para "A file whose contents are accessible as a range of
+		memory addresses. Some operating systems support this feature,
+		in which the virtual memory subsystem arranges for a range of
+		virtual memory addresses to point to the contents of an open
+		file. Programs can then gain access to the file's contents by
+		operating on memory addresses in that range. Access to the
+		file's contents is valid only as long as the file remains
+		open."))
+  (glossentry "nibfile"
+   (para "A data file created by
+		Apple's "
+    (term "InterfaceBuilder") "
+		application, which contains archived Objective-C objects that
+		define user-interface elements for
+		a "
+    (term "Cocoa") "
+		application. Under Mac OS
+		X, "
+    (term "Cocoa") " applications
+		typically create their user interface elements by reading
+		nibfiles and unarchiving the objects in them."))
+  (glossentry "REPL"
+   (para #:|"Read-eval-print loop". The interactive shell provided
+		by {CCL} for interaction with Lisp.|))
+  (glossentry "s-expression"
+   (para "The simplest, most general element of Lisp syntax. An
+		s-expression may be an atom (such as a symbol, integer, or
+		string), or it may be a list of s-expressions."))
+  (glossentry "special variable"
+   (para "A variable whose binding is in the dynamic
+		environment. Special variables are essentially equivalent to
+		global variables in languages other than Lisp. A special
+		variable binding is visible in any lexical environment, so
+		long as a lexical binding has not shadowed it."))
+  (glossentry "static variable"
+   (para "In {CCL}, a variable whose value is shared across all
+		threads, and which may not be dynamically rebound. Changing a
+		static variable's value in one thread causes all threads to
+		see the new value. Attempting to dynamically rebind the
+		variable (for instance, by using {code LET}, or using
+		the variable name as a parameter in a {code LAMBDA}
+		form) signals an error."))
+  (glossentry "toplevel function"
+   (para "The function executed by Lisp automatically once its
+		startup is complete. {CCL}'s default toplevel is the
+		interactive "
+    (ref (glossentry "REPL") "read-eval-print loop") " that you normally use to interact with
+		Lisp. You can, however, replace the toplevel with a function
+		of your own design, changing {CCL} from a Lisp development
+		system into some tool of your making."))
+  (glossentry "type-specifier"
+   (para "An expression that denotes a type. Type specifiers may
+		be symbols (such as {code CONS}
+		and {code STRING}), or they may be more complex
+		"
+    (ref (glossentry "s-expression") "S-expressions") "
+		(such as (UNSIGNED-BYTE 8)).")))

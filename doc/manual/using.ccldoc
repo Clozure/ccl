@@ -1,0 +1,866 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Using {CCL}"
+  (defsection "Introduction"
+    (para "The Common Lisp standard allows considerable latitude in the
+      details of an implementation, and each particular Common Lisp
+      system has some idiosyncrasies. This chapter describes ordinary
+      user-level features of {CCL}, including features that may be
+      part of the Common Lisp standard, but which may have quirks or
+      details in the {CCL} implementation that are not described by
+      the standard. It also describes extensions to the standard; that
+      is, features of {CCL} that are not part of the Common Lisp
+      standard at all."))
+  
+
+  (defsection "Memory-mapped Files"
+    (para "In release 1.2 and later, {CCL}
+      supports "
+     (ref (glossentry "memory-mapped file") "memory-mapped files") ". On operating systems that support memory-mapped
+      files (including Mac OS X, Linux, and FreeBSD), the operating
+      system can arrange for a range of virtual memory addresses to
+      refer to the contents of an open file. As long as the file remains
+      open, programs can read values from the file by reading addresses
+      in the mapped range.")
+    "Using memory-mapped files may in some cases be more
+      efficient than reading the contents of a file into a data
+      structure in memory.
+
+      {CCL} provides the
+      functions {function map-file-to-ivector}
+      and {function map-file-to-octet-vector} to support
+      memory-mapping. These functions return vectors whose contents are
+      the contents of memory-mapped files. Reading an element of such a
+      vector returns data from the corresponding position in the
+      file.
+
+      Without memory-mapped files, a common idiom for reading the
+      contents of files might be something like this:"
+    (code-block "(let* ((stream (open pathname :direction :input :element-type '(unsigned-byte 8)))
+       (vector (make-array (file-size-to-vector-size stream)
+                           :element-type '(unsigned-byte 8))))
+  (read-sequence vector stream))
+    ")
+    "Using a memory-mapped files has a result that is the same in
+      that, like the above example, it returns a vector whose contents are
+      the same as the contents of the file. It differs in that the above
+      example creates a new vector in memory and copies the file's
+      contents into it; using a memory-mapped file instead arranges for
+      the vector's elements to point to the file's contents on disk
+      directly, without copying them into memory first.
+
+      The vectors returned by {function map-file-to-ivector}
+      and {function map-file-to-octet-vector} are read-only; any
+      attempt to change an element of a vector returned by these
+      functions results in a memory-access error. {CCL} does not
+      currently support writing data to memory-mapped files.
+
+      Vectors created by {function map-file-to-ivector}
+      and {function map-file-to-octet-vector} are required to
+      respect {CCL}'s limit on the total size of an array. That means
+      that you cannot use these functions to create a vector longer
+      than {variable array-total-size-limit}, even if the filesystem
+      supports file sizes that are larger. The value
+      of {variable array-total-size-limit} is {code (expt 2 24)}
+      on 32-but platforms; and {code (expt 2 56)} on 64-bit
+      platforms."
+
+    (definition (:function map-file-to-ivector) "map-file-to-ivector pathname element-type" nil
+     (para "
+      The {function map-file-to-ivector} function tries to
+      open the file at {param pathname} for reading. If
+      successful, the function maps the file's contents to a range of
+      virtual addresses. If successful, it returns a read-only vector
+      whose element-type is given
+      by {param element-type}, and whose contents are
+      the contents of the memory-mapped file.
+    ")
+     (defsection "Description"
+       (listing :definition
+         (item "{param pathname}" ccldoc::=> "The pathname of the file to be memory-mapped.")
+         (item "{param element-type}" ccldoc::=> "The element-type of the vector to be
+            created. Specified as
+            a "
+          (term "type-specifier") "
+            that names a subtype of either {code signed-byte}
+            or {code unsigned-byte}."))
+  
+       (para "The returned vector is
+      a "
+        (ref (glossentry "displaced array") "displaced-array") "
+      whose element-type is {code (UPGRADED-ARRAY-ELEMENT-TYPE
+        element-type)}. The target of the displaced array is a
+      vector of type {code (SIMPLE-ARRAY element-type (*))} whose
+      elements are the contents of the memory-mapped file.")
+       "Because of alignment issues, the mapped file's contents
+      start a few bytes (4 bytes on 32-bit platforms, 8 bytes on
+      64-bit platforms) into the vector. The displaced array returned
+      by {function map-file-to-ivector} hides this overhead, but
+      it's usually more efficient to operate on the underlying simple
+      1-dimensional array.  Given a displaced array (like the value
+      returned by {function map-file-to-ivector}), the function
+      {function array-displacement} returns the underlying array and
+      the displacement index in elements.
+    
+
+      Currently, {CCL} supports only read operations on
+      memory-mapped files. If you try to change the contents of an array
+      returned by {function map-file-to-ivector}, {CCL} signals
+      a memory error."))
+
+    (definition (:function unmap-ivector) "unmap-ivector displaced-array" nil
+     (defsection "Description"
+       (para "If the argument is a displaced-array returned
+      by {function map-file-to-ivector}, and if it has not yet
+      been unmapped by this function,
+      then {function unmap-ivector} undoes the memory mapping,
+      closes the mapped file, and changes the displaced-array so that its
+      target is an empty vector (of length zero).")))
+
+    (definition (:function map-file-to-octet-vector) "map-file-to-octet-vector displaced-array" nil
+     (defsection "Description"
+       (para "This function is a synonym for {code (map-file-to-ivector
+        pathname '(unsigned-byte 8))} It is provided as a convenience
+      for the common case of memory-mapping a file as a vector of
+      bytes.")))
+
+    (definition (:function unmap-octet-vector) "unmap-octet-vector displaced-array" nil
+     (defsection "Description"
+       (para "This function is a synonym for {function unmap-ivector}"))))
+
+  (defsection "Static Variables"
+    (para "{CCL} supports the definition
+      of "
+     (ref (glossentry "static variable") "static variables") ", whose values are the same across threads,
+      and which may not be dynamically bound. The value of a static
+      variable is thus the same across all threads; changing the value
+      in one thread changes it for all threads.")
+    "Attempting to dynamically rebind a static variable (for
+      instance, by using {code LET}, or using the variable name as
+      a parameter in a {code LAMBDA} form) signals an
+      error. Static variables are shared global resources; a dynamic
+      binding is private to a single thread.
+
+      Static variables therefore provide a simple way to share
+      mutable state across threads. They also provide a simple way to
+      introduce race conditions and obscure bugs into your code, since
+      every thread reads and writes the same instance of a given static
+      variable. You must take care, therefore, in how you change the
+      values of static variables, and use normal multithreaded
+      programming techniques, such as locks or semaphores, to protect
+      against race conditions.
+
+      In {CCL}, access to a static variable is usually faster than
+      access to a special variable that has not been declared
+      static."
+    (definition (:macro defstatic) "defstatic var value &key docstring" nil
+       (para "Proclaims the
+      variable "
+        (ref (glossentry "special variable") "special") ",
+      assigns the variable the supplied {param value}, and assigns
+      the {param docstring} to the
+      variable's {code variable} documentation. Marks the
+      variable static, preventing any attempt to dynamically rebind
+      it. Any attempt to dynamically rebind {param var}
+      signals an error.")))
+
+  (defsection "Saving Applications"
+    nil
+    (para "{CCL} provides the
+      function {function save-application}, which creates a file
+      containing an archived Lisp memory image.")
+    (para "{CCL} consists of a small executable called the
+      {term lisp kernel}, which
+      implements the very lowest level features of the Lisp system, and
+      a {term heap image}, which
+      contains the in-memory representation of most of the Lisp system,
+      including functions, data structures, variables, and so on. When
+      you start {CCL}, you are launching the kernel, which then locates
+      and reads an image file, restoring the archived image in
+      memory. Once the image is fully restored, the Lisp system is
+      running.")
+    "Using {function save-application}, you can create a
+      file that contains a modified image, one that includes any changes
+      you've made to the running Lisp system. If you later pass your
+      image file to the {CCL} kernel as a command-line parameter, it
+      then loads your image file instead of its default one, and {CCL}
+      starts up with your modifications.
+
+      If this scenario seems to you like a convenient way to
+      create an application, that's just as intended. You can create an
+      application by modifying the running Lisp until it does what you
+      want, then use {function save-application} to preserve your
+      changes and later load them for use."
+    (para "In fact, you can go further than that. You can replace
+      {CCL}'s "
+     (term "toplevel function") " with your own, and then, when the image is
+      loaded, the Lisp system immediately performs your tasks rather
+      than the default tasks that make it a Lisp development system. If
+      you save an image in which you have done this, the resulting Lisp
+      system is your tool rather than a Lisp development system.")
+    "You can go a step further still. You can
+      tell {function save-application} to prepend the Lisp kernel
+      to the image file. Doing this makes the resulting image into a
+      self-contained executable binary. When you run the resulting file,
+      the Lisp kernel immediately loads the attached image file and runs
+      your saved system. The Lisp system that starts up can have any
+      behavior you choose. It can be a Lisp development system, but with
+      your customizations; or it can immediately perform some task of
+      your design, making it a specialized tool rather than a general
+      development system.
+
+      In other words, you can develop any application you like by
+      interactively modifying {CCL} until it does what you want, then
+      using {function save-application} to preserve your changes
+      in an executable image."
+    (para "On Mac OS X,
+      the "
+     (ref (section "The Application Builder") "application builder") "
+      uses {function save-application} to create the executable
+      portion of the "
+     (term "application bundle") ". Double-clicking the application bundle runs
+      the executable image created
+      by {function save-application}.")
+    "Also on Mac OS X, {CCL} supports an object type
+      called {code macptr}, which is the type of pointers into the
+      foreign (Mac OS) heap. Examples of
+      commonly-user {code macptr} objects are Cocoa windows and
+      other dynamically-allocated Mac OS system objects.
+
+      Because a {code macptr} object is a pointer into a
+      foreign heap that exists for the lifetime of the running Lisp
+      process, and because a saved image is used by loading it into a
+      brand new Lisp process, saved {code macptr} objects cannot
+      be relied on to point to the same things when reconstituted from a
+      saved image. In fact, a restored {code macptr} object might
+      point to anything at all-for example an arbitrary location
+      in the middle of a block of code, or a completely nonexistent
+      virtual address.
+
+      For that reason, {code save-application} converts
+      all {code macptr} objects to {code dead-macptr}
+      objects when writing them to an image
+      file. A {code dead-macptr} is functionally identical to
+      a {code macptr}, except that code that operates
+      on {code macptr} objects distinguishes them
+      from {code dead-macptr} objects and can handle them
+      appropriately-signaling errors, for example.
+
+      Tthere is one exception to the conversion
+      of {code macptr} to {code dead-macptr} objects:
+      a {code macptr} object that points to the address 0 is not
+      converted, because address 0 can always be relied upon to refer to
+      the same thing."
+
+    "The constant {code +null-ptr+}
+      refers to a {code macptr} object that points to address 0.
+
+      On all supported platforms, you can
+      use {function save-application} to create a command-line
+      tool that runs very like any other command-line program
+      does. Alternatively, if you choose not to prepend the kernel, you
+      can save an image and then later run it by passing it as a
+      command-line parameter to the {code ccl}
+      or {code ccl64} script."
+
+    (definition (:function save-application)
+     "save-application filename {code &key} toplevel-function init-file error-handler application-class clear-clos-caches (purify t) impurify (mode #o644) prepend-kernel native"
+      "Saves a heap image."
+
+     (defsection "Description"
+       (listing :definition
+         (item "{param filename}" ccldoc::=> "The pathname of the file to be created when {CCL}
+            saves the application.")
+         (item "{param toplevel-function}" ccldoc::=>
+          (para "The function to be executed after startup is
+            complete. The toplevel is a function of no arguments that
+            performs whatever actions the lisp system should perform
+            when launched with this image.")
+          (para "If this parameter is not supplied, {CCL} uses its
+            default toplevel. The default toplevel runs
+            the "
+           (ref (glossentry "REPL") "read-eval-print loop") "."))
+         (item "{param init-file}" ccldoc::=> "The pathname of a Lisp file to be loaded when the
+            image starts up. You can place initialization expressions in
+            this file, and use it to customize the behavior of the Lisp
+            system when it starts up.")
+         (item "{param error-handler}" ccldoc::=> "The error-handling mode for the saved image. The
+            supplied value determines what happens when an error is not
+            handled by the saved image. Valid values
+            are {code :quit} (Lisp exits with an error
+            message); {code :quit-quietly} (Lisp exits without an
+            error message); or {code :listener} (Lisp enters a
+            break loop, enabling you to debug the problem by interacting
+            in a listener). If you don't supply this parameter, the
+            saved image uses the default error handler
+            ({code :listener}).")
+         (item "{param application-class}" ccldoc::=> "The CLOS class that represents the saved Lisp
+            application. Normally you don't need to supply this
+            parameter; {function save-application} uses the
+            class {code ccl:lisp-development-system}. In some
+            cases you may choose to create a custom application class;
+            in that case, pass the name of the class as the value for
+            this parameter.")
+         (item "{param clear-clos-caches}" ccldoc::=> "If true, ensures that CLOS caches are emptied before
+            saving the image. Normally you don't need to supply this
+            parameter, but if for some reason you want to ensure the
+            CLOS caches are clear when the image starts up, you can pass
+            any true value.")
+         (item "{param purify}" ccldoc::=> "
+	    When true, calls (in effect) {code purify} before
+	    saving the heap image.  This moves certain objects that
+	    are unlikely to become garbage to a special memory area
+	    that is not scanned by the GC (since it is expected that
+	    the GC wouldn't find anything to collect).
+         ")
+         (item "{param impurify}" ccldoc::=> "
+	    If true, calls (in effect) {code impurify} before
+	    saving the heap image.  (If both {code :impurify}
+	    and {code :purify} are true, first
+	    {code impurify} is done, and then {code purify}.)
+         
+
+	   {code impurify} moves objects in certain special memory
+	   areas into the regular dynamic heap, where they will be scanned
+	   by the GC.
+	 ")
+         (item "{param mode}" ccldoc::=> "
+	    A number specifying the mode (permission bits) of the output file.
+	  ")
+         (item "{param prepend-kernel}" ccldoc::=> "Specifies the file to prepend to the saved heap
+	  image.  A value of {code t} means to prepend
+	  the lisp kernel binary that the lisp started with.
+	  Otherwise, the value of {code :prepend-kernel}
+	  should be a pathname designator for the file to be
+	  prepended.
+
+	   If the prepended file is execuatable, its execute
+	   mode bits will be copied to the output file.
+
+	   This argument can be used to prepend any kind of file to
+	   the saved heap image.  This can be useful in some special
+	   cases.
+	 ")
+         (item "{param native}" ccldoc::=> "If true, saves the image as a native (ELF, Mach-O, PE)
+          shared library.  (On platforms where this isn't yet supported,
+          a warning is issued and the option is ignored.)
+         "))))
+    (para))
+
+  (defsection "Concatenating FASL Files"
+    (para "Multiple fasl files can be concatenated into a single file.
+           The single file might be easier to distribute or install, and
+           loading it may be slightly faster than loading the individual
+           files (since it avoids the overhead of opening and closing each
+           file in succession).")
+
+    (definition (:function fasl-concatenate) "fasl-concatenate output-file fasl-files &key (:if-exists :error)" nil
+      "This function reads the fasl files specified by the list {param
+       fasl-files} and combines them into a single fasl file named
+       {param output-file}.  The {code :if-exists} keyword argument is
+       interpreted as in the standard function {code open}.
+
+       Loading the concatenated fasl file has the same effect as
+       loading the invidual input fasl files in the specified order."
+
+      (para
+       "The {code pathname-type} of the output file and of each input
+        file defaults to the current platform's fasl file type (see "
+       (ref (table "Platform-specific filename conventions")) ").
+       If any of the input files has a different type an error will
+       be signaled, but {function fasl-concatenate} doesn't otherwise
+       try too hard to verify that the input files are real fasl files
+       for the current platform.")))
+
+  (defsection "Floating Point Numbers"
+    "In {CCL}, the Common Lisp types short-float and single-float are
+      implemented as IEEE single precision values; double-float and
+      long-float are IEEE double precision values.  On 64-bit
+      platforms, single-floats are immediate values (like fixnums and
+      characters).
+
+    Floating-point exceptions are generally enabled and detected.  By
+    default, threads start up with overflow, division-by-zero, and
+    invalid enabled, and the rounding mode is set to nearest. The
+    functions {function set-fpu-mode} and
+    {function get-fpu-mode} provide user control over
+    floating-point behavior."
+
+    (definition (:function get-fpu-mode) "get-fpu-mode &optional mode"
+      "Return the state of exception-enable and rounding-mode control
+       flags for the current thread."
+
+      "When called without the optional {param mode} argument, this
+       function returns a plist of keyword/value pairs which describe
+       the floating point exception-enable and rounding-mode flags for
+       the current thread.
+
+      If {param mode} is supplied, it should be one of the keywords
+      {code :rounding-mode}, {code :overflow}, {code :underflow},
+      {code :division-by-zero}, {code :invalid}, or {code :inexact}.
+      The value of corresponding control flag is returned."
+
+      (listing :definition
+         (item "rounding-mode" ccldoc::=> "One of {code :nearest}, {code :zero},
+{code :positive}, or {code :negative}")
+         (item "overflow, underflow, division-by-zero, invalid, inexact"
+          ccldoc::=> "
+	      If {code t}, the floating-point exception is signaled.
+	      If {code nil}, it is masked.
+	    ")))
+
+    (definition (:function set-fpu-mode)
+     "set-fpu-mode {code &key} rounding-mode overflow underflow division-by-zero invalid inexact" "Set the state of exception-enable and rounding-mode control
+	flags for the current thread."
+     (defsection "Arguments and Values"
+       (listing :definition
+         (item "{param rounding-mode}" ccldoc::=> "
+	      If supplied, must be one of :nearest, :zero, :positive, or
+	      :negative.
+	    ")
+         (item "{param overflow}, {param underflow}, {param division-by-zero}, {param invalid}, {param inexact}"
+          ccldoc::=> "NIL to mask the exception, T to signal it.")))
+     (defsection "Description"
+       (para "
+	Sets the current thread's exception-enable and rounding-mode
+	control flags to the indicated values for arguments that are
+	supplied, and preserves the values assoicated with those
+	that aren't supplied.
+      "))))
+
+  (defsection "Code Coverage"
+    (defsection "Overview"
+      (para "
+  In Clozure CL 1.4 and later, code coverage provides information
+  about which paths through generated code have been executed and
+  which haven't. For each source form, it can report one of three
+  possible outcomes:
+")
+      (listing :bullet
+        (item "
+      Not covered: this form was never entered.
+    ")
+        (item "
+      Partly covered: This form was entered, and some parts were
+      executed and some weren't.
+    ")
+        (item "
+      Fully covered: Every bit of code generated from this form was
+      executed.
+    ")))
+    (defsection "Limitations"
+      "
+  While the information gathered for coverage of generated code is
+  complete and precise, the mapping back to source forms is of
+  necessity heuristic, and depends a great deal on the behavior of
+  macros and the path of the source forms through compiler
+  transforms. Source information is not recorded for variables, which
+  further limits the source mapping. In practice, there is often
+  enough information scattered about a partially covered function to
+  figure out which logical path through the code was taken and which
+  wasn't. If that doesn't work, you can try disassembling to see which
+  parts of the compiled code were not executed: in the disassembled
+  code there will be references to #<CODE-NOTE [xxx] ...> where xxx
+  is NIL if the code that follows was never executed and non-NIL if it
+  was.
+
+
+
+  Sometimes the situation can be improved by modifying macros to try
+  to preserve more of the input forms, rather than destructuring and
+  rebuilding them.
+"
+      (para "
+  Because the code coverage information is associated with compiled
+  functions, code coverage information is not available for load-time toplevel
+  expressions.  You can work around this by creating a function and calling
+  it. I.e. instead of
+  "
+       (code-block "(progn
+  (do-this)
+  (setq that ...) ...))")
+       "do: "
+       (code-block "(defun init-this-and-that ()
+  (do-this)
+  (setq that ...)  ...)
+(init-this-and-that)")
+       "
+
+Then you can see the coverage information in the definition of
+{code init-this-and-that}.
+"))
+
+    (defsection "Usage"
+      (para "In order to gather code coverage information, you first have to
+  recompile all your code to include code coverage
+  instrumentation. Compiling files will generate code coverage
+  instrumentation if {code ccl:*compile-code-coverage*}
+  is true:  "
+       (code-block "
+(setq ccl:*compile-code-coverage* t) 
+(recompile-all-your-files)"))
+
+      "The compilation process will be many times slower than normal, and
+  the fasl files will be many times bigger.
+
+  When you execute functions loaded from instrumented fasl files, they
+  will record coverage information every time they are executed. 
+  You can examine that information by calling {code ccl:report-coverage}
+  or {code ccl:coverage-statistics}."
+
+      (para "While recording coverage, you can collect incremental
+   coverage deltas between any two points in time.  You might do this
+   while running a test suite, to record the coverage for each test,
+   for example: "
+       (code-block "
+(ccl:reset-incremental-coverage)
+(loop with coverage = (make-hash-table)
+      for test in (tests-to-run)
+      do (run-test test)
+      do (setf (gethash test coverage) (ccl:get-incremental-coverage))
+      finally (return coverage))")
+       "creates a hash table mapping a test to a representation of all coverage recorded while running the
+   test.  This hash table can then be passed to {code ccl:report-coverage}, {code ccl:incremental-coverage-svn-matches}
+   or {code ccl:incremental-coverage-source-matches}.
+"))
+    (defsection "Functions and Variables"
+      (para "
+  The following functions can be used to manage the coverage data:
+")
+      (definition (:function report-coverage)
+       "report-coverage output-file {code &key} (tags nil) (external-format :default) (statistics t) (html t)"
+       "Generate a code coverage report"
+       (defsection "Arguments and Values"
+         (listing :definition
+           (item "{param output-file}" ccldoc::=> "
+          Pathname for the output index file.
+	")
+           (item "{param html}" ccldoc::=> "
+	  If non-nil (the default), this will generate an HTML report, consisting of
+	  an index file in {param output-file} and, in the same directory,
+          one html file for each instrumented source file that has been loaded in the
+          current session.
+	")
+           (item "{param tags}" ccldoc::=> "
+	  If non-nil, this should be a hash table mapping arbitrary keys (tags) to incremental coverage deltas.  The
+          HTML report will show a list of tags, and allow selection of an arbitrary subset of them to show the
+          coloring and statistics for coverage by that subset.
+	")
+           (item "{param external-format}" ccldoc::=> "
+	  Controls the external format of the html files.
+	")
+           (item "{param statistics}" ccldoc::=>
+	  "If non-nil (the default), a comma-separated file is 
+	  generated with the summary of statistics. You can specify a
+	  filename for the statistics argument, otherwise
+	  {code statistics.csv} is created in the directory of {param output-file}.
+          See documentation of coverage-statistics below for a
+	  description of the values in the statistics file.")))
+       (defsection "Example"
+         (para "
+      If you've loaded {system foo.lx64fsl} and
+      {system bar.lx64fsl}, and have run some tests, you could
+      do
+    "
+          (code-block "(report-coverage \"/my/dir/coverage/report.html\")")
+          "
+    and this would generate {system report.html},
+    {system foo_lisp.html} and
+    {system bar_lisp.html}, and
+    {system statistics.csv} all in
+    {system /my/dir/coverage/}.
+    ")))
+      (definition (:function reset-coverage) "reset-coverage"
+      "Resets all coverage data back to the “Not Executed” state"
+       (defsection "Description"
+         (para "Resets all coverage data back to the “Not Executed” state")))
+
+      (definition (:function clear-coverage) "clear-coverage" "Forget about all instrumented files that have been loaded."
+       (defsection "Description"
+         (para "Gets rid of the information about which instrumented
+      files have been loaded, so {code ccl:report-coverage} will not
+      report any files, and {code ccl:save-coverage-in-file} will not
+      save any info, until more instrumented files are loaded.")))
+      (definition (:function save-coverage-in-file) "save-coverage-in-file pathname" "
+      Save all coverage into to a file so you can restore it later."
+       (defsection "Description"
+         (para "
+      Saves all coverage info in a file, so you can restore the
+      coverage state later. This allows you to combine multiple runs
+      or continue in a later session. Equivalent to
+      {code (ccl:write-coverage-to-file (ccl:get-coverage) pathname)}.
+    ")))
+      (definition (:function restore-coverage-from-file) "restore-coverage-from-file pathname" "
+      Load coverage state from a file.
+    "
+       (defsection "Description"
+         (para #:|
+      Restores the coverage data previously saved with
+      ccl:save-coverage-in-file, for the set of instrumented fasls
+      that were loaded both at save and restore time. I.e. coverage
+      info is only restored for files that have been loaded in this
+      session. For example if in a previous session you had loaded
+      {system "foo.lx86fsl"} and then saved the coverage info, in this session
+      you must load the same {system "foo.lx86fsl"} before calling
+      {code restore-coverage-from-file} in order to retrieve the stored
+      coverage info for "foo".  Equivalent to {code (ccl:restore-coverage
+      (ccl:read-coverage-from-file pathname))}.
+    |)))
+      (definition (:function get-coverage) "GET-COVERAGE" "
+      Returns a snapshot of the current coverage data.
+    "
+       (defsection "Description"
+         (para "
+      Returns a snapshot of the current coverage data. A snapshot is a
+      copy of the current coverage state. It can be saved in a file
+      with {code ccl:write-coverage-to-file}, reinstated back as the current
+      state with {code ccl:restore-coverage}, or combined with other
+      snapshots with {code ccl:combine-coverage}.
+    ")))
+      (definition (:function restore-coverage) "restore-coverage snapshot" "
+      Reinstalls a coverage snapshot as the current coverage state.
+    "
+       (defsection "Description"
+         (para "
+      Reinstalls a coverage snapshot as the current coverage state.
+    ")))
+      (definition (:function combine-coverage) "combine-coverage snapshots" "
+      Combines multiple coverage snapshots into one.
+    "
+       (defsection "Description"
+         (para "
+      Takes a list of coverage snapshots and returns a new coverage snapshot
+      representing a union of all the coverage data.
+    ")))
+      (definition (:function write-coverage-to-file) "write-coverage-to-file snapshot pathname" "
+      Save a coverage snapshot in a file.
+    "
+       (defsection "Description"
+         (para "
+      Saves the coverage snapshot in a file. The snapshot can be
+      loaded back with {code ccl:read-coverage-from-file} or loaded and
+      restored with {code ccl:restore-coverage-from-file}. Note that the file
+      created is actually a lisp source file and can be compiled for
+      faster loading.
+    ")))
+      (definition (:function read-coverage-from-file) "read-coverage-from-file pathname" "
+      Return the coverage snapshot saved in a file.
+    "
+       (defsection "Description"
+         (para "
+      Returns the snapshot saved in pathname. Doesn't affect the
+      current coverage state. pathname can be the file previously
+      created with {code ccl:write-coverage-to-file} or
+      {code ccl:save-coverage-in-file}, or it can be the name of the fasl
+      created from compiling such a file.
+    ")))
+      (definition (:function coverage-statistics) "coverage-statistics"
+       (clause "
+      Returns a sequence of {code ccl:coverage-statistics} objects, one per source file.
+    ")
+       (defsection "Description"
+         (para "
+      Returns a sequence of {code ccl:coverage-statistics} objects, one for each
+      source file, containing the same information as that written to
+      the statistics file by {function report-coverage}. The following
+      accessors are defined for {code ccl:coverage-statistics} objects:
+      "
+          (listing :definition
+            (item "{function coverage-source-file}" ccldoc::=> "
+	    the name of the source file corresponding to this information
+	  ")
+            (item "{function coverage-expressions-total}" ccldoc::=> "
+	    the total number of expressions
+	  ")
+            (item "{function coverage-expressions-entered}" ccldoc::=> "
+	    the number of source expressions that have been entered
+	    (i.e. at least partially covered)
+	  ")
+            (item "{function coverage-expressions-covered}" ccldoc::=> "
+	    the number of source expressions that were fully covered
+	  ")
+            (item "{function coverage-unreached-branches}" ccldoc::=> "
+	    the number of conditionals with one branch taken and one not taken
+	  ")
+            (item "{function coverage-code-forms-total}" ccldoc::=> "
+	    the total number of code forms. A code form is an
+	    expression in the final stage of compilation, after all
+	    macroexpansion and compiler transforms and simplification
+	  ")
+            (item "{function coverage-code-forms-covered}" ccldoc::=> "
+	    the number of code forms that have been entered
+	  ")
+            (item "{function coverage-functions-total}" ccldoc::=> "
+	    the total number of functions
+	  ")
+            (item "{function coverage-functions-fully-covered}" ccldoc::=> "
+	    the number of functions that were fully covered
+	  ")
+            (item "{function coverage-functions-partly-covered}" ccldoc::=> "
+	    the number of functions that were partly covered
+	  ")
+            (item "{function coverage-functions-not-entered}" ccldoc::=> "
+	    the number of functions never entered
+	  ")))))
+      (definition (:function reset-incremental-coverage) "reset-incremental-coverage" "
+      Reset incremental coverage.
+    "
+       (defsection "Description"
+         (para "
+      Marks a starting point for recording incremental coverage.
+      Note that calling
+      this function does not affect regular coverage data (whereas calling
+      {code ccl:reset-coverage} resets incremental coverage as well).
+    ")))
+      (definition (:function get-incremental-coverage) "get-incremental-coverage {code &key} (reset t)" "
+      Returns the delta of coverage since the last incremental reset.
+    "
+       (defsection "Description"
+         "
+      Returns the delta of coverage since the last reset of incremental coverage.
+     If {code reset} is true (the default), it also resets incremental coverage
+     now, so that the next call to {code get-incremental-coverage} will return
+     the delta from this point.
+     
+
+
+      Incremental coverage deltas are represented differently than the full coverage snapshots
+      returned by functions such as {code ccl:get-coverage}.  Incremental
+      coverage uses an abbreviated format
+      and is missing some of the information in a full snapshot, and therefore cannot be passed to
+      functions documented to accept a {param snapshot}, only to functions
+      specifically documented to accept incremental coverage deltas.
+     "))
+      (definition (:function incremental-coverage-source-matches)
+       "incremental-coverage-source-matches collection sources" "
+      Find incremental coverage deltas intersecting source regions.
+    "
+       (defsection "Arguments and Values"
+         (listing :definition
+           (item "{param collection}" ccldoc::=> "
+          A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
+          incremental coverage deltas.
+         ")
+           (item "{param sources}" ccldoc::=> "
+          A list of pathnames and/or source-notes, the latter representing a range within a file.
+         ")))
+       (defsection "Description"
+         "
+     Given a hash table {code collection} whose values are incremental coverage
+     deltas, return a list of all keys corresponding to those deltas that intersect any region
+     in {code sources}.
+     
+
+
+     For example if the deltas represent tests, then the returned value is a list of all tests
+     that cover some part of the source regions.
+     
+
+      {code collection} can also be a sequence of deltas, in which case a subsequence
+      of matching deltas is returned.  In particular you can test whether any particular delta
+      intersects the sources by passing it in as a single-element list.
+     "))
+      (definition (:function incremental-coverage-svn-matches)
+       "incremental-coverage-svn-matches collection {code &key} (directory (current-directory)) (revision :base)" "
+      Find incremental coverage deltas matching changes from a particular subversion revision.
+    "
+       (defsection "Arguments and Values"
+         (listing :definition
+           (item "{param collection}" ccldoc::=> "
+          A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
+          incremental coverage deltas.
+         ")
+           (item "{param directory}" ccldoc::=> "
+          The pathname of a subversion working directory.
+         ")
+           (item "{param revision}" ccldoc::=> "
+          The revision to compare to the working directory, an integer or another
+          value whose printed representation is suitable for passing as the
+          {code --revision} argument
+          to {system svn}.
+         ")))
+       (defsection "Description"
+         "
+     Given a hash table {code collection} whose values are incremental coverage
+     deltas, return a list of all keys corresponding to those deltas that intersect any changed
+     source in {code directory} since revision {code revision} in subversion.
+     
+
+
+     For example if the deltas represent tests, then the returned value is a list of all tests
+     that might be affected by the changes.
+     
+
+      {code collection} can also be a sequence of deltas, in which case a subsequence
+      of matching deltas is returned.  In particular you can test whether any particular delta
+      is affected by the changes by passing it in as a single-element list.
+     "))
+      (definition (:variable *compile-code-coverage*) "*compile-code-coverage*" "
+      When true, instrument functions being compiled to collect code coverage information.
+    "
+       (defsection "Description"
+         (para "
+      This variable controls whether functions are instrumented for
+      code coverage. Files compiled while this variable is true will
+      contain code coverage instrumentation.
+    ")))
+      (definition (:macro without-compiling-code-coverage) "without-compiling-code-coverage" "
+      Don't record code coverage for forms within the body.
+    "
+       (defsection "Description"
+         (para "
+      This macro arranges so that body doesn't record internal details
+      of code coverage. It will be considered totally covered if it's
+      entered at all. The Common Lisp macros {code ASSERT} and {code CHECK-TYPE} use
+      this macro.
+    "))))
+    (defsection "Interpreting Code Coloring"
+      (para "
+
+ The output of ccl:report-coverage consists of formatted source code, with coverage indicated by
+ coloring.  Four colors are used: dark green for forms that compiled to code in which every single
+ instruction was executed, light green for forms that have been entered but weren't totally covered, red
+ for forms that were never entered, and the page background color for toplevel forms that weren't
+ instrumented.
+
+")
+      (para "
+ The source coloring is applied from outside in.  So for example if you have
+
+  "
+       (code-block "
+(outer-form ... (inner-form ...) ...)
+  ")
+       "
+
+ first the whole outer form is painted with whatever color expresses the outer form coverage, and then the
+ inner form color is replaced with whatever color expresses the inner form coverage.  One consequence of
+ this approach is that every part of the outer form that is not specifically inside some executable inner
+ form will have the outer form's coverage color. If the syntax of outer form involves some non-executable
+ forms, or forms that do not have coverage info of their own for whatever reason, then they will just
+ inherit the color of the outer form, because they don't get repainted with a color of their own.
+")
+      (para "
+ One case in which this approach can be confusing is in the case of symbols.  As noted in the Limitations
+ section, coverage information is not recorded for variables; hence the coloring of a variable does not
+ convey information about whether the variable was evaluated or not -- that information is not available,
+ and the variable just inherits the color of the form that contains it.
+")))
+  (defsection "Other Extensions"
+
+
+
+    (definition (:macro unwind-protect) "unwind-protect protected-form {lbrace}cleanup-form{rbrace}*" "
+      Ensure cleanup-forms are executed.
+    "
+     (defsection "Summary"
+       (para "
+      In {CCL}, the cleanup forms are always executed as if they were
+      wrapped with "
+        (ref (definition :macro without-interrupts)) ".
+      To allow interrupts, use
+      "
+        (ref (definition :macro with-interrupts-enabled)) ".
+    ")))
+
+))

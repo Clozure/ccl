@@ -1,6 +1,7 @@
 See http://ccl.clozure.com/docs for preformatted versions of
 the documentation.
 
-http://trac.clozure.com/ccldoc describes how to obtain and
-format the documentation source.
+http://trac.clozure.com/ccldoc describes how to obtain and use the
+CCLDoc tool to format the manual from the CCLDoc source in the
+manual/ directory.
 

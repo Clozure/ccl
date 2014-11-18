@@ -1,0 +1,139 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "CLOS Metaobject Protocol"
+  "{CCL} supports most of the semi-standard
+  metaobject protocol (MOP) for CLOS, as defined in chapters 5 and 6
+  of “The Art Of The Metaobject Protocol”,
+  (Kiczales et al, MIT Press 1991, ISBN 0-262-61074-4); this
+  specification is also available online at {link
+  http://www.alu.org/mop/index.html}.
+
+  Notably absent is support for the generic function invocation protocol.
+
+  The keyword :openmcl-partial-mop is on {code *features*} to
+  indicate the presence of this functionality.
+
+  All of the symbols defined in the MOP specification
+  (whether implemented or not) are exported from the {code ccl}
+  package and from the {code openmcl-mop} package."
+
+  (table "MOP Implementation Status"
+    (row (item "construct") (item "status"))
+    (row (item "accessor-method-slot-definition") (item "+"))
+    (row (item "add-dependent") (item "+"))
+    (row (item "add-direct-method") (item "+"))
+    (row (item "add-direct-subclass") (item "+"))
+    (row (item "add-method") (item "+"))
+    (row (item "class-default-initargs") (item "+"))
+    (row (item "class-direct-default-initargs") (item "+"))
+    (row (item "class-direct-slots") (item "+"))
+    (row (item "class-direct-subclasses") (item "+"))
+    (row (item "class-direct-superclasses") (item "+"))
+    (row (item "class-finalized-p") (item "+"))
+    (row (item "class-prototype") (item "+"))
+    (row (item "class-slots") (item "+"))
+    (row (item "compute-applicable-methods") (item "-"))
+    (row (item "compute-applicable-methods-using-classes") (item "-"))
+    (row (item "compute-class-precedence-list") (item "+"))
+    (row (item "compute-direct-initargs") (item "+"))
+    (row (item "compute-discriminating-function") (item "-"))
+    (row (item "compute-effective-method") (item "+"))
+    (row (item "compute-effective-slot-definition") (item "+"))
+    (row (item "compute-slots") (item "+"))
+    (row (item "direct-slot-definition-class") (item "+"))
+    (row (item "effective-slot-definition-class") (item "+"))
+    (row (item "ensure-class") (item "+"))
+    (row (item "ensure-class-using-class") (item "+"))
+    (row (item "ensure-generic-function-using-class") (item "+"))
+    (row (item "eql-specializer-object") (item "+"))
+    (row (item "extract-lambda-list") (item "+"))
+    (row (item "extract-specializer-names") (item "+"))
+    (row (item "finalize-inheritance") (item "+"))
+    (row (item "find-method-combination") (item "+"))
+    (row (item "funcallable-standard-instance-access") (item "+"))
+    (row (item "generic-function-argument-precedence-order") (item "+"))
+    (row (item "generic-function-declarations") (item "+"))
+    (row (item "generic-function-lambda-list") (item "+"))
+    (row (item "generic-function-method-class") (item "+"))
+    (row (item "generic-function-method-combination") (item "+"))
+    (row (item "generic-function-methods") (item "+"))
+    (row (item "generic-function-name") (item "+"))
+    (row (item "intern-eql-specializer") (item "+"))
+    (row (item "make-method-lambda") (item "-"))
+    (row (item "map-dependents") (item "+"))
+    (row (item "method-function") (item "+"))
+    (row (item "method-generic-function") (item "+"))
+    (row (item "method-lambda-list") (item "+"))
+    (row (item "method-qualifiers") (item "+"))
+    (row (item "method-specializers") (item "+"))
+    (row (item "reader-method-class") (item "+"))
+    (row (item "remove-dependent") (item "+"))
+    (row (item "remove-direct-method") (item "+"))
+    (row (item "remove-direct-subclass") (item "+"))
+    (row (item "remove-method") (item "+"))
+    (row (item "set-funcallable-instance-function") (item "-"))
+    (row (item "slot-boundp-using-class") (item "+"))
+    (row (item "slot-definition-allocation") (item "+"))
+    (row (item "slot-definition-initargs") (item "+"))
+    (row (item "slot-definition-initform") (item "+"))
+    (row (item "slot-definition-initfunction") (item "+"))
+    (row (item "slot-definition-location") (item "+"))
+    (row (item "slot-definition-name") (item "+"))
+    (row (item "slot-definition-readers") (item "+"))
+    (row (item "slot-definition-type") (item "+"))
+    (row (item "slot-definition-writers") (item "+"))
+    (row (item "slot-makunbound-using-class") (item "+"))
+    (row (item "slot-value-using-class") (item "+"))
+    (row (item "specializer-direct-generic-functions") (item "+"))
+    (row (item "specializer-direct-methods") (item "+"))
+    (row (item "standard-instance-access") (item "+"))
+    (row (item "update-dependent") (item "+"))
+    (row (item "validate-superclass") (item "+"))
+    (row (item "writer-method-class") (item "+")))
+    
+    "Note that those generic functions whose status is “-” in
+      the table above deal with the internals of generic function
+      dispatch and method invocation (the “generic function invocation
+      protocol”). Method functions are implemented a bit differently
+      in {CCL} from what the MOP expects, and it's not yet clear if
+      or how this subprotocol can be well-supported.
+
+      Those constructs that are marked as “+” in the table above
+      are nominally implemented as the MOP document specifies
+      (deviations from the specification should be considered bugs;
+      please report them as such.) Note that some CLOS implementations
+      in widespread use (e.g., PCL) implement some things
+      (ENSURE-CLASS-USING-CLASS comes to mind) a bit differently from
+      what the MOP specifies."
+
+  (defsection "Concurrency issues"
+    "The entire CLOS class and generic function hierarchy is
+      effectively a (large, complicated) shared data structure; it's
+      not generally practical for a thread to request exclusive access
+      to all of CLOS, and the effects of volitional modification of
+      the CLOS hierarchy (via class redefinition, {code change-class},
+      etc.) in a multithreaded environment aren't always tractable.
+
+      Native threads exacerbate this problem (in that they
+      increase the opportunities for concurrent modification and
+      access.) The implementation should try to ensure that a thread's
+      view of any subset of the CLOS hierarchy is consistent (to the
+      extent that that's possible) and should try to ensure that
+      incidental modifications of the hierarchy (cache updates, etc.)
+      happen atomically; it's not generally possible for the
+      implementation to guarantee that a thread's view of things is
+      correct and current.
+
+      If you are loading code and defining classes in the most
+      usual way, which is to say, via the compiler, using only a
+      single thread, these issues are probably not going to affect you
+      much.
+
+      If, however, you are making finicky changes to the class
+      hierarchy while you're running multiple threads which manipulate
+      objects related to each other, more care is required.  Before
+      doing such a thing, you should know what you're doing and
+      already be aware of what precautions to take, without being
+      told.  That said, if you do it, you should seriously consider
+      what your application's critical data is, and use locks for
+      critical code sections."))

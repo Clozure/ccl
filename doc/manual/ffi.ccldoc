@@ -1,0 +1,2552 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "The Foreign-Function Interface"
+  (defsection "Specifying And Using Foreign Types"
+    "{CCL} provides a fairly rich language for defining and specifying
+     foreign data types (this language is derived from CMUCL's “alien
+     type” system.)
+
+     In practice, most foreign type definitions are introduced into
+     {CCL} via its interface database, though it is also possible to
+     define foreign types interactively and/or programmatically.
+
+     {CCL}'s foreign type system is “evolving” (a polite word for
+     not-quite-complete): there are some inconsistencies involving
+     package usage, for instance. Symbols used in foreign type
+     specifiers {emphasis should} be keywords, but this convention
+     isn't always enforced.
+
+     Foreign type, record, and field names are case-sensitive; {CCL}
+     uses some escaping conventions to allow keywords to be used to
+     denote these names."
+
+    (defsection "Type Annotations"
+        "As of version 1.2, {CCL} supports annotating the types of
+          foreign pointers on Mac OS X. Forms that create pointers to
+          foreign memory-that is, {code MACPTR}s-store
+          with the {code MACPTR} object a type annotation that
+          identifies the foreign type of the object pointed
+          to. Calling {code PRINT-OBJECT} on a {code MACPTR}
+          attempts to print information about the identified foreign
+          type, including whether it was allocated on the heap or the
+          stack, and whether it's scheduled for automatic reclamation by
+          the garbage collector.
+
+          Support for type annotation is not yet complete. In
+          particular, some uses of {code PREF}
+          and {code SLOT-VALUE} do ot yet take type annotations into
+          account, and neither do {code DESCRIBE}
+          and {code INSPECT}.")
+
+      (defsection "Foreign Types as Classes"
+        "Some types of foreign pointers take advantage of the
+          support for type annotations, and pointers of these types
+          can be treated as instances of known classes. Specifically,
+          a pointer to an {code :<NSR>ect} is recognized
+          as an instance of the built-in
+          class {code NS:NS-RECT}, a pointer to
+          an {code <NSS>ize} is treated as an instance
+          of {code NS:NS-SIZE}, a pointer to
+          an {code <NSP>oint} is recognized as an
+          instance of {code NS:NS-POINT}, and a pointer to
+          an {code <NSR>ange} is recognized as an
+          instance of {code NS:NS-RANGE}.
+
+        A few more obscure structure types also support this
+        mechanism, and it's possible that a future version will
+        support user definition of similar type mappings.
+
+        This support for foreign types as classes provides the
+        following conveniences for each supported type:"
+        (listing :bullet
+          (item "a {code PRINT-OBJECT} method is defined")
+          (item "a foreign type name is created and treated as an alias
+          for the corresponding type. As an example, the
+          name {code :NS-RECT} is a name for the type that
+          corresponds to {code NS:NS-RECT}, and you can
+          use {code :NS-RECT} as a type designator
+          in "
+           (ref (definition :macro rlet)) " forms to
+          specify a structure of type {code NS-RECT}.")
+          (item "the class is integrated into the type system so that
+            {code (TYPEP R 'NS:NS-RECT)} is implemented with
+            fair efficiency.")
+          (item "inlined accessor and {code SETF} inverses are
+            defined for the structure type's fields.  In the case of
+            an {code <NSR*gt;ect}, for example, the fields in
+            question are the fields of the embedded point and size, so
+            that {code NS:NS-RECT-X}, {code NS:NS-RECT-Y}, {code NS:NS-RECT-WIDTH},
+            {code NS-RECT-HEIGHT} and {code SETF} inverses
+            are defined.  The accessors and setter functions typecheck
+            their arguments and the setters handle coercion to the
+            appropriate type of {code CGFLOAT} where
+            applicable.")
+          (item
+           (para "an initialization function is defined; for
+            example,")
+           (code-block "(NS:INIT-NS-SIZE s w h)")
+           (para "is roughly equivalent to")
+           (code-block "(SETF (NS:NS-SIZE-WIDTH s) w
+      (NS:NS-SIZE-HEIGHT s) h)
+          ")
+           (para "but might be a little more efficient."))
+          (item
+           (para "a creation function is defined; for
+            example")
+           (code-block "(ns:ns-make-point x y)")
+           (para "is functionally equivalent to")
+           (code-block "(LET ((P (MAKE-GCABLE-RECORD :NS-POINT)))
+  (NS:INIT-NS-POINT P X Y)
+  p)
+          "))
+          (item "a macro is defined which, like {code RLET},
+            stack-allocates an instance of the foreign record type,
+            optionally initializes that instance, and executes a body
+            of code with a variable bound to that instance.
+
+For example,"
+           (code-block "(ns:with-ns-range (r loc len)
+  (format t \"~& range has location ~s, length ~s\" 
+     (ns:ns-range-location r) (ns:ns-range-length r)))
+"))
+          (item))))
+
+    (defsection "Syntax of Foreign Type Specifiers"
+      (listing :bullet
+        (item "Some foreign types are builtin: keywords denote
+            primitive,builtin types such as the IEEE-double-float type
+            (denoted:DOUBLE-FLOAT), in much the same way as certain
+            symbols(CONS, FIXNUM,etc.) define primitive CL
+            types.")
+        (item "Constructors such as :SIGNED and :UNSIGNED can be
+            used to denote signed and unsigned integer subtypes
+            (analogous to the CL type specifiers SIGNED-BYTE and
+            UNSIGNED-BYTE.) :SIGNED is shorthand for(:SIGNED 32) and
+            :UNSIGNED is shorthand for (:UNSIGNED 32).")
+        (item "Aliases for other (perhaps more complicated) types
+            can be defined via ccl:def-foreign-type (sort of like
+            cl:deftype or the C typedef facility). The type :char is
+            defined as an alias for (:SIGNED8) on some platforms, as
+            (:UNSIGNED 8) on others.")
+        (item "The construct (:struct {emphasis name})
+	        can be used to refer to a named structure type; (:UNION
+	        {emphasis name}) can be used to refer to a named
+	        union type. It isn't necessary to enumerate a structure or
+	        union type's fields in order to refer to the type.")
+        (item "If {emphasis X} is a valid foreign type
+	        reference,then (:* {emphasis X}) denotes the foreign
+	        type “pointer to {emphasis X}”. By convention, (:* T)
+	        denotes an anonymous pointer type, vaguely equivalent
+	        to {code void *} in C.")
+        (item "If a fieldlist is a list of lists, each of whose CAR
+	        is a foreign field name (keyword) and whose CADR is a
+	        foreign type specifier, then (:STRUCT
+	        {emphasis name} ,@fieldlist) is a definition of
+	        the structure type {emphasis name},
+	        and (:UNION {emphasis name} ,@fieldlist) is a
+	        definition of the union type
+	        {emphasis name}. Note that it's necessary
+	        to define a structure or union type in order to include
+	        that type in a structure, union, or array, but only
+	        necessary to refer to a structure or union type in order
+	        to define a type alias or a pointer type.")
+        (item "If {emphasis X} is a defined foreign type,
+              then (:array {emphasis X} &rest dims)
+	        denotes the foreign type “array of
+	        {emphasis X}”. Although multiple array dimensions
+	        are allowed by the :array constructor,
+	        only single-dimensioned arrays are (at all) well-supported
+	        in {CCL}.")))
+
+  (defsection "Foreign Function Calls"
+
+    (defsection "Overview"
+      "{CCL} provides a number of constructs for calling foreign
+        functions from Lisp code, all of which are based on the
+        function {function %ff-call}. In many cases, {CCL}'s
+        interface translator provides information about the foreign
+        function's entrypoint name and argument and return types; this
+        enables the use of the {code #_} reader macro (described
+        below), which is usually nicer to use than the than other
+        constructs.
+
+        {CCL} also provides a mechanism for defining {emphasis
+        callbacks}: lisp functions which can be called from foreign
+        code.
+
+        There's no supported way to directly pass lisp data to
+        foreign functions: scalar lisp data must be coerced to an
+        equivalent foreign representation, and lisp arrays (notably
+        strings) must be copied to non-GCed memory."
+
+      (defsection "Type Designators for Arguments and Return Values"
+        (para "The types of foreign argument and return values in foreign
+	      function calls and callbacks can be specified by any of the following
+          keywords:")
+        (listing :definition
+          (item "{code :UNSIGNED-BYTE}" ccldoc::=> "The argument/return value is of type (UNSIGNED-BYTE 8)")
+          (item "{code :SIGNED-BYTE}" ccldoc::=> "The argument/return value is of type (SIGNED-BYTE 8)")
+          (item "{code :UNSIGNED-HALFWORD}" ccldoc::=> "The argument/return value is of type (UNSIGNED-BYTE 16)")
+          (item "{code :SIGNED-HALFWORD}" ccldoc::=> "The argument/return value is of type (SIGNED-BYTE 16)")
+          (item "{code :UNSIGNED-FULLWORD}" ccldoc::=> "The argument/return value is of type (UNSIGNED-BYTE 32)")
+          (item "{code :SIGNED-FULLWORD}" ccldoc::=> "The argument/return value is of type (SIGNED-BYTE 32)")
+          (item "{code :UNSIGNED-DOUBLEWORD}" ccldoc::=> "The argument/return value is of type (UNSIGNED-BYTE 64)")
+          (item "{code :SIGNED-DOUBLEWORD}" ccldoc::=> "The argument/return value is of type (SIGNED-BYTE 64)")
+          (item "{code :SINGLE-FLOAT}" ccldoc::=> "The argument/return value is of type SINGLE-FLOAT")
+          (item "{code :DOUBLE-FLOAT}" ccldoc::=> "The argument/return value is of type DOUBLE-FLOAT")
+          (item "{code :ADDRESS}" ccldoc::=> "The argument/return values
+		        is "
+           (ref (section "Referencing and Using Foreign Memory Addresses") "a MACPTR") ".")
+          (item "{code :VOID}" ccldoc::=> "or NIL Not valid as an argument type specifier; specifies
+		        that there is no meaningful return value"))
+        (para "On some platforms, a small positive integer
+          {emphasis N} can also be used as an argument
+          specifier; it indicates that the corresponding argument is a
+          pointer to an {emphasis N}-word structure or union
+          which should be passed by value to the foreign
+          function.  Exactly which foreign structures are passed
+	      by value and how is very dependent on the Application
+	      Binary Interface (ABI) of the platform; unless you're
+	      very familiar with ABI details (some of which are quite
+	      baroque), it's often easier to let higher-level constructs
+	      deal with these details."))
+
+      (defsection "External Entrypoints and Named External Entrypoints"
+        "PowerPC machine instructions are always aligned on
+          32-bit boundaries, so the two least significant bits of the
+          first instruction (the entrypoint) of a foreign function are
+          always 0. {CCL} often represents an entrypoint address as
+          a fixnum that's binary-equivalent to the entrypoint address:
+          if{emphasis  E} is an entrypoint address expressed
+          as a signed 32-bit integer, then (ash {emphasis E}
+          -2) is an equivalent fixnum representation of that
+          address. An entrypoint address can also be encapsulated in a
+          MACPTR, but that's somewhat less efficient.
+
+          Although it's possible to use fixnums or macptrs to
+          represent entrypoint addresses, it's somewhat cumbersome to
+          do so. {CCL} can cache the addresses of named external
+          functions in structure-like objects of type
+          CCL:EXTERNAL-ENTRY-POINT (sometimes abbreviated as EEP).
+          Through the use of LOAD-TIME-VALUE, compiled lisp functions
+          are able to reference EEPs as constants; the use of an
+          indirection allows {CCL} runtime system to ensure that the
+          EEP's address is current and correct."))
+
+    (defsection "Return Conventions for C Structures"
+      "On some platforms, C functions that are defined to
+        return structures do so by reference: they actually
+        accept a first parameter of type “pointer to returned
+        struct/union” - which must be allocated by the caller - and
+        don't return a meaningful value.
+
+	    {emphasis Exactly} how a C function that's
+	    defined to return a foreign structure does so is dependent on
+	    the ABI (and on the size and composition of the structure/union
+	    in many cases.)"))
+
+  (defsection "Referencing and Using Foreign Memory Addresses"
+    (defsection "Overview"
+      (defsection "Basics"
+        "For a variety of technical reasons, it isn't generally
+          possible to directly reference arbitrary absolute addresses
+          (such as those returned by the C library function malloc(),
+          for instance) in {CCL}. In {CCL} (and in MCL), such
+          addresses need to be {emphasis encapsulated} in
+          objects of type CCL:MACPTR; one can think of a MACPTR as
+          being a specialized type of structure whose sole purpose is
+          to provide a way of referring to an underlying raw
+          address.
+
+          It's sometimes convenient to blur the distinction
+          between a MACPTR and the address it represents; it's
+          sometimes necessary to maintain that distinction. It's
+          important to remember that a MACPTR is (generally) a
+          first-class Lisp object in the same sense that a CONS cell
+          is: it'll get GCed when it's no longer possible to reference
+          it. The lifetime of a MACPTR doesn't generally have
+          anything to do with the lifetime of the block of memory its
+          address points to.
+
+          It might be tempting to ask “How does one obtain the
+          address encapsulated by a macptr?”. The answer to that
+          question is that one doesn't do that (and there's no way to
+          do that): addresses aren't first-class objects, and there's
+          no way to refer to one.
+
+          Two MACPTRs that encapsulate the same address are EQL
+          to each other.
+
+          There are a small number of ways to directly create a
+          MACPTR (and there's a fair amount of syntactic sugar built
+          on top of of those primitives.) These primitives will be
+          discussed in greater detail below, but they include:"
+        (listing :bullet
+          (item "Creating a MACPTR with a specified address, usually
+	          via the function CCL:%INT-TO-PTR.")
+          (item "Referencing the return value of a foreign function
+	          call (see )that's specified to return an address.")
+          (item "Referencing a memory location that's specified to
+	          contain an address."))
+        "All of these primitive MACPTR-creating operations are
+          usually open-coded by the compiler; it has a fairly good
+          notion of what low-level operations produce MACPTRs and
+          which operations consume the addresses that the
+          encapsulate, and will usually optimize out the introduction
+          of intermediate MACPTRs in a simple expression.
+
+          One consequence of the use of MACPTR objects to
+          encapsulate foreign addresses is that (naively)
+          {emphasis every reference to a foreign address causes a
+            MACPTR to be allocated.}
+
+Consider a code fragment like the following:"
+        (code-block "(defun get-next-event ()
+  \"get the next event from a hypothetical window system\"
+  (loop
+     (let* ((event (#_get_next_window_system_event))) ; via an FF-CALL
+       (unless (null-event-p event)
+         (handle-event event)))))
+")
+
+        (para "As this is written, each call to the (hypothetical)
+          foreign function #_get_next_window_system_event will return
+          a new MACPTR object.  Ignoring for the sake of argument the
+          question of whether this code fragment exhibits a good way
+          to poll for external events (it doesn't), it's not hard to
+          imagine that this loop could execute several million times
+          per second (producing several million MACPTRs per second.)
+          Clearly, the naive approach is impractical in many
+          cases."))
+
+      (defsection "Stack allocation of-and destructive operations on-MACPTRs."
+        (para "If certain conditions held in the environment in which
+	      GET-NEXT-EVENT ran-namely, if it was guaranteed that
+	      neither NULL-EVENT-P nor HANDLE-EVENT cached or otherwise
+	      retained their arguments (the “event” pointer)-there'd be
+	      a few alternatives to the naive approach. One of those
+	      approaches would be to use the primitive function
+	      %SETF-MACPTR (described in greater detail below) to
+	      destructively modify a MACPTR (to change the value of the
+	      address it encapsulates.) The GET-NEXT-EVENT example could
+	      be re-written as:")
+        (code-block "(defun get-next-event ()
+  (let* ((event (%int-to-ptr 0)))     ; create a MACPTR with address 0
+    (loop
+       (%setf-macptr event (#_get_next_window_system_event)) ; re-use it
+       (unless (null-event-p event)
+         (handle-event event)))))
+        ")
+        "That version's a bit more realistic: it allocates a
+          single MACPTR outside if the loop, then changes its address
+          to point to the current address of the hypothetical event
+          structure on each loop iteration. If there are a million
+          loop iterations per call to GET-NEXT-EVENT, we're allocating
+          a million times fewer MACPTRs per call; that sounds like a
+          Good Thing.
+
+          An Even Better Thing would be to advise the compiler
+          that the initial value (the null macptr) bound to the
+          variable event has dynamic extent (that value won't be
+          referenced once control leaves the extent of the binding of
+          that variable.) Common Lisp allows us to make such an
+          assertion via a dynamic-extent declaration; {CCL}'s
+          compiler can recognize the primitive macptr-creating
+          operation involved and can replace it with an equivalent
+          operation that stack-allocates the macptr object. If we're
+          not worried about the cost of allocating that macptr on
+          every iteration (the cost is small and there's no hidden GC
+          cost), we could move the binding back inside the
+          loop:"
+        (code-block "(defun get-next-event ()
+  (loop
+     (let* ((event (%null-ptr))) ; (%NULL-PTR) is shorthand for (%INT-TO-PTR 0)
+       (declare (dynamic-extent event))
+       (%setf-macptr event (#_get_next_window_system_event))
+       (unless (null-event-p event)
+         (handle-event event)))))
+        ")
+        (para "The idiom of binding one or more variables to
+          stack-allocated MACPTRs, then destructively modifying those
+          MACPTRs before executing a body of code is common enough
+          that {CCL} provides a macro (WITH-MACPTRS) that handles
+          all of the gory details. The following version of
+          GET-NEXT-EVENT is semantically equivalent to the previous
+          version, but hopefully a bit more concise:")
+        (code-block "(defun get-next-event ()
+  (loop
+     (with-macptrs ((event (#_get_next_window_system_event)))
+       (unless (null-event-p event)
+         (handle-event event)))))
+        "))
+      (defsection "Stack-allocated memory (and stack-allocated pointers to it.)"
+        (para "Fairly often, the blocks of foreign memory (obtained
+	      by malloc or something similar) have well-defined lifetimes
+	      (they can safely be freed at some point when it's known that
+	      they're no longer needed and it's known that they're no
+	      longer referenced.) A common idiom might be:")
+        (code-block "(with-macptrs (p (#_allocate_foreign_memory size))
+  (unwind-protect
+       (use-foreign-memory p)
+    (#_deallocate_foreign_memory p)))
+        ")
+        "That's not unreasonable code, but it's fairly
+          expensive for a number of reasons: foreign functions calls
+          are themselves fairly expensive (as is UNWIND-PROTECT), and
+          most library routines for allocating and deallocating
+          foreign memory (things like malloc and free) can be fairly
+          expensive in their own right.
+
+          In the idiomatic code above, both the MACPTR P and the
+          block of memory that's being allocated and freed have
+          dynamic extent and are therefore good candidates for stack
+          allocation. {CCL} provides the %STACK-BLOCK macro, which
+          executes a body of code with one or more variables bound to
+          stack-allocated MACPTRs which encapsulate the addresses of
+          stack-allocated blocks of foreign memory. Using
+          %STACK-BLOCK, the idiomatic code is:"
+        (code-block "(%stack-block ((p size))
+              (use-foreign-memory p))
+        ")
+        "which is a bit more efficient and a bit more concise
+          than the version presented earlier.
+
+          %STACK-BLOCK is used as the basis for slightly
+          higher-level things like RLET. (See FIXTHIS for more information
+          about RLET.)")
+      (defsection "Caveats"
+        (para "Reading from, writing to, allocating, and freeing
+          foreign memory are all potentially dangerous operations;
+          this is no less true when these operations are performed in
+          {CCL} than when they're done in C or some other
+          lower-level language. In addition, destructive operations on
+          Lisp objects be dangerous, as can stack allocation if it's
+          abused (if DYNAMIC-EXTENT declarations are violated.)
+          Correct use of the constructs and primitives described here
+          is reliable and safe; even slightly incorrect use of these
+          constructs and primitives can crash {CCL}.")))
+
+    (defsection "Foreign-Memory-Addresses Dictionary"
+      (para "Unless otherwise noted, all of the symbols mentioned
+        below are exported from the CCL package.")
+      (defsection "Scalar memory reference"
+        (definition (:function %get-unsigned-byte)
+                    "%get-unsigned-byte ptr &optional (offset 0)" ""
+          "References and returns the unsigned 8-bit byte at the effective byte
+          address formed by adding {param offset} to the address encapsulated by
+          {param ptr}.")
+        (definition (:function %get-signed-byte)
+                    "%get-signed-byte ptr &optional (offset 0)" ""
+          "Like {function %get-unsigned-byte} above, but returns
+          the signed 8-bit byte at the computed address.")
+        (definition (:function %get-unsigned-word)
+                    "%get-unsigned-word ptr &optional (offset 0)" ""
+          "References and returns the unsigned 16-bit word at the effective byte
+          address formed by adding {param offset} to the address encapsulated by
+          {param ptr}.")
+        (definition (:function %get-signed-word)
+                    "%get-signed-word ptr &optional (offset 0)" ""
+          "Like {function %get-unsigned-word} above, but returns
+          the signed 16-bit word at the computed address.")
+        (definition (:function %get-unsigned-long)
+                    "%get-unsigned-long ptr &optional (offset 0)" ""
+          "References and returns the unsigned 32-bit long word at the effective byte
+          address formed by adding {param offset} to the address encapsulated by
+          {param ptr}.")
+        (definition (:function %get-signed-long)
+                    "%get-signed-long ptr &optional (offset 0)" ""
+          "Like {function %get-unsigned-long} above, but returns
+          the signed 32-bit long word at the computed address.")
+        (definition (:function %%get-unsigned-longlong)
+                    "%%get-unsigned-longlong ptr &optional (offset 0)" ""
+          "References and returns the unsigned 64-bit long long word at the effective byte
+          address formed by adding {param offset} to the address encapsulated by
+          {param ptr}.")
+        (definition (:function %%get-signed-longlong)
+                    "%%get-signed-longlong ptr &optional (offset 0)" ""
+          "Like {function %%get-unsigned-longlong} above, but returns
+          the signed 64-bit long long word at the computed address.")
+        (definition (:function %get-ptr)
+                    "%get-ptr ptr &optional (offset 0)" nil
+          "Returns a macptr encapsulating the address found at the effective byte address
+          formed by adding {param offset} to the address represented by {param ptr}.")
+        (definition (:function %get-single-float)
+                    "%get-single-float ptr &optional (offset 0)" nil
+          "Returns the {code single-float} found at the effective byte address
+          formed by adding {param offset} to the address represented by {param ptr}.")
+        (definition (:function %get-double-float)
+                    "%get-double-float ptr &optional (offset 0)" nil
+          "Returns the {code double-float} found at the effective byte address
+          formed by adding {param offset} to the address represented by {param ptr}.")
+
+        "All of the memory reference primitives described above can be used with
+        {code setf}.")
+
+      (definition (:function "%get-bit") "%get-bit ptr bit-offset" nil
+        "References and returns the {param bit-offset}th bit at the address
+        encapsulated by {param ptr}. (Bit 0 at a given address is the most
+        significant bit of the byte at that address.)  Can be used with
+        SETF.")
+     
+      (definition (:function "%get-bitfield") "%get-bitfield ptr bit-offset width" nil
+        "References and returns an unsigned integer composed from the
+        {param width} bits found {param bit-offset} bits from the address encapsulated by
+        {param ptr}. The least significant bit of the result is the value of
+        {code (%get-bit ptr (1- (+ bit-offset width)))}. Can be used with {code setf}.")
+
+      (definition (:function "%int-to-ptr") "%int-to-ptr int" nil
+       "Creates and returns a macptr whose address is {param int}.")
+
+      (definition (:function "%inc-ptr") "%inc-ptr ptr &optional (delta 1)" nil
+        "Creates and returns a macptr whose address is the address of
+        {param ptr} plus {param delta}. The idiom {code (%inc-ptr ptr 0)}
+        is sometimes used to copy a macptr, that is, to create a new macptr
+        encapsulating the same address as {param ptr}.")
+
+      (definition (:function "%ptr-to-int") "%ptr-to-int ptr" nil
+        "Returns the address encapsulated by {param ptr} as an integer.")
+
+      (definition (:macro "%null-ptr") "%null-ptr" nil
+        "Equivalent to {code (%int-to-ptr 0)}.")
+
+      (definition (:function "%null-ptr-p") "%null-ptr-p ptr" nil
+        "This function returns true if {param ptr} is a macptr that encapsulates the
+        address 0.  It returns {code nil} if {param ptr} encapsulates some other address.")
+      
+      (definition (:function %setf-macptr) "%setf-macptr dest-ptr src-ptr" nil
+        "Causes {param dest-ptr} to encapsulate the same address that
+        {param src-ptr} does, then returns the updated {param
+        dest-ptr}.")
+
+      (definition (:macro %incf-ptr) "%incf-ptr ptr &optional (delta 1)" nil
+        "Destructively modifies {param ptr} by adding {param delta} to
+        the address it encapsulates. Returns {param ptr}.")
+
+      (definition (:macro with-macptrs) "with-macptrs (var expr)* &body body" nil
+        "Executes {param body} in an environment in which each {param
+        var} is bound to a stack-allocated macptr which encapsulates
+        the foreign address yielded by the corresponding {param
+        expr}. Returns whatever values body returns.")
+
+      (definition (:macro %stack-block) "%stack-block (var expr)* &body body" nil
+        "Executes {param body} in an environment in which each {param
+        var} is bound to a stack-allocated macptr which encapsulates
+        the address of a stack-allocated region of size {param expr}
+        bytes. Returns whatever value(s) body returns.")
+
+      (definition (:function make-cstring) "make-cstring string" nil
+       "Allocates a block of foreign memory (via {code malloc}) of
+length {code (1+ (length {param string}))}.  It then copies {param
+string} to this block and appends a trailing nul byte.  Returns a
+macptr to the block.")
+
+      (definition (:macro with-encoded-cstrs) "with-encoded-cstrs encoding-name (var string)* &body body" nil
+	"Executes body in an environment in which each {param var} is bound
+        to a macptr which encapsulates the %address of a
+        stack-allocated region of into which each {param string} (and a
+        trailing NUL character) has been copied. Returns whatever
+        value(s) body returns.
+
+        The {param encoding-name} should be a keyword that names a
+        character encoding. Each foreign string is encoded according
+        to the named encoding. Each foreign string has dynamic
+        extent.
+
+        Note that {macro with-encoded-cstrs} does not automatically
+        prepend byte-order marks to the encoded strings;
+        additionally, the size of the terminating {code #\\NUL}
+        character depends on the number of octets per code unit in
+        the encoding.
+
+        The expression "
+	(code-block "(ccl:with-cstrs ((x \"x\")) (#_puts x))")
+	"is functionally equivalent to "
+	(code-block "(ccl:with-encoded-cstrs :iso-8859-1 ((x \"x\")) (#_puts x))"))
+
+      (definition (:macro with-cstrs) "with-cstrs (var string)* &body body" nil
+	"Executes {param body} in an environment in which each {param var}
+         is bound to a macptr which encapsulates the address of a
+         stack-allocated region of memory into which each {param string} (and
+         a trailing NUL character) has been copied. Returns whatever
+         values body returns.
+
+         This macro is hard-coded to use the {code :iso-8859-1} encoding.  The macro
+         {macro with-encoded-cstrs} allows you to specify the encoding.")
+
+
+      (definition (:function %get-cstring) "%get-cstring ptr" nil
+          "This function interprets {param ptr} as a pointer to a (null-terminated) C string,
+           and returns an equivalent lisp string.")
+
+      (definition (:function %str-from-ptr) "%str-from-ptr ptr length" nil
+          "Returns a lisp string of length {param length},
+          whose contents are initialized from the bytes at {param ptr.}")
+
+      (definition (:function get-encoded-string) "get-encoded-string encoding-name ptr len" nil
+	"Creates and returns a lisp string from {param len} octets pointed to by {param ptr}
+          decoded according to {param encoding-name}.")))
+
+  (defsection "The Interface Database"
+    (defsection "Overview"
+      "{CCL} uses a set of database files which contain
+        foreign type, record, constant, and function definitions
+        derived from the operating system's header files, be that
+        Linux or Darwin.  An archive containing these database files
+        (and the shell scripts which were used in their creation) is
+        available; see the Distributions page for information about
+        obtaining current interface database files.
+
+Not surprisingly, different platforms use different database files.
+
+{CCL} defines reader macros that consult these databases:"
+      (listing :bullet
+        (item "#$foo looks up the value of the constant definition of foo")
+        (item "#_foo looks up the foreign function definition for foo"))
+      "In both cases, the symbol foo is interned in the {code OS}
+        package. The #$ reader macro has the side-effect of defining
+        foo as a constant (as if via DEFCONSTANT); the #_ reader macro
+        has the side effect of defining foo as a macro which will
+        expand into an (EXTERNAL-CALL form.)
+
+        It's important to remember that the side-effect happens
+        when the form containing the reader macro is
+        read. Macroexpansion functions that expand into forms which
+        contain instances of those reader macros don't do what one
+        might think that they do, unless the macros are expanded in
+        the same lisp session as the reader macro was read in.
+
+        In addition, references to foreign type,
+        structure/union, and field names (when used in the RREF/PREF
+        and RLET macros) will cause these database files to be
+        consulted.
+
+        Since the {CCL} sources contain instances of these
+        reader macros (and references to foreign record types and
+        fields), compiling {CCL} from those sources depends on the
+        ability to find and use (see {section Building the Heap Image}).")
+
+    (defsection "Other issues:"
+      (listing :bullet
+        (item "{CCL} now preserves the case of external symbols in
+	        its database
+	        files. See {section Case-sensitivity of foreign names in {CCL}} for information about
+	        case in foreign symbol names.")
+        (item "The Linux databases are derived from a somewhat
+	        arbitrary set of Linux header files. Linux is enough of a
+	        moving target that it may be difficult to define a standard,
+	        reference set of interfaces from which to derive a standard,
+	        reference set of database files.This seems to be less of
+	        an issue with Darwin and FreeBSD."))
+      (para "For information about building the database files,
+	    see {section The Interface Translator}.")))
+  (defsection "Using Interface Directories"
+    (defsection "Overview"
+      (para "As distributed, the {code ccl:headers;} (for LinuxPPC)
+        directory is organized like:")
+      (code-block "
+        headers/
+        headers/gl/
+        headers/gl/C/
+        headers/gl/C/populate.sh
+        headers/gl/constants.cdb
+        headers/gl/functions.cdb
+        headers/gl/records.cdb
+        headers/gl/objc-classes.cdb
+        headers/gl/objc-methods.cdb
+        headers/gl/types.cdb
+        headers/gnome/
+        headers/gnome/C/
+        headers/gnome/C/populate.sh
+        headers/gnome/constants.cdb
+        headers/gnome/functions.cdb
+        headers/gnome/records.cdb
+        headers/gnome/objc-classes.cdb
+        headers/gnome/objc-methods.cdb
+        headers/gnome/types.cdb
+        headers/gtk/
+        headers/gtk/C/
+        headers/gtk/C/populate.sh
+        headers/gtk/constants.cdb
+        headers/gtk/functions.cdb
+        headers/gtk/records.cdb
+        headers/gtk/objc-classes.cdb
+        headers/gtk/objc-methods.cdb
+        headers/gtk/types.cdb
+        headers/libc/
+        headers/libc/C/
+        headers/libc/C/populate.sh
+        headers/libc/constants.cdb
+        headers/libc/functions.cdb
+        headers/libc/records.cdb
+        headers/libc/objc-classes.cdb
+        headers/libc/objc-methods.cdb
+        headers/libc/types.cdb
+      ")
+      "e.g, as a set of parallel subdirectories, each with a
+        lowercase name and each of which contains a set of 6 database
+        files and a {code C} subdirectory which contains a shell script
+        used in the database creation process.
+
+        As one might assume, the database files in each of these
+        subdirectories contain foreign type, constant, and function
+        definitions - as well as Objective-C class and method info -that
+        correspond (roughly) to the information contained in the
+        header files associated with a “-dev” package in a Linux
+        distribution.  {code libc} corresponds pretty closely to the
+        interfaces associated with glibc/libc6 header files, {code gl}
+        corresponds to an openGL+GLUT development package, {code gtk}
+        and {code gnome} contain interface information from the GTK+1.2 and
+        GNOME libraries, respectively.
+
+        For Darwin, the {code ccl:darwin-headers;} directory contains
+        a {code libc} subdirectory, whose contents roughly correspond to
+        those of {code /usr/include} under Darwin, as well as
+        subdirectories corresponding to the MacOSX Carbon and Cocoa
+        frameworks.
+
+        To see the precise set of .h files used to generate the
+        database files in a given interface directory, consult the
+        corresponding {code populate.sh} shell script (in the interface
+        directory's {code C} subdirectory.)
+
+        The intent is that this initial set can be augmented to
+        meet local needs, and that this can be done in a fairly
+        incremental fashion: one needn't have unrelated header files
+        installed in order to generate interface databases for a
+        package of interest.
+
+        Hopefully, this scheme will also make it easier to
+        distribute patches and bug fixes.
+
+        {CCL} maintains a list of directories; when looking
+        for a foreign type, constant, function, or record definition,
+        it'll consult the database files in each directory on that
+        list. Initially, the list contains an entry for the {code libc}
+        interface directory. {CCL} needs to be explicitly told to
+        look in other interface directories should it need to do
+        so.")
+
+    (defsection "Creating new interface directories"
+      #:|This example refers to "ccl:headers;", which is
+        appropriate for LinuxPPC. The procedure's analogous under
+        Darwin, where the "ccl:darwin-headers;" directory would be
+        used instead.
+
+        To create a new interface directory, "foo", and a set of
+        database files in that directory:|
+      (listing :number
+        (item #:|Create a subdirectory of "ccl:headers;" named
+	        "foo".|)
+        (item #:|Create a subdirectory of "ccl:headers;foo;" named
+	        "C".|)
+        (item #:|Create a file in "ccl:headers;foo;C;" named
+	        "populate.sh".
+
+One way of accomplishing the above steps is:|
+         (code-block #:|
+            ? (close (open "ccl:headers;foo;C;populate.sh" :direction :output :
+                           if-does-not-exist :create :if-exists :overwrite))
+          |))
+        (item #:|Edit the file created above, using the "populate.sh"
+	        files in the distribution as guidelines.
+
+The file might wind up looking something like:|
+         (code-block "#/bin/sh
+            h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h")))
+      (para "Refer to {section The Interface Translator} for
+        information about running the interface translator and .ffi
+        parser.")
+      (para #:|Assuming that all went well, there should now be .cdb
+        files in "ccl:headers;foo;". You can then do
+        |
+       (code-block "
+          ? (use-interface-dir :foo)
+	    ")
+       " 
+	    whenever you need to
+        access the foreign type information in those database
+        files.")))
+  (defsection "Using Shared Libraries"
+    (defsection "Overview"
+      (para "{CCL} provides facilities to open and close shared
+        libraries.")
+      (para #:|"Opening" a shared library, which is done with | (ref (definition :function open-shared-library))
+       ", maps the library's code and
+        data into {CCL}'s address space and makes its exported
+        symbols accessible to {CCL}.")
+      (para #:|"Closing" a shared library, which is done with | (ref (definition :function close-shared-library))
+       ", unmaps the library's code
+        and and removes the library's symbols from the global
+        namespace.")
+      #:|A small number of shared libraries (including libc,
+        libm, libdl under Linux, and the "system" library under
+        Darwin) are opened by the lisp kernel and can't be
+        closed.
+
+        {CCL} uses data structures of type
+        EXTERNAL-ENTRY-POINT to map a foreign function name (string)
+        to that foreign function's {emphasis current}
+        address. (A function's address may vary from session to
+        session as different versions of shared libraries may load at
+        different addresses; it may vary within a session for similar
+        reasons.)
+
+        An EXTERNAL-ENTRY-POINT whose address is known is said
+        to be {emphasis resolved}. When an external entry
+        point is resolved, the shared library which defines that entry
+        point is noted; when a shared library is closed, the entry
+        points that it defines are made unresolved.  An
+        EXTERNAL-ENTRY-POINT must be in the resolved state in order to
+        be FF-CALLed; calling an unresolved entry point causes a "last
+        chance" attempt to resolve it. Attempting to resolve an
+        entrypoint that was defined in a closed library will cause an
+        attempt to reopen that library.
+
+        {CCL} keeps track of all libraries that have been
+        opened in a lisp session. When a saved application is first
+        started, an attempt is made to reopen all libraries that were
+        open when the image was saved, and an attempt is made to
+        resolve all entry points that had been referenced when the
+        image was saved. Either of these attempts can fail "quietly",
+        leaving some entry points in an unresolved state.
+
+        Linux shared libraries can be referred to either by a
+        string which describes their full pathname or by their
+        {emphasis soname}, a shorter string that can be
+        defined when the library is created. The dynamic linker
+        mechanisms used in Linux make it possible (through a series of
+        filesystem links and other means) to refer to a library via
+        several names; the library's soname is often the most
+        appropriate identifier.
+
+        so names are often less version-specific than other names
+        for libraries; a program that refers to a library by the name
+        "libc.so.6" is more portable than one which refers to
+        "libc-2.1.3.so" or to "libc-2.2.3.so", even though the latter
+        two names might each be platform-specific aliases of the
+        first.
+
+        All of the global symbols described below are exported
+        from the CCL package.|)
+    (defsection "Limitations and known bugs"
+      (listing :bullet
+        (item "Don't get me started.")
+        (item "The underlying functionality has a poor notion of
+	        dependency;it's not always possible to open libraries that
+	        depend on unopened libraries, but it's possible to close
+	        libraries on which other libraries depend. It
+	        {emphasis may} be possible to generate
+	        more explicit dependency information by parsing the output
+	        of the Linux ldd and ldconfig programs.")))
+    (defsection ">Darwin Notes"
+      (para "Darwin shared libraries come in two (basic) flavors:")
+      (listing :bullet
+        (item #:|"dylibs" (which often have the extension".dylib") are
+	        primarily intended to be linked against at compile/link
+	        time. They can be loaded dynamically,{emphasis but can't
+	        be unloaded}. Accordingly,OPEN-SHARED-LIBRARY
+	        can be used to open a .dylib-style library;calling
+	        CLOSE-SHARED-LIBRARY on the result of such a call produces
+	        a warning, and has no other effect. It appears that (due
+	        to an OS bug) attempts to open .dylib shared-libraries
+	        that are already open can cause memory corruption unless
+	        the full pathname of the .dylib file is specified on the
+	        first and all subsequent calls.|)
+        (item #:|"bundles" are intended to serve as application
+	        extensions; they can be opened multiple times (creating
+	        multiple instances of the library!) and closed
+	        properly.|))
+      (para "Thanks to Michael Klingbeil for getting both kinds of
+        Darwin shared libraries working in {CCL}.")))
+  (defsection "The Interface Translator"
+    (defsection "Overview"
+      #:|{CCL} uses an interface translation system based on the FFIGEN
+	    system, which is described at
+	    {link http://www.ccs.neu.edu/home/lth/ffigen/ this page}
+	    The interface translator makes
+	    the constant, type, structure, and function definitions in a set of
+	    C-language header files available to lisp code.
+
+        The basic idea of the FFIGEN scheme is to use the C
+        compiler's frontend and parser to translate .h files into
+        semantically equivalent .ffi files, which represent the
+        definitions from the headers using a syntax based on
+        S-expressions.  Lisp code can then concentrate on the .ffi
+        representation, without having to concern itself with the
+        semantics of header file inclusion or the arcana of C
+        parsing.
+
+        The original FFIGEN system used a modified version of
+        the LCC C compiler to produce .ffi files. Since many OS
+        header files contain GCC-specific constructs, {CCL}'s
+        translation system uses a modified version of GCC (called,
+        somewhat confusingly, ffigen.)
+
+	See {link http://trac.clozure.com/openmcl/wiki/BuildFFIGEN 
+	here} for information on building and installing ffigen.
+	
+
+        A component shell script called h-to-ffi.sh reads a
+        specified .h file (and optional preprocessor arguments) and writes
+         a (hopefully) equivalent .ffi file to standard output, calling 
+        the ffigen program with appropriate  arguments.
+
+        For each interface directory (see FIXTHIS)
+        {emphasis subdir} distributed with {CCL}, a shell
+        script (distributed with {CCL} as
+        "ccl:headers;{emphasis subdir};C;populate.sh"
+        (or some other platform-specific headers directory)
+        calls h-to-ffi.sh on a large number of the header
+        files in /usr/include (or some other {emphasis system header
+          path}) and creates a parallel directory tree in
+        "ccl:headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};"
+        (or
+        "ccl:darwin-headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};", etc.),
+        populating that directory with .ffi files.
+
+        A lisp function defined in "ccl:library;parse-ffi.lisp"
+        reads the .ffi files in a specified interface directory
+        {emphasis subdir} and generates new versions of the
+        databases (files with the extension .cdb).
+
+        The CDB databases are used by the #$ and #_ reader
+        macros and are used in the expansion of RREF, RLET, and
+        related macros.|)
+    (defsection "Details: rebuilding the CDB databases, step by step"
+      (listing :number
+        (item #:|Ensure that the FFIGEN program is installed. See
+	        the"README" file generated during the FFIGEN build process for
+	        specific installation instructions.This example assumes
+	        LinuxPPC; for other platforms, substitute the appropriate
+		headers directory. |)
+        (item #:|Edit the
+	        "ccl:headers;{emphasis subdir};C;populate.sh"shell
+	        script. When you're confident that the files
+	        and preprocessor options match your environment, cd to
+	        the"ccl:headers;{emphasis subdir};C;" directory
+	        and invoke ./populate.sh. Repeat this step until you're
+	        able to cleanly translate all files referenced in the shell
+	        script.|)
+        (item
+         (para "Run {CCL}:
+            "
+          (code-block #:|
+              ? (require "PARSE-FFI")
+              PARSE-FFI
+
+              ? (ccl::parse-standard-ffi-files :SUBDIR)
+              ;;; lots of output ... after a while, shiny new .cdb files should
+              ;;; appear in "ccl:headers;subdir;"
+          |))
+         (para "It may be necessary to call CCL::PARSE-STANDARD-FFI-FILES
+                  twice, to ensure that forward-references are resolved ")))))
+  (defsection "Case-sensitivity of foreign names in {CCL}"
+    (defsection "Overview"
+      "As of release 0.11, {CCL} addresses the fact that
+	    foreign type, constant, record, field, and function nams are
+	    case-sensitive and provides mechanisms to refer to these names
+	    via lisp symbols.
+
+        Previous versions of {CCL} have tried to ignore that
+        fact, under the belief that case conflicts were rare and that
+        many users (and implementors) would prefer not to deal with
+        case-related issues. The fact that some information in the
+        interface databases was incomplete or inaccessible because of
+        this policy made it clearer that the policy was untenable. I
+        can't claim that the approach described here is aesthetically
+        pleasing, but I can honestly say that it's less unpleasant
+        than other approaches that I'd thought of. I'd be interested
+        to hear alternate proposals.
+
+        The issues described here have to do with how lisp
+        symbols are used to denote foreign functions, constants,
+        types, records, and fields. It doesn't affect how other lisp
+        objects are sometimes used to denote foreign objects. For
+        instance, the first argument to the EXTERNAL-CALL macros is
+        now and has always been a case-sensitive string.")
+    (defsection "Foreign constant and function names"
+      #:|The primary way of referring to foreign constant and
+        function names in {CCL} is via the #$ and #_ reader
+        macros. These reader macro functions each read a symbol into
+        the "OS" package, look up its constant or function definition
+        in the interface database, and assign the value of the
+        constant to the symbol or install a macroexpansion function on
+        the symbol.
+
+        In order to observe case-sensitivity, the reader-macros
+        now read the symbol with (READTABLE-CASE :PRESERVE) in
+        effect.
+
+        This means that it's necessary to type the foreign
+        constant or function name in correct case, but it isn't
+        necessary to use any special escaping constructs when writing
+        the variable name. For instance:|
+      (code-block #:|
+        (#_read fd buf n) ; refers to foreign symbol "read"
+        (#_READ fd buf n) ; refers to foreign symbol "READ", which may
+        ; not exist ...
+        #$o_rdonly ; Probably doesn't exist
+        #$O_RDONLY ; Exists on most platforms
+      |))
+    (defsection "Foreign type, record, and field names"
+      #:|Constructs like RLET expect a foreign type or record
+	    name to be denoted by a symbol (typically a keyword); RREF
+	    (and PREF) expect an "accessor" form, typically a keyword
+	    formed by concatenating a foreign type or record name with a
+	    sequence of one or more foreign field names, separated by
+	    dots. These names are interned by the reader as other lisp
+	    symbols are, with an arbitrary value of READTABLE-CASE in
+	    effect (typically :UPCASE.) It seems like it would be very
+	    tedious to force users to manually escape (via vertical bar or
+	    backslash syntax) all lowercase characters in symbols used to
+	    specify foreign type, record, and field names (especially
+	    given that many traditional POSIX structure, type, and field
+	    names are entirely lowercase.)
+
+        The approach taken by {CCL} is to allow the symbols
+        (keywords) used to denote foreign type, record, and field
+        names to contain angle brackets ({code <} and
+        {code >}). Such symbols are translated to
+	    foreign names via the following set of conventions:|
+      (listing :bullet
+        (item "All instances of < and > in the symbol's pname
+	        are balanced and don't nest.")
+        (item "Any alphabetic characters in the symbol's pname
+	        that aren't enclosed in angle brackets are treated as
+	        lower-case,regardless of the value of READTABLE-CASE and
+	        regardless of the case in which they were written.")
+        (item "Alphabetic characters that appear within angle
+	        brackets are mapped to upper-case, again regardless of how
+	        they were written or interned."))
+      #:|There may be many ways of "escaping" (with angle
+	    brackets) sequences of upper-case and non-lower-case
+	    characters in a symbol used to denote a foreign name. When
+	    translating in the other direction, {CCL} always escapes the
+	    longest sequence that starts with an upper-case character and
+	    doesn't contain a lower-case character.
+
+        It's often preferable to use this canonical form of a
+        foreign type name.
+
+        The accessor forms used by PREF/RREF should be viewed as
+        a series of foreign type/record and field names; upper-case
+        sequences in the component names should be escaped with angle
+        brackets, but those sequences shouldn't span components. (More
+        simply, the separating dots shouldn't be enclosed, even if
+        both surrounding characters need to be.)
+
+        Older POSIX code tends to use lower-case exclusively for
+        type, record, and field names; there are only a few cases in
+        the {CCL} sources where mixed-case names need to be
+        escaped.|)
+    (defsection "Examples"
+      (code-block #:|
+        ;;; Allocate a record of type "window".
+        (rlet ((w :window)) ...)
+        ;;; Allocate a record of type "Window", which is probably a
+        ;;;  different type
+        (rlet ((w :<w>indow)) ...)
+        ;;; This is equivalent to the last example
+        (rlet ((w :<w>INDOW)))
+      |)))
+  (defsection "Reading Foreign Names"
+    "{CCL}
+      provides several reader macros to make it more convenient to
+      handle foreign type, function, variable, and constant
+      names. Each of these reader macros reads symbols preserving the
+      case of the source text, and selects an appropriate package in
+      which to intern the resulting symbol. These reader macros are
+      especially useful when your Lisp code interacts extensively with
+      a foreign library-for example, when using Mac OS X's Cocoa
+      frameworks.
+
+      These reader macros include {code #_} to read foreign function
+      names, {code #&} to read foreign variable names, {code #$}
+      to read foreign constant names, {code #/} to
+      read the names of foreign Objective-C methods, and {code #>} to read
+      keywords that can be used as the names of types, records, and
+      accessors.
+
+      All of these reader macros preserve the case of the text
+      that they read; beyond that similarity, each performs some
+      additional work, unique to each reader macro, to create symbols
+      suitable for a particular use. For example, the function,
+      variable, and constant reader macros intern the resulting symbol
+      in the {code os} package of the running platform, but the reader
+      macro for Objective-C method names interns symbols in the
+      {code nextstep-functions} package.
+
+      You are likely to see these reader macros used extensively
+      in Lisp code that works with foreign libraries; for example,
+      {CCL} IDE code, which defines numerous Objective-C classes
+      and methods, uses these reader macros extensively.
+
+      For more detailed descriptions of each of these reader
+      macros, see the Foreign-Function-Interface Dictionary
+      section.")
+
+  (defsection "Tutorial: Using Basic Calls and Types"
+    "This tutorial is meant to cover the basics of {CCL} for
+      calling external C functions and passing data back and forth.
+      These basics will provide the foundation for more advanced
+      techniques which will allow access to the various external
+      libraries and toolkits.
+
+      The first step is to start with a simple C dynamic library
+      in order to actually observe what is actually passing between
+      {CCL} and C.  So, some C code is in order:
+
+      Create the file typetest.c, and put the following code
+      into it:"
+    (code-block #:|
+#include <stdio.h>
+
+void
+void_void_test(void)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+{rbrace}
+
+signed char
+sc_sc_test(signed char data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %d\\n", (signed int)data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+
+unsigned char
+uc_uc_test(unsigned char data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %d\\n", (signed int)data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+    |)
+    "This defines three functions.  If you're familiar with C,
+      notice that there's no {code main()}, because we're
+      just building a library, not an executable.
+
+      The function {code void_void_test()} doesn't
+      take any parameters, and doesn't return anything, but it prints
+      two lines to let us know it was called.
+      {code sc_sc_test()} takes a signed char as a
+      parameter, prints it, and returns it.
+      {code uc_uc_test()} does the same thing, but with an
+      unsigned char.  Their purpose is just to prove to us that we
+      really can call C functions, pass them values, and get values
+      back from them.
+
+      This code is compiled into a dynamic library on OS X
+      10.3.4 with the command:"
+    (code-block "
+
+      gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \\
+      -install_name ./libtypetest.dylib
+    ")
+    (block "Tip"
+      (para #:|Users of 64-bit platforms may need to pass options such
+        as "-m64" to gcc, may need to give the output library a different
+        extension (such as ".so"), and may need to user slightly different
+        values for other options in order to create an equivalent test
+        library.|))
+    #:|The -dynamiclib tells gcc that we will be compiling this
+      into a dynamic library and not an executable binary program.
+      The output filename is "libtypetest.dylib".  Notice that we
+      chose a name which follows the normal OS X convention, being in
+      the form "libXXXXX.dylib", so that other programs can link to
+      the library.  {CCL} doesn't need it to be this way, but it is
+      a good idea to adhere to existing conventions.
+
+      The -install_name flag is primarily used when building OS
+      X "bundles".  In this case, we are not using it, so we put a
+      placeholder into it, "./libtypetest.dylib".  If we wanted to use
+      typetest in a bundle, the -install_name argument would be a
+      relative path from some "current" directory.
+
+      After creating this library, the first step is to tell
+      {CCL} to open the dynamic library.  This is done by calling
+      .|
+    (code-block #:|
+
+      Welcome to {CCL} Version (Beta: Darwin) 0.14.2-040506!
+
+      ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
+      #<SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
+    |)
+    #:|You should use an absolute path here; using a relative
+      one, such as just "libtypetest.dylib", would appear to work, but
+      there are subtle problems which occur after reloading it.  See
+      the Darwin notes on for details.  It would be a bad idea anyway,
+      because software should never rely on its starting directory
+      being anything in particular.
+
+      This command returns a reference to the opened shared library, and
+      {CCL} also adds one to the global variable
+      {code ccl::*shared-libraries*}:|
+    (code-block "
+
+      ? ccl::*shared-libraries*
+      (#<SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
+       #<SHLIB /usr/lib/libSystem.B.dylib #x606179E>)
+    ")
+    (para "Before we call anything, let's check that the individual
+      functions can actually be found by the system.  We don't have to
+      do this, but it helps to know how to find out whether this is
+      the problem, when something goes wrong.  We use "
+     (ref (definition :macro external-call)) ":")
+    (code-block #:|
+
+      ? (external "_void_void_test")
+      #<EXTERNAL-ENTRY-POINT "_void_void_test" (#x000CFDF8) /Users/andewl/openmcl/libtypetest.dylib #x638EDF6>
+
+      ? (external "_sc_sc_test")
+      #<EXTERNAL-ENTRY-POINT "_sc_sc_test" (#x000CFE50) /Users/andewl/openmcl/libtypetest.dylib #x638EB3E>
+
+      ? (external "_uc_uc_test")
+      #<EXTERNAL-ENTRY-POINT "_uc_uc_test" (#x000CFED4) /Users/andewl/openmcl/libtypetest.dylib #x638E626>
+    |)
+    #:|Notice that the actual function names have been "mangled"
+      by the C linker.  The first function was named "void_void_test"
+      in typetest.c, but in libtypetest.dylib, it has an underscore (a
+      "_" symbol) before it: "_void_void_test".  So, this is the name
+      which you have to use.  The mangling - the way the name is
+      changed - may be different for other operating systems or other
+      versions, so you need to "just know" how it's done...
+
+      Also, pay particular attention to the fact that a
+      hexadecimal value appears in the EXTERNAL-ENTRY-POINT.
+      (#x000CFDF8, for example - but what it is doesn't matter.)
+      These hex numbers mean that the function can be dereferenced.
+      Functions which aren't found will not have a hex number.  For
+      example:|
+    (code-block #:|
+
+      ? (external "functiondoesnotexist")
+      #<EXTERNAL-ENTRY-POINT "functiondoesnotexist" {lbrace}unresolved{rbrace}  #x638E3F6>
+    |)
+    #:|The "unresolved" tells us that {CCL} wasn't able to find this
+      function, which means you would get an error, "Can't resolve foreign
+      symbol," if you tried to call it.
+
+      These external function references also are stored in a
+      hash table which is accessible through a global variable,
+      {code ccl::*eeps*}.
+
+      At this point, we are ready to try our first external
+      function call:|
+    (code-block #:|
+
+      ? (external-call "_void_void_test" :void)
+      Entered void_void_test:
+      Exited  void_void_test:
+      NIL
+    |)
+    #:|We used , which is is the normal mechanism for accessing
+      externally linked code.  The "_void_void_test" is the mangled
+      name of the external function.  The :void refers to the return
+      type of the function.
+
+      The next step is to try passing a value to C, and getting one
+      back:|
+    (code-block #:|
+
+      ? (external-call "_sc_sc_test" :signed-byte -128 :signed-byte)
+      Entered sc_sc_test:
+      Data In: -128
+      Exited  sc_sc_test:
+      -128
+    |)
+    "The first :signed-byte gives the type of the first
+      argument, and then -128 gives the value to pass for it.  The
+      second :signed-byte gives the return type.  The return type is
+      always given by the last argument to .
+
+      Everything looks good.  Now, let's try a number outside
+      the range which fits in one byte:"
+    (code-block #:|
+
+      ? (external-call "_sc_sc_test" :signed-byte -567 :signed-byte)
+      Entered sc_sc_test:
+      Data In: -55
+      Exited  sc_sc_test:
+      -55
+    |)
+    (para "Hmmmm.  A little odd.  Let's look at the unsigned stuff to
+      see how it reacts:")
+    (code-block #:|
+
+      ? (external-call "_uc_uc_test" :unsigned-byte 255 :unsigned-byte)
+      Entered uc_uc_test:
+      Data In: 255
+      Exited  uc_uc_test:
+      255
+    |)
+    (para "That looks okay.  Now, let's go outside the valid range again:")
+    (code-block #:|
+
+      ? (external-call "_uc_uc_test" :unsigned-byte 567 :unsigned-byte)
+      Entered uc_uc_test:
+      Data In: 55
+      Exited  uc_uc_test:
+      55
+
+      ? (external-call "_uc_uc_test" :unsigned-byte -567 :unsigned-byte)
+      Entered uc_uc_test:
+      Data In: 201
+      Exited  uc_uc_test:
+      201
+    |)
+    #:|Since a signed byte can only hold values from -128 through 127, and
+      an unsigned one can only hold values from 0 through 255, any number
+      outside that range gets "clipped": only the low eight bits of it
+      are used.
+
+        What is important to remember is that {emphasis external
+        function calls have
+        very few safety checks.}
+      Data outside the valid range for its type will silently do
+      very strange things; pointers outside the valid range can very well
+      crash the system.
+
+      That's it for our first example library.  If you're still
+      following along, let's add some more C code to look at the rest
+      of the primitive types.  Then we'll need to recompile the
+      dynamic library, load it again, and then we can see what
+      happens.
+
+Add the following code to typetest.c:|
+    (code-block #:|
+int
+si_si_test(int data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %d\\n", data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+
+long
+sl_sl_test(long data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %ld\\n", data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+
+long long
+sll_sll_test(long long data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %lld\\n", data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+
+float
+f_f_test(float data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %e\\n", data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+
+double
+d_d_test(double data)
+{lbrace}
+    printf("Entered %s:\\n", __FUNCTION__);
+    printf("Data In: %e\\n", data);
+    printf("Exited  %s:\\n", __FUNCTION__);
+    fflush(stdout);
+    return data;
+{rbrace}
+    |)
+    (para "The command line to compile the dynamic library is the same as before:")
+    (code-block "
+
+      gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \\
+      -install_name ./libtypetest.dylib
+    ")
+    "Now, restart {CCL}.  This step is required because
+      {CCL} cannot close and reload a dynamic library on OS
+      X.
+
+Have you restarted?  Okay, try out the new code:"
+    (code-block #:|
+
+      Welcome to {CCL} Version (Beta: Darwin) 0.14.2-040506!
+
+      ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
+      #<SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
+
+      ? (external-call "_si_si_test" :signed-fullword -178965 :signed-fullword)
+      Entered si_si_test:
+      Data In: -178965
+      Exited  si_si_test:
+      -178965
+
+      ? ;; long is the same size as int on 32-bit machines.
+      (external-call "_sl_sl_test" :signed-fullword -178965 :signed-fullword)
+      Entered sl_sl_test:
+      Data In: -178965
+      Exited  sl_sl_test:
+      -178965
+
+      ? (external-call "_sll_sll_test"
+      :signed-doubleword -973891578912 :signed-doubleword)
+      Entered sll_sll_test:
+      Data In: -973891578912
+      Exited  sll_sll_test:
+      -973891578912
+    |)
+    (para "Okay, everything seems to be acting as expected.  However,
+      just to remind you that most of this stuff has no safety net,
+      here's what happens if somebody mistakes
+      {code sl_sl_test()} for
+      {code sll_sll_test()}, thinking that a long is
+      actually a doubleword:")
+    (code-block #:|
+
+      ? (external-call "_sl_sl_test"
+      :signed-doubleword -973891578912 :signed-doubleword)
+      Entered sl_sl_test:
+      Data In: -227
+      Exited  sl_sl_test:
+      -974957576192
+    |)
+    "Ouch.  The C function changes the value with no warning
+      that something is wrong.  Even worse, it manages to pass the
+      original value back to {CCL}, which hides the fact that
+      something is wrong.
+
+      Finally, let's take a look at doing this with
+      floating-point numbers."
+    (code-block #:|
+
+      Welcome to {CCL} Version (Beta: Darwin) 0.14.2-040506!
+
+      ? (open-shared-library "/Users/andewl/openmcl/libtypetest.dylib")
+      #<SHLIB /Users/andewl/openmcl/libtypetest.dylib #x638EF3E>
+
+      ? (external-call "_f_f_test" :single-float -1.256791e+11 :single-float)
+      Entered f_f_test:
+      Data In: -1.256791e+11
+      Exited  f_f_test:
+      -1.256791E+11
+
+      ? (external-call "_d_d_test" :double-float -1.256791d+290 :double-float)
+      Entered d_d_test:
+      Data In: -1.256791e+290
+      Exited  d_d_test:
+      -1.256791D+290
+    |)
+    #:|Notice that the number ends with "...e+11" for the single-float,
+      and "...d+290" for the
+      double-float.  Lisp has both of these float types itself, and the
+      d instead of the e is how you specify which to create.  If
+      you tried to pass :double-float 1.0e2 to external-call, Lisp would
+      be nice enough to notice and give you a type error.  Don't get the
+      :double-float wrong, though, because then there's no protection.
+
+      Congratulations!  You now know how to call external C functions from
+      within {CCL}, and pass numbers back and forth.  Now that the basic
+      mechanics of calling and passing work, the next step is to examine how
+      to pass more complex data structures around.|
+    (defsection "Acknowledgement"
+      (para "This chapter was generously contributed by Andrew
+	    P. Lentvorski Jr.")))
+  (defsection "Tutorial: Allocating Foreign Data on the Lisp Heap "
+    #:|Not every foreign function is so marvelously easy to use
+      as the ones we saw in the last section.  Some functions require
+      you to allocate a C struct, fill it with your own
+      information, and pass in a pointer to that struct.  Some of them
+      require you to allocate an empty struct that they will fill in
+      so that you can read the information out of it.
+
+    There are generally two ways to allocate foreign data.  The
+    first way is to allocate it on the stack; the RLET macro is one way to do this.
+    This is analogous to using automatic variables in C.  In the
+    jargon of Common Lisp, data allocated this way is said to have
+    dynamic extent.
+
+    The other way to heap-allocate the foreign data.  This is
+    analogous to calling malloc in C.  Again in the jargon of Common
+    Lisp, heap-allocated data is said to have indefinite extent. If a
+    function heap-allocates some data, that data remains valid even
+    after the function itself exits.  This is useful for data which
+    may need to be passed between multiple C calls or multiple
+    threads. Also, some data may be too large to copy multiple times
+    or may be too large to allocate on the stack.
+
+      The big disadvantage to allocating data on the heap is
+      that it must be explicitly deallocated-you need to "free" it
+      when you're done with it.  Normal Lisp objects, even those with indefinite
+      extent, are deallocated by the garbage collector when it can prove
+      that they're no longer referenced.  Foreign data, though, is outside the
+      GC's ken:  it has no way to know whether a blob of foreign data is still
+      referenced by foreign code or not. It is thus up to the programmer
+      to manage it manually, just as one
+      does in C with malloc and free.
+    
+
+      What that means is that, if you allocate something and
+      then lose track of the pointer to it, there's no way to ever
+      free that memory.  That's what's called a memory leak, and if
+      your program leaks enough memory it will eventually use up all
+      of it!  So, you need to be careful to not lose your
+      pointers.
+
+      That disadvantage, though, is also an advantage for using
+      foreign functions.  Since the garbage collector doesn't know
+      about this memory, it will never move it around.  External C
+      code needs this, because it doesn't know how to follow it to
+      where it moved, the way that Lisp code does.  If you allocate
+      data manually, you can pass it to foreign code and know that no
+      matter what that code needs to do with it, it will be able to,
+      until you deallocate it.  Of course, you'd better be sure it's
+      done before you do.  Otherwise, your program will be unstable
+      and might crash sometime in the future, and you'll have trouble
+      figuring out what caused the trouble, because there won't be
+      anything pointing back and saying "you deallocated this too
+      soon."
+
+And, so, on to the code...
+
+      As in the last tutorial, our first step
+      is to create a local dynamic library in order to help show
+      what is actually going on between {CCL} and C.  So, create the file
+      ptrtest.c, with the following code:|
+    (code-block "
+#include <stdio.h>
+
+void reverse_int_array(int * data, unsigned int dataobjs)
+{lbrace}
+    int i, t;
+    
+    for(i=0; i<dataobjs/2; i++)
+        {lbrace}
+            t = *(data+i);
+            *(data+i) = *(data+dataobjs-1-i);
+            *(data+dataobjs-1-i) = t;
+        {rbrace}
+{rbrace}
+
+void reverse_int_ptr_array(int **ptrs, unsigned int ptrobjs)
+{lbrace}
+    int *t;
+    int i;
+    
+    for(i=0; i<ptrobjs/2; i++)
+        {lbrace}
+            t = *(ptrs+i);
+            *(ptrs+i) = *(ptrs+ptrobjs-1-i);
+            *(ptrs+ptrobjs-1-i) = t;
+        {rbrace}
+{rbrace}
+
+void
+reverse_int_ptr_ptrtest(int **ptrs)
+{lbrace}
+    reverse_int_ptr_array(ptrs, 2);
+    
+    reverse_int_array(*(ptrs+0), 4);
+    reverse_int_array(*(ptrs+1), 4);
+{rbrace}
+    ")
+    "This defines three functions.
+      {code reverse_int_array} takes a pointer to an array
+      of {code int}s, and a count telling how many items
+      are in the array, and loops through it putting the elements in
+      reverse.  {code reverse_int_ptr_array} does the same
+      thing, but with an array of pointers to {code int}s.
+      It only reverses the order the pointers are in; each pointer
+      still points to the same thing.
+      {code reverse_int_ptr_ptrtest} takes an array of
+      pointers to arrays of {code int}s.  (With me?)  It
+      doesn't need to be told their sizes; it just assumes that the
+      array of pointers has two items, and that both of those are
+      arrays which have four items.  It reverses the array of
+      pointers, then it reverses each of the two arrays of
+      {code int}s.
+
+      Now, compile ptrtest.c into a dynamic library using the
+      command:"
+    (code-block "
+      gcc -dynamiclib -Wall -o libptrtest.dylib ptrtest.c -install_name ./libptrtest.dylib
+    ")
+    (para "The function {code make-heap-ivector} is the
+      primary tool for allocating objects in heap memory.  It
+      allocates a fixed-size {CCL} object in heap memory.  It
+      returns both an array reference, which can be used directly from
+      {CCL}, and a {code macptr}, which can be used to
+      access the underlying memory directly.  For example:")
+    (code-block "
+      ? ;; Create an array of 3 4-byte-long integers
+      (multiple-value-bind (la lap)
+          (make-heap-ivector 3 '(unsigned-byte 32))
+        (setq a la)
+        (setq ap lap))
+      ;Compiler warnings :
+      ;   Undeclared free variable A, in an anonymous lambda form.
+      ;   Undeclared free variable AP, in an anonymous lambda form.
+      #<A Mac Pointer #x10217C>
+
+      ? a
+      #(1396 2578 97862649)
+
+      ? ap
+      #<A Mac Pointer #x10217C>
+    ")
+    "It's important to realize that the contents of the
+      {code ivector} we've just created haven't been
+      initialized, so their values are unpredictable, and you should
+      be sure not to read from them before you set them, to avoid
+      confusing results.
+
+      At this point, {code a} references an object
+      which works just like a normal array.  You can refer to any item
+      of it with the standard {code aref} function, and
+      set them by combining that with {code setf}.  As
+      noted above, the {code ivector}'s contents haven't
+      been initialized, so that's the next order of business:"
+    (code-block "
+      ? a
+      #(1396 2578 97862649)
+
+      ? (aref a 2)
+      97862649
+
+      ? (setf (aref a 0) 3)
+      3
+
+      ? (setf (aref a 1) 4)
+      4
+
+      ? (setf (aref a 2) 5)
+      5
+
+      ? a
+      #(3 4 5)
+    ")
+    (para "In addition, the {code macptr} allows direct
+      access to the same memory:")
+    (code-block "
+      ? (setq *byte-length-of-long* 4)
+      4
+
+      ? (%get-signed-long ap (* 2 *byte-length-of-long*))
+      5
+
+      ? (%get-signed-long ap (* 0 *byte-length-of-long*))
+      3
+
+      ? (setf (%get-signed-long ap (* 0 *byte-length-of-long*)) 6)
+      6
+
+      ? (setf (%get-signed-long ap (* 2 *byte-length-of-long*)) 7)
+      7
+
+      ? ;; Show that a actually got changed through ap
+      a
+      #(6 4 7)
+    ")
+    (para "So far, there is nothing about this object that could not
+      be done much better with standard Lisp.  However, the
+      {code macptr} can be used to pass this chunk of
+      memory off to a C function.  Let's use the C code to reverse the
+      elements in the array:")
+    (code-block #:|
+      ? ;; Insert the full path to your copy of libptrtest.dylib
+      (open-shared-library "/Users/andrewl/openmcl/openmcl/gtk/libptrtest.dylib")
+      #<SHLIB /Users/andrewl/openmcl/openmcl/gtk/libptrtest.dylib #x639D1E6>
+
+      ? a
+      #(6 4 7)
+
+      ? ap
+      #<A Mac Pointer #x10217C>
+
+      ? (external-call "_reverse_int_array" :address ap :unsigned-int (length a) :address)
+      #<A Mac Pointer #x10217C>
+
+      ? a
+      #(7 4 6)
+
+      ? ap
+      #<A Mac Pointer #x10217C>
+    |)
+    "The array gets passed correctly to the C function,
+      {code reverse_int_array}.  The C function reverses
+      the contents of the array in-place; that is, it doesn't make a
+      new array, just keeps the same one and reverses what's in it.
+      Finally, the C function passes control back to {CCL}.  Since
+      the allocated array memory has been directly modified, {CCL}
+      reflects those changes directly in the array as well.
+
+      There is one final bit of housekeeping to deal with.
+      Before moving on, the memory needs to be deallocated:"
+    (code-block "
+      ? (dispose-heap-ivector a ap)
+      NIL
+    ")
+    #:|The {code dispose-heap-ivector} macro actually
+      deallocates the ivector, releasing its memory into the heap for
+      something else to use.  Both {code a} and {code ap}
+      now have undefined values.
+      
+
+      When do you call {code dispose-heap-ivector}?
+      Anytime after you know the ivector will never be used again, but
+      no sooner.  If you have a lot of ivectors, say, in a hash table,
+      you need to make sure that when whatever you were doing with the
+      hash table is done, those ivectors all get freed.  Unless
+      there's still something somewhere else which refers to them, of
+      course!  Exactly what strategy to take depends on the situation,
+      so just try to keep things simple unless you know better.
+
+      The simplest situation is when you have things set up so
+      that a Lisp object "encapsulates" a pointer to foreign data,
+      taking care of all the details of using it.  In this case, you
+      don't want those two things to have different lifetimes: You
+      want to make sure your Lisp object exists as long as the foreign
+      data does, and no longer; and you want to make sure the foreign
+      data doesn't get deallocated while your Lisp object still refers
+      to it.
+
+      If you're willing to accept a few limitations, you can
+      make this easy.  First, you can't let foreign code keep a
+      permanent pointer to the memory; it has to always finish what
+      it's doing, then return, and not refer to that memory again.
+      Second, you can't let any Lisp code that isn't part of your
+      encapsulating "wrapper" refer to the pointer directly.  Third,
+      nothing, either foreign code or Lisp code, should explicitly
+      deallocate the memory.
+
+      If you can make sure all of these are true, you can at
+      least ensure that the foreign pointer is deallocated when the
+      encapsulating object is about to become garbage, by using
+      {CCL}'s nonstandard "termination" mechanism, which is
+      essentially the same as what Java and other languages call
+      "finalization".
+
+      Termination is a way of asking the garbage collector to
+      let you know when it's about to destroy an object which isn't
+      used anymore.  Before destroying the object, it calls a function
+      which you write, called a terminator.
+
+      So, you can use termination to find out when a particular
+      {code macptr} is about to become garbage.  That's
+      not quite as helpful as it might seem: It's not exactly the same
+      thing as knowing that the block of memory it points to is
+      unreferenced.  For example, there could be another
+      {code macptr} somewhere to the same block; or, if
+      it's a struct, there could be a {code macptr} to one
+      of its fields.  Most problematically, if the address of that
+      memory has been passed to foreign code, it's sometimes hard to
+      know whether that code has kept the pointer.  Most foreign
+      functions don't, but it's not hard to think of
+      exceptions.
+
+You can use code such as this to make all this happen:|
+    (code-block "
+      (defclass wrapper (whatever)
+        ((element-type :initarg :element-type)
+         (element-count :initarg :element-count)
+         (ivector)
+         (macptr)))
+
+      (defmethod initialize-instance ((wrapper wrapper) {code &rest} initargs)
+        (declare (ignore initargs))
+        (call-next-method)
+        (ccl:terminate-when-unreachable wrapper)
+        (with-slots (ivector macptr element-type element-count) wrapper
+          (multiple-value-bind (new-ivector new-macptr)
+              (make-heap-ivector element-count element-type)
+            (setq ivector new-ivector
+                  macptr new-macptr))))
+
+      (defmethod ccl:terminate ((wrapper wrapper))
+        (with-slots (ivector macptr) wrapper
+          (when ivector
+            (dispose-heap-ivector ivector macptr)
+            (setq ivector nil
+                  macptr nil))))
+    ")
+    "The {code ccl:terminate} method will be called
+      on some arbitrary thread sometime (hopefully soon) after the GC
+      has decided that there are no strong references to an object
+      which has been the argument of a
+      {code ccl:terminate-when-unreachable} call.
+
+      If it makes sense to say that the foreign object should
+      live as long as there's Lisp code that references it (through
+      the encapsulating object) and no longer, this is one way of doing
+      that.
+
+      Now we've covered passing basic types back and forth with
+      C, and we've done the same with pointers.  You may think this is
+      all...  but we've only done pointers to basic types.  Join us
+      next time for pointers... to pointers."
+    (defsection "Acknowledgement"
+      (para "Much of this chapter was generously contributed by
+	    Andrew P. Lentvorski Jr.")))
+
+  (defsection "The Foreign-Function-Interface Dictionary"
+    (definition (:reader-macro "#_") "#_" nil
+     (defsection "Description"
+       (para #:|Reads a symbol from the current input stream, with *PACKAGE*
+	      bound to the "OS" package and with readtable-case preserved.|)
+       (para "Does a lookup on that symbol in " (ref (section "The Interface Database") "the {CCL} interface database")
+        ", signalling an error if no foreign function
+	      information can be found for the symbol in any active "
+        (ref (section "Using Interface Directories") "interface directory") ".")
+       #:|Notes the foreign function information, including the foreign
+	      function's return type, the number and type of the foreign
+	      function's required arguments, and an indication of whether or
+	      not the function accepts additional arguments (via e.g., the
+	      "varargs" mechanism in C).
+
+	      Defines a macroexpansion function on the symbol, which expand
+	      macro calls involving the symbol into EXTERNAL-CALL forms where
+	      foreign argument type specifiers for required arguments and the
+	      return value specifer are provided from the information in the
+	      database.
+
+Returns the symbol.
+
+	      The effect of these steps is that it's possible to call
+	      foreign functions that take fixed numbers of arguments by simply
+	      providing argument values, as in:|
+       (code-block "(#_isatty fd)
+          (#_read fd buf n)")
+       (para "and to call foreign functions that take variable numbers of
+	      arguments by specifying the types of non-required args, as in:")
+       (code-block #:|(with-cstrs ((format-string "the answer is: %d"))
+          (#_printf format-string :int answer))|)
+       (para "You can query whether a given name is defined in the
+          interface databases by appending the '?' character to the reader
+          macro; for example:")
+       (code-block "
+          CL-USER> #_?printf
+          T
+          CL-USER> #_?foo
+          NIL
+        ")))
+    (definition (:reader-macro "#&") "#&" nil
+     (defsection "Description"
+       #:|In {CCL} 1.2 and later, the #& reader macro can be used to
+	      access foreign variables; this functionality depends on the presence of
+	      "vars.cdb" files in the interface database. The current behavior
+	      of the #& reader macro is to:
+
+	      Read a symbol from the current input stream, with *PACKAGE*
+	      bound to the "OS" package and with readtable-case preserved.
+
+	      Use that symbol's pname to access the {CCL} interface
+	      database, signalling an error if no appropriate foreign variable
+	      information can be found with that name in any active interface
+	      directory.
+
+	      Use type information recorded in the database to construct a
+	      form which can be used to access the foreign variable, and return
+	      that form.
+
+	      Please note that the set of foreign variables declared in header files
+	      may or may not match the set of foreign variables exported from
+	      libraries (we're generally talking about C and Unix here ...). When
+	      they do match, the form constructed by the #& reader macro manages the
+	      details of resolving and tracking changes to the foreign variable's
+	      address.
+
+	      Future extensions (via prefix arguments to the reader macro) may
+	      offer additional behavior; it might be convenient (for instance) to be
+	      able to access the address of a foreign variable without dereferencing
+	      that address.
+
+	      Foreign variables in C code tend to be platform- and
+	      package-specific (the canonical example - "errno" - is typically
+	      not a variable when threads are involved. )
+
+In LinuxPPC, |
+       (code-block "? #&stderr")
+       #:|returns a pointer to the stdio error stream ("stderr" is a
+	      macro under OSX/Darwin).
+
+On both LinuxPPC and DarwinPPC, |
+       (code-block "? #&sys_errlist")
+       "returns a pointer to a C array of C error message strings.
+
+          You can query whether a given name is defined in the
+          interface databases by appending the '?' character to the reader
+          macro; for example:"
+       (code-block "
+          CL-USER> #&?sys_errlist
+          T
+          CL-USER> #&?foo
+          NIL
+        ")))
+    (definition (:reader-macro "#$") "#$" nil
+     (defsection "Description"
+       #:|In {CCL} 0.14.2 and later, the #? reader macro can be used
+	      to access foreign constants; this functionality depends on the
+	      presence of "constants.cdb" files in the interface
+	      database. The current behavior of the #$ reader macro is
+	      to:
+
+	      Read a symbol from the current input stream, with
+	      *PACKAGE* bound to the "OS" package and with
+	      readtable-case preserved.
+
+	      Use that symbol's pname to access the {CCL} interface
+	      database, signalling an error if no appropriate foreign constant
+	      information can be found with that name in any active interface
+	      directory.
+
+	      Use type information recorded in the database to construct a
+	      form which can be used to access the foreign constant, and return
+	      that form.
+
+	      Please note that the set of foreign constants declared in
+	      header files may or may not match the set of foreign constants
+	      exported from libraries. When they do match, the form
+	      constructed by the #$ reader macro manages the details of
+	      resolving and tracking changes to the foreign constant's
+	      address.
+
+          You can query whether a given name is defined in the
+          interface databases by appending the '?' character to the reader
+          macro; for example:|
+       (code-block "
+          CL-USER> #$?SO_KEEPALIVE
+          T
+          CL-USER> #$?foo
+          NIL
+        ")))
+    (definition (:reader-macro "#/") "#/" nil
+     (defsection "Description"
+       #:|In {CCL} 1.2 and later, the #/ reader macro can be used to
+	      access foreign functions on the Darwin platform. The current
+	      behavior of the #/ reader macro is to:
+
+	      Read a symbol from the current input stream, with
+	      *PACKAGE* bound to the "NEXTSTEP-FUNCTIONS" package, with
+	      readtable-case preserved, and with any colons included.
+
+          Do limited sanity-checking on the resulting symbol; for
+          example, any name that contains at least one colon is required
+          also to end with a colon, to conform to Objective-C
+          method-naming conventions.
+
+          Export the resulting symbol from the "NEXTSTEP-FUNCTIONS"
+          package and return it.
+
+          For example, reading "#/alloc" interns and returns
+          NEXTSTEP-FUNCTIONS:\|alloc\|. Reading "#/initWithFrame:" interns
+          and returns NEXTSTEP-FUNCTIONS:\|initWithFrame:\|.
+
+          A symbol read using this macro can be used as an operand
+          in most places where an Objective-C message name can be used, such as
+          in the (OBJ:@SELECTOR ...) construct.
+
+          Please note: the reader macro is not rigorous about
+          enforcing Objective-C method-naming conventions. Despite the
+          simple checking done by the reader macro, it may still be
+          possible to use it to construct invalid names.
+
+          The act of interning a new symbol in the
+          NEXTSTEP-FUNCTIONS package triggers an interface database lookup
+          of Objective-C methods with the corresponding message name.  If any
+          such information is found, a special type of dispatching
+          function is created and initialized and the new symbol is given
+          the newly-created dispatching function as its function
+          definition.
+
+          The dispatching knows how to call declared Objective-C methods
+          defined on the message. In many cases, all methods have the same
+          foreign type signature, and the dispatching function merely
+          passes any arguments that it receives to a function that does an
+          Objective-C message send with the indicated foreign argument and return
+          types. In other cases, where different Objective-C messages have
+          different type signatures, the dispatching function tries to
+          choose a function that handles the right type signature based on
+          the class of the dispatching function's first argument.
+
+          If new information about Objective-C methods is introduced
+          (e.g., by using additional interface files or as Objective-C
+          methods are defined from lisp), the dispatch function is
+          reinitialized to recognize newly-introduced foreign type
+          signatures.
+
+          The argument and result coercion that the bridge has
+          traditionally supported is supported by the new mechanism (e.g.,
+          :<BOOL> arguments can be specified as lisp booleans and :<BOOL>
+          results are returned as lisp boolean values, and an argument
+          value of NIL is coerced to a null pointer if the corresponding
+          argument type is :ID.
+
+          Some Objective-C methods accept variable numbers of
+          arguments; the foreign types of non-required arguments are
+          determined by the lisp types of those arguments (e.g., integers
+          are passed as integers, floats as floats, pointers as pointers,
+          record types by reference.)
+
+Examples:|
+       (code-block #:|
+          ;;; #/alloc is a known message.
+          ? #'#/alloc
+          #<OBJC-DISPATCH-FUNCTION NEXTSTEP-FUNCTIONS:\|alloc\| #x300040E94EBF>
+          ;;; Sadly, #/foo is not ...
+          ? #'#/foo
+          > Error: Undefined function: NEXTSTEP-FUNCTIONS:\|foo\|
+
+          ;;; We can send an "init" message to a newly-allocated instance of
+          ;;; "NSObject" by:
+
+          (send (send ns:ns-object 'alloc) 'init)
+
+          ;;; or by
+
+          (#/init (#/alloc ns:ns-object))
+        |)
+       (para #:|Objective-C methods that "return" structures return them
+          as garbage-collectable pointers when called via dispatch
+          functions.  For example, if "my-window" is an NS:NS-WINDOW
+          instance, then|)
+       (code-block "
+          (#/frame my-window)
+        ")
+       (para "returns a garbage-collectable pointer to a structure that
+          describes that window's frame rectangle. This convention means
+          that there's no need to use SLET or special structure-returning
+          message send syntax; keep in mind, though, that #_malloc,
+          #_free, and the GC are all involved in the creation and eventual
+          destruction of structure-typed return values. In some programs
+          these operations may have an impact on performance.")))
+
+    (definition (:reader-macro "#>") "#>" nil
+     (defsection "Description"
+       (para "In {CCL} 1.2 and later, the #> reader macro reads
+          the following text as a keyword, preserving the case of the
+          text. For example:")
+       (code-block "
+          CL-USER> #>FooBar
+          :<F>OO<B>AR
+        ")
+       (para "The resulting keyword can be used as the name of foreign
+          types, records, and accessors.")))
+    (definition (:function close-shared-library) "close-shared-library library {code &key} completely"
+     "Stops using a shared library, informing the operating
+	      system that it can be unloaded if appropriate."
+     (defsection "Values"
+       (listing :definition
+         (item "{param library}" ccldoc::=> "either an object of type SHLIB, or a string which
+		        designates one by its so-name.")
+         (item "{param completely}" ccldoc::=> "a boolean.  The default is T.")))
+     (defsection "Description"
+       (para "If {param completely} is T, sets the
+	      reference count of {param library} to 0.  Otherwise,
+	      decrements it by 1.  In either case, if the reference count
+	      becomes 0, {function close-shared-library}
+	      frees all memory resources consumed {param library}
+	      and
+	      causes any EXTERNAL-ENTRY-POINTs known to be defined by it to
+	      become unresolved.")))
+
+    (definition (:macro defcallback)
+     "defcallback name ({lbrace}arg-type-specifier var{rbrace}* {code &optional} result-type-specifier) {code &body} body"
+     nil
+      (para "Proclaims {param name}
+	      to be a special variable; sets its value to a
+	      MACPTR which, when called by foreign code, calls a lisp function
+	      which expects foreign arguments of the specified types and which
+	      returns a foreign value of the specified result type. Any argument
+	      variables which correspond to foreign arguments of type :ADDRESS
+	      are bound to stack-allocated MACPTRs.
+
+	      If {param name}
+	      is already a callback function pointer, its value is
+	      not changed; instead, it's arranged
+	      that an
+	      updated version of the lisp callback function will be called.
+	      This feature allows for callback functions to be redefined
+	      incrementally, just like Lisp functions are.
+
+	      {function defcallback}
+	      returns the callback pointer, e.g., the
+	      value of {param name}.")
+     (defsection "Values"
+       (listing :definition
+         (item "{param name}" ccldoc::=> "A symbol which can be made into a special variable")
+         (item "{param arg-type-specifer}" ccldoc::=> "One of the foreign argument-type keywords,
+		        described above, or an equivalent "
+          (ref (section "Specifying And Using Foreign Types") "foreign type specifier") ".  In addition, if the keyword
+		        :WITHOUT-INTERRUPTS is specified, the callback will be
+		        executed with lisp interrupts disabled if the
+		        corresponding var is non-NIL. If :WITHOUT-INTERRUPTS
+		        is specified more than once, the rightmost instance
+		        wins.")
+         (item "{param var}" ccldoc::=> "A symbol (lisp variable), which will be bound to a
+		        value of the specified type.")
+         (item "{param body}" ccldoc::=> "A sequence of lisp forms, which should return a value
+		        which can be coerced to the specified result-type."))))
+
+    (definition (:macro def-foreign-type) "def-foreign-type name foreign-type-spec" nil
+      "If name is non-{code nil}, defines {param name} to be an alias
+       for the foreign type specified by {param foreign-type-spec}. If
+       {param foreign-type-spec} is a named structure or union type,
+       additionally defines that structure or union type.
+
+       If name is {code nil}, {param foreign-type-spec} must be a
+       named foreign struct or union definition, in which case the
+       foreign structure or union definition is put in effect.
+
+       Note that there are two separate namespaces for foreign type
+       names: one for the names of ordinary types and one for the
+       names of structs and unions.  Which one {param name} refers to
+       depends on {param foreign-type-spec} in the obvious manner."
+     (defsection "Values"
+       (listing :definition
+         (item "{param name}" ccldoc::=> "NIL or a keyword; the keyword may contain
+		        "
+          (ref (section "Case-sensitivity of foreign names in {CCL}") "escaping constructs") ".")
+         (item "{param foreign-type-spec}" ccldoc::=> "A foreign type specifier, whose syntax is (loosely)
+		        defined above."))))
+
+    (definition (:macro external) "external name" "Resolves a reference to an external symbol which
+	      is defined in a shared library."
+     (defsection "Values"
+       (listing :definition
+         (item "{param name}" ccldoc::=> "
+		        a simple-string which names an external symbol.
+		        Case-sensitive.
+		      ")
+         (item "{param entry}" ccldoc::=> "
+		        an object of type EXTERNAL-ENTRY-POINT which maintains
+		        the address of the foreign symbol named by
+		        {param name}.
+		      ")))
+     (defsection "Description"
+       #:|If there is already an EXTERNAL-ENTRY-POINT for
+	      the symbol named by {param name}, finds it and
+	      returns it.  If not, creates one and returns it.
+
+	      Tries to resolve the entry point to a memory address,
+	      and identify the containing library.
+
+	      Be aware that under Darwin, external functions which
+	      are callable from C have underscores prepended to their names,
+	      as in "_fopen".|))
+
+    (definition (:macro external-call)
+     "external-call name {lbrace}arg-type-specifier arg{rbrace}* {code &optional} result-type-specifier" nil
+      (para "Calls the foreign function at the address obtained by
+	      resolving the external-entry-point associated with name, passing
+	      the values of each arg as a foreign argument of type indicated by
+	      the corresponding arg-type-specifier. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-specifier), or NIL if result-type-specifer is :VOID or
+	      NIL")
+     (defsection "Values"
+       (listing :definition
+         (item "{param name}" ccldoc::=> "A lisp string. See external, above.")
+         (item "{param arg-type-specifer}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above, or an equivalent "
+          (ref (section "Specifying And Using Foreign Types") "foreign type specifier") ".")
+         (item "{param arg}" ccldoc::=> "A lisp value of type indicated by the corresponding
+		        arg-type-specifier")
+         (item "{param result-type-specifier}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above, or an equivalent "
+          (ref (section "Specifying And Using Foreign Types") "foreign type specifier") "."))))
+
+    (definition (:function %ff-call)
+     "%ff-call entrypoint {lbrace}arg-type-keyword arg{rbrace}* {code &optional} result-type-keyword" nil
+      (para "Calls the foreign function at address entrypoint passing the
+	      values of each arg as a foreign argument of type indicated by the
+	      corresponding arg-type-keyword. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-keyword), or NIL if result-type-keyword is :VOID or
+	      NIL")
+     (defsection "Values"
+       (listing :definition
+         (item "{param entrypoint}" ccldoc::=> "A fixnum or MACPTR")
+         (item "{param arg-type-keyword}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above")
+         (item "{param arg}" ccldoc::=> "A lisp value of type indicated by the corresponding
+		        arg-type-keyword")
+         (item "{param result-type-keyword}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above"))))
+
+    (definition (:macro ff-call)
+     "ff-call entrypoint {lbrace}arg-type-specifier arg{rbrace}* {code &optional} result-type-specifier" nil
+       (para "Calls the foreign function at address entrypoint passing the
+	      values of each arg as a foreign argument of type indicated by the
+	      corresponding arg-type-specifier. Returns the foreign function
+	      result (coerced to a Lisp object of type indicated by
+	      result-type-specifier), or NIL if result-type-specifer is :VOID or
+	      NIL")
+     (defsection "Values"
+       (listing :definition
+         (item "{param entrypoint}" ccldoc::=> "A fixnum or MACPTR")
+         (item "{param arg-type-specifer}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above, or an equivalent "
+          (ref (section "Specifying And Using Foreign Types") "foreign type specifier") ".")
+         (item "{param arg}" ccldoc::=> "A lisp value of type indicated by the corresponding
+		        arg-type-specifier")
+         (item "{param result-type-specifier}" ccldoc::=> "One of the foreign argument-type keywords, described
+		        above, or an equivalent "
+          (ref (section "Specifying And Using Foreign Types") "foreign type specifier") "."))))
+
+    (definition (:function foreign-symbol-address) "foreign-symbol-address name" nil
+      (para "This function tries to resolve the address of the foreign
+	     symbol {param name} (a lisp string). If successful, it
+	     returns that address encapsulated in a macptr; otherwise,
+	     it returns {code nil}."))
+
+    (definition (:function foreign-symbol-entry) "foreign-symbol-entry name"
+      nil
+      (para "This function rries to resolve the address of the foreign
+	     symbol {param name} (a lisp string). If successful, it
+	     returns a fixnum representation of that address.
+	     Otherwise, it returns {code nil}."))
+
+    (definition (:function free) "free ptr" nil
+      "Free the foreign memory pointed to by {param ptr} by invoking
+the standard C function {code free()}.  If {param ptr} is a gcable
+pointer (such as an object returned from {function
+make-gcable-record}), then {function free} first informs the garbage
+collector that the foreign memory has been deallocted before actually
+calling {code free()}.")
+
+    (definition (:function make-heap-ivector) "make-heap-ivector element-count element-type" nil
+	"An ivector is a one-dimensional array that's specialized to
+	 a numeric or character element type.
+
+	 {function make-heap-ivector} allocates an ivector in
+	  foreign memory.  The GC will never move this vector, and
+	  will in fact not pay any attention to it at all.  The
+	  returned pointer to it can therefore be passed safely to
+	  foreign code.
+
+	  The vector must be explicitly deallocated with
+	  {function dispose-heap-ivector}."
+     (defsection "Values"
+       (listing :definition
+         (item "{param element-count}" ccldoc::=> "A positive integer.")
+         (item "{param element-type}" ccldoc::=> "A type specifier.
+		      
+		      ")
+         (item "{param vector}" ccldoc::=> "A lisp vector.  The initial contents are
+		      undefined.")
+         (item "{param mactpr}" ccldoc::=> "A pointer to the first byte of data stored
+		      in the vector.
+		      ")
+         (item "{param size}" ccldoc::=> "The size of the returned vector in octets.
+		      "))))
+
+    (definition (:macro ccl::make-gcable-record) "make-gcable-record typespec &rest initforms" nil
+      (para "Allocates a block of foreign memory suitable to hold the foreign
+	      type described by {param typespec}, in the same manner
+	      as " (ref (definition :macro make-record)) ". In
+	      addition, {macro make-gcable-record} marks the
+	      returned object gcable: in other words, it informs the garbage
+	      collector that it may reclaim the object when it becomes
+	      unreachable.")
+      (para "In all other respects, {macro make-gcable-record} works
+          the same way as " (ref (definition :macro make-record)) ".")
+
+      " When using gcable pointers, it's important to remember the
+          distinction between a {code macptr} object (which is a
+          lisp object, more or less like any other) and the block of
+          foreign memory that the {code macptr} object points to.
+          If a gcable {code macptr} object is the only thing in the
+          world (lisp world or foreign world) that references the
+          underlying block of foreign memory, then freeing the foreign
+          memory when it becomes impossible to reference it is convenient
+          and sane.  If other lisp {code macptr}s reference the
+          underlying block of foreign memory or if the address of that
+          foreign memory is passed to and retained by foreign code, having
+          the GC free the memory may have unpleasant consequences if those
+          other references are used.
+
+          Take care, therefore, not to create a gcable record unless
+          you are sure that the returned {code macptr} will be the
+          only reference to the allocated memory that will ever be
+          used."
+     (defsection "Values"
+       (listing :definition
+         (item "{param typespec}" ccldoc::=> "A foreign type specifier, or a keyword which is used
+		        as the name of a foreign struct or union.")
+         (item "{param initforms}" ccldoc::=> "If the type denoted by {param typespec}
+		        is scalar, a single value appropriate for that type;
+		        otherwise, a list of alternating field names and
+		        values appropriate for the types of those fields.")
+         (item "{param result}" ccldoc::=> "
+		        A {type macptr} which encapsulates the address of a
+		        newly-allocated record on the foreign heap. The foreign
+		        object returned by {function ccl::make-gcable-record}
+		        is freed when the garbage collector determines that
+		        the {code MACPTR} object that describes it is
+		        unreachable."))))
+
+    (definition (:macro make-record) "make-record typespec {code &rest} initforms" nil
+       "Expands into code which allocates and initializes an instance
+	of the type denoted by {param typespec}, on the foreign heap.
+	The record is allocated using the C function {function
+	malloc}, and the user of {function make-record} must
+	explicitly call the function {function free} to deallocate the
+	record, when it is no longer needed.
+	    
+        If {param initforms} is provided, its value or values are used
+	in the initialization.  When the type is a scalar, {param
+	initforms} is either a single value which can be coerced to
+	that type, or no value, in which case binary 0 is used.  When
+	the type is a {code struct}, {param initforms} is a list,
+	giving field names and the values for each.  Each field is
+	treated in the same way as a scalar is: If a value for it is
+	given, it must be coerceable to the field's type; if not,
+	binary 0 is used.
+
+        When the type is an array, {param initforms} may not be
+	provided, because {function make-record} cannot initialize its
+	values.  {function make-record} is also unable to initialize
+	fields of a {code struct} which are themselves {code struct}s.
+	The user of {function make-record} should set these values by
+	another means.
+
+        A possibly-significant limitation is that it must be possible
+	to find the foreign type at the time the macro is expanded;
+	{function make-record} signals an error if this is not the
+	case."
+
+     (defsection "Values"
+       (listing :definition
+         (item "{param typespec}" ccldoc::=> "A foreign type specifier, or a keyword which is used
+		        as the name of a foreign struct or union.")
+         (item "{param initforms}" ccldoc::=> "If the type denoted by {param typespec}
+		        is scalar, a single value appropriate for that type;
+		        otherwise, a list of alternating field names and
+		        values appropriate for the types of those fields.")
+         (item "{param result}" ccldoc::=> "
+		        A {type macptr} which encapsulates the address of a
+		        newly-allocated record on the foreign heap.
+		      ")))
+     (defsection "Notes"
+       "
+	      It is inconvenient that {function make-record} is a
+	      macro, because this means that {param typespec}
+	      cannot be a variable; it must be an immediate value.
+
+	      If it weren't for this requirement,
+	      {function make-record} could be a function.  However,
+	      that would mean that any stand-alone application using it would
+	      have to include a copy of the interface database
+	      (see {section The Interface Database}), which is undesirable
+	      because it's large."))
+
+    (definition (:function open-shared-library) "open-shared-library name"
+     "Asks the operating system to load a shared library for {CCL} to use."
+     (defsection "Values"
+       (listing :definition
+         (item "{param name}" ccldoc::=> "A SIMPLE-STRING which is presumed to be the so-name of
+		        or a filesystem path to the library.")
+         (item "{param library}" ccldoc::=> "An object of type SHLIB which describes the
+		        library denoted by {param name}.")))
+     (defsection "Description"
+       (para "If the library denoted by {param name} can
+	      be loaded by the
+	      operating system, returns an object of type SHLIB that describes
+	      the library; if the library is already open, increments a
+	      reference count. If the library can't be loaded, signals a
+	      SIMPLE-ERROR which contains an often-cryptic message from the
+	      operating system."))
+     (defsection "Examples"
+       (code-block #:|;;; Try to do something simple.
+          ? (open-shared-library "libgtk.so")
+          > Error: Error opening shared library "libgtk.so": /usr/lib/libgtk.so: undefined symbol: gdk_threads_mutex
+          > While executing: OPEN-SHARED-LIBRARY
+
+          ;;; Grovel around, curse, and try to find out where "gdk_threads_mutex"
+          ;;; might be defined. Then try again:
+
+          ? (open-shared-library "libgdk.so")
+          #<SHLIB libgdk.so #x3046DBB6>
+
+          ? (open-shared-library "libgtk.so")
+          #<SHLIB libgtk.so #x3046DC86>
+
+          ;;; Reference an external symbol defined in one of those libraries.
+
+          ? (external "gtk_main")
+          #<EXTERNAL-ENTRY-POINT "gtk_main" (#x012C3004) libgtk.so #x3046FE46>
+
+          ;;; Close those libraries.
+
+          ? (close-shared-library "libgtk.so")
+          T
+
+          ? (close-shared-library "libgdk.so")
+          T
+
+          ;;; Reference the external symbol again.
+
+          ? (external "gtk_main")
+          #<EXTERNAL-ENTRY-POINT "gtk_main" {lbrace}unresolved{rbrace} libgtk.so #x3046FE46>|))
+     (defsection "Notes"
+       "It would be helpful to describe what an soname is and give
+	      examples of one.
+
+	      Does the SHLIB still get returned if the library is
+	      already open?"))
+
+    (definition (:macro pref) "pref ptr accessor-form" nil
+      "References an instance of a foreign type (or a component of a
+       foreign type) accessible via {param ptr}.
+
+       Expands into code which references the indicated scalar type
+       or component, or returns a pointer to a composite type.
+
+       PREF can be used with SETF."
+
+     (defsection "Values"
+       (listing :definition
+         (item "{param ptr}" ccldoc::=> (ref (section "Referencing and Using Foreign Memory Addresses") "a MACPTR")
+          ".")
+         (item "{param accessor-form}" ccldoc::=> "a keyword which names a foreign type or record, as
+		        described in {section Foreign type, record, and field names}.
+		      "))))
+
+    (definition (:function %reference-external-entry-point) "%reference-external-entry-point eep" nil
+      (para "Tries to resolve the address of the external-entry-point
+	     {param eep} and returns a fixnum representation of that address if
+	     successful; else signals an error.")
+     (defsection "Values"
+       (listing :definition
+         (item "{param eep}" ccldoc::=> "An EXTERNAL-ENTRY-POINT, as obtained by the EXTERNAL
+		        macro."))))
+
+    (definition (:macro rlet) "rlet (var typespec {code &rest} initforms)* &body body" nil
+       (para "Executes {param body} in an environment in which each
+	      var is bound to a macptr encapsulating the 
+	      address of a stack-allocated foreign memory block, allocated and
+	      initialized from {param typespec} and {param initforms} as per"
+              (ref (definition :macro make-record)) ". Returns
+              whatever values {param body} returns.")
+       (para "Record fields that aren't explicitly initialized have
+	      unspecified contents.")
+     (defsection "Values"
+       (listing :definition
+         (item "{param var}" ccldoc::=> "A symbol (a lisp variable)")
+         (item "{param typespec}" ccldoc::=> "A foreign type specifier or foreign record name.")
+         (item "{param initforms}" ccldoc::=> "As described above, for
+		        "
+          (ref (definition :macro make-record))))))
+
+    (definition (:macro rletz) "rletz (var typespec {code &rest} initforms)* {code &body} body" nil
+     "This macro is just like {macro rlet}, except that the stack-allocated
+      foreign memory is zeroed.")
+
+    (definition (:function terminate-when-unreachable) "terminate-when-unreachable object" nil
+      "The termination mechanism is a way to have the garbage
+       collector run a function right before an object is about to
+       become garbage.  It is very similar to the finalization
+       mechanism which Java has.  It is not standard Common Lisp,
+       although other Lisp implementations have similar features.  It
+       is useful when there is some sort of special cleanup,
+       deallocation, or releasing of resources which needs to happen
+       when a certain object is no longer being used.
+
+       When the garbage collector discovers that an object is no
+       longer referred to anywhere in the program, it deallocates that
+       object, freeing its memory.  However, if {function
+       terminate-when-unreachable} has been called on the object at
+       any time, the garbage collector first invokes the generic
+       function {function terminate}, passing it the object as a
+       parameter.
+
+       Therefore, to make termination do something useful, you need to
+       define a method on {function terminate}.
+
+       Because calling {function terminate-when-unreachable} only
+       affects a single object, rather than all objects of its class,
+       you may wish to put a call to it in the {function
+       initialize-instance} method of a class.  Of course, this is
+       only appropriate if you do in fact want to use termination for
+       all objects of a given class."
+     (defsection "Values"
+       (listing :definition
+         (item "{param object}" ccldoc::=> "A CLOS object of a class for which there exists a method of the generic function {function terminate}.")))
+     (defsection "Example"
+       (code-block "
+          (defclass resource-wrapper ()
+            ((resource :accessor resource)))
+
+          (defmethod initialize-instance :after ((x resource-wrapper) &rest initargs)
+             (ccl:terminate-when-unreachable x))
+
+          (defmethod ccl:terminate ((x resource-wrapper))
+             (when (resource x)
+                (deallocate (resource x))))"))
+     (defsection "See Also" (clause "{section Tutorial: Allocating Foreign Data on the Lisp Heap }")))
+
+    (definition (:function unuse-interface-dir) "unuse-interface-dir dir-id" nil
+      (para "Tells {CCL} to remove the interface directory denoted by
+	      {param dir-id} from the list of interface directories which are
+	      consulted for foreign type and function
+	      information. Returns T if the directory was on the
+	      search list, NIL otherwise.")
+     (defsection "Values"
+       (listing :definition
+         (item "{param dir-id}" ccldoc::=> #:|A keyword whose pname, mapped to lower case, names a subdirectory of "ccl:headers;" (or "ccl:darwin-headers;")|))))
+
+    (definition (:function use-interface-dir) "use-interface-dir dir-id" nil
+       (para "Tells {CCL} to add the interface directory denoted by
+	      dir-id to the list of interface directories which it consults for
+	      foreign type and function information. Arranges that that
+	      directory is searched before any others.")
+       (para "Note that {function use-interface-dir}
+	      merely adds an entry
+	      to a search list.
+	      If the named directory doesn't exist in the file system
+	      or doesn't
+	      contain a set of database files, a runtime error may occur
+	      when {CCL}
+	      tries to open some database file in that directory, and it
+	      will try to
+	      open such a database file whenever it needs to find any
+	      foreign type or
+	      function information. "
+        (ref (definition :function unuse-interface-dir)) "
+	      may come in
+	      handy in that case.")
+     (defsection "Values"
+       (listing :definition
+         (item "{param dir-id}" ccldoc::=> #:|A keyword whose pname, mapped to lower case, names a
+		        subdirectory of "ccl:headers;" (or
+		        "ccl:darwin-headers;")|)))
+     (defsection "Examples"
+       (para "One typically wants interface information to be
+	      available at compile-time (or, in many cases, at read-time).
+	      A typical idiom would be:")
+       (code-block "(eval-when (:compile-toplevel :execute)
+          (use-interface-dir :GTK))")
+       (para "Using the :GTK interface directory makes available
+	      information on
+	      foreign types, functions, and constants.  It's generally
+	      necessary to
+	      load foreign libraries before actually calling the
+	      foreign code, which for GTK can be done like this:")
+       (code-block "(load-gtk-libraries)")
+       (para "It should now be possible to do things like:")
+       (code-block "(#_gtk_widget_destroy w)")))))

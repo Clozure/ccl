@@ -1,0 +1,3955 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Hemlock Programming"
+  (defsection "Introduction"
+    "
+Hemlock is the text editor used in {CCL}.  It was originally based on the {link http://www.cons.org/cmucl/hemlock/index.html CMU Hemlock editor}, but has since diverged from it in various ways.  We continue to call the editor part of our IDE {code Hemlock} to give credit where credit is due, but we make no attempt at source or API compatibility with the original Hemlock.
+        
+
+
+Like the code, this documentation is based on the original Hemlock documentation, modified as necessary.
+        
+
+
+Hemlock follows in the tradition of Emacs-compatible editors, with a rich set of extensible commands.  This document describes the API for implementing new commands.  The basic editor consists of a set of Lisp utility functions for manipulating buffers and the other data structures of the editor.  All user level commands are written in terms of these 
+functions. To find out how to define commands see {section Commands}.
+        ")
+  (defsection "Representation of Text"
+    "
+In Hemlock, text is represented as a sequence of lines.  Newline characters
+are never stored but are implicit between lines.  The
+implicit newline character is treated as the single character {code #\\Newline} by the
+text primitives.
+        
+
+
+Text is broken into lines when it is first introduced into Hemlock.  Text enters
+Hemlock from the outside world in two ways: reading a file, or pasting text
+from the system clipboard.  Hemlock uses heuristics {emphasis (which should be documented here!)}
+to decide what newline convention to use to convert the incoming text into its internal
+representation as a sequence of lines.  Similarly it uses heuristics
+{emphasis (which should be documented here!)} to convert the internal representation into
+a string with embedded newlines in order to write a file or paste a region into
+the clipboard.
+        "
+    (defsection "Lines"
+      (para "
+A {code line} is an object representing a sequence of characters with no line breaks.
+            ")
+      (definition (:function hemlock-interface:linep) "linep line" nil
+       (defsection "Description"
+         (para "
+This function returns t if line is a line object, otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:line-string) "line-string line" nil
+       (defsection "Description"
+         (para "
+Given a line, this function returns as a simple string the characters
+in the line.  This is setf'able to set the line-string to any string
+that does not contain newline characters.  It is an error to
+destructively modify the result of line-string or to destructively
+modify any string after the line-string of some line has been set to
+that string.
+                    ")))
+      (definition (:function hemlock-interface:line-previous) "line-previous line" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:line-next) "line-next line" nil
+       (defsection "Description"
+         (para "
+Given a line, line-previous returns the previous line or nil if there
+is no previous line.  Similarly, line-next returns the line following
+line or nil.
+                    ")))
+      (definition (:function hemlock-interface:line-buffer) "line-buffer line" nil
+       (defsection "Description"
+         (para "
+This function returns the buffer which contains this line. Since a
+line may not be associated with any buffer, in which case line-buffer
+returns nil.
+                    ")))
+      (definition (:function hemlock-interface:line-length) "line-length line" nil
+       (defsection "Description"
+         (para "
+This function returns the number of characters in the line. This
+excludes the newline character at the end.
+                    ")))
+      (definition (:function hemlock-interface:line-character) "line-character line index" nil
+       (defsection "Description"
+         (para "
+This function returns the character at position index within line. It
+is an error for index to be greater than the length of the line or
+less than zero.  If index is equal to the length of the line, this
+returns a #\\newline character.
+                    ")))
+      (definition (:function hemlock-interface:line-plist) "line-plist line" nil
+       (defsection "Description"
+         (para "
+This function returns the property-list for line. setf, getf, putf and
+remf can be used to change properties. This is typically used in
+conjunction with line-signature to cache information about the line's
+contents.
+                    ")))
+      (definition (:function hemlock-interface:line-signature) "line-signature line" nil
+       (defsection "Description"
+         (para "
+This function returns an object that serves as a signature for a
+line's contents. It is guaranteed that any modification of text on the
+line will result in the signature changing so that it is not eql to
+any previous value. The signature may change even when the text
+remains unmodified, but this does not happen often.
+                    "))))
+    (defsection "Marks"
+      "
+A {code mark} indicates a specific position within the text represented by a
+line and a character position within that line.  Although a mark is
+sometimes loosely referred to as pointing to some character, it in
+fact points between characters.  If the charpos is zero, the previous
+character is the newline character separating the previous line from
+the mark's line. If the charpos is equal to the number of characters
+in the line, the next character is the newline character separating
+the current line from the next.  If the mark's line has no previous
+line, a mark with charpos of zero has no previous character; if the
+mark's line has no next line, a mark with charpos equal to the length of
+the line has no next character.
+            
+
+
+This section discusses the very basic operations involving marks, but
+a lot of Hemlock programming is built on altering some text at a mark.
+For more extended uses of marks see {section Altering and Searching Text}.
+            "
+      (defsection "Kinds of Marks"
+        "
+A mark may have one of two lifetimes: temporary or permanent. Permanent
+marks remain valid after arbitrary operations on the text; temporary
+marks do not.  Temporary marks are used because less bookkeeping
+overhead is involved in their creation and use.  If a temporary mark
+is used after the text it points to has been modified results will be
+unpredictable. Permanent marks continue to point between the same two
+characters regardless of insertions and deletions made before or after
+them.
+                
+
+
+There are two different kinds of permanent marks which differ only in
+their behavior when text is inserted at the position of the mark; text
+is inserted to the left of a left-inserting mark and to the right of
+right-inserting mark.
+                ")
+      (defsection "Mark Functions"
+        (definition (:function hemlock-interface:markp) "markp mark" nil
+         (defsection "Description"
+           (para "
+This function returns t if mark is a mark object, otherwise nil.
+                        ")))
+        (definition (:function hemlock-interface:mark-line) "mark-line mark" nil
+         (defsection "Description"
+           (para "
+This function returns the line to which mark points.
+                        ")))
+        (definition (:function hemlock-interface:mark-charpos) "mark-charpos mark" nil
+         (defsection "Description"
+           (para "
+This function returns the character position {emphasis in the line} of the character
+after mark, i.e. the number of characters before the mark in the mark's line.
+                        ")))
+        (definition (:function hemlock-interface:mark-buffer) "mark-buffer mark" nil
+         (defsection "Description"
+           (para "
+Returns the buffer containing this mark.
+                        ")))
+        (definition (:function hemlock-interface:mark-absolute-position) "mark-absolute-position mark" nil
+         (defsection "Description"
+           (para "
+This function returns the character position {emphasis in the buffer} of the character
+after the mark, i.e. the number of characters before the mark in the mark's
+buffer.
+                        ")))
+        (definition (:function hemlock-interface:mark-kind) "mark-kind mark" nil
+         (defsection "Description"
+           (para "
+This function returns one of {code :right-inserting}, {code :left-inserting} or
+                            {code :temporary} depending on the mark's kind.  A corresponding setf form
+changes the mark's kind.
+                        ")))
+        (definition (:function hemlock-interface:previous-character) "previous-character mark" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:next-character) "next-character mark" nil
+         (defsection "Description"
+           (para "
+This function returns the character immediately before (after) the
+position of the mark, or nil if there is no previous (next) character.
+These characters may be set with setf when they exist; the setf
+methods for these forms signal errors when there is no previous or
+next character.
+                        "))))
+      (defsection "Making Marks"
+        (definition (:function hemlock-interface:mark) "mark line charpos {code &optional} kind" nil
+         (defsection "Description"
+           (para "
+This function returns a mark object that points to the charpos'th
+character of the line. Kind is the kind of mark to create, one
+of {code :temporary}, {code :left-inserting}, or {code :right-inserting}. The default is
+:temporary.
+                        ")))
+        (definition (:function hemlock-interface:copy-mark) "copy-mark mark {code &optional} kind" nil
+         (defsection "Description"
+           (para "
+This function returns a new mark pointing to the same position and of
+the same kind, or of kind kind if it is supplied.
+                        ")))
+        (definition (:function hemlock-interface:delete-mark) "delete-mark mark" nil
+         (defsection "Description"
+           (para "
+This function deletes mark. Delete any permanent marks when you are
+finished using it.
+                        ")))
+        (definition (:macro hemlock-interface:with-mark)
+         "with-mark ({lbrace}(mark pos [kind]){rbrace}*) {lbrace}form{rbrace}*" nil
+         (defsection "Description"
+           (para "
+This macro binds to each variable mark a mark of kind kind, which
+defaults to {code :temporary}, pointing to the same position as the
+markpos. On exit from the scope the mark is deleted.  The value of the
+last form is the value returned.
+                        "))))
+      (defsection "Moving Marks"
+        (para "
+These functions destructively modify marks to point to new positions.
+Other sections of this document describe mark moving routines specific
+to higher level text forms than characters and lines, such as words,
+sentences, paragraphs, Lisp forms, etc.
+                ")
+        (definition (:function hemlock-interface:move-to-position)
+         "move-to-position mark charpos {code &optional} line" nil
+         (defsection "Description"
+           (para "
+This function changes the mark to point to the given character
+position on the line line. Line defaults to mark's line.
+                        ")))
+        (definition (:function hemlock-interface:move-to-absolute-position) "move-to-absolute-position mark position"
+         nil
+         (defsection "Description"
+           (para "
+This function changes the mark to point to the given character
+position in the buffer.
+                        ")))
+        (definition (:function hemlock-interface:move-mark) "move-mark mark new-position" nil
+         (defsection "Description"
+           (para "
+This function moves mark to the same position as the
+mark new-position and returns it.
+                        ")))
+        (definition (:function hemlock-interface:line-start) "line-start mark {code &optional} line" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:line-end) "line-end mark {code &optional} line" nil
+         (defsection "Description"
+           (para "
+This function changes mark to point to the beginning or the end of
+line and returns it. Line defaults to mark's line.
+                        ")))
+        (definition (:function hemlock-interface:buffer-start) "buffer-start mark {code &optional} buffer" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:buffer-end) "buffer-end mark {code &optional} buffer" nil
+         (defsection "Description"
+           (para "
+These functions change mark to point to the beginning or end of
+buffer, which defaults to the buffer mark currently points into. If
+buffer is unsupplied, then it is an error for mark to be disassociated
+from any buffer.
+                        ")))
+        (definition (:function hemlock-interface:mark-before) "mark-before mark" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:mark-after) "mark-after mark" nil
+         (defsection "Description"
+           (para "
+These functions change mark to point one character before or after the
+current position.  If there is no character before/after the current
+position, then they return nil and leave mark unmodified.
+                        ")))
+        (definition (:function hemlock-interface:character-offset) "character-offset mark n" nil
+         (defsection "Description"
+           (para "
+This function changes mark to point n characters after (n before if n
+is negative) the current position.  If there are less than n
+characters after (before) the mark, then this returns nil and mark is
+unmodified.
+                        ")))
+        (definition (:function hemlock-interface:line-offset) "line-offset mark n {code &optional} charpos" nil
+         (defsection "Description"
+           (para "
+This function changes mark to point n lines after (n before if n is
+negative) the current position.  The character position of the
+resulting mark is (min (line-length resulting-line) (mark-charpos
+mark)) if charpos is unspecified, or (min (line-length resulting-line)
+charpos) if it is.  As with character-offset, if there are not n lines
+then nil is returned and mark is not modified.
+                        ")))))
+    (defsection "Regions"
+      (para "
+A {code region} is simply a pair of marks: a starting mark and an ending
+mark.  The text in a region consists of the characters following the
+starting mark and preceding the ending mark (keep in mind that a mark
+points between characters on a line, not at them).  By modifying the
+starting or ending mark in a region it is possible to produce regions
+with a start and end which are out of order or even in different
+buffers.  The use of such regions is undefined and may result in
+arbitrarily bad behavior.
+            ")
+      (defsection "Region Functions"
+        (definition (:function hemlock-interface:region) "region start end" nil
+         (defsection "Description"
+           (para "
+This function returns a region constructed from the marks start and
+end. It is an error for the marks to point to non-contiguous lines or
+for start to come after end.
+                        ")))
+        (definition (:function hemlock-interface:regionp) "regionp region" nil
+         (defsection "Description"
+           (para "
+This function returns t if region is a region object, otherwise nil.
+                        ")))
+        (definition (:function hemlock-interface:make-empty-region) "make-empty-region" nil
+         (defsection "Description"
+           (para "
+This function returns a region with start and end marks pointing to
+the start of one empty line.  The start mark is a {code :right-inserting}
+mark, and the end is a {code :left-inserting} mark.
+                        ")))
+        (definition (:function hemlock-interface:copy-region) "copy-region region" nil
+         (defsection "Description"
+           (para "
+This function returns a region containing a copy of the text in the
+specified region. The resulting region is completely disjoint
+from region with respect to data references --- marks, lines, text, etc.
+                        ")))
+        (definition (:function hemlock-interface:region-to-string) "region-to-string region" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:string-to-region) "string-to-region string" nil
+         (defsection "Description"
+           (para "
+These functions coerce regions to Lisp strings and vice versa.  Within
+the string, lines are delimited by newline characters.
+                        ")))
+        (definition (:function hemlock-interface:line-to-region) "line-to-region line" nil
+         (defsection "Description"
+           (para "
+This function returns a region containing all the characters on
+line. The first mark is {code :right-inserting} and the last is
+                            {code :left-inserting}.
+                        ")))
+        (definition (:function hemlock-interface:region-start) "region-start region" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:region-end) "region-end region" nil
+         (defsection "Description"
+           (para "
+This function returns the start or end mark of region.
+                        ")))
+        (definition (:function hemlock-interface:region-bounds) "region-bounds region" nil
+         (defsection "Description"
+           (para "
+This function returns as multiple-values the starting and ending marks
+of region.
+                        ")))
+        (definition (:function hemlock-interface:set-region-bounds) "set-region-bounds region start end" nil
+         (defsection "Description"
+           (para "
+This function sets the start and end of region to start and end. It is
+an error for start to be after or in a different buffer from end.
+                        ")))
+        (definition (:function hemlock-interface:count-lines) "count-lines region" nil
+         (defsection "Description"
+           (para "
+This function returns the number of lines in the region, first and
+last lines inclusive.  A newline is associated with the line it
+follows, thus a region containing some number of non-newline
+characters followed by one newline is one line, but if a newline were
+added at the beginning, it would be two lines.
+                        ")))
+        (definition (:function hemlock-interface:count-characters) "count-characters region" nil
+         (defsection "Description"
+           (para "
+This function returns the number of characters in a given region. This
+counts line breaks as one character.
+                        "))))))
+  (defsection "Buffers"
+    (para "
+A buffer is an object consisting of:
+            "
+     (listing :number
+       (item "
+A name.
+                    ")
+       (item "
+A piece of text.
+                    ")
+       (item "
+The insertion point.
+                    ")
+       (item "
+An associated file (optional).
+                    ")
+       (item "
+A write protect flag.
+                    ")
+       (item "
+Some "
+        (ref (section "Hemlock Variables") "variables") ".
+                    ")
+       (item "
+Some "
+        (ref (section "Commands") "key bindings") ".
+                    ")
+       (item "
+A collection of {section Modes}.
+		    ")
+       (item "
+A list of modeline fields (optional).
+                    "))
+     "Because of the way Hemlock is currently integrated in Cocoa, all modifications
+to buffer contents must take place in the GUI thread.  Hemlock commands always
+run in the GUI thread, so most of the time you do not need to worry about it.
+If you are running code in another thread that needs to modify a buffer, you
+should perform that action using {code gui::execute-in-gui} or {code gui::queue-for-gui}.
+        ")
+    (para "
+There are no intrinsic limitations on examining buffers from any thread,
+however, Hemlock currently does no locking, so you risk seeing the buffer
+in an inconsistent state if you look at it outside the GUI thread.
+        ")
+    (defsection "The Current Buffer"
+      (para #:|
+Hemlock has the concept of the "current buffer".  The current buffer
+is defined during Hemlock commands as the buffer of the hemlock view
+that received the key events that invoked the command.  Many hemlock
+function operate on the current buffer rather than taking an explicit
+buffer argument.  In effect, the current buffer is an implicit argument
+to many text manipulation functions.
+            |)
+      (definition (:function hemlock-interface:current-buffer) "current-buffer" nil
+       (defsection "Description"
+         (para "
+Returns the current buffer, which, during command execution, is the
+buffer that is the target of the command.
+                    ")))
+      (definition (:function hemlock-interface:current-point) "current-point" nil
+       (defsection "Description"
+         (para "
+This function returns the buffer-point of the current buffer . This is
+such a common idiom in commands that it is defined despite its trivial
+implementation.
+                    ")))
+      (definition (:function hemlock-interface:current-point-collapsing-selection) "current-point-collapsing-selection"
+       nil
+       (defsection "Description"
+         (para "
+This function returns the buffer-point of the current buffer, after first
+deactivating any active region.
+                    ")))
+      (definition (:function hemlock-interface:current-point-extending-selection) "current-point-extending-selection"
+       nil
+       (defsection "Description"
+         (para "
+This function returns the buffer-point of the current buffer, after first
+making sure there is an active region - if the region is already active,
+keeps it active, otherwise it establishes a new (empty) region at point.
+                    ")))
+      (definition (:function hemlock-interface:current-point-for-insertion) "current-point-for-insertion" nil
+       (defsection "Description"
+         (para "
+This function checks to see if the current buffer can be modified at its
+current point, and errors if not.  Otherwise, it deletes the current
+selection if any, and returns the current point.
+                    ")))
+      (definition (:function hemlock-interface:current-point-for-deletion) "current-point-for-deletion" nil
+       (defsection "Description"
+         (para "
+This function checks to see if the current buffer can be modified at its
+current point and errors if not.  Otherwise, if there is a section
+in the current buffer, it deletes it and returns NIL.  If there is no
+selection, it returns the current point.
+                    ")))
+      (definition (:function hemlock-interface:current-point-unless-selection) "current-point-unless-selection" nil
+       (defsection "Description"
+         (para "
+This function checks to see if the current buffer can be modified at its
+current point and errors if not.  Otherwise, if there's a selection in the
+current buffer, returns NIL.  If there is no selection, it returns the
+current point.
+                    ")))
+      (definition (:function hemlock-interface:current-mark) "current-mark" nil
+       (defsection "Description"
+         (para "
+This function returns the top of the current buffer's mark stack.
+There always is at least one mark at the beginning of the buffer's
+region, and all marks returned are right-inserting.
+                    ")))
+      (definition (:function hemlock-interface:pop-buffer-mark) "pop-buffer-mark" nil
+       (defsection "Description"
+         (para "
+This function pops the current buffer's mark stack, returning the
+mark.  If the stack becomes empty, this pushes a new mark on the stack
+pointing to the buffer's start.  This always deactivates the current
+region (see {section Active Regions}).
+                    ")))
+      (definition (:function hemlock-interface:push-buffer-mark)
+       "push-buffer-mark mark {code &optional} activate-region" nil
+       (defsection "Description"
+         (para "
+This function pushes mark into the current buffer's mark stack,
+ensuring that the mark is right-inserting. If mark does not point into
+the current buffer, this signals an error.  Optionally, the current
+region is made active, but this never deactivates the current region
+(see {section Active Regions}).
+Mark is returned.
+                    ")))
+      (definition (:function hemlock-interface:push-new-buffer-mark)
+       "push-new-buffer-mark mark {code &optional} activate-region" nil
+       (defsection "Description"
+         (para "
+This function pushes a new mark onto the mark stack, at the position of {code mark}.
+It's equivalent to calling {code push-buffer-mark} on {code (copy-mark mark)}.
+                    ")))
+      (definition (:function hemlock-interface:all-buffers) "all-buffers" nil
+       (defsection "Description"
+         (para "
+This function returns a list of all the buffer objects made with make-buffer.
+                    ")))
+      (definition (:variable hi:*buffer-names*) "*buffer-names*" nil
+       (defsection "Description"
+         (para "
+This variable holds a "
+          (ref (section "String-table Functions") "string-table") "
+mapping the name of a buffer to the corresponding buffer object.
+                    "))))
+    (defsection "Buffer  Functions"
+      (definition (:function hemlock-interface:make-buffer)
+       "make-buffer name {code &key} :modes :modeline-fields :delete-hook" nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Default Modeline Fields") "Default Modeline Fields" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Make Buffer Hook") "Make Buffer Hook" nil
+       (defsection "Description"
+         (para "
+make-buffer creates and returns a buffer with the given name. If a
+buffer named name already exists, nil is returned. Modes is a list of
+modes which should be in effect in the buffer, major mode first,
+followed by any minor modes.  If this is omitted then the buffer is
+created with the list of modes contained in "
+          (ref (definition :hemlock-variable "Default Modes"))
+          ". Modeline-fields is a list of modeline-field objects (see
+the  {section Modelines} section)
+which may be nil. delete-hook is a list of delete hooks specific
+to this buffer, and delete-buffer invokes these along with Delete
+Buffer Hook.
+                    ")
+         (para "
+Buffers created with make-buffer are entered into the list
+(all-buffers), and their names are inserted into the string-table
+*buffer-names*. When a buffer is created the hook Make Buffer Hook is
+invoked with the new buffer.
+                    ")))
+      (definition (:function hemlock-interface:bufferp) "bufferp buffer" nil
+       (defsection "Description"
+         (para "
+Returns t if buffer is a buffer object, otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:buffer-name) "buffer-name buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Name Hook") "Buffer Name Hook" nil
+       (defsection "Description"
+         (para "
+buffer-name returns the name, which is a string, of the given buffer.
+The corresponding setf method invokes Buffer Name Hook with buffer
+and the new name and then sets the buffer's name.  When the user
+supplies a name for which a buffer already exists, the setf method
+signals an error.
+                    ")))
+      (definition (:function hemlock-interface:buffer-region) "buffer-region buffer" nil
+       (defsection "Description"
+         (para "
+Returns the buffer's region.  Note this is the region that contains all
+the text in a buffer, as opposed to the "
+          (ref (definition :function hemlock-interface:current-region)) ".
+                    ")
+         (para "
+This can be set with setf to replace the buffer's text.
+                    ")))
+      (definition (:function hemlock-interface:buffer-pathname) "buffer-pathname buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Pathname Hook") "Buffer Pathname Hook" nil
+       (defsection "Description"
+         (para "
+buffer-pathname returns the pathname of the file associated with the
+given buffer, or nil if it has no associated file.  This is the
+truename of the file as of the most recent time it was read or
+written.  There is a setf form to change the pathname.  When the
+pathname is changed the hook Buffer Pathname Hook is invoked with the
+buffer and new value.
+                    ")))
+      (definition (:function hemlock-interface:buffer-write-date) "buffer-write-date buffer" nil
+       (defsection "Description"
+         (para "
+Returns the write date for the file associated with the buffer in
+universal time format.  When this the buffer-pathname is set, use setf
+to set this to the corresponding write date, or to nil if the date is
+unknown or there is no file.
+                    ")))
+      (definition (:function hemlock-interface:buffer-point) "buffer-point buffer" nil
+       (defsection "Description"
+         (para "
+Returns the mark which is the current location within buffer. To move
+the point, use "
+          (ref (definition :function hemlock-interface:move-mark)) " or "
+          (ref (definition :function hemlock-interface:move-to-position)))))
+      (definition (:function hemlock-interface:buffer-mark) "buffer-mark buffer" nil
+       (defsection "Description"
+         (para "
+This function returns the top of buffer's mark stack.  There always is
+at least one mark at the beginning of buffer's region, and all marks
+returned are right-inserting.
+                    ")))
+      (definition (:function hemlock-interface:buffer-start-mark) "buffer-start-mark buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:buffer-end-mark) "buffer-end-mark buffer" nil
+       (defsection "Description"
+         (para "
+These functions return the start and end marks of buffer's region:
+"
+          (code-block "
+(buffer-start-mark buffer )  &lt;==&gt;  (region-start (buffer-region buffer))
+")
+          "and
+"
+          (code-block "
+(buffer-end-mark buffer )  &lt;==&gt;  (region-end (buffer-region buffer))
+"))))
+      (definition (:function hemlock-interface:buffer-writable) "buffer-writable buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Writable Hook") "Buffer Writable Hook" nil
+       (defsection "Description"
+         (para "
+This function returns t if you can modify the buffer, nil if you
+cannot.  If a buffer is not writable, then any attempt to alter text
+in the buffer results in an error.  There is a setf method to change
+this value.  The setf method invokes the functions in Buffer Writable
+Hook on the buffer and new value before storing the new value.
+                    ")))
+      (definition (:function hemlock-interface:buffer-modified) "buffer-modified buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Modified Hook") "Buffer Modified Hook" nil
+       (defsection "Description"
+         (para "
+buffer-modified returns t if the buffer has been modified, nil if it
+hasn't.  This attribute is set whenever a text-altering operation is
+performed on a buffer.  There is a setf method to change this value.
+The setf method invokes the functions in Buffer Modified Hook with the
+buffer whenever the value of the modified flag changes.
+                    ")))
+      (definition (:macro hemlock-interface:with-writable-buffer) "with-writable-buffer (buffer) {code &body} body" nil
+       (defsection "Description"
+         (para "
+This macro executes forms with buffer's writable status set.  After
+forms execute, this resets the buffer's writable and modified status.
+                    ")))
+      (definition (:function hemlock-interface:buffer-signature) "buffer-signature buffer" nil
+       (defsection "Description"
+         (para "
+This function returns an arbitrary number which reflects the buffer's
+current signature. The result is eql to a previous result if and only if
+the buffer has not been modified between the calls.
+                    ")))
+      (definition (:function hemlock-interface:buffer-variables) "buffer-variables buffer" nil
+       (defsection "Description"
+         (para "
+This function returns a "
+          (ref (section "String-table Functions") "string-table") " containing the names of
+the buffer's local "
+          (ref (section "Hemlock Variables") "variables") ".
+                    ")))
+      (definition (:function hemlock-interface:buffer-modes) "buffer-modes buffer" nil
+       (defsection "Description"
+         (para "
+This function returns the list of the names of the modes active in
+buffer. The major mode is first, followed by any minor modes.  See
+the {section Modes} chapter.
+                    ")))
+      (definition (:function hemlock-interface:buffer-delete-hook) "buffer-delete-hook buffer" nil
+       (defsection "Description"
+         (para "
+This function returns the list of buffer specific functions
+delete-buffer invokes when deleting a buffer . This is setf-able.
+                    ")))
+      (definition (:function hemlock-interface:delete-buffer) "delete-buffer buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Delete Buffer Hook") "Delete Buffer Hook" nil
+       (defsection "Description"
+         (para "
+delete-buffer removes buffer from ("
+          (ref (definition :function hemlock-interface:all-buffers)) ") and its name
+from "
+          (ref (definition :variable hi:*buffer-names*)) ".  Before buffer is deleted, this invokes
+the functions on buffer returned by buffer-delete-hook and those found
+in Delete Buffer Hook. If buffer is the current-buffer, or if it is
+displayed in any view, then this function signals an error.
+                    "))))
+    (defsection "Modelines"
+      "
+A Buffer may specify a modeline, a line of text which is displayed
+across the bottom of a view to indicate status information.
+Modelines are described by a list of modeline-field objects which have
+individual update functions and are optionally fixed-width. These have
+an eql name for convenience in referencing and updating, but the name
+must be unique for all created modeline-field objects.  All modeline-field
+functions must take a buffer as an
+argument and return a string.  When displaying
+a modeline-field with a specified width, the result of the update
+function is either truncated or padded on the right to meet the
+constraint.
+            
+
+
+Whenever one of the following changes occurs, all of a buffer's
+modeline fields are updated:
+            "
+      (listing :bullet
+        (item "
+A buffer's major mode is set.
+                    ")
+        (item "
+One of a buffer's minor modes is turned on or off.
+                    ")
+        (item "
+A buffer  is renamed.
+                    ")
+        (item "
+A buffer's pathname changes.
+                    ")
+        (item "
+A buffer's modified status changes.
+                    "))
+      "
+The policy is that whenever one of these changes occurs, it is
+guaranteed that the modeline will be updated before the next trip
+through redisplay.  Furthermore, since the system cannot know what
+modeline-field objects the user has added whose update functions rely
+on these values, or how he has changed Default Modeline Fields, we must
+update all the fields.  
+            
+
+
+The user should note that modelines can be updated at any time, so
+update functions should be careful to avoid needless delays (for
+example, waiting for a local area network to determine information).
+            "
+      (definition (:function hemlock-interface:make-modeline-field)
+       "make-modeline-field {code &key} :name :width :function" nil
+       (defsection "Description"
+         (para "
+This function returns a modeline-field object with name, width,
+and function. Width defaults to nil meaning that the field is variable
+width; otherwise, the programmer must supply this as a positive
+integer. Function must take a buffer as an arguments and
+return a string.  If name already names a modeline-field object,
+then this signals an error.
+                    ")))
+      (definition (:function hemlock-interface:modeline-field-name) "modeline-field-name modeline-field" nil
+       (defsection "Description"
+         (para "
+This function returns the name field of a modeline-field object.
+If this is set with setf, and the new name already names a
+modeline-field, then the setf method signals an error.
+                    ")))
+      (definition (:function hemlock-interface:modeline-field-p) "modeline-field-p modeline-field" nil
+       (defsection "Description"
+         (para "
+This function returns t if its argument is a modeline-field object, nil
+otherwise.
+                    ")))
+      (definition (:function hemlock-interface:modeline-field) "modeline-field name" nil
+       (defsection "Description"
+         (para "
+This returns the modeline-field object named name. If none exists, this
+returns nil.
+                    ")))
+      (definition (:function hemlock-interface:modeline-field-function) "modeline-field-function modeline-field" nil
+       (defsection "Description"
+         (para "
+Returns the function called when updating the modeline-field. When this
+is set with setf, the setf method updates modeline-field for all views
+on all buffers that contain the given field, so the next trip through
+redisplay will reflect the change.  All modeline-field functions must
+take a buffer as an argument and return a string.
+                    ")))
+      (definition (:function hemlock-interface:modeline-field-width) "modeline-field-width modeline-field" nil
+       (defsection "Description"
+         (para "
+Returns the width to which modeline-field is constrained, or nil
+indicating that it is variable width.  When this is set with setf, the
+setf method updates all modeline-fields for all views on all buffers
+that contain the given field, so the next trip through redisplay will
+reflect the change.
+                    ")))
+      (definition (:function hemlock-interface:buffer-modeline-fields) "buffer-modeline-fields buffer" nil
+       (defsection "Description"
+         (para "
+Returns a copy of the list of buffer's modeline-field objects. This
+list can be destructively modified without affecting display of
+buffer's modeline, but modifying any particular field's components
+(for example, width or function) causes the changes to be reflected
+the next trip through redisplay in every modeline display that uses
+the modified modeline-field.  When this is set with setf, the setf
+method method updates all modeline-fields on all views on the buffer,
+so next trip through the redisplay will reflect the change.
+                    ")))
+      (definition (:function hemlock-interface:buffer-modeline-field-p) "buffer-modeline-field-p buffer field" nil
+       (defsection "Description"
+         (para "
+If field, a modeline-field or the name of one, is in buffer's list of
+modeline-field objects, it is returned; otherwise, this returns nil.
+                    ")))
+      (definition (:function hemlock-interface:update-modeline-fields) "update-modeline-fields buffer" nil
+       (defsection "Description"
+         (para "
+Arranges so that the modeline display is updated with the latest values
+at the end of current command.
+                    ")))))
+  (defsection "Altering and Searching Text"
+    "
+A note on marks and text alteration: :temporary marks are invalid
+after any change has been made to the buffer the mark points to; it is
+an error to use a temporary mark after such a change has been made.
+        
+
+
+If text is deleted which has permanent marks pointing into it then
+they are left pointing to the position where the text was.
+        "
+    (defsection "Altering Text"
+      (definition (:function hemlock-interface:insert-character) "insert-character mark character" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:insert-string) "insert-string mark string" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:insert-region) "insert-region mark region" nil
+       (defsection "Description"
+         (para "
+Inserts character, string or region at mark. {code insert-character} signals
+an error if character is not {code string-char-p}. If string or region is
+empty, and mark is in some buffer, then Hemlock leaves buffer-modified of
+mark's buffer unaffected.
+                    ")))
+      (definition (:function hemlock-interface:ninsert-region) "ninsert-region mark region" nil
+       (defsection "Description"
+         (para "
+Like {code insert-region}, inserts the region at the mark's position,
+destroying the source region.  This must be used with caution, since
+if anyone else can refer to the source region bad things will
+happen. In particular, one should make sure the region is not linked
+into any existing buffer.  If region is empty, and mark is in some
+buffer, then Hemlock leaves buffer-modified of mark's buffer unaffected.
+                    ")))
+      (definition (:function hemlock-interface:delete-characters) "delete-characters mark n" nil
+       (defsection "Description"
+         (para "
+This deletes n characters after the mark (or -n before if n is
+negative).  If n characters after (or -n before) the mark do not
+exist, then this returns nil; otherwise, it returns t. If n is zero,
+and mark is in some buffer, then Hemlock leaves buffer-modified of
+mark's buffer unaffected.
+                    ")))
+      (definition (:function hemlock-interface:delete-region) "delete-region region" nil
+       (defsection "Description"
+         (para "
+This deletes region. This is faster than delete-and-save-region
+(below) because no lines are copied. If region is empty and contained
+in some buffer's buffer-region, then Hemlock leaves buffer-modified of
+the buffer unaffected.
+                    ")))
+      (definition (:function hemlock-interface:delete-and-save-region) "delete-and-save-region region" nil
+       (defsection "Description"
+         (para "
+This deletes region and returns a region containing the original
+region's text. If region is empty and contained in some buffer's
+buffer-region, then Hemlock leaves buffer-modified of the buffer
+unaffected. In this case, this returns a distinct empty region.
+                    ")))
+      (definition (:function hemlock-interface:filter-region) "filter-region function region" nil
+       (defsection "Description"
+         (para "
+Destructively modifies region by replacing the text of each line with
+the result of the application of function to a string containing that
+text. Function must obey the following restrictions:
+                    ")
+         (listing :number
+           (item "
+The argument may not be destructively modified.
+                            ")
+           (item "
+The return value may not contain newline characters.
+                            ")
+           (item "
+The return value may not be destructively modified after it is returned from function.
+                            "))
+         "
+The strings are passed in order.
+                    
+
+
+Using this function, a region could be uppercased by doing:
+                        {code (filter-region #'string-upcase region)}")))
+    (defsection "Text Predicates"
+      (definition (:function hemlock-interface:start-line-p) "start-line-p mark" nil
+       (defsection "Description"
+         (para "
+Returns t if the mark points before the first character in a line, nil
+otherwise.
+                    ")))
+      (definition (:function hemlock-interface:end-line-p) "end-line-p mark" nil
+       (defsection "Description"
+         "
+Returns t if the mark points after the last character in a line and
+before the newline, nil otherwise.
+                    
+
+{code empty-line-p} mark [Function]
+Return t if the line which mark points to contains no characters.
+                    "))
+      (definition (:function hemlock-interface:blank-line-p) "blank-line-p line" nil
+       (defsection "Description"
+         (para "
+Returns t if line contains only characters with a Whitespace attribute
+of 1.  See the {section Character Attributes}
+chapter for discussion of character attributes.
+                    ")))
+      (definition (:function hemlock-interface:blank-before-p) "blank-before-p mark" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:blank-after-p) "blank-after-p mark" nil
+       (defsection "Description"
+         (para "
+These functions test if all the characters preceding or following mark
+on the line it is on have a Whitespace attribute of 1.
+                    ")))
+      (definition (:function hemlock-interface:same-line-p) "same-line-p mark1 mark2" nil
+       (defsection "Description"
+         (para "
+Returns t if mark1 and mark2 point to the same line, or nil otherwise; That is,
+"
+          (code-block "
+(same-line-p a b) &lt;==&gt; (eq (mark-line a) (mark-line b))
+"))))
+      (definition (:function hemlock-interface:mark<) "mark< mark1 mark2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:mark<=) "mark<= mark1 mark2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:mark=) "mark= mark1 mark2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:mark/=) "mark/= mark1 mark2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:mark>=) "mark>= mark1 mark2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:mark>) "mark> mark1 mark2" nil
+       (defsection "Description"
+         (para "
+These predicates test the relative ordering of two marks in a piece of
+text, that is a mark is mark> another if it points to a position after
+it. An error is signalled if the marks do not point into the same buffer,
+except that for such marks mark= is always false and mark/= is always true.
+                    ")))
+      (definition (:function hemlock-interface:line<) "line< line1 line2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:line<=) "line<= line1 line2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:line>=) "line>= line1 line2" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:line>) "line> line1 line2" nil
+       (defsection "Description"
+         (para "
+These predicates test the ordering of line1 and line2. An error is signalled
+if the lines are not in the same buffer.
+                    ")))
+      (definition (:function hemlock-interface:lines-related) "lines-related line1 line2" nil
+       (defsection "Description"
+         (para "
+This function returns t if line1 and line2 are in the same buffer, nil
+nil otherwise.
+                    ")))
+      (definition (:function hemlock-interface:first-line-p) "first-line-p mark" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:last-line-p) "last-line-p mark" nil
+       (defsection "Description"
+         (para "{code first-line-p} returns t if there is no line before the line mark is on,
+and nil otherwise. {code Last-line-p} similarly tests tests whether there is
+no line after mark.
+                    "))))
+    (defsection "Kill Ring"
+      (para "
+There is a global "
+       (ref (section "Ring Functions") "ring") " of regions deleted from buffers.
+Some commands save affected regions on the kill ring before performing
+modifications.  You should consider making the command "
+       (ref (section "Undoing commands") "undoable") ",
+but this is a simple way of achieving a less
+satisfactory means for the user to recover.
+            ")
+      (definition (:function hemlock-interface:kill-region) "kill-region region current-type" nil
+       (defsection "Description"
+         (para "
+This kills region saving it in the kill ring. Current-type is either
+:kill-forward or :kill-backward. When the "
+          (ref (definition :function hemlock-interface:last-command-type)) "
+is one of these, this adds region to the beginning or end,
+respectively, of the top of the kill ring. The result of calling this is
+undoable using the command Undo (see the Hemlock User's Manual). This
+sets last-command-type to current-type, and it interacts with
+kill-characters.
+                    ")))
+      (definition (:function hemlock-interface:kill-characters) "kill-characters mark count" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Character Deletion Threshold") "Character Deletion Threshold (initial value 5)"
+       nil
+       (defsection "Description"
+         (para "
+kill-characters kills count characters after mark if count is
+positive, otherwise before mark if count is negative.  When count is
+greater than or equal to Character Deletion Threshold, the killed
+characters are saved on the kill ring. This may be called multiple times
+contiguously (that is, without  "
+          (ref (definition :function hemlock-interface:last-command-type)) " being set)
+to accumulate an effective count for purposes of comparison with the
+threshold.
+                    ")
+         "
+This sets last-command-type, and it interacts with kill-region. When
+this adds a new region to the kill ring, it sets last-command-type to
+:kill-forward (if count is positive) or :kill-backward (if count is
+negative).  When last-command-type is :kill-forward or :kill-backward,
+this adds the killed characters to the beginning (if count is
+negative) or the end (if count is positive) of the top of the kill ring,
+and it sets last-command-type as if it added a new region to the
+kill ring. When the kill ring is unaffected, this sets
+last-command-type to :char-kill-forward or :char-kill-backward
+depending on whether count is positive or negative, respectively.
+                    
+
+
+This returns mark if it deletes characters.  If there are not count
+characters in the appropriate direction, this returns nil.
+                    ")))
+    (defsection "Active Regions"
+      "
+Every buffer has a mark stack and a mark known as the point
+where most text altering nominally occurs.  Between the top of the
+mark stack, the current-mark, and the current-buffer's point, the
+current-point, is what is known as the current-region . Certain
+commands signal errors when the user tries to operate on the
+current-region without its having been activated.  If the user turns
+off this feature, then the current-region is effectively always
+active.
+            
+
+
+When writing a command that marks a region of text, the programmer
+should make sure to activate the region.  This typically occurs
+naturally from the primitives that you use to mark regions, but
+sometimes you must explicitly activate the region.  These commands
+should be written this way, so they do not require the user to
+separately mark an area and then activate it.  Commands that modify
+regions do not have to worry about deactivating the region since
+modifying a buffer automatically deactivates the region.  Commands
+that insert text often activate the region ephemerally; that is, the
+region is active for the immediately following command, allowing the
+user wants to delete the region inserted, fill it, or whatever.
+            
+
+
+Once a marking command makes the region active, it remains active until:
+            "
+      (listing :bullet
+        (item "
+a command uses the region,
+                    ")
+        (item "
+a command modifies the buffer,
+                    ")
+        (item "
+a command changes the current window or buffer,
+                    ")
+        (item "
+a command signals an editor-error,
+                    ")
+        (item "
+or the user types C-g.
+                    "))
+      (definition (:hemlock-variable "Active Regions Enabled") "Active Regions Enabled (initial value t)" nil
+       (defsection "Description"
+         (para "
+When this variable is non-nil, some primitives signal an editor-error
+if the region is not active.  This may be set to nil for more
+traditional Emacs region semantics.
+                    ")))
+      (definition (:variable hemlock-interface:*ephemerally-active-command-types*) "*ephemerally-active-command-types*"
+       nil
+       (defsection "Description"
+         (para "
+This is a list of {section Command Types}, and its initial
+value is the list of :ephemerally-active and :unkill. When the
+previous command's type is one of these, the current-region is active
+for the currently executing command only, regardless of whether it
+does something to deactivate the region.  However, the current command
+may activate the region for future commands. :ephemerally-active is a
+default command type that may be used to ephemerally activate the
+region, and:unkill is the type used by two commands, Un-kill and
+Rotate Kill Ring (what users typically think of as C-y and M-y).
+                    ")))
+      (definition (:function hemlock-interface:activate-region) "activate-region" nil
+       (defsection "Description"
+         (para "
+This makes the current-region active.
+                    ")))
+      (definition (:function hemlock-interface:deactivate-region) "deactivate-region" nil
+       (defsection "Description"
+         (para "
+After invoking this the current-region is no longer active.
+                    ")))
+      (definition (:function hemlock-interface:region-active-p) "region-active-p" nil
+       (defsection "Description"
+         (para "
+Returns whether the current-region is active, including
+ephemerally. This ignores Active Regions Enabled.
+                    ")))
+      (definition (:function hemlock-interface:check-region-active) "check-region-active" nil
+       (defsection "Description"
+         (para "
+This signals an editor-error when active regions are enabled, and the
+current-region is not active.
+                    ")))
+      (definition (:function hemlock-interface:current-region)
+       "current-region {code &optional} error-if-not-active deactivate-region" nil
+       (defsection "Description"
+         (para "
+This returns a region formed with current-mark and current-point,
+optionally signaling an editor-error if the current region is not
+active. Error-if-not-active defaults to t. Each call returns a
+distinct region object.  Depending on deactivate-region (defaults to
+t), fetching the current region deactivates it.  Hemlock primitives
+are free to modify text regardless of whether the region is active, so
+a command that checks for this can deactivate the region whenever it
+is convenient.
+                    "))))
+    (defsection "Searching and Replacing"
+      (para "
+Before using any of these functions to do a character search, look at
+{section Character Attributes}.  They provide a facility similar to
+the syntax table in real Emacs.  Syntax tables are a powerful,
+general, and efficient mechanism for assigning meanings to characters
+in various modes.
+            ")
+      (definition (:function hemlock-interface:new-search-pattern)
+       "new-search-pattern kind direction pattern {code &optional} result-search-pattern" nil
+       (defsection "Description"
+         (para "
+Returns a search-pattern object which can be given to the find-pattern
+and replace-pattern functions. A search-pattern is a specification of
+a particular sort of search to do. direction is either :forward or
+:backward, indicating the direction to search in. kind specifies the
+kind of search pattern to make, and pattern is a thing which specifies
+what to search for.  The interpretation of pattern depends on the kind
+of pattern being made.  Currently defined kinds of search pattern are:
+                    ")
+         (listing :definition
+           (item ":string-insensitive" ccldoc::=> "
+Does a case-insensitive string search for pattern
+                                ")
+           (item ":string-sensitive" ccldoc::=> "
+Does a case-sensitive string search for pattern.
+                                ")
+           (item ":character" ccldoc::=> "
+Finds an occurrence of the character pattern. This is case sensitive.
+                                ")
+           (item ":not-character" ccldoc::=> "
+Find a character which is not the character pattern.
+                                ")
+           (item ":test" ccldoc::=> "
+Finds a character which satisfies the function pattern. This function may not be applied an any particular fashion, so it should depend only on what its argument is, and should have no side-effects.
+                                ")
+           (item ":test-not" ccldoc::=> "
+Similar to :test, except it finds a character that fails the test.
+                                ")
+           (item ":any" ccldoc::=> "
+Finds a character that is in the string pattern.
+                                ")
+           (item ":not-any" ccldoc::=> "
+Finds a character that is not in the string pattern.
+                                "))
+         (para "
+result-search-pattern, if supplied, is a search-pattern to
+destructively modify to produce the new pattern.  Where reasonable
+this should be supplied, since some kinds of search patterns may
+involve large data structures.
+                    ")))
+      (definition (:function hemlock-interface:search-pattern-p) "search-pattern-p search-pattern" nil
+       (defsection "Description"
+         (para "
+Returns t if search-pattern is a search-pattern object, otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:get-search-pattern) "get-search-pattern string direction" nil
+       (defsection "Description"
+         (para "
+get-search-pattern interfaces to a default search string and pattern
+that search and replacing commands can use.  These commands then share
+a default when prompting for what to search or replace, and save on
+consing a search pattern each time they execute.  This uses Default
+Search Kind (see the  Hemlock  User's Manual) when updating the pattern
+object.
+                    ")))
+      (definition (:variable hemlock-interface:*last-search-string*) "*last-search-string*" nil
+       (defsection "Description"
+         (para "
+Returns the last string searched for, useful when prompting.
+                    ")))
+      (definition (:function hemlock-interface:find-pattern) "find-pattern mark search-pattern" nil
+       (defsection "Description"
+         (para "
+Find the next match of search-pattern starting at mark. If a match is
+found then mark is altered to point before the matched text and the
+number of characters matched is returned.  If no match is found then
+nil is returned and mark is not modified.
+                    ")))
+      (definition (:function hemlock-interface:replace-pattern)
+       "replace-pattern mark search-pattern replacement {code &optional} n" nil
+       (defsection "Description"
+         (para "
+Replace n matches of search-pattern with the string replacement
+starting at mark. If n is nil (the default) then replace all matches.
+A mark pointing before the last replacement done is returned.
+                    ")))))
+  (defsection "The Current Environment"
+    (defsection "Different Scopes"
+      (para #:|
+In Hemlock the "current" values of |
+       (ref (section "Hemlock Variables") "variables") ",
+"
+       (ref (section "Commands") "key bindings") " and
+"
+       (ref (section "Character Attributes") "character-attributes") "
+depend on the "
+       (ref (section "The Current Buffer") "current buffer") "
+and the modes active in it.  There are three possible scopes for
+Hemlock values:
+            ")
+      (listing :definition
+        (item "buffer local" ccldoc::=> "
+The value is present only if the buffer it is local to is the current buffer.
+                        ")
+        (item "mode local" ccldoc::=> "
+The value is present only when the mode it is local to is active in the current buffer.
+                        ")
+        (item "global" ccldoc::=> "
+The value is always present unless shadowed by a buffer or mode local value.
+                        ")))
+    (defsection "Shadowing"
+      "
+It is possible that there are different values for the same thing in 
+in different scopes.  For example, there be might a global binding for a given
+variable and also a local binding in the current buffer.  Whenever there is a
+conflict, shadowing occurs, permitting only one of the values to be visible in
+the current environment.
+            
+
+
+The process of resolving such a conflict can be described as a search
+down a list of places where the value might be defined, returning the
+first value found.  The order for the search is as follows:
+            "
+      (listing :number
+        (item "
+Local values in the current buffer.
+                    ")
+        (item "
+Mode local values in the minor modes of the current buffer, in order from the highest precedence mode to the lowest precedence mode.  The order of minor modes with equal precedences is undefined.
+                    ")
+        (item "
+Mode local values in the current buffer's major mode.
+                    ")
+        (item "
+Global values.
+                    "))))
+  (defsection "Hemlock Variables"
+    (para "
+Hemlock implements a system of variables separate from normal Lisp
+variables for the following reasons:
+        ")
+    (listing :number
+      (item "
+Hemlock has different scoping rules which are useful in an editor.  Hemlock variables can be local to a "
+       (ref (section "Buffers") "buffer") " or a " (ref (section "Modes") "mode") ".
+                ")
+      (item "
+Hemlock variables have "
+       (ref (section "Mode Hooks") "hooks")
+       ", lists of functions called when someone sets the variable. See variable-value for the arguments Hemlock passes to these hook functions.
+                ")
+      (item "
+There is a database of variable names and documentation which makes it easier to find out what variables exist and what their values mean.
+                "))
+    (defsection "Variable Names"
+      "
+To the user, a variable name is a case insensitive string.  This
+string is referred to as the string name of the variable. A string
+name is conventionally composed of words separated by spaces.
+            
+
+
+In Lisp code a variable name is a symbol.  The name of this symbol is
+created by replacing any spaces in the string name with hyphens.  This
+symbol name is always interned in the Hemlock package.
+            "
+      (definition (:variable hemlock-interface:*global-variable-names*) "*global-variable-names*" nil
+       (defsection "Description"
+         (para "
+This variable holds a string-table of the names of all the global
+Hemlock variables. The value of each entry is the symbol name of the
+variable.
+                    ")))
+      (definition (:function hemlock-interface:current-variable-tables) "current-variable-tables" nil
+       (defsection "Description"
+         (para "
+This function returns a list of variable tables currently established,
+globally, in the current buffer, and by the modes of the
+current-buffer. This list is suitable for use with
+prompt-for-variable.
+                    "))))
+    (defsection "Variable Functions"
+      (para "
+In the following descriptions name is the symbol name of the variable.
+            ")
+      (definition (:function hemlock-interface:defhvar)
+       "defhvar string-name documentation {code &key} :mode :buffer :hooks :value" nil
+       (defsection "Description"
+         (para "
+This function defines a Hemlock variable. Functions that take a
+variable name signal an error when the variable is undefined.
+                    ")
+         (listing :definition
+           (item "{param string-name}" ccldoc::=> "
+The string name of the variable to define.
+                                ")
+           (item "{param documentation}" ccldoc::=> "
+The documentation string for the variable.
+                                ")
+           (item "{param mode}, {param buffer}" ccldoc::=> "
+If buffer is supplied, the variable is local to that buffer.  If mode is supplied, it is local to that mode.  If neither is supplied, it is global.
+                                ")
+           (item "{param value}" ccldoc::=> "
+This is the initial value for the variable, which defaults to nil.
+                                ")
+           (item "{param hooks}" ccldoc::=> "
+This is the initial list of functions to call when someone sets the variable's value. These functions execute before Hemlock establishes the new value. See variable-value for the arguments passed to the hook functions.
+                                "))
+         (para "
+If a variable with the same name already exists in the same place,
+then defhvar sets its hooks and value from hooks and value if the user
+supplies these keywords.
+                    ")))
+      (definition (:function hemlock-interface:variable-value) "variable-value name {code &optional} kind where" nil
+       (defsection "Description"
+         (para "
+This function returns the value of a Hemlock variable in some place. The following values for kind are defined:
+                    ")
+         (listing :definition
+           (item ":current" ccldoc::=> "
+Return the value present in the current environment, taking into consideration any mode or buffer local variables.  This is the default.
+                                ")
+           (item ":global" ccldoc::=> "
+Return the global value.
+                                ")
+           (item ":mode" ccldoc::=> "
+Return the value in the mode named where.
+                                ")
+           (item ":buffer" ccldoc::=> "
+Return the value in the buffer where.
+                                "))
+         (para "
+When set with setf, Hemlock sets the value of the specified variable
+and invokes the functions in its hook list with name, kind, where, and
+the new value.
+                    ")))
+      (definition (:function hemlock-interface:variable-documentation)
+       "variable-documentation name {code &optional} kind where" nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:variable-hooks) "variable-hooks name {code &optional} kind where" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:variable-name) "variable-name name {code &optional} kind where" nil
+       (defsection "Description"
+         (para "
+These function return the documentation, hooks and string name of a
+Hemlock variable. The kind and where arguments are the same as for
+variable-value. The documentation and hook list may be set using setf.
+                    ")))
+      (definition (:function hemlock-interface:string-to-variable) "string-to-variable string" nil
+       (defsection "Description"
+         (para "
+This function converts a string into the corresponding variable symbol
+name. String need not be the name of an actual Hemlock variable.
+                    ")))
+      (definition (:macro hemlock-interface:value) "value name" nil (defsection "Description" (para " ")))
+      (definition (:macro hemlock-interface:setv) "setv name new-value" nil
+       (defsection "Description"
+         (para "
+These macros get and set the current value of the Hemlock variable
+name. Name is not evaluated.  There is a setf form for {code value}.
+                    ")))
+      (definition (:macro hemlock-interface:hlet) "hlet ({lbrace}(var value){rbrace}*){lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+This macro is very similar to let in effect; within its scope each of
+the Hemlock variables var have the respective values, but after the
+scope is exited by any means the binding is removed.  This does not
+cause any hooks to be invoked.  The value of the last form is
+returned.
+                    ")))
+      (definition (:function hemlock-interface:hemlock-bound-p) "hemlock-bound-p name {code &optional} kind where" nil
+       (defsection "Description"
+         (para "
+Returns t if name is defined as a Hemlock variable in the place
+specified by kind and where, or nil otherwise.
+                    ")))
+      (definition (:function hemlock-interface:delete-variable) "delete-variable name {code &optional} kind where" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Delete Variable Hook") "Delete Variable Hook" nil
+       (defsection "Description"
+         "
+delete-variable makes the Hemlock variable name no longer defined in
+the specified place. Kind and where have the same meanings as they do
+for variable-value, except that :current is not available, and the
+default for kind is :global
+                    
+
+
+An error will be signaled if no such variable exists.  The hook,
+Delete Variable Hook is invoked with the same arguments before the
+variable is deleted.
+                    ")))
+    (defsection "Hooks"
+      "
+Hemlock actions such as setting variables, changing buffers, changing
+windows, turning modes on and off, etc., often have hooks associated
+with them.  A hook is a list of functions called before the system
+performs the action.  The manual describes the object specific hooks
+with the rest of the operations defined on these objects.
+            
+
+
+Often hooks are stored in Hemlock variables, Delete Buffer Hook and
+Set Window Hook for example.  This leads to a minor point of confusion
+because these variables have hooks that the system executes when
+someone changes their values.  These hook functions Hemlock invokes
+when someone sets a variable are an example of a hook stored in an
+object instead of a Hemlock variable. These are all hooks for editor
+activity, but Hemlock keeps them in different kinds of locations.
+This is why some of the routines in this section have a special
+interpretation of the hook place argument.
+            "
+      (definition (:macro hemlock-interface:add-hook) "add-hook place hook-fun" nil
+       (defsection "Description" (para " ")))
+      (definition (:macro hemlock-interface:remove-hook) "remove-hook place hook-fun" nil
+       (defsection "Description"
+         (para "
+These macros add or remove a hook function in some place. If hook-fun
+already exists in place, this call has no effect.  If place is a
+symbol, then it is a Hemlock variable; otherwise, it is a generalized
+variable or storage location.  Here are two examples:
+                    ")
+         (code-block "
+(add-hook delete-buffer-hook 'remove-buffer-from-menu)
+(add-hook (variable-hooks 'check-mail-interval)
+          'reschedule-mail-check)
+")))
+      (definition (:macro hemlock-interface:invoke-hook) "invoke-hook place {code &rest} args" nil
+       (defsection "Description"
+         (para "
+This macro calls all the functions in place. If place is a symbol,
+then it is a Hemlock variable; otherwise, it is a generalized
+variable.
+                    ")))))
+  (defsection "Commands"
+    (defsection "Introduction"
+      (para "
+The way that the user tells Hemlock to do something is by invoking a
+command. Commands have three attributes:
+            ")
+      (listing :definition
+        (item "name" ccldoc::=> "
+A command's name provides a way to refer to it.  Command names are
+usually capitalized words separated by spaces, such as Forward Word.
+                        ")
+        (item "documentation" ccldoc::=> "
+The documentation for a command is used by on-line help facilities.
+                        ")
+        (item "function" ccldoc::=> "
+A command is implemented by a Lisp function, which is callable from Lisp.
+                        "))
+      (defsection "Defining Commands"
+        (definition (:variable hemlock-interface:*command-names*) "*command-names*" nil
+         (defsection "Description"
+           (para "
+Holds a "
+            (ref (section "String-table Functions") "string-table") " associating command names to command
+objects.  Whenever a new command is defined it is entered in this
+table.
+                    ")))
+        (definition (:macro hemlock-interface:defcommand)
+         "defcommand {lbrace}command-name | (command-name function-name {code &key}){rbrace} lambda-list command-doc {lbrace}function-doc{rbrace} {lbrace}form{rbrace}*"
+         nil
+         (defsection "Description"
+           (para "
+Defines a command named name. defcommand creates a function to
+implement the command from the lambda-list and forms supplied.  The
+lambda-list must specify one required argument, see "
+            (ref (section "Command Arguments") "below") #:|,
+which by convention is typically named {code p}. If the caller does not specify
+function-name, defcommand creates the command name by replacing all
+spaces with hyphens and appending "-command".  Any keyword arguments
+are as for {code make-command}.  Command-doc becomes the command
+documentation for the command.  Function-doc, if present, becomes the
+documentation for the function and should primarily describe
+issues involved in calling the command as a function, such as what any
+additional arguments are. 
+                            |)))
+        (definition (:function hemlock-interface:make-command)
+         "make-command name documentation function {code &key} :transparent-p" nil
+         (defsection "Description"
+           (para "
+Defines a new command named name, with command documentation
+documentation and function function.  If :transparent-p is true,
+the command becomes "
+            (ref (section "Transparent Key Bindings") "transparent") ".
+The command in entered in the
+string-table "
+            (ref (definition :variable hemlock-interface:*command-names*)) ", with the command object as its
+value.  Normally command implementors will use the defcommand macro,
+but this permits access to the command definition mechanism at a lower
+level, which is occasionally useful.
+                            ")))
+        (definition (:function hemlock-interface:commandp) "commandp command" nil
+         (defsection "Description"
+           (para "
+Returns t if command is a command object, otherwise nil.
+                            ")))
+        (definition (:function hemlock-interface:command-documentation) "command-documentation command" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:command-function) "command-function command" nil
+         (defsection "Description" (para " ")))
+        (definition (:function hemlock-interface:command-name) "command-name command" nil
+         (defsection "Description"
+           (para "
+Returns the documentation, function, or name for command. These may be
+set with setf.
+                            "))))
+      (defsection "Command Documentation"
+        (para "
+Command documentation is a description of what the command does when
+it is invoked as an extended command or from a key.  Command
+documentation may be either a string or a function.  If the
+documentation is a string then the first line should briefly summarize
+the command, with remaining lines filling the details.  Example:
+                    ")
+        (code-block #:|
+(defcommand "Forward Character" (p)
+  "Move the point forward one character.
+   With prefix argument move that many characters, with negative
+   argument go backwards."
+. . .)
+|)
+        (para "
+Command documentation may also be a function of one argument.  The
+function is called with either :short or :full, indicating that the
+function should return a short documentation string or do something
+to document the command fully.
+                    ")))
+    (defsection "The Command Interpreter"
+      (para "
+The command interpreter is the functionality invoked by the event
+handler to process key-events from the keyboard and dispatch to
+different commands on the basis of what the user types.  When the
+command interpreter executes a command, we say it invokes the command.  The
+command interpreter also provides facilities for communication between
+contiguously running commands, such as a last command type register.
+It also takes care of resetting communication mechanisms, clearing the
+echo area, displaying partial keys typed slowly by the user, etc.
+            ")
+      (defsection "Controlling The Command Interpreter"
+        (definition (:hemlock-variable "Command Abort Hook") "Command Abort Hook" nil
+         (defsection "Description"
+           (para "
+The command interpreter invokes the function in this variable whenever
+someone aborts a command (for example, if someone called
+editor-error).
+                    "))))
+      (defsection "Editor Input"
+        (para "
+The canonical representation of editor input is a key-event structure.
+Users can bind commands to keys, which are
+non-empty sequences of key-events. A key-event consists of an
+identifying token known as a keysym and a field of bits representing
+modifiers.  Users define keysym names by supplying names that reflect
+the legends on their keyboard's keys. Users define modifier names
+similarly, but the system chooses the bit and mask for recognizing the
+modifier.  You can use keysym and modifier names to textually specify
+key-events and Hemlock keys in a #k syntax. The following are some
+examples:
+                    ")
+        (code-block #:|
+#k"C-u"
+#k"Control-u"
+#k"c-m-z"
+#k"control-x meta-d"
+#k"a"
+#k"A"
+#k"Linefeed"
+|)
+        "
+This is convenient for use within code and in init files
+containing {code bind-key} calls.
+                    
+
+
+The #k syntax is delimited by double quotes.  Within the
+double quotes, spaces separate multiple key-events.  A single
+key-event optionally starts with modifier names terminated by hyphens.
+Modifier names are alphabetic sequences of characters which the system
+uses case-insensitively. Following modifiers is a keysym name, which
+is case-insensitive if it consists of multiple characters, but if the
+name consists of only a single character, then it is case-sensitive.
+                    
+
+
+You can escape special characters---hyphen, double quote, open angle
+bracket, close angle bracket, and space---with a backslash, and you
+can specify a backslash by using two contiguously.  You can use angle
+brackets to enclose a keysym name with many special characters in it.
+Between angle brackets appearing in a keysym name position, there are
+only two special characters, the closing angle bracket and backslash.
+                    
+
+
+For more information on key-events see the {section Key-events} section.
+                    ")
+      (defsection "Binding Commands to Keys"
+        (para "
+The command interpreter determines which command to invoke on the
+basis of {emphasis key bindings}. A key binding is an association between a
+command and a sequence of key-events.  A sequence
+of key-events is called a key and is represented by a single key-event
+or a sequence (list or vector) of key-events.
+                    ")
+        (para "
+Since key bindings may be local to a mode or buffer, the "
+         (ref (section "The Current Environment") "current environment")
+         " determines the set of key bindings in effect at
+any given time.  When the command interpreter tries to find the
+binding for a key, it first checks if there is a local binding in
+the "
+         (ref (section "The Current Buffer") "current buffer") ", then if there is a binding in each of the
+minor modes and the major "
+         (ref (section "Modes") "mode") " for the current buffer, and
+finally checks to see if there is a global binding.  If no binding is
+found, then the command interpreter beeps or flashes the screen to
+indicate this.
+                    ")
+        (definition (:function hemlock-interface:bind-key) "bind-key name key {code &optional} kind where" nil
+         (defsection "Description"
+           (para "
+This function associates command name and key in some environment. Key
+is either a key-event or a sequence of key-events.  There are three
+possible values of kind:
+                            ")
+           (listing :definition
+             (item ":global" ccldoc::=> "
+The default, make a global key binding.
+                                        ")
+             (item ":mode" ccldoc::=> "
+Make a mode specific key binding in the mode whose name is where.
+                                        ")
+             (item ":buffer" ccldoc::=> "
+Make a binding which is local to buffer where.
+                                        "))
+           (para "
+This processes key for "
+            (ref (section "Key Translation") "key translations") " before establishing the
+binding.
+                            ")
+           "
+If the key is some prefix of a key binding which already exists in the
+specified place, then the new one will override the old one,
+effectively deleting it.
+                            
+
+{code do-alpha-key-events} is useful for setting up bindings in certain new modes.
+                            "))
+        (definition (:function hemlock-interface:command-bindings) "command-bindings command" nil
+         (defsection "Description"
+           (para "
+This function returns a list of the places where command is bound.  A
+place is specified as a list of the key (always a vector), the kind of
+binding, and where (either the mode or buffer to which the binding is
+local, or nil if it is a global).
+                            ")))
+        (definition (:function hemlock-interface:delete-key-binding)
+         "delete-key-binding key {code &optional} kind where" nil
+         (defsection "Description"
+           "
+This function removes the binding of key in some place. Key is either
+a key-event or a sequence of key-events. kind is the kind of binding
+to delete, one of :global(the default), :mode or :buffer. If kind is
+:mode, where is the mode name, and if kind is :buffer, then where is
+the buffer.
+                            
+
+
+This function signals an error if key is unbound.
+                            "
+           (para "
+This processes key for "
+            (ref (section "Key Translation") "key translations") " before deleting the binding.
+                            ")))
+        (definition (:function hemlock-interface:get-command) "get-command key {code &optional} kind where" nil
+         (defsection "Description"
+           (para "
+This function returns the command bound to key, returning nil if it is
+unbound. Key is either a key-event or a sequence of key-events.  If
+key is an initial subsequence of some keys, then this returns the
+keyword :prefix. There are four cases of kind:
+                            ")
+           (listing :definition
+             (item ":current" ccldoc::=> "
+Return the current binding of key using the current buffer's search
+list.  If there are any transparent key bindings for key, then they
+are returned in a list as a second value.
+                                        ")
+             (item ":global" ccldoc::=> "
+Return the global binding of key. This is the default.
+                                        ")
+             (item ":mode" ccldoc::=> "
+Return the binding of key in the mode named where.
+                                        ")
+             (item ":buffer" ccldoc::=> "
+Return the binding of key local to the buffer where.
+                                        "))
+           (para "
+This processes key for "
+            (ref (section "Key Translation") "key translations") " before looking for any
+binding.
+                            ")))
+        (definition (:function hemlock-interface:map-bindings) "map-bindings function kind {code &optional} where" nil
+         (defsection "Description"
+           (para "
+This function maps over the key bindings in some place.  For each
+binding, this passes function the key and the command bound to
+it. Kind and where are the same as in bind-key. The key is not
+guaranteed to remain valid after a given iteration.
+                            "))))
+      (defsection "Key Translation"
+        "
+Key translation is a process that the command interpreter applies to
+keys before doing anything else.  There are two kinds of key
+translations: substitution and bit-prefix. In either case, the command
+interpreter translates a key when a specified key-event sequence
+appears in a key.
+                    
+
+
+In a substitution translation, the system replaces the matched
+subsequence with another key-event sequence. Key translation is not
+recursively applied to the substituted key-events.
+                    
+
+
+In a bit-prefix translation, the system removes the matched
+subsequence and effectively sets the specified bits in the next
+key-event in the key.
+                    
+
+
+While translating a key, if the system encounters an incomplete final
+subsequence of key-events, it aborts the translation process.  This
+happens when those last key-events form a prefix of some
+translation. It also happens when they translate to a bit-prefix, but
+there is no following key-event to which the system can apply the
+indicated modifier. If there is a binding for this partially
+untranslated key, then the command interpreter will invoke that
+command; otherwise, it will wait for the user to type more key-events.
+                    "
+        (definition (:function hemlock-interface:key-translation) "key-translation key" nil
+         (defsection "Description"
+           "
+This form is setf-able and allows users to register key translations
+that the command interpreter will use as users type key-events.
+                            
+
+
+This function returns the key translation for key, returning nil if
+there is none. Key is either a key-event or a sequence of key-events.
+If key is a prefix of a translation, then this returns :prefix.
+                            
+
+
+A key translation is either a key or modifier specification. The bits
+translations have a list form: (:bits {lbrace}bit-name{rbrace}*).
+                            
+
+
+Whenever key appears as a subsequence of a key argument to the binding
+manipulation functions, that portion will be replaced with the
+translation.
+                            ")))
+      (defsection "Transparent Key Bindings"
+        (para "
+Key bindings local to a mode may be transparent. A transparent key
+binding does not shadow less local key bindings, but rather indicates
+that the bound command should be invoked before the first normal key
+binding.  Transparent key bindings are primarily useful for
+implementing minor modes such as auto fill and word
+abbreviation. There may be several transparent key bindings for a
+given key, in which case all of the transparent commands are invoked in the
+order they were found. If there no normal key binding for a key typed,
+then the command interpreter acts as though the key is unbound even if
+there are transparent key bindings.
+                    ")
+        (para "
+The :transparent-p argument to "
+         (ref (definition :function hemlock-interface:defmode)) " determines whether
+all the key bindings in a mode are transparent or not.  In addition
+a particular command may be declared to be transparent by the
+:transparent-p argument to defcommand and make-command.
+                    ")))
+    (defsection "Command Types"
+      (para "
+In many editors the behavior of a command depends on the kind of
+command invoked before it. Hemlock provides a mechanism to support
+this known as {code command type}.
+            ")
+      (definition (:function hemlock-interface:last-command-type) "last-command-type" nil
+       (defsection "Description"
+         (para "
+This returns the command type of the last command invoked. If this is
+set with setf, the supplied value becomes the value of
+last-command-type until the next command completes.  If the previous
+command did not set last-command-type, then its value is nil. Normally
+a command type is a keyword. The command type is not cleared after a
+command is invoked due to a transparent key binding.
+                    "))))
+    (defsection "Command Arguments"
+      (para "
+There are three ways in which a command may be invoked: It may be
+bound to a key which has been typed, it may be invoked as an extended
+command, or it may be called as a Lisp function.  Ideally commands
+should be written in such a way that they will behave sensibly no
+matter which way they are invoked. The functions which implement
+commands must obey certain conventions about argument passing if the
+command is to function properly.
+            ")
+      (defsection "The Prefix Argument"
+        (para "
+Whenever a command is invoked it is passed as its first argument what
+is known as the prefix argument. The prefix argument is always either
+an integer or nil. When a command uses this value it is usually as a
+repeat count, or some conceptually similar function.
+                ")
+        (definition (:function hemlock-interface:prefix-argument) "prefix-argument" nil
+         (defsection "Description"
+           (para "
+This function returns the current value of the prefix argument.  When
+set with setf, the new value becomes the prefix argument for the next
+command.  If the prefix argument is not set by the previous command
+then the prefix argument for a command is nil. The prefix argument is
+not cleared after a command is invoked due to a transparent key
+binding.
+                        "))))
+      (defsection "Lisp Arguments"
+        (para "
+It is often desirable to call commands from Lisp code, in which case
+arguments which would otherwise be prompted for are passed as optional
+arguments following the prefix argument.  A command should prompt for
+any arguments not supplied.
+                "))))
+  (defsection "Modes"
+    (para "
+A mode is a collection of Hemlock values which may be present in the
+"
+     (ref (section "The Current Environment") "current environment") " depending on the editing task at hand.
+An example of a typical mode is Lisp, for editing Lisp code.
+        ")
+    (defsection "Mode Hooks"
+      (para "
+When a mode is added to or removed from a buffer, its mode hook is
+invoked.  The hook functions take two arguments, the buffer involved
+and t if the mode is being added or nil if it is being removed.  Mode
+hooks are typically used to make a mode do something additional to
+what it usually does.  One might, for example, make a Text mode hook
+that turned on auto-fill mode when you entered.
+            "))
+    (defsection "Major and Minor Modes"
+      "
+There are two kinds of modes, major modes and minor modes. A buffer
+always has exactly one major mode, but it may have any number of minor
+modes.  Major modes may have mode character attributes while minor
+modes may not.
+            
+
+
+A major mode is usually used to change the environment in some major
+way, such as to install special commands for editing some language.
+Minor modes generally change some small attribute of the environment,
+such as whether lines are automatically broken when they get too long.
+A minor mode should work regardless of what major mode and minor modes
+are in effect.
+            "
+      (definition (:hemlock-variable "Default Modes") #:|Default Modes (initial value '("Fundamental" "Save"))| nil
+       (defsection "Description"
+         (para "
+This variable contains a list of mode names which are instantiated in
+a buffer when no other information is available.
+                    ")))
+      (definition (:variable hemlock-interface:*mode-names*) "*mode-names*" nil
+       (defsection "Description"
+         (para "
+Holds a string-table of the names of all the modes.
+                    ")))
+      (definition (:hemlock-command "Illegal") "Illegal" nil
+       (defsection "Description"
+         (para "
+This is a useful command to bind in modes that wish to shadow global
+bindings by making them effectively illegal.  Also, although less
+likely, minor modes may shadow major mode bindings with this.  This
+command calls editor-error.
+                    "))))
+    (defsection "Mode Functions"
+      (definition (:function hemlock-interface:defmode)
+       "defmode name {code &key} :setup-function :cleanup-function :major-p :precedence :transparent-p :documentation"
+       nil
+       (defsection "Description"
+         (para "
+This function defines a new mode named name, and enters it in
+"
+          (ref (definition :variable hemlock-interface:*mode-names*)) ".  If major-p is supplied and is not nil then
+the mode is a major mode; otherwise it is a minor mode.
+                    ")
+         "
+Setup-function and cleanup-function are functions which are invoked
+with the buffer affected, after the mode is turned on, and before it
+is turned off, respectively.  These functions typically are used to
+make buffer-local key or variable bindings and to remove them when the
+mode is turned off.
+                    
+
+
+Precedence is only meaningful for a minor mode.  The precedence of a
+minor mode determines the order in which it in a buffer's list of
+modes.  When searching for values in the current environment, minor
+modes are searched in order, so the precedence of a minor mode
+determines which value is found when there are several definitions.
+                    
+
+
+Transparent-p determines whether key bindings local to the defined mode
+are transparent.  Transparent key bindings are invoked in addition to
+the first normal key binding found rather than shadowing less local
+key bindings.
+                    
+
+
+Documentation is some introductory text about the mode.  Commands such
+as Describe Mode use this.
+                    "))
+      (definition (:function hemlock-interface:mode-documentation) "mode-documentation name" nil
+       (defsection "Description"
+         (para "
+This function returns the documentation for the mode named name.
+                    ")))
+      (definition (:function hemlock-interface:buffer-major-mode) "buffer-major-mode buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Major Mode Hook") "Buffer Major Mode Hook" nil
+       (defsection "Description"
+         (para "
+buffer-major-mode returns the name of buffer's major mode.  The major
+mode may be changed with setf; then Buffer Major Mode Hook is invoked
+with buffer and the new mode.
+                    ")))
+      (definition (:function hemlock-interface:buffer-minor-mode) "buffer-minor-mode buffer name" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Buffer Minor Mode Hook") "Buffer Minor Mode Hook" nil
+       (defsection "Description"
+         (para "
+buffer-minor-mode returns t if the minor mode name is active in
+buffer, nil otherwise. A minor mode may be turned on or off by using
+setf; then Buffer Minor Mode Hook is invoked with buffer, name and the
+new value.
+                    ")))
+      (definition (:function hemlock-interface:mode-variables) "mode-variables name" nil
+       (defsection "Description"
+         (para "
+Returns the string-table of mode local variables.
+                    ")))
+      (definition (:function hemlock-interface:mode-major-p) "mode-major-p name" nil
+       (defsection "Description"
+         (para "
+Returns t if name is the name of a major mode, or nil if it is the
+name of a minor mode.  It is an error for name not to be the name of a
+mode.
+                    ")))))
+  (defsection "Character Attributes"
+    (defsection "Introduction"
+      (para "
+Character attributes provide a global database of information about
+characters.  This facility is similar to, but more general than, the
+syntax tables of other editors such as Emacs. For example, you should
+use character attributes for commands that need information regarding
+whether a character is whitespace or not.  Use character attributes
+for these reasons:
+            ")
+      (listing :number
+        (item "
+If this information is all in one place, then it is easy the
+change the behavior of the editor by changing the syntax table,
+much easier than it would be if character constants were wired
+into commands.
+                    "))
+      (listing :number
+        (item "
+This centralization of information avoids needless duplication of effort.
+                    "))
+      (listing :number
+        (item "
+The syntax table primitives are probably faster than anything that
+can be written above the primitive level.
+                    "))
+      (para "
+Note that an essential part of the character attribute scheme is that
+character attributes are global and are there for the user to
+change. Information about characters which is internal to some set of
+commands (and which the user should not know about) should not be
+maintained as a character attribute.  For such uses various character
+searching abilities are provided by the function "
+       (ref (definition :function hemlock-interface:find-pattern)) ".
+20).
+            "))
+    (defsection "Character Attribute Names"
+      (para #:|
+As for Hemlock variables, character attributes have a user visible
+string name, but are referred to in Lisp code as a symbol.  The string
+name, which is typically composed of capitalized words separated by
+spaces, is translated into a keyword by replacing all spaces with
+hyphens and interning this string in the keyword package.  The
+attribute named "Ada Syntax" would thus become :ada-syntax.
+            |)
+      (definition (:variable hemlock-interface:*character-attribute-names*) "*character-attribute-names*" nil
+       (defsection "Description"
+         (para "
+Whenever a character attribute is defined, its name is entered in this
+"
+          (ref (section "String-table Functions") "string-table") ", with the corresponding keyword as the value.
+                    "))))
+    (defsection "Character Attribute Functions"
+      (definition (:function hemlock-interface:defattribute)
+       "defattribute name documentation {code &optional} type initial-value" nil
+       (defsection "Description"
+         "
+This function defines a new character attribute with name, a
+string.  Character attribute operations take attribute
+arguments as a keyword whose name is name uppercased with spaces
+replaced by hyphens.
+                    
+
+
+Documentation describes the uses of the character attribute.
+                    
+
+
+Type, which defaults to (mod 2), specifies what type the values of the
+character attribute are.  Values of a character attribute may be of
+any type which may be specified to make-array. Initial-value (default
+0) is the value which all characters will initially have for this
+attribute.
+                    "))
+      (definition (:function hemlock-interface:character-attribute-name) "character-attribute-name attribute" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:character-attribute-documentation)
+       "character-attribute-documentation attribute" nil
+       (defsection "Description"
+         (para "
+These functions return the name or documentation for attribute.
+                    ")))
+      (definition (:function hemlock-interface:character-attribute) "character-attribute attribute character" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Character Attribute Hook") "Character Attribute Hook" nil
+       (defsection "Description"
+         "
+character-attribute returns the value of attribute for character. This
+signals an error if attribute is undefined.
+                    
+
+
+setf will set a character's attributes.  This setf method invokes the
+functions in Character Attribute Hook on the attribute and character
+before it makes the change.
+                    
+
+
+If character is nil, then the value of the attribute for the beginning
+or end of the buffer can be accessed or set.  The buffer beginning and
+end thus become a sort of fictitious character, which simplifies the
+use of character attributes in many cases.
+                    "))
+      (definition (:function hemlock-interface:character-attribute-p) "character-attribute-p symbol" nil
+       (defsection "Description"
+         (para "
+This function returns t if symbolis the name of a character attribute,
+nil otherwise.
+                    ")))
+      (definition (:function hemlock-interface:shadow-attribute) "shadow-attribute attribute character value mode" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Shadow Attribute Hook") "Shadow Attribute Hook" nil
+       (defsection "Description"
+         (para "
+This function establishes value as the value of character's attribute
+attribute when in the mode mode.  Mode must be the name of a major
+mode. Shadow Attribute Hook is invoked with the same arguments when
+this function is called. If the value for an attribute is set while
+the value is shadowed, then only the shadowed value is affected, not
+the global one.
+                    ")))
+      (definition (:function hemlock-interface:unshadow-attribute) "unshadow-attribute attribute character mode" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Unshadow Attribute Hook") "Unshadow Attribute Hook" nil
+       (defsection "Description"
+         (para "
+Make the value of attribute for character no longer be shadowed in
+mode. Unshadow Attribute Hook is invoked with the same arguments when
+this function is called.
+                    ")))
+      (definition (:function hemlock-interface:find-attribute) "find-attribute mark attribute {code &optional} test"
+       nil (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:reverse-find-attribute)
+       "reverse-find-attribute mark attribute {code &optional} test" nil
+       (defsection "Description"
+         (para "
+These functions find the next (or previous) character with some value
+for the character attribute attribute starting at mark. They pass test
+one argument, the value of attribute for the character tested.  If the
+test succeeds, then these routines modify mark to point before (after
+for reverse-find-attribute) the character which satisfied the test.
+If no characters satisfy the test, then these return nil, and mark
+remains unmodified. Test defaults to {code #'not-zerop}. There is no guarantee
+that the test is applied in any particular fashion, so it should have
+no side effects and depend only on its argument.
+                    ")))
+      (definition (:function hemlock-interface:find-not-attribute) "find-not-attribute mark attribute" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:reverse-find-not-attribute) "reverse-find-not-attribute mark attribute"
+       nil
+       (defsection "Description"
+         (para "
+These are equivalent to (find-attribute mark attribute #'zerop) and
+(reverse-find-attribute mark attribute #'zerop), respectively.
+                    "))))
+    (defsection "Character Attribute Hooks"
+      "
+It is often useful to use the character attribute mechanism as an
+abstract interface to other information about characters which in fact
+is stored elsewhere.  For example, some implementation of Hemlock
+might decide to define a Print Representation attribute which controls
+how a character is displayed on an output device.
+            
+
+
+To make this easy to do, each attribute has a list of hook functions
+which are invoked with the attribute, character and new value whenever
+the current value changes for any reason.
+            "
+      (definition (:function hemlock-interface:character-attribute-hooks) "character-attribute-hooks attribute" nil
+       (defsection "Description"
+         (para "
+Return the current hook list for attribute. This may be set with
+setf. The "
+          (ref (definition :macro hemlock-interface:add-hook)) " and "
+          (ref (definition :macro hemlock-interface:remove-hook)) " macros should be used to
+manipulate these lists.
+                    "))))
+    (defsection "System Defined Character Attributes"
+      (para "
+These are predefined in Hemlock:
+            ")
+      (listing :definition
+        (item #:|"Whitespace"| ccldoc::=> "
+A value of 1 indicates the character is whitespace.
+                        ")
+        (item #:|"Word Delimiter"| ccldoc::=> "
+A value of 1 indicates the character separates words (see the {section English Text Buffers} section).
+
+                        ")
+        (item #:|"Space"| ccldoc::=> "
+This is like Whitespace, but it should not include Newline. Hemlock
+uses this primarily for handling indentation on a line.
+                        ")
+        (item #:|"Sentence Terminator"| ccldoc::=> "
+A value of 1 indicates these characters terminate sentences (see the {section English Text Buffers} section).
+                        ")
+        (item #:|"Sentence Closing Char"| ccldoc::=> #:|
+A value of 1 indicates these delimiting characters, such as " or ),
+may follow a Sentence Terminator.
+                        |)
+        (item #:|"Paragraph Delimiter"| ccldoc::=> "
+A value of 1 indicates these characters delimit paragraphs when they
+begin a line (see the {section English Text Buffers} section).
+                        ")
+        (item #:|"Page Delimiter"| ccldoc::=> "
+A value of 1 indicates this character separates {section Logical Pages}
+when it begins a line.
+                        ")
+        (item #:|"Lisp Syntax"| ccldoc::=> "
+This uses symbol values from the following:
+                        "))
+      (listing :bullet
+        (item "
+nil  These characters have no interesting properties.
+                    "))
+      (listing :bullet
+        (item "
+:space  These characters act like whitespace and should not include Newline.
+                    "))
+      (listing :bullet
+        (item "
+:newline  This is the Newline character.
+                    "))
+      (listing :bullet
+        (item "
+:open-paren  This is ( character.
+                    "))
+      (listing :bullet
+        (item "
+:close-paren  This is ) character.
+                    "))
+      (listing :bullet
+        (item "
+:prefix  This is a character that is a part of any form it precedes for example, the single quote, '.
+                    "))
+      (listing :bullet
+        (item #:|
+:string-quote  This is the character that quotes a string literal, ".
+                    |))
+      (listing :bullet
+        (item "
+:char-quote  This is the character that escapes a single character, \\.
+                    "))
+      (listing :bullet
+        (item "
+:comment  This is the character that makes a comment with the rest of the line,;.
+                    "))
+      (listing :bullet
+        (item "
+:constituent  These characters are constitute symbol names.
+                    "))))
+  (defsection "Controlling the Display"
+    (defsection "Views"
+      "
+A {code hemlock-view} represents the GUI object(s) used to display the contents
+of a buffer.  Conceptually it consists of a text buffer, a
+modeline for semi-permanent status info, an echo area for transient
+status info, and a text input area for reading prompted
+input. (Currently the last two are conflated, i.e. text input happens
+in the echo area).
+            
+
+
+The API for working with hemlock-views is not fully
+defined yet.  If you need to work with views beyond what's listed
+here, you will probably need to get in the sources and find some
+internal functions to call.
+            ")
+    (defsection "The Current View"
+      (definition (:function hemlock-interface:current-view) "current-view" nil
+       (defsection "Description"
+         (para "
+current-view returns the hemlock view which is the target of the
+currently executing command.  This is usually the frontmost hemlock
+window in the current application.
+                    "))))
+    (defsection "View Functions"
+      (definition (:function hemlock-interface:hemlock-view-p) "hemlock-view-p object" nil
+       (defsection "Description"
+         (para "
+This function returns t if object is a hemlock view, otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:hemlock-view-buffer) "hemlock-view-buffer view" nil
+       (defsection "Description"
+         (para "
+This function returns the buffer which is displayed in the view.
+                    "))))
+    (defsection "Cursor Positions"
+      (definition (:function hemlock-interface:mark-column) "mark-column mark" nil
+       (defsection "Description"
+         (para "
+This function returns the X position at which mark would be displayed,
+supposing its line was displayed on an infinitely wide screen.  This
+takes into consideration strange characters such as tabs.
+                    ")))
+      (definition (:function hemlock-interface:move-to-column) "move-to-column mark column {code &optional} line" nil
+       (defsection "Description"
+         (para "
+This function is analogous to "
+          (ref (definition :function hemlock-interface:move-to-position)) ", except that
+it moves mark to the position on line which corresponds to the
+specified column.  If the line would not reach to the specified column, then nil is
+returned and mark is not modified.  Note that since a character may be
+displayed on more than one column on the screen, several different
+values of column may cause mark to be moved to the same position.
+                    "))))
+    (defsection "Redisplay"
+      (para "
+The display of the buffer contents on the screen is updated at the
+end of each command.  The following function can be used to control
+the scroll position of the buffer in the view.
+            ")
+      (definition (:function hemlock-interface:set-scroll-position) "set-scroll-position how {code &optional} what" nil
+       (defsection "Description"
+         (para "
+Normally, after a command that changes the contents of the buffer
+or the selection (i.e. the active region), the event handler repositions
+the view so that the selection is visible, scrolling the buffer as
+necessary.  Calling this function tells the system to not do that,
+and instead to position the buffer in a particular way.  {code how} can
+be one of the following:
+                    ")
+         (listing :definition
+           (item ":center-selection" ccldoc::=> "
+This causes the selection (or the point) to be centered in the visible area.  {code what} is ignored.
+
+                                ")
+           (item ":page-up" ccldoc::=> "
+This causes the previous page of the buffer to be shown {code what} is ignored.
+                                ")
+           (item ":page-down" ccldoc::=> "
+This causes the next page of the buffer to be shown. {code what} is ignored.
+                                ")
+           (item ":lines-up" ccldoc::=> "
+ This causes {code what} previous lines to be scrolled in at the top. {code what} must be an integer.  
+                                ")
+           (item ":lines-down" ccldoc::=> "
+This causes {code what} next lines to be scrolled in at the bottom. {code what} must be an integer.
+                                ")
+           (item ":line" ccldoc::=> "
+ This causes the line containing {code what} to be scrolled to the top of the view. {code what} must be a mark.
+                                "))))))
+  (defsection "Logical Key-Events"
+    (defsection "Introduction"
+      (para "
+Some primitives such as "
+       (ref (definition :function hemlock-interface:prompt-for-key)) " and commands such as
+Emacs query replace read key-events directly from the keyboard instead
+of using the command interpreter.  To encourage consistency between
+these commands and to make them portable and easy to customize, there
+is a mechanism for defininglogical key-events.  A logical key-event is
+a keyword which stands for some set of key-events.  The system
+globally interprets these key-events as indicators a particular
+action.  For example, the :help logical key-event represents the set of
+key-events that request help in a given Hemlock implementation. This
+mapping is a many-to-many mapping, not one-to-one, so a given logical
+key-event may have multiple corresponding actual key-events.  Also,
+any key-event may represent different logical key-events.
+            "))
+    (defsection "Logical Key-Event Functions"
+      (definition (:variable hemlock-interface:*logical-key-event-names*) "*logical-key-event-names*" nil
+       (defsection "Description"
+         (para "
+This variable holds a string-table mapping all logical key-event names
+to the keyword identifying the logical key-event.
+                    ")))
+      (definition (:function hemlock-interface:define-logical-key-event)
+       "define-logical-key-event string-name documentation" nil
+       (defsection "Description"
+         "
+This function defines a new logical key-event with name string-name.
+Logical key-event operations take logical key-events
+arguments as a keyword whose name is string-name uppercased with
+spaces replaced by hyphens.
+                    
+
+
+Documentation describes the action indicated by the logical key-event.
+                    "))
+      (definition (:function hemlock-interface:logical-key-event-key-events) "logical-key-event-key-events keyword" nil
+       (defsection "Description"
+         (para "
+This function returns the list of key-events representing the logical
+key-event keyword.
+                    ")))
+      (definition (:function hemlock-interface:logical-key-event-name) "logical-key-event-name keyword" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:logical-key-event-documentation)
+       "logical-key-event-documentation keyword" nil
+       (defsection "Description"
+         (para "
+These functions return the string name and documentation given
+to define-logical-key-event for logical key-event keyword.
+                    ")))
+      (definition (:function hemlock-interface:logical-key-event-p) "logical-key-event-p key-event keyword" nil
+       (defsection "Description"
+         (para "
+This function returns t if key-event is the logical key-event
+keyword. This is setf-able establishing or disestablishing key-events
+as particular logical key-events. It is a error for keyword to be an
+undefined logical key-event.
+                    "))))
+    (defsection "System Defined Logical Key-Events"
+      (para "
+There are many default logical key-events, some of which are used by
+functions documented in this manual.  If a command wants to read a
+single key-event command that fits one of these descriptions then the
+key-event read should be compared to the corresponding logical
+key-event instead of explicitly mentioning the particular key-event in
+the code.  In many cases you can use the "
+       (ref (definition :macro hemlock-interface:command-case)) " macro.
+It makes logical key-events easy to use and takes care of prompting
+and displaying help messages.
+            ")
+      (listing :bullet
+        (item "
+:abort Indicates the prompter should terminate its activity without performing any closing actions of convenience, for example.
+                    ")
+        (item "
+:yes Indicates the prompter should take the action under consideration.
+                    ")
+        (item "
+:no Indicates the prompter should NOT take the action under consideration.
+                    ")
+        (item "
+:do-all Indicates the prompter should repeat the action under consideration as many times as possible.
+                    ")
+        (item "
+:do-once Indicates the prompter should execute the action under consideration once and then exit.
+                    ")
+        (item "
+:help Indicates the prompter should display some help information.
+                    ")
+        (item "
+:confirm Indicates the prompter should take any input provided or use the default if the user entered nothing.
+                    ")
+        (item "
+:quote Indicates the prompter should take the following key-event as itself without any sort of command interpretation.
+                    ")
+        (item "
+:keep Indicates the prompter should preserve something.
+                    ")
+        (item "
+:y Indicates a short positive response
+                    ")
+        (item "
+:n Indicates a short negative response
+                    "))
+      (para "
+Define a new logical key-event whenever:
+            ")
+      (listing :number
+        (item "
+The key-event concerned represents a general class of actions, and
+several commands may want to take a similar action of this type.
+                    "))
+      (listing :number
+        (item "
+The exact key-event a command implementor chooses may generate
+violent taste disputes among users, and then the users can trivially
+change the command in their init files.
+                    "))
+      (listing :number
+        (item "
+You are using {code command-case} which prevents implementors from
+specifying non-standard characters for dispatching in otherwise
+possibly portable code, and you can define and set the logical
+key-event in a site dependent file where you can mention
+implementation dependent characters.
+                    "))))
+  (defsection "The Echo Area"
+    (para "
+Hemlock provides a number of facilities for displaying information and
+prompting the user for it.  Most of these work through a small area
+displayed at the bottom of the screen, called the Echo Area.
+        ")
+    (defsection "Echo Area Functions"
+      (definition (:function hemlock-interface:clear-echo-area) "clear-echo-area" nil
+       (defsection "Description"
+         (para "
+Clears the echo area.
+                    ")))
+      (definition (:function hemlock-interface:message) "message control-string {code &rest} format-arguments" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:loud-message)
+       "loud-message control-string {code &rest} format-arguments" nil
+       (defsection "Description"
+         (para "
+Displays a message in the echo area, replacing previous contents if any.
+loud-message is like message, but it also beeps.
+                    ")))
+      (definition (:function hemlock-interface:beep) "beep" nil
+       (defsection "Description"
+         (para "
+Gets the user's attention, typically by making a sound.
+                    "))))
+    (defsection "Prompting Functions"
+      #:|
+Prompting functions can be used to obtain short one-line input from the user.
+            
+
+
+Cocoa note: Because of implementation restrictions, only one buffer at
+a time is allowed to read prompted input.  If a prompting function is
+invoked while a prompting operation is already in effect in another
+buffer, the attempt fails, telling the user "Buffer xxx is already
+waiting for input".
+            
+
+
+Most of the prompting functions accept the following keyword arguments:
+            |
+      (listing :definition
+        (item ":must-exist" ccldoc::=> "
+If :must-exist has a non-nil value then the user is
+prompted until a valid response is obtained. If :must-exist is nil
+then return as a string whatever is input.  The default is t.
+                        ")
+        (item ":default" ccldoc::=> "
+If null input is given when the user is prompted then this
+value is returned. If no default is given then some input must be
+given before anything interesting will happen.
+                        ")
+        (item ":default-string" ccldoc::=> "
+If a :default is given then this is a string to be
+printed to indicate what the default is.  The default is some
+representation of the value for :default, for example for a buffer it
+is the name of the buffer.
+                        ")
+        (item ":prompt" ccldoc::=> "
+This is the prompt string to display.
+                        ")
+        (item ":help" ccldoc::=> "
+This is similar to :prompt, except that it is displayed when the help
+command is typed during input.
+                        "))
+      (block nil
+        (para "This may also be a function.  When called with no arguments, it
+should either return a string which is the help text or perform some
+action to help the user, returning nil.
+            "))
+      (definition (:function hemlock-interface:prompt-for-buffer)
+       "prompt-for-buffer {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+Prompts with completion for a buffer name and returns the
+corresponding buffer.  If must-exist is nil, then it returns the input
+string if it is not a buffer name.  This refuses to accept the empty
+string as input when :default and :default-string are
+nil. :default-string may be used to supply a default buffer name
+when:default is nil, but when :must-exist is non-nil, it must name an
+already existing buffer.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-key-event) "prompt-for-key-event {code &key} :prompt :help"
+       nil
+       (defsection "Description"
+         (para "
+This function prompts for a key-event returning immediately when the
+user types the next key-event.  "
+          (ref (definition :macro hemlock-interface:command-case)) " is more useful
+for most purposes. When appropriate, use {section Logical Key-Events}.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-key)
+       "prompt-for-key {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+This function prompts for a key, a vector of key-events, suitable for
+passing to any of the functions that manipulate "
+          (ref (section "Binding Commands to Keys") "key bindings") ".
+If must-exist is true, then the key must be bound in the current
+environment, and the command currently bound is returned as the second
+value.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-file)
+       "prompt-for-file {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para #:|
+This function prompts for an acceptable filename.  "Acceptable" means
+that it is a legal filename, and it exists if must-exist is
+non-nil. prompt-for-file returns a Common Lisp pathname.  If the file
+exists as entered, then this returns it, otherwise it is merged with
+default as by merge-pathnames.
+                    |)))
+      (definition (:function hemlock-interface:prompt-for-integer)
+       "prompt-for-integer {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+This function prompts for a possibly signed integer. If must-exist is
+nil, then prompt-for-integer returns the input as a string if it is
+not a valid integer.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-keyword)
+       "prompt-for-keyword string-tables {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         "
+This function prompts for a keyword with completion, using the string
+tables in the list string-tables. If must-exist is non-nil, then the
+result must be an unambiguous prefix of a string in one of the
+string-tables, and the returns the complete string even if only a
+prefix of the full string was typed.  In addition, this returns the
+value of the corresponding entry in the string table as the second
+value.
+                    
+
+
+If must-exist is nil, then this function returns the string exactly as
+entered.  The difference between prompt-for-keyword with must-exist
+nil, and prompt-for-string, is the user may complete the input using
+the Complete Parse and Complete Field commands.
+                    "))
+      (definition (:function hemlock-interface:prompt-for-expression)
+       "prompt-for-expression {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+This function reads a Lisp expression.  If must-exist is nil, and a
+read error occurs, then this returns the string typed.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-string)
+       "prompt-for-string {code &key} :prompt :help :default :default-string" nil
+       (defsection "Description"
+         (para "
+This function prompts for a string; this cannot fail.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-variable)
+       "prompt-for-variable {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+This function prompts for a variable name.  If must-exist is non-nil,
+then the string must be a variable defined in the current environment,
+in which case the symbol name of the variable found is returned as the
+second value.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-y-or-n)
+       "prompt-for-y-or-n {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para "
+This prompts for logical key events :Y or :N, returning t or nil without waiting for
+confirmation.  When the user types a confirmation key, this returns
+default if it is supplied.  If must-exist is nil, this returns
+whatever key-event the user first types; however, if the user types
+one of the above key-events, this returns t or nil. This is analogous to
+the Common Lisp function y-or-n-p.
+                    ")))
+      (definition (:function hemlock-interface:prompt-for-yes-or-no)
+       "prompt-for-yes-or-no {code &key} :prompt :help :must-exist :default :default-string" nil
+       (defsection "Description"
+         (para #:|
+This function is to prompt-for-y-or-n as yes-or-no-p is to
+y-or-n-p. "Yes" or "No" must be typed out in full and confirmation
+must be given.
+                    |)))
+      (definition (:macro hemlock-interface:command-case)
+       "command-case ({lbrace}key value{rbrace}*){lbrace}({lbrace}({lbrace}tag{rbrace}*) | tag{rbrace} help {lbrace}form{rbrace}*){rbrace}*"
+       nil
+       (defsection "Description"
+         (para "
+This macro is analogous to the Common Lisp case macro. Commands such
+as Help use this to get a key-event, translate it to a
+character, and then to dispatch on the character to some case.  In
+addition to character dispatching, this supports {section Logical Key-Events}
+by using the input key-event directly without translating it
+to a character.  Since the description of this macro is rather
+complex, first consider the following example:
+"
+          (code-block #:|
+(defcommand "Save All Buffers" (p)
+  "Give the User a chance to save each modified buffer."
+  (dolist (b *buffer-list*)
+    (select-buffer-command () b)
+    (when (buffer-modified b)
+      (command-case (:prompt "Save this buffer: [Y] "
+			     :help "Save buffer, or do something else:")
+	((:yes :confirm)
+	 "Save this buffer and go on to the next."
+	 (save-file-command () b))
+	(:no "Skip saving this buffer, and go on to the next.")
+	((:exit #\\p) "Punt this silly loop."
+	 (return nil))))))
+|))
+         "
+command-case prompts for a key-event and then executes the code in the
+first branch with a logical key-event or a character (called tags)
+matching the input.  Each character must be a standard-character, one
+that satisfies the Common Lisp standard-char-p predicate, and the
+dispatching mechanism compares the input key-event to any character
+tags by mapping the key-event to a character with
+ext:key-event-char. If the tag is a logical key-event, then the search
+for an appropriate case compares the key-event read with the tag
+using logical-key-event-p.
+                    
+
+
+All uses of command-case have two default cases, :help and :abort. You
+can override these easily by specifying your own branches that include
+these logical key-event tags.  The :help branch displays in a pop-up
+window the a description of the valid responses using the variously
+specified help strings. The :abort branch signals an editor-error.
+                    
+
+
+The key/value arguments control the prompting.  The following are valid values:
+                    "
+         (listing :definition
+           (item ":help" ccldoc::=> "
+The default :help case displays this string in a pop-up window.  In
+addition it formats a description of the valid input including each
+case's help string.
+                                ")
+           (item ":prompt" ccldoc::=> "
+This is the prompt used when reading the key-event.
+                                ")
+           (item ":bind" ccldoc::=> "
+This specifies a variable to which the prompting mechanism binds the
+input key-event. Any case may reference this variable.  If you wish
+to know what character corresponds to the key-event, use
+key-event-char.
+                                "))
+         "
+Instead of specifying a tag or list of tags, you may use t. This
+becomes the default branch, and its forms execute if no other branch
+is taken, including the default :help and :abort cases. This option has
+no helpstring, and the default :help case does not describe the default
+branch.  Every command-case has a default branch; if none is specified,
+the macro includes one that beep's and reprompt's (see below).
+                    
+
+
+Within the body of command-case, there is a defined reprompt macro. It
+causes the prompting mechanism and dispatching mechanism to
+immediately repeat without further execution in the current branch.
+                    ")))
+    (defsection "Control of Parsing Behavior"
+      (definition (:hemlock-variable "Beep On Ambiguity") "Beep On Ambiguity (initial value t)" nil
+       (defsection "Description"
+         (para #:|
+If this variable is true, then an attempt to complete a parse which is
+ambiguous will result in a "beep".
+                    |))))
+    (defsection "Defining New Prompting Functions"
+      (para #:|
+Prompting functionality is implemented by the function parse-for-something
+in cooperation with commands defined in "Echo Area" mode on the buffer associated
+with the echo area. You can implement new prompting functions by invoking
+parse-for-something with appropriate arguments.
+            |)
+      (definition (:function hemlock-interface:parse-for-something) "parse-for-something {code &key}" nil
+       (defsection "Description"
+         (para #:|
+This function enters a mode reading input from the user and echoing it in the echo area, and
+returns a value when done.  The input is managed by commands bound in "Echo Area" mode on the
+buffer associated with the echo area.  The following  keyword arguments are accepted:
+                    |)
+         (listing :definition
+           (item "{code :verification-function}" ccldoc::=> "
+This is invoked by the "
+            (ref (definition :hemlock-command "Confirm Parse")) " command.  It does most of
+the work when parsing prompted input. Confirm Parse calls it
+with one argument, which is the string that the user typed so far.
+The function should return a list of values which are to be the result
+of the recursive edit, or nil indicating that the parse failed.  In order
+to return zero values, a non-nil second value may be returned along with
+a nil first value.
+                                ")
+           (item "{code :string-tables}" ccldoc::=> "
+This is the list of string-tables, if any, that pertain to this parse.
+                                ")
+           (item "{code :value-must-exist}" ccldoc::=> "
+This is referred to by the verification function, and possibly some of the
+commands.
+                                ")
+           (item "{code :default}" ccldoc::=> "
+The string representing the default object when prompting the user.
+Confirm Parse supplies this to the parse verification function when the
+user input is empty.
+                                ")
+           (item "{code :default-string}" ccldoc::=> "
+When prompting the user, if :default is not specified, Hemlock displays
+this string as a representation of the default object; for example,
+when prompting for a buffer, this argument would be a default buffer name.
+                                ")
+           (item "{code :type}" ccldoc::=> "
+The kind of parse, e.g. :file, :keyword, :string. This tells the completion
+commands how to do completion, with :string disabling completion.
+                                ")
+           (item "{code :prompt}" ccldoc::=> "
+The prompt to display to the user.
+                                ")
+           (item "{code :help}" ccldoc::=> "
+The help string or function being used for the current parse.
+                                ")))))
+    (defsection "Some Echo Area Commands"
+      (para "
+These are some of the Echo Area commands that coordinate with the
+prompting routines. Hemlock binds other commands specific to the Echo
+Area, but they are uninteresting to mention here, such as deleting to
+the beginning of the line or deleting backwards a word.
+            ")
+      (definition (:hemlock-command "Help On Parse") "Help On Parse (bound to Home, C-_ in Echo Area mode)" nil
+       (defsection "Description"
+         (para "
+Display the help text for the parse currently in progress.
+                    ")))
+      (definition (:hemlock-command "Complete Keyword") "Complete Keyword (bound to Escape in Echo Area mode)" nil
+       (defsection "Description"
+         (para "
+This attempts to complete the current region.
+It signals an editor-error if the input is ambiguous or incorrect.
+                    ")))
+      (definition (:hemlock-command "Complete Field") "Complete Field (bound to Space in Echo Area mode)" nil
+       (defsection "Description"
+         (para "
+Similar to {code Complete Keyword}, but only attempts to complete up to and
+including the first character in the keyword with a non-zero
+:parse-field-separator attribute. If there is no field separator then
+attempt to complete the entire keyword.  If it is not a keyword parse
+then just self-insert.
+                    ")))
+      (definition (:hemlock-command "Confirm Parse") "Confirm Parse (bound to Return in Echo Area mode)" nil
+       (defsection "Description"
+         (para "
+Call the verification function with the current input.  If it
+returns a non-nil value then that is returned as the value of the
+parse.  A parse may return a nil value if the verification function
+returns a non-nil second value.
+                    ")))))
+  (defsection "Files"
+    (para "
+This chapter discusses ways to read and write files at various
+levels---at marks, into regions, and into buffers.  This also treats
+automatic mechanisms that affect the state of buffers in which files
+are read.
+        ")
+    (defsection "File Options and Type Hooks"
+      (para #:|
+The user specifies file options with a special syntax on the first
+line of a file.  If the first line contains the string "-*-",
+then Hemlock interprets the text between the first such occurrence and
+the second, which must be contained in one line , as a list of
+"option: value" pairs separated by semicolons.  The following is a
+typical example:
+|
+       (code-block "
+;;; -*- Mode: Lisp, Editor; Package: Hemlock -*-
+")
+       "See the Hemlock User's Manual for more details and predefined options.
+            ")
+      (para "
+File type hooks are executed when Hemlock reads a file into a buffer
+based on the type of the pathname.  When the user specifies a Mode
+file option that turns on a major mode, Hemlock ignores type hooks.
+This mechanism is mostly used as a simple means for turning on some
+appropriate default major mode.
+            ")
+      (definition (:macro hemlock-interface:define-file-option)
+       "define-file-option name (buffer value) {lbrace}declaration{rbrace}* {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+This defines a new file option with the string
+name name. Buffer and value specify variable names for the buffer and the
+option value string, and forms are evaluated with these bound.
+                    ")))
+      (definition (:macro hemlock-interface:define-file-type-hook)
+       "define-file-type-hook type-list (buffer type) {lbrace}declaration{rbrace}* {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+This defines some code that process-file-options(below) executes when
+the file options fail to set a major mode.  This associates each type,
+a string, in type-list with a routine that binds buffer to the
+buffer the file is in and type to the type of the pathname.
+                    ")))
+      (definition (:function hemlock-interface:process-file-options)
+       "process-file-options buffer {code &optional} pathname" nil
+       (defsection "Description"
+         (para "
+This checks for file options in buffer and invokes handlers if there
+are any. Pathname defaults to buffer's pathname but may be nil. If
+there is no Mode file option that specifies a major mode, and pathname
+has a type, then this tries to invoke the appropriate file type
+hook. read-buffer-file calls this.
+                    "))))
+    (defsection "Pathnames and Buffers"
+      (para "
+There is no good way to uniquely identify buffer names and pathnames.
+However, Hemlock has one way of mapping pathnames to buffer names that
+should be used for consistency among customizations and primitives.
+Independent of this, Hemlock provides a means for consistently
+generating prompting defaults when asking the user for pathnames.
+            ")
+      (definition (:function hemlock-interface:pathname-to-buffer-name) "pathname-to-buffer-name pathname" nil
+       (defsection "Description"
+         (para #:|
+This function returns a string of the form "file-namestring directory-namestring".
+                    |)))
+      (definition (:hemlock-variable "Pathname Defaults") #:|Pathname Defaults (initial value (pathname "gazonk.del"))|
+       nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Last Resort Pathname Defaults Function") "Last Resort Pathname Defaults Function"
+       nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Last Resort Pathname Defaults")
+       #:|Last Resort Pathname Defaults (initial value (pathname "gazonk"))| nil
+       (defsection "Description"
+         (para "
+These variables control the computation of default pathnames when
+needed for promting the user.  Pathname Defaults is a sticky
+default. See the Hemlock User's Manual for more details.
+                    ")))
+      (definition (:function hemlock-interface:buffer-default-pathname) "buffer-default-pathname buffer" nil
+       (defsection "Description"
+         (para "
+This returns Buffer Pathname if it is bound.  If it is not bound, and
+buffer's name is composed solely of alphnumeric characters, then
+return a pathname formed from buffer's name.  If buffer's name has
+other characters in it, then return the value of Last Resort Pathname
+Defaults Function called on buffer.
+                    "))))
+    (defsection "File Groups"
+      (para "
+Currently Hemlock doesn't have support for file groups.
+            "))
+    (defsection "File Reading and Writing"
+      (para "
+Common Lisp pathnames are used by the file primitives.  For probing,
+checking write dates, and so forth, all of the Common Lisp file
+functions are available.
+            ")
+      (definition (:function hemlock-interface:read-file) "read-file pathname mark" nil
+       (defsection "Description"
+         (para "
+This inserts the file named by pathname at mark.
+                    ")))
+      (definition (:function hemlock-interface:write-file)
+       "write-file region pathname {code &key} :keep-backup :append" nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Keep Backup Files") "Keep Backup Files (initial value nil)" nil
+       (defsection "Description"
+         "
+This function writes the contents of region to the file named by
+pathname. This writes region using a stream as if it were opened with
+:if-exists supplied as :rename-and-delete.
+                    
+
+
+When keep-backup, which defaults to the value of Keep Backup Files, is
+non-nil, this opens the stream as if :if-exists were :rename. If
+append is non-nil, this writes the file as if it were opened
+with:if-exists supplied as :append.
+                    
+
+
+This signals an error if both append and keep-backup are supplied as non-nil.
+                    "))
+      (definition (:function hemlock-interface:write-buffer-file) "write-buffer-file buffer pathname" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Write File Hook") "Write File Hook" nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Add Newline at EOF on Writing File")
+       "Add Newline at EOF on Writing File (initial value :ask-user)" nil
+       (defsection "Description"
+         (para "
+write-buffer-file writes buffer to the file named by pathname
+including the following:
+                    ")
+         (listing :bullet
+           (item "
+It assumes pathname is somehow related to buffer's pathname: if
+the buffer's write date is not the same as pathname's, then this
+prompts the user for confirmation before overwriting the file.
+                            "))
+         (listing :bullet
+           (item "
+It consults Add Newline at EOF on Writing File (see Hemlock User's
+Manual for possible values) and interacts with the user if
+necessary.
+                            "))
+         (listing :bullet
+           (item "
+It sets Pathname Defaults, and after using write-file,
+marks buffer unmodified.
+                            "))
+         (listing :bullet
+           (item "
+It updates Buffer's pathname and write date.
+                            "))
+         (listing :bullet
+           (item "
+It renames the buffer according to the new pathname if possible.
+                            "))
+         (listing :bullet
+           (item "
+It invokes Write File Hook.
+                            "))
+         (para "
+Write File Hook is a list of functions that take the newly written buffer as an argument.
+                    ")))
+      (definition (:function hemlock-interface:read-buffer-file) "read-buffer-file pathname buffer" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Read File Hook") "Read File Hook" nil
+       (defsection "Description"
+         (para "
+read-buffer-file deletes buffer's region and uses read-file to read
+pathname into it, including the following:
+                    ")
+         (listing :bullet
+           (item "
+It sets buffer's write date to the file's write date if the file
+exists; otherwise, it messages that this is a new file and sets
+buffer's write date to nil.
+                            "))
+         (listing :bullet
+           (item "
+It moves buffer's point to the beginning.
+                            "))
+         (listing :bullet
+           (item "
+It sets buffer's unmodified status.
+                            "))
+         (listing :bullet
+           (item "
+It sets buffer's pathname to the result of probing pathname if the
+file exists; otherwise, this function sets buffer's pathname to the
+result of merging pathname with default-directory.
+                            "))
+         (listing :bullet
+           (item "
+It sets Pathname Defaults to the result of the previous item.
+                            "))
+         (listing :bullet
+           (item "
+It processes the file options.
+                            "))
+         (listing :bullet
+           (item "
+It invokes Read File Hook.
+                            "))
+         (para "
+Read File Hook is a list functions that take two arguments---the
+buffer read into and whether the file existed, t if so.
+                    ")))))
+  (defsection "Hemlock's Lisp Environment"
+    (para "
+This chapter is sort of a catch all for any functions and variables
+which concern Hemlock's interaction with the outside world.
+        ")
+    (defsection "Entering and Leaving the Editor"
+      (definition (:function ed) "ed {code &optional} x" nil
+       (defsection "Description"
+         "
+This a standard Common Lisp function.  If x is supplied and is a
+string or pathname, the file specified by x is visited in a hemlock
+view (opening a new window if necessary, otherwise bringing an
+existing window with the file to the front), and the hemlock view
+object is the return value from the function.
+                    
+
+
+If x is null, a new empty hemlock view is created and returned.
+                    
+
+
+If x is a symbol or a setf function name, it attempts to
+edit the definition of the name.  In this last case, the
+function returns without waiting for the operation to complete
+(for example, it might put up a non-modal dialog asking the
+user to select one of multiple definitions) and hence the
+return value is always NIL.
+                    ")))
+    (defsection "Keyboard Input"
+      (definition (:variable hemlock-interface:*key-event-history*) "*key-event-history*" nil
+       (defsection "Description"
+         (para "
+This is a Hemlock "
+          (ref (section "Ring Functions") "ring buffer") " that holds the last 60
+key-events received.
+                    ")))
+      (definition (:function hemlock-interface:last-key-event-typed) "last-key-event-typed" nil
+       (defsection "Description"
+         (para "
+This function returns the last key-event the user typed to invoke the current command.
+                    ")))
+      (definition (:function hemlock-interface:last-char-typed) "last-char-typed" nil
+       (defsection "Description"
+         (para "
+This function returns the character corresponding to the last key event typed.
+                    "))))
+    (defsection "Hemlock Streams"
+      (para "
+It is possible to create streams which output to or get input from a
+buffer. This mechanism is quite powerful and permits easy interfacing
+of Hemlock to Lisp.
+            ")
+      (para "
+Note that operations on these streams operate directly on buffers,
+therefore they have the same restrictions as described "
+       (ref (section "Buffers") "here") "
+for interacting with buffers from outside of the GUI thread.
+            ")
+      (definition (:function hemlock-interface:make-hemlock-output-stream)
+       "make-hemlock-output-stream mark {code &optional} buffered" nil
+       (defsection "Description"
+         (para "
+This function returns a stream that inserts at mark all
+output directed to it.  It works best if mark is a left-inserting mark.
+Buffered controls whether the stream is buffered or not, and its valid values
+are the following keywords:
+                    ")
+         (listing :definition
+           (item ":none" ccldoc::=> "
+No buffering is done.  This is the default.
+                                ")
+           (item ":line" ccldoc::=> "
+The buffer is flushed whenever a newline is written or when it is
+explicitly done with force-output.
+                                ")
+           (item ":full" ccldoc::=> "
+The stream is only brought up to date when it is explicitly
+done with force-output
+                                "))))
+      (definition (:function hemlock-interface:hemlock-output-stream-p) "hemlock-output-stream-p object" nil
+       (defsection "Description"
+         (para "
+This function returns t if object is a hemlock-output-stream object.
+                    ")))
+      (definition (:function hemlock-interface:make-hemlock-region-stream) "make-hemlock-region-stream region" nil
+       (defsection "Description"
+         (para "
+This function returns a stream from which the text in
+region can be read.
+                    ")))
+      (definition (:function hemlock-interface:hemlock-region-stream-p) "hemlock-region-stream-p object" nil
+       (defsection "Description"
+         (para "
+This function returns t if object is a hemlock-region-stream object.
+                    ")))
+      (definition (:macro hemlock-interface:with-input-from-region)
+       "with-input-from-region (var region) {lbrace}declaration{rbrace}* {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+While evaluating forms, binds var to a stream which returns input from region.
+                    ")))
+      (definition (:macro hemlock-interface:with-output-to-mark)
+       "with-output-to-mark (var mark [buffered]) {lbrace}declaration{rbrace}* {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+During the evaluation of the forms, binds var to a stream which inserts
+output at the permanent mark.  Buffered has the same meaning as for
+make-hemlock-output-stream.
+                    ")))
+      (definition (:macro hemlock-interface:with-pop-up-display)
+       "with-pop-up-display (var {code &key} height name) {lbrace}declaration{rbrace}* {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+This macro executes forms in a context with var bound to a
+stream. Hemlock collects output to this stream and tries to pop up a
+display of the appropriate height containing all the output.  When
+height is supplied, Hemlock creates the pop-up display immediately,
+forcing output on line breaks.  This is useful for displaying information
+of temporary interest.
+                    "))))
+    (defsection "Interface to the Error System"
+      "
+Hemlock commands are executed from an event handler in the initial
+Cocoa thread.  They are executed within a
+ccl::with-standard-abort-handling form, which means cl:abort,
+ccl:abort-break, ccl:throw-cancel will abort the current command only
+and exit the event handler in an orderly fashion.
+            
+
+
+In addition, for now, lisp errors during command execution dump a
+backtrace in the system console and are otherwise handled as if by
+                {code handle-lisp-errors} below, which means it is not possible to debug
+errors at the point of the error.  Once {CCL} has better support
+for debugging errors in the initial Cocoa thread, better Hemlock error
+handling will be provided that will allow for some way to debug.
+            "
+      (definition (:function hemlock-interface:editor-error) "editor-error {code &rest} args" nil
+       (defsection "Description"
+         (para "
+This function is called to report minor errors to the user.  These are
+errors that a normal user could encounter in the course of editing,
+such as a search failing or an attempt to delete past the end of the
+buffer. This function simply aborts the current command.  Any args
+specified are used to format an error message to be placed in the echo
+area.  This function never returns.
+                    ")))
+      (definition (:macro hemlock-interface:handle-lisp-errors) "handle-lisp-errors {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+Within the body of this macro any Lisp errors that occur are handled
+by displaying an error message in a dialog and aborting the current
+command, leaving the error text in the echo area.  This macro should
+be wrapped around code which may get an error due to some action of
+the user --- for example, evaluating code fragments on the behalf of
+and supplied by the user.
+                    "))))
+    (defsection "Definition Editing"
+      (para "
+Hemlock provides commands for finding the definition of a function
+or variable and placing the user at the definition in a buffer. A
+function is provided to allow invoking this functionality outside
+of Hemlock.  Note that this function is unusual in that it is
+it is safe to call outside of the command interpreter, and in fact
+it can be called from any thread.
+            ")
+      (definition (:function hemlock:edit-definition) "edit-definition name" nil
+       (defsection "Description"
+         (para "
+This function tries to find the definition of {code name}, create
+or activate the window containing it, and scroll the view
+to show the definition.  If there are multiple definitions
+available, the user is given a choice of which one to
+use.  This function may return before the operation is complete.
+                    "))))
+    (defsection "Event Scheduling"
+      (para "
+No Event Scheduling functionality is provided at this time.
+            "))
+    (defsection "Miscellaneous"
+      (definition (:function hemlock-interface:in-lisp) "in-lisp {lbrace}form{rbrace}*" nil
+       (defsection "Description"
+         (para "
+This evaluates forms inside handle-lisp-errors. It also binds
+*package* to the package named by Current Package if it is
+non-nil. Use this when evaluating Lisp code on behalf of the user.
+                    ")))
+      (definition (:macro hemlock-interface:do-alpha-chars) "do-alpha-chars (var kind [result]) {lbrace}form{rbrace}*"
+       nil
+       (defsection "Description"
+         (para "
+This iterates over alphabetic characters in Common Lisp binding var to
+each character in order as specified under character relations in
+Common Lisp the Language. Kind is one of:lower, :upper, or :both. When
+the user supplies :both, lowercase characters are processed first.
+                    ")))))
+  (defsection "High-Level Text Primitives"
+    (para "
+This chapter discusses primitives that operate on higher level text
+forms than characters and words. For English text, there are functions
+that know about sentence and paragraph structures, and for Lisp
+sources, there are functions that understand this language. This
+chapter also describes mechanisms for organizing file sections into
+logical pages and for formatting text forms.
+        ")
+    (defsection "Indenting Text"
+      (definition (:hemlock-variable "Indent Function") "Indent Function (initial value tab-to-tab-stop)" nil
+       (defsection "Description"
+         (para "
+The value of this variable determines how indentation is done, and it
+is a function which is passed a mark as its argument. The function
+should indent the line that the mark points to. The function may move
+the mark around on the line. The mark will be :left-inserting. The
+default simply inserts a tab character at the mark. A function for
+Lisp mode probably moves the mark to the beginning of the line,
+deletes horizontal whitespace, and computes some appropriate
+indentation for Lisp code.
+                    ")))
+      (definition (:hemlock-variable "Indent with Tabs") "Indent with Tabs (initial value nil)" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Spaces per Tab") "Spaces per Tab (initial value 8)" nil
+       (defsection "Description"
+         (para "
+Indent with Tabs should be true if indenting should use tabs
+whenever possible. If nil, the default, it only uses spaces.
+Spaces per Tab defines the size of a tab.
+                    ")))
+      (definition (:function hemlock-interface:indent-region) "indent-region region" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:indent-region-for-commands) "indent-region-for-commands region" nil
+       (defsection "Description"
+         (para "
+indent-region invokes the value of Indent Function on every line of
+region. indent-region-for-commands uses indent-region but first saves
+the region for the Undo command.
+                    ")))
+      (definition (:function hemlock-interface:delete-horizontal-space) "delete-horizontal-space mark" nil
+       (defsection "Description"
+         (para "
+This deletes all characters on either side of mark with a Space attribute (see {section System Defined Character Attributes}) of 1.
+                    "))))
+    (defsection "Lisp Text Buffers"
+      "
+Hemlock bases its Lisp primitives on parsing a block of the buffer and
+annotating lines as to what kind of Lisp syntax occurs on the line or
+what kind of form a mark might be in (for example, string, comment,
+list, etc.). These do not work well if the block of parsed forms is
+exceeded when moving marks around these forms, but the block that gets
+parsed is somewhat programmable.
+            
+
+
+There is also a notion of a top level form which this documentation
+often uses synonymously with defun, meaning a Lisp form occurring in a
+source file delimited by parentheses with the opening parenthesis at
+the beginning of some line. The names of the functions include this
+inconsistency.
+            "
+      (definition (:function hemlock-interface:pre-command-parse-check) "pre-command-parse-check mark for-sure" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Parse Start Function")
+       "Parse Start Function (initial value start-of-parse-block)" nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Parse End Function") "Parse End Function (initial value end-of-parse-block)" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Minimum Lines Parsed") "Minimum Lines Parsed (initial value 50)" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Maximum Lines Parsed") "Maximum Lines Parsed (initial value 500)" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Defun Parse Goal") "Defun Parse Goal (initial value 2)" nil
+       (defsection "Description"
+         "
+pre-command-parse-check calls Parse Start Function and Parse End
+Function on mark to get two marks. It then parses all the lines
+between the marks including the complete lines they point into. When
+for-sure is non-nil, this parses the area regardless of any cached
+information about the lines. Every command that uses the following
+routines calls this before doing so.
+                    
+
+
+The default values of the start and end variables use Minimum Lines
+Parsed, Maximum Lines Parsed, and Defun Parse Goal to determine how
+big a region to parse. These two functions always include at least the
+minimum number of lines before and after the mark passed to them. They
+try to include Defun Parse Goal number of top level forms before and
+after the mark passed them, but these functions never return marks
+that include more than the maximum number of lines before or after the
+mark passed to them.
+                    "))
+      (definition (:function hemlock-interface:form-offset) "form-offset mark count" nil
+       (defsection "Description"
+         (para "
+This tries to move mark count forms forward if positive or -count
+forms backwards if negative. Mark is always moved. If there were
+enough forms in the appropriate direction, this returns mark,
+otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:top-level-offset) "top-level-offset mark count" nil
+       (defsection "Description"
+         (para "
+This tries to move mark count top level forms forward if positive or
+-count top level forms backwards if negative. If there were enough top
+level forms in the appropriate direction, this returns mark, otherwise
+nil. Mark is moved only if this is successful.
+                    ")))
+      (definition (:function hemlock-interface:mark-top-level-form) "mark-top-level-form mark1 mark2" nil
+       (defsection "Description"
+         (para "
+This moves mark1 and mark2 to the beginning and end, respectively, of
+the current or next top level form. Mark1 is used as a reference to
+start looking. The marks may be altered even if unsuccessful. If
+successful, return mark2, else nil. Mark2 is left at the beginning of
+the line following the top level form if possible, but if the last
+line has text after the closing parenthesis, this leaves the mark
+immediately after the form.
+                    ")))
+      (definition (:function hemlock-interface:defun-region) "defun-region mark" nil
+       (defsection "Description"
+         (para "
+This returns a region around the current or next defun with respect to
+mark. Mark is not used to form the region. If there is no appropriate
+top level form, this signals an editor-error. This calls
+pre-command-parse-check first.
+                    ")))
+      (definition (:function hemlock-interface:inside-defun-p) "inside-defun-p mark" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:start-defun-p) "start-defun-p mark" nil
+       (defsection "Description"
+         (para "
+These return, respectively, whether mark is inside a top level form or
+at the beginning of a line immediately before a character whose Lisp
+Syntax (see {section System Defined Character Attributes}) 
+value is :opening-paren.
+                    ")))
+      (definition (:function hemlock-interface:forward-up-list) "forward-up-list mark" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:backward-up-list) "backward-up-list mark" nil
+       (defsection "Description"
+         (para "
+Respectively, these move mark immediately past a character whose Lisp
+Syntax (see {section System Defined Character Attributes}) 
+value is :closing-paren or immediately before
+a character whose Lisp Syntax value is :opening-paren.
+                    ")))
+      (definition (:function hemlock-interface:valid-spot) "valid-spot mark forwardp" nil
+       (defsection "Description"
+         (para "
+This returns t or nil depending on whether the character indicated by
+mark is a valid spot. When forwardp is set, use the character after
+mark and vice versa. Valid spots exclude commented text, inside
+strings, and character quoting.
+                    ")))
+      (definition (:function hemlock-interface:defindent) "defindent name count" nil
+       (defsection "Description"
+         (para "
+This defines the function with name to have count special
+arguments. indent-for-lisp, the value of "
+          (ref (definition :hemlock-variable "Indent Function")) #:|
+in Lisp mode, uses this to specially indent these arguments. For
+example, do has two, with-open-file has one, etc. There are many of
+these defined by the system including definitions for special Hemlock
+forms. Name is a simple-string, case insensitive and purely textual
+(that is, not read by the Lisp reader); therefore, "with-a-mumble" is
+distinct from "mumble:with-a-mumble".
+                    |))))
+    (defsection "English Text Buffers"
+      (para "
+This section describes some routines that understand basic English
+language forms.
+            ")
+      (definition (:function hemlock-interface:word-offset) "word-offset mark count" nil
+       (defsection "Description"
+         (para "
+This moves mark count words forward (if positive) or backwards (if
+negative). If mark is in the middle of a word, that counts as one. If
+there were count (-count if negative) words in the appropriate
+direction, this returns mark, otherwise nil. This always moves mark. A
+word lies between two characters whose Word Delimiter attribute value
+is 1 (see {section System Defined Character Attributes}).
+                    ")))
+      (definition (:function hemlock-interface:sentence-offset) "sentence-offset mark count" nil
+       (defsection "Description"
+         "
+This moves mark count sentences forward (if positive) or backwards (if negative). If mark is in the middle of a sentence, that counts as one. If there were count (-count if negative) sentences in the appropriate direction, this returns mark, otherwise nil. This always moves mark. 
+                    
+
+
+A sentence ends with a character whose Sentence Terminator attribute
+is 1 followed by two spaces, a newline, or the end of the buffer. The
+terminating character is optionally followed by any number of
+characters whose Sentence Closing Char attribute is 1. A sentence
+begins after a previous sentence ends, at the beginning of a
+paragraph, or at the beginning of the buffer.
+                    "))
+      (definition (:function hemlock-interface:paragraph-offset) "paragraph-offset mark count {code &optional} prefix"
+       nil (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Paragraph Delimiter Function") "Paragraph Delimiter Function (initial value )"
+       nil
+       (defsection "Description"
+         "
+This moves mark count paragraphs forward (if positive) or backwards
+(if negative). If mark is in the middle of a paragraph, that counts as
+one. If there were count (-count if negative) paragraphs in the
+appropriate direction, this returns mark, otherwise nil. This only
+moves mark if there were enough paragraphs.
+                    
+
+
+Paragraph Delimiter Function holds a function that takes a mark,
+typically at the beginning of a line, and returns whether or not the
+current line should break the paragraph. default-para-delim-function
+returns t if the next character, the first on the line, has a
+Paragraph Delimiter attribute value of 1. This is typically a space,
+for an indented paragraph, or a newline, for a block style. Some modes
+require a more complicated determinant; for example, Scribe modes adds
+some characters to the set and special cases certain formatting
+commands.
+                    "
+         (para "
+Prefix defaults to "
+          (ref (definition :hemlock-variable "Fill Prefix")) ", and the right
+prefix is necessary to correctly skip paragraphs. If prefix is
+non-nil, and a line begins with prefix, then the scanning process
+skips the prefix before invoking the Paragraph Delimiter
+Function. Note, when scanning for paragraph bounds, and prefix is
+non-nil, lines are potentially part of the paragraph regardless of
+whether they contain the prefix; only the result of invoking the
+delimiter function matters.
+                    ")
+         (para "
+The programmer should be aware of an idiom for finding the end of the
+current paragraph. Assume paragraphp is the result of moving mark one
+paragraph, then the following correctly determines whether there
+actually is a current paragraph:
+"
+          (code-block "
+(or paragraphp
+  (and (last-line-p mark)
+       (end-line-p mark)
+       (not (blank-line-p (mark-line mark))))) 
+"))
+         (para "
+In this example mark is at the end of the last paragraph in the
+buffer, and there is no last newline character in the
+buffer. paragraph-offset would have returned nil since it could not
+skip any paragraphs since mark was at the end of the current and last
+paragraph. However, you still have found a current paragraph on which
+to operate. mark-paragraph understands this problem.
+                    ")))
+      (definition (:function hemlock-interface:mark-paragraph) "mark-paragraph mark1 mark2" nil
+       (defsection "Description"
+         (para "
+This marks the next or current paragraph, setting mark1 to the
+beginning and mark2 to the end. This uses "
+          (ref (definition :hemlock-variable "Fill Prefix")) ".
+Mark1 is always on the first line of the paragraph, regardless
+of whether the previous line is blank. Mark2 is typically at the
+beginning of the line after the line the paragraph ends on, this
+returns mark2 on success. If this cannot find a paragraph, then the
+marks are left unmoved, and nil is returned.
+                    "))))
+    (defsection "Logical Pages"
+      (para "
+Logical pages are not supported at this time.
+            "))
+    (defsection "Filling"
+      (para "
+Filling is an operation on text that breaks long lines at word
+boundaries before a given column and merges shorter lines together in
+an attempt to make each line roughly the specified length. This is
+different from justification which tries to add whitespace in awkward
+places to make each line exactly the same length. Hemlock's filling
+optionally inserts a specified string at the beginning of each
+line. Also, it eliminates extra whitespace between lines and words,
+but it knows two spaces follow sentences.
+            ")
+      (definition (:hemlock-variable "Fill Column") "Fill Column (initial value 75)" nil
+       (defsection "Description" (para " ")))
+      (definition (:hemlock-variable "Fill Prefix") "Fill Prefix (initial value nil)" nil
+       (defsection "Description"
+         (para "
+These variables hold the default values of the prefix and column
+arguments to Hemlock's filling primitives. If Fill Prefix is nil, then
+there is no fill prefix.
+                    ")))
+      (definition (:function hemlock-interface:fill-region) "fill-region region {code &optional} prefix column" nil
+       (defsection "Description"
+         (para "
+This deletes any blank lines in region and fills it according to
+prefix and column. Prefix and column default to Fill Prefix and Fill
+Column.
+                    ")))
+      (definition (:function hemlock-interface:fill-region-by-paragraphs)
+       "fill-region-by-paragraphs region {code &optional} prefix column" nil
+       (defsection "Description"
+         (para "
+This finds paragraphs within region and fills them
+with fill-region. This ignores blank lines between paragraphs. Prefix
+and column default to Fill Prefix and Fill Column.
+                    ")))))
+  (defsection "Utilities"
+    (para "
+This chapter describes a number of utilities for manipulating some
+types of objects Hemlock uses to record information. String-tables are
+used to store names of variables, commands, modes, and buffers. Ring
+lists can be used to provide a kill ring, recent command history, or
+other user-visible features.
+        ")
+    (defsection "String-table Functions"
+      "
+String tables are similar to Common Lisp hash tables in that they
+associate a value with an object. There are a few useful differences:
+in a string table the key is always a case insensitive string, and
+primitives are provided to facilitate keyword completion and
+recognition. Any type of string may be added to a string table, but
+the string table functions always return simple-string's.
+            
+
+
+A string entry in one of these tables may be thought of as being
+separated into fields or keywords. The interface provides keyword
+completion and recognition which is primarily used to implement some
+Echo Area commands. These routines perform a prefix match on a
+field-by-field basis allowing the ambiguous specification of earlier
+fields while going on to enter later fields. While string tables may
+use any string-char as a separator, the use of characters other than
+space may make the Echo Area commands fail or work unexpectedly.
+            "
+      (definition (:function hemlock-interface:make-string-table) "make-string-table" nil
+       (defsection "Description"
+         (para "
+This function creates an empty string table that uses separator as the
+character, which must be a string-char, that distinguishes
+fields. Initial-contents specifies an initial set of strings and their
+values in the form of a dotted a-list, for example:
+"
+          (code-block #:|
+'(("Global" . t) ("Mode" . t) ("Buffer" . t))
+|))))
+      (definition (:function hemlock-interface:string-table-p) "string-table-p string-table" nil
+       (defsection "Description"
+         (para "
+This function returns t if string-table is a string-table object,
+otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:string-table-separator) "string-table-separator string-table" nil
+       (defsection "Description"
+         (para "
+This function returns the separator character given to
+make-string-table.
+                    ")))
+      (definition (:function hemlock-interface:delete-string) "delete-string string table" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:clrstring) "clrstring table" nil
+       (defsection "Description"
+         (para "
+delete-string removes any entry for string from the string-table
+table, returning t if there was an entry. clrstring removes all
+entries from table.
+                    ")))
+      (definition (:function hemlock-interface:getstring) "getstring string table" nil
+       (defsection "Description"
+         "
+This function returns as multiple values, first the value
+corresponding to the string if it is found and nil if it isn't, and
+second t if it is found and nil if it isn't.
+                    
+
+
+This may be set with setf to add a new entry or to store a new value
+for a string. It is an error to try to insert a string with more than
+one field separator character occurring contiguously.
+                    "))
+      (definition (:function hemlock-interface:complete-string) "complete-string string tables" nil
+       (defsection "Description"
+         (para "
+This function completes string as far as possible over the list of
+tables, returning five values. It is an error for tables to have
+different separator characters. The five return values are as follows:
+                    ")
+         (listing :bullet
+           (item "
+The maximal completion of the string or nil if there is none.
+                            "))
+         (listing :bullet
+           (item "
+An indication of the usefulness of the returned string:
+                            "))
+         (listing :definition
+           (item ":none" ccldoc::=> "
+There is no completion of string.
+                                ")
+           (item ":complete" ccldoc::=> "
+The completion is a valid entry, but other valid
+completions exist too. This occurs when the supplied string is an
+entry as well as initial substring of another entry.
+                                ")
+           (item ":unique" ccldoc::=> "
+The completion is a valid entry and unique.
+                                ")
+           (item ":ambiguous" ccldoc::=> "
+The completion is invalid; get-string would return nil
+and nil if given the returned string.
+                                "))
+         (listing :bullet
+           (item "
+The value of the string when the completion is :unique or
+:complete, otherwise nil.
+                            "))
+         (listing :bullet
+           (item "
+An index, or nil, into the completion returned, indicating where
+the addition of a single field to string ends. The command Complete
+Field uses this when the completion contains the addition to string
+of more than one field.
+                            "))
+         (listing :bullet
+           (item "
+An index to the separator following the first ambiguous field when
+the completion is :ambiguous or :complete, otherwise nil.
+                            "))))
+      (definition (:function hemlock-interface:find-ambiguous) "find-ambiguous string table" nil
+       (defsection "Description" (para " ")))
+      (definition (:function hemlock-interface:find-containing) "find-containing string table" nil
+       (defsection "Description"
+         "
+find-ambiguous returns a list in alphabetical order of all the strings
+in table matching string. This considers an entry as matching if each
+field in string, taken in order, is an initial substring of the
+entry's fields; entry may have fields remaining.
+                    
+
+
+find-containing is similar, but it ignores the order of the fields in
+string, returning all strings in table matching any permutation of the
+fields in string.
+                    "))
+      (definition (:macro hemlock-interface:do-strings)
+       "do-strings (string-var value-var table result) declaration tag statement" nil
+       (defsection "Description"
+         (para "
+This macro iterates over the strings in table in alphabetical
+order. On each iteration, it binds string-var to an entry's string and
+value-var to an entry's value.
+                    "))))
+    (defsection "Ring Functions"
+      (para "
+There are various purposes in an editor for which a ring of values can
+be used, so Hemlock provides a general ring buffer type. It is used
+for maintaining a ring of  "
+       (ref (section "Kill Ring") "killed regions") ", a ring of
+"
+       (ref (section "The Current Buffer") "marks") ", or a ring of command strings which various
+modes and commands maintain as a history mechanism.
+            ")
+      (definition (:function hemlock-interface:make-ring) "make-ring length {code &optional} delete-function" nil
+       (defsection "Description"
+         (para "
+Makes an empty ring object capable of holding up to length Lisp
+objects. Delete-function is a function that each object is passed to
+before it falls off the end. Length must be greater than zero.
+                    ")))
+      (definition (:function hemlock-interface:ringp) "ringp ring" nil
+       (defsection "Description"
+         (para "
+Returns t if ring is a ring object, otherwise nil.
+                    ")))
+      (definition (:function hemlock-interface:ring-length) "ring-length ring" nil
+       (defsection "Description"
+         (para "
+Returns as multiple-values the number of elements which ring currently
+holds and the maximum number of elements which it may hold.
+                    ")))
+      (definition (:function hemlock-interface:ring-ref) "ring-ref ring index" nil
+       (defsection "Description"
+         (para "
+Returns the index'th item in the ring, where zero is the index of the
+most recently pushed. This may be set with setf.
+                    ")))
+      (definition (:function hemlock-interface:ring-push) "ring-push object ring" nil
+       (defsection "Description"
+         (para "
+Pushes object into ring, possibly causing the oldest item to go away.
+                    ")))
+      (definition (:function hemlock-interface:ring-pop) "ring-pop ring" nil
+       (defsection "Description"
+         (para "
+Removes the most recently pushed object from ring and returns it. If
+the ring contains no elements then an error is signalled.
+                    ")))
+      (definition (:function hemlock-interface:rotate-ring) "rotate-ring ring offset" nil
+       (defsection "Description"
+         (para "
+With a positive offset, rotates ring forward that many times. In a
+forward rotation the index of each element is reduced by one, except
+the one which initially had a zero index, which is made the last
+element. A negative offset rotates the ring the other way.
+                    "))))
+    (defsection "Undoing commands"
+      (para "
+No API to the undo facility is provided at this time.
+            ")))
+  (defsection "Miscellaneous"
+    (para "
+This chapter is somewhat of a catch-all for comments and features that
+don't fit well anywhere else.
+        ")
+    (defsection "Key-events"
+      (defsection "Introduction"
+        (para "
+The canonical representation of editor input is a key-event
+structure. Users can bind commands to keys, which
+are non-empty sequences of key-events. A key-event consists of
+an identifying token known as a keysym and a field of bits
+representing modifiers. Users define keysyms by supplying names
+that reflect the legends on their keyboard's keys.
+Users define modifier names similarly, but the system chooses the
+bit and mask for recognizing the modifier. You can
+use keysym and modifier names to textually specify key-events and
+Hemlock keys in a #k syntax. The following are some examples:
+"
+         (code-block #:|
+#k"C-u"
+#k"Control-u"
+#k"c-m-z"
+#k"control-x meta-d"
+#k"a"
+#k"A"
+#k"Linefeed"
+|))
+        "
+This is convenient for use within code and in init files containing
+bind-key calls.
+                
+
+
+The #k syntax is delimited by double quotes, but the system parses the
+contents rather than reading it as a Common Lisp string. Within the
+double quotes, spaces separate multiple key-events. A single key-event
+optionally starts with modifier names terminated by hyphens. Modifier
+names are alphabetic sequences of characters which the system uses
+case-insensitively. Following modifiers is a keysym name, which is
+case-insensitive if it consists of multiple characters, but if the
+name consists of only a single character, then it is case-sensitive.
+                
+
+
+You can escape special characters --- hyphen, double quote, open angle
+bracket, close angle bracket, and space --- with a backslash, and you
+can specify a backslash by using two contiguously. You can use angle
+brackets to enclose a keysym name with many special characters in
+it. Between angle brackets appearing in a keysym name position, there
+are only two special characters, the closing angle bracket and
+backslash.
+                ")
+      (defsection "Interface"
+        (definition (:function hemlock-interface:define-keysym)
+         "define-keysym keysym preferred-name {code &rest} other-names" nil
+         (defsection "Description"
+           "
+This function establishes a mapping from preferred-name to keysym for
+purposes of #k syntax. Other-names also map to keysym, but the system
+uses preferred-name when printing key-events. The names are
+case-insensitive simple-strings; however, if the string contains a
+single character, then it is used case-sensitively. Redefining a
+keysym or re-using names has undefined effects.
+                        
+
+
+Keysym can be any object, but generally it is either an integer
+representing the window-system code for the event, or a keyword
+which allows the mapping of the keysym to its code to be defined
+separately.
+                        "))
+        (definition (:function hemlock-interface:define-keysym-code) "define-keysym-code keysym code" nil
+         (defsection "Description"
+           (para "
+Defines the window-system code for the key event which in Hemlock is
+represented by keysym.
+                        ")))
+        (definition (:function hemlock-interface:define-mouse-keysym)
+         "define-mouse-keysym button keysym name shifted-bit event-key" nil
+         (defsection "Description"
+           (para "
+This function defines keysym named name for key-events representing
+mouse click events. Shifted-bit is a defined modifier name that
+translate-mouse-key-event sets in the key-event it returns whenever
+the shift bit is set in an incoming event.
+                        ")))
+        (definition (:function hemlock-interface:name-keysym) "name-keysym name" nil
+         (defsection "Description"
+           (para "
+This function returns the keysym named name. If name is unknown, this
+returns nil.
+                        ")))
+        (definition (:function hemlock-interface:keysym-names) "keysym-names keysym" nil
+         (defsection "Description"
+           (para "
+This function returns the list of all names for keysym. If keysym is
+undefined, this returns nil.
+                        ")))
+        (definition (:function hemlock-interface:keysym-preferred-name) "keysym-preferred-name keysym" nil
+         (defsection "Description"
+           (para "
+This returns the preferred name for keysym, how it is typically
+printed. If keysym is undefined, this returns nil.
+                        ")))
+        (definition (:function hemlock-interface:define-key-event-modifier)
+         "define-key-event-modifier long-name short-name" nil
+         (defsection "Description"
+           "
+This establishes long-name and short-name as modifier names for
+purposes of specifying key-events in #k syntax. The names are
+case-insensitive strings. If either name is already defined,
+this signals an error.
+                        
+
+
+The system defines the following default modifiers (first the long
+name, then the short name):
+                        "
+           (listing :bullet
+             (item #:|
+"Hyper", "H"
+                                |)
+             (item #:|
+"Super", "S"
+                                |)
+             (item #:|
+"Meta", "M"
+                                |)
+             (item #:|
+"Control", "C"
+                                |)
+             (item #:|
+"Shift", "Shift"
+                                |)
+             (item #:|
+"Lock", "Lock"
+                                |))))
+        (definition (:variable hemlock-interface:*all-modifier-names*) "*all-modifier-names*" nil
+         (defsection "Description"
+           (para "
+This variable holds all the defined modifier names.
+                        ")))
+        (definition (:function hemlock-interface:make-key-event-bits) "make-key-event-bits {code &rest} modifier-names"
+         nil
+         (defsection "Description"
+           (para "
+This function returns bits suitable for make-key-event from the
+supplied modifier-names. If any name is undefined, this signals an
+error.
+                        ")))
+        (definition (:function hemlock-interface:key-event-modifier-mask) "key-event-modifier-mask modifier-name" nil
+         (defsection "Description"
+           (para "
+This function returns a mask for modifier-name. This mask is suitable
+for use with key-event-bits. If modifier-name is undefined, this
+signals an error.
+                        ")))
+        (definition (:function hemlock-interface:key-event-bits-modifiers) "key-event-bits-modifiers bits" nil
+         (defsection "Description"
+           (para "
+This returns a list of key-event modifier names, one for each modifier
+set in bits.
+                        ")))
+        (definition (:function hemlock-interface:make-key-event) "make-key-event object bits" nil
+         (defsection "Description"
+           (para "
+This function returns a key-event described by object with
+bits. Object is one of keysym, string, or key-event. When object is a
+key-event, this uses key-event-keysym. You can form bits with
+make-key-event-bits or key-event-modifier-mask.
+                        ")))
+        (definition (:function hemlock-interface:key-event-p) "key-event-p object" nil
+         (defsection "Description"
+           (para "
+This function returns whether object is a key-event.
+                        ")))
+        (definition (:function hemlock-interface:key-event-bits) "key-event-bits key-event" nil
+         (defsection "Description"
+           (para "
+This function returns the bits field of a key-event.
+                        ")))
+        (definition (:function hemlock-interface:key-event-keysym) "key-event-keysym key-event" nil
+         (defsection "Description"
+           (para "
+This function returns the keysym field of a key-event.
+                        ")))
+        (definition (:function hemlock-interface:char-key-event) "char-key-event character" nil
+         (defsection "Description"
+           (para "
+This function returns the key-event associated with character. You can
+associate a key-event with a character by setf-ing this form.
+                        ")))
+        (definition (:function hemlock-interface:key-event-char) "key-event-char key-event" nil
+         (defsection "Description"
+           (para #:|
+This function returns the character associated with key-event. You can
+associate a character with a key-event by setf'ing this form. The
+system defaultly translates key-events in some implementation
+dependent way for text insertion; for example, under an ASCII system,
+the key-event #k"C-h", as well as #k"backspace" would map to the
+Common Lisp character that causes a backspace.
+                        |)))
+        (definition (:function hemlock-interface:key-event-bit-p) "key-event-bit-p key-event bit-name" nil
+         (defsection "Description"
+           (para "
+This function returns whether key-event has the bit set named by
+bit-name. This signals an error if bit-name is undefined.
+                        ")))
+        (definition (:macro hemlock-interface:do-alpha-key-events)
+         "do-alpha-key-events (var kind {code &optional} result) form" nil
+         (defsection "Description"
+           (para "
+This macro evaluates each form with var bound to a key-event
+representing an alphabetic character. Kind is one of :lower, :upper,
+or :both, and this binds var to each key-event in order a-z A-Z.
+When :both is specified, this processes lowercase letters
+first.
+                        ")))
+        (definition (:function hemlock-interface:pretty-key-string)
+         "pretty-key-string key {code &optional} stream long-names-p" nil
+         (defsection "Description"
+           (para "
+This returns a string representing key, a key-event or vector of key-events, in a
+user-expected fashion. Long-names-p indicates whether
+modifiers should be described by their long or short name.
+                        ")))))))

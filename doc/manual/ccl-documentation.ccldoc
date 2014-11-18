@@ -1,0 +1,57 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(ccldoc:def-expander CCL () "Clozure CL")
+
+(defun generate-ccl-symbols ()
+  (let ((forms nil)
+	(rows nil))
+    (do-external-symbols (sym :ccl)
+      (cond ((fboundp sym)
+	     (push `(:function ,sym) forms))
+	    ((boundp sym)
+	     (push `(:variable ,sym) forms))))
+    (setq forms (sort forms 'string-greaterp :key 'second))
+    (setq forms (stable-sort forms 'string-greaterp :key 'first))
+    (loop
+      (let ((a (first forms))
+	    (b (second forms)))
+	(setq forms (nthcdr 2 forms))
+	(when (null a)
+	  (return))
+	(push `(:row (:item ,a) (:item ,b)) rows)))
+    `(:table "Exported Symbols" ,@rows)))
+
+(document "{CCL} Documentation"
+  (include-file "about.ccldoc" :in-package :ccl)
+  (include-file "install.ccldoc" :in-package :ccl)
+  (include-file "build.ccldoc" :in-package :ccl)
+  (include-file "using.ccldoc" :in-package :ccl)
+  (include-file "debugging.ccldoc" :in-package :ccl)
+  (include-file "unicode.ccldoc" :in-package :ccl)
+  (include-file "fs.ccldoc" :in-package :ccl)
+  (include-file "os.ccldoc" :in-package :ccl)
+  (include-file "sockets.ccldoc" :in-package :ccl)
+  (include-file "threads.ccldoc" :in-package :ccl)
+  (include-file "ffi.ccldoc" :in-package :ccl)
+  (include-file "external-process.ccldoc" :in-package :ccl)
+  (include-file "streams.ccldoc" :in-package :ccl)
+  (include-file "platform-notes.ccldoc" :in-package :ccl)
+  (include-file "gc.ccldoc" :in-package :ccl)
+
+  (include-file "limits.ccldoc" :in-package :ccl)
+  (include-file "implementation.ccldoc" :in-package :ccl)
+  (include-file "modifying.ccldoc" :in-package :ccl)
+
+  (include-file "profile.ccldoc" :in-package :ccl)
+
+  (include-file "mop.ccldoc" :in-package :ccl)
+
+  (include-file "objc-bridge.ccldoc" :in-package :ccl)
+  (include-file "ide.ccldoc" :in-package :ccl)
+  (include-file "hemlock.ccldoc" :in-package :ccl)
+
+  (include-file "q-and-a.ccldoc" :in-package :ccl)
+  (include-file "glossary.ccldoc" :in-package :ccl)
+  (index-section "Symbol Index")
+  (defsection "CCL Exported Symbols"
+    #.(generate-ccl-symbols)))

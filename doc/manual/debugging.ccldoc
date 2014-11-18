@@ -1,0 +1,745 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Debugging"
+  (defsection "Trace"
+    (para "{CCL}'s tracing facility is invoked by an extended version
+      of the Common Lisp {code trace} macro.  Extensions allow tracing
+      of methods, as well as finer control over tracing actions.")
+    (definition (:macro trace)
+     "TRACE {lbrace} keyword global-value {rbrace}* {lbrace} spec | ( spec {lbrace} keyword local-value {rbrace}*){rbrace}*"
+     nil
+     (defsection "Description"
+       "The {code trace} macro encapsulates the functions named by
+        {sample spec}s, causing trace actions to take place on entry
+        and exit from each function.  The default actions print a
+        message on function entry and exit. {sample Keyword}/{sample
+        value} options can be used to specify changes in the default
+        behavior.
+    
+        Invoking {code (trace)} without arguments returns a list of
+        functions being traced.
+
+        A {sample spec} is either a symbol that is the name of a
+        function, or an expression of the form {code (setf {sample
+        symbol})}, or a specific method of a generic function in the
+        form {code (:method {sample gf-name} {lbrace}{sample
+        qualifier}{rbrace}* ({lbrace}{sample specializer}{rbrace}*))},
+        where a {sample specializer} can be the name of a class or an
+        {code EQL} specializer.
+
+        A {sample spec} can also be a string naming a package, or
+        equivalently a list {code (:package {sample package-name})},
+        in order to request that all functions in the package to be
+        traced.
+
+        By default, whenever a traced function is entered or exited, a
+        short message is printed on {variable *trace-output*} showing
+        the arguments on entry and values on exit.  Options specified
+        as key/value pairs can be used to modify this behavior.
+        Options preceding the function {sample spec}s apply to all the
+        functions being traced.  Options specified along with a
+        {sample spec} apply to that spec only and override any global
+        options. The following options are supported:"
+
+       (listing :definition
+         (item "{code :methods {lbrace}T | nil{rbrace}}" ccldoc::=>
+	       "If true, and if applied to a {sample spec} naming a generic
+	   function, arranges to trace all the methods of the generic
+	   function in addition to the generic function itself.")
+         (item "{code :inside {sample outside-spec} | ({lbrace}{sample outside-spec}{rbrace}*)}" ccldoc::=>
+	       "Inhibits all trace actions unless the current
+	        invocation of the function being traced is inside one
+	        of the {sample outside-spec}'s, i.e. unless a function
+	        named by one of the {sample outside-spec}'s is
+	        currently on the stack.  {sample outside-spec} can
+	        name a function, a method, or a package, as above.")
+         (item (clause "{code :if {sample form}}, {code :condition {sample form}}") ccldoc::=>
+          " Evaluates {sample form} whenever the function being traced
+	        is about to be entered, and inhibits all trace actions
+	        if {sample form} returns nil. The form may reference
+	        the lexical variable {code ccl::args}, which is a list
+	        of the arguments in this call. {code :condition} is
+	        just a synonym for {code :if}, though if both are
+	        specified, both must return non-nil.
+	      ")
+         (item "{code :before-if {sample form}}" ccldoc::=>
+          " Evaluates {sample form} whenever the function being traced
+	        is about to be entered, and inhibits the entry trace
+	        actions if {sample form} returns nil.  The form may
+	        reference the lexical variable {code ccl::args}, which
+	        is a list of the arguments in this call. If both
+	        {code :if} and {code :before-if} are specified, both
+	        must return non-nil in order for the before entry
+	        actions to happen.")
+         (item "{code :after-if {sample form}}" ccldoc::=>
+          " Evaluates {sample form} whenever the function being traced
+	        has just exited, and inhibits the exit trace actions
+	        if {sample form} returns nil.  The form may reference
+	        the lexical variable {code ccl::vals}, which is a list
+	        of values returned by this call. If both {code :if}
+	        and {code :after-if} are specified, both must return
+	        non-nil in order for the after exit actions to happen.")
+         (item "{code :print-before {sample form}}" ccldoc::=>
+          " Evaluates {sample form} whenever the function being traced
+	        is about to be entered, and prints the result before
+	        printing the standard entry message.  The form may
+	        reference the lexical variable {code ccl::args}, which
+	        is a list of the arguments in this call.  To see
+	        multiple forms, use {code values}:
+	        {code :print-before (values (one-thing) (another-thing))}.")
+         (item "{code :print-after {sample form}}" ccldoc::=>
+	       " Evaluates {sample form} whenever the function being
+	        traced has just exited, and prints the result after
+	        printing the standard exit message.  The form may
+	        reference the lexical variable {code ccl::vals}, which
+	        is a list of values returned by this call. To see
+	        multiple forms, use {code values}:
+	        {code :print-after (values (one-thing) (another-thing))}.")
+         (item "{code :print {sample form}}" ccldoc::=>
+          "Equivalent to {code :print-before {sample
+          form} :print-after {sample form}}.")
+         (item "{code :eval-before {sample form}}" ccldoc::=>
+	       "Evaluates {sample form} whenever the function being
+	        traced is about to be entered.  The form may reference
+	        the lexical variable {code ccl::args}, which is a list
+	        of the arguments in this call.")
+         (item "{code :eval-after {sample form}}" ccldoc::=>
+	       "Evaluates {sample form} whenever the function being
+	        has just exited.  The form may reference the lexical
+	        variable {code ccl::vals}, which is a list of values
+	        returned by this call.
+	      ")
+         (item "{code :eval {sample form}}" ccldoc::=>
+	       "Equivalent to {code :eval-before {sample form} :eval-after {sample form}}.")
+         (item "{code :break-before {sample form}}" ccldoc::=>
+	       "Evaluates {sample form} whenever the function being
+	        traced is about to be entered, and if the result is
+	        non-nil, enters a debugger break loop.  The form may
+	        reference the lexical variable {code ccl::args}, which
+	        is a list of the arguments in this call.")
+         (item "{code :break-after {sample form}}" ccldoc::=>
+	       "Evaluates {sample form} whenever the function being
+	        traced has just exited, and if the result is non-nil,
+	        enters a debugger break loop. The form may reference
+	        the lexical variable {code ccl::vals}, which is a list
+	        of values returned by this call.")
+         (item "{code :break {sample form}}" ccldoc::=>
+	       "Equivalent to {code :break-before {sample
+	       form} :break-after {sample form}}.")
+         (item (clause "{code :backtrace-before {sample form}}, {code :backtrace {sample form}}") ccldoc::=>
+	       (para "Evaluates {sample form} whenever the function being
+	        traced is about to be entered.  The form may reference
+	        the lexical variable {code ccl::args}, which is a list
+	        of the arguments in this call. The value returned by
+	        {sample form} is intepreted as follows:")
+	       (listing :definition
+	         (item "{code nil}" ccldoc::=> "does nothing")
+		 (item "{code :detailed}" ccldoc::=> "prints a
+	              detailed backtrace to {variable
+	              *trace-output*}.")
+		 (item "{code (:detailed {sample integer})}"
+	              ccldoc::=> "prints the top {sample integer}
+	              frames of detailed backtrace to {variable
+	              *trace-output*}.")
+		 (item "{sample integer}" ccldoc::=> "prints top
+	              {sample integer} frames of a terse backtrace to
+	              {variable *trace-output*}.")
+		 (item "anything else" ccldoc::=> "prints a terse
+		 backtrace to {variable *trace-output*}."))
+          (para "Note that unlike with the other options,
+	        {code :backtrace} is equivalent to
+	        {code :backtrace-before} only, not both before and
+	        after, since it's usually not helpful to print the
+	        same backtrace both before and after the function
+	        call."))
+         (item "{code :backtrace-after {sample form}}" ccldoc::=>
+          (para "Evaluates {sample form} whenever the function being
+	        traced has just exited.  The form may reference the
+	        lexical variable {code ccl::vals}, which is a list of
+	        values returned by this call. The value returned by
+	        {sample form} is intepreted as follows:")
+          (listing :definition
+            (item "{code nil}" ccldoc::=> "does nothing")
+            (item "{code :detailed}" ccldoc::=> "prints a detailed
+	              backtrace to {variable *trace-output*}.")
+            (item "{code (:detailed {sample integer})}"
+	              ccldoc::=> "prints the top {sample integer}
+	              frames of detailed backtrace to {variable
+	              *trace-output*}.")
+            (item "{sample integer}" ccldoc::=> "prints top {sample
+	              integer} frames of a terse backtrace to
+	              {variable *trace-output*}.")
+            (item "anything else" ccldoc::=> "prints a terse backtrace
+            to {variable *trace-output*}.")))
+         (item "{code :before}{sample action}" ccldoc::=>
+          (para
+           "specifies the action to be taken just before the traced
+           function is entered.  {sample action} is one of:")
+          (listing :definition
+            (item "{code :print}" ccldoc::=>
+             "The default, prints a short indented message showing the
+             function name and the invocation arguments")
+            (item "{code :break}" ccldoc::=> "Equivalent to
+            {code :before :print :break-before t}")
+            (item "{code :backtrace}" ccldoc::=> "Equivalent to
+            {code :before :print :backtrace-before t}")
+            (item "{sample function}" ccldoc::=> " Any other value is
+                  interpreted as a function to call on entry instead
+                  of printing the standard entry message.  It is
+                  called with its first argument being the name of the
+                  function being traced, the remaining arguments being
+                  all the arguments to the function being traced, and
+                  {variable *trace-level*} bound to the current
+                  nesting level of trace actions. ")))
+         (item "{code :after}{sample action}" ccldoc::=>
+          (para "specifies the action to be taken just after the
+          traced function exits.  {sample action} is one of:")
+          (listing :definition
+            (item "{code :print}" ccldoc::=>
+             "The default, prints a short indented message showing the
+	              function name and the returned values ")
+            (item "{code :break}" ccldoc::=> "Equivalent to
+            {code :after :print :break-after t}")
+            (item "{code :backtrace}" ccldoc::=> "Equivalent to
+            {code :after :print :backtrace-after t}")
+            (item "{sample function}" ccldoc::=> "Any other value is
+	              interpreted as a function to call on exit
+	              instead of printing the standard exit message.
+	              It is called with its first argument being the
+	              name of the function being traced, the remaining
+	              arguments being all the values returned by the
+	              function being traced, and ccl:*trace-level*
+	              bound to the current nesting level of trace
+	              actions."))))))
+    
+    (definition (:variable *trace-level*) "CCL:*TRACE-LEVEL*" nil
+     (defsection "Description"
+       (para "Variable bound to the current nesting level during
+        execution of before and after trace actions.  The default
+        printing actions use it to determine the amount of
+        indentation.")))
+    
+    (definition (:variable *trace-max-indent*) "CCL:*TRACE-MAX-INDENT*" nil
+     (defsection "Description"
+       (para
+        "The default before and after print actions will not indent by
+        more than the value of {variable *trace-max-indent*}
+        regardless of the current trace level.")))
+
+    (definition (:function trace-function) "CCL:TRACE-FUNCTION spec {code &key} {lbrace} keyword value {rbrace}*" nil
+      (defsection "Description"
+	(para "This is a functional version of the TRACE macro.
+      {sample spec} and {sample keyword}s are as for TRACE, except
+      that all arguments are evaluated. ")))
+    (definition (:variable *trace-print-level*) "CCL:*TRACE-PRINT-LEVEL*" nil
+     (defsection "Description"
+	 (para "The default print actions bind {variable *print-level*}
+      to this value while printing. Note that this rebinding is only
+      in effect during the default entry and exit messages.  It does
+      not apply to printing of {code :print-before/:print-after} forms
+      or any explicit printing done by user code.")))
+    (definition (:variable *trace-print-length*) "CCL:*TRACE-PRINT-LENGTH*" nil
+     (defsection "Description"
+       (para "The default print actions bind {variable *print-length*}
+      to this value while printing. Note that this rebinding is only
+      in effect during the default entry and exit messages.  It does
+      not apply to printing of {code :print-before/:print-after} forms
+      or any explicit printing done by user code.")))
+    (definition (:variable *trace-bar-frequency*) "CCL:*TRACE-BAR-FREQUENCY*" nil
+     (defsection "Description"
+       (para "By default, this is nil. If non-nil it should be a
+    integer, and the default entry and exit messages will print a |
+    instead of space every this many levels of indentation."))))
+
+(defsection "Advising"
+    "
+    The {code advise} macro can be thought of as a more
+    general version of {code trace}. It allows code that
+    you specify to run before, after, or around a given function, for
+    the purpose of changing the behavior of the function. Each piece
+    of added code is called a piece of advice. Each piece of advice
+    has a unique name, so that you can have multiple pieces of advice
+    on the same function, including multiple
+    {code :before}, {code :after}, and
+    {code :around} pieces of advice.
+  
+
+
+    The {code :name} and {code :when}
+    keywords serve to identify the piece of advice.  A later call to
+    {code advise} with the same values of
+    {code :name} and {code :when} will replace
+    the existing piece of advice; a call with different values will not.
+  "
+    (definition (:macro advise) "advise spec form {code &key} when name"
+     (clause "
+	Add a piece of advice to the function or method specified by
+	{param spec} according to
+	{param form}.
+      ")
+     (defsection "Arguments and Values"
+       (listing :definition
+         (item "{param spec}" ccldoc::=> "
+	      A specification of the function on which to put the
+	      advice.  This is either a symbol that is the name of a
+	      function or generic function, or an expression of the
+	      form (setf {sample symbol}), or a
+	      specific method of a generic function in the form
+	      (:method symbol {lbrace}qualifiers{rbrace} (specializer {lbrace}specializer{rbrace})).
+	    ")
+         (item "{param form}" ccldoc::=> "
+	      A form to execute before, after, or around the advised
+	      function. The form can refer to the variable arglist
+	      that is bound to the arguments with which the advised
+	      function was called. You can exit from form with
+	      (return).
+	    ")
+         (item "{param name}" ccldoc::=> "
+	      A name that identifies the piece of advice.
+	    ")
+         (item "{param when}" ccldoc::=> "
+	      An argument that specifies when the piece of advice is
+	      run. There are three allowable values. The default is
+	      {code :before}, which specifies that form is
+	      executed before the advised function is called. Other
+	      possible values are {code :after}, which
+	      specifies that form is executed after the advised
+	      function is called, and {code :around},
+	      which specifies that form is executed around the call to
+	      the advised function. Use {code (:do-it)}
+	      within form to indicate invocation of the original
+	      definition.
+	    ")))
+     (defsection "Examples"
+       (para "
+	The function {code foo}, already defined, does
+	something with a list of numbers. The following code uses a
+	piece of advice to make foo return zero if any of its
+	arguments is not a number. Using :around advice, you can do
+	the following:
+	"
+        (code-block "
+(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+	      0
+	      (:do-it))
+	:when :around :name :zero-if-not-nums)
+	"))
+       (para "
+	To do the same thing using a :before piece of advice:
+	"
+        (code-block "
+(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+	      (return 0))
+	:when :before :name :zero-if-not-nums)
+	"))))
+    (definition (:macro unadvise) "unadvise spec {code &key} when name"
+     (clause "
+	Remove the piece or pieces of advice matching {param spec},
+	{param when}, and {param name}.
+      ")
+     (defsection "Description"
+       (para "
+	The unadvise macro removes the piece or pieces of advice
+	matching {code spec}, {code when},
+	and {code name}. When the value of
+	{code spec} is t and the values of {code when}
+	and {code name} are nil, unadvise
+	removes every piece of advice; when {code spec} is
+	t, the argument {code when} is nil, and
+	{code name} is non-nil, unadvise removes all
+	pieces of advice with the given name.
+      "))
+     (defsection "Arguments and Values"
+       (para "
+	The arguments have the same meaning as in
+	"
+        (ref (definition :macro advise)) ".
+      ")))
+    (definition (:macro advisedp) "advisedp spec {code &key} when name"
+     (clause "
+	Return a list of the pieces of advice matching {param spec},
+	{param when}, and {param name}.
+      ")
+     (defsection "Description"
+       (para "
+	The advisedp macro returns a list of existing pieces of advice
+	that match {code spec}, {code when},
+	and {code name}. When the value of
+	{code spec} is t and the values of
+	{code when} and {code name} are nil,
+	advisedp returns all existing pieces of advice.
+      "))
+     (defsection "Arguments and Values"
+       (para "
+	The arguments have the same meaning as in
+	"
+        (ref (definition :macro advise)) ".
+"))))
+
+(defsection "Watched Objects"
+    (para "
+    As of release 1.4, Clozure CL provides a way for lisp objects to
+    be watched so that a condition will be signaled when a thread
+    attempts to write to the watched object. For a certain class of
+    bugs (someone is changing this value, but I don't know who), this
+    can be extremely helpful.
+  ")
+  (definition (:function watch) "watch {code &optional} object" "
+	Monitor a lisp object for writes.
+      "
+       (defsection "Arguments and Values"
+         (listing :definition
+           (item "{param object}" ccldoc::=> "
+	      Any memory-allocated lisp object.
+	    ")))
+       (defsection "Description"
+         "The WATCH function arranges for the specified object to be
+	monitored for writes. This is accomplished by copying the
+	object to its own set of virtual memory pages, which are then
+	write-protected. This protection is enforced by the computer's
+	memory-management hardware; the write-protection does not slow
+	down reads at all.
+      
+
+
+	When any write to the object is attempted, a
+	WRITE-TO-WATCHED-OBJECT condition will be signaled.
+      
+
+
+	When called with no arguments, WATCH returns a freshly-consed
+	list of the objects currently being watched.
+      
+
+
+	WATCH returns NIL if the object cannot be watched (typically
+	because the object is in a static or pure memory area).
+      ")
+       (defsection "DWIM"
+         (para "
+      WATCH operates at a fairly low level; it is not possible to
+      avoid the details of the internal representation of objects.
+      Nevertheless, as a convenience, WATCHing a standard-instance,
+      a hash-table, or a multi-dimensional or non-simple CL array
+      will watch the underlying slot-vector, hash-table-vector, or
+      data-vector, respectively.
+      "))
+       (defsection "Discussion"
+         "
+      WATCH can monitor any memory-allocated lisp object.
+    
+
+
+      In Clozure CL, a memory-allocated object is either a cons cell
+      or a uvector.
+    
+
+
+      WATCH operates on cons cells, not lists. In order to watch a
+      chain of cons cells, each cons cell must be watched
+      individually. Because each watched cons cell takes up its own
+      own virtual memory page (4 Kbytes), it's only feasible to watch
+      relatively short lists.
+    
+
+
+      If a memory-allocated object isn't a cons cell, then it is a
+      vector-like object called a uvector. A uvector is a
+      memory-allocated lisp object whose first word is a header that
+      describes the object's type and the number of elements that it
+      contains.
+    
+
+
+      So, a hash table is a uvector, as is a string, a standard
+      instance, a double-float, a CL array or vector, and so forth.
+    
+
+
+      Some CL objects, like strings and other simple vectors, map in a
+      straightforward way onto the uvector representation. It is easy
+      to understand what happens in such cases. The uvector index
+      corresponds directly to the vector index:
+    "
+         (code-block #:|
+? (defvar *s* "xxxxx")
+*S*
+? (watch *s*)
+"xxxxx"
+? (setf (char *s* 3) #\\o)
+> Error: Write to watched uvector "xxxxx" at index 3
+>        Faulting instruction: (movl (% eax) (@ -5 (% r15) (% rcx)))
+> While executing: SET-CHAR, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+|)
+         #:|
+      In the case of more complicated objects (e.g., a hash-table, a
+      standard-instance, a package, etc.), the elements of the uvector
+      are like slots in a structure. It's necessary to know which one
+      of those "slots" contains the data that will be changed when the
+      object is written to.
+    
+
+
+      As mentioned above, watch knows about arrays, hash-tables, and
+      standard-instances, and will automatically watch the appropriate
+      data-containing element.
+    
+
+
+      An example might make this clearer.
+    |
+         (code-block "
+? (defclass foo ()
+    (slot-a slot-b slot-c))
+#<STANDARD-CLASS FOO>
+? (defvar *a-foo* (make-instance 'foo))
+*A-FOO*
+? (watch *a-foo*)
+#<SLOT-VECTOR #xDB00D>
+;;; Note that WATCH has watched the internal slot-vector object
+? (setf (slot-value *a-foo* 'slot-a) 'foo)
+> Error: Write to watched uvector #<SLOT-VECTOR #xDB00D> at index 1
+>        Faulting instruction: (movq (% rsi) (@ -5 (% r8) (% rdi)))
+> While executing: %MAYBE-STD-SETF-SLOT-VALUE-USING-CLASS, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+")
+         "
+      Looking at a backtrace would presumably show what object and
+      slot name were written.
+    
+
+
+      Note that even though the write was to slot-a, the uvector index
+      was 1 (not 0). This is because the first element of a
+      slot-vector is a pointer to the instance that owns the slots. We
+      can retrieve that to look at the object that was modified:
+    "
+         (code-block "
+1 > (uvref (write-to-watched-object-object *break-condition*) 0)
+#<FOO #x30004113502D>
+1 > (describe *)
+#<FOO #x30004113502D>
+Class: #<STANDARD-CLASS FOO>
+Wrapper: #<CLASS-WRAPPER FOO #x300041135EBD>
+Instance slots
+SLOT-A: #<Unbound>
+SLOT-B: #<Unbound>
+SLOT-C: #<Unbound>
+1 >
+")))
+
+  (definition (:function unwatch) "unwatch object" "
+	Stop monitoring a lisp object for writes.
+      "
+      (defsection "Description"
+         (para "The UNWATCH function ensures that the specified
+    object is in normal, non-monitored memory. If the object is not
+    currently being watched, UNWATCH does nothing and returns
+    NIL. Otherwise, the newly unwatched object is returned.
+  ")))
+  
+  (definition (:condition ccl::write-to-watched-object) "WRITE-TO-WATCHED-OBJECT" "
+	Condition signaled when a write to a watched object is attempted.
+      "
+       (defsection "Discussion"
+         (para "
+      This condition is signaled when a watched object is written
+      to. There are three slots of interest:
+    ")
+         (listing :definition
+           (item "object" ccldoc::=> "
+	    The actual object that was the destination of the write.
+	  ")
+           (item "offset" ccldoc::=> "
+	    The byte offset from the tagged object pointer to the
+	    address of the write.
+	  ")
+           (item "instruction" ccldoc::=> "
+	    The disassembled machine instruction that attempted the write.
+	  ")))
+       (defsection "Restarts"
+         "
+      A few restarts are provided: one will skip over the faulting
+      write instruction and proceed; another offers to unwatch the
+      object and continue.
+    
+
+
+      There is also an emulate restart. In some common cases, the
+      faulting write instruction can be emulated, enabling the write
+      to be performed without having to unwatch the object (and
+      therefore let other threads potentially write to it). If the
+      faulting instruction isn't recognized, the emulate restart will
+      not be offered.
+    "))
+
+  (defsection "Notes"
+      "
+  Although some care has been taken to minimize potential problems
+  arising from watching and unwatching objects from multiple
+  threads, there may well be subtle race conditions present that
+  could cause bad behavior.
+
+
+
+  For example, suppose that a thread attempts to write to a watched
+  object. This causes the operating system to generate an
+  exception. The lisp kernel figures out what the exception is, and
+  calls back into lisp to signal the write-to-watched-object
+  condition and perhaps handle the error.
+
+
+
+  Now, as soon lisp code starts running again (for the callback),
+  it's possible that some other thread could unwatch the very
+  watched object that caused the exception, perhaps before we even
+  have a chance to signal the condition, much less respond to it.
+
+
+
+  Having the object unwatched out from underneath a handler may at
+  least confuse it, if not cause deeper trouble. Use caution with
+  unwatch.
+")
+    (defsection "Examples"
+      (para "
+  Here are a couple more examples in addition to the above examples
+  of watching a string and a standard-instance.
+")
+      (defsection "Fancy arrays"
+        (code-block "
+?  (defvar *f* (make-array '(2 3) :element-type 'double-float))
+*F*
+? (watch *f*)
+#(0.0D0 0.0D0 0.0D0 0.0D0 0.0D0 0.0D0)
+;;; Note that the above vector is the underlying data-vector for the array
+? (setf (aref *f* 1 2) pi)
+> Error: Write to watched uvector #<VECTOR 6 type DOUBLE-FLOAT, simple> at index 5
+>        Faulting instruction: (movq (% rax) (@ -5 (% r8) (% rdi)))
+> While executing: ASET, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+1 > 
+  ")
+        (para "
+    In this case, uvector index in the report is the row-major index
+    of the element that was written to.
+  "))
+      (defsection "Hash tables"
+        "
+    Hash tables are surprisingly complicated. The representation of a
+    hash table includes an element called a hash-table-vector. The
+    keys and values of the elements are stored pairwise in this
+    vector.
+  
+
+
+    One problem with trying to monitor hash tables for writes is that
+    the underlying hash-table-vector is replaced with an entirely new
+    one when the hash table is rehashed. A previously-watched
+    hash-table-vector will not be the used by the hash table after
+    rehashing, and writes to the new vector will not be caught.
+  "
+        (code-block "
+? (defvar *h* (make-hash-table))
+*H*
+? (setf (gethash 'noise *h*) 'feep)
+FEEP
+? (watch *h*)
+#<HASH-TABLE-VECTOR #xDD00D>
+;;; underlying hash-table-vector
+? (setf (gethash 'noise *h*) 'ding)
+> Error: Write to watched uvector #<HASH-TABLE-VECTOR #xDD00D> at index 35
+>        Faulting instruction: (lock)
+>          (cmpxchgq (% rsi) (@ (% r8) (% rdx)))
+> While executing: %STORE-NODE-CONDITIONAL, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+;;; see what value is being replaced...
+1 > (uvref (write-to-watched-object-object *break-condition*) 35)
+FEEP
+;;; backtrace shows useful context
+1 > :b
+*(1A109F8) : 0 (%STORE-NODE-CONDITIONAL ???) NIL
+ (1A10A50) : 1 (LOCK-FREE-PUTHASH NOISE #<HASH-TABLE :TEST EQL size 1/60 #x30004117D47D> DING) 653
+ (1A10AC8) : 2 (CALL-CHECK-REGS PUTHASH NOISE #<HASH-TABLE :TEST EQL size 1/60 #x30004117D47D> DING) 229
+ (1A10B00) : 3 (TOPLEVEL-EVAL (SETF (GETHASH # *H*) 'DING) NIL) 709
+ ...
+  "))
+      (defsection "Lists"
+        (para "
+    As previously mentioned, WATCH only watches individual cons cells.
+  ")
+        (code-block "
+? (defun watch-list (list)
+    (maplist #'watch list))
+WATCH-LIST
+? (defvar *l* (list 1 2 3))
+*L*
+? (watch-list *l*)
+((1 2 3) (2 3) (3))
+? (setf (nth 2 *l*) 'foo)
+> Error: Write to the CAR of watched cons cell (3)
+>        Faulting instruction: (movq (% rsi) (@ 5 (% rdi)))
+> While executing: %SETNTH, in process listener(1).
+> Type :POP to abort, :R for a list of available restarts.
+> Type :? for other options.
+"))))
+
+(defsection "Memory"
+  (definition (:function heap-utilization) "heap-utilization &key (stream *debug-io*) (gc-first t) area unit (sort :size) classes start threshold)" nil
+
+    "This function walks the lisp heap, collects information about the
+objects stored on the heap, and prints a report of the results to the
+stream speficied by the keyword argument {code :stream}. It shows the
+number of objects of each type, the sum of their logical sizes (the
+size of the data part of the object) and the sum of their physical
+sizes (the total size as computed by {function object-direct-size}).
+
+If {code :gc-first} is true (the default), {function heap-utilization}
+does a full gc before scanning the heap.
+
+If {code :classes} is true, objects are classified by class rather
+than just basic type.
+
+The keyword argument {code :area} can be used to restrict the walk to
+one memory area or a list of areas. Some possible values
+are {code :dynamic}, {code :static}, {code :managed-static}, and
+{code :readonly}. By default, all areas (including stacks) are examined.
+
+The keword argument {code :sort} can be one of {code :count},
+{code :logical-size}, or {code :physical-size} to sort output by count
+or size.
+
+By default, sizes are shown in bytes.  The keyword argument
+{code :unit} can be {code :kb}, {code :mb}, or {code :gb}
+to show sizes in those units.
+
+If {code :start} is non-nil, it should be an object returned by
+{function get-allocation-sentinel}; only objects at higher address are
+scanned (roughly, only objects allocated after it).
+
+If threshold is non-nil, it should be a number between 0 and 1. All
+types whose share of the heap is less than threshold will be lumped
+together in an “All Others” line rather than being listed
+individually.")
+
+(definition (:function object-direct-size) "object-direct-size thing" nil
+  "This function returns the size of {param thing} in bytes, including
+any headers and alignment overhead.  It does not descend into an object's
+components."))
+
+(definition (:variable *disassemble-verbose*) "*disassemble-verbose*" nil
+  "When true, the output of {code disassemble} may include
+  platform-dependent additional information.  For instance, on the x86
+  ports, the output will include the x86 opcode bytes.
+
+  The default value is {code nil}.")
+
+) ;end chapter
+
+  
+  

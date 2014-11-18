@@ -1,0 +1,181 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Running Other Programs as Subprocesses"
+  (defsection "Overview"
+    "{CCL} provides primitives to run external Unix programs,
+      to select and connect Lisp streams to their input and output
+      sources, to (optionally) wait for their completion and to check
+      their execution and exit status.
+
+      All of the global symbols described below are exported
+      from the CCL package.
+
+      This implementation is modeled on - and uses some code
+      from - similar facilities in CMUCL.")
+  (defsection "Examples"
+    (code-block #:|
+;;; Capture the output of the "uname" program in a lisp string-stream
+;;; and return the generated string (which will contain a trailing
+;;; newline.)
+? (with-output-to-string (stream)
+    (run-program "uname" '("-r") :output stream))
+;;; Write a string to *STANDARD-OUTPUT*, the hard way.
+? (run-program "cat" () :input (make-string-input-stream "hello") :output t)
+;;; Find out that "ls" doesn't expand wildcards.
+? (run-program "ls" '("*.lisp") :output t)
+;;; Let the shell expand wildcards.
+? (run-program "sh" '("-c" "ls *.lisp") :output t)
+|)
+    (para "These last examples will only produce output if {CCL}'s
+      current directory contains .lisp files, of course."))
+  (defsection "Limitations and known bugs"
+    (listing :bullet
+      (item "{CCL} and the external process may get
+        confused about who owns which streams when input, output, or
+        error are specified as T and wait is specified as
+        NIL.")
+      (item "External processes that need to talk to a
+        terminal device may not work properly; the environment (SLIME,
+        ILISP) under which {CCL} is run can affect
+        this.")))
+  (defsection "External-Program Dictionary"
+    (definition (:function run-program)
+     "run-program program args &key (wait t) pty sharing input if-input-does-not-exist output (if-output-exists :error) (error :output) (if-error-exists :error) status-hook external-format env (silently-ignore-catastrophic-failures *silently-ignore-catastrophic-failure-in-run-program*)"
+     "Invokes an external program as an OS subprocess
+	    of lisp."
+     (defsection "Arguments and Values"
+       (listing :definition
+         (item "{param program}" ccldoc::=> "A string or pathname which denotes an executable file.
+		  The PATH environment variable is used to find programs whose
+		  name doesn't contain a directory component.")
+         (item "{param args}" ccldoc::=> "A list of simple-strings")
+         (item "{param wait}" ccldoc::=> "Indicates whether or not run-program should wait for
+		  the EXTERNAL-PROCESS to complete or should return
+		  immediately.")
+         (item "{param pty}" ccldoc::=> "This option is accepted but currently ignored;
+		  it's intended to make it easier to run external programs
+		  that need to interact with a terminal device.")
+         (item "{param sharing}" ccldoc::=> "Sets a specific sharing mode
+                  (see {section Additional keywords for OPEN and MAKE-SOCKET}) for any streams created
+                  within RUN-PROGRAM when INPUT, OUTPUT or ERROR are requested
+                  to be a :STREAM.")
+         (item "{param input}" ccldoc::=>
+          (para "Selects the input source used by the EXTERNAL-PROCESS.
+		  May be any of the following:")
+          (listing :bullet
+            (item "NIL Specifies that a null input stream (e.g.,
+		      /dev/null) should be used.")
+            (item "T Specifies that the EXTERNAL-PROCESS should use
+		      the input source with which {CCL} was invoked.")
+            (item "A string or pathname. Specifies that the
+		      EXTERNAL-PROCESS should receive its input from the named
+		      existing file.")
+            (item ":STREAM Creates a Lisp stream opened for character
+		      output. Any data written to this stream (accessible as
+		      the EXTERNAL-PROCESS-INPUT-STREAM of the
+		      EXTERNAL-PROCESS object) appears as input to the
+		      external process.")
+            (item "A stream. Specifies that the lisp stream should
+		      provide input to the EXTERNAL-PROCESS.")))
+         (item "{param if-input-does-not-exist}" ccldoc::=> "If the input argument specifies the name of an
+		  existing file, this argument is used as the
+		  if-does-not-exist argument to OPEN when that file is opened.")
+         (item "{param output}" ccldoc::=> "Specifies where standard output from the external
+		  process should be sent. Analogous to input above.")
+         (item "{param if-output-exists}" ccldoc::=> "If output is specified as a string or pathname, this
+		  argument is used as the if-exists argument to OPEN when that
+		  file is opened.")
+         (item "{param error}" ccldoc::=> "Specifies where error output from the external process
+		  should be sent. In addition to the values allowed for
+		  output, the keyword :OUTPUT can be used to indicate that
+		  error output should be sent where standard output goes.")
+         (item "{param if-error-exists}" ccldoc::=> "Analogous to if-output-exists.")
+         (item "{param status-hook}" ccldoc::=> "A user-defined function of one argument (the
+		  EXTERNAL-PROCESS structure.) This function is called
+		  whenever {CCL} detects a change in the status of the
+		  EXTERNAL-PROCESS.")
+         (item "{param external-format}" ccldoc::=> "
+		    The external format (see {section External Formats}) for all of the
+		    streams (input, output, and error) used to
+		    communicate with the external process.
+		  ")
+         (item "{param env}" ccldoc::=> "
+		    New OS environment variable bindings for the
+		    external process.  By default the external process
+		    inherits the environment of the running Lisp
+		    process.  Env is an association list with elements
+		    (<Environment Variable
+		    Name> . <Value>). Name and
+		    value are case sensitive strings. See "
+          (ref (definition :function setenv)) ".
+		  ")
+         (item "{param silently-ignore-catastrophic-failures}" ccldoc::=> "
+		    If NIL, signal an error if run-program is unable
+		    to start the program. If non-NIL, treat failure to
+		    start the same as failure from the program itself,
+		    by setting the status and exit-code
+		    fields. Default is
+		    {variable ccl::*silently-ignore-catastrophic-failure-in-run-program*}.
+		  ")))
+     (defsection "Description"
+       "Runs the specified program in an external (Unix) process,
+	    returning an object of type EXTERNAL-PROCESS if successful.
+
+            The implementation involves a lisp process/thread which
+            monitors the status of this external process and arranges for
+            the standard I/O descriptors for the external process to be
+            connected to the specified lisp streams.  Since this may require
+            the monitoring thread to do I/O on lisp streams in some cases,
+            streams provided as the values of the {code :INPUT},
+            {code :OUTPUT}, and {code :ERROR} arguments
+            should not be private to some other lisp thread."))
+
+    (definition (:function signal-external-process)
+     "signal-external-process proc sig &key (error-if-exited t)" nil
+     "Sends signal number {param sig} to the external process {param
+      proc} (which would have been returned by {function run-program}.
+      Typically, it would only be useful to call this function if the
+      {param proc} was created with {code :wait nil}.
+
+      If successful, the function returns {code t}; otherwise, an error is
+      signaled.
+
+      However, if {param error-if-exited} is {code nil}, and the attempt to
+      signal the external process fails because the external process
+      has already exited, the function will return nil rather than
+      signaling an error.")
+
+    (definition (:function external-process-id) "external-process-id proc" nil
+      "Returns the operating system process ID assigned to the
+       external-process object {param proc}.")
+      
+    (definition (:function external-process-input-stream)
+	"external-process-input-stream proc" nil
+      "Returns the lisp stream which is used to write input to the
+       external-process object {param proc}, if it has one.  This will
+       be the stream created when the {code :input} argument to
+       {function run-program} is specified as {code :stream}.")
+
+    (definition (:function external-process-output-stream)
+	"external-process-output-stream proc" nil
+     "Returns the lisp stream which is used to read output from the
+      external-process object {param proc}, if there is one.  This is
+      the stream created when the {code :output} argument to {function
+      run-program} is specified as {code :stream}.")
+
+    (definition (:function external-process-error-stream)
+	"external-process-error-stream proc" nil
+     "Returns the stream which is used to read
+      error output from a given OS subprocess, if there is one.
+      This is the stream created when the {code :error} argument
+      to {function run-program} is specified as {code :stream}.")
+
+    (definition (:function external-process-status)
+	"external-process-status proc" nil
+      "Returns, as multiple values, a keyword denoting the status of
+       the external process {param proc} (one of {code :running},
+       {code :stopped}, {:code signaled}, or {:code exited}), and the
+       exit code or terminating signal if the first value is other
+       than {code :running}."))
+
+) ;chapter

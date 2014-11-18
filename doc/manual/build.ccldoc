@@ -1,0 +1,303 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Building {CCL} from its Source Code"
+  (defsection "Building Definitions"
+    (para "The following terms are used in subsequent sections; it
+      may be helpful to refer to these definitions.")
+    (para "A {term fasl file} is the file produced
+      by {code compile-file}.  These files store the
+      machine code associated with function definitions and the
+      external representation of other lisp objects in a compact,
+      machine-readable form. Short for
+      “{code FAS}t {code L}oading”. {CCL} uses different pathname
+      types (extensions) to name fasl files on different platforms; see "
+      (ref (table "Platform-specific filename conventions")) " for the details.")
+    (para "The {term lisp kernel} is a C program with a fair amount of
+      platform-specific assembly language code.  The lisp kernel
+      provides runtime support for lisp code, such as garbage collection,
+      memory allocation, exception handling, and so forth.
+      When the lisp kernel starts, it maps the heap image into memory and
+      transfers control to compiled lisp code that the image contains.")
+    (para "A {term heap image} is a file that can be quickly mapped into a
+      process's address space. Conceptually, it's not too different
+      from an executable file or shared library in the OS's native
+      format (ELF or Mach-O/dyld format); for historical reasons,
+      {CCL}'s own heap images are in their own (fairly simple)
+      format. A full heap image contains all of the code and data that
+      comprise {CCL}. The default image file name
+      is the name of the lisp kernel with a {code .image} suffix.  See "
+     (ref (table "Platform-specific filename conventions")) ".")
+    (para "A bootstrapping image (see {section Create a Bootstrapping Image})
+      is a minimal
+      heap image used in the process of building {CCL} itself.  The
+      bootstrapping image contains just enough code to load the rest
+      of {CCL} from fasl files.  The function {function rebuild-ccl}
+      automatically creates a bootstrepping image as part of its work.")
+    (para "Each supported platform (and possibly a few
+      as-yet-unsupported ones) has a uniquely named subdirectory of
+      {code ccl/lisp-kernel/}; each such
+      kernel build directory
+      contains a Makefile and may contain some auxiliary files (linker
+      scripts, etc.) that are used to build the lisp kernel on a
+      particular platform. The platform-specific name of the kernel
+      build directory is described in "
+     (ref (table "Platform-specific filename conventions")) ".")
+
+    (table "Platform-specific filename conventions"
+      (row
+       (item "Platform")
+       (item "kernel")
+       (item "fasl extension")
+       (item "kernel build directory"))
+      (row
+       (item "Linux (ppc)")
+       (item "ppccl")
+       (item ".pfsl")
+       (item "linuxppc"))
+      (row
+       (item "Linux (ppc64)")
+       (item "ppccl64")
+       (item ".p64fsl")
+       (item "linuxppc64"))
+      (row
+       (item "Linux (x8664)")
+       (item "lx86cl64")
+       (item ".lx64fsl")
+       (item "linuxx8664"))
+      (row
+       (item "Linux (x8632)")
+       (item "lx86cl")
+       (item ".lx32fsl")
+       (item "linuxx8632"))
+      (row
+       (item "Linux (arm32)")
+       (item "armcl")
+       (item ".lafsl")
+       (item "linuxarm"))
+      (row
+       (item "OS X (x8664)")
+       (item "dx86cl64")
+       (item ".dx64fsl")
+       (item "darwinx8664"))
+      (row
+       (item "OS X (x8632)")
+       (item "dx86cl")
+       (item ".dx32fsl")
+       (item "darwinx8632"))
+      (row
+       (item "FreeBSD (x8664)")
+       (item "fx86cl64")
+       (item ".fx64fsl")
+       (item "freebsdx8664"))
+      (row
+       (item "FreeBSD (x8632)")
+       (item "fx86cl")
+       (item ".fx32fsl")
+       (item "freebsdx8632"))
+      (row
+       (item "Solaris (x8664)")
+       (item "sx86cl64")
+       (item ".sx64fsl")
+       (item "solarisx64"))
+      (row
+       (item "Solaris (x8632)")
+       (item "sx86cl")
+       (item ".sx32fsl")
+       (item "solarisx86"))
+      (row
+       (item "Windows (x8664)")
+       (item "wx86cl64.exe")
+       (item ".wx64fsl")
+       (item "win64"))
+      (row
+       (item "Windows (x8632)")
+       (item "wx86cl.exe")
+       (item ".wx32fsl")
+       (item "win32"))))
+
+  (defsection "Reasons for Building"
+    "At a given time, there are generally two versions of {CCL} that
+    you might want to use (and therefore might want to build from
+    source).
+
+    The first of these is the current release branch.  Fixes for
+    serious bugs are sometimes checked into the release branch, and
+    you might want to update from Subversion and rebuild in order to
+    pick up these fixes.
+
+    You may also be interested in building the development version of {CCL}, which is
+    often called the trunk.  The trunk may contain both interesting new features and
+    interesting new bugs.  See {link http://trac.clozure.com/ccl/wiki} for information
+    about how to check out a copy of the trunk.")
+
+  (defsection "Kernel Build Prerequisites"
+    "In order to build the lisp kernel, you must have installed a C compiler and its
+associated tools (such as {system as} and {system ld}).  Additionally, the lisp kernel
+build process uses {system m4};  this program is often not installed by default, so
+make sure you have it.  The lisp kernel makefiles generally assume that you are using
+GNU make.
+
+    On a recent Mac OS X system, typing {system xcode-select --install} should download
+and install everything needed to build {CCL}.")
+
+  (defsection "Building Everything"
+    "With all the pre-requisites in place, building {CCL} is very simple."
+    (code-block "$ ccl -n
+? (ccl:rebuild-ccl :full t)")
+
+    "This peforms the following steps:"
+    (listing :bullet
+      (item "Deletes all fasl files and other object files in the
+	      {code ccl} directory tree")
+
+      (item "Does {code (compile-ccl t)} in the running lisp, to
+	      generate fasl files from the lisp sources.")
+      (item "Does {code (xload-level-0 :force)} in the
+	      running lisp.  This compiles the lisp files in the
+	      {code ccl:level-0;} directory and then creates a special
+               bootstrapping image from the compiled fasl files.")
+      (item "Runs an external process that runs
+	      {system make} in the current platform's kernel
+	      build directory to create a new kernel.  
+             This step can only work if the C compiler and related
+             tools are installed; see {section Kernel Build Prerequisites}.")
+      (item "Runs another external process, which causes the newly
+	      compiled lisp kernel to load the new bootstrapping image.
+	      The bootstrapping image then loads the rest of
+	      the fasl files and a new copy of the platform's
+	      full heap image is then saved."))
+
+    "When all goes well, this all happen without user intervention and
+      with some simple progress messages.  If anything goes wrong
+      during execution of either of the external processes, the
+      process output is displayed as part of a lisp error message.
+
+      {code rebuild-ccl} is essentially just a short cut for running
+      all the individual steps involved in rebuilding the system.  You
+      can also execute these steps individually, as described below.")
+
+  (defsection "Building the Kernel"
+    "Rebuilding the lisp kernel is straightfoward. Consult the table "
+     (ref (table "Platform-specific filename conventions")) " to determine
+     the name of the lisp kernel build directory you want.  Then, change to
+     that directory and say {system make}.  Suppose you wanted to build the
+     lisp kernel for 64-bit FreeBSD/x86.  We find that the name of the lisp
+     kernel build directory is {system freebsdx8664}, so we do the following: "
+
+     (code-block "$ cd ccl/lisp-kernel/freebsdx8664
+$ make clean
+$ make")
+
+     "The most common reason that the build fails is because m4 is not installed.  If you
+see {system m4: command not found}, then you should install m4.
+
+On Mac OS X, make sure that you have installed the command-line developer tools
+with {system xcode-select --install}.  If you get an error message saying that
+the file {system sys/signal.h} cannot be found, this is a sign that you need to do this.
+You need to do this even if you have Xcode already installed.")
+
+  (defsection "Building the Heap Image"
+    "Typically, {function rebuild-ccl} is used to rebuild all of {CCL}.
+    In special cases, you might want to exercise more control over how
+    the heap image is built.  These cases typically arise only when
+    developing {CCL} itself.
+
+   Creating a new {CCL} heap image consists of the following steps:"
+    (listing :number
+      (item "Using an existing lisp, recompile the updated lisp source code")
+      (item "Using an existing lisp, create a new bootstrapping image")
+      (item "Start up the lisp kernel and tell it to load the bootstrapping image
+            you just created"))
+
+    (defsection "Compile Lisp Source Code"
+      (para " Calling:")
+      (code-block "? (ccl:compile-ccl)")
+      "at the lisp prompt compiles any fasl files that are
+        out-of-date with respect to the corresponding lisp sources;
+        {code (ccl:compile-ccl t)} forces recompilation. {code
+        ccl:compile-ccl} reloads newly-compiled versions of some
+        files; {code ccl:xcompile-ccl} is analogous, but skips this
+        reloading step.
+
+        Unless there are bootstrapping considerations involved, it
+        usually doesn't matter whether these files are reloaded after
+        they're recompiled.
+
+        Calling {code compile-ccl} or
+        {code xcompile-ccl} in an environment where fasl
+        files don't yet exist may produce warnings to that effect
+        whenever files are {code require}d during
+        compilation; those warnings can be safely ignored. Depending
+        on the maturity of the {CCL} release, calling
+        {code compile-ccl} or
+        {code xcompile-ccl} may also produce several
+        warnings about undefined functions, etc. They should be
+        cleaned up at some point.")
+
+    (defsection "Create a Bootstrapping Image"
+      "The bootstrapping image isn't provided in {CCL}
+       distributions. It can be built from the source code provided
+       in distributions (using a lisp image and kernel provided in
+       those distributions) using the procedure described
+       below.
+
+        The bootstrapping image is built by invoking a special utility
+        inside a running {CCL} heap image to load files contained in
+        the {code ccl/level-0} directory. The bootstrapping image
+        loads several dozen fasl files.  After it's done so, it saves
+        a heap image via {code save-application}. This process is
+        called cross-dumping.
+
+        Given a source distribution, a lisp kernel, and a heap image,
+        one can produce a bootstrapping image by first invoking {CCL}
+        from the shell:"
+
+      (code-block "$ ccl
+? (ccl:xload-level-0)")
+
+      "This function compiles the lisp sources in the {code
+        ccl/level-0} directory as needed, and then loads the resulting
+        fasl files into a simulated lisp heap contained in data
+        structures inside the running lisp. It then writes this
+        data to disk as a bootstrapping image and displays the
+        pathname of the newly-written image on the terminal.
+
+        {code xload-level-0} should be called whenever your existing
+        boot image is out-of-date with respect to the source files in
+        {code ccl:level-0;}.")
+
+    (defsection "Building a full image from a bootstrapping image"
+      "To build a full image from a bootstrapping image, just invoke
+       the kernel and tell it to load the bootstrapping image (as
+       reported by {function xload-level-0}.  For example, suppose you
+       are using 64-bit Mac OS X:"
+
+      (code-block "$ cd ccl    # wherever your ccl directory is
+$ ./dx86cl64 --image-name x86-boot64.image --no-init")
+
+      "Other platoforms use analogous steps: use the appropriate
+       platform-specific name for the lisp kernel, and use the name of
+       boot image as reported by {function xload-level-0}.
+
+      This process will load a few dozen fasl files, printing a
+      message as each file is loaded. If all of these files
+      successfully load, the lisp will print a prompt. You should be
+      able to do essentially everything in that environment that you
+      can in the environment provided by a full heap image. If
+      everything went well, you can save that image using {function
+      save-application}:"
+      (code-block "? (ccl:save-application \"new.image\")")
+      "The name {sample new.image} can be whatever you want.  You may
+      wish to use the default image name for your platform;  see "
+       (ref (table "Platform-specific filename conventions")) "."
+
+      (para "If things go wrong in the early stages of the loading
+        sequence, errors are often difficult to debug; until a fair
+        amount of code (CLOS, the CL condition system, streams, the
+        reader, the read-eval-print loop) is loaded, it's generally
+        not possible for the lisp to report an error.  Errors that
+        occur during these early stages (“the cold load”) sometimes
+        cause the lisp kernel debugger to be invoked; it's
+        primitive, but can sometimes help one to get oriented.")))
+
+) ;chapter

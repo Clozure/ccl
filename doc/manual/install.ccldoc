@@ -1,0 +1,169 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Installing and Running {CCL}"
+
+  (defsection "Installing"
+    "{CCL} is distributed via the Internet.  Please see {link
+http://ccl.clozure.com/download.html} for instructions on how to
+download it.
+
+After following the download instructions, you should have a directory
+on your system named {system ccl}.  This directory is called the {term
+ccl directory}."
+
+    (glossentry "ccl directory" "The directory containing {CCL}'s source
+code and interface databases.  The {code ccl} logical host should refer
+to this directory.")
+
+"{CCL} is made up of two parts: the {term lisp kernel}, and a {term
+heap image}.  When the lisp kernel starts up, it locates the heap
+image, maps it into memory, and starts running the lisp code contained
+in the image.  In the ccl directory, you will find pre-built lisp
+kernel executables and heap images for your platform.
+
+The names used for the lisp kernel on the various platforms are listed
+in the table below.  The heap images have the same basename as the
+corresponding lisp kernel, but a {system .image} suffix.  Thus, the
+image name for {system armcl} would be {system armcl.image}."
+
+  (table "Kernel Names by Platform" 
+    (row (item "Platform") (item "Kernel"))
+    (row (item "Linux x86, x86-64") (item "lx86cl, lx86cl64"))
+    (row (item "OS X x86, x86-64") (item "dx86cl, dx86cl64"))
+    (row (item "FreeBSD x86, x86-64") (item "fx86cl, fx86cl64"))
+    (row (item "Solaris x86, x86-64") (item "sx86cl, sx86cl64"))
+    (row (item "Windows x86, x86-64") (item "wx86cl, wx86cl64"))
+    (row (item "Linux PowerPC 32-bit, 64-bit") (item "ppccl, ppccl64"))
+    (row (item "Linux ARM 32-bit (armv6)") (item "armcl")))
+
+  "By default, the lisp kernel will look for a heap image with an
+appropriate name in the same directory that the lisp kernel itself is
+in.  Thus, it is possible to start {CCL} simply by running {system
+./lx86cl64} (or whatever the appropriate binary is called) directly
+from the ccl directory.
+
+   If the lisp kernel binary does not work, you may need to recompile it
+on your local system.  See {section Building the Kernel}.")
+
+  (defsection "Running {CCL}"
+    "If you always run {CCL} from Emacs, it is sufficient to use the full pathname
+of the lisp kernel binary directly.  That is, in your Emacs init file, you could write something
+like {code (setq inferior-lisp-program \"/path/to/ccl/lx86cl64\")} or make the equivalent
+changes to {code slime-lisp-implementations}.
+
+    It can also be handy to run {CCL} straight from a terminal prompt.
+In the {system scripts/} directory of the ccl directory, there are two
+files named {system ccl} and {system ccl64}.  Copy these files into
+{system /usr/local/bin} or some other directory that is on your path, and then
+edit them so that the value of {code CCL_DEFAULT_DIRECTORY} is your ccl
+directory. You can then start up the lisp by typing {system ccl} or {system ccl64}.
+
+    You may wish to install {system scripts/ccl64} with the name
+{system ccl} if you use the 64-bit lisp more. If you want the 32-bit
+lisp to be available as well, you can install {system scripts/ccl} as
+{system ccl32}.  Note that there is nothing magical about these
+scripts. You should feel free to edit them as desired."
+
+    (defsection "The Init File"
+      "By default, {CCL} will look for a file named {system
+      ccl-init.lisp} in your home directory, and load it upon startup.
+      On Unix systems, it will also look for {system .ccl-init.lisp}.
+
+      If you wish, you can compile your init file, and {CCL} will load
+      the compiled version if it is newer than the corresponding
+      source file.  In other words, {CCL} loads your init file with
+      {code (load \"home:ccl-init\")}.
+
+      Because the init file is loaded the same way as normal Lisp code
+      is, you can put anything you want in it.  For example, you can
+      change the working directory, and load code that you use
+      frequently.
+
+      To suppress the loading of this init-file, invoke {CCL} with the
+      {code --no-init} (or {code -n}) option.")
+
+  (defsection "Command Line Options"
+    (para "When using {CCL} from the command line, the following
+      options may be used to modify its behavior.  The exact set of
+      {CCL} command-line arguments may vary per platform and
+      may change over time.  The definitive list of command line
+      options may be retrieved by using the
+      {code --help} option.")
+    (listing :bullet
+      (item "{code -h} (or
+	      {code --help}).  Provides a definitive (if
+	      somewhat terse) summary of the command line options
+	      accepted by the {CCL} implementation and then
+	      exits.")
+      (item "{code -V} (or {code --version}).  Prints the version of
+	      {CCL} then exits.  The version string is the same value
+	      that is returned by {function
+	      lisp-implementation-version}.")
+      (item
+       (para "{code -K} {param character-encoding-name} (or
+	      {code --terminal-encoding}{param character-encoding-name}).
+	      Specifies the character encoding to use for
+	      {variable *terminal-io*} (see {section Character Encodings}).  Specifically, the
+	      {param character-encoding-name} string
+	      is uppercased and interned in the {code keyword} package. If an
+	      encoding named by that keyword exists,
+	      {variable *terminal-character-encoding-name*} is set to the name
+	      of that encoding.   The  default us {code :utf-8}."))
+      (item "{code -n} (or
+	      {code --no-init}). If this option is given, the
+	      init file is not loaded.  This is useful if {CCL} is being
+	      invoked by a shell script that should not be affected by
+	      whatever customizations a user might have in place.")
+      (item "{code -e} {param form}
+	      (or {code --eval}). An expression is read (via
+	      {function read-from-string}) from the string
+	      {param form} and evaluated. If
+	      {param form} contains shell metacharacters,
+	      it may be necessary to escape or quote them to prevent the
+	      shell from interpreting them.")
+      (item "{code -l} {param path}
+	      (or {code --load} {param path}). Loads file specified by
+	      {param path}.")
+      (item "{code -T} {param n} (or
+	      {code --set-lisp-heap-gc-threshold} {param n}).  Sets the Lisp gc threshold to
+	      {param n}. (see {section GC Page reclamation policy}")
+      (item "{code -Q} (or
+	      {code --quiet}). Suppresses printing of
+	      heralds and prompts when the {code --batch}
+	      command line option is specified.")
+      (item "{code -R} {param n} (or
+	      {code --heap-reserve}). Reserves
+	      {param n} bytes for heap expansion.  The
+	      default is {code 549755813888}.  (see {section Heap space allocation})")
+      (item "{code -S} {param n} (or
+	      {code --stack-size}{param n}). Sets the size of the
+	      initial control stack to {param n}. (see {section Thread Stack Sizes})")
+      (item "{code -Z} {param n} (or
+	      {code --thread-stack-size}{param n}). Sets the size of the first
+	      thread's stack to {param n}. (see {section Thread Stack Sizes})")
+      (item "{code -b} (or {code --batch}). Execute in batch mode. End-of-file
+	      from {variable *standard-input*} causes {CCL} to exit, as do attempts to
+	      enter a break loop.")
+      (item "{code --no-sigtrap} An obscure option for running under GDB.")
+      (item "{code -I} {param image-name} (or
+	      {code --image-name} {param image-name}). Specifies the image
+	      name for the kernel to load.  Defaults to the kernel name
+	      with the suffix {system .image} appended."))
+
+    "The {code --load} and {code --eval} options can each be provided
+    multiple times.  They're executed in the order specified on the
+    command line, after the init file (if there is one) is loaded and
+    before the toplevel read-eval-print loop is entered.
+
+    Finally, any arguments following the pseudo-argument {code --} are
+    not processed, and are made available to Lisp as the value of
+    {code ccl:*unprocessed-command-line-arguments*}.")
+
+  (defsection "Running {CCL} as a Mac Application"
+    "If you want to run {CCL} as a double-clickable Macintosh application, you can do that.
+A version of {CCL} is available from the Mac App Store if you would like to obtain it from
+there.  Alternatively you can build the IDE yourself: please see {section Building the IDE}.
+Currently, it's not possible to use the Mac App Store version of {CCL} as a command-line
+program."))
+
+) ;chapter

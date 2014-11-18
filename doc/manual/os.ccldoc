@@ -1,0 +1,44 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Operating System Interface"
+  (definition (:function getenv) "getenv name" nil
+    "This function looks up the value of the environment variable
+     denoted by the string {param name} and returns its value as a
+     string.  If there is no such envionment variable, then {code nil}
+     is returned.")
+
+  (definition (:function setenv) "setenv name value" nil
+    "This function sets the operating system environment variable
+     denoted by the string {param name} to the string {param value}.
+     If the environment variable is successfully set, 0 is returned.
+     Otherwise, a platform-specific integer error code is returned.")
+
+  (definition (:function wait-for-signal) "wait-for-signal sig duration" nil
+    "Wait for the signal with signal number {param sig} to be received,
+     or until {param duration} seconds have elapsed.  If {param
+     duration} is {code nil}, wait for an indeterminate very long
+     time (many years).
+
+     If {param sig} is outside the range of valid signals, or reserved
+     by {CCL} for its own use, an error is signaled.  An error is
+     always signaled on Windows systems.")
+
+  (definition (:function quit) "quit &optional (exit 0) &key error-handler" nil
+    "Cleanly exit from lisp.  If {param exit} is a value of type
+     {code (signed-byte 32)}, that value will be passed to the C
+     library function {code _exit()} as the status code.  A value of
+     {code nil} is treated as a zero.
+
+     Alternatively, {param exit} may be a function of no arguments.
+     This function will be called instead of {code _exit()} to exit
+     the lisp.
+
+     If the {code :error-handler} keyword argument is supplied, it
+     must be a function of one argument, the condition, that will be
+     called if an error occurs when preparing to quit.  The
+     error-handler function should exit the lisp.")
+
+  ) ;chapter
+
+
+
