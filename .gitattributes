@@ -118,7 +118,7 @@ compiler/nx2.lisp -text
 doc/README -text
 doc/manual/about.ccldoc -text
 doc/manual/build.ccldoc -text
-doc/manual/ccl-documentation.ccldoc -text
+doc/manual/ccl.ccldoc -text
 doc/manual/debugging.ccldoc -text
 doc/manual/external-process.ccldoc -text
 doc/manual/ffi.ccldoc -text
