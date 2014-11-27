@@ -9224,7 +9224,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (target-os-case 
    (:androidarm
     (arm2-soft-float-eabi-ff-call seg vreg xfer address argspecs argvals resultspec))
-   (t     
+   ((:linuxarm)
     (if (and (< (length argspecs) 2)
              (not (typep (car argspecs) 'fixnum)))
       (arm2-eabi-ff-call-simple seg vreg xfer address (car argspecs) (car argvals) resultspec)

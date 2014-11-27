@@ -611,7 +611,7 @@
 
 (defarmlapfunction %lookup-subprim-address ((subp arg_z))
   (ldr imm0 (:@ rcontext (:lsr subp (:$ arm::fixnumshift))))
-  (ldr pc (:@ rcontext (:$ #.(subprim-name->offset 'arm::.SPmakeu32 (find-backend :androidarm))))))
+  (ldr pc (:@ rcontext (:$ #.(subprim-name->offset 'arm::.SPmakeu32)))))
 
 (defarmlapfunction arm-hard-float-p ()
   (check-nargs 0)
