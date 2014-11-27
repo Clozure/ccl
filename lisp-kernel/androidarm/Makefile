@@ -14,10 +14,13 @@
 #   http://opensource.franz.com/preamble.html
 
 LIBBASE = 0x04001000
-NDK = /usr/local/android-ndk-r8c
+NDK = /usr/local/android-ndk-r10c
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
-HOST = linux-x86
+
+
+
+HOST = linux-x86_64
 else
 ifeq ($(UNAME_S),Darwin)
 HOST = darwin-x86
@@ -30,8 +33,8 @@ SYSROOT = $(NDK)/platforms/$(ANDROIDVERSION)/arch-arm
 NDKLIB = $(SYSROOT)/usr/lib
 NDKINC = $(SYSROOT)/usr/include
 ABI = arm-linux-androideabi
-NDKBIN = $(NDK)/toolchains/$(ABI)-4.6/prebuilt/$(HOST)/bin/$(ABI)-
-GCCLIB = $(NDK)/toolchains/$(ABI)-4.6/prebuilt/$(HOST)/lib/gcc/$(ABI)/4.6/armv7-a
+NDKBIN = $(NDK)/toolchains/$(ABI)-4.9/prebuilt/$(HOST)/bin/$(ABI)-
+GCCLIB = $(NDK)/toolchains/$(ABI)-4.9/prebuilt/$(HOST)/lib/gcc/$(ABI)/4.9/armv7-a
 VPATH = ../
 RM = /bin/rm
 AS = $(NDKBIN)as
@@ -39,7 +42,7 @@ CC = $(NDKBIN)gcc --sysroot $(SYSROOT)
 LD = $(NDKBIN)ld
 HOSTCC = cc -m32
 M4 = m4
-ASFLAGS = -mfpu=vfp
+ASFLAGS = -mfpu=vfp -k
 M4FLAGS = -DLINUX -DARM -DANDROID -DLIBBASE=$(LIBBASE)
 CDEFINES = -DLINUX -DARM -DANDROID -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DCCLSHARED
 CDEBUG = -g
@@ -64,7 +67,7 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDKINC) -c $<  $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -fpic -o $@
+	$(CC) -include ../$(PLATFORM_H) -I. -I$(NDKINC) -c $<  $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -fPIC -o $@
 
 
 # -nostdinc -isystem ${NDK}/usr/gcc-include -isystem $(NDK)/usr/include
@@ -93,7 +96,7 @@ KSPOBJ = $(SPOBJ)
 all:	../../libaarmcl.so ../../aarmcl
 
 aarmcl.o: aarmcl.c
-	$(CC) -g -I$(NDKINC) -c $< -fpic -o $@
+	$(CC) -g -I$(NDKINC) -c $< -fPIC -o $@
 
 
 OSLIBS = -ldl -lm -lc -landroid -llog
@@ -101,11 +104,11 @@ APPLIBS = $(OSLIBS) $(NDKLIB)/crtbegin_dynamic.o $(NDKLIB)/crtend_android.o $(GC
 
 
 ../../libaarmcl.so:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) ./armandroid.x ./fixlib
-	$(LD) --shared -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../libaarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o android_native_app_glue.o --no-as-needed $(OSLIBS) -T ./armandroid.x
+	$(LD) --shared -fPIC -Bdynamic -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../libaarmcl.so  -L $(NDKLIB) pad.o arm-spentry.o  pmcl-kernel.o gc-common.o arm-gc.o bits.o arm-exceptions.o image.o thread_manager.o lisp-debug.o memory.o unix-calls.o arm-asmutils.o imports.o lispdcmd.o plprint.o plsym.o albt.o arm_print.o android_native_app_glue.o --no-as-needed --warn-shared-textrel $(OSLIBS)
 #	./fixlib $(LIBBASE) >> ../../libaarmcl.so
 
 ../../aarmcl:	aarmcl.o
-		$(LD) -Bdynamic -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl -L $(NDKLIB) aarmcl.o $(APPLIBS)
+		$(LD) -Bdynamic -pie -e _start  -dynamic-linker /system/bin/linker -nostdlib -z nocopyreloc  -o ../../aarmcl -L $(NDKLIB) aarmcl.o $(APPLIBS)
 
 ./fixlib: ./fixlib.c
 	$(HOSTCC) -g $< -o $@

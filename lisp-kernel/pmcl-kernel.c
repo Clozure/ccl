@@ -2403,6 +2403,11 @@ typedef Elf32_Ehdr Elf_Ehdr_thing;
 typedef Elf32_Shdr Elf_Shdr_thing;
 #endif
 
+#ifdef ANDROID
+extern Elf_Dyn_thing *android_executable_dynamic_section = NULL;
+#endif
+
+
 Elf_Dyn_thing *
 get_executable_dynamic_entries()
 {
@@ -2411,42 +2416,9 @@ get_executable_dynamic_entries()
   return _DYNAMIC;
 #else
 #ifdef ANDROID
-  /* Deep, dark secret: the "handle" returned by dlopen() is
-     a pointer to an soinfo structure, as defined in linker.h.
-     We can get the link map from there ...
-  */
-  
+  extern Elf_Dyn_thing *android_executable_dynamic_section;
 
- 
-  /* Woe unto us - and lots of it - if the executable is mapped
-     at an address other than 0x8000.  Todo: parse /proc/self/maps. */
-  char *p;
-  Elf_Ehdr_thing *elf_header;
-  Elf_Shdr_thing *section_header;
-  int i,fd;
-  struct stat _stat;
-  Elf_Dyn_thing *result = NULL;
-  
-  fd = open("/proc/self/exe",O_RDONLY);
-  if (fd >= 0) {
-    if (fstat(fd,&_stat) == 0) {
-      p = (char *)mmap(NULL,_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
-      if (p != MAP_FAILED) {
-        elf_header = (Elf_Ehdr_thing *)p;
-        for (section_header = (Elf_Shdr_thing *)(p+elf_header->e_shoff),
-               i = 0;
-             i < elf_header->e_shnum;
-             i++,section_header++) {
-          if (section_header->sh_type == SHT_DYNAMIC) {
-            result = (Elf_Dyn_thing *)section_header->sh_addr;
-            break;
-          }
-        }
-        munmap(p,_stat.st_size);
-      }
-    }
-    close(fd);
-  }
+  Elf_Dyn_thing *result = android_executable_dynamic_section;
   return result;
 #else
 #error need implementation for get_executable_dynamic_entries from dso

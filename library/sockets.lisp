@@ -70,6 +70,10 @@
     #-windows-target `(int-errno-call ,form))
   )
 
+#+android-target
+(eval-when (:compile-toplevel :execute)
+  (def-foreign-type :sockaddr_storage (:struct :__kernel_sockaddr_storage)))
+
 
 #+windows-target
 (defun %get-winsock-error ()

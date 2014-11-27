@@ -25,7 +25,9 @@
 #ifdef DARWIN
 #include <sys/ucontext.h>
 #else
+#ifndef ANDROID
 #include <ucontext.h>
+#endif
 #endif
 #endif
 

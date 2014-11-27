@@ -78,15 +78,46 @@ _exportfn(C(store_conditional))
         __(cmp ip,#0)
         __(bne 0b)
         __(b 2f)
-1:      __(adr ip,3f)
-        __(ldr ip,[ip])
+1:    
+        __(ldr r2,.L555)
+.LPIC0:
+        __(add r2,pc,r2)
+        __(ldr ip,.L555+4)
+        __(ldr ip,[r2,ip])
         __(ldr ip,[ip])
         __(cmp ip,#7)
         __(blt 2f)
         .long 0xf57ff01f
 2:      __(mov r0,r3)
         __(bx lr)   
-3:      .long C(arm_architecture_version)                     
+.L555:
+        .word _GLOBAL_OFFSET_TABLE_-(.LPIC0+8)
+        .word  C(arm_architecture_version)(GOT)
+
+                                                                                                                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 _endfn
 
 /* Atomically store new_value(r1) in *r0 ;  return previous contents */

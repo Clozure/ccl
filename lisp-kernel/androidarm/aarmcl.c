@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <elf.h>
 
 int
 (*cclmain)();
@@ -13,7 +14,7 @@ main(int argc, char *argv[], char *envp, void *auxv)
 {
   char buf[PATH_MAX], *path, *lastslash;
   int n, prefixlen;
-  void *libhandle;
+  void *libhandle, **dynamic_entries;
 
   if ((n = readlink("/proc/self/exe", buf, PATH_MAX)) > 0) {
     path = malloc(n+4+3);
@@ -37,6 +38,8 @@ main(int argc, char *argv[], char *envp, void *auxv)
     if (libhandle != NULL) {
       cclmain = dlsym(libhandle, "cclmain");
       if (cclmain != NULL) {
+        dynamic_entries = dlsym(libhandle,"android_executable_dynamic_section");
+        *dynamic_entries = &_DYNAMIC;
         return cclmain(argc,argv,envp, auxv);
       } else {
         fprintf(stderr, "Couldn't resolve library entrpoint.\n");

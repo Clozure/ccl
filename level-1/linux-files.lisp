@@ -1104,7 +1104,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
 (defmacro with-string-vector ((var strings &optional encoding) &body body)
   `(call-with-string-vector #'(lambda (,var) ,@body) ,strings ,encoding))
 
-(defloadvar *max-os-open-files* #-windows-target (#_getdtablesize) #+windows-target 32)
+(defloadvar *max-os-open-files* #-(or windows-target android-target) (#_getdtablesize) #+windows-target 32 #+android-target (#_sysconf #$_SC_OPEN_MAX))
 
 (defun pipe ()
   ;;  (rlet ((filedes (:array :int 2)))

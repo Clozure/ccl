@@ -74,10 +74,12 @@ char *kernel_svn_revision = "unknown";
 #define CRUNCH_MAGIC		0x5065cf03
 
 
+#ifndef ANDROID
 struct user_vfp {
 	unsigned long long fpregs[32];
 	unsigned long fpscr;
 };
+#endif
 
 struct user_vfp *
 find_vfp_info(ExceptionInformation *xp)
