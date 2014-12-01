@@ -798,6 +798,7 @@
       (let* ((maxbits (target-word-size-case
                        (32 29)
                        (64 60)))
+             (newtype nil)
              (cnum (acode-constant-p num))
              (camt (acode-constant-p amt))
              (trust-decls *acode-rewrite-trust-declarations*)
@@ -849,36 +850,12 @@
                    (setf (acode-operator w) (%nx1-operator %ilsl)
                          (acode-operands w) (list amt num)
                          (acode.asserted-type w) nil))))
-              ((or (and (subtypep asserted-type fixnum-type)
-                        (acode-form-typep num fixnum-type trust-decls)
-                        (target-word-size-case
-                         (32 (acode-form-typep amt '(signed-byte 5) trust-decls))
-                         (64 (acode-form-typep amt '(signed-byte 6) trust-decls))))
-                   (let* ((numtype (specifier-type (acode-form-type num trust-decls)))
-                          (amttype (specifier-type (acode-form-type amt trust-decls)))
-                          (fixtype (specifier-type fixnum-type)))
-                     (if (and (typep numtype 'numeric-ctype)
-                              (csubtypep numtype fixtype)
-                              (typep amttype 'numeric-ctype)
-                              (csubtypep amttype fixtype))
-                       (let* ((highnum (numeric-ctype-high numtype))
-                              (lownum (numeric-ctype-low numtype))
-                              (widenum (if (> (integer-length highnum)
-                                              (integer-length lownum))
-                                         highnum
-                                         lownum))
-                              (maxleft (numeric-ctype-high amttype)))
-                         
-                         (and (>= (numeric-ctype-low amttype)
-                                        (target-word-size-case
-                                         (32 -31)
-                                         (64 -63)))
-                                    (< maxleft
-                                       (arch::target-nbits-in-word (backend-target-arch *target-backend*)))
-                                    (typep (ignore-errors (ash widenum maxleft))
-                                           fixnum-type))))))
+              ((and (setq newtype (bounded-integer-type-for-ash
+                                   (acode-form-type num trust-decls)
+                                   (acode-form-type amt trust-decls)))
+                    (subtypep (type-specifier newtype) fixnum-type))
                (setf (acode-operator w) (%nx1-operator fixnum-ash)
-                     (acode.asserted-type w) nil))))))
+                     (acode.asserted-type w) (type-specifier newtype)))))))
 
 (def-acode-rewrite acode-rewrite-multiple-value-call multiple-value-call asserted-type (callable formlist)
   (when (acode-p callable)
@@ -894,6 +871,8 @@
                (:ne '/=)
                (:ge '>=)
                (:gt '>))))
+    (rewrite-acode-form num1)
+    (rewrite-acode-form num2)
     ;;(acode-rewrite-binop-for-numeric-contagion num1 num2 *acode-rewrite-trust-declarations*)
     (multiple-value-bind (v1 c1) (acode-constant-p num1)
       (multiple-value-bind (v2 c2) (acode-constant-p num2)

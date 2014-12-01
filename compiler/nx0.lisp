@@ -628,9 +628,16 @@ function to the indicated name is true.")
     ;; It's not worth trying to be too precise here if the shift count
     ;; is at all large.
     (when (and t2 (csubtypep t2 (specifier-type '(signed-byte 16))))
-      (specifier-type `(integer
-                        ,(ash (numeric-ctype-low t1) (numeric-ctype-low t2))
-                        ,(ash (numeric-ctype-high t1) (numeric-ctype-high t2)))))))
+      (let* ((vals (ignore-errors
+                      (list
+                       (ash (numeric-ctype-low t1) (numeric-ctype-low t2))
+                       (ash (numeric-ctype-low t1) (numeric-ctype-high t2))
+                       (ash (numeric-ctype-high t1) (numeric-ctype-low t2))
+                       (ash (numeric-ctype-high t1) (numeric-ctype-high t2))))))
+        (when vals
+          (specifier-type `(integer
+                            ,(apply #'min vals)
+                            ,(apply #'max vals))))))))
                         
 
 (defun nx-binop-numeric-contagion (form1 form2 trust-decls)
