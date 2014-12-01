@@ -1,6 +1,66 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
-(chapter "The Foreign-Function Interface"
+(chapter "The Foreign Function Interface"
+  "{CCL} can call external code that uses the platform's C ABI.  C++
+functions cannot be called directly.  All of the mechanisms used to do
+this are ultimately based on the function {function %ff-call}, but the
+{code #_} reader macro and the {macro external-call} macro are
+typically more convenient and easier to use.
+
+There is also a mechanism to let external code call into lisp.  This is
+useful when you want to pass a lisp function as a callback function. (See
+{macro defcallback}.)"
+
+  (defsection "Brief Examples"
+    "A few examples may be useful before discussing the FFI facilities
+in detail.
+
+     Most functions that are in the system C library are included in the
+interface database that comes with {CCL}.  The reader macro {code #_}
+consults that database for information about the foriegn code, and makes
+foreign functions easy to use."
+    (code-block "? (#_getpid)
+2845
+? (#_log2 2048d0)
+11.0D0
+? (with-encoded-cstrs :ascii ((s \"Yow!\"))
+    (#_write 1 s 4))")
+
+    "These same calls can be made with the slightly lower-level
+{macro external-call}."
+
+    (code-block "? (external-call \"getpid\" :pid_t)
+2845
+? (external-call \"log2\" :double 2048d0 :double)
+11.0D0
+? (with-encoded-cstrs :ascii ((s \"Yow!\"))
+    (external-call \"write\" :int 1 :address s :size_t 4 :ssize_t))")
+
+    "Note that with {macro external-call}, it is necessary to specify
+the foreign types of the arguments and return values.  The {code #_}
+reader macro uses the interface database to determine that the
+function {code getpid} (for example) returns a {code pid_t} value, and
+it is therefore not necessary to specify it explicitly.
+
+Finally, just to frighten pets and small children, here is a fairly
+complicated example (adapted  from a man page for {code getpwuid_r}):"
+    (code-block "? (let ((bufsize (#_sysconf #$_SC_GETPW_R_SIZE_MAX)))
+    (when (= bufsize -1)
+      (error \"sysconf failed\"))
+    (%stack-block ((buf bufsize))
+      (rlet ((pw (:struct :passwd))
+	     (result :address))
+        (let ((err (#_getpwuid_r (#_getuid) pw buf bufsize result)))
+	  (when (or (not (zerop err))
+		    (%null-ptr-p (%get-ptr result)))
+	    (error \"getpwuid_r failed\"))
+	  (let ((cname (pref pw :passwd.pw_name))
+	        (gid (pref pw :passwd.pw_gid)))
+	    (format t \"~&user ~s gid is ~d\" (get-encoded-string :ascii
+		  					        cname
+							        (#_strlen cname))
+		  gid))))))"))
+
   (defsection "Specifying And Using Foreign Types"
     "{CCL} provides a fairly rich language for defining and specifying
      foreign data types (this language is derived from CMUCL's “alien
@@ -2171,16 +2231,17 @@ Examples:|
           (ref (section "Specifying And Using Foreign Types") "foreign type specifier") "."))))
 
     (definition (:function %ff-call)
-     "%ff-call entrypoint {lbrace}arg-type-keyword arg{rbrace}* {code &optional} result-type-keyword" nil
-      (para "Calls the foreign function at address entrypoint passing the
-	      values of each arg as a foreign argument of type indicated by the
-	      corresponding arg-type-keyword. Returns the foreign function
-	      result (coerced to a Lisp object of type indicated by
-	      result-type-keyword), or NIL if result-type-keyword is :VOID or
-	      NIL")
+      "%ff-call entrypoint {lbrace}arg-type-keyword arg{rbrace}* &optional result-type-keyword" nil
+      (para "This is the most fundamental and lowest-level way to call
+a foreign function.  It calls the foreign function at address {param entrypoint}
+passing the values of each {param arg} as a foreign argument of type indicated
+by the corresponding {param arg-type-keyword}. Returns the foreign function
+result (coerced to a Lisp object of type indicated by
+result-type-keyword), or {code nil} if result-type-keyword is {code :void} or
+{code NIL}.")
      (defsection "Values"
        (listing :definition
-         (item "{param entrypoint}" ccldoc::=> "A fixnum or MACPTR")
+         (item "{param entrypoint}" ccldoc::=> "A fixnum or macptr")
          (item "{param arg-type-keyword}" ccldoc::=> "One of the foreign argument-type keywords, described
 		        above")
          (item "{param arg}" ccldoc::=> "A lisp value of type indicated by the corresponding
