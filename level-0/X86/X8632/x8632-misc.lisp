@@ -881,20 +881,7 @@
 (defx8632lapfunction %%apply-in-frame-proto ()
   (hlt))
 
-(defx8632lapfunction %atomic-pop-static-cons ()
-  @again
-  (movl (@ (+ (target-nil-value) (x8632::kernel-global static-conses))) (% eax))
-  (cmpl ($ (target-nil-value)) (% eax))
-  (jz @lose)
-  (%cdr eax temp0)
-  (lock)
-  (cmpxchgl (% temp0) (@ (+ (target-nil-value) (x8632::kernel-global static-conses))))
-  (jnz @again)
-  (lock)
-  (subl ($ '1) (@ (+ (target-nil-value) (x8632::kernel-global free-static-conses))))
-  @lose
-  (movl (% eax) (% arg_z))
-  (single-value-return))
+
 
 
 

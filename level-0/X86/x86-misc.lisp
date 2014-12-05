@@ -1189,20 +1189,7 @@
   (jmp (@ 'function (% fn))))
   
 
-(defx86lapfunction %atomic-pop-static-cons ()
-  @again
-  (movq (@ (+ (target-nil-value) (x8664::kernel-global static-conses))) (% rax))
-  (cmpq ($ (target-nil-value)) (% rax))
-  (jz @lose)
-  (%cdr rax temp0)
-  (lock)
-  (cmpxchgq (% temp0) (@ (+ (target-nil-value) (x8664::kernel-global static-conses))))
-  (jnz @again)
-  (lock)
-  (subq ($ x8664::fixnumone) (@ (+ (target-nil-value) (x8664::kernel-global free-static-conses))))
-  @lose
-  (movq (% rax) (% arg_z))
-  (single-value-return))
+
 
 
   

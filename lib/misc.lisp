@@ -1408,19 +1408,29 @@ are running on, or NIL if we can't find any useful information."
                      #+32-bit-target 7)))
         (t 0)))
 
+(defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
+
+(defloadvar *free-static-cons-address* (%int-to-ptr (kernel-global-address 'free-static-conses)))
+
 (defun static-cons (car-value cdr-value)
   "Allocates a cons cell that doesn't move on garbage collection,
    and thus doesn't trigger re-hashing when used as a key in a hash
    table.  Usage is equivalent to regular CONS."
-  (loop
-    (let ((cell (without-interrupts (%atomic-pop-static-cons))))
-      (if cell
-        (progn
-          (setf (car cell) car-value)
-          (setf (cdr cell) cdr-value)
-          (return cell))
-        (progn
-          (%ensure-static-conses))))))
+  (let* ((addr *static-cons-address*)
+         (freeaddr  *free-static-cons-address*))
+    (loop
+      (with-exception-lock
+          (without-interrupts      
+           (let ((cell (%get-object addr 0)))
+             (if cell
+               (progn
+                 (%set-object addr 0 (cdr cell))
+                 (%set-object freeaddr 0 (1- (%get-object freeaddr 0)))
+                 (setf (car cell) car-value)
+                 (setf (cdr cell) cdr-value)
+                 (return cell))
+               (progn
+                 (%ensure-static-conses)))))))))
 
 (defun free-static-conses ()
   (%get-kernel-global free-static-conses))

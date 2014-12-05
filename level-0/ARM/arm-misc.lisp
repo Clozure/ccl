@@ -1161,27 +1161,7 @@
 
 #+later
 (progn
-(defarmlapfunction %atomic-pop-static-cons ()
-  (li imm0 (+ (target-nil-value) (arm::kernel-global static-conses)))
-  @again
-  (lrarx arg_z rzero imm0)
-  (cmpri arg_z (target-nil-value))
-  (beq @lose)
-  (%cdr arg_y arg_z)
-  (strcx. arg_y rzero imm0)
-  (bne @again)
-  (li imm0 (+ (target-nil-value) (arm::kernel-global free-static-conses)))
-  @decf
-  (lrarx imm1 rzero imm0)
-  (subi imm1 imm1 '1)
-  (strcx. imm1 rzero imm0)
-  (bne @decf)
-  (isync)
-  (bx lr)
-  @lose
-  (li imm0 arm::reservation-discharge)
-  (strcx. rzero rzero imm0)
-  (bx lr))
+
 
 
 

@@ -2544,16 +2544,8 @@ the lock held."
 
  
 (defmacro with-exception-lock (&body body)
-  (let* ((p (gensym)))
-    `(with-macptrs (,p)     
-      (%get-kernel-global-ptr 'exception-lock ,p)
-      (%lock-recursive-lock-ptr ,p "global exception lock wait" nil)
-      ;; Among other things, we can't be interrupted by another
-      ;; thread now.
-      (unwind-protect
-           (progn
-             ,@body)
-        (%unlock-recursive-lock-ptr ,p "global exception lock")))))
+  `(with-lock-grabbed (*kernel-exception-lock*)
+    ,@body))
 
 
 (defmacro with-lock-grabbed-maybe ((lock &optional
