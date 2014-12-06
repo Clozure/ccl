@@ -476,9 +476,7 @@
 ;; general utilities
 
 ;; NIL is constant, assume is same in core as here.
-(defun kernel-global-address (global)
-  (check-type global symbol)
-  (+ (target-nil-value) (target::%kernel-global global)))
+
 
 (defun nil-relative-symbol-address (sym)
   (+ (target-nil-value)

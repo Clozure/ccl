@@ -1408,6 +1408,10 @@ are running on, or NIL if we can't find any useful information."
                      #+32-bit-target 7)))
         (t 0)))
 
+(defun kernel-global-address (global)
+  (check-type global symbol)
+  (+ (target-nil-value) (target::%kernel-global global)))
+
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 
 (defloadvar *free-static-cons-address* (%int-to-ptr (kernel-global-address 'free-static-conses)))
