@@ -140,6 +140,7 @@ doc/manual/q-and-a.ccldoc -text
 doc/manual/sockets.ccldoc -text
 doc/manual/streams.ccldoc -text
 doc/manual/threads.ccldoc -text
+doc/manual/toplevel.ccldoc -text
 doc/manual/unicode.ccldoc -text
 doc/manual/using.ccldoc -text
 doc/release-notes-1.2.txt -text

@@ -26,6 +26,7 @@
   (include-file "install.ccldoc" :in-package :ccl)
   (include-file "build.ccldoc" :in-package :ccl)
   (include-file "using.ccldoc" :in-package :ccl)
+  (include-file "toplevel.ccldoc" :in-package :ccl)
   (include-file "debugging.ccldoc" :in-package :ccl)
   (include-file "unicode.ccldoc" :in-package :ccl)
   (include-file "fs.ccldoc" :in-package :ccl)

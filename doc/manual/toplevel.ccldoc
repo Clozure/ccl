@@ -1,0 +1,30 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Top-level Interface"
+  
+  (definition (:variable *quit-on-eof*)
+      "*quit-on-eof*" nil "When true, exit the top-level immediately upon
+receipt of an EOF.  If {variable *quit-on-eof*} is {code nil} (which
+is the default), ignore the EOF.
+
+Note, though, that an internally-defined number of consecutive EOFs
+will exit lisp anyway.")
+
+  (definition (:toplevel-command ":pwd") ":pwd" nil
+    "Print the pathname of the current directory.")
+
+  (definition (:toplevel-command ":cd") ":cd dir" nil
+    "Change to the directory specified by {param dir}, which may be a
+namestring or a pathname object.")
+
+  (definition (:toplevel-command ":proc") ":proc &optional proc" nil
+    "Show information about the process {param proc}, or all
+processes if {param proc} is not specified.")
+
+  (definition (:toplevel-command ":kill") ":kill proc" nil
+    "Kill the process whose name or ID matches {param proc}.")
+
+  ) ;chapter
+
+
+
