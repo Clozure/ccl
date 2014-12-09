@@ -686,7 +686,7 @@ WATCH-LIST
 >        Faulting instruction: (movq (% rsi) (@ 5 (% rdi)))
 > While executing: %SETNTH, in process listener(1).
 > Type :POP to abort, :R for a list of available restarts.
-> Type :? for other options.
+> Type :? for other options.h
 "))))
 
 (defsection "Memory"
@@ -730,14 +730,93 @@ individually.")
 (definition (:function object-direct-size) "object-direct-size thing" nil
   "This function returns the size of {param thing} in bytes, including
 any headers and alignment overhead.  It does not descend into an object's
-components."))
+components.")
 
-(definition (:variable *disassemble-verbose*) "*disassemble-verbose*" nil
-  "When true, the output of {code disassemble} may include
+(definition (:function %address-of) "%address-of" nil
+  "This function returns the address of {param thing} as an integer.
+If {param thing} is a fixnum, {param thing} is simply returned.
+
+Note that there are types other than fixnums that are represented as
+immediate values rather than heap-allocated objects.  On various platforms,
+these might include characters and single-flosts, and possibly other values.
+The {function %address-of} function will return fairly useless values
+for such objects.
+
+The value returned by {function %address-of} is only useful for debugging,
+since the GC may run at any time and may move objects around in memory,
+thereby changing their addresses."))
+
+(defsection "Disassemble"
+  (definition (:variable *disassemble-verbose*) "*disassemble-verbose*" nil
+    "When true, the output of {code disassemble} may include
   platform-dependent additional information.  For instance, on the x86
   ports, the output will include the x86 opcode bytes.
 
-  The default value is {code nil}.")
+  The default value is {code nil}."))
+
+(defsection "Source Notes"
+
+  "Source locations are recorded in source-note objects, which have
+accessors {function source-note-filename}, {function source-note-start-pos},
+{function source-note-end-pos}, and {function source-note-text}.
+
+The start and end positions are file positions and not character positions.
+The text will be {code nil} unless source recording was on at read time.  If
+the original source file is still available, {function ensure-source-note-text}
+will force the missing source text to be read from the file.
+
+Source notes are associated with definitons (via record-source-fule) and
+also stored in function objects (including anonymous and local functions).
+The former can be retrieved via {function find-definition-sources}, and
+the latter via {function function-source-note}.
+
+Source recording is governed by the variable
+{variable *save-source-locations*}.
+
+PC to source mapping is controlled by {variable *record-pc-mapping*}."
+
+(definition (:variable *record-source-file*) "*record-source-file" nil
+  "When true, record source file information for defintions.")
+
+(definition (:variable *save-source-locations*) "*save-source-locations*" nil
+  "This variable governs how source location information is recorded."
+  (listing :definition
+    (item "{code nil}" :=> "Do not record source location information.
+Filename information for definitions will still be saved if
+{variable *record-source-file*} is true.")
+    (item "{code t}" :=> "Store source location information, including
+the original source text, for function objects and definitions.")
+    (item "{code :no-text}" :=> "Store source location information, but
+do not store a copy of the original source text.  This is an optimization
+useful for compiling files that are not expected to change.")))
+	  
+(definition (:variable *record-pc-mapping*) "*record-pc-mapping*" nil
+  "When true, record PC to source mapping (but only if {variable
+*save-source-locations*} is also true).")
+
+(definition (:function function-source-note) "function-source-note f" nil
+  "Return the source-note object for the function {param f}.")
+
+(definition (:function source-note-filename) "source-note-filename source" nil
+  "Return the filename for {param source}.")
+
+(definition (:function source-note-start-pos) "source-note-start-pos source-note" nil
+  "Return the starting file position (not character position) for the thing
+described by {param source-note}.")
+
+(definition (:function source-note-end-pos) "source-note-end-pos source-note" nil
+  "Return the ending file position (not character position) for the thing
+described by {param source-note}.")
+
+
+(definition (:function source-note-text) "source-note-text source-note &optional start end" nil
+  "Return the saved source text delimited by {param start} and {param end}.")
+
+(definition (:function ensure-source-note-text) "ensure-source-note-text source-note &key if-does-not-exist" nil
+  "Read the source text from the original file if it is not already
+present in {param source-note}."))
+
+
 
 ) ;end chapter
 
