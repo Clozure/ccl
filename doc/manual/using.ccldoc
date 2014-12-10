@@ -345,7 +345,17 @@
           shared library.  (On platforms where this isn't yet supported,
           a warning is issued and the option is ignored.)
          "))))
-    (para))
+
+    (definition (:variable *save-exit-functions*) "*save-exit-functions*" nil
+      "This variable contains a list of 0-argument functions that will
+be called before saving a heap image.  Users may add functions to this list
+as needed.")
+
+    (definition (:variable *restore-lisp-functions*) "*restore-lisp-functions*"	nil
+      "This variable contains a list of 0-argument functions
+that will be called after restoring a saved heap image.  Users may add
+functions to this list as needed."))
+
 
   (defsection "Concatenating FASL Files"
     (para "Multiple fasl files can be concatenated into a single file.

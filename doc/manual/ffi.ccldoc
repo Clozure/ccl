@@ -569,6 +569,9 @@ Consider a code fragment like the following:"
       (definition (:macro "%null-ptr") "%null-ptr" nil
         "Equivalent to {code (%int-to-ptr 0)}.")
 
+      (definition (:variable +null-ptr+) "+null-ptr+" nil
+        "This constant variable contains the result of {code (%null-ptr)}.")
+
       (definition (:function "%null-ptr-p") "%null-ptr-p ptr" nil
         "This function returns true if {param ptr} is a macptr that encapsulates the
         address 0.  It returns {code nil} if {param ptr} encapsulates some other address.")
