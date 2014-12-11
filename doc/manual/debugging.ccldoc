@@ -1,6 +1,20 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Debugging"
+  (defsection "Break Loops"
+    (definition (:variable *break-on-warnings*) "*break-on-warnings*" nil
+      "When true, {code warn} will enter a break loop.
+
+This variable was removed from ANSI CL.  The rationale was that the
+same effect may be acheived with {code (setq *break-on-signals* 'warning)}.")
+
+    (definition (:variable *break-on-errors*) "*break-on-errors*" nil
+      "When true (the default), lisp will enter a break loop when an
+error is signaled.")
+
+    (definition (:variable *show-restarts-on-break*) "*show-restarts-on-break*" nil
+      "When true, automatically print the available restarts before entering a break loop."))
+
   (defsection "Trace"
     (para "{CCL}'s tracing facility is invoked by an extended version
       of the Common Lisp {code trace} macro.  Extensions allow tracing
