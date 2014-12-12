@@ -13,6 +13,10 @@
      If the environment variable is successfully set, 0 is returned.
      Otherwise, a platform-specific integer error code is returned.")
 
+  (definition (:function unsetenv) "unsetenv name" nil
+    "This function deletes the operating system environment variable
+     denoted by the string {param name}.")
+
   (definition (:function wait-for-signal) "wait-for-signal sig duration" nil
     "Wait for the signal with signal number {param sig} to be received,
      or until {param duration} seconds have elapsed.  If {param
