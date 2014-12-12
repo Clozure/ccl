@@ -75,6 +75,7 @@
      *backtrace-on-break*
      *show-restarts-on-break*
      print-call-history
+     backtrace-as-list
      dbg-form
      *backtrace-print-level*
      *backtrace-print-length*
