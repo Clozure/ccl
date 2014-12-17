@@ -2194,7 +2194,7 @@
                                               j ($ *x862-arg-y*)
                                               new val-reg)
                 (values ($ *x862-temp0*) ($ x8664::arg_x) ($ *x862-arg-y*) ($ *x862-arg-z*)))
-              (x862-four-untargeted-reg-forms seg
+              (x862-four-targeted-reg-forms seg
                                               array ($ *x862-temp0*)
                                               i ($ x8664::arg_x)
                                               j ($ *x862-arg-y*)
