@@ -157,7 +157,7 @@ scripts. You should feel free to edit them as desired."
 
     Finally, any arguments following the pseudo-argument {code --} are
     not processed, and are made available to Lisp as the value of
-    {code ccl:*unprocessed-command-line-arguments*}.")
+    {variable ccl:*unprocessed-command-line-arguments*}.")
 
   (defsection "Running {CCL} as a Mac Application"
     "If you want to run {CCL} as a double-clickable Macintosh application, you can do that.

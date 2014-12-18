@@ -42,6 +42,18 @@
      called if an error occurs when preparing to quit.  The
      error-handler function should exit the lisp.")
 
+  (definition (:variable *command-line-argument-list*) "*command-line-argument-list*" nil
+    "A list of strings decoded from the argument vector passed to the lisp
+process (as {code argv[]}) by the operating system.  The foreign C strings are
+assumed to be UTF-8 encoded.")
+
+  (definition (:variable *unprocessed-command-line-arguments*)
+      "*unprocessed-command-line-arguments*" nil
+    "A list of strings that denotes the command-line arguments that
+remain after the lisp has processed and removed arguments that it
+interprets itself.")
+
+
   ) ;chapter
 
 
