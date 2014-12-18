@@ -651,6 +651,7 @@ the socket is not connected."))
                               (/ internal-time-units-per-second 1000))
                        0))
                  (connect-timeout
+		  (check-io-timeout connect-timeout)
                   (round (* connect-timeout 1000)))))
              (socket-address (or remote-address
                                  (apply #'resolve-address

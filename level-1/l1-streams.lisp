@@ -457,8 +457,8 @@
   (line-termination nil)
   (unread-char-function 'ioblock-no-char-input)
   (encode-literal-char-code-limit 256)
-  (input-timeout nil)
-  (output-timeout nil)
+  (input-timeout nil)			;in milliseconds
+  (output-timeout nil)			;in milliseconds
   (deadline nil))
 
 
@@ -3266,8 +3266,12 @@
     (let* ((bom-info (and insize encoding (not (eq encoding :inferred)) (character-encoding-use-byte-order-mark encoding))))
       (when bom-info
         (ioblock-check-input-bom ioblock bom-info sharing)))
-    (setf (ioblock-input-timeout ioblock) input-timeout)
-    (setf (ioblock-output-timeout ioblock) output-timeout)
+    (when input-timeout
+      (check-io-timeout input-timeout)
+      (setf (ioblock-input-timeout ioblock) (round (* 1000 input-timeout))))
+    (when output-timeout
+      (check-io-timeout output-timeout)
+      (setf (ioblock-output-timeout ioblock) (round (* 1000 output-timeout))))
     (setf (ioblock-deadline ioblock) deadline)
     ioblock))
 
