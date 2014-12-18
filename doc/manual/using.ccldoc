@@ -354,7 +354,20 @@ as needed.")
     (definition (:variable *restore-lisp-functions*) "*restore-lisp-functions*"	nil
       "This variable contains a list of 0-argument functions
 that will be called after restoring a saved heap image.  Users may add
-functions to this list as needed."))
+functions to this list as needed.")
+
+    (definition (:variable *lisp-cleanup-functions*) "*lisp-cleanup-functions*"
+	nil
+      "This variable contains a list of 0-argument functions that will be
+called before quitting the lisp.
+
+Note that {function save-application} quits the lisp, so any functions
+on this list will be invoked before saving a heap image.")
+
+    (definition (:variable *lisp-startup-functions*) "*lisp-startup-functions*"
+	nil
+      "This variable contains a list of 0-argument functions that will be
+called after starting the lisp."))
 
 
   (defsection "Concatenating FASL Files"
