@@ -41,6 +41,7 @@
     :ansi-cl
     #-windows-target :unix
     :openmcl-unicode-strings
+    :ipv6
     ;; Threads and MOP stuff is pretty redundant.
     :openmcl-native-threads
     :openmcl-partial-mop
