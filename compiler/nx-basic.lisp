@@ -877,10 +877,12 @@
         (*decomp-prettify* prettify))
     (decomp-form acode)))
 
+
 (defun decomp-form (acode)
+  (unless (acode-p acode) (error "what?"))                          
   (cond ((nx-t acode) t)
         ((nx-null acode) nil)
-        (t (let* ((op (car acode))
+        (t (let* ((op (acode-operator acode))
                   (num (length *next-nx-operators*))
                   (name (when (and (fixnump op)
                                    (<= 0 op)
@@ -980,13 +982,13 @@
        ,@(loop for name in (if (atom names) (list names) names)
            collect `(defmethod decomp-using-name ((,op-var (eql ',name)) ,acode-var)
                       (declare ,@op-decls)
-                      (destructuring-bind ,args-vars (cdr ,acode-var)
+                      (destructuring-bind ,args-vars (acode-operands ,acode-var)
                         ,@decls
                         ,@body)))))))
 
 ;; Default method
 (defmethod decomp-using-name (op acode)
-  `(,op ,@(decomp-formlist (cdr acode))))
+  `(,op ,@(decomp-formlist (acode-operands acode))))
 
 ;; not real op, kludge generated below for lambda-bind
 (defdecomp keyref (op index)
@@ -1024,11 +1026,12 @@
       t)))
            
 (defdecomp progn (&whole form op form-list)
-  (if (and *decomp-prettify*
-           (null (cdr form-list))
-           (decomp-replace form (car form-list)))
-    (decomp-form (car form-list))
-    `(,op ,@(decomp-formlist form-list))))
+  (when form-list
+    (if (and *decomp-prettify*
+             (null (cdr form-list))
+             (decomp-replace form (car form-list)))
+      (decomp-form (car form-list))
+      `(,op ,@(decomp-formlist form-list)))))
 
 (defdecomp (prog1 multiple-value-prog1 or list %temp-list values) (op form-list)
   `(,op ,@(decomp-formlist form-list)))
