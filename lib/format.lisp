@@ -1788,8 +1788,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun format-fixed-aux (stream number w d k ovf pad atsign)
   (and w (<= w 0) (setq w nil))  ; if width is unreasonable, ignore it.
-  (if (not (or w d))  ; perhaps put this back when prin1 is better
-    (prin1 number stream)
+  (if (not (or w d))
+    (print-float-free-form number stream)
     (let ((spaceleft w)
           (abs-number (abs number))
           strlen zsuppress flonum-to-string-width)
