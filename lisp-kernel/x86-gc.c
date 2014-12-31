@@ -242,7 +242,7 @@ check_readonly_range(LispObj *start, LispObj *end)
             if (a) {
               code = a->code;
             } else {
-              a = AREA_VOID;
+              code = AREA_VOID;
             }
             switch (code) {
             case AREA_READONLY:
@@ -1968,7 +1968,8 @@ update_self_references_in_range(LispObj *start, LispObj *end)
 LispObj
 compact_dynamic_heap()
 {
-  LispObj *src = ptr_from_lispobj(GCfirstunmarked), *dest = src, node, new, *current,  *prev = NULL;
+  LispObj *src = ptr_from_lispobj(GCfirstunmarked), *dest = src, node, new;
+  LispObj *current = src,  *prev = NULL;
   natural 
     elements, 
     dnode = gc_area_dnode(GCfirstunmarked), 
