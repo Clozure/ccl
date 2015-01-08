@@ -1243,6 +1243,7 @@
     nhash.find                          ; function: find vector-index
     nhash.find-new                      ; function: find vector-index on put
     nhash.read-only                     ; boolean: true when read-only
+    nhash.min-size                      ; smallest size can shrink the table to.
     )
 
 (def-accessors (lock-acquisition) %svref

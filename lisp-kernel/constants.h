@@ -115,7 +115,7 @@ typedef struct hash_table_vector_header {
   LispObj weak_deletions_count; /* incremented when GC deletes weak pair */
   LispObj hash;                 /* backpointer to hash-table */
   LispObj deleted_count;        /* number of deleted entries [not maintained if lock-free] */
-  LispObj count;                /* number of valid entries [not maintained if lock-free] */
+  LispObj count;                /* number of valid entries */
   LispObj cache_idx;            /* index of last cached pair */
   LispObj cache_key;            /* value of last cached key */
   LispObj cache_value;          /* last cached value */

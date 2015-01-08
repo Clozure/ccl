@@ -251,7 +251,8 @@
         (compareF (nhash.compareF hash))
         (vector (nhash.vector hash))
         (private (if (nhash.owner hash) '*current-process*))
-        (lock-free-p (logtest $nhash.lock-free (the fixnum (nhash.lock hash)))))
+        (lock-free-p (hash-lock-free-p hash)))
+
     (flet ((convert (f)
              (if (or (fixnump f) (symbolp f))
                `',f
@@ -259,7 +260,7 @@
       (values
        `(%cons-hash-table
          nil nil nil ,(nhash.grow-threshold hash) ,(nhash.rehash-ratio hash) ,(nhash.rehash-size hash)
-        nil nil ,private ,lock-free-p)
+        nil nil ,private ,lock-free-p ,(nhash.min-size hash))
        `(%initialize-hash-table ,hash ,(convert keytransF) ,(convert compareF) ',vector)))))
 
 (defun needs-rehashing (hash)

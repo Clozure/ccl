@@ -60,7 +60,7 @@
 
 
 (defun %cons-hash-table (keytrans-function compare-function vector
-                         threshold rehash-ratio rehash-size find find-new owner &optional lock-free-p)
+                         threshold rehash-ratio rehash-size find find-new owner lock-free-p &optional min-size)
   (%istruct
    'HASH-TABLE                          ; type
    keytrans-function                    ; nhash.keytransF
@@ -79,6 +79,7 @@
    find                                 ; nhash.find
    find-new                             ; nhash.find-new
    nil                                  ; nhash.read-only
+   (or min-size 0)                      ; nhash.min-size
    ))
 
 (defun nhash.vector-size (vector)
@@ -436,9 +437,9 @@ before doing so.")
      :SIZE -- A hint as to how many elements will be put in this hash
        table.
      :REHASH-SIZE -- Indicates how to expand the table when it fills up.
-       If an integer, add space for that many elements. If a floating
-       point number (which must be greater than 1.0), multiply the size
-       by that amount.
+       If an integer (which must be greater than 0), add space for that
+       many elements. If a floating point number (which must be greater
+       than 1.0), multiply the size by that amount.
      :REHASH-THRESHOLD -- Indicates how dense the table can become before
        forcing a rehash. Can be any positive number <=1, with density
        approaching zero as the threshold approaches 0. Density 1 means an
@@ -450,8 +451,9 @@ before doing so.")
     (report-bad-arg hash-function '(or symbol function)))
   (unless (and (realp rehash-threshold) (<= 0.0 rehash-threshold) (<= rehash-threshold 1.0))
     (report-bad-arg rehash-threshold '(real 0 1)))
-  (unless (or (fixnump rehash-size) (and (realp rehash-size) (< 1.0 rehash-size)))
-    (report-bad-arg rehash-size '(or fixnum (real 1 *))))
+  (unless (or (and (fixnump rehash-size) (<= 1 rehash-size))
+              (and (realp rehash-size) (< 1.0 rehash-size)))
+    (report-bad-arg rehash-size '(or (integer 1 *) (real (1) *))))
   (unless (fixnump size) (report-bad-arg size 'fixnum))
   (setq rehash-threshold (/ 1.0 (max 0.01 rehash-threshold)))
   (let* ((default-hash-function
@@ -487,7 +489,7 @@ before doing so.")
     (when (and (eq lock-free :shared) (not shared))
       (setq lock-free nil))
     (multiple-value-bind (grow-threshold total-size)
-        (compute-hash-size (1- size) 1 rehash-threshold)
+        (compute-hash-size size 0 rehash-threshold)
       (let* ((flags (+ (if weak (ash 1 $nhash_weak_bit) 0)
                        (ecase weak
                          ((t nil :key) 0)
@@ -500,19 +502,16 @@ before doing so.")
                     grow-threshold rehash-threshold rehash-size
                     find-function find-put-function
                     (unless shared *current-process*)
-                    lock-free)))
+                    lock-free
+                    size)))
         (setf (nhash.vector.hash (nhash.vector hash)) hash)
         hash))))
 
 (defun compute-hash-size (size rehash-size rehash-ratio)
-  (let* ((new-size size))
-    (declare (fixnum size new-size))
-    (setq new-size (max 30 (if (fixnump rehash-size)
+  (let* ((new-size (max 30 (if (fixnump rehash-size)
                              (%i+ size rehash-size)
-                             (ceiling (* size rehash-size)))))
-    (if (<= new-size size)
-      (setq new-size (1+ size)))        ; God save you if you make this happen
-    
+                             (max (1+ size) (ceiling (* size rehash-size)))))))
+    (declare (fixnum size new-size))
     (let ((vector-size (%hash-size (max (+ new-size 2) (ceiling (* new-size rehash-ratio))))))
       ; TODO: perhaps allow more entries, based on actual size:
       ;  (values (min (floor vector-size rehash-ratio) (%i- vector-size 2)) vector-size))
@@ -736,7 +735,7 @@ before doing so.")
     (multiple-value-setq (grow-threshold vector-size)
       (if (%i<= grow-threshold 0) ; if ran out of room, grow, else get just enough.
         (compute-hash-size count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
-        (compute-hash-size count 1 (nhash.rehash-ratio hash))))
+        (compute-hash-size (max (nhash.min-size hash) (+ count grow-threshold)) 0 (nhash.rehash-ratio hash))))
     (setq new-vector (%cons-nhash-vector vector-size inherited-flags))
     (loop with full-count = grow-threshold
           for i from $nhash.vector_overhead below (uvsize old-vector) by 2
@@ -752,36 +751,14 @@ before doing so.")
                    (setf (%svref new-vector (%i+ new-vector-index 1)) value)
                    (decf grow-threshold)
                    (when (%i<= grow-threshold 0)
-		     (error "Bug: undeleted entries?")
-		     #+obsolete ;; we no longer undelete entries
-                     ;; Too many entries got undeleted while we were rehashing (that's the
-                     ;; only way we could end up with more than COUNT entries, as adding
-                     ;; new entries is blocked).  Grow the output vector.
-                     (multiple-value-bind (bigger-threshold bigger-vector-size)
-                         (compute-hash-size full-count (nhash.rehash-size hash) (nhash.rehash-ratio hash))
-                       (assert (> bigger-vector-size vector-size))
-                       (let ((bigger-vector (%cons-nhash-vector bigger-vector-size 0)))
-                         (%copy-gvector-to-gvector new-vector
-                                                   $nhash.vector_overhead
-                                                   bigger-vector
-                                                   $nhash.vector_overhead
-                                                   (%i- (uvsize new-vector) $nhash.vector_overhead))
-                         (setf (nhash.vector.flags bigger-vector) (nhash.vector.flags new-vector))
-                         (%lock-free-rehash-in-place hash bigger-vector)
-                         (setq grow-threshold (- bigger-threshold full-count))
-                         (setq full-count bigger-threshold)
-                         (setq new-vector bigger-vector)
-                         (setq vector-size bigger-vector-size)))))))
+		     (error "Bug: undeleted entries?")))))
           finally (setf (nhash.vector.count new-vector) (- full-count grow-threshold)))
 
     (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
       (%lock-free-rehash-in-place hash new-vector))
     (setf (nhash.vector.hash new-vector) hash)
-    (setf (nhash.grow-threshold hash) grow-threshold)
-    ;; At this point, another thread might decrement the threshold while they're looking at the old
-    ;; vector. That's ok, just means it will be too small and we'll rehash sooner than planned,
-    ;; no big deal.
-    (setf (nhash.vector hash) new-vector)))
+    (setf (nhash.vector hash) new-vector)
+    (setf (nhash.grow-threshold hash) grow-threshold)))
 
 ;; This is called on a new vector that hasn't been installed yet, so no other thread is
 ;; accessing it.  However, gc might be deleting stuff from it, which is why it tests
@@ -886,23 +863,43 @@ before doing so.")
       ;; were searching.  Take care of it and try again.
       (lock-free-rehash hash))))
 
-;; TODO: might be better (faster, safer) to just create a new all-free vector?
+(defun replace-nhash-vector (hash size flags)
+  (let ((vector (%cons-nhash-vector size flags)))
+    (setf (nhash.vector.hash vector) hash)
+    (setf (nhash.vector hash) vector)))
+
 (defun lock-free-clrhash (hash)
   (when (nhash.read-only hash)
     (signal-read-only-hash-table-error hash)) ;;continuable
   (with-lock-context
-    (without-interrupts
-     (let ((lock (nhash.exclusion-lock hash)))
-       (%lock-recursive-lock-object lock) ;; disallow rehashing.
-       (loop
-         with vector = (nhash.vector hash)
-         for i fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
-         as val = (%svref vector i)
-         unless (or (eq val free-hash-marker) (eq val deleted-hash-value-marker))
-         do (setf (%svref vector (%i- i 1)) deleted-hash-key-marker
-                  (%svref vector i) deleted-hash-value-marker)
-	 finally (setf (nhash.vector.count vector) 0))
-       (%unlock-recursive-lock-object lock))))
+      (without-interrupts
+        (let ((lock (nhash.exclusion-lock hash)))
+          (%lock-recursive-lock-object lock)    ;; disallow rehashing (or other clrhashing)
+          ;; Note that since we can't reuse deleted slots, deleting entries doesn't increase capacity.
+          ;; As a heuristic, reuse existing vector if there is enough capacity left to grow again to
+          ;; current size, otherwise make a fresh one.
+          (if (< (lock-free-hash-table-count hash) (nhash.grow-threshold hash))
+            (loop
+              with vector = (nhash.vector hash)
+              for i fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
+              as val = (%svref vector i)
+              unless (or (eq val free-hash-marker) (eq val deleted-hash-value-marker))
+              do (setf (%svref vector (%i- i 1)) deleted-hash-key-marker
+                       (%svref vector i) deleted-hash-value-marker)
+              finally (setf (nhash.vector.count vector) 0))
+            (multiple-value-bind (grow-threshold vector-size)
+                                 (compute-hash-size (nhash.min-size hash) 0 (nhash.rehash-ratio hash))
+              (setf (nhash.grow-threshold hash) 0) ;; prevent puthash from adding new entries
+              (loop with vector = (nhash.vector hash) ;; mark entries as obsolete
+                for i fixnum from (%i+ $nhash.vector_overhead 1) below (uvsize vector) by 2
+                do (setf (%svref vector i) rehashing-value-marker))
+              (let ((flags (logand $nhash_weak_flags_mask (nhash.vector.flags (nhash.vector hash)))))
+		(when (> vector-size 1000)
+		  ;; Install a tiny temp vector to let the old one get gc'd before consing a big new vector.
+		  (replace-nhash-vector hash 1 0))
+                (replace-nhash-vector hash vector-size flags))
+              (setf (nhash.grow-threshold hash) grow-threshold)))
+          (%unlock-recursive-lock-object lock))))
   hash)
 
 (defun lock-free-puthash (key hash value)

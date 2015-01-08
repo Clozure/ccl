@@ -40,10 +40,10 @@
   nhash.vector.hash                     ; back-pointer
   nhash.vector.deleted-count            ; if lock-free, hint to GC to delete marked keys.
                                         ; else number of deleted entries
-  nhash.vector.count                    ; number of valid entries [not maintained if lock-free]
-  nhash.vector.cache-idx                ; index of last cached key/value pair
-  nhash.vector.cache-key                ; cached key
-  nhash.vector.cache-value              ; cached value
+  nhash.vector.count                    ; number of valid entries
+  nhash.vector.cache-idx                ; index of last cached key/value pair [not used if lock-free]
+  nhash.vector.cache-key                ; cached key [not used if lock-free]
+  nhash.vector.cache-value              ; cached value [not used if lock-free]
   nhash.vector.size                     ; number of entries in table
   nhash.vector.size-reciprocal          ; shifted reciprocal of nhash.vector.size
   )
