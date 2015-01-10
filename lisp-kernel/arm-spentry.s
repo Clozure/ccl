@@ -3167,6 +3167,7 @@ _spentry(eabi_ff_call_simple)
         __(mov fn,#0)
         __(ldr arg_y,[rcontext,#tcr.last_lisp_frame])
         __(str sp,[rcontext,#tcr.last_lisp_frame])
+        __(str vsp,[rcontext,#tcr.save_vsp])
         __(mov arg_x,rcontext)  /* preserved by C */
         __(test_fixnum(arg_z))
         __(str allocptr,[arg_x,#tcr.save_allocptr])

@@ -743,6 +743,7 @@ gc_like_from_xp(ExceptionInformation *xp,
                 signed_natural(*fun)(TCR *, signed_natural), 
                 signed_natural param)
 {
+
   TCR *tcr = get_tcr(true), *other_tcr;
   int result;
   signed_natural inhibit;
@@ -1634,7 +1635,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     if (program_counter >= &egc_set_hash_key_conditional) {
       if ((program_counter < &egc_set_hash_key_conditional_test) ||
 	  ((program_counter == &egc_set_hash_key_conditional_test) &&
-	   (! (xpPSR(xp) & PSR_Z_MASK)))) {
+           (xpGPR(xp,imm0) != 0))) {
 	return;
       }
       root = xpGPR(xp,arg_x);
@@ -1643,7 +1644,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     } else if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_test) ||
 	  ((program_counter == &egc_store_node_conditional_test) &&
-	   (! (xpPSR(xp) & PSR_Z_MASK)))) {
+	   (xpGPR(xp,imm0) != 0))) {
 	/* The conditional store either hasn't been attempted yet, or
 	   has failed.  No need to adjust the PC, or do memoization. */
 	return;
@@ -1792,7 +1793,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         /* Whatever we finished allocating, reset allocptr/allocbase to
            VOID_ALLOCPTR */
         xpGPR(xp,allocptr) = VOID_ALLOCPTR;
-        tcr->save_allocptr = tcr->save_allocbase = VOID_ALLOCPTR;
+        tcr->save_allocptr = tcr->save_allocbase = (LispObj *)VOID_ALLOCPTR;
       }
       return;
     }
