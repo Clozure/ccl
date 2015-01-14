@@ -911,7 +911,7 @@ accept-connection on it again."))
                                              :port (or remote-port
                                                        (getf (socket-keys socket) :remote-port))
                                              :connect :active
-                                             :address-family (getf (socket-keys socket) :address-family)
+                                             :address-family (socket-address-family socket)
                                              :socket-type :datagram))))
     (multiple-value-setq (msg offset) (verify-socket-buffer msg offset size))
     (%stack-block ((bufptr size))
