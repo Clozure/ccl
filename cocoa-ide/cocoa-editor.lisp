@@ -3370,7 +3370,7 @@
    (lambda (tv)
      (with-hemlock-context (tv)
        (multiple-value-bind (start end) (hi:buffer-selection-range (hi:current-buffer))
-         #+debug 0
+         #+debug
          (#_NSLog #@"update Hemlock selection: charpos = %d, abspos = %d"
                   :int (hi::mark-charpos (hi:current-point)) :int start)
          (#/updateSelection:length:affinity: tv
