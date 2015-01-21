@@ -577,3 +577,19 @@
   get a Lisp error due to some action of the user."
   `(handler-bind ((error #'lisp-error-error-handler))
      ,@body))
+
+
+;;;;
+
+(defmacro with-default-view-for-buffer ((view) &body body)
+  (let ((viewvar (gensym)) (buffervar (gensym)) (savevar (gensym)))
+    `(let* ((,viewvar ,view)
+            (,buffervar (hemlock-view-buffer ,viewvar))
+            (,savevar (buffer-default-view ,buffervar)))
+       ;;(assert (null (buffer-default-view (hemlock-echo-area-buffer ,viewvar))))
+       (unwind-protect
+           (progn
+             (setf (buffer-default-view ,buffervar) ,viewvar)
+             ,@body)
+         (setf (buffer-default-view ,buffervar) ,savevar)))))
+

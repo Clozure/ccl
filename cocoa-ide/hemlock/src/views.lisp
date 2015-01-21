@@ -9,17 +9,12 @@
 ;; prompted input.  Currently the last two are conflated.
 ;;
 ;; A HEMLOCK-VIEW never changes which text buffer it displays (unlike in emacs).  A
-;; text buffer can be displayed in multiple HEMLOCK-VIEW's, although currently there
-;; is no UI to make that happen.  But we try take care to distinguish per-buffer info
-;; from per-view info.  The former is stored in the buffer struct and in buffer
-;; variables.  The latter is currently stored in HEMLOCK-VIEW slots, although I'd
+;; text buffer can be displayed in multiple HEMLOCK-VIEW's (through the "Duplicate
+;; this window" command in the context menu, or programmatically thru #/duplicate.)
+;; Per-buffer info is stored in the buffer struct and in buffer variables.  The
+;; per-view info is currently stored in HEMLOCK-VIEW slots, although I'd
 ;; like to introduce user-definable "view variables" and get rid of some of these
-;; user-level slots.  [Note: currently, multiple views on a buffer are but a remote
-;; dream.  Basic things like the insertion point are still per buffer when they
-;; should be per view]
-
-;; NOTE: In CCL, it's no longer a dream. See definition
-;;  (objc:defmethod (#/duplicate: :void) ((self hemlock-frame) sender)
+;; user-level slots.
 ;;
 ;; The user interacts with a HEMLOCK-VIEW using events.  Each time the user presses a
 ;; key, the OS arranges to invoke our event handler.  The event handler computes and
@@ -38,6 +33,7 @@
    (buffer :initarg :buffer :reader hemlock-view-buffer)
    (echo-area-buffer :initarg :echo-area-buffer :reader hemlock-echo-area-buffer)
    (echo-area-stream :reader hemlock-echo-area-stream)
+   (selection-info :reader hemlock-selection-info)
 
    ;; Input state
    (quote-next-p :initform nil :accessor hemlock-view-quote-next-p)
@@ -54,6 +50,7 @@
 
    ;; User level "view variables", for now give each its own slot.
    (last-command-type :initform nil :accessor hemlock-last-command-type)
+   ;; TODO: should this be in selection-info?  E.g. should it get copied when copy the view?
    (target-column :initform 0 :accessor hemlock-target-column)
    ))
 
@@ -68,7 +65,14 @@
 
 (defmethod initialize-instance ((view hemlock-view) &key)
   (call-next-method)
+  (with-slots (selection-info buffer) view
+    (setf selection-info (make-selection-info :point (copy-mark (buffer-point buffer))
+                                              :%mark (let ((mark (buffer-mark buffer)))
+                                                       (and mark (copy-mark mark)))
+                                              :region-active (buffer-region-active buffer)))
+    (setf (buffer-default-view buffer) view))
   (with-slots (echo-area-buffer echo-area-stream) view
+    #+debug (assert (null (buffer-default-view echo-area-buffer))) ;; For echo area, use the selection info from buffer, not view.
     (setf echo-area-stream
 	  (make-hemlock-output-stream (buffer-end-mark echo-area-buffer) :full))))
 
@@ -190,7 +194,7 @@
   (funcall (command-function command) p))
 
 (defmethod execute-hemlock-key ((view hemlock-view) key)
-  #+debug (log-debug "~&execute-hemlock-key ~s" key)
+  #+debug (log-debug "~&execute-hemlock-key ~s ~s" view key)
   (with-output-to-listener
    (if (or (symbolp key) (functionp key))
      (funcall key)
@@ -275,17 +279,18 @@
              (*next-view-start* nil) ;; gets set by scrolling commands
              (text-buffer (hemlock-view-buffer view))
              (mod (buffer-modification-state text-buffer)))
-        (modifying-buffer-storage (*current-buffer*)
-          (restart-case
-              (handler-bind ((error #'(lambda (c)
-                                        (lisp-error-error-handler c :debug-p t))))
-                (execute-hemlock-key view key))
-            (exit-event-handler () :report "Exit from hemlock event handler")))
-        ;; Update display
-        (if *next-view-start*
-          (destructuring-bind (how . where) *next-view-start*
-            (hemlock-ext:scroll-view view how where))
-          (unless (equal mod (buffer-modification-state text-buffer))
-            ;; Modified buffer, make sure user sees what happened
-            (hemlock-ext:ensure-selection-visible view)))
-        (update-echo-area-after-command view)))))
+        (with-default-view-for-buffer (view)
+          (modifying-buffer-storage (*current-buffer*)
+            (restart-case
+                (handler-bind ((error #'(lambda (c)
+                                          (lisp-error-error-handler c :debug-p t))))
+                  (execute-hemlock-key view key))
+              (exit-event-handler () :report "Exit from hemlock event handler")))
+          ;; Update display
+          (if *next-view-start*
+            (destructuring-bind (how . where) *next-view-start*
+              (hemlock-ext:scroll-view view how where))
+            (unless (equal mod (buffer-modification-state text-buffer))
+              ;; Modified buffer, make sure user sees what happened
+              (hemlock-ext:ensure-selection-visible view)))
+          (update-echo-area-after-command view))))))

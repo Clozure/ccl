@@ -78,15 +78,16 @@
                         (:constructor internal-make-font-region (start end)))
   node)
 
-;;; swappable selection info
+;; Each view has a selection.  The view's selection is what is displayed in the window, and by
+;; default it is what is manipulated by commands.  In addition, each buffer has its own selection
+;; info that is only used when a buffer is accessed without any view context (or if the buffer
+;; is serving as the echo area buffer).
 (defstruct (selection-info (:copier nil))
   point			      ; current position in buffer
   %mark                       ; a saved buffer position
   (mark-ring (make-ring 10 #'delete-mark))                 ; per-view
   region-active               ; modified-tick when region last activated
-  view                        ; hemlock-text-view or NIL
-)
-
+  )
   
 ;;; The buffer object:
 ;;;
@@ -102,14 +103,7 @@
   minor-mode-objects	      ; list of buffer's minor mode objects, reverse precedence order
   bindings		      ; buffer's command table
   (shadow-syntax nil)         ; buffer's changes to syntax attributes.
-  #-clozure
-  point			      ; current position in buffer
-  #-clozure
-  %mark                       ; a saved buffer position
-  #-clozure
-  region-active               ; modified-tick when region last activated
-  #+clozure
-  (selection-info (make-selection-info))
+  (default-selection-info (make-selection-info)) ; usually shadowed by a view's info
   (%writable t)		      ; t => can alter buffer's region
   (modified-tick -2)	      ; The last time the buffer was modified.
   (unmodified-tick -1)	      ; The last time the buffer was unmodified
@@ -134,9 +128,14 @@
   (selection-set-by-command nil) ; boolean: true if selection set by (shifted) motion command.
   (%lines (make-array 10 :adjustable t :fill-pointer 0)) ;; all lines in the buffer
   (plist ())                  ; plist for users
-  #+clozure
-  textstorage
+
+  ;; Dynamically bound slot, pointing to the preferred view for buffer.
+  (default-view nil)
   )
+
+(defun buffer-selection-info (buffer)
+  (let ((view (buffer-default-view buffer)))
+    (if view (hemlock-selection-info view) (buffer-default-selection-info buffer))))
 
 (defun buffer-point (buffer)
   (selection-info-point (buffer-selection-info buffer)))

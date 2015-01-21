@@ -6,11 +6,16 @@
 
 ;; Functions used by the IDE display code.
 
-(defmacro with-display-context (view &body body)
-  `(let* ((hi::*current-view* ,view)
-	  (hi::*current-buffer* (hemlock-view-buffer hi::*current-view*)))
-     ,@body))
-
+(defmacro with-display-context ((view &optional pane) &body body)
+  (let ((viewvar (gensym "VIEW")))
+    `(let* ((,viewvar ,view)
+            (hi::*current-view* ,viewvar)
+            (hi::*current-buffer* (ecase ,pane
+                                    ((:text) (hi::hemlock-view-buffer ,viewvar))
+                                    ((:echo) (hi::hemlock-echo-area-buffer ,viewvar))
+                                    ((nil) (hi::hemlock-view-current-buffer ,viewvar)))))
+       (hi::with-default-view-for-buffer (,viewvar)
+         ,@body))))
 
 ;; User variable.  Maps symbol categories (see compute-symbol-category) to color specs
 (defvar *lisp-code-colors* '((:string :blue)
