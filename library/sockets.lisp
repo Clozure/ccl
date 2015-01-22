@@ -1477,6 +1477,34 @@ host addresses matching the specified query terms.  The default is to
 return the first matching address.
 
 errorp may be passed as NIL to return NIL if no match was found."
+
+  ;; We have historically supported the use of an (unsigned-byte 32)
+  ;; value to represent an IPv4 address. If existing code does that to
+  ;; avoid overhead (name resolution, consing, what-have-you), then
+  ;; that code may not appreciate the consing/mallocing we do here
+  ;; to support that.
+  (when (typep host '(unsigned-byte 32))
+    (let* ((proto (ecase socket-type
+		    ((nil :stream) "tcp")
+		    (:datagram "udp")))
+	   (inet-port (typecase port
+			(fixnum (htons port))
+			(string (_getservbyname port proto))
+			(symbol (_getservbyname (string-downcase
+						 (string port)) proto)))))
+      (if (null inet-port)
+	(when errorp
+	  (error "can't resolve port ~s with getservbyname" port))
+	(let* ((socket-address (make-instance 'socket-address))
+	       (sin (sockaddr socket-address)))
+	  (setf (pref sin :sockaddr_in.sin_family) #$AF_INET)
+	  (setf (pref sin
+		      #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
+		      #-(or windows-target solaris-target) :sockaddr_in.sin_addr.s_addr) (htonl host))
+	  (setf (pref sin :sockaddr_in.sin_port) inet-port)
+	  (upgrade-socket-address-from-sockaddr #$AF_INET socket-address)
+	  (return-from resolve-address socket-address)))))
+    
   (with-cstrs ((host-buf (or host ""))
                (port-buf (string-downcase (or (ensure-string port) ""))))
     (rletZ ((hints #>addrinfo)
