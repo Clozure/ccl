@@ -624,17 +624,16 @@ the lisp and run REBUILD-CCL again.")
                (if force (xload-level-0 :force) (xload-level-0)))
              (when kernel
                (when (or clean force)
-                 ;; Do a "make -k clean".
+                 ;; Do a "make clean".
                  (run-program "make"
-                              (list "-k"
-                                    "-C"
+                              (list "-C"
                                     (format nil "lisp-kernel/~a"
                                             (kernel-build-directory))
                                     "clean")))
                (format t "~&;Building lisp-kernel ...")
                (with-output-to-string (s)
                  (let* ((proc (run-program (make-program)
-                                           (list "-k" "-C" 
+                                           (list "-C" 
                                                  (format nil "lisp-kernel/~a"
                                                          (kernel-build-directory))
                                                  "-j"
