@@ -132,6 +132,48 @@
                             *hyperspec-map-sym-hash* hash)))
                   (setf (gethash sym hash) url)))))))))
 
+(defun http-url (url)
+  "Returns an ns-url object given a string representing an http URL."
+  (with-cfstring (s url)
+    (#/absoluteURL
+     (make-instance 'ns:ns-url
+       :with-string s))))
+
+(defun pathname-to-file-url (pathname)
+  "Returns an ns-url object given a string representing a file URL."
+  (with-cfstring (s (native-translated-namestring pathname))
+    (with-autorelease-pool
+        (#/retain
+         (#/fileURLWithPath: ns:ns-url s)))))
+
+(defun open-cocoa-window-with-url (url &optional (default-title "") (erf nil))
+  (rlet ((pdocattrs :id +null-ptr+)
+         (perror :id  +null-ptr+))
+    (let* ((data (make-instance 'ns:ns-data
+                   :with-contents-of-url url
+                   :options 0
+                   :error perror)))
+      (if (not (%null-ptr-p (pref perror :id)))
+          (when (functionp erf)
+            (funcall erf (pref perror :id)))
+          (let* ((string (make-instance 'ns:ns-attributed-string
+                           :with-html data
+                           :base-url url
+                           :document-attributes pdocattrs))
+                 (docattrs (pref pdocattrs :id))
+                 (title #+cocotron +null-ptr+
+                        #-cocotron
+                        (if (%null-ptr-p docattrs)
+                            +null-ptr+
+                            (#/objectForKey: docattrs #&NSTitleDocumentAttribute))))
+            (with-cfstring (nsdefault-title default-title)
+              (if (%null-ptr-p title)
+                  (setq title nsdefault-title))
+              (#/newDisplayDocumentWithTitle:content:
+               (#/sharedDocumentController ns:ns-document-controller)
+               title
+               string)))))))
+
 (defun lookup-hyperspec-symbol (symbol doc)
   (let* ((relative-url (gethash symbol (hyperspec-map-hash doc))))
     (when relative-url
@@ -141,35 +183,16 @@
                      :relative-to-url *hyperspec-map-sym-url*))))
         
         (if *lookup-hyperspec-in-browser*
-          (ccl::%open-url-in-browser url)
-          (rlet ((pdocattrs :id +null-ptr+)
-                 (perror :id  +null-ptr+))
-            (let* ((data (make-instance 'ns:ns-data
-                           :with-contents-of-url url
-                           :options 0
-                           :error perror)))
-              (if (not (%null-ptr-p (pref perror :id)))
-                (progn
-                  (#/presentError: doc (pref perror :id)))
-                (let* ((string (make-instance 'ns:ns-attributed-string
-                                 :with-html data
-                                 :base-url url
-                                 :document-attributes pdocattrs))
-                       (docattrs (pref pdocattrs :id))
-                       (title #+cocotron +null-ptr+
-                              #-cocotron
-                              (if (%null-ptr-p docattrs)
-                                +null-ptr+
-                                (#/objectForKey: docattrs #&NSTitleDocumentAttribute))))
-                  (if (%null-ptr-p title)
-                    (setq title (%make-nsstring (string symbol))))
-                  (#/newDisplayDocumentWithTitle:content:
-                   (#/sharedDocumentController ns:ns-document-controller)
-                   title
-                   string))))))))))
+            (ccl::%open-url-in-browser url)
+            (open-cocoa-window-with-url url (string symbol) (lambda (errptr) (#/presentError: doc errptr))
+                                        ))))))
                               
+#+IGNORE
+(gui::queue-for-gui (lambda () (open-cocoa-window-with-url (http-url "http://www.google.com/"))))
 
-
+#+IGNORE
+(gui::queue-for-gui (lambda () (open-cocoa-window-with-url 
+                                (pathname-to-file-url "ccl:doc;ccl-documentation.html"))))
                    
                    
                    
