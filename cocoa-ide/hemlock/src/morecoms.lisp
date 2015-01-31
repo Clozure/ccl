@@ -424,7 +424,7 @@ i-search, and prompted input (e.g. m-x)"
 		  :prompt "Character Position: "
 		  :help "Enter an absolute character position to goto."))))
     (unless (and (integerp p) (not (minusp p)))
-      (editor-error "Must supply a non-negatige integer."))
+      (editor-error "Must supply a non-negative integer."))
     (let ((point (current-point-unless-selection)))
       (when point
 	(unless (move-to-absolute-position point p)
