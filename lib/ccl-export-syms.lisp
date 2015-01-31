@@ -755,6 +755,9 @@
      object-direct-size
      add-feature
      remove-feature
+     choose-file-dialog
+     choose-new-file-dialog
+     choose-directory-dialog
      ;; Disabling heap allocation (to detect unexpected consing.)
      allow-heap-allocaton
      heap-allocation-allowed-p

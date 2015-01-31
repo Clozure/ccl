@@ -85,6 +85,7 @@
     (cocoa-choose-new-file-dialog :file-types file-types)))
 
 (setq ccl::*choose-file-dialog-hook* 'cocoa-choose-file-dialog-hook-function)
+(setq ccl::*choose-directory-dialog-hook* 'cocoa-choose-directory-dialog)
 
 (defun %cocoa-choose-directory-dialog (directory)
   (assume-cocoa-thread)

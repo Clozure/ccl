@@ -766,6 +766,7 @@ are running on, or NIL if we can't find any useful information."
 		       (return-from get-answer (list (nth value list))))))))))))
 
 (defvar *choose-file-dialog-hook* nil "for GUIs")
+(defvar *choose-directory-dialog-hook* nil "for GUIs")
 
 ;;; There should ideally be some way to override the UI (such as
 ;;; it is ...) here.
@@ -798,6 +799,11 @@ are running on, or NIL if we can't find any useful information."
 	  (format *query-io* "~&~s does not exist." namestring)
 	  (format *query-io* "~&Type of ~s is not one of ~{~a~}"
 		  namestring file-types)))))
+
+(defun choose-directory-dialog (&key directory)
+  (let* ((hook *choose-directory-dialog-hook*))
+    (when hook
+      (funcall hook :directory directory))))
 
 (defparameter *overwrite-dialog-hook* nil)
 (defun overwrite-dialog (filename prompt)
