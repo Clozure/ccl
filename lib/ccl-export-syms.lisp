@@ -325,6 +325,7 @@
      lock-file
      unlock-file
      file-locked-p
+     file-data-size
      directoryp
      delete-directory
      *trust-paths-from-environment*

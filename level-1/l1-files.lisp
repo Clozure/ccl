@@ -1173,6 +1173,11 @@ a host-structure or string."
   or FILE is a wild pathname."
   (%file-author (defaulted-native-namestring path)))
 
+(defun file-data-size (path)
+  "Returns size of file's data fork, without needing to open the file.
+   If the file has a resource fork, its size is not included here."
+  (nth-value 2 (ccl::%stat (defaulted-native-namestring path))))
+
 (defun touch (path)
   (if (not (probe-file path))
     (progn
