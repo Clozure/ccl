@@ -456,13 +456,13 @@ safer to mess with directly as there is less magic going on."))
 (defmethod local-socket-filename ((socket file-socket))
   (let ((address (local-socket-address socket)))
     (when address
-      (path address))))
+      (socket-address-path address))))
 
 #-windows-target
 (defmethod remote-socket-filename ((socket file-socket))
   (let ((address (remote-socket-address socket)))
     (when address
-      (path address))))
+      (socket-address-path address))))
 
 #-windows-target
 (defmethod local-filename ((socket file-socket))
@@ -1590,7 +1590,7 @@ errorp may be passed as NIL to return NIL if no match was found."
 
 #-windows-target
 (defclass unix-socket-address (socket-address)
-  ((path :initarg :path :reader path :reader host :reader socket-address-path)))
+  ((path :initarg :path :reader host :reader socket-address-path)))
 
 #-windows-target
 (defmethod initialize-instance :after ((socket-address unix-socket-address) &key path)
@@ -1615,7 +1615,7 @@ errorp may be passed as NIL to return NIL if no match was found."
 
 #-windows-target
 (defmethod socket-address-as-string ((socket-address unix-socket-address))
-  (format nil "~S" (path socket-address)))
+  (format nil "~S" (socket-address-path socket-address)))
 
 #-windows-target
 (defconstant +socketaddr_un-sock-path-lan+ (/ (ensure-foreign-type-bits
