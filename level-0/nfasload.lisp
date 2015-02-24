@@ -630,7 +630,7 @@
   (fasl-read-ivector s target::subtag-u64-vector))
 
 #+64-bit-target
-(deffaslop $fasl-u64-vector (s)
+(deffaslop $fasl-s64-vector (s)
   (fasl-read-ivector s target::subtag-s64-vector))
 
 (deffaslop $fasl-bit-vector (s)
