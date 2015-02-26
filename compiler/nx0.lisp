@@ -1599,7 +1599,7 @@ Or something. Right? ~s ~s" var varbits))
 	    (with-program-error-handler (lambda (c) (runtime-program-error-form c))
 	      (parse-body (%cddr lambda-form) *nx-lexical-environment* t))
           (setf (afunc-acode p) (nx1-lambda (%cadr lambda-form) body decls)))))
-
+    (rewrite-acode-form (afunc-acode p))
     (nx1-transitively-punt-bindings *nx-punted-vars*)
     (setf (afunc-blocks p) *nx-blocks*)
     (setf (afunc-tags p) *nx-tags*)
