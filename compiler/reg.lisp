@@ -93,7 +93,7 @@
 ; "type" values for FPRs - type of SOURCE may be encoded herein
 (defconstant hard-reg-class-fpr-type-double 0)          ;  IEEE double
 (defconstant hard-reg-class-fpr-type-single 1)          ; IEEE single
-(defconstant hard-reg-class-fpr-type-comples-double-float 2)
+(defconstant hard-reg-class-fpr-type-complex-double-float 2)
 (defconstant hard-reg-class-fpr-type-complex-single-float 3)
   
 
