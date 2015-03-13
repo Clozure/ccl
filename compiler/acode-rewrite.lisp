@@ -793,6 +793,7 @@
 (def-acode-rewrite acode-rewrite-with-c-frame with-c-frame asserted-type (body)
   (rewrite-acode-form body asserted-type))
 
+
 (def-acode-rewrite acode-rewrite-ash ash asserted-type (&whole w num amt)
   (or (acode-constant-fold-numeric-binop w num amt 'ash)
       (let* ((maxbits (target-word-size-case
@@ -850,12 +851,14 @@
                    (setf (acode-operator w) (%nx1-operator %ilsl)
                          (acode-operands w) (list amt num)
                          (acode.asserted-type w) nil))))
-              ((and (setq newtype (bounded-integer-type-for-ash
-                                   (acode-form-type num trust-decls)
+              ((and  (setq newtype (bounded-integer-type-for-ash
+                                  (acode-form-type num trust-decls)
                                    (acode-form-type amt trust-decls)))
                     (subtypep (type-specifier newtype) fixnum-type))
-               (setf (acode-operator w) (%nx1-operator fixnum-ash)
-                     (acode.asserted-type w) (type-specifier newtype)))))))
+               (when (and (acode-form-typep num fixnum-type trust-decls)
+                          (acode-form-typep amt fixnum-type trust-decls))
+                 (setf (acode-operator w) (%nx1-operator fixnum-ash)))
+               (setf (acode.asserted-type w) (type-specifier newtype)))))))
 
 (def-acode-rewrite acode-rewrite-multiple-value-call multiple-value-call asserted-type (callable formlist)
   (when (acode-p callable)
