@@ -1162,7 +1162,9 @@ The option strings can be used to control the JVM, esp. the classpath:
                  (setq *pvm* (%get-ptr vm))
                  (values result (%get-ptr vm) (%get-ptr env)))
                (error "Can't create Java VM: result = ~d" result)))))))
-   args))
+   args
+   :utf-8
+   ))
 
 
 ;;;this is the FLI side of proxy support
