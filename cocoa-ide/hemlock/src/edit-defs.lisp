@@ -339,7 +339,7 @@
       (- pos (hi::buffer-lines-before-absolute-position buffer pos))
       pos)))
 
-(defun move-to-source-note (source)
+(defun move-to-source-note (source &optional activate)
   (let ((start-pos (ccl:source-note-start-pos source)))
     (when start-pos
       (setq start-pos (byte-position-to-character-position start-pos))
@@ -378,9 +378,15 @@
                         (and snippet
                              (or (ssearch temp-mark snippet :forward)
                                  (ssearch temp-mark snippet :backward)))))
-              (let ((point (move-point-leaving-mark temp-mark)))
-                (or (character-offset point offset)
-                    (buffer-end point))))))))))
+              (unless (character-offset temp-mark offset)
+                (buffer-end temp-mark))
+              (move-point-leaving-mark temp-mark)
+              (when activate
+                (pre-command-parse-check temp-mark)
+                (unless (form-offset temp-mark 1)
+                  (buffer-end temp-mark))
+                (push-new-buffer-mark temp-mark t))
+              t)))))))
 
 (defun find-definition-in-buffer (def-type full-name source)
   (or (and (ccl:source-note-p source)
