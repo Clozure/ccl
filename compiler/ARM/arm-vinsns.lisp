@@ -2810,14 +2810,8 @@
 
 (define-arm-vinsn fixnum->char (((dest :lisp))
                                 ((src :imm))
-                                ((tempa :u32)
-                                 (tempb :u32)))
-  (mov tempb (:$ #xff))
-  (orr tempb tempb (:$ #x7f00))
-  (mov tempa (:lsr src (:$ (+ arm::fixnumshift 1))))
-  (cmp tempa tempb)
+                                ((tempa :u32)))
   (mov tempa (:lsr src (:$ (+ arm::fixnumshift 11))))
-  (beq :bad)
   (cmp tempa (:$ 27))
   (mov dest (:lsl src (:$ (- arm::charcode-shift arm::fixnumshift))))
   :bad
