@@ -347,11 +347,19 @@
             (pattern nil)
             (offset 0))
         (flet ((ssearch (mark string direction)
-                 (find-pattern mark
-                               (setq pattern (new-search-pattern :string-insensitive
-                                                                 direction
-                                                                 string
-                                                                 pattern)))))
+                 (or (find-pattern mark
+                                   (setq pattern (new-search-pattern :string-insensitive
+                                                                     direction
+                                                                     string
+                                                                     pattern)))
+                     ;; above will fail if mark is the middle of the string, because backward
+                     ;; searches don't match anything past the mark.
+                     (when (eq direction :backward)
+                       (with-mark ((temp-mark mark))
+                         (unless (character-offset temp-mark (length string))
+                           (buffer-end temp-mark))
+                         (when (find-pattern temp-mark pattern)
+                           (move-mark mark temp-mark)))))))
           (declare (inline ssearch))
           (with-mark ((temp-mark (current-point)))
             (unless full-text
