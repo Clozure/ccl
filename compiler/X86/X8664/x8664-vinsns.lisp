@@ -1,4 +1,4 @@
-;;;-*- Mode: Lisp; Package: CCL -*-
+;;-*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;;   Copyright (C) 2005-2009 Clozure Associates and contributors.
 ;;;   This file is part of Clozure CL.
@@ -4023,12 +4023,8 @@
 				  ((src :imm))
 				  ((temp :u32)))
   (movl (:%l src) (:%l temp))
-  (sarl (:$ub (+ x8664::fixnumshift 1)) (:%l temp))
-  (cmpl (:$l (ash #xfffe -1)) (:%l temp))
-  (je :bad-if-eq)
-  (sarl (:$ub (- 11 1)) (:%l temp))
+  (sarl (:$ub (+ x8664::fixnumshift 11)) (:%l temp))
   (cmpl (:$b (ash #xd800 -11))(:%l temp))
-  :bad-if-eq
   (movl (:$l (:apply target-nil-value)) (:%l temp))
   (cmovel (:%l temp) (:%l dest))
   (je :done)
