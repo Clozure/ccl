@@ -710,8 +710,7 @@
                                     `((declare (global-function-name ,global-name))))
                                 ,@decls ,body))
            (info (if (and inline-spec
-                          (or (null env)
-                              (definition-environment env t))
+                          (binding-free-environment-p env)
                           (nx-declared-inline-p inline-spec env)
                           (not (and (symbolp inline-spec)
                                     (gethash inline-spec *NX1-ALPHATIZERS*))))
