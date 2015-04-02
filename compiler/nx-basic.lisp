@@ -206,7 +206,7 @@
                          (>= safety 2)
                          (> debug speed)
                          (> safety speed)))))
-               :detect-floating-point-exectptions
+               :detect-floating-point-exceptions
                (lambda (env) (> (safety-optimize-quantity env) 1)) ; extensions
                )))
   (defun new-compiler-policy (&key (allow-tail-recursion-elimination nil atr-p)
