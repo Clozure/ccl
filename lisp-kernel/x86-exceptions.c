@@ -1515,24 +1515,41 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 
 #ifdef LINUX
 /* type of pointer to saved fp state */
-#ifdef X8664
-typedef fpregset_t FPREGS;
-#else
+
 typedef struct _fpstate *FPREGS;
-#endif
+#define FPREGSsize_in_bytes(f) linux_fpstate_size_in_bytes(f)
+
+size_t
+linux_fpstate_size_in_bytes(FPREGS state)
+{
+  if (WORD_SIZE == 64){
+    /* see <asm/sigcontext.h> It would be way too useful if we could
+       include that file without conflicting with <bits/sigcontext.h> */
+    /* I didn't make this stuff up */
+    struct _fpx_sw_bytes * sw = (struct _fpx_sw_bytes *) (((char *)state)+464);
+    if (sw->magic1 == FP_XSTATE_MAGIC1) {
+      return sw->extended_size;
+    }
+
+  }
+  return (sizeof (*state));
+}
+
 LispObj *
 copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 {
   FPREGS src = (FPREGS)(xp->uc_mcontext.fpregs), dest;
-  
+  size_t nbytes = FPREGSsize_in_bytes(src);
   if (src) {
-    dest = ((FPREGS)current)-1;
-    *dest = *src;
+    BytePtr bc = (BytePtr)current - nbytes;
+    dest = (FPREGS) (truncate_to_power_of_2(bc,6));
+    memcpy(dest,src,nbytes);
     *destptr = dest;
-    current = (LispObj *) dest;
+    current = (LispObj *)dest;
   }
   return current;
 }
+
 #endif
 
 
