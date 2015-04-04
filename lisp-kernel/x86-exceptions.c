@@ -1514,7 +1514,22 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 
 
 #ifdef LINUX
-/* type of pointer to saved fp state */
+
+/* some versions of  <bits/sigcontext.h> are too old to
+define some magic numbers that we need. define those things here, prefixed
+with "magic__ " to avoid name conflicts. what a waste of time!
+*/
+#define magic__FP_XSTATE_MAGIC1	0x46505853U
+struct magic__fpx_sw_bytes
+{
+  __uint32_t magic1;
+  __uint32_t extended_size;
+  __uint64_t xstate_bv;
+  __uint32_t xstate_size;
+  __uint32_t padding[7];
+};
+
+
 
 typedef struct _fpstate *FPREGS;
 #define FPREGSsize_in_bytes(f) linux_fpstate_size_in_bytes(f)
@@ -1526,8 +1541,8 @@ linux_fpstate_size_in_bytes(FPREGS state)
     /* see <asm/sigcontext.h> It would be way too useful if we could
        include that file without conflicting with <bits/sigcontext.h> */
     /* I didn't make this stuff up */
-    struct _fpx_sw_bytes * sw = (struct _fpx_sw_bytes *) (((char *)state)+464);
-    if (sw->magic1 == FP_XSTATE_MAGIC1) {
+    struct magic__fpx_sw_bytes * sw = (struct magic__fpx_sw_bytes *) (((char *)state)+464);
+    if (sw->magic1 == magic__FP_XSTATE_MAGIC1) {
       return sw->extended_size;
     }
 
