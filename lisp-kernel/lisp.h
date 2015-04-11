@@ -91,7 +91,9 @@ void wperror(char *);
 
 void ensure_static_conses(ExceptionInformation *, TCR *,natural);
 
-extern FILE *dbgout;
+extern FILE *dbgout,*dbgin;
+
+extern void redirect_debugger_io(void);
 
 #define RESERVE_FOR_LISP 1
 #define ON_ALTSTACK 2
@@ -103,5 +105,6 @@ install_signal_handler(int signo, void *handler, unsigned flags);
 extern void make_dynamic_heap_executable(void *, void *);
 extern void xMakeDataExecutable(BytePtr, natural);
 extern void lower_heap_start(BytePtr, area*);
+
 
 #endif /* __lisp__ */

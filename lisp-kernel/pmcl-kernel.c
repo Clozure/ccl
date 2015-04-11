@@ -1163,6 +1163,7 @@ usage_exit(char *herald, int exit_status, char* other_args)
   fprintf(dbgout, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");
   fprintf(dbgout, "\t-b, --batch: exit when EOF on *STANDARD-INPUT*\n");
   fprintf(dbgout, "\t--no-sigtrap : obscure option for running under GDB\n");
+  fprintf(dbgout, "\t--debug : try to ensure that kernel debugger uses a TTY for I/O\n");
   fprintf(dbgout, "\t-I, --image-name <image-name>\n");
 #ifndef WINDOWS
   fprintf(dbgout, "\t and <image-name> defaults to %s\n", 
@@ -1237,7 +1238,7 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
 #ifdef DARWIN
   extern int NXArgc;
 #endif
-
+  dbgin = stdin;
   for (i = 1; i < argc;) {
     arg = argv[i];
     if (shadow) {
@@ -1366,7 +1367,13 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
 		 (strcmp(arg, "--batch") == 0)) {
 	batch_flag = 1;
 	num_elide = 1;
-      } else if (strcmp(arg,"--") == 0) {
+      } else if ((strcmp (arg, "-d") == 0) ||
+                 (strcmp (arg, "--debug")  == 0)) {
+        redirect_debugger_io();
+        num_elide=1;
+        
+        } else if (strcmp(arg,"--") == 0) {
+                     
         break;
       } else {
 	i++;

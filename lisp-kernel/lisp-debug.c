@@ -27,16 +27,17 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
-#ifdef WINDOWS
+
 #include <fcntl.h>
-#else
+#ifndef WINDOWS
 #include <sys/socket.h>
 #include <dlfcn.h>
 #endif
-#include <sys/stat.h>
 
-FILE *dbgout = NULL;
+
+FILE *dbgout = NULL, *dbgin=NULL;
 
 typedef enum {
   debug_continue,		/* stay in the repl */
@@ -218,6 +219,20 @@ fpurge (FILE* file)
 }
 #endif
 
+void
+redirect_debugger_io()
+{
+#ifndef WINDOWS
+  if (!isatty(fileno(dbgin))) {
+    int fd = open("/dev/tty", O_RDWR);
+    if (fd >=0) {
+      dbgin=fdopen(fd,"r");
+      open_debug_output(fd);
+    }
+#endif
+  }
+}
+      
 int
 readc()
 {
@@ -225,7 +240,7 @@ readc()
   int c;
 
   while (tries) {
-    c = getchar();
+    c = fgetc(dbgin);
     switch(c) {
     case '\n':
       continue;
@@ -872,7 +887,7 @@ debug_get_string_value(char *prompt)
     fpurge(stdin);
     fprintf(dbgout, "\n %s :",prompt);
     buf[0] = 0;
-    res = fgets(buf, sizeof(buf), stdin);
+    res = fgets(buf, sizeof(buf),dbgin);
   } while (0);
   p = strchr(res, '\n');
   if (p) {
@@ -892,7 +907,7 @@ debug_get_natural_value(char *prompt)
     fpurge(stdin);
     fprintf(dbgout, "\n  %s :", prompt);
     s[0]=0;
-    res = fgets(s, 24, stdin);
+    res = fgets(s, 24, dbgin);
     val = strtoul(res,&endptr,0);
   } while (*endptr);
   return val;
@@ -908,7 +923,7 @@ debug_get_u5_value(char *prompt)
   do {
     fpurge(stdin);
     fprintf(dbgout, "\n  %s :", prompt);
-    res = fgets(s, 24, stdin);
+    res = fgets(s, 24, dbgin);
     n = sscanf(res, "%i", &val);
   } while ((n != 1) || (val > 31));
   return val;
