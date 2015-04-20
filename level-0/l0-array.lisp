@@ -493,7 +493,7 @@
                                                      target::misc-data-offset))
                                       (the fixnum (* target-start 8))))
                                  (the fixnum (* n 8))))
-      (#.target::complex-double-float-vector
+      (#.target::subtag-complex-double-float-vector
         (%copy-ivector-to-ivector source
                                  (the fixnum
                                    (+ (the fixnum (- target::misc-dfloat-offset
@@ -504,7 +504,7 @@
                                    (+ (the fixnum (- target::misc-dfloat-offset
                                                      target::misc-data-offset))
                                       (the fixnum (* target-start 16))))
-                                 (the fixnum (* n 16)))))
+                                 (the fixnum (* n 16))))))
   target)
 
 (defun vector-push-extend (elt vector &optional (extension nil extp))
