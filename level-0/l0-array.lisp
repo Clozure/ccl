@@ -480,7 +480,8 @@
       ((#.target::subtag-double-float-vector
         #+64-bit-target #.target::subtag-s64-vector
         #+64-bit-target #.target::subtag-u64-vector
-        #+64-bit-target #.target::subtag-fixnum-vector)
+        #+64-bit-target #.target::subtag-fixnum-vector
+        #.target::subtag-complex-single-float-vector)
        (%copy-ivector-to-ivector source
                                  (the fixnum
                                    (+ (the fixnum (- target::misc-dfloat-offset
@@ -491,7 +492,19 @@
                                    (+ (the fixnum (- target::misc-dfloat-offset
                                                      target::misc-data-offset))
                                       (the fixnum (* target-start 8))))
-                                 (the fixnum (* n 8))))))
+                                 (the fixnum (* n 8))))
+      (#.target::complex-double-float-vector
+        (%copy-ivector-to-ivector source
+                                 (the fixnum
+                                   (+ (the fixnum (- target::misc-dfloat-offset
+                                                     target::misc-data-offset))
+                                      (the fixnum (* source-start 16))))
+                                 target
+                                 (the fixnum
+                                   (+ (the fixnum (- target::misc-dfloat-offset
+                                                     target::misc-data-offset))
+                                      (the fixnum (* target-start 16))))
+                                 (the fixnum (* n 16)))))
   target)
 
 (defun vector-push-extend (elt vector &optional (extension nil extp))
