@@ -151,13 +151,13 @@
 
 
 (defparameter *env-modules*
-  '(hash backquote lispequ  level-2 macros
+  '(lispequ hash backquote   level-2 macros
     defstruct-macros lists chars setf setf-runtime
     defstruct defstruct-lds 
     foreign-types
     db-io
     nfcomp
-    ))
+    hashenv))
 
 (defun target-env-modules (&optional (target
 				      (backend-name *host-backend*)))

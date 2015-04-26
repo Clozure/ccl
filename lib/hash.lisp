@@ -148,7 +148,8 @@
 
 
 (eval-when (:compile-toplevel :execute)
-  (require "HASHENV" "ccl:xdump;hashenv"))
+  (require "HASHENV" "ccl:xdump;hashenv")
+  (require "LISPEQU"))
 
 (defvar *hash-table-class*
   (progn
@@ -242,7 +243,6 @@
       (multiple-value-bind (found key value) (m)
         (unless found (return))
         (funcall function key value)))))
-
 
 
 (defmethod make-load-form ((hash hash-table) &optional env)
