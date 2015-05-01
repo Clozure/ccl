@@ -707,14 +707,16 @@ tenure_to_area(area *target)
 void
 untenure_from_area(area *from)
 {
-  if (lisp_global(OLDEST_EPHEMERAL) != 0) {
+  if ((lisp_global(OLDEST_EPHEMERAL) != 0)) {
     area *a = active_dynamic_area, *child;
     BytePtr curlow = from->low;
     natural new_tenured_dnodes = area_dnode(curlow, tenured_area->low);
     
     for (child = from; child != a; child = child->younger) {
-      child->low = child->active = child->high = curlow;
-      child->ndnodes = 0;
+      child->low = from->low;
+
+     child->active = child->high = curlow;
+     child->ndnodes = area_dnode(child->high, child->low);
     }
     
     a->low = curlow;

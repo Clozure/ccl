@@ -311,6 +311,8 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 
   case AREA_STATIC_CONS:
     addr = (char *) lisp_global(HEAP_START);
+    tenured_area = new_area(addr, addr, AREA_STATIC);
+
     a = new_area(addr-align_to_power_of_2(mem_size,log2_page_size), addr, AREA_STATIC_CONS);
     if (mem_size) {      
       if (!MapFile(a->low,
@@ -324,6 +326,9 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     a->ndnodes = area_dnode(a->active, a->low);
     sect->area = a;
     static_cons_area = a;
+    /* not yet 
+    lower_heap_start(a->low,tenured_area);
+    */
     break;
 
   default:
@@ -420,9 +425,11 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
         add_area_holding_area_lock(a);
         break;
       case AREA_STATIC_CONS:
+        /* not yet
+ lower_heap_start(static_cons_area->low,tenured_area);
+        */
         break;
       case AREA_DYNAMIC:
-        lower_heap_start(static_cons_area->low,a);
         if (bias) {
           relocate_area_contents(a, bias);
         }

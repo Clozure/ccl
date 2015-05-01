@@ -223,7 +223,7 @@ void
 redirect_debugger_io()
 {
 #ifndef WINDOWS
-  if (!isatty(fileno(dbgin))) {
+  if (1 || !isatty(fileno(dbgin))) {
     int fd = open("/dev/tty", O_RDWR);
     if (fd >=0) {
       dbgin=fdopen(fd,"r");

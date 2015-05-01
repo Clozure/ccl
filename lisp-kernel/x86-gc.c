@@ -310,7 +310,7 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
   }
 
   if (current != end) {
-    Bug(NULL, "Overran end of memory range: start = 0x%08x, end = 0x%08x, prev = 0x%08x, current = 0x%08x",
+    Bug(NULL, "Overran end of memory range: start = 0x" LISP ", end = 0x" LISP ", prev = 0x" LISP ", current = 0x" LISP "",
         start, end, prev, current);
   }
 }

@@ -1280,31 +1280,19 @@ reclaim_static_dnodes()
 {
   natural nstatic = tenured_area->static_dnodes, 
     i, 
-    bits, 
     bitnum,
-    nfree = 0,
-    nstatic_conses = area_dnode(static_cons_area->high, static_cons_area->low);
+    nfree = 0;
   cons *c = (cons *)tenured_area->low, *d;
-  bitvector bitsp = GCmarkbits;
-  LispObj head = lisp_global(STATIC_CONSES);
+  bitvector bits = GCmarkbits;
+  LispObj head = lisp_nil;
 
-  for (i = 0; i < nstatic; i+= nbits_in_word, c+= nbits_in_word) {
-    bits = *bitsp++;
-    if (bits != ALL_ONES) {
-      for (bitnum = 0; bitnum < nbits_in_word; bitnum++) {
-        if (! (bits & (BIT0_MASK>>bitnum))) {
-          d = c + bitnum;
-          if (i < nstatic_conses) {                
-            d->car = unbound;
-            d->cdr = head;
-            head = ((LispObj)d)+fulltag_cons;
-            nfree++;
-          } else {
-            d->car = 0;
-            d->cdr = 0;
-          }
-        }
-      }
+  for (i = 0; i < nstatic; i++) {
+    if(!ref_bit(bits,i)) {
+      d=c+i;
+      d->cdr = head;
+      d->car = unbound;
+      nfree++;
+      head = ((LispObj) d)+fulltag_cons;
     }
   }
   lisp_global(STATIC_CONSES) = head;
@@ -1708,8 +1696,8 @@ gc(TCR *tcr, signed_natural param)
         }
       }
     }
-
-    mark_root(lisp_global(STATIC_CONSES));
+    /* those static conses that are reachable will be marked */
+    /*mark_root(lisp_global(STATIC_CONSES)); */
 
     {
       area *next_area;
@@ -1833,9 +1821,12 @@ gc(TCR *tcr, signed_natural param)
     GCrelocptr = global_reloctab;
     GCfirstunmarked = calculate_relocation();
 
+
+
     if (!GCephemeral_low) {
       reclaim_static_dnodes();
     }
+
 
     forward_range((LispObj *) ptr_from_lispobj(GCarealow), (LispObj *) ptr_from_lispobj(GCfirstunmarked));
 

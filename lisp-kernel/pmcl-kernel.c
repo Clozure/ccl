@@ -4,7 +4,7 @@
    This file is part of Clozure CL.  
 
    Clozure CL is licensed under the terms of the Lisp Lesser GNU Public
-   License , known as the LLGPL and distributed with Clozure CL as the
+   License , known as the LLGPL and distributed+ with Clozure CL as the
    file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
    which is distributed with Clozure CL as the file "LGPL".  Where these
    conflict, the preamble takes precedence.  
@@ -702,16 +702,19 @@ lower_heap_start(BytePtr new_low, area *a)
       new_markbits = old_markbits-n;
     CommitMemory(new_markbits,n);
     dynamic_mark_ref_bits = (bitvector)new_markbits;
-    if (a->refbits) {
+    if (a) {
+      if (a->refbits) {
       a->refbits= dynamic_mark_ref_bits;
+      }
+      a->static_dnodes += new_dnodes;
+      a->ndnodes += new_dnodes;
+      a->low = new_low;
+      a->refidx -= nidx;
     }
-    a->static_dnodes += new_dnodes;
-    a->ndnodes += new_dnodes;
-    a->low = new_low;
-    a->refidx -= nidx;
     low_markable_address = new_low;
     lisp_global(HEAP_START) = (LispObj)new_low;
     static_cons_area->ndnodes = area_dnode(static_cons_area->high,new_low);
+    ensure_gc_structures_writable();
   }
 }
 
@@ -719,7 +722,7 @@ void
 ensure_gc_structures_writable()
 {
   natural 
-    ndnodes = area_dnode(lisp_global(HEAP_END),low_relocatable_address),
+    ndnodes = area_dnode(lisp_global(HEAP_END),tenured_area->low),
     markbits_size = (3*sizeof(LispObj))+((ndnodes+7)>>3),
     reloctab_size = (sizeof(LispObj)*(((ndnodes+((1<<bitmap_shift)-1))>>bitmap_shift)+1)),
     n;
@@ -1399,6 +1402,13 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
       }
     }
   }
+#if 0
+  redirect_debugger_io();
+  fprintf(dbgout,"ccl pid = %d", getpid());
+  sleep(20);
+#endif
+
+
 }
 
 #ifdef WINDOWS
@@ -1777,11 +1787,9 @@ init_consing_areas()
     /* Create these areas as AREA_STATIC, change them to AREA_DYNAMIC */
     g1_area = new_area(lowptr, lowptr, AREA_STATIC);
     g2_area = new_area(lowptr, lowptr, AREA_STATIC);
-    tenured_area = new_area(lowptr, lowptr, AREA_STATIC);
-    add_area_holding_area_lock(tenured_area);
     add_area_holding_area_lock(g2_area);
     add_area_holding_area_lock(g1_area);
-
+    add_area_holding_area_lock(tenured_area);
     g1_area->code = AREA_DYNAMIC;
     g2_area->code = AREA_DYNAMIC;
     tenured_area->code = AREA_DYNAMIC;
@@ -1808,6 +1816,9 @@ init_consing_areas()
     g2_area->threshold = default_g2_threshold;
     g1_area->threshold = default_g1_threshold;
     a->threshold = default_g0_threshold;
+    if (static_cons_area && static_cons_area->ndnodes) {
+      lower_heap_start(static_cons_area->low, tenured_area);
+    }
   }
 }
 
@@ -2541,43 +2552,10 @@ allocate_static_conses(natural n)
 void
 ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
 {
-  area *a = active_dynamic_area;
-  natural nbytes = nconses>>dnode_shift, have;
-  BytePtr p = a->high-nbytes;
-#ifdef USE_GC_NOTIFICATION
-  Boolean crossed_notify_threshold = false;
-  LispObj before_shrink, after_shrink;
-#endif
+  natural nbytes = nconses<<dnode_shift;
+  allocate_static_conses(nconses);
+  TCR_AUX(tcr)->bytes_allocated += nbytes;
 
-  if (p < a->active) {
-    untenure_from_area(tenured_area);
-    gc_from_xp(xp, 0L);
-#ifdef USE_GC_NOTIFICATION
-    did_gc_notification_since_last_full_gc = false;
-#endif
-  }
-
-  have = unbox_fixnum(lisp_global(FREE_STATIC_CONSES));
-  if (have < nconses) {
-#ifdef USE_GC_NOTIFICATION
-    before_shrink = a->high-a->active;
-    if (before_shrink>nbytes) {
-      shrink_dynamic_area(nbytes);
-      after_shrink = a->high-a->active; 
-      if ((before_shrink >= lisp_heap_notify_threshold) &&
-          (after_shrink < lisp_heap_notify_threshold)) {
-        crossed_notify_threshold = true;
-      }
-    }
-#endif
-    allocate_static_conses(nconses);
-    TCR_AUX(tcr)->bytes_allocated += nbytes;
-  }
-#ifdef USE_GC_NOTIFICATION
-  if (crossed_notify_threshold && !did_gc_notification_since_last_full_gc) {
-    callback_for_gc_notification(xp,tcr);
-  }
-#endif
 }
       
 #ifdef ANDROID

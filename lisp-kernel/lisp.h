@@ -91,6 +91,8 @@ void wperror(char *);
 
 void ensure_static_conses(ExceptionInformation *, TCR *,natural);
 
+void ensure_gc_structures_writable(void);
+
 extern FILE *dbgout,*dbgin;
 
 extern void redirect_debugger_io(void);
