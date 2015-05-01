@@ -22,7 +22,7 @@
     (:export
      "START-SERVER"
      "STOP-SERVER"
-
+     "STOP-ALL-SERVERS"
      ;; Some stuff that's also useful on client side
      "THREAD"
      "THREAD-CLASS"
@@ -479,8 +479,13 @@ non-swink process PROCESS."
           (process-kill process))
         (close socket :abort t) ;; harmless if already closed.
         (with-swink-lock ()
-          (remf *listener-sockets* info)))
+          (remf *listener-sockets* port)))
       t)))
+
+(defun stop-all-servers ()
+  "Stop all swink servers"
+  (loop for info on *listener-sockets* by #'cddr do
+    (stop-server (car info))))
 
 (defun enqueue-internal-request (conn event)
   (with-connection-lock (conn)
