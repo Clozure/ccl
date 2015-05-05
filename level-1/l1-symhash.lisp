@@ -181,12 +181,11 @@
                           (use *make-package-use-defaults*)
                           (internal-size 60)
                           (external-size 10))
-  "Make a new package having the specified NAME, NICKNAMES, and 
-  USE list. :INTERNAL-SYMBOLS and :EXTERNAL-SYMBOLS are
-  estimates for the number of internal and external symbols which
-  will ultimately be present in the package. The default value of
-  USE is implementation-dependent, and in this implementation
-  it is NIL."
+  "Make a new package having the specified NAME, NICKNAMES, and USE
+list.  INTERNAL-SIZE and EXTERNAL-SIZE are estimates for the number of
+internal and external symbols which will ultimately be present in the
+package.  In this implementation, the default for the USE list is the
+value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
   (setq internal-size (require-type internal-size 'fixnum)
         external-size (require-type external-size 'fixnum))
   (let* ((pkg-name (new-package-name name))
