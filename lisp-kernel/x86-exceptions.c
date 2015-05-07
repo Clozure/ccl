@@ -1542,7 +1542,7 @@ linux_fpstate_size_in_bytes(FPREGS state)
        include that file without conflicting with <bits/sigcontext.h> */
     /* I didn't make this stuff up */
     struct magic__fpx_sw_bytes * sw = (struct magic__fpx_sw_bytes *) (((char *)state)+464);
-    if (sw->magic1 == magic__FP_XSTATE_MAGIC1) {
+    if (sw->magic1 == magic__FP_XSTATE_MAGIC1 &&(os_major_version >=3)) {
       return sw->extended_size;
     }
 

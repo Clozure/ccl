@@ -1542,6 +1542,8 @@ remap_spjump()
 #endif
 
 
+natural os_major_version = 0;
+
 void
 check_os_version(char *progname)
 {
@@ -1556,6 +1558,7 @@ check_os_version(char *progname)
 
   uname(&uts);
   got = strtoul(uts.release,&got_end,10);
+  os_major_version = got;
 #if defined(X8632) && defined(FREEBSD)
   if (!strcmp(uts.machine,"amd64")) {
     extern Boolean rcontext_readonly;

@@ -109,4 +109,6 @@ extern void xMakeDataExecutable(BytePtr, natural);
 extern void lower_heap_start(BytePtr, area*);
 
 
+extern natural os_major_version;
+
 #endif /* __lisp__ */
