@@ -72,6 +72,7 @@ normalize_tcr(ExceptionInformation *, TCR *, Boolean);
   of this JVM nonsense can take effect) and noting the address it'd return to.
 */
 
+
 pc
 real_sigreturn = (pc)0;
 
@@ -1532,10 +1533,10 @@ struct magic__fpx_sw_bytes
 
 
 typedef struct _fpstate *FPREGS;
-#define FPREGSsize_in_bytes(f) linux_fpstate_size_in_bytes(f)
+#define FPREGSsize_in_bytes(f,bp) linux_fpstate_size_in_bytes(f,bp)
 
 size_t
-linux_fpstate_size_in_bytes(FPREGS state)
+linux_fpstate_size_in_bytes(FPREGS state, Boolean *bp)
 {
   if (WORD_SIZE == 64){
     /* see <asm/sigcontext.h> It would be way too useful if we could
@@ -1543,28 +1544,40 @@ linux_fpstate_size_in_bytes(FPREGS state)
     /* I didn't make this stuff up */
     struct magic__fpx_sw_bytes * sw = (struct magic__fpx_sw_bytes *) (((char *)state)+464);
     if (sw->magic1 == magic__FP_XSTATE_MAGIC1 &&(os_major_version >=3)) {
+      *bp = true;
       return sw->extended_size;
     }
 
   }
+  *bp= false;
   return (sizeof (*state));
 }
 
 LispObj *
 copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 {
+  Boolean magic = false;
   FPREGS src = (FPREGS)(xp->uc_mcontext.fpregs), dest;
-  size_t nbytes = FPREGSsize_in_bytes(src);
+  size_t nbytes = 0;
+
+
   if (src) {
-    BytePtr bc = (BytePtr)current - nbytes;
-    dest = (FPREGS) (truncate_to_power_of_2(bc,6));
-    memcpy(dest,src,nbytes);
-    *destptr = dest;
-    current = (LispObj *)dest;
+    if (copy_exception_avx_state) {
+      nbytes = FPREGSsize_in_bytes(src,&magic);
+    }
+    if (magic) {
+      BytePtr bc = (BytePtr)current - nbytes;
+      dest = (FPREGS) (truncate_to_power_of_2(bc,6));
+      memcpy(dest,src,nbytes);
+    } else {
+      dest = ((FPREGS)current)-1; 
+      *dest = *src; 
+    }
   }
+  *destptr = dest;
+  current = (LispObj *)dest;
   return current;
 }
-
 #endif
 
 

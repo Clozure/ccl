@@ -1167,6 +1167,14 @@ usage_exit(char *herald, int exit_status, char* other_args)
   fprintf(dbgout, "\t-b, --batch: exit when EOF on *STANDARD-INPUT*\n");
   fprintf(dbgout, "\t--no-sigtrap : obscure option for running under GDB\n");
   fprintf(dbgout, "\t--debug : try to ensure that kernel debugger uses a TTY for I/O\n");
+#ifdef LINUX
+#ifdef X86
+#if WORD_SIZE==64
+  fprintf(dbgout,  "\t--avx :signal handlers preserve AVX(YMM) registers on x8664 Linux.  This the default on Linux >=3.0\n");
+ fprintf(dbgout,  "\t--no-avx :signal handler don't preserve AVX(YMM) registers on x8664 Linux, This the default on Linux <3.0\n");
+#endif
+#endif
+#endif
   fprintf(dbgout, "\t-I, --image-name <image-name>\n");
 #ifndef WINDOWS
   fprintf(dbgout, "\t and <image-name> defaults to %s\n", 
@@ -1231,6 +1239,7 @@ parse_numeric_option(char *arg, char *argname, natural default_val)
    This removes everything it recognizes from argv;
    remaining args will be processed by lisp code.
 */
+Boolean copy_exception_avx_state = false;
 
 void
 process_options(int argc, char *argv[], wchar_t *shadow[])
@@ -1374,8 +1383,15 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
                  (strcmp (arg, "--debug")  == 0)) {
         redirect_debugger_io();
         num_elide=1;
-        
-        } else if (strcmp(arg,"--") == 0) {
+      } else if (strcmp (arg,"--avx") == 0) {
+        copy_exception_avx_state =1;
+        num_elide = 1;
+      } else if (strcmp (arg,"--no-avx") == 0) {
+        copy_exception_avx_state =0;
+        num_elide = 1;
+
+    
+      } else if (strcmp(arg,"--") == 0) {
                      
         break;
       } else {
@@ -1881,7 +1897,14 @@ main
 #endif
 
   check_os_version(argv[0]);
-#ifdef WINDOWS
+#ifdef LINUX
+#if WORD_SIZE==64
+  if (os_major_version >= 3) {
+    copy_exception_avx_state = true;
+  }
+#endif
+#endif
+#ifdef WINDOXS
   real_executable_name = determine_executable_name();
 #else
   real_executable_name = determine_executable_name(argv[0]);

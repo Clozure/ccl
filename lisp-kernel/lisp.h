@@ -110,5 +110,6 @@ extern void lower_heap_start(BytePtr, area*);
 
 
 extern natural os_major_version;
+extern Boolean copy_exception_avx_state;
 
 #endif /* __lisp__ */
