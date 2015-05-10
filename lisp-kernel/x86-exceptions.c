@@ -1556,6 +1556,10 @@ linux_fpstate_size_in_bytes(FPREGS state, Boolean *bp)
 LispObj *
 copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 {
+  extern void ensure_safe_for_string_operations(void);
+  ensure_safe_for_string_operations();
+  {
+
   Boolean magic = false;
   FPREGS src = (FPREGS)(xp->uc_mcontext.fpregs), dest;
   size_t nbytes = 0;
@@ -1577,6 +1581,7 @@ copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
   *destptr = dest;
   current = (LispObj *)dest;
   return current;
+}
 }
 #endif
 
