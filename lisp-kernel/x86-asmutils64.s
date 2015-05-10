@@ -127,6 +127,11 @@ _exportfn(C(atomic_and))
 	__(ret)
 _endfn
 
+_exportfn(C(ensure_safe_for_string_operations))
+        __(cld)
+        __(ret)
+_endfn                                       
+
 
         __ifdef(`DARWIN')
 _exportfn(C(pseudo_sigreturn))
@@ -270,10 +275,7 @@ C(restore_windows_context_iret): .quad Xrestore_windows_context_iret
 _exportfn(C(windows_halt))
         __(hlt)
 _endfn         
-_exportfn(C(ensure_safe_for_string_operations))
-        __(cld)
-        __(ret)
-_endfn                                       
+
         __endif
 
 /* zero N (%carg1) dnodes, starting at the dnode-aligned address in %carg0 */
