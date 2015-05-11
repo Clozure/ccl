@@ -1212,12 +1212,12 @@
           (#/removeTemporaryAttribute:forCharacterRange: layout #&NSForegroundColorAttributeName char-range)
           (#/removeTemporaryAttribute:forCharacterRange: layout #&NSBackgroundColorAttributeName char-range)
           (loop
-            for (start len attrib . color) in (hemlock:compute-syntax-coloring start length)
-            when color
-            do (progn
-                 (setf (ns:ns-range-location range) start
+            for (pos len attrib . color) in (hemlock:compute-syntax-coloring start length) as endpos = (+ pos len)
+            while (< pos end)
+            do (when (and color (< start endpos))
+                 (setf (ns:ns-range-location range) pos
                        (ns:ns-range-length range) len)
-		 (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range))))
+                 (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range))))
         (when (eql #$YES (text-view-paren-highlight-enabled self))
           (setf (ns:ns-range-length range) 1)
           (loop
