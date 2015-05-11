@@ -53,6 +53,8 @@
     ;; and managing statically allocated CONS cells) will be
     ;; added in 1.1
     ;; Was dropped in 1.2
+    #+(and x86-target 64-bit-target)
+    :static-conses-should-work-with-egc-in-ccl 
     ;; :openmcl-hash-consing
     #+eabi-target :eabi-target
     #+ppc-target :powerpc
