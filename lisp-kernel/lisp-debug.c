@@ -229,8 +229,8 @@ redirect_debugger_io()
       dbgin=fdopen(fd,"r");
       open_debug_output(fd);
     }
-#endif
   }
+#endif
 }
       
 int
