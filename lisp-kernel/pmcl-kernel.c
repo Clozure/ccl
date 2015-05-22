@@ -2144,9 +2144,10 @@ main
 #ifdef GC_INTEGRITY_CHECKING
   (nrs_GC_EVENT_STATUS_BITS.vcell |= gc_integrity_check_bit);
 #endif
-  if (egc_enabled) {
-    egc_control(true, NULL);
-  } else {
+
+  egc_control(true, NULL);
+  if (!egc_enabled) {
+    egc_control(false,NULL);
     lisp_global(OLDSPACE_DNODE_COUNT) = 0;
   }
   heap_dirty_limit = active_dynamic_area->active;
