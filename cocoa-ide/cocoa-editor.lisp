@@ -3387,31 +3387,11 @@
   (let ((tv (text-pane-text-view (hi::hemlock-view-pane view))))
     (#/scrollRangeToVisible: tv (#/selectedRange tv))))
 
-(defloadvar *general-pasteboard* nil)
-
-(defun general-pasteboard ()
-  (or *general-pasteboard*
-      (setq *general-pasteboard*
-            (#/retain (#/generalPasteboard ns:ns-pasteboard)))))
-
-(defloadvar *string-pasteboard-types* ())
-
-(defun string-pasteboard-types ()
-  (or *string-pasteboard-types*
-      (setq *string-pasteboard-types*
-            (#/retain (#/arrayWithObject: ns:ns-array #&NSStringPboardType)))))
-
-
-(objc:defmethod (#/stringToPasteBoard:  :void)
-    ((self lisp-application) string)
-  (let* ((pb (general-pasteboard)))
-    (#/declareTypes:owner: pb (string-pasteboard-types) nil)
-    (#/setString:forType: pb string #&NSStringPboardType)))
-    
 (defun hemlock-ext:string-to-clipboard (string)
   (when (> (length string) 0)
-    (#/performSelectorOnMainThread:withObject:waitUntilDone:
-     *nsapp* (@selector #/stringToPasteBoard:) (%make-nsstring string) t)))
+    (with-cfstring (s string)
+      (#/performSelectorOnMainThread:withObject:waitUntilDone:
+       *nsapp* (@selector #/stringToPasteBoard:) s t))))
 
 #+cocotron
 ;;; Work around a byte-order bug that affects #/paste.
@@ -3455,7 +3435,7 @@
 (objc:defmethod (#/paste: :void) ((self hemlock-textstorage-text-view) sender)
   (declare (ignorable sender))
   #+debug (#_NSLog #@"Paste: sender = %@" :id sender)
-  (let* ((pb (general-pasteboard))
+  (let* ((pb (#/generalPasteboard ns:ns-pasteboard))
          (string (progn (#/types pb) (#/stringForType: pb #&NSStringPboardType))))
     #+debug (log-debug "   string = ~s" string)
     (unless (%null-ptr-p string)

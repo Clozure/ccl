@@ -121,12 +121,6 @@
                    (force-output t)
                    ))))))))
 
-
-
-(defvar *default-ns-application-proxy-class-name*
-    "LispApplicationDelegate")
-
-
 (defun enable-foreground ()
   #+apple-objc
   (rlet ((psn :<P>rocess<S>erial<N>umber))
@@ -134,12 +128,7 @@
     (#_TransformProcessType psn #$kProcessTransformToForegroundApplication)
     (eql 0 (#_SetFrontProcess psn))))
 
-#+nil
-(objc:defmethod (#/showPreferences: :void) ((self lisp-application) sender)
-  (declare (ignore sender))
-  (#/show (#/sharedPanel lisp-preferences-panel)))
-
-(objc:defmethod (#/toggleConsole: :void) ((self lisp-application) sender)
+(objc:defmethod (#/toggleConsole: :void) ((self ide-application) sender)
   (let* ((console (console self)))
     (unless (%null-ptr-p console)
       (mark-console-output-available console nil)
@@ -147,7 +136,7 @@
         (#/orderOut: console sender)
         (#/orderFront: console sender)))))
 
-(objc:defmethod (#/validateMenuItem: :<BOOL>) ((self lisp-application)
+(objc:defmethod (#/validateMenuItem: :<BOOL>) ((self ide-application)
                                                item)
   (let* ((action (#/action item)))
     (cond ((eql action (@selector #/toggleConsole:))
@@ -193,10 +182,9 @@
 		(and ccl::*quitting* (not (#/isRunning app))))
 	(return)))))
 
-(defun start-cocoa-ide (&key
-				(application-proxy-class-name
-				 *default-ns-application-proxy-class-name*))
-  
+(defparameter *delegate-class-name* "IDEApplicationDelegate")
+
+(defun start-cocoa-ide ()
   (flet ((cocoa-startup ()
 	   ;; Start up a thread to run periodic tasks.
            (ccl::with-standard-initial-bindings
@@ -209,14 +197,12 @@
                    (unless (%null-ptr-p icon)
                      (#/setApplicationIconImage: *NSApp* icon)))
                  (setf (ccl::application-ui-object *application*) *NSApp*)
-                 (when (and application-proxy-class-name
+                 (when (and *delegate-class-name*
 			    (%null-ptr-p (#/delegate *nsapp*)))
-                   (let* (#+nil (classptr (ccl::%objc-class-classptr
-                                     (ccl::load-objc-class-descriptor application-proxy-class-name)))
-			  (class (#_NSClassFromString (%make-nsstring application-proxy-class-name)))
-                          (instance (#/init (#/alloc class))))
-                     
-                     (#/setDelegate: *NSApp* instance))))
+                   (let* ((class (with-cfstring (s *delegate-class-name*)
+				   (#_NSClassFromString s)))
+                          (delegate (#/init (#/alloc class))))
+                     (#/setDelegate: *NSApp* delegate))))
                (run-event-loop))))
     (process-interrupt *cocoa-event-process* #'(lambda ()
                                                  (%set-toplevel 

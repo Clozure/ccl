@@ -393,6 +393,7 @@ lisp-kernel/x86-spjump32.s -text
 lisp-kernel/x86-subprims32.s -text
 lisp-kernel/x86-utils.c -text
 lisp-kernel/x86-utils.h -text
+mac-ui/ccl-application.lisp -text
 mac-ui/cf-utils.lisp -text
 mac-ui/cg.lisp -text
 mac-ui/event-process.lisp -text

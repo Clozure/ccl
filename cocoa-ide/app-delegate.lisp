@@ -4,14 +4,14 @@
 
 (in-package "GUI")
 
-(defclass lisp-application-delegate (ns:ns-object)
+(defclass ide-application-delegate (ns:ns-object)
     ()
   (:metaclass ns:+ns-object))
 
 ;;; This method is a good place to:
 ;;;  * register value transformer names
 ;;;  * register default user defaults
-(objc:defmethod (#/initialize :void) ((self +lisp-application-delegate))
+(objc:defmethod (#/initialize :void) ((self +ide-application-delegate))
   (#/setValueTransformer:forName: ns:ns-value-transformer
 				  (make-instance 'font-to-name-transformer)
 				  #@"FontToName")
@@ -57,20 +57,20 @@
 
 
 (objc:defmethod (#/applicationWillFinishLaunching: :void)
-    ((self lisp-application-delegate) notification)
+    ((self ide-application-delegate) notification)
   (declare (ignore notification))
   (initialize-user-interface)
   (initialize-menus))
 
 (objc:defmethod (#/applicationWillTerminate: :void)
-		((self lisp-application-delegate) notification)
+		((self ide-application-delegate) notification)
   (declare (ignore notification))
   ;; UI has decided to quit; terminate other lisp threads.
   (ccl::prepare-to-quit))
 
 (defloadvar *preferences-window-controller* nil)
 
-(objc:defmethod (#/showPreferences: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showPreferences: :void) ((self ide-application-delegate)
 					    sender)
   (declare (ignore sender))
   (when (null *preferences-window-controller*)
@@ -80,7 +80,7 @@
 
 (defloadvar *processes-window-controller* nil)
 
-(objc:defmethod (#/showProcessesWindow: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showProcessesWindow: :void) ((self ide-application-delegate)
 						sender)
   (declare (ignore sender))
   (when (null *processes-window-controller*)
@@ -90,7 +90,7 @@
 
 (defloadvar *apropos-window-controller* nil)
 
-(objc:defmethod (#/showAproposWindow: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showAproposWindow: :void) ((self ide-application-delegate)
 						sender)
   (declare (ignore sender))
   (when (null *apropos-window-controller*)
@@ -100,7 +100,7 @@
 
 (defloadvar *xapropos-window-controller* nil)
 
-(objc:defmethod (#/showXaproposWindow: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showXaproposWindow: :void) ((self ide-application-delegate)
 						sender)
   (declare (ignore sender))
   (when (null *xapropos-window-controller*)
@@ -108,13 +108,13 @@
 	  (make-instance 'xapropos-window-controller)))
   (#/showWindow: *xapropos-window-controller* self))
 
-(objc:defmethod (#/showNewInspector: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showNewInspector: :void) ((self ide-application-delegate)
                                              sender)
   (declare (ignore sender))
   (#/showWindow: (make-instance 'inspector::xinspector-window-controller
                    :inspector (inspector::make-inspector *package*)) self))
 
-(objc:defmethod (#/showSearchFiles: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showSearchFiles: :void) ((self ide-application-delegate)
                                             sender)
   ;;If function key is pressed, always make a new window
   ;;otherwise bring frontmost search files window to the front
@@ -137,7 +137,7 @@
                               #'(lambda () 
                                   (hemlock::show-list-definitions-window view)))))
 
-(objc:defmethod (#/newListener: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/newListener: :void) ((self ide-application-delegate)
                                         sender)
   (declare (ignore sender))
   (#/openUntitledDocumentOfType:display:
@@ -157,7 +157,7 @@
                 (push w listener-windows)))))))))
         
                 
-(objc:defmethod (#/showListener: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showListener: :void) ((self ide-application-delegate)
                                         sender)
   (declare (ignore sender))
   (let* ((key-window (#/keyWindow *NSApp*))
@@ -177,7 +177,7 @@
      (t
       (#/makeKeyAndOrderFront: top-listener +null-ptr+)))))
 
-(objc:defmethod (#/ensureListener: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/ensureListener: :void) ((self ide-application-delegate)
 					   sender)
   (declare (ignore sender))
   (let ((top-listener-document (#/topListener hemlock-listener-document)))
@@ -196,24 +196,24 @@
   "Semaphore that's signaled when the application's finished launching ...")
 
 (objc:defmethod (#/applicationDidFinishLaunching: :void)
-    ((self lisp-application-delegate) notification)
+    ((self ide-application-delegate) notification)
   (declare (ignore notification))
   (unless (shift-key-now-p)
     (load-ide-init-file))
   (signal-semaphore *cocoa-ide-finished-launching*))
 
 (objc:defmethod (#/applicationShouldOpenUntitledFile: #>BOOL)
-    ((self lisp-application-delegate) app)
+    ((self ide-application-delegate) app)
   (declare (ignore app))
   t)
 
 (objc:defmethod (#/applicationOpenUntitledFile: :<BOOL>)
-    ((self lisp-application-delegate) app)
+    ((self ide-application-delegate) app)
   (when (zerop *cocoa-listener-count*)
     (#/newListener: self app)
     t))
 
-(objc:defmethod (#/loadFile: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/loadFile: :void) ((self ide-application-delegate) sender)
   (declare (ignore sender))
   (let ((filename (cocoa-choose-file-dialog
 		   :button-string "Load"
@@ -226,7 +226,7 @@
 				       (load filename)
 				       (fresh-line)))))))
 
-(objc:defmethod (#/compileFile: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/compileFile: :void) ((self ide-application-delegate) sender)
   (declare (ignore sender))
   (let ((filename (cocoa-choose-file-dialog
 		   :button-string "Compile"
@@ -238,27 +238,27 @@
 				       (compile-file filename)
 				       (fresh-line)))))))
 
-(objc:defmethod (#/exitBreak: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/exitBreak: :void) ((self ide-application-delegate) sender)
   (let* ((top-listener (#/topListener hemlock-listener-document)))
     (unless (%null-ptr-p top-listener)
       (#/exitBreak: top-listener sender))))
 
-(objc:defmethod (#/continue: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/continue: :void) ((self ide-application-delegate) sender)
   (let* ((top-listener (#/topListener hemlock-listener-document)))
     (unless (%null-ptr-p top-listener)
       (#/continue: top-listener sender))))
 
-(objc:defmethod (#/restarts: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/restarts: :void) ((self ide-application-delegate) sender)
   (let* ((top-listener (#/topListener hemlock-listener-document)))
     (unless (%null-ptr-p top-listener)
       (#/restarts: top-listener sender))))
 
-(objc:defmethod (#/backtrace: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/backtrace: :void) ((self ide-application-delegate) sender)
   (let* ((top-listener (#/topListener hemlock-listener-document)))
     (unless (%null-ptr-p top-listener)
       (#/backtrace: top-listener sender))))
 
-(objc:defmethod (#/validateMenuItem: #>BOOL) ((self lisp-application-delegate) item)
+(objc:defmethod (#/validateMenuItem: #>BOOL) ((self ide-application-delegate) item)
   (let* ((action (#/action item)))
     (cond ((or (eql action (@selector "exitBreak:"))
                (eql action (@selector "continue:"))
@@ -269,7 +269,7 @@
                (#/validateMenuItem: top-listener item))))
           (t t))))
 
-(objc:defmethod (#/showManual: :void) ((self lisp-application-delegate) sender)
+(objc:defmethod (#/showManual: :void) ((self ide-application-delegate) sender)
   (declare (ignore sender))
   (let* ((p (merge-pathnames "doc/ccl-documentation.html" #p"ccl:"))
 	 (workspace (#/sharedWorkspace ns:ns-workspace)))
@@ -278,7 +278,7 @@
 
 (defloadvar *hemlock-commands-window-controller* nil)
 
-(objc:defmethod (#/showHemlockCommands: :void) ((self lisp-application-delegate)
+(objc:defmethod (#/showHemlockCommands: :void) ((self ide-application-delegate)
                                                sender)
   (declare (ignore sender))
   (when (null *hemlock-commands-window-controller*)

@@ -16,6 +16,9 @@
 
 (require "OBJC-SUPPORT")
 
+(define-special-objc-word "IDE")
+(define-special-objc-word "CCL")
+
 (defpackage "GUI"
   (:use :common-lisp :ccl)
   (:import-from
@@ -65,7 +68,8 @@
   '("libdispatch"
     "event-process"
     "cg"
-    "cf-utils"))
+    "cf-utils"
+    "ccl-application"))
 
 (defvar *use-pre-lion-search-files* nil "User-settable parameter to prefer old search-files behavior,
   even if you're running on Lion or later. Must set this to true BEFORE doing (require :cocoa-application).")
@@ -78,6 +82,7 @@
 (defparameter *ide-files*
   `(;"ide-bundle" - loaded by hand above
     "constants"
+    "ide-application"
     "cocoa-utils"
     "cocoa-defaults"
     "cocoa-typeout"

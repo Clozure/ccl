@@ -88,7 +88,7 @@
         <key>NSHumanReadableCopyright</key>
         <string>Copyright 2002-CURRENT-YEAR Clozure Associates and contributors</string>
 	<key>NSPrincipalClass</key>
-	<string>LispApplication</string>
+	<string>IDEApplication</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

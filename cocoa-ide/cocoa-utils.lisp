@@ -223,16 +223,6 @@
            ,@body)))))
 
 
-;;; Usually, one does not sublass NSApplication.  We do it mainly
-;;; because we use a user-defined event to signal the event loop to
-;;; invoke a lisp function, and the only way I know of to respond to a
-;;; user-defined event is to override -[NSApplication sendEvent:].
-
-(defclass lisp-application (ns:ns-application)
-    ((termp :foreign-type :<BOOL>)
-     (console :foreign-type :id :accessor console))
-  (:metaclass ns:+ns-object))
-
 ;;; previously used names
 (defun execute-in-gui (thunk &key context)
   (declare (ignore context))
