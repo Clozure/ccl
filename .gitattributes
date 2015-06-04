@@ -87,10 +87,6 @@ cocoa-ide/ide-contents/Resources/openmcl-icon.icns -text svneol=unset#unset
 cocoa-ide/ide-contents/Resources/openmcl-icon.ico -text
 cocoa-ide/ide-self-update.lisp -text
 cocoa-ide/inspector.lisp -text
-cocoa-ide/lib/cf-utils.lisp -text
-cocoa-ide/lib/cg.lisp -text
-cocoa-ide/lib/event-process.lisp -text
-cocoa-ide/lib/libdispatch.lisp -text
 cocoa-ide/menus.lisp -text
 cocoa-ide/preferences-views.lisp -text
 cocoa-ide/preferences.lisp -text

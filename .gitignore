@@ -90,6 +90,7 @@ lisp-kernel/linuxppc/*~.*
 lisp-kernel/linuxppc64/*~.*
 lisp-kernel/static-linuxppc/*~.*
 lisp-kernel/static-linuxppc/external-functions.h
+mac-ui/fasls
 scripts/*~.*
 tools/*fsl
 tools/*~.*

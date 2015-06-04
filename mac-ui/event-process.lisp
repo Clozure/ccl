@@ -22,7 +22,10 @@
    (#/initWithInt: (#/alloc ns:ns-number)
 		   (assign-id-map-id *interrupt-id-map* f))
    wait))
-  
+
+;;; Note that the next two functions will hang if a run loop is not
+;;; running on the the main thread.
+
 (defun queue-for-event-process (f)
   "Queue the zero-argument function F for asynchronous execution in
 the event process."

@@ -61,7 +61,7 @@
    "EXECUTE-IN-GUI"
    ))
 
-(defparameter *ide-lib-files*
+(defparameter *mac-ui-files*
   '("libdispatch"
     "event-process"
     "cg"
@@ -116,14 +116,14 @@
   '("xinspector"
     ))
 
-(defun load-ide-lib-files (names lib-dir force-compile)
-  (let* ((bin-dir (merge-pathnames ";fasls;" lib-dir)))
+(defun load-mac-ui-files (names mac-ui-dir force-compile)
+  (let* ((bin-dir (merge-pathnames ";fasls;" mac-ui-dir)))
     (ensure-directories-exist bin-dir)
     (with-compilation-unit ()
       (dolist (name names)
 	(let* ((source (make-pathname :name name
 				      :type (pathname-type *.lisp-pathname*)
-				      :defaults lib-dir))
+				      :defaults mac-ui-dir))
 	       (fasl (make-pathname :name name
 				    :type (pathname-type *.fasl-pathname*)
 				    :defaults bin-dir)))
@@ -163,6 +163,6 @@
     (#_Gestalt #$gestaltSystemVersion p)
     (when (>= (%get-long p) #x1050)
       (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
-  (load-ide-lib-files *ide-lib-files* "ccl:cocoa-ide;lib;" force-compile)
+  (load-mac-ui-files *mac-ui-files* "ccl:mac-ui;" force-compile)
   (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
   (provide "COCOA"))
