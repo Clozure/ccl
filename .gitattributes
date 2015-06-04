@@ -40,6 +40,7 @@ cocoa-ide/hemlock/src/display.lisp -text
 cocoa-ide/hemlock/src/isearchcoms.lisp -text
 cocoa-ide/hemlock/src/symbol-completion.lisp -text
 cocoa-ide/hemlock/src/views.lisp -text
+cocoa-ide/ide-application.lisp -text
 cocoa-ide/ide-bundle.lisp -text
 cocoa-ide/ide-contents/Resources/Appearance.tiff -text
 cocoa-ide/ide-contents/Resources/Documentation.icns -text
