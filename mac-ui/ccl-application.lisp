@@ -27,12 +27,30 @@ NSApplication is our best bet for that.
 (objc:defmethod (#/finishLaunching :void) ((self ccl-application))
   ;; This method is called by #/run before it starts the event loop.
   ;; NSApplicationWillFinishLaunchingNotification is posted from here.
-  ;; If there is CCL-specific stuff that absolutely must take place
-  ;; before those notifications are processed, this is where we can
-  ;; make that happen.  We can certainly have some controller object
-  ;; register for NSApplicationWillFinishLaunchingNotification, but I
-  ;; don't believe that we can be sure about the order in which the
+  ;; If there are things that must take place before those
+  ;; notifications are processed, this is where we can make that
+  ;; happen.  We can certainly have some controller object register
+  ;; for NSApplicationWillFinishLaunchingNotification, but I don't
+  ;; believe that we can be sure about the order in which the
   ;; registered observers are called.
   (call-next-method))
 
+;;; In Cocoa, many UI-related calls must be made only on the "main"
+;;; (i.e., the initial) thread.  Here we implement some support for
+;;; calling lisp functions on the main thread.
+
+(defstatic *interrupt-id-map* (make-id-map))
+
+(objc:defmethod (#/lispInterrupt: :void) ((self ccl-application) id)
+  (funcall (id-map-free-object *interrupt-id-map* (#/intValue id)))
+  (#/release id))
+
+(defun %interrupt-event-process (f wait)
+  (#/performSelectorOnMainThread:withObject:waitUntilDone:
+   *nsapp*
+   (objc:@selector #/lispInterrupt:)
+   ;; The NSNumber instance is released in #/lispInterrupt: above
+   (#/initWithInt: (#/alloc ns:ns-number)
+		   (assign-id-map-id *interrupt-id-map* f))
+   wait))
 

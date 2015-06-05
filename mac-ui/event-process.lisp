@@ -1,27 +1,8 @@
 (in-package "CCL")
 
-;;; Large parts of Cocoa are not thread safe.  Many calls must be made
-;;; only on the "main" (i.e., the initial) thread.
-;;;
 ;;; For historical reasons CCL calls thread "processes".  So, instead
 ;;; of speaking of the "main thread" or the "event thread", we will
 ;;; use the term "event process".
-
-
-(defstatic *interrupt-id-map* (make-id-map))
-
-(objc:defmethod (#/lispInterrupt: :void) ((self ns:ns-application) id)
-  (funcall (id-map-free-object *interrupt-id-map* (#/intValue id)))
-  (#/release id))
-
-(defun %interrupt-event-process (f wait)
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   *nsapp*
-   (objc:@selector #/lispInterrupt:)
-   ;; The NSNumber instance is released in #/lispInterrupt: above
-   (#/initWithInt: (#/alloc ns:ns-number)
-		   (assign-id-map-id *interrupt-id-map* f))
-   wait))
 
 ;;; Note that the next two functions will hang if a run loop is not
 ;;; running on the the main thread.
