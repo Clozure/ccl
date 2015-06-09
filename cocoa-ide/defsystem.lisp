@@ -65,11 +65,11 @@
    ))
 
 (defparameter *mac-ui-files*
-  '("libdispatch"
+  '("cf-utils"
+    "libdispatch"
+    "ccl-application"
     "event-process"
-    "cg"
-    "cf-utils"
-    "ccl-application"))
+    "cg"))
 
 (defvar *use-pre-lion-search-files* nil "User-settable parameter to prefer old search-files behavior,
   even if you're running on Lion or later. Must set this to true BEFORE doing (require :cocoa-application).")
