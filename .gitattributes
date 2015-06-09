@@ -399,6 +399,8 @@ mac-ui/cf-utils.lisp -text
 mac-ui/cg.lisp -text
 mac-ui/event-process.lisp -text
 mac-ui/libdispatch.lisp -text
+mac-ui/objc-wrapper.lisp -text
+mac-ui/package.lisp -text
 objc-bridge/objc-package.lisp -text
 objc-bridge/obsolete/README -text
 scripts/ccl -text
