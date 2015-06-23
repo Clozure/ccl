@@ -2872,7 +2872,7 @@ initially NIL.")
      (declare (ignore ignore))
      (%unreadable stream "#<")))
 
-(dolist (ch '(#\null #\tab #\linefeed #\page #\return #\space #\312))
+(dolist (ch '(#\null #\tab #\linefeed #\page #\return #\space))
   (set-dispatch-macro-character
    #\#
    ch
