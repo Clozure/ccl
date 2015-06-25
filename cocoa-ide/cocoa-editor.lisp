@@ -820,7 +820,8 @@
       (#/beginEditing self)
       (unwind-protect
            (#/replaceCharactersInRange:withString: self r string)
-        (#/endEditing self)))))
+        (#/endEditing self)))
+    (for-each-textview-using-storage self #'update-paren-highlight)))
 
 (defun front-view-for-buffer (buffer)
   (loop
