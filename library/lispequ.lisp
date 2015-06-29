@@ -615,7 +615,7 @@
 (def-accessors (readtable) %svref
   ()                                        ; 'readtable
   rdtab.ttab                                ; type table
-  rdtab.alist                               ; macro-char alist
+  rdtab.macros                               ; macro-char table
   rdtab.case)				    ; gratuitous braindeath
 
 ;character types in readtables

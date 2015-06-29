@@ -1845,6 +1845,9 @@
   (destructuring-bind (name . char) pair
     (register-character-name name char)))
 
+(defun need-char-code (char)
+  (or (char-code char) (error "undefined charactern ~a" char)))
+
 
 
 ;;;(NAME-CHAR name)
@@ -1955,24 +1958,28 @@
   object)
 
 (eval-when (:compile-toplevel :execute)
-(def-accessors %svref
-  token.string
-  token.ipos
-  token.opos
-  token.len
-)
+  (def-accessors %svref
+      token.string
+    token.ipos
+    token.opos
+    token.len
+    )
 
-(defmacro with-token-buffer ((name) &body body &environment env)
-  (multiple-value-bind (body decls) (parse-body body env nil)
-    `(let* ((,name (vector (%get-token-string 16) 0 0 16 nil)))
-       (declare (dynamic-extent ,name))
-       (unwind-protect
-         (locally ,@decls ,@body)
-         (%return-token-string ,name)))))
-)
+  (defmacro with-token-buffer ((name) &body body &environment env)
+    (multiple-value-bind (body decls) (parse-body body env nil)
+      `(let* ((,name (vector (%get-token-string 16) 0 0 16 nil)))
+        (declare (dynamic-extent ,name))
+        (unwind-protect
+             (locally ,@decls ,@body)
+          (%return-token-string ,name)))))
+  )
 
 (defun read-dispatch (stream char)
-  (let* ((info (cdr (assq char (rdtab.alist *readtable*)))))
+  (let* ((alistp (typep (rdtab.macros *readtable*) 'list))
+         (info (if alistp
+                 (cdr (assq char (rdtab.macros *readtable*)))
+                 (let* ((code (need-char-code char)))
+                   (sparse-vector-ref (rdtab.macros *readtable*) code)))))
     (with-token-buffer (tb)
       (let* ((subchar nil)
              (numarg nil))
@@ -1981,7 +1988,11 @@
                 (%add-char-to-token subchar tb)
                 (return (setq subchar (char-upcase subchar) 
                               numarg (%token-to-number tb 10)))))
-        (let* ((dispfun (cdr (assq subchar (cdr info)))))     ; <== WAS char
+        (let* ((dispfun (if alistp (cdr (assq subchar (cdr info)))
+                          (and (consp info) (sparse-vector-ref (cdr info) (need-char-code subchar))))))
+   ; <== WAS char
+               
+                          
           (if dispfun
               (funcall dispfun stream subchar numarg)
               (signal-reader-error stream "Undefined character ~S in a ~S dispatch macro." subchar char)))))))
@@ -1989,8 +2000,9 @@
 ;;; This -really- gets initialized later in the file
 (defvar %standard-readtable%
   (let* ((ttab (make-sparse-vector char-code-limit '(unsigned-byte 8) $cht_cnst))
-         (macs `((#\# . (,#'read-dispatch))))
+         (macs (make-sparse-vector char-code-limit t nil))
          (case :upcase))
+  (setf (sparse-vector-ref macs (char-code #\#)) (cons #'read-dispatch (make-sparse-vector char-code-limit t nil))) 
     (dotimes (ch (1+ (char-code #\Space)))
       (setf (sparse-vector-ref ttab ch) $cht_wsp))
     (setf (sparse-vector-ref ttab #xa0) $cht_wsp)
@@ -2006,6 +2018,28 @@
 (def-standard-initial-binding *readtable* )
 (queue-fixup (setq %initial-readtable% (copy-readtable *readtable*)))
 
+(defun %get-readtable-char (char &optional (readtable *readtable*))
+  (setq char (require-type char 'character))
+  (let* ((attr (%character-attribute char (rdtab.ttab readtable))))
+    (declare (fixnum attr))
+    (values attr (if (logbitp $cht_macbit attr) (assoc char (rdtab.macros readtable))))))
+
+(defun copy-macro-table (table)
+  (let*  ((out (copy-sparse-vector table))
+          (outtab (sparse-vector-table out)))
+    
+   (dotimes (i (length outtab) out)
+      (let* ((v (svref outtab i)))
+        (when v
+          (dotimes (j (length v))
+            (let* ((datum (svref v j)))
+              (when (consp datum)
+                (setf (svref v i)
+                      (cons (car datum)
+                            (copy-macro-table (cdr datum))))))))))))
+    
+
+
 (defun copy-readtable (&optional (from *readtable*) to)
   (setq from (if from (readtable-arg from)  %standard-readtable%))
   (let* ((fttab (rdtab.ttab from)))
@@ -2014,7 +2048,11 @@
                (%istruct 'readtable
                          (copy-sparse-vector fttab)
                          nil (rdtab.case from))))
-    (setf (rdtab.alist to) (copy-tree (rdtab.alist from)))
+    (if (listp (rdtab.macros from))
+      (setf (rdtab.macros to) (copy-tree (rdtab.macros from)))
+      (setf (rdtab.macros to) (copy-macro-table (rdtab.macros from))))
+
+
     (setf (rdtab.case to) (rdtab.case from))
     to))
 
@@ -2034,17 +2072,9 @@
     (setf (sparse-vector-ref attrtab code) attr)))
 
 
-;;; returns: (values attrib <aux-info>), where
-;;;           <aux-info> = (char . fn), if terminating macro
-;;;                      = (char . (fn . dispatch-alist)), if dispatching macro
-;;;                      = nil otherwise
 
 
-(defun %get-readtable-char (char &optional (readtable *readtable*))
-  (setq char (require-type char 'character))
-  (let* ((attr (%character-attribute char (rdtab.ttab readtable))))
-    (declare (fixnum attr))
-    (values attr (if (logbitp $cht_macbit attr) (assoc char (rdtab.alist readtable))))))
+
 
 
 (defun set-syntax-from-char (to-char from-char &optional to-readtable from-readtable)
@@ -2055,24 +2085,22 @@
   (setq from-char (require-type from-char 'base-char))
   (setq to-readtable (readtable-arg to-readtable))
   (setq from-readtable (readtable-arg (or from-readtable %initial-readtable%)))
-  (multiple-value-bind (from-attr from-info) (%get-readtable-char from-char from-readtable)
-    (let* ((new-tree (copy-tree (cdr from-info)))
-           (old-to-info (nth-value 1 (%get-readtable-char to-char to-readtable))))
-      (without-interrupts
-       (if from-info
-         (if old-to-info
-           (setf (cdr old-to-info) new-tree)
-           (push (cons to-char new-tree) (rdtab.alist to-readtable)))
-         (if old-to-info
-           (setf (rdtab.alist to-readtable) (delq old-to-info (rdtab.alist to-readtable)))))
-       (%set-character-attribute to-char
-                                 to-readtable
-                                 (if (and (= from-attr $cht_cnst)
-                                          (member to-char '(#\Newline #\Linefeed #\Page #\Return
-                                                            #\Space #\Tab #\Backspace #\Rubout)))
-                                   $cht_ill
-                                   from-attr)))
-      t)))
+  (let* ((from-attr (%character-attribute from-char (rdtab.ttab from-readtable)))
+         (from-info (sparse-vector-ref (rdtab.macros from-readtable) (need-char-code from-char))))
+    (if (atom from-info)
+      (setf (sparse-vector-ref (rdtab.macros to-readtable) (need-char-code to-char)) from-info)
+      (setf (sparse-vector-ref (rdtab.macros to-readtable) (need-char-code to-char))
+            (cons (car from-info)
+                  (copy-macro-table  (cdr from-info)))))
+     
+    (%set-character-attribute  to-char
+                               to-readtable
+                               (if (and (= from-attr $cht_cnst)
+                                        (member to-char '(#\Newline #\Linefeed #\Page #\Return
+                                                          #\Space #\Tab #\Backspace #\Rubout)))
+                                 $cht_ill
+                                 from-attr)))
+  t)
 
 (defun get-macro-character (char &optional readtable)
   "Return the function associated with the specified CHAR which is a macro
@@ -2080,11 +2108,20 @@
   T if CHAR is a macro character which is non-terminating, i.e. which can
   be embedded in a symbol name."
   (setq readtable (readtable-arg readtable))
-  (multiple-value-bind (attr info) (%get-readtable-char char readtable)
-    (declare (fixnum attr) (list info))
-    (let* ((def (cdr info)))
-      (values (if (consp def) (car def) def)
-              (= attr $cht_ntmac)))))
+  (if (listp (rdtab.macros readtable))
+    (multiple-value-bind (attr info) (%get-readtable-char char readtable)
+      (declare (fixnum attr) (list info))
+      (let* ((def (cdr info)))
+        (values (if (consp def) (car def) def)
+                (= attr $cht_ntmac))))
+    (let* ((code (need-char-code char))
+           (info (sparse-vector-ref (rdtab.macros readtable) code)))
+      
+             
+      (values (if (atom info) info (car info))
+              (= (%character-attribute  char (rdtab.ttab readtable)) $cht_ntmac)))))
+
+      
 
 (defun set-macro-character (char fn &optional non-terminating-p readtable)
   "Causes CHAR to be a macro character which invokes FUNCTION when seen
@@ -2095,20 +2132,28 @@
   (when fn
     (unless (or (symbolp fn) (functionp fn))
       (setq fn (require-type fn '(or symbol function)))))
-  (let* ((info (nth-value 1 (%get-readtable-char char readtable))))
-    (declare (list info))
-    (without-interrupts
-     (%set-character-attribute char readtable
-                               (if (null fn) $cht_cnst (if non-terminating-p $cht_ntmac $cht_tmac)))
-     (if (and (null fn) info)
-       (setf (rdtab.alist readtable) (delete info (rdtab.alist readtable) :test #'eq)) 
-       (if (null info)
-         (push (cons char fn) (rdtab.alist readtable))
-         (let* ((def (cdr info)))
-           (if (atom def)
-             (setf (cdr info) fn)         ; Non-dispatching
-             (setf (car def) fn))))))     ; Dispatching
-    t))
+  (%set-character-attribute char readtable
+                            (if (null fn) $cht_cnst (if non-terminating-p $cht_ntmac $cht_tmac)))
+  (if (listp (rdtab.macros readtable))
+    (let* ((info (nth-value 1 (%get-readtable-char char readtable))))
+      (declare (list info))
+      (without-interrupts
+     
+       (if (and (null fn) info)
+         (setf (rdtab.macros readtable) (delete info (rdtab.macros readtable) :test #'eq)) 
+         (if (null info)
+           (push (cons char fn) (rdtab.macros readtable))
+           (let* ((def (cdr info)))
+             (if (atom def)
+               (setf (cdr info) fn)     ; Non-dispatching
+               (setf (car def) fn)))))) ; Dispatching
+      t)
+    (let* ((code (or (need-char-code char) ))
+           (info (sparse-vector-ref (rdtab.macros readtable) code)))
+      (if (consp info)
+        (setf (car info) fn)
+        (setf (sparse-vector-ref (rdtab.macros readtable) code) fn))
+      t))) 
 
 (defun readtable-case (readtable)
   (unless (istruct-typep readtable 'readtable)
@@ -2132,14 +2177,18 @@
    be non-terminating."
   (setq readtable (readtable-arg readtable))
   (setq char (require-type char 'base-char))
+  (%set-character-attribute char readtable
+           (if non-terminating-p $cht_ntmac $cht_tmac))
+  (if (listp (rdtab.macros readtable))
+    
   (let* ((info (nth-value 1 (%get-readtable-char char readtable))))
     (declare (list info))
     (without-interrupts
-     (%set-character-attribute char readtable
-           (if non-terminating-p $cht_ntmac $cht_tmac))
-     (if info
+          (if info
        (rplacd (cdr info) nil)
-       (push (cons char (cons #'read-dispatch nil)) (rdtab.alist readtable)))))
+       (push (cons char (cons #'read-dispatch nil)) (rdtab.macros readtable)))))
+    (setf (sparse-vector-ref (rdtab.macros readtable) (need-char-code char))
+          (cons #'read-dispatch (make-sparse-vector char-code-limit t nil))))
   t)
 
 (defun get-dispatch-macro-character (disp-ch sub-ch &optional (readtable *readtable*))
@@ -2149,10 +2198,17 @@
   (setq disp-ch (require-type disp-ch 'base-char))
   (setq sub-ch (char-upcase (require-type sub-ch 'base-char)))
   (unless (digit-char-p sub-ch 10)
-    (let* ((def (cdr (nth-value 1 (%get-readtable-char disp-ch readtable)))))
-      (if (consp def)
-        (cdr (assq sub-ch (cdr def)))
-        (error "~A is not a dispatching macro character in ~s ." disp-ch readtable)))))
+    (if (listp (rdtab.macros readtable))
+      (let* ((def (cdr (nth-value 1 (%get-readtable-char disp-ch readtable)))))
+        (if (consp def)
+          (cdr (assq sub-ch (cdr def)))
+          (error "~A is not a dispatching macro character in ~s ." disp-ch readtable)))
+      (let* ((code (char-code disp-ch))
+             (info (sparse-vector-ref (rdtab.macros readtable) code)))
+        (if (atom info)
+          (error "~A is not a dispatching macro character in ~s ." disp-ch readtable)
+          (let* ((subcode (char-code sub-ch)))
+            (sparse-vector-ref (cdr info) subcode)))))))
 
 (defun set-dispatch-macro-character (disp-ch sub-ch fn &optional readtable)
   "Cause FUNCTION to be called whenever the reader reads DISP-CHAR
@@ -2162,18 +2218,40 @@
   (setq sub-ch (char-upcase (require-type sub-ch 'base-char)))
   (when (digit-char-p sub-ch 10)
     (error "subchar can't be a decimal digit - ~a ." sub-ch))
-  (let* ((info (nth-value 1 (%get-readtable-char disp-ch readtable)))
-         (def (cdr info)))
-    (declare (list info))
-    (unless (consp def)
-      (error "~A is not a dispatching macro character in ~s ." disp-ch readtable))
-    (let* ((alist (cdr def))
-           (pair (assq sub-ch alist)))
-      (if pair
-        (setf (cdr pair) fn)
-        (push (cons sub-ch fn) (cdr def))))
-    t))
+  (if (listp (rdtab.macros readtable))
+    (let* ((info (nth-value 1 (%get-readtable-char disp-ch readtable)))
+           (def (cdr info)))
+      (declare (list info))
+      (unless (consp def)
+        (error "~A is not a dispatching macro character in ~s ." disp-ch readtable))
+      (let* ((alist (cdr def))
+             (pair (assq sub-ch alist)))
+        (if pair
+          (setf (cdr pair) fn)
+          (push (cons sub-ch fn) (cdr def))))
+      t)
+    (let* ((code (char-code disp-ch))
+           (info (sparse-vector-ref (rdtab.macros readtable) code)))
+      (if (atom info)
+        (error "~A is not a dispatching macro character in ~s ." disp-ch readtable)
+        (let* ((subcode (char-code sub-ch)))
+          (setf (sparse-vector-ref (cdr info) subcode) fn))))))
 
+
+(defun convert-readtable-macros (readtable)
+  (let*  ((alist (rdtab.macros readtable)))
+    (when (listp alist)
+      (let* ((new (make-sparse-vector char-code-limit t  nil)))
+        (dolist (pair alist)
+          (destructuring-bind (char . f) pair
+            (if (atom f)
+              (setf (sparse-vector-ref new (need-char-code char)) f)
+              (let* ((sub (make-sparse-vector char-code-limit t nil)))
+                (dolist (pair (cdr f))
+                  (destructuring-bind (subch . subf) pair
+                    (setf (sparse-vector-ref sub (need-char-code subch)) subf)))
+                (setf (sparse-vector-ref new (need-char-code char))(cons (car f) sub))))))
+      (setf (rdtab.macros readtable) new)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;				Reader					;;
@@ -2524,7 +2602,9 @@
     (let* ((vals (multiple-value-list 
                      (if (not (logbitp $cht_macbit attr))
                        (%parse-token stream firstchar dot-ok)
-                       (let* ((def (cdr (assq firstchar (rdtab.alist readtable)))))
+                       (let* ((def (if (listp (rdtab.macros readtable))
+                                     (cdr (assq firstchar (rdtab.macros readtable)))
+                                     (sparse-vector-ref (rdtab.macros readtable) (need-char-code firstchar )))))
                          (cond ((null def))
                                ((atom def)
                                 (funcall def stream firstchar))
