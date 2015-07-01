@@ -1399,6 +1399,18 @@
   "Forms with syntax like LABELS, MACROLET, etc."
   :value '("LABELS" "MACROLET" "FLET"))
 
+(defgeneric lisp-mode? (thing)
+  (:documentation "Returns true if thing is in Lisp mode"))
+
+(defmethod lisp-mode? ((mark mark))
+  (lisp-mode? (mark-buffer mark)))
+
+(defmethod lisp-mode? ((buffer buffer))
+  (string-equal "Lisp" (buffer-major-mode buffer)))
+
+(defmethod lisp-mode? ((thing t))
+  nil)
+
 ;;; LISP-INDENTATION-CHECK-FOR-LOCAL-DEF -- Internal.
 ;;;
 ;;; This is a temporary hack to see how it performs.  When we are indenting

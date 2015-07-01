@@ -80,7 +80,7 @@
 ;; Return nil to use the default Cocoa selection, which will be word for double-click, line for triple.
 (defun hemlock:selection-for-click (mark paragraph-mode-p)
   ;; Handle lisp mode specially, otherwise just go with default Cocoa behavior
-  (when (string= (buffer-major-mode (mark-buffer mark)) "Lisp")
+  (when (lisp-mode? mark)
     (unless paragraph-mode-p
       (let ((region (word-region-at-mark mark)))
         (when region
@@ -108,7 +108,7 @@
           (setq name nick len nicklen))))))
 
 (defun hemlock:update-current-package (&optional pkg (buffer (current-buffer)))
-  (when (equalp (buffer-major-mode buffer) "Lisp")
+  (when (lisp-mode? buffer)
     (unless pkg
       (setq pkg (or (package-at-mark (current-point))
                     (variable-value 'default-package :buffer buffer))))
@@ -264,45 +264,45 @@
                     ;; color top-level setq's, just for fun
                     (eq sym 'setq))))))
 
-
 (defun compute-string/comment-coloring-in-region (region-start region-end)
-  (let* ((lisp-code-colors (cached-lisp-code-colors))
-         (start-line (mark-line region-start))
-         (end-line (line-next (mark-line region-end)))
-         (start-charpos (mark-charpos region-start)))
-    (assert (not (eq start-line end-line)))
-    (loop
-      for line = start-line then (line-next line) until (eq line end-line)
-      for info = (getf (line-plist line) 'lisp-info)
-      when info
-      nconc (loop with origin = (hi::line-origin line)
-              for last-end = 0 then end-offset
-              for (start-offset . end-offset) in (lisp-info-ranges-to-ignore info)
-              for syntax = (if (eql start-offset 0)
-                             (lisp-info-begins-quoted info)
-                             (if (< last-end start-offset)
-                               (character-attribute :lisp-syntax (line-character line (1- start-offset)))
-                               :comment))
-              do (when (member syntax '(:symbol-quote :string-quote))
-                   (when (< 0 start-offset)
-                     (decf start-offset))
-                   (when (< end-offset (line-length line))
-                     (incf end-offset)))
-              unless (and (eq line start-line) (<= end-offset start-charpos))
-              nconc (let* ((type (case syntax
-                                   ((:char-quote :symbol-quote) nil)
-                                   (:string-quote :string)
-                                   (t (loop for i from start-offset as nsemi upfrom 0
-                                        until (or (eql nsemi 3)
-                                                  (eql i end-offset)
-                                                  (not (test-char (line-character line i) :lisp-syntax :comment)))
-                                        finally (return (case nsemi
-                                                          (2 :double-comment)
-                                                          (3 :triple-comment)
-                                                          (t :comment)))))))
-                           (color (and type (cdr (assq type lisp-code-colors)))))
-                      (when color
-                        (list (list* (+ origin start-offset) (- end-offset start-offset) color))))))))
+  (when (lisp-mode? region-start)
+    (let* ((lisp-code-colors (cached-lisp-code-colors))
+           (start-line (mark-line region-start))
+           (end-line (line-next (mark-line region-end)))
+           (start-charpos (mark-charpos region-start)))
+      (assert (not (eq start-line end-line)))
+      (loop
+        for line = start-line then (line-next line) until (eq line end-line)
+        for info = (getf (line-plist line) 'lisp-info)
+        when info
+        nconc (loop with origin = (hi::line-origin line)
+                for last-end = 0 then end-offset
+                for (start-offset . end-offset) in (lisp-info-ranges-to-ignore info)
+                for syntax = (if (eql start-offset 0)
+                                 (lisp-info-begins-quoted info)
+                                 (if (< last-end start-offset)
+                                     (character-attribute :lisp-syntax (line-character line (1- start-offset)))
+                                     :comment))
+                do (when (member syntax '(:symbol-quote :string-quote))
+                     (when (< 0 start-offset)
+                       (decf start-offset))
+                     (when (< end-offset (line-length line))
+                       (incf end-offset)))
+                unless (and (eq line start-line) (<= end-offset start-charpos))
+                nconc (let* ((type (case syntax
+                                     ((:char-quote :symbol-quote) nil)
+                                     (:string-quote :string)
+                                     (t (loop for i from start-offset as nsemi upfrom 0
+                                          until (or (eql nsemi 3)
+                                                    (eql i end-offset)
+                                                    (not (test-char (line-character line i) :lisp-syntax :comment)))
+                                          finally (return (case nsemi
+                                                            (2 :double-comment)
+                                                            (3 :triple-comment)
+                                                            (t :comment)))))))
+                             (color (and type (cdr (assq type lisp-code-colors)))))
+                        (when color
+                          (list (list* (+ origin start-offset) (- end-offset start-offset) color)))))))))
 
 (defun coloring-region (start-mark end-mark color)
   (when color
@@ -313,51 +313,53 @@
         (list* start len color)))))
 
 (defun compute-symbol-coloring-in-region (region-start region-end)
-  (let* ((sym-vec (make-sym-vec))
-         (pkg nil)
-         (lisp-colors (cached-lisp-code-colors))
-         (defn-color (cdr (assq :definition lisp-colors))))
-    (with-mark ((start-mark region-start)
-                (end-mark region-start))
-      (let ((pkgname (package-at-mark region-end end-mark)))
-	(when pkgname
-	  (when (mark< region-start end-mark)
-	    ;; Argh, more than one package in region.  KLUDGE!!
-	    (return-from compute-symbol-coloring-in-region
-	      (nconc (compute-symbol-coloring-in-region region-start (mark-before end-mark))
-		     (compute-symbol-coloring-in-region (mark-after end-mark) region-end))))
-	  (setq pkg (find-package pkgname))))
-      (loop
-        while (and (%scan-to-symbol start-mark) (mark< start-mark region-end))
-        for sym = (progn
-                    (move-mark end-mark start-mark)
-                    (unless (forward-form end-mark) (move-mark end-mark region-end))
-                    (case-insensitive-string-to-symbol (displace-to-region sym-vec start-mark end-mark) pkg))
-        for type = (compute-symbol-category start-mark sym)
-        for reg = (when type
-                    (let ((color (cdr (assq type lisp-colors))))
-                      (when color
-                        (coloring-region start-mark end-mark color))))
-        when reg collect reg
-        ;; if we're at start of a defining form, color the thing being defined.
-        when (and defn-color
-                  (defining-symbol-p start-mark sym)
-                  (form-offset (move-mark start-mark end-mark) 1)
-                  (%scan-down-to-atom end-mark)
-                  (mark< end-mark region-end))
-        collect (progn
-                  (move-mark start-mark end-mark)
-                  (unless (and (forward-form end-mark)
-                               (mark<= end-mark region-end))
-                    (move-mark end-mark region-end))
-                  (unless (mark< start-mark end-mark)
-                    (warn "definition got start ~s end ~s region-end ~s" start-mark end-mark
-                          region-end)
-                    (move-mark end-mark start-mark))
-                  (coloring-region start-mark end-mark defn-color))
-        do (rotatef start-mark end-mark)))))
+  (when (lisp-mode? region-start)
+    (let* ((sym-vec (make-sym-vec))
+           (pkg nil)
+           (lisp-colors (cached-lisp-code-colors))
+           (defn-color (cdr (assq :definition lisp-colors))))
+      (with-mark ((start-mark region-start)
+                  (end-mark region-start))
+        (let ((pkgname (package-at-mark region-end end-mark)))
+          (when pkgname
+            (when (mark< region-start end-mark)
+              ;; Argh, more than one package in region.  KLUDGE!!
+              (return-from compute-symbol-coloring-in-region
+                (nconc (compute-symbol-coloring-in-region region-start (mark-before end-mark))
+                       (compute-symbol-coloring-in-region (mark-after end-mark) region-end))))
+            (setq pkg (find-package pkgname))))
+        (loop
+          while (and (%scan-to-symbol start-mark) (mark< start-mark region-end))
+          for sym = (progn
+                      (move-mark end-mark start-mark)
+                      (unless (forward-form end-mark) (move-mark end-mark region-end))
+                      (case-insensitive-string-to-symbol (displace-to-region sym-vec start-mark end-mark) pkg))
+          for type = (compute-symbol-category start-mark sym)
+          for reg = (when type
+                      (let ((color (cdr (assq type lisp-colors))))
+                        (when color
+                          (coloring-region start-mark end-mark color))))
+          when reg collect reg
+          ;; if we're at start of a defining form, color the thing being defined.
+          when (and defn-color
+                    (defining-symbol-p start-mark sym)
+                    (form-offset (move-mark start-mark end-mark) 1)
+                    (%scan-down-to-atom end-mark)
+                    (mark< end-mark region-end))
+          collect (progn
+                    (move-mark start-mark end-mark)
+                    (unless (and (forward-form end-mark)
+                                 (mark<= end-mark region-end))
+                      (move-mark end-mark region-end))
+                    (unless (mark< start-mark end-mark)
+                      (warn "definition got start ~s end ~s region-end ~s" start-mark end-mark
+                            region-end)
+                      (move-mark end-mark start-mark))
+                    (coloring-region start-mark end-mark defn-color))
+          do (rotatef start-mark end-mark))))))
 
 (defun compute-unmatched-parens-coloring-in-region (start-mark end-mark)
+  ; not checking for lisp mode here because this is still useful even in text mode
   (macrolet ((scan-loop (forwardp open-key buffer-start-mark start-line end-line close-key)
                `(loop with paren-count = 0 with limit-line = (neighbor-line ,end-line ,forwardp) with in-region-p = nil
                   for line = (mark-line (,buffer-start-mark (mark-buffer m))) then (neighbor-line line ,forwardp)
