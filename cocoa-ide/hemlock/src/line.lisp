@@ -43,7 +43,7 @@
   "A Hemlock line object.  See Hemlock design document for details."
   ;;
   ;; Something that represents the contents of the line.  This is
-  ;; guaranteed to change (as compared by EQL) whenver the contents of the
+  ;; guaranteed to change (as compared by EQL) whenever the contents of the
   ;; line changes, but might at arbitarary other times.  There are
   ;; currently about three different cases:
   ;;
