@@ -10,9 +10,7 @@
 (defun queue-for-event-process (f)
   "Queue the zero-argument function F for asynchronous execution in
 the event process."
-  (if (eq *current-process* *initial-process*)
-    (funcall f)
-    (%interrupt-event-process f nil)))
+    (%interrupt-event-process f nil))
 
 (defun call-in-event-process (f)
   "Invoke the zero-argument function F in the event process, wait for
