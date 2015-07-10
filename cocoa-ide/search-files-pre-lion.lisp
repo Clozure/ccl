@@ -81,7 +81,7 @@
     (when (and (typep nsstr ns:ns-string) (plusp (#/length nsstr)))
       (let ((lstr (lisp-string-from-nsstring nsstr)))
         (when (valid-host-p lstr)
-          (probe-file (get-full-dir-string lstr)))))))
+          (ignore-errors (probe-file (get-full-dir-string lstr))))))))
 
 (objc:defmethod (#/controlTextDidChange: :void) ((wc search-files-window-controller) notification)
   (let* ((object (#/object notification))
