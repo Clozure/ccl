@@ -193,24 +193,17 @@
                 (coloring-cache-tick cache) tick)))
     (coloring-cache-data cache)))
 
-
-;; Map strings to symbols, to avoid consing strings for upcasing
-(defvar *string-to-symbol-cache* (make-hash-table :test #'equalp))
-
 (defun case-insensitive-string-to-symbol (string pkg)
   (when (null pkg) (setq pkg *package*))
-  (let* ((pkg-alist (gethash string *string-to-symbol-cache*))
-         (known (assoc pkg pkg-alist)))
-    (if known
-      (cdr known)
-      (let* ((str (coerce string 'simple-string))
-             (*package* pkg)
-             (*read-eval* nil)
-             (sym (ignore-errors (read-from-string str))))
-        (unless (symbolp sym) (setq sym nil))
-        (setf (gethash str *string-to-symbol-cache*) (cons (cons pkg sym) pkg-alist))
-        sym))))
-
+  (let* ((str (coerce string 'simple-string)))
+    (ignore-errors 
+     (case (readtable-case *readtable*)
+       (:upcase (find-symbol (nstring-upcase str) pkg))
+       (:downcase (find-symbol (nstring-downcase str) pkg))
+       (:preserve (find-symbol str pkg))
+       (t (find-symbol (nstring-upcase str) pkg)
+          ; not the right way to handle :invert. Do we care?
+          )))))
 
 ;; Try to exclude use of symbol in data.
 (defun mark-at-invocation-p (start-mark)
