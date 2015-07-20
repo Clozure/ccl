@@ -2022,7 +2022,10 @@
   (setq char (require-type char 'character))
   (let* ((attr (%character-attribute char (rdtab.ttab readtable))))
     (declare (fixnum attr))
-    (values attr )))
+    (values attr (if (logbitp $cht_macbit attr)
+                     (sparse-vector-ref
+                      (rdtab.macros readtable)
+                      (need-char-code char))))))
 
 (defun copy-macro-table (table)
   (let*  ((out (copy-sparse-vector table))

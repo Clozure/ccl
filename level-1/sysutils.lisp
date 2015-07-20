@@ -946,6 +946,27 @@
         (sparse-vector-default sv)
         (uvref v (logand i #xff))))))
 
+(defun sparse-vector-count (sv)
+  "Returns number of entries in sparse vector.
+  (Actually, it just counts how many elements are not the default value.
+  So this can be fooled because it can't distinguish the default value from a valid value that happens to be eql to default.)"
+  (with-lock-grabbed ((sparse-vector-lock sv))
+    (let* ((table (sparse-vector-table sv))
+           (majormax (length table))
+           (default (sparse-vector-default sv))
+           (total 0))
+      (declare (fixnum total))
+      (flet ((tally-vector (v)
+               (dotimes (i 256)
+                 (declare (fixnum i))
+                 (unless (eql default (uvref v i))
+                   (incf total)))))
+        (dotimes (i majormax)
+          (declare (fixnum i))
+          (let ((v (svref table i)))
+            (when v (tally-vector v))))
+        total))))
+
 (defun (setf sparse-vector-ref) (new sv i)
   (unless (and (typep i 'fixnum)
                (>= (the fixnum i) 0)
