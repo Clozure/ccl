@@ -121,28 +121,26 @@
    :constituent - Things that make up symbols."
   'symbol nil)
 
-;; Default from lisp readtable.
 (dotimes (i 256)
- (let ((c (code-char i)))
-  (setf (character-attribute :lisp-syntax c)
-   (case (ccl::%get-readtable-char c ccl::%standard-readtable%)
-    (#.ccl::$cht_wsp :space)
-    (#.ccl::$cht_sesc :char-quote)
-    (#.ccl::$cht_mesc :symbol-quote)
-    (#.ccl::$cht_cnst :constituent)))))
-
-(setf (character-attribute :lisp-syntax #\() :open-paren)
-(setf (character-attribute :lisp-syntax #\)) :close-paren)
-(setf (character-attribute :lisp-syntax #\') :prefix)
-(setf (character-attribute :lisp-syntax #\`) :prefix)
-(setf (character-attribute :lisp-syntax #\,) :prefix)
-(setf (character-attribute :lisp-syntax #\#) :prefix-dispatch)
-(setf (character-attribute :lisp-syntax #\") :string-quote)
-(setf (character-attribute :lisp-syntax #\;) :comment)
-
-(setf (character-attribute :lisp-syntax #\newline) :newline)
-(setf (character-attribute :lisp-syntax nil) :newline)
-
+  (setf (character-attribute :lisp-syntax (code-char i)) 
+	        (if (<= i 32) :space :constituent))) 
+(dolist (pair 
+          '((#\backspace nil) 
+            (#\rubout nil) 
+            (#\\ :char-quote) 
+            (#\| :symbol-quote) 
+            (#\no-break_space :space) 
+            (#\( :open-paren) 
+            (#\) :close-paren) 
+            (#\' :prefix) 
+            (#\` :prefix) 
+            (#\, :prefix) 
+            (#\# :prefix-dispatch) 
+            (#\" :string-quote) 
+            (#\; :comment) 
+            (#\newline :newline) 
+            (nil :newline))) 
+  (setf (character-attribute :lisp-syntax (first pair)) (second pair))) 
 #|
 (do-alpha-chars (ch :both)
   (setf (character-attribute :lisp-syntax ch) :constituent))
