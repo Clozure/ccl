@@ -258,6 +258,8 @@
     (setq where (mark-absolute-position where)))
   (setf *next-view-start* (cons how where)))
 
+(defvar *delay-display-update-p* nil)
+
 (defmethod handle-hemlock-event ((view hemlock-view) key)
   ;; Key can also be a function, in which case it will get executed in the view event context
   #+debug (log-debug "handle-hemlock-event ~s~:[~; (recursive)~]"
@@ -287,10 +289,11 @@
                   (execute-hemlock-key view key))
               (exit-event-handler () :report "Exit from hemlock event handler")))
           ;; Update display
-          (if *next-view-start*
-            (destructuring-bind (how . where) *next-view-start*
-              (hemlock-ext:scroll-view view how where))
-            (unless (equal mod (buffer-modification-state text-buffer))
-              ;; Modified buffer, make sure user sees what happened
-              (hemlock-ext:ensure-selection-visible view)))
+          (unless *delay-display-update-p*
+            (if *next-view-start*
+                (destructuring-bind (how . where) *next-view-start*
+                  (hemlock-ext:scroll-view view how where))
+                (unless (equal mod (buffer-modification-state text-buffer))
+                  ;; Modified buffer, make sure user sees what happened
+                  (hemlock-ext:ensure-selection-visible view))))
           (update-echo-area-after-command view))))))

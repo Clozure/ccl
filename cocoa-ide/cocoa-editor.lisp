@@ -1110,7 +1110,8 @@
   ;; If no modifier keys are pressed, send hemlock a no-op.
   ;; (Or almost a no-op - this does an update-hemlock-selection as a side-effect)
   (unless (logtest #$NSDeviceIndependentModifierFlagsMask (#/modifierFlags event))
-    (let* ((view (hemlock-view self)))
+    (let* ((view (hemlock-view self))
+           (hi::*delay-display-update-p* t))
       (when view
 	(unless (eventqueue-abort-pending-p self)
 	  (hi::handle-hemlock-event view #k"leftdown")))))
