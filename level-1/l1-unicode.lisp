@@ -2712,7 +2712,7 @@ mark."
   :code-unit-size 32
   :native-endianness t                  ;not necessarily true.
   :stream-encode-function
-  #+ucs-4-stream-encode
+  #'ucs-4-stream-encode
   :stream-decode-function
   #'ucs-4-stream-decode
   :vector-encode-function
