@@ -510,6 +510,12 @@
   (:report (lambda (c s)
              (format s "Unexpected end of file ~a" (stream-error-context c)))))
 
+(define-condition stream-is-closed-error (stream-error)
+  ()
+  (:report (lambda (condition stream)
+	     (format stream "~s is closed"
+		     (stream-error-stream condition)))))
+
 (define-condition io-timeout (stream-error)
   ())
 

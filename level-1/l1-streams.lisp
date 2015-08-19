@@ -3828,10 +3828,8 @@
 	(return i)
 	(rplaca tail b)))))
 
-
-
 (defun stream-is-closed (s)
-  (error "~s is closed" s))
+  (error 'stream-is-closed-error :stream s))
 
 (defmethod stream-read-char ((s basic-character-input-stream))
   (let* ((ioblock (basic-stream-ioblock s)))
