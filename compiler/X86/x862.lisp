@@ -2696,7 +2696,7 @@
                   (let* ((reg (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-complex-single-float)))
                     (if safe
                       (! trap-unless-complex-single-float result-reg))
-                    (! get-comples-single-float reg result-reg)
+                    (! get-complex-single-float reg result-reg)
                     reg))
                  ((:s64-vector :fixnum-vector)
                   (let* ((reg (make-unwired-lreg next-imm-target :mode hard-reg-class-gpr-mode-s64)))
@@ -2715,7 +2715,7 @@
                (let* ((reg (make-unwired-lreg next-fp-target :mode hard-reg-class-fpr-mode-complex-double-float)))
                  (if safe
                    (! trap-unless-complex-double-float result-reg))
-                 (! get-comples-double-float reg result-reg)
+                 (! get-complex-double-float reg result-reg)
                  reg))
               (is-32-bit
                ;; Generally better to use a GPR for the :SINGLE-FLOAT-VECTOR
