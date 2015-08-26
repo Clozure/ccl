@@ -1177,15 +1177,17 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 |#
 
 (defun write-perverted-string (string stream end type &optional escape)
-  ; type :invert :upcase :downcase :capitalize or :studly
+  ;; type :invert :upcase :downcase :capitalize or :studly
   (declare (fixnum end))
   (let* ((readtable *readtable*)
          (readcase (readtable-case readtable))
          (outbuf-ptr -1)
-         (outbuf (make-string (if escape
-                                (+ end 2 (count-if (lambda (c) (or (eql c escape)
-                                                                   (eql c #\\))) string :end end))
-                                end)))
+         (outbuf (make-string (+ end
+				 (if escape 2 0)
+				 (count-if (lambda (c)
+					     (or (eql c escape)
+						 (eql c #\\)))
+					   string :end end))))
          (word-start t)
          (offset 0))
     (declare (fixnum offset outbuf-ptr)
