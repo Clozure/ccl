@@ -18,6 +18,21 @@
 
 ;;; Comparisons make more sense if arg order is "dest, src", instead
 ;;; of the gas/ATT arg order.
+(defx86lapmacro callq (addr)
+  `(call ,addr))
+
+
+(defx86lapmacro leaveq()
+  `(leave))
+
+(defx86lapmacro leavel ()
+  `(leavel))
+
+(defx86lapmacro retl (&rest rest)
+  `(ret ,@rest))
+
+(defx86lapmacro retq (&rest rest)
+  `(ret ,@rest))
 
 (defx86lapmacro rcmp (src dest)
   `(cmp ,dest ,src))

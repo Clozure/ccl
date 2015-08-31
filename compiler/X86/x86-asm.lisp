@@ -24,6 +24,7 @@
 (defconstant +MAX-IMMEDIATE-OPERANDS+ 2) ; max immediates per insn (lcall  ljmp)
 (defconstant +MAX-MEMORY-OPERANDS+ 2) ; max memory refs per insn (string ops)
 
+
 ;;; Prefixes will be emitted in the order defined below.
 ;;; WAIT-PREFIX must be the first prefix since FWAIT is really is an
 ;;; instruction  and so must come before any prefixes.
@@ -358,7 +359,6 @@
   base-opcode            ; 1-3 bytes
   rex-prefix             ; initial REX value
   modrm-byte             ; initial modrm vale, may be nil if no modrm byte
-  lap-options                           ; alist or plist
   )
 
 
@@ -912,12 +912,7 @@
    (def-x86-opcode call ((:label :insert-label))
      #xe8 nil nil)
 
-   (def-x86-opcode (callq :cpu64) ((:label :insert-label))
-     #xe8 nil nil)
-   
    (def-x86-opcode (call :cpu64) ((:reg64 :insert-modrm-rm))
-     #xff #o320 #x0)
-   (def-x86-opcode (callq :cpu64) ((:reg64 :insert-modrm-rm))
      #xff #o320 #x0)
    (def-x86-opcode (call :cpuno64) ((:reg32 :insert-modrm-rm))
      #xff #o320 #x0)
@@ -925,8 +920,6 @@
    (def-x86-opcode call ((:anymem :insert-memory))
      #xff #o020 #x0)
 
-   (def-x86-opcode (callq :cpu64) ((:anymem :insert-memory))
-     #xff #o020 #x0)
    ;; cbtw
    (def-x86-opcode cbtw ()
      #x98 nil nil #x66)
@@ -1738,10 +1731,7 @@
    ;; leave
    (def-x86-opcode leave ()
      #xc9 nil nil)
-   (def-x86-opcode (leaveq :cpu64) ()
-     #xc9 nil nil)
-   (def-x86-opcode (leavel :cpu32) ()
-     #xc9 nil nil)
+
    ;; lock
    (def-x86-opcode lock ()
      #xf0 nil nil)
@@ -2225,18 +2215,6 @@
      #xc3 nil nil)
 
    (def-x86-opcode ret ((:imm16 :insert-imm16))
-     #xc2 nil nil)
-
-   (def-x86-opcode (retq :cpu64) ()
-     #xc3 nil nil)
-
-   (def-x86-opcode (retq :cpu64) ((:imm16 :insert-imm16))
-     #xc2 nil nil)
-
-   (def-x86-opcode (retl :cpu32) ()
-     #xc3 nil nil)
-
-   (def-x86-opcode (retl :cpu32) ((:imm16 :insert-imm16))
      #xc2 nil nil)
 
    ;; rol
