@@ -477,18 +477,51 @@
 (defx86lapmacro recover-fn ()
   `(movl ($ :self) (% fn)))
 
-(defx86lapmacro call-subprim (name)
+
+(defx86lapmacro lisp-call (arg)
   (target-arch-case
    (:x8632
     `(progn
        (:talign x8632::fulltag-tra)
-       (call (@ ,(x86-subprim-offset name)))
-       (recover-fn)))
+       (call ,arg)))
    (:x8664
     `(progn
        (:talign 4)
-       (call (@ ,(x86-subprim-offset name)))
+       (call ,arg)))))
+
+(defx86lapmacro lisp-jump (arg)
+  (target-arch-case
+   (:x8632
+    `(progn
+       (:talign x8632::fulltag-tra)
+       (jmp ,arg)))
+   (:x8664
+    `(progn
+       (:talign 4)
+       (jmp ,arg)))))
+
+(defx86lapmacro call-subprim (name)
+  (target-arch-case
+   (:x8632
+    `(progn
+       (lisp-call (@ ,(x86-subprim-offset name)))
+       (recover-fn)))
+   (:x8664
+    `(progn
+       (lisp-call (@ ,(x86-subprim-offset name)))
        (recover-fn-from-rip)))))
+
+(defx86lapmacro jump-subprim (name)
+  (target-arch-case
+   (:x8632
+    `(progn
+       (lisp-jump (@ ,(x86-subprim-offset name)))
+       (recover-fn)))
+   (:x8664
+    `(progn
+       (lisp-jump (@ ,(x86-subprim-offset name)))
+       (recover-fn-from-rip)))))
+
 
  (defx86lapmacro %car (src dest)
   (target-arch-case
@@ -541,18 +574,17 @@
   (target-arch-case
    (:x8632
     `(progn
-       (load-constant ,name fname)
-       (set-nargs ,nargs)
-       (:talign 5)
-       (call (@ x8632::symbol.fcell (% fname)))
-       (recover-fn)))
+      (load-constant ,name fname)
+      (set-nargs ,nargs)
+      (lisp-call (@ x8632::symbol.fcell (% fname)))
+       
+      (recover-fn)))
    (:x8664
     `(progn
-       (load-constant ,name fname)
-       (set-nargs ,nargs)
-       (:talign 4)
-       (call (@ x8664::symbol.fcell (% fname)))
-       (recover-fn-from-rip)))))
+      (load-constant ,name fname)
+      (set-nargs ,nargs)
+      (lisp-call (@ x8664::symbol.fcell (% fname)))
+      (recover-fn-from-rip)))))
 
 
 ;;;  tail call the function named by NAME with nargs NARGS.  %FN is

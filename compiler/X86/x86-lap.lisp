@@ -570,13 +570,19 @@
 	    (setq form (ash val (arch::target-fixnum-shift (backend-target-arch *target-backend*))))
             (let* ((constant-label (ensure-x86-lap-constant-label val )))
               (setq form `(:^ ,(x86-lap-label-name constant-label)))))))
+      
       (if (null form)
         (setq form (arch::target-nil-value (backend-target-arch *target-backend*)))
         (if (eq form t)
           (setq form
                 (+ (arch::target-nil-value (backend-target-arch *target-backend*))
                    (arch::target-t-offset  (backend-target-arch *target-backend*))))))
-      
+
+      (progn
+        (when (symbolp form)
+          (multiple-value-bind (offset condition)
+              (ignore-errors (subprim-name->offset form))
+            (unless condition  (setq form offset)))))
       (if (label-address-expression-p form)
         (make-label-x86-lap-expression :label (find-or-create-x86-lap-label (cadr form)))
         (if (contains-label-address-expression form)
@@ -586,17 +592,19 @@
               (2 (make-binary-x86-lap-expression :operator op :operand0 (parse-x86-lap-expression (car args))
                                                  :operand1 (parse-x86-lap-expression (cadr args))))
               (t (make-n-ary-x86-lap-expression :operator op :operands (mapcar #'parse-x86-lap-expression args)))))
+
+          
           (multiple-value-bind (value condition)
               (ignore-errors
                 (eval (if (atom form)
                         form
                         (cons (car form)
-                            (mapcar #'(lambda (x)
-                                        (if (typep x 'constant-x86-lap-expression)
-                                          (constant-x86-lap-expression-value
-                                           x)
-                                          x))
-                                    (cdr form))))))
+                              (mapcar #'(lambda (x)
+                                          (if (typep x 'constant-x86-lap-expression)
+                                            (constant-x86-lap-expression-value
+                                             x)
+                                            x))
+                                      (cdr form))))))
             (if condition
               (error "~a signaled during assembly-time evaluation of form ~s" condition form)
               value #|(make-constant-x86-lap-expression :value value)|#)))))))
@@ -1538,7 +1546,13 @@ execute them very quickly.")
     (x86-lap-directive frag-list :byte 0) ;regsave mask
     (emit-x86-lap-label frag-list entry-code-tag)
 
-    (x86-lap-form `(lea (@ (:^ ,entry-code-tag) (% rip)) (% fn)) frag-list instruction main-frag-list exception-frag-list)
+    (let* ((first (car forms)))
+      (when (eq (car first) 'let)
+        (let* ((form0 (caddr first)))
+          (when (and (consp form0) (symbolp (car form0)))
+        
+            (unless (equalp (string (car form0)) "recover-fn-from-rip")
+              (x86-lap-form `(lea (@ (:^ ,entry-code-tag) (% rip)) (% fn)) frag-list instruction main-frag-list exception-frag-list))))))
     (dolist (f forms)
       (setq frag-list (x86-lap-form f frag-list instruction main-frag-list exception-frag-list)))
     (setq frag-list main-frag-list)

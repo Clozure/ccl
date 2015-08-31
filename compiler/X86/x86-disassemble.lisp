@@ -33,6 +33,7 @@
   op2
   start					;start of instruction in code-vector
   end					;and its end
+  flags
   )
 
 (defmethod print-object ((xdi x86-disassembled-instruction) stream)
@@ -1055,7 +1056,7 @@
    (make-x86-dis "movQ" 'op-seg +w-mode+ 'op-e +v-mode+)
    (make-x86-dis "popU" 'op-e +v-mode+)
    ;; #x90
-   (make-x86-dis "nop" 'nop-fixup 0)
+   (make-x86-dis '("nop" . :nop) 'nop-fixup 0)
    (make-x86-dis "xchgS" 'op-reg +ecx-reg+ 'op-imreg +eax-reg+)
    (make-x86-dis "xchgS" 'op-reg +edx-reg+ 'op-imreg +eax-reg+)
    (make-x86-dis "xchgS" 'op-reg +ebx-reg+ 'op-imreg +eax-reg+)
@@ -2112,7 +2113,7 @@
     (setf (x86-ds-prefixes ds) prefixes)))
 
 
-(defun x86-putop (ds template sizeflag instruction)
+(defun x86-putop (ds template sizeflag instruction flags)
   (let* ((ok t))
     (when (consp template)
       (if (x86-ds-mode-64 ds)
@@ -2121,7 +2122,8 @@
   (if (dotimes (i (length template) t)
           (unless (lower-case-p (schar template i))
             (return nil)))
-      (setf (x86-di-mnemonic instruction) template)
+      (setf (x86-di-mnemonic instruction) template
+            (x86-di-flags instruction) flags)
       (let* ((string-buffer (x86-ds-string-buffer ds))
              (mod (x86-ds-mod ds))
              (rex (x86-ds-rex ds))
@@ -2250,7 +2252,8 @@
         (setf (x86-di-mnemonic instruction) (subseq string-buffer 0))))
   ok))
 
-(defparameter *x86-dissassemble-always-print-suffix* t)
+(defparameter *x86-disassemble-print-nop* nil)
+(defparameter *x86-disassemble-always-print-suffix* t)
 
 (defun x86-dis-do-float (ds instruction floatop sizeflag)
   (declare (ignore floatop sizeflag))
@@ -2402,7 +2405,7 @@
            (is-rip (thing)
              (if (and (typep thing 'x86::x86-register-operand)
                       (x86-ds-mode-64 ds))
-               (let* ((entry (x86::x86-register-operand-entry thing)))
+              (let* ((entry (x86::x86-register-operand-entry thing)))
                  (eq entry (svref x86::*x8664-register-entries* 102)))))
            (is-ra0 (thing)
              (if (typep thing 'x86::x86-register-operand)
@@ -2414,7 +2417,13 @@
              (and (typep thing 'x86::x86-memory-operand)
                   (null (x86::x86-memory-operand-base thing))
                   (null (x86::x86-memory-operand-index thing))
+                  (x86::x86-memory-operand-disp thing)))
+           (is-disp-and-base (thing)
+             (and (typep thing 'x86::x86-memory-operand)
+                  (x86::x86-memory-operand-base thing)
+                  (null (x86::x86-memory-operand-index thing))
                   (x86::x86-memory-operand-disp thing))))
+             
       (flet ((is-fn-ea (thing)
                (and (typep thing 'x86::x86-memory-operand)
                     (is-fn (x86::x86-memory-operand-base thing))
@@ -2484,22 +2493,33 @@
                      
                    
                (if (and (setq disp (is-rip-ea op0)) (< disp 0) (is-fn op1))
-                 (progn
-                   (setf (x86::x86-memory-operand-disp op0)
-                         (parse-x86-lap-expression `(:^ ,entry-ea)))
-                   (push entry-ea (x86-ds-pending-labels ds)))))))
+                 (setf (x86-di-mnemonic instruction) "recover-fn-from-rip"
+                       (x86-di-op0 instruction) nil
+                         (x86-di-op0 instruction) nil)))))
           ((:jump :call)
            (let* ((disp (is-disp-only op0)))
-             (when disp
+             (cond ( disp
                (let* ((info (find (early-x86-lap-expression-value disp)
 				  (if (x86-ds-mode-64 ds)
 				    x8664::*x8664-subprims*
 				    x8632::*x8632-subprims*)
                                   :key #'subprimitive-info-offset)))
                  (when info (setf (x86::x86-memory-operand-disp op0)
-                                  (subprimitive-info-name info)))))))
+                                  (subprimitive-info-name info)
+                                  
+                                  (x86-di-mnemonic instruction)
+                                  (case flag
+                                    (:jump "lisp-jump")
+                                    (:call "lisp-call ")
+                                  )))))
+ 
+               (t
+                (when (eq flag :call)
+                  (setf (x86-di-mnemonic instruction)
+                        "lisp-call")
+                  )))))
           (t
-           (let* ((jtab (is-jump-table-ref op0)))
+           (Let* ((jtab (is-jump-table-ref op0)))
              (if (and jtab (> jtab 0))
                (let* ((count (x86-ds-u32-ref ds (- jtab 4)))
                       (block (make-x86-dis-block :start-address (+ jtab (x86-ds-entry-point ds))
@@ -2541,7 +2561,7 @@
 (defun x86-disassemble-instruction (ds labeled)
   (let* ((addr (x86-ds-code-pointer ds))
          (sizeflag (logior +aflag+ +dflag+
-                           (if *x86-dissassemble-always-print-suffix*
+                           (if *x86-disassemble-always-print-suffix*
                              +suffix-always+
                              0)))
          (instruction (make-x86-disassembled-instruction :address addr
@@ -2645,7 +2665,7 @@
                                               (x86-dis-bytemode2 dp))
                                        (if (x86-ds-mode-64 ds) 1 0))))
                     (t (error "Disassembly error")))))
-          (when (x86-putop ds (x86-dis-mnemonic dp) sizeflag instruction)
+          (when (x86-putop ds (x86-dis-mnemonic dp) sizeflag instruction (x86-dis-flags dp))
             (let* ((operands ())
                    (op1 (x86-dis-op1 dp))
                    (op2 (x86-dis-op2 dp))
@@ -2854,24 +2874,26 @@
 (defvar *previous-source-note*)
 
 (defun x86-print-di-lap (ds instruction tab-stop pc)
-  (dolist (p (x86-di-prefixes instruction))
-    (when tab-stop
-      (format t "~vt" tab-stop))
-    (format t "(~a)~%" p))
-  (when tab-stop
-    (format t "~vt" tab-stop))
-  (format t "(~a" (x86-di-mnemonic instruction))
-  (let* ((op0 (x86-di-op0 instruction))
-	 (op1 (x86-di-op1 instruction))
-	 (op2 (x86-di-op2 instruction)))
-    (when op0
-      (write-x86-lap-operand t op0 ds)
-      (when op1
-	(write-x86-lap-operand t op1 ds)
-	(when op2
-	  (write-x86-lap-operand t op2 ds)))))
   (let ((comment-start-offset 40))
-    (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) pc)
+
+    (unless (and (eq :nop (x86-di-flags instruction)) (not *x86-disassemble-print-nop*))
+      (dolist (p (x86-di-prefixes instruction))
+        (when tab-stop
+          (format t "~vt" tab-stop))
+        (format t "(~a)~%" p))
+      (when tab-stop
+        (format t "~vt" tab-stop))
+      (format t "(~a" (x86-di-mnemonic instruction))
+      (let* ((op0 (x86-di-op0 instruction))
+             (op1 (x86-di-op1 instruction))
+             (op2 (x86-di-op2 instruction)))
+        (when op0
+          (write-x86-lap-operand t op0 ds)
+          (when op1
+            (write-x86-lap-operand t op1 ds)
+            (when op2
+              (write-x86-lap-operand t op2 ds)))))
+      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) (+ pc #+x8664-target 15 #-x8664-target 7)))
     (when *disassemble-verbose*
       (let* ((istart (x86-di-start instruction))
 	     (iend (x86-di-end instruction))
@@ -2879,6 +2901,7 @@
 	     (code-vector (x86-ds-code-vector ds))
 	     (byteidx istart))
 	(dotimes (i (min nbytes 4))
+          (format t ";")
 	  (format t " ~(~2,'0x~)" (aref code-vector byteidx))
 	  (incf byteidx))
 	(format t "~%")
@@ -3085,3 +3108,22 @@
              (vector-push-extend (list object label instr) lines)))
        nil))
     (coerce lines 'simple-vector)))
+
+(defun disassemble-to-file (function path)
+  (let* ((name (if (typep function 'symbol) function (function-name function)))
+         (header (if name (format nil "(~s ~s ()" (target-arch-case (:x8664 'defx86lapfunction)(:x8632 'defx86lapfunction))name) (error "Not yet: anonymous function"))))
+    (with-open-file (*standard-output* path :direction :output :if-exists :supersede) 
+      (write-line header)
+      (disassemble function)
+      (write-line ")"))
+    path))
+
+
+
+
+
+
+
+(export  '(disassemble-to-file  *x86-disassemble-print-nop*))
+
+(provide "X86-DISASSEMBLE")
