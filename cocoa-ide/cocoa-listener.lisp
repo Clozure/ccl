@@ -184,23 +184,107 @@
 
 (defparameter $listener-flush-limit 4095)
 
+(defclass double-output-buffer ()
+  ((flush-limit :initarg :flush-limit :accessor dob-flush-limit)
+   (data :initarg :data :accessor dob-data)
+   (other-data :initform nil :accessor dob-other-data)
+   (output-data :initarg :output-data :accessor dob-output-data)
+   (data-lock :initform (make-recursive-lock) :accessor dob-data-lock)
+   (output-data-lock :initform (make-recursive-lock) :accessor dob-output-data-lock)
+   (semaphore :initform (make-semaphore) :accessor dob-semaphore)))
+
+(defun make-double-output-buffer (&optional (flush-limit $listener-flush-limit))
+  (check-type flush-limit (integer 0))
+  (flet ((make-buffer ()
+	   (make-array (1+ flush-limit)
+		       :adjustable t
+		       :fill-pointer 0
+		       :element-type 'character)))
+    (let* ((data (make-buffer))
+	   (output-data (make-buffer))
+	   (res (make-instance 'double-output-buffer
+			       :flush-limit flush-limit
+			       :data data
+			       :output-data output-data)))
+      (dob-return-output-data res)
+      res)))
+
+(defmacro with-dob-data ((data dob) &body body)
+  (let ((thunk (gensym "THUNK")))
+    `(flet ((,thunk (,data)
+	      ,@body))
+       (declare (dynamic-extent #',thunk))
+       (call-with-dob-data #',thunk ,dob))))
+
+;; The GUI thread isn't allowed to print on a listener output-stream,
+;; so ignore all attempts.
+(defun call-with-dob-data (thunk dob)
+  (unless (typep *current-process* 'appkit-process)
+    (with-lock-grabbed ((dob-data-lock dob))
+      (funcall thunk (dob-data dob)))))
+
+(defmacro with-dob-output-data ((data dob) &body body)
+  (let ((thunk (gensym "THUNK")))
+    `(flet ((,thunk (,data)
+	      ,@body))
+       (declare (dynamic-extent #',thunk))
+       (call-with-dob-output-data #',thunk ,dob))))
+
+(defun call-with-dob-output-data (thunk dob)
+  (with-lock-grabbed ((dob-output-data-lock dob))
+    (funcall thunk (dob-output-data dob))))
+
+;; Should be called only in the GUI thread, except when
+;; initializing a new double-output-buffer instance (or
+;; debugging the semaphore wait code).
+(defun dob-return-output-data (dob)
+  (with-dob-output-data (output-data dob)
+    (when output-data
+      (setf (fill-pointer output-data) 0)
+      (setf (dob-output-data dob) nil
+	    (dob-other-data dob) output-data)
+      (signal-semaphore (dob-semaphore dob))
+      output-data)))
+
+;; Must be called inside WITH-DOB-DATA
+(defun dob-queue-output-data (dob &optional force)
+  (unless (and (not force) (eql 0 (length (dob-data dob))))
+    (wait-on-semaphore (dob-semaphore dob))
+    (when (dob-other-data dob)
+      (setf (dob-output-data dob) (dob-data dob)
+	    (dob-data dob) (dob-other-data dob)
+	    (dob-other-data dob) nil)
+      t)))
+
+;; True return means we overflowed the current buffer
+(defun dob-push-char (dob char)
+  (with-dob-data (data dob)
+    (when (>= (vector-push-extend char data) (dob-flush-limit dob))
+      (dob-queue-output-data dob t)
+      t)))
+
 (defclass cocoa-listener-output-stream (fundamental-character-output-stream)
-  ((lock :initform (make-lock))
-   (hemlock-view :initarg :hemlock-view)
-   (data :initform (make-array (1+ $listener-flush-limit)
-                               :adjustable t :fill-pointer 0
-                               :element-type 'character))
-   (limit :initform $listener-flush-limit)))
+  ((buffer :initform (make-double-output-buffer $listener-flush-limit))
+   (hemlock-view :initarg :hemlock-view)))
 
 (defmethod stream-element-type ((stream cocoa-listener-output-stream))
-  (with-slots (data) stream
-    (array-element-type data)))
+  (with-slots (buffer) stream
+    (array-element-type (dob-data buffer))))
+
+(defun display-cocoa-listener-output-buffer (stream)
+  (with-slots (hemlock-view buffer) stream
+    (unwind-protect
+	 (with-dob-output-data (data buffer)
+	   (when (> (fill-pointer data) 0)
+	     (append-output hemlock-view data)
+	     (setf (fill-pointer data) 0)))
+      (dob-return-output-data buffer))))
 
 (defmethod ccl:stream-write-char ((stream cocoa-listener-output-stream) char)
-  (with-slots (data lock limit) stream
-    (when (with-lock-grabbed (lock)
-	    (>= (vector-push-extend char data) limit))
-      (stream-force-output stream))))
+  (with-slots (buffer) stream
+    (when (dob-push-char buffer char)
+      (queue-for-gui
+       (lambda () (display-cocoa-listener-output-buffer stream))))))
 
 ;; This isn't really thread safe, but it's not too bad...  I'll take a chance - trying
 ;; to get it to execute in the gui thread is too deadlock-prone.
@@ -211,41 +295,40 @@
 
 ;; TODO: doesn't do the right thing for embedded tabs (in buffer or data)
 (defmethod ccl:stream-line-column ((stream cocoa-listener-output-stream))
-  (with-slots (hemlock-view data lock) stream
-    (with-lock-grabbed (lock)
+  (with-slots (hemlock-view buffer) stream
+    (with-dob-data (data buffer)
       (let* ((n (length data))
              (pos (position #\Newline data :from-end t)))
-        (if (null pos)
-          (+ (hemlock-listener-output-mark-column hemlock-view) n)
-          (- n pos 1))))))
+        (if pos
+	    (- n pos 1)
+	    (with-dob-output-data (output-data buffer)
+	      (let* ((output-n (if output-data (length output-data) 0))
+		     (output-pos (and (> output-n 0)
+				      (position #\Newline output-data :from-end t))))
+		(if output-pos
+		    (+ n (- output-n output-pos 1))
+		    (+ (hemlock-listener-output-mark-column hemlock-view)
+		       n output-n)))))))))
 
-(defmethod ccl:stream-fresh-line  ((stream cocoa-listener-output-stream))
-  (with-slots (hemlock-view data lock limit) stream
-    (when (with-lock-grabbed (lock)
-            (let ((n (length data)))
-              (unless (if (= n 0)
-                        (= (hemlock-listener-output-mark-column hemlock-view) 0)
-                        (eq (aref data (1- n)) #\Newline))
-                (>= (vector-push-extend #\Newline data) limit))))
-      (stream-force-output stream))))
+(defmethod ccl:stream-fresh-line ((stream cocoa-listener-output-stream))
+  (unless (eql 0 (ccl:stream-line-column stream))
+    (ccl:stream-write-char stream #\Newline)))
 
 (defmethod ccl::stream-finish-output ((stream cocoa-listener-output-stream))
   (stream-force-output stream))
 
 (defmethod ccl:stream-force-output ((stream cocoa-listener-output-stream))
   (if (typep *current-process* 'appkit-process)
-    (with-slots (hemlock-view data lock) stream
-      (with-lock-grabbed (lock)
-        (when (> (fill-pointer data) 0)
-          (append-output hemlock-view data)
-          (setf (fill-pointer data) 0))))
-    (with-slots (data) stream
-      (when (> (fill-pointer data) 0)
-        (queue-for-gui #'(lambda () (stream-force-output stream)))))))
+    (display-cocoa-listener-output-buffer stream)
+    (with-slots (buffer) stream
+      (with-dob-data (data buffer)
+	data
+	(when (dob-queue-output-data buffer)
+	  (queue-for-gui #'(lambda () (stream-force-output stream))))))))
 
 (defmethod ccl:stream-clear-output ((stream cocoa-listener-output-stream))
-  (with-slots (data lock) stream
-    (with-lock-grabbed (lock)
+  (with-slots (buffer) stream
+    (with-dob-data (data buffer)
       (setf (fill-pointer data) 0))))
 
 (defmethod ccl:stream-line-length ((stream cocoa-listener-output-stream))
