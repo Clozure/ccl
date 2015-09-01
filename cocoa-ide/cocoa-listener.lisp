@@ -189,8 +189,8 @@
    (data :initarg :data :accessor dob-data)
    (other-data :initform nil :accessor dob-other-data)
    (output-data :initarg :output-data :accessor dob-output-data)
-   (data-lock :initform (make-recursive-lock) :accessor dob-data-lock)
-   (output-data-lock :initform (make-recursive-lock) :accessor dob-output-data-lock)
+   (data-lock :initform (ccl::make-recursive-lock) :accessor dob-data-lock)
+   (output-data-lock :initform (ccl::make-recursive-lock) :accessor dob-output-data-lock)
    (semaphore :initform (make-semaphore) :accessor dob-semaphore)))
 
 (defun make-double-output-buffer (&optional (flush-limit $listener-flush-limit))
