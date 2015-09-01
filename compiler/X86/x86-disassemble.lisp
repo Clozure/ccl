@@ -22,6 +22,8 @@
   (require "X86-ASM")
   (require "X86-LAP"))
 
+(defparameter *tra-tag* (target-arch-case (:x8664 4) (:x8632 5)))
+
 (defstruct (x86-disassembled-instruction (:include dll-node)
                                          (:conc-name x86-di-))
   address
@@ -225,8 +227,10 @@
                   (return i)))))
         (unless instruction
           (error "Bug: no instruction at address #x~x" address))
-        (return (or (x86-di-labeled instruction)
-                    (setf (x86-di-labeled instruction) t)))))))
+        (return (and
+                 (or (x86-di-labeled instruction)
+                    (setf (x86-di-labeled instruction) t))
+                 instruction))))))
 
 
 ;;; Flags stored in PREFIXES
@@ -2468,7 +2472,7 @@
                           (if (< disp 0)
                             `(- (:^ ,label-ea))
                             `(:^ ,label-ea))))
-                   (push label-ea (x86-ds-pending-labels ds))
+                   (push (cons label-ea (if (eq flag :lea) *tra-tag*)) (x86-ds-pending-labels ds))
                    (when (or (eq flag :single) (eq flag :double))
                      (let* ((block (make-x86-dis-block :start-address label-ea
                                                        :end-address (+ label-ea (if (eq flag :single) 4 8))))
@@ -2492,7 +2496,7 @@
                        (insert-x86-block block (x86-ds-blocks ds))))))
                      
                    
-               (if (and (setq disp (is-rip-ea op0)) (< disp 0) (is-fn op1))
+               (when (and (setq disp (is-rip-ea op0)) (< disp 0) (is-fn op1))
                  (setf (x86-di-mnemonic instruction) "recover-fn-from-rip"
                        (x86-di-op0 instruction) nil
                          (x86-di-op0 instruction) nil)))))
@@ -2541,7 +2545,7 @@
                                         :end (+ start 4))))
                      (append-dll-node instruction instructions)
                      (setq labeled nil)
-                     (push target (x86-ds-pending-labels ds))
+                     (push (cons target *tra-tag*) (x86-ds-pending-labels ds))
                      (incf jtab 4)))
                  (insert-x86-block block (x86-ds-blocks ds)))
                (unless (x86-ds-mode-64 ds)
@@ -2697,7 +2701,7 @@
       (values (x86-dis-analyze-operands ds instruction (x86-dis-flags dp))
               (or stop (eq (x86-dis-flags dp) :jump))))))
 
-(defun x86-disassemble-new-block (ds addr)
+(defun x86-disassemble-new-block (ds addr &optional align)
   (setf (x86-ds-code-pointer ds) addr)
   (let* ((limit (do-dll-nodes (b (x86-ds-blocks ds) (x86-ds-code-limit ds))
                   (when (> (x86-dis-block-start-address b) addr)
@@ -2707,8 +2711,8 @@
          (labeled (not (eql addr (x86-ds-entry-point ds)))))
     (loop
       (multiple-value-bind (instruction stop)
-          (x86-disassemble-instruction ds labeled)
-        (setq labeled nil)
+          (x86-disassemble-instruction ds (or align labeled))
+        (setq labeled nil align nil)
         (append-dll-node instruction instructions)
         (if stop (return))
         (if (>= (x86-ds-code-pointer ds) limit)
@@ -2893,7 +2897,7 @@
             (write-x86-lap-operand t op1 ds)
             (when op2
               (write-x86-lap-operand t op2 ds)))))
-      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) (+ pc #+x8664-target 15 #-x8664-target 7)))
+      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) (+ pc (x86-ds-entry-point ds))))
     (when *disassemble-verbose*
       (let* ((istart (x86-di-start instruction))
 	     (iend (x86-di-end instruction))
@@ -2917,6 +2921,8 @@
 
 (defun x86-print-disassembled-instruction (ds instruction seq function)
   (let* ((addr (x86-di-address instruction))
+         (labeled (x86-di-labeled instruction))
+         (align (if (typep labeled 'fixnum) labeled))
          (entry (x86-ds-entry-point ds))
          (pc (- addr entry)))
     (let ((source-note (find-source-note-at-pc function pc)))
@@ -2928,7 +2934,8 @@
                        (string-sans-most-whitespace source-text 100)
                        "#<no source text>")))
           (format t "~&~%;;; ~A" text))))
-    (when (x86-di-labeled instruction)
+    (when labeled
+      (when align (format t "~&~%~4t(:align ~d)" align))
       (format t "~&L~d~%" pc)
       (setq seq 0))
     (format t "~&")
@@ -2972,9 +2979,14 @@
           #+x8632-target (ash (x86-ds-next-u16 ds) 2))
     (do* ()
          ((null (x86-ds-pending-labels ds)))
-      (let* ((lab (pop (x86-ds-pending-labels ds))))
-        (or (x86-dis-find-label lab blocks)
-            (x86-disassemble-new-block ds lab))))
+      (let* ((lab (pop (x86-ds-pending-labels ds)))
+             (align nil))
+        (when (consp lab)
+          (setq align (cdr lab) lab (car lab))) 
+        (or (let* ((i (x86-dis-find-label lab blocks)))
+              (when (and i align) (setf (x86-di-labeled i) align))
+              i)
+            (x86-disassemble-new-block  ds lab align))))
     (when (and header-function
                blocks
                (let ((something-to-disassemble nil))
