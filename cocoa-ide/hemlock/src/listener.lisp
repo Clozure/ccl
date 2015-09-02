@@ -644,7 +644,7 @@ between the region's start and end, and if there are no ill-formed expressions i
                   (read s))))
      (let* ((*print-pretty* t)
             (expansion (funcall expander expr)))
-       (format t "~&~s~&" expansion)))))
+       (format t "~%~s~&" expansion)))))
 
 (defcommand "Editor Macroexpand-1 Expression" (p)
   "Show the macroexpansion of the current expression in the null environment.

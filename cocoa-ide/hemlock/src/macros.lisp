@@ -492,9 +492,35 @@
 (defvar *saved-standard-output* nil)
 
 (defmacro with-output-to-listener (&body body)
-  `(let* ((*saved-standard-output* (or *saved-standard-output* *standard-output*))
-	  (*standard-output* (hemlock-ext:top-listener-output-stream)))	  
-     ,@body))
+  (let ((thunk (gensym "THUNK")))
+    `(flet ((,thunk () ,@body))
+       (declare (dynamic-extent #',thunk))
+       (call-with-output-to-listener #',thunk))))
+
+(defun cocoa-event-process-p ()
+  (eq ccl:*current-process* ccl::*cocoa-event-process*))
+
+(defun write-to-top-listener (str)
+  (let ((stream (hemlock-ext:top-listener-output-stream)))
+    (if (cocoa-event-process-p)
+        (ccl:process-run-function "write-to-top-listener"
+                                  (lambda ()
+                                    (write-string str stream)))
+        (write-string str stream))))
+
+(defun call-with-output-to-listener (thunk)
+  (let* ((*saved-standard-output* (or *saved-standard-output* *standard-output*)))
+    (cond ((cocoa-event-process-p)
+           (cond ((typep *standard-output* 'ccl:string-output-stream)
+                  (funcall thunk))
+                 (t (let* ((values nil)
+                           (str (with-output-to-string (*standard-output*)
+                                  (setf values (multiple-value-list
+                                                (funcall thunk))))))
+                      (write-to-top-listener str)
+                      (apply #'values values)))))
+          (t (let ((*standard-output* (hemlock-ext:top-listener-output-stream)))
+               (funcall thunk))))))
 
 (defmacro with-standard-standard-output (&body body)
   `(let* ((*standard-output* (or *saved-standard-output* *standard-output*)))

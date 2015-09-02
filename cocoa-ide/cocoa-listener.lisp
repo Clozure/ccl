@@ -219,7 +219,7 @@
 ;; The GUI thread isn't allowed to print on a listener output-stream,
 ;; so ignore all attempts.
 (defun call-with-dob-data (thunk dob)
-  (unless (typep *current-process* 'appkit-process)
+  (unless (eq *current-process* *cocoa-event-process*)
     (with-lock-grabbed ((dob-data-lock dob))
       (funcall thunk (dob-data dob)))))
 
