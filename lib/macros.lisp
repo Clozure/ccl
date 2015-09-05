@@ -3386,7 +3386,7 @@ element-type is numeric."
                     `(,sym ,@decls (atomic-incf-decf ,@body ,delta))))
 	(car `(%atomic-incf-car ,(cadr place) ,delta))
 	(cdr `(%atomic-incf-cdr ,(cadr place) ,delta))
-	(svref `(%atomic-incf-gvector ,@(cdr place) ,delta))))
+	((svref struct-ref) `(%atomic-incf-gvector ,@(cdr place) ,delta))))
     (if (and (symbolp place) (eq :special (variable-information place env)))
       (let* ((base (gensym))
              (offset (gensym)))
