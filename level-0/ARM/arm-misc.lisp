@@ -453,7 +453,7 @@
         (scaled-src-idx imm1)
         (scaled-dest-idx imm2)
         (val imm0))
-    (cmp nbytes (:$ 32))
+    (cmp nbytes '32)
     (vpop1 scaled-src-idx)
     (mov scaled-src-idx (:lsr scaled-src-idx (:$ arm::fixnumshift)))
     (add scaled-src-idx scaled-src-idx (:$ arm::misc-data-offset))
