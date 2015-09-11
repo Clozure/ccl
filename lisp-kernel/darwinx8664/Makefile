@@ -50,6 +50,22 @@ M4 = gm4
 ### Apple never
 M4FLAGS = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR
 ASFLAGS = -arch x86_64 -g
+
+# In Xcode 7, the clang integrated assember complains that .stabs
+# directives are unsupported.  Work around this by using the system
+# assembler.  (Apparently, we'll have to quit using .stabs directives
+# at some point soon.)
+
+# Since Xcode 7 only runs on Yosemite and later, use OS version as a
+# heuristic to detect whether the -Q flag is available.  It seems to
+# be available as far back as Lion, but on Snow Leopard, "as" doesn't
+# know about -Q.
+
+yosemite_plus := $(shell uname -r | awk -F. '{ if ($$1 >= 14) print "t" }')
+ifeq ($(yosemite_plus),t)
+ASFLAGS += -Q
+endif
+
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
 	   -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
 CDEBUG = -g
