@@ -61,6 +61,8 @@
      *svn-program*
      watch
      unwatch
+     stack-access
+     using-linear-scan
 
      show-documentation
      %set-toplevel
