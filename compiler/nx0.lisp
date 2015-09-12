@@ -19,6 +19,10 @@
 
 (in-package "CCL")
 
+
+(defvar *backend-use-linear-scan* nil)
+(defvar *force-legacy-backend* nil)
+
 ;; :compiler:nx0.lisp - part of the compiler
 
 
@@ -130,7 +134,7 @@
 
 (setq *nx-known-declarations*
   '(special inline notinline type ftype function ignore optimize dynamic-extent ignorable
-    ignore-if-unused settable unsettable
+    ignore-if-unused settable unsettable 
      notspecial global-function-name debugging-function-name resident))
 
 (defun find-optimize-quantity (name env)
@@ -324,7 +328,7 @@ function to the indicated name is true.")
 
 (defun nx-float-safety (env)
   (or (eql (safety-optimize-quantity env) 3)
-      (let* ((hook (getf (policy.misc *nx-current-compiler-policy*) :detect-floating-point-exceptions)))
+      (let* ((hook (getf (policy.misc *nx-current-compiler-policy*) :detect-floating-point-excption)))
         (when hook
           (if (functionp hook)
             (funcall hook env)
@@ -1060,6 +1064,7 @@ function to the indicated name is true.")
   (when *nx-parsing-lambda-decls*
     (setf (afunc-name *nx-current-function*) (cadr decl))))
 
+
 (defnxdecl resident (pending decl env)
   (declare (ignore env pending))
   (declare (ignore decl))
@@ -1283,9 +1288,12 @@ function to the indicated name is true.")
       (if (atom spec)
         (setq q spec v 3)
         (setq q (%car spec) v (cadr spec)))
-      (if (and (fixnump v) (<= 0 v 3) (memq q '(speed space compilation-speed safety debug)))
-        (push (cons q v) mdecls)
-        (nx-bad-decls spec)))))
+      (if (and (fixnump v) (<= 0 v 3))
+        (if  (memq q '(speed space compilation-speed safety debug))
+          (push (cons q v) mdecls)
+          (if (eq q 'stack-access)
+            (when *nx-parsing-lambda-decls* (target-arch-case (:x8664 (setq *backend-use-linear-scan* (not (eql v 0))))))
+            (nx-bad-decls spec)))))))
 
 (defun %proclaim-optimize (specs &aux q v)
   (dolist (spec specs)
@@ -1299,7 +1307,8 @@ function to the indicated name is true.")
                (space (setq *nx-space* v))
                (compilation-speed (setq *nx-cspeed* v))
                (safety (setq *nx-safety* v))
-               (debug (setq *nx-debug* v))))
+               (debug (setq *nx-debug* v))
+               (stack-access (progn (target-arch-case (:x8664 (setq *backend-use-linear-scan* (not (eql v 0))))) v ))))
         (bad-proclaim-spec `(optimize ,spec)))))
 
 (defun nx-lexical-finfo (sym &optional (env *nx-lexical-environment*))
@@ -1690,6 +1699,18 @@ Or something. Right? ~s ~s" var varbits))
             (setf (acode-note acode) *nx-current-code-note*))
           acode)))))
 
+(defun nx-ensure-supplied-p (always pending vals spvars)
+  (when (or always
+            (dolist (v spvars) (when v (return t)))
+            (dolist (v vals) (unless (nx-null v) (return t))))
+    (do*  ((spvars spvars (cdr spvars)))
+          ((null spvars))
+      (unless (car spvars)
+        (setf (car spvars) (nx-new-temp-var pending)))))
+  spvars)
+              
+    
+           
 (defun nx-parse-simple-lambda-list (pending ll &aux
 					      req
 					      opt
@@ -1715,7 +1736,7 @@ Or something. Right? ~s ~s" var varbits))
             (push (nx-new-var pending sym t) optvars)
             (push (if spvar (nx-new-var pending spvar t)) optsuppliedp)))
         (if optvars
-          (setq opt (list (nreverse optvars) (nreverse optinits) (nreverse optsuppliedp)))
+          (setq opt (list (nreverse optvars) (setq optinits (nreverse optinits)) (nx-ensure-supplied-p nil pending optinits (nreverse optsuppliedp))))
           (nx1-whine :lambda ll))))
     (let ((temp (pop resttail)))
       (when (or (eq temp '&rest)
@@ -1754,7 +1775,7 @@ Or something. Right? ~s ~s" var varbits))
          (list
           kallowother
           (nreverse keysyms)
-          (nreverse keysupp)
+          (nx-ensure-supplied-p  t pending nil (nreverse keysupp))
           (nreverse keyinits)
           (apply #'vector (nreverse keykeys))))))
     (let (auxvals auxvars)
@@ -2267,6 +2288,7 @@ Or something. Right? ~s ~s" var varbits))
 	      (setq arglist (nreverse typed-arglist))))))
       (setq result-type (type-specifier (single-value-type (function-ctype-returns ctype)))))
     (values arglist (nx-target-type result-type) errors-p)))
+
 
 
 (defun innermost-lfun-bits-keyvect (def)
