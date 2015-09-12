@@ -86,6 +86,7 @@
     name
     frag
     offset
+    align
     )
 
   (defstruct (frag (:include ccl::dll-node)
@@ -579,7 +580,10 @@
                    (arch::target-t-offset  (backend-target-arch *target-backend*))))))
 
       (progn
-        (when (symbolp form)
+        (when (and (symbolp form) (find form (arch::target-subprims-table
+                                              (backend-target-arch *target-backend*))
+                                        :test #'string-equal 
+                                        :key #'subprimitive-info-name))
           (multiple-value-bind (offset condition)
               (ignore-errors (subprim-name->offset form))
             (unless condition  (setq form offset)))))
@@ -1546,13 +1550,8 @@ execute them very quickly.")
     (x86-lap-directive frag-list :byte 0) ;regsave mask
     (emit-x86-lap-label frag-list entry-code-tag)
 
-    (let* ((first (car forms)))
-      (when (eq (car first) 'let)
-        (let* ((form0 (caddr first)))
-          (when (and (consp form0) (symbolp (car form0)))
-        
-            (unless (equalp (string (car form0)) "recover-fn-from-rip")
-              (x86-lap-form `(lea (@ (:^ ,entry-code-tag) (% rip)) (% fn)) frag-list instruction main-frag-list exception-frag-list))))))
+    (unless (equalp (car forms) '(recover-fn-from-rip))
+      (x86-lap-form `(lea (@ (:^ ,entry-code-tag) (% rip)) (% fn)) frag-list instruction main-frag-list exception-frag-list))
     (dolist (f forms)
       (setq frag-list (x86-lap-form f frag-list instruction main-frag-list exception-frag-list)))
     (setq frag-list main-frag-list)
