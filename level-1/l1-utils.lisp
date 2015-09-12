@@ -541,6 +541,10 @@ vector
 (defun bad-proclaim-spec (spec)
   (signal-program-error "Invalid declaration specifier ~s" spec))
 
+
+(defun using-linear-scan () *backend-use-linear-scan*)
+
+
 (defun proclaim-type (type &rest vars)
   (declare (dynamic-extent vars))
   ;; Called too early to use (every #'symbolp vars)
