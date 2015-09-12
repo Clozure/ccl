@@ -172,7 +172,7 @@
   (if (typep regspec 'fixnum)
     (the fixnum (ldb *encoded-reg-value-byte* (the fixnum regspec)))
     (if (typep regspec 'lreg)
-      (lreg-value regspec)
+      (or (lreg-value regspec) )
       (error "bad regspec: ~s" regspec))))
 
 ;;; Logical (as opposed to "physical") registers are represented by structures
