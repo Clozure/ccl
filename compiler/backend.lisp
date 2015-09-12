@@ -185,15 +185,17 @@
   (backend-ea-physical-reg vreg hard-reg-class-crf))
 
 (defun %available-node-temp (mask)
-  (unless (eql 0 mask)
-    (if *backend-allocate-high-node-temps*
-      (do* ((bit 31 (1- bit)))
-           ((< bit 0))
-        (when (logbitp bit mask)
-          (return bit)))    
-      (dotimes (bit 32)
-        (when (logbitp bit mask)
-          (return bit))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil)
+    (unless (eql 0 mask)
+      (if *backend-allocate-high-node-temps*
+        (do* ((bit 31 (1- bit)))
+             ((< bit 0))
+          (when (logbitp bit mask)
+            (return bit)))    
+        (dotimes (bit 32)
+          (when (logbitp bit mask)
+            (return bit)))))))
 
 (defun available-node-temp (mask)
   (or (%available-node-temp mask)
@@ -203,25 +205,31 @@
 (defun ensure-node-target (reg)
   (if (node-reg-p reg)
     reg
-    (available-node-temp *available-backend-node-temps*)))
+    (if *backend-use-linear-scan*
+      (make-unwired-lreg nil)
+      (make-unwired-lreg (available-node-temp *available-backend-node-temps*)))))
 
 (defun select-node-temp ()
-  (let* ((mask *available-backend-node-temps*))
-    (if *backend-allocate-high-node-temps*
-      (do* ((bit 31 (1- bit)))
-           ((< bit 0) (error "Bug: ran out of node temp registers."))
-        (when (logbitp bit mask)
-          (setq *available-backend-node-temps* (bitclr bit mask))
-          (return bit)))
-      (dotimes (bit 32 (error "Bug: ran out of node temp registers."))
-        (when (logbitp bit mask)
-          (setq *available-backend-node-temps* (bitclr bit mask))
-          (return bit))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil)
+    (let* ((mask *available-backend-node-temps*))
+      (if *backend-allocate-high-node-temps*
+        (do* ((bit 31 (1- bit)))
+             ((< bit 0) (error "Bug: ran out of node temp registers."))
+          (when (logbitp bit mask)
+            (setq *available-backend-node-temps* (bitclr bit mask))
+            (return bit)))
+        (dotimes (bit 32 (error "Bug: ran out of node temp registers."))
+          (when (logbitp bit mask)
+            (setq *available-backend-node-temps* (bitclr bit mask))
+            (return bit)))))))
 
 (defun available-imm-temp (mask &optional (mode-name :natural))
-  (dotimes (bit 32 (error "Bug: ran out of imm temp registers."))
-    (when (logbitp bit mask)
-      (return (set-regspec-mode bit (gpr-mode-name-value mode-name))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil :mode (gpr-mode-name-value mode-name))
+    (dotimes (bit 32 (error "Bug: ran out of imm temp registers."))
+      (when (logbitp bit mask)
+        (return (set-regspec-mode bit (gpr-mode-name-value mode-name)))))))
 
 (defun use-imm-temp (n)
   (declare (fixnum n))
@@ -230,11 +238,13 @@
 
 
 (defun select-imm-temp (&optional (mode-name :u32))
-  (let* ((mask *available-backend-imm-temps*))
-    (dotimes (bit 32 (error "Bug: ran out of imm temp registers."))
-      (when (logbitp bit mask)
-        (setq *available-backend-imm-temps* (bitclr bit mask))
-        (return (set-regspec-mode bit (gpr-mode-name-value mode-name)))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil :mode (gpr-mode-name-value mode-name))
+    (let* ((mask *available-backend-imm-temps*))
+      (dotimes (bit 32 (error "Bug: ran out of imm temp registers."))
+        (when (logbitp bit mask)
+          (setq *available-backend-imm-temps* (bitclr bit mask))
+          (return (set-regspec-mode bit (gpr-mode-name-value mode-name))))))))
 
 ;;; Condition-register fields are PPC-specific, but we might as well have
 ;;; a portable interface to them.
@@ -245,27 +255,43 @@
   n)
 
 (defun select-crf-temp ()
-  (let* ((mask *available-backend-crf-temps*))
-    (dotimes (bit 8 (error "Bug: ran out of CR fields."))
-      (declare (fixnum bit))
-      (when (logbitp bit mask)
-        (setq *available-backend-crf-temps* (bitclr bit mask))
-        (return (make-hard-crf-reg (the fixnum (ash bit 2))))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil :class hard-reg-class-crf)
+    (let* ((mask *available-backend-crf-temps*))
+      (dotimes (bit 8 (error "Bug: ran out of CR fields."))
+        (declare (fixnum bit))
+        (when (logbitp bit mask)
+          (setq *available-backend-crf-temps* (bitclr bit mask))
+          (return (make-hard-crf-reg (the fixnum (ash bit 2)))))))))
 
 (defun available-crf-temp (mask)
-  (dotimes (bit 8 (error "Bug: ran out of CR fields."))
-    (when (logbitp bit mask)
-      (return (make-hard-crf-reg (the fixnum (ash bit 2)))))))
+  (if *backend-use-linear-scan*
+    (make-unwired-lreg nil :class hard-reg-class-crf)
+    (dotimes (bit 8 (error "Bug: ran out of CR fields."))
+      (when (logbitp bit mask)
+        (return (make-hard-crf-reg (the fixnum (ash bit 2))))))))
 
 (defun single-float-reg-p (reg)
   (and (= (hard-regspec-class reg) hard-reg-class-fpr)
        (= (get-regspec-mode reg) hard-reg-class-fpr-mode-single)))
 
 (defun target-fpr-mask (fpreg mode)
-  (funcall
-   (arch::target-fpr-mask-function (backend-target-arch *target-backend*))
-   fpreg
-   mode))
+  (if *backend-use-linear-scan*
+    0
+    (funcall
+     (arch::target-fpr-mask-function (backend-target-arch *target-backend*))
+     fpreg
+     mode)))
+
+(defun node-reg-mask-for-reg (reg)
+    (if *backend-use-linear-scan*
+      0
+      (ash 1 (hard-regspec-value reg))))
+
+(defun imm-reg-mask-for-reg (reg)
+    (if *backend-use-linear-scan*
+      0
+      (ash 1 (hard-regspec-value reg))))
 
 (defun fpr-mask-for-vreg (vreg)
   (target-fpr-mask (hard-regspec-value vreg) (get-regspec-mode vreg)))
@@ -276,56 +302,84 @@
 
 
 (defun available-fp-temp (mask &optional (mode-name :double-float))
-  (do* ((regno 0 (1+ regno))
-        (mode (fpr-mode-name-value mode-name))
-        (regmask (target-fpr-mask regno mode)  (target-fpr-mask regno mode)))
-       ((> regmask mask) (error "Bug: ran out of fp registers."))
-    (when (eql regmask (logand mask regmask))
-      (return (make-hard-fp-reg regno mode)))))
+  (let* ((mode (fpr-mode-name-value mode-name)))
+    (if *backend-use-linear-scan*
+      (make-unwired-lreg nil :class hard-reg-class-fpr :mode mode)
+      (do* ((regno 0 (1+ regno))
+            (regmask (target-fpr-mask regno mode)  (target-fpr-mask regno mode)))
+           ((> regmask mask) (error "Bug: ran out of fp registers."))
+        (when (eql regmask (logand mask regmask))
+          (return (make-hard-fp-reg  regno mode)))))))
 
 (defun select-fp-temp (mode-name)
-  (do* ((i 0 (1+ i))
-        (mode (fpr-mode-name-value mode-name))
-        (fpr-mask (target-fpr-mask i mode) (target-fpr-mask i mode)))
-       ((> fpr-mask *available-backend-fp-temps*) (compiler-bug "Bug: ran out of fp registers."))
-    (when (= fpr-mask (logand fpr-mask *available-backend-fp-temps*))
-      (return i))))
+  (let* ((mode (fpr-mode-name-value mode-name)))
+    (if *backend-use-linear-scan*
+      (make-unwired-lreg nil :class hard-reg-class-fpr :mode mode)
+      (do* ((i 0 (1+ i))
+            (fpr-mask (target-fpr-mask i mode) (target-fpr-mask i mode)))
+           ((> fpr-mask *available-backend-fp-temps*) (compiler-bug "Bug: ran out of fp registers."))
+        (when (= fpr-mask (logand fpr-mask *available-backend-fp-temps*))
+          (return (make-hard-fp-reg i mode)))))))
 
 
-(defparameter *backend-all-lregs* ())
-(defun note-logical-register (l)
-  (push l *backend-all-lregs*)
-  l)
-
-(defun free-logical-registers ()
-  (without-interrupts
-   (let* ((prev (pool.data *lreg-freelist*)))
-     (dolist (r *backend-all-lregs*)
-       (setf (lreg-value r) prev
-             prev r))
-     (setf (pool.data *lreg-freelist*) prev)
-     (setq *backend-all-lregs* nil))))
 
 
-(defun make-unwired-lreg (value &key 
+(defun make-unwired-lreg (value &key
+                                vinsns
 				(class (if value (hard-regspec-class value) 0))
 				(mode (if value (get-regspec-mode value) 0))
 				(type (if value (get-node-regspec-type-modes value) 0)))
-  (note-logical-register (make-lreg (if value (hard-regspec-value value)) class mode type nil)))
+  (declare (ignorable vinsns))
+  (let* ((vinsns *vinsn-list*)
+        (lreg  (%make-lreg :value  (if value (hard-regspec-value value))
+                            :id (if vinsns
+                                  (length (vinsn-list-lregs vinsns))
+                                  (incf (the fixnum *logical-register-counter*)))
+                            :class class
+                            :mode mode
+                            :type type
+                            :wired nil)))
+        (if vinsns
+      (vector-push-extend lreg (vinsn-list-lregs vinsns))
+      (error "no vinsns"))
+    lreg))
 
-;;; Make an lreg with the same class, mode, & type as the prototype.
+(defun make-unwired-lreg-of-type (type)
+  (let* ((class hard-reg-class-gpr)
+         (mode hard-reg-class-gpr-mode-node))
+    (cond ((subtypep type 'single-float)
+          (setq class hard-reg-class-fpr
+                 mode  hard-reg-class-fpr-mode-single))
+          ((subtypep type 'double-float)
+           (setq class hard-reg-class-fpr
+                 mode  hard-reg-class-fpr-mode-double))
+          ((subtyPep type '(complex single-float))
+            (setq class hard-reg-class-fpr
+                 mode  hard-reg-class-fpr-mode-complex-single-float))
+          ((subtyPep type '(complex double-float))
+            (setq class hard-reg-class-fpr
+                 mode  hard-reg-class-fpr-mode-complex-double-float)))
+    (make-unwired-lreg nil :class class :mode mode)))
+
+
 (defun make-unwired-lreg-like (proto)
-  (make-unwired-lreg nil
-		     :class (hard-regspec-class proto)
-		     :mode (get-regspec-mode proto)
-		     :type (get-node-regspec-type-modes proto)))
-  
-(defun make-wired-lreg (value &key 
-			      (class (hard-regspec-class value))
-			      (mode (get-regspec-mode value))
-			      (type (get-node-regspec-type-modes value)))
-  (note-logical-register (make-lreg (hard-regspec-value value) class mode type t)))
+  (if (typep proto 'fixnum)
+    (make-unwired-lreg nil
+                       :class (hard-regspec-class proto)
+                     :mode (get-regspec-mode proto))
+    proto))
 
+                     
+
+
+
+(defun ensure-unwired-lreg-like (proto)
+  (make-unwired-lreg nil
+                     :class (hard-regspec-class proto)
+                     :mode (get-regspec-mode proto)))
+
+
+                       
 (defvar *backend-immediates*)
 
 (defun backend-new-immediate (imm)
@@ -363,20 +417,7 @@
       (vector-push-extend (make-vinsn-label lnum) *backend-labels*))))
 
 
-;;; Loop through all labels in *backend-labels*; if the label has been
-;;; emitted, remove it from vinsns and return it to the
-;;; *vinsn-label-freelist*.  "vinsns" should then contain nothing but
-;;; ... vinsns
 
-(defun backend-remove-labels ()
-  (let* ((labels *backend-labels*)
-         (freelist *vinsn-label-freelist*))
-    (dotimes (i (the fixnum (length labels)))
-      (let* ((lab (aref labels i)))
-        (if lab
-          (if (vinsn-label-succ lab)
-            (remove-and-free-dll-node lab freelist)
-            (free-dll-node lab freelist)))))))
 
 (defun backend-copy-label (from to)
   (let* ((from-lab (aref *backend-labels* from))
@@ -414,12 +455,12 @@
       (error "bug: Register spec class (~d) is not one  of ~s." class expected))))
 
 (defmacro with-node-temps ((&rest reserved) (&rest nodevars) &body body)
-  `(let* ((*available-backend-node-temps* (logand *available-backend-node-temps* (lognot (logior ,@(mapcar #'(lambda (r) `(ash 1 (hard-regspec-value ,r))) reserved)))))
+  `(let* ((*available-backend-node-temps* (logand *available-backend-node-temps* (lognot (logior ,@(mapcar #'(lambda (r) `(node-reg-mask-for-reg ,r)) reserved)))))
           ,@(mapcar #'(lambda (v) `(,v (make-unwired-lreg (select-node-temp)))) nodevars))
      ,@body))
 
 (defmacro with-imm-temps ((&rest reserved) (&rest immvars) &body body)
-  `(let* ((*available-backend-imm-temps* (logand *available-backend-imm-temps* (lognot (logior ,@(mapcar #'(lambda (r) `(ash 1 (hard-regspec-value ,r))) reserved)))))
+  `(let* ((*available-backend-imm-temps* (logand *available-backend-imm-temps* (lognot (logior ,@(mapcar #'(lambda (r) `(imm-reg-mask-for-reg ,r)) reserved)))))
           ,@(mapcar #'(lambda (v) (let* ((var (if (atom v) v (car v)))
                                          (mode-name (if (atom v) :u32 (cadr v)))) 
                                     `(,var (select-imm-temp ',mode-name)))) immvars))
@@ -427,10 +468,9 @@
 
 
 (defmacro with-crf-target ((&rest reserved) name &body body)
-  `(let* ((,name (make-unwired-lreg 
-                  (available-crf-temp 
-                   (logand *available-backend-crf-temps* 
-                           (lognot (logior ,@(mapcar #'(lambda (r) `(ash 1 (ash (hard-regspec-value ,r) -2))) reserved))))))))
+  (declare (ignorable reserved))
+  `(let* ((,name (make-unwired-lreg
+                  (make-unwired-lreg 0 :class hard-reg-class-crf))))
      ,@body))
 
 (defmacro regspec-crf-gpr-case ((regspec regval) crf-form gpr-form)
@@ -467,7 +507,7 @@
 		      (lognot (logior ,@(mapcar
 					 #'(lambda (r)
                                              `(if ,r
-                                               (ash 1 (hard-regspec-value ,r))
+                                               (imm-reg-mask-for-reg  ,r)
                                                0))
 					 reserved))))
 		     ',mode-name))))
@@ -481,7 +521,7 @@
                     (lognot (logior ,@(mapcar
                                        #'(lambda (r)
                                            `(if ,r
-                                             (ash 1 (hard-regspec-value ,r))
+                                             (node-reg-mask-for-reg ,r)
                                              0))
                                        reserved))))))))
     ,@body))
@@ -549,3 +589,11 @@
 
 
      
+
+
+
+
+
+
+
+
