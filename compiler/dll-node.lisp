@@ -63,6 +63,11 @@
           (dll-node-succ node) header
           (dll-node-succ last) node)))
 
+(defun pop-dll-node (header)
+  (let* ((first (dll-header-first header)))
+    (unless (eq first header)
+      (values (remove-dll-node first)))))
+
 (defun remove-dll-node-list (head tail)
   (let* ((prev (dll-node-pred head))
          (after (dll-node-succ tail)))
@@ -136,11 +141,24 @@
 
 ;;; This definition doesn't work when the body unlinks "more than" the
 ;;; current node.
+
 (defmacro do-dll-nodes ((valvar header &optional result) &body body)
   (let* ((headervar (make-symbol "HEADER"))
          (next (make-symbol "NEXT")))
     `(do* ((,headervar ,header)
            (,valvar (dll-header-first ,headervar) ,next)
+           (,next (dll-node-succ ,valvar) (dll-node-succ ,valvar)))
+          ((eq ,valvar ,headervar)
+           ,result)         
+       ,@body)))
+
+;; skip the head, walk the tail.
+
+(defmacro do-tail-dll-nodes ((valvar header &optional result) &body body)
+  (let* ((headervar (make-symbol "HEADER"))
+         (next (make-symbol "NEXT")))
+    `(do* ((,headervar ,header)
+           (,valvar (dll-node-succ (dll-header-first ,headervar)) ,next)
            (,next (dll-node-succ ,valvar) (dll-node-succ ,valvar)))
           ((eq ,valvar ,headervar)
            ,result)         
