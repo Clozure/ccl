@@ -474,7 +474,7 @@ are running on, or NIL if we can't find any useful information."
     (format s "~&took ~v:D ~a (~v,vF seconds) to run." iwidth elapsed-time units ffield-width fwidth elapsed-seconds )
     (unless (eql gc-time 0)
       (format s
-              "~%~5t~v:D ~a (~v,vF seconds), ~,2f% of which was spent in GC." iwidth
+              "~%~5t~v:D ~a (~v,vF seconds, ~,2f%) of which was spent in GC." iwidth
               gc-time units ffield-width fwidth gc-seconds (* 100.0 (/ gc-seconds elapsed-seconds))))
     (format s "~&During that period, and with ~D available CPU core~P," cpu-count cpu-count)
     (format s "~&~5t~v:D ~a (~v,vF seconds) were spent in user mode" iwidth user-time units ffield-width fwidth user-seconds)
