@@ -522,7 +522,7 @@
 
  
 (defun nx-cons-var (name &optional (bits 0))
-  (%istruct 'var name bits nil nil nil nil 0 nil nil 0 0 nil 0))
+  (%istruct 'var name bits nil nil nil nil 0 nil nil 0 0 nil 0 nil))
 
 
 
