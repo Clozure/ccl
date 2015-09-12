@@ -221,63 +221,79 @@
 (defparameter *nx-rewrite-acode* t)
 
 
-(defun compile-named-function (def &key name env policy load-time-eval-token target
+
+(defparameter *current-function-name* nil)
+(defparameter *nx-current-function* nil)
+
+(defun compile-named-function (def &rest args
+                                &key name env policy load-time-eval-token target
                                 function-note keep-lambda keep-symbols source-notes
                                 (record-pc-mapping *record-pc-mapping*)
+                                (force-legacy-backend nil)
                                 (compile-code-coverage *compile-code-coverage*))
   ;; SOURCE-NOTES, if not nil, is a hash table mapping source forms to locations,
   ;;   is used to produce and attach a pc/source map to the lfun, also to attach
   ;;   source locations and pc/source maps to inner lfuns.
   ;; FUNCTION-NOTE, if not nil, is a note to attach to the function as the lfun
   ;;   source location in preference to whatever the source-notes table assigns to it.
-  (when (and name *nx-discard-xref-info-hook*)
-    (funcall *nx-discard-xref-info-hook* name))
-  (setq 
-   def
-   (let* ((*load-time-eval-token* load-time-eval-token)
-	  (*nx-source-note-map* source-notes)
-          (*nx-current-note* function-note)
-          (*record-pc-mapping* (and source-notes record-pc-mapping))
-          (*compile-code-coverage* (and source-notes compile-code-coverage))
-          (*nx-current-code-note* (and *compile-code-coverage*
-                                       (make-code-note :form def :source-note function-note)))
-          (env (new-lexical-environment env)))
-     (setf (lexenv.variables env) 'barrier)
-     (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
-            (*nx-target-fixnum-type*
-             (target-word-size-case
-              (32 *nx-32-bit-fixnum-type*)
-              (64 *nx-64-bit-fixnum-type*)))
-            (*nx-target-half-fixnum-type*
-             (target-word-size-case
-              (32 '(signed-byte 29))
-              (64 '(signed-byte 60))))
-            (*nx-target-natural-type*
-               (target-word-size-case
-                (32 *nx-32-bit-natural-type*)
-                (64 *nx-64-bit-natural-type*)))
-            (*nx-in-frontend* t)
-            (afunc (nx1-compile-lambda 
-                    name 
-                    def
-                    (make-afunc) 
-                    nil 
-                    env 
-                    (or policy *default-compiler-policy*)
-                    *load-time-eval-token*)))
-       (setq *nx-in-frontend* nil)
-       (if (afunc-lfun afunc)
-         afunc
-         (progn
-           (when (and *nx-rewrite-acode*
-                      (afunc-acode afunc))
-             (rewrite-acode-form (afunc-acode afunc) t))
-           (funcall (backend-p2-compile *target-backend*)
-                    afunc
-                    ;; will also bind *nx-lexical-environment*
-                    (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
-                    keep-symbols))))))
-  (values (afunc-lfun def) (afunc-warnings def)))
+  (handler-case
+      (progn
+        (when (and name *nx-discard-xref-info-hook*)
+          (funcall *nx-discard-xref-info-hook* name))
+        (setq 
+         def
+         (let* ((*load-time-eval-token* load-time-eval-token)
+                (*current-function-name* (or name "an anonymous function"))
+                (*backend-use-linear-scan*  (target-arch-case (:x8664 (unless force-legacy-backend *backend-use-linear-scan*)) (t nil)))
+                (*force-legacy-backend* force-legacy-backend)
+                (*nx-source-note-map* source-notes)
+                (*nx-current-note* function-note)
+                (*record-pc-mapping* (and source-notes record-pc-mapping))
+                (*compile-code-coverage* (and source-notes compile-code-coverage))
+                (*nx-current-code-note* (and *compile-code-coverage*
+                                             (make-code-note :form def :source-note function-note)))
+                (env (new-lexical-environment env)))
+           (setf (lexenv.variables env) 'barrier)
+           (let* ((*target-backend* (or (if target (find-backend target)) *host-backend*))
+                  (*nx-target-fixnum-type*
+                   (target-word-size-case
+                    (32 *nx-32-bit-fixnum-type*)
+                    (64 *nx-64-bit-fixnum-type*)))
+                  (*nx-target-half-fixnum-type*
+                   (target-word-size-case
+                    (32 '(signed-byte 29))
+                    (64 '(signed-byte 60))))
+                  (*nx-target-natural-type*
+                   (target-word-size-case
+                    (32 *nx-32-bit-natural-type*)
+                    (64 *nx-64-bit-natural-type*)))
+                  (*nx-in-frontend* t)
+                  (afunc (nx1-compile-lambda 
+                          name 
+                          def
+                          (make-afunc) 
+                          nil 
+                          env 
+                          (or policy *default-compiler-policy*)
+                          *load-time-eval-token*)))
+             (setq *nx-in-frontend* nil)
+             (if (afunc-lfun afunc)
+               afunc
+               (progn
+                 (when (and *nx-rewrite-acode*
+                            (afunc-acode afunc))
+                   (let* ((*nx-current-function* afunc))
+                     (rewrite-acode-form (afunc-acode afunc) t)))
+                 (funcall (backend-p2-compile *target-backend*)
+                          afunc
+                          ;; will also bind *nx-lexical-environment*
+                          (if keep-lambda (if (lambda-expression-p keep-lambda) keep-lambda def))
+                          keep-symbols))))))
+        (values (afunc-lfun def) (afunc-warnings def)))
+    (linear-scan-bailout
+     ()
+     (apply #'compile-named-function def :force-legacy-backend T args))))
+                         
 
 (defparameter *compiler-whining-conditions*
   '((:undefined-function . undefined-function-reference)
