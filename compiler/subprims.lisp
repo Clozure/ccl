@@ -20,7 +20,7 @@
 (defstruct subprimitive-info
   name
   offset
-  nailed-down
+  platform-info
   argument-mask
   registers-used
   )
