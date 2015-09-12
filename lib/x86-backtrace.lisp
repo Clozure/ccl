@@ -130,11 +130,7 @@
 
 
 (defun register-number->saved-register-index (regnum)
-  (ecase regnum
-    (#.x8664::save3 0)
-    (#.x8664::save2 1)
-    (#.x8664::save1 2)
-    (#.x8664::save0 3)))
+  (break "regnum = ~s" regnum))
 
 
 (defun get-register-value (address last-catch index)
@@ -144,7 +140,7 @@
 			 #+x8632-target
 			 x8632::catch-frame.db-link-cell
 			 #+x8664-target
-			 x8664::catch-frame.save-save3-cell))))
+			 x8664::catch-frame.db-link-cell))))
 
 ;;; Inverse of get-register-value
 
@@ -155,7 +151,7 @@
 			       #+x8632-target
 			       x8632::catch-frame.db-link-cell
 			       #+x8664-target
-			       x8664::catch-frame.save-save3-cell))
+                               x8664::catch-frame.db-link-cell))
           value)))
 
 (defun %find-register-argument-value (context cfp regval bad)
@@ -391,75 +387,16 @@
 
 
 (defun find-x8664-saved-nvrs (frame start-fp context)
-  (let* ((locations (make-array 16 :initial-element nil))
-         (need (logior (ash 1 x8664::save0)
-                       (ash 1 x8664::save1)
-                       (ash 1 x8664::save2)
-                       (ash 1 x8664::save3))))
-    (declare (fixnum need)
-             (dynamic-extent locations))
-    (do* ((parent frame child)
-          (child (child-frame parent context) (child-frame child context)))
-         ((or (= need 0) (eq child start-fp))
-          (values (%svref locations x8664::save0)
-                  (%svref locations x8664::save1)
-                  (%svref locations x8664::save2)
-                  (%svref locations x8664::save3)))
-      (multiple-value-bind (lfun pc) (cfp-lfun child)
-        (when (and lfun pc)
-          (multiple-value-bind (used where) (registers-used-by lfun pc)
-            (when (and used where (logtest used need))
-              (locally (declare (fixnum used))
-                (do* ((i x8664::save3 (1+ i)))
-                     ((or (= i 16) (= used 0)))
-                  (declare (type (mod 16) i))
-                  (when (logbitp i used)
-                    (when (logbitp i need)
-                      (setq need (logandc2 need (ash 1 i)))
-                      (setf (%svref locations i)
-                            (- (the fixnum (1- parent))
-                               (+ where (logcount (logandc2 used (1+ (ash 1 (1+ i)))))))))
-                    (setq used (logandc2 used (ash 1 i)))))))))))))
+  (declare (ignore frame start-fp context)))
                                          
               
          
 (defun %apply-in-frame (frame function arglist)
+  (declare (ignore frame function arglist))
   (target-arch-case
    (:x8632 (error "%apply-in-frame doesn't work for x8632 yet"))
    (:x8664
-    (let* ((target-catch (last-catch-since frame nil))
-	   (start-fp (if target-catch
-		       (uvref target-catch x8664::catch-frame.rbp-cell)
-		       (%get-frame-ptr)))
-	   (target-xcf (last-xcf-since frame start-fp nil))
-	   (target-db-link (last-binding-before frame))
-	   (target-tsp (last-tsp-before frame))
-	   (target-foreign-sp (last-foreign-sp-before frame)))
-      (multiple-value-bind (save0-loc save1-loc save2-loc save3-loc)
-	  (find-x8664-saved-nvrs frame start-fp nil)
-	(let* ((thunk (%clone-x86-function #'%%apply-in-frame-proto
-					   frame
-					   target-catch
-					   target-db-link
-					   target-xcf
-					   target-tsp
-					   target-foreign-sp
-					   (if save0-loc
-					     (- save0-loc frame)
-					     0)
-					   (if save1-loc
-					     (- save1-loc frame)
-					     0)
-					   (if save2-loc
-					     (- save2-loc frame)
-					     0)
-					   (if save3-loc
-					     (- save3-loc frame)
-					     0)
-					   (coerce-to-function function)
-					   arglist
-					   0)))
-	  (funcall thunk)))))))
+    (error "%apply-in-frame has bitrotted"))))
 
             
     
