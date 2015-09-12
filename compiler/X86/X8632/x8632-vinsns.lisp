@@ -469,8 +469,9 @@
 
 
 (define-x8632-vinsn compare-vframe-offset-to-fixnum (()
-                                                     ((frame-offset :u16const)
-                                                      (fixval :s32const)))
+                                                     ((frame-offset :stack-offset)
+      (cur-vsp :stack-offset)
+      (fixval :s32const)))
   (:if (:and (:pred < fixval 128) (:pred >= fixval -128))
     (cmpl (:$b fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))
     (cmpl (:$l fixval) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp)))))
@@ -486,10 +487,7 @@
                                                ((vcell :lisp)))
   (cmpl (:$l (:apply target-nil-value)) (:@ x8632::value-cell.value (:%l vcell))))
 
-(define-x8632-vinsn lcell-load (((dest :lisp))
-				((cell :lcell)
-				 (top :lcell)))
-  (movl (:@ (:apply - (:apply + (:apply calc-lcell-offset cell) x8632::word-size-in-bytes)) (:%l x8632::ebp)) (:%l dest)))
+
 
 (define-x8632-vinsn (vframe-push :push :node :vsp)
     (()
@@ -503,11 +501,7 @@
 				   (cur-vsp :u16const)))
   (movl (:%l src) (:@ (:apply - (:apply + frame-offset x8632::word-size-in-bytes)) (:%l x8632::ebp))))
 
-(define-x8632-vinsn lcell-store (()
-				 ((src :lisp)
-				  (cell :lcell)
-				  (top :lcell)))
-  (movl (:%l src) (:@ (:apply - (:apply + (:apply calc-lcell-offset cell) x8632::word-size-in-bytes)) (:%l x8632::ebp))))
+
         
 (define-x8632-vinsn (popj :lispcontext :pop :vsp :lrRestore :jumpLR)
     (()
@@ -1145,6 +1139,12 @@
   (call (:@ spno))
   (movl (:$self 0) (:% x8632::fn)))
 
+(define-x8632-vinsn (call-subprim-no-return)  (()
+                                           ((spno :s32const))
+                                           ((entry (:label 1))))
+  (:talign x8632::fulltag-tra)
+  (call (:@ spno))
+  (movl (:$self 0) (:% x8632::fn)))
 
 (define-x8632-vinsn %ilognot (((dest :imm)
                                (src :imm))
@@ -1783,6 +1783,10 @@
   (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
   (jmp (:@ x8632::symbol.fcell (:% x8632::fname))))
 
+(define-x8632-vinsn (xpass-multiple-values-symbol :call  :extended-call :jumplr) (()
+                                                                                  ((lab :label)))
+  (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
+  (jmp (:@ x8632::symbol.fcell (:% x8632::fname))))
 
 ;;; It'd be good to have a variant that deals with a known function
 ;;; as well as this. 
@@ -1809,11 +1813,36 @@
   (:anchored-uuo (uuo-error-not-callable))
 )
 
+(define-x8632-vinsn (xpass-multiple-values  :call  :extended-call :jumplr) (()
+                                          ((lab :label))
+                                          ((tag :u8)))
+  :resume
+  (movl (:%l x8632::temp0) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :bad)
+  (movsbl (:@ x8632::misc-subtag-offset (:%l x8632::temp0)) (:%l tag))
+  (cmpl (:$b x8632::subtag-function) (:%l tag))
+  (cmovel (:%l x8632::temp0) (:%l x8632::fn))
+  (je :go)
+  (cmpl (:$b x8632::subtag-symbol) (:%l tag))
+  (cmovel (:@ x8632::symbol.fcell (:%l x8632::fname)) (:%l x8632::fn))
+  (jne :bad)
+  :go
+  (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr))))
+  (jmp (:%l x8632::fn))
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-not-callable))
+)
 (define-x8632-vinsn (pass-multiple-values-known-function :jumplr) (((fnreg :lisp))
                                                                     ())
   (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
   (jmp (:%l fnreg)))
 
+(define-x8632-vinsn (xpass-multiple-values-known-function ) (() ((lab :label) (fnreg :lisp)))
+  (pushl (:@ (:apply + (:apply target-nil-value) (x8632::%kernel-global 'x86::ret1valaddr)))) 
+  (jmp (:%l fnreg)))
 
 (define-x8632-vinsn reserve-outgoing-frame (()
                                             ())
@@ -1909,7 +1938,7 @@
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.next-tsp))
   )
 
-(define-x8632-vinsn (discard-c-frame :csp :pop :discard) (()
+(define-x8632-vinsn (discard-c-frame  :pop :discard) (()
                                                           ()
                                                           ((temp :imm)))
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l temp))
@@ -1954,15 +1983,13 @@
   (movl (:%l val) (:@ (:apply + x8632::misc-data-offset (:apply ash idx x8632::word-shift)) (:%l closure))))
 
 (define-x8632-vinsn (nthrowvalues :call :subprim) (()
-                                                        ((lab :label))
-							((ra (:lisp #.x8632::ra0))))
-  (leal (:@ (:^ lab) (:%l x8632::fn)) (:%l ra))
+                                                        ())
   (jmp (:@ .SPnthrowvalues)))
 
 (define-x8632-vinsn (nthrow1value :call :subprim) (()
-                                                        ((lab :label))
-							((ra (:lisp #.x8632::ra0))))
-  (leal (:@ (:^ lab) (:%l x8632::fn)) (:%l ra))
+                                                        ()
+							)
+
   (jmp (:@ .SPnthrow1value)))
 
 
@@ -2087,6 +2114,10 @@
 					      ())
   (ret))
 
+(define-x8632-vinsn label-address (((dest :lisp))
+                                   ((lab :label)))
+  
+  (leal (:@ (:^ lab)  (:%l x8632::fn)) (:%l dest)))
 ;;; xxx
 (define-x8632-vinsn (nmkcatchmv :call :subprim) (()
 						      ((lab :label))
@@ -2109,17 +2140,11 @@
 
 
 (define-x8632-vinsn (make-simple-unwind :call :subprim) (()
-                                                     ((protform-lab :label)
-                                                      (cleanup-lab :label)))
-  (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
-  (leal (:@ (:^ cleanup-lab)  (:%l x8632::fn)) (:%l x8632::xfn))
+                                                     ())
   (jmp (:@ .SPmkunwind)))
 
-(define-x8632-vinsn (nmkunwind :call :subprim) (()
-                                                     ((protform-lab :label)
-                                                      (cleanup-lab :label)))
-  (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
-  (leal (:@ (:^ cleanup-lab)  (:%l x8632::fn)) (:%l x8632::xfn))
+(define-x8632-vinsn (nmkunwind  :call :subprim :needs-frame-pointer) (()
+                                                     ())
   (jmp (:@ .SPnmkunwind)))
 
 (define-x8632-vinsn u16->u32 (((dest :u32))
@@ -3594,10 +3619,7 @@
 ;;; on entry to the new mkunwind confuses the issue.
 
 (define-x8632-vinsn (mkunwind :call :subprim) (()
-                                                     ((protform-lab :label)
-                                                      (cleanup-lab :label)))
-  (leal (:@ (:^ protform-lab) (:%l x8632::fn)) (:%l x8632::ra0))
-  (leal (:@ (:^ cleanup-lab)  (:%l x8632::fn)) (:%l x8632::xfn))
+                                                     ())
   (jmp (:@ .SPmkunwind)))
 
 ;;; Funcall the function or symbol in temp0 and obtain the single
@@ -4353,68 +4375,77 @@
 (define-x8632-vinsn (nfp-store-single-float :nfp :set)
  (()
                                                         ((val :single-float)
-                                                         (offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movss (:%xmm val) (:@ (:apply + 16 offset) (:% x8632::imm0)))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
-
-
+                                                         (offset :u16const)
+                                                         (nfp :imm)))
+  (movss (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
 
 (define-x8632-vinsn (nfp-store-double-float :nfp :set) (()
                                                         ((val :double-float)
-                                                         (offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movsd (:%xmm val) (:@ (:apply + 16 offset) (:% x8632::imm0)))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                         (offset :u16const)
+                                                         (nfp :imm)))
+  (movsd (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
 
+(define-x8632-vinsn (spill-double-float :nfp :set) (()
+                                                    ((val :double-float)
+                                                     (offset :u16const))
+                                                    ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:% nfp))
+  (movsd (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+(define-x8632-vinsn (reload-double-float :nfp :ref) (()
+                                                    ((val :double-float)
+                                                     (offset :u16const))
+                                                    ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:% nfp))
+  (movsd (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
+
+(define-x8632-vinsn (spill-single-float :nfp :set) (()
+                                                    ((val :single-float)
+                                                     (offset :u16const))
+                                                    ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:% nfp))
+  (movss (:%xmm val) (:@ (:apply + 16 offset) (:% nfp))))
+
+(define-x8632-vinsn (reload-single-float :nfp :ref) (()
+                                                    ((val :single-float)
+                                                     (offset :u16const))
+                                                    ((nfp :imm)))
+  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:% nfp))
+  (movss (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
 
 (define-x8632-vinsn (nfp-load-double-float :nfp :ref) (((val :double-float))
-                                                       ((offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movsd (:@ (:apply + 16 offset) (:% x8632::imm0)) (:%xmm val))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                       ((offset :u16const)
+                                                       (nfp :imm)))
+  (movsd (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
 
 
 (define-x8632-vinsn (nfp-load-single-float :nfp :ref) (((val :single-float))
-                                                       ((offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movss (:@ (:apply + 16 offset) (:% x8632::imm0)) (:%xmm val))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                       ((offset :u16const)
+                                                        (nfp :imm)))
+  (movss (:@ (:apply + 16 offset) (:% nfp)) (:%xmm val)))
 
 (define-x8632-vinsn (nfp-store-complex-single-float :nfp :set) (()
                                                                 ((val :complex-single-float)
-                                                                 (offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movq (:%xmm val) (:@ (:apply + 16 offset) (:%l x8632::imm0)))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                                 (offset :u16const)
+                                                                (nfp :imm)))
+  (movq (:%xmm val) (:@ (:apply + 16 offset) (:%l nfp))))
 
 (define-x8632-vinsn nfp-load-complex-single-float (((val :complex-single-float))
-                                                   ((offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movq (:@ (:apply + 16 offset) (:%l x8632::imm0)) (:%xmm val))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                   ((offset :u16const)
+                                                  (nfp :imm)))
+  (movq (:@ (:apply + 16 offset) (:%l nfp)) (:%xmm val)))
 
 
 (define-x8632-vinsn (nfp-store-complex-double-float :nfp :set) (()
                                                                 ((val :complex-double-float)
-                                                                 (offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:%l x8632::imm0)))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                                 (offset :u16const)
+                                                                (nfp :imm)))
+  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:%l nfp))))
 
 (define-x8632-vinsn (nfp-load-complex-double-float :nfp :ref) (((val :complex-double-float))
-                                                               ((offset :u16const)))
-  (movd (:%l x8632::imm0) (:%mmx x8632::stack-temp))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.nfp) (:%l x8632::imm0))
-  (movdqu (:@ (:apply + 16 offset) (:%l x8632::imm0)) (:%xmm val))
-  (movd (:%mmx x8632::stack-temp) (:%l x8632::imm0)))
+                                                               ((offset :u16const)
+                                                               (nfp :imm)))
+  (movdqu (:@ (:apply + 16 offset) (:%l nfp)) (:%xmm val)))
 
 (define-x8632-vinsn nfp-compare-natural-register (()
                                                   ((offset :u16const)
@@ -4462,7 +4493,7 @@
 
 
 
-(define-x8632-vinsn (temp-push-unboxed-word :push :word :csp)
+(define-x8632-vinsn (temp-push-unboxed-word :push :word )
     (()
      ((w :u32))
      ((temp :imm)))
@@ -4473,7 +4504,7 @@
   (movl (:%l x8632::ebp) (:@ 4 (:%l temp)))
   (movl (:%l w) (:@ 8 (:%l temp))))
 
-(define-x8632-vinsn (temp-pop-unboxed-word :pop :word :csp)
+(define-x8632-vinsn (temp-pop-unboxed-word :pop :word )
     (((w :u32))
      ())
   (movl (:@ (:%seg :rcontext) x8632::tcr.foreign-sp) (:%l w))
@@ -4482,7 +4513,7 @@
 
 
 
-(define-x8632-vinsn (temp-pop-temp1-as-unboxed-word :pop :word :csp)
+(define-x8632-vinsn (temp-pop-temp1-as-unboxed-word :pop :word )
     (()
      ()
      ((w (:u32 #.x8632::temp1))))
@@ -4514,7 +4545,7 @@
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.save-tsp))  
   (movl (:%l temp) (:@ (:%seg :rcontext) x8632::tcr.next-tsp)))
 
-(define-x8632-vinsn (temp-push-single-float :push :word :csp)
+(define-x8632-vinsn (temp-push-single-float :push :word )
     (()
      ((f :single-float))
      ((temp :imm)))
@@ -4525,7 +4556,7 @@
   (movl (:%l x8632::ebp) (:@ 4 (:%l temp)))
   (movss (:%xmm f) (:@ 8 (:%l temp))))
 
-(define-x8632-vinsn (temp-pop-single-float :pop :word :csp)
+(define-x8632-vinsn (temp-pop-single-float :pop :word )
     (((f :single-float))
      ()
      ((temp :imm)))
@@ -4533,7 +4564,7 @@
   (movss (:@ 8 (:%l temp)) (:%xmm f))
   (addl (:$b 16) (:@ (:%seg :rcontext) x8632::tcr.foreign-sp)))
 
-(define-x8632-vinsn (temp-push-double-float :push :word :csp)
+(define-x8632-vinsn (temp-push-double-float :push :word )
     (()
      ((f :double-float))
      ((temp :imm)))
@@ -4544,7 +4575,7 @@
   (movl (:%l x8632::ebp) (:@ 4 (:%l temp)))
   (movsd (:%xmm f) (:@ 8 (:%l temp))))
 
-(define-x8632-vinsn (temp-pop-double-float :pop :word :csp)
+(define-x8632-vinsn (temp-pop-double-float :pop :word )
     (((f :double-float))
      ()
      ((temp :imm)))
@@ -4729,7 +4760,7 @@
      ((src :complex-double-float)))
   ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
    (movapd (:%xmm src) (:%xmm dest)))
-  (shufpd (:$ub 1) (:%xmm target::fpzero) (:%xmm dest)))
+  (shufpd (:$ub 1) (:%xmm x8632::fpzero) (:%xmm dest)))
 
 
 (define-x8632-vinsn %make-complex-single-float
