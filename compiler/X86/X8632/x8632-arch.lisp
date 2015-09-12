@@ -1375,6 +1375,6 @@
 (defconstant fasl-version #x60)
 (defconstant fasl-max-version #x60)
 (defconstant fasl-min-version #x60)
-(defparameter *image-abi-version* 1040)
+(defparameter *image-abi-version* 1041)
 
 (provide "X8632-ARCH")
