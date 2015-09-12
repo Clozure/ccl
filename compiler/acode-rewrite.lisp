@@ -453,8 +453,10 @@
   
 
 (def-acode-rewrite acode-rewrite-lambda lambda-list asserted-type  (&whole whole req opt rest keys auxen body p2-decls &optional code-note)
-  (declare (ignore code-note req rest))
+  (declare (ignore code-note))
   (with-acode-declarations p2-decls
+    (unless (or opt rest keys)
+      (setf (afunc-vars *nx-current-function*) req))
     (dolist (optinit (cadr opt))
       (rewrite-acode-form optinit))
     (dolist (keyinit (nth 3 keys))
@@ -658,11 +660,22 @@
     (rewrite-acode-form arg)))
 
 (def-acode-rewrite acode-rewrite-self-call self-call asserted-type (arglist &optional spread-p)
-  (declare (ignore spread-p))
-  (dolist (arg (car arglist))
-    (rewrite-acode-form arg))
-  (dolist (arg (cadr arglist))
-    (rewrite-acode-form arg)))
+  (let* ((vars (afunc-vars *nx-current-function*)))
+    (if (or spread-p (not (eql (length vars) (+ (length (car arglist)) (length (cadr arglist))))))
+      (setq vars nil))
+    
+    (dolist (arg (car arglist))
+      (let* ((v (pop vars)))
+        (if v
+          (rewrite-acode-form arg (var-declared-type v))
+          (rewrite-acode-form arg))))
+    (setq vars (reverse vars))
+    (dolist (arg (cadr arglist))
+      (let* ((v (pop vars)))
+        (if v
+          (rewrite-acode-form arg (var-declared-type v))
+          (rewrite-acode-form arg))
+      ))))
 
 
 (def-acode-rewrite acode-rewrite-formlist (list values %temp-list vector) asserted-type (formlist)
@@ -699,8 +712,12 @@
         (setf (cdr forms) nil)))))
 
 
+
 (def-acode-rewrite acode-rewrite-labels-flet (labels flet)  asserted-type (vars funcs body p2decls)
-  (declare (ignore vars funcs))
+  (declare (ignore vars))
+  (dolist (func funcs)
+    (let* ((*nx-current-function* func))
+      (rewrite-acode-form (afunc-acode func))))
   (with-acode-declarations p2decls (rewrite-acode-form body asserted-type)))
 
 (def-acode-rewrite acode-rewrite-%decls-body %decls-body asserted-type (form p2decls)
@@ -792,7 +809,6 @@
 
 (def-acode-rewrite acode-rewrite-with-c-frame with-c-frame asserted-type (body)
   (rewrite-acode-form body asserted-type))
-
 
 (def-acode-rewrite acode-rewrite-ash ash asserted-type (&whole w num amt)
   (or (acode-constant-fold-numeric-binop w num amt 'ash)
