@@ -1258,12 +1258,6 @@ __(tra(local_label(_threw_one_value_dont_unbind)))
         __(movq %imm0,rcontext(tcr.nfp))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.link(%temp0),%imm1)
-	__(movq catch_frame._save0(%temp0),%save0)
-	__(movq catch_frame._save1(%temp0),%save1)
-	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef(`TCR_IN_GPR')
-	__(movq catch_frame._save3(%temp0),%save3)
-	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
 	__(movq catch_frame.pc(%temp0),%ra0)
 	__(lea -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
@@ -1306,12 +1300,6 @@ local_label(_threw_multiple_push_test):
         __(movq %imm0,rcontext(tcr.nfp))
 	__(movq %imm1,%rsp)
 	__(movq catch_frame.link(%temp0),%imm1)		
-	__(movq catch_frame._save0(%temp0),%save0)
-	__(movq catch_frame._save1(%temp0),%save1)
-	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef(`TCR_IN_GPR')
-	__(movq catch_frame._save3(%temp0),%save3)
-	__endif
 	__(movq %imm1,rcontext(tcr.catch_top))
 	__(movq catch_frame.pc(%temp0),%ra0)
 	__(lea -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
@@ -1348,34 +1336,28 @@ local_label(_nthrowv_dont_unbind):
 	__(movd %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrowv_skip))
-	__(movq catch_frame.xframe(%temp0),%save0)
-	__(movq %save0,rcontext(tcr.xframe))
-        __(movq catch_frame.nfp(%temp0),%save0)
-        __(movq %save0,rcontext(tcr.nfp))
-	__(leaq (%rsp,%nargs_q),%save1)
-	__(movq catch_frame.rsp(%temp0),%save2)
-	__(movq %nargs_q,%save0)
+	__(movq catch_frame.xframe(%temp0),%temp3)
+	__(movq %temp3,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%temp3)
+        __(movq %temp3,rcontext(tcr.nfp))
+	__(leaq (%rsp,%nargs_q),%temp4)
+	__(movq catch_frame.rsp(%temp0),%temp5)
+	__(movq %nargs_q,%temp3)
 	__(jmp local_label(_nthrowv_push_test))
 local_label(_nthrowv_push_loop):
-	__(subq $node_size,%save1)
-	__(subq $node_size,%save2)
-	__(movq (%save1),%temp1)
-	__(movq %temp1,(%save2))
+	__(subq $node_size,%temp4)
+	__(subq $node_size,%temp5)
+	__(movq (%temp4),%temp1)
+	__(movq %temp1,(%temp5))
 local_label(_nthrowv_push_test):
-	__(subq $node_size,%save0)
+	__(subq $node_size,%temp3)
 	__(jns local_label(_nthrowv_push_loop))
-	__(movq catch_frame.xframe(%temp0),%save0)
-	__(movq %save0,rcontext(tcr.xframe))
-        __(movq catch_frame.nfp(%temp0),%save0)
-        __(movq %save0,rcontext(tcr.nfp))
-	__(movq %save2,%rsp)
+	__(movq catch_frame.xframe(%temp0),%temp3)
+	__(movq %temp3,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%temp3)
+        __(movq %temp3,rcontext(tcr.nfp))
+	__(movq %temp5,%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef(`TCR_IN_GPR')
-	__(movq catch_frame._save3(%temp0),%save3)
-	__endif
-	__(movq catch_frame._save2(%temp0),%save2)
-	__(movq catch_frame._save1(%temp0),%save1)
-	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame.foreign_sp(%temp0),%stack_temp)
         __(movq %stack_temp,rcontext(tcr.foreign_sp))        
 local_label(_nthrowv_skip):	
@@ -1388,13 +1370,7 @@ local_label(_nthrowv_do_unwind):
 /* This is harder.  Call the cleanup code with the multiple values and   */
 /* nargs, the throw count, and the caller's return address in a temp  */
 /* stack frame.   */
-	__(leaq (%rsp,%nargs_q),%save1)
-	__(push catch_frame._save0(%temp0))
-	__(push catch_frame._save1(%temp0))
-	__(push catch_frame._save2(%temp0))
-	__ifndef(`TCR_IN_GPR')
-	__(push catch_frame._save3(%temp0))
-	__endif
+	__(leaq (%rsp,%nargs_q),%temp4)
 	__(push catch_frame.pc(%temp0))
 	__(movq catch_frame.rbp(%temp0),%rbp)
         __(movq catch_frame.xframe(%temp0),%stack_temp)
@@ -1418,20 +1394,14 @@ local_label(_nthrowv_do_unwind):
 	__(leaq node_size*3(%imm1),%imm1)
 	__(jmp local_label(_nthrowv_tpushtest))
 local_label(_nthrowv_tpushloop):
-	__(movq -node_size(%save1),%temp0)
-	__(subq $node_size,%save1)
+	__(movq -node_size(%temp4),%temp0)
+	__(subq $node_size,%temp4)
 	__(movq %temp0,(%imm1))
 	__(addq $node_size,%imm1)
 local_label(_nthrowv_tpushtest):
 	__(subl $node_size,%nargs)
 	__(jns local_label(_nthrowv_tpushloop))
 	__(pop %xfn)
-	__ifndef(`TCR_IN_GPR')
-	__(pop %save3)
-	__endif
-	__(pop %save2)
-	__(pop %save1)
-	__(pop %save0)
 	__(movq %arg_x,%rsp)
 /* Ready to call cleanup code. set up tra, jmp to %xfn   */
 	__(leaq local_label(_nthrowv_called_cleanup)(%rip),%ra0)
@@ -1497,23 +1467,17 @@ local_label(_nthrow1v_dont_unbind):
 	__(movd %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrow1v_skip))
-	__(movq catch_frame.xframe(%temp0),%save0)
-	__(movq %save0,rcontext(tcr.xframe))
-        __(movq catch_frame.nfp(%temp0),%save0)
-        __(movq %save0,rcontext(tcr.nfp))
-	__(leaq (%rsp,%nargs_q),%save1)
-	__(movq catch_frame.xframe(%temp0),%save0)
-	__(movq %save0,rcontext(tcr.xframe))
-        __(movq catch_frame.nfp(%temp0),%save0)
-        __(movq %save0,rcontext(tcr.nfp))
+	__(movq catch_frame.xframe(%temp0),%temp3)
+	__(movq %temp3,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%temp3)
+        __(movq %temp3,rcontext(tcr.nfp))
+	__(leaq (%rsp,%nargs_q),%temp4)
+	__(movq catch_frame.xframe(%temp0),%temp3)
+	__(movq %temp3,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%temp3)
+        __(movq %temp3,rcontext(tcr.nfp))
 	__(movq catch_frame.rsp(%temp0),%rsp)
 	__(movq catch_frame.rbp(%temp0),%rbp)
-	__ifndef(`TCR_IN_GPR')
-	__(movq catch_frame._save3(%temp0),%save3)
-	__endif
-	__(movq catch_frame._save2(%temp0),%save2)
-	__(movq catch_frame._save1(%temp0),%save1)
-	__(movq catch_frame._save0(%temp0),%save0)
 	__(movq catch_frame.foreign_sp(%temp0),%stack_temp)
         __(movq %stack_temp,rcontext(tcr.foreign_sp))        
 local_label(_nthrow1v_skip):	
@@ -1527,16 +1491,10 @@ local_label(_nthrow1v_do_unwind):
 /* This is harder, but not as hard (not as much BLTing) as the  */
 /* multiple-value case.  */
 	
-	__(movq catch_frame.xframe(%temp0),%save0)
-	__(movq %save0,rcontext(tcr.xframe))
-        __(movq catch_frame.nfp(%temp0),%save0)
-        __(movq %save0,rcontext(tcr.nfp))
-	__(movq catch_frame._save0(%temp0),%save0)
-	__(movq catch_frame._save1(%temp0),%save1)
-	__(movq catch_frame._save2(%temp0),%save2)
-	__ifndef(`TCR_IN_GPR')
-	__(movq catch_frame._save3(%temp0),%save3)
-	__endif
+	__(movq catch_frame.xframe(%temp0),%temp3)
+	__(movq %temp3,rcontext(tcr.xframe))
+        __(movq catch_frame.nfp(%temp0),%temp3)
+        __(movq %temp3,rcontext(tcr.nfp))
 	__(movq catch_frame.pc(%temp0),%xfn)
 	__(movq catch_frame.rbp(%temp0),%rbp)
 	__(movq catch_frame.rsp(%temp0),%rsp)
@@ -2488,15 +2446,15 @@ local_label(even):
 	/* Push the %saveN registers, so that we can use them in this loop   */
 	/* Also, borrow %arg_y for a bit */
 	__(push %arg_y)
-	__(push %save2)
-	__(push %save1)
-	__(push %save0)
-	__(leaq 4*node_size(%rsp,%imm0,2),%save0)
-	/* %save0 points to the 0th value/supplied-p pair   */
-	__(leaq (%arg_z,%imm1),%save1)
-	/* %save1 is the end of the provided keyword/value pairs (the old %tsp).   */
-	__(movq %imm0,%save2)
-	/* %save2 is the length of the keyword vector   */
+	__(push %temp5)
+	__(push %temp4)
+	__(push %temp3)
+	__(leaq 4*node_size(%rsp,%imm0,2),%temp3)
+	/* %temp3 points to the 0th value/supplied-p pair   */
+	__(leaq (%arg_z,%imm1),%temp4)
+	/* %temp4 is the end of the provided keyword/value pairs (the old %tsp).   */
+	__(movq %imm0,%temp5)
+	/* %temp5 is the length of the keyword vector   */
 5:	__(movq (%arg_z),%arg_y)	/* %arg_y is current keyword   */
 	__(xorl %imm0_l,%imm0_l)
         __(cmpq $nrs.kallowotherkeys,%arg_y)
@@ -2511,15 +2469,15 @@ local_label(even):
 	__(jne 7f)
 	/* Got a match; have we already seen this keyword ?   */
 	__(negq %imm0)
-	__(cmpb $fulltag_nil,-node_size*2(%save0,%imm0,2))
+	__(cmpb $fulltag_nil,-node_size*2(%temp3,%imm0,2))
 	__(jne 9f)	/* already seen keyword, ignore this value   */
 	__(movq node_size(%arg_z),%arg_y)
-	__(movq %arg_y,-node_size(%save0,%imm0,2))
-	__(movl $t_value,-node_size*2(%save0,%imm0,2))
+	__(movq %arg_y,-node_size(%temp3,%imm0,2))
+	__(movl $t_value,-node_size*2(%temp3,%imm0,2))
 	__(jmp 9f)
 7:	__(addq $node_size,%imm0)
 local_label(next_keyvect_entry):	
-	__(cmpq %imm0,%save2)
+	__(cmpq %imm0,%temp5)
 	__(jne 6b)
 	/* Didn't match anything in the keyword vector. Is the keyword  */
 	/* :allow-other-keys ?   */
@@ -2527,11 +2485,11 @@ local_label(next_keyvect_entry):
 	__(je 9f)               /* :allow-other-keys is never "unknown" */
 8:	__(btsq $keyword_flags_unknown_keys_bit,%temp1)
 9:	__(addq $dnode_size,%arg_z)
-	__(cmpq %arg_z,%save1)
+	__(cmpq %arg_z,%temp4)
 	__(jne 5b)
-	__(pop %save0)
-	__(pop %save1)
-	__(pop %save2)
+	__(pop %temp3)
+	__(pop %temp4)
+	__(pop %temp5)
 	__(pop %arg_y)
 	/* If the function takes an &rest arg, or if we got an unrecognized  */
 	/* keyword and don't allow that, copy the incoming keyword/value  */
@@ -3164,36 +3122,36 @@ local_label(push_pair_test):
 	__(jge local_label(push_pair_loop))
 	/* Push the %saveN registers, so that we can use them in this loop   */
 	/* Also, borrow %arg_z */
-	__(push %save0)
-	__(push %save1)
-	__(push %save2)
+	__(push %temp3)
+	__(push %temp4)
+	__(push %temp5)
 	__(push %arg_z)
 	/* save0 points to the 0th value/supplied-p pair   */
-	__(movq %arg_y,%save0)
+	__(movq %arg_y,%temp3)
 	/* save1 is the length of the keyword vector   */
-	__(vector_length(%arg_x,%save1))
+	__(vector_length(%arg_x,%temp4))
 	/* save2 is the current keyword   */
 	/* arg_z is the value of the current keyword   */
 	__(xorl %imm0_l,%imm0_l)	/* count unknown keywords seen   */
 local_label(match_keys_loop):
 	__(compare_reg_to_nil(%arg_reg))
 	__(je local_label(matched_keys))
-	__(_car(%arg_reg,%save2))
+	__(_car(%arg_reg,%temp5))
 	__(_cdr(%arg_reg,%arg_reg))
 	__(_car(%arg_reg,%arg_z))
 	__(_cdr(%arg_reg,%arg_reg))
 	__(xorl %arg_y_l,%arg_y_l)
 	__(jmp local_label(match_test))
 local_label(match_loop):
-	__(cmpq misc_data_offset(%arg_x,%arg_y),%save2)
+	__(cmpq misc_data_offset(%arg_x,%arg_y),%temp5)
 	__(je local_label(matched))
 	__(addq $node_size,%arg_y)
 local_label(match_test):
-	__(cmpq %arg_y,%save1)
+	__(cmpq %arg_y,%temp4)
 	__(jne local_label(match_loop))
 	/* No match.  Note unknown keyword, check for :allow-other-keys   */
 	__(addl $1,%imm0_l)
-	__(cmpq $nrs.kallowotherkeys,%save2)
+	__(cmpq $nrs.kallowotherkeys,%temp5)
 	__(jne local_label(match_keys_loop))
 	__(subl $1,%imm0_l)
 	__(btsl $seen_aok_bit,%nargs)
@@ -3206,11 +3164,11 @@ local_label(match_test):
 	/* Got a match.  Worry about :allow-other-keys here, too.   */
 local_label(matched):
 	__(negq %arg_y)
-	__(cmpb $fulltag_nil,-node_size*2(%save0,%arg_y,2))
+	__(cmpb $fulltag_nil,-node_size*2(%temp3,%arg_y,2))
 	__(jne local_label(match_keys_loop))
-	__(movq %arg_z,-node_size(%save0,%arg_y,2))
-	__(movl $t_value,-node_size*2(%save0,%arg_y,2))
-	__(cmpq $nrs.kallowotherkeys,%save2)
+	__(movq %arg_z,-node_size(%temp3,%arg_y,2))
+	__(movl $t_value,-node_size*2(%temp3,%arg_y,2))
+	__(cmpq $nrs.kallowotherkeys,%temp5)
 	__(jne local_label(match_keys_loop))
 	__(btsl $seen_aok_bit,%nargs)
 	__(jnc local_label(match_keys_loop))
@@ -3220,9 +3178,9 @@ local_label(matched):
 	__(jmp local_label(match_keys_loop))
 local_label(matched_keys):		
 	__(pop %arg_z)
-	__(pop %save2)
-	__(pop %save1)
-	__(pop %save0)
+	__(pop %temp5)
+	__(pop %temp4)
+	__(pop %temp3)
 	__(testl %imm0_l,%imm0_l)
 	__(je local_label(keys_ok)) 
 	__(btl $aok_bit,%nargs)
@@ -4272,11 +4230,11 @@ LocalLabelPrefix`'ffcall:
 	__(push %arg_z)
 	__(push %fn)
 	__ifndef(`TCR_IN_GPR')
-	__(push %save3)  
+	__(push %temp6)  
 	__endif
-	__(push %save2)
-	__(push %save1)
-	__(push %save0)       /* 10 or 11 registers pushed after %rbp */
+	__(push %temp5)
+	__(push %temp4)
+	__(push %temp3)       /* 10 or 11 registers pushed after %rbp */
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
 	__(movq $TCR_STATE_FOREIGN,rcontext(tcr.valence))
@@ -4326,11 +4284,11 @@ LocalLabelPrefix`'ffcall_call_end:
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))
 	__ifndef(`TCR_IN_GPR')
-	__(clr %save3)
+	__(clr %temp6)
 	__endif
-	__(clr %save2)
-	__(clr %save1)
-	__(clr %save0)
+	__(clr %temp5)
+	__(clr %temp4)
+	__(clr %temp3)
 	__(clr %arg_z)
 	__(clr %arg_y)
 	__(clr %arg_x)
@@ -4358,11 +4316,11 @@ LocalLabelPrefix`'ffcall_call_end:
 1:      __(movq rcontext(tcr.save_vsp),%rsp)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
-	__(pop %save0)
-	__(pop %save1)
-	__(pop %save2)
+	__(pop %temp3)
+	__(pop %temp4)
+	__(pop %temp5)
 	__ifndef(`TCR_IN_GPR')
-	__(pop %save3)
+	__(pop %temp6)
 	__endif
 	__(pop %fn)
 	__(pop %arg_z)
@@ -4396,18 +4354,18 @@ LocalLabelPrefix`'ffcall_call_end:
         __ifdef(`DARWIN')        
         /* Handle exceptions, for ObjC 2.0 */
 LocalLabelPrefix`'ffcallLandingPad:      
-        __(movq %rax,%save1)
+        __(movq %rax,%temp4)
         __(cmpq $1,%rdx)
         __(je 1f)
         __(movq %rax,%rdi)
 LocalLabelPrefix`'ffcallUnwindResume:            
        	__(call *lisp_global(unwind_resume))
 LocalLabelPrefix`'ffcallUnwindResume_end:         
-1:      __(movq %save1,%rdi)
+1:      __(movq %temp4,%rdi)
 LocalLabelPrefix`'ffcallBeginCatch:              
         __(call *lisp_global(objc_2_begin_catch))
 LocalLabelPrefix`'ffcallBeginCatch_end:          
-        __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
+        __(movq (%rax),%temp4) /* indirection is necessary because we don't provide type info in lsda */
 LocalLabelPrefix`'ffcallEndCatch:                
         __(call *lisp_global(objc_2_end_catch))
 LocalLabelPrefix`'ffcallEndCatch_end:            
@@ -4415,7 +4373,7 @@ LocalLabelPrefix`'ffcallEndCatch_end:
 	__(movq $1,%rdi)
 	__(call *%rax)
 	__(btsq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,tcr.flags(%rax))
-	__(movq %save1,%rax)
+	__(movq %temp4,%rax)
 	__(jmp LocalLabelPrefix`'ffcall_call_end)
 LocalLabelPrefix`'ffcall_end:   
         __endif
@@ -4482,11 +4440,11 @@ LocalLabelPrefix`'ffcall_return_registers:
 	__(push %arg_y)
 	__(push %arg_z)
 	__ifndef(`TCR_IN_GPR')
-	__(push %save3)
+	__(push %temp6)
 	__endif
-	__(push %save2)
-	__(push %save1)
-	__(push %save0)
+	__(push %temp5)
+	__(push %temp4)
+	__(push %temp3)
         __(movq macptr.address(%arg_y),%csave0)  /* %rbx non-volatile */
 	__(push %fn)
 	__(movq %rsp,rcontext(tcr.save_vsp))
@@ -4530,11 +4488,11 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
 	__endif
 	__(movq %rsp,rcontext(tcr.foreign_sp))        
 	__ifndef(`TCR_IN_GPR')
-	__(clr %save3)
+	__(clr %temp6)
 	__endif
-	__(clr %save2)
-	__(clr %save1)
-	__(clr %save0)
+	__(clr %temp5)
+	__(clr %temp4)
+	__(clr %temp3)
 	__(clr %arg_z)
 	__(clr %arg_y)
 	__(clr %arg_x)
@@ -4556,11 +4514,11 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
-	__(pop %save0)
-	__(pop %save1)
-	__(pop %save2)
+	__(pop %temp3)
+	__(pop %temp4)
+	__(pop %temp5)
 	__ifndef(`TCR_IN_GPR')
-	__(pop %save3)
+	__(pop %temp6)
 	__endif
 	__(pop %arg_z)
 	__(pop %arg_y)
@@ -4590,18 +4548,18 @@ LocalLabelPrefix`'ffcall_return_registers_call_end:
         __ifdef(`DARWIN')        
         /* Handle exceptions, for ObjC 2.0 */
 LocalLabelPrefix`'ffcall_return_registersLandingPad:      
-        __(movq %rax,%save1)
+        __(movq %rax,%temp4)
         __(cmpq $1,%rdx)
         __(je 1f)
         __(movq %rax,%rdi)
 LocalLabelPrefix`'ffcall_return_registersUnwindResume:            
        	__(call *lisp_global(unwind_resume))
 LocalLabelPrefix`'ffcall_return_registersUnwindResume_end:         
-1:      __(movq %save1,%rdi)
+1:      __(movq %temp4,%rdi)
 LocalLabelPrefix`'ffcall_return_registersBeginCatch:              
         __(call *lisp_global(objc_2_begin_catch))
 LocalLabelPrefix`'ffcall_return_registersBeginCatch_end:          
-        __(movq (%rax),%save1) /* indirection is necessary because we don't provide type info in lsda */
+        __(movq (%rax),%temp4) /* indirection is necessary because we don't provide type info in lsda */
 LocalLabelPrefix`'ffcall_return_registersEndCatch:                
         __(call *lisp_global(objc_2_end_catch))
 LocalLabelPrefix`'ffcall_return_registersEndCatch_end:            
@@ -4609,7 +4567,7 @@ LocalLabelPrefix`'ffcall_return_registersEndCatch_end:
 	__(movq $1,%rdi)
 	__(call *%rax)
 	__(btsq $TCR_FLAG_BIT_FOREIGN_EXCEPTION,tcr.flags(%rax))
-	__(movq %save1,%rax)
+	__(movq %temp4,%rax)
 	__(jmp LocalLabelPrefix`'ffcall_return_registers_call_end)
 LocalLabelPrefix`'ffcall_return_registers_end:   
         __endif
@@ -4668,11 +4626,11 @@ _spentry(syscall)
 	__(push %arg_y)
 	__(push %arg_z)
         __ifndef(`TCR_IN_GPR')
-	 __(push %save3)
+	 __(push %temp6)
         __endif
-	__(push %save2)
-	__(push %save1)
-	__(push %save0)
+	__(push %temp5)
+	__(push %temp4)
+	__(push %temp3)
 	__(push %fn)
 	__(movq %rsp,rcontext(tcr.save_vsp))
         __(movq %rbp,rcontext(tcr.save_rbp))
@@ -4713,11 +4671,11 @@ _spentry(syscall)
 	__(movq %rbp,%rsp)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
         __ifndef(`TCR_IN_GPR')
-	 __(clr %save3)
+	 __(clr %temp6)
         __endif
-	__(clr %save2)
-	__(clr %save1)
-	__(clr %save0)
+	__(clr %temp5)
+	__(clr %temp4)
+	__(clr %temp3)
 	__(clr %arg_z)
 	__(clr %arg_y)
 	__(clr %arg_x)
@@ -4730,11 +4688,11 @@ _spentry(syscall)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
 	__(pop %fn)
-	__(pop %save0)
-	__(pop %save1)
-	__(pop %save2)
+	__(pop %temp3)
+	__(pop %temp4)
+	__(pop %temp5)
         __ifndef(`TCR_IN_GPR')
-	 __(pop %save3)
+	 __(pop %temp6)
         __endif
 	__(pop %arg_z)
 	__(pop %arg_y)
@@ -4895,11 +4853,11 @@ _spentry(callback)
 	__(movq %csave0,%rax)
 	__(movq %rsp,rcontext(tcr.foreign_sp))
 	__ifndef(`TCR_IN_GPR')
-	__(clr %save3)
+	__(clr %temp6)
 	__endif
-	__(clr %save2)
-	__(clr %save1)
-	__(clr %save0)
+	__(clr %temp5)
+	__(clr %temp4)
+	__(clr %temp3)
 	__(clr %arg_z)
 	__(clr %arg_y)
 	__(clr %arg_x)
@@ -4913,11 +4871,11 @@ _spentry(callback)
 	__(movq %rbp,%arg_z)
         __(movq rcontext(tcr.save_rbp),%rbp)
 	__(movq $TCR_STATE_LISP,rcontext(tcr.valence))
-        __(movq (%rsp),%save0)
-        __(movq 8(%rsp),%save1)
-        __(movq 16(%rsp),%save2)
+        __(movq (%rsp),%temp3)
+        __(movq 8(%rsp),%temp4)
+        __(movq 16(%rsp),%temp5)
         __ifndef(`TCR_IN_GPR')
-         __(movq 24(%rsp),%save3)
+         __(movq 24(%rsp),%temp6)
         __endif
 	__(ldmxcsr rcontext(tcr.lisp_mxcsr))
 	__(movq $nrs.callbacks,%fname)

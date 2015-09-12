@@ -22,10 +22,10 @@
 #define Iarg_y      REG_RDI
 #define Iarg_x      REG_R8
 #define Iarg_z      REG_RSI
-#define Isave3      REG_R11
-#define Isave2      REG_R12
-#define Isave1      REG_R14
-#define Isave0      REG_R15
+#define Itemp6      REG_R11
+#define Itemp5      REG_R12
+#define Itemp4      REG_R14
+#define Itemp3      REG_R15
 #define Itemp2      REG_R10
 #define Ifn         REG_R13
 #define Irbp        REG_RBP
@@ -253,9 +253,8 @@ typedef struct catch_frame {
   LispObj mvflag;
   LispObj csp;
   LispObj db_link;
-  LispObj regs[4];
   LispObj xframe;
-  LispObj tsp_segment;
+  LispObj pc;
 } catch_frame;
 
 #define catch_frame_element_count ((sizeof(catch_frame)/sizeof(LispObj))-1)
@@ -354,5 +353,5 @@ typedef struct {
 #define log2_heap_segment_size 17L
 
 #define ABI_VERSION_MIN 1039
-#define ABI_VERSION_CURRENT 1039
-#define ABI_VERSION_MAX 1039
+#define ABI_VERSION_CURRENT 1041
+#define ABI_VERSION_MAX 1041

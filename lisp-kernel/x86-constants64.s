@@ -61,7 +61,6 @@
 
 	imm0..imm2
 	temp0..temp2
-	save0..save3
 	arg_x, arg_y, arg_z
 	fn
 
@@ -78,7 +77,6 @@
 	
 	imm0..imm2:		RAX, RDX, RCX
 	temp0..temp2:		RBX, R9, R10
-	save0..save3:		R15, R14, R12, R11
 	arg_x, arg_y, arg_z:	R8, RDI, RSI
         fn:			R13
         rcontext_reg:		GS
@@ -190,17 +188,17 @@ define(`temp2',`r10')
 	define(`temp2_x_b',`r10b')
 	define(`Rtemp2',`10')
 	
-define(`save3',`r11')		
-	define(`save3_l',`r11d')
-	define(`save3_w',`r11w')
-	define(`save3_b',`r11b')
-	define(`Rsave3',`11')
+define(`temp6',`r11')		
+	define(`temp6_l',`r11d')
+	define(`temp6_w',`r11w')
+	define(`temp6_b',`r11b')
+	define(`Rtemp6',`11')
 	
-define(`save2',`r12')
-	define(`save2_l',`r12d')
-	define(`save2_w',`r12w')
-	define(`save2_b',`r12b')
-	define(`Rsave2',`12')
+define(`temp5',`r12')
+	define(`temp5_l',`r12d')
+	define(`temp5_w',`r12w')
+	define(`temp5_b',`r12b')
+	define(`Rtemp5',`12')
 	
 define(`fn',`r13')		/* some addressing restrictions   */
 	define(`fn_l',`r13d')
@@ -208,17 +206,17 @@ define(`fn',`r13')		/* some addressing restrictions   */
 	define(`fn_b',`r13b')
 	define(`Rfn',`13')
 	
-define(`save1',`r14')
-	define(`save1_l',`r14d')
-	define(`save1_w',`r14w')
-	define(`save1_b',`r14b')
-	define(`Rsave1',`14')
+define(`temp4',`r14')
+	define(`temp4_l',`r14d')
+	define(`temp4_w',`r14w')
+	define(`temp4_b',`r14b')
+	define(`Rtemp4',`14')
 		
-define(`save0',`r15')
-	define(`save0_l',`r15d')
-	define(`save0_w',`r15w')
-	define(`save0_b',`r15b')
-	define(`Rsave0',`15')	
+define(`temp3',`r15')
+	define(`temp3_l',`r15d')
+	define(`temp3_w',`r15w')
+	define(`temp3_b',`r15b')
+	define(`Rtemp3',`15')	
 
 
 ifdef(`TCR_IN_GPR',`
@@ -632,10 +630,6 @@ define_subtag(function_boundary_marker,fulltag_imm_1,15)
 	 _node(rbp)		/* saved lisp rbp   */
 	 _node(foreign_sp)      /* necessary ?    */
 	 _node(db_link)		/* head of special-binding chain   */
-	 _node(_save3)
-	 _node(_save2)
-	 _node(_save1)
-	 _node(_save0)
 	 _node(xframe)		/* exception frame chain   */
 	 _node(pc)		/* TRA of catch exit or cleanup form   */
          _node(nfp)

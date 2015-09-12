@@ -779,10 +779,10 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
     fprintf(dbgout,"------\n");
     show_lisp_register(xp, "fn", Ifn);
     fprintf(dbgout,"------\n");
-    show_lisp_register(xp, "save0", Isave0);
-    show_lisp_register(xp, "save1", Isave1);
-    show_lisp_register(xp, "save2", Isave2);
-    show_lisp_register(xp, "save3", Isave3);
+    show_lisp_register(xp, "temp6", Itemp6);
+    show_lisp_register(xp, "temp5", Itemp5);
+    show_lisp_register(xp, "temp4", Itemp4);
+    show_lisp_register(xp, "temp3", Itemp3);
     fprintf(dbgout,"------\n");
     show_lisp_register(xp, "temp0", Itemp0);
     show_lisp_register(xp, "temp1", Itemp1);

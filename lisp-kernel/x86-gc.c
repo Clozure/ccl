@@ -242,7 +242,7 @@ check_readonly_range(LispObj *start, LispObj *end)
             if (a) {
               code = a->code;
             } else {
-              code = AREA_VOID;
+              a = AREA_VOID;
             }
             switch (code) {
             case AREA_READONLY:
@@ -344,10 +344,10 @@ check_xp(ExceptionInformation *xp)
   check_node(regs[Iarg_z]);
   check_node(regs[Iarg_y]);
   check_node(regs[Iarg_x]);
-  check_node(regs[Isave3]);
-  check_node(regs[Isave2]);
-  check_node(regs[Isave1]);
-  check_node(regs[Isave0]);
+  check_node(regs[Itemp6]);
+  check_node(regs[Itemp5]);
+  check_node(regs[Itemp4]);
+  check_node(regs[Itemp3]);
   check_node(regs[Ifn]);
   check_node(regs[Itemp0]);
   check_node(regs[Itemp1]);
@@ -1454,14 +1454,15 @@ mark_xp(ExceptionInformation *xp)
   mark_root(regs[Iarg_z]);
   mark_root(regs[Iarg_y]);
   mark_root(regs[Iarg_x]);
-  mark_root(regs[Isave3]);
-  mark_root(regs[Isave2]);
-  mark_root(regs[Isave1]);
-  mark_root(regs[Isave0]);
-  mark_root(regs[Ifn]);
   mark_root(regs[Itemp0]);
   mark_root(regs[Itemp1]);
   mark_root(regs[Itemp2]);
+  mark_root(regs[Itemp3]);
+  mark_root(regs[Itemp4]);
+  mark_root(regs[Itemp5]);
+  mark_root(regs[Itemp6]);
+  mark_root(regs[Ifn]);
+ 
   /* If the RIP isn't pointing into a marked function,
      we can -maybe- recover from that if it's tagged as
      a TRA. */
@@ -1848,14 +1849,14 @@ forward_xp(ExceptionInformation *xp)
   update_noderef(&(regs[Iarg_z]));
   update_noderef(&(regs[Iarg_y]));
   update_noderef(&(regs[Iarg_x]));
-  update_noderef(&(regs[Isave3]));
-  update_noderef(&(regs[Isave2]));
-  update_noderef(&(regs[Isave1]));
-  update_noderef(&(regs[Isave0]));
   update_noderef(&(regs[Ifn]));
   update_noderef(&(regs[Itemp0]));
   update_noderef(&(regs[Itemp1]));
   update_noderef(&(regs[Itemp2]));
+  update_noderef(&(regs[Itemp3]));
+  update_noderef(&(regs[Itemp4]));
+  update_noderef(&(regs[Itemp5]));
+  update_noderef(&(regs[Itemp6]));
   update_locref(&(regs[Iip]));
 }
 #else
@@ -1968,8 +1969,7 @@ update_self_references_in_range(LispObj *start, LispObj *end)
 LispObj
 compact_dynamic_heap()
 {
-  LispObj *src = ptr_from_lispobj(GCfirstunmarked), *dest = src, node, new;
-  LispObj *current = src,  *prev = NULL;
+  LispObj *src = ptr_from_lispobj(GCfirstunmarked), *dest = src, node, new, *current,  *prev = NULL;
   natural 
     elements, 
     dnode = gc_area_dnode(GCfirstunmarked), 
@@ -2590,10 +2590,10 @@ purify_xp(ExceptionInformation *xp, BytePtr low, BytePtr high, area *to, int wha
   copy_reference(&(regs[Iarg_z]), low, high, to, what, false);
   copy_reference(&(regs[Iarg_y]), low, high, to, what, false);
   copy_reference(&(regs[Iarg_x]), low, high, to, what, false);
-  copy_reference(&(regs[Isave3]), low, high, to, what, false);
-  copy_reference(&(regs[Isave2]), low, high, to, what, false);
-  copy_reference(&(regs[Isave1]), low, high, to, what, false);
-  copy_reference(&(regs[Isave0]), low, high, to, what, false);
+  copy_reference(&(regs[Itemp6]), low, high, to, what, false);
+  copy_reference(&(regs[Itemp5]), low, high, to, what, false);
+  copy_reference(&(regs[Itemp4]), low, high, to, what, false);
+  copy_reference(&(regs[Itemp3]), low, high, to, what, false);
   copy_reference(&(regs[Ifn]), low, high, to, what, false);
   copy_reference(&(regs[Itemp0]), low, high, to, what, false);
   copy_reference(&(regs[Itemp1]), low, high, to, what, false);
@@ -2935,11 +2935,11 @@ impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, signed_natural 
   impurify_noderef(&(regs[Iarg_y]), low, high, delta);
   impurify_noderef(&(regs[Iarg_x]), low, high, delta);
 #ifndef TCR_IN_GPR
-  impurify_noderef(&(regs[Isave3]), low, high, delta);
+  impurify_noderef(&(regs[Itemp6]), low, high, delta);
 #endif
-  impurify_noderef(&(regs[Isave2]), low, high, delta);
-  impurify_noderef(&(regs[Isave1]), low, high, delta);
-  impurify_noderef(&(regs[Isave0]), low, high, delta);
+  impurify_noderef(&(regs[Itemp5]), low, high, delta);
+  impurify_noderef(&(regs[Itemp4]), low, high, delta);
+  impurify_noderef(&(regs[Itemp3]), low, high, delta);
   impurify_noderef(&(regs[Ifn]), low, high, delta);
   impurify_noderef(&(regs[Itemp0]), low, high, delta);
   impurify_noderef(&(regs[Itemp1]), low, high, delta);
@@ -3327,10 +3327,10 @@ wp_update_xp(ExceptionInformation *xp, LispObj old, LispObj new)
   wp_maybe_update(&regs[Iarg_z], old, new);
   wp_maybe_update(&regs[Iarg_y], old, new);
   wp_maybe_update(&regs[Iarg_x], old, new);
-  wp_maybe_update(&regs[Isave3], old, new);
-  wp_maybe_update(&regs[Isave2], old, new);
-  wp_maybe_update(&regs[Isave1], old, new);
-  wp_maybe_update(&regs[Isave0], old, new);
+  wp_maybe_update(&regs[Itemp6], old, new);
+  wp_maybe_update(&regs[Itemp5], old, new);
+  wp_maybe_update(&regs[Itemp4], old, new);
+  wp_maybe_update(&regs[Itemp3], old, new);
   wp_maybe_update(&regs[Ifn], old, new);
   wp_maybe_update(&regs[Itemp0], old, new);
   wp_maybe_update(&regs[Itemp1], old, new);

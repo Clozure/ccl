@@ -110,11 +110,11 @@ _exportfn(C(start_lisp))
 	__(clr %temp2)
 	__(clr %fn)
         /*	__(clr %ra0) */ /* %ra0 == %temp2, now zeroed above */
-	__(clr %save0)
-	__(clr %save1)
-	__(clr %save2)
+	__(clr %temp3)
+	__(clr %temp4)
+	__(clr %temp5)
 	__ifndef(`TCR_IN_GPR') /* no %save3, r11 is %rcontext_reg */
-	__(clr %save3)
+	__(clr %temp6)
 	__endif
 	__(pxor %fpzero,%fpzero)	/* fpzero = 0.0`d0' */
         __(stmxcsr rcontext(tcr.foreign_mxcsr))
