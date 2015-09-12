@@ -1229,13 +1229,15 @@
 
 
 (defnx1 nx1-%defun %defun context (&whole w def &optional (doc nil doc-p) &environment env)
-  (declare (ignorable doc doc-p))
+  (declare (ignorable doc doc-p def))
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "%defun"))
   ;; Pretty bogus.
   (if (and (consp def)
            (eq (%car def) 'nfunction)
            (consp (%cdr def))
            (or (symbolp (%cadr def)) (setf-function-name-p (%cadr def))))
-    (note-function-info (%cadr def) (caddr def) env))
+    (note-function-info (%cadr def) (caddr def) env)) 
   (nx1-treat-as-call context w))
 
 (defnx1 nx1-function function context (arg &aux fn afunc)
@@ -1934,6 +1936,7 @@
     (multiple-value-bind (ok req opttail resttail keytail) (verify-lambda-list lambda-list)
       (declare (ignore req opttail))
       (when (and ok (or (eq (%car resttail) '&lexpr)
+                        *backend-use-linear-scan*
                         (eq (%car keytail) '&key)))
         (return-from nx1-lambda-bind (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args))))
     (let* ((*nx-lexical-environment* body-environment)
