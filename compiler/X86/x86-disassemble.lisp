@@ -2513,7 +2513,7 @@
                                   
                                   (x86-di-mnemonic instruction)
                                   (case flag
-                                    (:jump "lisp-jump")
+                                    (:jump (if (subprimitive-info-platform-info info) "lisp-jump" "jmp"))
                                     (:call "lisp-call ")
                                   )))))
  
