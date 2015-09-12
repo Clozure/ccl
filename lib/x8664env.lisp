@@ -16,15 +16,12 @@
 
 (in-package "CCL")
 
-(defconstant $numx8664saveregs 4)
+(defconstant $numx8664saveregs 0)
 (defconstant $numx8664argregs 3)
 
 
 (defconstant x8664-nonvolatile-registers-mask
-  (logior (ash 1 x8664::save0)
-          (ash 1 x8664::save1)
-          (ash 1 x8664::save2)
-          (ash 1 x8664::save3)))
+  0)
 
 (defconstant x8664-arg-registers-mask
   (logior (ash 1 x8664::arg_z)
@@ -34,7 +31,11 @@
 (defconstant x8664-temp-registers-mask
   (logior (ash 1 x8664::temp0)
           (ash 1 x8664::temp1)
-          (ash 1 x8664::temp2)))
+          (ash 1 x8664::temp2)
+          (ash 1 x8664::temp3)
+          (ash 1 x8664::temp4)
+          (ash 1 x8664::temp5)))
+
 
 
 (defconstant x8664-tagged-registers-mask
@@ -47,15 +48,15 @@
   (make-mask x8664::temp0
              x8664::temp1
              x8664::temp2
+             x8664::temp3
+             x8664::temp4
+             x8664::temp5
              x8664::arg_x
              x8664::arg_y
              x8664::arg_z))
 
 (defconstant x8664-nonvolatile-node-regs
-  (make-mask x8664::save0
-             x8664::save1
-             x8664::save2
-             x8664::save3))
+  0)
 
 
 (defconstant x8664-node-regs (logior x8664-temp-node-regs x8664-nonvolatile-node-regs))
@@ -72,7 +73,15 @@
                                            (logand x8664::fp4 15)
                                            (logand x8664::fp5 15)
                                            (logand x8664::fp6 15)
-                                           (logand x8664::fp7 15)))
+                                           (logand x8664::fp7 15)
+                                           (logand x8664::fp8 15)
+                                           (logand x8664::fp9 15)
+                                           (logand x8664::fp10 15)                               
+                                           (logand x8664::fp11 15)                               
+                                           (logand x8664::fp12 15)                               
+                                           (logand x8664::fp13 15)                               
+                                           (logand x8664::fp14 15)                               
+))
                                
 
 
