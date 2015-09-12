@@ -23,7 +23,6 @@
 
 (defvar *logical-register-counter* -1)
 
-(def-standard-initial-binding *lreg-freelist* (%cons-pool))
 
   
 (defstruct (lreg
@@ -36,48 +35,54 @@
   (type 0 :type fixnum)                 ; type
   (defs () :type list)                  ; list of vinsns which assign to this reg
   (refs () :type list)                  ; list of vinsns which reference this vreg
-  (conflicts () :type list)             ; other lregs which can't map to the same physical reg
+  (local-p nil)
   (wired t :type boolean)               ; when true, targeted value must be preserved.
-  (info nil)				; Whatever; used in printing.
+  (flags 0 :type fixnum)				;
+  (spill-offset nil :type (or null fixnum))
+  (interval nil)
+  
 )
 
-(defun free-lreg (l)
-  (without-interrupts                   ; explicitly
-   (let* ((p *lreg-freelist*))
-     (setf (lreg-value l) (pool.data p)
-           (pool.data p) l)
-     nil)))
+(defconstant lreg-spill-bit 0)
+(defconstant lreg-flag-spill (ash 1 lreg-spill-bit))
+(defconstant lreg-pre-spill-bit 1) ; incoming arg
+(defconstant lreg-flag-pre-spill (ash 1 lreg-pre-spill-bit))
 
-(defun alloc-lreg ()
-  (let* ((p *lreg-freelist*))
-    (without-interrupts 
-     (let* ((l (pool.data p)))
-       (when l 
-         (setf (pool.data p) (lreg-value l))
-         (setf (lreg-defs l) nil
-               (lreg-refs l) nil
-               (lreg-conflicts l) nil
-               (lreg-id l) (incf *logical-register-counter*)
-               (lreg-wired l) t)
-         l)))))
+(defun spilled-lreg-p (x) (if (typep x 'lreg) (logbitp lreg-spill-bit (lreg-flags x))))
+
+(defun free-lreg (l)
+  (declare (ignore l)))
+
+
 
 (defun make-lreg (value class mode type wired)
-  (let* ((l (alloc-lreg)))
-    (cond (l
-           (setf (lreg-value l) value
-                 (lreg-class l) class
-                 (lreg-type l) type
-                 (lreg-mode l) mode
-                 (lreg-wired l) wired)           
-           l)
-          (t (%make-lreg :value value :class class :type type :mode mode :wired wired)))))
- 
+  (%make-lreg :value value :class class :type type :mode mode :wired wired))
+
+(defun make-wired-lreg (value &key
+                              local-p
+			      (class (hard-regspec-class value))
+			      (mode (get-regspec-mode value))
+			      (type (get-node-regspec-type-modes value)))
+  (let* ((vinsns *vinsn-list*)
+         (lreg  (%make-lreg :value  (hard-regspec-value value)
+                            :id (length (vinsn-list-lregs vinsns))
+                            :class class
+                            :mode mode
+                            :type type
+                            :wired t
+                            :local-p local-p)))
+
+    (if vinsns
+      (vector-push-extend lreg (vinsn-list-lregs vinsns))
+      (error "no vinsns"))
+    lreg))
 
 (defun print-lreg (l s d)
   (declare (ignore d))
  (print-unreadable-object (l s :type t)
     (format s "~d" (lreg-id l))
-    (let* ((value (lreg-value l))
+    (let* ((spilled (logbitp lreg-spill-bit (lreg-flags l)))
+           (value (if spilled (lreg-spill-offset L)(lreg-value l)))
            (class (lreg-class l))
 	   (mode-name (if (eq class hard-reg-class-gpr)
 			(car (rassoc (lreg-mode l) *mode-name-value-alist*))
@@ -91,7 +96,9 @@
                 (t  (format nil "class ~d" class))))
       (if value
         (progn
-          (format s (if (lreg-wired l) "[~s]" "{~s}") value)
+          (if spilled
+            (format s "@ ~s" value)
+            (format s (if (lreg-wired l) "[~s]" "{~s}") value))
           (when mode-name
             (format s "/~a" mode-name)))
 	(progn
@@ -99,95 +106,13 @@
 	    (format s "{?/~a}" mode-name)
 	    (format s "{?}")))))))
 
-(def-standard-initial-binding *lcell-freelist* (%cons-pool))
-(defvar *next-lcell-id* -1)
-
-(defstruct (lcell 
-            (:print-function print-lcell)
-            (:constructor %make-lcell (kind parent width attributes info)))
-  (kind :node)         ; for printing
-  (id (incf (the fixnum *next-lcell-id*)) :type fixnum)                          ; 
-  (parent nil)                          ; backpointer to unique parent
-  (children nil)                        ; list of children
-  (width 4)                             ; size in bytes or NIL if deleted
-  (offset nil)                          ; sum of ancestor's widths or 0, NIL if deleted
-  (refs nil)                            ; vinsns which load/store into this cell
-  (attributes 0 :type fixnum)           ; bitmask
-  (info nil))                           ; whatever
-
-(defun print-lcell (c s d)
-  (declare (ignore d))
-  (print-unreadable-object (c s :type t)
-    (format s "~d" (lcell-id c))
-    (let* ((offset (lcell-offset c)))
-      (when offset
-        (format s "@#x~x" offset)))))
-
-(defun free-lcell (c)
-  (without-interrupts                   ; explicitly
-   (let* ((p *lcell-freelist*))
-     (setf (lcell-kind c) (pool.data p)
-           (pool.data p) c)
-     nil)))
-
-(defun alloc-lcell (kind parent width attributes info)
-  (let* ((p *lcell-freelist*))
-    (without-interrupts 
-     (let* ((c (pool.data p)))
-       (when c 
-         (setf (pool.data p) (lcell-kind c))
-         (setf (lcell-kind c) kind
-               (lcell-parent c) parent
-               (lcell-width c) width
-               (lcell-attributes c) (the fixnum attributes)
-               (lcell-info c) info
-               (lcell-offset c) nil
-               (lcell-refs c) nil
-               (lcell-children c) nil
-               (lcell-id c) (incf *next-lcell-id*))
-         c)))))
-
-(defun make-lcell (kind parent width attributes info)
-  (let* ((c (or (alloc-lcell kind parent width attributes info)
-                (%make-lcell kind parent width attributes info))))
-    (when parent (push c (lcell-children parent)))
-    c))
- 
-; Recursively calculate, but don't cache (or pay attention to previously calculated offsets) 
-(defun calc-lcell-offset (c)
-  (if c
-    (let* ((p (lcell-parent c)))
-      (if (null p)
-        0
-        (+ (calc-lcell-offset p) (or (lcell-width p) 0))))
-    0))
-
-; A cell's "depth" is its offset + its width
-(defun calc-lcell-depth (c)
-  (if c 
-    (+ (calc-lcell-offset c) (or (lcell-width c) 0))
-    0))
-
-; I don't know why "compute" means "memoize", but it does.
-(defun compute-lcell-offset (c)
-  (or (lcell-offset c)
-      (setf (lcell-offset c)
-            (let* ((p (lcell-parent c)))
-              (if (null p)
-                0
-                (+ (compute-lcell-offset p) (or (lcell-width p) 0)))))))
-
-(defun compute-lcell-depth (c)
-  (if c
-    (+ (compute-lcell-offset c) (or (lcell-width c) 0))
-    0))
-
 
 
                     
 
 (defparameter *spec-class-storage-class-alist*
   `((:lisp . ,arch::storage-class-lisp)
+    (:lisp-lreg  . ,arch::storage-class-lisp)
     (:imm . ,arch::storage-class-imm)
     (:wordptr . ,arch::storage-class-wordptr)
     (:u8 . ,arch::storage-class-u8)
@@ -229,10 +154,9 @@
     (:s16const . ,(specifier-type '(signed-byte 16)))
     (:s32const . ,(specifier-type '(signed-byte 32)))
     (:s64const . ,(specifier-type '(signed-byte 64)))
-    (:lcell . ,(specifier-type 'lcell))))
+    (:stack-offset . ,(specifier-type '(signed-byte 32)))))
 
-(defun match-vreg-value (vreg value)
-  (declare (ignorable vreg value))      ; at least until this -does- something.
+(defun match-vreg-value (vreg value)  (declare (ignorable vreg value))      ; at least until this -does- something.
   ;(format t "~&vreg = ~s, value = ~s" vreg value)
   t)
 
@@ -270,6 +194,7 @@
                                        (target-fpr-mask (hard-regspec-value fpr)
                                                         (get-regspec-mode fpr))))))
 
+(defparameter *check-vregs* nil)
 
 (defun match-vreg (vreg spec vinsn vp n)
   (declare (fixnum n))
@@ -281,11 +206,15 @@
       (if spec-class
         (let* ((vreg-value (hard-regspec-value vreg)))
           (if (typep vreg 'fixnum) 
-            (setq vreg vreg-value)
+            (progn
+              (when *check-vregs* (format t "~& vinsn ~s got fixnum for ~s" (vinsn-template-name template) class))
+              (setq vreg vreg-value))
+
             (if (typep vreg 'lreg)
-              (if result-p
-                (pushnew vinsn (lreg-defs vreg))
-                (pushnew vinsn (lreg-refs vreg)))
+              (unless (or (vinsn-attribute-p vinsn :spill) (vinsn-attribute-p vinsn :reload))
+                (if result-p
+                  (pushnew vinsn (lreg-defs vreg))
+                  (pushnew vinsn (lreg-refs vreg))))
               (error "Bad vreg: ~s" vreg)))
 	  (when vreg-value
 	    (case class
@@ -328,15 +257,8 @@
             (unless ctype (error "Unknown vreg constraint : ~s ." class))
             (unless (ctypep vreg ctype)
               (error "~S : value doesn't match constraint ~s in template for ~s ." vreg class (vinsn-template-name template)))))))
-    (when (typep vreg 'lcell)
-      (pushnew vinsn (lcell-refs vreg)))
     vreg))
 
-(defun note-lreg-conflict (lreg conflicts-with)
-  (and (typep lreg 'lreg)
-       (typep conflicts-with 'lreg)
-       (pushnew conflicts-with (lreg-conflicts lreg))
-       (pushnew lreg (lreg-conflicts conflicts-with))
-       t))
+
 
 (ccl::provide "VREG")
