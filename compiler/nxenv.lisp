@@ -49,6 +49,7 @@
   var-root-nsetqs                       ; setq count of root var
   var-initform                          ; initial value acode or NIL.
   var-local-bits
+  var-lreg
 )
 
 (defconstant $vlocalbitiveacrosscall 0) ;
