@@ -194,6 +194,7 @@
 (defx86reg arg_x.w r8w)
 (defx86reg arg_x.b r8b)
 
+
 (defx86reg temp1 r9)
 (defx86reg temp1.l r9d)
 (defx86reg temp1.w r9w)
@@ -212,31 +213,35 @@
 #+(or darwin-target windows-target)
 (defx86reg rcontext r11)
 
-(defx86reg save3 r11)
-(defx86reg save3.l r11d)
-(defx86reg save3.w r11w)
-(defx86reg save3.b r11b)
+(defx86reg temp6 r11)
+(defx86reg temp6.l r11d)
+(defx86reg temp6.w r11w)
+(defx86reg temp6.b r11b)
 
+(defx86reg temp5 r12)
+(defx86reg temp5.l r12d)
+(defx86reg temp5.w r12w)
+(defx86reg temp5.b r12b)
 
-(defx86reg save2 r12)
-(defx86reg save2.l r12d)
-(defx86reg save2.w r12w)
-(defx86reg save2.b r12b)
+(defx86reg arg_w r12)
+(defx86reg arg_w.l r12d)
+(defx86reg arg_w.w r12w)
+(defx86reg arg_w.b r12b)
 
 (defx86reg fn r13)
 (defx86reg fn.l r13d)
 (defx86reg fn.w r13w)
 (defx86reg fn.b r13b)
 
-(defx86reg save1 r14)
-(defx86reg save1.l r14d)
-(defx86reg save1.w r14w)
-(defx86reg save1.b r14b)
+(defx86reg temp4 r14)
+(defx86reg temp4.l r14d)
+(defx86reg temp4.w r14w)
+(defx86reg temp4.b r14b)
 
-(defx86reg save0 r15)
-(defx86reg save0.l r15d)
-(defx86reg save0.w r15w)
-(defx86reg save0.b r15b)
+(defx86reg temp3 r15)
+(defx86reg temp3.l r15d)
+(defx86reg temp3.w r15w)
+(defx86reg temp3.b r15b)
 
 ;;; Use xmm regs for floating-point.  (They can also hold integer values.)
 (defx86reg fp0 xmm0)
@@ -550,10 +555,6 @@
   rbp
   foreign-sp
   db-link                               ; value of dynamic-binding link on thread entry.
-  save-save3                            ; saved nvrs
-  save-save2
-  save-save1
-  save-save0
   xframe                                ; exception-frame link
   pc                                    ; tra of catch exit/unwind cleanup
 )
@@ -1381,9 +1382,9 @@
 
 (defconstant arg-check-trap-pc-limit 7)
 
-(defconstant fasl-version #x60)
-(defconstant fasl-max-version #x60)
-(defconstant fasl-min-version #x60)
-(defparameter *image-abi-version* 1039)
+(defconstant fasl-version #x61)
+(defconstant fasl-max-version #x61)
+(defconstant fasl-min-version #x61)
+(defparameter *image-abi-version* 1041)
 
 (provide "X8664-ARCH")
