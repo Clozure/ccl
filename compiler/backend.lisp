@@ -440,19 +440,8 @@
             (when (eq to-lab (svref vp i))
               (setf (svref vp i) from-lab))))))))
 
-;;; For now, the register-spec must be 
-;;; a) non-nil
-;;; c) of an expected class.
-;;; Return the class and value.
-(defun regspec-class-and-value (regspec expected)
-  (declare (fixnum expected))
-  (let* ((class (hard-regspec-class regspec)))
-    (declare (type (unsigned-byte 8) class))
-    (if (logbitp class expected)
-      (values class (if (typep regspec 'lreg)
-		      regspec
-		      (hard-regspec-value regspec)))
-      (error "bug: Register spec class (~d) is not one  of ~s." class expected))))
+
+
 
 (defmacro with-node-temps ((&rest reserved) (&rest nodevars) &body body)
   `(let* ((*available-backend-node-temps* (logand *available-backend-node-temps* (lognot (logior ,@(mapcar #'(lambda (r) `(node-reg-mask-for-reg ,r)) reserved)))))
@@ -469,18 +458,17 @@
 
 (defmacro with-crf-target ((&rest reserved) name &body body)
   (declare (ignorable reserved))
-  `(let* ((,name (make-unwired-lreg
-                  (make-unwired-lreg 0 :class hard-reg-class-crf))))
+  `(let* ((,name (make-wired-lreg 0 :class hard-reg-class-crf)))
      ,@body))
 
-(defmacro regspec-crf-gpr-case ((regspec regval) crf-form gpr-form)
+(defmacro regspec-crf-gpr-case ((regspec ) crf-form gpr-form)
   (let* ((class (gensym)))
     `(if ,regspec
-       (multiple-value-bind (,class ,regval) (regspec-class-and-value ,regspec hard-reg-class-gpr-crf-mask)
+       (let* ((,class (hard-regspec-class ,regspec)))
          (declare (fixnum ,class))
          (if (= ,class hard-reg-class-crf)
            ,crf-form
-           ,gpr-form)))))
+           ,gpr-form))))) 
 
 ;;; The NODE case may need to use ENSURING-NODE-TARGET.
 (defmacro unboxed-other-case ((regspec &rest mode-names)
