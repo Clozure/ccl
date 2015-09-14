@@ -4571,10 +4571,10 @@
       ;; Flags set.  Branch or return a boolean value ?
       (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (^ cr-bit true-p)
        (progn
-         (ensuring-node-target (target dest)
+         (ensuring-node-target (target vreg)
            (if (not true-p)
              (setq cr-bit (logxor 1 cr-bit)))
            (! cr-bit->boolean target cr-bit))
@@ -4681,10 +4681,10 @@
          (:x8664)
          (:x8632 (! mark-temp1-as-node-preserving-flags)))
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg)
          (^ cr-bit true-p)
          (progn
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
@@ -4698,10 +4698,10 @@
         (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
         (! nfp-compare-natural-register offset jreg)
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg )
          (^ cr-bit true-p)
          (progn
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
@@ -4715,10 +4715,10 @@
       (progn
         (! compare ireg jreg)
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg)
          (^ cr-bit true-p)
          (progn
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
@@ -4739,10 +4739,10 @@
                    (! compare-registers reg ireg)
                    (! compare-constant-to-register (x86-immediate-label imm) ireg))))
              (regspec-crf-gpr-case 
-              (vreg dest)
+              (vreg)
               (^ cr-bit true-p)
               (progn
-                (ensuring-node-target (target dest)
+                (ensuring-node-target (target vreg)
                   (if (not true-p)
                     (setq cr-bit (logxor 1 cr-bit)))
                   (! cr-bit->boolean target cr-bit))
@@ -4753,10 +4753,10 @@
     (when vreg
       (! compare-to-nil ireg)
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg )
        (^ cr-bit true-p)
        (progn
-       (ensuring-node-target (target dest)
+       (ensuring-node-target (target vreg)
          (if (not true-p)
            (setq cr-bit (logxor 1 cr-bit)))
          (! cr-bit->boolean target cr-bit))
@@ -4775,10 +4775,10 @@
             (! compare-to-nil reg)
             (! compare-vframe-offset-to-nil offset  *x862-vstack*))))
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (^ cr-bit true-p)
        (progn
-         (ensuring-node-target (target dest)
+         (ensuring-node-target (target vreg)
            (if (not true-p)
              (setq cr-bit (logxor 1 cr-bit)))
            (! cr-bit->boolean target cr-bit))
@@ -4800,32 +4800,32 @@
       (progn
         (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg)
          (progn
            (! double-float-compare ireg jreg)
            (^ cr-bit true-p))
          (progn
            (! double-float-compare ireg jreg)
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
            (^))))
       (^))))
-
+ 
 (defun x862-compare-single-float-registers (seg vreg xfer ireg jreg cr-bit true-p)
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (progn
         (setq cr-bit (x862-cr-bit-for-unsigned-comparison cr-bit))
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg)
          (progn
            (! single-float-compare ireg jreg)
            (^ cr-bit true-p))
          (progn
            (! single-float-compare ireg jreg)
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
@@ -4849,10 +4849,10 @@
       (! compare-reg-to-zero reg)
       (! compare-s32-constant reg zero))
     (regspec-crf-gpr-case 
-     (vreg dest)
+     (vreg )
      (^ cr-bit true-p)
      (progn
-       (ensuring-node-target (target dest)
+       (ensuring-node-target (target vreg)
          (if (not true-p)
            (setq cr-bit (logxor 1 cr-bit)))
          (! cr-bit->boolean target cr-bit))
@@ -7901,10 +7901,10 @@
     (multiple-value-bind (cr-bit true-p) (acode-condition-to-x86-cr-bit cc)
       (! set-z-flag-if-consp (x862-one-untargeted-reg-form seg form *x862-arg-z*))
       (regspec-crf-gpr-case
-       (vreg dest)
+       (vreg )
        (^ cr-bit true-p)
        (progn
-	 (ensuring-node-target (target dest)
+	 (ensuring-node-target (target vreg)
 	   (if (not true-p)
 	     (setq cr-bit (logxor 1 cr-bit)))
 	   (! cr-bit->boolean target cr-bit))
@@ -8089,10 +8089,10 @@
     (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg form *x862-arg-y* type *x862-arg-z*)
       (! set-z-flag-if-istruct-typep r1 r2)
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg )
        (^ cr-bit true-p)
        (progn
-         (ensuring-node-target (target dest)
+         (ensuring-node-target (target vreg)
            (if (not true-p)
              (setq cr-bit (logxor 1 cr-bit)))
            (! cr-bit->boolean target cr-bit))
@@ -8553,10 +8553,10 @@
           (multiple-value-bind (rbit rform) (x862-two-untargeted-reg-forms seg bitnum *x862-arg-y* form *x862-arg-z*)
             (! set-c-flag-if-variable-logbitp rbit rform)))
         (regspec-crf-gpr-case 
-         (vreg dest)
+         (vreg)
          (^ cr-bit true-p)
          (progn
-           (ensuring-node-target (target dest)
+           (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
              (! cr-bit->boolean target cr-bit))
@@ -10391,6 +10391,8 @@
 
 (defx862 x862-throw throw (seg vreg xfer tag valform )
   (declare (ignorable vreg xfer))
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "throw"))
   (let* ((*x862-vstack* *x862-vstack*))
     (x862-vpush-register seg (x862-one-untargeted-reg-form seg tag *x862-arg-z*))
     (if (x862-trivial-p valform)
@@ -10408,6 +10410,8 @@
 ;;; be careful not to consider the block following the jump to be dead.
 ;;; Use a vinsn other than JUMP to reference the label.
 (defx862 x862-catch catch (seg vreg xfer tag valform)
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "catch"))
   (let* ((tag-label (backend-get-next-label))
          (tag-label-value (aref *backend-labels* tag-label))
          (mv-pass (x862-mv-p xfer)))
@@ -11018,6 +11022,8 @@
     
 
 (defx862 x862-unwind-protect unwind-protect (seg vreg xfer protected-form cleanup-form)
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "unwind-protect"))
   (let* ((cleanup-label (backend-get-next-label))
          (protform-label (backend-get-next-label))
          (old-stack (x862-encode-stack)))
@@ -11040,6 +11046,8 @@
     (x862-undo-body seg vreg xfer protected-form old-stack)))
 
 (defx862 x862-progv progv (seg vreg xfer symbols values body)
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "progv")) 
   (let* ((cleanup-label (backend-get-next-label))
          (protform-label (backend-get-next-label))
          (old-stack (x862-encode-stack)))
