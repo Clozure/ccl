@@ -1087,23 +1087,7 @@
          (crfs *backend-crf-temps*))
     (when (vinsn-attribute-p vinsn :subprim)
       (case (vinsn-template-name (vinsn-template vinsn))
-        (bind
-         (setq fprs 0
-               nodes   (make-mask x8664::temp0
-                                  x8664::temp1
-                                  x8664::ra0
-                                  x8664::arg_y
-                                  x8664::arg_z)))
-        (dpayback
-         (setq fprs 0
-               imms (make-mask x8664::imm0 x8664::imm1)
-               nodes (make-mask x8664::arg_y x8664::temp1))
-        )
-        (fix-overflow
-          (setq fprs 0
-                nodes (make-mask x8664::allocptr x8664::arg_z)
-                imms (make-mask x8664::imm0 x8664::imm1))
-         )
+
         
         
         ))
@@ -1832,6 +1816,8 @@ o           (unless (and (eql use (interval-begin interval))
 
 ;;; This is unsafe
 (defun try-to-omit-frame-pointer (seg)
+  (declare (ignorable seg))
+  #+x86-target
   (when *x862-reckless*
     (let* ((uses ()))
       (when
