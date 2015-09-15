@@ -1372,9 +1372,9 @@
 ;;; (maybe not = on x8632)
 (defconstant arg-check-trap-pc-limit 7)
 
-(defconstant fasl-version #x60)
-(defconstant fasl-max-version #x60)
-(defconstant fasl-min-version #x60)
+(defconstant fasl-version #x66)
+(defconstant fasl-max-version #x66)
+(defconstant fasl-min-version #x66)
 (defparameter *image-abi-version* 1041)
 
 (provide "X8632-ARCH")
