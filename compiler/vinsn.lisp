@@ -379,7 +379,7 @@
                    (unless (atom f)
                      (if (fixnump (car f))
                        (got-one f)
-                       (dolist (subform (cdr f))
+                        (dolist (subform (cdr f))
                          (walk-form subform)))))
                  (got-one (f)
                    (let* ((old-opcode (car f))
@@ -1877,6 +1877,7 @@ o           (unless (and (eql use (interval-begin interval))
                            *backend-fp-temps*
                            *backend-crf-temps*))
              (build-interval-list header)
+             #+x86-target
              (when *linear-scan-verbose*
                (ls-format "~&**********************************************~s" (afunc-name *x862-cur-afunc*))
                (dolist (n fg )

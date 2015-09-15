@@ -47,7 +47,7 @@
               (dolist (v *arm2-all-nfp-pushes* max)
                 (when (vinsn-succ v)    ;not elided
                   (let* ((depth (+ (the fixnum (svref (vinsn-variable-parts v) 1))
-                                   (if (vinsn-attribute-p v :doubleword)
+                                   (if (vinsn-attribute-p v :uses-frame-pointer)
                                      16
                                      8))))
                     (declare (fixnum depth))
@@ -605,7 +605,8 @@
          (set-fill-pointer
           *backend-immediates* 0))))
       (backend-get-next-label)          ; start @ label 1, 0 is confused with NIL in compound cd
-      (with-dll-node-freelist (vinsns *vinsn-freelist*)
+      (let* ((vinsns (make-vinsn-list))
+             (*vinsn-list* vinsns))
         (unwind-protect
              (progn
                (setq bits (arm2-toplevel-form vinsns (make-wired-lreg *arm2-result-reg*) $backend-return (afunc-acode afunc)))
@@ -654,8 +655,7 @@
                      (when (getf debug-info 'pc-source-map)
                        (setf (getf debug-info 'pc-source-map) (arm2-generate-pc-source-map debug-info)))
                      (when (getf debug-info 'function-symbol-map)
-                       (setf (getf debug-info 'function-symbol-map) (arm2-digest-symbols)))))))
-          (backend-remove-labels))))
+                       (setf (getf debug-info 'function-symbol-map) (arm2-digest-symbols))))))))))
     afunc))
 
 (defun arm2-xmake-function (code imms bits &optional data)
@@ -3340,7 +3340,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
               (when pair
                 (setf (car pair) nil)))
             (when nested
-              (let* ((size (if (vinsn-attribute-p push-vinsn :doubleword)
+              (let* ((size (if (vinsn-attribute-p push-vinsn :uses-frame-pointer)
                              16
                              8)))
                 (declare (fixnum size))
@@ -3897,10 +3897,10 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (! compare-immediate crf u8 u8constant))))
       ;; Flags set.  Branch or return a boolean value ?
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (^ cr-bit true-p)
        (progn
-         (ensuring-node-target (target dest)
+         (ensuring-node-target (target vreg)
            (if (not true-p)
              (setq cr-bit (logxor 1 cr-bit)))
            (! cond->boolean target cr-bit))
@@ -3979,9 +3979,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (progn
-         (! compare dest ireg jreg)
+         (! compare vreg ireg jreg)
          (^ cr-bit true-p))
        (with-crf-target () crf
          (! compare crf ireg jreg)
@@ -3994,13 +3994,13 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (progn
-         (! compare-to-nil dest ireg)
+         (! compare-to-nil vreg ireg)
          (^ cr-bit true-p))
        (with-crf-target () crf
          (! compare-to-nil crf ireg)
-         (ensuring-node-target (target dest)
+         (ensuring-node-target (target vreg)
            (! cond->boolean target (if true-p cr-bit (logxor cr-bit 1))))
          (^)))
       (^))))
@@ -4009,15 +4009,15 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (progn
-         (! double-float-compare dest ireg jreg)
+         (! double-float-compare vreg ireg jreg)
          (^ cr-bit true-p))
        (progn
          (with-crf-target () flags
            (! double-float-compare flags ireg jreg)
 
-           (! cond->boolean dest (if true-p cr-bit (logxor cr-bit 1))))
+           (! cond->boolean vreg (if true-p cr-bit (logxor cr-bit 1))))
          (^)))
       (^))))
 
@@ -4025,15 +4025,15 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (if vreg
       (regspec-crf-gpr-case 
-       (vreg dest)
+       (vreg)
        (progn
-         (! single-float-compare dest ireg jreg)
+         (! single-float-compare vreg ireg jreg)
          (^ cr-bit true-p))
        (progn
          (with-crf-target () flags
            (! single-float-compare flags ireg jreg)
 
-           (! cond->boolean dest (if true-p cr-bit (logxor cr-bit 1))))
+           (! cond->boolean vreg (if true-p cr-bit (logxor cr-bit 1))))
          (^)))
       (^))))
 
@@ -4053,14 +4053,14 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (declare (fixnum reg))
   (with-arm-local-vinsn-macros (seg vreg xfer)
     (regspec-crf-gpr-case 
-     (vreg dest)
+     (vreg)
      (progn
        (if (or (arm::encode-arm-immediate zero)
                (arm::encode-arm-immediate (- zero)))
-         (! compare-immediate dest reg zero)
+         (! compare-immediate vreg reg zero)
          (with-node-target (reg) other
            (arm2-lri seg other zero)
-           (! compare dest reg other)))
+           (! compare vreg reg other)))
        (^ cr-bit true-p))
      (with-crf-target () crf
        (if (or (arm::encode-arm-immediate zero)
@@ -4069,7 +4069,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
          (with-node-target (reg) other
            (arm2-lri seg other zero)
            (! compare crf reg other)))
-       (ensuring-node-target (target dest)
+       (ensuring-node-target (target vreg)
          (! cond->boolean target (if true-p cr-bit (logxor cr-bit 1))))
        (^)))))
 
@@ -5536,7 +5536,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (ea (var-ea var)))
       (when (typep ea 'lreg)
         (setf (var-ea var) (lreg-value ea)))))
-  (free-logical-registers))
+)
 
 ;;; It's not clear whether or not predicates, etc. want to look
 ;;; at an lreg or just at its value slot.
@@ -6625,9 +6625,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                  (arm-bit (min (- arm::nbits-in-word arm::fixnumshift)
                                (max fixbit 0))))
             (regspec-crf-gpr-case 
-             (vreg dest)
+             (vreg)
              (progn
-               (! %ilogbitp-constant-bit dest reg arm-bit)
+               (! %ilogbitp-constant-bit vreg reg arm-bit)
                (^ cr-bit true-p))
              (with-crf-target () crf
                 (! %ilogbitp-constant-bit crf reg arm-bit)
@@ -6636,13 +6636,13 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                 (^))))
           (multiple-value-bind (rbit rform) (arm2-two-untargeted-reg-forms seg bitnum arm::arg_y form arm::arg_z)
             (regspec-crf-gpr-case 
-               (vreg dest)
+               (vreg)
                (progn
-                 (! %ilogbitp-variable-bit dest rform rbit)
+                 (! %ilogbitp-variable-bit vreg rform rbit)
                  (^ cr-bit true-p))
                (with-crf-target () crf
                  (! %ilogbitp-variable-bit crf rform rbit)
-                 (ensuring-node-target (target dest)
+                 (ensuring-node-target (target vreg)
                   (! cond->boolean target (if true-p cr-bit (logxor cr-bit 1))))
                  (^)))))))))
 
@@ -6739,6 +6739,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 ;;; the label.
 ;;; "predicate" is being used as a verb here - "to make predicated".
 (defun arm2-predicate-block (labelnum)
+  (declare (ignorable labelnum))
+  #+later
+  
   (let* ((lab (aref *backend-labels* labelnum))
          (refs (vinsn-label-refs lab))
          (branch (car refs)))
@@ -6774,12 +6777,13 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
           (when branch-condition
             (let* ((condition (if branch-true-p (logxor 1 branch-condition) branch-condition)))
               (do* ((next (dll-node-succ branch) (dll-node-succ next)))
-                   ((eq next lab)
-                    (elide-vinsn branch)
+                   ((eq next lab) 
+                    (elide-vinsn branch) 
                     (remove-dll-node lab)
                     t)
                 (cond ((typep next 'vinsn-label))
                       ((vinsn-attribute-p next :jump)
+                       (break)
                        (setf (vinsn-template next)
                              (need-vinsn-template 'cbranch-true
                                                   (backend-p2-vinsn-templates

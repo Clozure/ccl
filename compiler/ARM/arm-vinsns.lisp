@@ -32,7 +32,7 @@
   (* 2 (%hard-regspec-value q)))
 
 ;;; Non-volatile FPRs.
-(define-arm-vinsn (push-nvfprs :push :multiple :doubleword :csp :predicatable)
+(define-arm-vinsn (push-nvfprs :push :multiple :uses-frame-pointer :predicatable)
     (()
      ((n :u16const)
       (header :u16const))
@@ -45,7 +45,7 @@
   (:word header)
   (:code))
 
-(define-arm-vinsn (pop-nvfprs :pop :multiple :doubleword :csp :predicatable)
+(define-arm-vinsn (pop-nvfprs :pop :multiple :uses-frame-pointer  :predicatable)
     (()
      ((n :u16const))
      ((d7 (:double-float #.arm::d7))))
@@ -1907,12 +1907,12 @@
      ((mask :u16const)))
   (stmdb (:! arm::vsp) (:$ mask)))
 
-(define-arm-vinsn (vpush-register-arg :push :node :vsp :outgoing-argument :predicatable)
+(define-arm-vinsn (vpush-register-arg :push :node :vsp  :predicatable)
     (()
      ((reg :lisp)))
   (str reg (:@! vsp (:$ (- arm::node-size)))))
 
-(define-arm-vinsn (vpush-register-arg :push :node :vsp :outgoing-argument :predicatable)
+(define-arm-vinsn (vpush-register-arg :push :node :vsp  :predicatable)
     (()
      ((reg :lisp)))
   (str reg (:@! vsp (:$ (- arm::node-size)))))
@@ -2142,7 +2142,7 @@
 
 ;;; just like JUMP, only (implicitly) asserts that the following 
 ;;; code is somehow reachable.
-(define-arm-vinsn (non-barrier-jump :xref) (()
+(define-arm-vinsn (non-barrier-jump ) (()
                                             ((label :label)))
   (b label))
 
@@ -2313,7 +2313,7 @@
 ;;; is one of the few cases that I can think of - but if we ever do, we
 ;;; might as well exploit the fact that we stored the previous sp at
 ;;; offset 4 in the C frame.
-(define-arm-vinsn (discard-c-frame :csp :pop :discard :predicatable)
+(define-arm-vinsn (discard-c-frame  :pop :discard :predicatable)
     (()
      ())
   (ldr sp (:@ sp (:$ 4))))
@@ -3420,7 +3420,7 @@
   (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
   (fldd val (:@ lr (:$ (:apply + 8 offset)))))
 
-(define-arm-vinsn (nfp-store-complex-double-float :nfp :set :doubleword)
+(define-arm-vinsn (nfp-store-complex-double-float :nfp :set :uses-frame-pointer)
     (()
      ((val :complex-double-float)
       (offset :u16const)))
@@ -3428,7 +3428,7 @@
   (fstd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ sp (:$ (:apply + 8 8 offset)))))
 
-(define-arm-vinsn (nfp-store-complex-double-float-nested :nfp :set :doubleword)
+(define-arm-vinsn (nfp-store-complex-double-float-nested :nfp :set :uses-frame-pointer)
     (()
      ((val :complex-double-float)
       (offset :u16const)))
@@ -3438,14 +3438,14 @@
         (:@ lr (:$ (:apply + 8 8 offset)))))
   
 
-(define-arm-vinsn (nfp-load-complex-double-float :nfp :ref :doubleword)
+(define-arm-vinsn (nfp-load-complex-double-float :nfp :ref :uses-frame-pointer)
     (((val :complex-double-float))
      ((offset :u16const)))
   (fldd (:apply arm-quad-to-double val) (:@ sp (:$ (:apply + 8 offset))))
   (fldd (:apply 1+ (:apply arm-quad-to-double val))
         (:@ sp (:$ (:apply + 8 8 offset)))))
 
-(define-arm-vinsn (nfp-load-complex-double-float-nested :nfp :ref :doubleword)
+(define-arm-vinsn (nfp-load-complex-double-float-nested :nfp :ref :uses-frame-pointer)
     (((val :complex-double-float))
      ((offset :u16const)))
   (ldr lr (:@ rcontext (:$ arm::tcr.nfp)))
@@ -3718,7 +3718,7 @@
      ())
   (bx lr))
 
-(define-arm-vinsn (restore-full-lisp-context :lispcontext :pop :csp :lrRestore :predicatable)
+(define-arm-vinsn (restore-full-lisp-context :lispcontext :pop  :lrRestore :predicatable)
     (()
      ())
   (ldmia (:! sp) (imm0 vsp fn lr)))
@@ -3727,7 +3727,7 @@
 
 
 
-(define-arm-vinsn (popj :lispcontext :pop :csp :lrRestore :jumpLR :predicatable)
+(define-arm-vinsn (popj :lispcontext :pop  :lrRestore :jumpLR :predicatable)
     (() 
      ())
   (ldmia (:! sp) (imm0 vsp fn pc)))
