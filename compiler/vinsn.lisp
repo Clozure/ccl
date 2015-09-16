@@ -1814,11 +1814,14 @@ o           (unless (and (eql use (interval-begin interval))
     (signal 'linear-scan-bailout)))
 
 
-;;; This is unsafe
+;;; This is not "unsafe".  it may affect debugging and error
+;;;  reporting, but so do other things in the new backend, and
+;;; we have already decided that those things (reducing stack
+;; access) are important.
 (defun try-to-omit-frame-pointer (seg)
   (declare (ignorable seg))
   #+x86-target
-  (when *x862-reckless*
+  (when t
     (let* ((uses ()))
       (when
           (do-dll-nodes (v seg t)
