@@ -218,15 +218,16 @@
 (defx86reg temp6.w r11w)
 (defx86reg temp6.b r11b)
 
+(defx86reg arg_w r12)
+(defx86reg arg_w.l r12d)
+(defx86reg arg_w.w r12w)
+(defx86reg arg_w.b r12b)
+
 (defx86reg temp5 r12)
 (defx86reg temp5.l r12d)
 (defx86reg temp5.w r12w)
 (defx86reg temp5.b r12b)
 
-(defx86reg arg_w r12)
-(defx86reg arg_w.l r12d)
-(defx86reg arg_w.w r12w)
-(defx86reg arg_w.b r12b)
 
 (defx86reg fn r13)
 (defx86reg fn.l r13d)
