@@ -167,7 +167,7 @@
                 :platform-syscall-mask (logior platform-os-freebsd platform-cpu-x86 platform-word-size-32) 
                 :target-specific-features
                 '(:x8632 :x86-target :freebsd-target :x8632-target
-                  :freebsdsx8632-target
+                  :freebsdx8632-target
                   :little-endian-target
                   :32-bit-target)
                 :target-fasl-pathname (make-pathname :type "fx32fsl")
