@@ -185,11 +185,15 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   }
   version = (header->abi_version) & 0xffff;
   if (version < ABI_VERSION_MIN) {
-    fprintf(dbgout, "Heap image is too old for this kernel.\n");
+    fprintf(dbgout, "Heap image (version %d) "
+	    "is too old for this kernel (minimum %d).\n", version,
+	    ABI_VERSION_MIN);
     return false;
   }
   if (version > ABI_VERSION_MAX) {
-    fprintf(dbgout, "Heap image is too new for this kernel.\n");
+    fprintf(dbgout, "Heap image (version %d) "
+	    "is too new for this kernel (maximum %d).\n", version,
+	    ABI_VERSION_MAX);
     return false;
   }
   flags = header->flags;

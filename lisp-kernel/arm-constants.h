@@ -347,9 +347,9 @@ typedef struct tcr {
 #define FPSCR_UFE_BIT 11                    /* underflow enable */
 #define FPSCR_IXE_BIT 12                    /* inexact enable */
 
-#define ABI_VERSION_MIN 1044
-#define ABI_VERSION_CURRENT 1044
-#define ABI_VERSION_MAX 1044
+#define ABI_VERSION_MIN 1045
+#define ABI_VERSION_CURRENT 1045
+#define ABI_VERSION_MAX 1045
 
 #define ARM_ARCHITECTURE_v7 7
 #define ARM_ARCHITECTURE_min 6
