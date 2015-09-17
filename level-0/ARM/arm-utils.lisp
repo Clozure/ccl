@@ -23,13 +23,7 @@
   (test-fixnum arg)
   (mov imm0 arg_z)
   (bxeq lr)
-  (tst imm0 (:$ #xc0000000))            ; see if result fits in a fixnum, sorta
-  (box-fixnum arg_z imm0)               ; assume it did
-  (bxeq lr)                             ; else arg_z tagged ok, but missing bits
-  (spjump .SPmakeu32)         ; put all bits in bignum.
-)
-
-
+  (spjump .SPmakeu32))
 
 ;;; "areas" are fixnum-tagged and, for the most part, so are their
 ;;; contents.
