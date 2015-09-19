@@ -13,10 +13,12 @@
 #   The LLGPL is also available online at
 #   http://opensource.franz.com/preamble.html
 
-
 SVN_REVISION := "$(shell svnversion || echo unknown)"
 
-SDKROOT=/
+SDKROOT := $(shell xcrun --show-sdk-path)
+ifeq ($(strip $(SDKROOT)),)
+SDKROOT := "/"
+endif
 OSVERSION=10.6
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
