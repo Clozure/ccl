@@ -10770,6 +10770,7 @@
   (^))
 
 (defx862 x862-lambda-bind lambda-bind (seg vreg xfer vals req rest keys-p auxen body p2decls)
+  (linear-scan-bailout "lambda-bind: fix this")
   (let* ((old-stack (x862-encode-stack))
          (*x862-nfp-depth* *x862-nfp-depth*)
          (nreq (list-length req))

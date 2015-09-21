@@ -1936,7 +1936,7 @@
     (multiple-value-bind (ok req opttail resttail keytail) (verify-lambda-list lambda-list)
       (declare (ignore req opttail))
       (when (and ok (or (eq (%car resttail) '&lexpr)
-                        *backend-use-linear-scan*
+                        ;*backend-use-linear-scan*
                         (eq (%car keytail) '&key)))
         (return-from nx1-lambda-bind (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args))))
     (let* ((*nx-lexical-environment* body-environment)
