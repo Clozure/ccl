@@ -1613,7 +1613,7 @@
                 (setf (interval-avail i) mask)
                 (when (eql 0 mask)
                   (let* ((victim (find-spill-candidate active regtype begin)))
-                    (break)
+                    (ls-break)
                     (progn (spill-and-split-interval   seg 'pressure victim begin intervals unhandled) (expire-interval seg victim ) (setq mask (svref avail regtype)) (when (eql mask 0) (break "mask is still 0 after spilling ~s" victim)))))
                                  
 
