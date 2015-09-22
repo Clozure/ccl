@@ -1117,28 +1117,29 @@
             (let* ((lreg (aref lregs i))
                    (interval (lreg-interval lreg))
                    (end (interval-end interval)))
-              (dolist (pred (fgn-inedges node))
-                (let* ((xfer ())
-                       (ref-vinsn ()))
+              (unless (or (lreg-wired lreg) (lreg-local-p lreg))
+                (dolist (pred (fgn-inedges node))
+                  (let* ((xfer ())
+                         (ref-vinsn ()))
                   
                   
-                  (when (and (typep pred 'condnode)
-                             (eq node (condnode-branchedge pred))
-                             (setq xfer (condnode-condbranch pred))
-                             (>  (vinsn-sequence xfer) end))
-                    (setq ref-vinsn (select-vinsn 'ref templates (list lreg))))
+                    (when (and (typep pred 'condnode)
+                               (eq node (condnode-branchedge pred))
+                               (setq xfer (condnode-condbranch pred))
+                               (>  (vinsn-sequence xfer) end))
+                      (setq ref-vinsn (select-vinsn 'ref templates (list lreg))))
                     
-                  (when (and (not xfer)
-                             (eq node (jumpnode-outedge pred))
-                             (setq xfer (dll-header-last pred))
-                             (>  (vinsn-sequence xfer) end))
-                    (setq ref-vinsn (select-vinsn 'ref templates (list lreg))) )
-                  (when ref-vinsn
-                    (insert-vinsn-before ref-vinsn xfer)
-                    (let*  ((refpos (vinsn-sequence ref-vinsn)))
-                      (setf (interval-use-positions interval)
-                            (append (interval-use-positions interval) (list refpos))
-                            (interval-end interval) refpos))))))))))))
+                    (when (and (not xfer)
+                               (eq node (jumpnode-outedge pred))
+                               (setq xfer (dll-header-last pred))
+                               (>  (vinsn-sequence xfer) end))
+                      (setq ref-vinsn (select-vinsn 'ref templates (list lreg))) )
+                    (when ref-vinsn
+                      (insert-vinsn-before ref-vinsn xfer)
+                      (let*  ((refpos (vinsn-sequence ref-vinsn)))
+                        (setf (interval-use-positions interval)
+                              (append (interval-use-positions interval) (list refpos))
+                              (interval-end interval) refpos)))))))))))))
                 
               
                        
@@ -1612,6 +1613,7 @@
                 (setf (interval-avail i) mask)
                 (when (eql 0 mask)
                   (let* ((victim (find-spill-candidate active regtype begin)))
+                    (break)
                     (progn (spill-and-split-interval   seg 'pressure victim begin intervals unhandled) (expire-interval seg victim ) (setq mask (svref avail regtype)) (when (eql mask 0) (break "mask is still 0 after spilling ~s" victim)))))
                                  
 

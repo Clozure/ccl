@@ -7689,10 +7689,11 @@
             (setq *x862-tail-nargs* max-args
                   *x862-tail-arg-vars* (reverse rev-fixed)
                   *x862-tail-vsp* *x862-vstack*)
-            (let* ((stack-arg-var (if (> max-args *x862-target-num-arg-regs*)
-                                    (car *x862-tail-arg-vars*))))
-              (when (and stack-arg-var (not (var-nvr stack-arg-var)))
-                (x862-stack-to-register seg (x862-vloc-ea 0) *x862-temp0*)))
+            (unless *backend-use-linear-scan*
+              (let* ((stack-arg-var (if (> max-args *x862-target-num-arg-regs*)
+                                      (car *x862-tail-arg-vars*))))
+                (when (and stack-arg-var (not (var-nvr stack-arg-var)))
+                  (x862-stack-to-register seg (x862-vloc-ea 0) *x862-temp0*))))
             (setq *x862-tail-label* (backend-get-next-label)))
           (when method-var
 	    (target-arch-case
