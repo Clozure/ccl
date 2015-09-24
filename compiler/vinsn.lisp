@@ -1525,11 +1525,15 @@
           (preg (interval-preg interval))
           (start (interval-begin interval))
           (end (interval-end interval)))
+    (declare (ignorable start end))
     (when (and lreg preg)
-      (dolist (def (lreg-defs lreg))
-        (replace-vinsn-operands def lreg preg start end))
-      (dolist (ref (lreg-refs lreg))
-        (replace-vinsn-operands ref lreg preg start end)))))
+      (if (eql 0 (interval-flags interval))
+        (setf (lreg-value lreg) preg)
+        (progn
+          (dolist (def (lreg-defs lreg))
+            (replace-vinsn-operands def lreg preg start end))
+          (dolist (ref (lreg-refs lreg))
+            (replace-vinsn-operands ref lreg preg start end)))))))
 
                        
                        
@@ -1852,8 +1856,46 @@ o           (unless (and (eql use (interval-begin interval))
 
 (defparameter *report-linear-scan-success* t)
 
+;; see postprocess-interal; this assumes that all trivial-copy operands
+;; are lregs.
+(defun remove-trivial-copies (seg)
+  (declare (ignorable seg))
+  #+notyet
+  (let* ((regs (vinsn-list-lregs seg))
+         (nregs (length regs)))
+    (declare (type (vector t) regs) (fixnum nregs))
+    
+    (dolist (n (vinsn-list-flow-graph seg))
+      (let* ((kill (fgn-live-kill n))
+             (live-out(fgn-live-out n))
+             (triv ()))
+        (declare (simple-bit-vector kill live-out))
+        (dotimes (i nregs)
+          (when (and (eql 1 (sbit kill i))
+                     (eql 0 (sbit live-out i)))
+            (let* ((reg (aref regs i)))
+              (let* ((defs (lreg-defs reg)))
+                (unless (cdr defs)
+                  (let ((def (car defs)))
+                    (when (vinsn-attribute-p def :trivial-copy)
+                      (push reg triv))))))))
+        (setq triv (sort triv #'< :key (lambda (r) (vinsn-sequence (car (lreg-defs r))))))
+        (dolist (r triv)
+          (let* ((def (car (lreg-defs r)))
+                 (vp (vinsn-variable-parts def) )
+                 (src (svref vp 1))
+                 (dest (svref vp 0)))
+            (when (and (typep src 'lreg)
+                       (typep dest 'lreg))
+              (unless (and (lreg-wired src)
+                           (lreg-wired dest))
+                (break)))))))))
+
+
+
 (defun optimize-vinsns (header)
   ;; Delete unreferenced labels that the compiler might have emitted.
+
   ;; Subsequent operations may cause other labels to become
   ;; unreferenced.
   (let* ((regs (vinsn-list-lregs header)))
@@ -1891,6 +1933,7 @@ o           (unless (and (eql use (interval-begin interval))
              (unless (linear-scan header )
                (linear-scan-bailout "register allocation failed"))
 
+             (remove-trivial-copies header)
              (when *report-linear-scan-success*
                (ls-format  "~&;; Won on ~a" *current-function-name*))
              (incf *linear-scan-won*)
