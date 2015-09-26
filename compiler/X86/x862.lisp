@@ -42,6 +42,8 @@
 (defparameter *x862-nfp-vars* ())
 (defparameter *x862-incoming-args-on-stack* most-positive-fixnum)
 (defparameter *x862-stack-vars* ())
+(defparameter *x862-tagbody-info* ())
+
 
 (defun x862-max-nfp-depth ()
   (or *x862-max-nfp-depth*
@@ -637,6 +639,7 @@
            (*x862-single-float-constant-alist* nil)
            (*x862-vstack* 0)
            (*x862-cstack* 0)
+           (*x862-tagbody-info* ())
 	   (*x86-lap-entry-offset* (target-arch-case
 				    (:x8632 x8632::fulltag-misc)
 				    (:x8664 x8664::fulltag-function)))
@@ -1322,7 +1325,7 @@
                     ((= nargs 1)
                      (! copy-gpr reg ($ x8664::arg_z))))
               (setf (var-lreg var) reg)))
-          (x862-seq-bind seg (car auxen) (cadr auxen))
+          ;(x862-seq-bind seg (car auxen) (cadr auxen))
 
          
           t)))))
@@ -1377,7 +1380,7 @@
                  (setf (var-lreg var) reg)
                  ))
              
-             (x862-seq-bind seg (%car auxen) (%cadr auxen))
+             ;(x862-seq-bind seg (%car auxen) (%cadr auxen))
              t)
        ))))
 
@@ -8148,7 +8151,7 @@
 
 (defx862 x862-local-go local-go (seg vreg xfer tag)
   (declare (ignorable xfer))
-  (let* ((curstack (x862-encode-stack))
+  (let*  ((curstack (x862-encode-stack))
          (label (cadr tag))
          (deststack (caddr tag)))
     (if (not (x862-equal-encodings-p curstack deststack))
@@ -8594,13 +8597,17 @@
   (x862-nil seg vreg xfer))
 
 
+;;back in 1987 or so, destructively modifying the acode may have seemed
+;; like a clever idea.  Now, not so much.
+;; see also X862-LOCAL-BLOCK and variants
+
 (defx862 x862-local-tagbody local-tagbody (seg vreg xfer taglist body)
   (let* ((encstack (x862-encode-stack))
          (tagop (%nx1-operator tag-label)))
     (dolist (tag taglist)
       (rplacd tag (cons (backend-get-next-label) (cons encstack (cadr (cddr (cddr tag)))))))
     (dolist (form body)
-      (if (eq (acode-operator form) tagop)
+      (if (eq (acode-operator form) tagop) 
         (let ((tag (cdar (acode-operands form))))
            (when (cddr tag) (! align-loop-head))
           (@ (car tag)))
