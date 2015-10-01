@@ -767,9 +767,9 @@
       (let* ((vinsns (make-vinsn-list))
              (*vinsn-list* vinsns)
              (result-reg (make-wired-lreg *x862-result-reg*)))
-                        (setq bits (x862-toplevel-form vinsns result-reg
-                                                       $backend-return (afunc-acode afunc)))
-                        (optimize-vinsns vinsns)            
+	(setq bits (x862-toplevel-form vinsns result-reg
+				       $backend-return (afunc-acode afunc)))
+	(optimize-vinsns vinsns)            
         (do* ((constants *x862-constant-alist* (cdr constants)))
              ((null constants))
           (let* ((imm (caar constants)))
