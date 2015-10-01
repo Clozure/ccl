@@ -8151,6 +8151,8 @@
 
 (defx862 x862-local-go local-go (seg vreg xfer tag)
   (declare (ignorable xfer))
+  (when *backend-use-linear-scan*
+    (linear-scan-bailout "GO"))
   (let*  ((curstack (x862-encode-stack))
          (label (cadr tag))
          (deststack (caddr tag)))
