@@ -332,7 +332,7 @@
      (%double-float--2   #.(logior operator-single-valued-mask operator-side-effect-free-mask operator-acode-subforms-mask) double-float)
      (%double-float*-2   #.(logior operator-single-valued-mask operator-side-effect-free-mask operator-acode-subforms-mask) double-float)
      (%double-float/-2   #.(logior operator-single-valued-mask operator-side-effect-free-mask operator-acode-subforms-mask) double-float)
-     ()
+     (load-time-value  #.(logior operator-single-valued-mask operator-side-effect-free-mask operator-acode-subforms-mask) t)
      ()
      ()
      ()

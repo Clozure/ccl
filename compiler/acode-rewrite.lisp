@@ -562,10 +562,13 @@
               (acode.asserted-type w) nil)))))
 
 
+(def-acode-rewrite acode-rewrite-load-time-value (load-time-value) asserted-type (val)
+  (rewrite-acode-form val))
+
 (def-acode-rewrite acode-rewrite-cxr (%car %cdr car cdr) asserted-type (&whole w cell)
   (rewrite-acode-form cell)
   (multiple-value-bind (val constantp) (acode-constant-p cell)
-    (when (and constantp (typep val 'list) (not (and *load-time-eval-token* (eq (car val) *load-time-eval-token*))))
+    (when (and constantp (typep val 'list) )
       (let* ((op (acode-operator w)))
         (acode-rewrite-as-constant-ref w (if (or (eql op (%nx1-operator car))
                                                  (eql op (%nx1-operator %car)))

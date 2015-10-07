@@ -6317,6 +6317,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
     (<- valreg))
   (^))
 
+(defarm2 arm2-load-time-value load-time-value (seg vreg xfer val)
+  (arm2-form seg vreg xfer val))
 
 (defarm2 arm2-local-go local-go (seg vreg xfer tag)
   (declare (ignorable xfer))

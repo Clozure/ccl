@@ -361,6 +361,7 @@
          seg vreg xfer (acode-operands acode)))
 
 
+
 (defun acode-constant-p (form)
   ;; This returns (values constant-value constantp); some code
   ;; may need to check constantp if constant-value is nil.
@@ -370,9 +371,19 @@
            (values nil t))
           ((eql op (%nx1-operator t))
            (values t t))
-          ((or (eql op (%nx1-operator fixnum))
-               (eql op (%nx1-operator immediate)))
+          ((eql op (%nx1-operator fixnum))
            (values (car (acode-operands form)) t))
+          ((eql op (%nx1-operator immediate))
+           ;; recognize the acode produced for LOAD-TIME-VALUE by
+           ;; COMPILE-FILE as something non-constant.
+           (if (and 
+                (consp (car (acode-operands form)))
+                *load-time-eval-token*
+                (eq (car (car (acode-operands form))) *load-time-eval-token*))
+             (values nil nil)
+                             
+                    
+             (values (car (acode-operands form)) t)))
           (t (values nil nil)))))
 
 (defun acode-constant-fold-binop (seg vreg xfer x y function)

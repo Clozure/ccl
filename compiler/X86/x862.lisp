@@ -8149,6 +8149,9 @@
   (^))
 
 
+(defx862 x862-load-time-value load-time-value (seg vreg xfer val)
+  (x862-form seg vreg xfer val))
+
 (defx862 x862-local-go local-go (seg vreg xfer tag)
   (declare (ignorable xfer))
   (when *backend-use-linear-scan*

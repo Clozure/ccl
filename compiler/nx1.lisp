@@ -1158,7 +1158,6 @@
   ;; Validate the "read-only-p" argument
   (if (and read-only-p (neq read-only-p t)) (require-type read-only-p '(member t nil)))
   ;; Then ignore it.
-  (if *nx-load-time-eval-token*
     (multiple-value-bind (function warnings)
                          (compile-named-function 
                           `(lambda () ,form)
@@ -1167,8 +1166,12 @@
                           :load-time-eval-token *nx-load-time-eval-token*
                           :target (backend-name *target-backend*))
       (setq *nx-warnings* (append *nx-warnings* warnings))
-      (nx1-immediate context (list *nx-load-time-eval-token* `(funcall ,function))))
-    (nx1-immediate context (eval form))))
+      (if *nx-load-time-eval-token*
+        (nx1-immediate context (list *nx-load-time-eval-token* `(funcall ,function)))
+    
+      (make-acode (%nx1-operator load-time-value)
+              (make-acode (%nx1-operator immediate)
+                          (funcall function))))))
 
 (defun nx1-catch-body (context body)
   (let* ((temp (new-lexical-environment *nx-lexical-environment*)))
