@@ -363,7 +363,9 @@
 
 
 (defun make-unwired-lreg-like (proto)
-  (if (typep proto 'fixnum)
+  (if (or (typep proto 'fixnum)
+          (and (typep proto 'lreg)
+               (lreg-wired proto)))
     (make-unwired-lreg nil
                        :class (hard-regspec-class proto)
                      :mode (get-regspec-mode proto))
