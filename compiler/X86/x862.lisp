@@ -4164,7 +4164,10 @@
         (x862-copy-register seg creg creg)
         (x862-copy-register seg creg ctemp)
         (x862-copy-register seg areg atemp)
-        (x862-copy-register seg breg btemp))
+        (x862-copy-register seg breg btemp)
+        (! ref areg)
+        (! ref breg)
+        (! ref creg))
       (values areg breg creg)    )  
 
     
