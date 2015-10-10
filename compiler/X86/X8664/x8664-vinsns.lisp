@@ -4193,7 +4193,7 @@
   (shlq (:$ub (- 48 x8664::fixnumshift)) (:%q dest))
   (sarq (:$ub (- 48 x8664::fixnumshift)) (:%q dest)))
 
-(define-x8664-subprim-jump-vinsn (tail-funcall-gen) .SPtfuncallgen)
+(define-x8664-subprim-jump-vinsn (tail-funcall-gen :needs-frame-pointer) .SPtfuncallgen)
 
 (define-x8664-subprim-call-vinsn (gets64) .SPgets64)
 
@@ -4394,7 +4394,7 @@
         
   
 
-(define-x8664-subprim-jump-vinsn (tail-call-sym-gen) .SPtcallsymgen)
+(define-x8664-subprim-jump-vinsn (tail-call-sym-gen :needs-frame-pointer) .SPtcallsymgen)
 
 (define-x8664-subprim-call-vinsn (make-stack-list)  .Spmakestacklist)
 
