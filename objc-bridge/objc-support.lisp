@@ -101,6 +101,27 @@
             (%note-protocol p))))
       (unless (%null-ptr-p protocols) (#_free protocols)))))
             
+(defloadvar *tagged-instance-class-indices* ())
+
+(defun %safe-get-objc-class (instance)
+  (#_object_getClass instance))
+
+(defun lookup-tagged-instance-class (instance)
+  (let* ((tag (tagged-objc-instance-p instance)))
+    (if tag
+      (let* ((class (%safe-get-objc-class instance)))
+        (unless (%null-ptr-p class)
+          (install-foreign-objc-class class nil)
+          (let* ((idx (objc-class-or-private-class-id class)))
+            (atomic-push-uvector-cell (symptr->symvector '*tagged-instance-class-indices*)
+                                      target::symbol.vcell-cell
+                                      (cons tag idx))
+            idx))))))
+
+(defun objc-tagged-instance-class-index (instance tag)
+  (or (cdr (assoc tag *tagged-instance-class-indices* :test #'eq))
+      (lookup-tagged-instance-class instance)))
+  
 
 (defun map-objc-classes (&optional (lookup-in-database-p t))
   (iterate-over-objc-classes
@@ -724,31 +745,6 @@ NSObjects describe themselves in more detail than others."
 (defmethod terminate ((instance objc:objc-object))
   (objc-message-send instance "release"))
 
-(defloadvar *tagged-instance-class-indices* ())
-
-
-(defun %safe-get-objc-class (instance)
-  (#_object_getClass instance))
-
-(defun lookup-tagged-instance-class (instance)
-  (let* ((tag (tagged-objc-instance-p instance)))
-    (if tag
-      (let* ((class (%safe-get-objc-class instance)))
-        (unless (%null-ptr-p class)
-          (install-foreign-objc-class class nil)
-          (let* ((idx (objc-class-or-private-class-id class)))
-            (atomic-push-uvector-cell (symptr->symvector '*tagged-instance-class-indices*)
-                                      target::symbol.vcell-cell
-                                      (cons tag idx))
-            idx))))))
-
-      
-
-
-(defun objc-tagged-instance-class-index (instance tag)
-  (or (cdr (assoc tag *tagged-instance-class-indices* :test #'eq))
-      (lookup-tagged-instance-class instance)))
-  
 
 
 

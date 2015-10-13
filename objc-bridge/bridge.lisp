@@ -925,7 +925,7 @@
 (defun %call-next-objc-class-method (self class selector sig &rest args)
   (rlet ((s :objc_super #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
             #+(or apple-objc-2.0 cocotron-objc) :super_class #-(or apple-objc-2.0 cocotron-objc) :class
-            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass (pref class :objc_class.isa))
+            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass (#_object_getClass class))
             #-(or apple-objc-2.0 cocotron-objc) (pref (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer) :objc_class.super_class)))
     (let* ((siginfo (objc-method-signature-info sig))
            (function (or (objc-method-signature-info-super-function siginfo)
@@ -1303,7 +1303,7 @@
               (when c
                 (let* ((meta-p (getf (objc-method-info-flags method-info) :class)))
                   (if meta-p
-                    (with-macptrs ((m (pref c :objc_class.isa)))
+                    (with-macptrs ((m (#_object_getClass c)))
                       (canonicalize-registered-metaclass m))
                     (canonicalize-registered-class c))))))))
 

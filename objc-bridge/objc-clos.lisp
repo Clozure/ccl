@@ -195,7 +195,7 @@
 ;;; P is known to be a (possibly null!) instance of some ObjC class.
 (defun %set-objc-instance-type (p)
   (unless (%null-ptr-p p)
-    (let* ((parent (pref p :objc_object.isa))
+    (let* ((parent (#_object_getClass p))
            (id (objc-class-id parent)))
       (when id
         (%set-macptr-domain p *objc-object-domain*)
