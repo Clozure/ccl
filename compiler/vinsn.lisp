@@ -879,6 +879,7 @@
 (defun create-flow-graph (vinsns)
   (show-vinsns vinsns 2)
   (let* ((nodes ()))
+    
     (flet ((label->fgn (label) (dll-node-pred label)))
       (loop
         (multiple-value-bind (label last) (remove-last-basic-block vinsns)
@@ -926,29 +927,29 @@
 
 
           (unless (typep first 'callnode)
-          (dolist (ref (fgn-inedges first))
-            (nsubstitute second first (fgn-outedges ref))
-            (when (typep ref 'jumpnode)
-              (when (eq first (jumpnode-outedge ref))
-                (setf (jumpnode-outedge ref) second))
-              (when (typep ref 'condnode)
-                (when (eq first (condnode-branchedge ref))
-                  (setf (condnode-branchedge ref) second)))))
+            (dolist (ref (fgn-inedges first))
+              (nsubstitute second first (fgn-outedges ref))
+              (when (typep ref 'jumpnode)
+                (when (eq first (jumpnode-outedge ref))
+                  (setf (jumpnode-outedge ref) second))
+                (when (typep ref 'condnode)
+                  (when (eq first (condnode-branchedge ref))
+                    (setf (condnode-branchedge ref) second)))))
 
-          (if (setf (fgn-extended-pred second) (fgn-extended-pred first))
-            (setf (fgn-extended-succ (fgn-extended-pred first)) second))
-          (setf (fgn-inedges second) (fgn-inedges first))
-          (multiple-value-bind (label1 jump) (detach-dll-nodes first)
-            (let* ((label2 (dll-header-succ second)))
-              (insert-dll-node-before label1 label2 jump)
-              (when (null (delete jump (vinsn-label-refs label2)))
-                (remove-dll-node label2))
-              (remove-dll-node jump)
-              (setf (fgn-id second) (fgn-id first))))
+            (if (setf (fgn-extended-pred second) (fgn-extended-pred first))
+              (setf (fgn-extended-succ (fgn-extended-pred first)) second))
+            (setf (fgn-inedges second) (fgn-inedges first))
+            (multiple-value-bind (label1 jump) (detach-dll-nodes first)
+              (let* ((label2 (dll-header-succ second)))
+                (insert-dll-node-before label1 label2 jump)
+                (when (null (delete jump (vinsn-label-refs label2)))
+                  (remove-dll-node label2))
+                (remove-dll-node jump)
+                (setf (fgn-id second) (fgn-id first))))
           
-          (setf (car nodes1) nil))))
+            (setf (car nodes1) nil))))
 
-        
+
 
       
       (setf (vinsn-list-flow-graph vinsns) (refine-flow-graph nodes)))))
@@ -1893,9 +1894,11 @@ o           (unless (and (eql use (interval-begin interval))
 
 
 
-(defun optimize-vinsns (header)
-  ;; Delete unreferenced labels that the compiler might have emitted.
 
+(defun optimize-vinsns (header)
+
+  
+  ;; Delete unreferenced labels that the compiler might have emitted.
   ;; Subsequent operations may cause other labels to become
   ;; unreferenced.
   (let* ((regs (vinsn-list-lregs header)))
@@ -1908,6 +1911,10 @@ o           (unless (and (eql use (interval-begin interval))
     (maximize-jumps header)
     (eliminate-dead-code header) 
     (cond (*backend-use-linear-scan*
+           (let* ((size (dll-header-length header)))
+             (when (> size 10000)
+               (linear-scan-bailout "function size exceeds compiler limitation"))
+             )
            (normalize-vinsns header)
            (let* ((fg (create-flow-graph header))
                   (seq 0))

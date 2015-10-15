@@ -213,8 +213,8 @@
             (if (typep vreg 'lreg)
               (unless (or (vinsn-attribute-p vinsn :spill) (vinsn-attribute-p vinsn :reload))
                 (if result-p
-                  (pushnew vinsn (lreg-defs vreg))
-                  (pushnew vinsn (lreg-refs vreg))))
+                  (push vinsn (lreg-defs vreg))
+                  (push vinsn (lreg-refs vreg))))
               (error "Bad vreg: ~s" vreg)))
 	  (when vreg-value
 	    (case class
