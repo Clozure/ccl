@@ -263,7 +263,7 @@
 	    (or (gethash class objc-class-map)
 		(let* ((id (assign-next-class-id))
 		       (class (%inc-ptr class 0))
-		       (meta (pref class #+(or apple-objc cocotron-objc) :objc_class.isa #+gnu-objc :objc_class.class_pointer)))
+		       (meta (#_object_getClass class)))
 		  (setf (gethash class objc-class-map) id)
 		  (setf (svref c id) class
 			(svref csv id)
@@ -785,8 +785,7 @@
 	  (unless (%null-ptr-p c)
             (setf (gethash c class-map) i)
 	    (unless (gethash m metaclass-map)
-              (%setf-macptr m (pref c #+(or apple-objc cocotron-objc) :objc_class.isa
-				      #+gnu-objc :objc_class.class_pointer))
+              (%setf-macptr m (#_object_getClass c))
               (setf (gethash m metaclass-map) meta-id))
             (note-class-protocols c)))))
     ;; Second pass: install class objects for user-defined classes,
@@ -803,8 +802,7 @@
 		 (meta-id (objc-class-id->objc-metaclass-id i))
 		 (m (id->objc-metaclass meta-id)))
             (let* ((class (make-objc-class-pair super (make-cstring (objc-class-id-foreign-name i))))
-                   (meta (pref class #+(or apple-objc cocotron-objc) :objc_class.isa
-                               #+gnu-objc :objc-class.class_pointer)))
+                   (meta (#_object_getClass class)))
 	    (unless (gethash m metaclass-map)
 	      (%revive-macptr m)
 	      (%setf-macptr m meta)
@@ -909,8 +907,7 @@
                                           "NS")))
                            "NS"))
                          (meta-super
-                          (if super (pref super #+(or apple-objc cocotron-objc) :objc_class.isa
-                                          #+gnu-objc :objc_class.class_pointer))))
+                          (if super (#_object_getClass super))))
                     ;; It's important (here and when initializing the
                     ;; class below) to use the "canonical"
                     ;; (registered) version of the class, since some
@@ -2670,8 +2667,7 @@ argument lisp string."
 	(if (with-macptrs (q)
 	      (safe-get-ptr p q)
               (not (%null-ptr-p q)))
-	  (with-macptrs ((parent #+(or apple-objc cocotron-objc) (pref p :objc_object.isa)
-                                 #+gnu-objc (pref p :objc_object.class_pointer)))
+	  (with-macptrs ((parent (#_object_getClass p)))
             (or
              (objc-class-id parent)
              (objc-private-class-id parent)
@@ -2794,7 +2790,7 @@ argument lisp string."
 	 (imp (lisp-objc-method-imp m)))
     (%add-objc-method
      (if (lisp-objc-method-class-p m)
-       (pref class #+(or apple-objc cocotron-objc) :objc_class.isa #+gnu-objc :objc_class.class_pointer)
+       (#_object_getClass class)	;class methods go on the metaclass
        class)
      sel
      typestring
@@ -2982,7 +2978,10 @@ argument lisp string."
                        ,@(if class-p
                              #+(or apple-objc-2.0 cocotron-objc)
                              `((external-call "class_getSuperclass"
-                                :address (pref (@class ,class-name) :objc_class.isa) :address))
+                                :address
+				(external-call "object_getClass"
+					       :address (@class ,class-name)
+					       :address)))
                              #-(or apple-objc-2.0 cocotron-objc)
                              `((pref
                                 (pref (@class ,class-name)
