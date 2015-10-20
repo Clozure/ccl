@@ -1552,9 +1552,7 @@ errorp may be passed as NIL to return NIL if no match was found."
                       (error "cannot resolve local service host ~A port ~A connect ~S type ~S"
                              host port connect socket-type)))
               (#_freeaddrinfo (pref results :address)))
-	    (if errorp
-	      (socket-error nil "getaddrinfo" err t)
-	      (values nil err)))))))
+	      (values nil err))))))
 
 (defclass ip4-socket-address (ip-socket-address)
   ())
