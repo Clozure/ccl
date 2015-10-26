@@ -328,15 +328,13 @@ function to the indicated name is true.")
 
 (defun nx-float-safety (env)
   (or (eql (safety-optimize-quantity env) 3)
-      (let* ((hook (getf (policy.misc *nx-current-compiler-policy*) :detect-floating-point-excption)))
+      (let* ((hook (getf (policy.misc *nx-current-compiler-policy*)
+			 :detect-floating-point-exception)))
         (when hook
           (if (functionp hook)
             (funcall hook env)
             t)))))
 
-
-
-#-bccl
 (defun nx1-default-operator ()
  (or (gethash *nx-sfname* *nx1-operators*)
      (error "Bug - operator not found for  ~S" *nx-sfname*)))
