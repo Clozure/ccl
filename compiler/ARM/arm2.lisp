@@ -1253,20 +1253,6 @@
               (arm2-form seg nil nil f ))
             (apply fn seg vreg xfer (acode-operands form))))))))
 
-;;; dest is a float reg - form is acode
-(defun arm2-form-float (seg freg xfer form)
-  (declare (ignore xfer))
-  (arm-with-note (form seg freg)
-    (when (or (nx-null form)(nx-t form))(compiler-bug "arm2-form to freg ~s" form))
-    (when (and (= (get-regspec-mode freg) hard-reg-class-fpr-mode-double)
-               (arm2-form-typep form 'double-float))
-                                        ; kind of screwy - encoding the source type in the dest register spec
-      (set-node-regspec-type-modes freg hard-reg-class-fpr-type-double))
-    (let* ((fn (arm2-acode-operator-function form)))
-      (apply fn seg freg nil (acode-operands form)))))
-
-
-
 (defun arm2-form-typep (form type)
   (acode-form-typep form type *arm2-trust-declarations*)
 )
@@ -3126,11 +3112,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
     (arm2-push-register seg reg)))
 
 (defun arm2-one-lreg-form (seg form lreg)
-  (let ((is-float (= (hard-regspec-class lreg) hard-reg-class-fpr)))
-    (if is-float
-      (arm2-form-float seg lreg nil form)
-      (arm2-form seg lreg nil form))
-    lreg))
+  (arm2-form seg lreg nil form)
+  lreg)
 
 (defun arm2-one-targeted-reg-form (seg form reg)
   (arm2-one-lreg-form seg form reg))

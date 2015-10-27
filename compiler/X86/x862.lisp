@@ -1458,19 +1458,6 @@
               (x862-form seg nil nil f ))
             (apply fn seg vreg xfer (acode-operands form))))))))
 
-;;; dest is a float reg - form is acode
-(defun x862-form-float (seg freg xfer form)
-  (declare (ignore xfer))
-  (x86-with-note (form seg)
-    (when (or (nx-null form)(nx-t form))(compiler-bug "x862-form to freg ~s" form))
-    (when (and (= (get-regspec-mode freg) hard-reg-class-fpr-mode-double)
-               (x862-form-typep form 'double-float))
-      ;; kind of screwy - encoding the source type in the dest register spec
-      (set-node-regspec-type-modes freg hard-reg-class-fpr-type-double))
-    (let* ((fn (x862-acode-operator-function form)))
-      (apply fn seg freg nil (acode-operands form)))))
-
-
 (defun x862-form-typep (form type)
   (acode-form-typep form type *x862-trust-declarations*)
 )
@@ -3705,11 +3692,8 @@
     (x862-push-register seg reg)))
 
 (defun x862-one-lreg-form (seg form lreg)
-  (let ((is-float (= (hard-regspec-class lreg) hard-reg-class-fpr)))
-    (if is-float
-      (x862-form-float seg lreg nil form)
-      (x862-form seg lreg nil form))
-    lreg))
+  (x862-form seg lreg nil form)
+  lreg)
 
 (defun x862-one-targeted-reg-form (seg form reg)
   (x862-one-lreg-form seg form reg))
