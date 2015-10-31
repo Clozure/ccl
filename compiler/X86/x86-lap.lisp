@@ -1355,44 +1355,31 @@
                     (:expr64 (emit-quad frag pos (x86-lap-expression-value arg)))
 		    (:self (emit-long frag pos (x86-lap-expression-value arg)))))))))))))
 
-(defstatic *x86-32-bit-lap-nops*
-  #(
-    #()
-    #(#x90)                             ; nop                  
-    #(#x89 #xf6)                        ; movl %esi,%esi       
-    #(#x8d #x76 #x00)                   ; leal 0(%esi),%esi    
-    #(#x8d #x74 #x26 #x00)              ; leal 0(%esi,1),%esi  
-    #(#x90 #x8d #x74 #x26 #x00)         ; nop ; leal 0(%esi,1),%esi  
-    #(#x8d #xb6 #x00 #x00 #x00 #x00)    ; leal 0L(%esi),%esi   
-    #(#x8d #xb4 #x26 #x00 #x00 #x00 #x00) ; leal 0L(%esi,1),%esi 
-  )
-  "Allegedly, many implementations recognize these instructions and
-execute them very quickly.")
+;;; Recommended multi-byte nop instructions.  See Intel 64 and IA-32
+;;; Architectures Software Development Manual, Volume 2B, entry for
+;;; NOP.
+(defstatic *x86-recommended-nops*
+  #(#()
+    #(#x90)
+    #(#x66 #x90)
+    #(#x0f #x1f #x00)
+    #(#x0f #x1f #x40 #x00)
+    #(#x0f #x1f #x44 #x00 #x00)
+    #(#x66 #x0f #x1f #x44 #x00 #x00)
+    #(#x0f #x1f #x80 #x00 #x00 #x00 #x00)
+    #(#x0f #x1f #x84 #x00 #x00 #x00 #x00 #x00)
+    ))
 
-(defstatic *x86-32-bit-lap-nops-8*
-  #(#x90 #x8d #xb4 #x26 #x00 #x00 #x00 #x00))
+(defstatic *x86-9-byte-nop* #(#x66 #x0f #x1f #x84 #x00 #x00 #x00 #x00 #x00))
 
 (defun frag-emit-nops (frag count)
-  (target-word-size-case
-   (32
-    (do* ((c count (- c 8)))
-         ((< c 8)
-          (let* ((v (svref *x86-32-bit-lap-nops* c)))
-            (dotimes (i c)
-              (frag-push-byte frag (svref v i)))))
-      (dotimes (i 8)
-        (frag-push-byte frag (svref *x86-32-bit-lap-nops-8* i)))))
-   (64
-    (let* ((nnops (ash (+ count 3) -2))
-           (len (floor count nnops))
-           (remains (- count (* nnops len))))
-      (dotimes (i remains)
-        (dotimes (k len) (frag-push-byte frag #x66))
-        (frag-push-byte frag #x90))
-      (do* ((i remains (1+ i)))
-           ((= i nnops))
-        (dotimes (k (1- len)) (frag-push-byte frag #x66))
-        (frag-push-byte frag #x90))))))
+  (do ((c count (- c 9)))
+      ((< c 9)
+       (let ((v (svref *x86-recommended-nops* c)))
+	 (dotimes (i c)
+	   (frag-push-byte frag (svref v i)))))
+    (dotimes (i 9)
+      (frag-push-byte frag (svref *x86-9-byte-nop* i)))))
   
 (defun fill-for-alignment (frag-list)
   (ccl::do-dll-nodes (frag frag-list)

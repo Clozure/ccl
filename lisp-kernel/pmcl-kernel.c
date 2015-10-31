@@ -1629,11 +1629,21 @@ check_x86_cpu()
   eax = cpuid(0, &ebx, &ecx, &edx);
 
   if (eax >= 1) {
+    int family;
+    int has_long_nop;
+
     eax = cpuid(1, &ebx, &ecx, &edx);
     cache_block_size = (ebx & 0xff00) >> 5;
-    if ((X86_REQUIRED_FEATURES & edx) == X86_REQUIRED_FEATURES) {
+
+    /* Does processor support multi-byte NOP (0x0f 0x1f)? */
+    family = (eax & 0xf00) >> 8;
+    has_long_nop = (family == 0x6 || family == 0xf);
+
+    if ((X86_REQUIRED_FEATURES & edx) == X86_REQUIRED_FEATURES && has_long_nop)
+    {
       return true;
     }
+
     /* It's very unlikely that SSE2 would be present and other things
        that we want wouldn't.  If they don't have MMX or CMOV either,
        might as well tell them. */
@@ -1646,7 +1656,9 @@ check_x86_cpu()
     if ((edx & X86_FEATURE_CMOV) == 0) {
       fprintf(dbgout, "This CPU doesn't support the CMOV instruction\n");
     }
-    
+    if (has_long_nop == 0) {
+      fprintf(dbgout, "This CPU doesn't support the multi-byte form of NOP\n");
+    }
   }
   return false;
 }
