@@ -405,6 +405,7 @@ objc-bridge/objc-package.lisp -text
 objc-bridge/obsolete/README -text
 scripts/ccl -text
 scripts/ccl64 -text
+scripts/get-binaries -text
 scripts/http-to-ssh -text
 scripts/http-to-svn -text
 scripts/makedmg -text

@@ -1,0 +1,77 @@
+#!/bin/bash
+
+# Use:
+# 1. check out source directly with
+#    svn://svn.clozure.com/openmcl/trunk/source ccl
+# 2. cd ccl
+# 3. scripts/get-binaries linuxx86
+#
+# This way, you don't have to deal with svn externals.
+
+#dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )"
+
+case $1 in
+    linuxx86)
+	platform="linuxx86"
+	image32="lx86cl.image"
+	image64="lx86cl64.image"
+	headers32="x86-headers"
+	headers64="x86-headers64"
+	;;
+    darwinx86)
+	platform="darwinx86"
+	image32="dx86cl.image"
+	image64="dx86cl64.image"
+	headers32="x86-headers"
+	headers64="x86-headers64"
+	;;
+    freebsdx86)
+	platform="freebsdx86"
+	image32="fx86cl.image"
+	image64="fx86cl64.image"
+	headers32="freebsd-headers"
+	headers64="freebsd-headers64"
+	;;
+    solarisx86)
+	platform="solarisx86"
+	image32="sx86cl.image"
+	image64="sx86cl64.image"
+	headers32="solarisx86-headers"
+	headers64="solarisx64-headers"
+	;;
+    windows)
+	platform="windows"
+	image32="wx86cl.image"
+	image64="wx86cl64.image"
+	headers32="win32-headers"
+	headers64="win64-headers"
+	;;
+    linuxarm)
+	platform="linuxarm"
+	image32="armcl.image"
+	headers32="arm-headers"
+	;;
+    *)
+	echo "Usage: $0 linuxx86|darwinx86|freebsdx86|solarisx86|windows|linuxarm"
+	exit 1
+	;;
+esac
+
+if [ "x$image64" != "x" ]; then
+    echo fetching $image64
+    svn export svn://svn.clozure.com/openmcl/trunk/$platform/ccl/$image64
+else
+    echo no 64-bit image for $platform
+fi
+
+if [ "x$headers64" != "x" ]; then
+    svn export svn://svn.clozure.com/openmcl/trunk/$headers64
+else
+    echo no 64-bit headers for $platform
+fi
+
+echo fetching $image32
+svn export http://svn.clozure.com/publicsvn/openmcl/trunk/$platform/ccl/$image32
+svn export http://svn.clozure.com/publicsvn/openmcl/trunk/$headers32
+
+
