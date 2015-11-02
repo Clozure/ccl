@@ -1229,7 +1229,7 @@
    (make-x86-dis "(bad)")
    (make-x86-dis "(bad)")
    (make-x86-dis "(bad)")
-   (make-x86-dis "nopS" 'op-e +v-mode+)
+   (make-x86-dis '("nopS" . :nop) 'op-e +v-mode+)
    ;; #x20
    (make-x86-dis "movL" 'op-rd +m-mode+ 'op-c +m-mode+)
    (make-x86-dis "movL" 'op-rd +m-mode+ 'op-d +m-mode+)
@@ -2121,13 +2121,13 @@
   (let* ((ok t))
     (when (consp template)
       (if (x86-ds-mode-64 ds)
-      (setq template (cdr template))
-      (setq template (car template))))
-  (if (dotimes (i (length template) t)
+	(setq template (cdr template))
+	(setq template (car template))))
+    (setf (x86-di-flags instruction) flags)
+    (if (dotimes (i (length template) t)
           (unless (lower-case-p (schar template i))
             (return nil)))
-      (setf (x86-di-mnemonic instruction) template
-            (x86-di-flags instruction) flags)
+      (setf (x86-di-mnemonic instruction) template)
       (let* ((string-buffer (x86-ds-string-buffer ds))
              (mod (x86-ds-mod ds))
              (rex (x86-ds-rex ds))
@@ -2254,7 +2254,7 @@
                 (dotimes (i (length b))
                   (vector-push-extend (schar b i) string-buffer))))))
         (setf (x86-di-mnemonic instruction) (subseq string-buffer 0))))
-  ok))
+    ok))
 
 (defparameter *x86-disassemble-print-nop* nil)
 (defparameter *x86-disassemble-always-print-suffix* t)
@@ -2897,7 +2897,7 @@
             (write-x86-lap-operand t op1 ds)
             (when op2
               (write-x86-lap-operand t op2 ds)))))
-      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) (+ pc (x86-ds-entry-point ds))))
+      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) pc))
     (when *disassemble-verbose*
       (let* ((istart (x86-di-start instruction))
 	     (iend (x86-di-end instruction))
