@@ -2878,7 +2878,8 @@
 (defvar *previous-source-note*)
 
 (defun x86-print-di-lap (ds instruction tab-stop pc)
-  (let ((comment-start-offset 40))
+  (let ((comment-start-offset 40)
+        (apc (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc))))
 
     (unless (and (eq :nop (x86-di-flags instruction)) (not *x86-disassemble-print-nop*))
       (dolist (p (x86-di-prefixes instruction))
@@ -2890,14 +2891,15 @@
       (format t "(~a" (x86-di-mnemonic instruction))
       (let* ((op0 (x86-di-op0 instruction))
              (op1 (x86-di-op1 instruction))
-             (op2 (x86-di-op2 instruction)))
+             (op2 (x86-di-op2 instruction))
+             )
         (when op0
           (write-x86-lap-operand t op0 ds)
           (when op1
             (write-x86-lap-operand t op1 ds)
             (when op2
               (write-x86-lap-operand t op2 ds)))))
-      (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) pc))
+      (format t ")~vt;~8<[~D/~D]~>" (+ comment-start-offset tab-stop) pc apc))
     (format t "~&")))
 
 (defun x86-print-di-raw (ds instruction tab-stop pc)
@@ -2909,8 +2911,9 @@
 	 (iend (x86-di-end instruction))
 	 (nbytes (- iend istart))
 	 (code-vector (x86-ds-code-vector ds))
-	 (byteidx istart))
-    (format t "~5@d: " pc)
+	 (byteidx istart)
+         (apc (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc))))
+    (format t "~5@d/~d: " pc apc)
     (dotimes (i (min nbytes 4))
       (format t "~(~2,'0x~) " (aref code-vector byteidx))
       (incf byteidx))
