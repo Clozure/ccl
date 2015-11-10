@@ -752,7 +752,8 @@
            *x862-recorded-symbols*
            (*x862-emitted-source-notes* '())
 	   (*x862-gpr-locations-valid-mask* 0)
-           (*x862-track-gpr-locations* *x862-track-gpr-locations*)
+	   ;; OK to use regmap when not using new allocator
+           (*x862-track-gpr-locations* (not *backend-use-linear-scan*))
            (*x862-gpr-locations* (make-array 16 :initial-element nil))
            (*x862-gpr-location-lregs* (make-array 16 :initial-element nil)))
       (declare (dynamic-extent *x862-gpr-locations* *x862-gpr-location-lregs*))
