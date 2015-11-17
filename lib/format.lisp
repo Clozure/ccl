@@ -1294,54 +1294,84 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (ash (5-to-e e) e))
 |#
       
-
-
-
 ;;; Given a non-negative floating point number, SCALE-EXPONENT returns a
 ;;; new floating point number Z in the range (0.1, 1.0] and and exponent
 ;;; E such that Z * 10^E is (approximately) equal to the original number.
 ;;; There may be some loss of precision due the floating point representation.
 ;;; JUST do the EXPONENT since thats all we use
 
+(defconstant single-float-min-e
+  (nth-value 1 (decode-float least-positive-single-float)))
+(defconstant double-float-min-e
+  (nth-value 1 (decode-float least-positive-double-float)))
 
-(defconstant long-log10-of-2 0.30103d0)
+;;; Adapted from CMUCL.
 
-#| 
-(defun scale-exponent (x)
-  (if (floatp x )
-      (scale-expt-aux (abs x) 0.0d0 1.0d0 1.0d1 1.0d-1 long-log10-of-2)
-      (report-bad-arg x 'float)))
-
-#|this is the slisp code that was in the place of the error call above.
-  before floatp was put in place of shortfloatp.
-      ;(scale-expt-aux x (%sp-l-float 0) (%sp-l-float 1) %long-float-ten
-      ;                %long-float-one-tenth long-log10-of-2)))
-|#
-
-; this dies with floating point overflow (?) if fed least-positive-double-float
-
-(defun scale-expt-aux (x zero one ten one-tenth log10-of-2)
-  (let ((exponent (nth-value 1 (decode-float x))))
-    (if (= x zero)
-      (values zero 1)
-      (let* ((e (round (* exponent log10-of-2)))
-             (x (if (minusp e)		;For the end ranges.
-                  (* x ten (expt ten (- -1 e)))
-                  (/ x ten (expt ten (1- e))))))
-        (do ((d ten (* d ten))
-             (y x (/ x d))
-             (e e (1+ e)))
-            ((< y one)
-             (do ((m ten (* m ten))
-                  (z y (* z m))
-                  (e e (1- e)))
-                 ((>= z one-tenth) (values x e)))))))))
-|#
-
-(defun scale-exponent (n)
-  (let ((exp (nth-value 1 (decode-float n))))
-    (values (round (* exp long-log10-of-2)))))
-
+;; This is a modified version of the scale computation from Burger and
+;; Dybvig's paper "Printing floating-point quickly and accurately."
+;; We only want the exponent, so most things not needed for the
+;; computation of the exponent have been removed.  We also implemented
+;; the floating-point log approximation given in Burger and Dybvig.
+;; This is very noticeably faster for large and small numbers.  It is
+;; slower for intermediate sized numbers.
+(defun accurate-scale-exponent (v)
+  (declare (type float v))
+  (if (zerop v)
+      1
+      (let ((float-radix 2)		; b
+	    (float-digits (float-digits v)) ; p
+	    (min-e
+	     (etypecase v
+	       (single-float single-float-min-e)
+	       (double-float double-float-min-e))))
+	(multiple-value-bind (f e)
+	    (integer-decode-float v)
+	  (let ( ;; FIXME: these even tests assume normal IEEE rounding
+		;; mode.  I wonder if we should cater for non-normal?
+		(high-ok (evenp f)))
+	    ;; We only want the exponent here.
+	    (labels ((flog (x)
+		       (declare (type (float (0.0)) x))
+		       (let ((xd (etypecase x
+				   (single-float
+				    (float x 1d0))
+				   (double-float
+				    x))))
+			 (ceiling (- (the (double-float -400d0 400d0)
+					  (log xd 10d0))
+				     1d-10))))
+		     (fixup (r s m+ k)
+		       (if (if high-ok
+			       (>= (+ r m+) s)
+			       (> (+ r m+) s))
+			   (+ k 1)
+			   k))
+		     (scale (r s m+)
+		       (let* ((est (flog v))
+			      (scale (the integer (10-to-e (abs est)))))
+			 (if (>= est 0)
+			     (fixup r (* s scale) m+ est)
+			     (fixup (* r scale) s (* m+ scale) est)))))
+	      (let (r s m+)
+		(if (>= e 0)
+		    (let* ((be (expt float-radix e))
+			   (be1 (* be float-radix)))
+		      (if (/= f (expt float-radix (1- float-digits)))
+			  (setf r (* f be 2)
+				s 2
+				m+ be)
+			  (setf r (* f be1 2)
+				s (* float-radix 2)
+				m+ be1)))
+		    (if (or (= e min-e) 
+			    (/= f (expt float-radix (1- float-digits))))
+			(setf r (* f 2)
+			      s (* (expt float-radix (- e)) 2)
+			      m+ 1)
+			(setf r (* f float-radix 2)
+			      s (* (expt float-radix (- 1 e)) 2)
+			      m+ float-radix)))
+		(scale r s m+))))))))
 
 ;;; Page  ~|
 
@@ -1920,7 +1950,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                   (and (plusp k)(>= k (+ d 2)))
                   (and (minusp k)(< k (- d))))
           (format-error "incompatible values for k and d")))
-      (when (not exp) (setq exp (scale-exponent  number)))
+      (when (not exp) (setq exp (accurate-scale-exponent (abs number))))
       AGAIN
       (let* ((expt (- exp k))
              (estr (let ((*print-base* 10))
