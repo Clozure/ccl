@@ -630,11 +630,13 @@
 (define-x8664-vinsn (restore-full-lisp-context :lispcontext :pop :vsp :uses-frame-pointer)
     (()
      ())
-  (leave))
+  (movq (:%q x8664::rbp) (:%q x8664::rsp))
+  (popq (:%q x8664::rbp))
+  )
 
 (define-x8664-vinsn compare-to-nil (()
                                     ((arg0 t)))
-  (cmpb (:$b x8664::fulltag-nil) (:%b arg0)))
+  (cmpq (:$l (target-nil-value)) (:%q arg0)))
 
 (define-x8664-vinsn compare-to-t (()
                                     ((arg0 t)))
@@ -1531,11 +1533,27 @@
                                                       ((bignum :lisp)))
   (movq (:%q x8664::imm2) (:@ x8664::misc-data-offset (:%q bignum))))
   
+
                                                        
 (define-x8664-vinsn box-fixnum (((dest :imm))
                                 ((src :s8)))
   (imulq (:$b x8664::fixnumone) (:%q src)(:%q dest)))
 
+;;; don't modify src
+(define-x8664-vinsn box-fixnum-carefully (((dest :imm))
+                                          ((src :s8))
+                                          ((temp :s8)))
+  (movq (:%q src) (:%q temp))
+  (shlq (:$ub x8664::fixnumshift) (:%q temp))
+  (movq (:%q temp) (:%q dest)))
+
+(define-x8664-vinsn box-fixnum* (((dest :imm)
+                                  (src :s8))
+                                  
+                                 ((src :s8))
+                                         )
+  (shlq (:$ub x8664::fixnumshift) (:%q src))
+  (movq (:%q src) (:%q dest)))
 
 (define-x8664-vinsn (return-or-fix-overflow :jumpLR)(()
                                             ())
@@ -2077,12 +2095,21 @@
   (:align 3)
   (:long (:^ label)))
 
+(define-x8664-vinsn (align-referenced-label :align) (()
+                                                 ((label :label)))
+  #+later
+  ((:pred plusp (:apply length (:apply vinsn-label-refs label)))
+   (:align 4)))
+  
+
+
 ;;; %ra0 is pointing into %fn, so no need to copy %fn here.
 (define-x8664-vinsn (xpass-multiple-values-symbol :call  :extended-call :jumplr)
     (()
      ((lab :label))
      ())                                                                
   (pushq (:@ (:apply + (:apply target-nil-value) (x8664::%kernel-global 'x86::ret1valaddr))))
+  (:talign 4)
   (jmp (:@ x8664::symbol.fcell (:% x8664::fname)))
 
   )
@@ -4900,6 +4927,12 @@
                                 ())
   (testb (:%b x8664::arg_z) (:%b x8664::arg_z)))
 
+(define-x8664-vinsn clr-eq-bit (()
+                                ()
+                                ((temp :u32)))
+  (xorl (:%l temp) (:%l temp))
+  (incl (:%l temp)))
+
 (define-x8664-vinsn %schar8 (((char :imm))
 			    ((str :lisp)
 			     (idx :imm))
@@ -5141,7 +5174,8 @@
 
 (define-x8664-vinsn align-loop-head (()
                                      ()
-                                     ()))
+                                     ())
+  (:align 4))
 
 (define-x8664-vinsn double-float-negate (((reg :double-float))
                                          ((reg :double-float)

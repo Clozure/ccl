@@ -22,7 +22,7 @@
   (require "X86-ASM")
   (require "X86-LAP"))
 
-(defparameter *tra-tag* (target-arch-case (:x8664 4) (:x8632 5)))
+(defparameter *tra-tag* (target-arch-case (:x8664 -4) (:x8632 -5)))
 
 (defstruct (x86-disassembled-instruction (:include dll-node)
                                          (:conc-name x86-di-))
@@ -202,6 +202,7 @@
   start-address
   end-address
   (instructions (make-dll-header))
+  (align nil)
 )
 
 ;;; Insert the block before the first existing block whose
@@ -683,6 +684,18 @@
                 (t (error "Disassembly error")))))
     (x86::make-x86-immediate-operand :value (parse-x86-lap-expression op))))
 
+
+(defun x86-dis-align-address (ds address)
+  (let* ((apc (+ address  (if (x86-ds-mode-64 ds) x8664::node-size  x8632::node-size))))
+    (cond ((not (logtest 15 apc))
+           4)
+          ((not (logtest 7 apc))
+           3)
+          ((not (logtest 3 apc))
+           2)
+          ((not (logtest 1 apc))
+           1))))
+
 (defun op-j (ds bytemode sizeflag)
   (let* ((mask -1)
          (disp (cond ((= bytemode +b-mode+)
@@ -696,7 +709,11 @@
                      (t (error "Disassembly error"))))
          (label-address (logand (+ (x86-ds-code-pointer ds) disp)
                                 mask)))
-    (push label-address (x86-ds-pending-labels ds))
+    (let* ((align (x86-dis-align-address ds label-address)))
+      (if align
+        (push (cons label-address align) (x86-ds-pending-labels ds))
+        
+        (push label-address (x86-ds-pending-labels ds))))
     (x86::make-x86-label-operand :label label-address)))
 
 (defun op-seg (ds x y)
@@ -2472,7 +2489,7 @@
                           (if (< disp 0)
                             `(- (:^ ,label-ea))
                             `(:^ ,label-ea))))
-                   (push (cons label-ea (if (eq flag :lea) *tra-tag*)) (x86-ds-pending-labels ds))
+                   (push label-ea  (x86-ds-pending-labels ds))
                    (when (or (eq flag :single) (eq flag :double))
                      (let* ((block (make-x86-dis-block :start-address label-ea
                                                        :end-address (+ label-ea (if (eq flag :single) 4 8))))
@@ -2518,9 +2535,10 @@
                                   )))))
  
                (t
-                (when (eq flag :call)
+                (if (eq flag :call)
                   (setf (x86-di-mnemonic instruction)
                         "lisp-call")
+                 
                   )))))
           (t
            (Let* ((jtab (is-jump-table-ref op0)))
@@ -2545,7 +2563,7 @@
                                         :end (+ start 4))))
                      (append-dll-node instruction instructions)
                      (setq labeled nil)
-                     (push (cons target *tra-tag*) (x86-ds-pending-labels ds))
+                     (push target (x86-ds-pending-labels ds))
                      (incf jtab 4)))
                  (insert-x86-block block (x86-ds-blocks ds)))
                (unless (x86-ds-mode-64 ds)
@@ -2706,7 +2724,7 @@
   (let* ((limit (do-dll-nodes (b (x86-ds-blocks ds) (x86-ds-code-limit ds))
                   (when (> (x86-dis-block-start-address b) addr)
                     (return (x86-dis-block-start-address b)))))
-         (block (make-x86-dis-block :start-address addr))
+         (block (make-x86-dis-block  :start-address addr ))
          (instructions (x86-dis-block-instructions block))
          (labeled (not (eql addr (x86-ds-entry-point ds)))))
     (loop
@@ -2881,7 +2899,10 @@
   (let ((comment-start-offset 40)
         (apc (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc))))
 
-    (unless (and (eq :nop (x86-di-flags instruction)) (not *x86-disassemble-print-nop*))
+    (unless (and (eq :nop (x86-di-flags instruction))
+                 (not *x86-disassemble-print-nop*)
+                 (not *disassemble-verbose*))
+      
       (dolist (p (x86-di-prefixes instruction))
         (when tab-stop
           (format t "~vt" tab-stop))
@@ -2911,9 +2932,8 @@
 	 (iend (x86-di-end instruction))
 	 (nbytes (- iend istart))
 	 (code-vector (x86-ds-code-vector ds))
-	 (byteidx istart)
-         (apc (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc))))
-    (format t "~5@d/~d: " pc apc)
+	 (byteidx istart))
+    (format t "~5@d: " pc)
     (dotimes (i (min nbytes 4))
       (format t "~(~2,'0x~) " (aref code-vector byteidx))
       (incf byteidx))
@@ -2948,8 +2968,9 @@
                        (string-sans-most-whitespace source-text 100)
                        "#<no source text>")))
           (format t "~&~%;;; ~A" text))))
-    (when labeled
-      (when align (format t "~&~%~4t(:align ~d)" align))
+    (when labeled 
+      (when (and align (> align 0))
+          (format t "~&~%~vt(:align ~d)" (if *disassemble-verbose* 20 4) align))
       (format t "~&L~d~%" pc)
       (setq seq 0))
     (format t "~&")
@@ -2973,6 +2994,16 @@
 	  (let* ((source-text (source-note-text source-note)))
 	    (when source-text
 	      (format t ";;; ~A" (string-sans-most-whitespace source-text 100))))))))
+
+;;; find blocks of code that are unreferenced but which may affect alignment of successors,
+(defun x86-disassemble-find-alignment-blocks (ds)
+  (declare (ignorable ds))
+  #+later
+  (let* ((blocks (x86-ds-blocks ds)))
+    (do-dll-nodes (b blocks)
+      (format t "~&~d ~d"(x86-dis-block-start-address b) (x86-dis-block-end-address b)))
+    
+    (break())))
 
 (defun x86-disassemble-xfunction (function xfunction
                                   &key (symbolic-names #+x8664-target target::*x8664-symbolic-register-names*
@@ -3015,6 +3046,8 @@
     (let* ((seq 0)
            (*previous-source-note* nil))
       (declare (special *previous-source-note*))
+      (when *disassemble-verbose*
+        (x86-disassemble-find-alignment-blocks ds))
       (do-dll-nodes (block blocks)
         (do-dll-nodes (instruction (x86-dis-block-instructions block))
           (setq seq (funcall collect-function ds instruction seq function)))))))
@@ -3140,6 +3173,8 @@
 
 (defun disassemble-to-file (function path)
   (let* ((name (if (typep function 'symbol) function (function-name function)))
+         (*disassemble-verbose* nil)
+         (*x86-disassemble-print-nop* nil)
          (header (if name (format nil "(~s ~s ()" (target-arch-case (:x8664 'defx86lapfunction)(:x8632 'defx86lapfunction))name) (error "Not yet: anonymous function"))))
     (with-open-file (*standard-output* path :direction :output :if-exists :supersede) 
       (write-line header)

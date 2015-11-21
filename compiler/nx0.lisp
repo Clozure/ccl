@@ -1290,7 +1290,7 @@ function to the indicated name is true.")
         (if  (memq q '(speed space compilation-speed safety debug))
           (push (cons q v) mdecls)
           (if (eq q 'stack-access)
-            (when *nx-parsing-lambda-decls* (target-arch-case (:x8664 (setq *backend-use-linear-scan* (not (eql v 0))))))
+            (when (and *nx-parsing-lambda-decls* (not *force-legacy-backend*)) (target-arch-case (:x8664 (setq *backend-use-linear-scan* (not (eql v 0))))))
             (nx-bad-decls spec)))))))
 
 (defun %proclaim-optimize (specs &aux q v)
