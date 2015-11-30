@@ -292,7 +292,6 @@ lib/x8632env.lisp -text
 library/cn-encode.lisp -text
 library/core-files.lisp -text
 library/cover.lisp -text
-library/darwinx8632-syscalls.lisp -text
 library/dominance.lisp -text
 library/elf.lisp -text
 library/intel-io.lisp -text
@@ -307,8 +306,6 @@ library/sequence-utils.lisp -text
 library/serial-streams.lisp -text
 library/sockets.lisp -text
 library/swank-loader.lisp -text
-library/x86-win64-syscalls.lisp -text
-library/x8664-solaris-syscalls.lisp -text
 lisp-kernel/albt.c -text
 lisp-kernel/androidarm/Makefile -text
 lisp-kernel/androidarm/aarmcl.c -text
