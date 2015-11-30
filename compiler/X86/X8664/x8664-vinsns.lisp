@@ -2692,17 +2692,11 @@
   (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
   (movss (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
 
-
-
-
-(define-x8664-vinsn (reload-complex-single-float :reload :nfp :ref) (((val :complex-single-float))
-                                                               ((offset :u16const)
-                                                                (nfp :imm)))
+(define-x8664-vinsn (reload-complex-single-float :reload :nfp :ref)
+    (((val :complex-single-float))
+     ((offset :u16const)))
   (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
   (movq (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
-
-
-
 
 (define-x8664-vinsn (reload-complex-double-float  :reload  :nfp :ref) (((val :complex-double-float))
                                                                ((offset :u16const)
