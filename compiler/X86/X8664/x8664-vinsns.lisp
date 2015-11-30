@@ -1165,11 +1165,13 @@
   (movq (:rcontext x8664::tcr.nfp) (:%q nfp))
   (movq (:%xmm val) (:@ (:apply + 16 offset) (:%q nfp))))
 
-(define-x8664-vinsn (spill-complex-double-float  :spill :nfp :set) (()
-                                                                ((val :complex-double-float)
-                                                                 (offset :u16const)))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:% x8664::temp5))))
+(define-x8664-vinsn (spill-complex-double-float :spill :nfp :set)
+    (()
+     ((val :complex-double-float)
+      (offset :u16const))
+     ((temp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+  (movdqu (:%xmm val) (:@ (:apply + 16 offset) (:%q temp))))
 
 (define-x8664-vinsn (reload :reload :needs-frame-pointer) (((dest :lisp))
                            ((slot :stack-offset)))
@@ -2629,9 +2631,6 @@
     (pushq (:$b 0))
     (subl (:$b 1) (:%l count))
     (jge :loop))))
-           
-           
-           
   
 (define-x8664-vinsn save-nfp (()
                               ()
@@ -2647,81 +2646,62 @@
    (movq (:%mmx x8664::stack-temp) (:@ 8 (:%q nfp)))
    (movq (:%q nfp) (:rcontext x8664::tcr.nfp))))
 
-
-
-
 (define-x8664-vinsn restore-nfp (()
                                  ()
-                                 ())
+                                 ((temp :imm)))
   ((:pred > (:apply x862-max-nfp-depth) 0)
-   (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-   (movq (:@ 8 (:%q x8664::temp5)) (:%mmx x8664::stack-temp))
-   (movq (:@ (:%q x8664::temp5)) (:%q x8664::temp5))
-   (movq (:%q x8664::temp5) (:rcontext x8664::tcr.foreign-sp))
-   (movq (:%mmx x8664::stack-temp)(:rcontext x8664::tcr.nfp))))
-
-
-
-
-
-
-
+   (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+   (movq (:@ 8 (:%q temp)) (:%mmx x8664::stack-temp))
+   (movq (:@ (:%q temp)) (:%q temp))
+   (movq (:%q temp) (:rcontext x8664::tcr.foreign-sp))
+   (movq (:%mmx x8664::stack-temp) (:rcontext x8664::tcr.nfp))))
 
 (define-x8664-vinsn (reload-natural  :reload :nfp :ref) (((val :u64))
-                                                       ((offset :u16const)))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movq (:@ (:apply + 16 offset) (:%q x8664::temp5)) (:%q val)))
+							 ((offset :u16const)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q val))
+  (movq (:@ (:apply + 16 offset) (:%q val)) (:%q val)))
 
+(define-x8664-vinsn (reload-double-float :reload :nfp :ref) (((val :double-float))
+							     ((offset :u16const))
+							     ((temp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+  (movsd (:@ (:apply + 16 offset) (:% temp)) (:%xmm val)))
 
-
-
-(define-x8664-vinsn (reload-double-float :reload  :nfp :ref) (((val :double-float))
-                                                       ((offset :u16const)))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movsd (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
-
-
-
-
-
-
-
-(define-x8664-vinsn (reload-single-float :reload  :nfp :ref) (((val :single-float))
-                                           ((offset :u16const)
-                                            ))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movss (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
+(define-x8664-vinsn (reload-single-float :reload :nfp :ref) (((val :single-float))
+							     ((offset :u16const))
+							     ((temp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+  (movss (:@ (:apply + 16 offset) (:% temp)) (:%xmm val)))
 
 (define-x8664-vinsn (reload-complex-single-float :reload :nfp :ref)
     (((val :complex-single-float))
-     ((offset :u16const)))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movq (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
+     ((offset :u16const))
+     ((temp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+  (movq (:@ (:apply + 16 offset) (:%q temp)) (:%xmm val)))
 
-(define-x8664-vinsn (reload-complex-double-float  :reload  :nfp :ref) (((val :complex-double-float))
-                                                               ((offset :u16const)
-                                                                ))
-  (movq (:rcontext x8664::tcr.nfp) (:%q x8664::temp5))
-  (movdqu (:@ (:apply + 16 offset) (:% x8664::temp5)) (:%xmm val)))
+(define-x8664-vinsn (reload-complex-double-float :reload :nfp :ref)
+    (((val :complex-double-float))
+     ((offset :u16const))
+     ((temp :imm)))
+  (movq (:rcontext x8664::tcr.nfp) (:%q temp))
+  (movdqu (:@ (:apply + 16 offset) (:% temp)) (:%xmm val)))
 
-(define-x8664-vinsn (temp-push-unboxed-word :push :word )
-    (()
-     ((w :u64))
-     ((temp :imm)
-      (stack-temp :imm)))
+(define-x8664-vinsn (temp-push-unboxed-word :push :word) (()
+							  ((w :u64))
+							  ((temp :imm)
+							   (stack-temp :imm)))
   (movq (:rcontext x8664::tcr.foreign-sp) (:%q stack-temp))
   (subq (:$b (* 2 x8664::dnode-size)) (:rcontext x8664::tcr.foreign-sp))
-  (movq (:rcontext x8664::tcr.foreign-sp) (:%q x8664::temp5))
-  (movq (:%q stack-temp) (:@ (:%q x8664::temp5)))
-  (movq (:% x8664::rbp) (:@ x8664::csp-frame.rbp (:%q x8664::temp5)))
-  (movq (:%q w) (:@ x8664::dnode-size (:%q x8664::temp5))))
+  (movq (:rcontext x8664::tcr.foreign-sp) (:%q temp))
+  (movq (:%q stack-temp) (:@ (:%q temp)))
+  (movq (:% x8664::rbp) (:@ x8664::csp-frame.rbp (:%q temp)))
+  (movq (:%q w) (:@ x8664::dnode-size (:%q temp))))
 
-
-(define-x8664-vinsn (temp-push-node :push :word :tsp)
-        (()
-         ((w :lisp))
-         ((temp :imm)
-	  (stack-temp :imm)))
+(define-x8664-vinsn (temp-push-node :push :word :tsp) (()
+						       ((w :lisp))
+						       ((temp :imm)
+							(stack-temp :imm)))
   (subq (:$b (* 2 x8664::dnode-size)) (:rcontext x8664::tcr.next-tsp))
   (movq (:rcontext x8664::tcr.save-tsp) (:%q stack-temp))
   (movq (:rcontext x8664::tcr.next-tsp) (:%q temp))
@@ -2732,18 +2712,16 @@
   (movq (:%q temp) (:rcontext x8664::tcr.save-tsp))
   (movq (:%q w) (:@ x8664::dnode-size (:%q temp))))
 
-(define-x8664-vinsn (temp-push-double-float :push :word )
-    (()
-     ((f :double-float))
-     ((temp :imm)
-      (stack-temp :imm)))
+(define-x8664-vinsn (temp-push-double-float :push :word ) (()
+							   ((f :double-float))
+							   ((temp :imm)
+							    (stack-temp :imm)))
   (movq (:rcontext x8664::tcr.foreign-sp) (:%q stack-temp))  
   (subq (:$b (* 2 x8664::dnode-size)) (:rcontext x8664::tcr.foreign-sp))
   (movq (:rcontext x8664::tcr.foreign-sp) (:%q temp))  
   (movq (:%q stack-temp) (:@ (:%q temp)))
   (movq (:% x8664::rbp) (:@ x8664::csp-frame.rbp (:%q temp)))
   (movapd (:%xmm f) (:@ x8664::dnode-size (:%q temp))))
-
 
 (define-x8664-vinsn (vpush-single-float :push :word :vsp)
     (()
