@@ -330,6 +330,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                  (declare (ignore prev tilde parms atsign cmd))
                  (if (and evil-commands colon)
                      (format-error "Logical-block directive not allowed inside justification directive"))))
+	  (#\~ (format-nextchar))
           ((#\} #\> #\) #\])
            (format-error "No matching bracket")))))))
 
