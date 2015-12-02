@@ -705,7 +705,10 @@ given is that of a group to which the current user belongs."
     (with-filename-cstrs ((name namestring #|(tilde-expand namestring)|#))
       (let* ((result (#_realpath name resultbuf)))
         (declare (dynamic-extent result))
-        (unless (%null-ptr-p result)
+        (if (%null-ptr-p result)
+	  (let ((errno (%get-errno)))
+	    (unless (= errno (- #$ENOENT))
+	      (signal-file-error errno namestring)))
           (get-foreign-namestring result))))))
 
 ;;; Return fully resolved pathname & file kind, or (values nil nil)
