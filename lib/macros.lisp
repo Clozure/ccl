@@ -693,6 +693,8 @@
 ;; ---- allow inlining setf functions
 (defmacro defun (spec args &body body &environment env &aux global-name inline-spec)
   "Define a function at top level."
+  (when (null spec)
+    (signal-program-error "Using ~s as a function name is silly." nil))
   (validate-function-name spec)
   (setq args (require-type args 'list))
   (setq body (require-type body 'list))
