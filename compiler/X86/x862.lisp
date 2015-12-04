@@ -6884,10 +6884,10 @@
     (do-dll-nodes (v header)
       (if (%vinsn-label-p v)
         (progn
-          (let* ((align (dolist (ref (vinsn-label-refs v))
-                          (when (and *backend-use-linear-scan* (vinsn-attribute-p ref :jump :branch))
+          (let* ((align (dolist (ref (vinsn-label-refs v) 4)
+                          (unless (and *backend-use-linear-scan* (vinsn-attribute-p ref :jump :branch))
                             
-                            (return 4)))))
+                            (return nil)))))
 
             (when align
 
