@@ -1463,25 +1463,25 @@ unsigned IP address."
       (princ-to-string port)))
 
 (defun resolve-address (&key
-                          host
-                          port
-                          (socket-type :stream)
-                          (connect :active)
-                          address-family
-                          numeric-host-p
-                          #-windows-target numeric-service-p
-                          (singlep t)
-                          (errorp t))
+                        host
+                        port
+                        (socket-type :stream)
+                        (connect :active)
+                        address-family
+                        numeric-host-p
+                        #-windows-target numeric-service-p
+                        (singlep t)
+                        (errorp t))
   "Resolve a host and/or port string to one or more socket-address
-instances.  Either host or port may be unspecified.  Calls
-getaddrinfo() underneath.
-
-singlep may be passed as NIL to make the function return a list of
-host addresses matching the specified query terms.  The default is to
-return the first matching address.
-
-errorp may be passed as NIL to return NIL if no match was found."
-
+  instances.  Either host or port may be unspecified.  Calls
+  getaddrinfo() underneath.
+  
+  singlep may be passed as NIL to make the function return a list of
+  host addresses matching the specified query terms.  The default is to
+  return the first matching address.
+  
+  errorp may be passed as NIL to return NIL if no match was found."
+  
   ;; We have historically supported the use of an (unsigned-byte 32)
   ;; value to represent an IPv4 address. If existing code does that to
   ;; avoid overhead (name resolution, consing, what-have-you), then
@@ -1497,18 +1497,18 @@ errorp may be passed as NIL to return NIL if no match was found."
 			(symbol (_getservbyname (string-downcase
 						 (string port)) proto)))))
       (if (null inet-port)
-	(when errorp
-	  (error "can't resolve port ~s with getservbyname" port))
-	(let* ((socket-address (make-instance 'socket-address))
-	       (sin (sockaddr socket-address)))
-	  (setf (pref sin :sockaddr_in.sin_family) #$AF_INET)
-	  (setf (pref sin
-		      #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
-		      #-(or windows-target solaris-target) :sockaddr_in.sin_addr.s_addr) (htonl host))
-	  (setf (pref sin :sockaddr_in.sin_port) inet-port)
-	  (upgrade-socket-address-from-sockaddr #$AF_INET socket-address)
-	  (return-from resolve-address socket-address)))))
-    
+          (when errorp
+            (error "can't resolve port ~s with getservbyname" port))
+          (let* ((socket-address (make-instance 'socket-address))
+                 (sin (sockaddr socket-address)))
+            (setf (pref sin :sockaddr_in.sin_family) #$AF_INET)
+            (setf (pref sin
+                        #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
+                        #-(or windows-target solaris-target) :sockaddr_in.sin_addr.s_addr) (htonl host))
+            (setf (pref sin :sockaddr_in.sin_port) inet-port)
+            (upgrade-socket-address-from-sockaddr #$AF_INET socket-address)
+            (return-from resolve-address socket-address)))))
+  
   (with-cstrs ((host-buf (or host ""))
                (port-buf (string-downcase (or (ensure-string port) ""))))
     (rletZ ((hints #>addrinfo)
@@ -1535,24 +1535,26 @@ errorp may be passed as NIL to return NIL if no match was found."
                                  results)))
         (if (eql 0 err)
             (prog1
-                (or (loop for info = (pref results :address) then (pref info #>addrinfo.ai_next)
-                          until (%null-ptr-p info)
-                          for sockaddr = (pref info #>addrinfo.ai_addr)
-                          for socket-address = (make-instance 'socket-address)
-                          do (loop for i below (pref info #>addrinfo.ai_addrlen)
-                                   do (setf (paref (sockaddr socket-address) :uint8_t i)
-                                            (paref sockaddr :uint8_t i)))
-                             (upgrade-socket-address-from-sockaddr (pref (sockaddr socket-address) :sockaddr_storage.ss_family)
-                                                                   socket-address)
-                          if singlep
-                            do (return socket-address)
-                          else
-                            collect socket-address)
-                    (when errorp
-                      (error "cannot resolve local service host ~A port ~A connect ~S type ~S"
-                             host port connect socket-type)))
+              (or (loop for info = (pref results :address) then (pref info #>addrinfo.ai_next)
+                    until (%null-ptr-p info)
+                    for sockaddr = (pref info #>addrinfo.ai_addr)
+                    for socket-address = (make-instance 'socket-address)
+                    do (loop for i below (pref info #>addrinfo.ai_addrlen)
+                         do (setf (paref (sockaddr socket-address) :uint8_t i)
+                                  (paref sockaddr :uint8_t i)))
+                    (upgrade-socket-address-from-sockaddr (pref (sockaddr socket-address) :sockaddr_storage.ss_family)
+                                                          socket-address)
+                    if singlep
+                    do (return socket-address)
+                    else
+                    collect socket-address)
+                  (when errorp
+                    (error "cannot resolve local service host ~A port ~A connect ~S type ~S"
+                           host port connect socket-type)))
               (#_freeaddrinfo (pref results :address)))
-	      (values nil err))))))
+            (if errorp 
+                (socket-error nil "getaddrinfo" err t) 
+                (values nil err)))))))
 
 (defclass ip4-socket-address (ip-socket-address)
   ())
@@ -1708,7 +1710,8 @@ the resulting sockaddr."
                                                               (case (find-symbol (string-upcase proto) :keyword)
                                                                 (:udp :datagram)
                                                                 (:tcp :stream))
-                                                              proto))))
+                                                              proto)
+                                             :errorp nil)))
         (when socket-address
           (port socket-address)))))
 
@@ -1717,7 +1720,7 @@ the resulting sockaddr."
 unsigned IP address."
   (if (typep host 'integer)
       host
-      (let ((socket-address (resolve-address :host host :address-family :internet)))
+      (let ((socket-address (resolve-address :host host :address-family :internet :errorp nil)))
         (when socket-address
           (host socket-address)))))
 
