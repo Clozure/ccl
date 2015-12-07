@@ -646,24 +646,8 @@ the socket is not connected."))
                           backlog connect-timeout deadline
                         &allow-other-keys)
   (unwind-protect
-       (let ((timeout-in-milliseconds
-               (cond
-                 (deadline
-                  (max (round (- deadline (get-internal-real-time))
-                              (/ internal-time-units-per-second 1000))
-                       0))
-                 (connect-timeout
-		  (check-io-timeout connect-timeout)
-                  (round (* connect-timeout 1000)))))
-             (socket-address (or remote-address
-                                 (apply #'resolve-address
-					:connect connect
-					:address-family address-family
-                                        :host remote-host
-                                        :port remote-port
-                                        :allow-other-keys t
-                                        keys))))
-         (when (< fd 0)
+       (progn
+	 (when (< fd 0)
            (setq fd (socket-call nil "socket"
                                  (c_socket (ecase address-family
                                              (:internet #$PF_INET)
@@ -676,8 +660,25 @@ the socket is not connected."))
                               keys)))
            (apply #'set-socket-options socket keys)
            (if (eql connect :passive)
-               (socket-call nil "listen" (c_listen fd (or backlog 5)))
-               (%socket-connect fd socket-address timeout-in-milliseconds))
+	     (socket-call nil "listen" (c_listen fd (or backlog 5)))
+	     (let ((timeout-in-milliseconds
+		    (cond
+		      (deadline
+		       (max (round (- deadline (get-internal-real-time))
+				   (/ internal-time-units-per-second 1000))
+			    0))
+		      (connect-timeout
+		       (check-io-timeout connect-timeout)
+		       (round (* connect-timeout 1000)))))
+		   (socket-address (or remote-address
+				       (apply #'resolve-address
+					      :connect connect
+					      :address-family address-family
+					      :host remote-host
+					      :port remote-port
+					      :allow-other-keys t
+					      keys))))
+               (%socket-connect fd socket-address timeout-in-milliseconds)))
            (setq fd -1)
            socket))
     (unless (< fd 0)
