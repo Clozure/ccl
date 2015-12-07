@@ -4608,9 +4608,9 @@
           (if (and boolean (or js32 is32))
             (let* ((form (if js32 i j))
                    (var (nx2-lexical-reference-p form))
-                   (ea (when var
-                         (unless (x862-existing-reg-for-var var)
-                           (when (eql 1 (var-refs var)) (var-ea var)))))
+                   (ea (unless *backend-use-linear-scan* (when var
+                                                           (unless (x862-existing-reg-for-var var)
+                                                             (when (eql 1 (var-refs var)) (var-ea var))))))
                    (offset (and ea
                                 (memory-spec-p ea)
                                 (not (eql (memspec-type ea) memspec-nfp-offset))
@@ -4626,22 +4626,22 @@
               (unless (or js32 (eq cr-bit x86::x86-e-bits))
                 (setq cr-bit (x862-reverse-cr-bit cr-bit)))
               (^ cr-bit true-p))
-            (if (and ;(eq cr-bit x86::x86-e-bits) 
-                     (or js32 is32))
+            (if (and                    ;(eq cr-bit x86::x86-e-bits) 
+                 (or js32 is32))
               (progn
                 (unless (or js32 (eq cr-bit x86::x86-e-bits))
                   (setq cr-bit (x862-reverse-cr-bit cr-bit)))
-              (x862-test-reg-%izerop
-               seg 
-               vreg 
-               xfer 
-               (x862-one-untargeted-reg-form 
-                seg 
-                (if js32 i j) 
-                *x862-arg-z*) 
-               cr-bit 
-               true-p 
-               (or js32 is32)))
+                (x862-test-reg-%izerop
+                 seg 
+                 vreg 
+                 xfer 
+                 (x862-one-untargeted-reg-form 
+                  seg 
+                  (if js32 i j) 
+                  *x862-arg-z*) 
+                 cr-bit 
+                 true-p 
+                 (or js32 is32)))
               (multiple-value-bind (ireg jreg) (x862-two-untargeted-reg-forms seg i *x862-arg-y* j *x862-arg-z*)
                 (x862-compare-registers seg vreg xfer ireg jreg cr-bit true-p)))))))))
 
@@ -4921,7 +4921,7 @@
     (! %set-new-macptr-value dest)))
 
 (defun x862-copy-register (seg dest src)
-  (unless (eq dest src)
+  (unless (and nil (eq dest src))
     (with-x86-local-vinsn-macros (seg)
       (when dest
         (let* ((dest-gpr (if (eql (hard-regspec-class dest) hard-reg-class-gpr) dest))
@@ -5955,6 +5955,7 @@
 
 (defun x862-ref-symbol-value (seg vreg xfer sym check-boundp)
   (declare (ignorable check-boundp))
+  ;;(when *backend-use-linear-scan* (linear-scan-bailout"special var ref"))
   (setq check-boundp (not *x862-reckless*))
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (when (or check-boundp vreg)
@@ -6711,7 +6712,7 @@
 ;;; on x86, branching to a shared exit point can sometimes be
 ;;; larger than simply exiting, but it's hard to know that in
 ;;; advance.  If the exit point involves restoring nvrs, then
-;;; it's likely that branching will be smaller.
+;;; it's likely that branching will be smaller.     
 (defun x862-fold-popj ()
   ())  ;  fold if we'll need to restore nvrs.
   
@@ -8328,6 +8329,7 @@
            (let* ((nargs (+ (length (car arglist)) (length (cadr arglist))))
                   (tail-p (x862-tailcallok xfer)))
              (declare (fixnum nargs))
+
              (if (and (eql nargs *x862-tail-nargs*) tail-p (not spread-p))
                (let ((args (append (car arglist) (reverse (cadr arglist)))))
                  (ecase nargs
@@ -8340,7 +8342,7 @@
                    (unless (eql 0 depth)
                      (! adjust-vsp depth)))
                  (-> *x862-fixed-self-tail-call-label*))
-               (linear-scan-bailout "self-call"))))
+               (progn (linear-scan-bailout "self-call")))))
                    
         
           (t
