@@ -635,7 +635,7 @@
                                    (nx1-valid-gf-keyword-p global-def key))
                         collect key)))))
           (if bad-keys
-            (setq reason (list* :unknown-gf-keys bad-keys (cddr reason)))
+            (setq reason (list* :unknown-gf-keywords bad-keys (cddr reason)))
             (setq deftype nil))))
       (when deftype
         (when (eq deftype :deferred-mismatch)
