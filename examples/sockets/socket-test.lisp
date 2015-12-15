@@ -74,7 +74,7 @@
 
 (defun send-message (socket string socket-address)
   (let ((reply (encode-string-to-octets string)))
-    (send-to socket reply (length reply) :remote socket-address)))
+    (send-to socket reply (length reply) :remote-address socket-address)))
 
 (defun run-datagram-test (address-family &rest args &key host port)
   (with-open-socket (server-socket :address-family address-family :type :datagram :local-host host :local-port port)
