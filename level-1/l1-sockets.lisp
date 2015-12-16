@@ -61,15 +61,19 @@
                      'basic-binary-io-stream
                      'basic-character-io-stream)
 
-(defclass unconnected-socket (socket)
+(defclass device-mixin ()
   ((device :initarg :device :accessor socket-device)
    (keys :initarg :keys :reader socket-keys)))
 
 ;; A passive tcp socket just generates connection streams
-(defclass listener-socket (tcp-socket unconnected-socket) ())
+(defclass listener-socket (tcp-socket device-mixin) ())
 
-(defclass file-listener-socket (stream-file-socket unconnected-socket) ())
+(defclass file-listener-socket (stream-file-socket device-mixin) ())
 
 ;; A udp socket just sends and receives packets.
-(defclass udp-socket (ip-socket unconnected-socket) ())
+(defclass udp-socket (ip-socket device-mixin)
+  ((connected :initarg :connected :initform nil :accessor socket-connected
+              :documentation "True if the socket is connected in the UDP sense,
+              i.e. it has had #_connect successfully called on it.")))
+
 
