@@ -43,6 +43,7 @@
             LOCAL-SOCKET-ADDRESS
 	    SOCKET-ADDRESS-FAMILY
 	    SOCKET-CONNECT
+            SOCKET-CONNECTED
 	    SOCKET-FORMAT
 	    SOCKET-TYPE
 	    SOCKET-ERROR
@@ -355,9 +356,10 @@ for udp-socket."))
 
 (defmethod socket-type ((socket stream-file-socket)) :stream)
 
+;;; Is this used by anybody?
 (defgeneric socket-connect (stream)
  (:documentation
-   "Return :active for tcp-stream, :passive for listener-socket, and NIL
+   "Return :active for tcp-stream, :passive for listener-socket, and socket-connected
 for udp-socket"))
 
 (defmethod socket-connect ((stream tcp-stream)) :active)
@@ -409,7 +411,7 @@ make-socket."))
   (assert (and in-p out-p) () "Non-bidirectional file-socket stream?")
   'basic-file-socket-stream)
 
-(defmethod socket-format ((socket unconnected-socket))
+(defmethod socket-format ((socket device-mixin))
   (or (getf (socket-keys socket) :format) :text))
 
 (defgeneric close (socket &key abort)
@@ -417,12 +419,16 @@ make-socket."))
    "The close generic function can be applied to sockets. It releases the
 operating system resources associated with the socket."))
 
-(defmethod close ((socket unconnected-socket) &key abort)
+(defmethod close ((socket device-mixin) &key abort)
   (declare (ignore abort))
   (when (socket-device socket)
     (fd-close (socket-device socket))
     (setf (socket-device socket) nil)
     t))
+
+(defmethod close :after ((socket udp-socket) &key abort)
+  (declare (ignore abort))
+  (setf (socket-connected socket) nil))
 
 (defmethod socket-connect ((stream listener-socket)) :passive)
 
@@ -436,7 +442,7 @@ operating system resources associated with the socket."))
       (socket-error nil "connect" err nil :connect-address socket-address))))
 
 (defmethod socket-type ((stream udp-socket)) :datagram)
-(defmethod socket-connect ((stream udp-socket)) nil)
+(defmethod socket-connect ((stream udp-socket)) (socket-connected stream))
 (defmethod socket-format ((stream udp-socket)) :binary)
 
 (defgeneric socket-os-fd (socket)
@@ -631,7 +637,8 @@ the socket is not connected."))
                                 :port remote-port
                                 :allow-other-keys t
                                 keys)
-                         nil))
+                         nil)
+        (setf (socket-connected socket) t))
       (setq fd -1)
       socket)
     (unless (< fd 0)
@@ -844,7 +851,8 @@ the socket is not connected."))
 	      (_accept fd *multiprocessing-socket-io*)))
 	  (*multiprocessing-socket-io*
 	    (_accept fd t))
-	  (t
+	  (t ; if nowait was specified, temporarily force the socket to not block
+             ;  (sockets are generally 'born blocking' in CCL)
 	    (let ((was-blocking (get-socket-fd-blocking fd)))
 	      (unwind-protect
 		  (progn
@@ -909,24 +917,29 @@ accept-connection on it again."))
 (defmethod send-to ((socket udp-socket) msg size
 		    &key remote-host remote-port remote-address offset)
   "Send a UDP packet over a socket."
-  (let ((socket-address (or remote-address
-                            (remote-socket-address socket)
-                            (resolve-address :host (or remote-host
-                                                       (getf (socket-keys socket) :remote-host))
-                                             :port (or remote-port
-                                                       (getf (socket-keys socket) :remote-port))
-                                             :connect :active
-                                             :address-family (socket-address-family socket)
-                                             :socket-type :datagram))))
+  (let ((socket-address (and (not (socket-connected socket))
+                             (or remote-address
+                                 (remote-socket-address socket)
+                                 (resolve-address :host (or remote-host
+                                                            (getf (socket-keys socket) :remote-host))
+                                                  :port (or remote-port
+                                                            (getf (socket-keys socket) :remote-port))
+                                                  :connect :active
+                                                  :address-family (socket-address-family socket)
+                                                  :socket-type :datagram)))))
     (multiple-value-setq (msg offset) (verify-socket-buffer msg offset size))
     (%stack-block ((bufptr size))
       (%copy-ivector-to-ptr msg offset bufptr 0 size)
       (socket-call socket "sendto"
-        (with-eagain (socket-device socket) :output
-          (c_sendto (socket-device socket)
-                    bufptr size 0
-                    (sockaddr socket-address)
-                    (sockaddr-length socket-address)))))))
+                   (with-eagain (socket-device socket) :output
+                     (c_sendto (socket-device socket)
+                               bufptr size 0
+                               (if socket-address
+                                   (sockaddr socket-address)
+                                   (%null-ptr))
+                               (if socket-address
+                                   (sockaddr-length socket-address)
+                                   0)))))))
 
 (defmethod receive-from ((socket udp-socket) size &key buffer extract offset want-socket-address-p)
   "Read a UDP packet from a socket. If no packets are available, wait for
@@ -943,7 +956,7 @@ If want-socket-address-p is true:
 
   The buffer with the data
   The number of bytes read
-  The socket-address describing the sender
+  The socket-address object describing the sender
 "
   (let ((fd (socket-device socket))
 	(vec-offset offset)
@@ -991,8 +1004,9 @@ you need to read responses after sending an end-of-file signal."))
   (let ((fd (socket-device socket)))
     (socket-call socket "shutdown"
       (c_shutdown fd (ecase direction
-		       (:input 0)
-		       (:output 1))))))
+		       (:input #$SHUT_RD)
+		       (:output #$SHUT_WR)
+                       (:both #$SHUT_RDWR))))))
 
 (defun dotted-to-ipaddr (name &key (errorp t))
   "Convert a dotted-string representation of a host address to a 32-bit
