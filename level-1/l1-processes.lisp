@@ -513,7 +513,7 @@ predicate to return true."
 
 (defun process-wait-with-timeout (whostate time function &rest args)
   "Cause the current thread to wait for a given predicate to return true,
-or for a timeout to expire."
+or for a timeout to expire. Time is in ticks."
   (declare (dynamic-extent args))
   (cond ((null time)  (apply #'process-wait whostate function args) t)
         (t (let* ((win nil)

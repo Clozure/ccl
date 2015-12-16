@@ -152,7 +152,7 @@ atomically decremented."
                             millis (floor remaining-itus (/ internal-time-units-per-second 1000)))))))))))))
 
 (defun timed-wait-on-semaphore (s duration &optional notification)
-  "Wait until the given semaphore has a postive count which can be
+  "Wait until the given semaphore has a positive count which can be
 atomically decremented, or until a timeout expires."
   (%timed-wait-on-semaphore-ptr (semaphore-value s) duration notification))
 
