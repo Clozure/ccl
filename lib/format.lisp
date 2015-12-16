@@ -1132,8 +1132,14 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; DO NOT EVEN THINK OF ATTEMPTING TO UNDERSTAND THIS CODE WITHOUT READING 
 ;;; THE PAPER!
 
-
-
+#| Improvements beyond Steele and White:
+ Steele and White (original and retrospective included): http://kurtstephens.com/files/p372-steele.pdf
+ Bryan O'Sullivan: http://www.serpentine.com/blog/2011/06/29/here-be-dragons-advances-in-problems-you-didnt-even-know-you-had/
+ Burger and Dybvig: http://www.cs.indiana.edu/~dyb/pubs/FP-Printing-PLDI96.pdf
+ Loitsch: http://www.cs.tufts.edu/~nr/cs257/archive/florian-loitsch/printf.pdf
+ Ryan Juckett: http://www.ryanjuckett.com/programming/printing-floating-point-numbers/part-2/
+ Gay: http://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.4049
+|#
 
 (defun flonum-to-string (n &optional width fdigits scale)
   (let ((*print-radix* nil))
