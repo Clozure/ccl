@@ -5396,13 +5396,7 @@
              :unsigned-fullword))
 
 (defun unread-data-available-p (fd)
-  #+(or freebsd-target windows-target)
-  (fd-input-available-p fd 0)
-  #-(or freebsd-target windows-target)
-  (rlet ((arg (* :char) (%null-ptr)))
-    (when (zerop (int-errno-call (#_ioctl fd #$FIONREAD :address arg)))
-      (let* ((avail (pref arg :long)))
-	(and (> avail 0) avail)))))
+  (fd-input-available-p fd 0))
 
 ;;; Read and discard any available unread input.
 (defun %fd-drain-input (fd)
@@ -5518,6 +5512,9 @@
 	      (pref tv :timeval.tv_usec) us)))))
 
 (defun fd-input-available-p (fd &optional milliseconds)
+  "Returns true or false depending on whether input is available.
+   In some cases on windows, it may return a count of the number of unread bytes.
+   This behavior should not be depended upon."
   #+windows-target
   (case (%unix-fd-kind fd)
     (:socket
