@@ -22,8 +22,8 @@ case $1 in
 	platform="darwinx86"
 	image32="dx86cl.image"
 	image64="dx86cl64.image"
-	headers32="x86-headers"
-	headers64="x86-headers64"
+	headers32="darwin-x86-headers"
+	headers64="darwin-x86-headers64"
 	;;
     freebsdx86)
 	platform="freebsdx86"
