@@ -878,7 +878,7 @@
 
 ;;; Create a flow graph from vinsns and return the entry node.
 (defun create-flow-graph (vinsns)
-  (show-vinsns vinsns 2)
+
   (let* ((nodes ()))
     
     (flet ((label->fgn (label) (dll-node-pred label)))
@@ -1925,27 +1925,40 @@ o           (unless (and (eql use (interval-begin interval))
 
 
 ;;; Choose another physical register for interval
-                
-(defun resolve-interval-conflict (interval)
-  (let* ((mask 0))
-    (declare (fixnum mask))
-    (dolist (other (interval-conflicts-with interval))
-      (setq mask (logior mask (ash 1 (interval-preg other)))))
-    (block resolve
-      (let* ((avail (logandc2 (interval-avail interval) mask)))
-        (declare (fixnum avail))
-        (do* (( i 16 (1- i)))
-             ((< i 0))
-          (declare (fixnum i))
-          (let* ((preg (1- i)))
-            (declare (type (integer 0 15) preg))
-            (when (and (logbitp preg avail)
-                       (not (find-conflicting-intervals interval preg)))
-              (let* ((lreg (interval-lreg interval)))
-                (setf (lreg-value lreg) preg
-                      (interval-preg interval) preg))
-            (return-from resolve preg))))))))
 
+(defun resolve-interval-conflict (interval)
+  (let* ((def (interval-trivial-def interval))
+         (lreg (interval-lreg interval)))
+    (if def
+      (nullify-trivial-copy def t)
+      (if (and lreg (not (or (lreg-wired lreg) (lreg-local-p lreg))))
+        (let* ((mask 0))
+          (declare (fixnum mask))
+          (dolist (other (interval-conflicts-with interval))
+            (setq mask (logior mask (ash 1 (interval-preg other)))))
+          (block resolve
+            (let* ((avail (logandc2 (interval-avail interval) mask)))
+              (declare (fixnum avail))
+              (do* (( i 16 (1- i)))
+                   ((< i 0))
+                (declare (fixnum i))
+                (let* ((preg (1- i)))
+                  (declare (type (integer 0 15) preg))
+                  (when (and (logbitp preg avail)
+                             (not (find-conflicting-intervals interval preg)))
+                    (let* ((lreg (interval-lreg interval)))
+                      (setf (lreg-value lreg) preg
+                            (interval-preg interval) preg))
+                    (return-from resolve preg)))))))))))
+
+(defun resolvable-interval-conflict-p (interval)
+  (let* ((def (interval-trivial-def interval))
+         (lreg (interval-lreg interval)))
+    (or (and def (nullify-trivial-copy def nil))
+        (unless (or (lreg-wired lreg)
+                    (lreg-local-p lreg))
+
+          t))))
 
 
                                             
@@ -1978,23 +1991,37 @@ o           (unless (and (eql use (interval-begin interval))
                (src-preg (interval-preg src-interval))
                (dest-preg (interval-preg dest-interval)))
           (declare (type (unsigned-byte 4) src-preg dest-preg))
-          (when (and resolve (interval-non-trivial-conflicts dest-interval))
+          (or (eql src-preg dest-preg)  
+              (progn
+          (when (and resolve
+                     (interval-non-trivial-conflicts dest-interval)
+                     (getf (vinsn-annotation vinsn) :resolvable))
             (dolist (conflict (interval-non-trivial-conflicts dest-interval) )
               (resolve-interval-conflict conflict)
               (setf (interval-conflicts-with conflict) nil)))
-          (unless (or (eql src-preg dest-preg)
-                      (lreg-local-p dest)
-                      (lreg-wired dest))
 
             (when (not resolve)
               (dolist (i (find-conflicting-intervals dest-interval src-preg))
-                (unless (or (eq i src-interval) (interval-trivial-def i))
+                
+                ;; the conflicting interval was defined by a trivial-copy, but
+                ;; we might nullify that definition.
+                (unless (or (eq i src-interval) #|(interval-trivial-def i)|#)
                   (push dest-interval (interval-conflicts-with i))
-                  (push i (interval-non-trivial-conflicts  dest-interval)))))
-            (setf (interval-preg dest-interval)src-preg
-                  (lreg-value dest) src-preg
-                  (svref vp 0) src)
-            t))))))
+                  (push i (interval-non-trivial-conflicts  dest-interval))))
+              (when (dolist (i (interval-non-trivial-conflicts  dest-interval) t)
+                      (unless (resolvable-interval-conflict-p  i)
+                              (break)
+                        (return nil)))
+                (setf (getf (vinsn-annotation vinsn) :resolvable) t))))
+                          
+          (when (getf (vinsn-annotation vinsn) :resolvable)
+            (if resolve
+              (setf (lreg-value dest) src-preg
+                    (svref vp 0) src)
+              (setf (interval-preg dest-interval)src-preg))
+            t))
+
+        )))))
 
 (defparameter *remove-trivial-copies* nil)
 
@@ -2077,14 +2104,17 @@ o           (unless (and (eql use (interval-begin interval))
                  (show-fgn n (vinsn-list-lregs header))))
              (unless (linear-scan header )
                (linear-scan-bailout "register allocation failed"))
-
+             (when *linear-scan-verbose*
+               (dolist (n fg )
+                 (terpri)
+                 (show-fgn n regs nil)))
              (remove-trivial-copies header)
              (when *report-linear-scan-success*
                (format *debug-io*  "~&;; Won on ~a" *current-function-name*))
              (incf *linear-scan-won*)
              (resolve-split-intervals header)
              (process-spills-and-reloads fg)
-             (when *linear-scan-verbose*
+             '(when *linear-scan-verbose*
                (dolist (n fg )
                  (terpri)
                  (show-fgn n regs)))
