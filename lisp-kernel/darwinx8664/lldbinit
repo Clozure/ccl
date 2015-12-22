@@ -1,0 +1,12 @@
+process handle --notify false --pass true --stop false SIGKILL SIGILL SIGSEGV SIGBUS SIGFPE SIGUSR1 SIGUSR2 SIGEMT
+
+# this doesn't work until a target is defined
+target stop-hook add --one-liner "disassemble --pc"
+
+command alias arg_x expr print_lisp_object($r8)
+command alias arg_y expr print_lisp_object($rdi)
+command alias arg_z expr print_lisp_object($rsi)
+command alias fn expr print_lisp_object($r13)
+
+command alias lbt expr plbt_sp($rbp)
+

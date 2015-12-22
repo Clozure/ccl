@@ -336,6 +336,7 @@ lisp-kernel/constants.h -text
 lisp-kernel/darwinarm/Makefile -text
 lisp-kernel/darwinx8632/.gdbinit -text
 lisp-kernel/darwinx8632/Makefile -text
+lisp-kernel/darwinx8664/lldbinit -text
 lisp-kernel/freebsdx8632/.gdbinit -text
 lisp-kernel/freebsdx8632/Makefile -text
 lisp-kernel/gc-common.c -text
