@@ -5150,9 +5150,9 @@
   (:align 4))
 
 (define-x8664-vinsn double-float-negate (((reg :double-float))
-                                         ((reg :double-float)
-                                          (tmp :double-float)))
-  (movsd (:@ (:^ :const) (:% x8664::fn)) (:%xmm tmp)) 
+                                         ((reg :double-float))
+					 ((tmp :double-float)))
+  (movsd (:@ (:^ :const) (:% x8664::fn)) (:%xmm tmp))
   (pxor (:%xmm tmp) (:%xmm reg))
   (:uuo-section)
   :const
@@ -5160,8 +5160,8 @@
   (:long #x-80000000))
 
 (define-x8664-vinsn single-float-negate (((reg :single-float))
-                                         ((reg :single-float)
-                                          (tmp :single-float)))
+                                         ((reg :single-float))
+					 ((tmp :single-float)))
   (movss (:@ (:^ :const) (:% x8664::fn)) (:%xmm tmp)) 
   (pxor (:%xmm tmp) (:%xmm reg))
   (:uuo-section)
