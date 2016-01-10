@@ -867,9 +867,6 @@ minimum number of elements to add if it must be extended."
                    target::subtag-u16-vector)
 		  ((and (>= low 0) (<= high #xffffffff))
                    target::subtag-u32-vector)
-                  #+64-bit-target
-                  ((and (>= low 0) (<= high (1- (ash 1 64))))
-                   target::subtag-u64-vector)
 		  ((and (>= low -128) (<= high 127)) target::subtag-s8-vector)
 		  ((and (>= low -32768) (<= high 32767)) target::subtag-s16-vector)
                   #+32-bit-target
@@ -882,6 +879,9 @@ minimum number of elements to add if it must be extended."
                   ((and (>= low target::target-most-negative-fixnum)
                         (<= high target::target-most-positive-fixnum))
                    target::subtag-fixnum-vector)                  
+                  #+64-bit-target
+                  ((and (>= low 0) (<= high (1- (ash 1 64))))
+                   target::subtag-u64-vector)
                   #+64-bit-target
                   ((and (>= low (ash -1 63)) (<= high (1- (ash 1 63))))
                    target::subtag-s64-vector)
