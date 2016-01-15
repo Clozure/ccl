@@ -703,7 +703,6 @@ minimum number of elements to add if it must be extended."
                           (setf (uvref data (the fixnum (+ offset rmi))) val))))))))))))))
 
 
-
 (defun schar (s i)
   "SCHAR returns the character object at an indexed position in a string
    just as CHAR does, except the string must be a simple-string."
@@ -713,47 +712,41 @@ minimum number of elements to add if it must be extended."
       (aref (the simple-string s) i)
       (report-bad-arg s 'simple-string))))
 
-
 (defun %scharcode (s i)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
-      (locally
-        (declare (optimize (speed 3) (safety 0)))
+      (locally (declare (optimize (speed 3) (safety 0)))
         (aref (the (simple-array (unsigned-byte 32) (*)) s) i))
-        (report-bad-arg s 'simple-string))))
-
+      (report-bad-arg s 'simple-string))))
 
 (defun set-schar (s i v)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
       (setf (aref (the simple-string s) i) v)
-        (report-bad-arg s 'simple-string))))
+      (report-bad-arg s 'simple-string))))
 
- 
 (defun %set-scharcode (s i v)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
-      (locally
-        (declare (optimize (speed 3) (safety 0)))
+      (locally (declare (optimize (speed 3) (safety 0)))
         (setf (aref (the simple-string s) i) v))
-        (report-bad-arg s 'simple-string))))
-  
+      (report-bad-arg s 'simple-string))))
 
-; Strings are simple-strings, start & end values are sane.
+;;; Strings are simple-strings, start & end values are sane.
 (defun %simple-string= (str1 str2 start1 start2 end1 end2)
   (declare (fixnum start1 start2 end1 end2))
   (when (= (the fixnum (- end1 start1))
            (the fixnum (- end2 start2)))
     (locally (declare (type simple-base-string str1 str2))
-            (do* ((i1 start1 (1+ i1))
-                  (i2 start2 (1+ i2)))
-                 ((= i1 end1) t)
-              (declare (fixnum i1 i2))
-              (unless (eq (schar str1 i1) (schar str2 i2))
-                (return))))))
+      (do* ((i1 start1 (1+ i1))
+	    (i2 start2 (1+ i2)))
+	   ((= i1 end1) t)
+	(declare (fixnum i1 i2))
+	(unless (eq (schar str1 i1) (schar str2 i2))
+	  (return))))))
 
 (defun copy-uvector (src)
   (%extend-vector 0 src (uvsize src)))
