@@ -340,9 +340,37 @@
   (movq (% allocptr) (% arg_z))
   (movq (% xmm0) (@ x8664::complex-single-float.realpart (% arg_z)))
   (single-value-return))
-                                               
 
-
+;;; Write the hex digits (including leading zeros) that represent the
+;;; unsigned-byte contained in FIXNUM into STRING, which must be long
+;;; enough.  END-IDX is the position in the string where the rightmost
+;;; hex digit should go.  END-IDX should be 14 for (unsigned-byte 60),
+;;; and 7 for (unsigned-byte 32).  This function assumes that the
+;;; starting index (for the leftmost hex digit) is 0.
+(defx86lapfunction %ub-fixnum-hex-digits ((end-idx arg_x) (fixnum arg_y)
+					  (string arg_z))
+  (let ((index imm1))
+    ;; We want index to start out as the index into the string of the
+    ;; rightmost hex digit.  Thus, for (unsigned-byte 60), index will
+    ;; be 14.  For (unsigned-byte 32), it will be 7.
+    (unbox-fixnum end-idx index)
+    (unbox-fixnum fixnum imm2)
+    ;; Fill in string, from right to left, with hex digits of fixnum.
+    @loop
+    (movl ($ #xf) (% imm0.l))
+    (andl (% imm2.l) (% imm0.l))	;get low nibble
+    (cmpl ($ 10) (% imm0.l))		;convert to char code
+    (jb @small)
+    ;; extra for digits #\A through #\F
+    (addl ($ 7) (% imm0.l))
+    @small
+    ;; 48 is (char-code #\0) 
+    (addl ($ 48) (% imm0.l))
+    (movl (% imm0.l) (@ x8664::misc-data-offset (% string) (% index) 4))
+    (sarq ($ 4) (% imm2))		;shift in next lowest nibble
+    (subq ($ 1) (% index))
+    (jae @loop)
+    (single-value-return)))                                               
   
 ;;; End of x86-numbers.lisp
 ) ; #+x8664-target
