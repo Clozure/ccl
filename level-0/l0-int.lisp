@@ -188,6 +188,7 @@
             (setq index (1- index))
             (setf (schar string index) #\0)))))))
 
+#+x8664-target
 (defun %bignum-hex-digits (b string)
   (let* ((size (uvsize b))
 	 (temp-string (make-string 8))
@@ -205,7 +206,7 @@
 (defun write-unsigned-byte-hex-digits (u stream)
   (setq u (require-type u '(unsigned-byte)))
   #-x8664-target
-  (write n :stream stream :base 16)
+  (write u :stream stream :base 16)
   #+x8664-target
   (if (fixnump u)
     (let* ((scratch (make-string 15)))
