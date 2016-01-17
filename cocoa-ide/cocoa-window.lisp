@@ -1,18 +1,18 @@
 ;;;-*-Mode: LISP; Package: GUI -*-
 ;;;
-;;;   Copyright (C) 2002-2007 Clozure Associates
-;;;   This file is part of OpenMCL.  
+;;; Copyright 2002-2007 Clozure Associates
 ;;;
-;;;   OpenMCL is licensed under the terms of the Lisp Lesser GNU Public
-;;;   License , known as the LLGPL and distributed with OpenMCL as the
-;;;   file "LICENSE".  The LLGPL consists of a preamble and the LGPL,
-;;;   which is distributed with OpenMCL as the file "LGPL".  Where these
-;;;   conflict, the preamble takes precedence.  
+;;; Licensed under the Apache License, Version 2.0 (the "License");
+;;; you may not use this file except in compliance with the License.
+;;; You may obtain a copy of the License at
 ;;;
-;;;   OpenMCL is referenced in the preamble as the "LIBRARY."
+;;;     http://www.apache.org/licenses/LICENSE-2.0
 ;;;
-;;;   The LLGPL is also available online at
-;;;   http://opensource.franz.com/preamble.html
+;;; Unless required by applicable law or agreed to in writing, software
+;;; distributed under the License is distributed on an "AS IS" BASIS,
+;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;;; See the License for the specific language governing permissions and
+;;; limitations under the License.
 
 
 (in-package "GUI")
