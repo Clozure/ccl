@@ -678,7 +678,7 @@ the lisp and run REBUILD-CCL again.")
                                 (eql exit-code 0))
                          (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
                            (unless (and write-date (> write-date old-write-date))
-                             (error "The hesp imsge ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
+                             (error "The heap image ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
                            (format t "~&;Wrote heap image: ~s"
                                    (truename (format nil "ccl:~a"
                                                      (standard-image-name))))
