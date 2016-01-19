@@ -1829,7 +1829,6 @@ o           (unless (and (eql use (interval-begin interval))
                    
                  
             
-
 (defstatic *linear-scan-won* 0)
 (defstatic *linear-scan-lost* 0)
 (defparameter *report-linear-scan-success* nil)
@@ -2081,6 +2080,7 @@ o           (unless (and (eql use (interval-begin interval))
              (when *report-linear-scan-success*
                (format *debug-io*  "~&;; Won on ~a" *current-function-name*))
              (incf *linear-scan-won*)
+             (setq *using-linear-scan-won* t)
              (resolve-split-intervals header)
              (process-spills-and-reloads fg)
              (when *linear-scan-verbose*
