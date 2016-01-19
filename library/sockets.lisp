@@ -1004,9 +1004,12 @@ you need to read responses after sending an end-of-file signal."))
   (let ((fd (socket-device socket)))
     (socket-call socket "shutdown"
       (c_shutdown fd (ecase direction
-		       (:input #$SHUT_RD)
-		       (:output #$SHUT_WR)
-                       (:both #$SHUT_RDWR))))))
+		       (:input #-windows-target #$SHUT_RD
+			       #+windows-target #$SD_RECEIVE)
+		       (:output #-windows-target #$SHUT_WR
+				#+windows-target #$SD_SEND)
+                       (:both #-windows-target #$SHUT_RDWR
+			      #+windows-target #$SD_BOTH))))))
 
 (defun dotted-to-ipaddr (name &key (errorp t))
   "Convert a dotted-string representation of a host address to a 32-bit
