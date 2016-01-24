@@ -226,7 +226,7 @@
 (defparameter *using-linear-scan-won* nil)
 
 
-(defloadvar *stack-access-winners* ())
+(defloadvar *stack-access-winners* (make-hash-table :test 'eq :weak t))
 
 (defun compile-named-function (def &rest args
                                 &key name env policy load-time-eval-token target
@@ -295,7 +295,7 @@
                             keep-symbols))))))
           (let* ((f (afunc-lfun def)))
             (when *using-linear-scan-won*
-              (push f *stack-access-winners*))
+              (setf (gethash   f *stack-access-winners*) name)) 
             (values f (afunc-warnings def))))
       (linear-scan-bailout
        ()
