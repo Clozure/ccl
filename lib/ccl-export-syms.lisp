@@ -61,6 +61,7 @@
      watch
      unwatch
      stack-access
+     *stack-access-defeat-hook*
      using-linear-scan
 
      show-documentation

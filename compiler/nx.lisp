@@ -227,13 +227,15 @@
 
 
 (defloadvar *stack-access-winners* (make-hash-table :test 'eq :weak t))
+(defparameter *stack-access-defeat-hook* ())
+
 
 (defun compile-named-function (def &rest args
                                 &key name env policy load-time-eval-token target
                                 function-note keep-lambda keep-symbols source-notes
                                 (record-pc-mapping *record-pc-mapping*)
                                 (force-legacy-backend nil)
-                                 (compile-code-coverage *compile-code-coverage*))
+                                (compile-code-coverage *compile-code-coverage*))
   ;; SOURCE-NOTES, if not nil, is a hash table mapping source forms to locations,
   ;;   is used to produce and attach a pc/source map to the lfun, also to attach
   ;;   source locations and pc/source maps to inner lfuns.
@@ -248,7 +250,13 @@
            def
            (let* ((*load-time-eval-token* load-time-eval-token)
                   (*current-function-name* (or name "an anonymous function"))
-                  (*backend-use-linear-scan*  (target-arch-case (:x8664 (unless force-legacy-backend (and name *backend-use-linear-scan* ))) (t nil)))
+                  (defeat-hook *stack-access-defeat-hook*)
+                  (suppress (or force-legacy-backend (null name) (and defeat-hook
+                                                                      (or (typep defeat-hook 'function)
+                                                                          (and (typep defeat-hook 'symbol)
+                                                                               (fboundp defeat-hook)))
+                                                                      (funcall  defeat-hook name))))
+                  (*backend-use-linear-scan*  (target-arch-case (:x8664 (unless suppress  *backend-use-linear-scan* ))    (t nil)))
                   (*force-legacy-backend* force-legacy-backend)
                   (*nx-source-note-map* source-notes)
                   (*nx-current-note* function-note)
