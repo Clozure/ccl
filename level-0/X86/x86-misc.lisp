@@ -406,6 +406,21 @@
   (shrq ($ 1) (% arg_z))
   (single-value-return))
 
+(defx86lapfunction rdtscp ()
+  (:byte #x0f)                          ;three-byte rdtscp opcode
+  (:byte #x01)                         ;is #x0f #x01 xf9
+  (:byte #xf9)
+  (shlq ($ 32) (% rdx))
+  (orq (% rdx) (% rax))
+  (imul ($ (* 2 target::node-size)) (% rax) (% arg_z))
+  (shrq ($ 1) (% arg_z))
+  (shlq ($ target::fixnumshift) (% rcx))
+  (push (% arg_z))
+  (push (% rcx))
+  (set-nargs 2)
+  (lea (@ '2 (% rsp)) (% temp0))
+  (jmp-subprim .SPvalues)))
+
 ;;; Return all 64 bits of the time-stamp counter as an unsigned integer.
 (defx86lapfunction rdtsc64 ()
   (:byte #x0f)                          ;two-byte rdtsc opcode
