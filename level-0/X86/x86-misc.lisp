@@ -419,7 +419,7 @@
   (push (% rcx))
   (set-nargs 2)
   (lea (@ '2 (% rsp)) (% temp0))
-  (jmp-subprim .SPvalues)))
+  (jmp-subprim .SPvalues))
 
 ;;; Return all 64 bits of the time-stamp counter as an unsigned integer.
 (defx86lapfunction rdtsc64 ()
