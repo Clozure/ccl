@@ -1649,3 +1649,27 @@ are running on, or NIL if we can't find any useful information."
                                     +null-ptr+)))
         (unless (eql handle #$INVALID_HANDLE_VALUE)
           handle)))))
+;;; call into the CCL kernel to execute a CPUID instruction,  Yes it's
+;;; a PITA to need to do this
+#+x86-target
+(defun x86-cpuid (selector)
+  (rletz ((bx :unsigned-long)
+          (cx :unsigned-long )
+          (dx :unsigned-long))
+    (values
+     (external-call "cpuid"
+                    :unsigned-long selector
+                    :address bx
+                    :address cx
+                    :address dx
+                    :unsigned-long)
+     (pref bx :unsigned-long)
+     (pref cx :unsigned-long)
+     (pref dx :unsigned-long))))
+
+(defun winning-function-p (f)
+  (getf (%lfun-info f) :winner))
+
+#+x86-target
+(defun rdtscp-p ()
+  (logbitp 27 (nth-value 3 (x86-cpuid #x80000001))))

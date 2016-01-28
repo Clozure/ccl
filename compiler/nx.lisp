@@ -226,7 +226,8 @@
 (defparameter *using-linear-scan-won* nil)
 
 
-(defloadvar *stack-access-winners* (make-hash-table :test 'eq :weak t))
+(defparameter *stack-access-winners* (make-hash-table :test 'eq ))
+(def-ccl-pointers reset-winners () (clrhash *stack-access-winners*))
 (defparameter *stack-access-defeat-hook* ())
 
 
