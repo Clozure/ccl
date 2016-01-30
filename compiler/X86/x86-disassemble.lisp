@@ -2896,8 +2896,7 @@
 (defvar *previous-source-note*)
 
 (defun x86-print-di-lap (ds instruction tab-stop pc)
-  (let ((comment-start-offset 40)
-        (apc (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc))))
+  (let ((comment-start-offset 40))
 
     (unless (and (eq :nop (x86-di-flags instruction))
                  (not *x86-disassemble-print-nop*)
@@ -2920,7 +2919,7 @@
             (write-x86-lap-operand t op1 ds)
             (when op2
               (write-x86-lap-operand t op2 ds)))))
-      (format t ")~vt;~8<[~D/~D]~>" (+ comment-start-offset tab-stop) pc apc))
+       (format t ")~vt;~8<[~D]~>" (+ comment-start-offset tab-stop) pc))
     (format t "~&")))
 
 (defun x86-print-di-raw (ds instruction tab-stop pc)
@@ -2958,6 +2957,7 @@
          (labeled (x86-di-labeled instruction))
          (align (if (typep labeled 'fixnum) labeled))
          (entry (x86-ds-entry-point ds))
+         (comment-start-offset 44)
          (pc (- addr entry)))
     (let ((source-note (find-source-note-at-pc function pc)))
       (unless (eql (source-note-file-range source-note)
@@ -2971,7 +2971,7 @@
     (when labeled 
       (when (and align (> align 0))
           (format t "~&~%~vt(:align ~d)" (if *disassemble-verbose* 20 4) align))
-      (format t "~&L~d~%" pc)
+      (format t "~&L~d ~vt;~8< [@~D]~>~%" pc comment-start-offset (+ pc  (if (x86-ds-mode-64 ds) x8664::fulltag-function x8632::fulltag-misc)))
       (setq seq 0))
     (format t "~&")
     (let ((tab-stop 4)
