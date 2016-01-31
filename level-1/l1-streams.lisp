@@ -3090,7 +3090,7 @@
       (ecase line-termination
         (:cr (setf (ioblock-write-char-when-locked-function ioblock)
                    '%ioblock-write-char-translating-newline-to-cr
-                   (ioblock-read-char-function ioblock)
+                   (ioblock-write-char-function ioblock)
                    (case sharing
                      (:private
                       '%private-ioblock-write-char-translating-newline-to-cr)
