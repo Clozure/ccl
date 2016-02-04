@@ -1668,8 +1668,14 @@ are running on, or NIL if we can't find any useful information."
      (pref dx :unsigned-long))))
 
 (defun winning-function-p (f)
-  (getf (%lfun-info f) :winner))
+  (let* ((bits (lfun-bits f)))
+    (unless (logbitp $lfbits-noname-bit bits)
+      (logbitp 32 bits)))))
 
 #+x86-target
 (defun rdtscp-p ()
   (logbitp 27 (nth-value 3 (x86-cpuid #x80000001))))
+
+#+x86-target
+(defun invariant-tsc-p ()
+  (logbitp 8  (nth-value 3 (x86-cpuid #x80000007))))

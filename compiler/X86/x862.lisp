@@ -916,7 +916,8 @@
                 (when (getf debug-info 'function-symbol-map)
                   (setf (getf debug-info 'function-symbol-map) (x862-digest-symbols)))
 
-
+                (when *using-linear-scan-won*
+                  (setq bits (logior bits (ash 1 32))))
                 (setf (afunc-lfun afunc)
                       #+x86-target
                       (if (eq *host-backend* *target-backend*)
