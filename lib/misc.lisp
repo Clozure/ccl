@@ -1670,7 +1670,7 @@ are running on, or NIL if we can't find any useful information."
 (defun winning-function-p (f)
   (let* ((bits (lfun-bits f)))
     (unless (logbitp $lfbits-noname-bit bits)
-      (logbitp 32 bits)))))
+      (logbitp 32 bits))))
 
 #+x86-target
 (defun rdtscp-p ()
