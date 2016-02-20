@@ -208,6 +208,7 @@
 (defvar *x862-entry-label* nil)
 (defvar *x862-tail-label* nil)
 (defvar *x862-tail-vsp* nil)
+(defvar *x862-fixed-self-tail-vsp* nil)
 (defvar *x862-tail-nargs* nil)
 (defvar *x862-tail-arg-vars* nil)
 (defvar *x862-tail-allow* t)
@@ -733,6 +734,7 @@
            (*x862-entry-label* nil)
            (*x862-tail-label* nil)
            (*x862-tail-vsp* nil)
+           (*x862-fixed-self-tail-vsp* nil)
            (*x862-tail-nargs* nil)
            (*x862-tail-arg-vars* nil)
            (*x862-inhibit-register-allocation* nil)
@@ -1407,12 +1409,19 @@
           (let* ((offset (* (the fixnum (- nargs *x862-target-num-arg-regs*)) *x862-target-node-size*)))
             (declare (fixnum offset))
             (! save-lisp-context-offset offset)))
-        (@ (setq *x862-fixed-self-tail-call-label* (backend-get-next-label))))
+        (@ (setq *x862-fixed-self-tail-call-label* (backend-get-next-label)))
+        (setq *x862-tail-nargs* nargs
+                  *x862-tail-arg-vars* (reverse revargs)
+                  *x862-tail-vsp* *x862-vstack*
+                  *x862-fixed-self-tail-vsp* *x862-vstack*
+                  ))
       (target-arch-case
        (:x8632
 	(destructuring-bind (&optional zvar yvar &rest stack-args) revargs
 	  (let* ((nstackargs (length stack-args)))
 	    (x862-set-vstack (* nstackargs *x862-target-node-size*))
+            (when *x862-fixed-self-tail-vsp*
+                (setq *x862-fixed-self-tail-vsp* *x862-vstack*))
 	    (if (>= nargs 2)
 	      (push (x862-vpush-arg-register seg ($ *x862-arg-y*) yvar) reg-vars))
 	    (if (>= nargs 1)
@@ -1420,7 +1429,9 @@
        (:x8664
 	(destructuring-bind (&optional zvar yvar xvar &rest stack-args) revargs
 	  (let* ((nstackargs (length stack-args)))
-	    (x862-set-vstack (* nstackargs *x862-target-node-size*))
+            (x862-set-vstack (* nstackargs *x862-target-node-size*))
+            (when *x862-fixed-self-tail-vsp*
+                (setq *x862-fixed-self-tail-vsp* *x862-vstack*))
 	    (if (>= nargs 3)
 	      (push (x862-vpush-arg-register seg ($ x8664::arg_x) xvar ) reg-vars))
 	    (if (>= nargs 2)
@@ -3559,7 +3570,7 @@
 (defun x862-make-closure (seg afunc downward-p)
   (if *backend-use-linear-scan*
     (with-x86-local-vinsn-macros (seg)
-      ;(linear-scan-bailout "closure")
+      ;(linear-scan-bailout 'closure)
       (let* ((header ($ x8664::imm0 :mode :u64))
              (disp ($ x8664::imm1 :mode :s64))
              (dest ($ x8664::arg_z))
@@ -3751,7 +3762,7 @@
 (defun x862-formlist (seg stkargs &optional revregargs)
   (with-x86-local-vinsn-macros (seg)  
     (let* ((nregs (length revregargs))
-           ;(*x862-vstack* *x862-vstack*)
+           ;;(*x862-vstack* *x862-vstack*)
            (n nregs)
            (zreg ())
            (yreg ())
@@ -3761,19 +3772,19 @@
       (if *backend-use-linear-scan*
         (dolist (arg stkargs)
           (let* ((reg (x862-one-untargeted-lreg-form seg arg (?))))
-          (! vpush-register reg))
+            (! vpush-register reg))
           (incf n))
         (dolist (arg stkargs)
-        (let* ((pushform (x862-acode-operator-supports-push arg)))
-          (if pushform
-            (progn
-              (x862-form seg :push nil pushform)
+          (let* ((pushform (x862-acode-operator-supports-push arg)))
+            (if pushform
+              (progn
+                (x862-form seg :push nil pushform)
 
-              (x862-adjust-vstack *x862-target-node-size*))
+                (x862-adjust-vstack *x862-target-node-size*))
               
-            (let* ((reg (x862-one-untargeted-reg-form seg arg *x862-arg-z*)))
-              (x862-vpush-register-arg seg reg)))
-          (incf n))))
+              (let* ((reg (x862-one-untargeted-reg-form seg arg *x862-arg-z*)))
+                (x862-vpush-register-arg seg reg)))
+            (incf n))))
       (when revregargs
         (let* ((zform (%car revregargs))
                (yform (%cadr revregargs))
@@ -3782,8 +3793,8 @@
 	    (progn
 	      (target-arch-case (:x8632 (compiler-bug "3 reg args on x8632?")))
 	      (multiple-value-setq (xreg yreg zreg) (x862-three-targeted-reg-forms seg xform ($ x8664::arg_x)
-					     yform ($ *x862-arg-y*)
-					     zform ($ *x862-arg-z*))))
+                                                                                   yform ($ *x862-arg-y*)
+                                                                                   zform ($ *x862-arg-z*))))
 	    (if (eq 2 nregs)
 	      (multiple-value-setq (yreg zreg) (x862-two-targeted-reg-forms seg yform ($ *x862-arg-y*) zform ($ *x862-arg-z*)))
 	      (setq zreg (x862-one-targeted-reg-form seg zform ($ *x862-arg-z*)))))))
@@ -5426,7 +5437,7 @@
              (if (or (typep val 'fixnum)
                      ;
                      (logbitp $vbitdynamicextent bits))
-               (linear-scan-bailout "dynamic-extent")
+               (linear-scan-bailout 'dynamic-extent)
                (cond ((logbitp $vbitspecial bits)
                       (x862-dbind seg val sym))
                      (t
@@ -5516,7 +5527,7 @@
     (when *backend-use-linear-scan*
       (let*  ((reg (or (var-lreg var) (let* ((r (?))) (setf (var-lreg var) r)))))
         (when (or  closed-p)
-          (linear-scan-bailout (format nil "not yet closed variable ~s" var)))
+          (linear-scan-bailout 'closed-varable))
         (let* ((offset (ash vloc -3)))
           (when (< offset *x862-incoming-args-on-stack*)
             (break)
@@ -5757,7 +5768,7 @@
 
       
 (defun x862-%immediate-store  (seg vreg xfer bits ptr offset val)
-  (linear-scan-bailout "pointer operations")
+  (linear-scan-bailout 'ffi )
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if (eql 0 (%ilogand #xf bits))
       (x862-%immediate-set-ptr seg vreg xfer  ptr offset val)
@@ -6047,7 +6058,7 @@
                                                  (eql (acode-operator f)
                                                       (%nx1-operator immediate)))
                                             (not (x862-acode-needs-memoization f)))
-                                  (linear-scan-bailout "store")))
+                                  (linear-scan-bailout 'store)))
 
         (let* ((n (length initforms))
                (vec (?))
@@ -7248,20 +7259,20 @@
           (if (not (or opt rest keys))
             (if *backend-use-linear-scan*
               (or (setq handled-simple-lambda (x862-fixed-args-entry seg rev-fixed auxen))
-                  (linear-scan-bailout "lambda"))
+                  (linear-scan-bailout 'lambda))
               
               (setq arg-regs (x862-req-nargs-entry seg rev-fixed)))
             (if (and (not (or hardopt rest keys))
                      (<= (+ num-fixed num-opt) *x862-target-num-arg-regs*))
               (if  *backend-use-linear-scan*
                 (or (setq handled-simple-lambda (x862-simple-optional-entry seg  rev-fixed  rev-opt auxen))
-                    (linear-scan-bailout "lambda"))
+                    (linear-scan-bailout 'lambda))
                 (setq arg-regs (x862-simple-opt-entry seg rev-opt rev-fixed)))
 
               (progn
 
                 (when (and *backend-use-linear-scan* (not handled-simple-lambda))
-                  (linear-scan-bailout "lambda"))
+                  (linear-scan-bailout 'lambda))
                 ;; From now on, the runtime assumes that all
                 ;; incoming arguments are on the stack, either because
                 ;; we push them below or something in the runtime does
@@ -7834,7 +7845,6 @@
       (^))))
 
 (defx862 x862-setq-special setq-special (seg vreg xfer sym val)
-  ;;(linear-scan-bailout "setq of special variable")
   (let* ((symreg ($ *x862-arg-y*))
          (valreg ($ *x862-arg-z*)))
     (x862-one-targeted-reg-form seg val valreg)
@@ -7850,7 +7860,7 @@
 (defx862 x862-local-go local-go (seg vreg xfer tag)
   (declare (ignorable xfer))
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "GO"))
+    (linear-scan-bailout 'go))
   (let*  ((curstack (x862-encode-stack))
          (label (cadr tag))
          (deststack (caddr tag)))
@@ -8122,7 +8132,7 @@
       (^))))
 
 (defx862 x862-multiple-value-list multiple-value-list (seg vreg xfer form)
-  (linear-scan-bailout "mulriple-value-list")
+  (linear-scan-bailout 'multiple-value-list)
   (x862-multiple-value-body seg form)
   (! list)
   (when vreg
@@ -8324,106 +8334,77 @@
   (x862-call-fn seg vreg xfer fn arglist spread-p))
 
 (defx862 x862-self-call self-call (seg vreg xfer arglist &optional spread-p)
+
+
   (setq arglist (x862-augment-arglist *x862-cur-afunc* arglist (if spread-p 1 *x862-target-num-arg-regs*)))
   (with-x86-local-vinsn-macros (seg)
+    ;;(break)
+    (cond  (*backend-use-linear-scan*
+            (let* ((nargs (+ (length (car arglist)) (length (cadr arglist))))
+                   (tail-p (x862-tailcallok xfer)))
+              (declare (fixnum nargs))
 
-    (cond (*backend-use-linear-scan*
-           (let* ((nargs (+ (length (car arglist)) (length (cadr arglist))))
-                  (tail-p (x862-tailcallok xfer)))
-             (declare (fixnum nargs))
-
-             (if (and (eql nargs *x862-tail-nargs*) tail-p (not spread-p))
-               (let ((args (append (car arglist) (reverse (cadr arglist)))))
-                 (ecase nargs
-                   (0)
-                   (1 (x862-one-lreg-form seg (car args) ($ x8664::arg_z)))
-                   (2 (x862-two-targeted-reg-forms seg (car args) ($ x8664::arg_y) (cadr args) ($ x8664::arg_z)))
-                   (3 (x862-three-targeted-reg-forms seg (car args) ($ x8664::arg_x) (cadr args) ($ x8664::arg_y) (caddr args) ($ x8664::arg_z)))
-                   (4 (x862-four-targeted-reg-forms seg  (car args) ($ x8664::arg_w) (cadr args) ($ x8664::arg_x) (caddr args) ($ x8664::arg_y) (cadddr args) ($ x8664::arg_z))))
-                 (let* ((depth *x862-vstack*))
-                   (unless (eql 0 depth)
-                     (! adjust-vsp depth)))
-                 (-> *x862-fixed-self-tail-call-label*))
-               (progn (linear-scan-bailout "self-call")))))
+              (if (and (eql nargs *x862-tail-nargs*) tail-p (not spread-p))
+                (let ((args (append (car arglist) (reverse (cadr arglist)))))
+                  (ecase nargs
+                    (0)
+                    (1 (x862-one-lreg-form seg (car args) ($ x8664::arg_z)))
+                    (2 (x862-two-targeted-reg-forms seg (car args) ($ x8664::arg_y) (cadr args) ($ x8664::arg_z)))
+                    (3 (x862-three-targeted-reg-forms seg (car args) ($ x8664::arg_x) (cadr args) ($ x8664::arg_y) (caddr args) ($ x8664::arg_z)))
+                    (4 (x862-four-targeted-reg-forms seg  (car args) ($ x8664::arg_w) (cadr args) ($ x8664::arg_x) (caddr args) ($ x8664::arg_y) (cadddr args) ($ x8664::arg_z))))
+                  (let* ((depth *x862-vstack*))
+                    (unless (eql 0 depth)
+                      (! adjust-vsp depth)))
+                  (-> *x862-fixed-self-tail-call-label*))
+                (progn (linear-scan-bailout 'self-call)))))
                    
         
-          (t
-           (progn
+           (t
+            (progn
     
-             (let* ((nargs *x862-tail-nargs*))
-               (if (and nargs (x862-tailcallok xfer) (not spread-p)
-                        (eql nargs (+ 17  (length (car arglist))
-                                      (length (cadr arglist)))))
-                 (let* ((forms (append (car arglist) (reverse (cadr arglist))))
-                        (vars *x862-tail-arg-vars*)
-                        (regs (ecase nargs
-                                (0 ())
-                                (1 (list ($ *x862-arg-z*)))
-                                (2 (list ($ *x862-arg-y*) ($ *x862-arg-z*)))
-                                (3 (list (target-arch-case
-                                          (:x8632 ($ x8632::temp0))
-                                          (:x8664 ($ x8664::arg_x)))
-                                         ($ *x862-arg-y*) ($ *x862-arg-z*)))
-                                (4 (target-arch-case
-                                    (:x8632 (compiler-bug "4 tail-call args on x8632"))
-                                    (:x8664 (list ($ x8664::temp0)
-                                                  ($ x8664::arg_x)
-                                                  ($ x8664::arg_y)
-                                                  ($ x8664::arg_z))))))))
-                   ;; A form that's a lexical reference to X that's ultimately going
-                   ;; to be stored in X is a noop.
-                   (collect ((new-forms)
-                             (new-vars)
-                             (new-regs))
-                     (do* ((xforms forms (cdr xforms))
-                           (xvars vars (cdr xvars))
-                           (xregs regs (cdr xregs))
-                           (new-nargs 0))
-                          ((null xforms)
-                           (setq nargs new-nargs
-                                 forms (new-forms)
-                                 vars (new-vars)
-                                 regs (new-regs)))
-                       (declare (fixnum new-nargs))
-                       (let* ((var (car xvars))
-                              (form (car xforms)))
-                         (unless (and (eq var (nx2-lexical-reference-p form))
-                                      (not (logbitp $vbitsetq (nx-var-bits var)))
-                                      (var-nvr var))
-                           (incf new-nargs)
-                           (new-vars var)
-                           (new-forms form)
-                           (new-regs (car xregs))))))
-                   (dotimes (i nargs)
-                     (let* ((var (nth i vars))
-                            (nvr (var-nvr var)))
-                       (when nvr
-                         (when (dotimes (j nargs t)
-                                 (unless (= i j)
-                                   (let* ((form (nth j forms)))
-                                     (unless (and (nx2-var-not-set-by-form-p var form)
-                                                  (nx2-var-not-reffed-by-form-p var form))
-                                       (return)))))
-                           (setf (nth i regs) nvr)))))
-                   (case nargs
-                     (1 (x862-one-targeted-reg-form seg (car forms) (car regs)))
-                     (2 (x862-two-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)))
-                     (3 (x862-three-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs) (caddr forms) (caddr regs)))
-                     (4 (x862-four-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)  (caddr forms) (caddr regs) (cadddr forms) (cadddr regs))))
-                   (do* ((vars vars (cdr vars))
-                         (forms forms (cdr forms))
-                         (regs regs (cdr regs)))
-                        ((null vars))
-                     (let* ((var (car vars))
-                            (reg (car regs)))
-                       (unless (and (eq var (nx2-lexical-reference-p (car forms)))
-                                    (not (logbitp $vbitsetq (nx-var-bits var))))
-                         (x862-do-lexical-setq seg nil (var-ea var) reg))))
-                   (let* ((diff (- *x862-vstack* *x862-tail-vsp*)))
-                     (unless (eql 0 diff)
-                       (! adjust-vsp diff))
-                     (! jump (aref *backend-labels* *x862-tail-label*))))
-                 (x862-call-fn seg vreg xfer -2 arglist spread-p))))))))
+              (let* ((nargs *x862-tail-nargs*)
+                     (vars *x862-tail-arg-vars*)
+                     (*x862-vstack* *x862-vstack*)
+                     (regargs (cadr arglist)))
+
+                (if (and nargs (x862-tailcallok xfer) (not spread-p)
+                         *x862-fixed-self-tail-call-label*
+                         *x862-fixed-self-tail-vsp*
+                         (dolist (v vars t)                    
+                           (when (logtest (nx-var-bits v) (logior (ash 1 $vbitclosed)
+                                                                  (ash 1 $vbitsetq)
+                                                                  (ash 1 $vbitspecial)))
+                             (return nil)))
+                         (eql nargs (+ (length (car arglist))
+                                       (length regargs))))
+                  (let* (
+                         (defer ())
+                         (scratch *x862-temp0*))
+                    (do* ((forms (append (car arglist) regargs) (cdr forms))
+                          (vars vars (cdr vars)))
+                         ((eq forms regargs)
+                          (let* ((*x862-vstack* *x862-vstack*))
+                            (x862-formlist seg nil regargs))
+                          (dolist (d defer)
+                            (x862-vpop-register seg scratch)
+                            (x862-register-to-stack seg scratch d))
+                          (let* ((diff (- *x862-vstack* *x862-fixed-self-tail-vsp*)))
+                            (unless (eql 0 diff)
+                              (! adjust-vsp diff))
+
+                            (x862-set-nargs seg nargs)
+                            (! jump (aref *backend-labels* *x862-fixed-self-tail-call-label*))) 
+                        
+                          )
+                      (let ((form (car forms))
+                            (var (car vars)))
+                        (or (eq var (nx2-lexical-reference-p  form))
+                            (progn
+                              (x862-form seg scratch nil form)
+                              (x862-vpush-register seg scratch)
+                              (push (var-ea var) defer))))))
+                  (x862-call-fn seg vreg xfer -2 arglist spread-p)))))))
+  )
 
 
 (defx862 x862-lexical-function-call lexical-function-call (seg vreg xfer afunc arglist &optional spread-p)
@@ -9200,7 +9181,7 @@
                  (let* ((bits (nx-var-bits var)))
                    (when (or ;;(logbitp $vbitspecial bits)
                              (logbitp $vbitclosed bits))
-                     (linear-scan-bailout "special or closed var"))
+                     (linear-scan-bailout 'closed))
                    (let* ((reg (?)))
                      (! vpop-register reg)
                      (setf (var-lreg var) reg))))
@@ -9327,7 +9308,7 @@
       (^))))
 
 (defx862 x862-%ilsr %ilsr (seg vreg xfer form1 form2)
-  (linear-scan-bailout "assembler bug")
+  (linear-scan-bailout '%ilsr)
   (if (null vreg)
     (progn
       (x862-form seg nil nil form1)
@@ -9647,7 +9628,7 @@
     (x862-set-float seg vreg xfer ptr offset newval nil fp-reg)))
 
 (defx862 x862-immediate-get-ptr immediate-get-ptr (seg vreg xfer ptr offset)
-  (linear-scan-bailout "pointer operations")
+  (linear-scan-bailout 'ffi)
   (let* ((absptr (acode-absolute-ptr-p ptr))
          (triv-p (x862-trivial-p offset))
          (dest vreg)
@@ -9715,7 +9696,7 @@
 ;;; This returns an unboxed object, unless the caller wants to box it.
 (defx862 x862-immediate-get-xxx immediate-get-xxx (seg vreg xfer bits ptr offset)
   (declare (fixnum bits))
-  (linear-scan-bailout "pointer operations")
+  (linear-scan-bailout 'ffi)
   (let* ((fixnump (logbitp 6 bits))
          (signed (logbitp 5 bits))
          (size (logand 15 bits))
@@ -9874,7 +9855,7 @@
     (with-x86-p2-declarations p2decls
       (cond(*backend-use-linear-scan*
             (or (x862-check-simple-varlist vars)
-                (linear-scan-bailout "LET"))
+                (linear-scan-bailout 'let))
             (x862-seq-bind seg vars valcopy))
            (t
             (dolist (var vars)
@@ -9952,7 +9933,7 @@
     (if (null fwd-refs)
       (x862-seq-fbind seg vreg xfer (nreverse real-vars) (nreverse real-funcs) body p2decls)
       (let* ((old-stack (x862-encode-stack)))
-        (linear-scan-bailout "LABELS needs more work")
+        (linear-scan-bailout 'labels)
         (setq real-vars (nreverse real-vars) real-funcs (nreverse real-funcs))
         (with-x86-p2-declarations p2decls
           (dolist (var real-vars)
@@ -9988,7 +9969,7 @@
     (let* ((*x862-vstack* *x862-vstack*)
            (*x862-cstack* *x862-cstack*))
       (when (and *backend-use-linear-scan* need-break)
-        (linear-scan-bailout "non-local exit"))
+        (linear-scan-bailout 'return-from))
       (if 
         (or
          (eq dest-cd $backend-return)
@@ -10097,7 +10078,7 @@
 (defx862 x862-throw throw (seg vreg xfer tag valform )
   (declare (ignorable vreg xfer))
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "throw"))
+    (linear-scan-bailout 'throw))
   (let* ((*x862-vstack* *x862-vstack*))
     (x862-vpush-register seg (x862-one-untargeted-reg-form seg tag *x862-arg-z*))
     (if (x862-trivial-p valform)
@@ -10116,7 +10097,7 @@
 ;;; Use a vinsn other than JUMP to reference the label.
 (defx862 x862-catch catch (seg vreg xfer tag valform)
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "catch"))
+    (linear-scan-bailout 'catch))
   (let* ((tag-label (backend-get-next-label))
          (tag-label-value (aref *backend-labels* tag-label))
          (mv-pass (x862-mv-p xfer)))
@@ -10475,7 +10456,7 @@
   (^))
 
 (defx862 x862-lambda-bind lambda-bind (seg vreg xfer vals req rest keys-p auxen body p2decls)
-  (linear-scan-bailout "lambda-bind: fix this")
+  (linear-scan-bailout 'lambda-bind)
   (let* ((old-stack (x862-encode-stack))
          (*x862-nfp-depth* *x862-nfp-depth*)
          (nreq (list-length req))
@@ -10729,7 +10710,7 @@
 
 (defx862 x862-unwind-protect unwind-protect (seg vreg xfer protected-form cleanup-form)
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "unwind-protect"))
+    (linear-scan-bailout 'unwind-protect))
   (let* ((cleanup-label (backend-get-next-label))
          (protform-label (backend-get-next-label))
          (old-stack (x862-encode-stack)))
@@ -10753,7 +10734,7 @@
 
 (defx862 x862-progv progv (seg vreg xfer symbols values body)
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "progv")) 
+    (linear-scan-bailout 'progv)) 
   (let* ((cleanup-label (backend-get-next-label))
          (protform-label (backend-get-next-label))
          (old-stack (x862-encode-stack)))
@@ -10770,7 +10751,7 @@
     (x862-undo-body seg vreg xfer body old-stack)))
 
 (defx862 x862-%ptr-eql %ptr-eql (seg vreg xfer cc x y )
-  (linear-scan-bailout "%PTR-EQL")
+  (linear-scan-bailout '%PTR-EQL)
   (if (null vreg)
     (progn
       (x862-form seg nil nil x)
@@ -10865,7 +10846,7 @@
 
 
 (defx862 x862-multiple-value-call multiple-value-call (seg vreg xfer fn arglist)
-  (linear-scan-bailout "multiple-value-call")
+  (linear-scan-bailout 'multiple-value-call)
   (x862-mvcall seg vreg xfer fn arglist))
 
 
@@ -10993,7 +10974,7 @@
 
 
 (defun x862-x8664-ff-call-return (seg vreg resultspec)
-  (linear-scan-bailout "ff-call")
+  (linear-scan-bailout 'ff-call)
   (with-x86-local-vinsn-macros (seg vreg)
     (when vreg
       (cond ((eq resultspec :void) (<- nil))
@@ -11145,7 +11126,7 @@
     
 (defx862 x862-ff-call ff-call (seg vreg xfer address argspecs argvals resultspec &optional monitor)
   (declare (ignore monitor))
-  (linear-scan-bailout "ffi")
+  (linear-scan-bailout 'ffi)
   (if (eq (backend-target-os *target-backend*) :win64)
     (x862-win64-ff-call seg vreg xfer address argspecs argvals resultspec)
     (let* ((*x862-vstack* *x862-vstack*)
@@ -11983,6 +11964,6 @@
 (defun x8664-spill-area-needed ()
   (let* ((vl *vinsn-list*))
     (when (>(vinsn-list-max-spill-depth vl) 10)
-      (linear-scan-bailout "too function-call intensive"))
+      (linear-scan-bailout 'calls))
    (prog1 (- (vinsn-list-max-spill-depth vl) (vinsn-list-spill-base vl))
      )))
