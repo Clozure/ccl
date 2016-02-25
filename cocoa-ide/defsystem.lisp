@@ -110,7 +110,6 @@
          "cocoa-grep")
     "cocoa-backtrace"
     "inspector"
-    "project"
     "cocoa-remote-lisp"
     "preferences-views"
     "preferences"

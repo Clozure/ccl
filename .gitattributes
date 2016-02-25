@@ -20,6 +20,7 @@ cocoa-ide/altconsole/resource/MainMenu.nib/objects.nib -text
 cocoa-ide/altconsole/version.plist -text
 cocoa-ide/app-delegate.lisp -text
 cocoa-ide/apropos-window.lisp -text
+cocoa-ide/asdf-browser.lisp -text
 cocoa-ide/build-application.lisp -text
 cocoa-ide/builder-utilities.lisp -text
 cocoa-ide/ccl-ide.lisp -text
@@ -92,7 +93,6 @@ cocoa-ide/menus.lisp -text
 cocoa-ide/preferences-views.lisp -text
 cocoa-ide/preferences.lisp -text
 cocoa-ide/processes-window.lisp -text
-cocoa-ide/project.lisp -text
 cocoa-ide/search-files-pre-lion.lisp -text
 cocoa-ide/search-files.lisp -text
 cocoa-ide/start.lisp -text
