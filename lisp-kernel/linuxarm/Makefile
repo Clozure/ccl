@@ -89,7 +89,7 @@ OSLIBS = -ldl -lm -lpthread -lrt
 
 
 ../../armcl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) $(FLOAT_ABI_OPTION) -o $@ -T ./armlinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) $(FLOAT_ABI_OPTION) -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
