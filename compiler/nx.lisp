@@ -230,6 +230,26 @@
 (def-ccl-pointers reset-winners () (clrhash *stack-access-winners*))
 (defparameter *stack-access-defeat-hook* ())
 
+(defun stack-access-might-win (def)
+  (and *backend-use-linear-scan*
+       (lambda-expression-p def)
+       (let* ((ll (cadr def))
+              (bits (or (encode-lambda-list ll) -1)))
+         (unless (or (eq (car  ll) '&method)
+                     (eq (car  ll) '&lap)
+                     (logtest (logior
+                           (%ilsl $lfbits-optinit-bit 1)
+                           (%ilsl $lfbits-rest-bit 1)
+                           (%ilsl $lfbits-restv-bit 1)
+                           (%ilsl $lfbits-keys-bit 1)
+                           (%ilsl $lfbits-aok-bit 1)) bits))
+           (let* ((nopt (ldb $lfbits-numopt bits))
+                  (nreq (ldb $lfbits-numreq bits)))
+             (if (eql 0 nopt)
+               (<= nreq 4)
+               (if (eql 1 nopt)
+                 (< nreq 4))))))))
+              
 
 (defun compile-named-function (def &rest args
                                 &key name env policy load-time-eval-token target
@@ -252,11 +272,16 @@
            (let* ((*load-time-eval-token* load-time-eval-token)
                   (*current-function-name* (or name "an anonymous function"))
                   (defeat-hook *stack-access-defeat-hook*)
-                  (suppress (or force-legacy-backend (null name) (and defeat-hook
+                  (suppress (or force-legacy-backend
+                               
+                                (null name) (and defeat-hook
                                                                       (or (typep defeat-hook 'function)
                                                                           (and (typep defeat-hook 'symbol)
                                                                                (fboundp defeat-hook)))
-                                                                      (funcall  defeat-hook name))))
+                                                                      (funcall  defeat-hook name))
+                                
+                                (not (stack-access-might-win def))))
+                  
                   (*backend-use-linear-scan*  (target-arch-case (:x8664 (unless suppress  *backend-use-linear-scan* ))    (t nil)))
                   (*force-legacy-backend* force-legacy-backend)
                   (*nx-source-note-map* source-notes)

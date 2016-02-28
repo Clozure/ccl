@@ -1233,7 +1233,7 @@
 (defnx1 nx1-%defun %defun context (&whole w def &optional (doc nil doc-p) &environment env)
   (declare (ignorable doc doc-p def))
   (when *backend-use-linear-scan*
-    (linear-scan-bailout "%defun"))
+    (linear-scan-bailout '%defun))
   ;; Pretty bogus.
   (if (and (consp def)
            (eq (%car def) 'nfunction)
