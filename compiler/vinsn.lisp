@@ -2068,7 +2068,7 @@ o           (unless (and (eql use (interval-begin interval))
         )))
 
 
-(defparameter *remove-trivial-copies* t)
+(defparameter *remove-trivial-copies* nil)
 
 ;; see postprocess-interval; this assumes that all trivial-copy operands
 ;; are lregs.
