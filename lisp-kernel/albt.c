@@ -92,7 +92,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
         elements = (header_element_count(header)+2)&~1;
         next = (lisp_frame *)(current+elements);
       } else if ((header & fixnummask) == 0) {
-        next = (LispObj *)header;
+        next = (lisp_frame *)header;
       } else if (header == stack_alloc_marker) {
         next = (lisp_frame *)(current[1]);
       } else {

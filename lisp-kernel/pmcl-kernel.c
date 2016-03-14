@@ -1676,7 +1676,7 @@ check_arm_cpu()
 
   install_signal_handler(SIGILL, (void *)early_signal_handler,0);
   feature_check();
-  win = arm_architecture_version >= 6;
+  win = arm_architecture_version >= 7;
   install_signal_handler(SIGILL, NULL, 0);
 
 #endif
