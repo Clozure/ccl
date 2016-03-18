@@ -1079,7 +1079,7 @@
 
 (defmethod print-object ((i interval) stream)
   (print-unreadable-object (i stream :type t)
-    (format stream "~c ~d:(~d) ~s ~s/~s ~s (~s)" (if (interval-trivial-def i) #\? #\space )(interval-idx i) (interval-flags i) (interval-lreg i) (interval-begin i) (interval-end i) (interval-regtype i) (interval-preg i))))
+    (format stream "~c ~d:(~d) ~s ~s/~s ~s (~s) <~s/~s" (if (interval-trivial-def i) #\? #\space )(interval-idx i) (interval-flags i) (interval-lreg i) (interval-begin i) (interval-end i) (interval-regtype i) (interval-preg i) (mapcar #'interval-idx (interval-conflicts i)) (mapcar #'interval-idx (interval-conflicts-with i)))))
 
 
                    
@@ -1187,6 +1187,7 @@
     (setf (vinsn-list-spill-area-used seg) (make-array nregs :element-type 'bit))
 
     (dovector (lreg (vinsn-list-lregs seg))
+      
               
       (let* ((all (append (lreg-defs lreg) (lreg-refs lreg))))
         
@@ -1972,6 +1973,9 @@ o           (unless (and (eql use (interval-begin interval))
     (dovector (i intervals)
       (when (interval-lreg i)
         (unless (interval-trivial-def i)
+         (dolist (other (find-conflicting-intervals i (interval-preg i)))
+           
+           (pushnew other (interval-conflicts-with i)))
           (let ((cw (interval-conflicts-with i)))
             (when cw 
               (ls-break)
@@ -2052,6 +2056,8 @@ o           (unless (and (eql use (interval-begin interval))
                (dest-preg (interval-preg dest-interval)))
           (declare (type (unsigned-byte 4) src-preg dest-preg))
           (when (memq (vinsn-sequence vinsn) *break-seqs*) (break))
+
+                      
           (when (and resolve
                      (interval-conflicts dest-interval)
                      (getf (vinsn-annotation vinsn) :resolvable))
@@ -2064,8 +2070,11 @@ o           (unless (and (eql use (interval-begin interval))
             (setf (getf (vinsn-annotation vinsn) :resolvable) t))
           (unless (or (eql src-preg dest-preg)
                       (lreg-wired dest)
+                      (cdr (lreg-defs dest)) 
                       )
 
+            '(when (cdr (lreg-defs dest))
+              (break "~s" *current-function-name*))
             (when (not resolve)
               (dolist (i (find-conflicting-intervals dest-interval src-preg))
                  
@@ -2079,7 +2088,6 @@ o           (unless (and (eql use (interval-begin interval))
                       (unless (resolvable-interval-conflict-p  i dest)
                         
                         (return nil)))
-               
                 (setf (getf (vinsn-annotation vinsn) :resolvable) t))))
 
 
@@ -2144,14 +2152,18 @@ o           (unless (and (eql use (interval-begin interval))
             (nullify-trivial-copy v nil))))
       (rebuild-avail-before seg)
       (resolve-non-trivial-interval-conflicts seg)
+      (when *linear-scan-verbose*
+        (format t "~&after:~&")
+
+        (dovector (i intervals)
+            (format t "~&i=~s" i)))
       (dolist (block (vinsn-list-flow-graph seg))
         (do-tail-dll-nodes (v block)
           (when (vinsn-attribute-p v :trivial-copy)
             (nullify-trivial-copy v t))))
       (when *linear-scan-verbose*
-        (format t "~&after:~&")
         (show-vinsn-list seg))
-      (ls-format  "~&removed trivial-copy vinsns from ~s" *current-function-name*)
+      (ls-format "~&removed trivial-copy vinsns from ~s" *current-function-name*)
       )))
 
 
