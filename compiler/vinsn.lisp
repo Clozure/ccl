@@ -2070,7 +2070,7 @@ o           (unless (and (eql use (interval-begin interval))
             (setf (getf (vinsn-annotation vinsn) :resolvable) t))
           (unless (or (eql src-preg dest-preg)
                       (lreg-wired dest)
-                      (cdr (lreg-defs dest)) 
+                      ;(cdr (lreg-defs dest)) 
                       )
 
             '(when (cdr (lreg-defs dest))
@@ -2117,6 +2117,7 @@ o           (unless (and (eql use (interval-begin interval))
 
 
 (defparameter *remove-trivial-copies* nil)
+
 
 ;; see postprocess-interval; this assumes that all trivial-copy operands
 ;; are lregs.
