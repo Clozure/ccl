@@ -2003,6 +2003,9 @@ o           (unless (and (eql use (interval-begin interval))
               )))))))
 
 
+(defun trivial-copy-source-operand (v)
+  (and (vinsn-attribute-p v :trivial-copy)
+       (svref (vinsn-variable-parts v) 1)))
 ;;; Choose another physical register for interval
                 
 (defun resolve-interval-conflict (interval reg)
@@ -2073,12 +2076,20 @@ o           (unless (and (eql use (interval-begin interval))
              (dest-preg (interval-preg dest-interval)))
         (declare (type (unsigned-byte 4) src-preg dest-preg))
         (when (and (typep src 'lreg)
-                   (typep dest 'lreg))
-          #+notyet ; there is likely an issue here
-          (when (cdr (lreg-defs dest))
-            (format t "~&mulitple defs of dest: ~s"    (lreg-defs dest))
-            (when (cdr (lreg-refs src))
-              (break "both: ~s"  (lreg-refs src))))
+                   (typep dest 'lreg)
+                   (dolist (def (cdr (lreg-defs dest)) t)
+                     (unless (vinsn-attribute-p def :trivial-copy)
+                       (let* ((dseq (vinsn-sequence def)))
+                         (declare (fixnum dseq))
+                         (unless (dolist (ref (lreg-refs dest) t)
+                                   (when (and (> (the fixnum (vinsn-sequence ref)) dseq)
+                                              (not (vinsn-attribute-p ref :trivial-copy)))
+                                     (ls-break "???")
+                                                                                  
+                                     (return nil)))
+                           (return nil))))))
+                                                       
+
         (when (memq (vinsn-sequence vinsn) *break-seqs*) (break))
         (when (and resolve
                    (interval-conflicts dest-interval)
