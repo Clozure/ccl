@@ -1076,10 +1076,7 @@
   (conflicts-with () :type list)
 )
 
-(defun fixed-lreg-p (x)
-  (if (typep x 'lreg)
-    (or (lreg-wired x) (lreg-local-p x))
-    (report-bad-arg x 'lreg)))
+
 
 
 (defmethod print-object ((i interval) stream)
