@@ -79,7 +79,7 @@
 (defx86lapfunction %object-in-heap-area-p ((object arg_y) (area arg_z))
   (rcmp (% object) (@ x8664::area.low (% area)))
   (setae (%b imm0))
-  (rcmp (% object) (@ x8664::area.low (% area)))
+  (rcmp (% object) (@ x8664::area.high (% area)))
   (setb (%b imm1))
   (andb (% imm1.b) (% imm0.b))
   (andl ($ x8664::t-offset) (%l imm0))
