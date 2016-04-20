@@ -8718,8 +8718,7 @@
 (defun x862-explicit-non-fixnum-type-p (form)
   (let* ((type (x862-form-type form))
          (target-fixnum-type (nx-target-type 'fixnum)))
-    (and (not (subtypep type target-fixnum-type))
-         (not (subtypep target-fixnum-type type)))))
+    (eq (specifier-type `(and ,target-fixnum-type ,type)) *empty-type*)))
 
 (defun x862-inline-sub2 (seg vreg xfer form1 form2)
   (let* ((v2 (acode-fixnum-form-p form2))
@@ -9139,7 +9138,7 @@
       (x862-vpush-register seg nreg))
      (x862-multiple-value-body seg form) ; sets nargs
     (! nth-value *x862-arg-z*))
-  (<- *x862-arg-z*)
+  (<- ($ *x862-arg-z*))
   (^))
 
 (defx862 x862-values values (seg vreg xfer forms)
