@@ -2026,13 +2026,11 @@ o           (unless (and (eql use (interval-begin interval))
                   (declare (type (integer 0 15) preg))
                   (when (and (logbitp preg avail)
                              (not (find-conflicting-intervals interval preg)))
-                    (when (dolist (ref (lreg-refs lreg) t)
-                              (when (vinsn-attribute-p ref :trivial-copy)
-                                (return nil)))
-                        (setf (lreg-value lreg) preg
-                              (interval-preg interval) preg)
-                        (use-preg-in-interval preg interval)
-                        (return-from resolve preg))))))))))))
+                    (when t 
+                      (setf (lreg-value lreg) preg
+                            (interval-preg interval) preg)
+                      (use-preg-in-interval preg interval)
+                      (return-from resolve preg))))))))))))
 
 (defun resolvable-interval-conflict-p (interval reg)
   (let* ((lreg (interval-lreg interval))
