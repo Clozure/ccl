@@ -2026,11 +2026,13 @@ o           (unless (and (eql use (interval-begin interval))
                   (declare (type (integer 0 15) preg))
                   (when (and (logbitp preg avail)
                              (not (find-conflicting-intervals interval preg)))
-                    (let* ((lreg (interval-lreg interval)))
-                      (setf (lreg-value lreg) preg
-                            (interval-preg interval) preg))
-                    (use-preg-in-interval preg interval)
-                    (return-from resolve preg)))))))))))
+                    (when (dolist (ref (lreg-refs lreg) t)
+                              (when (vinsn-attribute-p ref :trivial-copy)
+                                (return nil)))
+                        (setf (lreg-value lreg) preg
+                              (interval-preg interval) preg)
+                        (use-preg-in-interval preg interval)
+                        (return-from resolve preg))))))))))))
 
 (defun resolvable-interval-conflict-p (interval reg)
   (let* ((lreg (interval-lreg interval))
@@ -2046,102 +2048,104 @@ o           (unless (and (eql use (interval-begin interval))
     (let* ((vp (vinsn-variable-parts vinsn))
            (dest (svref vp 0))
            (src (svref vp 1)))
-      ;; if both src and dest are lregs, dest
-      ;; is not fixed, and doing so would not
-      ;; introduce any conflicts throughout
-      ;; the lifetime of dest, make the copy
-      ;; a nop and change uses of dest to use
-      ;; src directly
-      ;; we are considering changing uses
-      ;; of "dest" to use the same preg
-      ;; as "src" does.  some other interval(s)
-      ;; which did not conflict with "dest"
-      ;; during register allocation may do
-      ;; so now (if we back out of the copy)
-      ;; if we find any such conflicting
-      ;; intervals (which try to use the preg
-      ;; from the src interval. change the
-      ;; conflicting interval to use another
-      ;; preg if we can.
+      (when (and (typep src 'lreg)
+                 (typep dest 'lreg))
+        ;; if both src and dest are lregs, dest
+        ;; is not fixed, and doing so would not
+        ;; introduce any conflicts throughout
+        ;; the lifetime of dest, make the copy
+        ;; a nop and change uses of dest to use
+        ;; src directly
+        ;; we are considering changing uses
+        ;; of "dest" to use the same preg
+        ;; as "src" does.  some other interval(s)
+        ;; which did not conflict with "dest"
+        ;; during register allocation may do
+        ;; so now (if we back out of the copy)
+        ;; if we find any such conflicting
+        ;; intervals (which try to use the preg
+        ;; from the src interval. change the
+        ;; conflicting interval to use another
+        ;; preg if we can.
       
         
         
         
-      (let* ((src-interval (lreg-interval src))
-             (dest-interval (lreg-interval dest))
-             (src-preg (interval-preg src-interval))
-             (dest-preg (interval-preg dest-interval)))
-        (declare (type (unsigned-byte 4) src-preg dest-preg))
-        (when (and (typep src 'lreg)
-                   (typep dest 'lreg)
-                   (dolist (def (cdr (lreg-defs dest)) t)
-                     (unless (vinsn-attribute-p def :trivial-copy)
-                       (let* ((dseq (vinsn-sequence def)))
-                         (declare (fixnum dseq))
-                         (unless (dolist (ref (lreg-refs dest) t)
-                                   (when (and (> (the fixnum (vinsn-sequence ref)) dseq)
-                                              (not (vinsn-attribute-p ref :trivial-copy)))
-                                     (ls-break "???")
+        (let* ((src-interval (lreg-interval src))
+               (dest-interval (lreg-interval dest))
+               (src-preg (interval-preg src-interval))
+               (dest-preg (interval-preg dest-interval)))
+          (declare (type (unsigned-byte 4) src-preg dest-preg))
+          (when (and (typep src 'lreg)
+                     (typep dest 'lreg)
+                     (dolist (def (cdr (lreg-defs dest)) t)
+                       (unless (vinsn-attribute-p def :trivial-copy)
+                         (let* ((dseq (vinsn-sequence def)))
+                           (declare (fixnum dseq))
+                           (unless (dolist (ref (lreg-refs dest) t)
+                                     (when (and (> (the fixnum (vinsn-sequence ref)) dseq)
+                                                (not (vinsn-attribute-p ref :trivial-copy)))
+                                       (ls-break "???")
                                                                                   
-                                     (return nil)))
-                           (return nil))))))
+                                       (return nil)))
+                             (return nil))))))
                                                        
 
-        (when (memq (vinsn-sequence vinsn) *break-seqs*) (break))
-        (when (and resolve
-                   (interval-conflicts dest-interval)
-                   (getf (vinsn-annotation vinsn) :resolvable))
+            (when (memq (vinsn-sequence vinsn) *break-seqs*) (break))
+            (when (and resolve
+                       (interval-conflicts dest-interval)
+                       (getf (vinsn-annotation vinsn) :resolvable))
 
             
-          (dolist (conflict (interval-conflicts dest-interval) )
-            ;;(resolve-interval-conflict conflict dest)
-            (setf (interval-conflicts-with conflict) nil)))
-        (when (eql src-preg dest-preg)
-          (setf (getf (vinsn-annotation vinsn) :resolvable) t))
-        (unless (or (eql src-preg dest-preg)
-                    (fixed-lreg-p dest)
-                    )
+              (dolist (conflict (interval-conflicts dest-interval) )
+                ;;(resolve-interval-conflict conflict dest)
+                (setf (interval-conflicts-with conflict) nil)))
+            (when (eql src-preg dest-preg)
+              (setf (getf (vinsn-annotation vinsn) :resolvable) t))
+            (unless (or (eql src-preg dest-preg)
+                        (fixed-lreg-p dest)
+                        )
 
-          (when (not resolve)
-            (dolist (i (find-conflicting-intervals dest-interval src-preg))
+              (when (not resolve)
+                (dolist (i (find-conflicting-intervals dest-interval src-preg))
                  
-              ;; the conflicting interval was defined by a trivial-copy, but
-              ;; we might nullify that definition.
-              (unless (or (eq i src-interval) #|(interval-trivial-def i)|#)
-                (push dest-interval (interval-conflicts-with i))
-                (push i (interval-conflicts  dest-interval))))
+                  ;; the conflicting interval was defined by a trivial-copy, but
+                  ;; we might nullify that definition.
+                  (unless (or (eq i src-interval) #|(interval-trivial-def i)|#)
+                    (push dest-interval (interval-conflicts-with i))
+                    (push i (interval-conflicts  dest-interval))))
 
-            (when (dolist (i (interval-conflicts  dest-interval) t)
-                    (unless (resolvable-interval-conflict-p  i dest)
+                (when (dolist (i (interval-conflicts  dest-interval) t)
+                        (unless (resolvable-interval-conflict-p  i dest)
                         
-                      (return nil)))
+                          (return nil)))
                
-              (setf (getf (vinsn-annotation vinsn) :resolvable) t))))
+                  (setf (getf (vinsn-annotation vinsn) :resolvable) t))))
 
 
-        (when (or (getf (vinsn-annotation vinsn) :resolvable) (eql src-preg dest-preg))
+            (when (or (getf (vinsn-annotation vinsn) :resolvable) (eql src-preg dest-preg))
 
-          (if resolve
-            (unless (fixed-lreg-p dest)
-              (setf (lreg-value dest) src-preg
-                    (svref vp 0) src))
-            (progn
-              (unless (eql src-preg dest-preg)
-                (unuse-preg-in-interval dest-preg dest-interval))    
-              (setf (interval-preg dest-interval)src-preg
-                    ;;(interval-lreg dest-interval) nil
-                    (lreg-interval dest) src-interval)
+              (if resolve
+                (unless (fixed-lreg-p dest)
+                  (setf (lreg-value dest) src-preg
+                        (svref vp 0) src))
+                (progn
+                  (unless (eql src-preg dest-preg)
+                    (unuse-preg-in-interval dest-preg dest-interval))    
+                  (setf (interval-preg dest-interval)src-preg
+                        ;;(interval-lreg dest-interval) nil
+                        (lreg-interval dest) src-interval)
                 
 
-              ))
+                  ))
             
                     
 
             
 
-          t)))
+              t)))) 
 
-    )))
+      )))
 
 
 (defparameter *remove-trivial-copies* nil)
