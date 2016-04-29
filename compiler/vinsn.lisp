@@ -1978,31 +1978,33 @@ o           (unless (and (eql use (interval-begin interval))
   (let* ((intervals (vinsn-list-intervals seg)))
     (declare (type (vector t) intervals))
     (dovector (i intervals)
-      (when (and (interval-lreg i) (not (fixed-lreg-p(interval-lreg i))))
+      (let* ((lreg (interval-lreg i)))
+      (when (and lreg (not (fixed-lreg-p lreg)))
 
         (unless (interval-trivial-def i)
           (dolist (other (find-conflicting-intervals i (interval-preg i)))
             (let* ((tdef (interval-trivial-def other)))
               (if tdef
-                (progn
-                  ;;(break "1??")
+                (unless (eq lreg (trivial-copy-source-operand tdef))
+                  (when (null (interval-conflicts-with i))(break "1??"))
                   (pushnew other (interval-conflicts-with i)))
                 ;;(break "2??")
                 )))
                 
           (let ((cw (interval-conflicts-with i)))
             (when cw 
-              ;;(ls-break)
+               ;;(break)
               (dolist (other cw)
                 (setf (interval-conflicts other) (delete i (interval-conflicts other)))
                 )
               (resolve-interval-conflict i nil)
-              )))))))
+              ))))))))
 
 
 (defun trivial-copy-source-operand (v)
   (and (vinsn-attribute-p v :trivial-copy)
        (svref (vinsn-variable-parts v) 1)))
+
 ;;; Choose another physical register for interval
                 
 (defun resolve-interval-conflict (interval reg)
@@ -2096,6 +2098,7 @@ o           (unless (and (eql use (interval-begin interval))
 
             
               (dolist (conflict (interval-conflicts dest-interval) )
+                (break)
                 ;;(resolve-interval-conflict conflict dest)
                 (setf (interval-conflicts-with conflict) nil)))
             (when (eql src-preg dest-preg)
@@ -2126,7 +2129,7 @@ o           (unless (and (eql use (interval-begin interval))
               (if resolve
                 (unless (fixed-lreg-p dest)
                   (setf (lreg-value dest) src-preg
-                        (svref vp 0) src))
+                       ))
                 (progn
                   (unless (eql src-preg dest-preg)
                     (unuse-preg-in-interval dest-preg dest-interval))    
