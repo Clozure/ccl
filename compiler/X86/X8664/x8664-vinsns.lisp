@@ -642,7 +642,7 @@
                                     ((arg0 t)))
   (cmpq (:$l (:apply target-t-value)) (:%q arg0)))
 
-(define-x8664-vinsn ref-constant (((dest :lisp))
+(define-x8664-vinsn (ref-constant :constant-ref) (((dest :lisp))
                                   ((lab :label)))
   (movq (:@ (:^ lab) (:%q x8664::fn)) (:%q dest)))
 
