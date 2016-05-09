@@ -1074,6 +1074,8 @@
   (conflicts () :type list)
   (alt-preg 0 :type (unsigned-byte 4))
   (conflicts-with () :type list)
+  (alive t)
+  peer
 )
 
 
@@ -2038,8 +2040,8 @@ o           (unless (and (eql use (interval-begin interval))
   (let* ((lreg (interval-lreg interval))
          (tdef (interval-trivial-def interval)))
     (if (fixed-lreg-p lreg)
-      (and tdef (eq reg (svref (vinsn-variable-parts tdef) 1))) 
-      t)))
+      (and tdef (eq reg (trivial-copy-source-operand tdef))) 
+      nil)))
 
 (defparameter *break-seqs* () ) ; for debugging
                                             
@@ -2098,7 +2100,7 @@ o           (unless (and (eql use (interval-begin interval))
 
             
               (dolist (conflict (interval-conflicts dest-interval) )
-                (break)
+                ;;(break)
                 ;;(resolve-interval-conflict conflict dest)
                 (setf (interval-conflicts-with conflict) nil)))
             (when (eql src-preg dest-preg)
@@ -2135,7 +2137,8 @@ o           (unless (and (eql use (interval-begin interval))
                     (unuse-preg-in-interval dest-preg dest-interval))    
                   (setf (interval-preg dest-interval)src-preg
                         ;;(interval-lreg dest-interval) nil
-                        (lreg-interval dest) src-interval)
+                        ;;(lreg-interval dest) src-interval
+                        )
                 
 
                   ))
