@@ -2023,7 +2023,7 @@ o           (unless (and (eql use (interval-begin interval))
             (let* ((avail (logandc2 (interval-avail interval) mask)))
               (declare (fixnum avail))
               (do* (( i 16 (1- i)))
-                   ((< i 0) (break "???")(linear-scan-bailout 'pressure))
+                   ((< i 0) (ls-break "???")(linear-scan-bailout 'pressure))
                 (declare (fixnum i))
                 (let* ((preg (1- i)))
                   (declare (type (integer 0 15) preg))
@@ -2172,7 +2172,8 @@ o           (unless (and (eql use (interval-begin interval))
                     (linear-scan-bailout 'losing))
                   (dolist (other (interval-active-before dest-interval)) (pushnew other (interval-conflicts-with dest-interval)))
                   (resolve-interval-conflict dest-interval nil)
-                  (break "~&funky at ~s" vinsn))))
+                  (when *linear-scan-verbose*
+                    (break "~&funky at ~s" vinsn)))))
           
             )
 
@@ -2181,7 +2182,7 @@ o           (unless (and (eql use (interval-begin interval))
   
 
 
-(defparameter *remove-trivial-copies* nil)
+(defparameter *remove-trivial-copies* t)
 
 ;; see postprocess-interval; this assumes that all trivial-copy operands
 ;; are lregs.
@@ -2225,7 +2226,8 @@ o           (unless (and (eql use (interval-begin interval))
       (when *linear-scan-verbose*
         (format t "~&after:~&")
         (show-vinsn-list seg))
-      (format t "~&removed trivial-copy vinsns from ~s" *current-function-name*)
+      (when *linear-scan-verbose*
+        (format t "~&removed trivial-copy vinsns from ~s" *current-function-name*))
       )))
 
 
