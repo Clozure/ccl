@@ -329,6 +329,7 @@
     (let* ((typecode (typecode source-sequence))
            (n (- source-end source-start)))
       (if (and (not (listp source-sequence))
+               (simple-array-p source-sequence)
                (= (the fixnum (- target-end target-start)) n)
                (= typecode (typecode target-sequence)))
         (%uvector-replace target-sequence target-start source-sequence source-start n typecode)
