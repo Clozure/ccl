@@ -1,4 +1,4 @@
-;;;-*-Mode: LISP; Package: CCL -*-
+;;-*-Mode: LISP; Package: CCL -*-
 ;;;
 ;;; Copyright 2010 Clozure Associates
 ;;;
@@ -45,7 +45,7 @@
             (let* ((max 0))
               (declare (fixnum max))
               (dolist (v *arm2-all-nfp-pushes* max)
-                (when (vinsn-succ v)    ;not elided
+                (when (and v (vinsn-succ v))    ;not elided
                   (let* ((depth (+ (the fixnum (svref (vinsn-variable-parts v) 1))
                                    (if (vinsn-attribute-p v :uses-frame-pointer)
                                      16
@@ -234,7 +234,7 @@
       (when (and (logbitp i in)
                  (eql c (svref vals i)))
         (setq out (logior out (ash 1 i)))))))
-
+ 
 (defun arm2-nfp-ref (seg vreg ea)
   (with-arm-local-vinsn-macros (seg vreg)
     (let* ((offset (logand #xfff8 ea))
