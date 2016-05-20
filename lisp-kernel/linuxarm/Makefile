@@ -16,13 +16,20 @@
 SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 # default float-abi to whatever the toolchain defaults to.
+FLOAT_ABI_OPTION =
+VPATH = ../
+# default float-abi to whatever the toolchain defaults to.
 # allow float-abi.mk to override
 FLOAT_ABI_OPTION =
 VPATH = ../
 RM = /bin/rm
-# Versions of GNU as >= 2.9.1 all seem to work
-# AS = gas-2.9.1
-AS = as
+# compile natively,  on a 32-bit ARM v7 running Linux
+CROSS=
+# a plausible cross-compilation prefix, useful on
+# at least an odroid64 running Ubuntu 16.04
+#CROSS=/usr/bin/arm-linux-gnueabihf-
+AS = $(CROSS)as
+CC = $(CROSS)gcc
 M4 = m4
 ASFLAGS = -mfpu=vfp -march=armv7-a $(FLOAT_ABI_OPTION)
 M4FLAGS = -DLINUX -DARM
