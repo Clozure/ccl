@@ -114,7 +114,6 @@ compiler/acode-rewrite.lisp -text
 compiler/nx2.lisp -text
 doc/README -text
 doc/compiler-changes-in-CCL-1.12-trunk.pdf -text
-doc/compiler0changes-in-CCL-1.12-trunk.pdf -text
 doc/manual/about.ccldoc -text
 doc/manual/build.ccldoc -text
 doc/manual/ccl.ccldoc -text
