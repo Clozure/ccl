@@ -180,26 +180,6 @@
 
 (defparameter *arm-instruction-table*
   (vector
-   #||
-   ;; CLREX requires ARMv6T2 or later.  The memory-barrier instructions
-   ;; require ARMv7.
-   (define-arm-instruction clrex ()
-     #xf57ff01f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction isb ()
-     #xf57ff06f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction dmb ()
-     #xf57ff05f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction dsb ()
-     #xf57ff04f
-     #xffffffff
-     (:non-conditional))
-   ||#
 
    (define-arm-instruction vmul.f32 (:dd :dn :dm)
      #xf3000d10
@@ -888,7 +868,33 @@
      #x016f0f10
      #x0fff0ff0
      ())
- ))
+
+   ;; CLREX requires ARMv6T2 or later.  The memory-barrier instructions
+   ;; require ARMv7.
+   (define-arm-instruction clrex ()
+     #xf57ff01f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction isb ()
+     #xf57ff06f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction dmb ()
+     #xf57ff05f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction dsb ()
+     #xf57ff04f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction wfe ()
+     #x0320f002
+     #x0fffffff
+     ())
+   (define-arm-instruction sev ()
+     #x0320f004
+     #x0fffffff
+     ())))
 
 (dotimes (i (length *arm-instruction-table*))
   (let* ((template (svref *arm-instruction-table* i))

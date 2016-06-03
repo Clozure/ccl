@@ -353,24 +353,7 @@
     (str arg_z (:@! vsp (:$ (- arm::node-size))))
      ,none)))
 
-;;; ARMv7-only instructions
-(defarmlapmacro clrex (&optional (temp 'arm::imm0))
-  (let* ((skip (gensym)))
-    `(progn
-      (ldr ,temp (:@ rcontext (:$ arm::tcr.architecture-version)))
-      (cmp ,temp (:$ 0))
-      (blt ,skip)
-      (:opcode #xf57ff01f)
-      ,skip)))
 
-(defarmlapmacro dmb (&optional (temp 'arm::imm0))
-  (let* ((skip (gensym)))
-    `(progn
-      (ldr ,temp (:@ rcontext (:$ arm::tcr.architecture-version)))
-      (cmp ,temp (:$ 0))
-      (blt ,skip)
-      (:opcode #xf57ff05f)
-      ,skip)))
 
 
 
