@@ -66,7 +66,7 @@ ASFLAGS += -Q
 endif
 
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
-	   -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
+	   -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O
 # Once in a while, -Wformat says something useful.  The odds are against that,
