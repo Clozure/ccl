@@ -235,6 +235,10 @@ int spin_lock_tries = 1;
 void
 get_spin_lock(signed_natural *p, TCR *tcr)
 {
+#ifdef ARM
+  extern void atomic_swap_acquire(signed_natural *, TCR*);
+  atomic_swap_acquire(p, tcr);
+#else
   int i, n = spin_lock_tries;
   
   while (1) {
@@ -247,6 +251,7 @@ get_spin_lock(signed_natural *p, TCR *tcr)
     sched_yield();
 #endif
   }
+#endif
 }
 #endif
 

@@ -106,7 +106,12 @@ Boolean extern threads_initialized;
 Boolean extern log_tcr_info;
 
 #define LOCK_SPINLOCK(x,tcr) get_spin_lock(&(x),tcr)
+#ifdef ARM
+extern void release_spin_lock(int *);
+#define RELEASE_SPINLOCK(x) release_spin_lock(&x)
+#else
 #define RELEASE_SPINLOCK(x) (x)=0
+#endif
 
 #ifdef WIN_32
 #define TCR_TO_TSD(tcr) ((void *)((natural)(tcr)))
