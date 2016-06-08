@@ -313,7 +313,6 @@
      #x0fff00ff
      (:prefer-separate-cond))
 
-   #||
    ;; movw, movt require ARMv6T2 or later
    (define-arm-instruction movw (:rd :imm16)
      #x03000000
@@ -328,7 +327,6 @@
      #x0320f000
      #x0fffffff
      ())
-   ||#
 
    (define-arm-instruction and (:rd :rn :shifter)
      #x00000000
