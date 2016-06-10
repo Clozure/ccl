@@ -89,66 +89,63 @@ scripts. You should feel free to edit them as desired."
       may change over time.  The definitive list of command line
       options may be retrieved by using the
       {code --help} option.")
-    (listing :bullet
-      (item "{code -h} (or
-	      {code --help}).  Provides a definitive (if
+    (listing :definition
+      (item "{code -h}, {code --help}" => "Provides a definitive (if
 	      somewhat terse) summary of the command line options
 	      accepted by the {CCL} implementation and then
 	      exits.")
-      (item "{code -V} (or {code --version}).  Prints the version of
+      (item "{code -V}, {code --version}" => "Prints the version of
 	      {CCL} then exits.  The version string is the same value
 	      that is returned by {function
 	      lisp-implementation-version}.")
-      (item
-       (para "{code -K} {param character-encoding-name} (or
-	      {code --terminal-encoding}{param character-encoding-name}).
-	      Specifies the character encoding to use for
-	      {variable *terminal-io*} (see {section Character Encodings}).  Specifically, the
-	      {param character-encoding-name} string
-	      is uppercased and interned in the {code keyword} package. If an
-	      encoding named by that keyword exists,
-	      {variable *terminal-character-encoding-name*} is set to the name
-	      of that encoding.   The  default us {code :utf-8}."))
-      (item "{code -n} (or
-	      {code --no-init}). If this option is given, the
+      (item "{code -K}, {code --terminal-encoding}
+                    {param character-encoding-name}" =>
+	     "Specifies the character encoding to use for {variable
+	      *terminal-io*} (see {section Character Encodings}).
+	      Specifically, the {param character-encoding-name} string
+	      is uppercased and interned in the {code keyword}
+	      package. If an encoding named by that keyword exists,
+	      {variable *terminal-character-encoding-name*} is set to
+	      the name of that encoding.  The default is
+	      {code :utf-8}.")
+      (item "{code -n}, {code --no-init}" => "If this option is given, the
 	      init file is not loaded.  This is useful if {CCL} is being
 	      invoked by a shell script that should not be affected by
 	      whatever customizations a user might have in place.")
-      (item "{code -e} {param form}
-	      (or {code --eval}). An expression is read (via
-	      {function read-from-string}) from the string
-	      {param form} and evaluated. If
-	      {param form} contains shell metacharacters,
-	      it may be necessary to escape or quote them to prevent the
-	      shell from interpreting them.")
-      (item "{code -l} {param path}
-	      (or {code --load} {param path}). Loads file specified by
-	      {param path}.")
-      (item "{code -T} {param n} (or
-	      {code --set-lisp-heap-gc-threshold} {param n}).  Sets the Lisp gc threshold to
-	      {param n}. (see {section GC Page reclamation policy}")
-      (item "{code -Q} (or
-	      {code --quiet}). Suppresses printing of
+      (item "{code -e}, {code --eval} {param form}" =>
+	    "An expression is read (via {function read-from-string})
+	     from the string {param form} and evaluated. If {param
+	     form} contains shell metacharacters, it may be necessary
+	     to escape or quote them to prevent the shell from
+	     interpreting them.")
+      (item "{code -l}, {code --load} {param path}" =>
+	    "Loads file specified by {param path}.")
+      (item "{code -T}, {code --set-lisp-heap-gc-threshold} {param n}" =>
+	    "Sets the Lisp gc threshold to {param n}
+            (see {section GC Page reclamation policy}).")
+      (item "{code -Q}, {code --quiet}" => "Suppresses printing of
 	      heralds and prompts when the {code --batch}
 	      command line option is specified.")
-      (item "{code -R} {param n} (or
-	      {code --heap-reserve}). Reserves
-	      {param n} bytes for heap expansion.  The
-	      default is {code 549755813888}.  (see {section Heap space allocation})")
-      (item "{code -S} {param n} (or
-	      {code --stack-size}{param n}). Sets the size of the
-	      initial control stack to {param n}. (see {section Thread Stack Sizes})")
-      (item "{code -Z} {param n} (or
-	      {code --thread-stack-size}{param n}). Sets the size of the first
-	      thread's stack to {param n}. (see {section Thread Stack Sizes})")
-      (item "{code -b} (or {code --batch}). Execute in batch mode. End-of-file
-	      from {variable *standard-input*} causes {CCL} to exit, as do attempts to
-	      enter a break loop.")
-      (item "{code --no-sigtrap} An obscure option for running under GDB.")
-      (item "{code -I} {param image-name} (or
-	      {code --image-name} {param image-name}). Specifies the image
-	      name for the kernel to load.  Defaults to the kernel name
-	      with the suffix {system .image} appended."))
+      (item "{code -R}, {code --heap-reserve} {param n}" =>
+	    "Reserves {param n} bytes for heap expansion.  The default
+             depends on the particular platform in use
+             (see {section Heap space allocation}).")
+      (item "{code -S}, {code --stack-size} {param n}" =>
+	    "Sets the size of the initial control stack to {param
+	     n} (see {section Thread Stack Sizes}).")
+      (item "{code -Z}, {code --thread-stack-size} {param n}" => "Sets
+	      the size of the first thread's stack to {param n} (see
+	      {section Thread Stack Sizes}).")
+      (item "{code -b}, {code --batch}" => "Execute in batch
+	      mode. End-of-file from {variable *standard-input*}
+	      causes {CCL} to exit, as do attempts to enter a break
+	      loop.")
+      (item "{code --no-sigtrap}" => "An obscure option for running
+      under GDB.")
+      (item "{code -I}, {code --image-name} {param image-name}" =>
+	    "Specifies the image name for the kernel to load.
+	     Defaults to the kernel name with the suffix {system
+	      .image} appended."))
 
     "The {code --load} and {code --eval} options can each be provided
     multiple times.  They're executed in the order specified on the
