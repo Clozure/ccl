@@ -43,6 +43,10 @@
 
 
 typedef u_int32_t opcode, *pc;
+/*
+bad idea
+#define TCR_FLAG_BIT_PC_LUSERED (fixnumshift+9)
+*/
 
 Boolean
 handle_uuo(ExceptionInformation *, siginfo_t *, opcode);
@@ -87,6 +91,16 @@ handle_trap(ExceptionInformation *, opcode, pc, siginfo_t *);
 #define IS_SET_ALLOCPTR_RESULT_RD(i) (((i)&0x0fff0fff) == 0x01a0000c)
 #define IS_CLR_ALLOCPTR_TAG(i)       (((i)&0x0fffffff) == 0x03ccc007)
 #define IS_BRANCH_AROUND_ALLOC_TRAP(i) (((i)&0x0fffffff) == 0x0a000000)
+
+typedef enum {
+  ID_unrecognized_alloc_instruction,
+  ID_adjust_allocptr_instruction,
+  ID_load_allocbase_instruction,
+  ID_compare_allocptr_to_allocbase_instruction,
+  ID_branch_around_alloc_trap_instruction,
+  ID_alloc_trap_instruction,
+  ID_finish_allocation
+} alloc_instruction_id;
 
 
 #define IS_GC_TRAP(i)                (((i)&0x0fffffff) == 0x07f002f0)

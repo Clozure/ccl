@@ -1038,7 +1038,12 @@ handle_exception(int xnum,
 {
   pc program_counter;
   opcode instruction = 0;
-
+#if 0
+  if (tcr->flags & (1<<TCR_FLAG_BIT_PC_LUSERED)) {
+    tcr->flags &= ~(1<<TCR_FLAG_BIT_PC_LUSERED);
+    return true;
+  }
+#endif
   if (old_valence != TCR_STATE_LISP) {
     return false;
   }
@@ -1615,6 +1620,57 @@ extern opcode
 
 extern opcode ffcall_return_window, ffcall_return_window_end;
 
+alloc_instruction_id  classify_alloc_instruction (ExceptionInformation *xp)
+{
+  pc program_counter = xpPC(xp);
+  opcode instr = *program_counter;
+
+  if (IS_SUB_FROM_ALLOCPTR(instr) ||
+      IS_SUB_RM_FROM_ALLOCPTR(instr)) {
+    return ID_adjust_allocptr_instruction;
+  }
+  if (IS_LOAD_RD_FROM_ALLOCBASE(instr)) {
+    return ID_load_allocbase_instruction;
+  }
+  if (IS_COMPARE_ALLOCPTR_TO_RM(instr)) {
+    return ID_compare_allocptr_to_allocbase_instruction;
+  }
+  if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
+    return ID_branch_around_alloc_trap_instruction;
+  }
+  if (IS_ALLOC_TRAP(instr)) {
+    return ID_alloc_trap_instruction;
+  }
+  if (IS_CLR_ALLOCPTR_TAG(instr) ||
+      IS_SET_ALLOCPTR_RESULT_RD(instr) ||
+      IS_SET_ALLOCPTR_CDR_RD(instr) ||
+      IS_SET_ALLOCPTR_CAR_RD(instr) ||
+      IS_SET_ALLOCPTR_HEADER_RD(instr)) {
+        return ID_finish_allocation;
+      }
+  return ID_unrecognized_alloc_instruction;
+}
+  
+
+void
+restart_allocation(ExceptionInformation *xp)
+{
+  pc p = xpPC(xp);
+  opcode instr = *p;
+
+  while (1) {
+    if (IS_SUB_RM_FROM_ALLOCPTR(instr) ||
+        IS_SUB_LO_FROM_ALLOCPTR(instr)) {
+      xpPC(xp) = p;
+      return;
+    } else {
+      --p;
+      instr = *p;
+    }
+  }
+}
+
+
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 {
@@ -1698,91 +1754,13 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 
   
   if (allocptr_tag != tag_fixnum) {
-    signed_natural disp = allocptr_displacement(xp);
+    alloc_instruction_id state = classify_alloc_instruction(xp);
+    if (state != ID_unrecognized_alloc_instruction) {
 
-    if (disp) {
-      /* Being architecturally "at" the alloc trap doesn't tell
-         us much (in particular, it doesn't tell us whether
-         or not the thread has committed to taking the trap
-         and is waiting for the exception lock (or waiting
-         for the Mach exception thread to tell it how bad
-         things are) or is about to execute a conditional
-         trap.
-         Regardless of which case applies, we want the
-         other thread to take (or finish taking) the
-         trap, and we don't want it to consider its
-         current allocptr to be valid.
-         The difference between this case (suspend other
-         thread for GC) and the previous case (suspend
-         current thread for interrupt) is solely a
-         matter of what happens after we leave this
-         function: some non-current thread will stay
-         suspended until the GC finishes, then take
-         (or start processing) the alloc trap.   The
-         current thread will go off and do PROCESS-INTERRUPT
-         or something, and may return from the interrupt
-         and need to finish the allocation that got interrupted.
-      */
-
-      if (alloc_disp) {
-        *alloc_disp = disp;
-        xpGPR(xp,allocptr) -= disp;
-        /* Leave the PC at the alloc trap.  When the interrupt
-           handler returns, it'll decrement allocptr by disp
-           and the trap may or may not be taken.
-        */
-      } else {
-        Boolean ok = false;
-        update_bytes_allocated(tcr, (void *) ptr_from_lispobj(cur_allocptr - disp));
-        xpGPR(xp, allocptr) = VOID_ALLOCPTR + disp;
-        instr = program_counter[-1];
-        if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
-          instr = program_counter[-2];
-          if (IS_COMPARE_ALLOCPTR_TO_RM(instr)){
-            xpGPR(xp,RM_field(instr)) = VOID_ALLOCPTR;
-            ok = true;
-          }
-        }
-        if (ok) {
-          /* Clear the carry bit, so that the trap will be taken. */
-          xpPSR(xp) &= ~PSR_C_MASK;
-        } else {
-          Bug(NULL, "unexpected instruction preceding alloc trap.");
-        }
-      }
-    } else {
-      /* we may be before or after the alloc trap.  If before, set
-         allocptr to VOID_ALLOCPTR and back up to the start of the
-         instruction sequence; if after, finish the allocation. */
-      Boolean before_alloc_trap = false;
-
-      if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
-        before_alloc_trap = true;
-        --program_counter;
-        instr = *program_counter;
-      }
-      if (IS_COMPARE_ALLOCPTR_TO_RM(instr)) {
-        before_alloc_trap = true;
-        --program_counter;
-        instr = *program_counter;
-      }
-      if (IS_LOAD_RD_FROM_ALLOCBASE(instr)) {
-        before_alloc_trap = true;
-        --program_counter;
-        instr = *program_counter;
-      }
-      if (IS_SUB_HI_FROM_ALLOCPTR(instr)) {
-        before_alloc_trap = true;
-        --program_counter;
-      }
-      if (before_alloc_trap) {
-        xpPC(xp) = program_counter;
-        xpGPR(xp,allocptr) = VOID_ALLOCPTR;
-      } else {
-        /* If we're already past the alloc_trap, finish allocating
-           the object. */
+      if (state == ID_finish_allocation) {
         if (allocptr_tag == fulltag_cons) {
           finish_allocating_cons(xp);
+          
         } else {
           if (allocptr_tag == fulltag_misc) {
             finish_allocating_uvector(xp);
@@ -1790,13 +1768,22 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
             Bug(xp, "what's being allocated here ?");
           }
         }
-        /* Whatever we finished allocating, reset allocptr/allocbase to
-           VOID_ALLOCPTR */
-        xpGPR(xp,allocptr) = VOID_ALLOCPTR;
-        tcr->save_allocptr = tcr->save_allocbase = (LispObj *)VOID_ALLOCPTR;
+      } else {
+        restart_allocation(xp);
       }
-      return;
+      xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+#if 0
+      if (state == 1777 + ID_alloc_trap_instruction) {
+        /* what a tangled web we weave */
+        xpGPR(xp,allocptr)+=allocptr_displacement(xp);
+      }
+#endif
+    } else {
+      Bug(xp, "urecognized allocation atate");
     }
+    /* *********** 
+    tcr->flags |= (1<<TCR_FLAG_BIT_PC_LUSERED);
+    ****/
     return;
   }
   {
@@ -1887,6 +1874,9 @@ install_signal_handler(int signo, void *handler, unsigned flags)
   int err;
 
   sigfillset(&sa.sa_mask);
+  if (signo == thread_suspend_signal) {
+    sigdelset(&sa.sa_mask, SIGILL);
+  }
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
