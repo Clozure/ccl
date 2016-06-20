@@ -2260,20 +2260,9 @@
    ((:pred arm::encode-arm-immediate (:apply lognot intval))
     (mvn dest (:$ (:apply lognot intval))))
    ((:not (:pred arm::encode-arm-immediate (:apply lognot intval)))
-    ((:not (:pred = 0 (:apply logand #xff intval)))
-     (mov dest (:$ (:apply logand #xff intval))))
-    ((:not (:pred = 0 (:apply logand #xff00 intval)))
-     ((:pred = 0 (:apply logand #xff intval))
-      (mov dest (:$ (:apply logand #xff00 intval))))
-     ((:not (:pred = 0 (:apply logand #xff intval)))
-      (orr dest dest (:$ (:apply logand #xff00 intval)))))
-    ((:not (:pred = 0 (:apply logand #xff0000 intval)))
-      ((:pred = 0 (:apply logand #xffff intval))
-       (mov dest (:$ (:apply logand #xff0000 intval))))
-      ((:not (:pred = 0 (:apply logand #xffff intval)))
-       (orr dest dest (:$ (:apply logand #xff0000 intval)))))
-    ((:not (:pred = 0 (:apply logand #xff000000 intval)))
-     (orr dest dest (:$ (:apply logand #xff000000 intval)))))))
+    (movw dest (:$ (:apply logand #xffff intval)))
+    ((:pred /= (:apply logand #xffff0000 intval) 0)
+     (movt dest (:$ (:apply ash (:apply logand #xffff0000 intval) -16)))))))
 
 
 
