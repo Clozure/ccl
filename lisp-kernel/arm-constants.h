@@ -338,6 +338,7 @@ typedef struct tcr {
 #define PSR_V_MASK (1<<28)
 
 #define TCR_FLAG_BIT_ALLOCPTR_FOREIGN (fixnumshift+8)
+#define TCR_FLAG_BIT_PC_LUSERED (fixnumshift+9)
 
 /* FPSCR exception enable bits */
 #define FPSCR_IOE_BIT 8                     /* invalid operation enable */
