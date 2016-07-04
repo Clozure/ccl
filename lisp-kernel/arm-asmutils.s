@@ -132,6 +132,27 @@ _exportfn(C(atomic_swap))
         __(bx lr)
 _endfn
 
+_exportfn(C(atomic_swap_acquire))
+        __(mov r2,r0)
+0:      __(ldrex r0,[r2])
+        __(strex r3,r1,[r2])
+        __(cmp r3,#0)
+        __(wfene)
+        __(bne 0b)
+        __(dmb)        
+        __(bx lr)
+_endfn
+
+_exportfn(C(release_spin_lock))
+        __(mov r1,#0)
+        __(dmb)
+        __(str r1,[r0])
+        __(dsb)
+        __(sev)
+        __(bx lr)
+_endfn
+        
+
 /* Logior the value in *r0 with the value in r1 (presumably a bitmask with exactly 1 */
 /* bit set.)  Return non-zero if any of the bits in that bitmask were already set. */
         
@@ -251,7 +272,23 @@ _exportfn(C(zero_dnodes))
         .align 3
 9:      .long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 _endfn             
-                   
+
+_exportfn(C(dmb))
+        __(dmb)
+        __(bx lr)
+_endfn
+        
+_exportfn(C(dsb))
+        __(dsb)
+        __(bx lr)
+_endfn
+_exportfn(C(isb))
+        __(isb)
+        __(bx lr)
+_endfn        
+        
+                
+                           
 _exportfn(C(feature_check))
         .globl C(feature_check_ldrex)
         .globl C(feature_check_clrex)
