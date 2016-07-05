@@ -154,23 +154,25 @@ finish_allocating_cons(ExceptionInformation *xp)
   LispObj cur_allocptr = xpGPR(xp, allocptr);
   cons *c = (cons *)ptr_from_lispobj(untag(cur_allocptr));
   int target_reg;
-
   while (1) {
-    instr = *program_counter++;
+    instr = *program_counter;
 
     if (IS_CLR_ALLOCPTR_TAG(instr)) {
       xpGPR(xp, allocptr) = untag(cur_allocptr);
-      xpPC(xp) = program_counter;
+      xpPC(xp) = program_counter+1;
       return;
     } else if (IS_SET_ALLOCPTR_CAR_RD(instr)) {
       c->car = xpGPR(xp,RD_field(instr));
     } else if (IS_SET_ALLOCPTR_CDR_RD(instr)) {
       c->cdr = xpGPR(xp,RD_field(instr));
-    } else {
-      /* assert(IS_SET_ALLOCPTR_RESULT_RD(instr)) */
+    } else if (IS_SET_ALLOCPTR_RESULT_RD(instr)) {
       xpGPR(xp,RD_field(instr)) = cur_allocptr;
+    } else {
+      Bug(xp, "huh?");
     }
+    program_counter++;  
   }
+
 }
 
 /*
@@ -721,8 +723,10 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
     update_area_active((area **)&tcr->vs_area, (BytePtr) tcr->save_vsp);
     update_area_active((area **)&tcr->cs_area, (BytePtr) tcr->last_lisp_frame);
   }
+#if 0
+    fprintf(dbgout,"tcr = 0x%x, last lisp frame = 0x%x\n", (natural) tcr , (natural) (tcr->last_lisp_frame));
 
-
+#endif
   tcr->save_allocptr = tcr->save_allocbase = (void *)VOID_ALLOCPTR;
   if (cur_allocptr) {
     update_bytes_allocated(tcr, cur_allocptr);
@@ -864,7 +868,7 @@ Boolean
 is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {
   return ((xpFaultStatus(xp) & 0x800) != 0);
-}
+ }
 
 Boolean
 handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr, int old_valence)
@@ -1038,12 +1042,10 @@ handle_exception(int xnum,
 {
   pc program_counter;
   opcode instruction = 0;
-#if 0
   if (tcr->flags & (1<<TCR_FLAG_BIT_PC_LUSERED)) {
     tcr->flags &= ~(1<<TCR_FLAG_BIT_PC_LUSERED);
     return true;
   }
-#endif
   if (old_valence != TCR_STATE_LISP) {
     return false;
   }
@@ -1442,6 +1444,10 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
     natural  old_last_lisp_frame = tcr->last_lisp_frame;
     int old_valence;
 
+    if (tcr->flags & (1<<TCR_FLAG_BIT_PC_LUSERED)) {
+      tcr->flags &= ~(1<<TCR_FLAG_BIT_PC_LUSERED);
+      return;
+    }
     tcr->last_lisp_frame = xpGPR(context,Rsp);
     old_valence = prepare_to_wait_for_exception_lock(tcr, context);
 #endif
@@ -1615,7 +1621,9 @@ extern opcode
   egc_set_hash_key_conditional,
   egc_set_hash_key_conditional_test,
   swap_lr_lisp_frame_temp0,
-  swap_lr_lisp_frame_arg_z;
+  swap_lr_lisp_frame_arg_z,
+  ffcall_funky,
+  ffcall_funky_end;
 
 
 extern opcode ffcall_return_window, ffcall_return_window_end;
@@ -1669,7 +1677,7 @@ restart_allocation(ExceptionInformation *xp)
     }
   }
 }
-
+extern pc _SPeabi_ff_call_simple, _SPdebind;
 
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
@@ -1680,6 +1688,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   LispObj cur_allocptr = xpGPR(xp, allocptr);
   int allocptr_tag = fulltag_of(cur_allocptr);
   
+  /* fprintf(dbgout, "0x%x @ 0x%x\n", (natural)tcr,(natural)program_counter); */
 
 
   if ((program_counter < &egc_write_barrier_end) && 
@@ -1747,6 +1756,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         }
       }
     }
+    tcr->flags |= (1<<TCR_FLAG_BIT_PC_LUSERED);
+    dsb();
+
     xpPC(xp) = xpLR(xp);
     return;
   }
@@ -1781,9 +1793,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     } else {
       Bug(xp, "urecognized allocation atate");
     }
-    /* *********** 
     tcr->flags |= (1<<TCR_FLAG_BIT_PC_LUSERED);
-    ****/
+    dsb();
     return;
   }
   {
@@ -1805,6 +1816,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       }
       xpGPR(xp,Rlr) = xpGPR(xp,imm0);
       xpPC(xp) = base+3;
+      tcr->flags |= (1<<TCR_FLAG_BIT_PC_LUSERED);
+      dsb();
       return;
     }
   }
@@ -1874,9 +1887,17 @@ install_signal_handler(int signo, void *handler, unsigned flags)
   int err;
 
   sigfillset(&sa.sa_mask);
+#if 1
+  if (signo == SIGILL) {
+    sigdelset(&sa.sa_mask, thread_suspend_signal);
+  }
+#endif
+#if 0
   if (signo == thread_suspend_signal) {
     sigdelset(&sa.sa_mask, SIGILL);
+    sigdelset(&sa.sa_mask, SIGTRAP);    
   }
+#endif
   
   sa.sa_sigaction = (void *)handler;
   sigfillset(&sa.sa_mask);
@@ -1907,7 +1928,7 @@ install_signal_handler(int signo, void *handler, unsigned flags)
 void
 install_pmcl_exception_handlers()
 {
-  install_signal_handler(SIGILL, (void *)sigill_handler, RESERVE_FOR_LISP);
+  install_signal_handler(SIGILL, (void *)signal_handler, RESERVE_FOR_LISP);
   install_signal_handler(SIGSEGV, (void *)ALTSTACK(signal_handler),
                          RESERVE_FOR_LISP|ON_ALTSTACK);
   install_signal_handler(SIGBUS, (void *)ALTSTACK(signal_handler),
