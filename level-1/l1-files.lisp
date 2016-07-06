@@ -910,7 +910,7 @@ a host-structure or string."
         (when (and slash-pos semi-pos)
 	  (error "Illegal directory string ~s" (%substr sstr start end)))
         (if (null pos)
-	  (list :relative (std-part sstr start end))
+	  (list :absolute (std-part sstr start end))
 	  (let ((pos-char (%schar sstr pos)))
 	    (cons (if (eq pos start)
 		    (if (eq pos-char #\/) ':absolute ':relative)
