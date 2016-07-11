@@ -612,6 +612,13 @@ lisp_fstat(HANDLE hfile, struct __stat64 *buf)
 }
 
 int
+lisp_lstat(wchar_t *path, struct __stat64 *buf)
+{
+  errno = ENOSYS;
+  return -1;
+}
+
+int
 lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
 {
   errno = ENOSYS;
