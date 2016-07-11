@@ -1024,6 +1024,7 @@
   lisp-gettimeofday
   lisp-sigexit
   jvm-init
+  lisp-lstat
   ;; Dummy entry
   last-kernel-import
 )

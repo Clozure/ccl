@@ -101,6 +101,7 @@ import_ptrs_start:
         defimport(lisp_gettimeofday)
         defimport(lisp_sigexit)
         defimport(jvm_init)
+        defimport(lisp_lstat)
    
         .globl C(import_ptrs_base)
 C(import_ptrs_base):

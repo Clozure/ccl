@@ -481,7 +481,10 @@ given is that of a group to which the current user belongs."
      #+(and linux-target (not android-target))
      (#_ __lxstat #$_STAT_VER_LINUX cname stat)
      #-(and linux-target (not android-target))
-     (#_lstat cname stat)
+     (int-errno-ffcall (%kernel-import target::kernel-import-lisp-lstat)
+		       :address cname
+		       :address stat
+		       :int)
      stat)))
 
 

@@ -645,6 +645,7 @@
   lisp-gettimeofday
   lisp-sigexit
   jvm-init
+  lisp-lstat
 )
 
 (defmacro nrs-offset (name)

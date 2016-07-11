@@ -96,6 +96,11 @@ lisp_fstat(int fd, void *buf)
   return fstat(fd,buf);
 }
 
+int
+lisp_lstat(char *path, void *buf)
+{
+  return lstat(path, buf);
+}
 
 int
 lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
