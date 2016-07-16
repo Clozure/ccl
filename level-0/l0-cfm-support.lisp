@@ -723,6 +723,7 @@ return a fixnum representation of that address, else return NIL."
           (when (%simple-string= name shlibname 0 0 namelen shlibnamelen)
             (unless (shlib.base lib)
               (setf (shlib.base lib) addr)
+              #+no; don't change soname of existing library
               (let* ((soname  (soname-from-mach-header addr)))
                 (when soname
                   (setf (shlib.soname lib) soname))))
