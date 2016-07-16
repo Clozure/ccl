@@ -1063,7 +1063,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                   (return))
           (decf (shlib.opencount lib)))
         (when (and (eql 0 (shlib.opencount lib))
-                   (not (%probe-shared-library lib)))
+                   t #||(not (%probe-shared-library lib))||#)
           (setf (shlib.pathname lib) nil
                 (shlib.base lib) nil
                 (shlib.handle lib) nil
