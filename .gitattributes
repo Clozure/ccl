@@ -307,6 +307,8 @@ lisp-kernel/platform-darwinx8664.h -text
 lisp-kernel/platform-freebsdx8632.h -text
 lisp-kernel/platform-freebsdx8664.h -text
 lisp-kernel/platform-linuxarm.h -text
+lisp-kernel/platform-linuxppc.h -text
+lisp-kernel/platform-linuxppc64.h -text
 lisp-kernel/platform-linuxx8632.h -text
 lisp-kernel/platform-linuxx8664.h -text
 lisp-kernel/platform-solarisx64.h -text
@@ -316,6 +318,7 @@ lisp-kernel/platform-win64.h -text
 lisp-kernel/probes.d -text
 lisp-kernel/solarisx64/.gdbinit -text
 lisp-kernel/solarisx86/Makefile -text
+lisp-kernel/static-linuxppc/ccl-platform.h -text
 lisp-kernel/unix-calls.c -text
 lisp-kernel/win32/.gdbinit -text
 lisp-kernel/win32/Makefile -text
