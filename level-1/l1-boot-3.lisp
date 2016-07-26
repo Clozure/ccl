@@ -33,6 +33,8 @@
 
 (define-character-encoding-alias :mule-utf-8 :utf-8)
 
+(set-pathname-encoding-name :utf-8)
+
 (catch :toplevel
     (or (find-package "COMMON-LISP-USER")
         (make-package "COMMON-LISP-USER" :use '("COMMON-LISP" "CCL") :NICKNAMES '("CL-USER")))
