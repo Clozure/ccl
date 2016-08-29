@@ -69,7 +69,7 @@
 ;;; somewhere, there are too many of these to keep on a list.
 (can-constant-fold '(specfier-type %ilsl %ilsr 1- 1+ eql eq
                      byte make-point - / (+ . fold-constant-subforms) (* . fold-constant-subforms) ash character
-                     char-code code-char lsh
+                     string char-code code-char lsh
                      (logior . fold-constant-subforms) (logand . fold-constant-subforms)
                      (logxor . fold-constant-subforms) logcount logorc2 listp consp expt
                      logorc1 logtest lognand logeqv lognor lognot logandc2 logandc1
