@@ -27,7 +27,7 @@ CC=cc
 
 ### Current ld64 bugs include the claim that 0x1000 isn't a power of 2.
 ### Gosh.  I always thought that it was.  Go know, right ?
-LDFLAGS = -macosx_version_min $(OSVERSION) -arch x86_64 -dynamic \
+LDFLAGS = -macosx_version_min $(OSVERSION) -arch x86_64 -no_pie \
 	  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000
 
 AS = as
