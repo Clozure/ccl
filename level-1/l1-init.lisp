@@ -165,7 +165,7 @@
 
 
 (defconstant lambda-list-keywords 
-  '(&OPTIONAL &REST &AUX &KEY &ALLOW-OTHER-KEYS &BODY &ENVIRONMENT &WHOLE)
+  '(&OPTIONAL &REST &AUX &KEY &ALLOW-OTHER-KEYS &BODY &ENVIRONMENT &WHOLE CCL::&LEXPR)
   "symbols which are magical in a lambda list")
 
 (defstatic *type-system-initialized* nil)
