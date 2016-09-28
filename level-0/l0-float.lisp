@@ -527,7 +527,7 @@
                 (make-short-float-from-fixnums 
                    (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
                    new-exp
-                   (if minusp 1 0)))
+                   (if minusp -1 1)))
               ; den > num - exp negative
               (progn  
                 (float-rat-neg-exp num den (if minusp -1 1) nil t)))))))))
