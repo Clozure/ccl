@@ -180,4 +180,5 @@
       (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
   (load-mac-ui-files *mac-ui-files* "ccl:mac-ui;" force-compile)
   (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
+  (require 'build-application)
   (provide "COCOA"))
