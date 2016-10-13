@@ -1049,10 +1049,10 @@
              (dynamic-extent handle) 
              (list splice handle))
     (if (and (%i>= i start) (eq item (car (%cdr splice))))
-      (progn
-        (%rplacd splice (%cddr splice))
-        (setq numdeleted (%i+ numdeleted 1)))
-      (setq splice (%cdr splice)))))
+        (progn
+          (%rplacd splice (%cddr splice))
+          (setq numdeleted (%i+ numdeleted 1)))
+        (setq splice (%cdr splice)))))
 
 (defun list-delete-moderately-complex (item list start end count test test-not key)
   (unless start (setq start 0))
@@ -1072,28 +1072,6 @@
         (rplacd splice (cddr splice))
         (setq numdeleted (1+ numdeleted)))
       (setq splice (cdr splice)))))
-
-(defun list-delete (item list &key from-end test test-not (start 0)
-                         end count key 
-                         &aux (temp list)  revp)
-  (unless end (setq end target::target-most-positive-fixnum))
-  (when (and from-end count)
-    (let ((len (length temp)))
-      (if (not (%i< start len))
-        (return-from list-delete temp))
-      (setq temp (nreverse temp) revp t)
-      (psetq end (%i- len start)
-             start (%i- len (%imin len end)))))
-  (setq key (adjust-key key))
-  (multiple-value-setq (test test-not)
-                       (adjust-test-args item test test-not))
-  (setq temp
-        (if (or test key test-not)
-          (list-delete-moderately-complex item temp start end count test test-not key)
-          (list-delete-very-simple item temp start end count)))
-   (if revp
-    (nreverse temp)
-    temp))
 
 ; The vector will be freshly consed & nothing is displaced to it,
 ; so it's legit to destructively truncate it.
