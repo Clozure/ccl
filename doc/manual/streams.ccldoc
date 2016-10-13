@@ -145,7 +145,7 @@
 
     (defsection "Creating Your Own Stream Classes with Gray Streams"
       (defsection "Overview"
-	"This sect1 is still being written and revised, because
+	"This section is still being written and revised, because
         it is woefully incomplete.  The dictionary section currently
         only lists a couple functions.  Caveat lector.
 

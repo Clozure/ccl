@@ -422,7 +422,7 @@ in an inconsistent state if you look at it outside the GUI thread.
 Hemlock has the concept of the "current buffer".  The current buffer
 is defined during Hemlock commands as the buffer of the hemlock view
 that received the key events that invoked the command.  Many hemlock
-function operate on the current buffer rather than taking an explicit
+functions operate on the current buffer rather than taking an explicit
 buffer argument.  In effect, the current buffer is an implicit argument
 to many text manipulation functions.
             |)
@@ -1031,7 +1031,7 @@ characters in the appropriate direction, this returns nil.
 Every buffer has a mark stack and a mark known as the point
 where most text altering nominally occurs.  Between the top of the
 mark stack, the current-mark, and the current-buffer's point, the
-current-point, is what is known as the current-region . Certain
+current-point, is what is known as the current-region. Certain
 commands signal errors when the user tries to operate on the
 current-region without its having been activated.  If the user turns
 off this feature, then the current-region is effectively always
