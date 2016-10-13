@@ -81,7 +81,7 @@
   octets-in-string-function              ;(STRING START END)
 
   ;; Returns the number of (full) characters encoded in VECTOR, and
-  ;; the index the index of the first octet not used to encode
+  ;; the index of the first octet not used to encode
   ;; them. (The second value may be less than END.
   length-of-vector-encoding-function    ;(VECTOR START END) 
 
