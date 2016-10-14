@@ -27,6 +27,7 @@
 (defparameter *backtrace-show-internal-frames* nil)
 (defparameter *backtrace-print-level* 2)
 (defparameter *backtrace-print-length* 5)
+(defparameter *backtrace-print-string-length* :default)
 
 (defparameter *backtrace-format* :traditional
   "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
@@ -56,6 +57,7 @@
                           (start-frame-number 0)
                           (print-level *backtrace-print-level*)
                           (print-length *backtrace-print-length*)
+                          (print-string-length *backtrace-print-string-length*)
                           (show-internal-frames *backtrace-show-internal-frames*))
   "Returns a list representing the backtrace.
 Each element in the list is a list that describes the call in one stack frame:
@@ -64,6 +66,7 @@ The arguments are represented by strings, the function is a symbol or a function
 object."
   (let* ((*backtrace-print-level* print-level)
          (*backtrace-print-length* print-length)
+         (*backtrace-print-string-length* print-string-length)
          (*backtrace-format* :list)
          (result nil))
     (map-call-frames (lambda (p context)
@@ -89,10 +92,12 @@ object."
                                 (stream *debug-io*)
                                 (print-level *backtrace-print-level*)
                                 (print-length *backtrace-print-length*)
+                                (print-string-length *backtrace-print-string-length*)
                                 (show-internal-frames *backtrace-show-internal-frames*)
                                 (format *backtrace-format*))
   (let ((*backtrace-print-level* print-level)
         (*backtrace-print-length* print-length)
+        (*backtrace-print-string-length* print-string-length)
         (*backtrace-format* format)
         (*standard-output* stream)
         (*print-circle* nil)
@@ -153,7 +158,8 @@ object."
 	    (format t "~&  ~D " i)
 	    (when name (format t "~s" name))
 	    (let* ((*print-length* (default-print-length *backtrace-print-length*))
-		   (*print-level* (default-print-level *backtrace-print-level*)))
+		   (*print-level* (default-print-level *backtrace-print-level*))
+                   (*print-string-length* (default-print-string-length *backtrace-print-string-length*)))
 	      (format t ": ~s" var))
 	    (when type (format t " (~S)" type)))))
     (error () (format t "#<error printing frame>")))
@@ -169,7 +175,8 @@ object."
                (format t "~&     Arguments: ~:s" (arglist-from-map lfun)))
             (t (format t "~&  ~s" (arglist-from-map lfun))))
 	  (let* ((*print-length* (default-print-length *backtrace-print-length*))
-		 (*print-level* (default-print-level *backtrace-print-level*)))
+		 (*print-level* (default-print-level *backtrace-print-level*))
+                 (*print-string-length* (default-print-string-length *backtrace-print-string-length*)))
 	    (flet ((show-pair (pair prefix)
 		     (destructuring-bind (name . val) pair
 		       (format t "~&~a~s: " prefix name)
@@ -219,7 +226,8 @@ object."
             collect (if (eq arg (%unbound-marker))
                       "?"
                       (let* ((*print-length* (default-print-length *backtrace-print-length*))
-                             (*print-level* (default-print-level *backtrace-print-level*)))
+                             (*print-level* (default-print-level *backtrace-print-level*))
+                             (*print-string-length* (default-print-string-length *backtrace-print-string-length*)))
                         (format nil "~s" arg)))))))
 
 ;;; Return a list of "interesting" frame addresses in context, most
