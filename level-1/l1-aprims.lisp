@@ -56,6 +56,7 @@
 (def-standard-initial-binding *random-state* (initial-random-state))
 (def-standard-initial-binding *error-print-length* 20)
 (def-standard-initial-binding *error-print-level* 8)
+(def-standard-initial-binding *error-print-string-length* :default)
 
 (defun %badarg (arg type)
   (%err-disp $XWRONGTYPE arg type))

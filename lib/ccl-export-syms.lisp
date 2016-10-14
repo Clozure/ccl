@@ -81,6 +81,7 @@
      dbg-form
      *backtrace-print-level*
      *backtrace-print-length*
+     *backtrace-print-string-length*
      *backtrace-show-internal-frames*
      *backtrace-format*
      map-call-frames
@@ -90,6 +91,7 @@
      apply-in-frame
      *error-print-level*
      *error-print-length*
+     *error-print-string-length*
      *quit-on-eof*
      *quit-interrupt-hook*
      *break-hook*
@@ -110,6 +112,7 @@
      abort-break
      *trace-print-level*
      *trace-print-length*
+     *trace-print-string-length*
      *trace-bar-frequency*
      trace-function
      *ignore-extra-close-parenthesis*
