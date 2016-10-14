@@ -404,8 +404,9 @@ given is that of a group to which the current user belongs."
        #-(or linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
-       (pref stat :stat.st_dev))
-      (values nil nil nil nil nil nil nil nil nil nil)))
+       (pref stat :stat.st_dev)
+       (pref stat :stat.st_flags))
+      (values nil nil nil nil nil nil nil nil nil nil nil)))
 
 #+win64-target
 (defun %stat-values (result stat)
