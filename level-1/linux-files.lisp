@@ -405,6 +405,7 @@ given is that of a group to which the current user belongs."
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
        (pref stat :stat.st_dev)
+       #-(or linux-target solaris-target)
        (pref stat :stat.st_flags))
       (values nil nil nil nil nil nil nil nil nil nil nil)))
 
