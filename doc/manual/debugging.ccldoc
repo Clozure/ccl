@@ -779,17 +779,18 @@ The text will be {code nil} unless source recording was on at read time.  If
 the original source file is still available, {function ensure-source-note-text}
 will force the missing source text to be read from the file.
 
-Source notes are associated with definitons (via record-source-fule) and
-also stored in function objects (including anonymous and local functions).
-The former can be retrieved via {function find-definition-sources}, and
-the latter via {function function-source-note}.
+Source notes are associated with definitons (via
+{function record-source-file}) and also stored in function objects
+(including anonymous and local functions).  The former can be retrieved via
+{function find-definition-sources}, and the latter via
+{function function-source-note}.
 
 Source recording is governed by the variable
 {variable *save-source-locations*}.
 
 PC to source mapping is controlled by {variable *record-pc-mapping*}."
 
-(definition (:variable *record-source-file*) "*record-source-file" nil
+(definition (:variable *record-source-file*) "*record-source-file*" nil
   "When true, record source file information for defintions.")
 
 (definition (:variable *save-source-locations*) "*save-source-locations*" nil
