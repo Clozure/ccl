@@ -765,7 +765,15 @@ minimum number of elements to add if it must be extended."
                 4
                 (if (= subtag target::subtag-double-float-vector)
                   6
-                  0)))))
+                  (if (= subtag target::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 32-bit pad at the beginning of the vector.
+                        (+ 4 (ash element-count 4)))
+                      (if (= subtag target::subtag-complex-single-float-vector)
+                          (return-from subtag-bytes
+                            ;; There's a 32-bit pad at the beginning of the vector.
+                            (+ 4 (ash element-count 3)))
+                          0)))))))
          (total-bits (ash element-count element-bit-shift)))
     (ash (+ 7 total-bits) -3)))
 
@@ -803,7 +811,15 @@ minimum number of elements to add if it must be extended."
                 4
                 (if (= subtag x8632::subtag-double-float-vector)
                   6
-                  0)))))
+                  (if (= subtag x8632::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 32-bit pad at the beginning of the vector.
+                        (+ 4 (ash element-count 4)))
+                      (if (= subtag x8632::subtag-complex-single-float-vector)
+                          (return-from subtag-bytes
+                            ;; There's a 32-bit pad at the beginning of the vector.
+                            (+ 4 (ash element-count 3)))
+                          0)))))))
          (total-bits (ash element-count element-bit-shift)))
     (ash (+ 7 total-bits) -3)))
 
@@ -823,9 +839,13 @@ minimum number of elements to add if it must be extended."
                 6
                 (if (= subtag x8664::subtag-bit-vector)
                   0
-                  (if (>= subtag x8664::min-8-bit-ivector-subtag)
-                    3
-                    4)))))
+                  (if (= subtag x8664::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 64-bit pad at the beginning of the vector.
+                        (+ 8 (ash element-count 4)))
+                      (if (>= subtag x8664::min-8-bit-ivector-subtag)
+                          3
+                          4))))))
          (total-bits (ash element-count element-bit-shift)))
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
