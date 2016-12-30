@@ -2820,7 +2820,7 @@
                 (when  index-known-fixnum
                   (unless unscaled-idx
                     (setq unscaled-idx ($ *x862-arg-y*)))
-                  (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 1)))))
+                  (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3)))))
                 (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx))
                (is-64-bit
                 (if (eq type-keyword :complex-single-float-vector)
