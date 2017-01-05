@@ -84,7 +84,9 @@ KSPOBJ= $(SPOBJ)
 all:	../../dx86cl64
 
 ../../dx86cl64:	 $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
-	cc -mmacosx-version-min=10.6 -arch x86_64 -Wl,-no_pie,-pagezero_size,0x11000,-seg1addr,0x11000 -Wl,-map,/tmp/foo -o $@ $(SPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
+	cc -mmacosx-version-min=$(OSVERSION) -arch x86_64 \
+	 -Wl,-no_pie,-pagezero_size,0x11000,-seg1addr,0x11000 \
+	 -o $@ $(SPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
