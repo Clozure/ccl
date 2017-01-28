@@ -887,7 +887,7 @@ a host-structure or string."
 	(values pos2 host)))))
 
 (defun %directory-string-list (sstr start &optional (end (length sstr)) host)
-  ;; Should use host to split by / vs. ; but for now suport both for either host,
+  ;; Should use host to split by / vs. ; but for now support both for either host,
   ;; like the mac version. It means that ';' has to be quoted in unix pathnames.
   (declare (ignore host))
   ;This must cons up a fresh list, %expand-logical-directory rplacd's it.
