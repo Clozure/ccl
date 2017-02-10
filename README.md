@@ -44,4 +44,13 @@ Although it's an open-source project, available free of charge under a liberal l
 
 For more information about install CCL, you can visit it's official site:
 
-http://ccl.clozure.com/docs/ccl.html
+[http://ccl.clozure.com/docs/ccl.html](http://ccl.clozure.com/docs/ccl.html)
+
+
+## Install
+
+Clozure CL is distributed via the Internet. Please see [http://ccl.clozure.com/download.html](http://ccl.clozure.com/download.html) for instructions on how to download it.
+
+Then you should read document for how to configure it.
+
+[http://ccl.clozure.com/docs/ccl.html](http://ccl.clozure.com/docs/ccl.html)
