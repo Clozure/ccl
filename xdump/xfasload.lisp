@@ -1122,12 +1122,11 @@
           (xload-save-list (mapcar #'xload-save-list *xload-early-class-cells*)))
     (setf (xload-symbol-value (xload-copy-symbol '*istruct-cells*))
           *xload-early-istruct-cells*)
-    (let* ((svnrev (local-svn-revision))
-           (tree (svn-tree)))
+    (let ((rev (local-vc-revision)))
       (setf (xload-symbol-value (xload-copy-symbol '*openmcl-svn-revision*))
-            (typecase svnrev
-              (fixnum (ash svnrev *xload-target-fixnumshift*))
-              (string (xload-save-string (if tree (format nil "~a-~a" svnrev tree) svnrev)))
+            (typecase rev
+              (fixnum (ash rev *xload-target-fixnumshift*))
+              (string (xload-save-string rev))
               (t *xload-target-nil*))))
     (let* ((experimental-features *build-time-optional-features*))
       (setf (xload-symbol-value (xload-copy-symbol '*optional-features*))
