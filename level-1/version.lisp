@@ -23,7 +23,7 @@
 (defvar *openmcl-svn-revision* nil)
 (defparameter *openmcl-dev-level* nil)
 
-(defparameter *openmcl-version* (format nil "~d.~d~@[-~a~]~@[-r~a~] ~@[+~s~] (~@[~A: ~]~~A)"
+(defparameter *openmcl-version* (format nil "~d.~d~@[-~a~]~@[/~a~] ~@[+~s~] (~@[~A: ~]~~A)"
 					*openmcl-major-version*
 					*openmcl-minor-version*
 					(unless (null *openmcl-revision*)
