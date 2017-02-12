@@ -80,6 +80,7 @@ lib/*~.*
 library/*fsl
 library/*~.*
 lisp-kernel/*~.*
+lisp-kernel/**/*.o
 lisp-kernel/darwinx8632/mach_exc.h
 lisp-kernel/darwinx8632/mach_exc_server.c
 lisp-kernel/darwinx8632/probes.h
