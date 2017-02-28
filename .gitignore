@@ -10,6 +10,7 @@
 bin/*fsl
 cocoa-ide/*fsl
 cocoa-ide/*~.*
+cocoa-ide/altconsole/*.o
 cocoa-ide/altconsole/.gdb_history
 cocoa-ide/altconsole/AltConsole
 cocoa-ide/altconsole/AltConsole.app
@@ -45,6 +46,8 @@ examples/cocoa/*~.*
 examples/cocoa/easygui/*fsl
 examples/cocoa/easygui/*~.*
 examples/cocoa/easygui/example/*fsl
+examples/cocoa/easygui/example/fasls/*fsl
+examples/cocoa/easygui/fasls/*fsl
 examples/jfli/.cvsignore
 examples/rubix/*~.*
 l1-fasls/*fsl
@@ -97,3 +100,5 @@ tools/*fsl
 tools/*~.*
 xdump/*.*fsl
 xdump/*~.*
+darwin-x86-headers/
+darwin-x86-headers64/
