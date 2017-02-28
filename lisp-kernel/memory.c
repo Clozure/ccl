@@ -36,6 +36,14 @@
 
 #ifndef WINDOWS
 #include <sys/mman.h>
+
+/*
+ * FreeBSD 11.0, at least, doesn't define this any more. It has never
+ * actually implemented it.
+ */
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0
+#endif
 #endif
 
 #define DEBUG_MEMORY 0
