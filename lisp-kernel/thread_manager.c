@@ -598,7 +598,7 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
     *(--tcr->save_vsp) = lisp_nil;
     register_thread_tcr(tcr);
   }
-  if (TCR_INTERRUPT_LEVEL(tcr) <= (-2<<fixnumshift)) {
+  if (TCR_INTERRUPT_LEVEL(tcr) <= -(2 << fixnumshift)) {
     SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
   } else {
     TCR_AUX(tcr)->suspend_context = context;
@@ -1335,7 +1335,7 @@ new_tcr(natural vstack_size, natural tstack_size)
   for (i = 0; i < 2048; i++) {
     tcr->tlb_pointer[i] = (LispObj) no_thread_local_binding_marker;
   }
-  TCR_INTERRUPT_LEVEL(tcr) = (LispObj) (-1<<fixnum_shift);
+  TCR_INTERRUPT_LEVEL(tcr) = (LispObj) -(1 << fixnumshift);
 #ifndef WINDOWS
   tcr->shutdown_count = PTHREAD_DESTRUCTOR_ITERATIONS;
 #else
