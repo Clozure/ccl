@@ -2060,7 +2060,8 @@
 		   (%mostly-normalize-bignum-macro v)
 		   (setq v-len (%bignum-length v))))))))))))
 
-(defun %bignum-bignum-gcd (u v)
+(defun %bignum-bignum-gcd (u v &optional res)
+  (declare (ignore res))
   (with-negated-bignum-buffers u v %positive-bignum-bignum-gcd))
 
 (defun unsignedwide->integer (uwidep)

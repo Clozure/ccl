@@ -512,9 +512,7 @@
               (bignum (add-bignum-and-fixnum y x))
               (complex (complex (+ x (%realpart y))
                                 (%imagpart y)))
-              (ratio (let* ((dy (%denominator y)) 
-                            (n (+ (* x dy) (%numerator y))))
-                       (%make-ratio n dy)))))
+              (ratio (add-ratio-int y x))))
     (double-float (number-case y
                     (double-float (+ (the double-float x) (the double-float y)))
                     (short-float (with-stack-double-floats ((dy y))
@@ -536,10 +534,7 @@
               (short-float (rat-sfloat + x y))
               (complex (complex (+ x (realpart y)) 
                                 (%imagpart y)))
-              (ratio
-               (let* ((dy (%denominator y))
-                      (n (+ (* x dy) (%numerator y))))
-                 (%make-ratio n dy)))))
+              (ratio (add-ratio-int y x))))
     (complex (number-case y
                (complex (complex (+ (%realpart x) (%realpart y))
                                  (+ (%imagpart x) (%imagpart y))))
@@ -563,13 +558,16 @@
                                   (t3 (truncate dy g2))
                                   (nd (if (eql t2 1) t3 (* t2 t3))))
                              (if (eql nd 1) nn (%make-ratio nn nd)))))))))
-             (integer
-              (let* ((dx (%denominator x)) (n (+ (%numerator x) (* y dx))))
-                (%make-ratio n dx)))
+             (integer (add-ratio-int x y))
              (double-float (rat-dfloat + x y))
              (short-float (rat-sfloat + x y))
              (complex (complex (+ x (%realpart y)) 
                                (%imagpart y)))))))
+
+(defun add-ratio-int (rat int)
+  (let* ((den (%denominator rat))
+         (num (+ (%numerator rat) (* int den))))
+    (%make-ratio num den)))
 
 (defun --2 (x y)     
   (number-case x
@@ -582,9 +580,7 @@
                         (subtract-bignum bx y)))
               (complex (complex (- x (%realpart y))
                                 (- (%imagpart y))))
-              (ratio (let* ((dy (%denominator y)) 
-                            (n (- (* x dy) (%numerator y))))
-                       (%make-ratio n dy)))))
+              (ratio (subtract-int-ratio x y))))
     (double-float (number-case y
                     (double-float (- (the double-float x) (the double-float y)))
                     (short-float (with-stack-double-floats ((dy y))
@@ -609,10 +605,7 @@
               (short-float (rat-sfloat - x y))
               (complex (complex (- x (realpart y)) 
                                 (- (%imagpart y))))
-              (ratio
-               (let* ((dy (%denominator y))
-                      (n (- (* x dy) (%numerator y))))
-                 (%make-ratio n dy)))))
+              (ratio (subtract-int-ratio x y))))
     (complex (number-case y
                (complex (complex (- (%realpart x) (%realpart y))
                                  (- (%imagpart x) (%imagpart y))))
@@ -636,14 +629,21 @@
                                   (t3 (truncate dy g2))
                                   (nd (if (eql t2 1) t3 (* t2 t3))))
                              (if (eql nd 1) nn (%make-ratio nn nd)))))))))
-             (integer
-              (let* ((dx (%denominator x)) (n (- (%numerator x) (* y dx))))
-                (%make-ratio n dx)))
+             (integer (subtract-ratio-int x y))
              (double-float (rat-dfloat - x y))
              (short-float (rat-sfloat - x y))
              (complex (complex (- x (%realpart y)) 
                                (- (%imagpart y))))))))
 
+(defun subtract-int-ratio (x ratio)
+  (let* ((den (%denominator ratio)) 
+         (num (- (* x den) (%numerator ratio))))
+    (%make-ratio num den)))
+
+(defun subtract-ratio-int (ratio y)
+  (let* ((den (%denominator ratio))
+         (num (- (%numerator ratio) (* y den))))
+    (%make-ratio num den)))
 
 ;;; BUILD-RATIO  --  Internal
 ;;;
@@ -1742,43 +1742,50 @@
      (bignum-logcount integer))))
 
 
+(defun %ash-left (int shift &optional res)
+  (declare (fixnum shift))
+  #+debug (assert (and (not (zerop int)) (> shift 0)))
+  (number-case int
+    (fixnum
+     (let ((length (integer-length (the fixnum int))))
+       (declare (fixnum length shift))
+       (cond ((> (+ length shift)
+                 (- (1- target::nbits-in-word) target::fixnumshift))
+              (with-small-bignum-buffers ((bi int))
+                (bignum-ashift-left bi shift nil res)))
+             (t (%iash (the fixnum int) shift)))))
+    (bignum
+     (bignum-ashift-left int shift nil res))))
+
+(defun %ash-right (int shift)
+  (declare (type integer shift))
+  #+debug (assert (and (not (zerop int)) (> shift 0)))
+  (number-case int
+   (fixnum
+     (cond ((>= shift target::nbits-in-word)
+            (if (minusp (the fixnum int)) -1 0))
+           (t (%iash (the fixnum int) (- shift)))))
+    (bignum
+     (bignum-ashift-right int shift))))
 
 (defun ash (integer count)
   "Shifts integer left by count places preserving sign. - count shifts right."
-  (etypecase integer
-    (fixnum
-     (etypecase count
-       (fixnum
-	(if (eql integer 0)
-	  0
-	  (if (eql count 0)
-	    integer
-	    (let ((length (integer-length (the fixnum integer))))
-	      (declare (fixnum length count))
-	      (cond ((and (plusp count)
-			  (> (+ length count)
-			     (- (1- target::nbits-in-word) target::fixnumshift)))
-		     (with-small-bignum-buffers ((bi integer))
-		       (bignum-ashift-left bi count)))
-		    ((and (minusp count) (< count (- (1- target::nbits-in-word))))
-		     (if (minusp integer) -1 0))
-		    (t (%iash (the fixnum integer) count)))))))
-       (bignum
-	(if (minusp count)
-	  (if (minusp integer) -1 0)          
-	  (error "Count ~s too large for ASH" count)))))
-    (bignum
-     (etypecase count
-       (fixnum
-        (if (eql count 0) 
-          integer
-          (if (plusp count)
-            (bignum-ashift-left integer count)
-            (bignum-ashift-right integer (- count)))))
-       (bignum
-        (if (minusp count)
-          (if (minusp integer) -1 0)
-          (error "Count ~s too large for ASH" count)))))))
+  (cond ((eql integer 0)
+         (check-type count integer)
+         0)
+        ((eql count 0)
+         (require-type integer 'integer))
+        (t
+         (number-case count
+           (fixnum
+            (if (plusp (the fixnum count))
+              (%ash-left integer count)
+              (%ash-right integer (- (the fixnum count)))))
+           (bignum
+            (check-type integer integer)
+            (if (plusp count)
+              (error "Count ~s too large for ASH" count)
+              (%ash-right integer most-positive-fixnum)))))))
 
 (defun integer-length (integer)
   "Return the number of significant bits in the absolute value of integer."
@@ -1956,7 +1963,7 @@
       `(let ((,n ,nexp))
          (if (minusp (the fixnum ,n))
            (if (eq ,n target::target-most-negative-fixnum)
-             (- ,n)
+             (- target::target-most-negative-fixnum)
              (the fixnum (- (the fixnum ,n))))
            ,n))))
   )
@@ -1970,7 +1977,7 @@
 ;;; of 0 before the dispatch so that the bignum code doesn't have to worry
 ;;; about "small bignum" zeros.
 ;;;
-(defun gcd-2 (n1 n2)
+(defun gcd-2 (n1 n2 &optional res)
   ;(declare (optimize (speed 3)(safety 0)))
   (cond 
    ((eql n1 0) (%integer-abs n2))
@@ -1992,15 +1999,19 @@
 		 (if (minusp n2)(setq n2 (the fixnum (- n2))))
                (%fixnum-gcd n1 n2)))))
            (bignum (if (eql n1 target::target-most-negative-fixnum)
-		     (%bignum-bignum-gcd n2 (- target::target-most-negative-fixnum))
-		     (bignum-fixnum-gcd (bignum-abs n2)(fixnum-abs n1))))))
+		     (%bignum-bignum-gcd n2 (- target::target-most-negative-fixnum) res)
+                     (let ((n1 (fixnum-abs n1)))
+                       (with-one-negated-bignum-buffer n2
+                         (lambda (an2) (bignum-fixnum-gcd an2 n1))))))))
 	(bignum
 	 (number-case n2
 	   (fixnum
             (if (eql n2 target::target-most-negative-fixnum)
-              (%bignum-bignum-gcd (bignum-abs n1)(fixnum-abs n2))
-              (bignum-fixnum-gcd (bignum-abs n1)(fixnum-abs n2))))
-	   (bignum (%bignum-bignum-gcd n1 n2))))))))
+              (%bignum-bignum-gcd n1 (- target::target-most-negative-fixnum) res)
+              (let ((n2 (fixnum-abs n2)))
+                (with-one-negated-bignum-buffer n1
+                  (lambda (an1) (bignum-fixnum-gcd an1 n2))))))
+	   (bignum (%bignum-bignum-gcd n1 n2 res))))))))
 
 #|
 (defun fixnum-gcd (n1 n2)

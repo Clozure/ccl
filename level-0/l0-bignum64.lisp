@@ -106,23 +106,32 @@
                                    start-digit
                                    start-pos
                                    res-len-form
-                                   termination
-                                   &optional result)
-    `(let* ((high-bits-in-first-digit (- digit-size ,start-pos))
-            (res-len ,res-len-form)
-            (res-len-1 (1- res-len))
-            ,@(if result `((,result (%allocate-bignum res-len)))))
-      (declare (type bignum-index res-len res-len-1))
-      (do ((i ,start-digit i+1)
-           (i+1 (1+ ,start-digit) (1+ i+1))
-           (j 0 (1+ j)))
-          ,termination
-        (declare (type bignum-index i i+1 j))
-        (setf (bignum-ref ,(if result result source) j)
-              (%logior (%digit-logical-shift-right (bignum-ref ,source i)
-                                                   ,start-pos)
-                       (%ashl (bignum-ref ,source i+1)
-                              high-bits-in-first-digit))))))
+                                   &optional res)
+    (let ((high-bits-in-first-digit (gensym))
+          (res-len (gensym))
+          (res-len-1 (gensym))
+          (result (gensym))
+          (i (gensym))
+          (i+1 (gensym))
+          (j (gensym)))
+      `(let* ((,high-bits-in-first-digit (- digit-size ,start-pos))
+              (,res-len ,res-len-form)
+              (,res-len-1 (1- ,res-len))
+              (,result (or ,res (%allocate-bignum ,res-len))))
+         (declare (type bignum-index ,res-len ,res-len-1))
+         (do ((,i ,start-digit ,i+1)
+              (,i+1 (1+ ,start-digit) (1+ ,i+1))
+              (,j 0 (1+ ,j)))
+             ((= ,j ,res-len-1)
+              (setf (bignum-ref ,result ,j)
+                    (%ashr (bignum-ref ,source ,i) ,start-pos))
+              (%normalize-bignum-macro ,result))
+           (declare (type bignum-index ,i ,i+1 ,j))
+           (setf (bignum-ref ,result ,j)
+                 (%logior (%digit-logical-shift-right (bignum-ref ,source ,i)
+                                                      ,start-pos)
+                          (%ashl (bignum-ref ,source ,i+1)
+                                 ,high-bits-in-first-digit)))))))
 
 
   )
@@ -174,12 +183,19 @@
     -1
     0))
 
+(defun %maybe-allocate-bignum (len res)
+  (if res
+    (progn
+      (assert (>= (%bignum-length res) len))
+      (%set-bignum-length len res)
+      res)
+    (%allocate-bignum len)))
          
 (defun %add-with-carry (a-digit b-digit carry-in)
   (declare (fixnum a-digit b-digit carry-in))
   (setq a-digit (logand all-ones-digit a-digit)
         b-digit (logand all-ones-digit b-digit))
-  (let* ((sum (+ carry-in (the fixnum (+ a-digit b-digit)))))
+  (let* ((sum (the fixnum (+ carry-in (the fixnum (+ a-digit b-digit))))))
     (declare (fixnum sum))
     (values (logand all-ones-digit sum) (logand 1 (the fixnum (ash sum -32))))))
 
@@ -187,11 +203,11 @@
   (declare (fixnum a-digit b-digit borrow-in))
   (setq a-digit (logand all-ones-digit a-digit)
         b-digit (logand all-ones-digit b-digit))
-  (let* ((diff (- (the fixnum (- a-digit b-digit))
-                  (the fixnum (- 1 borrow-in)))))
+  (let* ((diff (the fixnum (- (the fixnum (- a-digit b-digit))
+                              (the fixnum (- 1 borrow-in))))))
     (declare (fixnum diff))
     (values (logand all-ones-digit diff)
-            (- 1 (logand (the fixnum (ash diff -32)) 1)))))
+            (the fixnum (- 1 (logand (the fixnum (ash diff -32)) 1))))))
 
 
 
@@ -219,11 +235,13 @@
 	   (res (%allocate-bignum len-res))
 	   (carry 0)
 	   (sign-b (%bignum-sign b)))
-	(dotimes (i len-b)
-          (let* ((sum (+
+      (declare (bit carry))
+      (dotimes (i len-b)
+          (let* ((sum (the fixnum
+                      (+
                        (the fixnum (+ (the bignum-element-type (bignum-ref a i))
                                       (the bignum-element-type (bignum-ref b i))))
-                       carry)))
+                       carry))))
             (declare (fixnum sum))
             (setf (bignum-ref res i) sum)
             (setq carry (logand 1 (the fixnum (ash sum -32))))))
@@ -258,9 +276,10 @@
       (if (> len-bignum 2)
         (finish-bignum-add  res carry bignum (ash fixnum (- (- target::nbits-in-word target::fixnumshift))) 2 len-bignum)
         (setf (bignum-ref res 2)
+              (the fixnum
               (+ (the fixnum carry)
                  (the fixnum (+ (the bignum-element-type (%bignum-sign bignum))
-                                (the fixnum (ash fixnum (- (- target::nbits-in-word target::fixnumshift)))))))))
+                                (the fixnum (ash fixnum (- (- target::nbits-in-word target::fixnumshift))))))))))
       (%normalize-bignum-macro res))))
 
 
@@ -285,7 +304,7 @@
                                           sign-b))
                            carry))))
     (declare (fixnum i) (bignum-element-type sign-b))
-    (let* ((sum (the fixnum (+ (the fixnum (+ (bignum-ref a i)
+    (let* ((sum (the fixnum (+ (the fixnum (+ (the fixnum (bignum-ref a i))
                                               sign-b))
                                carry))))
       (declare (fixnum sum))
@@ -879,7 +898,7 @@
   (let* ((len-x (%bignum-length x))
 	 (len-res (1+ len-x))
          (minusp (bignum-minusp x))
-	 (res (or res (%allocate-bignum len-res))))
+	 (res (%maybe-allocate-bignum len-res res)))
     (declare (type bignum-index len-x len-res)) ;Test len-res for range?
     (let ((carry (bignum-negate-loop-really x len-x res)))
       (declare (fixnum carry))
@@ -902,8 +921,8 @@
 
   
 
-(defun copy-bignum (bignum)
-  (let ((res (%allocate-bignum (%bignum-length bignum))))
+(defun copy-bignum (bignum &optional res)
+  (let ((res (%maybe-allocate-bignum (%bignum-length bignum) res)))
     (bignum-replace res bignum)
     res))
 
@@ -936,12 +955,7 @@
        ((eql 0 n-bits)
         (bignum-ashift-right-digits bignum digits))
        (t
-        (shift-right-unaligned bignum digits n-bits (- bignum-len digits)
-				      ((= j res-len-1)
-				       (setf (bignum-ref res j)
-					     (%ashr (bignum-ref bignum i) n-bits))
-				       (%normalize-bignum-macro res))
-				      res))))))
+        (shift-right-unaligned bignum digits n-bits (- bignum-len digits)))))))
 
 			       
 
@@ -981,7 +995,7 @@
 ;;; boundary (that is, n-bits is zero), then we just copy digits.  The last
 ;;; branch handles the general case.
 ;;;
-(defun bignum-ashift-left (bignum x &optional bignum-len)
+(defun bignum-ashift-left (bignum x &optional bignum-len res)
   (declare (type bignum-type bignum)
 	   (fixnum x)
 	   (type (or null bignum-index) bignum-len))
@@ -994,15 +1008,15 @@
       (when (> res-len maximum-bignum-length)
 	(error "Can't represent result of left shift."))
       (if (zerop n-bits)
-        (bignum-ashift-left-digits bignum bignum-len digits)
-        (bignum-ashift-left-unaligned bignum digits n-bits res-len)))))
+        (bignum-ashift-left-digits bignum bignum-len digits res)
+        (bignum-ashift-left-unaligned bignum digits n-bits res-len res t)))))
 
 ;;; BIGNUM-ASHIFT-LEFT-DIGITS -- Internal.
 ;;;
-(defun bignum-ashift-left-digits (bignum bignum-len digits)
+(defun bignum-ashift-left-digits (bignum bignum-len digits res)
   (declare (type bignum-index bignum-len digits))
   (let* ((res-len (+ bignum-len digits))
-	 (res (%allocate-bignum res-len)))
+	 (res (%maybe-allocate-bignum res-len res)))
     (declare (type bignum-index res-len))
     (bignum-replace res bignum :start1 digits :end1 res-len :end2 bignum-len
 		    :from-end t)
@@ -1024,7 +1038,8 @@
 ;;;
 
 (defun bignum-ashift-left-unaligned (bignum digits n-bits res-len
-                                            &optional (res nil resp))
+                                            &optional (res nil resp)
+                                                      (normalizep (not resp)))
   (declare (type bignum-index digits res-len)
 	   (type (mod #.digit-size) n-bits))
   (let* ((remaining-bits (- digit-size n-bits))
@@ -1040,7 +1055,7 @@
 	       (%ashl (bignum-ref bignum 0) n-bits))
 	 (setf (bignum-ref res j)
 	       (%ashr (bignum-ref bignum i) remaining-bits))
-	 (if resp
+	 (if (not normalizep)
            (%zero-trailing-sign-digits res res-len)
            (%mostly-normalize-bignum-macro res)))
       (declare (type bignum-index i i+1 j))
@@ -1363,22 +1378,33 @@
 ;;; %FLOOR. That is, it has some bits on pretty high in the
 ;;; digit.
 
-(defun bignum-truncate-single-digit (x len-x y)
+(defun bignum-truncate-single-digit (x len-x digit)
   (declare (type bignum-index len-x))
   (let ((q (%allocate-bignum len-x))
-        (r 0)
-        (y (bignum-ref y 0)))
-    (declare (type bignum-element-type r y))
+        (r 0))
+    (declare (type bignum-element-type r digit))
     (do ((i (1- len-x) (1- i)))
         ((minusp i))
+      (declare (fixnum i))
       (multiple-value-bind (q-digit r-digit)
-          (%floor r (bignum-ref x i) y)
+          (%floor r (bignum-ref x i) digit)
         (declare (type bignum-element-type q-digit r-digit))
         (setf (bignum-ref q i) q-digit)
         (setf r r-digit)))
     (let ((rem (%allocate-bignum 1)))
       (setf (bignum-ref rem 0) r)
       (values q rem))))
+
+(defun bignum-rem-single-digit (x len-x digit)
+  (declare (type bignum-index len-x) (type bignum-element-type digit) (type bignum-type x))
+  (let ((r 0))
+    (declare (type bignum-element-type r))
+    (do ((i (1- len-x) (1- i)))
+        ((minusp i))
+      (declare (fixnum i))
+      (setf r (nth-value 1 (%floor r (bignum-ref x i) digit))))
+    r))
+
 
 ;;; This returns a guess for the next division step. Y1 is the
 ;;; highest y digit, and y2 is the second to highest y
@@ -1681,15 +1707,15 @@
   ;; to shift it to account for the initial Y shift. After we
   ;; multiple bind q and r, we first fix up the signs and then
   ;; return the normalized results.
-  (let* ((x-plusp (%bignum-0-or-plusp x (%bignum-length x)))
-         (y-plusp (%bignum-0-or-plusp y (%bignum-length y)))
+  (let* ((x-plusp (bignum-plusp x))
+         (y-plusp (bignum-plusp y))
          (x (if x-plusp x (negate-bignum x nil)))
          (y (if y-plusp y (negate-bignum y nil)))
          (len-x (%bignum-length x))
          (len-y (%bignum-length y)))
     (multiple-value-bind (q r)
         (cond ((< len-y 2)
-               (bignum-truncate-single-digit x len-x y))
+               (bignum-truncate-single-digit x len-x (bignum-ref y 0)))
               ((plusp (bignum-compare y x))
                (let ((res (%allocate-bignum len-x)))
                  (dotimes (i len-x)
@@ -1713,21 +1739,14 @@
                       ;; Now DO-TRUNCATE has executed, we just
                       ;; tidy up the remainder (in TRUNCATE-X)
                       ;; and return it.
-                      (cond
-                        ((zerop y-shift)
-                         (let ((res (%allocate-bignum len-y)))
-                           (declare (type bignum-type res))
-                           (bignum-replace res truncate-x :end2 len-y)
-                           (%normalize-bignum-macro res)))
+                      (let ((res (%allocate-bignum len-y)))
+                        (declare (type bignum-type res))
+                        (cond
+                         ((zerop y-shift)
+                          (bignum-replace res truncate-x :end2 len-y)
+                          (%normalize-bignum-macro res))
                         (t
-                         (shift-right-unaligned
-                          truncate-x 0 y-shift len-y
-                          ((= j res-len-1)
-                           (setf (bignum-ref res j)
-                                 (%ashr (bignum-ref truncate-x i)
-                                        y-shift))
-                           (%normalize-bignum-macro res))
-                          res)))))))))
+                         (shift-right-unaligned truncate-x 0 y-shift len-y res))))))))))
       (let ((quotient (cond ((eq x-plusp y-plusp) q)
                             ((typep q 'fixnum) (the fixnum (- q)))
                             (t (negate-bignum-in-place q))))
@@ -1746,12 +1765,53 @@
     (bignum-truncate bignum y)))
 
 (defun bignum-truncate-by-fixnum-no-quo (bignum fixnum)
-  (nth-value 1 (bignum-truncate-by-fixnum bignum fixnum)))
+  (with-small-bignum-buffers ((y fixnum))
+    (bignum-rem bignum y)))
 
 ;;; This may do unnecessary computation in some cases.
-(defun bignum-rem (x y)
-  (nth-value 1 (bignum-truncate x y)))
+#+safe-but-slow (defun bignum-rem (x y)
+                  (nth-value 1 (bignum-truncate x y)))
 
+(defun bignum-rem (x y &optional res)
+  (declare (type bignum-type x y))
+  #+debug (assert (and (plusp (%bignum-length x)) (plusp (%bignum-length y))))
+  (let ((x-plusp (bignum-plusp x)))
+    (with-negated-bignum-buffers x y
+      (lambda (x y) (positive-bignum-rem x y x-plusp res)))))
+
+(defun positive-bignum-rem (x y plusp &optional res)
+  (declare (type bignum-type x y))
+  (flet ((signed-rem (rem)
+           (unless plusp
+             (setq rem
+                   (if (fixnump rem)
+                     (the fixnum (- (the fixnum rem)))
+                     ;; This can turn (1+ most-positive-fixnum) into a fixnum
+                     (%normalize-bignum-macro (negate-bignum-in-place rem))))
+             (if (fixnump rem) rem (copy-bignum rem res)))))
+    (let* ((len-x (%bignum-length x))
+           (len-y (%bignum-length y)))
+      (cond ((< len-y 2)
+             (assert (eql len-y 1))
+             (signed-rem (bignum-rem-single-digit x len-x (bignum-ref y 0))))
+            ((plusp (bignum-compare y x))
+             (signed-rem x))
+            (t (let* ((len-x+1 (1+ len-x)))
+                 (with-bignum-buffers ((truncate-x len-x+1)
+                                       (truncate-y (1+ len-y)))
+                   (let ((y-shift (shift-y-for-truncate y)))
+                     (shift-and-store-truncate-buffers truncate-x
+                                                       truncate-y
+                                                       x len-x
+                                                       y len-y
+                                                       y-shift)
+                     (do-truncate truncate-x
+                                  truncate-y
+                                  len-x+1
+                                  len-y)
+                     (signed-rem (if (zerop y-shift)
+                                   (%normalize-bignum-macro truncate-x)
+                                   (shift-right-unaligned truncate-x 0 y-shift len-y truncate-x)))))))))))
 
 
 ;;;; General utilities.
@@ -1833,7 +1893,13 @@
 
 #-safe-but-slow
 (progn
-(defun %positive-bignum-bignum-gcd (u0 v0)
+
+(defun %shifted-gcd (b shift &optional res)
+  (if (zerop shift)
+    (if (fixnump b) b (copy-bignum b res))
+    (%ash-left b shift res)))
+
+(defun %positive-bignum-bignum-gcd (u0 v0 &optional res)
   (let* ((u-len (%bignum-length u0))
 	 (v-len (%bignum-length v0)))
     (declare (fixnum u-len v-len))
@@ -1881,10 +1947,10 @@
                                  (%maybe-fixnum-from-one-or-two-digit-bignum v))))
 		(if fix-v
 		  (if fix-u
-		    (return (ash (%fixnum-gcd fix-u fix-v) shift))
-		    (return (ash (bignum-fixnum-gcd u fix-v) shift)))
+		    (return (%shifted-gcd (%fixnum-gcd fix-u fix-v) shift res))
+                    (return (%shifted-gcd (bignum-fixnum-gcd u fix-v) shift res)))
 		  (if fix-u
-		    (return (ash (bignum-fixnum-gcd v fix-u) shift)))))
+		    (return (%shifted-gcd (bignum-fixnum-gcd v fix-u) shift res)))))
 	      (let* ((signum (if (> u-len v-len)
 			       1
 			       (if (< u-len v-len)
@@ -1893,11 +1959,7 @@
 		(declare (fixnum signum))
 		(case signum
 		  (0			; (= u v)
-		   (if (zerop shift)
-		     (let* ((copy (%allocate-bignum u-len)))
-		       (bignum-replace copy u)
-		       (return copy))
-		     (return (ash u shift))))
+                   (return (%shifted-gcd u shift res)))
 		  (1			; (> u v)
 		   (bignum-subtract-loop u u-len v v-len u)
 		   (%mostly-normalize-bignum-macro u)
@@ -1938,8 +2000,10 @@
                      (%mostly-normalize-bignum-macro v)
                      (setq v-len (%bignum-length v))))))))))))
 
-(defun %bignum-bignum-gcd (u v)
-  (with-negated-bignum-buffers u v %positive-bignum-bignum-gcd))
+
+(defun %bignum-bignum-gcd (u v &optional res)
+  (with-negated-bignum-buffers u v
+    (lambda (x y) (%positive-bignum-bignum-gcd x y res))))
 )
 
 
