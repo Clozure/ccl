@@ -43,68 +43,68 @@
 (defparameter $default-application-version-number "1.0")
 
 ;;; defaults related to Info.plist files
-(defparameter $cfbundle-development-region-key #@"CFBundleDevelopmentRegion")
+(defloadvar $cfbundle-development-region-key #@"CFBundleDevelopmentRegion")
 (defparameter $default-info-plist-development-region "English")
 
-(defparameter $cfbundle-executable-key #@"CFBundleExecutable")
+(defloadvar $cfbundle-executable-key #@"CFBundleExecutable")
 (defparameter $default-info-plist-executable $default-application-bundle-name)
 
-(defparameter $cfbundle-getinfo-string-key #@"CFBundleGetInfoString")
+(defloadvar $cfbundle-getinfo-string-key #@"CFBundleGetInfoString")
 (defparameter $default-info-plist-getInfo-string "\"1.0 Copyright © 2008\"")
 
-(defparameter $cfbundle-help-book-folder-key #@"CFBundleHelpBookFolder")
+(defloadvar $cfbundle-help-book-folder-key #@"CFBundleHelpBookFolder")
 (defparameter $default-info-plist-help-book-folder "MyApplicationHelp")
 
-(defparameter $cfbundle-help-book-name-key #@"CFBundleHelpBookName")
+(defloadvar $cfbundle-help-book-name-key #@"CFBundleHelpBookName")
 (defparameter $default-info-plist-help-book-name "\"MyApplication Help\"")
 
-(defparameter $cfbundle-icon-file-key #@"CFBundleIconFile")
+(defloadvar $cfbundle-icon-file-key #@"CFBundleIconFile")
 (defparameter $default-info-plist-icon-file "\"MyApplication.icns\"")
 
-(defparameter $cfbundle-bundle-identifier-key #@"CFBundleIdentifier")
+(defloadvar $cfbundle-bundle-identifier-key #@"CFBundleIdentifier")
 (defparameter $default-info-plist-bundle-identifier "\"com.clozure.apps.myapplication\"")
 
-(defparameter $cfbundle-dictionary-version-key #@"CFBundleInfoDictionaryVersion")
+(defloadvar $cfbundle-dictionary-version-key #@"CFBundleInfoDictionaryVersion")
 (defparameter $default-info-dictionary-version "\"6.0\"")
 
-(defparameter $cfbundle-bundle-name-key #@"CFBundleName")
+(defloadvar $cfbundle-bundle-name-key #@"CFBundleName")
 (defparameter $default-info-plist-bundle-name "MyApplication")
 
-(defparameter $cfbundle-bundle-package-type-key #@"CFBundlePackageType")
+(defloadvar $cfbundle-bundle-package-type-key #@"CFBundlePackageType")
 (defparameter $default-info-plist-bundle-package-type "APPL")
 
-(defparameter $cfbundle-short-version-string-key #@"CFBundleShortVersionString")
+(defloadvar $cfbundle-short-version-string-key #@"CFBundleShortVersionString")
 (defparameter $default-info-plist-short-version-string "\"1.0\"")
 
-(defparameter $cfbundle-bundle-signature-key #@"CFBundleSignature")
+(defloadvar $cfbundle-bundle-signature-key #@"CFBundleSignature")
 (defparameter $default-info-plist-bundle-signature "OMCL")
 
-(defparameter $cfbundle-version-key #@"CFBundleVersion")
+(defloadvar $cfbundle-version-key #@"CFBundleVersion")
 (defparameter $default-info-plist-version "\"1.0\"")
 
-(defparameter $ls-has-localized-display-name-key #@"LSHasLocalizedDisplayName")
+(defloadvar $ls-has-localized-display-name-key #@"LSHasLocalizedDisplayName")
 (defparameter $default-info-plist-has-localized-display-name "0")
 
-(defparameter $ls-minimum-system-version-key #@"LSMinimumSystemVersion")
+(defloadvar $ls-minimum-system-version-key #@"LSMinimumSystemVersion")
 (defparameter $default-info-plist-minimum-system-version "\"10.5\"")
 
-(defparameter $ns-main-nib-file-key #@"NSMainNibFile")
+(defloadvar $ns-main-nib-file-key #@"NSMainNibFile")
 (defparameter $default-info-plist-main-nib-file "MainMenu")
 
-(defparameter $ns-principal-class-key #@"NSPrincipalClass")
+(defloadvar $ns-principal-class-key #@"NSPrincipalClass")
 (defparameter $default-info-plist-principal-class "LispApplication")
 
 ;;; keys for document-types dicts
-(defparameter $cfbundle-type-extensions-key #@"CFBundleTypeExtensions")
-(defparameter $cfbundle-type-icon-file-key #@"CFBundleTypeIconFile")
-(defparameter $cfbundle-type-mime-types-key #@"CFBundleTypeMIMETypes")
-(defparameter $cfbundle-type-name-key #@"CFBundleTypeName")
-(defparameter $cfbundle-type-ostypes-key #@"CFBundleTypeOSTypes")
-(defparameter $cfbundle-type-role-key #@"CFBundleTypeRole")
-(defparameter $ls-item-content-types-key #@"LSItemContentTypes")
-(defparameter $ls-type-is-package-key #@"LSTypeIsPackage")
-(defparameter $ns-document-class-key #@"NSDocumentClass")
-(defparameter $ns-exportable-as-key #@"NSExportableAs")
+(defloadvar $cfbundle-type-extensions-key #@"CFBundleTypeExtensions")
+(defloadvar $cfbundle-type-icon-file-key #@"CFBundleTypeIconFile")
+(defloadvar $cfbundle-type-mime-types-key #@"CFBundleTypeMIMETypes")
+(defloadvar $cfbundle-type-name-key #@"CFBundleTypeName")
+(defloadvar $cfbundle-type-ostypes-key #@"CFBundleTypeOSTypes")
+(defloadvar $cfbundle-type-role-key #@"CFBundleTypeRole")
+(defloadvar $ls-item-content-types-key #@"LSItemContentTypes")
+(defloadvar $ls-type-is-package-key #@"LSTypeIsPackage")
+(defloadvar $ns-document-class-key #@"NSDocumentClass")
+(defloadvar $ns-exportable-as-key #@"NSExportableAs")
 
 ;;; NOT-VC-CONTROL-FILE (path)
 ;;; ------------------------------------------------------------------------
