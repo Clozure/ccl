@@ -1787,8 +1787,8 @@
                    (if (fixnump rem)
                      (the fixnum (- (the fixnum rem)))
                      ;; This can turn (1+ most-positive-fixnum) into a fixnum
-                     (%normalize-bignum-macro (negate-bignum-in-place rem))))
-             (if (fixnump rem) rem (copy-bignum rem res)))))
+                     (%normalize-bignum-macro (negate-bignum-in-place rem)))))
+           (if (fixnump rem) rem (copy-bignum rem res))))
     (let* ((len-x (%bignum-length x))
            (len-y (%bignum-length y)))
       (cond ((< len-y 2)
