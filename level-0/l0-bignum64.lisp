@@ -2144,9 +2144,9 @@
       (setf (bignum-ref bignum sign-index)
             (logand #x7fffffff (the (unsigned-byte 32)
                                  (random (expt 2 (1- digit-size)) state))))
-      (let* ((result (mod bignum number)))
+      (let* ((result (rem (%normalize-bignum-macro bignum) number)))
         (if (eq result bignum)
-          (copy-uvector bignum)
+          (copy-bignum bignum)
           result)))))
 
 
