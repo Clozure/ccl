@@ -100,6 +100,58 @@
        ,@(inits)
        ,@body)))
 
+;; 
+(defmacro with-temporary-bignum-buffers (specs &body body)
+  "WITH-TEMPORARY-BIGNUM-BUFFERS ({(var expr)}* form*"
+  (collect ((a-vars)
+            (a-lens)
+            (b-vars)
+            (b-lens)
+            (buf-lens)
+            (buf-vars)
+            (vars))
+    (loop for (var (operation a b)) in specs
+       do (let ((a-var (if (symbolp a) nil (gensym)))
+                (a-len (gensym))
+                (b-var (if (symbolp b) nil (gensym)))
+                (b-len (gensym))
+                (buf-len (gensym))
+                (buf-var (gensym)))
+            (a-vars (if a-var `((,a-var ,a)) nil))
+            (a-lens
+             `(,a-len (if (fixnump ,(or a-var a)) ,(target-word-size-case (32 1) (64 2)) (%bignum-length ,(or a-var a)))))
+            (b-vars (if b-var `((,b-var ,b)) nil))
+            (b-lens
+             `(,b-len (if (fixnump ,(or b-var b)) ,(target-word-size-case (32 1) (64 2)) (%bignum-length ,(or b-var b)))))
+            (buf-lens `(,buf-len ,@(ecase operation
+                                     (+-2-into
+                                      `((1+ (max ,a-len ,b-len))))
+                                     (--2-into
+                                      `((1+ (max ,a-len ,b-len))))
+                                     (*-2-into
+                                      `((+ ,a-len ,b-len)))
+                                     (gcd-2
+                                      `((min ,a-len ,b-len)))
+                                     (truncate-no-rem
+                                      `((max ,(target-word-size-case (32 1) (64 2)) (1+ (- ,a-len ,b-len)))))
+                                     (maybe-truncate-no-rem
+                                      `((max ,(target-word-size-case (32 1) (64 2)) (1+ (- ,a-len ,b-len))))))))
+            (buf-vars `(,buf-var (allocate-typed-vector :bignum ,buf-len)))
+            (vars `(,var (,operation ,(or a-var a) ,(or b-var b) ,buf-var)))))
+    `(let* (,@(loop for a-var in (a-vars)
+                 for a-len in (a-lens)
+                 for b-var in (b-vars)
+                 for b-len in (b-lens)
+                 for buf-len in (buf-lens)
+                 for buf-var in (buf-vars)
+                 for var in (vars)
+                 append `(,@a-var ,a-len ,@b-var ,b-len ,buf-len ,buf-var ,var)))
+       (declare (type bignum-index ,@(mapcar 'car (a-lens))
+                                   ,@(mapcar 'car (b-lens))
+                                   ,@(mapcar 'car (buf-lens)))
+                (dynamic-extent ,@(mapcar 'car (buf-vars))))
+       ,@body)))
+
 ;;; call fn on possibly stack allocated negative of a and/or b
 ;;; args better be vars - we dont bother with once-only
 (defmacro with-negated-bignum-buffers (a b fn)

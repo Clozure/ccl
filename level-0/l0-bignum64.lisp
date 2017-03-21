@@ -223,7 +223,7 @@
 
 
 ;;;; Addition.
-(defun add-bignums (a b)
+(defun add-bignums (a b &optional res)
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b)))
     (declare (bignum-index len-a len-b)
@@ -232,7 +232,7 @@
       (rotatef a b)
       (rotatef len-a len-b))
     (let* ((len-res (1+ len-a))
-	   (res (%allocate-bignum len-res))
+	   (res (%maybe-allocate-bignum len-res res))
 	   (carry 0)
 	   (sign-b (%bignum-sign b)))
       (declare (bit carry))
@@ -253,13 +253,13 @@
                                   sign-b)))))
 	(%normalize-bignum-macro res))))
 
-(defun add-bignum-and-fixnum (bignum fixnum)
+(defun add-bignum-and-fixnum (bignum fixnum &optional res)
   (declare (bignum-type bignum)
            (fixnum fixnum)
            (optimize (speed 3) (safety 0)))
   (let* ((len-bignum (%bignum-length bignum))
          (len-res (1+ len-bignum))
-         (res (%allocate-bignum len-res))
+         (res (%maybe-allocate-bignum len-res res))
          (low (logand all-ones-digit fixnum))
          (high (logand all-ones-digit (the fixnum (ash fixnum -32)))))
     (declare (bignum-index len-bignum)
@@ -315,11 +315,11 @@
 
 
 ;;;; Subtraction.
-(defun subtract-bignum (a b)
+(defun subtract-bignum (a b &optional res)
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b))
 	 (len-res (1+ (max len-a len-b)))
-	 (res (%allocate-bignum len-res)))
+	 (res (%maybe-allocate-bignum len-res res)))
     (declare (bignum-index len-a len-b len-res))
     (bignum-subtract-loop a len-a b len-b res)
     (%normalize-bignum-macro res)))
@@ -813,13 +813,13 @@
 			tt)))))))))))
 ||#
 
-(defun multiply-bignums (a b)
+(defun multiply-bignums (a b &optional res)
   (let* ((signs-differ (not (eq (bignum-minusp a) (bignum-minusp b)))))
     (flet ((multiply-unsigned-bignums64 (a b)
 	     (let* ((len-a (ceiling (%bignum-length a) 2))
 		    (len-b (ceiling (%bignum-length b) 2))
 		    (len-res (+ len-a len-b))
-		    (res (%allocate-bignum (+ len-res len-res))))
+		    (res (%maybe-allocate-bignum (+ len-res len-res) res)))
 	       (declare (bignum-index len-a len-b len-res))
 	       (dotimes (i len-a)
 		 (declare (type bignum-index i))
@@ -838,7 +838,7 @@
     (with-small-bignum-buffers ((big-fix fixnum))
       (multiply-bignums bignum big-fix))))
 
-(defun multiply-bignum-and-fixnum (bignum fixnum)
+(defun multiply-bignum-and-fixnum (bignum fixnum &optional res)
   (declare (type bignum-type bignum) (fixnum fixnum))
   (if (eql fixnum 1)
     bignum
@@ -850,7 +850,7 @@
                (type bignum-index bignum-len))
       (flet ((do-it (bignum fixnum  negate-res)
                (let* ((bignum-len (%bignum-length bignum))
-                      (result (%allocate-bignum (the fixnum (+ bignum-len 2))))
+                      (result (%maybe-allocate-bignum (the fixnum (+ bignum-len 2)) res))
                       (len64 (ash (1+ bignum-len) -1)))
                  (declare (type bignum-type bignum)
                           (type bignum-index bignum-len len64))
@@ -925,6 +925,9 @@
   (let ((res (%maybe-allocate-bignum (%bignum-length bignum) res)))
     (bignum-replace res bignum)
     res))
+
+(defun maybe-copy-bignum (num &optional res)
+  (if (fixnump num) num (copy-bignum num res)))
 
 
 
