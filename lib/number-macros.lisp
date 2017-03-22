@@ -133,9 +133,9 @@
                                      (gcd-2
                                       `((min ,a-len ,b-len)))
                                      (truncate-no-rem
-                                      `((max ,(target-word-size-case (32 1) (64 2)) (1+ (- ,a-len ,b-len)))))
+                                      `((max ,(target-word-size-case (32 2) (64 3)) (+ (- ,a-len ,b-len) 2))))
                                      (maybe-truncate-no-rem
-                                      `((max ,(target-word-size-case (32 1) (64 2)) (1+ (- ,a-len ,b-len))))))))
+                                      `((max ,(target-word-size-case (32 2) (64 3)) (+ (- ,a-len ,b-len) 2)))))))
             (buf-vars `(,buf-var (allocate-typed-vector :bignum ,buf-len)))
             (vars `(,var (,operation ,(or a-var a) ,(or b-var b) ,buf-var)))))
     `(let* (,@(loop for a-var in (a-vars)

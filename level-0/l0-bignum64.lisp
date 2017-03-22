@@ -1381,9 +1381,9 @@
 ;;; %FLOOR. That is, it has some bits on pretty high in the
 ;;; digit.
 
-(defun bignum-truncate-single-digit (x len-x digit)
+(defun bignum-truncate-single-digit (x len-x digit &optional q rem)
   (declare (type bignum-index len-x))
-  (let ((q (%allocate-bignum len-x))
+  (let ((q (%maybe-allocate-bignum len-x q))
         (r 0))
     (declare (type bignum-element-type r digit))
     (do ((i (1- len-x) (1- i)))
@@ -1394,7 +1394,7 @@
         (declare (type bignum-element-type q-digit r-digit))
         (setf (bignum-ref q i) q-digit)
         (setf r r-digit)))
-    (let ((rem (%allocate-bignum 1)))
+    (let ((rem (%maybe-allocate-bignum 1 rem)))
       (setf (bignum-ref rem 0) r)
       (values q rem))))
 
@@ -1512,11 +1512,11 @@
 ;;; more than TRUNCATE-Y. This keeps i, i-1, i-2, and low-x-digit
 ;;; happy. Thanks to SHIFT-AND-STORE-TRUNCATE-BUFFERS.
 
-(defun do-truncate (truncate-x truncate-y len-x len-y)
+(defun do-truncate (truncate-x truncate-y len-x len-y &optional q)
   (declare (type bignum-index len-x len-y))
   (let* ((len-q (- len-x len-y))
          ;; Add one for extra sign digit in case high bit is on.
-         (q (%allocate-bignum (1+ len-q)))
+         (q (%maybe-allocate-bignum (1+ len-q) q))
          (k (1- len-q))
          (y1 (bignum-ref truncate-y (1- len-y)))
          (y2 (bignum-ref truncate-y (- len-y 2)))
@@ -1699,7 +1699,6 @@
 ;;;
 ;;; Normalize quotient and remainder. Cons result if necessary.
 
-
 (defun bignum-truncate (x y &optional no-rem)
   (declare (type bignum-type x y))
   (DECLARE (IGNORE NO-REM))
@@ -1770,6 +1769,47 @@
 (defun bignum-truncate-by-fixnum-no-quo (bignum fixnum)
   (with-small-bignum-buffers ((y fixnum))
     (bignum-rem bignum y)))
+
+(defun bignum-truncate-no-rem (x y &optional res)
+  (let ((negatep (not (eq (bignum-plusp x) (bignum-plusp y)))))
+    (with-negated-bignum-buffers x y
+      (lambda (x y) (positive-bignum-truncate-no-rem x y negatep res)))))
+
+(defun positive-bignum-truncate-no-rem (x y negatep res)
+  (declare (type bignum-type x y))
+  (flet ((signed-quotient (quotient)
+           (when negatep
+             (setf quotient (if (fixnump quotient)
+                                (the fixnum (- (the fixnum quotient)))
+                                (negate-bignum-in-place quotient))))
+           (setf quotient (%normalize-bignum-macro quotient))
+           (if (fixnump quotient)
+               quotient
+               (copy-bignum quotient res))))
+    (let ((len-x (%bignum-length x))
+          (len-y (%bignum-length y)))
+      (cond ((< len-y 2)
+             (with-bignum-buffers ((q len-x)
+                                   (rem 1))
+               (signed-quotient (bignum-truncate-single-digit x len-x (bignum-ref y 0) q rem))))
+            ((plusp (bignum-compare y x))
+             0)
+            (t
+             (let ((len-x+1 (1+ len-x)))
+               (with-bignum-buffers ((truncate-x len-x+1)
+                                     (truncate-y (1+ len-y))
+                                     (q (1+ (- len-x+1 len-y))))
+                 (let ((y-shift (shift-y-for-truncate y)))
+                   (shift-and-store-truncate-buffers truncate-x
+                                                     truncate-y
+                                                     x len-x
+                                                     y len-y
+                                                     y-shift)
+                   (signed-quotient (do-truncate truncate-x
+                                                 truncate-y
+                                                 len-x+1
+                                                 len-y
+                                                 q))))))))))
 
 ;;; This may do unnecessary computation in some cases.
 #+safe-but-slow (defun bignum-rem (x y)

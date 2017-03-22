@@ -1371,18 +1371,16 @@
          (double-float (truncate-rat-dfloat number divisor))
          (short-float (truncate-rat-sfloat number divisor))
          (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
-                  (truncate-no-rem p1 (%numerator divisor)))))))
+                  (truncate-no-rem p1 (%numerator divisor) res))))))
      (bignum (number-case divisor
                (fixnum (if (eq divisor 1) number
-                         (if (eq divisor target::target-most-negative-fixnum)
                            (with-small-bignum-buffers ((bd divisor))
-                             (bignum-truncate number bd :no-rem))
-                           (bignum-truncate-by-fixnum number divisor))))
-               (bignum (bignum-truncate number divisor :no-rem))
+                             (bignum-truncate-no-rem number bd res))))
+               (bignum (bignum-truncate-no-rem number divisor res))
                (double-float  (truncate-rat-dfloat number divisor))
                (short-float (truncate-rat-sfloat number divisor))
                (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
-                        (truncate-no-rem p1 (%numerator divisor))))))
+                        (truncate-no-rem p1 (%numerator divisor) res)))))
      (double-float (if (eql divisor 1)
                      (let ((res (%unary-truncate number)))
                        RES)
@@ -1428,7 +1426,7 @@
                   (double-float (truncate-rat-dfloat number divisor))
                   (short-float (truncate-rat-sfloat number divisor))
                   (rational  (with-temporary-bignum-buffers ((p1 (*-2-into (%denominator number) divisor)))
-                               (truncate-no-rem (%numerator number) p1))))))))
+                               (truncate-no-rem (%numerator number) p1 res))))))))
 
 
 ;;; %UNARY-ROUND  --  Interface
