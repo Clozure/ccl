@@ -868,19 +868,19 @@
 		 (ratio
 		  (if (eql 0 x)
                       0
-                      #-ignore
+                      #+ignore
                       (let* ((ny (%numerator y)) 
                              (dy (%denominator y)) 
                              (gcd (gcd x ny)))
                         (build-ratio (* (maybe-truncate x gcd) dy)
                                      (maybe-truncate ny gcd)
                                      res))
-                      #+ignore
+                      #-ignore
                       (let ((ny (%numerator y))
                             (dy (%denominator y)))
                         (with-temporary-bignum-buffers ((gcd (gcd-2 x ny))
                                                         (q1 (maybe-truncate-no-rem x gcd)))
-                          (build-ratio (* q1 dy) (maybe-copy-bignum (maybe-truncate ny gcd)) res)))))))
+                          (build-ratio (* q1 dy) (maybe-truncate-no-rem ny gcd) res)))))))
       (complex (number-case y
 		 (complex (let* ((rx (%realpart x))
 				 (ix (%imagpart x))
@@ -903,17 +903,17 @@
 	       (integer
 		(when (eql y 0)
 		  (divide-by-zero-error '/ x y))
-                #-ignore
+                #+ignore
                 (let* ((nx (%numerator x))
                        (gcd (gcd nx y)))
                   (build-ratio (maybe-truncate nx gcd)
                                (* (maybe-truncate y gcd) (%denominator x))
                                res))
-                #+ignore
+                #-ignore
                 (let ((nx (%numerator x)))
                   (with-temporary-bignum-buffers ((gcd (gcd-2 nx y))
                                                   (q1 (maybe-truncate-no-rem y gcd)))
-                    (build-ratio (maybe-copy-bignum (maybe-truncate nx gcd)) (* q1 (%denominator x)) res))))
+                    (build-ratio (maybe-truncate-no-rem nx gcd) (* q1 (%denominator x)) res))))
 	       (complex (real-complex-/ x y))
 	       (ratio
                 #-ignore
