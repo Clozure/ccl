@@ -868,14 +868,6 @@
 		 (ratio
 		  (if (eql 0 x)
                       0
-                      #+ignore
-                      (let* ((ny (%numerator y)) 
-                             (dy (%denominator y)) 
-                             (gcd (gcd x ny)))
-                        (build-ratio (* (maybe-truncate x gcd) dy)
-                                     (maybe-truncate ny gcd)
-                                     res))
-                      #-ignore
                       (let ((ny (%numerator y))
                             (dy (%denominator y)))
                         (with-temporary-bignum-buffers ((gcd (gcd-2 x ny))
@@ -903,13 +895,6 @@
 	       (integer
 		(when (eql y 0)
 		  (divide-by-zero-error '/ x y))
-                #+ignore
-                (let* ((nx (%numerator x))
-                       (gcd (gcd nx y)))
-                  (build-ratio (maybe-truncate nx gcd)
-                               (* (maybe-truncate y gcd) (%denominator x))
-                               res))
-                #-ignore
                 (let ((nx (%numerator x)))
                   (with-temporary-bignum-buffers ((gcd (gcd-2 nx y))
                                                   (q1 (maybe-truncate-no-rem y gcd)))
