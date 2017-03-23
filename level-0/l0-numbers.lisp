@@ -901,19 +901,6 @@
                     (build-ratio (maybe-truncate-no-rem nx gcd) (* q1 (%denominator x)) res))))
 	       (complex (real-complex-/ x y))
 	       (ratio
-                #-ignore
-                (let* ((nx (%numerator x))
-                       (dx (%denominator x))
-                       (ny (%numerator y))
-                       (dy (%denominator y))
-                       (g1 (gcd nx ny))
-                       (g2 (gcd dx dy)))
-                  (build-ratio (* (maybe-truncate nx g1)
-                                  (maybe-truncate dy g2))
-                               (* (maybe-truncate dx g2)
-                                  (maybe-truncate ny g1))
-                               res))
-		#+ignore
                 (let* ((nx (%numerator x))
 		       (dx (%denominator x))
 		       (ny (%numerator y))
