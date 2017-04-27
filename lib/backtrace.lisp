@@ -647,6 +647,7 @@ object."
                        (dolist (r rest) (push r result)))
                      (return))
                     (&rest
+                     (unless (listp value) (setf value (list value)))
                      (dolist (r value) (push r result))
                      (return))
                     (&key (push param result)))
