@@ -99,6 +99,11 @@ Boolean use_mach_exception_handling =
 #include <libgen.h>
 #endif
 
+#ifdef FREEBSD
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 #if defined(FREEBSD) || defined(SOLARIS)
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -1078,6 +1083,15 @@ determine_executable_name(char *argv0)
   return argv0;
 #endif
 #ifdef FREEBSD
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+  char exepath[PATH_MAX];
+  size_t len = sizeof(exepath);
+
+  if (sysctl(mib, 4, exepath, &len, NULL, 0) == 0) {
+    char *p = strndup(exepath, len);
+
+    return p;
+  }
   return ensure_real_path(argv0);
 #endif
 #ifdef SOLARIS
