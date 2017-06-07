@@ -96,12 +96,6 @@
     (* (logior (pref time #>FILETIME.dwLowDateTime)
                (ash (pref time #>FILETIME.dwHighDateTime) 32))
        100)))
-(defloadvar *lisp-start-timeval*
-    (progn
-      (let* ((r (make-record :timeval)))
-        (gettimeofday r)
-        r)))
-
 
 (defloadvar *internal-real-time-session-seconds* nil)
 
