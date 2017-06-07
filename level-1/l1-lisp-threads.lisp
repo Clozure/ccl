@@ -97,33 +97,15 @@
                (ash (pref time #>FILETIME.dwHighDateTime) 32))
        100)))
 
-(defloadvar *internal-real-time-session-seconds* nil)
-
-
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
-  (rlet ((tv :timeval))
-    (gettimeofday tv)
-    (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
-           (initial *internal-real-time-session-seconds*))
-      (if initial
-        (locally
-            (declare (type (unsigned-byte 32) initial))
-          (+ (* internal-time-units-per-second
-                (the (unsigned-byte 32)
-                  (- (the (unsigned-byte 32) (pref tv :timeval.tv_sec))
-                     initial)))
-             units))
-        (progn
-          (setq *internal-real-time-session-seconds*
-                (pref tv :timeval.tv_sec))
-          units)))))
+  (values (truncate (current-time-in-nanoseconds)
+                    (load-time-value
+                     (/ 1000000000 internal-time-units-per-second)))))
 
 (defun get-tick-count ()
-  (values (floor (get-internal-real-time)
-                 (floor internal-time-units-per-second
-                        *ticks-per-second*))))
+  (values (truncate (current-time-in-nanoseconds) *ns-per-tick*)))
 
 
 
