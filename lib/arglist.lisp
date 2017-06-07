@@ -82,7 +82,8 @@
           (declare (dynamic-extent eof))
           (loop
             (multiple-value-setq (val errorp)
-              (ignore-errors (values (read stream nil eof))))
+              (ignore-errors (values (let ((*package* (symbol-package sym)))
+                                       (read stream nil eof)))))
             (when errorp
               (push '&rest res)
               (push ':unparseable res)
