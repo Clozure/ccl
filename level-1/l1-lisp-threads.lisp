@@ -76,6 +76,26 @@
                     :address (or ptz (%null-ptr))
                     :int))
 
+#-(or darwin-target windows-target)
+(defloadvar preferred-posix-clock-id
+  (rlet ((ts :timespec))
+    (if (eql 0 (#_clock_gettime #$CLOCK_MONOTONIC ts))
+      #$CLOCK_MONOTONIC
+      #$CLOCK_REALTIME)))
+
+(defun current-time-in-nanoseconds ()
+  #-(or darwin-target windows-target)
+  (rlet ((ts :timespec))
+    (#_clock_gettime preferred-posix-clock-id ts)
+    (+ (* (pref ts :timespec.tv_sec) 1000000000)
+       (pref ts :timespec.tv_nsec)))
+  #+darwin-target (#_mach_absolute_time)
+  #+windows-target
+  (rlet ((time #>FILETIME))
+    (#_GetSystemTimeAsFileTime time)
+    (* (logior (pref time #>FILETIME.dwLowDateTime)
+               (ash (pref time #>FILETIME.dwHighDateTime) 32))
+       100)))
 (defloadvar *lisp-start-timeval*
     (progn
       (let* ((r (make-record :timeval)))
