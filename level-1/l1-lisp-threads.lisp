@@ -33,8 +33,17 @@
     #-windows-target
     (max 1000 (#_sysconf #$_SC_CLK_TCK)))
 
+(defloadvar *ns-per-second*
+    1000000000)
+
+(defloadvar *ns-per-millisecond*
+    (floor *ns-per-second* 1000))
+
 (defloadvar *ns-per-tick*
-    (floor 1000000000 *ticks-per-second*))
+    (floor *ns-per-second* *ticks-per-second*))
+
+(defloadvar *ns-per-internal-time-unit*
+    (floor *ns-per-second* internal-time-units-per-second))
 
 #-windows-target
 (defun %nanosleep (seconds nanoseconds)
@@ -83,29 +92,33 @@
       #$CLOCK_MONOTONIC
       #$CLOCK_REALTIME)))
 
+#+darwin-target
+(defloadvar darwin-ns-per-unit
+    (rlet ((timebase-info :mach_timebase_info_data_t))
+      (#_mach_timebase_info timebase-info)
+      (floor (pref timebase-info :mach_timebase_info_data_t.numer)
+             (pref timebase-info :mach_timebase_info_data_t.denom))))
+
 (defun current-time-in-nanoseconds ()
   #-(or darwin-target windows-target)
   (rlet ((ts :timespec))
     (#_clock_gettime preferred-posix-clock-id ts)
-    (+ (* (pref ts :timespec.tv_sec) 1000000000)
+    (+ (* (pref ts :timespec.tv_sec) *ns-per-second*)
        (pref ts :timespec.tv_nsec)))
-  #+darwin-target (#_mach_absolute_time)
+  #+darwin-target
+  (* (#_mach_absolute_time) darwin-ns-per-unit)
   #+windows-target
-  (rlet ((time #>FILETIME))
-    (#_GetSystemTimeAsFileTime time)
-    (* (logior (pref time #>FILETIME.dwLowDateTime)
-               (ash (pref time #>FILETIME.dwHighDateTime) 32))
-       100)))
+  (* (#_GetTickCount64) *ns-per-millisecond*))
 
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
   (values (truncate (current-time-in-nanoseconds)
-                    (load-time-value
-                     (/ 1000000000 internal-time-units-per-second)))))
+                    *ns-per-internal-time-unit*)))
 
 (defun get-tick-count ()
-  (values (truncate (current-time-in-nanoseconds) *ns-per-tick*)))
+  (values (truncate (current-time-in-nanoseconds)
+                    *ns-per-tick*)))
 
 
 
