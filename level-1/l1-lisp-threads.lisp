@@ -33,17 +33,15 @@
     #-windows-target
     (max 1000 (#_sysconf #$_SC_CLK_TCK)))
 
-(defloadvar *ns-per-second*
-    1000000000)
+(defconstant +ns-per-second+ 1000000000)
 
-(defloadvar *ns-per-millisecond*
-    (floor *ns-per-second* 1000))
+(defconstant +ns-per-millisecond+ (floor +ns-per-second+ 1000))
 
 (defloadvar *ns-per-tick*
-    (floor *ns-per-second* *ticks-per-second*))
+    (floor +ns-per-second+ *ticks-per-second*))
 
 (defloadvar *ns-per-internal-time-unit*
-    (floor *ns-per-second* internal-time-units-per-second))
+    (floor +ns-per-second+ internal-time-units-per-second))
 
 #-windows-target
 (defun %nanosleep (seconds nanoseconds)
@@ -103,12 +101,12 @@
   #-(or darwin-target windows-target)
   (rlet ((ts :timespec))
     (#_clock_gettime preferred-posix-clock-id ts)
-    (+ (* (pref ts :timespec.tv_sec) *ns-per-second*)
+    (+ (* (pref ts :timespec.tv_sec) +ns-per-second+)
        (pref ts :timespec.tv_nsec)))
   #+darwin-target
   (* (#_mach_absolute_time) darwin-ns-per-unit)
   #+windows-target
-  (* (#_GetTickCount64) *ns-per-millisecond*))
+  (* (#_GetTickCount64) +ns-per-millisecond+))
 
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
