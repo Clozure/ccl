@@ -670,7 +670,8 @@
                           (if (eq arg '&aux)
                             (return)
                             (push arg temp)))
-                        (format nil "~:a" (nreverse temp)))))
+                        (let ((*package* (find-package "KEYWORD")))
+                          (format nil "~:S" (nreverse temp))))))
       (if (and body-pos (memq '&optional normalized)) (decf body-pos))
       `(progn
          (eval-when (:compile-toplevel)
