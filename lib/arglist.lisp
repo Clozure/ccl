@@ -48,7 +48,7 @@
 ; Returns two values: the arglist & it's functions binding.
 ; If the second arg is NIL, there was no function binding.
 (defun arglist (sym &optional include-bindings)
-  (%arglist sym include-bindings))
+  (%arglist-internal sym include-bindings))
 
 (defun arglist-string (sym &optional include-bindings)
   (multiple-value-bind (res type)
@@ -67,34 +67,6 @@
         (setf (gethash real-sym %lambda-lists%) arglist)))))
 
 (defsetf arglist set-arglist)
-
-; Same as ARGLIST, but has the option of using TEMP-CONS instead of CONS
-; to cons up the list.
-(defun %arglist (sym &optional include-bindings)
-  (multiple-value-bind (res type)
-                       (%arglist-internal
-                        sym include-bindings)
-    (when (stringp res)
-      (with-input-from-string (stream res)
-        (setq res nil)
-        (let ((eof (list nil))
-              val errorp)
-          (declare (dynamic-extent eof))
-          (loop
-            (multiple-value-setq (val errorp)
-              (ignore-errors (values (read stream nil eof))))
-            (when errorp
-              (push '&rest res)
-              (push ':unparseable res)
-              (return))
-            (when (eq val eof)
-              (return))
-            (push val res))
-          (setq res
-                (if (and (null (cdr res)) (listp (car res)))
-                  (car res)
-                  (nreverse res))))))
-    (values res type)))
 
 (defun %arglist-internal (sym include-bindings 
                               &aux def type)

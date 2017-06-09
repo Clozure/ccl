@@ -664,13 +664,7 @@
   (multiple-value-bind (lambda-form doc)
                        (parse-macro-1 name arglist body env)
     (let* ((normalized (normalize-lambda-list arglist t t))
-           (body-pos (position '&body normalized))
-           (argstring (let ((temp nil))
-                        (dolist (arg normalized)
-                          (if (eq arg '&aux)
-                            (return)
-                            (push arg temp)))
-                        (format nil "~:a" (nreverse temp)))))
+           (body-pos (position '&body normalized)))
       (if (and body-pos (memq '&optional normalized)) (decf body-pos))
       `(progn
          (eval-when (:compile-toplevel)
@@ -678,7 +672,7 @@
          (eval-when (:load-toplevel :execute)
            (%macro 
             (nfunction ,name ,lambda-form)
-            '(,doc ,body-pos . ,argstring))
+            '(,doc ,body-pos . ,normalized))
            ',name)))))
 
 (defmacro define-symbol-macro (name expansion &environment env)
