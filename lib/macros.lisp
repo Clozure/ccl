@@ -3617,6 +3617,9 @@ element-type is numeric."
       (if struct-transform
         (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))
+      (if (eq (car place) 'the)
+        (setq place (caddr place)
+              sym (car place)))
       (if (member  sym '(svref ccl::%svref ccl::struct-ref))
         (let* ((v (gensym)))
           `(let* ((,v ,(cadr place)))
