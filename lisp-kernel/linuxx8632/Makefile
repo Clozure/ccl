@@ -21,7 +21,7 @@ AS = as
 M4 = m4
 ASFLAGS = --32
 M4FLAGS = -DLINUX -DX86 -DX8632 -DHAVE_TLS
-CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DSVN_REVISION=$(SVN_REVISION) # -DGC_INTEGRITY_CHECKING -DDISABLE_EGC
+CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DSVN_REVISION=$(SVN_REVISION) -DUSE_DTRACE # -DGC_INTEGRITY_CHECKING -DDISABLE_EGC
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
@@ -43,14 +43,15 @@ endif
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -I. -m32 -o $@
 
 SPOBJ = pad.o x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o x86-gc.o bits.o  x86-exceptions.o \
 	x86-utils.o \
-	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
+	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o \
+	probes.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o xlbt.o x86_print.o
 KERNELOBJ= $(COBJ) x86-asmutils32.o  imports.o
@@ -79,9 +80,13 @@ USE_LINK_SCRIPT = # -T $(LINK_SCRIPT)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
-$(COBJ): $(CHEADERS)
+$(COBJ): $(CHEADERS) probes.h
 $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
+probes.h: probes.d
+	dtrace -h -s $<
+probes.o: probes.d
+	dtrace -G -s $<
 
 cclean:
 	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../lx86cl

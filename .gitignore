@@ -33,3 +33,5 @@ lisp-kernel/darwinx8664/mach_exc_server.c
 lisp-kernel/darwinx8664/probes.h
 lisp-kernel/static-linuxppc/external-functions.h
 
+lisp-kernel/linuxx8664/probes.h
+lisp-kernel/linuxx8632/probes.h
