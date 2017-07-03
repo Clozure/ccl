@@ -482,6 +482,7 @@
      set-gc-notification-threshold
      *pending-gc-notification-hook*
      current-time-in-nanoseconds
+     create-perf-map
      
      population
      make-population
