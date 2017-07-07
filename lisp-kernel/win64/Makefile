@@ -97,7 +97,7 @@ KSPOBJ = $(SPOBJ)
 all:	../../wx86cl64.exe
 
 
-OSLIBS = -lpsapi -lws2_32
+OSLIBS = -lpsapi -lws2_32 -static -lpthread
 
 
 ../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile pei-x86-64.x
