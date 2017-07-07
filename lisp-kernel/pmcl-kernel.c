@@ -1917,7 +1917,7 @@ main
   }
 #endif
 #endif
-#ifdef WINDOXS
+#ifdef WINDOWS
   real_executable_name = determine_executable_name();
 #else
   real_executable_name = determine_executable_name(argv[0]);
