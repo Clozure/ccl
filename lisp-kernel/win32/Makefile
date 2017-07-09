@@ -44,21 +44,18 @@ SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 VPATH = ../
 RM = rm
-CC = i686-w64-mingw32-gcc
 
 ifeq ($(MSYSTEM),)
+CC = i686-w64-mingw32-gcc
 AS = i686-w64-mingw32-as
+LD = i686-w64-mingw32-ld
 else
+CC = /mingw32/bin/i686-w64-mingw32-gcc
 AS = /mingw32/bin/as
+LD = /mingw32/bin/ld
 endif
 
 M4 = m4
-
-ifeq ($(MSYSTEM),)
-LD = i686-w64-mingw32-ld
-else
-LD = /mingw32/bin/ld
-endif
 
 ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632
