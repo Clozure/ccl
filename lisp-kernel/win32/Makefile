@@ -14,8 +14,9 @@
 # limitations under the License.
 
 # This makefile is written to be used with the mingw toolchain
-# running in the Cygwin environment.
-#
+# running in the Cygwin environment or Msys2 environment.
+
+# If running in the Cygwin environment:
 # Install the following Cygwin packages:
 # * make
 # * m4
@@ -27,14 +28,35 @@
 #
 # Accept the dependencies the installation tool may add.
 
+# If running in the Msys2 environment:
+# Install the following Msys2 packages using pacman -S:
+# * make
+# * m4
+# * mingw-w64-i686-binutils
+# * mingw-w64-i686-crt
+# * mingw-w64-i686-gcc
+# * mingw-w64-i686-headers
+# * mingw-w64-i686-winpthreads
+# Accept the dependencies the installation tool may add.
+# Currently only install make, m4 and mingw-w64-i686-gcc will install other
+# mingw-w64-* dependencies. May change in the future.
 SVN_REVISION := "$(shell svnversion || echo unknown)"
 
 VPATH = ../
 RM = rm
+
+ifeq ($(MSYSTEM),)
 CC = i686-w64-mingw32-gcc
 AS = i686-w64-mingw32-as
-M4 = m4
 LD = i686-w64-mingw32-ld
+else
+CC = /mingw32/bin/i686-w64-mingw32-gcc
+AS = /mingw32/bin/as
+LD = /mingw32/bin/ld
+endif
+
+M4 = m4
+
 ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632
 CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DSVN_REVISION=$(SVN_REVISION)
