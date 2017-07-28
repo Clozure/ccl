@@ -4217,8 +4217,8 @@
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c))
-    (when (stream-listen c)
-      (return t))))
+    (cond ((stream-listen c)     (return t))
+          ((not (stream-eofp c)) (return nil)))))
 
 (defmethod stream-eofp ((s concatenated-stream))
   (do* ((c (concatenated-stream-current-input-stream s)
