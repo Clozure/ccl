@@ -4224,7 +4224,7 @@
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c) t)
-    (when (stream-listen c)
+    (unless (stream-eofp c)
       (return nil))))
 
 (defmethod stream-clear-input ((s concatenated-stream))
