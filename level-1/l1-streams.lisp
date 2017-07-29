@@ -5689,9 +5689,10 @@
                      nil)))))))
 
 (defun fd-stream-eofp (s ioblock)
-  (declare (ignore s))
-  (ioblock-eof ioblock))
-  
+  (or (ioblock-eof ioblock)
+      (progn (fd-stream-advance s ioblock nil)
+             (ioblock-eof ioblock))))
+
 (defun fd-stream-listen (s ioblock)
   (if (interactive-stream-p s)
     (unread-data-available-p (ioblock-device ioblock))
