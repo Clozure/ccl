@@ -208,6 +208,7 @@ foreign_name_and_offset(natural addr, int *delta)
 
 
 #if defined(LINUX) || defined(SOLARIS)
+#include <stdio_ext.h>
 #define fpurge __fpurge
 #endif
 
