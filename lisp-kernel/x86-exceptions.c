@@ -1677,7 +1677,7 @@ struct rt_sigframe {
 	siginfo_t  *pinfo;
 	void  *puc;
 	siginfo_t info;
-	struct ucontext uc;
+	ucontext_t uc;
 	struct _fpstate fpstate;
 	char retcode[8];
 };
@@ -2425,7 +2425,7 @@ setup_sigaltstack(area *a)
      It's easier to just reserve that page here than it would be to
      change copy_ucontext().
   */
-  stack.ss_size -= sizeof(struct ucontext);
+  stack.ss_size -= sizeof(ucontext_t);
 #endif
   if (sigaltstack(&stack, NULL) != 0) {
     perror("sigaltstack");
