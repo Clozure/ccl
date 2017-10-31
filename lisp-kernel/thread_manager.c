@@ -866,6 +866,13 @@ setup_tcr_extra_segment(TCR *tcr)
   amd64_set_gsbase(tcr);
 #endif
 #ifdef LINUX
+  /*
+   * According arch_prctl(2), there's no function prototype for
+   * arch_prctl().  Thus, we have to declare it ourselves.
+   * Note that addr is unsigned long for SET operations.
+   */
+  extern int arch_prctl(int code, unsigned long addr);
+
   arch_prctl(ARCH_SET_GS, (natural)tcr);
 #endif
 #ifdef DARWIN
