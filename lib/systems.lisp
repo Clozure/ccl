@@ -229,6 +229,7 @@
     (dominance        "ccl:bin;dominance"        ("ccl:library;dominance.lisp"))
     (swank-loader     "ccl:bin;swank-loader"     ("ccl:library;swank-loader.lisp"))    
     (remote-lisp      "ccl:bin;remote-lisp"      ("ccl:library;remote-lisp.lisp" "ccl:lib;swink.lisp"))
+    (perf-help      "ccl:bin;perf-help"          ("ccl:library;perf-help.lisp"))
  
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))

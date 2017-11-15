@@ -22,3 +22,7 @@
 #define SIG_SUSPEND_THREAD (SIGRTMIN+6)
 #define SIG_KILL_THREAD (SIGRTMIN+7)
 #endif
+
+#ifdef USE_DTRACE
+#include "probes.h"
+#endif
