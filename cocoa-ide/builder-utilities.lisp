@@ -164,7 +164,7 @@
         ;; e.g. "/Users/foo/.emacs"
         (if type
             (make-pathname :type type)
-            (make-pathname :directory (first (last dir)))))))
+            (make-pathname :directory (list :relative (first (last dir))))))))
 
 ;;; PATH (&rest components)
 ;;; ------------------------------------------------------------------------
