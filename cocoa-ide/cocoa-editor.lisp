@@ -68,7 +68,7 @@
             (,buffer (hemlock-buffer ,ns-obj))
             (,pane (cond ((eq ,buffer (hi::hemlock-view-buffer ,view)) :text)
                          ((eq ,buffer (hi::hemlock-echo-area-buffer ,view)) :echo)
-                         (t (error "invalid buffer ~s for view ~s" ,view ,buffer)))))
+                         (t (error "invalid buffer ~s for view ~s" ,buffer ,view)))))
        (hemlock:with-display-context (,view ,pane)
          ,@body))))
 
