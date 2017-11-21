@@ -91,7 +91,7 @@ all:	../../dx86cl
 
 # KSPOBJ=
 
-OSEARLYLIBS = -L $(SDKROOT)/usr/lib -lcrt1.o
+OSEARLYLIBS = -L$(SDKROOT)/usr/lib -lcrt1.o
 OSLATELIBS = -lSystem
 
 # is this needed?
