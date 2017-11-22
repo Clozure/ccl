@@ -295,25 +295,8 @@
     :sets-lr                            ; uses the link register, if there is one.
     )))
 
-(defparameter *nvp-max* 10 "size of *vinsn-varparts* freelist elements")
-(def-standard-initial-binding *vinsn-varparts* (%cons-pool))
-
-(defun alloc-varparts-vector ()
-  (without-interrupts
-   (let* ((v (pool.data *vinsn-varparts*)))
-     (if v
-       (progn
-         (setf (pool.data *vinsn-varparts*)
-               (svref v 0))
-          (%init-misc 0 v)
-         v)
-       (make-array (the fixnum *nvp-max*) :initial-element 0)))))
-
 (defun free-varparts-vector (v)
-  (without-interrupts
-   (setf (svref v 0) (pool.data *vinsn-varparts*)
-         (pool.data *vinsn-varparts*) v)
-   nil))
+  (declare (ignore v)))
 
 (defun distribute-vinsn-notes (notes pred succ)
   (or (null notes)
@@ -339,7 +322,6 @@
             (when (typep v 'lreg)
               (setf (lreg-defs v) (delete vinsn (lreg-defs v)))
               (setf (lreg-refs v) (delete vinsn (lreg-refs v))))))
-        (free-varparts-vector vp)
         (setf (vinsn-variable-parts vinsn) nil)
         (if (distribute-vinsn-notes (vinsn-notes vinsn) (vinsn-pred vinsn) (vinsn-succ vinsn))
           (remove-dll-node vinsn)
@@ -418,7 +400,7 @@
          (temp-specs (vinsn-template-temp-vreg-specs template))
          (ntemps (length temp-specs))
          (nvp (vinsn-template-nvp template))
-         (vp (alloc-varparts-vector))
+         (vp (make-array nvp))
          (*available-backend-node-temps* *available-backend-node-temps*)
 	 (*available-backend-fp-temps* *available-backend-fp-temps*)
          (*available-backend-imm-temps* *available-backend-imm-temps*)
