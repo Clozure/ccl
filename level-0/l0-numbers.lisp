@@ -1917,7 +1917,7 @@
        (when (<= half-words 0) (return))
        (incf index 2))
     ;; The bignum code expects normalized bignums
-    (let* ((result (rem (%normalize-bignum-2 t dividend) number)))
+    (let* ((result (mod (%normalize-bignum-2 t dividend) number)))
       (if (eq dividend result)
 	(copy-bignum result)
 	result))))
