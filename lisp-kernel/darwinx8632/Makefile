@@ -45,7 +45,7 @@ ASFLAGS += -Q
 SDKROOT := "$(shell xcrun --show-sdk-path)"
 endif
 
-CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -D_DARWIN_NO_64_BIT_INODE -DUSE_DTRACE
+CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
