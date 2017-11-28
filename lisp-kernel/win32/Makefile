@@ -40,7 +40,7 @@
 # Accept the dependencies the installation tool may add.
 # Currently only install make, m4 and mingw-w64-i686-gcc will install other
 # mingw-w64-* dependencies. May change in the future.
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = rm
@@ -59,7 +59,7 @@ M4 = m4
 
 ASFLAGS = -g --32
 M4FLAGS = -DWIN_32 -DWINDOWS -DX86 -DX8632
-CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DWIN_32 -DWINDOWS -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE  -D__MSVCRT__ -D__MSVCRT_VERSION__=0x700 -D_WIN32_WINNT=0x0502 -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O
 # Once in a while, -Wformat says something useful.  The odds are against that,

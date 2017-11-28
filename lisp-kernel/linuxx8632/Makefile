@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = /bin/rm
@@ -21,7 +21,7 @@ AS = as
 M4 = m4
 ASFLAGS = --32
 M4FLAGS = -DLINUX -DX86 -DX8632 -DHAVE_TLS
-CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DSVN_REVISION=$(SVN_REVISION) # -DGC_INTEGRITY_CHECKING -DDISABLE_EGC
+CDEFINES = -DLINUX -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DVC_REVISION=$(VC_REVISION) # -DGC_INTEGRITY_CHECKING -DDISABLE_EGC
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

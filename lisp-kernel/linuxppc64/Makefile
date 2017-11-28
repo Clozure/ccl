@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = /bin/rm
@@ -23,7 +23,7 @@ AS = as
 M4 = m4
 ASFLAGS = -mregnames -mppc64 -a64 -maltivec
 M4FLAGS = -DLINUX -DPPC -DPPC64
-CDEFINES = -DLINUX -D_REENTRANT -DPPC -DPPC64 -D_GNU_SOURCE -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DLINUX -D_REENTRANT -DPPC -DPPC64 -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # word size issues are a little more relevant on a 64-bit platform

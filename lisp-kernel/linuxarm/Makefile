@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 # default float-abi to whatever the toolchain defaults to.
 # allow float-abi.mk to override
@@ -26,7 +26,7 @@ AS = as
 M4 = m4
 ASFLAGS = -mfpu=vfp -march=armv6 $(FLOAT_ABI_OPTION)
 M4FLAGS = -DLINUX -DARM
-CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
