@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 SDKROOT=/
 OSVERSION=10.6
@@ -45,7 +45,7 @@ ASFLAGS += -Q
 SDKROOT := "$(shell xcrun --show-sdk-path)"
 endif
 
-CDEFINES = -DDARWIN -DX86 -DX8632 -DSVN_REVISION=$(SVN_REVISION) -DUSE_DTRACE
+CDEFINES = -DDARWIN -DX86 -DX8632 -DVC_REVISION=$(VC_REVISION) -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
