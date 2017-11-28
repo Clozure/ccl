@@ -2919,8 +2919,8 @@
 (defparameter specialized-array-element-types
   '(nil bit (unsigned-byte 8) (signed-byte 8) (unsigned-byte 16)
     (signed-byte 16) (unsigned-byte 32) #+32-bit-target fixnum (signed-byte 32)
-    #+64-bit-target (unsigned-byte 64)
     #+64-bit-target fixnum
+    #+64-bit-target (unsigned-byte 64)
     #+64-bit-target (signed-byte 64)
     character  short-float double-float
     #||(complex short-float) (complex double-float)||#))

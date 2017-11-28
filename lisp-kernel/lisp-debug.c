@@ -45,14 +45,14 @@ typedef enum {
   debug_kill
 } debug_command_return;
 
-#ifdef SVN_REVISION
+#ifdef VC_REVISION
 #define xstr(s) str(s)
 #define str(s) #s
-char *kernel_svn_revision = xstr(SVN_REVISION);
+char *kernel_vc_revision = xstr(VC_REVISION);
 #undef xstr
 #undef str
 #else
-char *kernel_svn_revision = "unknown";
+char *kernel_vc_revision = "unknown";
 #endif
 
 #ifdef ARM
@@ -208,6 +208,7 @@ foreign_name_and_offset(natural addr, int *delta)
 
 
 #if defined(LINUX) || defined(SOLARIS)
+#include <stdio_ext.h>
 #define fpurge __fpurge
 #endif
 
@@ -945,7 +946,7 @@ debug_show_lisp_version(ExceptionInformation *xp, siginfo_t *info, int arg)
 {
   extern void *plsym(ExceptionInformation *,char*);
 
-  fprintf(dbgout, "Lisp kernel svn revision: %s\n", kernel_svn_revision);
+  fprintf(dbgout, "Lisp kernel vc revision: %s\n", kernel_vc_revision);
   if (xp)
     plsym(xp, "*OPENMCL-VERSION*");
   return debug_continue;

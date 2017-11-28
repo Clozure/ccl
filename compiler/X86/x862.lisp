@@ -174,6 +174,7 @@
 (defvar *x862-register-annotation-types* nil)
 (defvar *x862-register-ea-annotations* nil)
 (defvar *x862-constant-alist* nil)
+(defvar *x862-constant-cache* nil)
 (defvar *x862-double-float-constant-alist* nil)
 (defvar *x862-single-float-constant-alist* nil)
 
@@ -254,14 +255,25 @@
 (declaim (fixnum *x862-vstack* *x862-cstack*))
 
 
+;; When there are more than this many constants, create an auxiliary hash table to keep track of them.
+(defconstant $x86-constant-cache-limit 400)
 
 
 
 
 (defun x86-immediate-label (imm)
-  (or (cdr (assoc imm *x862-constant-alist* :test #'eq))
+  (or (if (fixnump *x862-constant-cache*)
+          (cdr (assoc imm *x862-constant-alist* :test #'eq))
+          (gethash imm *x862-constant-cache*))
       (let* ((lab (aref *backend-labels* (backend-get-next-label))))
         (push (cons imm lab) *x862-constant-alist*)
+        (if (fixnump *x862-constant-cache*)
+           (when (> (incf *x862-constant-cache*) $x86-constant-cache-limit) ;; alist getting too big, make an index.
+             (let ((hash (make-hash-table :size (* 2 $x86-constant-cache-limit) :test #'eq)))
+               (dolist (cell *x862-constant-alist*)
+                 (setf (gethash (car cell) hash) (cdr cell)))
+               (setq *x862-constant-cache* hash)))
+           (setf (gethash imm *x862-constant-cache*) lab))
         lab)))
 
 (defun x86-double-float-constant-label (imm)
@@ -638,6 +650,7 @@
            (*x862-register-ea-annotations* (x862-make-stack 16))
            (*x862-register-restore-ea* nil)
            (*x862-constant-alist* nil)
+           (*x862-constant-cache* 0)
            (*x862-double-float-constant-alist* nil)
            (*x862-single-float-constant-alist* nil)
            (*x862-vstack* 0)
@@ -2050,7 +2063,8 @@
              (if (and (eql vreg-class hard-reg-class-fpr)
                       (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
                (setq fp-val vreg))
-             (if index-known-fixnum
+             (when index-known-fixnum
+               (unless unscaled-idx (setq unscaled-idx *x862-temp0*))
                (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-arch-case (:x8632 2) (:x8664 3)))))
              (! misc-ref-complex-double-float fp-val src unscaled-idx)
              (<- fp-val)))
@@ -2803,10 +2817,12 @@
             (t
 	     (cond
                (is-128-bit
-                (if index-known-fixnum
-		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 1))))
-                      (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx)))
-                (is-64-bit
+                (when  index-known-fixnum
+                  (unless unscaled-idx
+                    (setq unscaled-idx ($ *x862-arg-y*)))
+                  (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3)))))
+                (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx))
+               (is-64-bit
                 (if (eq type-keyword :complex-single-float-vector)
                   ;; don't bother to special-case constant indices
                   (progn

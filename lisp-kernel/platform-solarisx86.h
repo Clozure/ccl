@@ -19,6 +19,8 @@
 #define PLATFORM_CPU PLATFORM_CPU_X86
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_32
 
+#include <ucontext.h>
+#include <sys/fp.h>
 typedef struct ucontext ExceptionInformation;
 
 #define MAXIMUM_MAPPABLE_MEMORY (1U<<30)

@@ -703,7 +703,6 @@ minimum number of elements to add if it must be extended."
                           (setf (uvref data (the fixnum (+ offset rmi))) val))))))))))))))
 
 
-
 (defun schar (s i)
   "SCHAR returns the character object at an indexed position in a string
    just as CHAR does, except the string must be a simple-string."
@@ -713,47 +712,41 @@ minimum number of elements to add if it must be extended."
       (aref (the simple-string s) i)
       (report-bad-arg s 'simple-string))))
 
-
 (defun %scharcode (s i)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
-      (locally
-        (declare (optimize (speed 3) (safety 0)))
+      (locally (declare (optimize (speed 3) (safety 0)))
         (aref (the (simple-array (unsigned-byte 32) (*)) s) i))
-        (report-bad-arg s 'simple-string))))
-
+      (report-bad-arg s 'simple-string))))
 
 (defun set-schar (s i v)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
       (setf (aref (the simple-string s) i) v)
-        (report-bad-arg s 'simple-string))))
+      (report-bad-arg s 'simple-string))))
 
- 
 (defun %set-scharcode (s i v)
   (let* ((typecode (typecode s)))
     (declare (fixnum typecode))
     (if (= typecode target::subtag-simple-base-string)
-      (locally
-        (declare (optimize (speed 3) (safety 0)))
+      (locally (declare (optimize (speed 3) (safety 0)))
         (setf (aref (the simple-string s) i) v))
-        (report-bad-arg s 'simple-string))))
-  
+      (report-bad-arg s 'simple-string))))
 
-; Strings are simple-strings, start & end values are sane.
+;;; Strings are simple-strings, start & end values are sane.
 (defun %simple-string= (str1 str2 start1 start2 end1 end2)
   (declare (fixnum start1 start2 end1 end2))
   (when (= (the fixnum (- end1 start1))
            (the fixnum (- end2 start2)))
     (locally (declare (type simple-base-string str1 str2))
-            (do* ((i1 start1 (1+ i1))
-                  (i2 start2 (1+ i2)))
-                 ((= i1 end1) t)
-              (declare (fixnum i1 i2))
-              (unless (eq (schar str1 i1) (schar str2 i2))
-                (return))))))
+      (do* ((i1 start1 (1+ i1))
+	    (i2 start2 (1+ i2)))
+	   ((= i1 end1) t)
+	(declare (fixnum i1 i2))
+	(unless (eq (schar str1 i1) (schar str2 i2))
+	  (return))))))
 
 (defun copy-uvector (src)
   (%extend-vector 0 src (uvsize src)))
@@ -772,7 +765,15 @@ minimum number of elements to add if it must be extended."
                 4
                 (if (= subtag target::subtag-double-float-vector)
                   6
-                  0)))))
+                  (if (= subtag target::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 32-bit pad at the beginning of the vector.
+                        (+ 4 (ash element-count 4)))
+                      (if (= subtag target::subtag-complex-single-float-vector)
+                          (return-from subtag-bytes
+                            ;; There's a 32-bit pad at the beginning of the vector.
+                            (+ 4 (ash element-count 3)))
+                          0)))))))
          (total-bits (ash element-count element-bit-shift)))
     (ash (+ 7 total-bits) -3)))
 
@@ -810,7 +811,15 @@ minimum number of elements to add if it must be extended."
                 4
                 (if (= subtag x8632::subtag-double-float-vector)
                   6
-                  0)))))
+                  (if (= subtag x8632::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 32-bit pad at the beginning of the vector.
+                        (+ 4 (ash element-count 4)))
+                      (if (= subtag x8632::subtag-complex-single-float-vector)
+                          (return-from subtag-bytes
+                            ;; There's a 32-bit pad at the beginning of the vector.
+                            (+ 4 (ash element-count 3)))
+                          0)))))))
          (total-bits (ash element-count element-bit-shift)))
     (ash (+ 7 total-bits) -3)))
 
@@ -830,9 +839,13 @@ minimum number of elements to add if it must be extended."
                 6
                 (if (= subtag x8664::subtag-bit-vector)
                   0
-                  (if (>= subtag x8664::min-8-bit-ivector-subtag)
-                    3
-                    4)))))
+                  (if (= subtag x8664::subtag-complex-double-float-vector)
+                      (return-from subtag-bytes
+                        ;; There's a 64-bit pad at the beginning of the vector.
+                        (+ 8 (ash element-count 4)))
+                      (if (>= subtag x8664::min-8-bit-ivector-subtag)
+                          3
+                          4))))))
          (total-bits (ash element-count element-bit-shift)))
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
@@ -867,9 +880,6 @@ minimum number of elements to add if it must be extended."
                    target::subtag-u16-vector)
 		  ((and (>= low 0) (<= high #xffffffff))
                    target::subtag-u32-vector)
-                  #+64-bit-target
-                  ((and (>= low 0) (<= high (1- (ash 1 64))))
-                   target::subtag-u64-vector)
 		  ((and (>= low -128) (<= high 127)) target::subtag-s8-vector)
 		  ((and (>= low -32768) (<= high 32767)) target::subtag-s16-vector)
                   #+32-bit-target
@@ -882,6 +892,9 @@ minimum number of elements to add if it must be extended."
                   ((and (>= low target::target-most-negative-fixnum)
                         (<= high target::target-most-positive-fixnum))
                    target::subtag-fixnum-vector)                  
+                  #+64-bit-target
+                  ((and (>= low 0) (<= high (1- (ash 1 64))))
+                   target::subtag-u64-vector)
                   #+64-bit-target
                   ((and (>= low (ash -1 63)) (<= high (1- (ash 1 63))))
                    target::subtag-s64-vector)

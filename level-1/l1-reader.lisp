@@ -3104,7 +3104,13 @@ arg=char : read delimited list"
 
 (defun source-note-source (source-note)
   (when source-note
-    (source-note.source (require-type source-note 'source-note))))
+    (loop for note = (require-type source-note 'source-note) then source
+       for source = (source-note.source note)
+       unless (source-note-p source)
+       return (if (eq source-note note)
+                  source
+                  ;; Cache the toplevel note, don't really need the intermediate pointers
+                  (setf (source-note.source source-note) note)))))
 
 (defun source-note-file-range (source-note)
   (when source-note
@@ -3164,17 +3170,17 @@ arg=char : read delimited list"
   (let ((recording (assq stream *recording-source-streams*)))
     (when (and recording (not *read-suppress*))
       (destructuring-bind (map file-name stream-offset) (cdr recording)
-        (let* ((prev (gethash form map))
-               (note (make-source-note :filename file-name
-                                       :start-pos (+ stream-offset start-pos)
-                                       :end-pos (+ stream-offset end-pos))))
-          (setf (gethash form map)
-                (cond ((null prev) note)
-                      ((consp prev) (cons note prev))
-                      (t (list note prev))))
-          (loop for subnote in subform-notes
-            do (when (source-note-source subnote) (error "Subnote ~s already owned?" subnote))
-            do (setf (source-note.source subnote) note))
+        ;; Don't record notes for entries with multiple sources, which can happen for atoms:
+        ;;   if we can't tell which instance we mean, then we don't have useful source info.
+        (let ((note (when (eq (gethash form map 'first) 'first)
+                      (make-source-note :filename file-name
+                                        :start-pos (+ stream-offset start-pos)
+                                        :end-pos (+ stream-offset end-pos)))))
+          (setf (gethash form map) note)
+          (when note
+            (loop for subnote in subform-notes
+               do (when (source-note.source subnote) (error "Subnote ~s already owned?" subnote))
+               do (setf (source-note.source subnote) note)))
           note)))))
 
 (defun read-recording-source (stream &key eofval file-name start-offset map save-source-text)
@@ -3193,18 +3199,7 @@ non-atomic nested subforms."
          (declare (dynamic-extent recording *recording-source-streams*))
          (multiple-value-bind (form source-note) (read-internal stream nil eofval nil)
            (when (and source-note (not (eq form eofval)))
-             (assert (null (source-note-source source-note)))
-             (loop for form being the hash-key using (hash-value note) of map
-                   do (cond ((eq note source-note) nil)
-                            ;; Remove entries with multiple source notes, which can happen
-                            ;; for atoms.  If we can't tell which instance we mean, then we
-                            ;; don't have useful source info.
-                            ((listp note) (remhash form map))
-                            ((loop for p = note then (source-note-source p) while (source-note-p p)
-                                   thereis (eq p source-note))
-                             ;; Flatten the backpointers so each subnote points directly
-                             ;; to the toplevel note.
-                             (setf (source-note.source note) source-note))))
+             (assert (null (source-note.source source-note)))
              (when save-source-text
                (setf (source-note.source source-note)
                      (fetch-octets-from-stream stream

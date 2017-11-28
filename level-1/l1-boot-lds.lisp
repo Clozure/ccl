@@ -68,7 +68,7 @@ consulting services e-mail info@clozure.com or visit http://www.clozure.com.
 
 (defun listener-function ()
   (unless (or *inhibit-greeting* *quiet-flag*)
-    (format t "~&Welcome to ~A ~A!~%"
+    (format t "~&~A ~A~%"
 	    (lisp-implementation-type)
 	    (lisp-implementation-version))
     (unless *did-show-marketing-blurb*

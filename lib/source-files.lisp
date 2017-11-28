@@ -231,7 +231,7 @@ definition type NAME"
 (defmethod definition-base-name ((dt method-definition-type) (name cons))
   (if (setf-function-name-p name)
     (canonical-maybe-setf-name name)
-    (definition-base-name *function-definition-type* (car name))))
+    (definition-base-name *function-definition-type* (if (eq (car name) :method) (cadr name) (car name)))))
 
 ;; defmethod passes the actual method into record-source-file
 (defmethod definition-base-name ((dt method-definition-type) (method method))

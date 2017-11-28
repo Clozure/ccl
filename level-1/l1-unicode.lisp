@@ -81,7 +81,7 @@
   octets-in-string-function              ;(STRING START END)
 
   ;; Returns the number of (full) characters encoded in VECTOR, and
-  ;; the index the index of the first octet not used to encode
+  ;; the index of the first octet not used to encode
   ;; them. (The second value may be less than END.
   length-of-vector-encoding-function    ;(VECTOR START END) 
 
@@ -2883,7 +2883,7 @@ mark."
 (defun string-size-in-octets (string &key
                                      (start 0)
                                      end
-                                     external-format
+                                     (external-format :default)
                                      use-byte-order-mark)
   (setq end (check-sequence-bounds string start end))
   (let* ((ef (normalize-external-format t external-format)))
@@ -2928,7 +2928,7 @@ mark."
 (defun encode-string-to-octets (string &key
                                        (start 0)
                                        end
-                                       external-format
+                                       (external-format :default)
                                        use-byte-order-mark
                                        (vector nil vector-p)
                                        (vector-offset 0))
@@ -2988,7 +2988,7 @@ mark."
 (defun count-characters-in-octet-vector (vector &key
                                                 (start 0)
                                                 end
-                                                external-format)
+                                                (external-format :default))
   (setq end (check-sequence-bounds vector start end))
   (%count-characters-in-octet-vector
    vector
@@ -3008,7 +3008,7 @@ mark."
 (defun decode-string-from-octets (vector &key
                                          (start 0)
                                          end
-                                         external-format
+                                         (external-format :default)
                                          (string nil string-p))
   (setq end (check-sequence-bounds vector start end))
   (unless (= (typecode vector) target::subtag-u8-vector)

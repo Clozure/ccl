@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 # See <http://people.debian.org/~wookey/bootstrap.html>
 #CROSS=aarch64-linux-gnu-
@@ -24,7 +24,7 @@ CC = ${CROSS}gcc
 M4 = m4
 ASFLAGS = 
 M4FLAGS = -DLINUX -DARM64
-CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,

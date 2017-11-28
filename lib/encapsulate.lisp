@@ -25,6 +25,7 @@
 (defparameter *trace-max-indent* 40)
 (defvar *trace-print-level* :default)
 (defvar *trace-print-length* :default)
+(defvar *trace-print-string-length* :default)
 ;(defparameter *trace-define-if-undefined* nil)
 (defparameter *trace-bar-frequency* nil)
 (defvar *trace-hook* nil)
@@ -86,6 +87,7 @@
   (trace-tab :in)
   (let* ((*print-level* (default-print-level *trace-print-level*))
          (*print-length* (default-print-length *trace-print-length*))
+         (*print-string-length* (default-print-string-length *trace-print-string-length*))
          (*print-readably* nil))
     (format *trace-output* "Calling ~S ~%" args)
     (force-output *trace-output*)))
@@ -94,6 +96,7 @@
   (declare (dynamic-extent args))
   (let* ((*print-level* (default-print-level *trace-print-level*))
          (*print-length* (default-print-length *trace-print-length*))
+         (*print-string-length* (default-print-string-length *trace-print-string-length*))
          (*print-readably* nil))
     (if (eq n 1)
       (progn

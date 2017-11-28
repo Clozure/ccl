@@ -43,6 +43,7 @@
             LOCAL-SOCKET-ADDRESS
 	    SOCKET-ADDRESS-FAMILY
 	    SOCKET-CONNECT
+            SOCKET-CONNECTED
 	    SOCKET-FORMAT
 	    SOCKET-TYPE
 	    SOCKET-ERROR
@@ -355,9 +356,10 @@ for udp-socket."))
 
 (defmethod socket-type ((socket stream-file-socket)) :stream)
 
+;;; Is this used by anybody?
 (defgeneric socket-connect (stream)
  (:documentation
-   "Return :active for tcp-stream, :passive for listener-socket, and NIL
+   "Return :active for tcp-stream, :passive for listener-socket, and socket-connected
 for udp-socket"))
 
 (defmethod socket-connect ((stream tcp-stream)) :active)
@@ -409,7 +411,7 @@ make-socket."))
   (assert (and in-p out-p) () "Non-bidirectional file-socket stream?")
   'basic-file-socket-stream)
 
-(defmethod socket-format ((socket unconnected-socket))
+(defmethod socket-format ((socket device-mixin))
   (or (getf (socket-keys socket) :format) :text))
 
 (defgeneric close (socket &key abort)
@@ -417,12 +419,16 @@ make-socket."))
    "The close generic function can be applied to sockets. It releases the
 operating system resources associated with the socket."))
 
-(defmethod close ((socket unconnected-socket) &key abort)
+(defmethod close ((socket device-mixin) &key abort)
   (declare (ignore abort))
   (when (socket-device socket)
     (fd-close (socket-device socket))
     (setf (socket-device socket) nil)
     t))
+
+(defmethod close :after ((socket udp-socket) &key abort)
+  (declare (ignore abort))
+  (setf (socket-connected socket) nil))
 
 (defmethod socket-connect ((stream listener-socket)) :passive)
 
@@ -436,7 +442,7 @@ operating system resources associated with the socket."))
       (socket-error nil "connect" err nil :connect-address socket-address))))
 
 (defmethod socket-type ((stream udp-socket)) :datagram)
-(defmethod socket-connect ((stream udp-socket)) nil)
+(defmethod socket-connect ((stream udp-socket)) (socket-connected stream))
 (defmethod socket-format ((stream udp-socket)) :binary)
 
 (defgeneric socket-os-fd (socket)
@@ -631,7 +637,8 @@ the socket is not connected."))
                                 :port remote-port
                                 :allow-other-keys t
                                 keys)
-                         nil))
+                         nil)
+        (setf (socket-connected socket) t))
       (setq fd -1)
       socket)
     (unless (< fd 0)
@@ -646,24 +653,8 @@ the socket is not connected."))
                           backlog connect-timeout deadline
                         &allow-other-keys)
   (unwind-protect
-       (let ((timeout-in-milliseconds
-               (cond
-                 (deadline
-                  (max (round (- deadline (get-internal-real-time))
-                              (/ internal-time-units-per-second 1000))
-                       0))
-                 (connect-timeout
-		  (check-io-timeout connect-timeout)
-                  (round (* connect-timeout 1000)))))
-             (socket-address (or remote-address
-                                 (apply #'resolve-address
-					:connect connect
-					:address-family address-family
-                                        :host remote-host
-                                        :port remote-port
-                                        :allow-other-keys t
-                                        keys))))
-         (when (< fd 0)
+       (progn
+	 (when (< fd 0)
            (setq fd (socket-call nil "socket"
                                  (c_socket (ecase address-family
                                              (:internet #$PF_INET)
@@ -676,8 +667,25 @@ the socket is not connected."))
                               keys)))
            (apply #'set-socket-options socket keys)
            (if (eql connect :passive)
-               (socket-call nil "listen" (c_listen fd (or backlog 5)))
-               (%socket-connect fd socket-address timeout-in-milliseconds))
+	     (socket-call nil "listen" (c_listen fd (or backlog 5)))
+	     (let ((timeout-in-milliseconds
+		    (cond
+		      (deadline
+		       (max (round (- deadline (get-internal-real-time))
+				   (/ internal-time-units-per-second 1000))
+			    0))
+		      (connect-timeout
+		       (check-io-timeout connect-timeout)
+		       (round (* connect-timeout 1000)))))
+		   (socket-address (or remote-address
+				       (apply #'resolve-address
+					      :connect connect
+					      :address-family address-family
+					      :host remote-host
+					      :port remote-port
+					      :allow-other-keys t
+					      keys))))
+               (%socket-connect fd socket-address timeout-in-milliseconds)))
            (setq fd -1)
            socket))
     (unless (< fd 0)
@@ -843,7 +851,8 @@ the socket is not connected."))
 	      (_accept fd *multiprocessing-socket-io*)))
 	  (*multiprocessing-socket-io*
 	    (_accept fd t))
-	  (t
+	  (t ; if nowait was specified, temporarily force the socket to not block
+             ;  (sockets are generally 'born blocking' in CCL)
 	    (let ((was-blocking (get-socket-fd-blocking fd)))
 	      (unwind-protect
 		  (progn
@@ -908,24 +917,29 @@ accept-connection on it again."))
 (defmethod send-to ((socket udp-socket) msg size
 		    &key remote-host remote-port remote-address offset)
   "Send a UDP packet over a socket."
-  (let ((socket-address (or remote-address
-                            (remote-socket-address socket)
-                            (resolve-address :host (or remote-host
-                                                       (getf (socket-keys socket) :remote-host))
-                                             :port (or remote-port
-                                                       (getf (socket-keys socket) :remote-port))
-                                             :connect :active
-                                             :address-family (socket-address-family socket)
-                                             :socket-type :datagram))))
+  (let ((socket-address (and (not (socket-connected socket))
+                             (or remote-address
+                                 (remote-socket-address socket)
+                                 (resolve-address :host (or remote-host
+                                                            (getf (socket-keys socket) :remote-host))
+                                                  :port (or remote-port
+                                                            (getf (socket-keys socket) :remote-port))
+                                                  :connect :active
+                                                  :address-family (socket-address-family socket)
+                                                  :socket-type :datagram)))))
     (multiple-value-setq (msg offset) (verify-socket-buffer msg offset size))
     (%stack-block ((bufptr size))
       (%copy-ivector-to-ptr msg offset bufptr 0 size)
       (socket-call socket "sendto"
-        (with-eagain (socket-device socket) :output
-          (c_sendto (socket-device socket)
-                    bufptr size 0
-                    (sockaddr socket-address)
-                    (sockaddr-length socket-address)))))))
+                   (with-eagain (socket-device socket) :output
+                     (c_sendto (socket-device socket)
+                               bufptr size 0
+                               (if socket-address
+                                   (sockaddr socket-address)
+                                   (%null-ptr))
+                               (if socket-address
+                                   (sockaddr-length socket-address)
+                                   0)))))))
 
 (defmethod receive-from ((socket udp-socket) size &key buffer extract offset want-socket-address-p)
   "Read a UDP packet from a socket. If no packets are available, wait for
@@ -942,7 +956,7 @@ If want-socket-address-p is true:
 
   The buffer with the data
   The number of bytes read
-  The socket-address describing the sender
+  The socket-address object describing the sender
 "
   (let ((fd (socket-device socket))
 	(vec-offset offset)
@@ -990,8 +1004,12 @@ you need to read responses after sending an end-of-file signal."))
   (let ((fd (socket-device socket)))
     (socket-call socket "shutdown"
       (c_shutdown fd (ecase direction
-		       (:input 0)
-		       (:output 1))))))
+		       (:input #-windows-target #$SHUT_RD
+			       #+windows-target #$SD_RECEIVE)
+		       (:output #-windows-target #$SHUT_WR
+				#+windows-target #$SD_SEND)
+                       (:both #-windows-target #$SHUT_RDWR
+			      #+windows-target #$SD_BOTH))))))
 
 (defun dotted-to-ipaddr (name &key (errorp t))
   "Convert a dotted-string representation of a host address to a 32-bit
@@ -1463,25 +1481,25 @@ unsigned IP address."
       (princ-to-string port)))
 
 (defun resolve-address (&key
-                          host
-                          port
-                          (socket-type :stream)
-                          (connect :active)
-                          address-family
-                          numeric-host-p
-                          #-windows-target numeric-service-p
-                          (singlep t)
-                          (errorp t))
+                        host
+                        port
+                        (socket-type :stream)
+                        (connect :active)
+                        address-family
+                        numeric-host-p
+                        #-windows-target numeric-service-p
+                        (singlep t)
+                        (errorp t))
   "Resolve a host and/or port string to one or more socket-address
-instances.  Either host or port may be unspecified.  Calls
-getaddrinfo() underneath.
-
-singlep may be passed as NIL to make the function return a list of
-host addresses matching the specified query terms.  The default is to
-return the first matching address.
-
-errorp may be passed as NIL to return NIL if no match was found."
-
+  instances.  Either host or port may be unspecified.  Calls
+  getaddrinfo() underneath.
+  
+  singlep may be passed as NIL to make the function return a list of
+  host addresses matching the specified query terms.  The default is to
+  return the first matching address.
+  
+  errorp may be passed as NIL to return NIL if no match was found."
+  
   ;; We have historically supported the use of an (unsigned-byte 32)
   ;; value to represent an IPv4 address. If existing code does that to
   ;; avoid overhead (name resolution, consing, what-have-you), then
@@ -1497,18 +1515,18 @@ errorp may be passed as NIL to return NIL if no match was found."
 			(symbol (_getservbyname (string-downcase
 						 (string port)) proto)))))
       (if (null inet-port)
-	(when errorp
-	  (error "can't resolve port ~s with getservbyname" port))
-	(let* ((socket-address (make-instance 'socket-address))
-	       (sin (sockaddr socket-address)))
-	  (setf (pref sin :sockaddr_in.sin_family) #$AF_INET)
-	  (setf (pref sin
-		      #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
-		      #-(or windows-target solaris-target) :sockaddr_in.sin_addr.s_addr) (htonl host))
-	  (setf (pref sin :sockaddr_in.sin_port) inet-port)
-	  (upgrade-socket-address-from-sockaddr #$AF_INET socket-address)
-	  (return-from resolve-address socket-address)))))
-    
+          (when errorp
+            (error "can't resolve port ~s with getservbyname" port))
+          (let* ((socket-address (make-instance 'socket-address))
+                 (sin (sockaddr socket-address)))
+            (setf (pref sin :sockaddr_in.sin_family) #$AF_INET)
+            (setf (pref sin
+                        #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
+                        #-(or windows-target solaris-target) :sockaddr_in.sin_addr.s_addr) (htonl host))
+            (setf (pref sin :sockaddr_in.sin_port) inet-port)
+            (upgrade-socket-address-from-sockaddr #$AF_INET socket-address)
+            (return-from resolve-address socket-address)))))
+  
   (with-cstrs ((host-buf (or host ""))
                (port-buf (string-downcase (or (ensure-string port) ""))))
     (rletZ ((hints #>addrinfo)
@@ -1535,24 +1553,26 @@ errorp may be passed as NIL to return NIL if no match was found."
                                  results)))
         (if (eql 0 err)
             (prog1
-                (or (loop for info = (pref results :address) then (pref info #>addrinfo.ai_next)
-                          until (%null-ptr-p info)
-                          for sockaddr = (pref info #>addrinfo.ai_addr)
-                          for socket-address = (make-instance 'socket-address)
-                          do (loop for i below (pref info #>addrinfo.ai_addrlen)
-                                   do (setf (paref (sockaddr socket-address) :uint8_t i)
-                                            (paref sockaddr :uint8_t i)))
-                             (upgrade-socket-address-from-sockaddr (pref (sockaddr socket-address) :sockaddr_storage.ss_family)
-                                                                   socket-address)
-                          if singlep
-                            do (return socket-address)
-                          else
-                            collect socket-address)
-                    (when errorp
-                      (error "cannot resolve local service host ~A port ~A connect ~S type ~S"
-                             host port connect socket-type)))
+              (or (loop for info = (pref results :address) then (pref info #>addrinfo.ai_next)
+                    until (%null-ptr-p info)
+                    for sockaddr = (pref info #>addrinfo.ai_addr)
+                    for socket-address = (make-instance 'socket-address)
+                    do (loop for i below (pref info #>addrinfo.ai_addrlen)
+                         do (setf (paref (sockaddr socket-address) :uint8_t i)
+                                  (paref sockaddr :uint8_t i)))
+                    (upgrade-socket-address-from-sockaddr (pref (sockaddr socket-address) :sockaddr_storage.ss_family)
+                                                          socket-address)
+                    if singlep
+                    do (return socket-address)
+                    else
+                    collect socket-address)
+                  (when errorp
+                    (error "cannot resolve local service host ~A port ~A connect ~S type ~S"
+                           host port connect socket-type)))
               (#_freeaddrinfo (pref results :address)))
-	      (values nil err))))))
+            (if errorp 
+                (socket-error nil "getaddrinfo" err t) 
+                (values nil err)))))))
 
 (defclass ip4-socket-address (ip-socket-address)
   ())
@@ -1708,7 +1728,8 @@ the resulting sockaddr."
                                                               (case (find-symbol (string-upcase proto) :keyword)
                                                                 (:udp :datagram)
                                                                 (:tcp :stream))
-                                                              proto))))
+                                                              proto)
+                                             :errorp nil)))
         (when socket-address
           (port socket-address)))))
 
@@ -1717,7 +1738,7 @@ the resulting sockaddr."
 unsigned IP address."
   (if (typep host 'integer)
       host
-      (let ((socket-address (resolve-address :host host :address-family :internet)))
+      (let ((socket-address (resolve-address :host host :address-family :internet :errorp nil)))
         (when socket-address
           (host socket-address)))))
 

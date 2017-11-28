@@ -3090,7 +3090,7 @@
       (ecase line-termination
         (:cr (setf (ioblock-write-char-when-locked-function ioblock)
                    '%ioblock-write-char-translating-newline-to-cr
-                   (ioblock-read-char-function ioblock)
+                   (ioblock-write-char-function ioblock)
                    (case sharing
                      (:private
                       '%private-ioblock-write-char-translating-newline-to-cr)
@@ -4217,14 +4217,14 @@
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c))
-    (when (stream-listen c)
-      (return t))))
+    (cond ((stream-listen c)     (return t))
+          ((not (stream-eofp c)) (return nil)))))
 
 (defmethod stream-eofp ((s concatenated-stream))
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c) t)
-    (when (stream-listen c)
+    (unless (stream-eofp c)
       (return nil))))
 
 (defmethod stream-clear-input ((s concatenated-stream))
@@ -5396,13 +5396,7 @@
              :unsigned-fullword))
 
 (defun unread-data-available-p (fd)
-  #+(or freebsd-target windows-target)
-  (fd-input-available-p fd 0)
-  #-(or freebsd-target windows-target)
-  (rlet ((arg (* :char) (%null-ptr)))
-    (when (zerop (int-errno-call (#_ioctl fd #$FIONREAD :address arg)))
-      (let* ((avail (pref arg :long)))
-	(and (> avail 0) avail)))))
+  (fd-input-available-p fd 0))
 
 ;;; Read and discard any available unread input.
 (defun %fd-drain-input (fd)
@@ -5518,6 +5512,9 @@
 	      (pref tv :timeval.tv_usec) us)))))
 
 (defun fd-input-available-p (fd &optional milliseconds)
+  "Returns true or false depending on whether input is available.
+   In some cases on windows, it may return a count of the number of unread bytes.
+   This behavior should not be depended upon."
   #+windows-target
   (case (%unix-fd-kind fd)
     (:socket
@@ -5692,9 +5689,10 @@
                      nil)))))))
 
 (defun fd-stream-eofp (s ioblock)
-  (declare (ignore s))
-  (ioblock-eof ioblock))
-  
+  (or (ioblock-eof ioblock)
+      (progn (fd-stream-advance s ioblock nil)
+             (ioblock-eof ioblock))))
+
 (defun fd-stream-listen (s ioblock)
   (if (interactive-stream-p s)
     (unread-data-available-p (ioblock-device ioblock))

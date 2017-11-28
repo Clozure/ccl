@@ -54,7 +54,7 @@
 
 (define-condition storage-condition (serious-condition) ())
 
-(define-condition thread-condition (serious-condition) ())
+(define-condition thread-condition (condition) ())
 
 (define-condition process-reset (thread-condition)
   ((kill :initarg :kill :initform nil :reader process-reset-kill)))

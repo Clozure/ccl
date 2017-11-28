@@ -927,10 +927,20 @@ are running on, or NIL if we can't find any useful information."
         (native-translated-namestring
          (merge-pathnames "svnversion" *svn-program*)))
       "svnversion"))
-        
-                      
-        
-                         
+
+(defun local-git-revision ()
+  (let ((s (make-string-output-stream))
+	(git-dir (native-translated-namestring
+		  (merge-pathnames (ccl-directory) ".git"))))
+    (multiple-value-bind (status exit-code)
+	(external-process-status
+	 (run-program "git" (list "--git-dir" git-dir "describe" "HEAD")
+		      :output s :error :output))
+      (when (and (eq status :exited)
+		 (= exit-code 0))
+	(string-right-trim (list #\space #\newline)
+			   (get-output-stream-string s))))))
+
 (defun local-svn-revision ()
   (let* ((s (make-string-output-stream))
          (root (native-translated-namestring "ccl:")))
@@ -949,6 +959,9 @@ are running on, or NIL if we can't find any useful information."
               (return-from local-svn-revision line))))))
     nil))
 
+(defun local-vc-revision ()
+  (or (local-git-revision)
+      (local-svn-revision)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

@@ -125,8 +125,7 @@
          (apply sd (nreverse args))))))
 
 ;;;from slisp reader2.lisp, and apparently not touched in 20 years.
-(defun parse-integer (string &key (start 0) end
-                      (radix 10) junk-allowed)
+(defun parse-integer (string &key (start 0) end (radix 10) junk-allowed)
   "Examine the substring of string delimited by start and end
   (default to the beginning and end of the string)  It skips over
   whitespace characters and then tries to parse an integer. The
@@ -144,40 +143,39 @@
                         (return-from parse-integer (values nil end))
                         (parse-integer-not-integer-string string)))
                    (unless (whitespacep (char string i)) (return i))))
-        (minusp nil)
-        (found-digit nil)
-        (result 0))
-       (let ((char (char string index)))
-            (cond ((char= char #\-)
-                   (setq minusp t)
-                   (setq index (1+ index)))
-                  ((char= char #\+)
-                    (setq index (1+ index))
-                   )))
-       (loop
+          (minusp nil)
+          (found-digit nil)
+          (result 0))
+      (declare (fixnum start end radix))
+      (let ((char (char string index)))
+        (cond ((char= char #\-)
+               (setq minusp t)
+               (setq index (1+ index)))
+              ((char= char #\+)
+               (setq index (1+ index)))))
+      (loop
         (when (= index end) (return nil))
         (let* ((char (char string index))
                (weight (digit-char-p char radix)))
-              (cond (weight
-                     (setq result (+ weight (* result radix))
-                                  found-digit t))
-                    (junk-allowed (return nil))
-                    ((whitespacep char)
-                     (until (eq (setq index (1+ index)) end)
-                       (unless (whitespacep (char string index))
-                         (parse-integer-not-integer-string string)))
-                     (return nil))
-                    (t
-                     (parse-integer-not-integer-string string))))
-         (setq index (1+ index)))
-       (values
-        (if found-digit
-            (if minusp (- result) result)
-            (if junk-allowed
-                nil
-                (parse-integer-not-integer-string string)))
-        index))))
-
+	  (cond (weight
+		 (setq result (+ weight (* result radix))
+		       found-digit t))
+		(junk-allowed (return nil))
+		((whitespacep char)
+		 (until (eq (setq index (1+ index)) end)
+		   (unless (whitespacep (char string index))
+		     (parse-integer-not-integer-string string)))
+		 (return nil))
+		(t
+		 (parse-integer-not-integer-string string))))
+	(setq index (1+ index)))
+      (values
+       (if found-digit
+	 (if minusp (- result) result)
+	 (if junk-allowed
+	   nil
+	   (parse-integer-not-integer-string string)))
+       index))))
 
 (defun get-read-object (arg)
   (if (listp %read-objects%)

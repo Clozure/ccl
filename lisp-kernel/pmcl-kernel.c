@@ -1716,6 +1716,12 @@ ensure_gs_available(char *progname)
 {
   LispObj fs_addr = 0L, gs_addr = 0L, cur_thread = (LispObj)pthread_self();
   char *gnu_get_libc_version(void);
+  /*
+   * According arch_prctl(2), there's no function prototype for
+   * arch_prctl().  Thus, we have to declare it ourselves.
+   * Note that addr is unsigned long * for GET operations.
+   */
+  extern int arch_prctl(int code, unsigned long *addr);
   
   arch_prctl(ARCH_GET_GS, &gs_addr);
   arch_prctl(ARCH_GET_FS, &fs_addr);
@@ -1917,7 +1923,7 @@ main
   }
 #endif
 #endif
-#ifdef WINDOXS
+#ifdef WINDOWS
   real_executable_name = determine_executable_name();
 #else
   real_executable_name = determine_executable_name(argv[0]);

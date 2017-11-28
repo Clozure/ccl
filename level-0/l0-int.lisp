@@ -186,3 +186,52 @@
             (declare (fixnum i))
             (setq index (1- index))
             (setf (schar string index) #\0)))))))
+
+#+x8664-target
+(defun %bignum-hex-digits (b string)
+  (let* ((size (uvsize b))
+	 (temp-string (make-string 8))
+	 (end 0))
+    (declare (type fixnum size end))
+    (declare (dynamic-extent temp-string))
+    (locally (declare (optimize (speed 3) (safety 0)))
+      (loop for i of-type fixnum from (the fixnum (1- size)) downto 0
+	    for start2 of-type fixnum by 32
+	    do (%ub-fixnum-hex-digits 7 (bignum-ref b i) temp-string)
+	    (setq end (%i+ end 8))
+	    (%copy-ivector-to-ivector temp-string 0 string start2 32)))
+    (values string end)))
+
+(defun write-unsigned-byte-hex-digits (u stream)
+  (setq u (require-type u '(unsigned-byte)))
+  #-x8664-target
+  (write u :stream stream :base 16)
+  #+x8664-target
+  (if (fixnump u)
+    (let* ((scratch (make-string 15)))
+      (declare (dynamic-extent scratch))
+      (%ub-fixnum-hex-digits 14 u scratch)
+      (let ((start (dotimes (i 15 nil)
+		     (declare (fixnum i)
+			      (optimize (speed 3) (safety 0)))
+		     (unless (char= #\0 (schar scratch i))
+		       (return i)))))
+	(if start
+	  (write-string scratch stream :start start)
+	  (write-string "0" stream))))
+    (let* ((scratch (make-string (the fixnum (ash (the fixnum (uvsize u)) 3))))
+	   (start 0))
+      (declare (dynamic-extent scratch)
+	       (fixnum start))
+      (multiple-value-bind (string end)
+	  (%bignum-hex-digits u scratch)
+	;; skip leading zeros (there will be a non-zero digit)
+	(let ((i 0))
+	  (declare (type (unsigned-byte 56) i))
+	  (loop
+	    (if (char= #\0 (schar string i))
+	      (setq start (%i+ start 1))
+	      (return))
+	    (setq i (%i+ i 1))))
+	(write-string string stream :start start :end end))))
+  nil)

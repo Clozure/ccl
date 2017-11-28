@@ -75,7 +75,7 @@
 (define-x8664-vinsn misc-ref-complex-double-float  (((dest :complex-double-float))
                                                     ((v :lisp)
                                                      (scaled-idx :imm)))
-  (movapd (:@ x8664::complex-double-float.realpart (:%q v) (:%q scaled-idx) 2) (:%xmm dest)))
+  (movdqu (:@ x8664::complex-double-float.realpart (:%q v) (:%q scaled-idx) 2) (:%xmm dest)))
 
 (define-x8664-vinsn misc-ref-c-double-float  (((dest :double-float))
                                               ((v :lisp)
@@ -132,7 +132,7 @@
                                                     (v :lisp)
                                                     (unscaled-idx :imm))
 				   ())
-  (movapd (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q  v) (:%q unscaled-idx) 2)))
+  (movdqu (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q  v) (:%q unscaled-idx) 2)))
 
 (define-x8664-vinsn misc-ref-u8 (((dest :u8))
                                  ((v :lisp)
@@ -1833,7 +1833,7 @@
 
 (define-x8664-vinsn get-complex-double-float (((result :complex-double-float))
                                               ((source :lisp)))
-  (movdqa (:@  x8664::complex-double-float.realpart (:%q source)) (:%xmm result)))
+  (movdqu (:@  x8664::complex-double-float.realpart (:%q source)) (:%xmm result)))
 
 (define-x8664-vinsn get-complex-single-float (((result :complex-single-float))
                                               ((source :lisp)))
@@ -2371,7 +2371,7 @@
 (define-x8664-vinsn set-complex-double-float-value (()
                                                     ((node :lisp)
                                                      (val :complex-double-float)))
-  (movdqa (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q node))))
+  (movdqu (:%xmm val) (:@ x8664::complex-double-float.realpart (:%q node))))
 
 (define-x8664-vinsn set-complex-single-float-value (()
                                                     ((node :lisp)
@@ -5167,7 +5167,7 @@
      ((r :double-float)
      (i :double-float)))
   ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
-   (:movupd (:%xmm r)�(:%xmm dest)))
+   (movapd (:%xmm r) (:%xmm dest)))
   (shufpd (:$ub 0) (:%xmm i) (:%xmm dest)))
   
 

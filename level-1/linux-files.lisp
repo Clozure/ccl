@@ -151,7 +151,7 @@ atomically decremented."
                             millis (floor remaining-itus (/ internal-time-units-per-second 1000)))))))))))))
 
 (defun timed-wait-on-semaphore (s duration &optional notification)
-  "Wait until the given semaphore has a postive count which can be
+  "Wait until the given semaphore has a positive count which can be
 atomically decremented, or until a timeout expires."
   (%timed-wait-on-semaphore-ptr (semaphore-value s) duration notification))
 
@@ -404,8 +404,10 @@ given is that of a group to which the current user belongs."
        #-(or linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
-       (pref stat :stat.st_dev))
-      (values nil nil nil nil nil nil nil nil nil nil)))
+       (pref stat :stat.st_dev)
+       #-(or linux-target solaris-target)
+       (pref stat :stat.st_flags))
+      (values nil nil nil nil nil nil nil nil nil nil nil)))
 
 #+win64-target
 (defun %stat-values (result stat)
@@ -704,7 +706,10 @@ given is that of a group to which the current user belongs."
     (with-filename-cstrs ((name namestring #|(tilde-expand namestring)|#))
       (let* ((result (#_realpath name resultbuf)))
         (declare (dynamic-extent result))
-        (unless (%null-ptr-p result)
+        (if (%null-ptr-p result)
+	  (let ((errno (%get-errno)))
+	    (unless (= errno (- #$ENOENT))
+	      (signal-file-error errno namestring)))
           (get-foreign-namestring result))))))
 
 ;;; Return fully resolved pathname & file kind, or (values nil nil)
@@ -1057,7 +1062,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                   (return))
           (decf (shlib.opencount lib)))
         (when (and (eql 0 (shlib.opencount lib))
-                   (not (%probe-shared-library lib)))
+                   t #||(not (%probe-shared-library lib))||#)
           (setf (shlib.pathname lib) nil
                 (shlib.base lib) nil
                 (shlib.handle lib) nil

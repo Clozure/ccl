@@ -831,14 +831,11 @@
         (make-acode (%nx1-operator or) (nx1-formlist context (%cdr whole)))))))
 
 (defun nx1-1d-vref (context env arr dim0 &optional uvref-p)
+  (declare (ignorable context))
   (let* ((simple-vector-p (nx-form-typep arr 'simple-vector env))
-         (string-p (unless simple-vector-p 
-                     (if (nx-form-typep arr 'string env)
-                       (or (nx-form-typep arr 'simple-string env)
-                           (return-from nx1-1d-vref (nx1-form context `(char ,arr ,dim0)))))))
-         (simple-1d-array-p (unless (or simple-vector-p string-p) 
+	 (simple-string-p (unless simple-vector-p (nx-form-typep arr 'simple-string env)))
+         (simple-1d-array-p (unless (or simple-vector-p simple-string-p)
                               (nx-form-typep arr '(simple-array * (*)) env)))
-         
          (array-type (specifier-type  (nx-form-type arr env)))
          (type-keyword (funcall
                         (arch::target-array-type-name-from-ctype-function
@@ -850,7 +847,7 @@
                   (nx1-form :value arr)
                   (nx1-form :value dim0))
       (let* ((op (cond (simple-1d-array-p (%nx1-operator uvref))
-                       (string-p (%nx1-operator %sbchar))
+                       (simple-string-p (%nx1-operator %sbchar))
                        (simple-vector-p 
                         (if (nx-inhibit-safety-checking env) (%nx1-operator %svref) (%nx1-operator svref)))
                        (uvref-p (%nx1-operator uvref))

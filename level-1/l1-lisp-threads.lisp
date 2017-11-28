@@ -31,7 +31,7 @@
 (defloadvar *ticks-per-second*
     #+windows-target 1000
     #-windows-target
-    (#_sysconf #$_SC_CLK_TCK))
+    (max 1000 (#_sysconf #$_SC_CLK_TCK)))
 
 (defloadvar *ns-per-tick*
     (floor 1000000000 *ticks-per-second*))

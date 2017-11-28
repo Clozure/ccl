@@ -256,6 +256,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun default-print-length (val)
   (if (eq val :default) *print-length* val))
 
+(defun default-print-string-length (val)
+  (if (eq val :default) *print-string-length* val))
+
 ;;;; ======================================================================
 
 (defclass xp-stream (output-stream)

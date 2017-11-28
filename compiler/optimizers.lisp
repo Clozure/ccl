@@ -69,7 +69,7 @@
 ;;; somewhere, there are too many of these to keep on a list.
 (can-constant-fold '(specfier-type %ilsl %ilsr 1- 1+ eql eq
                      byte make-point - / (+ . fold-constant-subforms) (* . fold-constant-subforms) ash character
-                     char-code code-char lsh
+                     string char-code code-char lsh
                      (logior . fold-constant-subforms) (logand . fold-constant-subforms)
                      (logxor . fold-constant-subforms) logcount logorc2 listp consp expt
                      logorc1 logtest lognand logeqv lognor lognot logandc2 logandc1
@@ -594,6 +594,16 @@
     (character t)
     (symbol t)
     (string t)))
+
+(define-compiler-macro last (&whole call L &optional (n 1 n-p))
+  (if (and n-p (not (eql n 1)))
+    call
+    (let* ((checked (gensym))
+           (returned (gensym)))
+      `(do* ((,checked ,L (cdr ,checked))
+              (,returned ,checked))
+        ((atom ,checked) ,returned)
+        (setq ,returned ,checked)))))
 
 (define-compiler-macro ldb (&whole call &environment env byte integer)
   (cond ((and (integerp byte) (> byte 0))

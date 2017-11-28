@@ -910,15 +910,19 @@ collected result will be returned as the value of the LOOP."
     ((atom tree) tree)
     (t (cons (subst-gensyms-for-nil (car tree))
 	     (subst-gensyms-for-nil (cdr tree))))))
- 
+
+(defmacro loop-destructuring-bind (lambda-list args-list &body body)
+  (let ((*ignores* ()))
+    (declare (special *ignores*))
+    (let ((dl (subst-gensyms-for-nil lambda-list)))
+      `(destructuring-bind (&optional ,@dl) ,args-list
+	 (declare (ignore ,@*ignores*))
+	 ,@body))))
+
 (defun loop-build-destructuring-bindings (crocks forms)
   (if crocks
-      (let ((*ignores* ()))
-	(declare (special *ignores*))
-	`((destructuring-bind ,(subst-gensyms-for-nil (car crocks))
-	      ,(cadr crocks)
-	    (declare (ignore ,@*ignores*))
-	    ,@(loop-build-destructuring-bindings (cddr crocks) forms))))
+      `((loop-destructuring-bind ,(car crocks) ,(cadr crocks)
+	,@(loop-build-destructuring-bindings (cddr crocks) forms)))
       forms))
 
 (defun loop-translate (*loop-source-code* *loop-macro-environment* *loop-universe*)

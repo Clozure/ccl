@@ -25,7 +25,7 @@
 (defvar *cocoa-ide-path*
   (let* ((bits (nth-value 1 (host-platform))))
     (format nil "ccl:Clozure CL~a.app;" bits)))
-(defvar *cocoa-ide-copy-headers-p* nil)
+(defvar *cocoa-ide-copy-headers-p* t)
 (defvar *cocoa-ide-install-altconsole* t)
 (defvar *cocoa-ide-bundle-suffix*
   (multiple-value-bind (os bits cpu) (host-platform)
