@@ -6722,54 +6722,11 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 ;;; the label.
 ;;; "predicate" is being used as a verb here - "to make predicated".
 (defun arm2-predicate-block (labelnum)
-  (let* ((lab (aref *backend-labels* labelnum))
-         (refs (vinsn-label-refs lab))
-         (branch (car refs)))
-    (if (and (vinsn-attribute-p branch :branch)
-             (null (cdr refs)))
-      (when (do* ((next (dll-node-succ branch) (dll-node-succ next))
-                  (count 0 (1+ count))
-                  (vinsn-p nil))
-                 ((eq next lab) (return vinsn-p))
-              (declare (fixnum count))
-              (if (typep next 'vinsn-label)
-                (unless (typep (vinsn-label-id next) 'vinsn-note)
-                  (return))
-                (progn
-                  (when (= count 2)
-                    (return))
-                  (unless (and (typep next 'vinsn)
-                               (null (getf (vinsn-annotation next) :predicate))
-                               (vinsn-attribute-p next :predicatable)
-                               (or (eq lab (dll-node-succ next))
-                                   (not (vinsn-attribute-p next :jump :call  :jumpLR))))
-                    (return))
-                  (setq vinsn-p t))))
-        (multiple-value-bind (branch-true-p branch-condition cond-operand-index)
-            (let* ((branch-instr (car (vinsn-template-body (vinsn-template branch))))
-                   (values (vinsn-variable-parts branch))
-                   (operands (cdr branch-instr)))
-              (dolist (op operands (values nil nil nil))
-                (cond ((eql (car op) (arm::encode-vinsn-field-type :cond))
-                       (return (values t (svref values (cadr op)) (cadr op))))
-                      ((eql (car op) (arm::encode-vinsn-field-type :negated-cond))
-                       (return (values nil (svref values (cadr op)) (cadr op)))))))
-          (when branch-condition
-            (let* ((condition (if branch-true-p (logxor 1 branch-condition) branch-condition)))
-              (do* ((next (dll-node-succ branch) (dll-node-succ next)))
-                   ((eq next lab)
-                    (elide-vinsn branch)
-                    (remove-dll-node lab)
-                    t)
-                (cond ((typep next 'vinsn-label))
-                      ((vinsn-attribute-p next :jump)
-                       (setf (vinsn-template next)
-                             (need-vinsn-template 'cbranch-true
-                                                  (backend-p2-vinsn-templates
-                                                   *target-backend*))
-                             (svref (vinsn-variable-parts next) cond-operand-index)
-                             condition))
-                      (t (setf (getf (vinsn-annotation next) :predicate) condition)))))))))))
+  ;; This no longer works now that vinsn varparts are no longer
+  ;; freelisted.  To bootstrap from the first 1.11 release, you will need
+  ;; to manually compile this new no-op function before calling
+  ;; compile-ccl.
+  (declare (ignore labelnum)))
 
 (defparameter *arm2-generate-casejump* t)
 
