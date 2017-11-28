@@ -362,8 +362,10 @@
   (if (current-view nil)
     (let ((message (and args (apply #'format nil args))))
       (abort-current-command message))
-    (apply #'error args)))
-
+    (let ((string (format nil "(error~{ '~S~})" args)))
+      (beep)
+      (gui::eval-in-listener-process (gui::top-listener-process) string))))
+
 ;;;; Do-Strings
 
 (defmacro do-strings ((string-var value-var table &optional result) &body forms)
