@@ -60,10 +60,10 @@
 (defloadvar *did-show-marketing-blurb* nil)
 
 (defparameter *marketing-blurb* "
-CCL is developed and maintained by Clozure Associates. For more information
-about CCL visit http://ccl.clozure.com.  To enquire about Clozure's Common Lisp
-consulting services e-mail info@clozure.com or visit http://www.clozure.com.
+For more information about CCL, please see http://ccl.clozure.com.
 
+CCL is free software.  It is distributed under the terms of the Apache
+Licence, Version 2.0.
 ")
 
 (defun listener-function ()
