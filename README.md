@@ -9,23 +9,10 @@ A working CCL consists of three parts.
 * The lisp kernel is a C program with a fair amount of platform-specific assembly language code.  The lisp kernel provides runtime support for lisp code.  When the lisp kernel starts up, it maps the heap image into memory and transfers control to compiled lisp code contained in the heap image.
 * The interface database is a set of files derived from the operating system's C header files. The `#_` and `#$` reader macros consult this database to look up the definitions of foreign functions and constants.  The interface database is not required for CCL to start up and run already-compiled code, but it is required to compile CCL itself.
 
-Archives containing a heap image, a pre-compiled lisp kernel, and an interface database are available from https://github.com/Clozure/ccl/releases.
+For the latest released version of CCL, please see https://github.com/Clozure/ccl/releases/latest and download the archive for your platform.  These archives contain not only the necessary binaries, but also a full clone of the source code.  So, to install a complete CCL, all you have to do is download one archive and extract it.
 
-So, to build the development version CCL from source, follow these steps:
-* `git clone https://github.com/Clozure/ccl.git`
-* Go to https://github.com/Clozure/ccl/releases, and download the appropriate archive of binaries for your platform.
-* Unpack the archive, and move the contents into the source directory as needed.  For example, if you have checked out the sources into the `ccl-dev` directory on Linux running on x86, you could do the following:
-```
-cd ccl-dev
-tar --strip-components 1 -xf ../ccl-1.12-dev.0-linuxx86-binaries.tar.bz2
-```
-Then, start lisp and compile the sources. See http://ccl.clozure.com/docs/ccl.html#building-clozure-cl-from-its-source-code for more detailed information.
+If you want to run the development version of CCL, please see https://github.com/Clozure/ccl/releases.  You will typically want the most recent development snapshot.  Note that archives for a development snapshot include only binaries (heap image, lisp kernel, and interface database).  You must clone the repository first, and then unpack the binaries into your clone.
 
-In brief, if you have a working C compiler and the m4 macro processor installed, the following commands will compile a new CCL from source:
-```
-./lx86cl64  # or dx86cl64 or whatever
-(rebuild-ccl :full t)
-```
+To report a bug or request an enhancement, please make an issue at https://github.com/Clozure/ccl/issues.
 
 If you run into problems, please send mail to openmcl-devel@clozure.com, ask on #ccl on freenode, or create an issue here, especially if you think you have found a bug.
-
