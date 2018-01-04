@@ -62,13 +62,21 @@ extern void freebsd_sigreturn(ExceptionInformation *);
     Bug(context,"sigreturn returned"); \
   } while (0)
 
+#include <sys/param.h>
+
+#define AVX_CONTEXT_PRESENT(xp) ((xp)->uc_mcontext.mc_trapno & 4)
+
+#if __FreeBSD_version < 901000
 /* AVX stuff.  Funky, because some of this isn't defined until
    fbsd 9.1 headers; if we built on an older OS version, we still need
    to know about this if we run on 9.1+ */
 
-#define AVX_CONTEXT_PRESENT(xp) ((xp)->uc_mcontext.mc_trapno & 4)
 #define AVX_CONTEXT_PTR(xp) (((xp)->uc_mcontext.mc_fpstate[66]))
 #define AVX_CONTEXT_SIZE(xp) ((natural)((xp)->uc_mcontext.mc_fpstate[67]))
+#else
+#define AVX_CONTEXT_PTR(xp) (((xp)->uc_mcontext.mc_xfpustate))
+#define AVX_CONTEXT_SIZE(xp) ((natural)((xp)->uc_mcontext.mc_xfpustate_len))
+#endif
 
 #include "os-freebsd.h"
 
