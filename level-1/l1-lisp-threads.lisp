@@ -467,13 +467,10 @@
 #+linux-target
 (defun set-os-thread-name (lisp-thread name)
   "Set the OS-visible name of the thread with pthread_setname_np."
-  (let ((name
-          (if (<= (length name) 15)
-              name
-              (subseq name 0 15))))
-    (let ((natural (lisp-thread-os-thread lisp-thread)))
-      (when natural
-        (with-utf-8-cstr (name name)
+  (let ((natural (lisp-thread-os-thread lisp-thread)))
+    (when natural
+      (let ((end (min 15 (length name))))
+        (with-cstr (name name 0 end)
           (external-call "pthread_setname_np"
                          :pthread_t natural
                          :address name
@@ -490,7 +487,7 @@
                        :address buffer
                        :size_t 16
                        :int)
-        (%get-utf-8-cstring buffer)))))
+        (%get-cstring buffer)))))
 
 ;;; This returns something lower-level than the pthread, if that
 ;;; concept makes sense.  On current versions of Linux, it returns
