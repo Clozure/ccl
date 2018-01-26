@@ -463,7 +463,32 @@
         (unless (zerop natural) natural)))))
 
 
-                         
+
+#+linux-target
+(defun set-os-thread-name (lisp-thread name)
+  "Set the OS-visible name of the thread with pthread_setname_np."
+  (let ((natural (lisp-thread-os-thread lisp-thread)))
+    (when natural
+      (let ((end (min 15 (length name))))
+        (with-cstr (name name 0 end)
+          (external-call "pthread_setname_np"
+                         :pthread_t natural
+                         :address name
+                         :int))))))
+
+#+linux-target
+(defun get-os-thread-name (lisp-thread)
+  "Read the OS-visible name of the thread with pthread_getname_np."
+  (let ((natural (lisp-thread-os-thread lisp-thread)))
+    (when natural
+      (%stack-block ((buffer 16))
+        (external-call "pthread_getname_np"
+                       :pthread_t natural
+                       :address buffer
+                       :size_t 16
+                       :int)
+        (%get-cstring buffer)))))
+
 ;;; This returns something lower-level than the pthread, if that
 ;;; concept makes sense.  On current versions of Linux, it returns
 ;;; the pid of the clone()d process; on Darwin, it returns a Mach

@@ -159,7 +159,7 @@
 
 (set-type-predicate 'process 'processp)
 
-(defun make-process (name &key 
+(defun make-process (name &key
 			  thread
 			  persistent
                           (priority 0)
@@ -190,7 +190,9 @@
       (unless lisp-thread
         (setq lisp-thread
               (or thread
-                  (new-thread name stack-size  vstack-size  tstack-size)))))
+                  (new-thread name stack-size  vstack-size  tstack-size)))
+        #+linux-target
+        (set-os-thread-name lisp-thread name)))
     (add-to-all-processes p)
     (setf (car (process-splice p)) p)
     p))
