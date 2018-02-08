@@ -495,12 +495,12 @@
       (#.target::subtag-complex-double-float-vector
         (%copy-ivector-to-ivector source
                                  (the fixnum
-                                   (+ (the fixnum (- target::misc-dfloat-offset
+                                   (+ (the fixnum (- target::misc-complex-dfloat-offset
                                                      target::misc-data-offset))
                                       (the fixnum (* source-start 16))))
                                  target
                                  (the fixnum
-                                   (+ (the fixnum (- target::misc-dfloat-offset
+                                   (+ (the fixnum (- target::misc-complex-dfloat-offset
                                                      target::misc-data-offset))
                                       (the fixnum (* target-start 16))))
                                  (the fixnum (* n 16))))))

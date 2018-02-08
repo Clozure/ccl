@@ -543,6 +543,7 @@
 (defconstant misc-subtag-offset misc-header-offset)
 (defconstant misc-data-offset (+ misc-header-offset 4))
 (defconstant misc-dfloat-offset (+ misc-header-offset 8))
+(defconstant misc-complex-dfloat-offset misc-dfloat-offset)
 
 
 (defconstant canonical-nil-value (+ #x04000000 fulltag-nil))

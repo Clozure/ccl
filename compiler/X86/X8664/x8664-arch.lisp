@@ -431,7 +431,10 @@
 (defconstant misc-dfloat-offset misc-data-offset)
 (defconstant misc-symbol-offset (- node-size fulltag-symbol))
 (defconstant misc-function-offset (- node-size fulltag-function))
-  
+;;; There is a pad word after the uvector header so that the
+;;; complex-double-float elements are 16-byte aligned.
+(defconstant misc-complex-dfloat-offset (+ misc-data-offset node-size))
+
 (define-subtag single-float fulltag-imm-0 0)
 
 (define-subtag character fulltag-imm-1 0)
