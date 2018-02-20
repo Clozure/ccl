@@ -178,42 +178,42 @@
   `(%stack-block (,spec) ,@forms))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-(defun extract-bound-decls-for-dolist-var (var decls env)
-  (if (null decls)
-    (values nil nil)
-      (collect ((var-decls)
-                (other-decls))
-        (dolist (declform decls
-                 (let* ((vdecls (var-decls))
-                        (others (other-decls)))
-                   (values (if vdecls `((declare ,@vdecls)))
-                           (if others `((declare ,@others))))))
-          ;; (assert (eq (car declform) 'declare))
-          (dolist (decl (cdr declform))
-            (if (atom decl)
-              (other-decls decl)
-              (let* ((spec (car decl)))
-                (if (specifier-type-if-known spec env)
-                  (setq spec 'type
-                        decl `(type ,@decl)))
-                (case spec
-                  (type
-                   (destructuring-bind (typespec &rest vars) (cdr decl)
-                     (cond ((member var vars :test #'eq)
-                            (setq vars (delete var vars))
-                            (var-decls `(type ,typespec ,var))
-                            (when vars
-                              (other-decls `(type ,typespec ,@vars))))
-                           (t (other-decls decl)))))
-                   ((special ingore ignorable ccl::ignore-if-unused)
-                    (let* ((vars (cdr decl)))
-                      (cond ((member var vars :test #'eq)
-                             (setq vars (delete var vars))
-                             (var-decls `(,spec ,var))
-                             (when vars
-                               (other-decls `(,spec ,@vars))))
-                            (t (other-decls decl)))))
-                   (t (other-decls decl))))))))))
+  (defun extract-bound-decls-for-dolist-var (var decls env)
+    (if (null decls)
+        (values nil nil)
+        (collect ((var-decls)
+                  (other-decls))
+          (dolist (declform decls
+                            (let* ((vdecls (var-decls))
+                                   (others (other-decls)))
+                              (values (if vdecls `((declare ,@vdecls)))
+                                      (if others `((declare ,@others))))))
+            ;; (assert (eq (car declform) 'declare))
+            (dolist (decl (cdr declform))
+              (if (atom decl)
+                  (other-decls decl)
+                  (let* ((spec (car decl)))
+                    (if (specifier-type-if-known spec env)
+                        (setq spec 'type
+                              decl `(type ,@decl)))
+                    (case spec
+                      (type
+                       (destructuring-bind (typespec &rest vars) (cdr decl)
+                         (cond ((member var vars :test #'eq)
+                                (setq vars (delete var vars))
+                                (var-decls `(type ,typespec ,var))
+                                (when vars
+                                  (other-decls `(type ,typespec ,@vars))))
+                               (t (other-decls decl)))))
+                      ((special ignore ignorable ccl::ignore-if-unused)
+                       (let* ((vars (cdr decl)))
+                         (cond ((member var vars :test #'eq)
+                                (setq vars (delete var vars))
+                                (var-decls `(,spec ,var))
+                                (when vars
+                                  (other-decls `(,spec ,@vars))))
+                               (t (other-decls decl)))))
+                      (t (other-decls decl))))))))))
 )
 
 
