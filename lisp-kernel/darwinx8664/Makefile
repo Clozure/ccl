@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 OSVERSION=10.6
 
@@ -44,7 +44,7 @@ ifeq ($(yosemite_plus),t)
 ASFLAGS += -Q
 endif
 
-CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION) \
+CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DVC_REVISION=$(VC_REVISION) \
 	   -DUSE_DTRACE
 CDEBUG = -g
 COPT = -O

@@ -4217,14 +4217,14 @@
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c))
-    (when (stream-listen c)
-      (return t))))
+    (cond ((stream-listen c)     (return t))
+          ((not (stream-eofp c)) (return nil)))))
 
 (defmethod stream-eofp ((s concatenated-stream))
   (do* ((c (concatenated-stream-current-input-stream s)
 	   (concatenated-stream-next-input-stream s)))
        ((null c) t)
-    (when (stream-listen c)
+    (unless (stream-eofp c)
       (return nil))))
 
 (defmethod stream-clear-input ((s concatenated-stream))
@@ -5689,9 +5689,10 @@
                      nil)))))))
 
 (defun fd-stream-eofp (s ioblock)
-  (declare (ignore s))
-  (ioblock-eof ioblock))
-  
+  (or (ioblock-eof ioblock)
+      (progn (fd-stream-advance s ioblock nil)
+             (ioblock-eof ioblock))))
+
 (defun fd-stream-listen (s ioblock)
   (if (interactive-stream-p s)
     (unread-data-available-p (ioblock-device ioblock))

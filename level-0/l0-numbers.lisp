@@ -1917,9 +1917,9 @@
        (when (<= half-words 0) (return))
        (incf index 2))
     ;; The bignum code expects normalized bignums
-    (let* ((result (mod dividend number)))
+    (let* ((result (mod (%normalize-bignum-2 t dividend) number)))
       (if (eq dividend result)
-	(copy-uvector result)
+	(copy-bignum result)
 	result))))
 
 (defun %float-random (number state)

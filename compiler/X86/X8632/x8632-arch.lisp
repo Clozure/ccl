@@ -373,6 +373,7 @@
 (defconstant misc-subtag-offset misc-header-offset)
 (defconstant misc-data-offset (+ misc-header-offset node-size))
 (defconstant misc-dfloat-offset ( + misc-header-offset 8))
+(defconstant misc-complex-dfloat-offset misc-dfloat-offset)
 
 (defconstant max-64-bit-constant-index (ash 1 24))
 (defconstant max-32-bit-constant-index (ash 1 24))

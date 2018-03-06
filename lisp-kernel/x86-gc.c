@@ -241,7 +241,7 @@ check_readonly_range(LispObj *start, LispObj *end)
             if (a) {
               code = a->code;
             } else {
-              a = AREA_VOID;
+              a = NULL;
             }
             switch (code) {
             case AREA_READONLY:

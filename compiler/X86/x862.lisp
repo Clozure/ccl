@@ -8350,78 +8350,106 @@
   (x862-call-fn seg vreg xfer fn arglist spread-p))
 
 (defx862 x862-self-call self-call (seg vreg xfer arglist &optional spread-p)
-
-
   (setq arglist (x862-augment-arglist *x862-cur-afunc* arglist (if spread-p 1 *x862-target-num-arg-regs*)))
   (with-x86-local-vinsn-macros (seg)
-    ;;(break)
-    (cond  (*backend-use-linear-scan*
-            (let* ((nargs (+ (length (car arglist)) (length (cadr arglist))))
-                   (tail-p (x862-tailcallok xfer)))
-              (declare (fixnum nargs))
 
-              (if (and (eql nargs *x862-tail-nargs*) tail-p (not spread-p))
-                (let ((args (append (car arglist) (reverse (cadr arglist)))))
-                  (ecase nargs
-                    (0)
-                    (1 (x862-one-lreg-form seg (car args) ($ x8664::arg_z)))
-                    (2 (x862-two-targeted-reg-forms seg (car args) ($ x8664::arg_y) (cadr args) ($ x8664::arg_z)))
-                    (3 (x862-three-targeted-reg-forms seg (car args) ($ x8664::arg_x) (cadr args) ($ x8664::arg_y) (caddr args) ($ x8664::arg_z)))
-                    (4 (x862-four-targeted-reg-forms seg  (car args) ($ x8664::arg_w) (cadr args) ($ x8664::arg_x) (caddr args) ($ x8664::arg_y) (cadddr args) ($ x8664::arg_z))))
-                  (let* ((depth *x862-vstack*))
-                    (unless (eql 0 depth)
-                      (! adjust-vsp depth)))
-                  (-> *x862-fixed-self-tail-call-label*))
-                (progn (linear-scan-bailout 'self-call)))))
+    (cond (*backend-use-linear-scan*
+           (let* ((nargs (+ (length (car arglist)) (length (cadr arglist))))
+                  (tail-p (x862-tailcallok xfer)))
+             (declare (fixnum nargs))
+
+             (if (and (eql nargs *x862-tail-nargs*) tail-p (not spread-p))
+               (let ((args (append (car arglist) (reverse (cadr arglist)))))
+                 (ecase nargs
+                   (0)
+                   (1 (x862-one-lreg-form seg (car args) ($ x8664::arg_z)))
+                   (2 (x862-two-targeted-reg-forms seg (car args) ($ x8664::arg_y) (cadr args) ($ x8664::arg_z)))
+                   (3 (x862-three-targeted-reg-forms seg (car args) ($ x8664::arg_x) (cadr args) ($ x8664::arg_y) (caddr args) ($ x8664::arg_z)))
+                   (4 (x862-four-targeted-reg-forms seg  (car args) ($ x8664::arg_w) (cadr args) ($ x8664::arg_x) (caddr args) ($ x8664::arg_y) (cadddr args) ($ x8664::arg_z))))
+                 (let* ((depth *x862-vstack*))
+                   (unless (eql 0 depth)
+                     (! adjust-vsp depth)))
+                 (-> *x862-fixed-self-tail-call-label*))
+               (progn (linear-scan-bailout "self-call")))))
                    
         
-           (t
-            (progn
+          (t
+           (progn
     
-              (let* ((nargs *x862-tail-nargs*)
-                     (vars *x862-tail-arg-vars*)
-                     (*x862-vstack* *x862-vstack*)
-                     (regargs (cadr arglist)))
-
-                (if (and nargs (x862-tailcallok xfer) (not spread-p)
-                         *x862-fixed-self-tail-call-label*
-                         *x862-fixed-self-tail-vsp*
-                         (dolist (v vars t)                    
-                           (when (logtest (nx-var-bits v) (logior (ash 1 $vbitclosed)
-                                                                  (ash 1 $vbitsetq)
-                                                                  (ash 1 $vbitspecial)))
-                             (return nil)))
-                         (eql nargs (+ (length (car arglist))
-                                       (length regargs))))
-                  (let* (
-                         (defer ())
-                         (scratch *x862-temp0*))
-                    (do* ((forms (append (car arglist) regargs) (cdr forms))
-                          (vars vars (cdr vars)))
-                         ((eq forms regargs)
-                          (let* ((*x862-vstack* *x862-vstack*))
-                            (x862-formlist seg nil regargs))
-                          (dolist (d defer)
-                            (x862-vpop-register seg scratch)
-                            (x862-register-to-stack seg scratch d))
-                          (let* ((diff (- *x862-vstack* *x862-fixed-self-tail-vsp*)))
-                            (unless (eql 0 diff)
-                              (! adjust-vsp diff))
-
-                            (x862-set-nargs seg nargs)
-                            (! jump (aref *backend-labels* *x862-fixed-self-tail-call-label*))) 
-                        
-                          )
-                      (let ((form (car forms))
-                            (var (car vars)))
-                        (or (eq var (nx2-lexical-reference-p  form))
-                            (progn
-                              (x862-form seg scratch nil form)
-                              (x862-vpush-register seg scratch)
-                              (push (var-ea var) defer))))))
-                  (x862-call-fn seg vreg xfer -2 arglist spread-p)))))))
-  )
-
+             (let* ((nargs *x862-tail-nargs*))
+               (if (and nargs (x862-tailcallok xfer) (not spread-p)
+                        (eql nargs (+ 17  (length (car arglist))
+                                      (length (cadr arglist)))))
+                 (let* ((forms (append (car arglist) (reverse (cadr arglist))))
+                        (vars *x862-tail-arg-vars*)
+                        (regs (ecase nargs
+                                (0 ())
+                                (1 (list ($ *x862-arg-z*)))
+                                (2 (list ($ *x862-arg-y*) ($ *x862-arg-z*)))
+                                (3 (list (target-arch-case
+                                          (:x8632 ($ x8632::temp0))
+                                          (:x8664 ($ x8664::arg_x)))
+                                         ($ *x862-arg-y*) ($ *x862-arg-z*)))
+                                (4 (target-arch-case
+                                    (:x8632 (compiler-bug "4 tail-call args on x8632"))
+                                    (:x8664 (list ($ x8664::temp0)
+                                                  ($ x8664::arg_x)
+                                                  ($ x8664::arg_y)
+                                                  ($ x8664::arg_z))))))))
+                   ;; A form that's a lexical reference to X that's ultimately going
+                   ;; to be stored in X is a noop.
+                   (collect ((new-forms)
+                             (new-vars)
+                             (new-regs))
+                     (do* ((xforms forms (cdr xforms))
+                           (xvars vars (cdr xvars))
+                           (xregs regs (cdr xregs))
+                           (new-nargs 0))
+                          ((null xforms)
+                           (setq nargs new-nargs
+                                 forms (new-forms)
+                                 vars (new-vars)
+                                 regs (new-regs)))
+                       (declare (fixnum new-nargs))
+                       (let* ((var (car xvars))
+                              (form (car xforms)))
+                         (unless (and (eq var (nx2-lexical-reference-p form))
+                                      (not (logbitp $vbitsetq (nx-var-bits var)))
+                                      (var-nvr var))
+                           (incf new-nargs)
+                           (new-vars var)
+                           (new-forms form)
+                           (new-regs (car xregs))))))
+                   (dotimes (i nargs)
+                     (let* ((var (nth i vars))
+                            (nvr (var-nvr var)))
+                       (when nvr
+                         (when (dotimes (j nargs t)
+                                 (unless (= i j)
+                                   (let* ((form (nth j forms)))
+                                     (unless (and (nx2-var-not-set-by-form-p var form)
+                                                  (nx2-var-not-reffed-by-form-p var form))
+                                       (return)))))
+                           (setf (nth i regs) nvr)))))
+                   (case nargs
+                     (1 (x862-one-targeted-reg-form seg (car forms) (car regs)))
+                     (2 (x862-two-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)))
+                     (3 (x862-three-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs) (caddr forms) (caddr regs)))
+                     (4 (x862-four-targeted-reg-forms seg (car forms) (car regs) (cadr forms) (cadr regs)  (caddr forms) (caddr regs) (cadddr forms) (cadddr regs))))
+                   (do* ((vars vars (cdr vars))
+                         (forms forms (cdr forms))
+                         (regs regs (cdr regs)))
+                        ((null vars))
+                     (let* ((var (car vars))
+                            (reg (car regs)))
+                       (unless (and (eq var (nx2-lexical-reference-p (car forms)))
+                                    (not (logbitp $vbitsetq (nx-var-bits var))))
+                         (x862-do-lexical-setq seg nil (var-ea var) reg))))
+                   (let* ((diff (- *x862-vstack* *x862-tail-vsp*)))
+                     (unless (eql 0 diff)
+                       (! adjust-vsp diff))
+                     (! jump (aref *backend-labels* *x862-tail-label*))))
+                 (x862-call-fn seg vreg xfer -2 arglist spread-p))))))))
 
 (defx862 x862-lexical-function-call lexical-function-call (seg vreg xfer afunc arglist &optional spread-p)
   (x862-call-fn seg vreg xfer (make-acode (%nx1-operator simple-function) afunc)

@@ -14,8 +14,9 @@
 # limitations under the License.
 
 # This makefile is written to be used with the mingw toolchain
-# running in the Cygwin environment.
-#
+# running in the Cygwin environment or Msys2 environment.
+
+# If running in the Cygwin environment:
 # Install the following Cygwin packages:
 # * make
 # * m4
@@ -27,19 +28,41 @@
 #
 # Accept the dependencies the installation tool may add.
 
-SVN_REVISION := "$(shell svnversion || echo unknown)"
+# If running in the Msys2 environment:
+# Install the following Msys2 packages using pacman -S:
+# * make
+# * m4
+# * mingw-w64-x86_64-binutils
+# * mingw-w64-x86_64-crt
+# * mingw-w64-x86_64-gcc
+# * mingw-w64-x86_64-headers
+# * mingw-w64-x86_64-winpthreads
+# Accept the dependencies the installation tool may add.
+# Currently only install make, m4 and mingw-w64-x86_64-gcc will install other
+# mingw-w64-* dependencies. May change in the future.
+# Running make using msys2-installation-directory/mingw64.exe, not msys2.exe.
+VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = rm
 # gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
 # are installed under these names
+
+ifeq ($(MSYSTEM),)
 CC = x86_64-w64-mingw32-gcc
 AS = x86_64-w64-mingw32-as
-M4 = m4
 LD = x86_64-w64-mingw32-ld
+else
+CC = /mingw64/bin/x86_64-w64-mingw32-gcc
+AS = /mingw64/bin/as
+LD = /mingw64/bin/ld
+endif
+
+M4 = m4
+
 ASFLAGS = -g --64
 M4FLAGS = -DWIN_64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR
-CDEFINES = -DWIN_64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR -DSVN_REVISION=$(SVN_REVISION)
+CDEFINES = -DWIN_64 -DWINDOWS -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DEMUTLS -DTCR_IN_GPR -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
@@ -97,7 +120,7 @@ KSPOBJ = $(SPOBJ)
 all:	../../wx86cl64.exe
 
 
-OSLIBS = -lpsapi -lws2_32
+OSLIBS = -lpsapi -lws2_32 -static -lpthread
 
 
 ../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile pei-x86-64.x

@@ -670,7 +670,8 @@
                           (if (eq arg '&aux)
                             (return)
                             (push arg temp)))
-                        (format nil "~:a" (nreverse temp)))))
+                        (let ((*package* (find-package "KEYWORD")))
+                          (format nil "~:S" (nreverse temp))))))
       (if (and body-pos (memq '&optional normalized)) (decf body-pos))
       `(progn
          (eval-when (:compile-toplevel)
@@ -1513,9 +1514,10 @@ All output to that string stream is saved in a string."
                ,@(if string-p () `((get-output-stream-string ,var))))
           (close ,var))))))
 
-(defmacro with-output-to-vector ((var &optional vector &key external-format)
-                                 &body body 
-                                 &environment env)
+(defmacro with-output-to-vector ((var &optional vector
+				      &key (external-format :default))
+				 &body body
+				 &environment env)
   (let* ((vector-p (not (null vector))))
     (multiple-value-bind (forms decls) (parse-body body env nil)
       `(let* ((,var ,@(if vector-p

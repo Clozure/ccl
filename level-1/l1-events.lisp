@@ -241,7 +241,7 @@
   (%install-periodic-task 
    'auto-flush-interactive-streams
    'auto-flush-interactive-streams
-   33
+   (truncate *ticks-per-second* 3)	;run 3 times/sec
    (+ $ptask_draw-flag $ptask_event-dispatch-flag)))
 
 
