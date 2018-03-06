@@ -980,22 +980,22 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (when end-atsign (setq body-string (format-fill-transform body-string)))
       (format-check-simple prefix)
       (format-check-simple suffix)
-      (unless *format-arguments*
-	(setq *format-index* start)
-	(format-error "Missing argument"))
       (let ((args (if (not atsign)
-                    ; This piece of garbage is needed to avoid double length counting from (formatter ...) things
-                    ; but also to allow (flet . t) not to barf.
-                    ; Was formerly simply  (if *format-arguments* (pop-format-arg))
-                    ; Actually wanna not count the arg iff the ~< is at the top level
-                    ; in a format string i.e. "is this the first ~< in THIS string?"                    
-                    (when *format-arguments*
-                      (if  (and (listp *format-arguments*)
-                                (first-block-p start))
-                        (pop *format-arguments*)  ; dont count
-                        (pop-format-arg))) ; unless not listp or not first
-                    (prog1 *format-arguments*
-                      (setq *format-arguments* nil))))
+                      ; This piece of garbage is needed to avoid double length counting from (formatter ...) things
+                      ; but also to allow (flet . t) not to barf.
+                      ; Was formerly simply  (if *format-arguments* (pop-format-arg))
+                      ; Actually wanna not count the arg iff the ~< is at the top level
+                      ; in a format string i.e. "is this the first ~< in THIS string?"                    
+                      (if *format-arguments*
+                          (if  (and (listp *format-arguments*)
+                                    (first-block-p start))
+                               (pop *format-arguments*)  ; dont count
+                               (pop-format-arg)) ; unless not listp or not first
+                          (progn
+                            (setq *format-index* start)
+                            (format-error "Missing argument")))
+                      (prog1 *format-arguments*
+                        (setq *format-arguments* nil))))
             (*format-control-string* body-string)
             (*format-top-level* (and atsign *format-top-level*)))
         (let ((*logical-block-p* t)
