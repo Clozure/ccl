@@ -106,6 +106,17 @@
                 (pref tv :timeval.tv_sec))
           units)))))
 
+(defun get-internal-real-time-usec ()
+  "Like get-internal-real-time but guaranteed to return the result in microseconds,
+   regardless of what internal-time-units-per-second may be."
+  (declare (optimize (speed 3) (debug 0)))
+  (rlet ((now :timeval)
+         (since :timeval))
+    (ccl::gettimeofday now (%null-ptr))
+    (ccl::%sub-timevals since now ccl::*lisp-start-timeval*)
+    (+ (* 1000000 (the (unsigned-byte 32) (pref since :timeval.tv_sec)))
+       (the fixnum (pref since :timeval.tv_usec)))))
+
 (defun get-tick-count ()
   (values (floor (get-internal-real-time)
                  (floor internal-time-units-per-second
