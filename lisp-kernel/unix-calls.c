@@ -30,6 +30,18 @@
 #endif
 #include <errno.h>
 #include <unistd.h>
+#if __FreeBSD_version >= 1200031
+/*
+ * ino_t, dev_t, nlink_t were extended to 64 bits (thereby changing
+ * struct stat). struct dirent changed also.
+ *
+ * Make the old versions available as freebsd11_stat and freebsd11_dirent.
+ * XXX - this should go away when FreeBSD 12 headers are generated
+ */
+#define _WANT_FREEBSD11_STAT
+#define _WANT_FREEBSD11_DIRENT
+#include <string.h>
+#endif
 #include <sys/stat.h>
 #include <dirent.h>
 #include <sys/syscall.h>
@@ -84,6 +96,81 @@ lisp_ftruncate(int fd, off_t length)
   return ftruncate(fd,length);
 }
 
+#if __FreeBSD_version >= 1200031
+/*
+ * struct stat has changed.  As a temporary workaround until
+ * we can generate headers for FreeBSD 12, return stat(2) data in
+ * the old version of struct stat that the lisp expects.
+ */
+void
+populate_old_stat(struct stat *sb, struct freebsd11_stat *sb11)
+{
+    memset(sb11, 0, sizeof(*sb11));
+    sb11->st_dev = sb->st_dev;
+    sb11->st_ino = sb->st_ino;
+    sb11->st_mode = sb->st_mode;
+    sb11->st_nlink = sb->st_nlink;
+    sb11->st_uid = sb->st_uid;
+    sb11->st_gid = sb->st_gid;
+    sb11->st_rdev = sb->st_rdev;
+    sb11->st_atim = sb->st_atim;
+    sb11->st_mtim = sb->st_mtim;
+    sb11->st_ctim = sb->st_ctim;
+    sb11->st_size = sb->st_size;
+    sb11->st_blocks = sb->st_blocks;
+    sb11->st_blksize = sb->st_blksize;
+    sb11->st_flags = sb->st_flags;
+    sb11->st_gen = sb->st_gen;
+    sb11->st_birthtim = sb->st_birthtim;
+}
+
+int
+lisp_stat(char *path, void *buf)
+{
+  struct stat sb;
+  int ret;
+
+  ret = stat(path, &sb);
+  if (ret == 0) {
+    populate_old_stat(&sb, buf);
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+int
+lisp_fstat(int fd, void *buf)
+{
+  struct stat sb;
+  int ret;
+
+  ret = fstat(fd, &sb);
+  if (ret == 0) {
+    populate_old_stat(&sb, buf);
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+int
+lisp_lstat(char *path, void *buf)
+{
+  struct stat sb;
+  int ret;
+
+  ret = lstat(path, &sb);
+  if (ret == 0) {
+    populate_old_stat(&sb, buf);
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+#else
+
 int
 lisp_stat(char *path, void *buf)
 {
@@ -101,6 +188,7 @@ lisp_lstat(char *path, void *buf)
 {
   return lstat(path, buf);
 }
+#endif
 
 int
 lisp_futex(int *uaddr, int op, int val, void *timeout, int *uaddr2, int val3)
@@ -119,11 +207,37 @@ lisp_opendir(char *path)
   return opendir(path);
 }
 
+#if __FreeBSD_version >= 1200031
+/*
+ * struct dirent has changed.  Lisp only cares about :dirent.d_name,
+ * so make that available in the old struct dirent.
+ * Again, this will all go away when we generate new interfaces for
+ * FreeBSD 12.
+ */
+static __thread struct freebsd11_dirent old_dirent;
+
+struct freebsd11_dirent *
+lisp_readdir(DIR *dir)
+{
+  struct dirent *dp;
+  struct freebsd11_dirent d11;
+
+  dp = readdir(dir);
+  if (dp != NULL) {
+    memset(&old_dirent, 0, sizeof(old_dirent));
+    strcpy(old_dirent.d_name, dp->d_name);
+    return &old_dirent;
+  } else {
+    return NULL;
+  }
+}
+#else
 struct dirent *
 lisp_readdir(DIR *dir)
 {
   return readdir(dir);
 }
+#endif
 
 int
 lisp_closedir(DIR *dir)
