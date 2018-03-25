@@ -2796,7 +2796,7 @@
                      (setf (ioblock-read-char-when-locked-function ioblock)
                            #'%ioblock-read-swapped-u32-encoded-char)
                     (case sharing
-                      (:private '#'%private-ioblock-read-swapped-u16-encoded-char)
+                      (:private #'%private-ioblock-read-swapped-u32-encoded-char)
                       (:lock #'%locked-ioblock-read-swapped-u32-encoded-char)
                       (t #'%ioblock-read-swapped-u32-encoded-char))))))))
       (progn
