@@ -139,5 +139,6 @@
 
 (defun set-tty-raw (tty)
   (rlet ((attr :termios))
+    (#_tcgetattr tty attr)
     (#_cfmakeraw attr)
     (eql 0 (#_tcsetattr tty #$TCSAFLUSH attr))))
