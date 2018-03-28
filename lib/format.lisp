@@ -346,12 +346,13 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (declare (dynamic-extent format-arguments))
   (if (null stream)
     (with-output-to-string (s)
-			   (apply #'format s control-string format-arguments))
+      (apply #'format s control-string format-arguments))
     (if (stringp stream)
       (with-output-to-string (s stream)
-			     (apply #'format s control-string format-arguments))
+	(apply #'format s control-string format-arguments))
       (let ((*format-top-level* t))
-	(when (xp-structure-p stream)(setq stream (xp-stream-stream stream))) ; for xp tests only! They call format on a structure
+	(when (xp-structure-p stream)
+	  (setq stream (xp-stream-stream stream))) ; for xp tests only! They call format on a structure
 	(setq stream (if (eq stream t)
 		       *standard-output*
 		       (require-type stream 'stream)))     
@@ -1824,7 +1825,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun format-fixed-aux (stream number w d k ovf pad atsign)
   (and w (<= w 0) (setq w nil))  ; if width is unreasonable, ignore it.
-  (if (not (or w d))
+  (if (and (not k)
+	   (not (or w d)))
     (print-float-free-form number stream)
     (let ((spaceleft w)
           (abs-number (abs number))
