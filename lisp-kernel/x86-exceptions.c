@@ -639,7 +639,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
       save_sp = xpGPR(xp,Isp),
       save_fp = xpGPR(xp,Ifp),
       cmain = nrs_CMAIN.vcell;
-    xcf =create_exception_callback_frame(xp, tcr),
+    xcf = create_exception_callback_frame(xp, tcr);
     pc_luser_xp(xp,tcr,NULL);
     allocation_enabled = true;
     tcr->save_allocbase = (void *)VOID_ALLOCPTR;
