@@ -402,6 +402,42 @@
       (find-definition-by-context def-type full-name)
       (editor-error "Couldn't find definition for ~s" full-name)))
 
+(defun edit-definition-spec-lessp (x y)
+  (cond ((symbolp x)
+         (if (symbolp y) (string-lessp x y) t))
+        ((symbolp y) nil)
+        ((typep x 'ccl::standard-method)
+         (if (typep y 'ccl::standard-method)
+             (let ((y-name (ccl::method-name y))
+                   (x-name (ccl::method-name x)))
+               (if (not (equal x-name y-name))
+                   (progn
+                     (if (consp x-name) (setf x-name (format nil "~A" x-name)))
+                     (if (consp y-name) (setf y-name (format nil "~A" y-name)))
+                     (string-lessp x-name y-name))
+                   (let ((y-specs (ccl::method-specializers y))
+                         y-spec)
+                     (dolist (x-spec (ccl::method-specializers x)
+                                     (or y-specs
+                                         (let ((y-qs (ccl::method-qualifiers y))
+                                               y-q)
+                                           (dolist (x-q (ccl::method-qualifiers x) y-qs)
+                                             (unless y-qs (return nil))
+                                             (setf y-q (pop y-qs))
+                                             (return (edit-definition-spec-lessp x-q y-q))))))
+                       (unless y-specs (return nil))
+                       (setf y-spec (pop y-specs))
+                       (if (typep x-spec 'class)
+                           (if (typep y-spec 'class)
+                               (let ((x-name (class-name x-spec))
+                                     (y-name (class-name y-spec)))
+                                 (return (edit-definition-spec-lessp x-name y-name)))
+                               (return nil))
+                           (if (and (typep x-spec 'ccl::eql-specializer)
+                                    (typep y-spec 'ccl::eql-specializer))
+                               (return (ignore-errors (edit-definition-spec-lessp (ccl::eql-specializer-object x-spec) (ccl::eql-specializer-object y-spec))))
+                               (return t)))))))))))
+
 ;; Note this isn't necessarily called from hemlock, e.g. it might be called by cl:ed,
 ;; from any thread, or it might be called from a sequence dialog, etc.
 (defun edit-definition (name)
@@ -411,15 +447,19 @@
              (loop for (id . sources) in list as source = (find-if-not #'null sources)
                when source collect (cons id source))))
          (defn-name (defn stream)
-           (destructuring-bind (dt . full-name) (car defn)
-             (format stream "~s ~s" (ccl:definition-type-name dt) (ccl:name-of full-name))))
+                    (destructuring-bind (dt . full-name) (car defn)
+                      (let ((dname (ccl:name-of full-name)))
+                        (when (and (consp dname) ; Don't show redundant word :METHOD
+                                   (eq :METHOD (first dname)))
+                          (setf dname (cdr dname)))
+                        (format stream "~a ~s" (string-downcase (ccl:definition-type-name dt)) dname))))
          (defn-action (defn &optional msg)
-           (destructuring-bind ((def-type . full-name) . source) defn
-             (hemlock-ext:execute-in-file-view
-              (ccl:source-note-filename source)
-              (lambda ()
-                (when msg (loud-message msg))
-                (find-definition-in-buffer def-type full-name source))))))
+                      (destructuring-bind ((def-type . full-name) . source) defn
+                        (hemlock-ext:execute-in-file-view
+                         (ccl:source-note-filename source)
+                         (lambda ()
+                           (when msg (loud-message msg))
+                           (find-definition-in-buffer def-type full-name source))))))
     (let* ((info (get-source-alist name))
            (msg nil))
       (when (and (null info) (symbolp name))
@@ -438,14 +478,15 @@
             (setq msg (format nil "No definitions for ~s, found ~s instead"
                               name (if (cdr found) found (car found)))))))
       (if info
-        (if (cdr info)
-          (progn
-            (when msg (loud-message msg))
-            (hemlock-ext:open-sequence-dialog
-             :title (format nil "Definitions of ~s" name)
-             :sequence info
-             :action #'defn-action
-             :printer #'defn-name))
-          (defn-action (car info) msg))
-        (editor-error "No known definitions for ~s" name)))))
+          (if (cdr info)
+              (progn
+                (setf info (sort info #'edit-definition-spec-lessp :key #'cdar))
+                (when msg (loud-message msg))
+                (hemlock-ext:open-sequence-dialog
+                 :title (format nil "Definitions of ~s" name)
+                 :sequence info
+                 :action #'defn-action
+                 :printer #'defn-name))
+              (defn-action (car info) msg))
+          (editor-error "No known definitions for ~s" name)))))
 
