@@ -2634,7 +2634,7 @@
   
 (define-x8664-vinsn save-nfp (()
                               ()
-                              ((nfp :lisp)))
+                              ((nfp :imm)))
   ((:pred > (:apply x862-max-nfp-depth) 0)
    (movq (:rcontext x8664::tcr.foreign-sp) (:%mmx x8664::stack-temp))
    (:if (:pred < (:apply + 16 (:apply x862-max-nfp-depth)) 128)
