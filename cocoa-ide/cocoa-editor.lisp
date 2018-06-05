@@ -1219,6 +1219,7 @@
          (start (ns:ns-range-location char-range))
          (length (ns:ns-range-length char-range))
          (end (+ start length)))
+    (ignore-errors ; because buffer (in with-hemlock-context) is often nil
     (with-hemlock-context (self)
       (ns:with-ns-range (range)
         (when (> length 0)
@@ -1238,7 +1239,7 @@
              for (pos attrib . color) in (text-view-paren-highlighting self)
              do (when (and (<= start pos) (< pos end))
                   (setf (ns:ns-range-location range) pos)
-		  (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range)))))))
+		  (#/addTemporaryAttribute:value:forCharacterRange: layout (ns-attribute attrib) color range))))))))
   #+cocotron
   (when (eql #$YES (text-view-paren-highlight-enabled self))
     (let* ((ts (#/textStorage self)))
@@ -3614,7 +3615,7 @@
              (let ((lpath (merge-pathnames arg *.lisp-pathname*)))
                (when (probe-file lpath) (setq arg lpath)))))
          ;; Avoid taking the error inside gui.
-         (truename arg)
+         (when arg (truename arg))
          (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
         ((ccl::valid-function-name-p arg)
          (hemlock:edit-definition arg)
