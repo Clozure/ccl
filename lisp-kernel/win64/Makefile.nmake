@@ -30,7 +30,7 @@ CDEFINES = /I.. /DWIN64 /DWINDOWS /D_REENTRANT /DX86 /DX8664 /D_GNU_SOURCE /DHAV
 CDEBUG = /Zi
 COPT =
 LDFLAGS =
-
+PLATFORM_H = platform-win64.h
 .SUFFIXES : .exe .obj .c .asm .s
 
 .s.asm:
@@ -38,7 +38,7 @@ LDFLAGS =
 .asm.obj:
 	$(AS) $(ASFLAGS) -o $@ $<
 .c.obj:
-	$(CC) /c $< $(CDEFINES) $(CDEBUG) $(COPT)
+	$(CC) /FI $(PLATFORM_H) /c $< $(CDEFINES) $(CDEBUG) $(COPT)
 
 SPOBJ = pad.obj x86-spjump64.obj x86-spentry64.obj x86-subprims64.obj
 ASMOBJ = x86-asmutils64.obj imports.obj

@@ -1134,10 +1134,18 @@ determine_executable_name()
 wchar_t *
 ensure_real_path(wchar_t *path)
 {
-  int bufsize = 256, n;
-
+#ifdef _MSC_VER
+	#define bufsize 256
+	int n;
+#else
+	int bufsize = 256, n;
+#endif
   do {
     wchar_t buf[bufsize];
+#ifdef bufsize
+#undef bufsize
+	int bufsize = 256;
+#endif
 
     n = GetFullPathNameW(path,bufsize,buf,NULL);
     if (n == 0) {
