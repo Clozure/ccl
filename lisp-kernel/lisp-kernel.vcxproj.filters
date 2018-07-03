@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+    <Filter Include="Assembly Files">
+      <UniqueIdentifier>{b95cb512-f458-4e93-962f-b7383615b326}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="win64\yasm-redefinition.patch" />
+    <None Include="m4macros.m4" />
+    <None Include="mach_exc.defs" />
+    <None Include="probes.d" />
+    <None Include="win32\pei-ia32.x" />
+    <None Include="win64\pei-x86-64.x" />
+    <None Include="lisp_globals.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="lisp.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="imports.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="errors.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-asmutils32.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="pad.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-asmutils64.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-constants.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-constants32.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-constants64.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-macros.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-spentry32.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-spentry64.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-spjump64.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-spjump32.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-subprims32.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-subprims64.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+    <None Include="x86-uuo.s">
+      <Filter>Assembly Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="albt.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="bits.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gc-common.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="image.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lispdcmd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lisp-debug.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mach-o-image.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="memory.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="plbt.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="plprint.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="plsym.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pmcl-kernel.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="thread_manager.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unix-calls.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="windows-calls.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="x86_print.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-exceptions.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-gc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-utils.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="xlbt.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="area.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="bits.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="kernel-globals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp_globals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lispdcmd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp-errors.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp-exceptions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lisptypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="macros.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="memprotect.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="os-windows.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="platform-win64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="threads.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-constants32.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-constants64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-exceptions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
