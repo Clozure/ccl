@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -23,18 +15,9 @@
     <ProjectGuid>{2388C5DB-088B-4CD9-A5BE-D0B5503932D3}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <ProjectName>lisp-kernel</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -50,12 +33,6 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -63,42 +40,11 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;/DWIN64 /DWINDOWS /D_REENTRANT /DX86 /DX8664 /D_GNU_SOURCE /DHAVE_TLS /DEMUTLS /DVC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ForcedIncludeFiles>/FI platform-win64.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <WarningLevel>Level3</WarningLevel>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>Disabled</Optimization>
+      <ForcedIncludeFiles>platform-win64.h;area.h;bits.h;x86-constants.h;lisp-errors.h;gc.h;lisp.h;lisp-exceptions.h;lisp_globals.h;macros.h;memprotect.h;image.h;threads.h;x86-constants64.h;x86-exceptions.h;lisptypes.h;x86-utils.h;constants.h;os-windows.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <PreprocessorDefinitions>WIN_64;WINDOWS;_REENTRANT;X86;X8664;_GNU_SOURCE;HAVE_TLS;EMUTLS;TCR_IN_GPR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <Link>
-      <TargetMachine>MachineX86</TargetMachine>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <SubSystem>Console</SubSystem>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;/DWIN64 /DWINDOWS /D_REENTRANT /DX86 /DX8664 /D_GNU_SOURCE /DHAVE_TLS /DEMUTLS /DVC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ForcedIncludeFiles>/FI platform-win64.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <WarningLevel>Level3</WarningLevel>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <TargetMachine>MachineX86</TargetMachine>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <None Include="errors.s" />
@@ -106,41 +52,28 @@
     <None Include="lisp.s" />
     <None Include="lisp_globals.s" />
     <None Include="m4macros.m4" />
-    <None Include="mach_exc.defs" />
     <None Include="pad.s" />
-    <None Include="probes.d" />
-    <None Include="win32\pei-ia32.x" />
-    <None Include="win64\pei-x86-64.x" />
     <None Include="win64\yasm-redefinition.patch" />
-    <None Include="x86-asmutils32.s" />
     <None Include="x86-asmutils64.s" />
     <None Include="x86-constants.s" />
-    <None Include="x86-constants32.s" />
     <None Include="x86-constants64.s" />
     <None Include="x86-macros.s" />
-    <None Include="x86-spentry32.s" />
     <None Include="x86-spentry64.s" />
-    <None Include="x86-spjump32.s" />
     <None Include="x86-spjump64.s" />
-    <None Include="x86-subprims32.s" />
     <None Include="x86-subprims64.s" />
     <None Include="x86-uuo.s" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="albt.c" />
     <ClCompile Include="bits.c" />
     <ClCompile Include="gc-common.c" />
     <ClCompile Include="image.c" />
     <ClCompile Include="lisp-debug.c" />
     <ClCompile Include="lispdcmd.c" />
-    <ClCompile Include="mach-o-image.c" />
     <ClCompile Include="memory.c" />
-    <ClCompile Include="plbt.c" />
     <ClCompile Include="plprint.c" />
     <ClCompile Include="plsym.c" />
     <ClCompile Include="pmcl-kernel.c" />
     <ClCompile Include="thread_manager.c" />
-    <ClCompile Include="unix-calls.c" />
     <ClCompile Include="windows-calls.c" />
     <ClCompile Include="x86-exceptions.c" />
     <ClCompile Include="x86-gc.c" />
@@ -154,11 +87,9 @@
     <ClInclude Include="constants.h" />
     <ClInclude Include="gc.h" />
     <ClInclude Include="image.h" />
-    <ClInclude Include="kernel-globals.h" />
     <ClInclude Include="lisp-errors.h" />
     <ClInclude Include="lisp-exceptions.h" />
     <ClInclude Include="lisp.h" />
-    <ClInclude Include="lispdcmd.h" />
     <ClInclude Include="lisptypes.h" />
     <ClInclude Include="lisp_globals.h" />
     <ClInclude Include="macros.h" />
@@ -167,7 +98,6 @@
     <ClInclude Include="platform-win64.h" />
     <ClInclude Include="threads.h" />
     <ClInclude Include="x86-constants.h" />
-    <ClInclude Include="x86-constants32.h" />
     <ClInclude Include="x86-constants64.h" />
     <ClInclude Include="x86-exceptions.h" />
     <ClInclude Include="x86-utils.h" />

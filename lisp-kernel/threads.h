@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#pragma once
+#endif
+
 #include <stdlib.h>
 #ifndef WINDOWS
 #include <unistd.h>

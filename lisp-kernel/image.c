@@ -20,7 +20,11 @@
 #include "image.h"
 #include "gc.h"
 #include <errno.h>
+#ifdef _MSC_VER
+#include <sys/types.h>
+#else
 #include <unistd.h>
+#endif
 #ifndef WINDOWS
 #include <sys/mman.h>
 #endif
