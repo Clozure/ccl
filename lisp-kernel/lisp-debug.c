@@ -114,9 +114,11 @@ open_debug_output(int fd)
   if (f) {
     if (setvbuf(f, NULL, _IONBF, 0) == 0) {
 #ifdef WINDOWS
+#ifndef _MSC_VER
       if (fileno(stdin) < 0) {
         stdin->_file = 0;
       }
+#endif
 #endif
       dbgout = f;
       return true;

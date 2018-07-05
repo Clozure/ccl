@@ -353,7 +353,12 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
   area *a;
   if (find_openmcl_image_file_header(fd, h)) {
     int i, nsections = h->nsections;
+#ifdef _MSC_VER
+	openmcl_image_section_header *sections = malloc(sizeof(openmcl_image_section_header)*nsections);
+	openmcl_image_section_header *sect = sections;
+#else
     openmcl_image_section_header sections[nsections], *sect=sections;
+#endif
     LispObj bias = image_base - ACTUAL_IMAGE_BASE(h);
 #if (WORD_SIZE== 64)
     signed_natural section_data_delta = 
@@ -446,6 +451,9 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	break;
       }
     }
+#ifdef _MSC_VER
+  free(sections);
+#endif
   }
   return image_nil;
 }

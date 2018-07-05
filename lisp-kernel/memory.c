@@ -26,7 +26,11 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#ifdef _MSC_VER
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #ifdef LINUX
 #include <strings.h>
 #endif
