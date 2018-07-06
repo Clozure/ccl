@@ -19,7 +19,9 @@
 #define PLATFORM_CPU PLATFORM_CPU_ARM
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_32
 
-typedef struct ucontext ExceptionInformation;
+#include <ucontext.h>
+
+typedef ucontext_t ExceptionInformation;
 
 #define MAXIMUM_MAPPABLE_MEMORY (3<<29)
 #define IMAGE_BASE_ADDRESS 0x10000000
