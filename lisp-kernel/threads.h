@@ -16,6 +16,8 @@
 
 #ifdef _MSC_VER
 #pragma once
+#include <minwinbase.h>
+#include <time.h>
 #endif
 
 #include <stdlib.h>
@@ -201,7 +203,7 @@ Boolean create_system_thread(size_t stack_size,
 			     void* stackaddr,
 #ifdef WINDOWS
 #ifdef _MSC_VER
-                             unsigned (CALLBACK *start_routine)(void *)
+                 unsigned (CALLBACK *start_routine)(void *)
 #else
                  unsigned CALLBACK (*start_routine)(void *)
 #endif

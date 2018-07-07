@@ -85,6 +85,7 @@
     <ClInclude Include="area.h" />
     <ClInclude Include="bits.h" />
     <ClInclude Include="constants.h" />
+    <ClInclude Include="dirent.h" />
     <ClInclude Include="gc.h" />
     <ClInclude Include="image.h" />
     <ClInclude Include="lisp-errors.h" />
