@@ -89,11 +89,7 @@ early_intn_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #endif
 #endif
 
-void
-do_intn()
-{
-  __asm volatile("int $0xcd");
-}
+extern void do_intn();
 
 void
 x86_early_exception_init()

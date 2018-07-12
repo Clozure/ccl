@@ -18,6 +18,9 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
+    <Filter Include="ASMINLINE">
+      <UniqueIdentifier>{b4b85f07-cacb-46bb-9829-d6ff51fd9b92}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="win64\yasm-redefinition.patch" />
@@ -175,5 +178,10 @@
     <ClInclude Include="dirent.h">
       <Filter>CHEADERS</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <YASM Include="win64\do_intn.asm">
+      <Filter>ASMINLINE</Filter>
+    </YASM>
   </ItemGroup>
 </Project>
