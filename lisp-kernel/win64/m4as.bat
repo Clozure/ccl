@@ -1,5 +1,5 @@
 @echo OFF
-rem M4 then YASM compile file, used together as external build tool in Visual Studio
+rem M4 then GNU AS compile file, used together as external build tool in Visual Studio
 set m4=C:\msys64\usr\bin\m4
 set as=C:\msys64\mingw64\bin\as
 

@@ -41,28 +41,104 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <CustomBuildBeforeTargets>Link</CustomBuildBeforeTargets>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <ForcedIncludeFiles>platform-win64.h;area.h;bits.h;x86-constants.h;lisp-errors.h;gc.h;lisp.h;lisp-exceptions.h;lisp_globals.h;macros.h;memprotect.h;image.h;threads.h;x86-constants64.h;x86-exceptions.h;lisptypes.h;x86-utils.h;constants.h;os-windows.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <PreprocessorDefinitions>WIN_64;WINDOWS;_REENTRANT;X86;X8664;_GNU_SOURCE;HAVE_TLS;EMUTLS;TCR_IN_GPR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <CustomBuild>
+      <Command>
+      </Command>
+      <Outputs>
+      </Outputs>
+      <AdditionalInputs>
+      </AdditionalInputs>
+    </CustomBuild>
+    <Link>
+      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="errors.s" />
-    <None Include="imports.s" />
-    <None Include="lisp.s" />
-    <None Include="lisp_globals.s" />
+    <None Include="errors.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <CustomBuild Include="imports.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="lisp.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="lisp_globals.s">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</DeploymentContent>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
     <None Include="m4macros.m4" />
-    <None Include="pad.s" />
+    <CustomBuild Include="pad.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="win64\m4as.bat" />
+    <None Include="win64\m4yasm.bat" />
     <None Include="win64\yasm-redefinition.patch" />
-    <None Include="x86-asmutils64.s" />
-    <None Include="x86-constants.s" />
-    <None Include="x86-constants64.s" />
-    <None Include="x86-macros.s" />
-    <None Include="x86-spentry64.s" />
-    <None Include="x86-spjump64.s" />
-    <None Include="x86-subprims64.s" />
-    <None Include="x86-uuo.s" />
+    <CustomBuild Include="x86-asmutils64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="x86-constants.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="x86-constants64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="x86-macros.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <CustomBuild Include="x86-spentry64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <CustomBuild Include="x86-spjump64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <CustomBuild Include="x86-subprims64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="x86-uuo.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bits.c" />
@@ -71,6 +147,7 @@
     <ClCompile Include="lisp-debug.c" />
     <ClCompile Include="lispdcmd.c" />
     <ClCompile Include="memory.c" />
+    <ClCompile Include="mingw-gettimeofday.c" />
     <ClCompile Include="plprint.c" />
     <ClCompile Include="plsym.c" />
     <ClCompile Include="pmcl-kernel.c" />
@@ -96,6 +173,9 @@
     <ClInclude Include="lisp_globals.h" />
     <ClInclude Include="macros.h" />
     <ClInclude Include="memprotect.h" />
+    <ClInclude Include="mingw-time.h" />
+    <ClInclude Include="mingw-timeb.h" />
+    <ClInclude Include="mingw-_timeval.h" />
     <ClInclude Include="os-windows.h" />
     <ClInclude Include="platform-win64.h" />
     <ClInclude Include="threads.h" />

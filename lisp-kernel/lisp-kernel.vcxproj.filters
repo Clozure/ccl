@@ -24,47 +24,31 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="win64\yasm-redefinition.patch" />
-    <None Include="pad.s">
-      <Filter>SP</Filter>
-    </None>
-    <None Include="x86-spentry64.s">
-      <Filter>SP</Filter>
-    </None>
-    <None Include="x86-spjump64.s">
-      <Filter>SP</Filter>
-    </None>
-    <None Include="x86-subprims64.s">
-      <Filter>SP</Filter>
-    </None>
-    <None Include="lisp.s">
-      <Filter>SPINC</Filter>
-    </None>
     <None Include="m4macros.m4">
       <Filter>SPINC</Filter>
     </None>
-    <None Include="x86-constants.s">
-      <Filter>SPINC</Filter>
-    </None>
-    <None Include="x86-macros.s">
-      <Filter>SPINC</Filter>
-    </None>
+    <None Include="win64\m4yasm.bat" />
+    <None Include="win64\m4as.bat" />
     <None Include="errors.s">
       <Filter>SPINC</Filter>
     </None>
-    <None Include="x86-uuo.s">
-      <Filter>SPINC</Filter>
-    </None>
-    <None Include="x86-constants64.s">
+    <None Include="lisp.s">
       <Filter>SPINC</Filter>
     </None>
     <None Include="lisp_globals.s">
       <Filter>SPINC</Filter>
     </None>
-    <None Include="x86-asmutils64.s">
-      <Filter>ASM</Filter>
+    <None Include="x86-constants.s">
+      <Filter>SPINC</Filter>
     </None>
-    <None Include="imports.s">
-      <Filter>ASM</Filter>
+    <None Include="x86-constants64.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-macros.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-uuo.s">
+      <Filter>SPINC</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -114,6 +98,9 @@
       <Filter>C</Filter>
     </ClCompile>
     <ClCompile Include="x86_print.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="mingw-gettimeofday.c">
       <Filter>C</Filter>
     </ClCompile>
   </ItemGroup>
@@ -178,10 +165,39 @@
     <ClInclude Include="dirent.h">
       <Filter>CHEADERS</Filter>
     </ClInclude>
+    <ClInclude Include="mingw-time.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="mingw-timeb.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="mingw-_timeval.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <YASM Include="win64\do_intn.asm">
       <Filter>ASMINLINE</Filter>
     </YASM>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="imports.s">
+      <Filter>ASM</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-asmutils64.s">
+      <Filter>ASM</Filter>
+    </CustomBuild>
+    <CustomBuild Include="pad.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-spentry64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-spjump64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-subprims64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>
