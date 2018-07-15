@@ -100,7 +100,13 @@
     <ClCompile Include="x86_print.c">
       <Filter>C</Filter>
     </ClCompile>
-    <ClCompile Include="mingw-gettimeofday.c">
+    <ClCompile Include="msvc-gettimeofday.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="msvc-getpagesize.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="msvc-fseeko64.c">
       <Filter>C</Filter>
     </ClCompile>
   </ItemGroup>
@@ -165,13 +171,7 @@
     <ClInclude Include="dirent.h">
       <Filter>CHEADERS</Filter>
     </ClInclude>
-    <ClInclude Include="mingw-time.h">
-      <Filter>CHEADERS</Filter>
-    </ClInclude>
-    <ClInclude Include="mingw-timeb.h">
-      <Filter>CHEADERS</Filter>
-    </ClInclude>
-    <ClInclude Include="mingw-_timeval.h">
+    <ClInclude Include="msvc-gettimeofday.h">
       <Filter>CHEADERS</Filter>
     </ClInclude>
   </ItemGroup>

@@ -47,7 +47,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <ForcedIncludeFiles>platform-win64.h;area.h;bits.h;x86-constants.h;lisp-errors.h;gc.h;lisp.h;lisp-exceptions.h;lisp_globals.h;macros.h;memprotect.h;image.h;threads.h;x86-constants64.h;x86-exceptions.h;lisptypes.h;x86-utils.h;constants.h;os-windows.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
-      <PreprocessorDefinitions>WIN_64;WINDOWS;_REENTRANT;X86;X8664;_GNU_SOURCE;HAVE_TLS;EMUTLS;TCR_IN_GPR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN_64;WINDOWS;_REENTRANT;X86;X8664;_GNU_SOURCE;HAVE_TLS;EMUTLS;TCR_IN_GPR;_WINSOCKAPI_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <CustomBuild>
       <Command>
@@ -147,7 +147,9 @@
     <ClCompile Include="lisp-debug.c" />
     <ClCompile Include="lispdcmd.c" />
     <ClCompile Include="memory.c" />
-    <ClCompile Include="mingw-gettimeofday.c" />
+    <ClCompile Include="msvc-fseeko64.c" />
+    <ClCompile Include="msvc-getpagesize.c" />
+    <ClCompile Include="msvc-gettimeofday.c" />
     <ClCompile Include="plprint.c" />
     <ClCompile Include="plsym.c" />
     <ClCompile Include="pmcl-kernel.c" />
@@ -173,9 +175,7 @@
     <ClInclude Include="lisp_globals.h" />
     <ClInclude Include="macros.h" />
     <ClInclude Include="memprotect.h" />
-    <ClInclude Include="mingw-time.h" />
-    <ClInclude Include="mingw-timeb.h" />
-    <ClInclude Include="mingw-_timeval.h" />
+    <ClInclude Include="msvc-gettimeofday.h" />
     <ClInclude Include="os-windows.h" />
     <ClInclude Include="platform-win64.h" />
     <ClInclude Include="threads.h" />

@@ -128,6 +128,9 @@ Boolean use_mach_exception_handling =
 #endif
 
 #ifdef WINDOWS
+#ifdef _MSC_VER
+#include <WinSock2.h>
+#endif
 #include <windows.h>
 #include <stdio.h>
 void

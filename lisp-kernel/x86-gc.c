@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _MSC_VER
-#include "mingw-time.h"
+#include <WinSock2.h>
 #else
 #include <sys/time.h>
 #endif
