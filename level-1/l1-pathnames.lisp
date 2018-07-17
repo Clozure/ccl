@@ -425,7 +425,7 @@
 	 ;; Make missing dir match (:absolute) or (:relative) - is that right?
 	 (null (cdr wild)))
 	((null wild)
-	 nil)
+	 t)
         (t (%pathname-match-dir0 (cdr path)(cdr wild)))))
 
 ; munch on tails path and wild 
