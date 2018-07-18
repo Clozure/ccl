@@ -129,8 +129,11 @@
                                      (list pathname pathname (and pathname (or (probe-file pathname) pathname)) nil
                                            source-map))))
                       (when package-name
-                        (push '*package* (car env))
-                        (push (ccl::pkg-arg package-name) (cdr env)))
+                        (let ((pkg-arg (ignore-errors (ccl::pkg-arg package-name))))
+                          ; sometimes a form in a buffer contains fully-qualified symbols,
+                          (when pkg-arg ; and such symbols don't require the buffer's package to be defined
+                            (push '*package* (car env))
+                            (push pkg-arg (cdr env)))))
                       (if source-map
                         (clrhash source-map)
                         (setf source-map (make-hash-table :test 'eq :shared nil)))
