@@ -3717,7 +3717,9 @@
            (fd (and ioblock (ioblock-device ioblock)))
            (encoding (and ioblock (encoding-name (ioblock-encoding ioblock)))))
       (if fd
-        (format out "~a (~a/~d)" encoding (%unix-fd-kind fd) fd)
+          (if (equal '(unsigned-byte 8) (ioblock-element-type ioblock))
+              (format out "~a (~a/~d)" '(unsigned-byte 8) (%unix-fd-kind fd) fd)
+              (format out "~a (~a/~d)" encoding (%unix-fd-kind fd) fd))
         (format out "~s" :closed)))))
 
 (defmethod select-stream-class ((s (eql 'basic-stream)) in-p out-p char-p)
