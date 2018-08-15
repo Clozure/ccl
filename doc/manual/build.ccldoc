@@ -32,7 +32,7 @@
       heap image used in the process of building {CCL} itself.  The
       bootstrapping image contains just enough code to load the rest
       of {CCL} from fasl files.  The function {function rebuild-ccl}
-      automatically creates a bootstrepping image as part of its work.")
+      automatically creates a bootstrapping image as part of its work.")
     (para "Each supported platform (and possibly a few
       as-yet-unsupported ones) has a uniquely named subdirectory of
       {code ccl/lisp-kernel/}; each such
@@ -122,7 +122,7 @@
 
     The first of these is the current release branch.  Fixes for
     serious bugs are sometimes checked into the release branch, and
-    you might want to update from Subversion and rebuild in order to
+    you might want to update from GitHub and rebuild in order to
     pick up these fixes.
 
     You may also be interested in building the development version of {CCL}, which is
