@@ -184,15 +184,6 @@ _endfn
 _exportfn(C(put_vector_registers))
 _endfn				
         
-	__ifdef(`DARWIN')
-_exportfn(C(darwin_sigreturn))
-        .globl C(sigreturn)
-	__(movl $0x20000b8,%eax)
-	__(syscall)
-	__(ret)
-_endfn
-	__endif
-        
         __ifdef(`WIN_64')
 /* %rcx = CONTEXT, %rdx = tcr, %r8 = old_valence.  This pretty
    much has to be uninterruptible */        

@@ -58,11 +58,6 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 
-#define DarwinSigReturn(context) do {\
-    darwin_sigreturn(context, 0x1e);                 \
-    Bug(context,"sigreturn returned");\
-  } while (0)
-
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
@@ -76,9 +71,7 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
 #define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)
-/* The x86 version of sigreturn just needs the context argument; the
-   hidden, magic "flavor" argument that sigtramp uses is ignored. */
-#define SIGRETURN(context) DarwinSigReturn(context)
+#define SIGRETURN(context)
 
 #include <mach/mach.h>
 #include <mach/mach_error.h>

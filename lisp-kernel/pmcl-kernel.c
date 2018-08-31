@@ -854,9 +854,6 @@ user_signal_handler (int signum, siginfo_t *info, ExceptionInformation *context)
   else if (signum == SIGQUIT) {
     lisp_global(INTFLAG) = (((signum<<8) + 2) << fixnumshift);
   }
-#ifdef DARWIN
-  DarwinSigReturn(context);
-#endif
 }
 
 #endif
