@@ -108,9 +108,11 @@
   (let* ((typecode (typecode key)))
     (declare (fixnum typecode))
     (or (= typecode target::subtag-macptr)
+        (= typecode target::subtag-complex-single-float)
+        (= typecode target::subtag-complex-double-float)
         (and (< typecode (- target::nbits-in-word target::fixnumshift))
              (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
-                        typecode)
+                           typecode)
                       (logior (ash 1 target::subtag-bignum)
                               #-64-bit-target
                               (ash 1 target::subtag-single-float)
