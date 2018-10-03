@@ -1449,7 +1449,7 @@
 ; test-not is typically NIL, but member doesn't like getting passed NIL
 ; for its test-not fn, so I special cased the call to member. --- cfry
 
-(defun remove-duplicates (sequence &key (test #'eql) test-not (start 0) 
+(defun remove-duplicates (sequence &key (test #'eql test-p) (test-not nil test-not-p) (start 0) 
       from-end end key)
   "The elements of SEQUENCE are compared pairwise, and if any two match,
    the one occurring earlier is discarded, unless FROM-END is true, in
@@ -1457,9 +1457,15 @@
    sequence is returned.
 
    The :TEST-NOT argument is deprecated."
+  (cond ((and test-p test-not-p)
+         (test-not-error test test-not))
+         (test-not-p (setq test nil)))
   (setq end (check-sequence-bounds sequence start end))
-  (delete-duplicates (copy-seq sequence) :from-end from-end :test test
-                     :test-not test-not :start start :end end :key key))
+  (if test
+      (delete-duplicates (copy-seq sequence) :from-end from-end :test test
+                         :start start :end end :key key)
+      (delete-duplicates (copy-seq sequence) :from-end from-end :test-not test-not
+                         :start start :end end :key key)))
 
 ;;; Delete-Duplicates:
 
@@ -1552,11 +1558,14 @@
       (aset vector jndex (aref vector index)))))
 
 
-(defun delete-duplicates (sequence &key (test #'eql) test-not (start 0) from-end end key)
+(defun delete-duplicates (sequence &key (test #'eql test-p) (test-not nil test-not-p) (start 0) from-end end key)
   "The elements of SEQUENCE are examined, and if any two match, one is
    discarded.  The resulting sequence, which may be formed by destroying the
    given sequence, is returned.
    Sequences of type STR have a NEW str returned."
+  (cond ((and test-p test-not-p)
+         (test-not-error test test-not))
+      (test-not-p (setq test nil)))
   (setq end (check-sequence-bounds sequence start end))
   (unless key (setq key #'identity))
   (seq-dispatch sequence
@@ -1635,12 +1644,15 @@
 
 ;;; Substitute:
 
-(defun substitute (new old sequence &key from-end (test #'eql) test-not
+(defun substitute (new old sequence &key from-end (test #'eql test-p) (test-not nil test-not-p)
                        (start 0) count
                        end (key #'identity))
   "Return a sequence of the same kind as SEQUENCE with the same elements,
   except that all elements equal to OLD are replaced with NEW. See manual
   for details."
+  (cond ((and test-p test-not-p)
+         (test-not-error test test-not))
+        (test-not-p (setq test nil)))
   (setq count (check-count count))
   (let ((length (length sequence))        )
     (setq end (check-sequence-bounds sequence start end))
@@ -2079,8 +2091,8 @@
 ;;; Mismatch:
 
 (defun mismatch (seq1 seq2 &key (from-end nil)
-                                  (test #'eql)
-                                  (test-not nil)
+                                  (test #'eql test-p)
+                                  (test-not nil test-not-p)
                                   (key #'identity)
                                   (start1 0)
                                   (start2 0)
@@ -2099,9 +2111,11 @@
    :FROM-END argument is given, then one plus the index of the rightmost
    position in which the sequences differ is returned."
   ;seq type-checking is done by length
-  ;start/end type-cheking is done by <= (below)
+  ;start/end type-checking is done by <= (below)
   ;test/key type-checking is done by funcall
-  ;no check for both test and test-not
+  (cond ((and test-p test-not-p)
+         (test-not-error test test-not))
+        (test-not-p (setq test nil)))
   (or end1 (setq end1 length1))
   (or end2 (setq end2 length2))
   (unless (and (<= start1 end1 length1)
@@ -2293,8 +2307,11 @@
 
 
 
-(defun search (sequence1 sequence2 &key from-end (test #'eql) test-not 
-                          (start1 0) end1 (start2 0) end2 (key #'identity))
+(defun search (sequence1 sequence2 &key from-end (test #'eql test-p) (test-not nil test-not-p)
+                         (start1 0) end1 (start2 0) end2 (key #'identity))
+  (cond ((and test-p test-not-p)
+         (test-not-error test test-not))
+        (test-not-p (setq test nil)))
   (setq end1 (check-sequence-bounds sequence1 start1 end1))
   (setq end2 (check-sequence-bounds sequence2 start2 end2))
   (setq key (adjust-key key))
