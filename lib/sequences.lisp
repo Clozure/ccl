@@ -2122,6 +2122,8 @@
            ((= i end2) (setq seq2 s2))
         (push (pop seq2) s2))))
   (when test-not (setq test test-not))
+  (unless key 
+    (setq key #'identity))
   (if from-end
       ;from-end
       (let* ((count1 end1)
