@@ -37,8 +37,10 @@
 (defun cdddar (list) (cdr (cddar list)))
 (defun cddddr (list) (cdr (cdddr list)))
 
-(defun tree-equal (x y &key (test (function eql)) test-not)
+(defun tree-equal (x y &key (test (function eql) test-p) (test-not nil test-not-p))
   "Returns T if X and Y are isomorphic trees with identical leaves."
+  (when (and test-p test-not-p)
+    (test-not-error test test-not))
   (if test-not
       (tree-equal-test-not x y test-not)
       (tree-equal-test x y test)))
