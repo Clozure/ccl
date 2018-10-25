@@ -15,15 +15,12 @@
 
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
-SDKROOT=/
-OSVERSION=10.6
+OSVERSION=10.9
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
 VPATH = ..
 RM = /bin/rm
-LD = ld
-LDFLAGS =  -macosx_version_min $(OSVERSION) -arch i386 -dynamic  -o $@ -e start -pagezero_size 0x11000 -seg1addr 0x00011000 -sectalign __TEXT __text 0x1000
 AS = as
 M4 = gm4
 M4FLAGS = -DDARWIN -DX86 -DX8632
@@ -42,7 +39,6 @@ ASFLAGS = -arch i386 -g
 yosemite_plus := $(shell uname -r | awk -F. '{ if ($$1 >= 14) print "t" }')
 ifeq ($(yosemite_plus),t)
 ASFLAGS += -Q
-SDKROOT := "$(shell xcrun --show-sdk-path)"
 endif
 
 CDEFINES = -DDARWIN -DX86 -DX8632 -DVC_REVISION=$(VC_REVISION) -DUSE_DTRACE
@@ -59,7 +55,7 @@ PLATFORM_H = platform-darwinx8632.h
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c -arch i386 $< $(CDEFINES) \
 	$(CDEBUG) $(COPT) $(MDYNAMIC_NO_PIC) $(WFORMAT) \
-	-I. -mmacosx-version-min=$(OSVERSION) -isysroot $(SDKROOT) -o $@
+	-I. -mmacosx-version-min=$(OSVERSION) -o $@
 
 SPOBJ = x86-spjump32.o x86-spentry32.o x86-subprims32.o
 ASMOBJ = x86-asmutils32.o imports.o
@@ -86,22 +82,11 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 KSPOBJ= $(SPOBJ)
 all:	../../dx86cl
 
-
-# No:
-
-# KSPOBJ=
-
-OSEARLYLIBS = -L$(SDKROOT)/usr/lib -lcrt1.o
-OSLATELIBS = -lSystem
-
-# is this needed?
-#OSMIDDLELIBS = -lSystemStubs
-
-OSLIBS = $(OSEARLYLIBS) $(OSMIDDLELIBS) $(OSLATELIBS)
-
 ../../dx86cl:	 $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
-	$(LD)  $(LDFLAGS) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)   $(OSLIBS)
-
+	cc -mmacosx-version-min=$(OSVERSION) -arch i386 \
+	 -Wl,-no_pie,-pagezero_size,0x11000,-seg1addr,0x11000 \
+	 -Wl,-sectalign,__TEXT,__text,0x1000 \
+	 -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
