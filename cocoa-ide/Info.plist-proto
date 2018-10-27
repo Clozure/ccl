@@ -10,7 +10,7 @@
         <key>LSApplicationCategoryType</key>
         <string>public.app-category.developer-tools</string>
         <key>LSMinimumSystemVersion</key>
-        <string>10.6.6</string>
+        <string>10.9.0</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDocumentTypes</key>
@@ -22,7 +22,7 @@
 			  <string>asd</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>openmcl-icon.icns</string>
+			<string>OPENMCL-ICONS</string>
 			<key>CFBundleTypeName</key>
 			<string>Lisp source code</string>
 			<key>CFBundleTypeRole</key>
@@ -34,7 +34,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeIconFile</key>
-			<string>openmcl-icon.icns</string>
+			<string>OPENMCL-ICONS</string>
 			<key>CFBundleTypeName</key>
 			<string>Listener</string>
 			<key>CFBundleTypeRole</key>
@@ -71,12 +71,12 @@
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>OPENMCL-KERNEL</string>
-	<key>CFBundleHelpBookFolder</key>
+	<key>HELP-BOOK-FOLDER</key>
 	<string>Help</string>
-	<key>CFBundleHelpBookName</key>
+	<key>HELP-BOOK-NAME</key>
 	<string>OpenMCL Help</string>
 	<key>CFBundleIconFile</key>
-	<string>openmcl-icon.icns</string>
+	<string>OPENMCL-ICONS</string>
 	<key>CFBundleIdentifier</key>
 	<string>OPENMCL-IDENTIFIER</string>
 	<key>CFBundleInfoDictionaryVersion</key>

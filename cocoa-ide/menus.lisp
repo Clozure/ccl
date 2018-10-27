@@ -116,6 +116,7 @@
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Definitions..." (objc:@selector #/showListDefinitions:) #@"")
     menu))
 
+#-mac-app-store
 (defun @experiments-menu ()
   (let ((menu (#/initWithTitle: (#/alloc ns:ns-menu) #@"Experiments")))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"xapropos" (objc:@selector #/showXaproposWindow:) #@"")
@@ -158,6 +159,7 @@
       (add-menu #@"Edit" (#/autorelease (@edit-menu)))
       (add-menu #@"Lisp" (#/autorelease (@lisp-menu)))
       (add-menu #@"Tools" (#/autorelease (@tools-menu)))
+      #-mac-app-store
       (add-menu #@"Experiments" (#/autorelease (@experiments-menu)))
       (let ((window-menu (@window-menu)))
 	(add-menu #@"Window" window-menu)

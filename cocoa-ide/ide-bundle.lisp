@@ -46,10 +46,13 @@
       (recursive-copy-directory source-dir contents-dir :if-exists if-exists :test #'ignore-test)
       (when copy-headers
 	(let* ((subdirs (ccl::cdb-subdirectory-path))
-	       (ccl-headers (make-pathname :host "ccl" :directory `(:absolute ,@subdirs)))
-	       (dest-headers (make-pathname :host (pathname-host contents-dir)
-					    :directory (append (pathname-directory contents-dir)
-							       (cons "Resources" subdirs)))))
+	       (ccl-headers (make-pathname :host "ccl"
+					   :directory `(:absolute ,@subdirs)))
+	       (dest-headers (make-pathname
+			      :host (pathname-host contents-dir)
+			      :directory
+			      (append (pathname-directory contents-dir)
+				      (list* "Resources"  "ccl" subdirs)))))
 	  (recursive-copy-directory ccl-headers dest-headers :if-exists if-exists :test #'ignore-test)))
       (when install-altconsole
         (install-altconsole bundle-path))
@@ -84,7 +87,12 @@
          (build-directory "ccl:cocoa-ide;altconsole;")
          (build-bundle-path "ccl:cocoa-ide;altconsole;AltConsole.app")
          (make-output (make-string-output-stream))
-         (args `("-C" ,(native-translated-namestring build-directory) "install")))
+	 #+mac-app-store
+         (args `("-C" ,(native-translated-namestring build-directory)
+		      "clean" "install" "MAC_APP_STORE=yes"))
+	 #-mac-app-store
+	 (args `("-C" ,(native-translated-namestring build-directory)
+		      "install")))
     (recursive-delete-directory altconsole-path :if-does-not-exist nil)
     (unwind-protect
          (multiple-value-bind (exit-status code)
@@ -132,6 +140,12 @@
                            (declare (ignore os))
                            (format nil "~d (~a~d)" *openmcl-svn-revision* cpu bits)))
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
+		    ("OPENMCL-ICONS" . #+mac-app-store "store.icns"
+				     #-mac-app-store "openmcl-icon.icns")
+		    ("HELP-BOOK-FOLDER" . #+mac-app-store "nohelpbookfolder"
+					#-mac-app-store "CFBundleHelpBookFolder")
+		    ("HELP-BOOK-NAME" . #+mac-app-store "nohelpbookname"
+				      #-mac-app-store "CFBundleHelpBookName")
 		    ("OPENMCL-NAME" . ,bundle-name)
                     ("OPENMCL-IDENTIFIER" . ,bundle-id)
 		    ("OPENMCL-VERSION" . ,bundle-version)
@@ -209,4 +223,7 @@
 
 (progn
   (create-ide-bundle *cocoa-ide-path*)
-  (fake-cfbundle-path *cocoa-ide-path* "ccl:cocoa-ide;Info.plist-proto" "com.clozure" *cocoa-ide-bundle-suffix* *cocoa-ide-frameworks* *cocoa-ide-libraries* #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))
+  (fake-cfbundle-path *cocoa-ide-path* "ccl:cocoa-ide;Info.plist-proto"
+		      "com.clozure" *cocoa-ide-bundle-suffix*
+		      *cocoa-ide-frameworks* *cocoa-ide-libraries*
+		      #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))
