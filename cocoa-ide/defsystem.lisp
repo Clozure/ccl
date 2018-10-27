@@ -115,20 +115,20 @@
     "preferences"
     "processes-window"
     "apropos-window"
+    #-mac-app-store
     "xapropos"
     "hemlock-commands"
     "file-dialogs"
     "menus"
     "app-delegate"
+    #-mac-app-store
     "ide-self-update"
     ,(if (use-pre-lion-search-files)
          "search-files-pre-lion"
          "search-files")
     "start"
-    ))
-
-(defparameter *leopard-only-ide-files*
-  '("xinspector"
+    #-mac-app-store
+    "xinspector"
     ))
 
 (defun load-mac-ui-files (names mac-ui-dir force-compile)
@@ -172,12 +172,6 @@
   force-compile)
 
 (defun load-ide (&optional force-compile)
-  ;; kludge to limit experimental files to Leopard
-  #+darwin-target
-  (rlet ((p :int))
-    (#_Gestalt #$gestaltSystemVersion p)
-    (when (>= (%get-long p) #x1050)
-      (setq *ide-files* (append *ide-files* *leopard-only-ide-files*))))
   (load-mac-ui-files *mac-ui-files* "ccl:mac-ui;" force-compile)
   (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
   (require 'build-application)

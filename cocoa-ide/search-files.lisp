@@ -257,7 +257,7 @@
   (%null-ptr-p (slot-value self 'text)))
 
 (defun %tree-node-for-grep-result (grep-result)
-  (let* ((node-data (#/new navigator-search-node-data))
+  (let* ((node-data (#/new (@class "NavigatorSearchNodeData")))
          (node (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node) node-data))
          (file (grep-result-file grep-result)))
     (#/release node-data)
@@ -267,7 +267,7 @@
       (#/setURL: node-data u))
     (let ((matches (grep-result-matches grep-result)))
       (dolist (match matches)
-        (let* ((child-node-data (#/new navigator-search-node-data))
+        (let* ((child-node-data (#/new (@class "NavigatorSearchNodeData")))
                (child-node (#/initWithRepresentedObject: (#/alloc ns:ns-tree-node)
                                                          child-node-data))
                (line-number (first match))
@@ -548,7 +548,7 @@
   (with-slots (outline-view search-data-source) wc
     (#/setTarget: outline-view search-data-source)
     (#/setDoubleAction: outline-view (@selector #/editLine:))
-    (setf search-data-source (#/new grep-results-data-source))
+    (setf search-data-source (#/new (@class "GrepResultsDataSource")))
     (#/setDelegate: outline-view search-data-source)
     (#/setDataSource: outline-view search-data-source))
   (setf (find-string-value wc) #@"")
