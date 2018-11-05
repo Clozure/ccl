@@ -70,13 +70,10 @@
         `(,op (the short-float (%short-float ,x)) (the short-float ,y)))))
 
 
-  
-
-
-  (declaim (inline  %make-complex %make-ratio))
+  (declaim (inline  %make-complex %make-ratio %maybe-make-ratio))
   (declaim (inline canonical-complex))
   (declaim (inline build-ratio))
-  (declaim (inline maybe-truncate)))
+  (declaim (inline maybe-truncate maybe-truncate-no-rem)))
 
 
 
@@ -86,7 +83,14 @@
 (defun %make-ratio (numerator denominator)
   (gvector :ratio numerator denominator))
  
-
+(defun %maybe-make-ratio (numerator denominator res)
+  (if res
+      (progn
+        (require-type res 'ratio)
+        (setf (%numerator res) numerator
+              (%denominator res) denominator)
+        res)
+      (%make-ratio numerator denominator)))
 
 ; this is no longer used
 (defun %integer-signum (num)
@@ -501,20 +505,21 @@
     (%make-complex realpart imagpart)))
 
 
+(defun +-2 (x y)
+  (locally
+      (declare (inline +-2-into))
+    (+-2-into x y)))
 
-
-(defun +-2 (x y)     
+(defun +-2-into (x y &optional res)
   (number-case x
     (fixnum (number-case y
               (fixnum (+ (the fixnum x) (the fixnum y)))
               (double-float (rat-dfloat + x y))
               (short-float (rat-sfloat + x y))
-              (bignum (add-bignum-and-fixnum y x))
+              (bignum (add-bignum-and-fixnum y x res))
               (complex (complex (+ x (%realpart y))
                                 (%imagpart y)))
-              (ratio (let* ((dy (%denominator y)) 
-                            (n (+ (* x dy) (%numerator y))))
-                       (%make-ratio n dy)))))
+              (ratio (add-ratio-int y x res))))
     (double-float (number-case y
                     (double-float (+ (the double-float x) (the double-float y)))
                     (short-float (with-stack-double-floats ((dy y))
@@ -530,16 +535,13 @@
                    (complex (complex (+ x (%realpart y))
                                      (%imagpart y)))))
     (bignum (number-case y
-              (bignum (add-bignums x y))
-              (fixnum (add-bignum-and-fixnum x y))
+              (bignum (add-bignums x y res))
+              (fixnum (add-bignum-and-fixnum x y res))
               (double-float (rat-dfloat + x y))
               (short-float (rat-sfloat + x y))
               (complex (complex (+ x (realpart y)) 
                                 (%imagpart y)))
-              (ratio
-               (let* ((dy (%denominator y))
-                      (n (+ (* x dy) (%numerator y))))
-                 (%make-ratio n dy)))))
+              (ratio (add-ratio-int y x res))))
     (complex (number-case y
                (complex (complex (+ (%realpart x) (%realpart y))
                                  (+ (%imagpart x) (%imagpart y))))
@@ -549,29 +551,47 @@
               (let* ((nx (%numerator x))
                      (dx (%denominator x))
                      (ny (%numerator y))
-                     (dy (%denominator y))
-                     (g1 (gcd dx dy)))
-                (if (eql g1 1)
-                  (%make-ratio (+ (* nx dy) (* dx ny)) (* dx dy))
-                  (let* ((t1 (+ (* nx (truncate dy g1)) (* (truncate dx g1) ny)))
-                         (g2 (gcd t1 g1))
-                         (t2 (truncate dx g1)))
-                    (cond ((eql t1 0) 0)
-                          ((eql g2 1) (%make-ratio t1 (* t2 dy)))
-                          (t
-                           (let* ((nn (truncate t1 g2))
-                                  (t3 (truncate dy g2))
-                                  (nd (if (eql t2 1) t3 (* t2 t3))))
-                             (if (eql nd 1) nn (%make-ratio nn nd)))))))))
-             (integer
-              (let* ((dx (%denominator x)) (n (+ (%numerator x) (* y dx))))
-                (%make-ratio n dx)))
+                     (dy (%denominator y)))
+                (with-temporary-bignum-buffers ((g1 (gcd-2 dx dy)))
+                  (if (eql g1 1)
+                      (with-temporary-bignum-buffers ((p1 (*-2-into nx dy))
+                                                      (p2 (*-2-into dx ny)))
+                        (%maybe-make-ratio (+ p1 p2) (* dx dy) res))
+                      (with-temporary-bignum-buffers ((q1 (truncate-no-rem dy g1))
+                                                      (p1 (*-2-into nx q1))
+                                                      (q2 (truncate-no-rem dx g1))
+                                                      (p2 (*-2-into q2 ny))
+                                                      (t1 (+-2-into p1 p2))
+                                                      (g2 (gcd-2 t1 g1))
+                                                      (t2 (truncate-no-rem dx g1)))
+                        (cond ((eql t1 0) 0)
+                              ((eql g2 1) (%maybe-make-ratio (maybe-copy-bignum t1) (* t2 dy) res))
+                              (t
+                               (with-temporary-bignum-buffers ((nn (truncate-no-rem t1 g2))
+                                                               (t3 (truncate-no-rem dy g2))
+                                                               (p1 (*-2-into t2 t3)))
+                                 (let ((nd (if (eql t2 1) t3 p1)))
+                                   (if (eql nd 1)
+                                       (maybe-copy-bignum nn)
+                                       (%maybe-make-ratio (maybe-copy-bignum nn) (maybe-copy-bignum nd) res)))))))))))
+             (integer (add-ratio-int x y res))
              (double-float (rat-dfloat + x y))
              (short-float (rat-sfloat + x y))
              (complex (complex (+ x (%realpart y)) 
                                (%imagpart y)))))))
 
-(defun --2 (x y)     
+(defun add-ratio-int (rat int &optional res)
+  (let ((den (%denominator rat)))
+    (with-temporary-bignum-buffers ((p1 (*-2-into int den)))
+      (%maybe-make-ratio (+ (%numerator rat) p1) den res))))
+
+
+(defun --2 (x y)
+  (locally
+      (declare (inline --2-into))
+    (--2-into x y)))
+
+(defun --2-into (x y &optional res)
   (number-case x
     (fixnum (number-case y
               (fixnum (- (the fixnum x) (the fixnum y)))
@@ -579,12 +599,10 @@
               (short-float (rat-sfloat - x y))
               (bignum 
                (with-small-bignum-buffers ((bx x))
-                        (subtract-bignum bx y)))
+                 (subtract-bignum bx y res)))
               (complex (complex (- x (%realpart y))
                                 (- (%imagpart y))))
-              (ratio (let* ((dy (%denominator y)) 
-                            (n (- (* x dy) (%numerator y))))
-                       (%make-ratio n dy)))))
+              (ratio (subtract-int-ratio x y res))))
     (double-float (number-case y
                     (double-float (- (the double-float x) (the double-float y)))
                     (short-float (with-stack-double-floats ((dy y))
@@ -600,19 +618,16 @@
                    (complex (complex (- x (%realpart y))
                                      (- (%imagpart y))))))
     (bignum (number-case y
-              (bignum (subtract-bignum x y))
+              (bignum (subtract-bignum x y res))
               (fixnum (if (eql y target::target-most-negative-fixnum)
                         (with-small-bignum-buffers ((by y))
-                          (subtract-bignum x by))
-                        (add-bignum-and-fixnum x (- y))))
+                          (subtract-bignum x by res))
+                        (add-bignum-and-fixnum x (- y) res)))
               (double-float (rat-dfloat - x y))
               (short-float (rat-sfloat - x y))
               (complex (complex (- x (realpart y)) 
                                 (- (%imagpart y))))
-              (ratio
-               (let* ((dy (%denominator y))
-                      (n (- (* x dy) (%numerator y))))
-                 (%make-ratio n dy)))))
+              (ratio (subtract-int-ratio x y res))))
     (complex (number-case y
                (complex (complex (- (%realpart x) (%realpart y))
                                  (- (%imagpart x) (%imagpart y))))
@@ -622,27 +637,44 @@
               (let* ((nx (%numerator x))
                      (dx (%denominator x))
                      (ny (%numerator y))
-                     (dy (%denominator y))
-                     (g1 (gcd dx dy)))
-                (if (eql g1 1)
-                  (%make-ratio (- (* nx dy) (* dx ny)) (* dx dy))
-                  (let* ((t1 (- (* nx (truncate dy g1)) (* (truncate dx g1) ny)))
-                         (g2 (gcd t1 g1))
-                         (t2 (truncate dx g1)))
-                    (cond ((eql t1 0) 0)
-                          ((eql g2 1) (%make-ratio t1 (* t2 dy)))
-                          (t
-                           (let* ((nn (truncate t1 g2))
-                                  (t3 (truncate dy g2))
-                                  (nd (if (eql t2 1) t3 (* t2 t3))))
-                             (if (eql nd 1) nn (%make-ratio nn nd)))))))))
-             (integer
-              (let* ((dx (%denominator x)) (n (- (%numerator x) (* y dx))))
-                (%make-ratio n dx)))
+                     (dy (%denominator y)))
+                (with-temporary-bignum-buffers ((g1 (gcd-2 dx dy)))
+                  (if (eql g1 1)
+                      (with-temporary-bignum-buffers ((p1 (*-2-into nx dy))
+                                                      (p2 (*-2-into dx ny)))
+                        (%maybe-make-ratio (- p1 p2) (* dx dy) res))
+                      (with-temporary-bignum-buffers ((q1 (truncate-no-rem dy g1))
+                                                      (p1 (*-2-into nx q1))
+                                                      (q2 (truncate-no-rem dx g1))
+                                                      (p2 (*-2-into q2 ny))
+                                                      (t1 (--2-into p1 p2))
+                                                      (g2 (gcd-2 t1 g1))
+                                                      (t2 (truncate-no-rem dx g1)))
+                        (cond ((eql t1 0) 0)
+                              ((eql g2 1) (%maybe-make-ratio (maybe-copy-bignum t1) (* t2 dy) res))
+                              (t
+                               (with-temporary-bignum-buffers ((nn (truncate-no-rem t1 g2))
+                                                               (t3 (truncate-no-rem dy g2))
+                                                               (p1 (*-2-into t2 t3)))
+                                 (let ((nd (if (eql t2 1) t3 p1)))
+                                   (if (eql nd 1)
+                                       nn
+                                       (%maybe-make-ratio (maybe-copy-bignum nn) (maybe-copy-bignum nd) res)))))))))))
+             (integer (subtract-ratio-int x y))
              (double-float (rat-dfloat - x y))
              (short-float (rat-sfloat - x y))
              (complex (complex (- x (%realpart y)) 
                                (- (%imagpart y))))))))
+
+(defun subtract-int-ratio (x ratio &optional res)
+  (let* ((den (%denominator ratio)))
+    (with-temporary-bignum-buffers ((p1 (*-2-into x den)))
+      (%maybe-make-ratio (- p1 (%numerator ratio)) den res))))
+
+(defun subtract-ratio-int (ratio y &optional res)
+  (let* ((den (%denominator ratio)))
+    (with-temporary-bignum-buffers ((p1 (*-2-into y den)))
+      (%maybe-make-ratio (- (%numerator ratio) p1) den res))))
 
 
 ;;; BUILD-RATIO  --  Internal
@@ -652,12 +684,12 @@
 ;;; it is 1.
 ;;;
 
-(defun build-ratio (num den)
+(defun build-ratio (num den &optional res)
   (if (minusp den) (setq num (- num) den (- den)))
   (case den
     (0 (divide-by-zero-error 'build-ratio num den))
     (1 num)
-    (t (%make-ratio num den))))
+    (t (%maybe-make-ratio num den res))))
 
 
 
@@ -667,27 +699,37 @@
 ;;;    Truncate X and Y, but bum the case where Y is 1.
 ;;;
 
-
 (defun maybe-truncate (x y)
   (if (eql y 1)
     x
     (truncate x y)))
 
+(defun maybe-truncate-no-rem (x y &optional res)
+  (if (eql y 1)
+    x
+    (truncate-no-rem x y res)))
+
 
 (defun *-2 (x y)
+  (locally
+      (declare (inline *-2-into))
+    (*-2-into x y)))
+
+(defun *-2-into (x y &optional res)
   ;(declare (optimize (speed 3)(safety 0)))
   (flet ((integer*ratio (x y)
 	   (if (eql x 0) 0
-	       (let* ((ny (%numerator y))
-		      (dy (%denominator y))
-		      (gcd (gcd x dy)))
-		 (if (eql gcd 1)
-		     (%make-ratio (* x ny) dy)
-		     (let ((nn (* (truncate x gcd) ny))
-			   (nd (truncate dy gcd)))
-		       (if (eql nd 1)
-			   nn
-			   (%make-ratio nn nd)))))))
+	       (let ((ny (%numerator y))
+                     (dy (%denominator y)))
+                 (with-temporary-bignum-buffers ((gcd (gcd-2 x dy)))
+                   (if (eql gcd 1)
+                       (%maybe-make-ratio (* x ny) dy res)
+                       (with-temporary-bignum-buffers ((q1 (truncate-no-rem x gcd))
+                                                       (nn (*-2-into q1 ny))
+                                                       (nd (truncate-no-rem dy gcd)))
+                         (if (eql nd 1)
+                             (maybe-copy-bignum nn)
+                             (%maybe-make-ratio (maybe-copy-bignum nn) (maybe-copy-bignum nd) res))))))))
 	 (complex*real (x y)
 	   (complex (* (%realpart x) y) (* (%imagpart x) y))))
     (number-case x
@@ -707,9 +749,9 @@
                 (fixnum
                  (if (eql y target::target-most-negative-fixnum)
                    (with-small-bignum-buffers ((by y))
-                     (multiply-bignums x by))
-                   (multiply-bignum-and-fixnum x y)))
-                (bignum (multiply-bignums x y))
+                     (multiply-bignums x by res))
+                   (multiply-bignum-and-fixnum x y res)))
+                (bignum (multiply-bignums x y res))
                 (double-float (dfloat-rat * y x))
                 (short-float (sfloat-rat * y x))
                 (ratio (integer*ratio x y))
@@ -717,8 +759,8 @@
       (fixnum (number-case y
                 (bignum (if (eql x target::target-most-negative-fixnum)
                           (with-small-bignum-buffers ((bx x))
-                            (multiply-bignums y bx))
-                          (multiply-bignum-and-fixnum y x)))
+                            (multiply-bignums y bx res))
+                          (multiply-bignum-and-fixnum y x res)))
                 (fixnum (multiply-fixnums (the fixnum x) (the fixnum y)))
                 (short-float (sfloat-rat * y x))
                 (double-float (dfloat-rat * y x))
@@ -735,33 +777,28 @@
                (ratio (let* ((nx (%numerator x))
 	                     (dx (%denominator x))
 	                     (ny (%numerator y))
-	                     (dy (%denominator y))
-	                     (g1 (gcd nx dy))
-	                     (g2 (gcd dx ny)))
-	                (build-ratio (* (maybe-truncate nx g1)
-			                (maybe-truncate ny g2))
-		                     (* (maybe-truncate dx g2)
-			                (maybe-truncate dy g1)))))
+	                     (dy (%denominator y)))
+                        (with-temporary-bignum-buffers ((g1 (gcd-2 nx dy))
+                                                        (g2 (gcd-2 dx ny))
+                                                        (nn1 (maybe-truncate-no-rem nx g1))
+                                                        (nn2 (maybe-truncate-no-rem ny g2))
+                                                        (nd1 (maybe-truncate-no-rem dx g2))
+                                                        (nd2 (maybe-truncate-no-rem dy g1)))
+                          (build-ratio (* nn1 nn2) (* nd1 nd2) res))))
                (integer (integer*ratio y x))
                (double-float (rat-dfloat * x y))
                (short-float (rat-sfloat * x y))
                (complex (complex*real y x)))))))
 
-
-
 (defun integer*integer (x y &optional res)
-  (declare (ignore res))
   (number-case x      
       (fixnum (number-case y
                 (fixnum (* (the fixnum x) (the fixnum y)))
-                (t (multiply-bignum-and-fixnum y x))))
+                (t (multiply-bignum-and-fixnum y x res))))
       (bignum (number-case y
-                (fixnum (multiply-bignum-and-fixnum x y))
-                (t (multiply-bignums x y))))))
+                (fixnum (multiply-bignum-and-fixnum x y res))
+                (t (multiply-bignums x y res))))))
 
-
-
-  
 
 ;;; INTEGER-/-INTEGER  --  Internal
 ;;;
@@ -770,7 +807,7 @@
 ;;; don't bother, since bignum division is expensive, and the test is not very
 ;;; likely to suceed.
 ;;;
-(defun integer-/-integer (x y)
+(defun integer-/-integer (x y &optional res)
   (if (and (typep x 'fixnum) (typep y 'fixnum))
     (multiple-value-bind (quo rem) (%fixnum-truncate x y)
       (if (eql 0 rem)
@@ -778,16 +815,20 @@
         (let ((gcd (gcd x y)))
           (declare (fixnum gcd))
           (if (eql gcd 1)
-            (build-ratio x y)
-            (build-ratio (%fixnum-truncate x gcd) (%fixnum-truncate y gcd))))))
-      (let ((gcd (gcd x y)))
+            (build-ratio x y res)
+            (build-ratio (%fixnum-truncate x gcd) (%fixnum-truncate y gcd) res)))))
+      (with-temporary-bignum-buffers ((gcd (gcd-2 x y)))
         (if (eql gcd 1)
-          (build-ratio x y)
-          (build-ratio (truncate x gcd) (truncate y gcd))))))
-
+          (build-ratio x y res)
+          (build-ratio (truncate-no-rem x gcd) (truncate-no-rem y gcd) res)))))
 
 
 (defun /-2 (x y)
+  (locally
+      (declare (inline /-2-into))
+    (/-2-into x y)))
+
+(defun /-2-into (x y &optional res)
   (macrolet ((real-complex-/ (x y)
 	       (let ((ry (gensym))
 		     (iy (gensym))
@@ -822,16 +863,16 @@
       (integer (number-case y
 		 (double-float (rat-dfloat / x y))
 		 (short-float (rat-sfloat / x y))
-		 (integer (integer-/-integer x y))
+		 (integer (integer-/-integer x y res))
 		 (complex (real-complex-/ x y))
 		 (ratio
 		  (if (eql 0 x)
-		    0
-		    (let* ((ny (%numerator y)) 
-			   (dy (%denominator y)) 
-			   (gcd (gcd x ny)))
-		      (build-ratio (* (maybe-truncate x gcd) dy)
-				   (maybe-truncate ny gcd)))))))
+                      0
+                      (let ((ny (%numerator y))
+                            (dy (%denominator y)))
+                        (with-temporary-bignum-buffers ((gcd (gcd-2 x ny))
+                                                        (q1 (maybe-truncate-no-rem x gcd)))
+                          (build-ratio (* q1 dy) (maybe-truncate-no-rem ny gcd) res)))))))
       (complex (number-case y
 		 (complex (let* ((rx (%realpart x))
 				 (ix (%imagpart x))
@@ -854,23 +895,25 @@
 	       (integer
 		(when (eql y 0)
 		  (divide-by-zero-error '/ x y))
-		(let* ((nx (%numerator x)) (gcd (gcd nx y)))
-		  (build-ratio (maybe-truncate nx gcd)
-			       (* (maybe-truncate y gcd) (%denominator x)))))
+                (let ((nx (%numerator x)))
+                  (with-temporary-bignum-buffers ((gcd (gcd-2 nx y))
+                                                  (q1 (maybe-truncate-no-rem y gcd)))
+                    (build-ratio (maybe-truncate-no-rem nx gcd) (* q1 (%denominator x)) res))))
 	       (complex (real-complex-/ x y))
 	       (ratio
-		(let* ((nx (%numerator x))
+                (let* ((nx (%numerator x))
 		       (dx (%denominator x))
 		       (ny (%numerator y))
-		       (dy (%denominator y))
-		       (g1 (gcd nx ny))
-		       (g2 (gcd dx dy)))
-		  (build-ratio (* (maybe-truncate nx g1)
-				  (maybe-truncate dy g2))
-			       (* (maybe-truncate dx g2)
-				  (maybe-truncate ny g1))))))))))
-
-
+		       (dy (%denominator y)))
+                  (with-temporary-bignum-buffers ((g1 (gcd-2 nx ny))
+                                                  (g2 (gcd-2 dx dy))
+                                                  (nn1 (maybe-truncate-no-rem nx g1))
+                                                  (nn2 (maybe-truncate-no-rem dy g2))
+                                                  (nn (*-2-into nn1 nn2))
+                                                  (nd1 (maybe-truncate-no-rem dx g2))
+                                                  (nd2 (maybe-truncate-no-rem ny g1))
+                                                  (nd (*-2-into nd1 nd2)))
+                    (build-ratio (maybe-copy-bignum nn) (maybe-copy-bignum nd) res)))))))))
 
 (defun divide-by-zero-error (operation &rest operands)
   (error (make-condition 'division-by-zero
@@ -1270,7 +1313,7 @@
                                    (* (%denominator number) divisor))))
                   (values q (- number (* q divisor))))))))))
 
-(defun truncate-no-rem (number  divisor)
+(defun truncate-no-rem (number divisor &optional res)
   "Returns number (or number/divisor) as an integer, rounded toward 0."
   (macrolet 
     ((truncate-rat-dfloat (number divisor)
@@ -1292,7 +1335,7 @@
        (if (zerop divisor)
          (error 'division-by-zero :operation 'truncate :operands (list number divisor))
          (with-small-bignum-buffers ((bn number))
-           (let* ((result (truncate-no-rem bn divisor)))
+           (let* ((result (truncate-no-rem bn divisor res)))
              (if (eq result bn)
                number
                result))))
@@ -1301,21 +1344,17 @@
          (bignum 0)
          (double-float (truncate-rat-dfloat number divisor))
          (short-float (truncate-rat-sfloat number divisor))
-         (ratio (let ((q (truncate (* number (%denominator divisor))
-                                   (%numerator divisor))))
-                  q)))))
+         (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
+                  (truncate-no-rem p1 (%numerator divisor) res))))))
      (bignum (number-case divisor
                (fixnum (if (eq divisor 1) number
-                         (if (eq divisor target::target-most-negative-fixnum)
                            (with-small-bignum-buffers ((bd divisor))
-                             (bignum-truncate number bd :no-rem))
-                           (bignum-truncate-by-fixnum number divisor))))
-               (bignum (bignum-truncate number divisor :no-rem))
+                             (bignum-truncate-no-rem number bd res))))
+               (bignum (bignum-truncate-no-rem number divisor res))
                (double-float  (truncate-rat-dfloat number divisor))
                (short-float (truncate-rat-sfloat number divisor))
-               (ratio (let ((q (truncate (* number (%denominator divisor))
-                                         (%numerator divisor))))
-                        Q))))
+               (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
+                        (truncate-no-rem p1 (%numerator divisor) res)))))
      (double-float (if (eql divisor 1)
                      (let ((res (%unary-truncate number)))
                        RES)
@@ -1360,10 +1399,8 @@
     (ratio (number-case divisor
                   (double-float (truncate-rat-dfloat number divisor))
                   (short-float (truncate-rat-sfloat number divisor))
-                  (rational
-                   (let ((q (truncate (%numerator number)
-                                      (* (%denominator number) divisor))))
-                     Q)))))))
+                  (rational  (with-temporary-bignum-buffers ((p1 (*-2-into (%denominator number) divisor)))
+                               (truncate-no-rem (%numerator number) p1 res))))))))
 
 
 ;;; %UNARY-ROUND  --  Interface
@@ -1742,43 +1779,50 @@
      (bignum-logcount integer))))
 
 
+(defun %ash-left (int shift &optional res)
+  (declare (fixnum shift))
+  #+debug (assert (and (not (zerop int)) (> shift 0)))
+  (number-case int
+    (fixnum
+     (let ((length (integer-length (the fixnum int))))
+       (declare (fixnum length shift))
+       (cond ((> (+ length shift)
+                 (- (1- target::nbits-in-word) target::fixnumshift))
+              (with-small-bignum-buffers ((bi int))
+                (bignum-ashift-left bi shift nil res)))
+             (t (%iash (the fixnum int) shift)))))
+    (bignum
+     (bignum-ashift-left int shift nil res))))
+
+(defun %ash-right (int shift)
+  (declare (type integer shift))
+  #+debug (assert (and (not (zerop int)) (> shift 0)))
+  (number-case int
+   (fixnum
+     (cond ((>= shift target::nbits-in-word)
+            (if (minusp (the fixnum int)) -1 0))
+           (t (%iash (the fixnum int) (- shift)))))
+    (bignum
+     (bignum-ashift-right int shift))))
 
 (defun ash (integer count)
   "Shifts integer left by count places preserving sign. - count shifts right."
-  (etypecase integer
-    (fixnum
-     (etypecase count
-       (fixnum
-	(if (eql integer 0)
-	  0
-	  (if (eql count 0)
-	    integer
-	    (let ((length (integer-length (the fixnum integer))))
-	      (declare (fixnum length count))
-	      (cond ((and (plusp count)
-			  (> (+ length count)
-			     (- (1- target::nbits-in-word) target::fixnumshift)))
-		     (with-small-bignum-buffers ((bi integer))
-		       (bignum-ashift-left bi count)))
-		    ((and (minusp count) (< count (- (1- target::nbits-in-word))))
-		     (if (minusp integer) -1 0))
-		    (t (%iash (the fixnum integer) count)))))))
-       (bignum
-	(if (minusp count)
-	  (if (minusp integer) -1 0)          
-	  (error "Count ~s too large for ASH" count)))))
-    (bignum
-     (etypecase count
-       (fixnum
-        (if (eql count 0) 
-          integer
-          (if (plusp count)
-            (bignum-ashift-left integer count)
-            (bignum-ashift-right integer (- count)))))
-       (bignum
-        (if (minusp count)
-          (if (minusp integer) -1 0)
-          (error "Count ~s too large for ASH" count)))))))
+  (cond ((eql integer 0)
+         (check-type count integer)
+         0)
+        ((eql count 0)
+         (require-type integer 'integer))
+        (t
+         (number-case count
+           (fixnum
+            (if (plusp (the fixnum count))
+              (%ash-left integer count)
+              (%ash-right integer (- (the fixnum count)))))
+           (bignum
+            (check-type integer integer)
+            (if (plusp count)
+              (error "Count ~s too large for ASH" count)
+              (%ash-right integer most-positive-fixnum)))))))
 
 (defun integer-length (integer)
   "Return the number of significant bits in the absolute value of integer."
@@ -1956,7 +2000,7 @@
       `(let ((,n ,nexp))
          (if (minusp (the fixnum ,n))
            (if (eq ,n target::target-most-negative-fixnum)
-             (- ,n)
+             (- target::target-most-negative-fixnum)
              (the fixnum (- (the fixnum ,n))))
            ,n))))
   )
@@ -1970,7 +2014,7 @@
 ;;; of 0 before the dispatch so that the bignum code doesn't have to worry
 ;;; about "small bignum" zeros.
 ;;;
-(defun gcd-2 (n1 n2)
+(defun gcd-2 (n1 n2 &optional res)
   ;(declare (optimize (speed 3)(safety 0)))
   (cond 
    ((eql n1 0) (%integer-abs n2))
@@ -1992,15 +2036,19 @@
 		 (if (minusp n2)(setq n2 (the fixnum (- n2))))
                (%fixnum-gcd n1 n2)))))
            (bignum (if (eql n1 target::target-most-negative-fixnum)
-		     (%bignum-bignum-gcd n2 (- target::target-most-negative-fixnum))
-		     (bignum-fixnum-gcd (bignum-abs n2)(fixnum-abs n1))))))
+		     (%bignum-bignum-gcd n2 (- target::target-most-negative-fixnum) res)
+                     (let ((n1 (fixnum-abs n1)))
+                       (with-one-negated-bignum-buffer n2
+                         (lambda (an2) (bignum-fixnum-gcd an2 n1))))))))
 	(bignum
 	 (number-case n2
 	   (fixnum
             (if (eql n2 target::target-most-negative-fixnum)
-              (%bignum-bignum-gcd (bignum-abs n1)(fixnum-abs n2))
-              (bignum-fixnum-gcd (bignum-abs n1)(fixnum-abs n2))))
-	   (bignum (%bignum-bignum-gcd n1 n2))))))))
+              (%bignum-bignum-gcd n1 (- target::target-most-negative-fixnum) res)
+              (let ((n2 (fixnum-abs n2)))
+                (with-one-negated-bignum-buffer n1
+                  (lambda (an1) (bignum-fixnum-gcd an1 n2))))))
+	   (bignum (%bignum-bignum-gcd n1 n2 res))))))))
 
 #|
 (defun fixnum-gcd (n1 n2)

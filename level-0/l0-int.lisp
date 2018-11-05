@@ -40,7 +40,11 @@
     (fixnum
      (locally
 	 (declare (fixnum n))
-       (if (minusp n) (- n) n)))
+       (if (minusp n)
+         (if (eql n most-negative-fixnum)
+           (- most-negative-fixnum)
+           (the fixnum (- n)))
+         n)))
     (bignum
      (if (minusp n) (- n) n))))
 
