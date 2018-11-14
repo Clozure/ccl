@@ -784,7 +784,7 @@
                                                         (nn2 (maybe-truncate-no-rem ny g2))
                                                         (nd1 (maybe-truncate-no-rem dx g2))
                                                         (nd2 (maybe-truncate-no-rem dy g1)))
-                          (build-ratio (* nn1 nn2) (* nd1 nd2) res))))
+                          (build-ratio (maybe-copy-bignum (* nn1 nn2)) (maybe-copy-bignum (* nd1 nd2)) res))))
                (integer (integer*ratio y x))
                (double-float (rat-dfloat * x y))
                (short-float (rat-sfloat * x y))
