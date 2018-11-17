@@ -936,10 +936,11 @@
 ;;; boundary (that is, n-bits is zero), then we just copy digits.  The last
 ;;; branch handles the general case.
 ;;;
-(defun bignum-ashift-left (bignum x &optional bignum-len)
+(defun bignum-ashift-left (bignum x &optional bignum-len res)
   (declare (type bignum-type bignum)
 	   (fixnum x)
-	   (type (or null bignum-index) bignum-len))
+	   (type (or null bignum-index) bignum-len)
+           (ignore res))
   (multiple-value-bind (digits n-bits)
 		       (truncate x digit-size)
     (declare (fixnum digits n-bits))
@@ -1490,6 +1491,10 @@
           (if no-rem
             quotient            
             (values quotient r)))))))
+
+(defun bignum-truncate-no-rem (x y &optional res)
+  (declare (ignore res))
+  (bignum-truncate x y t))
 
 (defun bignum-rem (x1 y1)
   (declare (type bignum-type x1 y1))  
