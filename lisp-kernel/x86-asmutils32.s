@@ -179,6 +179,14 @@ _exportfn(C(freebsd_sigreturn))
 _endfn
         __endif
 
+	__ifdef(`DARWIN')
+ _exportfn(C(darwin_sigreturn))
+	__(movl $0xb8,%eax)	/* SYS_sigreturn */
+	__(int $0x80)
+	__(ret)			/* shouldn't return */
+ _endfn
+         __endif
+
 _exportfn(C(get_vector_registers))
 	__(ret)
 _endfn

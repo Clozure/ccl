@@ -1455,7 +1455,7 @@ terminate_lisp()
 #endif
 
 #ifdef DARWIN
-#define min_os_version "8.0"    /* aka Tiger */
+#define min_os_version "13.0"    /* Mavericks */
 #endif
 #ifdef LINUX
 #ifdef PPC

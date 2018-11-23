@@ -49,6 +49,17 @@ typedef ucontext_t ExceptionInformation;
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 
+extern void darwin_sigreturn(ExceptionInformation *, unsigned);
+extern natural os_major_version;
+
+#define DarwinSigReturn(context) do {		     \
+    if (os_major_version < 18) { /* Mojave */	     \
+      darwin_sigreturn(context, 0x1e);		     \
+      Bug(context,"sigreturn returned");	     \
+    }						     \
+} while (0)
+
+
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define set_xpGPR(x,gpr,new) xpGPR((x),(gpr)) = (natural)(new)
@@ -62,7 +73,7 @@ typedef ucontext_t ExceptionInformation;
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
 #define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)
-#define SIGRETURN(context)
+#define SIGRETURN(context) DarwinSigReturn(context)
 
 #include <mach/mach.h>
 #include <mach/mach_error.h>
