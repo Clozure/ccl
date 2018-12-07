@@ -66,7 +66,7 @@ LINKSCRIPTFILE = # ./elf_x86_64.x
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)
 
 ../../fx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(LINKSCRIPTFILE)
-	$(CC) -m64 $(CDEBUG)  -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	$(CC) -m64 $(CDEBUG) -fuse-ld=bfd -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
