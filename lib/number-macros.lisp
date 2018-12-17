@@ -129,7 +129,7 @@
                                      (--2-into
                                       `((1+ (max ,a-len ,b-len))))
                                      (*-2-into
-                                      `((+ (* 2 (ceiling ,a-len 2)) (* 2 (ceiling ,b-len 2)) 1)))
+                                      `((+ (* 2 (ceiling (1+ ,a-len) 2)) (* 2 (ceiling (1+ ,b-len) 2)))))
                                      (gcd-2
                                       `((1+ (min ,a-len ,b-len))))
                                      (truncate-no-rem
