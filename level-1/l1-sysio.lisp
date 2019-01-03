@@ -516,7 +516,7 @@ is :UNIX.")
 ;;; to read this time is (+ where-it-was-last-time what-we-read-last-time.)
 (defun input-file-ioblock-advance (stream file-ioblock read-p)
   (let* ((newpos (+ (file-ioblock-octet-pos file-ioblock)
-		    (io-buffer-count (file-ioblock-inbuf file-ioblock)))))
+		    (ioblock-elements-to-octets file-ioblock (io-buffer-count (file-ioblock-inbuf file-ioblock))))))
     (setf (file-ioblock-octet-pos file-ioblock) newpos)
     (fd-stream-advance stream file-ioblock read-p)))
 
