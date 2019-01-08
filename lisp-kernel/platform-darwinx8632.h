@@ -51,10 +51,14 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 
-#define DarwinSigReturn(context) do {\
-    darwin_sigreturn(context, 0x1e);                 \
-    Bug(context,"sigreturn returned");\
+extern void darwin_sigreturn(ExceptionInformation *, unsigned);
+extern natural os_major_version;
+
+#define DarwinSigReturn(context) do {		     \
+    darwin_sigreturn(context, 0x1e);		     \
+    Bug(context,"sigreturn returned");		     \
   } while (0)
+
 
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
