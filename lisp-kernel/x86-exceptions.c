@@ -1974,6 +1974,44 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 #endif
 #endif
 
+#ifdef DARWIN
+/*
+ * On macOS Mojave (10.14), the default sigaction adds the
+ * SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP flag into sa_flags.
+ * See https://opensource.apple.com/source/libplatform/libplatform-177.200.16/src/setjmp/generic/sigaction.c.auto.html
+ * This validation causes CCL to break, so we use our own sigaction, which
+ * skips including that flag.
+ */
+
+#define SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP 0x400
+
+int
+darwin_sigaction(int sig, struct sigaction *nsv, struct sigaction *osv)
+{
+  extern void _sigtramp();
+  extern int __sigaction (int, struct __sigaction * __restrict,
+			  struct sigaction * __restrict);
+  struct __sigaction sa;
+  struct __sigaction *sap;
+  int ret;
+
+  if (sig <= 0 || sig >= NSIG || sig == SIGKILL || sig == SIGSTOP) {
+    errno = EINVAL;
+    return (-1);
+  }
+  sap = (struct __sigaction *)0;
+  if (nsv) {
+    sa.sa_handler = nsv->sa_handler;
+    sa.sa_tramp = _sigtramp;
+    sa.sa_mask = nsv->sa_mask;
+    sa.sa_flags = nsv->sa_flags; /* omit SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP */
+    sap = &sa;
+  }
+  ret = __sigaction(sig, sap, osv);
+  return ret;
+}
+#endif
+
 #ifndef WINDOWS
 void
 install_signal_handler(int signo, void *handler, unsigned flags)
@@ -2000,7 +2038,12 @@ install_signal_handler(int signo, void *handler, unsigned flags)
     sigaddset(&user_signals_reserved, signo);
   }
 
+#ifdef DARWIN
+  err = darwin_sigaction(signo, &sa, NULL);
+#else
   err = sigaction(signo, &sa, NULL);
+#endif
+
   if (err) {
     perror("sigaction");
     exit(1);

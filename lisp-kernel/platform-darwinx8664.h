@@ -60,11 +60,9 @@ extern void darwin_sigreturn(ExceptionInformation *, unsigned);
 extern natural os_major_version;
 
 #define DarwinSigReturn(context) do {		     \
-    if (os_major_version < 18) { /* Mojave */	     \
-      darwin_sigreturn(context, 0x1e);		     \
-      Bug(context,"sigreturn returned");	     \
-    }						     \
-} while (0)
+    darwin_sigreturn(context, 0x1e);		     \
+    Bug(context,"sigreturn returned");		     \
+  } while (0)
 
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
