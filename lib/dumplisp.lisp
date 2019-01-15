@@ -78,9 +78,13 @@
   (declare (ignore toplevel-function error-handler application-class
                    clear-clos-caches init-file impurify))
   #+windows-target (check-type application-type (member :console :gui))
-  (unless (probe-file (make-pathname :defaults nil
-                                     :directory (pathname-directory (translate-logical-pathname filename))))
-    (error "Directory containing ~s does not exist." filename))
+  (let ((path (translate-logical-pathname filename)))
+    (unless (probe-file (make-pathname
+                         :defaults nil
+                         ;; Needed in Windows
+                         :device (pathname-device path)
+                         :directory (pathname-directory path)))
+      (error "Directory containing ~s does not exist." filename)))
   (let* ((kind (%unix-file-kind (defaulted-native-namestring filename))))
     (when (and kind (not (eq kind :file )))
       (error "~S is not a regular file." filename)))
