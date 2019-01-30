@@ -330,21 +330,17 @@
     (setq *package* pkg)
     (set-package (%kernel-restart $xnopkg name))))
 
-  
 (defun %find-pkg (name &optional (len (length name)))
   (declare (fixnum len))
   (with-package-list-read-lock
-      (dolist (p %all-packages%)
-        (if (dolist (pkgname (pkg.names p))
-              (when (and (= (the fixnum (length pkgname)) len)
-                         (dotimes (i len t)
-                           ;; Aref: allow non-simple strings
-                           (unless (eq (aref name i) (schar pkgname i))
-                             (return))))
-                (return t)))
-          (return p)))))
-
-
+    (dolist (p %all-packages%)
+      (dolist (pkgname (pkg.names p))
+        (when (and (= (the fixnum (length pkgname)) len)
+                   (dotimes (i len t)
+                     ;; Aref: allow non-simple strings
+                     (unless (eq (aref name i) (schar pkgname i))
+                       (return nil))))
+          (return p))))))
 
 (defun pkg-arg (thing &optional deleted-ok)
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
@@ -360,8 +356,11 @@
                  xthing
                  (error "~S is a deleted package ." thing)))
               ((= typecode target::subtag-simple-base-string)
-               (or (%find-pkg xthing)
-                   (%kernel-restart $xnopkg xthing)))
+               (let ((local-nicknames (package-%local-nicknames xthing)))
+                 (cond (local-nicknames
+                        (cdr (assoc xthing local-nicknames :test #'string=)))
+                       ((%find-pkg xthing))
+                       (t (%kernel-restart $xnopkg xthing)))))
               (t (report-bad-arg thing 'simple-string))))))
 
 (defun %fasl-vpackage (s)
