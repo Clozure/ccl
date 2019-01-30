@@ -2366,8 +2366,7 @@ has immediate effect."
 
 ;;; DEFPACKAGE
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %defpackage-all-names-hash (options)
+(defun %defpackage-all-names-hash (options)
     (let ((all-options-alist nil)
           (all-names-size 0)
           (intern-export-size 0)
@@ -2397,7 +2396,7 @@ has immediate effect."
          (make-hash-table :test 'equal :size all-names-size))
        intern-export-size shadow-etc-size)))
 
-  (defun %defpackage (name &rest options)
+(defun %defpackage (name &rest options)
   (multiple-value-bind (all-names-hash intern-export-size shadow-etc-size)
       (%defpackage-all-names-hash options)
     (declare (fixnum intern-export-size shadow-etc-size))
@@ -2481,7 +2480,7 @@ has immediate effect."
 	          ',import-from-specs
 	          ',intern
 	          ',export
-	          ',documentation)))))))
+	          ',documentation))))))
 
 (defmacro defpackage (name &rest options)
   "Defines a new package called PACKAGE. Each of OPTIONS should be one of the
@@ -2498,7 +2497,7 @@ has immediate effect."
     (:DOCUMENTATION doc-string)
    All options except SIZE and DOCUMENTATION can be used multiple
    times."
-  (apply #'%defpackage rest options))
+  (apply #'%defpackage name options))
 
 
 (defmacro with-package-iterator ((mname package-list first-type &rest other-types)
