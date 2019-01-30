@@ -709,16 +709,18 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
 (defun package-shadowing-symbols (pkg) (pkg.shadowed (pkg-arg-allow-deleted pkg)))
 
 ;;; This assumes that all symbol-names and package-names are strings.
-(defun %define-package (name size 
-                             external-size ; extension (may be nil.)
-                             nicknames
-                             shadow
-                             shadowing-import-from-specs
-                             use
-                             import-from-specs
-                             intern
-                             export
-			     &optional doc)
+(defun %define-package (name
+                        size
+                        external-size ; extension (may be nil.)
+                        nicknames
+                        local-nicknames
+                        shadow
+                        shadowing-import-from-specs
+                        use
+                        import-from-specs
+                        intern
+                        export
+			                  &optional doc)
   (if (eq use :default) (setq use *make-package-use-defaults*))
   (let* ((pkg (find-package name)))
     (if pkg
@@ -734,6 +736,10 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
     (record-source-file name 'package)
     (unuse-package (package-use-list pkg) pkg)
     (rename-package pkg name nicknames)
+    (dolist (cons (package-%local-nicknames pkg))
+      (remove-package-local-nickname (car cons) pkg))
+    (dolist (cons local-nicknames)
+      (add-package-local-nickname (car cons) (cdr cons) pkg))
     (flet ((operation-on-all-specs (function speclist)
              (let ((to-do nil))
                (dolist (spec speclist)
@@ -742,11 +748,10 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
                      (multiple-value-bind (sym win) (find-symbol str from)
                        (if win
                          (push sym to-do)
-                         ; This should (maybe) be a PACKAGE-ERROR.
+                         ;; This should (maybe) be a PACKAGE-ERROR.
                          (cerror "Ignore attempt to ~s ~s from package ~s"
                                  "Cannot ~s ~s from package ~s" function str from))))))
                (when to-do (funcall function to-do pkg)))))
-      
       (dolist (sym shadow) (shadow sym pkg))
       (operation-on-all-specs 'shadowing-import shadowing-import-from-specs)
       (use-package use pkg)

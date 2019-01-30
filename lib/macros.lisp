@@ -2408,6 +2408,7 @@ has immediate effect."
            (documentation nil)
            (external-size nil)
            (nicknames nil)
+           (local-nicknames nil)
            (shadow nil)
            (shadowing-import-from-specs nil)
            (use :default)
@@ -2450,6 +2451,14 @@ has immediate effect."
                  (duplicate-option :external-size)
                  (setq external-size (car args))))
               (:nicknames (setq nicknames (all-names nil args nicknames)))
+              ;; (:local-nicknames (setq local-nicknames (all-local-nicknames args local-nicknames)))
+              (:local-nicknames
+               (setq local-nicknames
+                     (append local-nicknames
+                             (mapcar (lambda (spec)
+                                       (destructuring-bind (nick name) spec
+                                         (cons (string nick)(string name))))
+                                     args))))
               (:shadow (setq shadow (all-names :shadow args shadow)))
               (:shadowing-import-from
                (destructuring-bind (from &rest shadowing-imports) args
@@ -2474,6 +2483,7 @@ has immediate effect."
 	          ',size
 	          ',external-size
 	          ',nicknames
+            ',local-nicknames
 	          ',shadow
 	          ',shadowing-import-from-specs
 	          ',use
