@@ -337,13 +337,14 @@
   (declare (fixnum len))
   (with-package-list-read-lock
     (dolist (p %all-packages%)
-      (dolist (pkgname (pkg.names p))
-        (when (and (= (the fixnum (length pkgname)) len)
-                   (dotimes (i len t)
-                     ;; Aref: allow non-simple strings
-                     (unless (eq (aref name i) (schar pkgname i))
-                       (return nil))))
-          (return p))))))
+      (if (dolist (pkgname (pkg.names p))
+            (when (and (= (the fixnum (length pkgname)) len)
+                       (dotimes (i len t)
+                         ;; Aref: allow non-simple strings
+                         (unless (eq (aref name i) (schar pkgname i))
+                           (return))))
+              (return t)))
+        (return p)))))
 
 (defun pkg-arg (thing &optional deleted-ok errorp)
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
