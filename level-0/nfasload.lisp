@@ -366,11 +366,34 @@
                        (errorp (%kernel-restart $xnopkg xthing)))))
               (t (report-bad-arg thing 'simple-string))))))
 
+;;; We use a pair of hash-tables for storing local nickname information.
+;;; We use it in order to avoid modifying the package objects themselves.
+;;; We use a lock to synchronize access to the local nickname system; using
+;;; shared hash tables is not enough as the lists that are the values of the
+;;; hash tables may be modified by different threads at the same time.
+(defvar *package-local-nicknames-lock* (make-lock))
+(defvar *package-local-nicknames* (make-hash-table :test #'eq :weak t))
+(defvar *package-locally-nicknamed-by* (make-hash-table :test #'eq :weak t))
+
+(defun package-%local-nicknames (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-local-nicknames*))))
+(defun (setf package-%local-nicknames) (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (setf (gethash package *package-local-nicknames*) newval)))
+
+(defun package-%locally-nicknamed-by (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-locally-nicknamed-by*))))
+(defun (setf package-%locally-nicknamed-by) (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (setf (gethash package *package-locally-nicknamed-by*) newval)))
+
+
 (defun %fasl-vpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-vreadstr s)
     (let* ((p (%find-pkg str len)))
       (%epushval s (or p (%kernel-restart $XNOPKG (if new-p str (%fasl-copystr str len))))))))
-
 
 (defun %fasl-nvpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-nvreadstr s)
