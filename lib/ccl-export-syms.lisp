@@ -17,8 +17,9 @@
 (in-package "CCL")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export				;remember "CCL" at end of list
-					;setq %ccl-package-export-syms
+  (export
+   ;; remember "CCL" at end of list
+   ;; setq %ccl-package-export-syms
    '(
      local
      set-local
@@ -34,7 +35,7 @@
      defstatic
      defstaticvar
      *break-on-warnings*
-					; misc
+     ;; misc
      record-source-file
      get-source-files
      edit-definition
@@ -136,7 +137,7 @@
      include
      memq
      nremove
-					;put
+                                        ;put
      ratiop
      structure-typep
      structurep
@@ -173,7 +174,7 @@
      *unprocessed-command-line-arguments*
      *heap-image-name*
 
-					; The MOP
+     ;; The MOP
      accessor-method-slot-definition
      add-dependent
      add-direct-method
@@ -290,7 +291,7 @@
      string-studlify			;** DO NOT REMOVE, DO NOT DOCUMENT
      nstring-studlify			;** DO NOT REMOVE, DO NOT DOCUMENT
 
-					; User Options
+     ;; User Options
      *compile-definitions*
      *record-source-file*
      *save-doc-strings*
@@ -306,8 +307,8 @@
      *disassemble-verbose*
      target-fasl-version
 
-					;These 3 need to be set by the user in order for the correspondingly named
-					;functions to return something other than "unspecified".
+     ;; These 3 need to be set by the user in order for the correspondingly named
+     ;; functions to return something other than "unspecified".
      *short-site-name*
      *long-site-name*
      machine-owner
@@ -315,7 +316,7 @@
      init-list-default
      fset
 
-					; Files.
+     ;; Files.
      mac-default-directory
      current-directory
      directory-pathname-p
@@ -373,7 +374,7 @@
      select-item-from-list
 
 
-					; Low-level
+     ;; Low-level
      %stack-block
      %vstack-block
      %get-byte
@@ -456,7 +457,7 @@
      stream-rubout-handler
 
 
-					; Tools
+     ;; Tools
      gc
      egc
      egc-enabled-p
@@ -575,7 +576,7 @@
      process-input-wait
      process-output-wait
      wait-for-signal
-                                        ; termination
+     ;; termination
      terminate-when-unreachable
      terminate
      drain-termination-queue
@@ -586,7 +587,7 @@
      get-fpu-mode
      set-fpu-mode
 
-					; There's more. Like...
+     ;; There's more. Like...
 
      *listener-indent*
      *error-print-circle*
@@ -767,7 +768,11 @@
      allow-heap-allocaton
      heap-allocation-allowed-p
      allocation-disabled
-
+     ;; Protocol for package local nicknames
+     package-local-nicknames
+     package-locally-nicknamed-by-list
+     add-package-local-nickname
+     remove-package-local-nickname
      ) "CCL"
    )
   )
