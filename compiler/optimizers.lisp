@@ -2427,7 +2427,9 @@
                            (consp (cdr package))
                            (null (cddr package))
                            (package-ref-form (cadr package) env))))
-      `(%pkg-ref-intern ,string ,ref)
+      `(if (package-%local-nicknames *package*)
+         (locally (declare (notinline intern)) ,w)
+         (%pkg-ref-intern ,string ,ref))
       w)))
 
 (define-compiler-macro find-symbol (&whole w string &optional package &environment env)
@@ -2438,22 +2440,29 @@
                            (consp (cdr package))
                            (null (cddr package))
                            (package-ref-form (cadr package) env))))
-      `(%pkg-ref-find-symbol ,string ,ref)
+      `(if (package-%local-nicknames *package*)
+         (locally (declare (notinline find-symbol)) ,w)
+         (%pkg-ref-find-symbol ,string ,ref))
       w)))
 
 (define-compiler-macro find-package (&whole w package &environment env)
   (let* ((ref (package-ref-form package env)))
     (if ref
-      `(package-ref.pkg ,ref)
+      `(if (package-%local-nicknames *package*)
+         (locally (declare (notinline find-package)) ,w)
+         (package-ref.pkg ,ref))
       w)))
 
-(define-compiler-macro pkg-arg (&whole w package &optional allow-deleted &environment env)
+(define-compiler-macro pkg-arg (&whole w package &optional allow-deleted errorp &environment env)
+  (declare (ignore errorp))
   (let* ((ref (unless allow-deleted (package-ref-form package env))))
     (if ref
       (let* ((r (gensym)))
-        `(let* ((,r ,ref))
-          (or (package-ref.pkg ,ref)
-           (%kernel-restart $xnopkg (package-ref.name ,r)))))
+        `(if (package-%local-nicknames *package*)
+           (locally (declare (notinline pkg-arg)) ,w)
+           (let* ((,r ,ref))
+             (or (package-ref.pkg ,ref)
+                 (%kernel-restart $xnopkg (package-ref.name ,r))))))
       w)))
 
 

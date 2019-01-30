@@ -318,9 +318,12 @@
 
 
 (defun find-package (name)
-  (if (typep  name 'package)
-    name
-    (%find-pkg (string name))))
+  (cond ((typep name 'package)
+         name)
+        ((package-%local-nicknames *package*)
+         (pkg-arg name nil nil))
+        (t
+         (%find-pkg (string name)))))
 
 (defun %pkg-ref-find-package (ref)
   (package-ref.pkg ref))
@@ -342,7 +345,7 @@
                        (return nil))))
           (return p))))))
 
-(defun pkg-arg (thing &optional deleted-ok)
+(defun pkg-arg (thing &optional deleted-ok errorp)
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
@@ -356,11 +359,11 @@
                  xthing
                  (error "~S is a deleted package ." thing)))
               ((= typecode target::subtag-simple-base-string)
-               (let ((local-nicknames (package-%local-nicknames xthing)))
-                 (cond (local-nicknames
-                        (cdr (assoc xthing local-nicknames :test #'string=)))
+               (let ((local-nicknames (package-%local-nicknames *package*)))
+                 (cond ((and local-nicknames
+                             (cdr (assoc xthing local-nicknames :test #'string=))))
                        ((%find-pkg xthing))
-                       (t (%kernel-restart $xnopkg xthing)))))
+                       (errorp (%kernel-restart $xnopkg xthing)))))
               (t (report-bad-arg thing 'simple-string))))))
 
 (defun %fasl-vpackage (s)
