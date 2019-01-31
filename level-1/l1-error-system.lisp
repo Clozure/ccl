@@ -423,6 +423,22 @@
   (:report (lambda (c s)
              (format s (%rsc-string $xunintc) (slot-value c 'sym-to-unintern) (package-error-package c) (slot-value c 'conflicting-syms)))))
 
+(define-condition simple-package-error (package-error simple-condition) ())
+
+(defun signal-package-error (package format-control &rest format-args)
+  (error 'simple-package-error
+         :package package
+         :format-control format-control
+         :format-arguments format-args))
+
+(defun signal-package-cerror (package continue-string
+                              format-control &rest format-args)
+  (cerror continue-string
+          'simple-package-error
+          :package package
+          :format-control format-control
+          :format-arguments format-args))
+
 (define-condition import-conflict-error (package-error)
   ((imported-sym :initarg :imported-sym)
    (conflicting-sym :initarg :conflicting-sym)

@@ -316,26 +316,9 @@
   (dolist (name (pkg.names p))
     (setf (package-ref.pkg (register-package-ref name)) p)))
 
-
-;;; We use a pair of hash-tables for storing local nickname information.
-;;; We use it in order to avoid modifying the package objects themselves.
-;;; We use a lock to synchronize access to the local nickname system; using
-;;; shared hash tables is not enough as the lists that are the values of the
-;;; hash tables may be modified by different threads at the same time.
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *package-local-nicknames-lock* (make-lock))
-  (defvar *package-local-nicknames* (make-hash-table :test #'eq :weak t))
-  (defvar *package-locally-nicknamed-by* (make-hash-table :test #'eq :weak t)))
-
-(defun package-%local-nicknames (package)
-  (with-lock-grabbed (*package-local-nicknames-lock*)
-    (values (gethash package *package-local-nicknames*))))
-(defun package-%locally-nicknamed-by (package)
-  (with-lock-grabbed (*package-local-nicknames-lock*)
-    (values (gethash package *package-locally-nicknamed-by*))))
-
-;;; The SETF functions for these two are set in l1-symhash.lisp - level-0
-;;; does not support defining SETF functions.
+;; Early definitions. Redefined in l1-symhash.
+(defun package-%local-nicknames (package)      (declare (ignore package)) '())
+(defun package-%locally-nicknamed-by (package) (declare (ignore package)) '())
 
 (defun find-package (name)
   (cond ((typep name 'package)
@@ -366,7 +349,7 @@
               (return t)))
         (return p)))))
 
-(defun pkg-arg (thing &optional deleted-ok errorp)
+(defun pkg-arg (thing &optional deleted-ok (errorp t))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)

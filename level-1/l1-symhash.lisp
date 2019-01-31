@@ -645,14 +645,16 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
     (let* ((ref (register-package-ref n)))
       (setf (package-ref.pkg ref) nil)))
   (dolist (namer (package-%locally-nicknamed-by package))
-    (setf (package-%local-nicknames namer)
-          (delete package (package-%local-nicknames namer) :key #'cdr)))
-  (setf (package-%locally-nicknamed-by package) nil)
+    (setf-package-%local-nicknames
+     (remove package (package-%local-nicknames namer) :key #'cdr)
+     namer))
+  (setf-package-%locally-nicknamed-by nil package)
   (dolist (cell (package-%local-nicknames package))
     (let ((actual (cdr cell)))
-      (setf (package-%locally-nicknamed-by actual)
-            (delete package (package-%locally-nicknamed-by actual)))))
-  (setf (package-%local-nicknames package) nil)
+      (setf-package-%locally-nicknamed-by
+       (remove package (package-%locally-nicknamed-by actual))
+       actual)))
+  (setf-package-%local-nicknames nil package)
   (setf (pkg.names package) nil)
   (let* ((ivec (car (pkg.itab package)))
          (evec (car (pkg.etab package)))
@@ -881,21 +883,28 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
 ;; which causes a lot of spaghetti code. It would take a bigger refactor to
 ;; straighten all of this out.
 
-(define-condition simple-package-error (package-error simple-condition) ())
+;;; We use a pair of hash-tables for storing local nickname information.
+;;; We use it in order to avoid modifying the package objects themselves.
+;;; We use a lock to synchronize access to the local nickname system; using
+;;; shared hash tables is not enough as the lists that are the values of the
+;;; hash tables may be modified by different threads at the same time.
+(defvar *package-local-nicknames-lock* (make-lock))
+(defvar *package-local-nicknames* (make-hash-table :test #'eq :weak t))
+(defvar *package-locally-nicknamed-by* (make-hash-table :test #'eq :weak t))
 
-(defun signal-package-error (package format-control &rest format-args)
-  (error 'simple-package-error
-         :package package
-         :format-control format-control
-         :format-arguments format-args))
+(defun package-%local-nicknames (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-local-nicknames*))))
+(defun package-%locally-nicknamed-by (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-locally-nicknamed-by*))))
 
-(defun signal-package-cerror (package continue-string
-                              format-control &rest format-args)
-  (cerror continue-string
-          'simple-package-error
-          :package package
-          :format-control format-control
-          :format-arguments format-args))
+(defun setf-package-%local-nicknames (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (puthash package *package-local-nicknames* newval)))
+(defun setf-package-%locally-nicknamed-by (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (puthash package *package-locally-nicknamed-by* newval)))
 
 (defun package-local-nicknames (package-designator)
   "Returns an alist of \(local-nickname . actual-package) describing the
@@ -1000,14 +1009,18 @@ Experimental: interface subject to change."
                     (format s "Use ~A as local nickname for ~A instead."
                             nick (package-name actual)))
           (let ((old (cdr cell)))
-            (setf (package-%locally-nicknamed-by old)
-                  (delete package (package-%locally-nicknamed-by old)))
-            (push package (package-%locally-nicknamed-by actual))
+            (setf-package-%locally-nicknamed-by
+             (remove package (package-%locally-nicknamed-by old))
+             old)
+            (let ((oldval (package-%locally-nicknamed-by actual)))
+              (setf-package-%locally-nicknamed-by (cons package oldval) actual))
             (setf (cdr cell) actual))))
       (return-from add-package-local-nickname package))
     (unless cell
-      (push (cons nick actual) (package-%local-nicknames package))
-      (push package (package-%locally-nicknamed-by actual)))
+      (let ((oldval (package-%local-nicknames package)))
+        (setf-package-%local-nicknames (cons (cons nick actual) oldval) package))
+      (let ((oldval (package-%locally-nicknamed-by actual)))
+        (setf-package-%locally-nicknamed-by (cons package oldval) actual)))
     package))
 
 (defun remove-package-local-nickname (old-nickname
@@ -1024,18 +1037,11 @@ Experimental: interface subject to change."
          (cell (assoc nick existing :test #'string=)))
     (when cell
       (let ((old (cdr cell)))
-        (setf (package-%local-nicknames package) (delete cell existing))
-        (setf (package-%locally-nicknamed-by old)
-              (delete package (package-%locally-nicknamed-by old))))
+        (setf-package-%local-nicknames (delete cell existing) package)
+        (setf-package-%locally-nicknamed-by
+         (delete package (package-%locally-nicknamed-by old))
+         old))
       t)))
-
-(defun (setf package-%local-nicknames) (newval package)
-  (with-lock-grabbed (*package-local-nicknames-lock*)
-    (setf (gethash package *package-local-nicknames*) newval)))
-
-(defun (setf package-%locally-nicknamed-by) (newval package)
-  (with-lock-grabbed (*package-local-nicknames-lock*)
-    (setf (gethash package *package-locally-nicknamed-by*) newval)))
 
 (export '(package-local-nicknames
           package-locally-nicknamed-by-list
