@@ -1029,6 +1029,14 @@ Experimental: interface subject to change."
               (delete package (package-%locally-nicknamed-by old))))
       t)))
 
+(defun (setf package-%local-nicknames) (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (setf (gethash package *package-local-nicknames*) newval)))
+
+(defun (setf package-%locally-nicknamed-by) (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (setf (gethash package *package-locally-nicknamed-by*) newval)))
+
 (export '(package-local-nicknames
           package-locally-nicknamed-by-list
           add-package-local-nickname
