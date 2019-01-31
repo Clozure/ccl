@@ -320,7 +320,10 @@
 (defun package-%local-nicknames (package)      (declare (ignore package)) '())
 (defun package-%locally-nicknamed-by (package) (declare (ignore package)) '())
 
+(deftype string-designator () '(or character symbol string))
+
 (defun find-package (name)
+  (check-type name (or package string-designator))
   (cond ((typep name 'package)
          name)
         ((package-%local-nicknames *package*)
@@ -336,7 +339,17 @@
     (setq *package* pkg)
     (set-package (%kernel-restart $xnopkg name))))
 
+;;; TODO: Optimize package lookup.
+;;; According to dlowe from freenode, we do not need to use STRING= in PKG-ARG or the explicit
+;;; AREF loop in %FIND-PKG. We can consider all nicknames to be names of symbols interned in an
+;;; internal package. This means that, after interning the symbol name, we will be able to avoid
+;;; comparing symbol name lengths and contents and instead use the package system to immediately
+;;; fetch the proper symbol (and therefore its name). This should considerably speed up package
+;;; lookup and possibly mitigate the performance hit incurred by the introduction of package-local
+;;; nicknames.
+
 (defun %find-pkg (name &optional (len (length name)))
+  (check-type name (string))
   (declare (fixnum len))
   (with-package-list-read-lock
     (dolist (p %all-packages%)
@@ -350,6 +363,7 @@
         (return p)))))
 
 (defun pkg-arg (thing &optional deleted-ok (errorp t))
+  (check-type thing (or package string-designator))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
