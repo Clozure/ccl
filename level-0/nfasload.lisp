@@ -323,7 +323,7 @@
 (deftype string-designator () '(or character symbol string))
 
 (defun find-package (name)
-  (check-type name (or package string-designator))
+  (require-type name (or package string-designator))
   (cond ((typep name 'package)
          name)
         ((package-%local-nicknames *package*)
@@ -349,7 +349,7 @@
 ;;; nicknames.
 
 (defun %find-pkg (name &optional (len (length name)))
-  (check-type name (string))
+  (require-type name (string))
   (declare (fixnum len))
   (with-package-list-read-lock
     (dolist (p %all-packages%)
@@ -363,7 +363,7 @@
         (return p)))))
 
 (defun pkg-arg (thing &optional deleted-ok (errorp t))
-  (check-type thing (or package string-designator))
+  (require-type thing (or package string-designator))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
