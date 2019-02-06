@@ -323,7 +323,7 @@
 (deftype string-designator () '(or character symbol string))
 
 (defun find-package (name)
-  (require-type name (or package string-designator))
+  (require-type name '(or package string-designator))
   (cond ((typep name 'package)
          name)
         ((package-%local-nicknames *package*)
@@ -349,8 +349,8 @@
 ;;; nicknames.
 
 (defun %find-pkg (name &optional (len (length name)))
-  (require-type name (string))
   (declare (fixnum len))
+  (require-type name 'string)
   (with-package-list-read-lock
     (dolist (p %all-packages%)
       (if (dolist (pkgname (pkg.names p))
@@ -360,10 +360,10 @@
                          (unless (eq (aref name i) (schar pkgname i))
                            (return))))
               (return t)))
-        (return p)))))
+          (return p)))))
 
 (defun pkg-arg (thing &optional deleted-ok (errorp t))
-  (require-type thing (or package string-designator))
+  (require-type thing '(or package string-designator))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
@@ -371,18 +371,18 @@
                        (t
                         thing))))
     (let* ((typecode (typecode xthing)))
-        (declare (fixnum typecode))
-        (cond ((= typecode target::subtag-package)
-               (if (or deleted-ok (pkg.names xthing))
+      (declare (fixnum typecode))
+      (cond ((= typecode target::subtag-package)
+             (if (or deleted-ok (pkg.names xthing))
                  xthing
                  (error "~S is a deleted package ." thing)))
-              ((= typecode target::subtag-simple-base-string)
-               (let ((local-nicknames (package-%local-nicknames *package*)))
-                 (cond ((and local-nicknames
-                             (cdr (assoc xthing local-nicknames :test #'string=))))
-                       ((%find-pkg xthing))
-                       (errorp (%kernel-restart $xnopkg xthing)))))
-              (t (report-bad-arg thing 'simple-string))))))
+            ((= typecode target::subtag-simple-base-string)
+             (let ((local-nicknames (package-%local-nicknames *package*)))
+               (cond ((and local-nicknames
+                           (cdr (assoc xthing local-nicknames :test #'string=))))
+                     ((%find-pkg xthing))
+                     (errorp (%kernel-restart $xnopkg xthing)))))
+            (t (report-bad-arg thing 'simple-string))))))
 
 (defun %fasl-vpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-vreadstr s)
