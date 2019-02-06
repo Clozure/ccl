@@ -320,10 +320,8 @@
 (defun package-%local-nicknames (package)      (declare (ignore package)) '())
 (defun package-%locally-nicknamed-by (package) (declare (ignore package)) '())
 
-(deftype string-designator () '(or character symbol string))
-
 (defun find-package (name)
-  (require-type name '(or package string-designator))
+  (require-type name '(or package character symbol string))
   (cond ((typep name 'package)
          name)
         ((package-%local-nicknames *package*)
@@ -363,7 +361,7 @@
           (return p)))))
 
 (defun pkg-arg (thing &optional deleted-ok (errorp t))
-  (require-type thing '(or package string-designator))
+  (require-type thing '(or package character symbol string))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
