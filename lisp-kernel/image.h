@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#pragma once
+#endif
 
 #define IMAGE_SIG0 (('O'<<24) | ('p'<<16) | ('e'<<8) | 'n')
 #define IMAGE_SIG1 (('M'<<24) | ('C'<<16) | ('L'<<8) | 'I')

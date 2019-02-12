@@ -25,8 +25,13 @@ typedef struct {
 } thread_activation;
 
 #ifdef HAVE_TLS
+#ifdef _MSC_VER
+__declspec(thread) char tcrbuf[sizeof(TCR) + 16];
+__declspec(thread) TCR *current_tcr;
+#else
 __thread char tcrbuf[sizeof(TCR)+16];
 __thread TCR *current_tcr;
+#endif
 #endif
 
 /* This is set to true when running a 32-bit Lisp on 64-bit FreeBSD */
@@ -59,10 +64,13 @@ nullAPC(ULONG_PTR arg)
 {
 }
   
-BOOL WINAPI (*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
-BOOL WINAPI (*pCancelSynchronousIo)(HANDLE) = NULL;
-
-
+#ifdef _MSC_VER
+BOOL(WINAPI *pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+BOOL(WINAPI *pCancelSynchronousIo)(HANDLE) = NULL;
+#else
+BOOL WINAPI(*pCancelIoEx)(HANDLE, OVERLAPPED*) = NULL;
+BOOL WINAPI(*pCancelSynchronousIo)(HANDLE) = NULL;
+#endif
 
 extern void *windows_find_symbol(void*, char*);
 
@@ -1809,8 +1817,11 @@ xThreadCurrentStackSpace(TCR *tcr, unsigned *resultP)
 #ifdef WINDOWS
 Boolean
 create_system_thread(size_t stack_size,
-		     void* stackaddr,
-		     unsigned CALLBACK (*start_routine)(void *),
+#ifdef _MSC_VER
+  unsigned (CALLBACK *start_routine)(void *),
+#else
+  unsigned CALLBACK(*start_routine)(void *),
+#endif
 		     void* param)
 {
   HANDLE thread_handle;

@@ -26,7 +26,11 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#ifdef _MSC_VER
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #ifdef LINUX
 #include <strings.h>
 #endif
@@ -126,9 +130,13 @@ CommitMemory (LogicalAddress start, natural len)
 #endif
 #ifdef WINDOWS
   LogicalAddress rc;
-
+#ifdef _MSC_VER
+  if (((char *)start < ((char *)nil_value)) &&
+    (((char *)nil_value) < ((char *)start + len))) {
+#else
   if ((start < ((LogicalAddress)nil_value)) &&
       (((LogicalAddress)nil_value) < (start+len))) {
+#endif
     /* nil area is in the executable on Windows; ensure range is
        read-write */
     DWORD as_if_i_care;
@@ -326,7 +334,11 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
   LSEEK(fd, pos, SEEK_SET);
 
   while (total < nbytes) {
+#ifdef _MSC_VER
+    count = read(fd, (char *)addr + total, nbytes - total);
+#else
     count = read(fd, addr + total, nbytes - total);
+#endif
     total += count;
     // fprintf(dbgout, "read " DECIMAL " bytes, for a total of " DECIMAL " out of " DECIMAL " so far\n", count, total, nbytes);
     if (!(count > 0))

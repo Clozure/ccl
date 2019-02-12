@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{2388C5DB-088B-4CD9-A5BE-D0B5503932D3}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <ProjectName>lisp-kernel</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="..\..\..\app\vsYasm\vsyasm.props" />
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <CustomBuildBeforeTargets>Link</CustomBuildBeforeTargets>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <ForcedIncludeFiles>platform-win64.h;area.h;bits.h;x86-constants.h;lisp-errors.h;gc.h;lisp.h;lisp-exceptions.h;lisp_globals.h;macros.h;memprotect.h;image.h;threads.h;x86-constants64.h;x86-exceptions.h;lisptypes.h;x86-utils.h;constants.h;os-windows.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <PreprocessorDefinitions>WIN_64;WINDOWS;_REENTRANT;X86;X8664;_GNU_SOURCE;HAVE_TLS;EMUTLS;TCR_IN_GPR;_WINSOCKAPI_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <CustomBuild>
+      <Command>
+      </Command>
+      <Outputs>
+      </Outputs>
+      <AdditionalInputs>
+      </AdditionalInputs>
+    </CustomBuild>
+    <Link>
+      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <LargeAddressAware>false</LargeAddressAware>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <YASM Include="errors.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </YASM>
+    <CustomBuild Include="imports.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="errors.masm" />
+    <None Include="lisp.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="lisp_globals.s">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</DeploymentContent>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="m4macros.m4" />
+    <CustomBuild Include="pad.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="win64\yasm-redefinition.patch" />
+    <CustomBuild Include="x86-asmutils64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="x86-constants.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="x86-constants64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <None Include="x86-macros.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+    <CustomBuild Include="x86-spentry64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <CustomBuild Include="x86-spjump64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <CustomBuild Include="x86-subprims64.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4as.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).obj</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">lisp.s;m4macros.m4;x86-constants.s;x86-macros.s;errors.s;x86-uuo.s;x86-constants64.s;lisp_globals.s;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <None Include="x86-uuo.s">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildProjectDirectory)\win64\m4yasm.bat %(FullPath)</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(Filename).o</Outputs>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="bits.c" />
+    <ClCompile Include="gc-common.c" />
+    <ClCompile Include="image.c" />
+    <ClCompile Include="lisp-debug.c" />
+    <ClCompile Include="lispdcmd.c" />
+    <ClCompile Include="memory.c" />
+    <ClCompile Include="msvc-fseeko64.c" />
+    <ClCompile Include="msvc-getpagesize.c" />
+    <ClCompile Include="msvc-gettimeofday.c" />
+    <ClCompile Include="plprint.c" />
+    <ClCompile Include="plsym.c" />
+    <ClCompile Include="pmcl-kernel.c" />
+    <ClCompile Include="thread_manager.c" />
+    <ClCompile Include="windows-calls.c" />
+    <ClCompile Include="x86-exceptions.c" />
+    <ClCompile Include="x86-gc.c" />
+    <ClCompile Include="x86-utils.c" />
+    <ClCompile Include="x86_print.c" />
+    <ClCompile Include="xlbt.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="area.h" />
+    <ClInclude Include="bits.h" />
+    <ClInclude Include="constants.h" />
+    <ClInclude Include="dirent.h" />
+    <ClInclude Include="gc.h" />
+    <ClInclude Include="image.h" />
+    <ClInclude Include="lisp-errors.h" />
+    <ClInclude Include="lisp-exceptions.h" />
+    <ClInclude Include="lisp.h" />
+    <ClInclude Include="lisptypes.h" />
+    <ClInclude Include="lisp_globals.h" />
+    <ClInclude Include="macros.h" />
+    <ClInclude Include="memprotect.h" />
+    <ClInclude Include="msvc-gettimeofday.h" />
+    <ClInclude Include="os-windows.h" />
+    <ClInclude Include="platform-win64.h" />
+    <ClInclude Include="sys\time.h" />
+    <ClInclude Include="sys\timeb.h" />
+    <ClInclude Include="threads.h" />
+    <ClInclude Include="x86-constants.h" />
+    <ClInclude Include="x86-constants64.h" />
+    <ClInclude Include="x86-exceptions.h" />
+    <ClInclude Include="x86-utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <YASM Include="win64\do_intn.asm">
+      <Parser Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">1</Parser>
+    </YASM>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\..\..\app\vsYasm\vsyasm.targets" />
+  </ImportGroup>
+</Project>
