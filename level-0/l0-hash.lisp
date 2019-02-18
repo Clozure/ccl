@@ -1273,8 +1273,11 @@ before doing so.")
                      (nhash.grow-threshold hash) (- size old-size))
                (setq weak-flags nil)       ; tell clean-up form we finished the loop
                ;; If the old vector's in some static heap, zero it
-               ;; so that less garbage is retained.
-	       (%init-misc 0 old-vector)))
+               ;; so that less garbage is retained.  (But don't smash
+	       ;; the weakvll link.)
+	       (let ((old-weak-link (%svref old-vector 0)))
+		 (%init-misc 0 old-vector)
+		 (setf (%svref old-vector 0) old-weak-link))))
             (when weak-flags
               (setf (nhash.vector.flags old-vector)
                     (logior (the fixnum weak-flags)
