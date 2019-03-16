@@ -766,7 +766,9 @@ vector
         (integer (setq counter string-or-integer)) ; & emit-style-warning
         (string (setq prefix (ensure-simple-string string-or-integer)))))
     (unless counter
-      (with-lock-grabbed (*gensym-lock*)
+      (unless (and (numberp *gensym-counter*)(not (minusp *gensym-counter*)))
+        (error 'type-error :datum *gensym-counter* :expected-type 'unsigned-byte))
+      (with-lock-grabbed (*gensym-lock*) ; 
         (setq *gensym-counter* (1+ (setq counter *gensym-counter*)))))
     (make-symbol (%str-cat prefix (%integer-to-string counter)))))
 
