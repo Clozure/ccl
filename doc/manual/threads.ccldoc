@@ -1515,6 +1515,30 @@ A process cannot meaningfully attempt to enable itself.")
         (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
         (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
         (ref (definition :function process-output-wait)))))
+    (definition (:macro conditional-store) "conditional-store place old-value new-value"
+     "Attempts to atomically replace {param old-value} in {param place} with {param new-value}."
+     (defsection "Arguments and Values"
+       (listing :definition
+         (item "{param place}" ccldoc::=> "a {emphasis place}.")
+         (item "{param old-value}" ccldoc::=> "an {emphasis object}.")
+         (item "{param new-value}" ccldoc::=> "an {emphasis object}.")
+         (item "{param result}" ccldoc::=> "a {emphasis boolean} indicating whether the operation succeeded.")))
+     (defsection "Description"
+       (para "Attempts to atomically replace {param old-value} in {param place} with {param new-value},
+              and returns as its {param result} a {emphasis boolean} that indicates
+              whether the operation was successful.")
+       (para "If {param result} is {emphasis true},
+              the value of {param place} was replaced with the {param new-value}.
+              If {param result} is {emphasis false},
+              the value of {param place} was not {code eq} to {param old-value} and left unchanged.")
+       (para "{param Place} can be one of:")
+       (listing :bullet
+         (item "a {emphasis special variable},")
+         (item "a {emphasis car} or a {emphasis cdr} (i.e. {code (car …)} or {code (cdr …)}),")
+         (item "a {emphasis structure slot} referenced by its accessor (i.e. not via {code with-slots}).")))
+     (defsection "Notes"
+       (para "This operations is known as Compare and Swap (CAS),
+              and can be used to implement lock-free synchronization in multithreaded programs.")))
     (definition (:toplevel-command ":Y") "( :y p)" "Yields control of terminal input to a specified
 	      lisp process (thread)."
      (defsection "Arguments and Values"

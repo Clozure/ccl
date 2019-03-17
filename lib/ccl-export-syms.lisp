@@ -575,6 +575,8 @@
      process-input-wait
      process-output-wait
      wait-for-signal
+
+     conditional-store
                                         ; termination
      terminate-when-unreachable
      terminate

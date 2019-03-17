@@ -3618,12 +3618,21 @@ element-type is numeric."
       (if struct-transform
         (setq place (defstruct-ref-transform struct-transform (cdr place) env)
               sym (car place)))
-      (if (member  sym '(svref ccl::%svref ccl::struct-ref))
-        (let* ((v (gensym)))
-          `(let* ((,v ,(cadr place)))
-            (ccl::store-gvector-conditional ,(caddr place)
-             ,v ,old-value ,new-value)))
-        (signal-program-error "Don't know how to do conditional store to ~s" place)))))
+      (if (eq (car place) 'the)
+        (setq place (caddr place)
+              sym (car place)))
+      (case sym
+        ((svref ccl::%svref ccl::struct-ref)
+         (let* ((v (gensym)))
+           `(let* ((,v ,(cadr place)))
+              (ccl::store-gvector-conditional
+               ,(caddr place) ,v ,old-value ,new-value))))
+        (car
+         `(%rplaca-conditional ,(cadr place) ,old-value ,new-value))
+        (cdr
+         `(%rplacd-conditional ,(cadr place) ,old-value ,new-value))
+        (otherwise
+         (signal-program-error "Don't know how to do conditional store to ~s" place))))))
 
 (defmacro step (form)
   "The form is evaluated with single stepping enabled. Function calls
