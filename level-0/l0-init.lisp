@@ -57,6 +57,8 @@
     #+(and x86-target 64-bit-target)
     :static-conses-should-work-with-egc-in-ccl 
     ;; :openmcl-hash-consing
+    ;; 1.12 introduces package-local-nicknames
+    :package-local-nicknames
     #+eabi-target :eabi-target
     #+ppc-target :powerpc
     #+ppc-target :ppc-target
