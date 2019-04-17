@@ -502,9 +502,24 @@
 (define-compiler-macro cddddr (form)
   `(cdr (cdddr ,form)))
 
-
-
-
+(define-compiler-macro cons (&whole call x y &aux dcall ddcall)
+  (if (consp (setq dcall y))
+    (cond
+      ((or (eq (%car dcall) 'list) (eq (%car dcall) 'list*))
+       ;; (CONS A (LIST[*] . args)) -> (LIST[*] A . args)
+       (list* (%car dcall) x (%cdr dcall)))
+      ((or (neq (%car dcall) 'cons) (null (cddr dcall)) (cdddr dcall))
+       call)
+      ((null (setq ddcall (%caddr dcall)))
+       ;; (CONS A (CONS B NIL)) -> (LIST A B)
+       `(list ,x ,(%cadr dcall)))
+      ((and (consp ddcall)
+            (eq (%car ddcall) 'cons)
+            (eq (list-length ddcall) 3))
+       ;; (CONS A (CONS B (CONS C D))) -> (LIST* A B C D)
+       (list* 'list* x (%cadr dcall) (%cdr ddcall)))
+      (t call))
+    call))
 
 (define-compiler-macro dotimes (&whole call (i n &optional result)
                                        &body body
