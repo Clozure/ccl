@@ -628,20 +628,25 @@
     call
     `(locally ,@body)))
 
-(define-compiler-macro list* (&whole call &rest args  &aux (n (list-length args)))
-  (cond ((eql 0 n) nil)
-        ((eql n 1) `(values ,(car args)))
-        ((eql n 2) `(cons ,@args))
-        (n `(cons ,(car args) (list* ,@(cdr args))))
+(define-compiler-macro list* (&whole call &rest rest
+                                     &aux (n (list-length rest)) last)
+  (cond ((%izerop n) nil)
+        ((null (setq last (%car (last call))))
+         (cons 'list (nreverse (cdr (reverse (cdr call))))))
+        ((and (consp last) (memq (%car last) '(list* list cons)))
+         (cons (if (eq (%car last) 'cons) 'list* (%car last))
+               (nreconc (cdr (reverse (cdr call))) (%cdr last))))
+        ((eq n 1) (list 'values last))
+        ((eq n 2) (cons 'cons (%cdr call)))
         (t call)))
 
-
-
-#-arm-target
-(define-compiler-macro list  (&rest args)
-  (if args
-    `(cons ,(car args) (list ,@(cdr args)))))
-
+;;;(CONS X NIL) is same size as (LIST X) and faster.
+(define-compiler-macro list  (&whole call &optional (first nil first-p)
+                                     &rest more)
+  (if more
+    call
+    (if first-p
+      `(cons ,first nil))))
 
 (define-compiler-macro locally (&whole call &body body &environment env)
   (multiple-value-bind (body decls) (parse-body body env nil)
