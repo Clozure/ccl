@@ -633,7 +633,7 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
       (return-from delete-package nil)))
   (when (pkg.used-by package)
     (cerror "unuse ~S" 'package-is-used-by :package package
-            :using-packages (pkg.used-by package)))
+                                           :using-packages (pkg.used-by package)))
   (while (pkg.used-by package)
     (unuse-package package (car (pkg.used-by package))))
   (while (pkg.used package)
@@ -644,6 +644,17 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
   (dolist (n (pkg.names package))
     (let* ((ref (register-package-ref n)))
       (setf (package-ref.pkg ref) nil)))
+  (dolist (namer (package-%locally-nicknamed-by package))
+    (setf-package-%local-nicknames
+     (remove package (package-%local-nicknames namer) :key #'cdr)
+     namer))
+  (setf-package-%locally-nicknamed-by nil package)
+  (dolist (cell (package-%local-nicknames package))
+    (let ((actual (cdr cell)))
+      (setf-package-%locally-nicknamed-by
+       (remove package (package-%locally-nicknamed-by actual))
+       actual)))
+  (setf-package-%local-nicknames nil package)
   (setf (pkg.names package) nil)
   (let* ((ivec (car (pkg.itab package)))
          (evec (car (pkg.etab package)))
@@ -709,16 +720,18 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
 (defun package-shadowing-symbols (pkg) (pkg.shadowed (pkg-arg-allow-deleted pkg)))
 
 ;;; This assumes that all symbol-names and package-names are strings.
-(defun %define-package (name size 
-                             external-size ; extension (may be nil.)
-                             nicknames
-                             shadow
-                             shadowing-import-from-specs
-                             use
-                             import-from-specs
-                             intern
-                             export
-			     &optional doc)
+(defun %define-package (name
+                        size
+                        external-size ; extension (may be nil.)
+                        nicknames
+                        local-nicknames
+                        shadow
+                        shadowing-import-from-specs
+                        use
+                        import-from-specs
+                        intern
+                        export
+			                  &optional doc)
   (if (eq use :default) (setq use *make-package-use-defaults*))
   (let* ((pkg (find-package name)))
     (if pkg
@@ -734,6 +747,10 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
     (record-source-file name 'package)
     (unuse-package (package-use-list pkg) pkg)
     (rename-package pkg name nicknames)
+    (dolist (cons (package-%local-nicknames pkg))
+      (remove-package-local-nickname (car cons) pkg))
+    (dolist (cons local-nicknames)
+      (add-package-local-nickname (car cons) (cdr cons) pkg))
     (flet ((operation-on-all-specs (function speclist)
              (let ((to-do nil))
                (dolist (spec speclist)
@@ -742,11 +759,10 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
                      (multiple-value-bind (sym win) (find-symbol str from)
                        (if win
                          (push sym to-do)
-                         ; This should (maybe) be a PACKAGE-ERROR.
+                         ;; This should (maybe) be a PACKAGE-ERROR.
                          (cerror "Ignore attempt to ~s ~s from package ~s"
                                  "Cannot ~s ~s from package ~s" function str from))))))
                (when to-do (funcall function to-do pkg)))))
-      
       (dolist (sym shadow) (shadow sym pkg))
       (operation-on-all-specs 'shadowing-import shadowing-import-from-specs)
       (use-package use pkg)
@@ -862,3 +878,173 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
         (export syms pkg)))
     pkg))
 
+;; TODO Including FIND-PACKAGE-USING-PACKAGE would cause a lot of complications.
+;; CCL currently uses a mixture of CCL::PKG-ARG and CCL::%FIND-PKG internally,
+;; which causes a lot of spaghetti code. It would take a bigger refactor to
+;; straighten all of this out.
+
+;;; We use a pair of hash-tables for storing local nickname information.
+;;; We use it in order to avoid modifying the package objects themselves.
+;;; We use a lock to synchronize access to the local nickname system; using
+;;; shared hash tables is not enough as the lists that are the values of the
+;;; hash tables may be modified by different threads at the same time.
+(defvar *package-local-nicknames-lock* (make-lock))
+(defvar *package-local-nicknames* (make-hash-table :test #'eq :weak t))
+(defvar *package-locally-nicknamed-by* (make-hash-table :test #'eq :weak t))
+
+(defun package-%local-nicknames (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-local-nicknames*))))
+(defun package-%locally-nicknamed-by (package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (values (gethash package *package-locally-nicknamed-by*))))
+
+(defun setf-package-%local-nicknames (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (puthash package *package-local-nicknames* newval)))
+(defun setf-package-%locally-nicknamed-by (newval package)
+  (with-lock-grabbed (*package-local-nicknames-lock*)
+    (puthash package *package-locally-nicknamed-by* newval)))
+
+(defun package-local-nicknames (package-designator)
+  "Returns an alist of \(local-nickname . actual-package) describing the
+nicknames local to the designated package.
+When in the designated package, calls to FIND-PACKAGE with the any of the
+local-nicknames will return the corresponding actual-package instead. This
+also affects all implied calls to FIND-PACKAGE, including those performed by
+the reader.
+When printing a package prefix for a symbol with a package local nickname, the
+local nickname is used instead of the real name in order to preserve
+print-read consistency.
+See also: ADD-PACKAGE-LOCAL-NICKNAME, PACKAGE-LOCALLY-NICKNAMED-BY-LIST,
+REMOVE-PACKAGE-LOCAL-NICKNAME, and the DEFPACKAGE option :LOCAL-NICKNAMES.
+Experimental: interface subject to change."
+  (copy-tree
+   (package-%local-nicknames
+    (if (typep package-designator 'package)
+      package-designator
+      (pkg-arg package-designator)))))
+
+(defun package-locally-nicknamed-by-list (package-designator)
+  "Returns a list of packages which have a local nickname for the designated
+package.
+See also: ADD-PACKAGE-LOCAL-NICKNAME, PACKAGE-LOCAL-NICKNAMES,
+REMOVE-PACKAGE-LOCAL-NICKNAME, and the DEFPACKAGE option :LOCAL-NICKNAMES.
+Experimental: interface subject to change."
+  (copy-list
+   (package-%locally-nicknamed-by
+    (if (typep package-designator 'package)
+      package-designator
+      (pkg-arg package-designator)))))
+
+(defun add-package-local-nickname (local-nickname actual-package
+                                   &optional (package-designator *package*))
+  "Adds LOCAL-NICKNAME for ACTUAL-PACKAGE in the designated package, defaulting
+to current package. LOCAL-NICKNAME must be a string designator, and
+ACTUAL-PACKAGE must be a package designator.
+Returns the designated package.
+Signals a continuable error if LOCAL-NICKNAME is already a package local
+nickname for a different package, or if LOCAL-NICKNAME is one of \"CL\",
+\"COMMON-LISP\", or, \"KEYWORD\", or if LOCAL-NICKNAME is a global name or
+nickname for the package to which the nickname would be added.
+When in the designated package, calls to FIND-PACKAGE with the LOCAL-NICKNAME
+will return the package the designated ACTUAL-PACKAGE instead. This also
+affects all implied calls to FIND-PACKAGE, including those performed by the
+reader.
+When printing a package prefix for a symbol with a package local nickname,
+local nickname is used instead of the real name in order to preserve
+print-read consistency.
+See also: PACKAGE-LOCAL-NICKNAMES, PACKAGE-LOCALLY-NICKNAMED-BY-LIST,
+REMOVE-PACKAGE-LOCAL-NICKNAME, and the DEFPACKAGE option :LOCAL-NICKNAMES.
+Experimental: interface subject to change."
+  (let* ((nick (string local-nickname))
+         (actual (pkg-arg actual-package))
+         (package (pkg-arg package-designator))
+         (existing (package-%local-nicknames package))
+         (cell (assoc nick existing :test #'string=)))
+    (unless actual
+      (signal-package-error
+       package-designator
+       "The name ~S does not designate any package."
+       actual-package))
+    (unless (package-name actual)
+      (signal-package-error
+       actual
+       "Cannot add ~A as local nickname for a deleted package: ~S"
+       nick actual))
+    (when (member nick '("CL" "COMMON-LISP" "KEYWORD") :test #'string=)
+      (signal-package-cerror
+       actual
+       "Continue, use it as local nickname anyways."
+       "Attempt to use ~A as a package local nickname (for ~A)."
+       nick (package-name actual)))
+    (when (string= nick (package-name package))
+      (signal-package-cerror
+       package
+       "Continue, use it as a local nickname anyways."
+       "Attempt to use ~A as a package local nickname (for ~A) in ~
+        package named globally ~A."
+       nick (package-name actual) nick))
+    (when (member nick (package-nicknames package) :test #'string=)
+      (signal-package-cerror
+       package
+       "Continue, use it as a local nickname anyways."
+       "Attempt to use ~A as a package local nickname (for ~A) in ~
+        package nicknamed globally ~A."
+       nick (package-name actual) nick))
+    (when (and cell (neq actual (cdr cell)))
+      (restart-case
+          (signal-package-error
+           actual
+           "~@<Cannot add ~A as local nickname for ~A in ~A: ~
+            already nickname for ~A.~:@>"
+           nick (package-name actual)
+           (package-name package) (package-name (cdr cell)))
+        (keep-old ()
+          :report (lambda (s)
+                    (format s "Keep ~A as local nicname for ~A."
+                            nick (package-name (cdr cell)))))
+        (change-nick ()
+          :report (lambda (s)
+                    (format s "Use ~A as local nickname for ~A instead."
+                            nick (package-name actual)))
+          (let ((old (cdr cell)))
+            (setf-package-%locally-nicknamed-by
+             (remove package (package-%locally-nicknamed-by old))
+             old)
+            (let ((oldval (package-%locally-nicknamed-by actual)))
+              (setf-package-%locally-nicknamed-by (cons package oldval) actual))
+            (setf (cdr cell) actual))))
+      (return-from add-package-local-nickname package))
+    (unless cell
+      (let ((oldval (package-%local-nicknames package)))
+        (setf-package-%local-nicknames (cons (cons nick actual) oldval) package))
+      (let ((oldval (package-%locally-nicknamed-by actual)))
+        (setf-package-%locally-nicknamed-by (cons package oldval) actual)))
+    package))
+
+(defun remove-package-local-nickname (old-nickname
+                                      &optional (package-designator *package*))
+  "If the designated package had OLD-NICKNAME as a local nickname for
+another package, it is removed. Returns true if the nickname existed and was
+removed, and NIL otherwise.
+See also: ADD-PACKAGE-LOCAL-NICKNAME, PACKAGE-LOCAL-NICKNAMES,
+PACKAGE-LOCALLY-NICKNAMED-BY-LIST, and the DEFPACKAGE option :LOCAL-NICKNAMES.
+Experimental: interface subject to change."
+  (let* ((nick (string old-nickname))
+         (package (pkg-arg package-designator))
+         (existing (package-%local-nicknames package))
+         (cell (assoc nick existing :test #'string=)))
+    (when cell
+      (let ((old (cdr cell)))
+        (setf-package-%local-nicknames (delete cell existing) package)
+        (setf-package-%locally-nicknamed-by
+         (delete package (package-%locally-nicknamed-by old))
+         old))
+      t)))
+
+(export '(package-local-nicknames
+          package-locally-nicknamed-by-list
+          add-package-local-nickname
+          remove-package-local-nickname)
+        (find-package :ccl))

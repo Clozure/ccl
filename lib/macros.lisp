@@ -2364,9 +2364,137 @@ has immediate effect."
     `(eval-when (:execute :load-toplevel :compile-toplevel)
       ,form)))
 
+;;; DEFPACKAGE
+
+(defun %defpackage-all-names-hash (options)
+    (let ((all-options-alist nil)
+          (all-names-size 0)
+          (intern-export-size 0)
+          (shadow-etc-size 0))
+      (declare (fixnum all-names-size intern-export-size shadow-etc-size))
+      (dolist (option options)
+        (let ((option-name (car option)))
+          (when (memq option-name
+                      '(:nicknames :shadow :shadowing-import-from
+                        :use :import-from :intern :export))
+            (let ((option-size (length (cdr option)))
+                  (cell (assq option-name all-options-alist)))
+              (declare (fixnum option-size))
+              (if cell
+                (incf (cdr cell) option-size)
+                (push (cons option-name option-size) all-options-alist))
+              (when (memq option-name '(:shadow :shadowing-import-from :import-from :intern))
+                (incf shadow-etc-size option-size))
+              (when (memq option-name '(:export :intern))
+                (incf intern-export-size option-size))))))
+      (dolist (cell all-options-alist)
+        (let ((option-size (cdr cell)))
+          (when (> option-size all-names-size)
+            (setq all-names-size option-size))))
+      (values
+       (when (> all-names-size 0)
+         (make-hash-table :test 'equal :size all-names-size))
+       intern-export-size shadow-etc-size)))
+
+(defun %defpackage (name &rest options)
+  (multiple-value-bind (all-names-hash intern-export-size shadow-etc-size)
+      (%defpackage-all-names-hash options)
+    (declare (fixnum intern-export-size shadow-etc-size))
+    (let* ((intern-export-hash (when (> intern-export-size 0)
+                                 (make-hash-table :test 'equal :size intern-export-size)))
+           (shadow-etc-hash (when (> shadow-etc-size 0)
+                              (make-hash-table :test 'equal :size shadow-etc-size)))
+           (size nil)
+           (documentation nil)
+           (external-size nil)
+           (nicknames nil)
+           (local-nicknames nil)
+           (shadow nil)
+           (shadowing-import-from-specs nil)
+           (use :default)
+           (import-from-specs nil)
+           (intern nil)
+           (export nil))
+      (labels ((string-or-name (s) (string s))
+               (duplicate-option (o)
+                 (signal-program-error "Duplicate ~S option in ~S ." o options))
+               (duplicate-name (name option-name)
+                 (signal-program-error "Name ~s, used in ~s option, is already used in a conflicting option ." name option-name))
+               (all-names (option-name tail already)
+                 (when (eq already :default) (setq already nil))
+                 (when all-names-hash
+                   (clrhash all-names-hash))
+                 (dolist (name already)
+                   (setf (gethash (string-or-name name) all-names-hash) t))
+                 (dolist (name tail already)
+                   (setq name (string-or-name name))
+                   (unless (gethash name all-names-hash)          ; Ok to repeat name in same option.
+                     (when (memq option-name '(:shadow :shadowing-import-from :import-from :intern))
+                       (if (gethash name shadow-etc-hash)
+                         (duplicate-name name option-name))
+                       (setf (gethash name shadow-etc-hash) t))
+                     (when (memq option-name '(:export :intern))
+                       (if (gethash name intern-export-hash)
+                         (duplicate-name name option-name))
+                       (setf (gethash name intern-export-hash) t))
+                     (setf (gethash name all-names-hash) t)
+                     (push name already)))))
+        (dolist (option options)
+          (let ((args (cdr option)))
+            (ecase (%car option)
+              (:size
+               (if size
+                 (duplicate-option :size)
+                 (setq size (car args))))
+              (:external-size
+               (if external-size
+                 (duplicate-option :external-size)
+                 (setq external-size (car args))))
+              (:nicknames (setq nicknames (all-names nil args nicknames)))
+              ;; (:local-nicknames (setq local-nicknames (all-local-nicknames args local-nicknames)))
+              (:local-nicknames
+               (setq local-nicknames
+                     (append local-nicknames
+                             (mapcar (lambda (spec)
+                                       (destructuring-bind (nick name) spec
+                                         (cons (string nick)(string name))))
+                                     args))))
+              (:shadow (setq shadow (all-names :shadow args shadow)))
+              (:shadowing-import-from
+               (destructuring-bind (from &rest shadowing-imports) args
+                 (push (cons (string-or-name from)
+                             (all-names :shadowing-import-from shadowing-imports nil))
+                       shadowing-import-from-specs)))
+              (:use (setq use (all-names nil args use)))
+              (:import-from
+               (destructuring-bind (from &rest imports) args
+                 (push (cons (string-or-name from)
+                             (all-names :import-from imports nil))
+                       import-from-specs)))
+              (:intern (setq intern (all-names :intern args intern)))
+              (:export (setq export (all-names :export args export)))
+		          (:documentation
+		           (if documentation
+		             (duplicate-option :documentation)
+		             (setq documentation (cadr option)))))))
+        `(eval-when (:execute :compile-toplevel :load-toplevel)
+           (%define-package
+            ',(string-or-name name)
+	          ',size
+	          ',external-size
+	          ',nicknames
+            ',local-nicknames
+	          ',shadow
+	          ',shadowing-import-from-specs
+	          ',use
+	          ',import-from-specs
+	          ',intern
+	          ',export
+	          ',documentation))))))
+
 (defmacro defpackage (name &rest options)
-  "Defines a new package called PACKAGE. Each of OPTIONS should be one of the 
-   following: 
+  "Defines a new package called PACKAGE. Each of OPTIONS should be one of the
+   following:
     (:NICKNAMES {package-name}*)
     (:SIZE <integer>)
     (:EXTERNAL-SIZE <integer>)
@@ -2377,115 +2505,9 @@ has immediate effect."
     (:INTERN {symbol-name}*)
     (:EXPORT {symbol-name}*)
     (:DOCUMENTATION doc-string)
-   All options except SIZE and DOCUMENTATION can be used multiple 
+   All options except SIZE and DOCUMENTATION can be used multiple
    times."
-  (let* ((size nil)
-         (all-names-size 0)
-         (intern-export-size 0)
-         (shadow-etc-size 0)
-	 (documentation nil)
-         (all-names-hash (let ((all-options-alist nil))
-                           (dolist (option options)
-                             (let ((option-name (car option)))
-                               (when (memq option-name
-                                           '(:nicknames :shadow :shadowing-import-from
-                                             :use :import-from :intern :export))
-                                 (let ((option-size (length (cdr option)))
-                                       (cell (assq option-name all-options-alist)))
-                                   (declare (fixnum option-size))
-                                   (if cell
-                                     (incf (cdr cell) option-size)
-                                     (push (cons option-name option-size) all-options-alist))
-                                   (when (memq option-name '(:shadow :shadowing-import-from :import-from :intern))
-                                     (incf shadow-etc-size option-size))
-                                   (when (memq option-name '(:export :intern))
-                                     (incf intern-export-size option-size))))))
-                           (dolist (cell all-options-alist)
-                             (let ((option-size (cdr cell)))
-                               (when (> option-size all-names-size)
-                                 (setq all-names-size option-size))))
-                           (when (> all-names-size 0)
-                             (make-hash-table :test 'equal :size all-names-size))))
-         (intern-export-hash (when (> intern-export-size 0)
-                               (make-hash-table :test 'equal :size intern-export-size)))
-         (shadow-etc-hash (when (> shadow-etc-size 0)
-                            (make-hash-table :test 'equal :size shadow-etc-size)))
-         (external-size nil)
-         (nicknames nil)
-         (shadow nil)
-         (shadowing-import-from-specs nil)
-         (use :default)
-         (import-from-specs nil)
-         (intern nil)
-         (export nil))
-    (declare (fixnum all-names-size intern-export-size shadow-etc-size))
-    (labels ((string-or-name (s) (string s))
-             (duplicate-option (o)
-               (signal-program-error "Duplicate ~S option in ~S ." o options))
-             (duplicate-name (name option-name)
-               (signal-program-error "Name ~s, used in ~s option, is already used in a conflicting option ." name option-name))
-             (all-names (option-name tail already)
-               (when (eq already :default) (setq already nil))
-               (when all-names-hash
-                 (clrhash all-names-hash))
-               (dolist (name already)
-                 (setf (gethash (string-or-name name) all-names-hash) t))
-               (dolist (name tail already)
-                 (setq name (string-or-name name))
-                 (unless (gethash name all-names-hash)          ; Ok to repeat name in same option.
-                   (when (memq option-name '(:shadow :shadowing-import-from :import-from :intern))
-                     (if (gethash name shadow-etc-hash)
-                       (duplicate-name name option-name))
-                     (setf (gethash name shadow-etc-hash) t))
-                   (when (memq option-name '(:export :intern))
-                     (if (gethash name intern-export-hash)
-                       (duplicate-name name option-name))
-                     (setf (gethash name intern-export-hash) t))
-                   (setf (gethash name all-names-hash) t)
-                   (push name already)))))
-      (dolist (option options)
-        (let ((args (cdr option)))
-          (ecase (%car option)
-                 (:size 
-                  (if size 
-                    (duplicate-option :size) 
-                    (setq size (car args))))		 
-                 (:external-size 
-                  (if external-size 
-                    (duplicate-option :external-size) 
-                    (setq external-size (car args))))
-                 (:nicknames (setq nicknames (all-names nil args nicknames)))
-                 (:shadow (setq shadow (all-names :shadow args shadow)))
-                 (:shadowing-import-from
-                  (destructuring-bind (from &rest shadowing-imports) args
-                    (push (cons (string-or-name from)
-                                (all-names :shadowing-import-from shadowing-imports nil))
-                          shadowing-import-from-specs)))
-                 (:use (setq use (all-names nil args use)))
-                 (:import-from
-                  (destructuring-bind (from &rest imports) args
-                    (push (cons (string-or-name from)
-                                (all-names :import-from imports nil))
-                          import-from-specs)))
-                 (:intern (setq intern (all-names :intern args intern)))
-                 (:export (setq export (all-names :export args export)))
-		 (:documentation
-		  (if documentation
-		    (duplicate-option :documentation)
-		    (setq documentation (cadr option)))))))
-      `(eval-when (:execute :compile-toplevel :load-toplevel)
-         (%define-package ',(string-or-name name)
-	  ',size 
-	  ',external-size 
-	  ',nicknames
-	  ',shadow
-	  ',shadowing-import-from-specs
-	  ',use
-	  ',import-from-specs
-	  ',intern
-	  ',export
-	  ',documentation)))))
-
+  (apply #'%defpackage name options))
 
 
 (defmacro with-package-iterator ((mname package-list first-type &rest other-types)

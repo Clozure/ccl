@@ -128,6 +128,7 @@
 (defun set-cddddr (list new-value)
   (set-cdr (cdddr list) new-value))
 
-
-
-; End of setf-runtime.lisp
+(defun (setf package-%local-nicknames) (newval package)
+  (setf-package-%local-nicknames newval package))
+(defun (setf package-%locally-nicknamed-by) (newval package)
+  (setf-package-%locally-nicknamed-by newval package))
