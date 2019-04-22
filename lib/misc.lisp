@@ -754,8 +754,10 @@ are running on, or NIL if we can't find any useful information."
 	      (fresh-line *query-io*)
 	      (let* ((string (get-string-from-user "Selection [number,q,r,?]:"))
 		     (value (ignore-errors
-			      (let* ((*package* *keyword-package*))
-				(read-from-string string nil)))))
+                              (with-standard-io-syntax
+                                (let ((*read-eval* nil)
+                                      (*package* *keyword-package*))
+                                  (read-from-string string nil))))))
 		(cond ((eq value :q) (throw :cancel t))
 		      ((eq value :r) (throw :redisplay t))
 		      ((eq value :?) 
