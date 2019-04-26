@@ -888,7 +888,8 @@ value of the variable CCL:*MAKE-PACKAGE-USE-DEFAULTS*."
 ;;; We use a lock to synchronize access to the local nickname system; using
 ;;; shared hash tables is not enough as the lists that are the values of the
 ;;; hash tables may be modified by different threads at the same time.
-(defvar *package-local-nicknames-lock* (make-lock))
+(defvar *package-local-nicknames-lock*
+  (make-lock "Lock for the package-local nicknames system"))
 (defvar *package-local-nicknames* (make-hash-table :test #'eq :weak t))
 (defvar *package-locally-nicknamed-by* (make-hash-table :test #'eq :weak t))
 

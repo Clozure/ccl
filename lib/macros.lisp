@@ -1596,7 +1596,7 @@ to open."
        *READ-SUPPRESS*                  NIL
        *READTABLE*                      the standard readtable"
   (multiple-value-bind (decls body) (parse-body body env)
-    `(let ((*package* (pkg-arg "COMMON-LISP-USER"))
+    `(let ((*package* (%find-pkg "COMMON-LISP-USER"))
            (*print-array* t)
            (*print-base* 10.)
            (*print-case* :upcase)
