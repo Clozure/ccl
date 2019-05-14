@@ -10,7 +10,7 @@
         <key>LSApplicationCategoryType</key>
         <string>public.app-category.developer-tools</string>
         <key>LSMinimumSystemVersion</key>
-        <string>10.9.0</string>
+        <string>10.6.6</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDocumentTypes</key>
