@@ -135,10 +135,17 @@
                                   (subseq name 0 (- len 4))
                                   name)))
          (bundle-id (concatenate 'string bundle-prefix "." (or bundle-suffix bundle-name)))
-         (bundle-version (multiple-value-bind (os bits cpu)
-                             (ccl::host-platform)
-                           (declare (ignore os))
-                           (format nil "~d (~a~d)" *openmcl-svn-revision* cpu bits)))
+         #-mac-app-store
+         (bundle-version (format nil "~d.~d~@[.~a~]" *openmcl-major-version*
+                                 *openmcl-minor-version* *openmcl-revision*))
+         ;; The Mac App Store requires that CFBundleVersion must be
+         ;; greater than the last one.  When we used Subversion, it
+         ;; was convenient to use the revision number as the bundle
+         ;; version number.  There's no such analog on git, so we're
+         ;; in a pickle, and about all we can do is make this a number
+         ;; that we must increment manually.
+         #+mac-app-store
+         (bundle-version "111600")      ;1.11.6
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
 		    ("OPENMCL-ICONS" . #+mac-app-store "store.icns"
 				     #-mac-app-store "openmcl-icon.icns")
@@ -151,7 +158,7 @@
 		    ("OPENMCL-VERSION" . ,bundle-version)
                     ("OPENMCL-MAJOR-VERSION" . ,(format nil "~d" *openmcl-major-version*))
                     ("OPENMCL-MINOR-VERSION" . ,(format nil "~d" *openmcl-minor-version*))
-                    ("OPENMCL-REVISION" . ,(if *openmcl-revision* (format nil "-~a" *openmcl-revision*) ""))
+                    ("OPENMCL-REVISION" . ,(if *openmcl-revision* (format nil ".~a" *openmcl-revision*) ""))
                     ("CURRENT-YEAR" . ,(format nil "~a" (nth-value 5 (decode-universal-time (get-universal-time)))))))
          (executable-dir (merge-pathnames
                            (make-pathname :directory (format nil "Contents/~a/"
