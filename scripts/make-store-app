@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ccl=/usr/local/src/ccl
+ccl=${1:-/usr/local/src/ccl}
 app="$ccl/Clozure CL.app"
 target="$app/Contents/Resources/ccl"
 
