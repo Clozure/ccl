@@ -393,6 +393,8 @@
    (regex-checkbox :foreign-type :id :accessor regex-checkbox)
    (case-sensitive-checkbox :foreign-type :id :accessor case-sensitive-checkbox)
    (expand-results-checkbox :foreign-type :id :accessor expand-results-checkbox)
+   (search-comments-checkbox :foreign-type :id
+                             :accessor search-comments-checkbox)
    (progress-indicator :foreign-type :id :accessor progress-indicator)
    (status-field :foreign-type :id :accessor status-field)
    (find-string-value :foreign-type :id :reader find-string-value)

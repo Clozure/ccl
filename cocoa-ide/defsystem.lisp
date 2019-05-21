@@ -52,6 +52,7 @@
    application
    ;; Symbols that perhaps should be exported by ObjC support but aren't
    @selector
+   @class
    *nsapp*
    with-nsstr
    %make-nsstring
