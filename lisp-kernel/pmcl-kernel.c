@@ -1684,27 +1684,7 @@ check_arm_cpu()
 #endif
   return win;
 }
-#endif  
-
-void
-lazarus()
-{
-  TCR *tcr = get_tcr(false);
-  if (tcr) {
-    /* Some threads may be dying; no threads should be created. */
-    LOCK(lisp_global(TCR_AREA_LOCK),tcr);
-    tcr->vs_area->active = tcr->vs_area->high - node_size;
-    tcr->save_vsp = (LispObj *)(tcr->vs_area->active);
-#ifndef ARM
-    tcr->ts_area->active = tcr->ts_area->high;
-    tcr->save_tsp = (LispObj *)(tcr->ts_area->active);
 #endif
-    tcr->catch_top = 0;
-    tcr->db_link = 0;
-    tcr->xframe = 0;
-    start_lisp(tcr, 0);
-  }
-}
 
 #ifdef LINUX
 #ifdef X8664
@@ -2173,18 +2153,6 @@ main
   lisp_global(MANAGED_STATIC_REFBITS) = (LispObj)managed_static_refbits;
   lisp_global(MANAGED_STATIC_REFIDX) = (LispObj)managed_static_refidx;
   lisp_global(MANAGED_STATIC_DNODES) = (LispObj)managed_static_area->ndnodes;
-#ifdef ANDROID
-  /* In some versions of Android, atexit() generates a runtime warning
-     about the dangers of using atexit() with shared libraries.
-     Android is what it is.  It's a steaming pile of what it is, in fact.
-  */
-  {
-    extern int __cxa_atexit(void (*) (void *), void *, void *);
-    __cxa_atexit(lazarus, NULL, NULL);
-  }
-#else
-  atexit(lazarus);
-#endif
 #ifdef ARM
 #ifdef LINUX
 #ifdef SET_INITIAL_THREAD_AFFINITY
