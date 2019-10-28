@@ -1,0 +1,143 @@
+jobs:
+  include:
+  # CCL32 on Bionic produces broken executables.
+  # See https://github.com/Clozure/ccl/issues/236
+  # - os: linux
+  #   dist: bionic
+  #   env: CCL_ARCH=32 DIST=bionic
+  - os: linux
+    dist: bionic
+    env: CCL_ARCH=64 DIST=bionic
+  - os: linux
+    dist: xenial
+    env: CCL_ARCH=32 DIST=xenial
+  - os: linux
+    dist: xenial
+    env: CCL_ARCH=64 DIST=xenial
+  - os: windows
+    env: CCL_ARCH=32
+  - os: windows
+    env: CCL_ARCH=64
+  - os: osx
+    env: CCL_ARCH=32
+  - os: osx
+    env: CCL_ARCH=64
+language: c
+branches:
+  only:
+    - master
+    - cleanup
+cache:
+  directories:
+    - "/c/tools"
+install:
+  # Export the source directory path
+  - export SOURCE_DIR=$(pwd)
+  # Prepare CCL build command
+  - echo "(progn (ccl:rebuild-ccl :full t :verbose t) (ccl:quit))" >> build.lisp
+  # Windows - Gather information about running processes
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    ps -W | sort > ~/ps_1.txt;
+    fi
+  # Windows - download and unzip CCL
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    DOWNLOAD_URL="https://github.com/Clozure/ccl/releases/download/v1.12-dev.5/windows86.zip";
+    CCL_BINARY_NAME="w";
+    wget "$DOWNLOAD_URL";
+    7z x windows86.zip;
+    fi
+  # Linux - download and unzip CCL
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+    DOWNLOAD_URL="https://github.com/Clozure/ccl/releases/download/v1.12-dev.5/linuxx86.tar.gz";
+    CCL_BINARY_NAME="l";
+    wget "$DOWNLOAD_URL";
+    tar -xf linuxx86.tar.gz;
+    fi
+  # macOS - download and unzip CCL
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+    DOWNLOAD_URL="https://github.com/Clozure/ccl/releases/download/v1.12-dev.5/darwinx86.tar.gz";
+    CCL_BINARY_NAME="d";
+    wget "$DOWNLOAD_URL";
+    tar -xf darwinx86.tar.gz;
+    fi
+  # Export the CCL binary name
+  - if [ "$CCL_ARCH" = "64" ]; then CCL_ARCH_NAME="64"; else CCL_ARCH_NAME=; fi
+  - export CCL_BIN="$CCL_BINARY_NAME""x86cl""$CCL_ARCH_NAME";
+  # Clone and prepare the upstream ANSI-TEST
+  - git clone https://gitlab.common-lisp.net/ansi-test/ansi-test ~/ansi-test
+  - echo "(ccl:quit)" >> ~/ansi-test/quit.lisp
+  # Clone and prepare CCL test suite
+  - git clone https://github.com/Clozure/ccl-tests ~/ccl-tests
+  - echo "(run-tests :ansi nil :ccl t :exit t)" >> ~/ccl-tests/run.lisp
+  # Linux - install 32-bit support libraries
+  - if [ "$TRAVIS_OS_NAME" = "linux" -a "$CCL_ARCH" = "32" ]; then
+    sudo dpkg --add-architecture i386;
+    sudo apt-get update;
+    sudo apt-get install libc6:i386 libncurses5:i386 libstdc++6:i386 libc6-dev-i386
+                         linux-libc-dev:i386 gcc-multilib;
+    fi
+  # Windows - install MSYS2, set the MSYS2 shell path, install the toolchain
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    choco install -y msys2;
+    export msys2='cmd //C RefreshEnv.cmd ';
+    export msys2+='& set MSYS=winsymlinks:nativestrict ';
+    export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start';
+    if [ "$CCL_ARCH" = "64" ]; then
+      export shell="$msys2 -mingw64 -full-path -here -c \$\* --";
+    else
+      export shell="$msys2 -mingw32 -full-path -here -c \$\* --";
+    fi;
+    export msys2+=" -msys2 -c \$\* --";
+    $msys2 pacman --sync --noconfirm --needed make m4 autoconf automake binutils;
+    if [ "$CCL_ARCH" = "64" ]; then
+      echo "Installing 64-bit MinGW toolchain.";
+      $msys2 pacman --sync --noconfirm --needed
+                    mingw-w64-x86_64-libtool mingw-w64-x86_64-toolchain;
+    else
+      echo "Installing 32-bit MinGW toolchain.";
+      $msys2 pacman --sync --noconfirm --needed
+                    mingw-w64-i686-libtool mingw-w64-i686-toolchain;
+    fi;
+    export GNU_MAKE=mingw32-make;
+    export MAKE=mingw32-make;
+    else
+    export shell="";
+    fi
+    # Windows - add MinGW paths to $PATH
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    if [ "$CCL_ARCH" = "64" ]; then
+      echo "Setting 64-bit MinGW path.";
+      export PATH="$PATH:/C/tools/msys64/mingw64/bin:/C/tools/msys64/usr/bin";
+    else
+      echo "Setting 32-bit MinGW path.";
+      export PATH="$PATH:/C/tools/msys64/mingw32/bin:/C/tools/msys64/usr/bin";
+    fi
+    fi
+  # Echo debug information
+  - echo "Build debug information:"
+  - pwd; ls; echo $PATH; echo $CCL_BIN
+script:
+  - set -e
+  # Build CCL
+  - $shell ./$CCL_BIN -b -l build.lisp
+  # Rebuild to ensure that CCL can build itself
+  - $shell ./$CCL_BIN -b -l build.lisp
+  # Run the upstream ANSI-TEST
+  - $shell $SOURCE_DIR/$CCL_BIN -b -l ~/ansi-test/doit.lsp -l ~/ansi-test/quit.lisp | tee result.txt;
+    if grep -q "tests failed" result.txt; then false; fi
+  # Run the CCL test suite
+  - $shell $SOURCE_DIR/$CCL_BIN -b -l ~/ccl-tests/load.lisp -l ~/ccl-tests/run.lisp
+  - true
+after_script:
+  # Windows - Kill GPG agent - it tends to linger after the job
+  - if [ "$TRAVIS_OS_NAME" = "windows" -a ! -z "$GPG_PID" ]; then 
+    GPG_PID=$(ps -Wla | tr -s ' ' | grep gpg | cut -f2 -d' ');
+    taskkill //F //PID "$GPG_PID";
+    fi
+  # Windows - Check if any processes still linger after the job
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
+    ps -W | sort > ~/ps_2.txt;
+    cat ~/ps_1.txt;
+    cat ~/ps_2.txt;
+    diff ~/ps_1.txt ~/ps_2.txt || true;
+    fi
