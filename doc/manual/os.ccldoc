@@ -4,7 +4,7 @@
   (definition (:function getenv) "getenv name" nil
     "This function looks up the value of the environment variable
      denoted by the string {param name} and returns its value as a
-     string.  If there is no such envionment variable, then {code nil}
+     string.  If there is no such environment variable, then {code nil}
      is returned.")
 
   (definition (:function setenv) "setenv name value" nil
@@ -48,13 +48,10 @@ process (as {code argv[]}) by the operating system.  The foreign C strings are
 assumed to be UTF-8 encoded.")
 
   (definition (:variable *unprocessed-command-line-arguments*)
-      "*unprocessed-command-line-arguments*" nil
+    "*unprocessed-command-line-arguments*" nil
     "A list of strings that denotes the command-line arguments that
 remain after the lisp has processed and removed arguments that it
 interprets itself.")
 
 
   ) ;chapter
-
-
-

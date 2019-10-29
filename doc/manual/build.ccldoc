@@ -26,7 +26,7 @@
       format. A full heap image contains all of the code and data that
       comprise {CCL}. The default image file name
       is the name of the lisp kernel with a {code .image} suffix.  See "
-     (ref (table "Platform-specific filename conventions")) ".")
+      (ref (table "Platform-specific filename conventions")) ".")
     (para "A bootstrapping image (see {section Create a Bootstrapping Image})
       is a minimal
       heap image used in the process of building {CCL} itself.  The
@@ -41,79 +41,79 @@
       scripts, etc.) that are used to build the lisp kernel on a
       particular platform. The platform-specific name of the kernel
       build directory is described in "
-     (ref (table "Platform-specific filename conventions")) ".")
+      (ref (table "Platform-specific filename conventions")) ".")
 
     (table "Platform-specific filename conventions"
       (row
-       (item "Platform")
-       (item "kernel")
-       (item "fasl extension")
-       (item "kernel build directory"))
+	(item "Platform")
+	(item "kernel")
+	(item "fasl extension")
+	(item "kernel build directory"))
       (row
-       (item "Linux (ppc)")
-       (item "ppccl")
-       (item ".pfsl")
-       (item "linuxppc"))
+	(item "Linux (ppc)")
+	(item "ppccl")
+	(item ".pfsl")
+	(item "linuxppc"))
       (row
-       (item "Linux (ppc64)")
-       (item "ppccl64")
-       (item ".p64fsl")
-       (item "linuxppc64"))
+	(item "Linux (ppc64)")
+	(item "ppccl64")
+	(item ".p64fsl")
+	(item "linuxppc64"))
       (row
-       (item "Linux (x8664)")
-       (item "lx86cl64")
-       (item ".lx64fsl")
-       (item "linuxx8664"))
+	(item "Linux (x8664)")
+	(item "lx86cl64")
+	(item ".lx64fsl")
+	(item "linuxx8664"))
       (row
-       (item "Linux (x8632)")
-       (item "lx86cl")
-       (item ".lx32fsl")
-       (item "linuxx8632"))
+	(item "Linux (x8632)")
+	(item "lx86cl")
+	(item ".lx32fsl")
+	(item "linuxx8632"))
       (row
-       (item "Linux (arm32)")
-       (item "armcl")
-       (item ".lafsl")
-       (item "linuxarm"))
+	(item "Linux (arm32)")
+	(item "armcl")
+	(item ".lafsl")
+	(item "linuxarm"))
       (row
-       (item "OS X (x8664)")
-       (item "dx86cl64")
-       (item ".dx64fsl")
-       (item "darwinx8664"))
+	(item "OS X (x8664)")
+	(item "dx86cl64")
+	(item ".dx64fsl")
+	(item "darwinx8664"))
       (row
-       (item "OS X (x8632)")
-       (item "dx86cl")
-       (item ".dx32fsl")
-       (item "darwinx8632"))
+	(item "OS X (x8632)")
+	(item "dx86cl")
+	(item ".dx32fsl")
+	(item "darwinx8632"))
       (row
-       (item "FreeBSD (x8664)")
-       (item "fx86cl64")
-       (item ".fx64fsl")
-       (item "freebsdx8664"))
+	(item "FreeBSD (x8664)")
+	(item "fx86cl64")
+	(item ".fx64fsl")
+	(item "freebsdx8664"))
       (row
-       (item "FreeBSD (x8632)")
-       (item "fx86cl")
-       (item ".fx32fsl")
-       (item "freebsdx8632"))
+	(item "FreeBSD (x8632)")
+	(item "fx86cl")
+	(item ".fx32fsl")
+	(item "freebsdx8632"))
       (row
-       (item "Solaris (x8664)")
-       (item "sx86cl64")
-       (item ".sx64fsl")
-       (item "solarisx64"))
+	(item "Solaris (x8664)")
+	(item "sx86cl64")
+	(item ".sx64fsl")
+	(item "solarisx64"))
       (row
-       (item "Solaris (x8632)")
-       (item "sx86cl")
-       (item ".sx32fsl")
-       (item "solarisx86"))
+	(item "Solaris (x8632)")
+	(item "sx86cl")
+	(item ".sx32fsl")
+	(item "solarisx86"))
       (row
-       (item "Windows (x8664)")
-       (item "wx86cl64.exe")
-       (item ".wx64fsl")
-       (item "win64"))
+	(item "Windows (x8664)")
+	(item "wx86cl64.exe")
+	(item ".wx64fsl")
+	(item "win64"))
       (row
-       (item "Windows (x8632)")
-       (item "wx86cl.exe")
-       (item ".wx32fsl")
-       (item "win32"))))
+	(item "Windows (x8632)")
+	(item "wx86cl.exe")
+	(item ".wx32fsl")
+	(item "win32"))))
 
   (defsection "Reasons for Building"
     "At a given time, there are generally two versions of {CCL} that
@@ -145,7 +145,7 @@ and install everything needed to build {CCL}.")
     (code-block "$ ccl -n
 ? (ccl:rebuild-ccl :full t)")
 
-    "This peforms the following steps:"
+    "This performs the following steps:"
     (listing :bullet
       (item "Deletes all fasl files and other object files in the
 	      {code ccl} directory tree")
@@ -158,7 +158,7 @@ and install everything needed to build {CCL}.")
                bootstrapping image from the compiled fasl files.")
       (item "Runs an external process that runs
 	      {system make} in the current platform's kernel
-	      build directory to create a new kernel.  
+	      build directory to create a new kernel.
              This step can only work if the C compiler and related
              tools are installed; see {section Kernel Build Prerequisites}.")
       (item "Runs another external process, which causes the newly
@@ -177,18 +177,18 @@ and install everything needed to build {CCL}.")
       can also execute these steps individually, as described below.")
 
   (defsection "Building the Kernel"
-    "Rebuilding the lisp kernel is straightfoward. Consult the table "
-     (ref (table "Platform-specific filename conventions")) " to determine
+    "Rebuilding the lisp kernel is straightforward. Consult the table "
+    (ref (table "Platform-specific filename conventions")) " to determine
      the name of the lisp kernel build directory you want.  Then, change to
      that directory and say {system make}.  Suppose you wanted to build the
      lisp kernel for 64-bit FreeBSD/x86.  We find that the name of the lisp
      kernel build directory is {system freebsdx8664}, so we do the following: "
 
-     (code-block "$ cd ccl/lisp-kernel/freebsdx8664
+    (code-block "$ cd ccl/lisp-kernel/freebsdx8664
 $ make clean
 $ make")
 
-     "The most common reason that the build fails is because m4 is not installed.  If you
+    "The most common reason that the build fails is because m4 is not installed.  If you
 see {system m4: command not found}, then you should install m4.
 
 On Mac OS X, make sure that you have installed the command-line developer tools
@@ -275,7 +275,7 @@ You need to do this even if you have Xcode already installed.")
       (code-block "$ cd ccl    # wherever your ccl directory is
 $ ./dx86cl64 --image-name x86-boot64.image --no-init")
 
-      "Other platoforms use analogous steps: use the appropriate
+      "Other platforms use analogous steps: use the appropriate
        platform-specific name for the lisp kernel, and use the name of
        boot image as reported by {function xload-level-0}.
 
@@ -289,7 +289,7 @@ $ ./dx86cl64 --image-name x86-boot64.image --no-init")
       (code-block "? (ccl:save-application \"new.image\")")
       "The name {sample new.image} can be whatever you want.  You may
       wish to use the default image name for your platform;  see "
-       (ref (table "Platform-specific filename conventions")) "."
+      (ref (table "Platform-specific filename conventions")) "."
 
       (para "If things go wrong in the early stages of the loading
         sequence, errors are often difficult to debug; until a fair
@@ -300,4 +300,4 @@ $ ./dx86cl64 --image-name x86-boot64.image --no-init")
         cause the lisp kernel debugger to be invoked; it's
         primitive, but can sometimes help one to get oriented.")))
 
-) ;chapter
+  ) ;chapter
