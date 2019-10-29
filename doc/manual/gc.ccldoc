@@ -1,8 +1,8 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Understanding and Configuring the Garbage Collector"
-  (defsection "Heap space allocation"
-    #:|Release 0.10 or later of {CCL} uses a different memory
+         (defsection "Heap space allocation"
+           #:|Release 0.10 or later of {CCL} uses a different memory
       management scheme than previous versions did. Those earlier
       versions would allocate a block of memory (of specified size) at
       startup and would allocate lisp objects within that block. When
@@ -39,23 +39,23 @@
       The -R or -heap-reserve command-line option can be
       use to limit the size of the reserved block and therefore bound
       heap expansion. Running|
-    (code-block "
+           (code-block "
 > openmcl --heap-reserve 8M
 ")
-    (para "would provide an execution environment that's very similar to
+           (para "would provide an execution environment that's very similar to
 that provided by earlier {CCL} versions."))
-  (defsection "Ephemeral GC"
-    (para "For many programs, the following observations are true to
+         (defsection "Ephemeral GC"
+             (para "For many programs, the following observations are true to
       a very large degree:")
-    (listing :number
-      (item #:|Most heap-allocated objects have very short lifetimes ("are
+           (listing :number
+                    (item #:|Most heap-allocated objects have very short lifetimes ("are
 	  ephemeral"): they become inaccessible soon after they're created.|)
-      (item "Most non-ephemeral objects have very long lifetimes: it's
+                    (item "Most non-ephemeral objects have very long lifetimes: it's
 	  rarely productive for the GC to consider reclaiming them, since
 	  it's rarely able to do so. (An object that has survived a large
 	  number of GCs is likely to survive the next one. That's not always
 	  true of course, but it's a reasonable heuristic.)")
-      (item "It's relatively rare for an old object to be destructively
+                    (item "It's relatively rare for an old object to be destructively
 	  modified (via SETF) so that it points to a new one, therefore most
 	  references to newly-created objects can be found in the stacks and
 	  registers of active threads. It's not generally necessary to scan
@@ -63,7 +63,7 @@ that provided by earlier {CCL} versions."))
 	  such references don't exists), though it is necessary to keep
 	  track of the (hopefully exceptional) cases where old objects are
 	  modified to point at new ones."))
-    #:|"Ephemeral" (or "generational") garbage collectors try to
+           #:|"Ephemeral" (or "generational") garbage collectors try to
       exploit these observations: by concentrating on frequently
       reclaiming newly-created objects quickly, it's less often
       necessary to do more expensive GCs of the entire heap in order
@@ -116,8 +116,8 @@ that provided by earlier {CCL} versions."))
       other threads, the distinction between the "active" and
       "inactive" state isn't very meaningful, especially when native
       threads are involved.|)
-  (defsection "GC Page reclamation policy"
-    #:|After a full GC finishes, it'll try to ensure that at
+         (defsection "GC Page reclamation policy"
+           #:|After a full GC finishes, it'll try to ensure that at
       least (LISP-HEAP-GC-THRESHOLD) of virtual memory are available;
       objects will be allocated in this block of memory until it fills
       up, the GC is triggered, and the process repeats itself.
@@ -151,8 +151,8 @@ that provided by earlier {CCL} versions."))
       Functions described below give the user some control over
       this behavior. An adaptive, feedback-mediated approach might
       yield a better solution.|)
-  (defsection "\"Pure\" areas are read-only, paged from image file"
-    #:|SAVE-APPLICATION identifies code vectors and the pnames of
+         (defsection "\"Pure\" areas are read-only, paged from image file"
+           #:|SAVE-APPLICATION identifies code vectors and the pnames of
       interned symbols and copies these objects to a "pure" area of
       the image file it creates. (The "pure" area accounts for most of
       what the ROOM function reports as "static" space.)
@@ -180,8 +180,8 @@ that provided by earlier {CCL} versions."))
       file's directory entry and create a new file; one may need to
       exercise care when using file system utilities (like tar, for
       instance) that might overwrite an existing image file.|)
-  (defsection "Weak References"
-    #:|In general, a "weak reference" is a reference to an object
+         (defsection "Weak References"
+           #:|In general, a "weak reference" is a reference to an object
       which does not prevent the object from being garbage-collected.
       For example, suppose that you want to keep a list of all the
       objects of a certain type.  If you don't take special steps, the
@@ -232,101 +232,101 @@ that provided by earlier {CCL} versions."))
       workaround is to evaluate some meaningless expression before
       invoking {code gc}, to get the object out of the
       REPL variables.|)
-  (defsection "Weak References Dictionary"
-    (definition (:function make-population) "make-population {code &key} type initial-contents" nil
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param type}" ccldoc::=> "The type of population, one of {code :LIST} (the default) or {code :ALIST}")
-         (item "{param initial-contents}" ccldoc::=>
-          " A sequence of elements (or conses, for {code :alist}) to be used to initialize the
+         (defsection "Weak References Dictionary"
+             (definition (:function make-population) "make-population {code &key} type initial-contents" nil
+                         (defsection "Arguments and Values"
+                             (listing :definition
+                                      (item "{param type}" ccldoc::=> "The type of population, one of {code :LIST} (the default) or {code :ALIST}")
+                                      (item "{param initial-contents}" ccldoc::=>
+                                            " A sequence of elements (or conses, for {code :alist}) to be used to initialize the
               population. The sequence itself (and the conses in case of an
               alist) is not stored in the population, a new list or alist is created to hold the elements.")))
-     (defsection "Description" (para "Creates a new population of the specified type.")))
-    (definition (:function population-type) "population-type population" nil
-     (defsection "Description" (para "returns the type of {code population}, one of {code :LIST} or {code :ALIST}")))
-    (definition (:function population-contents) "population-contents population" nil
-     (defsection "Description"
-       (para "returns the list encapsulated in {code population}.
+                         (defsection "Description" (para "Creates a new population of the specified type.")))
+           (definition (:function population-type) "population-type population" nil
+                       (defsection "Description" (para "returns the type of {code population}, one of {code :LIST} or {code :ALIST}")))
+           (definition (:function population-contents) "population-contents population" nil
+                       (defsection "Description"
+                           (para "returns the list encapsulated in {code population}.
         Note that as long as there is a direct (non-weak) reference to this
         list, it will not be modified by the garbage collector.  Therefore it is
         safe to traverse the list, and even modify it, no different from any
         other list. If you want the elements to become garbage-collectable
-        again, you must stop refering to the list directly.")))
-    (definition (:function (setf population-contents)) "(setf ( population-contents population) contents)" nil
-     (defsection "Description"
-       (para "Sets the list encapsulated in {code population} to
+        again, you must stop referring to the list directly.")))
+           (definition (:function (setf population-contents)) "(setf ( population-contents population) contents)" nil
+                       (defsection "Description"
+                           (para "Sets the list encapsulated in {code population} to
         {code contents}.  {code Contents} is not copied,
         it is used directly."))))
-  (defsection "Garbage-Collection Dictionary"
-    (definition (:function gc) "gc" nil
-     (defsection "Description" (para "Causes a full GC to occur as soon as possible. Returns NIL.")))
-    (definition (:function lisp-heap-gc-threshold) "lisp-heap-gc-threshold" nil
-     (defsection "Description"
-       (para "Returns the value of the kernel variable that specifies the
+         (defsection "Garbage-Collection Dictionary"
+             (definition (:function gc) "gc" nil
+                         (defsection "Description" (para "Causes a full GC to occur as soon as possible. Returns NIL.")))
+           (definition (:function lisp-heap-gc-threshold) "lisp-heap-gc-threshold" nil
+                       (defsection "Description"
+                           (para "Returns the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC.")))
-    (definition (:function set-lisp-heap-gc-threshold) "set-lisp-heap-gc-threshold new-threshold" nil
-     (defsection "Arguments and Values"
-       (listing :definition (item "{param new-threshold}" ccldoc::=> "The requested new lisp-heap-gc-threshold.")))
-     (defsection "Description"
-       (para "Sets the value of the kernel variable that specifies the
+           (definition (:function set-lisp-heap-gc-threshold) "set-lisp-heap-gc-threshold new-threshold" nil
+                       (defsection "Arguments and Values"
+                           (listing :definition (item "{param new-threshold}" ccldoc::=> "The requested new lisp-heap-gc-threshold.")))
+                       (defsection "Description"
+                           (para "Sets the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC to
 	  new-value, which should be a non-negative fixnum. Returns the
 	  value of that kernel variable (which may be somewhat larger than
 	  what was specified).")))
-    (definition (:function use-lisp-heap-gc-threshold) "use-lisp-heap-gc-threshold" nil
-     (defsection "Description"
-       (para "Tries to grow or shrink lisp's heap space, so that the
+           (definition (:function use-lisp-heap-gc-threshold) "use-lisp-heap-gc-threshold" nil
+                       (defsection "Description"
+                           (para "Tries to grow or shrink lisp's heap space, so that the
 	  free space is (approximately) equal to the current heap threshold.
 	  Returns NIL")))
-    (definition (:function egc) "egc arg" nil
-     (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
-     (defsection "Description"
-       (para "Enables the EGC if arg is non-nil, disables the EGC
+           (definition (:function egc) "egc arg" nil
+                       (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
+                       (defsection "Description"
+                           (para "Enables the EGC if arg is non-nil, disables the EGC
 	  otherwise. Returns the previous enabled status. Although this
 	  function is thread-safe (in the sense that calls to it are
 	  serialized), it doesn't make a whole lot of sense to be
 	  turning the EGC on and off from multiple threads ...")))
-    (definition (:function egc-enabled-p) "egc-enabled-p" nil
-     (defsection "Description"
-       (para "Returns T if the EGC was enabled at the time of the call,
+           (definition (:function egc-enabled-p) "egc-enabled-p" nil
+                       (defsection "Description"
+                           (para "Returns T if the EGC was enabled at the time of the call,
 	  NIL otherwise.")))
-    (definition (:function egc-active-p) "egc-active-p" nil
-     (defsection "Description"
-       (para "Returns T if the EGC was active at the time of the call, NIL
+           (definition (:function egc-active-p) "egc-active-p" nil
+                       (defsection "Description"
+                           (para "Returns T if the EGC was active at the time of the call, NIL
 	  otherwise. Since this is generally a volatile piece of
 	  information, it's not clear whether this function serves a
 	  useful purpose when native threads are involved.")))
-    (definition (:function egc-configuration) "egc-configuration" nil
-     (defsection "Description"
-       (para "Returns, as multiple values, the sizes in kilobytes of the
+           (definition (:function egc-configuration) "egc-configuration" nil
+                       (defsection "Description"
+                           (para "Returns, as multiple values, the sizes in kilobytes of the
 	  thresholds associated with the youngest ephemeral generation, the
 	  middle ephemeral generation, and the oldest ephemeral generation")))
-    (definition (:function configure-egc) "configure-egc generation-0-size generation-1-size generation-2-size" nil
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param generation-0-size}" ccldoc::=> "the requested threshold size of the youngest
+           (definition (:function configure-egc) "configure-egc generation-0-size generation-1-size generation-2-size" nil
+                       (defsection "Arguments and Values"
+                           (listing :definition
+                                    (item "{param generation-0-size}" ccldoc::=> "the requested threshold size of the youngest
 		generation, in kilobytes")
-         (item "{param generation-1-size}" ccldoc::=> "the requested threshold size of the middle generation,
+                                    (item "{param generation-1-size}" ccldoc::=> "the requested threshold size of the middle generation,
 		in kilobytes")
-         (item "{param generation-2-size}" ccldoc::=> "the requested threshold size of the oldest generation,
+                                    (item "{param generation-2-size}" ccldoc::=> "the requested threshold size of the oldest generation,
 		in kilobytes")))
-     (defsection "Description"
-       (para "Puts the indicated threshold sizes in effect.
+                       (defsection "Description"
+                           (para "Puts the indicated threshold sizes in effect.
           Each threshold indicates the total size that may be allocated
           in that and all younger generations before a GC is triggered.
           Disables EGC while setting the values.
 	  (The provided threshold sizes are rounded up to a multiple of
 	  64Kbytes in {CCL} 0.14 and to a multiple of 32KBytes in earlier
 	  versions.)")))
-    (definition (:function gc-retain-pages) "gc-retain-pages arg" nil
-     (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
-     (defsection "Description"
-       (para "Tries to influence the GC to retain/recycle the pages
+           (definition (:function gc-retain-pages) "gc-retain-pages arg" nil
+                       (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
+                       (defsection "Description"
+                           (para "Tries to influence the GC to retain/recycle the pages
 	  allocated between GCs if arg is true, and to release them
 	  otherwise. This is generally a tradeoff between paging and other
 	  VM considerations.")))
-    (definition (:function gc-retaining-pages) "gc-retaining-pages" nil
-     (defsection "Description"
-       (para "Returns T if the GC tries to retain pages between full GCs
+           (definition (:function gc-retaining-pages) "gc-retaining-pages" nil
+                       (defsection "Description"
+                           (para "Returns T if the GC tries to retain pages between full GCs
 	  and NIL if it's trying to release them to improve VM paging
 	  performance.")))))

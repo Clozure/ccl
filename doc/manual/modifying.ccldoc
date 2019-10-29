@@ -157,7 +157,7 @@ While executing: #<Function CLASSIFY2 #x08476cfe>
     (para "CCL::DBG takes an argument, whose value is copied into the register
       that {CCL} uses to return a function's primary value (arg_z, which
       is r23 on the PowerPC). If we were to choose the (L) option at this point,
-      we'd see a dislay like:")
+      we'd see a display like:")
     (code-block "
 rnil = 0x01836015
 nargs = 0
@@ -191,9 +191,9 @@ r24 (save7) = ()
       If you ever unexpectedly find yourself in the "lisp kernel
       debugger", the output of the (L) and (B) options are often the most
       helpful things to include in a bug report.|)
-  (defsection "Using AltiVec in {CCL} LAP functions"
-    (defsection "Overview"
-      "It's now possible to use AltiVec instructions in PPC LAP
+         (defsection "Using AltiVec in {CCL} LAP functions"
+             (defsection "Overview"
+               "It's now possible to use AltiVec instructions in PPC LAP
         (assembler) functions.
 
         The lisp kernel detects the presence or absence of
@@ -217,8 +217,8 @@ r24 (save7) = ()
 
         Much of the {CCL} support for AltiVec LAP programming
         is based on work contributed to MCL by Shannon Spires.")
-    (defsection "Register usage conventions"
-      #:|{CCL} LAP functions that use AltiVec instructions must
+           (defsection "Register usage conventions"
+             #:|{CCL} LAP functions that use AltiVec instructions must
         interoperate with each other and with C functions; that fact
         suggests that they follow C AltiVec register usage
         conventions. (vr0-vr1 scratch, vr2-vr13 parameters/return
@@ -251,7 +251,7 @@ r24 (save7) = ()
         that this register is live. One could therefore write a leaf
         function that added the bytes in vr3 and vr2 and returned the
         result in vr2 as:|
-      (code-block "
+             (code-block "
 (defppclapfunction vaddubs ((y vr3) (z vr2))
   (vaddubs z y z)
   (blr))

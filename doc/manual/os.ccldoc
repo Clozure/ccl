@@ -1,24 +1,24 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Operating System Interface"
-  (definition (:function getenv) "getenv name" nil
-    "This function looks up the value of the environment variable
+         (definition (:function getenv) "getenv name" nil
+                     "This function looks up the value of the environment variable
      denoted by the string {param name} and returns its value as a
-     string.  If there is no such envionment variable, then {code nil}
+     string.  If there is no such environment variable, then {code nil}
      is returned.")
 
-  (definition (:function setenv) "setenv name value" nil
-    "This function sets the operating system environment variable
+         (definition (:function setenv) "setenv name value" nil
+                     "This function sets the operating system environment variable
      denoted by the string {param name} to the string {param value}.
      If the environment variable is successfully set, 0 is returned.
      Otherwise, a platform-specific integer error code is returned.")
 
-  (definition (:function unsetenv) "unsetenv name" nil
-    "This function deletes the operating system environment variable
+         (definition (:function unsetenv) "unsetenv name" nil
+                     "This function deletes the operating system environment variable
      denoted by the string {param name}.")
 
-  (definition (:function wait-for-signal) "wait-for-signal sig duration" nil
-    "Wait for the signal with signal number {param sig} to be received,
+         (definition (:function wait-for-signal) "wait-for-signal sig duration" nil
+                     "Wait for the signal with signal number {param sig} to be received,
      or until {param duration} seconds have elapsed.  If {param
      duration} is {code nil}, wait for an indeterminate very long
      time (many years).
@@ -27,8 +27,8 @@
      by {CCL} for its own use, an error is signaled.  An error is
      always signaled on Windows systems.")
 
-  (definition (:function quit) "quit &optional (exit 0) &key error-handler" nil
-    "Cleanly exit from lisp.  If {param exit} is a value of type
+         (definition (:function quit) "quit &optional (exit 0) &key error-handler" nil
+                     "Cleanly exit from lisp.  If {param exit} is a value of type
      {code (signed-byte 32)}, that value will be passed to the C
      library function {code _exit()} as the status code.  A value of
      {code nil} is treated as a zero.
@@ -42,19 +42,16 @@
      called if an error occurs when preparing to quit.  The
      error-handler function should exit the lisp.")
 
-  (definition (:variable *command-line-argument-list*) "*command-line-argument-list*" nil
-    "A list of strings decoded from the argument vector passed to the lisp
+         (definition (:variable *command-line-argument-list*) "*command-line-argument-list*" nil
+                     "A list of strings decoded from the argument vector passed to the lisp
 process (as {code argv[]}) by the operating system.  The foreign C strings are
 assumed to be UTF-8 encoded.")
 
-  (definition (:variable *unprocessed-command-line-arguments*)
-      "*unprocessed-command-line-arguments*" nil
-    "A list of strings that denotes the command-line arguments that
+         (definition (:variable *unprocessed-command-line-arguments*)
+                     "*unprocessed-command-line-arguments*" nil
+                     "A list of strings that denotes the command-line arguments that
 remain after the lisp has processed and removed arguments that it
 interprets itself.")
 
 
-  ) ;chapter
-
-
-
+         ) ;chapter
