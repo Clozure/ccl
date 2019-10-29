@@ -1,7 +1,7 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Implementation Details of {CCL}"
-         (para #:|This chapter describes many aspects of OpenMCL's
+  (para #:|This chapter describes many aspects of OpenMCL's
     implementation as of (roughly) version 1.1. Details vary a bit
     between the three architectures (PPC32, PPC64, and x86-64)
     currently supported and those details change over time, so the
@@ -11,8 +11,8 @@
     contain the string "constants".) Hopefully, this chapter will make
     it easier for someone who's interested to read and understand the
     contents of those files.|)
-         (defsection "Threads and exceptions"
-           #:|{CCL}'s threads are "native" (meaning that they're
+  (defsection "Threads and exceptions"
+    #:|{CCL}'s threads are "native" (meaning that they're
         scheduled and controlled by the operating system.)  Most of the
         implications of this are discussed elsewhere; this section tries
         to describe how threads look from the lisp kernel's perspective
@@ -36,8 +36,8 @@
         emulator on x86 versions of Mac OS X) don't provide accurate
         exception information to exception handling functions. {CCL}
         can't run in such environments.|
-           (defsection "The Thread Context Record"
-             #:|When a lisp thread is first created (or when a thread
+    (defsection "The Thread Context Record"
+      #:|When a lisp thread is first created (or when a thread
           created by foreign code first calls back to lisp), a data
           structure called a Thread Context Record (or TCR) is
           allocated and initialized.  On modern versions of Linux and
@@ -97,8 +97,8 @@
           exception handler (which is sort of an OS/hardware-mandated
           foreign function call where the OS thoughtfully saves the
           thread's register state for it beforehand.)|)
-           (defsection "Exception contexts, and exception-handling in general"
-             #:|Unix-like OSes tend to refer to exceptions as "signals";
+    (defsection "Exception contexts, and exception-handling in general"
+      #:|Unix-like OSes tend to refer to exceptions as "signals";
           the same general mechanism ("signal handling") is used to
           process both asynchronous OS-level events (such as the result
           of the keyboard driver noticing that ^C or ^Z has been
@@ -220,8 +220,8 @@
           (indicating that the current thread needs more memory to cons
           in), it tries to make that memory available.  In some cases,
           doing so involves invoking the GC.|)
-           (defsection "Threads, exceptions, and the GC"
-             #:|{CCL}'s GC is not concurrent: when the GC is invoked in
+    (defsection "Threads, exceptions, and the GC"
+      #:|{CCL}'s GC is not concurrent: when the GC is invoked in
           response to an exception in a particular thread, all other
           lisp threads must stop until the GC's work is done.  The
           thread that triggered the GC iterates over the global TCR
@@ -249,12 +249,12 @@
           itself) allows the GC to identify the "stack locations and
           register contents" that are elements of the GC's root
           set.|)
-           (defsection "PC-lusering"
-               (para "It's not quite accurate to say that {CCL}'s compiler
+    (defsection "PC-lusering"
+      (para "It's not quite accurate to say that {CCL}'s compiler
           and runtime follow precise stack and register usage
           conventions at all times; there are a few exceptions:")
-             (listing :bullet
-                      (item "On both PPC and x86-64 platforms, consing isn't
+      (listing :bullet
+	(item "On both PPC and x86-64 platforms, consing isn't
 	          fully atomic.It takes at least a few instructions to
 	          allocate an object in memory(and slap a header on it if
 	          necessary); if a thread is interrupted in the middle of
@@ -262,7 +262,7 @@
 	          not have been created or fully initialized at the point in
 	          time that the interrupt occurred.  (There are actually a
 	          few different states of partial initialization)")
-                      (item "On the PPC, the common act of building a lisp
+	(item "On the PPC, the common act of building a lisp
 	          control stack frame involves allocating a four-word frame
 	          and storing three register values into that frame.  (The
 	          fourth word - the back pointer to the previous frame - is
@@ -272,18 +272,18 @@
 	          few instructions earlier),so interrupting a thread that's
 	          in the process of initializing a PPC control stack frame
 	          isn't GC-safe.")
-                      (item "There are similar problems with the initialization
+	(item "There are similar problems with the initialization
 	          of temp stackframes on the PPC.  (Allocation and
 	          initialization doesn't happen atomically, and the newly
 	          allocated stack memory may have undefined contents.)")
-                      (item "{section The ephemeral GC}'s write barrier
+	(item "{section The ephemeral GC}'s write barrier
 	          has to be implemented atomically (i.e.,both an
 	          intergenerational store and the update of a
 	          corresponding reference bit has to happen without
 	          interruption, or neither of these events can
 	          happen.)")
-                      (item "There are a few more similar cases."))
-             "Fortunately, the number of these non-atomic instruction
+	(item "There are a few more similar cases."))
+      "Fortunately, the number of these non-atomic instruction
           sequences is small, and fortunately it's fairly easy for the
           interrupting thread to recognize when the interrupted thread
           is in the middle of such a sequence.  When this is detected,
@@ -298,9 +298,9 @@
           interrupted thread's PC on the PPC and (b) those instruction
           sequences are heavily stylized and intended to be easily
           recognized."))
-         (defsection "Register usage and tagging"
-             (defsection "Overview"
-               #:|Regardless of other details of its implementation, a
+  (defsection "Register usage and tagging"
+    (defsection "Overview"
+      #:|Regardless of other details of its implementation, a
 	      garbage collector's job is to partition the set of all
 	      heap-allocated lisp objects (CONSes, STRINGs, INSTANCEs, etc.)
 	      into two subsets.  The first subset contains all objects that
@@ -374,8 +374,8 @@
           raw non-node values.)  Higher-level parts of the lisp type
           system (functions like TYPE-OF and CLASS-OF, etc.) depend on
           the {section Tagging scheme}.|)
-           (defsection "pc-locatives on the PPC"
-             #:|On the PPC, there's a third case (besides "node" and
+    (defsection "pc-locatives on the PPC"
+      #:|On the PPC, there's a third case (besides "node" and
           "immediate" values).  As discussed below, a node that denotes
           a memory-allocated lisp object is a biased (tagged) pointer
           -to- that object; it's not generally possible to point -into-
@@ -428,15 +428,15 @@
           fortunately not necessary either (though the second part -
           adjusting the PC/RIP when the containing object moves) is
           both necessary and simple.|)
-           (defsection "Register and stack usage conventions"
-               (defsection "Stack conventions"
-                 "On both PPC and X86 platforms, each lisp thread uses 3
+    (defsection "Register and stack usage conventions"
+      (defsection "Stack conventions"
+	"On both PPC and X86 platforms, each lisp thread uses 3
             stacks; the ways in which these stacks are used differs
             between the PPC and X86.
 
 Each thread has:"
-                 (listing :bullet
-                          (item #:|A "control stack".  On both platforms, this is
+	(listing :bullet
+	  (item #:|A "control stack".  On both platforms, this is
 	            "the stack" used by foreign code.  On the PPC, it
 	            consists of a linked list of frames where the first word
 	            in each frame points to the first word in the previous
@@ -466,7 +466,7 @@ Each thread has:"
 	            TCR (see {section The Thread Context Record}
 	            when not running foreign code.  The control stack "grows
 	            down."|)
-                          (item #:|A "value stack".  On both platforms, all values on
+	  (item #:|A "value stack".  On both platforms, all values on
 	            the value stack are nodes (including "tagged return
 	            addresses" on x86-64.)  The value stack is always
 	            aligned to the native word size; objects are always
@@ -484,7 +484,7 @@ Each thread has:"
 	            stack when running lisp code, and the VSP value is saved
 	            in the TCR when running foreign code.  The value stack
 	            grows down.|)
-                          (item #:|A "temp stack".  The temp stack consists of a
+	  (item #:|A "temp stack".  The temp stack consists of a
 	            linked list of frames, each of which points to the
 	            previous temp stack frame.  The number of native
 	            machine words in each temp stack frame is always even,
@@ -520,8 +520,8 @@ Each thread has:"
 	            running foreign code.  The x86-64 keeps the address of
 	            the top of each thread's temp stack in the thread's
 	            TCR.|)))
-             (defsection "Register conventions"
-               #:|If there are a "reasonable" (for some value of
+      (defsection "Register conventions"
+	#:|If there are a "reasonable" (for some value of
             "reasonable") number of general-purpose registers and the
             instruction set is "reasonably" orthogonal (most
             instructions that operate on GPRs can operate on any GPR),
@@ -542,8 +542,8 @@ Each thread has:"
             encounter there.)
 
 On x86-64, the static register partitioning scheme involves:|
-               (listing :bullet
-                        (item #:|(only) three "immediate" registers.
+	(listing :bullet
+	  (item #:|(only) three "immediate" registers.
 
 	            The RAX, RCX, and RDX registers are used as the
 	            implicit operands and results of some extended-precision
@@ -557,23 +557,23 @@ On x86-64, the static register partitioning scheme involves:|
 	            may see these names in disassembled code, usually in
 	            operations involving type checking, array indexing, and
 	            foreign memory and function access.|)
-                        (item #:|(only) two "dedicated" registers.
+	  (item #:|(only) two "dedicated" registers.
 
 	            RSP and RBP have
 	            dedicated functionality dictated by the hardware and
 	            calling conventions.|)
-                        (item #:|11 "node" registers.
+	  (item #:|11 "node" registers.
 
 	            All other registers (RBX, RSI, RDI, and R8-R15)
 	            are asserted to contain node values at (almost) all
 	            times; legacy "string" operations that implicitly use RSI
 	            and/or RDI are not used.|))
-               (para "
+	(para "
 		On 32-bit x86, the default register partitioning scheme
 		involves:
 	      ")
-               (listing :bullet
-                        (item #:|
+	(listing :bullet
+	  (item #:|
 		  A single "immediate" register.
 
 
@@ -581,7 +581,7 @@ On x86-64, the static register partitioning scheme involves:|
 		    The EAX register is given the symbolic name
 		    "imm0".
 		  |)
-                        (item #:|
+	  (item #:|
 		    There are two "dedicated" registers.
 
 
@@ -589,7 +589,7 @@ On x86-64, the static register partitioning scheme involves:|
 		    ESP and EBP have dedicated functionality dictated by the
 		    hardware and calling conventions.
 		  |)
-                        (item #:|
+	  (item #:|
 		    5 "node" registers.
 
 
@@ -598,7 +598,7 @@ On x86-64, the static register partitioning scheme involves:|
 		    contain node values.  As on x86-64, string instructions
 		    that implicitly use ESI and EDI are not used.
 		  |))
-               "
+	"
 		There are times when this default partitioning scheme is
 		inadequate.  As mentioned in the x86-64 section, there are
 		instructions like the extended-precision MUL and DIV which
@@ -619,8 +619,8 @@ On x86-64, the static register partitioning scheme involves:|
 
             On the PPC, the static register partitioning scheme
             involves:"
-               (listing :bullet
-                        (item #:|6 "immediate" registers.
+	(listing :bullet
+	  (item #:|6 "immediate" registers.
 
 	            Registers r3-r8 are given
 	            the symbolic names imm0-imm5.  As a RISC architecture
@@ -629,50 +629,50 @@ On x86-64, the static register partitioning scheme involves:|
 	            x86-64 does, but they're generally used for the same sort
 	            of things (type checking, array indexing, FFI,
 	            etc.)|)
-                        (item "9 dedicated registers
+	  (item "9 dedicated registers
 	            "
-                              (listing :bullet
-                                       (item "r0 (symbolic name rzero) always contains the
+	    (listing :bullet
+	      (item "r0 (symbolic name rzero) always contains the
 		              value 0 when running lisp code.  Its value is
 		              sometimes read as 0 when it's used as the base
 		              register in a memory address; keeping the value 0
 		              there is sometimes convenient and avoids
 		              asymmetry.")
-                                       (item "r1 (symbolic name sp) is the control stack
+	      (item "r1 (symbolic name sp) is the control stack
 		              pointer, by PPC convention.")
-                                       (item "r2 is used to hold the current thread's TCR on
+	      (item "r2 is used to hold the current thread's TCR on
 		              ppc64 systems; it's not used on ppc32.")
-                                       (item "r9 and r10 (symbolic names allocptr and
+	      (item "r9 and r10 (symbolic names allocptr and
 		              allocbase) are used to do per-thread memory
 		              allocation")
-                                       (item "r11 (symbolic name nargs) contains the number
+	      (item "r11 (symbolic name nargs) contains the number
 		              of function arguments on entry and the number of
 		              return values in multiple-value returning
 		              constructs.  It's not used more generally as either
 		              a node or immediate register because of the way that
 		              certain trap instruction encodings are
 		              interpreted.")
-                                       (item "r12 (symbolic name tsp) holds the top of the
+	      (item "r12 (symbolic name tsp) holds the top of the
 		              current thread's temp stack.")
-                                       (item "r13 is used to hold the TCR on PPC32 systems;
+	      (item "r13 is used to hold the TCR on PPC32 systems;
 		              it's not used on PPC64.")
-                                       (item #:|r14 (symbolic name loc-pc) is used to copy
+	      (item #:|r14 (symbolic name loc-pc) is used to copy
 		              "pc-locative" values between main memory and
 		              special-purpose PPC registers (LR and CTR) used in
 		              function-call and return instructions.|)
-                                       (item "r15 (symbolic name vsp) addresses the top of
+	      (item "r15 (symbolic name vsp) addresses the top of
 		              the current thread's value stack.")
-                                       (item #:|lr and ctr are PPC branch-unit registers used
+	      (item #:|lr and ctr are PPC branch-unit registers used
 		              in function call and return instructions; they're
 		              always treated as "pc-locatives", which precludes
 		              the use of the ctr in some PPC looping
 		              constructs.|)))
-                        (item #:|17 "node" registers
+	  (item #:|17 "node" registers
 
 	            r15-r31 are always treated as node
 	            registers|))))
-           (defsection "Tagging scheme"
-             #:|{CCL} always allocates lisp objects on double-node
+    (defsection "Tagging scheme"
+      #:|{CCL} always allocates lisp objects on double-node
           (64-bit for 32-bit platforms, 128-bit for 64-bit platforms)
           boundaries; this mean that the low 3 bits (32-bit lisp) or 4
           bits (64-bit lisp) are always 0 and are therefore redundant
@@ -739,8 +739,8 @@ On x86-64, the static register partitioning scheme involves:|
           the details of how types are encoded vary between the ppc32,
           ppc64, and x86-64 implementations, but there are some
           general common principles:|
-             (listing :bullet
-                      (item #:|CONS cells always contain exactly 2 elements and are
+      (listing :bullet
+	(item #:|CONS cells always contain exactly 2 elements and are
 	          usually fairly common.It therefore makes sense to give
 	          CONS cells their own tag.  Unlike the fixnum case -
 	          where a tag value of 0 had positive implications - there
@@ -754,7 +754,7 @@ On x86-64, the static register partitioning scheme involves:|
 	          doing it the way that the host system did made
 	          bootstrapping to a new target system a little easier.)
 	        |)
-                      (item #:|Any way you look at it, NIL is a bit
+	(item #:|Any way you look at it, NIL is a bit
 	          ... unusual. NIL is both a SYMBOL and a LIST (as well as
 	          being a canonical truth value and probably a few other
 	          things.)  Its role as a LIST is probably much more
@@ -789,7 +789,7 @@ On x86-64, the static register partitioning scheme involves:|
 		  cell, and we have to explicitly check for a NIL argument
 		  in CONSP/RPLACA/RPLACD.
 		|)
-                      (item "Some objects are immediate (but not FIXNUMs). This
+	(item "Some objects are immediate (but not FIXNUMs). This
 	          is true of CHARACTERs and, on 64-bit platforms,
 	          SINGLE-FLOATs. It's also true of some nodes used in the
 	          runtime system (special values used to indicate unbound
@@ -801,7 +801,7 @@ On x86-64, the static register partitioning scheme involves:|
 	          several of their low bits.)  The GC treats any node with
 	          an immediate tag (and any node with a fixnum tag) as a
 	          leaf.")
-                      (item #:|There are some advantages to treating everything
+	(item #:|There are some advantages to treating everything
 	          else-memory-allocated objects that aren't CONS
 	          cells-uniformly.There are some disadvantages to
 	          that uniform treatment as well, and the treatment of
@@ -854,8 +854,8 @@ On x86-64, the static register partitioning scheme involves:|
 	          pushed on a thread's value stack, the GC might
 	          misinterpret that situation to mean that there was a
 	          stack-allocated UVECTOR on the value stack.)|))))
-         (defsection "Heap Allocation"
-           #:|When the {CCL} kernel first
+  (defsection "Heap Allocation"
+    #:|When the {CCL} kernel first
         starts up, a large contiguous chunk of the process's address
         space is mapped as "anonymous, no access" memory. ("Large"
         means different things in different contexts; on LinuxPPC32,
@@ -888,8 +888,8 @@ On x86-64, the static register partitioning scheme involves:|
         Inevitably, that code spoils everything and starts consing;
         there are basically three layers of memory allocation that can
         go on.|
-           (defsection "Per-thread object allocation"
-             #:|Each lisp thread has a private "reserved memory
+    (defsection "Per-thread object allocation"
+      #:|Each lisp thread has a private "reserved memory
           segment"; when a thread starts up, its reserved memory segment
           is empty.  PPC ports maintain the highest unallocated address
           and the lowest allocatable address in the current segment in
@@ -902,18 +902,18 @@ On x86-64, the static register partitioning scheme involves:|
 
           A thread tries to allocate an object whose physical size
           in bytes is X and whose tag is Y by:|
-             (listing :number
-                      (item #:|decrementing the "high" pointer by (- X Y)|)
-                      (item "trapping if the high pointer is less than the low
+      (listing :number
+	(item #:|decrementing the "high" pointer by (- X Y)|)
+	(item "trapping if the high pointer is less than the low
 	          pointer")
-                      (item "using the (tagged) high pointer to initialize the
+	(item "using the (tagged) high pointer to initialize the
 	          object, if necessary")
-                      (item "clearing the low bits of the high pointer"))
-             (para "On PPC32, where the size of a CONS cell is 8 bytes and
+	(item "clearing the low bits of the high pointer"))
+      (para "On PPC32, where the size of a CONS cell is 8 bytes and
           the tag of a CONS cell is 1, machine code which sets the arg_z
           register to the result of doing (CONS arg_y arg_z) looks
           like:")
-             (code-block "
+      (code-block "
   (SUBI ALLOCPTR ALLOCPTR 7)    ; decrement the high pointer by (- 8 1)
   (TWLLT ALLOCPTR ALLOCBASE)    ; trap if the high pointer is below the base
   (STW ARG_Z -1 ALLOCPTR)       ; set the CDR of the tagged high pointer
@@ -921,13 +921,13 @@ On x86-64, the static register partitioning scheme involves:|
   (MR ARG_Z ALLOCPTR)           ; arg_z is the new CONS cell
   (RLWINM ALLOCPTR ALLOCPTR 0 0 28)     ; clear tag bits
 	    ")
-             (para "On x86-64, the idea's similar but the implementation is
+      (para "On x86-64, the idea's similar but the implementation is
           different.  The high and low pointers to the current thread's
           reserved segment are kept in the TCR, which is addressed by
           the gs segment register. An x86-64 CONS cell is 16 bytes wide
           and has a tag of 3; we canonically use the temp0 register to
           initialize the object")
-             (code-block "
+      (code-block "
   (subq ($ 13) ((% gs) 216))    ; decrement allocptr
   (movq ((% gs) 216) (% temp0)) ; load allocptr into temp0
   (cmpq ((% gs) 224) (% temp0)) ; compare to allocabase
@@ -939,13 +939,13 @@ L1
   (movq (% arg_z) (-3 (% temp0))); set the cdr
   (movq (% temp0) (% arg_z))    ; return the cons
 	    ")
-             (para "If we don't take the trap (if allocating 8-16 bytes
+      (para "If we don't take the trap (if allocating 8-16 bytes
           doesn't exhaust the thread's reserved memory segment), that's
           a fairly short and simple instruction sequence.  If we do take
           the trap, we'll have to do some additional work in order to
           get a new segment for the current thread."))
-           (defsection "Allocation of reserved heap segments"
-             #:|After the lisp image is first mapped into memory - and after
+    (defsection "Allocation of reserved heap segments"
+      #:|After the lisp image is first mapped into memory - and after
           each full GC - the lisp kernel ensures that
           (LISP-HEAP-GC-THRESHOLD) additional bytes beyond the current
           end of the heap are mapped read-write.
@@ -973,8 +973,8 @@ L1
           result; avoiding this involves tuning the per-thread
           allocation quantum and the GC/EGC thresholds
           appropriately.|)
-           (defsection "Heap growth"
-             #:|All OSes on which {CCL} currently runs use an
+    (defsection "Heap growth"
+      #:|All OSes on which {CCL} currently runs use an
           "overcommit" memory allocation strategy by default (though
           some of them provide ways of overriding that default.)  What
           this means in general is that the OS doesn't necessarily
@@ -998,8 +998,8 @@ L1
 	      paging activity.  The most expedient course in cases like this
 	      is to either (a) use less memory or (b) get more memory; it's
 	      generally hard to use memory that you don't have.|))
-         (defsection "GC details"
-           "The GC uses a Mark/Compact algorithm; its
+  (defsection "GC details"
+    "The GC uses a Mark/Compact algorithm; its
         execution time is essentially a factor of the amount of live
         data in the heap. (The somewhat better-known Mark/Sweep
         algorithms don't compact the live data but instead traverse the
@@ -1009,20 +1009,20 @@ L1
         As mentioned in {section Heap Allocation}, two
         auxiliary data structures (proportional to the size of the lisp
         heap) are maintained. These are"
-           (listing :number
-                    (item "the markbits bitvector, which contains a bit for
+    (listing :number
+      (item "the markbits bitvector, which contains a bit for
 	        every doublenode in the dynamic heap (plus a few extra words
 	        for alignment and so that sub-bitvectors can start on word
 	        boundaries.)")
-                    (item "the relocation table, which contains a native word for
+      (item "the relocation table, which contains a native word for
 	        every 32 or 64 doublenodes in the dynamic heap, plus an
 	        extra word used to keep track of the end of the heap."))
-           "The total GC space overhead is therefore on the order of
+    "The total GC space overhead is therefore on the order of
         3% (2/64 or 1/32).
 
 The general algorithm proceeds as follows:"
-           (defsection "Mark phase"
-             "Each doublenode in the dynamic heap has a corresponding
+    (defsection "Mark phase"
+      "Each doublenode in the dynamic heap has a corresponding
           bit in the markbits vector. (For any doublenode in the heap,
           the index of its mark bit is determined by subtracting the
           address of the start of the heap from the address of the
@@ -1042,15 +1042,15 @@ The general algorithm proceeds as follows:"
           The mark phase traverses each root. If the tag of the
           value of the root indicates that it's a non-immediate node
           whose address lies in the lisp heap, then:"
-             (listing :number
-                      (item "If the object is already marked, do nothing.")
-                      (item "Set the object's markbit(s).")
-                      (item "If the object is an ivector, do nothing further.")
-                      (item "If the object is a cons cell, recursively mark its
+      (listing :number
+	(item "If the object is already marked, do nothing.")
+	(item "Set the object's markbit(s).")
+	(item "If the object is an ivector, do nothing further.")
+	(item "If the object is a cons cell, recursively mark its
 	          car and cdr.")
-                      (item "Otherwise, the object is a gvector. Recursively mark
+	(item "Otherwise, the object is a gvector. Recursively mark
 	          its elements."))
-             "Marking an object thus involves ensuring that its mark
+      "Marking an object thus involves ensuring that its mark
           bits are set and then recursively marking any pointers
           contained within the object if the object was originally
           unmarked. If this recursive step was implemented in the
@@ -1066,8 +1066,8 @@ The general algorithm proceeds as follows:"
           is used.)
 
 Certain types of objects are treated a little specially:"
-             (listing :number
-                      (item #:|To support a feature called {emphasis GCTWA}
+      (listing :number
+	(item #:|To support a feature called {emphasis GCTWA}
                 (an acronym that I believe comes from MACLISP,
 		            where it stood for "Garbage Collection of Truly
 		            Worthless Atoms"),
@@ -1080,19 +1080,19 @@ Certain types of objects are treated a little specially:"
 	          distinguishable from newly created symbols (by virtue of
 	          their having function bindings, value bindings, plists,
 	          or other attributes.)|)
-                      (item "Pools have their first element set to NIL before any
+	(item "Pools have their first element set to NIL before any
 	          other elements are marked.")
-                      (item "All hash tables have certain fields (used to cache
+	(item "All hash tables have certain fields (used to cache
 	          previous results) invalidated.")
-                      (item "Weak Hash Tables and other weak objects are put on a
+	(item "Weak Hash Tables and other weak objects are put on a
 	          linkedlist as they're encountered; their contents are only
 	          retained if there are other (non-weak) references to
 	          them."))
-             (para "At the end of the mark phase, the markbits of all
+      (para "At the end of the mark phase, the markbits of all
           objects that are transitively reachable from the roots are
           set and all other markbits are clear."))
-           (defsection "Relocation phase"
-             "The {emphasis forwarding address} of a
+    (defsection "Relocation phase"
+      "The {emphasis forwarding address} of a
 	      doublenode in the dynamic heap is (<its current address> -
 	      (size_of_doublenode * <the number of unmarked markbits that
 	      precede it>)) or alternately (<the base of the heap> +
@@ -1125,8 +1125,8 @@ Certain types of objects are treated a little specially:"
 	      dynamic heap is the address of that pointer.)  Often, the
 	      first unmarked object is much nearer the free pointer than it
 	      is to the base of the heap.")
-           (defsection "Forwarding phase"
-             #:|The forwarding phase traverses all roots and the "old"
+    (defsection "Forwarding phase"
+      #:|The forwarding phase traverses all roots and the "old"
           part of the dynamic heap (the part between the base of the
           heap and the first unmarked object.) All references to objects
           whose address is between the first unmarked object and the
@@ -1158,8 +1158,8 @@ Certain types of objects are treated a little specially:"
           pointer's forwarding address. Exploiting GCC-specific idioms,
           hand-coding the routine, and inlining calls to it could all be
           expected to improve GC performance.|)
-           (defsection "Compact phase"
-             #:|The compact phase compacts the area between the first
+    (defsection "Compact phase"
+      #:|The compact phase compacts the area between the first
           unmarked object and the freepointer so that it contains only
           marked objects.  While doing so, it forwards any pointers it
           finds in the objects it copies.
@@ -1172,8 +1172,8 @@ Certain types of objects are treated a little specially:"
           exception handler returns; otherwise, a "seriously low on
           memory" condition is signaled, possibly after releasing a
           small emergency pool of memory.|))
-         (defsection "The ephemeral GC"
-           "In the {CCL} memory management scheme, the relative age
+  (defsection "The ephemeral GC"
+    "In the {CCL} memory management scheme, the relative age
         of two objects in the dynamic heap can be determined by their
         addresses: if addresses X and Y are both addresses in the
         dynamic heap, X is younger than Y (X was created more recently
@@ -1182,15 +1182,15 @@ Certain types of objects are treated a little specially:"
 
         Ephemeral (or generational) garbage collectors attempt to
         exploit the following assumptions:"
-           (listing :bullet
-                    (item "most newly created objects become garbage soon after
+    (listing :bullet
+      (item "most newly created objects become garbage soon after
 	        they'recreated.")
-                    (item "most objects that have already survived several GCs
+      (item "most objects that have already survived several GCs
 	        are unlikely to ever become garbage.")
-                    (item "old objects can only point to newer objects as the
+      (item "old objects can only point to newer objects as the
 	        result of a destructive modification (e.g., via
 	        SETF.)"))
-           #:|By concentrating its efforts on (frequently and quickly)
+    #:|By concentrating its efforts on (frequently and quickly)
         reclaiming newly created garbage, an ephemeral collector hopes
         to postpone the more costly full GC as long as possible. It's
         important to note that most programs create some long-lived
@@ -1232,25 +1232,25 @@ Certain types of objects are treated a little specially:"
 
         The EGC uses exactly the same code as the full GC. When a
         given GC is "ephemeral",|
-           (listing :bullet
-                    (item #:|the "base of the heap" used to determine an object's
+    (listing :bullet
+      (item #:|the "base of the heap" used to determine an object's
 	        markbit address is the base of the generation
 	        being collected;|)
-                    (item "the markbits vector is actually a pointer into the
+      (item "the markbits vector is actually a pointer into the
 	        middle of the global markbits table; preceding entries in
 	        this table are used to note doubleword addresses in older
 	        generations that (may) contain intergenerational
 	        references;")
-                    (item "some steps (notably GCTWA and the handling of weak
+      (item "some steps (notably GCTWA and the handling of weak
 	        objects) are not performed;")
-                    (item #:|the intergenerational references table is used to
+      (item #:|the intergenerational references table is used to
 	        find additional roots for the mark and forward phases. If a
 	        bit is set in the intergenerational references table, that
 	        means that the corresponding doubleword (in some "old"
 	        generation, in some "earlier" part of the heap) may have had
 	        a pointer to an object in a younger generation stored into
 	        it.|))
-           "With one exception (the implicit setfs that occur on entry
+    "With one exception (the implicit setfs that occur on entry
         to and exit from the binding of a special variable), all setfs
         that might introduce an intergenerational reference must be
         memoized.
@@ -1277,8 +1277,8 @@ Certain types of objects are treated a little specially:"
         denote doublewords that definitely do not contain
         intergenerational references.
       ")
-         (defsection "Fasl files"
-           #:|Saving and loading of Fasl files is implemented in
+  (defsection "Fasl files"
+    #:|Saving and loading of Fasl files is implemented in
         xdump/faslenv.lisp, level-0/nfasload.lisp, and lib/nfcomp.lisp.
         The information here is only an overview, which might help when
         reading the source.
@@ -1324,9 +1324,9 @@ Certain types of objects are treated a little specially:"
         An exception is the bytecode #xFF, which has the symbolic
         name ccl::$faslend; it is used to mark the end of the
         block.|)
-         (defsection "The Objective-C Bridge"
-             (defsection "How {CCL} Recognizes Objective-C Objects"
-               #:|In most cases, pointers to instances of Objective-C
+  (defsection "The Objective-C Bridge"
+    (defsection "How {CCL} Recognizes Objective-C Objects"
+      #:|In most cases, pointers to instances of Objective-C
           classes are recognized as such; the recognition is (and
           probably always will be) slightly heuristic. Basically, any
           pointer that passes basic sanity checks and whose first word
@@ -1370,16 +1370,16 @@ Certain types of objects are treated a little specially:"
           as anticipated, but that may be because existing Cocoa code
           deals primarily with relatively long-lived objects such as
           windows, views, menus, etc.|)
-           (defsection "Recommended Reading"
-               (listing :definition
-                        (item "{link http://developer.apple.com/documentation/Cocoa/ Cocoa Documentation}" ccldoc::=> "
+    (defsection "Recommended Reading"
+      (listing :definition
+	(item "{link http://developer.apple.com/documentation/Cocoa/ Cocoa Documentation}" ccldoc::=> "
 	            This is the top page for all of Apple's documentation on
 	            Cocoa.  If you are unfamiliar with Cocoa, it is a good
 	            place to start.
 	          ")
-                        (item
-                         "{link http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html Foundation Reference for Objective-C}"
-                         ccldoc::=> "
+	(item
+	  "{link http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html Foundation Reference for Objective-C}"
+	  ccldoc::=> "
 	            This is one of the two most important Cocoa references; it
 	            covers all of the basics, except for GUI programming.  This is
 	            a reference, not a tutorial.

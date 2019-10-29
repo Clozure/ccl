@@ -1,15 +1,15 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Platform-specific notes"
-         (defsection "Overview"
-             (para " The documentation and whatever experience you may have in
+  (defsection "Overview"
+    (para " The documentation and whatever experience you may have in
       using {CCL} under Linux should also apply to using it under
       Darwin/MacOS X and FreeBSD. There are some differences between
       the platforms, and these differences are sometimes exposed in
       the implementation.")
-           
-           (defsection "File-system case"
-             #:|Darwin and MacOS X use HFS+ file systems by default;
+    
+    (defsection "File-system case"
+      #:|Darwin and MacOS X use HFS+ file systems by default;
 	    HFS+ file systems are usually case-insensitive. Most of
 	    {CCL}'s filesystem and pathname code assumes that the
 	    underlying filesystem is case-sensitive; this assumption
@@ -21,10 +21,10 @@
 
         Whatever the best solution to this problem turns out to
         be, there are some practical considerations. Doing:|
-             (code-block #:|
+      (code-block #:|
 ? (save-application "DPPCCL")
 	  |)
-             #:|on 32-bit DarwinPPC has the unfortunate side-effect of
+      #:|on 32-bit DarwinPPC has the unfortunate side-effect of
         trying to overwrite the Darwin {CCL} kernel, "dppccl", on a
         case-insensitive filesystem.
 
@@ -32,11 +32,11 @@
         the default heap image file name to be the kernel's own
         filename with the string ".image" appended, so the idiom would
         be:|
-             (code-block #:|
+      (code-block #:|
 ? (save-application "dppccl.image")
 	  |))
-           (defsection "Line Termination Characters"
-             #:|MacOSX effectively supports two distinct line-termination
+    (defsection "Line Termination Characters"
+      #:|MacOSX effectively supports two distinct line-termination
 	    conventions. Programs in its Darwin substrate follow the Unix
 	    convention of recognizing #\\LineFeed as a line terminator; traditional
 	    MacOS programs use #\\Return for this purpose.  Many modern
@@ -80,8 +80,8 @@
 
 	    Unless otherwise noted, the symbols mentioned in this
 	    documentation are exported from the CCL package.|)
-           (defsection "Single-precision trig & transcendental functions"
-               (para "
+    (defsection "Single-precision trig & transcendental functions"
+      (para "
 	    Despite what Darwin's man pages say, early versions of its math library
 	    (up to and including at least OSX 10.2 (Jaguar) don't implement
 	    single-precision variants of the transcendental and trig functions
@@ -91,8 +91,8 @@
 	    the result back to a SINGLE-FLOAT. These steps can introduce rounding
 	    errors (and potentially overflow conditions) that might not be present
 	    or as severe if true 32-bit variants were available."))
-           (defsection "Shared libraries"
-               (para #:|Darwin/MacOS X distinguishes between "shared libraries"
+    (defsection "Shared libraries"
+      (para #:|Darwin/MacOS X distinguishes between "shared libraries"
         and "bundles" or "extensions"; Linux and FreeBSD don't. In
         Darwin, "shared libraries" have the file type "dylib" : the
         expectation is that this class of file is linked against when
@@ -102,8 +102,8 @@
         unloaded from a running application, via a mechanism like the
         one used by {CCL}'s OPEN-SHARED-LIBRARY function.|)))
 
-         (defsection "Cocoa Programming in {CCL}"
-           "Cocoa is one of Apple's APIs for GUI programming; for most
+  (defsection "Cocoa Programming in {CCL}"
+    "Cocoa is one of Apple's APIs for GUI programming; for most
       purposes, development is considerably faster with Cocoa than
       with the alternatives.  You should have a little familiarity
       with it, to better understand this section.
@@ -119,8 +119,8 @@
       objects with Apple Interface Builder, and store them in .nib
       files to be loaded when needed.  Both approaches can be freely
       mixed in a single program."
-           (defsection "The Command Line and the Window System"
-             "{CCL} is ordinarily a command-line application (it
+    (defsection "The Command Line and the Window System"
+      "{CCL} is ordinarily a command-line application (it
         doesn't have a connection to the OSX Window server, doesn't
         have its own menubar or dock icon, etc.) By opening some
         libraries and jumping through some hoops, it's able to sort of
@@ -145,8 +145,8 @@
         the same underlying Unix file descriptor, it's not uncommon to
         see NSLog output mixed with lisp output on the initial
         listener.")
-           (defsection "Writing (and reading) Cocoa code"
-             #:|The
+    (defsection "Writing (and reading) Cocoa code"
+      #:|The
 	    syntax of the constructs used to define Cocoa classes and
 	    methods has changed a bit (it was never documented outside of
 	    the source code and never too well documented at all), largely
@@ -158,13 +158,13 @@
 
         All of the symbols described below are currently internal to
         the CCL package.|
-             (listing :column
-                      (item (ref (definition :macro objc:@class)))
-                      (item (ref (definition :macro objc:@selector)))
-                      (item (ref (definition :macro objc:define-objc-method)))
-                      (item (ref (definition :macro objc:define-objc-class-method)))))
-           (defsection "The Application Kit and Multiple Threads"
-             #:|The Cocoa API is broken into several pieces.  The
+      (listing :column
+	(item (ref (definition :macro objc:@class)))
+	(item (ref (definition :macro objc:@selector)))
+	(item (ref (definition :macro objc:define-objc-method)))
+	(item (ref (definition :macro objc:define-objc-class-method)))))
+    (defsection "The Application Kit and Multiple Threads"
+      #:|The Cocoa API is broken into several pieces.  The
         Application Kit, affectionately called AppKit, is the one
         which deals with window management, drawing, and handling
         events.  AppKit really wants all these things to be done by a
@@ -234,92 +234,92 @@
         seem to be substantial improvements over previous behaviors (where,
         for instance, a misspelled message name typically terminated the
         application.)|)
-           (defsection "Acknowledgement"
-               (para "The Cocoa bridge was originally developed, and
+    (defsection "Acknowledgement"
+      (para "The Cocoa bridge was originally developed, and
         generously contributed by, Randall Beer.")))
-         (defsection "Building an Application Bundle"
-             (para #:|You may have noticed that (require "COCOA") takes a long
+  (defsection "Building an Application Bundle"
+    (para #:|You may have noticed that (require "COCOA") takes a long
       time to load.  It is possible to avoid this by saving a Lisp
       heap image which has everything already loaded.  There is an
       example file which allows you to do this,
       "ccl/examples/cocoa-application.lisp", by producing a
       double-clickable application which runs your program.  First,
       load your own program.  Then, do:|)
-           (code-block #:|
+    (code-block #:|
 ? (require "COCOA-APPLICATION")
     |)
-           "When it finishes, you should be able to double-click the {CCL} icon
+    "When it finishes, you should be able to double-click the {CCL} icon
       in the ccl directory, to quickly start your program.
 
       The OS may have already decided that {CCL}.app isn't a valid
       executable bundle, and therefore won't let you double-click it.
       If this happens to you, to force it to reconsider, just update the
       last-modified time of the bundle.  In Terminal:"
-           (code-block "> touch {CCL}.app
+    (code-block "> touch {CCL}.app
     ")
-           (para #:|When an image which had contained ObjC classes (which are also
+    (para #:|When an image which had contained ObjC classes (which are also
       CLOS classes) is re-launched, those classes are "revived": all
       preexisting classes have their addresses updated destructively, so that
       existing subclass/superclass/metaclass relationships are maintained.
       It's not possible (and may never be) to preserve foreign
       instances across SAVE-APPLICATION. (It may be the case that NSArchiver
       and NSCoder and related classes offer some approximation of that.)|))
-         (defsection "Recommended Reading"
-             (listing :definition
-                      (item
-                       (clause
-                        "{link http://developer.apple.com/technologies/mac/cocoa.html Mac OS X - Cocoa}, {link http://developer.apple.com/library/mac/#documentation/General/Conceptual/DevPedia-CocoaCore/Cocoa.html 
+  (defsection "Recommended Reading"
+    (listing :definition
+      (item
+	(clause
+	  "{link http://developer.apple.com/technologies/mac/cocoa.html Mac OS X - Cocoa}, {link http://developer.apple.com/library/mac/#documentation/General/Conceptual/DevPedia-CocoaCore/Cocoa.html 
                 Cocoa Core Competencies
               }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/CocoaFundamentals/WhatIsCocoa/WhatIsCocoa.html 
                 Cocoa Fundamentals Guide
               }")
-                       ccldoc::=> "
+	ccldoc::=> "
 	        These are top-level pages pertaining to Cocoa in Apple's Mac OS X Developer Library.
 	        If you are unfamiliar with Cocoa, these links are good places to start.
 	      ")
-                      (item
-                       (clause
-                        "{link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjectiveC/Introduction/introObjectiveC.html 
+      (item
+	(clause
+	  "{link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjectiveC/Introduction/introObjectiveC.html 
                 The Objective-C Programming Language
               }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Introduction/Introduction.html 
                 Objective-C Runtime Programming Guide
               }")
-                       ccldoc::=>
-                       "These provide a conceptual overview and programming guide to Objective-C the language and runtime, respectively.")
-                      (item
-                       "{link http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/ObjCRuntimeRef/Reference/reference.html 
+	ccldoc::=>
+	"These provide a conceptual overview and programming guide to Objective-C the language and runtime, respectively.")
+      (item
+	"{link http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/ObjCRuntimeRef/Reference/reference.html 
                 Objective-C Runtime Reference
               }"
-                       ccldoc::=> "
+	ccldoc::=> "
 	        This is one of the two most important Cocoa references; it
 	        covers all of the basics, except for GUI programming.  This is
 	        a reference, not a tutorial.
 	      ")
-                      (item
-                       "{link http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html Application Kit Framework Reference}"
-                       ccldoc::=> "
+      (item
+	"{link http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html Application Kit Framework Reference}"
+	ccldoc::=> "
 	        This is the other very important Cocoa reference; it covers GUI programming with Cocoa / Application Kit Framework
 	        in considerable depth.  This is a reference, not a tutorial.
 	      ")
-                      (item "{link http://developer.apple.com/library/mac/navigation/ Mac OS X Developer Library}" ccldoc::=> "
+      (item "{link http://developer.apple.com/library/mac/navigation/ Mac OS X Developer Library}" ccldoc::=> "
 	        This is the top page for Mac OS X developer documentation.
 	        Go here to find the documentation on any other Mac OS X API.
 	        Also go here if you need general guidance about OS X, Carbon,
 	        Cocoa, Core Foundation, or Objective-C.
 	      ")
-                      (item "{link http://developer.apple.com/ Resources for Apple Developers}" ccldoc::=> "
+      (item "{link http://developer.apple.com/ Resources for Apple Developers}" ccldoc::=> "
                 This is the top page for all Apple developer documentation.
               ")))
-         (defsection "Operating-System Dictionary"
+  (defsection "Operating-System Dictionary"
 
-             (definition (:macro objc:@class) "@class class-name" nil
-                         (defsection "Arguments and Values"
-                             (listing :definition
-                                      (item "{param class-name}" ccldoc::=> "a string which denotes an existing class name, or a
+    (definition (:macro objc:@class) "@class class-name" nil
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param class-name}" ccldoc::=> "a string which denotes an existing class name, or a
 		        symbol which can be mapped to such a string via the standard
 		        name-mapping conventions for class names")))
-                         (defsection "Description"
-                           "Used to refer to a known ObjC class by name. (Via the use
+      (defsection "Description"
+	"Used to refer to a known ObjC class by name. (Via the use
 	      LOAD-TIME-VALUE, the results of a class-name -> class lookup
 	      are cached.)
 
@@ -328,26 +328,26 @@
 	      only because some old code still uses it.
 	    "))
 
-           (definition (:macro objc:@selector) "@selector string" nil
-                       (defsection "Arguments and Values"
-                           (listing :definition
-                                    (item "{param string}" ccldoc::=> "a string constant, used to canonically refer to an
+    (definition (:macro objc:@selector) "@selector string" nil
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param string}" ccldoc::=> "a string constant, used to canonically refer to an
 		        ObjC method selector")))
-                       (defsection "Description"
-                           (para "Used to refer to an ObjC method selector (method name). Uses
+      (defsection "Description"
+	(para "Used to refer to an ObjC method selector (method name). Uses
 	      LOAD-TIME-VALUE to cache the result of a string -> selector
 	      lookup.")))
 
-           (definition (:macro objc:defmethod)
-                       "objc:defmethod name-and-result-type ((receiver-arg-and-class) {code &rest} other-args) {code &body} body" nil
-                       (defsection "Arguments and Values"
-                           (listing :definition
-                                    (item "{param name-and-result-type}" ccldoc::=> "either an Objective-C message name, for methods
+    (definition (:macro objc:defmethod)
+      "objc:defmethod name-and-result-type ((receiver-arg-and-class) {code &rest} other-args) {code &body} body" nil
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param name-and-result-type}" ccldoc::=> "either an Objective-C message name, for methods
                 that return a value of type {code :ID}, or
                 a list containing an Objective-C message name and a
                 foreign type specifier for methods with a different
                 foreign result type.")
-                                    (item "{param receiver-arg-and-class}" ccldoc::=> #:|a two-element list whose first element is a
+	  (item "{param receiver-arg-and-class}" ccldoc::=> #:|a two-element list whose first element is a
                 variable name and whose second element is the Lisp
                 name of an Objective-C class or metaclass.  The
                 receiver variable name can be any bindable lisp
@@ -356,44 +356,44 @@
                 to be "unsettable"; i.e., it is an error to try to
                 change the value of the receiver in the body of the
                 method definition.|)
-                                    (item "{param other-args}" ccldoc::=> "either variable names (denoting parameters of
+	  (item "{param other-args}" ccldoc::=> "either variable names (denoting parameters of
             type {code :ID}) or 2-element lists whose
             first element is a variable name and whose second element
             is a foreign type specifier.")))
-                       (defsection "Description"
-                           (para "Defines an Objective-C-callable method which implements
+      (defsection "Description"
+	(para "Defines an Objective-C-callable method which implements
 	        the specified message selector for instances of the existing
 	        named Objective-C class.")
-                         (para "For a detailed description of the features and
+	(para "For a detailed description of the features and
           restrictions of the {code OBJC:DEFMETHOD} macro,
           see the
           section "
-                               (ref (section "Using objc:defmethod") "Using {code objc:defmethod}") ".")))
+	  (ref (section "Using objc:defmethod") "Using {code objc:defmethod}") ".")))
 
-           (definition (:macro objc:define-objc-method) "define-objc-method (selector class-name) {code &body} body" nil
-                       (defsection "Arguments and Values"
-                           (listing :definition
-                                    (item "{param selector}" ccldoc::=> "either a string which represents the name of the
+    (definition (:macro objc:define-objc-method) "define-objc-method (selector class-name) {code &body} body" nil
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param selector}" ccldoc::=> "either a string which represents the name of the
 		          selector or a list which describes the method's return
 		          type, selector components, and argument types (see below.)
 		          If the first form is used, then the first form in the body
 		          must be a list which describes the selector's argument
 		          types and return value type, as per DEFCALLBACK.")
-                                    (item "{param class-name}" ccldoc::=> #:|either a string which names an existing ObjC class
+	  (item "{param class-name}" ccldoc::=> #:|either a string which names an existing ObjC class
 		          name or a list symbol which can map to such a string via the
 		          standard name-mapping conventions for class names. (Note
 		          that the "canonical" lisp class name is such a
 		          symbol)|)))
-                       (defsection "Description"
-                           (para "Defines an ObjC-callable method which implements the
+      (defsection "Description"
+	(para "Defines an ObjC-callable method which implements the
 	        specified message selector for instances of the existing ObjC
 	        class class-name.")))
 
-           (definition (:macro objc:define-objc-class-method)
-                       "define-objc-class-method (selector class-name) {code &body} body" nil
-                       (defsection "Arguments and Values" (para "As per DEFINE-OBJC-METHOD"))
-                       (defsection "Description"
-                         #:|Like DEFINE-OBJC-METHOD, only used to define methods on the
+    (definition (:macro objc:define-objc-class-method)
+      "define-objc-class-method (selector class-name) {code &body} body" nil
+      (defsection "Arguments and Values" (para "As per DEFINE-OBJC-METHOD"))
+      (defsection "Description"
+	#:|Like DEFINE-OBJC-METHOD, only used to define methods on the
 	        {emphasis class} named by class-name and on its
 	        subclasses.
 
@@ -401,11 +401,11 @@
 	        "selector" argument can be a list whose first element is a
 	        foreign type specifier for the method's return value type and whose
 	        subsequent elements are either:|
-                         (listing :bullet
-                                  (item "a non-keyword symbol, which can be mapped to a selector string
+	(listing :bullet
+	  (item "a non-keyword symbol, which can be mapped to a selector string
 		        for a parameterless method according to the standard name-mapping
 		        conventions for method selectors.")
-                                  (item "a list of alternating keywords and variable/type specifiers,
+	  (item "a list of alternating keywords and variable/type specifiers,
 		        where the set of keywords can be mapped to a selector string for a
 		        parameterized method according to the standard name-mapping
 		        conventions for method selectors and each variable/type-specifier is
@@ -413,9 +413,9 @@
 		        CAR is a variable name and whose CADR is the corresponding
 		        argument's foreign type specifier."))))
 
-           (definition (:variable *alternate-line-terminator*) "CCL:*ALTERNATE-LINE-TERMINATOR*" nil
-                       (defsection "Description"
-                         #:|This variable is currently only used by the standard reader macro
+    (definition (:variable *alternate-line-terminator*) "CCL:*ALTERNATE-LINE-TERMINATOR*" nil
+      (defsection "Description"
+	#:|This variable is currently only used by the standard reader macro
 	        function for #\\; (single-line comments); that function reads successive
 	        characters until EOF, a #\\NewLine is read, or a character EQL to the
 	        value of *alternate-line-terminator* is read. In {CCL} for Darwin, the
@@ -435,16 +435,16 @@
 	        what READ-CHAR or READ-LINE "see", and that may be necessary to
 	        handle some more complicated cases.|))
 
-           (definition (:class ccl::ns-lisp-string) "CCL::NS-LISP-STRING" nil
-                       (defsection "Superclasses" (para "NS:NS-STRING"))
-                       (defsection "Initargs"
-                           (listing :definition
-                                    (item "{param :string}" ccldoc::=> "
+    (definition (:class ccl::ns-lisp-string) "CCL::NS-LISP-STRING" nil
+      (defsection "Superclasses" (para "NS:NS-STRING"))
+      (defsection "Initargs"
+	(listing :definition
+	  (item "{param :string}" ccldoc::=> "
 		          a Lisp string which is to be the content of
 		          the newly-created ns-lisp-string.
 		        ")))
-                       (defsection "Description"
-                         "
+      (defsection "Description"
+	"
 	        This class
 	        implements the interface of an NSString, which means that it can
 	        be passed to any Cocoa or Core Foundation function which expects
@@ -459,26 +459,26 @@
 	        foreign heap.  Therefore, it is necessary to explicitly free
 	        it, by sending a dealloc message.
 	      ")
-                       (defsection "Examples"
-                           (para "
+      (defsection "Examples"
+	(para "
 	        You can create an ns-lisp-string with
 	        {function make-instance}, just like
 	        any normal Lisp class:
 	      ")
-                         (code-block #:|? (defvar *the-string*
+	(code-block #:|? (defvar *the-string*
      (make-instance 'ccl::ns-lisp-string
                     :string "Hello, Cocoa."))
 |)
-                         (para "
+	(para "
 	        When you are done with the string, you must explicitly
 	        deallocate it:
 	      ")
-                         (code-block "? (ccl::send *the-string* 'dealloc)")
-                         (para "
+	(code-block "? (ccl::send *the-string* 'dealloc)")
+	(para "
 	        You may wish to use an {function unwind-protect}
 	        form to ensure that this happens:
 	      ")
-                         (code-block #:|(let (*the-string*)
+	(code-block #:|(let (*the-string*)
   (unwind-protect (progn (setq *the-string*
                                (make-instance 'ccl::ns-lisp-string
                                               :string "Hello, Cocoa."))
@@ -487,8 +487,8 @@
     (when *the-string*
       (ccl::send *the-string* 'dealloc))))
 |))
-                       (defsection "Notes"
-                           (para "
+      (defsection "Notes"
+	(para "
 	        Currently, ns-lisp-string is defined in
 	        the file ccl/examples/cocoa-backtrace.lisp, which is a
 	        rather awkward place.  It was probably not originally meant

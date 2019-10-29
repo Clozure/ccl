@@ -1,7 +1,7 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Characters and External Formats"
-         (para "All characters and strings in {CCL} fully support Unicode by
+  (para "All characters and strings in {CCL} fully support Unicode by
     using UTF-32. There is only one {code character} type and one
     {code string} type in {CCL}.  There has been a lot of discussion
     about this decision which can be found by searching the
@@ -10,12 +10,12 @@
     that we decided that the simplicity and speed advantages of only
     supporting UTF-32 outweigh the space disadvantage.")
 
-         (defsection "Characters"
-             (glossentry "code point"
-                         "A value in the Unicode code space; that is, a
+  (defsection "Characters"
+    (glossentry "code point"
+      "A value in the Unicode code space; that is, a
                    non-negative integer below {variable
                    char-code-limit} (#x110000).")
-           "There is one {code character} type in {CCL}.
+    "There is one {code character} type in {CCL}.
     All {code character}s are {code base-char}s.  {variable
     char-code-limit} is now {code #x110000}, which means that all
     Unicode characters can be directly represented.  As of Unicode
@@ -42,8 +42,8 @@
     definition for {function ccl::register-character-name} in {code
     ccl:level-1;l1-reader.lisp}.")
 
-         (defsection "External Formats"
-             (para "The standard functions {code open}, {code load}, and
+  (defsection "External Formats"
+    (para "The standard functions {code open}, {code load}, and
     {code compile-file} all accept an {code :external-format} keyword
     argument.  The value of {code :external-format} can be
     {code :default} (the default value), a line termination
@@ -55,7 +55,7 @@
     {param argument} is a plist, the result of {code (apply
     #'make-external-format {param argument})} will be used.")
 
-           "If {code :default} is specified, then the value of {variable
+    "If {code :default} is specified, then the value of {variable
     *default-external-format*} is used.  If no line-termination is
     specified, then the value of {variable *default-line-termination*}
     is used, which defaults to {code :unix}.  If no character encoding
@@ -75,9 +75,9 @@
     external-format-line-termination} and {code
     external-format-character-encoding}."
 
-           (definition (:variable *default-external-format*) "ccl:*default-external-format*" nil
-                       (defsection "Description"
-                         "The value of this variable is used
+    (definition (:variable *default-external-format*) "ccl:*default-external-format*" nil
+      (defsection "Description"
+	"The value of this variable is used
 	        when {code :external-format} is unspecified or specified
 	        as {code :default}. It can meaningfully be given any value
 	        that can be used as an external-format (except for the
@@ -88,9 +88,9 @@
 	        {code (:line-termination :unix)}, among other
 	        things."))
 
-           (definition (:variable *default-line-termination*) "ccl:*default-line-termination*" nil
-                       (defsection "Description"
-                         "The value of this variable is used when an
+    (definition (:variable *default-line-termination*) "ccl:*default-line-termination*" nil
+      (defsection "Description"
+	"The value of this variable is used when an
                 external-format doesn't specify a line-termination
                 convention (or specifies it as {code :default}.) It can
                 meaningfully be given any value that can be used as a
@@ -100,14 +100,14 @@
 	        The initial value of this variable
 	        in {CCL} is {code :unix}."))
 
-           (definition (:function make-external-format)
-                       "make-external-format {code &key} domain character-encoding line-termination"
-                       "Either creates a new external format object, or
+    (definition (:function make-external-format)
+      "make-external-format {code &key} domain character-encoding line-termination"
+      "Either creates a new external format object, or
 	return an existing one with the same specified slot
 	values."
-                       (defsection "Arguments and Values"
-                           (listing :definition
-                                    (item "{param domain}" ccldoc::=> "This is used
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param domain}" ccldoc::=> "This is used
 	      to indicate where the external format is to be used.
 	      Its value can be almost anything.  It defaults to {code
 	      NIL}.  There are two domains that have a pre-defined
@@ -116,7 +116,7 @@
 	      to/from a socket.  The value of {param domain} affects
 	      the default values for {param character-encoding} and
 	      {param line-termination}.")
-                                    (item "{param character-encoding}" ccldoc::=> "A
+	  (item "{param character-encoding}" ccldoc::=> "A
 	      keyword that specifies the character encoding for the
 	      external format. {section Character Encodings}.
 	      Defaults to {code :default} which means if {param
@@ -126,41 +126,41 @@
 	      variable {variable *default-socket-character-encoding*}.
 	      The initial value of both of these variables is {code
 	      NIL}, which means the {code :iso-8859-1} encoding.")
-                                    (item "{param line-termination}" ccldoc::=> "A
+	  (item "{param line-termination}" ccldoc::=> "A
 	      keyword that indicates a line termination keyword
 	      {section Line Termination Keywords}.  Defaults to
 	      {code :default} which means use the value of the
 	      variable {variable *default-line-termination*}.")
-                                    (item "{param external-format}" ccldoc::=> "An
+	  (item "{param external-format}" ccldoc::=> "An
 		     external-format object as described above.")))
 
-                       (defsection "Description"
-                           (para "Despite the function's name, it doesn't necessarily
+      (defsection "Description"
+	(para "Despite the function's name, it doesn't necessarily
 	create a new, unique {code external-format} object: two calls to
 	{function make-external-format} with the same arguments made in the same
 	dynamic environment return the same (eq) object."))))
 
-         (defsection "Line Termination Keywords"
-             (para "Line termination keywords indicate which characters are
+  (defsection "Line Termination Keywords"
+    (para "Line termination keywords indicate which characters are
   used to indicate the end of a line.  On input, the external line
   termination characters are replaced by {code #\\Newline} and on
   output, {code #\\Newline}s are converted to the external line
   termination characters.")
 
-           (table "Line Termination Keywords"
-                  (row (item "keyword") (item "character(s)"))
-                  (row (item "{code :unix}") (item "{code #\\Linefeed}"))
-                  (row (item "{code :macos}") (item "{code #\\Return}"))
-                  (row (item "{code :cr}") (item "{code #\\Return}"))
-                  (row (item "{code :crlf}") (item "{code #\\Return #\\Linefeed}"))
-                  (row (item "{code :cp/m}") (item "{code #\\Return #\\Linefeed}"))
-                  (row (item "{code :msdos}") (item "{code #\\Return #\\Linefeed}"))
-                  (row (item "{code :dos}") (item "{code #\\Return #\\Linefeed}"))
-                  (row (item "{code :windows}") (item "{code #\\Return #\\Linefeed}"))
-                  (row (item "{code :inferred}") (item "see below"))
-                  (row (item "{code :unicode}") (item "{code #\\Line_Separator}")))
+    (table "Line Termination Keywords"
+      (row (item "keyword") (item "character(s)"))
+      (row (item "{code :unix}") (item "{code #\\Linefeed}"))
+      (row (item "{code :macos}") (item "{code #\\Return}"))
+      (row (item "{code :cr}") (item "{code #\\Return}"))
+      (row (item "{code :crlf}") (item "{code #\\Return #\\Linefeed}"))
+      (row (item "{code :cp/m}") (item "{code #\\Return #\\Linefeed}"))
+      (row (item "{code :msdos}") (item "{code #\\Return #\\Linefeed}"))
+      (row (item "{code :dos}") (item "{code #\\Return #\\Linefeed}"))
+      (row (item "{code :windows}") (item "{code #\\Return #\\Linefeed}"))
+      (row (item "{code :inferred}") (item "see below"))
+      (row (item "{code :unicode}") (item "{code #\\Line_Separator}")))
 
-           (para "{code :inferred} means that a stream's line-termination
+    (para "{code :inferred} means that a stream's line-termination
   convention is determined by looking at the contents of a file.  It
   is only useful for {code file-stream}s that're open for
   {code :input} or {code :io}.  The first buffer full of data is
@@ -172,8 +172,8 @@
   buffer or if {code #\\Return} is preceded by {code #\\Linefeed}, the
   file's line termination type is set to {code :unix}."))
 
-         (defsection "Character Encodings"
-           "Internally, all characters and strings in {CCL} are in
+  (defsection "Character Encodings"
+    "Internally, all characters and strings in {CCL} are in
     UTF-32.  Externally, files or socket streams may encode characters
     in a wide variety of ways.  The International Organization for
     Standardization, widely known as ISO, defines many of these
@@ -193,30 +193,30 @@
     to know much about the {code character-encoding} objects and it is
     usually preferable to refer to a character encoding by its name."
 
-           (para "The set of character encodings supported by {CCL} can be
+    (para "The set of character encodings supported by {CCL} can be
       retrieved by calling {function describe-character-encodings}.")
 
-           (definition (:function describe-character-encodings) "describe-character-encodings" nil
-                       (defsection "Description"
-                           (para "Writes descriptions of all defined character encodings
+    (definition (:function describe-character-encodings) "describe-character-encodings" nil
+      (defsection "Description"
+	(para "Writes descriptions of all defined character encodings
 	  to {variable *terminal-io*}.  These descriptions
 	  include the names of the encoding’s aliases and a doc string
 	  which briefly describes each encoding’s properties and
 	  intended use.")))
 
-           (defsection "Encoding Problems"
-               (para "When a character cannot be encoded or decoded according to a
+    (defsection "Encoding Problems"
+      (para "When a character cannot be encoded or decoded according to a
       specified external format, the character in question will be replaced with
       an encoding-specific replacement character.  This will be
       {code #\\Replacement_Character} if the destination external format includes
       such a character; otherwise the replacement character will be {code #\\Sub}.")
-             (para "The presence of a replacement character
+      (para "The presence of a replacement character
       typically indicates that something got lost in
       translation: either data was not encoded properly or there was a
       bug in the decoding process."))
 
-           (defsection "Byte Order Marks"
-             "The endianness of a character encoding is sometimes
+    (defsection "Byte Order Marks"
+      "The endianness of a character encoding is sometimes
       explicit, and sometimes not.  For example,
       {code :utf-16be} indicates big-endian, but
       {code :utf-16} does not specify endianness.  A byte
@@ -239,8 +239,8 @@
       character.")
 
 
-           (defsection "Selected Character Encodings"
-               (para "A few commonly-used encodings are described here.  For the
+    (defsection "Selected Character Encodings"
+      (para "A few commonly-used encodings are described here.  For the
      complete list, call {function describe-character-encodings}. Most
      encodings have aliases, e.g. the encoding named
      {code :iso-8859-1} can also be referred to by the
@@ -248,8 +248,8 @@
      among others.  Where possible, the keywordized name of an
      encoding is equivalent to the preferred MIME charset name (and
      the aliases are all registered IANA charset names.)")
-             (listing :definition
-                      (item "{code :utf-8}" ccldoc::=> "An 8-bit, variable-length character encoding in
+      (listing :definition
+	(item "{code :utf-8}" ccldoc::=> "An 8-bit, variable-length character encoding in
        which characters with CHAR-CODEs in the range #x00-#x7f can be
        encoded in a single octet; characters with larger code values
        can be encoded in 2 to 4 bytes.
@@ -259,7 +259,7 @@
        {variable *terminal-io*} can be set via the
        {code -K} command-line argument (see {section Command Line Options}).")
 
-                      (item "{code :iso-8859-1}" ccldoc::=> "An 8-bit, fixed-width character encoding in
+	(item "{code :iso-8859-1}" ccldoc::=> "An 8-bit, fixed-width character encoding in
        which all character codes map to their Unicode
        equivalents. Intended to support most characters used in most
        Western European languages.
@@ -274,14 +274,14 @@
        Aliases: {code :iso_8859-1, :latin1, :l1,
        :ibm819, :cp819, :csisolatin1}")
 
-                      (item "{code :us-ascii}" ccldoc::=> "An 7-bit, fixed-width character encoding in
+	(item "{code :us-ascii}" ccldoc::=> "An 7-bit, fixed-width character encoding in
        which all character codes map to their Unicode
        equivalents.
 
        Aliases: {code :csascii, :cp637, :ibm637, :us,
        :iso646-us, :ascii, :iso-ir-6}")
 
-                      (item "{code :utf-16}" ccldoc::=> "A 16-bit, variable-length encoding in which
+	(item "{code :utf-16}" ccldoc::=> "A 16-bit, variable-length encoding in which
        characters with CHAR-CODEs less than #x10000 can be encoded in
        a single 16-bit word and characters with larger codes can be
        encoded in a pair of 16-bit words.  The endianness of the
@@ -291,22 +291,22 @@
        to be in big-endian order. Output is written in native
        byte-order with a leading byte-order mark.")))
 
-           (defsection "Encoding and Decoding Strings"
+    (defsection "Encoding and Decoding Strings"
 
-             "{CCL} provides functions to encode and decode strings to
+      "{CCL} provides functions to encode and decode strings to
            and from vectors of type (simple-array (unsigned-byte 8))."
 
-             (definition (:function count-characters-in-octet-vector)
-                         "count-characters-in-octet-vector vector {code &key} start end external-format" nil
-                         "Returns the number of characters that would be
+      (definition (:function count-characters-in-octet-vector)
+	"count-characters-in-octet-vector vector {code &key} start end external-format" nil
+	"Returns the number of characters that would be
     produced by decoding {param vector} (or the subsequence thereof
     delimited by {param start} and {param end}) according to {param
     external-format}.")
 
-             (definition (:function decode-string-from-octets)
-                         "decode-string-from-octets vector {code &key} start end external-format string" nil
-                         (defsection "Description"
-                           "Decodes the octets in {param vector} (or the
+      (definition (:function decode-string-from-octets)
+	"decode-string-from-octets vector {code &key} start end external-format string" nil
+	(defsection "Description"
+	  "Decodes the octets in {param vector} (or the
     subsequence of it delimited by {param start} and {param end}) into
     a string according to {param external-format}.
 
@@ -322,9 +322,9 @@
     characters according to {param external-format} will be decoded as
     {code #\\Replacement_Character}."))
 
-             (definition (:function encode-string-to-octets)
-                         "encode-string-to-octets string &key start end external-format use-byte-order-mark vector vector-offset" nil
-                         "Encodes {param string} (or the substring of it delimited by
+      (definition (:function encode-string-to-octets)
+	"encode-string-to-octets string &key start end external-format use-byte-order-mark vector vector-offset" nil
+	"Encodes {param string} (or the substring of it delimited by
            {param start} and {param end}) into {param vector} according to
            {param external-format}.
            It returns, as multiple values, the vector of octets
@@ -349,13 +349,13 @@
           (either {code #\\Replacement_Character} or {code #\\Sub)} before
           being encoded and written into the output vector.")
 
-             (definition (:function string-size-in-octets)
-                         "string-size-in-octets string &key start end external-format use-byte-order-mark" nil
-                         "Returns the number of octets required to encode {param
+      (definition (:function string-size-in-octets)
+	"string-size-in-octets string &key start end external-format use-byte-order-mark" nil
+	"Returns the number of octets required to encode {param
            string} (or the substring delimited by {code :start} and
            {code :end}) according to {code :external-format}.
 
 	   When {param use-byte-order-mark} is true, the returned size
            will include the space needed for a byte-order marker.")))
 
-         ) ;chapter
+  ) ;chapter

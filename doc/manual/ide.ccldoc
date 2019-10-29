@@ -1,8 +1,8 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "The {CCL} IDE"
-         (defsection "Introduction"
-           #:|{CCL} ships with the complete source code for an integrated
+  (defsection "Introduction"
+    #:|{CCL} ships with the complete source code for an integrated
     development environment written using Cocoa on Mac OS X. This
     chapter describes how to build and use that environment,
     referred to hereafter simply as "the IDE".
@@ -17,18 +17,18 @@
     features and many bugfixes. Although it's by no means a finished product,
     we hope it will prove more useful than previous versions, and we
     plan additional work on the IDE for future releases.|)
-         (defsection "Building the IDE"
-             (para "Building the {CCL} IDE is now a very simple
+  (defsection "Building the IDE"
+    (para "Building the {CCL} IDE is now a very simple
       process.")
-           (listing :number
-                    (item "In a shell session, cd to the ccl directory.")
-                    (item "Run ccl from the shell. The easiest way to do this is
+    (listing :number
+      (item "In a shell session, cd to the ccl directory.")
+      (item "Run ccl from the shell. The easiest way to do this is
           generally to execute the ccl or ccl64 command.")
-                    (item "Evaluate the form {code (require :cocoa-application)}"))
-           (para #:|For example, assuming that the {CCL} distribution is
+      (item "Evaluate the form {code (require :cocoa-application)}"))
+    (para #:|For example, assuming that the {CCL} distribution is
       installed in "/usr/local/ccl", the following sequence of shell
       interactions builds the IDE:|)
-           (code-block #:|
+    (code-block #:|
 oshirion:ccl mikel$ ccl64
 Welcome to Clozure Common Lisp Version 1.2-r9198M-trunk  (DarwinX8664)!
 ? (require :cocoa-application)
@@ -42,39 +42,39 @@ Saving application to /usr/local/ccl/Clozure CL.app/
 oshirion:ccl mikel$
 
     |)
-           (para #:|{CCL} compiles and loads the various subsystems that
+    (para #:|{CCL} compiles and loads the various subsystems that
       make up the IDE, then constructs a Cocoa application bundle
       named "Clozure CL.app" and saves the Lisp image into
       it. Normally {CCL} creates the application bundle in the root
       directory of the {CCL} distribution.|))
-         (defsection "Running the IDE"
-             (para #:|After it has been built, you can run the "Clozure CL.app"
+  (defsection "Running the IDE"
+    (para #:|After it has been built, you can run the "Clozure CL.app"
       application normally, by double-clicking its icon. When
       launched, the IDE initially displays a
       single |
-                   (term "listener window") " that you can use to interact with Lisp. You
+      (term "listener window") " that you can use to interact with Lisp. You
       can type Lisp expressions for evaluation at the prompt in the
       listener window. You can also
       use "
-                   (term "Hemlock") " editing
+      (term "Hemlock") " editing
       commands to edit the text of expressions in the listener
       window."))
-         (defsection "IDE Features"
-             (defsection "Editor Windows"
-                 (para "You can open an editor window either by choosing Open from
+  (defsection "IDE Features"
+    (defsection "Editor Windows"
+      (para "You can open an editor window either by choosing Open from
         the File menu and then selecting a text file, or by choosing
         New from the File menu. You can also evaluate the
         expression {code (ed)} in the listener window; in that
         case {CCL} creates a new window as if you had chosen New from
         the File menu.")
-               (para "Editor windows
+      (para "Editor windows
         implement "
-                     (term "Hemlock") "
+	(term "Hemlock") "
         editing commands. You can use all the editing and customization
         features of Hemlock within any editor window (including listener
         windows)."))
-           (defsection "The Lisp Menu"
-               (para "The Lisp menu provides several commands for interacting
+    (defsection "The Lisp Menu"
+      (para "The Lisp menu provides several commands for interacting
         with the running Lisp session, in addition to the ways you can
         interact with it by evaluating expressions. You can evaluate a
         selected range of text in any editing buffer. You can compile
@@ -83,12 +83,12 @@ oshirion:ccl mikel$
         file associated with an editor window; that means that if you
         try to load or compile a window that has not been saved to a
         file, the result is an error).")
-             (para "You can interrupt computations, trigger breaks, and select
+      (para "You can interrupt computations, trigger breaks, and select
         restarts from the Lisp menu. You can also display a backtrace or
         open the "
-                   (ref (section "The Inspector Window") "Inspector window") ".")
-             (defsection "Checking for Updates"
-               #:|At the bottom of the Lisp menu is an item entitled
+	(ref (section "The Inspector Window") "Inspector window") ".")
+      (defsection "Checking for Updates"
+	#:|At the bottom of the Lisp menu is an item entitled
         "Check for Updates". If your copy of {CCL} came from the
         Clozure Subversion server (which is the preferred source), and
         if your internet connection is working, then you can select
@@ -119,17 +119,17 @@ oshirion:ccl mikel$
         your working environment ready in case of such
         situations. You can also always obtain a full, fresh copy of
         {CCL} from Clozure's repository..|))
-           (defsection "The Tools Menu"
-               (para "The tools menu provides access to the Apropos and
+    (defsection "The Tools Menu"
+      (para "The tools menu provides access to the Apropos and
         Processes windows. The Apropos window searches the running Lisp
         image for symbols that match any text you enter. You can use the
         Apropos window to quickly find function names and other useful
         symbols. The Processes window lists all threads running in the
         current Lisp session. If you double-click a process entry, {CCL}
         opens an "
-                     (ref (section "The Inspector Window") "Inspector window") " on that process."))
-           (defsection "The Inspector Window"
-             "The Inspector window displays information about a Lisp
+	(ref (section "The Inspector Window") "Inspector window") " on that process."))
+    (defsection "The Inspector Window"
+      "The Inspector window displays information about a Lisp
         value. The information displayed varies from the very simple, in
         the case of a simple data value such as a character, to the
         complex, in the case of structured data such as lists or CLOS
@@ -152,8 +152,8 @@ oshirion:ccl mikel$
         (marked with a curved arrow) updates the display of the
         Inspector window, enabling you to quickly see the results of
         changing a data structure."))
-         (defsection "IDE Sources"
-           #:|{CCL} builds the IDE from sources in the "objc-bridge" and
+  (defsection "IDE Sources"
+    #:|{CCL} builds the IDE from sources in the "objc-bridge" and
       "cocoa-ide" directories in the {CCL} distribution. The IDE as a
       whole is a relatively complicated application, and is probably not
       the best place to look when you are first trying to understand how
@@ -171,24 +171,24 @@ oshirion:ccl mikel$
       Cocoa features of {CCL} from a terminal session (or from an Emacs
       session using SLIME or ILISP), you can evaluate {code (require
         :cocoa)}.|)
-         (defsection "The Application Builder"
-             (para "One important feature of the IDE currently has no Cocoa user
+  (defsection "The Application Builder"
+    (para "One important feature of the IDE currently has no Cocoa user
       interface: the application builder. The application builder
       constructs a
       Cocoa "
-                   (term "application bundle") " that runs a Lisp image when double-clicked. You
+      (term "application bundle") " that runs a Lisp image when double-clicked. You
       can use the application builder to create Cocoa applications in
       Lisp. These applications are exactly like Cocoa applications
       created with XCode and Objective-C, except that they are written
       in Lisp.")
-           (para "To make the application builder available, evaluate the
+    (para "To make the application builder available, evaluate the
       expression {code (require :build-application)}. {CCL} loads
       the required subsystems, if necessary.")
-           (definition (:function ccl::build-application)
-                       #:|BUILD-APPLICATION {code &key} ( name "MyApplication" ) ( type-string "APPL" ) ( creator-string "OMCL" ) ( directory (current-directory) ) ( copy-ide-resources t ) ( info-plist NIL ) ( nibfiles NIL ) ( main-nib-name NIL ) ( application-class 'GUI::COCOA-APPLICATION ) ( toplevel-function NIL )|
-                       nil
-                       (defsection "Description"
-                         "
+    (definition (:function ccl::build-application)
+      #:|BUILD-APPLICATION {code &key} ( name "MyApplication" ) ( type-string "APPL" ) ( creator-string "OMCL" ) ( directory (current-directory) ) ( copy-ide-resources t ) ( info-plist NIL ) ( nibfiles NIL ) ( main-nib-name NIL ) ( application-class 'GUI::COCOA-APPLICATION ) ( toplevel-function NIL )|
+      nil
+      (defsection "Description"
+	"
       The {variable ccl::build-application} function constructs an
       application bundle, populates it with the files needed to satisfy
       Mac OS X that the bundle is a launchable application, and saves an
@@ -201,24 +201,24 @@ oshirion:ccl mikel$
 
       The keyword arguments control various aspects of application
       bundle as {code BUILD-APPLICATION} builds it."
-                         (listing :definition
-                                  (item "{param name}" ccldoc::=> #:|Specifies the application name of the
+	(listing :definition
+	  (item "{param name}" ccldoc::=> #:|Specifies the application name of the
             bundle. {code BUILD-APPLICATION} creates an application
             bundle whose name is given by this parameter, with the
             extension ".app" appended. For example, using the default
             value for this parameter results in a bundle named
             "MyApplication.app".|)
-                                  (item "{param type-string}" ccldoc::=> "Specifies type of bundle to create. You should normally
+	  (item "{param type-string}" ccldoc::=> "Specifies type of bundle to create. You should normally
             never need to change the default value, which Mac OS X uses to
             identify application bundles.")
-                                  (item "{param creator-string}" ccldoc::=> "Specifies the " (term "creator code")
-                                        ", which uniquely identifies the application
+	  (item "{param creator-string}" ccldoc::=> "Specifies the " (term "creator code")
+	    ", which uniquely identifies the application
             under Mac OS X. The default creator code is that of {CCL}. For
             more information about reserving and assigning creator codes,
             see
             Apple's {link http://developer.apple.com/datatype/index.html developer
               page} on the topic.")
-                                  (item "{param directory}" ccldoc::=> #:|The directory in which {code BUILD-APPLICATION}
+	  (item "{param directory}" ccldoc::=> #:|The directory in which {code BUILD-APPLICATION}
             creates the application bundle. By default, it creates the
             bundle in the current working directory. Unless you
             use {code CURRENT-DIRECTORY} to set the working
@@ -226,7 +226,7 @@ oshirion:ccl mikel$
             so it's safest to specify a full pathname for this argument. A
             typical value might be {code "/Users/foo/Desktop/"}
             (assuming, of course, that your username is "foo").|)
-                                  (item "{param copy-ide-resources}" ccldoc::=> "Whether to copy the resource files from the IDE's
+	  (item "{param copy-ide-resources}" ccldoc::=> "Whether to copy the resource files from the IDE's
             application bundle. By
             default, {code BUILD-APPLICATION} copies nibfiles
             and other resources from the IDE to the newly-created
@@ -241,7 +241,7 @@ oshirion:ccl mikel$
             for the value of this parameter, in which case the IDE
             resources are not copied into your application
             bundle.")
-                                  (item "{param info-plist}" ccldoc::=> #:|A user-supplied NSDictionary object that defines the
+	  (item "{param info-plist}" ccldoc::=> #:|A user-supplied NSDictionary object that defines the
           contents of the Info.plist file to be written to the
           application bundle. The default value
           is {code NIL}, which specifies that the
@@ -253,12 +253,12 @@ oshirion:ccl mikel$
           function {code make-info-dict}. For details on
           the parameters to this function, see its definition in
           "ccl/cocoa-ide/builder-utilities.lisp".|)
-                                  (item "{param nibfiles}" ccldoc::=> "A list of pathnames, where each pathname identifies
+	  (item "{param nibfiles}" ccldoc::=> "A list of pathnames, where each pathname identifies
             a "
-                                        (term "nibfile") " created
+	    (term "nibfile") " created
             with
             Apple's "
-                                        (term "InterfaceBuilder") #:|
+	    (term "InterfaceBuilder") #:|
             application. {code BUILD-APPLICATION} copies each
             nibfile into the appropriate place in the application bundle,
             enabling the application to load user-interface elements from
@@ -266,19 +266,19 @@ oshirion:ccl mikel$
             nibfiles in the list. Each nibfile must be in ".nib" format,
             not ".xib" format, in order that the application can load
             it.|)
-                                  (item "{param main-nib-name}" ccldoc::=> "The name of
+	  (item "{param main-nib-name}" ccldoc::=> "The name of
             the "
-                                        (term "nibfile") " to load
+	    (term "nibfile") " to load
             initially when launching. The user-interface defined in this
             nibfile becomes the application's main interface. You must
             supply the name of a suitable nibfile for this parameter, or
             the resulting application uses the {CCL} user
             interface.")
-                                  (item "{param application-class}" ccldoc::=> "The name of the application's CLOS class. The default
+	  (item "{param application-class}" ccldoc::=> "The name of the application's CLOS class. The default
             value is the class provided by {CCL} for graphical
             applications. Supply the name of your application class if you
             implement one. If not, {CCL} uses the default class.")
-                                  (item "{param toplevel-function}" ccldoc::=> #:|The toplevel function that runs when the application
+	  (item "{param toplevel-function}" ccldoc::=> #:|The toplevel function that runs when the application
             launches. Normally the default value, which is {CCL}'s
             toplevel, works well, but in some cases you may wish to
             customize the behavior of the application's toplevel. The best
@@ -286,7 +286,7 @@ oshirion:ccl mikel$
             {CCL} source code, especially the implementations
             of {code TOPLEVEL-FUNCTION} in
             "ccl/level-1/l1-application.lisp"|))
-                         #:|{code BUILD-APPLICATION} creates a folder named
+	#:|{code BUILD-APPLICATION} creates a folder named
       "{sample name}.app" in the
       directory {sample directory}. Inside that
       folder, it creates the "Contents" folder that Mac OS X
@@ -325,18 +325,18 @@ oshirion:ccl mikel$
     For more information on how to
     use {code BUILD-APPLICATION}, see the Currency Converter
     example in "ccl/examples/cocoa/currency-converter/".|))
-           (defsection "Running the Application Builder From the Command
+    (defsection "Running the Application Builder From the Command
       Line"
-               (para #:|It's possible to automate use of the application builder
+      (para #:|It's possible to automate use of the application builder
         by running a call to {code CCL:BUILD-APPLICATION}
         from the terminal command line. For example, the following
         command, entered at a shell prompt in Mac OS X's Terminal
         window, builds a working copy of the {CCL} environment called
         "Foo.app":|)
-             (code-block #:|
+      (code-block #:|
 ccl -b -e "(require :cocoa)" -e "(require :build-application)" -e "(ccl::build-application :name \\"Foo\\")"
       |)
-             #:|You can use the same method to automate building your
+      #:|You can use the same method to automate building your
       Lisp/Cocoa applications. {CCL} handles each Lisp expressions
       passed with a {code -e} argument in order, so you
       can simply evaluate a sequence of Lisp expressions as in the
