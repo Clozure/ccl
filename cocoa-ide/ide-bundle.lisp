@@ -145,7 +145,7 @@
          ;; in a pickle, and about all we can do is make this a number
          ;; that we must increment manually.
          #+mac-app-store
-         (bundle-version "111600")      ;1.11.6
+         (bundle-version "111700")      ;1.11.7
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
 		    ("OPENMCL-ICONS" . #+mac-app-store "store.icns"
 				     #-mac-app-store "openmcl-icon.icns")
