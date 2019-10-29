@@ -77,17 +77,17 @@
     ")
       (defsection "Description"
         (listing :definition
-          (item "{param pathname}" ccldoc::=> "The pathname of the file to be memory-mapped.")
-          (item "{param element-type}" ccldoc::=> "The element-type of the vector to be
+	  (item "{param pathname}" ccldoc::=> "The pathname of the file to be memory-mapped.")
+	  (item "{param element-type}" ccldoc::=> "The element-type of the vector to be
             created. Specified as
             a "
-            (term "type-specifier") "
+	    (term "type-specifier") "
             that names a subtype of either {code signed-byte}
             or {code unsigned-byte}."))
 
         (para "The returned vector is
       a "
-          (ref (glossentry "displaced array") "displaced-array") "
+	  (ref (glossentry "displaced array") "displaced-array") "
       whose element-type is {code (UPGRADED-ARRAY-ELEMENT-TYPE
         element-type)}. The target of the displaced array is a
       vector of type {code (SIMPLE-ARRAY element-type (*))} whose
@@ -156,7 +156,7 @@
     (definition (:macro defstatic) "defstatic var value &key docstring" nil
       (para "Proclaims the
       variable "
-        (ref (glossentry "special variable") "special") ",
+	(ref (glossentry "special variable") "special") ",
       assigns the variable the supplied {param value}, and assigns
       the {param docstring} to the
       variable's {code variable} documentation. Marks the
@@ -269,22 +269,22 @@
 
       (defsection "Description"
         (listing :definition
-          (item "{param filename}" ccldoc::=> "The pathname of the file to be created when {CCL}
+	  (item "{param filename}" ccldoc::=> "The pathname of the file to be created when {CCL}
             saves the application.")
-          (item "{param toplevel-function}" ccldoc::=>
-            (para "The function to be executed after startup is
+	  (item "{param toplevel-function}" ccldoc::=>
+	    (para "The function to be executed after startup is
             complete. The toplevel is a function of no arguments that
             performs whatever actions the lisp system should perform
             when launched with this image.")
-            (para "If this parameter is not supplied, {CCL} uses its
+	    (para "If this parameter is not supplied, {CCL} uses its
             default toplevel. The default toplevel runs
             the "
-              (ref (glossentry "REPL") "read-eval-print loop") "."))
-          (item "{param init-file}" ccldoc::=> "The pathname of a Lisp file to be loaded when the
+	      (ref (glossentry "REPL") "read-eval-print loop") "."))
+	  (item "{param init-file}" ccldoc::=> "The pathname of a Lisp file to be loaded when the
             image starts up. You can place initialization expressions in
             this file, and use it to customize the behavior of the Lisp
             system when it starts up.")
-          (item "{param error-handler}" ccldoc::=> "The error-handling mode for the saved image. The
+	  (item "{param error-handler}" ccldoc::=> "The error-handling mode for the saved image. The
             supplied value determines what happens when an error is not
             handled by the saved image. Valid values
             are {code :quit} (Lisp exits with an error
@@ -294,26 +294,26 @@
             in a listener). If you don't supply this parameter, the
             saved image uses the default error handler
             ({code :listener}).")
-          (item "{param application-class}" ccldoc::=> "The CLOS class that represents the saved Lisp
+	  (item "{param application-class}" ccldoc::=> "The CLOS class that represents the saved Lisp
             application. Normally you don't need to supply this
             parameter; {function save-application} uses the
             class {code ccl:lisp-development-system}. In some
             cases you may choose to create a custom application class;
             in that case, pass the name of the class as the value for
             this parameter.")
-          (item "{param clear-clos-caches}" ccldoc::=> "If true, ensures that CLOS caches are emptied before
+	  (item "{param clear-clos-caches}" ccldoc::=> "If true, ensures that CLOS caches are emptied before
             saving the image. Normally you don't need to supply this
             parameter, but if for some reason you want to ensure the
             CLOS caches are clear when the image starts up, you can pass
             any true value.")
-          (item "{param purify}" ccldoc::=> "
+	  (item "{param purify}" ccldoc::=> "
 	    When true, calls (in effect) {code purify} before
 	    saving the heap image.  This moves certain objects that
 	    are unlikely to become garbage to a special memory area
 	    that is not scanned by the GC (since it is expected that
 	    the GC wouldn't find anything to collect).
          ")
-          (item "{param impurify}" ccldoc::=> "
+	  (item "{param impurify}" ccldoc::=> "
 	    If true, calls (in effect) {code impurify} before
 	    saving the heap image.  (If both {code :impurify}
 	    and {code :purify} are true, first
@@ -324,10 +324,10 @@
 	   areas into the regular dynamic heap, where they will be scanned
 	   by the GC.
 	 ")
-          (item "{param mode}" ccldoc::=> "
+	  (item "{param mode}" ccldoc::=> "
 	    A number specifying the mode (permission bits) of the output file.
 	  ")
-          (item "{param prepend-kernel}" ccldoc::=> "Specifies the file to prepend to the saved heap
+	  (item "{param prepend-kernel}" ccldoc::=> "Specifies the file to prepend to the saved heap
 	  image.  A value of {code t} means to prepend
 	  the lisp kernel binary that the lisp started with.
 	  Otherwise, the value of {code :prepend-kernel}
@@ -341,7 +341,7 @@
 	   the saved heap image.  This can be useful in some special
 	   cases.
 	 ")
-          (item "{param native}" ccldoc::=> "If true, saves the image as a native (ELF, Mach-O, PE)
+	  (item "{param native}" ccldoc::=> "If true, saves the image as a native (ELF, Mach-O, PE)
           shared library.  (On platforms where this isn't yet supported,
           a warning is issued and the option is ignored.)
          "))))
@@ -387,9 +387,9 @@ called after starting the lisp."))
        loading the individual input fasl files in the specified order."
 
       (para
-        "The {code pathname-type} of the output file and of each input
+	"The {code pathname-type} of the output file and of each input
         file defaults to the current platform's fasl file type (see "
-        (ref (table "Platform-specific filename conventions")) ").
+	(ref (table "Platform-specific filename conventions")) ").
        If any of the input files has a different type an error will
        be signaled, but {function fasl-concatenate} doesn't otherwise
        try too hard to verify that the input files are real fasl files
@@ -424,10 +424,10 @@ called after starting the lisp."))
       The value of corresponding control flag is returned."
 
       (listing :definition
-        (item "rounding-mode" ccldoc::=> "One of {code :nearest}, {code :zero},
+	(item "rounding-mode" ccldoc::=> "One of {code :nearest}, {code :zero},
 {code :positive}, or {code :negative}")
-        (item "overflow, underflow, division-by-zero, invalid, inexact"
-          ccldoc::=> "
+	(item "overflow, underflow, division-by-zero, invalid, inexact"
+	  ccldoc::=> "
 	      If {code t}, the floating-point exception is signaled.
 	      If {code nil}, it is masked.
 	    ")))
@@ -437,12 +437,12 @@ called after starting the lisp."))
 	flags for the current thread."
       (defsection "Arguments and Values"
         (listing :definition
-          (item "{param rounding-mode}" ccldoc::=> "
+	  (item "{param rounding-mode}" ccldoc::=> "
 	      If supplied, must be one of :nearest, :zero, :positive, or
 	      :negative.
 	    ")
-          (item "{param overflow}, {param underflow}, {param division-by-zero}, {param invalid}, {param inexact}"
-            ccldoc::=> "NIL to mask the exception, T to signal it.")))
+	  (item "{param overflow}, {param underflow}, {param division-by-zero}, {param invalid}, {param inexact}"
+	    ccldoc::=> "NIL to mask the exception, T to signal it.")))
       (defsection "Description"
         (para "
 	Sets the current thread's exception-enable and rounding-mode
@@ -460,14 +460,14 @@ called after starting the lisp."))
   possible outcomes:
 ")
       (listing :bullet
-        (item "
+	(item "
       Not covered: this form was never entered.
     ")
-        (item "
+	(item "
       Partly covered: This form was entered, and some parts were
       executed and some weren't.
     ")
-        (item "
+	(item "
       Fully covered: Every bit of code generated from this form was
       executed.
     ")))
@@ -499,15 +499,15 @@ called after starting the lisp."))
   expressions.  You can work around this by creating a function and calling
   it. I.e. instead of
   "
-        (code-block "(progn
+	(code-block "(progn
   (do-this)
   (setq that ...) ...))")
-        "do: "
-        (code-block "(defun init-this-and-that ()
+	"do: "
+	(code-block "(defun init-this-and-that ()
   (do-this)
   (setq that ...)  ...)
 (init-this-and-that)")
-        "
+	"
 
 Then you can see the coverage information in the definition of
 {code init-this-and-that}.
@@ -519,7 +519,7 @@ Then you can see the coverage information in the definition of
   instrumentation. Compiling files will generate code coverage
   instrumentation if {code ccl:*compile-code-coverage*}
   is true:  "
-        (code-block "
+	(code-block "
 (setq ccl:*compile-code-coverage* t)
 (recompile-all-your-files)"))
 
@@ -535,14 +535,14 @@ Then you can see the coverage information in the definition of
    coverage deltas between any two points in time.  You might do this
    while running a test suite, to record the coverage for each test,
    for example: "
-        (code-block "
+	(code-block "
 (ccl:reset-incremental-coverage)
 (loop with coverage = (make-hash-table)
       for test in (tests-to-run)
       do (run-test test)
       do (setf (gethash test coverage) (ccl:get-incremental-coverage))
       finally (return coverage))")
-        "creates a hash table mapping a test to a representation of all coverage recorded while running the
+	"creates a hash table mapping a test to a representation of all coverage recorded while running the
    test.  This hash table can then be passed to {code ccl:report-coverage}, {code ccl:incremental-coverage-svn-matches}
    or {code ccl:incremental-coverage-source-matches}.
 "))
@@ -551,29 +551,29 @@ Then you can see the coverage information in the definition of
   The following functions can be used to manage the coverage data:
 ")
       (definition (:function report-coverage)
-        "report-coverage output-file {code &key} (tags nil) (external-format :default) (statistics t) (html t)"
-        "Generate a code coverage report"
+	"report-coverage output-file {code &key} (tags nil) (external-format :default) (statistics t) (html t)"
+	"Generate a code coverage report"
         (defsection "Arguments and Values"
           (listing :definition
-            (item "{param output-file}" ccldoc::=> "
+	    (item "{param output-file}" ccldoc::=> "
           Pathname for the output index file.
 	")
-            (item "{param html}" ccldoc::=> "
+	    (item "{param html}" ccldoc::=> "
 	  If non-nil (the default), this will generate an HTML report, consisting of
 	  an index file in {param output-file} and, in the same directory,
           one html file for each instrumented source file that has been loaded in the
           current session.
 	")
-            (item "{param tags}" ccldoc::=> "
+	    (item "{param tags}" ccldoc::=> "
 	  If non-nil, this should be a hash table mapping arbitrary keys (tags) to incremental coverage deltas.  The
           HTML report will show a list of tags, and allow selection of an arbitrary subset of them to show the
           coloring and statistics for coverage by that subset.
 	")
-            (item "{param external-format}" ccldoc::=> "
+	    (item "{param external-format}" ccldoc::=> "
 	  Controls the external format of the html files.
 	")
-            (item "{param statistics}" ccldoc::=>
-              "If non-nil (the default), a comma-separated file is
+	    (item "{param statistics}" ccldoc::=>
+	      "If non-nil (the default), a comma-separated file is
 	  generated with the summary of statistics. You can specify a
 	  filename for the statistics argument, otherwise
 	  {code statistics.csv} is created in the directory of {param output-file}.
@@ -585,8 +585,8 @@ Then you can see the coverage information in the definition of
       {system bar.lx64fsl}, and have run some tests, you could
       do
     "
-            (code-block "(report-coverage \"/my/dir/coverage/report.html\")")
-            "
+	    (code-block "(report-coverage \"/my/dir/coverage/report.html\")")
+	    "
     and this would generate {system report.html},
     {system foo_lisp.html} and
     {system bar_lisp.html}, and
@@ -594,7 +594,7 @@ Then you can see the coverage information in the definition of
     {system /my/dir/coverage/}.
     ")))
       (definition (:function reset-coverage) "reset-coverage"
-        "Resets all coverage data back to the “Not Executed” state"
+	"Resets all coverage data back to the “Not Executed” state"
         (defsection "Description"
           (para "Resets all coverage data back to the “Not Executed” state")))
 
@@ -678,7 +678,7 @@ Then you can see the coverage information in the definition of
       created from compiling such a file.
     ")))
       (definition (:function coverage-statistics) "coverage-statistics"
-        (clause "
+	(clause "
       Returns a sequence of {code ccl:coverage-statistics} objects, one per source file.
     ")
         (defsection "Description"
@@ -688,41 +688,41 @@ Then you can see the coverage information in the definition of
       the statistics file by {function report-coverage}. The following
       accessors are defined for {code ccl:coverage-statistics} objects:
       "
-            (listing :definition
-              (item "{function coverage-source-file}" ccldoc::=> "
+	    (listing :definition
+	      (item "{function coverage-source-file}" ccldoc::=> "
 	    the name of the source file corresponding to this information
 	  ")
-              (item "{function coverage-expressions-total}" ccldoc::=> "
+	      (item "{function coverage-expressions-total}" ccldoc::=> "
 	    the total number of expressions
 	  ")
-              (item "{function coverage-expressions-entered}" ccldoc::=> "
+	      (item "{function coverage-expressions-entered}" ccldoc::=> "
 	    the number of source expressions that have been entered
 	    (i.e. at least partially covered)
 	  ")
-              (item "{function coverage-expressions-covered}" ccldoc::=> "
+	      (item "{function coverage-expressions-covered}" ccldoc::=> "
 	    the number of source expressions that were fully covered
 	  ")
-              (item "{function coverage-unreached-branches}" ccldoc::=> "
+	      (item "{function coverage-unreached-branches}" ccldoc::=> "
 	    the number of conditionals with one branch taken and one not taken
 	  ")
-              (item "{function coverage-code-forms-total}" ccldoc::=> "
+	      (item "{function coverage-code-forms-total}" ccldoc::=> "
 	    the total number of code forms. A code form is an
 	    expression in the final stage of compilation, after all
 	    macroexpansion and compiler transforms and simplification
 	  ")
-              (item "{function coverage-code-forms-covered}" ccldoc::=> "
+	      (item "{function coverage-code-forms-covered}" ccldoc::=> "
 	    the number of code forms that have been entered
 	  ")
-              (item "{function coverage-functions-total}" ccldoc::=> "
+	      (item "{function coverage-functions-total}" ccldoc::=> "
 	    the total number of functions
 	  ")
-              (item "{function coverage-functions-fully-covered}" ccldoc::=> "
+	      (item "{function coverage-functions-fully-covered}" ccldoc::=> "
 	    the number of functions that were fully covered
 	  ")
-              (item "{function coverage-functions-partly-covered}" ccldoc::=> "
+	      (item "{function coverage-functions-partly-covered}" ccldoc::=> "
 	    the number of functions that were partly covered
 	  ")
-              (item "{function coverage-functions-not-entered}" ccldoc::=> "
+	      (item "{function coverage-functions-not-entered}" ccldoc::=> "
 	    the number of functions never entered
 	  ")))))
       (definition (:function reset-incremental-coverage) "reset-incremental-coverage" "
@@ -755,16 +755,16 @@ Then you can see the coverage information in the definition of
       specifically documented to accept incremental coverage deltas.
      "))
       (definition (:function incremental-coverage-source-matches)
-        "incremental-coverage-source-matches collection sources" "
+	"incremental-coverage-source-matches collection sources" "
       Find incremental coverage deltas intersecting source regions.
     "
         (defsection "Arguments and Values"
           (listing :definition
-            (item "{param collection}" ccldoc::=> "
+	    (item "{param collection}" ccldoc::=> "
           A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
           incremental coverage deltas.
          ")
-            (item "{param sources}" ccldoc::=> "
+	    (item "{param sources}" ccldoc::=> "
           A list of pathnames and/or source-notes, the latter representing a range within a file.
          ")))
         (defsection "Description"
@@ -784,19 +784,19 @@ Then you can see the coverage information in the definition of
       intersects the sources by passing it in as a single-element list.
      "))
       (definition (:function incremental-coverage-svn-matches)
-        "incremental-coverage-svn-matches collection {code &key} (directory (current-directory)) (revision :base)" "
+	"incremental-coverage-svn-matches collection {code &key} (directory (current-directory)) (revision :base)" "
       Find incremental coverage deltas matching changes from a particular subversion revision.
     "
         (defsection "Arguments and Values"
           (listing :definition
-            (item "{param collection}" ccldoc::=> "
+	    (item "{param collection}" ccldoc::=> "
           A hash table mapping arbitrary keys to incremental coverage deltas, or a sequence of
           incremental coverage deltas.
          ")
-            (item "{param directory}" ccldoc::=> "
+	    (item "{param directory}" ccldoc::=> "
           The pathname of a subversion working directory.
          ")
-            (item "{param revision}" ccldoc::=> "
+	    (item "{param revision}" ccldoc::=> "
           The revision to compare to the working directory, an integer or another
           value whose printed representation is suitable for passing as the
           {code --revision} argument
@@ -851,10 +851,10 @@ Then you can see the coverage information in the definition of
  The source coloring is applied from outside in.  So for example if you have
 
   "
-        (code-block "
+	(code-block "
 (outer-form ... (inner-form ...) ...)
   ")
-        "
+	"
 
  first the whole outer form is painted with whatever color expresses the outer form coverage, and then the
  inner form color is replaced with whatever color expresses the inner form coverage.  One consequence of
@@ -880,10 +880,10 @@ Then you can see the coverage information in the definition of
         (para "
       In {CCL}, the cleanup forms are always executed as if they were
       wrapped with "
-          (ref (definition :macro without-interrupts)) ".
+	  (ref (definition :macro without-interrupts)) ".
       To allow interrupts, use
       "
-          (ref (definition :macro with-interrupts-enabled)) ".
+	  (ref (definition :macro with-interrupts-enabled)) ".
     ")))
 
     ))
