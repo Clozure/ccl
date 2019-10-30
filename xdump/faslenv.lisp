@@ -38,7 +38,6 @@
   faslstate.fasldispatch)
 
 
-(defconstant numfaslops 80 "Number of fasl file opcodes, roughly")
 (defconstant $fasl-epush-bit 7)
 (defconstant $fasl-file-id #xff00)
 (defconstant $fasl-file-id1 #xff01)

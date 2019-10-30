@@ -37,9 +37,6 @@
 (defmacro htlimit (htab) `(%cddr ,htab))
 )
 
-(eval-when (:execute :compile-toplevel)
-  (assert (= 80 numfaslops)))
-
 
 
 
