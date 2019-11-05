@@ -125,7 +125,8 @@
 (objc:defmethod #/sharedPanel ((self +typeout-window))
    (cond (*typeout-window*)
 	 (t
-          (setq *typeout-window* (#/typeoutWindowWithTitle: self "Typeout")))))
+          (setq *typeout-window* (#/typeoutWindowWithTitle: self
+                                                            #@"Typeout")))))
 
 
 
@@ -148,7 +149,8 @@
 (defun prepare-typeout-stream (stream)
   (declare (ignorable stream))
   (with-slots (window) stream
-    (#/show window)))
+    (gui:execute-in-gui #'(lambda ()
+                            (#/show window)))))
 
 
 
