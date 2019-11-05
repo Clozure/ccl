@@ -325,11 +325,14 @@
   (#/makeKeyAndOrderFront: w nil))
 
 (defun set-window-title (window title)
-  (#/setTitle: window (if title
-                        (if (typep title 'ns:ns-string)
-                          title
-                          (%make-nsstring title))
-                        #@"") ))
+  (gui:execute-in-gui
+   #'(lambda ()
+       (let ((s (if title
+                  (if (typep title 'ns:ns-string)
+                    title
+                    (#/autorelease (%make-nsstring title)))
+                  #@"")))
+         (#/setTitle: window s)))))
 
 (defmethod allocate-instance ((class ns:+ns-window)
                               &rest initargs
