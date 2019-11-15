@@ -2965,24 +2965,6 @@ defcallback returns the callback pointer, e.g., the value of name."
     `(%class-get ,class '%old-class-local-shared-slotds ,default)
     `(%class-get ,class '%old-class-local-shared-slotds)))
 
-(defmacro with-slot-values (slot-entries instance-form &body body)
-; Simplified form of with-slots.  Expands into a let instead of a symbol-macrolet
-; Thus, you can access the slot values, but you can't setq them.
-  (let ((instance (gensym)) var slot-name bindings)
-    (dolist (slot-entry slot-entries)
-      (cond ((symbolp slot-entry)
-             (setq var slot-entry slot-name slot-entry))
-            ((and (listp slot-entry) (cdr slot-entry) (null (cddr slot-entry))
-                  (symbolp (car slot-entry)) (symbolp (cadr slot-entry)))
-             (setq var (car slot-entry) slot-name (cadr slot-entry)))
-            (t (signal-program-error "Malformed slot-entry: ~a to with-slot-values.~@
-                                      Should be a symbol or a list of two symbols."
-				     slot-entry)))
-      (push `(,var (slot-value ,instance ',slot-name)) bindings))
-    `(let ((,instance ,instance-form))
-       (let ,(nreverse bindings)
-         ,@body))))
-
 (defmacro with-slots (slot-entries instance-form &body body)
   "Establish a lexical environment for referring to the slots in the
 instance named by the given slot-names as though they were variables.
