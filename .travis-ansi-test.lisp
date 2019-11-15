@@ -1,0 +1,8 @@
+(setf *default-pathname-defaults* (merge-pathnames "ansi-test/" (user-homedir-pathname)))
+(load "gclload1.lsp")
+(load "gclload2.lsp")
+(in-package :rt)
+(disable-note :ansi-spec-problem)
+(setf *default-pathname-defaults* (truename #P"sandbox/"))
+(do-tests)
+(ccl:quit (if *failed-tests* 1 0))

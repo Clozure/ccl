@@ -16,27 +16,9 @@
 
 (in-package "CCL")
 
-;;; Check that something that's supposed to be a proper list of
-;;; symbols is; error otherwise.
-;;; This is called only by the compiler output of a PROGV form.
-;;; It checks for the maximum length that the progvsave subprim
-;;; can handle.
-
-(defun check-symbol-list (l &optional (max-length
-                                        (floor (- 4096 20) (* target::node-size 3))
-                                       ))
-  (let ((len (list-length l)))
-    (if (and len
-             (or (null max-length)
-                 (< len max-length))
-             (dolist (s l t) 
-               (unless (and (symbolp s)
-                            (not (constant-symbol-p s))
-                            (not (logbitp $sym_vbit_global (the fixnum (%symbol-bits s))))
-                            (ensure-binding-index s))
-                 (return nil))))
-      l
-      (error "~s is not a proper list of bindable symbols~@[ of length < ~s~]." l max-length))))
+;;; Stub for bootstrapping. The proper implementation is in nx1.lisp.
+(defun %progv-check-symbol-list (list)
+  list)
 
 ;;; The type-checking done on the "plist" arg shouldn't be removed.
 (defun set-symbol-plist (sym plist)

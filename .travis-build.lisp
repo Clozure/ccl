@@ -1,0 +1,1 @@
+(ccl:rebuild-ccl :full t :verbose t :exit t)

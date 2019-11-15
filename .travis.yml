@@ -14,13 +14,13 @@ jobs:
   - os: linux
     dist: xenial
     env: CCL_ARCH=64 DIST=xenial
-  - os: windows
+  - os: osx
     env: CCL_ARCH=32
-  - os: windows
+  - os: osx
     env: CCL_ARCH=64
-  - os: osx
+  - os: windows
     env: CCL_ARCH=32
-  - os: osx
+  - os: windows
     env: CCL_ARCH=64
 language: c
 branches:
@@ -33,8 +33,6 @@ cache:
 install:
   # Export the source directory path
   - export SOURCE_DIR=$(pwd)
-  # Prepare CCL build command
-  - echo "(progn (ccl:rebuild-ccl :full t :verbose t) (ccl:quit))" >> build.lisp
   # Windows - Gather information about running processes
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
     ps -W | sort > ~/ps_1.txt;
@@ -65,7 +63,6 @@ install:
   - export CCL_BIN="$CCL_BINARY_NAME""x86cl""$CCL_ARCH_NAME";
   # Clone and prepare the upstream ANSI-TEST
   - git clone https://gitlab.common-lisp.net/ansi-test/ansi-test ~/ansi-test
-  - echo "(ccl:quit)" >> ~/ansi-test/quit.lisp
   # Clone and prepare CCL test suite
   - git clone https://github.com/Clozure/ccl-tests ~/ccl-tests
   - echo "(run-tests :ansi nil :ccl t :exit t)" >> ~/ccl-tests/run.lisp
@@ -119,14 +116,14 @@ install:
 script:
   - set -e
   # Build CCL
-  - $shell ./$CCL_BIN -b -l build.lisp
+  - $shell ./$CCL_BIN -b -l .travis-patch.lisp -l .travis-build.lisp
   # Rebuild to ensure that CCL can build itself
-  - $shell ./$CCL_BIN -b -l build.lisp
+  - $shell ./$CCL_BIN -b -l .travis-build.lisp
   # Run the upstream ANSI-TEST
-  - $shell $SOURCE_DIR/$CCL_BIN -b -l ~/ansi-test/doit.lsp -l ~/ansi-test/quit.lisp | tee result.txt;
-    if grep -q "tests failed" result.txt; then false; fi
+  - $shell ./$CCL_BIN -b -l .travis-ansi-test.lisp
   # Run the CCL test suite
-  - $shell $SOURCE_DIR/$CCL_BIN -b -l ~/ccl-tests/load.lisp -l ~/ccl-tests/run.lisp
+  # TODO: .travis-ccl-test.lisp
+  - $shell ./$CCL_BIN -b -l ~/ccl-tests/load.lisp -l ~/ccl-tests/run.lisp
   - true
 after_script:
   # Windows - Kill GPG agent - it tends to linger after the job
