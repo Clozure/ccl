@@ -16,13 +16,6 @@
 
 (in-package "CCL")
 
-;;; No error checking, no interrupts, no protect_caller, no nuthin.
-;;; No error, no cons.  No problem.
-(defun %progvrestore (saved)
-  (declare (optimize (speed 3) (safety 0)))
-  (dolist (pair saved)
-    (%set-sym-value (car pair) (cdr pair))))
-
 ;;; Check that something that's supposed to be a proper list of
 ;;; symbols is; error otherwise.
 ;;; This is called only by the compiler output of a PROGV form.
