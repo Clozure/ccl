@@ -34,9 +34,6 @@
 (defvar *function-parent-table* nil)
 (defvar *function-parent-pool* (%cons-pool))
 
-(defun copying-gc-p () ; if nz copying gc is on
-  nil)
-
 (defun lfun-closure-p (lfun)
   (logbitp $lfbits-trampoline-bit (lfun-bits lfun)))
 
@@ -70,7 +67,6 @@
                             function))))
     (if (and (symbolp function) (fboundp function))
       (setq cfun (symbol-function function)))
-    (when (copying-gc-p) (setq gccount (full-gccount)))
     (flet ((do-it (fun)
              (when (and gccount (neq gccount (full-gccount)))
                (throw 'losing :lost))
@@ -173,7 +169,6 @@
   (when (valid-function-name-p function)
     (setq cfun (or (and (symbolp function) (macro-function function))
                    (fboundp function))))
-  (when (copying-gc-p) (setq gccount (full-gccount)))
   (flet ((do-it (fun)
            (when (and gccount (neq gccount (full-gccount)))
              (throw 'losing :lost))
