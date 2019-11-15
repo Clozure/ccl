@@ -244,12 +244,17 @@
         (tagbody
           top
           (if (setq cell (%cdr (assq form (lexenv.functions env))))
-            (return-from macro-function 
+            (return-from macro-function
               (if (eq (car cell) 'macro) (%cdr cell))))
           (unless (listp (setq env (lexenv.parent-env env)))
             (go top)))))
-      ;; Not found in env, look in function cell.
-  (%global-macro-function form))
+  ;; Not found in env, look in function cell.
+  (let* ((fbinding (fboundp form)))
+    (if (and #-arm-target (typep fbinding 'simple-vector)
+             #+arm-target (= (typecode fbinding) arm::subtag-pseudofunction)
+             (= (the fixnum (uvsize fbinding)) #-arm-target 2 #+arm-target 3))
+        (let* ((fun (%svref fbinding #-arm-target 1 #+arm-target 2)))
+          (if (functionp fun) fun)))))
 
 (defun %fixnum-ref-macptr (fixnum &optional (offset 0))
   (%int-to-ptr (%fixnum-ref-natural fixnum offset)))
