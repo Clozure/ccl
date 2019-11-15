@@ -2960,11 +2960,6 @@ defcallback returns the callback pointer, e.g., the value of name."
          (throw 'line-limit-abbreviation-exit T)))))
 ) ; eval-when
 
-(defmacro %old-class-local-shared-slotds (class &optional default)
-  (if default                           ; so setf works
-    `(%class-get ,class '%old-class-local-shared-slotds ,default)
-    `(%class-get ,class '%old-class-local-shared-slotds)))
-
 (defmacro with-slots (slot-entries instance-form &body body)
   "Establish a lexical environment for referring to the slots in the
 instance named by the given slot-names as though they were variables.
