@@ -120,7 +120,8 @@ script:
   # Rebuild to ensure that CCL can build itself
   - $shell ./$CCL_BIN -b -l .travis-build.lisp
   # Run the upstream ANSI-TEST
-  - $shell ./$CCL_BIN -b -l .travis-ansi-test.lisp
+  - $shell ./$CCL_BIN -b < .travis-ansi-test.lisp | tee result.txt;
+    if grep -q "tests failed" result.txt; then false; fi
   # Run the CCL test suite
   # TODO: .travis-ccl-test.lisp
   - $shell ./$CCL_BIN -b -l ~/ccl-tests/load.lisp -l ~/ccl-tests/run.lisp
