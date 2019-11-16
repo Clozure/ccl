@@ -54,18 +54,6 @@
 	     (:static-dnodes :unsigned-long)))
 |#
 
-(defparameter *image-section-size* ())
-
-
-
-(defparameter *image-header-size* nil)
-
-(defun target-setup-image-header-sizes ()
-  (setq *image-header-size* (* 4 16))
-  (setq *image-section-size* (* 4 (target-word-size-case
-                                   (32 4)
-                                   (64 8)))))
-
 (defun image-write-fullword (w f &optional force-big-endian)
   (cond ((or force-big-endian *xload-target-big-endian*)
          (write-byte (ldb (byte 8 24) w) f)
@@ -95,31 +83,30 @@
   (file-position f (logand (lognot 4095)
 			   (+ 4095 (file-position f)))))
 
-
 (defun target-image-abi-version ()
   (let* ((pkg (pkg-arg "TARGET"))
          (sym (find-symbol "*IMAGE-ABI-VERSION*" pkg)))
     (or (and sym (boundp sym) (symbol-value sym))
         (error "*IMAGE-ABI-VERSION* not defined in ~s" pkg))))
-         
 
-(defun write-image-file (pathname image-base spaces )
-  (let* ((abi-version (target-image-abi-version)))
-    (target-setup-image-header-sizes)
+(defun write-image-file (pathname image-base spaces)
+  (let* ((abi-version (target-image-abi-version))
+         (image-header-size (* 4 16))
+         (image-section-size (* 4 (target-word-size-case (32 4) (64 8)))))
     (with-open-file (f pathname
                        :direction :output
                        :if-does-not-exist :create
                        :if-exists :supersede
                        :element-type '(unsigned-byte 8))
       (let* ((nsections (length spaces))
-             (header-pos (- 4096 (+ *image-header-size*
-                                    (* nsections *image-section-size*)))))
+             (header-pos (- 4096 (+ image-header-size
+                                    (* nsections image-section-size)))))
         (file-position f header-pos)
         (image-write-fullword image-sig0 f)
         (image-write-fullword image-sig1 f)
         (image-write-fullword image-sig2 f)
         (image-write-fullword image-sig3 f)
-        (image-write-fullword (get-universal-time) f)
+        (image-write-fullword (get-universal-time) f) ;; FIXME: Year 2038 problem.
         (image-write-fullword (target-word-size-case
                                (32 *xload-image-base-address*)
                                (64 0)) f)
@@ -131,7 +118,6 @@
         (target-word-size-case
          (32
           (dotimes (i 2) (image-write-fullword 0 f))
-        
           (image-write-fullword (backend-target-platform *target-backend*) f)
           (dotimes (i 4) (image-write-fullword 0 f)))
          (64
@@ -161,7 +147,3 @@
         (let* ((pos (+ 4 (file-position f))))
           (image-write-fullword (- header-pos pos) f))
         nil))))
-
-      
-      
-    
