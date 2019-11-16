@@ -73,6 +73,12 @@ install:
     sudo apt-get install libc6:i386 libncurses5:i386 libstdc++6:i386 libc6-dev-i386
                          linux-libc-dev:i386 gcc-multilib;
     fi
+  # Linux - install newer glibc
+  - if [ "$TRAVIS_OS_NAME" = "linux" -a "$CCL_ARCH" = "32" ]; then
+    echo "deb http://archive.ubuntu.com/ubuntu/ disco main" | sudo tee -a /etc/apt/sources.list;
+    sudo apt-get update;
+    sudo apt-get install --no-install-recommends libc6 libgcc1 gcc-9-base;
+    fi
   # Windows - install MSYS2, set the MSYS2 shell path, install the toolchain
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then
     choco install -y msys2;
