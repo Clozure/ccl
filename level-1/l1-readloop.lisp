@@ -72,22 +72,6 @@
 (defun toplevel ()
   (throw :toplevel nil))
 
-
-;;; It's not clear that this is the right behavior, but aborting CURRENT-PROCESS -
-;;; when no one's sure just what CURRENT-PROCESS is - doesn't seem right either.
-(defun interactive-abort ()
-  (interactive-abort-in-process *current-process*))
-
-(defun interactive-abort-in-process (p)
-  (if p (process-interrupt p 
-                           #'(lambda ()
-                               (unless *inhibit-abort*
-                                 (if *in-read-loop* 
-                                        (abort-break)
-                                        (abort))
-                                 )))))
-
-
 (defun abort (&optional condition)
   "Transfer control to a restart named ABORT, signalling a CONTROL-ERROR if
    none exists."

@@ -359,13 +359,7 @@ commands but aren't")
        (abort () :report (lambda (stream)
                            (if (eq break-level 0)
                              (format stream "Return to toplevel.")
-                             (format stream "Return to break level ~D." break-level)))
-              #|                        ; Handled by interactive-abort
-                                        ; go up one more if abort occurred while awaiting/reading input               
-              (when (and *in-read-loop* (neq break-level 0))
-              (abort))
-              |#
-               )
+                             (format stream "Return to break level ~D." break-level))))
         (abort-break () 
                      (unless (eq break-level 0)
                        (abort))))
