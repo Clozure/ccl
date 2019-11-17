@@ -76,11 +76,11 @@
 (defun simplify-vector-ctype (ctype)
   (typecase ctype
     (array-ctype
-     (make-array-ctype :complexp nil
-                       :element-type (array-ctype-element-type ctype)
-                       :specialized-element-type (array-ctype-specialized-element-type ctype)
-                       :dimensions '(*)))
-                                      
+     (make-array-ctype
+      :complexp nil
+      :element-type (array-ctype-element-type ctype)
+      :specialized-element-type (array-ctype-specialized-element-type ctype)
+      :dimensions '(*)))
     (named-ctype ctype)
     (member-ctype
      (apply #'type-intersection (mapcar #'(lambda (x)
@@ -88,8 +88,9 @@
                                              (ctype-of x)))
                                         (member-ctype-members ctype))))
     (union-ctype
-     (apply #'type-intersection (mapcar #'simplify-vector-ctype (union-ctype-types ctype))))))
-    
+     (apply #'type-intersection
+            (mapcar #'simplify-vector-ctype (union-ctype-types ctype))))))
+
 (defun make-sequence (type length &key (initial-element nil initial-element-p))
   "Return a sequence of the given TYPE and LENGTH, with elements initialized
   to INITIAL-ELEMENT."
@@ -845,9 +846,16 @@
 (defun coerce (object output-type-spec)
   "Coerce the Object to an object of type Output-Type-Spec."
   (let* ((type (specifier-type output-type-spec)))
-    (if (%typep object type)
-      object
+    (macrolet ((check-union-ctype (type)
+                 `(when (union-ctype-p ,type)
+                    (error 'simple-type-error
+                           :format-control "CTYPE too hairy for COERCE: ~S"
+                           :format-arguments (list ,type)
+                           :datum ,type
+                           :expected-type '(not union-ctype)))))
       (cond
+        ((%typep object type)
+         object)
         ((csubtypep type (specifier-type 'character))
          (character object))
         ((eq output-type-spec 'standard-char)
@@ -865,12 +873,14 @@
         ((csubtypep type (specifier-type 'list))
          (coerce-to-list object))
         ((csubtypep type (specifier-type 'string))
+         (check-union-ctype type)
          (let ((length (array-ctype-length type)))
            (if (and length (neq length (length object)))
              (report-bad-arg (make-string length) `(string ,(length object)))))
          (coerce-to-uarray object #.(type-keyword-code :simple-string)
                            t))
         ((csubtypep type (specifier-type 'vector))
+         (check-union-ctype type)
          (let ((length (array-ctype-length type)))
            (if (and length (neq length (length object)))
              (error 'invalid-subtype-error
@@ -888,21 +898,22 @@
         ((csubtypep type (specifier-type 'array))
          (let* ((dims (array-ctype-dimensions type)))
            (when (consp dims)
-             (when (not (null (cdr dims)))(error "~s is not a sequence type." output-type-spec))))
+             (when (not (null (cdr dims)))
+               (error "~s is not a sequence type." output-type-spec))))
          (let ((length (array-ctype-length type)))
            (if (and length (neq length (length object)))
              (error "Length of ~s is not ~s." object length)))
-         (coerce-to-uarray object (element-type-subtype (type-specifier 
-                                                         (array-ctype-element-type type))) t))
+         (let ((subtype (element-type-subtype (type-specifier (array-ctype-element-type type)))))
+           (coerce-to-uarray object subtype t)))
         ((numberp object)
          (let ((res
-                (cond
-                  ((csubtypep type (specifier-type 'double-float))
-                   (float object 1.0d0))
-                  ((csubtypep type (specifier-type 'float))
-                   (float object 1.0s0))                		
-                  ((csubtypep type (specifier-type 'complex))
-                   (coerce-to-complex object  (type-specifier type))))))
+                 (cond
+                   ((csubtypep type (specifier-type 'double-float))
+                    (float object 1.0d0))
+                   ((csubtypep type (specifier-type 'float))
+                    (float object 1.0s0))
+                   ((csubtypep type (specifier-type 'complex))
+                    (coerce-to-complex object  (type-specifier type))))))
            (unless res                  ;(and res (%typep res type))
              (error "~S can't be coerced to type ~S." object output-type-spec))
            res))
