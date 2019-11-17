@@ -2407,14 +2407,15 @@
 ;;; non-dot, non-escaped chars in token, and t if either no explicit
 ;;; package or "::"
 
-(defun %collect-xtoken (token stream 1stchar)
+(defun %collect-xtoken (token stream first-char &optional called-from-sharpsign-backslash)
   (let* ((escapes ())
          (nondots nil)
          (explicit-package *read-suppress*)
          (double-colon t)
          (multi-escaped nil))
     (do* ((attrtab (rdtab.ttab *readtable*))
-          (char 1stchar (read-char stream nil :eof )))
+          (char first-char (read-char stream nil :eof))
+          (first-character-read nil t))
          ((eq char :eof))
       (flet ((add-note-escape-pos (char token escapes)
                (push (token.opos token) escapes)
@@ -2422,47 +2423,65 @@
                escapes))
         (let* ((attr (%character-attribute char attrtab)))
           (declare (fixnum attr))
-          (when (or (= attr $cht_tmac)
-                    (= attr $cht_wsp))
-            (when (or (not (= attr $cht_wsp)) %keep-whitespace%)
-              (unread-char char stream))
-            (return ))
-          (if (= attr $cht_ill)
-              (signal-reader-error stream "Illegal character ~S." char)
-              (if (= attr $cht_sesc)
-                  (setq nondots t 
-                        escapes (add-note-escape-pos (%read-char-no-eof stream) token escapes))
-                  (if (= attr $cht_mesc)
-                      (progn 
-                        (setq nondots t)
-                        (loop
-                            (multiple-value-bind (nextchar nextattr) (%next-char-and-attr-no-eof stream attrtab)
-                              (declare (fixnum nextattr))
-                              (if (= nextattr $cht_mesc) 
-                                  (return (setq multi-escaped t))
-                                  (if (= nextattr $cht_sesc)
-                                      (setq escapes (add-note-escape-pos (%read-char-no-eof stream) token escapes))
-                            (setq escapes (add-note-escape-pos nextchar token escapes)))))))
-                  (let* ((opos (token.opos token)))         ; Add char to token, note 1st colonpos
-                    (declare (fixnum opos))
-                    (if (and (eq char #\:)       ; (package-delimiter-p char ?)
-                             (not explicit-package))
-                      (let* ((nextch (%read-char-no-eof stream)))
-                        (if (eq nextch #\:)
-                          (setq double-colon t)
-                          (progn
-			    (unread-char nextch stream)
-                            (setq double-colon nil)))
-                        (%casify-token token escapes)
-                        (setq explicit-package (%token-package token opos nondots stream)
-                              nondots t
-                              escapes nil)
-                        (setf (token.opos token) 0))
-                      (progn
-                        (unless (eq char #\.) (setq nondots t))
-                        (%add-char-to-token char token))))))))))
-        (values (or escapes multi-escaped) (if *read-suppress* nil explicit-package) nondots double-colon)))
-          
+          ;; Reader algorithm steps follow in comments.
+          (cond
+            ;; Exception: CLHS 2.4.8.1 - if we are called from #\# #\\, then we must treat the
+            ;; initial backslash as an escape character regardless of its character attribute
+            ;; in the current readtable.
+            ((and (not first-character-read)
+                  called-from-sharpsign-backslash
+                  (char= char #\\))
+             (setq nondots t
+                   escapes (add-note-escape-pos (%read-char-no-eof stream) token escapes)))
+            ;; 2. If X is an invalid character...
+            ((= attr $cht_ill)
+             (signal-reader-error stream "Illegal character ~S." char))
+            ;; 3. If X is a whitespace character...
+            ((= attr $cht_wsp)
+             (when %keep-whitespace%
+               (unread-char char stream))
+             (return))
+            ;; 4. If X is a terminating macro character...
+            ((= attr $cht_tmac)
+             (unread-char char stream)
+             (return))
+            ;; 5. If X is a single-escape character...
+            ((= attr $cht_sesc)
+             (setq nondots t
+                   escapes (add-note-escape-pos (%read-char-no-eof stream) token escapes)))
+            ;; 6. If X is a multiple-escape character...
+            ((= attr $cht_mesc)
+             (setq nondots t)
+             (loop
+               (multiple-value-bind (nextchar nextattr) (%next-char-and-attr-no-eof stream attrtab)
+                 (declare (fixnum nextattr))
+                 (if (= nextattr $cht_mesc)
+                   (return (setq multi-escaped t))
+                   (if (= nextattr $cht_sesc)
+                     (setq escapes (add-note-escape-pos (%read-char-no-eof stream) token escapes))
+                     (setq escapes (add-note-escape-pos nextchar token escapes)))))))
+            ;; 7. If X is a constituent character...
+            (t
+             (let* ((opos (token.opos token))) ; Add char to token, note 1st colonpos
+               (declare (fixnum opos))
+               (if (and (eq char #\:) ; maybe factor into (package-delimiter-p char)
+                        (not explicit-package))
+                 (let* ((nextch (%read-char-no-eof stream)))
+                   (if (eq nextch #\:)
+                     (setq double-colon t)
+                     (progn
+			                 (unread-char nextch stream)
+                       (setq double-colon nil)))
+                   (%casify-token token escapes)
+                   (setq explicit-package (%token-package token opos nondots stream)
+                         nondots t
+                         escapes nil)
+                   (setf (token.opos token) 0))
+                 (progn
+                   (unless (eq char #\.) (setq nondots t))
+                   (%add-char-to-token char token)))))))))
+    (values (or escapes multi-escaped) (if *read-suppress* nil explicit-package) nondots double-colon)))
+
 (defun %validate-radix (radix)
   (if (and (typep radix 'fixnum)
            (>= (the fixnum radix) 2)
@@ -2930,7 +2949,7 @@ initially NIL.")
  #'(lambda (stream subchar numarg)
      (require-no-numarg subchar numarg)
      (with-token-buffer (tb)
-       (%collect-xtoken tb stream #\\)
+       (%collect-xtoken tb stream #\\ t)
        (unless *read-suppress*
          (let* ((str (%string-from-token tb)))
            (or (name-char str)
