@@ -1095,6 +1095,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; Most of the optional arguments are for the benefit for FORMAT and are not
 ;;; used by the printer.
 ;;;
+;;; ;;; FIXME: the below no longer holds true. FLONUM-TO-STRING was modified
+;;; ;;; to instead return three values.
+;;;
 ;;; Returns:
 ;;; (VALUES DIGIT-STRING DIGIT-LENGTH LEADING-POINT TRAILING-POINT DECPNT)
 ;;; where the results have the following interpretation:
