@@ -268,7 +268,7 @@
         (item "stream-position stream {code &optional} new =>")
         (item "streamp stream => boolean")
         (item "stream-write-char output-stream char =>")
-        (item "stream-write-entire-string output-stream string =>")
+        (item "stream-write-string output-stream string =>")
         (item "stream-read-char input-stream =>")
         (item "stream-unread-char input-stream char =>")
         (item "stream-force-output output-stream => nil")

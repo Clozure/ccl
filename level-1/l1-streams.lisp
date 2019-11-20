@@ -298,10 +298,6 @@
   (declare (ignore char))
   (error "stream ~S is not capable of output" stream))
 
-(defun stream-write-entire-string (stream string)
-  (stream-write-string stream string))
-
-
 (defmethod stream-read-char ((x t))
   (report-bad-arg x 'stream))
 

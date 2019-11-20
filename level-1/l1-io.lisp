@@ -267,7 +267,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defun %write-string (string stream)
   (if (characterp string)
     (stream-write-char stream string)
-    (stream-write-entire-string stream string)))
+    (stream-write-string stream string)))
 
 
 ;; *print-simple-vector*
@@ -475,7 +475,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
            (print-object object stream)))
         ((%i< list-kludge 1)
          ;; *print-length* truncation
-         (stream-write-entire-string stream "..."))
+         (stream-write-string stream "..."))
         ((not (consp object))
          (write-a-frob object stream level nil))
         (t
@@ -500,7 +500,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
              (declare (type fixnum v) (type stream stream))
              (when (%i<= v 0)
                ;; *print-level* truncation
-               (stream-write-entire-string stream "#")
+               (stream-write-string stream "#")
                t)))
       (cond
         ((eq %type 'cons)
@@ -723,22 +723,22 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
   (let ((strlen (length string)))
     (declare (fixnum strlen))
     (cond ((zerop strlen)
-	   (stream-write-entire-string stream "0.0"))
+	   (stream-write-string stream "0.0"))
 	  ((> before-pt 0)
 	   (cond ((> strlen before-pt)
 		  (write-string string stream :start 0 :end before-pt)
 		  (stream-write-char stream #\.)
 		  (write-string string stream :start before-pt :end strlen))
 		 (t ; 0's after
-		  (stream-write-entire-string stream string)
+		  (stream-write-string stream string)
 		  (dotimes (i (- before-pt strlen))
 		    (stream-write-char stream #\0))
-		  (stream-write-entire-string stream ".0"))))
+		  (stream-write-string stream ".0"))))
 	  (t
-	   (stream-write-entire-string stream "0.")
+	   (stream-write-string stream "0.")
 	   (dotimes (i (- before-pt))
 	     (stream-write-char stream #\0))
-	   (stream-write-entire-string stream string)))))
+	   (stream-write-string stream string)))))
 
 (defun print-float-free-form (float stream)
   (setq stream (%real-print-stream stream))
@@ -809,7 +809,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 
 (defmethod print-object ((instance standard-object) stream)
   (if (%i<= %current-write-level% 0)    ; *print-level* truncation
-      (stream-write-entire-string stream "#")
+      (stream-write-string stream "#")
       (print-unreadable-object (instance stream :identity t)
         (let* ((class (class-of instance))
                (class-name (class-name class)))
@@ -849,7 +849,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
       (cond
        ((< level-1 0)
         ;; *print-level* truncation
-        (stream-write-entire-string stream "#"))
+        (stream-write-string stream "#"))
        (t 
         (prin1 type-string stream)
         (pp-space stream)
@@ -1760,7 +1760,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
   (cond 
    ((< levels-left 0)
     ;; *print-level* truncation
-    (stream-write-entire-string stream "#"))
+    (stream-write-string stream "#"))
    (t (write-internal stream
                       object 
                       (min levels-left target::target-most-positive-fixnum)

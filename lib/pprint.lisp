@@ -1149,7 +1149,7 @@
       (setq *locating-circularities* nil)
       (let ((s (xp-string-stream xp)))
         (when s
-          (stream-write-entire-string (xp-base-stream xp)
+          (stream-write-string (xp-base-stream xp)
                                       (get-output-stream-string s)))))
     (when (catch 'line-limit-abbreviation-exit
 	    (attempt-to-output xp nil T)
@@ -2056,7 +2056,7 @@
         ((not list-kludge))
         ((null object)(return-from write-not-pretty nil))
         ((and (not (consp object)) (not circle))
-         (stream-write-entire-string stream " . "))
+         (stream-write-string stream " . "))
         ((eq circle :first)
          (when (consp object) (stream-write-char stream #\())
          (write-a-frob object stream level list-kludge)
