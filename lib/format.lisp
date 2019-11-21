@@ -1094,10 +1094,6 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;;
 ;;; Most of the optional arguments are for the benefit for FORMAT and are not
 ;;; used by the printer.
-;;;
-;;; ;;; FIXME: the below no longer holds true. FLONUM-TO-STRING was modified
-;;; ;;; to instead return three values.
-;;;
 ;;; Returns:
 ;;; (VALUES DIGIT-STRING DIGIT-LENGTH LEADING-POINT TRAILING-POINT DECPNT)
 ;;; where the results have the following interpretation:
@@ -1110,7 +1106,6 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;;                       decimal point.
 ;;;     POINT-POS       - The position of the digit preceding the decimal
 ;;;                       point.  Zero indicates point before first digit.
-;;;     NZEROS          - number of zeros after point
 ;;;
 ;;; WARNING: For efficiency, there is a single string object *digit-string*
 ;;; which is modified destructively and returned as the value of
@@ -1144,138 +1139,219 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
  Gay: http://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.4049
 |#
 
-(defun flonum-to-string (n &optional width fdigits scale)
-  (let ((*print-radix* nil))
-    (cond ((zerop n)(values "" 0 0))
-          ((and (not (or width fdigits scale))
-                (double-float-p n)
-                ; cheat for the only (?) number that fails to be aesthetically pleasing
-                (= n 1e23))
-           (values "1" 24 23))
-          (t (let ((string (make-array 12 :element-type 'base-char
-                                       :fill-pointer 0 :adjustable t)))
-               (multiple-value-bind (sig exp)(integer-decode-float n)
-                 (float-string string sig exp (integer-length sig) width fdigits scale)))))))
+(defun flonum-to-string (x &optional width fdigits scale fmin)
+  ;; Wrapper around %FLONUM-TO-STRING, which is a version of FLONUM-TO-STRING adapted
+  ;; from SBCL. %FLONUM-TO-STRING returns five values.
+  ;; DIGIT-STRING   - The decimal representation of X, with decimal point.
+  ;; DIGIT-LENGTH   - The length of the string DIGIT-STRING.
+  ;; LEADING-POINT  - True if the first character of DIGIT-STRING is the decimal point.
+  ;; TRAILING-POINT - True if the last character of DIGIT-STRING is the decimal point.
+  ;; POINT-POS      - The position of the digit preceding the decimal
+  ;;                  point. Zero indicates point before first digit.
+  (multiple-value-bind (digit-string digit-length leading-point trailing-point point-pos)
+      (%flonum-to-string x width fdigits scale fmin)
+    (declare (ignore trailing-point leading-point))
+    (let ((before-pt point-pos)
+          (after-pt (- (+ 1 point-pos) digit-length)))
+      (values digit-string before-pt after-pt))))
 
-;;; if width given and fdigits nil then if exponent is >= 0 returns at
-;;; most width-1 digits if exponent is < 0 returns (- width (- exp) 1)
-;;; digits if fdigits given width is ignored, returns fdigits after
-;;; (implied) point The Steele/White algorithm can produce a leading
-;;; zero for 1e23 which lies exactly between two double floats -
-;;; rounding picks the float whose rational is
-;;; 99999999999999991611392. This guy wants to print as
-;;; 9.999999999999999E+22. The untweaked algorithm generates a leading
-;;; zero in this case.  (actually wants to print as 1e23!)  If we
-;;; choose s such that r < s - m/2, and r = s/10 - m/2 (which it does
-;;; in this case) then r * 10 < s => first digit is zero and
-;;; (remainder (* r 10) s) is r * 10 = new-r, 10 * m = new-m new-r = s
-;;; - new-m/2 so high will be false and she won't round up we do r *
-;;; (expt 2 (- e (- scale))) and s * (expt 5 (- scale)) i.e. both less
-;;; by (expt 2 (- scale))
+(defconstant single-float-min-e
+  (- 2 ccl::ieee-single-float-bias ccl::ieee-single-float-digits))
+(defconstant double-float-min-e
+  (- 2 ccl::ieee-double-float-bias ccl::ieee-double-float-digits))
 
-(defun float-string (string f e p &optional width fdigits scale)
-  (macrolet ((nth-digit (n) `(%code-char (%i+ ,n (%char-code #\0)))))    
-    (let ((r f)(s 1)(m- 1)(m+ 1)(k 0) cutoff roundup (mm nil))
-      (when (= f (if (eql p 53) #.(ash 1 52) (ash 1 (1- p))))
-        (setq mm t))
-      (when (or (null scale)(zerop scale))
-        ; approximate k
-        (let ((fudge 0))
-          (setq fudge (truncate (*  (%i+ e p) .301)))
-          (when (neq fudge 0)
-            (setq k fudge)
-            (setq scale (- k)))))
-      (when (and scale (not (eql scale 0)))      
-        (if (minusp scale)
-          (setq s (* s (5-to-e  (- scale))))
-          (let ((scale-factor (5-to-e scale)))
-            (setq r (* r scale-factor))
-            (setq m+ scale-factor)
-            (when mm (setq m- scale-factor)))))
-      (let ((shift (- e (if scale (- scale) 0))))
-        (declare (fixnum shift))
-        ;(print (list e scale shift))
-        (cond ((> shift 0)
-               (setq r (ash f shift))
-               (setq m+ (ash m+ shift))
-               (when mm (setq m- (ash m- shift))))
-              ((< shift 0)
-               (setq s (ash s (- shift))))))
-      (when mm
-        (setq m+ (+ m+ m+))
-        (setq r (+ r r))
-        (setq s (+ s s)))    
-      (let ((ceil (ceiling s 10))(fudge 1))
-        (while (< r ceil)
-          (setq k (1- k))
-          (setq r (* r 10))
-          (setq fudge (* fudge 10)))
-        (when (> fudge 1)
-          (setq m+ (* m+ fudge))
-          (when mm (setq m- (* m- fudge)))))    
-      (let ((2r (+ r r)))
-        (loop
-          (let ((2rm+ (+ 2r m+)))          
-            (while
-              (if (not roundup)  ; guarantee no leading zero
-                (> 2rm+ (+ s s))
-                (>=  2rm+ (+ s s)))
-              (setq s (* s 10))
-              (setq k (1+ k))))
-          (when (not (or fdigits width))(return))
-          (cond 
-           (fdigits (setq cutoff (- fdigits)))
-           (width
-            (setq cutoff
-                  (if (< k 0) (- 1 width)(1+ (- k width))))
-            ;(if (and fmin (> cutoff (- fmin))) (setq cutoff (- fmin)))
-            ))
-          (let ((a (if cutoff (- cutoff k) 0))
-                (y s))
-            (DECLARE (FIXNUM A))
-            (if (>= a 0)
-              (when (> a 0)(setq y (* y (10-to-e a))))
-              (setq y (ceiling y (10-to-e (the fixnum (- a))))))
-            (when mm (setq m- (max y m-)))
-            (setq m+ (max y m+))
-            (when (= m+ y) (setq roundup t)))
-          (when (if (not roundup)   ; tweak as above
-                  (<= (+ 2r m+)(+ s s))
-                  (< (+ 2r m+)(+ s s)))
-            (return))))
-      (let* ((h k)
-             (half-m+ (* m+ 5))  ; 10 * m+/2
-             (half-m- (if mm (* m- 5)))
-             u high low 
-             )
-        ;(print (list r s m+ roundup))
-        (unless (and fdigits (>= (- k) fdigits))
-          (loop
-            (setq k (1- k))
-            (multiple-value-setq (u r) (truncate (* r 10) s))          
-            (setq low (< r (if mm half-m- half-m+)))
-            (setq high 
-                  (if (not roundup)
-                    (> r (- s half-m+))
-                    (>= r (- s half-m+))))                   
-            (if (or low high)
-              (return)
-              (progn
-                (vector-push-extend (nth-digit u) string)))
-            (when mm (setq half-m- (* half-m- 10) ))
-            (setq half-m+ (* half-m+ 10)))
-          ;(print (list r s  high low h k))
-          (vector-push-extend
-           (nth-digit (cond
-                       ((and low (not high)) u) 
-                       ((and high (not low))(+ u 1))
-                       
-                       (t ;(and high low)
-                        (if (<= (+ r r) s) u (1+ u)))))
-           string))
-        ; second value is exponent, third is exponent - # digits generated
-        (values string h k)))))
+(declaim (inline %flonum-to-digits))
+(defun %flonum-to-digits (char-fun
+                          prologue-fun
+                          epilogue-fun
+                          float &optional position relativep)
+  (let ((print-base 10)                 ; B
+        (float-radix 2)                 ; b
+        (float-digits (float-digits float)) ; p
+        (min-e
+          (etypecase float
+            (single-float single-float-min-e)
+            (double-float double-float-min-e))))
+    (multiple-value-bind (f e)
+        (integer-decode-float float)
+      (let ( ;; FIXME: these even tests assume normal IEEE rounding
+            ;; mode.  I wonder if we should cater for non-normal?
+            (high-ok (evenp f))
+            (low-ok (evenp f)))
+        (labels ((scale (r s m+ m-)
+                   (do ((r+m+ (+ r m+))
+                        (k 0 (1+ k))
+                        (s s (* s print-base)))
+                       ((not (or (> r+m+ s)
+                                 (and high-ok (= r+m+ s))))
+                        (do ((k k (1- k))
+                             (r r (* r print-base))
+                             (m+ m+ (* m+ print-base))
+                             (m- m- (* m- print-base)))
+                            ((not (and (> r m-) ; Extension to handle zero
+                                       (let ((x (* (+ r m+) print-base)))
+                                         (or (< x s)
+                                             (and (not high-ok)
+                                                  (= x s))))))
+                             (funcall prologue-fun k)
+                             (generate r s m+ m-)
+                             (funcall epilogue-fun k))))))
+                 (generate (r s m+ m-)
+                   (let (d tc1 tc2)
+                     (tagbody
+                      loop
+                        (setf (values d r) (truncate (* r print-base) s))
+                        (setf m+ (* m+ print-base))
+                        (setf m- (* m- print-base))
+                        (setf tc1 (or (< r m-) (and low-ok (= r m-))))
+                        (setf tc2 (let ((r+m+ (+ r m+)))
+                                    (or (> r+m+ s)
+                                        (and high-ok (= r+m+ s)))))
+                        (when (or tc1 tc2)
+                          (go end))
+                        (funcall char-fun d)
+                        (go loop)
+                      end
+                        (let ((d (cond
+                                   ((and (not tc1) tc2) (1+ d))
+                                   ((and tc1 (not tc2)) d)
+                                   ((< (* r 2) s)
+                                    d)
+                                   (t
+                                    (1+ d)))))
+                          (funcall char-fun d)))))
+                 (initialize ()
+                   (let (r s m+ m-)
+                     (cond ((>= e 0)
+                            (let ((be (expt float-radix e)))
+                              (if (/= f (expt float-radix (1- float-digits)))
+                                ;; multiply F by 2 first, avoding consing two bignums
+                                (setf r (* f 2 be)
+                                      s 2
+                                      m+ be
+                                      m- be)
+                                (setf m- be
+                                      m+ (* be float-radix)
+                                      r (* f 2 m+)
+                                      s (* float-radix 2)))))
+                           ((or (= e min-e)
+                                (/= f (expt float-radix (1- float-digits))))
+                            (setf r (* f 2)
+                                  s (expt float-radix (- 1 e))
+                                  m+ 1
+                                  m- 1))
+                           (t
+                            (setf r (* f float-radix 2)
+                                  s (expt float-radix (- 2 e))
+                                  m+ float-radix
+                                  m- 1)))
+                     (when position
+                       (when relativep
+                         (do ((k 0 (1+ k))
+                              ;; running out of letters here
+                              (l 1 (* l print-base)))
+                             ((>= (* s l) (+ r m+))
+                              ;; k is now \hat{k}
+                              (if (< (+ r (* s (/ (expt print-base (- k position)) 2)))
+                                     (* s l))
+                                (setf position (- k position))
+                                (setf position (- k position 1))))))
+                       (let* ((x (/ (* s (expt print-base position)) 2))
+                              (low (max m- x))
+                              (high (max m+ x)))
+                         (when (<= m- low)
+                           (setf m- low)
+                           (setf low-ok t))
+                         (when (<= m+ high)
+                           (setf m+ high)
+                           (setf high-ok t))))
+                     (values r s m+ m-))))
+          (multiple-value-bind (r s m+ m-) (initialize)
+            (scale r s m+ m-)))))))
 
+(defun flonum-to-digits (float &optional position relativep)
+  (let ((digit-characters "0123456789"))
+    (let* ((result-size 28)
+           (result-string (make-array result-size :element-type 'base-char))
+           (pointer 0))
+      (declare (type (integer 0 #.array-dimension-limit) result-size)
+               (type (integer 0 #.(1- array-dimension-limit)) pointer)
+               (type (simple-array base-char (*)) result-string))
+      (flet ((push-char (char)
+               (when (= pointer result-size)
+                 (let ((old result-string))
+                   (setf result-size (* 2 (+ result-size 2))
+                         result-string
+                         (make-array result-size :element-type 'base-char))
+                   (replace result-string old)))
+               (setf (char result-string pointer) char)
+               (incf pointer))
+             (get-pushed-string nil
+               (let ((string result-string) (size pointer))
+                 (setf result-size 0 pointer 0 result-string "")
+                 (ccl::shrink-vector string size)
+                 string)))
+        (%flonum-to-digits
+         (lambda (d) (push-char (char digit-characters d)))
+         (lambda (k) k)
+         (lambda (k) (values k (get-pushed-string)))
+         float
+         position
+         relativep)))))
+
+(defun %flonum-to-string (x &optional width fdigits scale fmin)
+  (declare (type float x))
+  (multiple-value-bind (e string)
+      (if fdigits
+        (flonum-to-digits x (min (- (+ fdigits (or scale 0)))
+                                 (- (or fmin 0))))
+        (if (and width (> width 1))
+          (let ((w (multiple-value-list
+                    (flonum-to-digits x
+                                      (max 1
+                                           (+ (1- width)
+                                              (if (and scale (minusp scale))
+                                                scale 0)))
+                                      t)))
+                (f (multiple-value-list
+                    (flonum-to-digits x (- (+ 1 (or fmin 0)
+                                              (if scale scale 0)))))))
+            (if (>= (length (cadr w)) (length (cadr f)))
+              (values-list w)
+              (values-list f)))
+          (flonum-to-digits x)))
+    (let ((e (if (zerop x)
+               e
+               (+ e (or scale 0))))
+          (stream (make-string-output-stream)))
+      (if (plusp e)
+        (progn
+          (write-string string stream :end (min (length string) e))
+          (dotimes (i (- e (length string)))
+            (write-char #\0 stream))
+          (write-char #\. stream)
+          (write-string string stream :start (min (length string) e))
+          (when fdigits
+            (dotimes (i (- fdigits
+                           (- (length string)
+                              (min (length string) e))))
+              (write-char #\0 stream))))
+        (progn
+          (write-string "." stream)
+          (dotimes (i (- e))
+            (write-char #\0 stream))
+          (write-string string stream :end (when fdigits
+                                             (min (length string)
+                                                  (max (or fmin 0)
+                                                       (+ fdigits e)))))
+          (when fdigits
+            (dotimes (i (+ fdigits e (- (length string))))
+              (write-char #\0 stream)))))
+      (let ((string (get-output-stream-string stream)))
+        (values string (length string)
+                (char= (char string 0) #\.)
+                (char= (char string (1- (length string))) #\.)
+                (position #\. string))))))
 
 (defparameter integer-powers-of-10 (make-array (+ 12 (floor 324 12))))
 
@@ -1823,96 +1899,50 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (let ((*print-base* 10))
             (format-write-field stream (princ-to-string number) w 1 0 #\space t)))))))
 
-; do something ad hoc if d > w - happens if (format nil "~15g" (- 2.3 .1))
-; called with w = 11 d = 16 - dont do it after all.
-
 (defun format-fixed-aux (stream number w d k ovf pad atsign)
-  (and w (<= w 0) (setq w nil))  ; if width is unreasonable, ignore it.
-  (if (and (not k)
-	   (not (or w d)))
-    (print-float-free-form number stream)
-    (let ((spaceleft w)
-          (abs-number (abs number))
-          strlen zsuppress flonum-to-string-width)
-      (when (and w (or atsign (minusp number)))
+  (declare (type float number))
+  (if (ccl::nan-or-infinity-p number)
+    (prin1 number stream)
+    (let ((spaceleft w))
+      (when (and w (or atsign (minusp (float-sign number))))
         (decf spaceleft))
-      (when (and d w (<= w (+ 1 d (if atsign 1 0))))
-        (setq zsuppress t))
-      (when (and d (minusp d))
-          (format-error "Illegal value for d"))
-      (setq flonum-to-string-width
-            (and w
-                 (if (and (< abs-number 1) (not zsuppress))
-                   (1- spaceleft)   ; room for leading 0
-                   spaceleft)))
-      (when (and w (not (plusp flonum-to-string-width)))
-        (if ovf 
-          (progn
-            (dotimes (i w) (write-char ovf stream))
-            (return-from format-fixed-aux))
-          (setq spaceleft nil w nil flonum-to-string-width nil)))
-      (multiple-value-bind (str before-pt after-pt)
-                           (flonum-to-string abs-number
-                                             flonum-to-string-width
-                                             d k)
-        (setq strlen (length str))
-        (cond (w (decf spaceleft (+ (max before-pt 0) 1))
-                 (when (and (< before-pt 1) (not zsuppress))
-                   (decf spaceleft))
-                 (if d
-                   (decf spaceleft d)
-                   (setq d (max (min spaceleft (- after-pt))
-                                (if (> spaceleft 0) 1 0))
-                         spaceleft (- spaceleft d))))
-              ((null d) (setq d (max (- after-pt) 1))))
+      (multiple-value-bind (str len lpoint tpoint)
+          (%flonum-to-string (abs number) spaceleft d k)
+        ;; if caller specifically requested no fraction digits, suppress the
+        ;; optional trailing zero
+        (when (and d (zerop d))
+          (setq tpoint nil))
+        (when w
+          (decf spaceleft len)
+          ;; optional leading zero
+          (when lpoint
+            (if (or (> spaceleft 0) tpoint) ;force at least one digit
+              (decf spaceleft)
+              (setq lpoint nil)))
+          ;; optional trailing zero
+          (when tpoint
+            (if (or t (> spaceleft 0))
+              (decf spaceleft)
+              (setq tpoint nil))))
         (cond ((and w (< spaceleft 0) ovf)
-               ;;field width overflow
-               (dotimes (i w) (declare (fixnum i)) (write-char ovf stream)))
-              (t (when w (dotimes (i spaceleft) (declare (fixnum i)) (write-char pad stream)))
-                 (if (minusp (float-sign number)) ; 5/25
-                   (write-char #\- stream)
-                   (if atsign (write-char #\+ stream)))
-                 (cond
-                  ((> before-pt 0)
-                   (cond ((> strlen before-pt)
-                          (write-string str stream :start  0 :end before-pt)
-                          (write-char #\. stream)
-                          (write-string str stream :start  before-pt :end strlen)
-                          (dotimes (i (- d (- strlen before-pt)))
-                            (write-char #\0 stream)))
-                         (t ; 0's after
-                          (stream-write-string stream str)
-                          (dotimes (i (-  before-pt strlen))
-                            (write-char #\0 stream))
-                          (write-char #\. stream)
-                          (dotimes (i d)
-                            (write-char #\0 stream)))))
-                  (t (unless zsuppress (write-char #\0 stream))
-                     (write-char #\. stream)
-                     (dotimes (i (- before-pt))	 
-                       (write-char #\0 stream))
-                     (stream-write-string stream str)
-                     (dotimes (i (+ d after-pt)) 
-                      (write-char #\0 stream))))))))))
-#|
-; (format t "~7,3,-2f" 8.88)
-; (format t "~10,5,2f" 8.88)
-; (format t "~10,5,-2f" 8.88)
-; (format t "~10,5,2f" 0.0)
-; (format t "~10,5,2f" 9.999999999)
-; (format t "~7,,,-2e" 8.88) s.b. .009e+3 ??
-; (format t "~10,,2f" 8.88)
-; (format t "~10,,-2f" 8.88)
-; (format t "~10,,2f" 0.0)
-; (format t "~10,,2f" 0.123454)
-; (format t "~10,,2f" 9.9999999)
- (defun foo (x)
-    (format nil "~6,2f|~6,2,1,'*f|~6,2,,'?f|~6f|~,2f|~F"
-     x x x x x x))
-
-|#
-
-                  
+               ;; field width overflow
+               (dotimes (i w)
+                 (write-char ovf stream))
+               t)
+              (t
+               (when w
+                 (dotimes (i spaceleft)
+                   (write-char pad stream)))
+               (if (minusp (float-sign number))
+                 (write-char #\- stream)
+                 (when atsign
+                   (write-char #\+ stream)))
+               (when lpoint
+                 (write-char #\0 stream))
+               (write-string str stream)
+               (when tpoint
+                 (write-char #\0 stream))
+               nil))))))
 
 ;;; Exponential-format floating point  ~E
 
