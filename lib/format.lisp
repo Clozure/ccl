@@ -1306,7 +1306,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (if fdigits
         (flonum-to-digits x (min (- (+ fdigits (or scale 0)))
                                  (- (or fmin 0))))
-        (if (and width (> width 1))
+        (if width
           (let ((w (multiple-value-list
                     (flonum-to-digits x
                                       (max 1
