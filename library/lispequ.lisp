@@ -1160,10 +1160,11 @@
   mci.options                           ; short-form-options or long-form function
   mci.instances                         ; a population of instances
   mci.gfs                               ; a population of generic-functions
+  mci.args-lambda-list                  ; arguments lambda-list
   )
 
-(defmacro %cons-mci (&optional class options)
-  `(vector ,class ,options (%cons-population nil) (%cons-population nil)))
+(defmacro %cons-mci (&optional class options args-lambda-list)
+  `(vector ,class ,options (%cons-population nil) (%cons-population nil) ,args-lambda-list))
 
 ;;; slot accessor info for primary classes
 (def-accessors %svref
