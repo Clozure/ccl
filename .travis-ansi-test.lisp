@@ -5,5 +5,6 @@
 (disable-note :ansi-spec-problem)
 (disable-note :result-type-element-type-by-subtype)
 (setf *default-pathname-defaults* (truename #P"sandbox/"))
-(do-tests)
+(in-package :cl-test)
+(rt:do-tests)
 (ccl:quit (if *failed-tests* 1 0))
