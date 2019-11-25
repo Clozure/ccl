@@ -1460,7 +1460,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
                ;; to not print superflous " ..."
                (return))
               ((eql i print-length)
-               (%write-string " ..." stream)
+               (if (= i 0)
+                   (%write-string "..." stream)
+                   (%write-string " ..." stream))
                (return))
               ((= i 0))
               (t
