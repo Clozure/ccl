@@ -599,12 +599,14 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
         ((eq stream t) (setq stream *terminal-io*)))
   (write-unreadable-start object stream)
   (when type
-    (princ (type-of object) stream))
-  (when thunk 
-    (when type (stream-write-char stream #\space))
+    (princ (type-of object) stream)
+    (stream-write-char stream #\space))
+  (when thunk
     (funcall thunk))
+  (when (and thunk id)
+    (stream-write-char stream #\space))
   (if id
-    (%write-address object stream #\>)
+    (%write-address object stream (if (and type id) #\> nil))
     (pp-end-block stream ">"))
   nil)
 
@@ -653,10 +655,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
 (defmethod print-object ((num integer) stream)
   (write-an-integer num stream))
 
-(defun %write-address (object stream &optional foo)
-  (if foo (pp-space stream))
+(defun %write-address (object stream &optional end-block-char)
   (write-an-integer (if (integerp object) object (%address-of object)) stream 16. t)
-  (if foo (pp-end-block stream foo)))
+  (when end-block-char (pp-end-block stream end-block-char)))
 
 (defmethod print-object ((num ratio) stream)
   (let ((base (get-*print-base*)))
