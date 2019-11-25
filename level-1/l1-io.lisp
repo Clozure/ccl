@@ -525,7 +525,9 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
               (not (null (ccl::struct-def object)))
               (null (cdr (sd-slots (ccl::struct-def object)))))
          ;; else fall through to write-a-uvector
-         (write-a-structure object stream level))
+         ;; ansi PRINT-LEVEL.8 & PRINT-LEVEL.9
+         (unless (depth stream level)
+           (write-a-structure object stream level)))
         ((depth stream level))
         ((eq %type 'package)
          (write-a-package object stream))
