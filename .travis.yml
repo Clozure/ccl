@@ -26,7 +26,6 @@ language: c
 branches:
   only:
     - master
-    - cleanup
 cache:
   directories:
     - "/c/tools"
