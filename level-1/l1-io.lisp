@@ -603,10 +603,10 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
     (stream-write-char stream #\space))
   (when thunk
     (funcall thunk))
-  (when (and thunk id)
+  (when (or (and thunk id) (and (not type) id))
     (stream-write-char stream #\space))
   (if id
-    (%write-address object stream (if (and type id) #\> nil))
+    (%write-address object stream #\>)
     (pp-end-block stream ">"))
   nil)
 
