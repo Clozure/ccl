@@ -1694,3 +1694,6 @@ are running on, or NIL if we can't find any useful information."
 #+x86-target
 (defun invariant-tsc-p ()
   (logbitp 8  (nth-value 3 (x86-cpuid #x80000007))))
+
+(defun get-errno ()
+  (- (%get-errno)))
