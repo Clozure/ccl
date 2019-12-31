@@ -21,9 +21,9 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (pushnew :cocotron *features*))
 
-#+mac-app-store
+#+(or mac-app-store standalone-ide)
 (defvar *cocoa-ide-path* "ccl:Clozure CL.app;")
-#-mac-app-store
+#-(or mac-app-store standalone-ide)
 (defvar *cocoa-ide-path*
   (let* ((bits (nth-value 1 (host-platform))))
     (format nil "ccl:Clozure CL~a.app;" bits)))
@@ -36,14 +36,16 @@
     (declare (ignore os))
     #+mac-app-store
     (format nil "store.ccl-~a~a" (string-downcase cpu) bits)
-    #-mac-app-store
+    #+standalone-ide
+    (format nil "ccl-~a~a" (string-downcase cpu) bits)
+    #-(or mac-app-store standalone-ide)
     (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
 
 (defvar *cocoa-ide-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
 (defvar *cocoa-ide-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)
 
-(defvar *cocoa-ide-force-compile* #+mac-app-store t
-	                          #-mac-app-store nil)
+(defvar *cocoa-ide-force-compile* #+(or mac-app-store standalone-ide) t
+	                          #-(or mac-app-store standalone-ide) nil)
 (load "ccl:cocoa-ide;defsystem.lisp")
 (load-ide *cocoa-ide-force-compile*)
 

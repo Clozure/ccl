@@ -46,7 +46,7 @@
     (#/registerDefaults: domain dict)
     (#/release dict)
     (update-cocoa-defaults)
-    #-mac-app-store
+    #-(or mac-app-store standalone-ide)
     (when *standalone-cocoa-ide*
       (init-ccl-directory-for-ide))))
 

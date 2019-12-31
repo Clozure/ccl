@@ -115,19 +115,19 @@
     "preferences"
     "processes-window"
     "apropos-window"
-    #-mac-app-store
+    #-(or mac-app-store standalone-ide)
     "xapropos"
     "hemlock-commands"
     "file-dialogs"
     "menus"
     "app-delegate"
-    #-mac-app-store
+    #-(or mac-app-store standalone-ide)
     "ide-self-update"
     ,(if (use-pre-lion-search-files)
          "search-files-pre-lion"
          "search-files")
     "start"
-    #-mac-app-store
+    #-(or mac-app-store standalone-ide)
     "xinspector"
     ))
 
