@@ -243,18 +243,22 @@
   (declare (ignore toolbar))
   (#/arrayWithObjects: ns:ns-array #@"operate" #@"info" #@"edit" +null-ptr+))
 
-(defun safe-cocoa-edit (arg)
+(defun safe-edit (arg)
   "If an error happens, send it to top listener."
-  (handler-case (cocoa-edit arg)
+  (handler-case
+      (and (truename arg) ; throws an error if file doesn't exist
+           (if (> (file-total-size arg) 1.0e7) ; don't try to edit humongous files
+               (error "File ~S is too large. Open manually if you wish." arg)
+               (ed arg)))
     (error (c) 
-           (alert-window :title "File error"
-                                        :message (or (ignore-errors (princ-to-string c))
-                                                     "#<error printing error message>")
-                                        :default-button "Ok"))))
+           (gui::alert-window :title "File error"
+                              :message (or (ignore-errors (princ-to-string c))
+                                           "#<error printing error message>")
+                              :default-button "Ok"))))
 
 (objc:defmethod (#/openSystem: :void) ((self project-window-controller) sender)
   (declare (ignore sender))
-  (safe-cocoa-edit
+  (safe-edit
    (asdf:system-source-file (lisp-string-from-nsstring
                              (name (project-item self))))))
 
@@ -265,7 +269,7 @@
     (unless (minusp row)
       (let ((item (#/itemAtRow: (component-view self) row)))
         (typecase item 
-          (file-item (safe-cocoa-edit
+          (file-item (safe-edit
                       (lisp-string-from-nsstring (location item))))
           (ns:ns-string (make-project-window
                          (make-symbol (string-upcase (lisp-string-from-nsstring
