@@ -13,7 +13,10 @@
 ;;; See the License for the specific language governing permissions and
 ;;; limitations under the License.
 
+;;; TEST: (gui:make-project-window :cl+ssl)
+
 (in-package "GUI")
+(export 'MAKE-PROJECT-WINDOW)
 
 ;;; This file contains a project browser for the CCL IDE. A "project" is
 ;;; just the set of ASDF systems defined in the same file.
@@ -109,7 +112,7 @@
                                          (asdf:source-file 'file-item)))))
                           (setf (component obj) com)
                           obj)))
-        (asdf:module-components component)))
+        (asdf:component-children component)))
 
 (defmethod (setf component) (component (object system-item))
   (call-next-method)
@@ -240,9 +243,18 @@
   (declare (ignore toolbar))
   (#/arrayWithObjects: ns:ns-array #@"operate" #@"info" #@"edit" +null-ptr+))
 
+(defun safe-cocoa-edit (arg)
+  "If an error happens, send it to top listener."
+  (handler-case (cocoa-edit arg)
+    (error (c) 
+           (alert-window :title "File error"
+                                        :message (or (ignore-errors (princ-to-string c))
+                                                     "#<error printing error message>")
+                                        :default-button "Ok"))))
+
 (objc:defmethod (#/openSystem: :void) ((self project-window-controller) sender)
   (declare (ignore sender))
-  (find-or-make-hemlock-view
+  (safe-cocoa-edit
    (asdf:system-source-file (lisp-string-from-nsstring
                              (name (project-item self))))))
 
@@ -253,7 +265,7 @@
     (unless (minusp row)
       (let ((item (#/itemAtRow: (component-view self) row)))
         (typecase item 
-          (file-item (find-or-make-hemlock-view
+          (file-item (safe-cocoa-edit
                       (lisp-string-from-nsstring (location item))))
           (ns:ns-string (make-project-window
                          (make-symbol (string-upcase (lisp-string-from-nsstring
@@ -341,48 +353,36 @@
                 ((self project-window-controller)
                  outline-view (index :<NSI>nteger) item)
   (declare (ignore outline-view))
-  (cond ((eql item +null-ptr+) (case index
-                                 (0 (components-field self))
-                                 (1 (dependencies-field self))))
-        ((typep item 'component-item)
-         (#/objectAtIndex: (components item) index))
-        ((eql item (components-field self))
-         (#/objectAtIndex: (components (current-system-item self)) index))
-        ((eql item (dependencies-field self))
-         (let ((dependency (nth index
-                                (remove (asdf:component-name
-                                         (system (current-system-item self)))
-                                        (reduce #'union
-                                                (asdf:component-depends-on
-                                                 'asdf:load-op
-                                                 (system (current-system-item
-                                                          self)))
-                                                :key #'cdr)))))
-
-           (%make-nsstring (if (consp dependency)
-                             (namestring (asdf/component::component-pathname (second dependency)))
-                             (namestring (asdf/component::component-pathname dependency))))))))
+  (let ((csi (current-system-item self)))
+    (cond ((eql item +null-ptr+) (case index
+                                   (0 (components-field self))
+                                   (1 (dependencies-field self))))
+          ((typep item 'component-item)
+           (#/objectAtIndex: (components item) index))
+          ((eql item (components-field self))
+           (#/objectAtIndex: (components csi) index))
+          ((eql item (dependencies-field self))
+           (let ((dependency (nth index (get-dependencies (system csi)))))
+             (%make-nsstring (string dependency)))))))
 
 (objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>)
                 ((self project-window-controller) outline-view item)
   (declare (ignore outline-view))
   (not (or (typep item 'file-item) (typep item 'ns:ns-string))))
 
+(defun get-dependencies (system)
+  (asdf/system::system-depends-on system))
+
 (objc:defmethod (#/outlineView:numberOfChildrenOfItem: :<NSI>nteger)
                 ((self project-window-controller) outline-view item)
   (declare (ignore outline-view))
-  (cond ((eql item +null-ptr+) 2)
-        ((typep item 'component-item) (#/count (components item)))
-        ((eql item (components-field self))
-         (#/count (components (current-system-item self))))
-        ((eql item (dependencies-field self))
-         (length (remove (asdf:component-name (system (current-system-item
-                                                       self)))
-                         (reduce #'union
-                                 (asdf:component-depends-on
-                                  'asdf:load-op
-                                  (system (current-system-item self)))
-                                 :key #'cdr))))))
+  (let ((csi (current-system-item self)))
+    (cond ((eql item +null-ptr+) 2)
+          ((typep item 'component-item) (#/count (components item)))
+          ((eql item (components-field self))
+           (#/count (components csi)))
+          ((eql item (dependencies-field self))
+           (length (get-dependencies (system csi)))))))
 
 (objc:defmethod (#/outlineView:objectValueForTableColumn:byItem: :id)
                 ((self project-window-controller) outline-view column item)
@@ -403,12 +403,13 @@
 
 (defgeneric make-project-window (obj)
   (:method ((obj asdf:system))
-           (let ((controller (make-instance 'project-window-controller)))
-             (setf (project-item controller) obj)
-             (#/showWindow: controller nil)
-             controller))
+    (execute-in-gui #'(lambda ()
+                        (let ((controller (make-instance 'project-window-controller)))
+                          (setf (project-item controller) obj)
+                          (#/showWindow: controller (%null-ptr))
+                          controller))))
   (:method (obj)
-           (make-project-window (asdf:find-system obj))))
+    (make-project-window (asdf:find-system obj))))
 
 (defun find-related-systems (obj)
   "This just uses our assumption that a project is the set of systems in a
