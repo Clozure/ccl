@@ -371,8 +371,11 @@
 
 (objc:defmethod (#/outlineView:isItemExpandable: :<BOOL>)
                 ((self project-window-controller) outline-view item)
-  (declare (ignore outline-view))
-  (not (or (typep item 'file-item) (typep item 'ns:ns-string))))
+  (typecase item
+    (file-item nil)
+    (ns:ns-string nil)
+    (t (> (#/outlineView:numberOfChildrenOfItem: self outline-view item)
+          0))))
 
 (defun get-dependencies (system)
   (asdf/system::system-depends-on system))
@@ -413,7 +416,15 @@
                           (#/showWindow: controller (%null-ptr))
                           controller))))
   (:method (obj)
-    (make-project-window (asdf:find-system obj))))
+    (handler-case ; tolerate errors in find-system gracefully
+        (let ((system (asdf:find-system obj)))
+          (when system
+            (make-project-window system)))
+      (error (c) 
+             (gui::alert-window :title "ASDF system error"
+                                :message (or (ignore-errors (princ-to-string c))
+                                             "#<error printing error message>")
+                                :default-button "Ok")))))
 
 (defun find-related-systems (obj)
   "This just uses our assumption that a project is the set of systems in a
