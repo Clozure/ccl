@@ -51,6 +51,7 @@
    (outline-view :foreign-type :id :accessor outline-view)
    (recursive-checkbox :foreign-type :id :accessor recursive-checkbox)
    (regex-checkbox :foreign-type :id :accessor regex-checkbox)
+   (search-comments-checkbox :foreign-type :id :accessor search-comments-checkbox)
    (case-sensitive-checkbox :foreign-type :id :accessor case-sensitive-checkbox)
    (expand-results-checkbox :foreign-type :id :accessor expand-results-checkbox)
    (progress-indicator :foreign-type :id :accessor progress-indicator)
@@ -67,6 +68,7 @@
    (regex-p :initform t :reader regex-p)
    (case-sensitive-p :initform nil :reader case-sensitive-p)
    (expand-results-p :initform nil :reader expand-results-p)
+   (search-comments-p :initform t :reader search-comments-p)
    (grep-process :initform nil :accessor grep-process))
   (:metaclass ns:+ns-object))
 
@@ -120,18 +122,20 @@
 
 (objc:defmethod (#/toggleCheckbox: :void) ((wc search-files-window-controller) checkbox)
   (with-slots (recursive-checkbox regex-checkbox case-sensitive-checkbox expand-results-checkbox
-	       recursive-p regex-p case-sensitive-p expand-results-p) wc
+                                  search-comments-checkbox search-comments-p recursive-p regex-p case-sensitive-p expand-results-p) wc
     (cond ((eql checkbox recursive-checkbox)
 	   (setf recursive-p (not recursive-p)))
           ((eql checkbox regex-checkbox)
            (setf regex-p (not regex-p)))
 	  ((eql checkbox case-sensitive-checkbox)
 	   (setf case-sensitive-p (not case-sensitive-p)))
+          ((eql checkbox search-comments-checkbox)
+           (setf search-comments-p (not search-comments-p)))
 	  ((eql checkbox expand-results-checkbox)
 	   (setf expand-results-p (not expand-results-p))
 	   (if expand-results-p
-	     (expand-all-results wc)
-	     (collapse-all-results wc))
+               (expand-all-results wc)
+               (collapse-all-results wc))
 	   (#/reloadData (outline-view wc)))
 	  (t
 	   (error "Unknown checkbox ~s" checkbox)))))
@@ -233,12 +237,26 @@
   (get-full-dir-string (lisp-string-from-nsstring nsstring)))
 
 (defun make-grep-arglist (wc find-str)
-  (let ((grep-args (list "-I" "-s" "-e" find-str)))
-    ; Ignore binary files, suppress error messages
-    (unless (case-sensitive-p wc)
-      (push "-i" grep-args))
-    (unless (regex-p wc)
-      (push "-F" grep-args))
+  (let ((grep-args nil))
+    (flet ((default-args (&rest etc)
+                         (list* "-I" "-s" "-e" etc))) ; need -H because when using find rather than grep, filenames get lost
+      (cond ((search-comments-p wc) ; much simpler when we're searching comments
+             (setf grep-args (default-args "-e" find-str))
+             ;(setf grep-args (list "-I" "-e" find-str)) ; debug
+             ; Ignore binary files, suppress error messages
+             (unless (case-sensitive-p wc)
+               (push "-i" grep-args))
+             (unless (regex-p wc)
+               (push "-F" grep-args)))
+            (t ; not searching comments. Need a fancy pattern.
+             (unless (regex-p wc) ; treat string as literal. But we still have to use a pattern.
+               (setf find-str (concatenate 'string "\\Q" find-str "\\E")))
+             (setf find-str (concatenate 'string "(?:^[[:blank:]]*[^[:blank:];].*" find-str ")")) ; NOT a line beginning with ;
+             (unless (case-sensitive-p wc)
+               (setf find-str (concatenate 'string "(?i)" find-str)))
+             (setf find-str (concatenate 'string find-str ""))
+             (setf grep-args (default-args "-E" find-str))
+             ())))
     grep-args))
 
 (objc:defmethod (#/doSearch: :void) ((wc search-files-window-controller) sender)
@@ -256,7 +274,8 @@
     (push "-c" grep-args) ; we just want the count here
     (if (recursive-p wc)
       (setf grep-args (nconc grep-args (list "-r" "--include" file-str folder-str)))
-      (list (concatenate 'string folder-str file-str)))
+      ; following tells run-grep to use find instead of grep directly
+      (setf grep-args (cons :nr (nconc grep-args (list file-str folder-str)))))
     (#/setEnabled: (search-button wc) nil)
     (setf (grep-process wc) (process-run-function "grep" 'run-grep grep-args wc))
     (#/setTitle: (#/window wc) (#/autorelease
@@ -301,23 +320,40 @@
 
 ;;; This is run in a secondary thread.
 (defun run-grep (grep-arglist wc)
-  (with-autorelease-pool 
-      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/startAnimation:) nil t)
-    (unwind-protect
-	 (let* ((grep-output (call-grep grep-arglist)))
-	   (multiple-value-bind (results message)
-	       (results-and-message grep-output wc)
-	     ;; This assumes that only one grep can be running at
-	     ;; a time.
-	     (setf (new-results wc) results)
-	     (#/performSelectorOnMainThread:withObject:waitUntilDone:
-	      wc
-	      (@selector #/updateResults:)
-	      (#/autorelease (%make-nsstring message))
-	      t)))
-      (#/performSelectorOnMainThread:withObject:waitUntilDone:
-       (progress-indicator wc) (@selector #/stopAnimation:) nil t))))
+  (let ((progname nil))
+    (case (car grep-arglist)
+      (:nr ; nonrecursive. Gotta use find and a different arglist format
+       ; NOTE: If you're using grep on the command line relative to cwd, nonrecursive grep works fine, and there's
+       ;       no need for the find command.
+       ;   Where grep doesn't work nonrecursively if if you explicitly hand grep an explicit folder-str to search in,
+       ;       like we're doing here.
+       (pop grep-arglist)
+       ; last two things in arglist are (file-str folder-str) in that order.
+       (destructuring-bind (file-str folder-str) (last grep-arglist 2)
+         (setf grep-arglist (butlast grep-arglist 2))
+         (setf grep-arglist (append (list* folder-str "-name" file-str "-type" "f" "-maxdepth" "1" "-exec" "grep"
+                                           grep-arglist)
+                                    (list "{}" ";")))
+         (setf progname "find")))
+      (t
+       (setf progname "grep")))
+    (with-autorelease-pool 
+        (#/performSelectorOnMainThread:withObject:waitUntilDone:
+         (progress-indicator wc) (@selector #/startAnimation:) nil t)
+      (unwind-protect
+          (let* ((grep-output (call-grep grep-arglist progname)))
+            (multiple-value-bind (results message)
+                                 (results-and-message grep-output wc)
+              ;; This assumes that only one grep can be running at
+              ;; a time.
+              (setf (new-results wc) results)
+              (#/performSelectorOnMainThread:withObject:waitUntilDone:
+               wc
+               (@selector #/updateResults:)
+               (#/autorelease (%make-nsstring message))
+               t)))
+        (#/performSelectorOnMainThread:withObject:waitUntilDone:
+         (progress-indicator wc) (@selector #/stopAnimation:) nil t)))))
 
 (defun results-and-message (grep-output wc)
   (let* ((results (make-array 10 :fill-pointer 0 :adjustable t))
@@ -468,15 +504,15 @@
           (search-result-line-nsstr line-result)
           #@"ERROR")))))
 
-(defun call-grep (args)
+(defun call-grep (args &optional (progname "grep"))
   ;;Calls grep with the strings as arguments, and returns a string containing the output
   (with-output-to-string (stream)
-    (let* ((proc (run-program "grep" args :input nil :output stream)))
+    (let* ((proc (run-program progname args :input nil :output stream)))
       (multiple-value-bind (status exit-code) (external-process-status proc)
-	(let ((output (get-output-stream-string stream)))
-	  (if (eq :exited status)
-	    (return-from call-grep output)
-            (error "~a returned exit status ~s" *grep-program* exit-code)))))))
+        (let ((output (get-output-stream-string stream)))
+          (if (eq :exited status)
+              (return-from call-grep output)
+              (error "~a returned exit status ~s" *grep-program* exit-code)))))))
 
 (defun map-lines (string fn)
   "For each line in string, fn is called with the start and end of the line"
