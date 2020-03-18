@@ -241,20 +241,22 @@
     (flet ((default-args (&rest etc)
                          (list* "-I" "-s" etc)))
       (cond ((search-comments-p wc) ; much simpler when we're searching comments
-             (setf grep-args (default-args "-e" find-str))
+             (if (regex-p wc)
+                 (setf grep-args (default-args "-E" find-str)) ; -E because we need egrep here for full regex generality
+                 (setf grep-args (default-args "-e" find-str)))
              ; Ignore binary files, suppress error messages
              (unless (case-sensitive-p wc)
                (push "-i" grep-args))
              (unless (regex-p wc)
                (push "-F" grep-args)))
-            (t ; not searching comments. Need a fancy pattern.
+            (t ; not searching comments. Need a fancy pattern, regardless of whether regex-p or not.
              (unless (regex-p wc) ; treat string as literal. But we still have to use a pattern.
                (setf find-str (concatenate 'string "\\Q" find-str "\\E")))
              (setf find-str (concatenate 'string "(?:^[[:blank:]]*[^[:blank:];].*" find-str ")")) ; NOT a line beginning with ;
              (unless (case-sensitive-p wc)
                (setf find-str (concatenate 'string "(?i)" find-str)))
              (setf find-str (concatenate 'string find-str ""))
-             (setf grep-args (default-args "-E" find-str)) ; -E because we need egrep
+             (setf grep-args (default-args "-E" find-str)) 
              ())))
     grep-args))
 
