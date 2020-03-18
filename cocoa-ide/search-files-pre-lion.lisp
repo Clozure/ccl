@@ -239,10 +239,9 @@
 (defun make-grep-arglist (wc find-str)
   (let ((grep-args nil))
     (flet ((default-args (&rest etc)
-                         (list* "-I" "-s" "-e" etc))) ; need -H because when using find rather than grep, filenames get lost
+                         (list* "-I" "-s" etc)))
       (cond ((search-comments-p wc) ; much simpler when we're searching comments
              (setf grep-args (default-args "-e" find-str))
-             ;(setf grep-args (list "-I" "-e" find-str)) ; debug
              ; Ignore binary files, suppress error messages
              (unless (case-sensitive-p wc)
                (push "-i" grep-args))
@@ -255,7 +254,7 @@
              (unless (case-sensitive-p wc)
                (setf find-str (concatenate 'string "(?i)" find-str)))
              (setf find-str (concatenate 'string find-str ""))
-             (setf grep-args (default-args "-E" find-str))
+             (setf grep-args (default-args "-E" find-str)) ; -E because we need egrep
              ())))
     grep-args))
 
@@ -331,7 +330,8 @@
        ; last two things in arglist are (file-str folder-str) in that order.
        (destructuring-bind (file-str folder-str) (last grep-arglist 2)
          (setf grep-arglist (butlast grep-arglist 2))
-         (setf grep-arglist (append (list* folder-str "-name" file-str "-type" "f" "-maxdepth" "1" "-exec" "grep"
+         ; need -H because when using find rather than grep, filenames get lost
+         (setf grep-arglist (append (list* folder-str "-name" file-str "-type" "f" "-maxdepth" "1" "-exec" "grep" "-H"
                                            grep-arglist)
                                     (list "{}" ";")))
          (setf progname "find")))
