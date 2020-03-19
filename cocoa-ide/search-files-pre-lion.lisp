@@ -384,9 +384,11 @@
 	     (incf file-count)
 	     (when (> count 0)
 	       (vector-push-extend (make-search-result-file
-				    :name (subseq grep-output
-						  (+ start dir-len)
-						  colon-pos)
+				    :name (file-namestring
+                                           (parse-namestring
+                                            (subseq grep-output
+						  start
+						  colon-pos)))
 				    :lines (make-array count :initial-element nil))
 				   results)
 	       (incf occurrences count))))))
@@ -426,7 +428,7 @@
         (when file-result
           (setf line-result (get-line-result wc file-result 0)))))          
     (when line-result
-      (cocoa-edit-grep-line (concatenate 'string (search-dir wc) "/" (search-result-line-file line-result))
+      (cocoa-edit-grep-line (concatenate 'string (search-dir wc) (search-result-line-file line-result))
                       (1- (search-result-line-number line-result))
                       (unless (regex-p wc) ; can't do regex searching in Hemlock. Just go to line.
                         (search-str wc))))))
