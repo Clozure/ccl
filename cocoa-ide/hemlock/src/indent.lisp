@@ -114,8 +114,6 @@
 (defcommand "Indent Region" (p)
   "Invokes function held by Hemlock variable \"Indent Function\" on every
    line between point and mark, inclusively."
-  "Invokes function held by Hemlock variable \"Indent Function\" on every
-   line between point and mark, inclusively."
   (declare (ignore p))
   (let* ((region (current-region)))
     (with-mark ((start (region-start region) :left-inserting)
@@ -269,23 +267,41 @@
 
 (defcommand "Indent Rigidly" (p)
   "Indent the region rigidly by p spaces.
-   Each line in the region is moved p spaces to the right (left if p is
-   negative).  When moving a line to the left, tabs are converted to spaces."
+  Each line in the region is moved p spaces to the right (left if p is
+  negative).  When moving a line to the left, tabs are converted to spaces."
   "Indent the region rigidly p spaces to the right (left if p is negative)."
   (let ((p (or p (value spaces-per-tab)))
-	(region (current-region)))
+        (region (current-region)))
     (with-mark ((mark1 (region-start region) :left-inserting)
-		(mark2 (region-end region) :left-inserting))
+                (mark2 (region-end region) :left-inserting))
       (line-start mark1)
       (line-start mark2)
       (do ()
-	  ((mark= mark1 mark2))
-	(cond ((empty-line-p mark1))
-	      ((blank-after-p mark1)
-	       (delete-characters mark1 (line-length (mark-line mark1))))
-	      (t (find-attribute mark1 :whitespace #'zerop)
-		 (let ((new-column (+ p (mark-column mark1))))
-		   (delete-characters mark1 (- (mark-charpos mark1)))
-		   (if (plusp new-column)
-		       (indent-to-column mark1 new-column)))))
-	(line-offset mark1 1 0)))))
+          ((mark> mark1 mark2))
+        (cond ((empty-line-p mark1))
+              ((blank-after-p mark1)
+               (delete-characters mark1 (line-length (mark-line mark1))))
+              (t (find-attribute mark1 :whitespace #'zerop)
+                 (let ((new-column (+ p (mark-column mark1))))
+                   (delete-characters mark1 (- (mark-charpos mark1)))
+                   (if (plusp new-column)
+                       (indent-to-column mark1 new-column)))))
+        (line-offset mark1 1 0)))))
+
+(defcommand "Shift Right" (p)   
+  "Shifts each line in the selection to the right by one character. Leaves region
+  active so you can do it again if needed."
+  "Shifts each line in the selection to the right by one character"
+  (declare (ignore p))
+  (indent-rigidly-command 1)
+  (activate-region))
+
+(defcommand "Shift Left" (p)
+  "Shifts each line in the selection to the right by one character. Leaves region
+   active so you can do it again if needed."
+  "Shifts each line in the selection to the right by one character"
+  (declare (ignore p))
+  (indent-rigidly-command -1)
+  (activate-region))
+
+
