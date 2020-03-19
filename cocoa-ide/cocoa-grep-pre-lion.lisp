@@ -22,9 +22,20 @@
 
 (defun cocoa-edit-grep-line (file line-num &optional search-string)
   (assume-cocoa-thread)
-  (let ((view (find-or-make-hemlock-view file)))
-    (hi::handle-hemlock-event view #'(lambda ()
-                                       (edit-grep-line-in-buffer line-num search-string)))))
+  (let ((view (handler-case
+                  (and (truename file) ; throws an error if file doesn't exist
+                       (if (> (file-data-size file) 1.0e7) ; don't try to edit humongous files
+                           (error "File ~S is too large. Open manually if you wish." file)
+                           (find-or-make-hemlock-view file)))
+                (error (c) 
+                       (alert-window :title "File error"
+                                          :message (or (ignore-errors (princ-to-string c))
+                                                       "#<error printing error message>")
+                                          :default-button "Ok")
+                       nil))))
+    (when view
+      (hi::handle-hemlock-event view #'(lambda ()
+                                         (edit-grep-line-in-buffer line-num search-string))))))
 
 (defun edit-grep-line-in-buffer (line-num search-string)
   (let ((point (hi::current-point-collapsing-selection)))
