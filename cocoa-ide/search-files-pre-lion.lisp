@@ -384,11 +384,12 @@
 	     (incf file-count)
 	     (when (> count 0)
 	       (vector-push-extend (make-search-result-file
-				    :name (file-namestring
+				    :name (enough-namestring
                                            (parse-namestring
                                             (subseq grep-output
 						  start
-						  colon-pos)))
+						  colon-pos))
+                                           (search-dir wc))
 				    :lines (make-array count :initial-element nil))
 				   results)
 	       (incf occurrences count))))))
