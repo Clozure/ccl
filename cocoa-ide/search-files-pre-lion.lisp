@@ -13,6 +13,15 @@
 ;;; See the License for the specific language governing permissions and
 ;;; limitations under the License.
 
+#| TODO.
+    Fix this:
+    Example where a regex fails:
+    ^\(def(un|method)
+    fails when "Search Comments" is unchecked, because
+    when "Search Comments" is unchecked, the implicit pattern has already scanned
+    past the beginning of the line.
+|#
+
 (in-package "GUI")
 
 ; search-files.lisp for pre 10.7 (pre-Lion) versions of OSX
@@ -289,6 +298,7 @@
   (let* ((proc (grep-process wc)))
     (when proc (process-kill proc))))
 
+; This was probably an attempt to resist long beachballing when the list to be expanded is long.
 (defun auto-expandable-p (results)
   (let ((n 0))
     (dotimes (f (length results) t)
@@ -418,7 +428,8 @@
     (when line-result
       (cocoa-edit-grep-line (concatenate 'string (search-dir wc) "/" (search-result-line-file line-result))
                       (1- (search-result-line-number line-result))
-                      (search-str wc)))))
+                      (unless (regex-p wc) ; can't do regex searching in Hemlock. Just go to line.
+                        (search-str wc))))))
 
 (defun get-selected-item (outline-view)
   (let ((index (#/selectedRow outline-view)))
