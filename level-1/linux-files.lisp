@@ -1050,7 +1050,7 @@ of the shell itself."
 (defun close-shared-library (lib &key (completely t))
   "If completely is T, set the reference count of library to 0. Otherwise,
 decrements it by 1. In either case, if the reference count becomes 0,
-close-shared-library frees all memory resources consumed library and causes
+close-shared-library frees all memory resources consumed by library and causes
 any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
   (let* ((lib (if (typep lib 'string)
 		(or (shared-library-with-name lib)
