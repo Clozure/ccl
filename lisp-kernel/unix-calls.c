@@ -37,6 +37,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)
@@ -161,3 +162,9 @@ sigaltstack(stack_t *in, stack_t *out)
   return syscall(__NR_sigaltstack,in,out);
 }
 #endif
+
+char *
+lisp_realpath(const char *restrict file_name, char *restrict resolved_name)
+{
+  return realpath(file_name, resolved_name);
+}
