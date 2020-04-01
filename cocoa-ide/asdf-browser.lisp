@@ -247,7 +247,7 @@
   "If an error happens, send it to top listener."
   (handler-case
       (and (truename arg) ; throws an error if file doesn't exist
-           (if (> (file-total-size arg) 1.0e7) ; don't try to edit humongous files
+           (if (> (file-data-size arg) 1.0e7) ; don't try to edit humongous files
                (error "File ~S is too large. Open manually if you wish." arg)
                (ed arg)))
     (error (c) 
