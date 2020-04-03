@@ -11,7 +11,6 @@
 
 /*.image
 /*boot*
-
 /armcl
 /?x86cl
 /?x86cl64
@@ -19,7 +18,8 @@
 /*headers64/
 
 /*bundle*.app/
-/Clozure\ CL*.app/
+Clozure*CL*.app/
+Clozure*CL*.app*/
 cocoa-ide/altconsole/.gdb_history
 cocoa-ide/altconsole/AltConsole
 cocoa-ide/altconsole/AltConsole.app
