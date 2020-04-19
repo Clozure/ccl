@@ -164,7 +164,7 @@ sigaltstack(stack_t *in, stack_t *out)
 #endif
 
 char *
-lisp_realpath(const char *restrict file_name, char *restrict resolved_name)
+lisp_realpath(const char *file_name, char *resolved_name)
 {
   return realpath(file_name, resolved_name);
 }
