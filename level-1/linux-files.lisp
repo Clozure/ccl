@@ -706,8 +706,12 @@ given is that of a group to which the current user belongs."
   #+windows-target (%windows-realpath namestring)
   #-windows-target
   (%stack-block ((resultbuf #$PATH_MAX))
-    (with-filename-cstrs ((name namestring #|(tilde-expand namestring)|#))
-      (let* ((result (#_realpath name resultbuf)))
+    (with-filename-cstrs ((name namestring))
+      (let* ((result (ff-call
+                      (%kernel-import target::kernel-import-lisp-realpath)
+                      :address name
+                      :address resultbuf
+                      :address)))
         (declare (dynamic-extent result))
         (if (%null-ptr-p result)
 	  (let ((errno (%get-errno)))

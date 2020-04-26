@@ -28,9 +28,7 @@ COPT = #-O2
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-freebsdx8664.h
-
-
-
+LDFLAGS=-Wl,-O0
 
 SPOBJ = pad.o x86-spjump64.o x86-spentry64.o x86-subprims64.o
 ASMOBJ = x86-asmutils64.o imports.o
@@ -62,11 +60,8 @@ OSLIBS = -lm -lthr
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m64 -o $@
 
-LINKSCRIPTFILE = # ./elf_x86_64.x
-LINKSCRIPT =  # -T $(LINKSCRIPTFILE)
-
-../../fx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(LINKSCRIPTFILE)
-	$(CC) -m64 $(CDEBUG) -fuse-ld=bfd -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+../../fx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
+	$(CC) -v -m64 $(CDEBUG) -Wl,--export-dynamic $(LDFLAGS) -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)

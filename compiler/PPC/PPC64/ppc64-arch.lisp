@@ -715,6 +715,7 @@
   lisp-sigexit
   jvm-init
   lisp-lstat
+  lisp-realpath
 )
 
 (defmacro nrs-offset (name)

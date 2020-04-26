@@ -19,6 +19,8 @@
 #define PLATFORM_CPU PLATFORM_CPU_X86
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
 
+#define _DARWIN_C_SOURCE
+
 
 #include <sys/signal.h>
 #include <sys/ucontext.h>

@@ -78,6 +78,9 @@
                      (return integer))
                     ((memq c '(#\e #\E))
                      (return integer))
+                    ((memq c '(#\r #\R))
+                     (setq type 'rational)
+                     (return integer))
                     ((setq c (digit-char-p c))
                      (setq digits (1+ digits))
                      (setq integer (+ c (* 10 integer))))                  
@@ -118,7 +121,9 @@
 	    (coerce double-float-nan type)))
 	 (expt (setq expt (%i+ expt (* esign eexp))))
 	 (t (return-from parse-float nil)))))
-    (fide sign integer expt (subtypep type 'short-float))))
+    (if (eq type 'rational)
+        (* (if (zerop sign) 1 -1) integer (expt 10 expt))
+        (fide sign integer expt (subtypep type 'short-float)))))
 
 
 ;; an interesting test case: 1.448997445238699

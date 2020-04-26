@@ -102,6 +102,7 @@ import_ptrs_start:
         defimport(lisp_sigexit)
         defimport(jvm_init)
         defimport(lisp_lstat)
+        defimport(lisp_realpath)
    
         .globl C(import_ptrs_base)
 C(import_ptrs_base):

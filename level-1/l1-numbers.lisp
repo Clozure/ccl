@@ -71,7 +71,7 @@
                      (when (and (neq i nstart) ; need some digits first
                                 (memq c '#.(list (char-code #\E)(char-code #\F)
                                                  (char-code #\D)(char-code #\L)
-                                                 (char-code #\S))))
+                                                 (char-code #\S)(char-code #\R))))
                        (return-from new-numtoken (parse-float string len start)))
                      (return-from new-numtoken nil))
                     (t     ; seen a "digit" in base that ain't decimal

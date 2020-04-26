@@ -1062,3 +1062,10 @@ reserve_tls_slots()
   for (i = first_available; i < 30; i++)
     TlsFree(i);
 }
+
+wchar_t *
+lisp_realpath(wchar_t *filename, wchar_t *resolved_name)
+{
+    return NULL;
+}
+

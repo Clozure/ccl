@@ -234,84 +234,84 @@ that provided by earlier {CCL} versions."))
       REPL variables.|)
   (defsection "Weak References Dictionary"
     (definition (:function make-population) "make-population {code &key} type initial-contents" nil
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param type}" ccldoc::=> "The type of population, one of {code :LIST} (the default) or {code :ALIST}")
-         (item "{param initial-contents}" ccldoc::=>
-          " A sequence of elements (or conses, for {code :alist}) to be used to initialize the
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param type}" ccldoc::=> "The type of population, one of {code :LIST} (the default) or {code :ALIST}")
+	  (item "{param initial-contents}" ccldoc::=>
+	    " A sequence of elements (or conses, for {code :alist}) to be used to initialize the
               population. The sequence itself (and the conses in case of an
               alist) is not stored in the population, a new list or alist is created to hold the elements.")))
-     (defsection "Description" (para "Creates a new population of the specified type.")))
+      (defsection "Description" (para "Creates a new population of the specified type.")))
     (definition (:function population-type) "population-type population" nil
-     (defsection "Description" (para "returns the type of {code population}, one of {code :LIST} or {code :ALIST}")))
+      (defsection "Description" (para "returns the type of {code population}, one of {code :LIST} or {code :ALIST}")))
     (definition (:function population-contents) "population-contents population" nil
-     (defsection "Description"
-       (para "returns the list encapsulated in {code population}.
+      (defsection "Description"
+	(para "returns the list encapsulated in {code population}.
         Note that as long as there is a direct (non-weak) reference to this
         list, it will not be modified by the garbage collector.  Therefore it is
         safe to traverse the list, and even modify it, no different from any
         other list. If you want the elements to become garbage-collectable
-        again, you must stop refering to the list directly.")))
+        again, you must stop referring to the list directly.")))
     (definition (:function (setf population-contents)) "(setf ( population-contents population) contents)" nil
-     (defsection "Description"
-       (para "Sets the list encapsulated in {code population} to
+      (defsection "Description"
+	(para "Sets the list encapsulated in {code population} to
         {code contents}.  {code Contents} is not copied,
         it is used directly."))))
   (defsection "Garbage-Collection Dictionary"
     (definition (:function gc) "gc" nil
-     (defsection "Description" (para "Causes a full GC to occur as soon as possible. Returns NIL.")))
+      (defsection "Description" (para "Causes a full GC to occur as soon as possible. Returns NIL.")))
     (definition (:function lisp-heap-gc-threshold) "lisp-heap-gc-threshold" nil
-     (defsection "Description"
-       (para "Returns the value of the kernel variable that specifies the
+      (defsection "Description"
+	(para "Returns the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC.")))
     (definition (:function set-lisp-heap-gc-threshold) "set-lisp-heap-gc-threshold new-threshold" nil
-     (defsection "Arguments and Values"
-       (listing :definition (item "{param new-threshold}" ccldoc::=> "The requested new lisp-heap-gc-threshold.")))
-     (defsection "Description"
-       (para "Sets the value of the kernel variable that specifies the
+      (defsection "Arguments and Values"
+	(listing :definition (item "{param new-threshold}" ccldoc::=> "The requested new lisp-heap-gc-threshold.")))
+      (defsection "Description"
+	(para "Sets the value of the kernel variable that specifies the
 	  amount of free space to leave in the heap after full GC to
 	  new-value, which should be a non-negative fixnum. Returns the
 	  value of that kernel variable (which may be somewhat larger than
 	  what was specified).")))
     (definition (:function use-lisp-heap-gc-threshold) "use-lisp-heap-gc-threshold" nil
-     (defsection "Description"
-       (para "Tries to grow or shrink lisp's heap space, so that the
+      (defsection "Description"
+	(para "Tries to grow or shrink lisp's heap space, so that the
 	  free space is (approximately) equal to the current heap threshold.
 	  Returns NIL")))
     (definition (:function egc) "egc arg" nil
-     (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
-     (defsection "Description"
-       (para "Enables the EGC if arg is non-nil, disables the EGC
+      (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
+      (defsection "Description"
+	(para "Enables the EGC if arg is non-nil, disables the EGC
 	  otherwise. Returns the previous enabled status. Although this
 	  function is thread-safe (in the sense that calls to it are
 	  serialized), it doesn't make a whole lot of sense to be
 	  turning the EGC on and off from multiple threads ...")))
     (definition (:function egc-enabled-p) "egc-enabled-p" nil
-     (defsection "Description"
-       (para "Returns T if the EGC was enabled at the time of the call,
+      (defsection "Description"
+	(para "Returns T if the EGC was enabled at the time of the call,
 	  NIL otherwise.")))
     (definition (:function egc-active-p) "egc-active-p" nil
-     (defsection "Description"
-       (para "Returns T if the EGC was active at the time of the call, NIL
+      (defsection "Description"
+	(para "Returns T if the EGC was active at the time of the call, NIL
 	  otherwise. Since this is generally a volatile piece of
 	  information, it's not clear whether this function serves a
 	  useful purpose when native threads are involved.")))
     (definition (:function egc-configuration) "egc-configuration" nil
-     (defsection "Description"
-       (para "Returns, as multiple values, the sizes in kilobytes of the
+      (defsection "Description"
+	(para "Returns, as multiple values, the sizes in kilobytes of the
 	  thresholds associated with the youngest ephemeral generation, the
 	  middle ephemeral generation, and the oldest ephemeral generation")))
     (definition (:function configure-egc) "configure-egc generation-0-size generation-1-size generation-2-size" nil
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param generation-0-size}" ccldoc::=> "the requested threshold size of the youngest
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param generation-0-size}" ccldoc::=> "the requested threshold size of the youngest
 		generation, in kilobytes")
-         (item "{param generation-1-size}" ccldoc::=> "the requested threshold size of the middle generation,
+	  (item "{param generation-1-size}" ccldoc::=> "the requested threshold size of the middle generation,
 		in kilobytes")
-         (item "{param generation-2-size}" ccldoc::=> "the requested threshold size of the oldest generation,
+	  (item "{param generation-2-size}" ccldoc::=> "the requested threshold size of the oldest generation,
 		in kilobytes")))
-     (defsection "Description"
-       (para "Puts the indicated threshold sizes in effect.
+      (defsection "Description"
+	(para "Puts the indicated threshold sizes in effect.
           Each threshold indicates the total size that may be allocated
           in that and all younger generations before a GC is triggered.
           Disables EGC while setting the values.
@@ -319,14 +319,14 @@ that provided by earlier {CCL} versions."))
 	  64Kbytes in {CCL} 0.14 and to a multiple of 32KBytes in earlier
 	  versions.)")))
     (definition (:function gc-retain-pages) "gc-retain-pages arg" nil
-     (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
-     (defsection "Description"
-       (para "Tries to influence the GC to retain/recycle the pages
+      (defsection "Arguments and Values" (listing :definition (item "{param arg}" ccldoc::=> "a generalized boolean")))
+      (defsection "Description"
+	(para "Tries to influence the GC to retain/recycle the pages
 	  allocated between GCs if arg is true, and to release them
 	  otherwise. This is generally a tradeoff between paging and other
 	  VM considerations.")))
     (definition (:function gc-retaining-pages) "gc-retaining-pages" nil
-     (defsection "Description"
-       (para "Returns T if the GC tries to retain pages between full GCs
+      (defsection "Description"
+	(para "Returns T if the GC tries to retain pages between full GCs
 	  and NIL if it's trying to release them to improve VM paging
 	  performance.")))))

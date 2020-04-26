@@ -157,7 +157,7 @@ While executing: #<Function CLASSIFY2 #x08476cfe>
     (para "CCL::DBG takes an argument, whose value is copied into the register
       that {CCL} uses to return a function's primary value (arg_z, which
       is r23 on the PowerPC). If we were to choose the (L) option at this point,
-      we'd see a dislay like:")
+      we'd see a display like:")
     (code-block "
 rnil = 0x01836015
 nargs = 0
@@ -284,8 +284,8 @@ r24 (save7) = ()
         the WITH-VECTOR-BUFFER lap macro."))
   (defsection "Development-Mode Dictionary"
     (definition (:variable *warn-if-redefine-kernel*) "*WARN-IF-REDEFINE-KERNEL*" nil
-     (defsection "Description"
-       #:|When true, attempts to redefine (via DEFUN or DEFMETHOD)
+      (defsection "Description"
+	#:|When true, attempts to redefine (via DEFUN or DEFMETHOD)
 	      functions and methods that are marked as being
 	      "predefined" signal continuable errors.
 
@@ -293,43 +293,43 @@ r24 (save7) = ()
 	      no lisp functions or methods have been defined in the kernel
 	      in MCL or {CCL} since 1987 or so.|))
     (definition (:function set-development-environment)
-     "set-development-environment {code &optional} unmark-builtin-functions" nil
-     (defsection "Description"
-       (para #:|Arranges that the outermost special bindings of *PACKAGE*
+      "set-development-environment {code &optional} unmark-builtin-functions" nil
+      (defsection "Description"
+	(para #:|Arranges that the outermost special bindings of *PACKAGE*
 	      and *WARN-IF-REDEFINE-KERNEL* restore values of the "CCL"
 	      package and NIL to these variables, respectively. If the optional
 	      argument is true, marks all globally defined functions and methods
 	      as being "not predefined" (this is a fairly expensive
 	      operation.)|)))
     (definition (:function set-user-environment) "set-user-environment {code &optional} mark-builtin-functions" nil
-     (defsection "Description"
-       (para #:|Arranges that the outermost special bindings of *PACKAGE*
+      (defsection "Description"
+	(para #:|Arranges that the outermost special bindings of *PACKAGE*
 	      and *WARN-IF-REDEFINE-KERNEL* restore values of the
 	      "CL-USER" package and T to these variables, respectively.
 	      If the optional argument is true, marks all globally defined
 	      functions and methods as being "predefined" (this is a
 	      fairly expensive operation.)|)))
     (definition (:variable *altivec-available*) "*ALTIVEC-AVAILABLE*" nil
-     (defsection "Description"
-       (para "This variable is initialized each time an {CCL} session
+      (defsection "Description"
+	(para "This variable is initialized each time an {CCL} session
 	      starts based on information provided by the lisp kernel. Its value
 	      is true if AltiVec is present and false otherwise. This variable
 	      shouldn't be set by user code.")))
     (definition (:function altivec-available-p) "altivec-available-p" nil
-     (defsection "Description" (para "Returns non-NIL if AltiVec is available.")))
+      (defsection "Description" (para "Returns non-NIL if AltiVec is available.")))
     (definition (:variable *altivec-lapmacros-maintain-vrsave-p*) "*ALTIVEC-LAPMACROS-MAINTAIN-VRSAVE-P*" nil
-     (defsection "Description"
-       (para "Intended to control the expansion of certain lap macros.
+      (defsection "Description"
+	(para "Intended to control the expansion of certain lap macros.
 	      Initialized to NIL on LinuxPPC; initialized to T on platforms
 	      (such as MacOS X/Darwin) that require that the VRSAVE SPR contain
 	      a bitmask of active vector registers at all times.")))
     (definition (:lap-macro ccl::with-altivec-registers) "with-altivec-registers reglist {code &body} body" "Specify the test of Altivec registers used in the body."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param reglist}" ccldoc::=> "A list of vector register names (vr0 .. vr31).")
-         (item "{param body}" ccldoc::=> "A sequence of PPC LAP instructions.")))
-     (defsection "Description"
-       (para "Specifies the set of AltiVec registers used in body. If
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param reglist}" ccldoc::=> "A list of vector register names (vr0 .. vr31).")
+	  (item "{param body}" ccldoc::=> "A sequence of PPC LAP instructions.")))
+      (defsection "Description"
+	(para "Specifies the set of AltiVec registers used in body. If
 	      *altivec-lapmacros-maintain-vrsave-p* is true when the macro is
 	      expanded, generates code to save the VRSAVE SPR and updates VRSAVE
 	      to include a bitmask generated from the specified register list.
@@ -339,15 +339,15 @@ r24 (save7) = ()
 	      *altivec-lapmacros-maintain-vrsave-p* is true, restores VRSAVE as
 	      well. Uses the IMM0 register (r3) as a temporary.")))
     (definition (:lap-macro ccl::with-vector-buffer) "with-vector-buffer base n {code &body} body" "Make space for saved Altivec registers."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param base}" ccldoc::=> "Any available general-purpose register.")
-         (item "{param n}" ccldoc::=> "An integer between 1 and 254, inclusive. (Should
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param base}" ccldoc::=> "Any available general-purpose register.")
+	  (item "{param n}" ccldoc::=> "An integer between 1 and 254, inclusive. (Should
 		        typically be much, much closer to 1.) Specifies the size of
 		        the buffer, in 16-byte units.")
-         (item "{param body}" ccldoc::=> "A sequence of PPC LAP instructions.")))
-     (defsection "Description"
-       (para "Generates code which allocates a 16-byte aligned buffer
+	  (item "{param body}" ccldoc::=> "A sequence of PPC LAP instructions.")))
+      (defsection "Description"
+	(para "Generates code which allocates a 16-byte aligned buffer
 	      large enough to contain N vector registers; the GPR base points to
 	      the lowest address of this buffer. After processing body, the
 	      buffer will be deallocated. The body should preserve the value of

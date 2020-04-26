@@ -316,11 +316,18 @@
   (dolist (name (pkg.names p))
     (setf (package-ref.pkg (register-package-ref name)) p)))
 
+;; Early definitions. Redefined in l1-symhash.
+(defun package-%local-nicknames (package)      (declare (ignore package)) '())
+(defun package-%locally-nicknamed-by (package) (declare (ignore package)) '())
 
 (defun find-package (name)
-  (if (typep  name 'package)
-    name
-    (%find-pkg (string name))))
+  (require-type name '(or package character symbol string))
+  (cond ((typep name 'package)
+         name)
+        ((package-%local-nicknames *package*)
+         (pkg-arg name nil nil))
+        (t
+         (%find-pkg (string name)))))
 
 (defun %pkg-ref-find-package (ref)
   (package-ref.pkg ref))
@@ -330,23 +337,31 @@
     (setq *package* pkg)
     (set-package (%kernel-restart $xnopkg name))))
 
-  
+;;; TODO: Optimize package lookup.
+;;; According to dlowe from freenode, we do not need to use STRING= in PKG-ARG or the explicit
+;;; AREF loop in %FIND-PKG. We can consider all nicknames to be names of symbols interned in an
+;;; internal package. This means that, after interning the symbol name, we will be able to avoid
+;;; comparing symbol name lengths and contents and instead use the package system to immediately
+;;; fetch the proper symbol (and therefore its name). This should considerably speed up package
+;;; lookup and possibly mitigate the performance hit incurred by the introduction of package-local
+;;; nicknames.
+
 (defun %find-pkg (name &optional (len (length name)))
   (declare (fixnum len))
+  (require-type name 'string)
   (with-package-list-read-lock
-      (dolist (p %all-packages%)
-        (if (dolist (pkgname (pkg.names p))
-              (when (and (= (the fixnum (length pkgname)) len)
-                         (dotimes (i len t)
-                           ;; Aref: allow non-simple strings
-                           (unless (eq (aref name i) (schar pkgname i))
-                             (return))))
-                (return t)))
+    (dolist (p %all-packages%)
+      (if (dolist (pkgname (pkg.names p))
+            (when (and (= (the fixnum (length pkgname)) len)
+                       (dotimes (i len t)
+                         ;; Aref: allow non-simple strings
+                         (unless (eq (aref name i) (schar pkgname i))
+                           (return))))
+              (return t)))
           (return p)))))
 
-
-
-(defun pkg-arg (thing &optional deleted-ok)
+(defun pkg-arg (thing &optional deleted-ok (errorp t))
+  (require-type thing '(or package character symbol string))
   (let* ((xthing (cond ((or (symbolp thing) (typep thing 'character))
                         (string thing))
                        ((typep thing 'string)
@@ -354,21 +369,23 @@
                        (t
                         thing))))
     (let* ((typecode (typecode xthing)))
-        (declare (fixnum typecode))
-        (cond ((= typecode target::subtag-package)
-               (if (or deleted-ok (pkg.names xthing))
+      (declare (fixnum typecode))
+      (cond ((= typecode target::subtag-package)
+             (if (or deleted-ok (pkg.names xthing))
                  xthing
                  (error "~S is a deleted package ." thing)))
-              ((= typecode target::subtag-simple-base-string)
-               (or (%find-pkg xthing)
-                   (%kernel-restart $xnopkg xthing)))
-              (t (report-bad-arg thing 'simple-string))))))
+            ((= typecode target::subtag-simple-base-string)
+             (let ((local-nicknames (package-%local-nicknames *package*)))
+               (cond ((and local-nicknames
+                           (cdr (assoc xthing local-nicknames :test #'string=))))
+                     ((%find-pkg xthing))
+                     (errorp (%kernel-restart $xnopkg xthing)))))
+            (t (report-bad-arg thing 'simple-string))))))
 
 (defun %fasl-vpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-vreadstr s)
     (let* ((p (%find-pkg str len)))
       (%epushval s (or p (%kernel-restart $XNOPKG (if new-p str (%fasl-copystr str len))))))))
-
 
 (defun %fasl-nvpackage (s)
   (multiple-value-bind (str len new-p) (%fasl-nvreadstr s)
