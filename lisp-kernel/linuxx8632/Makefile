@@ -73,8 +73,13 @@ OSLIBS = -ldl -lm -lpthread -lrt
 LINK_SCRIPT = # ./elf_x86_32.x
 USE_LINK_SCRIPT = # -T $(LINK_SCRIPT)
 
+# Disable PIE: we need to ensure the kernel functions are mapped to low
+# addresses that fit in a fixnum. Otherwise ASLR could randomly load the
+# text section at an address outside this range.
+PIE = -no-pie
+
 ../../lx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile  $(LINK_SCRIPT)
-	$(CC)  -m32 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  -m32 $(PIE) $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
