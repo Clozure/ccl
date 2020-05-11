@@ -191,21 +191,21 @@ synchronization between threads."
     (report-bad-arg rw 'read-write-lock)))
   
 
-(defun %make-semaphore-ptr ()
+(defun %make-semaphore-ptr (&key (count 0))
   (let* ((p (ff-call (%kernel-import target::kernel-import-new-semaphore)
-	     :signed-fullword 0
-             :address)))
+		     :signed-fullword count
+		     :address)))
     (if (%null-ptr-p p)
-      (error "Can't create semaphore.")
+	(error "Can't create semaphore.")
       (record-system-lock
        (%setf-macptr
 	(make-gcable-macptr $flags_DisposeSemaphore)
 	p)))))
 
-(defun make-semaphore ()
+(defun make-semaphore (&key (count 0))
   "Create and return a semaphore, which can be used for synchronization
 between threads."
-  (%istruct 'semaphore (%make-semaphore-ptr)))
+  (%istruct 'semaphore (%make-semaphore-ptr :count count)))
 
 (defun semaphorep (x)
   (istruct-typep x 'semaphore))
