@@ -194,7 +194,7 @@ synchronization between threads."
 (defun %make-semaphore-ptr (&key (count 0))
   (let* ((p (ff-call (%kernel-import target::kernel-import-new-semaphore)
 	     :signed-fullword count
-	       :address)))
+             :address)))
     (if (%null-ptr-p p)
       (error "Can't create semaphore.")
       (record-system-lock
