@@ -125,7 +125,7 @@
 (objc:defmethod #/sharedPanel ((self +typeout-window))
    (cond (*typeout-window*)
 	 (t
-          (setq *typeout-window* (#/typeoutWindowWithTitle: self "Typeout")))))
+          (setq *typeout-window* (#/typeoutWindowWithTitle: self #@"Typeout")))))
 
 
 
