@@ -1710,6 +1710,11 @@
   (funcall (formatter "~:<~1I~W~^ ~@_~W~^ ~@_~:/pprint-fill/~^~@{ ~_~W~^~}~:>")
 	    xp list))
 
+(defun defclass-like (xp list &rest args)
+    (declare (ignore args))
+  (funcall (formatter "~:<~1I~W~^ ~@_~W~^ ~@_~:/pprint-fill/~^~:@_~:/pprint-linear/~^~@{ ~:@_~W~^~}~:>")
+	    xp list))
+
 (defun defvar-like (xp list &rest args)
     (declare (ignore args))
   (funcall (formatter "~:<~1I~W~^ ~@_~W~^ ~@_~W~^~@{ ~_~W~^~}~:>")
@@ -1981,7 +1986,7 @@
 (set-pprint-dispatch+ '(cons (member compiler-let)) #'let-print '(0) *IPD*)
 (set-pprint-dispatch+ '(cons (member cond)) #'cond-print '(0) *IPD*)
 (set-pprint-dispatch+ '(cons (member ctypecase)) #'block-like '(0) *IPD*)
-(set-pprint-dispatch+ '(cons (member defclass)) #'defun-like '(0) *IPD*)
+(set-pprint-dispatch+ '(cons (member defclass)) #'defclass-like '(0) *IPD*)
 (set-pprint-dispatch+ '(cons (member ctypecase)) #'block-like '(0) *IPD*) 
 (set-pprint-dispatch+ '(cons (member defconstant)) #'defvar-like '(0) *IPD*)
 (set-pprint-dispatch+ '(cons (member define-setf-expander)) #'defun-like '(0) *IPD*) 
