@@ -46,6 +46,7 @@
     (#/registerDefaults: domain dict)
     (#/release dict)
     (update-cocoa-defaults)
+    #-mac-app-store
     (when *standalone-cocoa-ide*
       (init-ccl-directory-for-ide))))
 
@@ -283,10 +284,7 @@
 
 (objc:defmethod (#/showManual: :void) ((self ide-application-delegate) sender)
   (declare (ignore sender))
-  (let* ((p (merge-pathnames "doc/ccl-documentation.html" #p"ccl:"))
-	 (workspace (#/sharedWorkspace ns:ns-workspace)))
-    (with-cfstring (s (native-translated-namestring p))
-      (#/openFile: workspace s))))
+  (ccl::open-url-in-browser "http://ccl.clozure.com/docs/ccl.html"))
 
 (defloadvar *hemlock-commands-window-controller* nil)
 

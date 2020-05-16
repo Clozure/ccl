@@ -108,9 +108,11 @@
   (let* ((typecode (typecode key)))
     (declare (fixnum typecode))
     (or (= typecode target::subtag-macptr)
+        (= typecode target::subtag-complex-single-float)
+        (= typecode target::subtag-complex-double-float)
         (and (< typecode (- target::nbits-in-word target::fixnumshift))
              (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
-                        typecode)
+                           typecode)
                       (logior (ash 1 target::subtag-bignum)
                               #-64-bit-target
                               (ash 1 target::subtag-single-float)
@@ -1271,8 +1273,11 @@ before doing so.")
                      (nhash.grow-threshold hash) (- size old-size))
                (setq weak-flags nil)       ; tell clean-up form we finished the loop
                ;; If the old vector's in some static heap, zero it
-               ;; so that less garbage is retained.
-	       (%init-misc 0 old-vector)))
+               ;; so that less garbage is retained.  (But don't smash
+	       ;; the weakvll link.)
+	       (let ((old-weak-link (%svref old-vector 0)))
+		 (%init-misc 0 old-vector)
+		 (setf (%svref old-vector 0) old-weak-link))))
             (when weak-flags
               (setf (nhash.vector.flags old-vector)
                     (logior (the fixnum weak-flags)

@@ -100,34 +100,89 @@
        ,@(inits)
        ,@body)))
 
+;; 
+(defmacro with-temporary-bignum-buffers (specs &body body)
+  "WITH-TEMPORARY-BIGNUM-BUFFERS ({(var expr)}* form*"
+  (collect ((a-vars)
+            (a-lens)
+            (b-vars)
+            (b-lens)
+            (buf-lens)
+            (buf-vars)
+            (vars))
+    (loop for (var (operation a b)) in specs
+       do (let ((a-var (if (symbolp a) nil (gensym)))
+                (a-len (gensym))
+                (b-var (if (symbolp b) nil (gensym)))
+                (b-len (gensym))
+                (buf-len (gensym))
+                (buf-var (gensym)))
+            (a-vars (if a-var `((,a-var ,a)) nil))
+            (a-lens
+             `(,a-len (if (fixnump ,(or a-var a)) ,(target-word-size-case (32 1) (64 2)) (%bignum-length ,(or a-var a)))))
+            (b-vars (if b-var `((,b-var ,b)) nil))
+            (b-lens
+             `(,b-len (if (fixnump ,(or b-var b)) ,(target-word-size-case (32 1) (64 2)) (%bignum-length ,(or b-var b)))))
+            (buf-lens `(,buf-len ,@(ecase operation
+                                     (+-2-into
+                                      `((1+ (max ,a-len ,b-len))))
+                                     (--2-into
+                                      `((1+ (max ,a-len ,b-len))))
+                                     (*-2-into
+                                      `((+ (* 2 (ceiling (1+ ,a-len) 2)) (* 2 (ceiling (1+ ,b-len) 2)))))
+                                     (gcd-2
+                                      `((1+ (min ,a-len ,b-len))))
+                                     (truncate-no-rem
+                                      `((1+ (max ,(target-word-size-case (32 2) (64 3)) (+ (- ,a-len ,b-len) 2)))))
+                                     (maybe-truncate-no-rem
+                                      `((1+ (max ,(target-word-size-case (32 2) (64 3)) (+ (- ,a-len ,b-len) 2))))))))
+            (buf-vars `(,buf-var (allocate-typed-vector :bignum ,buf-len)))
+            (vars `(,var (,operation ,(or a-var a) ,(or b-var b) ,buf-var)))))
+    `(let* (,@(loop for a-var in (a-vars)
+                 for a-len in (a-lens)
+                 for b-var in (b-vars)
+                 for b-len in (b-lens)
+                 for buf-len in (buf-lens)
+                 for buf-var in (buf-vars)
+                 for var in (vars)
+                 append `(,@a-var ,a-len ,@b-var ,b-len ,buf-len ,buf-var ,var)))
+       (declare (type bignum-index ,@(mapcar 'car (a-lens))
+                                   ,@(mapcar 'car (b-lens))
+                                   ,@(mapcar 'car (buf-lens)))
+                (dynamic-extent ,@(mapcar 'car (buf-vars))))
+       ,@body)))
+
 ;;; call fn on possibly stack allocated negative of a and/or b
 ;;; args better be vars - we dont bother with once-only
 (defmacro with-negated-bignum-buffers (a b fn)
-  `(let* ((len-a (%bignum-length ,a))
-          (len-b (%bignum-length ,b))
-          (a-plusp (bignum-plusp ,a))
-          (b-plusp (bignum-plusp ,b)))
-     (declare (type bignum-index len-a len-b))
-     (if (and a-plusp b-plusp)
-       (,fn ,a ,b )
-       (if (not a-plusp)
-         (with-bignum-buffers ((a1 (1+ len-a)))
-           (negate-bignum ,a nil a1)
-           (if b-plusp
-             (,fn a1 ,b)
-             (with-bignum-buffers ((b1 (1+ len-b)))
-               (negate-bignum ,b nil b1)
-               (,fn a1 b1))))
-         (with-bignum-buffers ((b1 (1+ len-b)))
-           (negate-bignum ,b nil b1)
-           (,fn ,a b1))))))
+  (let ((a1 (gensym))
+        (b1 (gensym)))
+    `(let* ((len-a (%bignum-length ,a))
+            (len-b (%bignum-length ,b))
+            (a-plusp (bignum-plusp ,a))
+            (b-plusp (bignum-plusp ,b)))
+       (declare (type bignum-index len-a len-b))
+       (if (and a-plusp b-plusp)
+         (,fn ,a ,b )
+         (if (not a-plusp)
+           (with-bignum-buffers ((,a1 (1+ len-a)))
+             (negate-bignum ,a nil ,a1)
+             (if b-plusp
+               (,fn ,a1 ,b)
+               (with-bignum-buffers ((,b1 (1+ len-b)))
+                 (negate-bignum ,b nil ,b1)
+                 (,fn ,a1 ,b1))))
+           (with-bignum-buffers ((,b1 (1+ len-b)))
+             (negate-bignum ,b nil ,b1)
+             (,fn ,a ,b1)))))))
 
 (defmacro with-one-negated-bignum-buffer (a fn)
-  `(if (bignum-plusp ,a)
-    (,fn ,a)
-    (with-bignum-buffers ((a1 (1+ (%bignum-length ,a))))
-      (negate-bignum ,a nil a1)
-      (,fn a1))))
+  (let ((a1 (gensym)))
+    `(if (bignum-plusp ,a)
+       (,fn ,a)
+       (with-bignum-buffers ((,a1 (1+ (%bignum-length ,a))))
+         (negate-bignum ,a nil ,a1)
+         (,fn ,a1)))))
 
 
 (defmacro fixnum-to-bignum-set (big fix)

@@ -582,13 +582,12 @@ callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr)
 
 
 /*
-  Allocate a large list, where "large" means "large enough to
-  possibly trigger the EGC several times if this was done
-  by individually allocating each CONS."  The number of 
-  ocnses in question is in arg_z; on successful return,
-  the list will be in arg_z 
-*/
-
+ * Allocate a large list, where "large" means "large enough to
+ * possibly trigger the EGC several times if this was done by
+ * individually allocating each CONS."  The number of conses to
+ * allocate is in arg_z; arg_y contains the initial element.  On
+ * successful return, the list will be in arg_z.
+ */
 Boolean
 allocate_list(ExceptionInformation *xp, TCR *tcr)
 {
@@ -597,8 +596,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     bytes_needed = (nconses << dnode_shift);
   LispObj
     prev = lisp_nil,
-    current,
-    initial = xpGPR(xp,Iarg_y);
+    current;
   Boolean notify_pending_gc = false;
 
   if (nconses == 0) {
@@ -613,7 +611,11 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
          nconses;
          prev = current, current+= dnode_size, nconses--) {
       deref(current,0) = prev;
-      deref(current,1) = initial;
+      /*
+       * Note that the GC may relocate the initial element stored in
+       * arg_y, so it's not safe to save arg_y in a local variable.
+       */
+      deref(current, 1) = xpGPR(xp, Iarg_y);
     }
     xpGPR(xp,Iarg_z) = prev;
     if (notify_pending_gc && !did_gc_notification_since_last_full_gc) {
@@ -637,7 +639,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr, Boolean *notify)
       save_sp = xpGPR(xp,Isp),
       save_fp = xpGPR(xp,Ifp),
       cmain = nrs_CMAIN.vcell;
-    xcf =create_exception_callback_frame(xp, tcr),
+    xcf = create_exception_callback_frame(xp, tcr);
     pc_luser_xp(xp,tcr,NULL);
     allocation_enabled = true;
     tcr->save_allocbase = (void *)VOID_ALLOCPTR;
@@ -1972,6 +1974,44 @@ altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *c
 #endif
 #endif
 
+#ifdef DARWIN
+/*
+ * On macOS Mojave (10.14), the default sigaction adds the
+ * SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP flag into sa_flags.
+ * See https://opensource.apple.com/source/libplatform/libplatform-177.200.16/src/setjmp/generic/sigaction.c.auto.html
+ * This validation causes CCL to break, so we use our own sigaction, which
+ * skips including that flag.
+ */
+
+#define SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP 0x400
+
+int
+darwin_sigaction(int sig, struct sigaction *nsv, struct sigaction *osv)
+{
+  extern void _sigtramp();
+  extern int __sigaction (int, struct __sigaction * __restrict,
+			  struct sigaction * __restrict);
+  struct __sigaction sa;
+  struct __sigaction *sap;
+  int ret;
+
+  if (sig <= 0 || sig >= NSIG || sig == SIGKILL || sig == SIGSTOP) {
+    errno = EINVAL;
+    return (-1);
+  }
+  sap = (struct __sigaction *)0;
+  if (nsv) {
+    sa.sa_handler = nsv->sa_handler;
+    sa.sa_tramp = _sigtramp;
+    sa.sa_mask = nsv->sa_mask;
+    sa.sa_flags = nsv->sa_flags; /* omit SA_VALIDATE_SIGRETURN_FROM_SIGTRAMP */
+    sap = &sa;
+  }
+  ret = __sigaction(sig, sap, osv);
+  return ret;
+}
+#endif
+
 #ifndef WINDOWS
 void
 install_signal_handler(int signo, void *handler, unsigned flags)
@@ -1998,7 +2038,12 @@ install_signal_handler(int signo, void *handler, unsigned flags)
     sigaddset(&user_signals_reserved, signo);
   }
 
+#ifdef DARWIN
+  err = darwin_sigaction(signo, &sa, NULL);
+#else
   err = sigaction(signo, &sa, NULL);
+#endif
+
   if (err) {
     perror("sigaction");
     exit(1);

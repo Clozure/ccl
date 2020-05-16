@@ -2394,10 +2394,12 @@
     (if (and (eql colonpos 0) (not seenbeforecolon))
       *keyword-package*
       (let* ((string (token.string token)))
-        (or (%find-pkg string colonpos)
-            (subseq string 0 colonpos)
-            #+nomore
-            (signal-reader-error stream "Reference to unknown package ~s." (subseq string 0 colonpos)))))
+        (if (package-%local-nicknames *package*)
+          (pkg-arg (subseq string 0 colonpos))
+          (or (%find-pkg string colonpos)
+              (subseq string 0 colonpos)
+              #+nomore
+              (signal-reader-error stream "Reference to unknown package ~s." (subseq string 0 colonpos))))))
     *package*))
 
 ;;; Returns 4 values: reversed list of escaped character positions,
@@ -2478,7 +2480,7 @@
 (defun %parse-token (stream firstchar dot-ok)
   (with-token-buffer (tb)
     (multiple-value-bind (escapes explicit-package nondots double-colon) (%collect-xtoken tb stream firstchar)
-      (unless *read-suppress* 
+      (unless *read-suppress*
         (let* ((string (token.string tb))
                (len (token.opos tb)))
           (declare (fixnum len))
@@ -2489,13 +2491,13 @@
               (signal-reader-error stream "Illegal symbol syntax in ~s." (%string-from-token tb)))
             ;; Something other than a buffer full of dots.  Thank god.
             (let* ((num (if (null escapes)
-                            (handler-case
-                                (%token-to-number tb (%validate-radix *read-base*))
-                              (arithmetic-error (c)
-                                (error 'impossible-number
-                                       :stream stream
-                                       :token (%string-from-token tb)
-                                       :condition c))))))
+                          (handler-case
+                              (%token-to-number tb (%validate-radix *read-base*))
+                            (arithmetic-error (c)
+                              (error 'impossible-number
+                                     :stream stream
+                                     :token (%string-from-token tb)
+                                     :condition c))))))
               (if (and num (not explicit-package))
                 num
                 (if (and (zerop len) (null escapes))
@@ -2505,11 +2507,11 @@
                     (let* ((pkg (if explicit-package (pkg-arg explicit-package) *package*)))
                       (if (or double-colon (eq pkg *keyword-package*))
                         (with-package-lock (pkg)
-			  (multiple-value-bind (symbol access internal-offset external-offset)
-			      (%find-symbol string len pkg)
-			    (if access
-			      symbol
-			      (%add-symbol (%string-from-token tb) pkg internal-offset external-offset))))
+			                    (multiple-value-bind (symbol access internal-offset external-offset)
+			                        (%find-symbol string len pkg)
+			                      (if access
+			                        symbol
+			                        (%add-symbol (%string-from-token tb) pkg internal-offset external-offset))))
                         (multiple-value-bind (found symbol) (%get-htab-symbol string len (pkg.etab pkg))
                           (if found
                             symbol

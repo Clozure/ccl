@@ -254,7 +254,7 @@
           and runtime follow precise stack and register usage
           conventions at all times; there are a few exceptions:")
       (listing :bullet
-        (item "On both PPC and x86-64 platforms, consing isn't
+	(item "On both PPC and x86-64 platforms, consing isn't
 	          fully atomic.It takes at least a few instructions to
 	          allocate an object in memory(and slap a header on it if
 	          necessary); if a thread is interrupted in the middle of
@@ -262,7 +262,7 @@
 	          not have been created or fully initialized at the point in
 	          time that the interrupt occurred.  (There are actually a
 	          few different states of partial initialization)")
-        (item "On the PPC, the common act of building a lisp
+	(item "On the PPC, the common act of building a lisp
 	          control stack frame involves allocating a four-word frame
 	          and storing three register values into that frame.  (The
 	          fourth word - the back pointer to the previous frame - is
@@ -272,17 +272,17 @@
 	          few instructions earlier),so interrupting a thread that's
 	          in the process of initializing a PPC control stack frame
 	          isn't GC-safe.")
-        (item "There are similar problems with the initialization
+	(item "There are similar problems with the initialization
 	          of temp stackframes on the PPC.  (Allocation and
 	          initialization doesn't happen atomically, and the newly
 	          allocated stack memory may have undefined contents.)")
-        (item "{section The ephemeral GC}'s write barrier
+	(item "{section The ephemeral GC}'s write barrier
 	          has to be implemented atomically (i.e.,both an
 	          intergenerational store and the update of a
 	          corresponding reference bit has to happen without
 	          interruption, or neither of these events can
 	          happen.)")
-        (item "There are a few more similar cases."))
+	(item "There are a few more similar cases."))
       "Fortunately, the number of these non-atomic instruction
           sequences is small, and fortunately it's fairly easy for the
           interrupting thread to recognize when the interrupted thread
@@ -430,13 +430,13 @@
           both necessary and simple.|)
     (defsection "Register and stack usage conventions"
       (defsection "Stack conventions"
-        "On both PPC and X86 platforms, each lisp thread uses 3
+	"On both PPC and X86 platforms, each lisp thread uses 3
             stacks; the ways in which these stacks are used differs
             between the PPC and X86.
 
 Each thread has:"
-        (listing :bullet
-          (item #:|A "control stack".  On both platforms, this is
+	(listing :bullet
+	  (item #:|A "control stack".  On both platforms, this is
 	            "the stack" used by foreign code.  On the PPC, it
 	            consists of a linked list of frames where the first word
 	            in each frame points to the first word in the previous
@@ -466,7 +466,7 @@ Each thread has:"
 	            TCR (see {section The Thread Context Record}
 	            when not running foreign code.  The control stack "grows
 	            down."|)
-          (item #:|A "value stack".  On both platforms, all values on
+	  (item #:|A "value stack".  On both platforms, all values on
 	            the value stack are nodes (including "tagged return
 	            addresses" on x86-64.)  The value stack is always
 	            aligned to the native word size; objects are always
@@ -484,7 +484,7 @@ Each thread has:"
 	            stack when running lisp code, and the VSP value is saved
 	            in the TCR when running foreign code.  The value stack
 	            grows down.|)
-          (item #:|A "temp stack".  The temp stack consists of a
+	  (item #:|A "temp stack".  The temp stack consists of a
 	            linked list of frames, each of which points to the
 	            previous temp stack frame.  The number of native
 	            machine words in each temp stack frame is always even,
@@ -521,7 +521,7 @@ Each thread has:"
 	            the top of each thread's temp stack in the thread's
 	            TCR.|)))
       (defsection "Register conventions"
-        #:|If there are a "reasonable" (for some value of
+	#:|If there are a "reasonable" (for some value of
             "reasonable") number of general-purpose registers and the
             instruction set is "reasonably" orthogonal (most
             instructions that operate on GPRs can operate on any GPR),
@@ -542,8 +542,8 @@ Each thread has:"
             encounter there.)
 
 On x86-64, the static register partitioning scheme involves:|
-        (listing :bullet
-          (item #:|(only) three "immediate" registers.
+	(listing :bullet
+	  (item #:|(only) three "immediate" registers.
 
 	            The RAX, RCX, and RDX registers are used as the
 	            implicit operands and results of some extended-precision
@@ -557,54 +557,54 @@ On x86-64, the static register partitioning scheme involves:|
 	            may see these names in disassembled code, usually in
 	            operations involving type checking, array indexing, and
 	            foreign memory and function access.|)
-          (item #:|(only) two "dedicated" registers.
+	  (item #:|(only) two "dedicated" registers.
 
 	            RSP and RBP have
 	            dedicated functionality dictated by the hardware and
 	            calling conventions.|)
-          (item #:|11 "node" registers.
+	  (item #:|11 "node" registers.
 
 	            All other registers (RBX, RSI, RDI, and R8-R15)
 	            are asserted to contain node values at (almost) all
 	            times; legacy "string" operations that implicitly use RSI
 	            and/or RDI are not used.|))
-        (para "
+	(para "
 		On 32-bit x86, the default register partitioning scheme
 		involves:
 	      ")
-        (listing :bullet
-          (item #:|
+	(listing :bullet
+	  (item #:|
 		  A single "immediate" register.
-		  
+
 
 
 		    The EAX register is given the symbolic name
 		    "imm0".
 		  |)
-          (item #:|
+	  (item #:|
 		    There are two "dedicated" registers.
-		  
+
 
 
 		    ESP and EBP have dedicated functionality dictated by the
 		    hardware and calling conventions.
 		  |)
-          (item #:|
+	  (item #:|
 		    5 "node" registers.
-		  
+
 
 
 		    The remaining registers, (EBX, ECX, EDX, ESI, EDI) normally
 		    contain node values.  As on x86-64, string instructions
-		    that implicity use ESI and EDI are not used.
+		    that implicitly use ESI and EDI are not used.
 		  |))
-        "
+	"
 		There are times when this default partitioning scheme is
 		inadequate.  As mentioned in the x86-64 section, there are
 		instructions like the extended-precision MUL and DIV which
 		require the use of EAX and EDX.  We therefore need a way to
 		change this partitioning at run-time.
-	      
+
 
 
 		Two schemes are employed.  The first uses a mask in the TCR
@@ -615,12 +615,12 @@ On x86-64, the static register partitioning scheme involves:|
 		If DF is set, EDX is treated as an immediate register.
 		(We don't use the string instructions, so DF isn't otherwise
 		used.)
-	      
+
 
             On the PPC, the static register partitioning scheme
             involves:"
-        (listing :bullet
-          (item #:|6 "immediate" registers.
+	(listing :bullet
+	  (item #:|6 "immediate" registers.
 
 	            Registers r3-r8 are given
 	            the symbolic names imm0-imm5.  As a RISC architecture
@@ -629,45 +629,45 @@ On x86-64, the static register partitioning scheme involves:|
 	            x86-64 does, but they're generally used for the same sort
 	            of things (type checking, array indexing, FFI,
 	            etc.)|)
-          (item "9 dedicated registers
+	  (item "9 dedicated registers
 	            "
-           (listing :bullet
-             (item "r0 (symbolic name rzero) always contains the
+	    (listing :bullet
+	      (item "r0 (symbolic name rzero) always contains the
 		              value 0 when running lisp code.  Its value is
 		              sometimes read as 0 when it's used as the base
 		              register in a memory address; keeping the value 0
 		              there is sometimes convenient and avoids
 		              asymmetry.")
-             (item "r1 (symbolic name sp) is the control stack
+	      (item "r1 (symbolic name sp) is the control stack
 		              pointer, by PPC convention.")
-             (item "r2 is used to hold the current thread's TCR on
+	      (item "r2 is used to hold the current thread's TCR on
 		              ppc64 systems; it's not used on ppc32.")
-             (item "r9 and r10 (symbolic names allocptr and
+	      (item "r9 and r10 (symbolic names allocptr and
 		              allocbase) are used to do per-thread memory
 		              allocation")
-             (item "r11 (symbolic name nargs) contains the number
+	      (item "r11 (symbolic name nargs) contains the number
 		              of function arguments on entry and the number of
 		              return values in multiple-value returning
 		              constructs.  It's not used more generally as either
 		              a node or immediate register because of the way that
 		              certain trap instruction encodings are
 		              interpreted.")
-             (item "r12 (symbolic name tsp) holds the top of the
+	      (item "r12 (symbolic name tsp) holds the top of the
 		              current thread's temp stack.")
-             (item "r13 is used to hold the TCR on PPC32 systems;
+	      (item "r13 is used to hold the TCR on PPC32 systems;
 		              it's not used on PPC64.")
-             (item #:|r14 (symbolic name loc-pc) is used to copy
+	      (item #:|r14 (symbolic name loc-pc) is used to copy
 		              "pc-locative" values between main memory and
 		              special-purpose PPC registers (LR and CTR) used in
 		              function-call and return instructions.|)
-             (item "r15 (symbolic name vsp) addresses the top of
+	      (item "r15 (symbolic name vsp) addresses the top of
 		              the current thread's value stack.")
-             (item #:|lr and ctr are PPC branch-unit registers used
+	      (item #:|lr and ctr are PPC branch-unit registers used
 		              in function call and return instructions; they're
 		              always treated as "pc-locatives", which precludes
 		              the use of the ctr in some PPC looping
 		              constructs.|)))
-          (item #:|17 "node" registers
+	  (item #:|17 "node" registers
 
 	            r15-r31 are always treated as node
 	            registers|))))
@@ -740,7 +740,7 @@ On x86-64, the static register partitioning scheme involves:|
           ppc64, and x86-64 implementations, but there are some
           general common principles:|
       (listing :bullet
-        (item #:|CONS cells always contain exactly 2 elements and are
+	(item #:|CONS cells always contain exactly 2 elements and are
 	          usually fairly common.It therefore makes sense to give
 	          CONS cells their own tag.  Unlike the fixnum case -
 	          where a tag value of 0 had positive implications - there
@@ -752,9 +752,9 @@ On x86-64, the static register partitioning scheme involves:|
 	          or x86-64, but all versions of {CCL} still store the CDR
 	          of a CONS cell first in memory.  It doesn't matter, but
 	          doing it the way that the host system did made
-	          boostrapping to a new target system a little easier.)
+	          bootstrapping to a new target system a little easier.)
 	        |)
-        (item #:|Any way you look at it, NIL is a bit
+	(item #:|Any way you look at it, NIL is a bit
 	          ... unusual. NIL is both a SYMBOL and a LIST (as well as
 	          being a canonical truth value and probably a few other
 	          things.)  Its role as a LIST is probably much more
@@ -789,7 +789,7 @@ On x86-64, the static register partitioning scheme involves:|
 		  cell, and we have to explicitly check for a NIL argument
 		  in CONSP/RPLACA/RPLACD.
 		|)
-        (item "Some objects are immediate (but not FIXNUMs). This
+	(item "Some objects are immediate (but not FIXNUMs). This
 	          is true of CHARACTERs and, on 64-bit platforms,
 	          SINGLE-FLOATs. It's also true of some nodes used in the
 	          runtime system (special values used to indicate unbound
@@ -801,7 +801,7 @@ On x86-64, the static register partitioning scheme involves:|
 	          several of their low bits.)  The GC treats any node with
 	          an immediate tag (and any node with a fixnum tag) as a
 	          leaf.")
-        (item #:|There are some advantages to treating everything
+	(item #:|There are some advantages to treating everything
 	          else-memory-allocated objects that aren't CONS
 	          cells-uniformly.There are some disadvantages to
 	          that uniform treatment as well, and the treatment of
@@ -903,12 +903,12 @@ On x86-64, the static register partitioning scheme involves:|
           A thread tries to allocate an object whose physical size
           in bytes is X and whose tag is Y by:|
       (listing :number
-        (item #:|decrementing the "high" pointer by (- X Y)|)
-        (item "trapping if the high pointer is less than the low
+	(item #:|decrementing the "high" pointer by (- X Y)|)
+	(item "trapping if the high pointer is less than the low
 	          pointer")
-        (item "using the (tagged) high pointer to initialize the
+	(item "using the (tagged) high pointer to initialize the
 	          object, if necessary")
-        (item "clearing the low bits of the high pointer"))
+	(item "clearing the low bits of the high pointer"))
       (para "On PPC32, where the size of a CONS cell is 8 bytes and
           the tag of a CONS cell is 1, machine code which sets the arg_z
           register to the result of doing (CONS arg_y arg_z) looks
@@ -947,7 +947,7 @@ L1
     (defsection "Allocation of reserved heap segments"
       #:|After the lisp image is first mapped into memory - and after
           each full GC - the lisp kernel ensures that
-          (LISP-HEAP-GC-TRESHOLD) additional bytes beyond the current
+          (LISP-HEAP-GC-THRESHOLD) additional bytes beyond the current
           end of the heap are mapped read-write.
 
           If a thread traps while trying to allocate memory, the
@@ -1043,12 +1043,12 @@ The general algorithm proceeds as follows:"
           value of the root indicates that it's a non-immediate node
           whose address lies in the lisp heap, then:"
       (listing :number
-        (item "If the object is already marked, do nothing.")
-        (item "Set the object's markbit(s).")
-        (item "If the object is an ivector, do nothing further.")
-        (item "If the object is a cons cell, recursively mark its
+	(item "If the object is already marked, do nothing.")
+	(item "Set the object's markbit(s).")
+	(item "If the object is an ivector, do nothing further.")
+	(item "If the object is a cons cell, recursively mark its
 	          car and cdr.")
-        (item "Otherwise, the object is a gvector. Recursively mark
+	(item "Otherwise, the object is a gvector. Recursively mark
 	          its elements."))
       "Marking an object thus involves ensuring that its mark
           bits are set and then recursively marking any pointers
@@ -1067,7 +1067,7 @@ The general algorithm proceeds as follows:"
 
 Certain types of objects are treated a little specially:"
       (listing :number
-        (item #:|To support a feature called {emphasis GCTWA}
+	(item #:|To support a feature called {emphasis GCTWA}
                 (an acronym that I believe comes from MACLISP,
 		            where it stood for "Garbage Collection of Truly
 		            Worthless Atoms"),
@@ -1080,11 +1080,11 @@ Certain types of objects are treated a little specially:"
 	          distinguishable from newly created symbols (by virtue of
 	          their having function bindings, value bindings, plists,
 	          or other attributes.)|)
-        (item "Pools have their first element set to NIL before any
+	(item "Pools have their first element set to NIL before any
 	          other elements are marked.")
-        (item "All hash tables have certain fields (used to cache
+	(item "All hash tables have certain fields (used to cache
 	          previous results) invalidated.")
-        (item "Weak Hash Tables and other weak objects are put on a
+	(item "Weak Hash Tables and other weak objects are put on a
 	          linkedlist as they're encountered; their contents are only
 	          retained if there are other (non-weak) references to
 	          them."))
@@ -1261,7 +1261,7 @@ Certain types of objects are treated a little specially:"
         used to initialize it. It's always safe to
         push any cons cell or gvector locative onto the memo stack;
         it's never safe to push anything else.
-      
+
 
         Typically, the intergenerational references bitvector is
         sparse: a relatively small number of old locations are stored
@@ -1270,7 +1270,7 @@ Certain types of objects are treated a little specially:"
         of work and usually does it fairly often; it uses a simple,
         brute-force method but might run faster if it was smarter about
         recognizing addresses that it'd already seen.
-      
+
 
         When the EGC mark and forward phases scan the
         intergenerational reference bits, they can clear any bits that
@@ -1286,14 +1286,14 @@ Certain types of objects are treated a little specially:"
         The {CCL} Fasl format is forked from the old MCL Fasl
         format; there are a few differences, but they are minor.  The
         name "nfasload" comes from the fact that this is the so-called
-        "new" Fasl system, which was true in 1986 or so.  
+        "new" Fasl system, which was true in 1986 or so.
 
         A Fasl file begins with a "file header", which contains
         version information and a count of the following "blocks".
         There's typically only one "block" per Fasl file.  The blocks
         are part of a mechanism for combining multiple logical files
         into a single physical file, in order to simplify the
-        distribution of precompiled programs. 
+        distribution of precompiled programs.
 
         Each block begins with a header for itself, which just
         describes the size of the data that follows.
@@ -1372,14 +1372,14 @@ Certain types of objects are treated a little specially:"
           windows, views, menus, etc.|)
     (defsection "Recommended Reading"
       (listing :definition
-        (item "{link http://developer.apple.com/documentation/Cocoa/ Cocoa Documentation}" ccldoc::=> "
+	(item "{link http://developer.apple.com/documentation/Cocoa/ Cocoa Documentation}" ccldoc::=> "
 	            This is the top page for all of Apple's documentation on
 	            Cocoa.  If you are unfamiliar with Cocoa, it is a good
 	            place to start.
 	          ")
-        (item
-         "{link http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html Foundation Reference for Objective-C}"
-         ccldoc::=> "
+	(item
+	  "{link http://developer.apple.com/documentation/Cocoa/Reference/Foundation/ObjC_classic/index.html Foundation Reference for Objective-C}"
+	  ccldoc::=> "
 	            This is one of the two most important Cocoa references; it
 	            covers all of the basics, except for GUI programming.  This is
 	            a reference, not a tutorial.

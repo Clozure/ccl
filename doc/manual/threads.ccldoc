@@ -131,7 +131,7 @@
 	      process queues;that's now the OS's job.")
       (item "Cooperative threads were based on coroutining
 	      primitives associated with objects of type
-	      STACK-GROUP. STACK-GROUPs no longerexist.")))
+	      STACK-GROUP. STACK-GROUPs no longer exist.")))
   (defsection "Implementation Decisions and Open Questions"
     (defsection "Thread Stack Sizes"
       #:|When you use MAKE-PROCESS to create a thread, you can
@@ -158,11 +158,11 @@
         excessive paging activity.|)
     (defsection " As of August 2003:"
       (listing :bullet
-        (item "It's not clear that exposing
+	(item "It's not clear that exposing
 	        PROCESS-SUSPEND/PROCESS-RESUME is a good idea: it's not clear
 	        that they offer ways to win, and it's clear that they offer
 	        ways to lose.")
-        (item #:|It has traditionally been possible to reset and enable
+	(item #:|It has traditionally been possible to reset and enable
 	        a process that's "exhausted" . (As used here, the
 	        term "exhausted" means that the process's initial function
 	        has run and returned and the underlying native thread has
@@ -174,7 +174,7 @@
 	        might be worth trying to tighten things up and declare that
 	        it's an error to apply PROCESS-ENABLE to an exhausted thread
 	        (and to make PROCESS-ENABLE detect this error.)|)
-        (item #:|When native threads that aren't created by {CCL}
+	(item #:|When native threads that aren't created by {CCL}
 	        first call into lisp, a "foreign process" is created, and
 	        that process is given its own set of initial bindings and set
 	        up to look mostly like a process that had been created by
@@ -212,7 +212,7 @@
 	      scheduling from lisp program execution affects timing. I know
 	      that there is or was code in both {CCL} and commercial MCL
 	      that was written under the explicit assumption that certain
-	      sequences of open-coded operations were uninterruptable; it's
+	      sequences of open-coded operations were uninterruptible; it's
 	      certainly possible that the same assumptions have been made
 	      (explicitly or otherwise) by application developers.")))
   (defsection "Background Terminal Input"
@@ -288,7 +288,7 @@
       (para #:|This example was run under ILISP; ILISP often gets confused if one
 	    tries to enter input and "point" doesn't follow a prompt.
 	    Entering a "simple" expression at this point gets it back in
-	    synch; that's otherwise not relevant to this example.|)
+	    sync; that's otherwise not relevant to this example.|)
       (code-block #:|
 ()
 NIL
@@ -537,34 +537,34 @@ Type :? for other options.
        no way to get a perfectly accurate list of all threads.")
 
     (definition (:function make-process)
-     "make-process name &key persistent priority class initargs stack-size vstack-size tstack-size initial-bindings use-standard-initial-bindings"
-     "Creates and returns a new process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param name}" ccldoc::=> "a string, used to identify the process.")
-         (item "{param persistent}" ccldoc::=> "if true, requests that information about the process
+      "make-process name &key persistent priority class initargs stack-size vstack-size tstack-size initial-bindings use-standard-initial-bindings"
+      "Creates and returns a new process."
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param name}" ccldoc::=> "a string, used to identify the process.")
+	  (item "{param persistent}" ccldoc::=> "if true, requests that information about the process
 		        be retained by SAVE-APPLICATION so that an equivalent
 		        process can be restarted when a saved image is run.  The
 		        default is nil.")
-         (item "{param priority}" ccldoc::=> "ignored.  It
+	  (item "{param priority}" ccldoc::=> "ignored.  It
 		        shouldn't be ignored of course, but there are
 		        complications on some platforms.  The default is 0.")
-         (item "{param class}" ccldoc::=> "the class of process object to create;
+	  (item "{param class}" ccldoc::=> "the class of process object to create;
 		        should be a subclass of CCL:PROCESS.  The default is
 		        CCL:PROCESS.")
-         (item "{param initargs}" ccldoc::=> "Any additional initargs to pass to MAKE-INSTANCE. The default is ().")
-         (item "{param stack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
+	  (item "{param initargs}" ccldoc::=> "Any additional initargs to pass to MAKE-INSTANCE. The default is ().")
+	  (item "{param stack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
 		        control stack; used for foreign function calls and to save
 		        function return address context.  The default is
 		        CCL:*DEFAULT-CONTROL-STACK-SIZE*.")
-         (item "{param vstack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
+	  (item "{param vstack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
 		        value stack; used for lisp function arguments, local
 		        variables, and other stack-allocated lisp objects.
 		        The default is CCL:*DEFAULT-VALUE-STACK-SIZE*.")
-         (item "{param tstack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
+	  (item "{param tstack-size}" ccldoc::=> "the size, in bytes, of the newly-created process's
 		        temp stack; used for the allocation of dynamic-extent
 		        objects.  The default is CCL:*DEFAULT-TEMP-STACK-SIZE*.")
-         (item "{param use-standard-initial-bindings}" ccldoc::=> #:|when true, the global "standard initial
+	  (item "{param use-standard-initial-bindings}" ccldoc::=> #:|when true, the global "standard initial
 		        bindings" are put into effect in the new thread before. See
 		        DEF-STANDARD-INITIAL-BINDING.  "standard" initial bindings
 		        are put into effect before any bindings specified by
@@ -573,27 +573,27 @@ Type :? for other options.
                        {emphasis This option is deprecated: the correct
                       behavior of many {CCL} components depends on thread-local
                       bindings of many special variables being in effect.}|)
-         (item "{param initial-bindings}" ccldoc::=> "an alist of ({param symbol} .
+	  (item "{param initial-bindings}" ccldoc::=> "an alist of ({param symbol} .
 		        {param valueform}) pairs, which can be
 		        used to initialize special variable bindings in the new
 		        thread. Each {param valueform} is used to
 		        compute the value of a new binding of
 		        {param symbol} in the execution environment of
 		        the newly-created thread.  The default is nil.")
-         (item "{param process}" ccldoc::=> "the newly-created process.")))
-     (defsection "Description"
-       (para "Creates and returns a new lisp process (thread) with the
+	  (item "{param process}" ccldoc::=> "the newly-created process.")))
+      (defsection "Description"
+	(para "Creates and returns a new lisp process (thread) with the
 	      specified attributes. {param process} will not begin
 	      execution immediately; it will need to be
 	      {emphasis preset} (given
 	      an initial function to run, as by
 	      "
-        (ref (definition :function process-preset)) ") and
+	  (ref (definition :function process-preset)) ") and
 	      {emphasis enabled}
 	      (allowed to execute, as by "
-        (ref (definition :function process-enable)) ")
+	  (ref (definition :function process-enable)) ")
 	      before it's able to actually do anything.")
-       "If {param valueform} is a function, it is
+	"If {param valueform} is a function, it is
 	      called, with no arguments, in the execution environment of the
 	      newly-created thread; the primary value it returns is used for
 	      the binding of the corresponding {param symbol}.
@@ -602,126 +602,126 @@ Type :? for other options.
 	      execution
 	      environment of the newly-created thread, and the resulting value
 	      is used.")
-     (defsection "See Also"
-       (clause (ref (definition :function process-preset)) ", " (ref (definition :function process-enable)) ", "
-        (ref (definition :function process-run-function)))))
+      (defsection "See Also"
+	(clause (ref (definition :function process-preset)) ", " (ref (definition :function process-enable)) ", "
+	  (ref (definition :function process-run-function)))))
     (definition (:function process-suspend) "process-suspend process" "Suspends a specified process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param result}" ccldoc::=> "T if {param process} had been runnable
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param result}" ccldoc::=> "T if {param process} had been runnable
 		        and is now suspended; NIL otherwise.  That is, T if
 		        {param process}'s
 		        "
-          (ref (definition :function process-suspend-count)) "
+	    (ref (definition :function process-suspend-count)) "
 		        transitioned from 0 to 1.")))
-     (defsection "Description"
-       (para "Suspends {param process}, preventing it from
+      (defsection "Description"
+	(para "Suspends {param process}, preventing it from
 	      running, and stopping it if it was already running. This is a fairly
 	      expensive operation, because it involves a few
 	      calls to the OS.  It also risks creating deadlock if used
 	      improperly, for instance, if the process being suspended owns a
 	      lock or other resource which another process will wait for.")
-       (para "
+	(para "
 	      Each
 	      call to {function process-suspend} must be reversed by
 	      a matching call to "
-        (ref (definition :function process-resume)) "
+	  (ref (definition :function process-resume)) "
 	      before {param process} is able to run.  What
 	      {function process-suspend} actually does is increment
 	      the "
-        (ref (definition :function process-suspend-count)) " of
+	  (ref (definition :function process-suspend-count)) " of
 	      {param process}.
 	    ")
-       (para "A process can't suspend itself, though this once
+	(para "A process can't suspend itself, though this once
 	    worked and this documentation claimed has claimed that it
 	    did."))
-     (defsection "See Also"
-       (clause (ref (definition :function process-resume)) ", " (ref (definition :function process-suspend-count))))
-     (defsection "Notes"
-       (para "{function process-suspend} was previously called
+      (defsection "See Also"
+	(clause (ref (definition :function process-resume)) ", " (ref (definition :function process-suspend-count))))
+      (defsection "Notes"
+	(para "{function process-suspend} was previously called
 	      {code process-disable}.
 	      "
-        (ref (definition :function process-enable)) "
+	  (ref (definition :function process-enable)) "
 	      now names a function for which there is no
 	      obvious inverse, so {code process-disable}
 	      is no longer
 	      defined.")))
     (definition (:function process-resume) "process-resume process"
-     "Resumes a specified process which had previously
+      "Resumes a specified process which had previously
 	      been suspended by process-suspend."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param result}" ccldoc::=> "T if {param process} had been suspended
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param result}" ccldoc::=> "T if {param process} had been suspended
 		        and is now runnable; NIL otherwise.  That is, T if
 		        {param process}'s
 		        "
-          (ref (definition :function process-suspend-count)) "
+	    (ref (definition :function process-suspend-count)) "
 		        transitioned from  to 0.
 		      ")))
-     (defsection "Description"
-       (para "Undoes the effect of a previous call to
+      (defsection "Description"
+	(para "Undoes the effect of a previous call to
 	      "
-        (ref (definition :function process-suspend)) "; if
+	  (ref (definition :function process-suspend)) "; if
 	      all such calls are undone, makes the process runnable. Has no
 	      effect if the process is not suspended.  What
 	      {function process-resume} actually does is decrement
 	      the "
-        (ref (definition :function process-suspend-count)) " of
+	  (ref (definition :function process-suspend-count)) " of
 	      {param process}, to a minimum of 0."))
-     (defsection "See Also"
-       (clause (ref (definition :function process-suspend)) ", " (ref (definition :function process-suspend-count))))
-     (defsection "Notes"
-       (para "
+      (defsection "See Also"
+	(clause (ref (definition :function process-suspend)) ", " (ref (definition :function process-suspend-count))))
+      (defsection "Notes"
+	(para "
 	      This was previously called PROCESS-ENABLE;
 	      "
-        (ref (definition :function process-enable)) " now does something slightly
+	  (ref (definition :function process-enable)) " now does something slightly
 	      different.
 	    ")))
     (definition (:function process-suspend-count) "process-suspend-count process"
-     "Returns the number of currently-pending suspensions
+      "Returns the number of currently-pending suspensions
 	      applicable to a given process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param result}" ccldoc::=> #:|The number of "outstanding"
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param result}" ccldoc::=> #:|The number of "outstanding"
 		        |
-          (ref (definition :function process-suspend)) " calls on
+	    (ref (definition :function process-suspend)) " calls on
 		        {param process}, or NIL if
 		        {param process} has expired.
 		      ")))
-     (defsection "Description"
-       (para #:|An "outstanding" | (ref (definition :function process-suspend)) " call
+      (defsection "Description"
+	(para #:|An "outstanding" | (ref (definition :function process-suspend)) " call
 	      is one which has not yet been reversed by a call to
 	      "
-        (ref (definition :function process-resume)) ".  A process expires when
+	  (ref (definition :function process-resume)) ".  A process expires when
 	      its initial function returns, although it may later be
 	      reset.")
-       (para "A process is {emphasis runnable} when it has a
+	(para "A process is {emphasis runnable} when it has a
 	      {function process-suspend-count} of 0, has been
 	      preset as by "
-        (ref (definition :function process-preset)) ", and has been
+	  (ref (definition :function process-preset)) ", and has been
 	      enabled as by "
-        (ref (definition :function process-enable)) ".  Newly-created
+	  (ref (definition :function process-enable)) ".  Newly-created
 	      processes have a {function process-suspend-count} of
 	      0."))
-     (defsection "See Also"
-       (clause (ref (definition :function process-suspend)) ", " (ref (definition :function process-resume)))))
+      (defsection "See Also"
+	(clause (ref (definition :function process-suspend)) ", " (ref (definition :function process-resume)))))
     (definition (:function process-preset) "process-preset process function {code &rest} args"
-     "Sets the initial function and arguments of a specified
+      "Sets the initial function and arguments of a specified
 	      process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
 		        which names it.
 		      ")
-         (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
+	  (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
 		        {param function}.")
-         (item "{param result}" ccldoc::=> "undefined.")))
-     (defsection "Description"
-       (para "Typically used to initialize a newly-created or newly-reset
+	  (item "{param result}" ccldoc::=> "undefined.")))
+      (defsection "Description"
+	(para "Typically used to initialize a newly-created or newly-reset
 	      process, setting things up so that when {param process}
 	      becomes enabled, it will begin execution by
 	      applying {param function} to {param args}.
@@ -730,105 +730,105 @@ Type :? for other options.
 	      although a process must be {function process-preset}
 	      before it can be enabled.  Processes are normally enabled by
 	      "
-        (ref (definition :function process-enable)) ".
+	  (ref (definition :function process-enable)) ".
 	    "))
-     (defsection "See Also"
-       (clause (ref (definition :function make-process)) ", " (ref (definition :function process-enable)) ", "
-        (ref (definition :function process-run-function)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-process)) ", " (ref (definition :function process-enable)) ", "
+	  (ref (definition :function process-run-function)))))
     (definition (:function process-enable) "process-enable process {code &optional} timeout"
-     "Begins executing the initial function of a specified
+      "Begins executing the initial function of a specified
 	      process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param timeout}" ccldoc::=> "a time interval in seconds.  May be any
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param timeout}" ccldoc::=> "a time interval in seconds.  May be any
 		        non-negative real number the {function floor} of
 		        which fits in 32 bits.  The default is 1.")
-         (item "{param result}" ccldoc::=> "undefined.")))
-     (defsection "Description"
-       (para "Tries to begin the execution of {param process}.
+	  (item "{param result}" ccldoc::=> "undefined.")))
+      (defsection "Description"
+	(para "Tries to begin the execution of {param process}.
 	      An error is signaled if {param process} has never
 	      been "
-        (ref (definition :function process-preset)) ".  Otherwise,
+	  (ref (definition :function process-preset)) ".  Otherwise,
 	      {param process} invokes its initial function.
 	    ")
-       "{function process-enable} attempts to
+	"{function process-enable} attempts to
 	      synchronize with {param process}, which is presumed
 	      to be reset or in the act of resetting itself.  If this attempt
 	      is not successful within the time interval specified by
 	      {param timeout}, a continuable error is signaled,
 	      which offers the opportunity to continue waiting.
-	    
+
 
 A process cannot meaningfully attempt to enable itself.")
-     (defsection "See Also"
-       (clause (ref (definition :function make-process)) ", " (ref (definition :function process-preset)) ", "
-        (ref (definition :function process-run-function))))
-     (defsection "Notes"
-       (para "It would be nice to have more discussion of what it means
+      (defsection "See Also"
+	(clause (ref (definition :function make-process)) ", " (ref (definition :function process-preset)) ", "
+	  (ref (definition :function process-run-function))))
+      (defsection "Notes"
+	(para "It would be nice to have more discussion of what it means
 	      to synchronize with the process.")))
     (definition (:function process-run-function)
-     "process-run-function process-specifier function {code &rest} args"
-     "Creates a process, presets it, and enables it.
+      "process-run-function process-specifier function {code &rest} args"
+      "Creates a process, presets it, and enables it.
 	    "
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process-specifier}" ccldoc::=> "{param name} | 
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process-specifier}" ccldoc::=> "{param name} |
 		        ({code &key} {param name}{param persistent}{param priority}{param class}{param initargs}{param stack-size}{param vstack-size}{param tstack-size})
 		      ")
-         (item "{param name}" ccldoc::=> "a string, used to identify the process.
+	  (item "{param name}" ccldoc::=> "a string, used to identify the process.
 		        Passed to {function make-process}.")
-         (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
+	  (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
 		        which names it.  Passed to
 		        {function process-preset}.
 		      ")
-         (item "{param persistent}" ccldoc::=> "a boolean, passed to {function make-process}.
+	  (item "{param persistent}" ccldoc::=> "a boolean, passed to {function make-process}.
 		      ")
-         (item "{param priority}" ccldoc::=> "ignored.")
-         (item "{param class}" ccldoc::=> "a subclass of CCL:PROCESS.  Passed to
+	  (item "{param priority}" ccldoc::=> "ignored.")
+	  (item "{param class}" ccldoc::=> "a subclass of CCL:PROCESS.  Passed to
 		        {function make-process}.")
-         (item "{param initargs}" ccldoc::=> "a list of any additional initargs to pass to
+	  (item "{param initargs}" ccldoc::=> "a list of any additional initargs to pass to
 		        {function make-process}.")
-         (item "{param stack-size}" ccldoc::=> "a size, in bytes.  Passed to
+	  (item "{param stack-size}" ccldoc::=> "a size, in bytes.  Passed to
 		        {function make-process}.")
-         (item "{param vstack-size}" ccldoc::=> "a size, in bytes.  Passed to
+	  (item "{param vstack-size}" ccldoc::=> "a size, in bytes.  Passed to
 		        {function make-process}.")
-         (item "{param tstack-size}" ccldoc::=> "a size, in bytes.  Passed to
+	  (item "{param tstack-size}" ccldoc::=> "a size, in bytes.  Passed to
 		        {function make-process}.")
-         (item "{param process}" ccldoc::=> "the newly-created process.")))
-     (defsection "Description"
-       (para "Creates a lisp process (thread) via
+	  (item "{param process}" ccldoc::=> "the newly-created process.")))
+      (defsection "Description"
+	(para "Creates a lisp process (thread) via
 	      "
-        (ref (definition :function make-process)) ",
+	  (ref (definition :function make-process)) ",
 	      presets it via "
-        (ref (definition :function process-preset)) ", and
+	  (ref (definition :function process-preset)) ", and
 	      enables it via "
-        (ref (definition :function process-enable)) ".  This means
+	  (ref (definition :function process-enable)) ".  This means
 	      that {param process} will immediately begin to
 	      execute.
 	      {function process-run-function} is
 	      the simplest way to create and run a process.
 	    "))
-     (defsection "See Also"
-       (clause (ref (definition :function make-process)) ", " (ref (definition :function process-preset)) ", "
-        (ref (definition :function process-enable)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-process)) ", " (ref (definition :function process-preset)) ", "
+	  (ref (definition :function process-enable)))))
     (definition (:function process-interrupt) "process-interrupt process function {code &rest} args"
-     "Arranges for the target process to invoke a
+      "Arranges for the target process to invoke a
 	      specified function at some point in the near future, and then
 	      return to what it was doing."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param function}" ccldoc::=> "a function.
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param function}" ccldoc::=> "a function.
 		      ")
-         (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
+	  (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
 		        {param function}.")
-         (item "{param result}" ccldoc::=> "the result of applying {param function}
+	  (item "{param result}" ccldoc::=> "the result of applying {param function}
 		        to {param args} if {param process}
 		        is the {variable *current-process*}, otherwise
 		        NIL.")))
-     (defsection "Description"
-       "Arranges for {param process}
+      (defsection "Description"
+	"Arranges for {param process}
 	      to apply {param function} to {param args} at
 	      some point in the near future (interrupting whatever
 	      {param process}
@@ -852,18 +852,18 @@ A process cannot meaningfully attempt to enable itself.")
 	      If the interrupted thread is
 	      blocking in a system call, that system call is aborted by
 	      the signal and the interrupt is handled on return.
-	    
+
 
 	      It is
 	      still difficult to reliably interrupt arbitrary foreign code
 	      (that may be stateful or otherwise non-reentrant); the
 	      interrupt request is handled when such foreign code returns
 	      to or enters lisp.")
-     (defsection "See Also" (clause (ref (definition :macro without-interrupts))))
-     (defsection "Notes"
-       "It would probably be better for {param result}
+      (defsection "See Also" (clause (ref (definition :macro without-interrupts))))
+      (defsection "Notes"
+	"It would probably be better for {param result}
 	      to always be NIL, since the present behavior is inconsistent.
-	    
+
 
 	      {function process-interrupt} works by sending signals
 	      between threads, via the C function
@@ -875,13 +875,13 @@ A process cannot meaningfully attempt to enable itself.")
 	    "))
 
     (definition (:variable *current-process*) "*current-process*" nil
-       "Bound separately in each process, to that process itself.
+      "Bound separately in each process, to that process itself.
         It may be used when lisp code needs to find out what process
 	it is executing in.  It should not be set by user code.")
 
     (definition (:function process-reset) "process-reset process &optional kill-option" nil
-     "This function causes {param process} to cleanly exit from any
-      ongoing computation and enter a state wehre it can be {function
+      "This function causes {param process} to cleanly exit from any
+      ongoing computation and enter a state where it can be {function
       process-preset}.
 
       This is implemented by signaling a condition of type
@@ -908,522 +908,522 @@ A process cannot meaningfully attempt to enable itself.")
       involves the use of the function {function process-interrupt}.")
 
     (definition (:function process-reset-and-enable) "process-reset-and-enable process"
-     "Reset and enable the specified process, which
+      "Reset and enable the specified process, which
 	    may not be the current process."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread), which
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread), which
 		      may not be the current process.")
-         (item "{param result}" ccldoc::=> "undefined.")))
-     (defsection "Description"
-       (para "
+	  (item "{param result}" ccldoc::=> "undefined.")))
+      (defsection "Description"
+	(para "
 	      Equivalent to calling (process-reset process) and
 	      (process-enable process).
 	    "))
-     (defsection "See Also"
-       (clause (ref (definition :function process-reset)) ", " (ref (definition :function process-enable)))))
+      (defsection "See Also"
+	(clause (ref (definition :function process-reset)) ", " (ref (definition :function process-enable)))))
 
     (definition (:function process-kill) "process-kill process" nil
-     "Causes {param process} to cleanly exit from any ongoing
+      "Causes {param process} to cleanly exit from any ongoing
       computation, and then exit.  Note that {code unwind-protect}
       cleanup forms will be run with interrupts disabled.")
 
     (definition (:function process-abort) "process-abort process &optional condition"
-     (clause "Causes a specified process to process an abort
+      (clause "Causes a specified process to process an abort
 	      condition, as if it had invoked
 	      {function abort}.")
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param condition}" ccldoc::=> "a lisp condition.  The default is NIL.")))
-     (defsection "Description"
-       (para "Entirely equivalent to calling
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param condition}" ccldoc::=> "a lisp condition.  The default is NIL.")))
+      (defsection "Description"
+	(para "Entirely equivalent to calling
 	      ("
-        (ref (definition :function process-interrupt)) "{param process}
+	  (ref (definition :function process-interrupt)) "{param process}
 	      ({function lambda} ()
 	      ({function abort}{param condition}))).
 	      Causes {param process} to transfer control to the
 	      applicable handler or restart for {function abort}.")
-       (para "If {param condition} is non-NIL,
+	(para "If {param condition} is non-NIL,
 	      {function process-abort} does not consider any
 	      handlers which are explicitly bound to conditions other than
 	      {param condition}."))
-     (defsection "See Also"
-       (clause (ref (definition :function process-reset)) ", " (ref (definition :function process-kill)))))
+      (defsection "See Also"
+	(clause (ref (definition :function process-reset)) ", " (ref (definition :function process-kill)))))
     (definition (:variable *ticks-per-second*) "*TICKS-PER-SECOND*" "Bound to the clock resolution of the OS
 	      scheduler."
-     (defsection "Value Type" (para "A positive integer."))
-     (defsection "Initial Value"
-       (para "The clock resolution of the OS scheduler.  Currently,
+      (defsection "Value Type" (para "A positive integer."))
+      (defsection "Initial Value"
+	(para "The clock resolution of the OS scheduler.  Currently,
 	      both LinuxPPC and DarwinPPC yield an initial value of 100.
 	    "))
-     (defsection "Description"
-       (para #:|This value is ordinarily of marginal interest at best,
+      (defsection "Description"
+	(para #:|This value is ordinarily of marginal interest at best,
 	      but, for backward compatibility, some functions accept timeout
 	      values expressed in "ticks".  This value gives the number of
 	      ticks per second.|))
-     (defsection "See Also" (clause (ref (definition :function process-wait-with-timeout)))))
+      (defsection "See Also" (clause (ref (definition :function process-wait-with-timeout)))))
     (definition (:function process-whostate) "process-whostate process"
-     "Returns a string which describes the status of
+      "Returns a string which describes the status of
 	      a specified process."
-     (defsection "Description"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a lisp process (thread).")
-         (item "{param whostate}" ccldoc::=> #:|a string which describes the "state" of
+      (defsection "Description"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a lisp process (thread).")
+	  (item "{param whostate}" ccldoc::=> #:|a string which describes the "state" of
 		        {param process}.|))
-       (para "This information is primarily for the benefit of
+	(para "This information is primarily for the benefit of
 	      debugging tools.  {param whostate} is a terse report
 	      on what {param process} is doing, or not doing,
 	      and why.")
-       (para "If the process is currently waiting in a call to
+	(para "If the process is currently waiting in a call to
 	      "
-        (ref (definition :function process-wait)) " or
+	  (ref (definition :function process-wait)) " or
 	      "
-        (ref (definition :function process-wait-with-timeout)) ", its
+	  (ref (definition :function process-wait-with-timeout)) ", its
 	      {function process-whostate} will be the value
 	      which was passed to that function as {param whostate}.
 	    "))
-     (defsection "See Also"
-       (clause (ref (definition :function process-wait)) ", " (ref (definition :function process-wait-with-timeout))
-        ", " (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para "This should arguably be SETFable, but doesn't seem to
+      (defsection "See Also"
+	(clause (ref (definition :function process-wait)) ", " (ref (definition :function process-wait-with-timeout))
+	  ", " (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para "This should arguably be SETFable, but doesn't seem to
 	      ever have been.")))
     (definition (:function process-allow-schedule) "process-allow-schedule"
-     "Used for cooperative multitasking; probably never
+      "Used for cooperative multitasking; probably never
 	      necessary."
-     (defsection "Description"
-       (para "Advises the OS scheduler that the current thread has nothing
+      (defsection "Description"
+	(para "Advises the OS scheduler that the current thread has nothing
 	      useful to do and that it should try to find some other thread to
 	      schedule in its place. There's almost always a better
 	      alternative, such as waiting for some specific event to
 	      occur.  For example, you could use a lock or semaphore."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
-        (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para "This is a holdover from the days of cooperative
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
+	  (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para "This is a holdover from the days of cooperative
 	      multitasking.  All modern general-purpose operating systems use
 	      preemptive multitasking.")))
     (definition (:function process-wait) "process-wait whostate function {code &rest} args"
-     "Causes the current lisp process (thread) to wait for
+      "Causes the current lisp process (thread) to wait for
 	      a given
 	      predicate to return true."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param whostate}" ccldoc::=> "a string, which will be the value of
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param whostate}" ccldoc::=> "a string, which will be the value of
 		        "
-          (ref (definition :function process-whostate)) "
+	    (ref (definition :function process-whostate)) "
 		        while the process is waiting.")
-         (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
+	  (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
 		        which names it.
 		      ")
-         (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
+	  (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
 		        {param function}.")
-         (item "{param result}" ccldoc::=> "NIL.")))
-     (defsection "Description"
-       (para "Causes the current lisp process (thread) to repeatedly
+	  (item "{param result}" ccldoc::=> "NIL.")))
+      (defsection "Description"
+	(para "Causes the current lisp process (thread) to repeatedly
 	      apply {param function} to
 	      {param args} until the call returns a true result, then
 	      returns NIL. After
 	      each failed call, yields the CPU as if by
 	      "
-        (ref (definition :function process-allow-schedule)) ".")
-       (para "
+	  (ref (definition :function process-allow-schedule)) ".")
+	(para "
 	      As with "
-        (ref (definition :function process-allow-schedule)) ", it's almost
+	  (ref (definition :function process-allow-schedule)) ", it's almost
 	      always more efficient to wait for some
 	      specific event to occur; this isn't exactly busy-waiting, but
 	      the OS scheduler can do a better job of scheduling if it's given
 	      the relevant information.  For example, you could use a lock
 	      or semaphore."))
-     (defsection "See Also"
-       (clause (ref (definition :function process-whostate)) ", "
-        (ref (definition :function process-wait-with-timeout)) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function process-whostate)) ", "
+	  (ref (definition :function process-wait-with-timeout)) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function process-wait-with-timeout)
-     "process-wait-with-timeout whostate ticks function args" "Causes the current thread to wait for a given
+      "process-wait-with-timeout whostate ticks function args" "Causes the current thread to wait for a given
 	      predicate to return true, or for a timeout to expire."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param whostate}" ccldoc::=> "a string, which will be the value of
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param whostate}" ccldoc::=> "a string, which will be the value of
 		        "
-          (ref (definition :function process-whostate)) "
+	    (ref (definition :function process-whostate)) "
 		        while the process is waiting.")
-         (item "{param ticks}" ccldoc::=> #:|either a positive integer expressing a duration
+	  (item "{param ticks}" ccldoc::=> #:|either a positive integer expressing a duration
 		        in "ticks" (see |
-          (ref (definition :variable *ticks-per-second*)) "),
+	    (ref (definition :variable *ticks-per-second*)) "),
 		        or NIL.")
-         (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
+	  (item "{param function}" ccldoc::=> "a function, designated by itself or by a symbol
 		        which names it.")
-         (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
+	  (item "{param args}" ccldoc::=> "a list of values, appropriate as arguments to
 		        {param function}.")
-         (item "{param result}" ccldoc::=> "T if {function process-wait-with-timeout}
+	  (item "{param result}" ccldoc::=> "T if {function process-wait-with-timeout}
 		        returned because its {param function} returned
 		        true, or NIL if it returned because the duration
 		        {param ticks} has been exceeded.")))
-     (defsection "Description"
-       (para "If {param ticks} is NIL, behaves exactly like
+      (defsection "Description"
+	(para "If {param ticks} is NIL, behaves exactly like
 	      "
-        (ref (definition :function process-wait)) ", except for returning T.
+	  (ref (definition :function process-wait)) ", except for returning T.
 	      Otherwise, {param function} will be tested repeatedly,
 	      in the same
 	      kind of test/yield loop as in "
-        (ref (definition :function process-wait)) "
+	  (ref (definition :function process-wait)) "
 	      until either {param function} returns true,
 	      or the duration {param ticks} has been exceeded.
 	    ")
-       (para " Having already read the descriptions of
+	(para " Having already read the descriptions of
 	      "
-        (ref (definition :function process-allow-schedule)) " and
+	  (ref (definition :function process-allow-schedule)) " and
 	      "
-        (ref (definition :function process-wait)) ", the
+	  (ref (definition :function process-wait)) ", the
 	      astute reader has no doubt anticipated the observation that
 	      better alternatives should be used whenever possible."))
-     (defsection "See Also"
-       (clause (ref (definition :variable *ticks-per-second*)) ", " (ref (definition :function process-whostate)) ", "
-        (ref (definition :function process-wait)) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :variable *ticks-per-second*)) ", " (ref (definition :function process-whostate)) ", "
+	  (ref (definition :function process-wait)) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:macro without-interrupts) "without-interrupts &body body"
-     "Evaluates its body in an environment in which
+      "Evaluates its body in an environment in which
 	      process-interrupt requests are deferred."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Executes {param body}
+      (defsection "Description"
+	(para "Executes {param body}
 	      in an environment in which "
-        (ref (definition :function process-interrupt)) "
+	  (ref (definition :function process-interrupt)) "
 	      requests are
 	      deferred. As noted in the description of
 	      "
-        (ref (definition :function process-interrupt)) ", this has nothing to do
+	  (ref (definition :function process-interrupt)) ", this has nothing to do
 	      with the
 	      scheduling of other threads; it may be necessary to inhibit
 	      "
-        (ref (definition :function process-interrupt)) " handling when
+	  (ref (definition :function process-interrupt)) " handling when
 	      (for instance) modifying some data
 	      structure (for which the current thread holds an appropriate lock)
 	      in some manner that's not reentrant."))
-     (defsection "See Also" (clause (ref (definition :function process-interrupt)))))
+      (defsection "See Also" (clause (ref (definition :function process-interrupt)))))
     (definition (:macro with-interrupts-enabled) "with-interrupts-enabled {code &body} body"
-     "Evaluates its body in an environment in which
+      "Evaluates its body in an environment in which
 	      process-interrupt requests have immediate effect."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Executes {param body}
+      (defsection "Description"
+	(para "Executes {param body}
 	      in an environment in which "
-        (ref (definition :function process-interrupt)) "
+	  (ref (definition :function process-interrupt)) "
 	      requests have immediate effect.
 	    ")))
     (definition (:function make-lock) "make-lock {code &optional} name"
-     "Creates and returns a lock object, which can
+      "Creates and returns a lock object, which can
 	      be used for synchronization between threads."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param name}" ccldoc::=> "any lisp object; saved as part of
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param name}" ccldoc::=> "any lisp object; saved as part of
 		        {param lock}.  Typically a string or symbol
 		        which may appear in the "
-          (ref (definition :function process-whostate)) "s
+	    (ref (definition :function process-whostate)) "s
 		        of threads which are waiting for {param lock}.
 		      ")
-         (item "{param lock}" ccldoc::=> "a newly-allocated object of type CCL:LOCK.")))
-     (defsection "Description"
-       (para #:|Creates and returns a lock object, which can
+	  (item "{param lock}" ccldoc::=> "a newly-allocated object of type CCL:LOCK.")))
+      (defsection "Description"
+	(para #:|Creates and returns a lock object, which can
 	      be used to synchronize access to some shared resource.
 	      {param lock} is
 	      initially in a "free" state; a lock can also be
 	      "owned" by a
 	      thread.|))
-     (defsection "See Also"
-       (clause (ref (definition :macro with-lock-grabbed)) ", " (ref (definition :function grab-lock)) ", "
-        (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :macro with-lock-grabbed)) ", " (ref (definition :function grab-lock)) ", "
+	  (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:macro with-lock-grabbed) "with-lock-grabbed (lock) {code &body} body"
-     "Waits until a given lock can be obtained, then
+      "Waits until a given lock can be obtained, then
 	      evaluates its body with the lock held."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Waits until {param lock} is either free or
+      (defsection "Description"
+	(para "Waits until {param lock} is either free or
 	      owned by the calling
 	      thread, then executes {param body} with the
 	      lock owned by the calling thread. If {param lock}
 	      was free when {function with-lock-grabbed} was called,
 	      it is restored to a free state after {param body}
 	      is executed."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :function grab-lock)) ", "
-        (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :function grab-lock)) ", "
+	  (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function grab-lock) "grab-lock lock" "Waits until a given lock can be obtained, then
 	      obtains it."
-     (defsection "Arguments and Values"
-       (listing :definition (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")))
-     (defsection "Description"
-       (para "Blocks until {param lock} is owned by the
+      (defsection "Arguments and Values"
+	(listing :definition (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")))
+      (defsection "Description"
+	(para "Blocks until {param lock} is owned by the
 	      calling thread.")
-       (para "The macro " (ref (definition :macro with-lock-grabbed)) "{emphasis could} be defined in
+	(para "The macro " (ref (definition :macro with-lock-grabbed)) "{emphasis could} be defined in
 	      terms of {function grab-lock} and
 	      "
-        (ref (definition :function release-lock)) ", but it is actually
+	  (ref (definition :function release-lock)) ", but it is actually
 	      implemented at a slightly lower level."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
-        (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
+	  (ref (definition :function release-lock)) ", " (ref (definition :function try-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function release-lock) "release-lock lock" "Relinquishes ownership of a given lock."
-     (defsection "Arguments and Values"
-       (listing :definition (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")))
-     (defsection "Description"
-       (para "Signals an error of type CCL:LOCK-NOT-OWNER if
+      (defsection "Arguments and Values"
+	(listing :definition (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")))
+      (defsection "Description"
+	(para "Signals an error of type CCL:LOCK-NOT-OWNER if
 	      {param lock}
 	      is not already owned by the calling thread; otherwise, undoes the
-	      effect of one previous 
+	      effect of one previous
 	      "
-        (ref (definition :function grab-lock)) ".  If this means that
+	  (ref (definition :function grab-lock)) ".  If this means that
 	      {function release-lock} has now been called on
 	      {param lock} the same number of times as
 	      "
-        (ref (definition :function grab-lock)) " has, {param lock}
+	  (ref (definition :function grab-lock)) " has, {param lock}
 	      becomes free."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
-        (ref (definition :function grab-lock)) ", " (ref (definition :function try-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
+	  (ref (definition :function grab-lock)) ", " (ref (definition :function try-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function try-lock) "try-lock lock" "Obtains the given lock, but only if it is not
 	      necessary to wait for it."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")
-         (item "{param result}" ccldoc::=> "T if {param lock} has been obtained,
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param lock}" ccldoc::=> "an object of type CCL:LOCK.")
+	  (item "{param result}" ccldoc::=> "T if {param lock} has been obtained,
 		        or NIL if it has not.")))
-     (defsection "Description"
-       (para "Tests whether {param lock}
+      (defsection "Description"
+	(para "Tests whether {param lock}
 	      can be obtained without blocking - that is, either
 	      {param lock} is already free, or it is already owned
 	      by "
-        (ref (definition :variable *current-process*)) ".  If it can,
+	  (ref (definition :variable *current-process*)) ".  If it can,
 	      causes it to
 	      be owned by the calling lisp process (thread) and returns T.
 	      Otherwise, the lock
 	      is already owned by another thread and cannot be obtained without
 	      blocking; NIL is returned in this case."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
-        (ref (definition :function grab-lock)) ", " (ref (definition :function release-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :macro with-lock-grabbed)) ", "
+	  (ref (definition :function grab-lock)) ", " (ref (definition :function release-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function make-read-write-lock) "make-read-write-lock-write-lock"
-     "Creates and returns a read-write lock, which can
+      "Creates and returns a read-write lock, which can
 	      be used for synchronization between threads."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param read-write-lock}" ccldoc::=> "a newly-allocated object of type
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param read-write-lock}" ccldoc::=> "a newly-allocated object of type
 		        CCL:READ-WRITE-LOCK.")))
-     (defsection "Description"
-       (para #:|Creates and returns an object of type CCL::READ-WRITE-LOCK.
+      (defsection "Description"
+	(para #:|Creates and returns an object of type CCL::READ-WRITE-LOCK.
 	      A read-write lock may, at any given time, belong to any number
 	      of lisp processes (threads) which act as "readers"; or, it may
 	      belong to at most one process which acts as a "writer".  A
 	      read-write lock may never be held by a reader at the same time as
 	      a writer.  Initially, {param read-write-lock} has
 	      no readers and no writers.|))
-     (defsection "See Also"
-       (clause (ref (definition :macro with-read-lock)) ", " (ref (definition :macro with-write-lock)) ", "
-        (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para #:|There probably should be some way to
+      (defsection "See Also"
+	(clause (ref (definition :macro with-read-lock)) ", " (ref (definition :macro with-write-lock)) ", "
+	  (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para #:|There probably should be some way to
 	      atomically "promote" a reader, making it a writer without
 	      releasing the lock, which could otherwise cause delay.|)))
 
     (definition (:macro with-read-lock) "with-read-lock (read-write-lock) &body body"
-     "Waits until a given lock is available for
+      "Waits until a given lock is available for
 	      read-only access, then evaluates its body with the lock
 	      held."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param read-write-lock}" ccldoc::=> "an object of type
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param read-write-lock}" ccldoc::=> "an object of type
 		        CCL:READ-WRITE-LOCK.")
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Waits until {param read-write-lock} has no
+      (defsection "Description"
+	(para "Waits until {param read-write-lock} has no
 	      writer,
 	      ensures that "
-        (ref (definition :variable *current-process*)) " is a
+	  (ref (definition :variable *current-process*)) " is a
 	      reader of it, then executes {param body}.
 	    ")
-       (para "After executing {param body}, if
+	(para "After executing {param body}, if
 	      "
-        (ref (definition :variable *current-process*)) " was not a reader of
+	  (ref (definition :variable *current-process*)) " was not a reader of
 	      {param read-write-lock} before
 	      {function with-read-lock} was called, the lock is
 	      released.  If it was already a reader, it remains one."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-read-write-lock)) ", " (ref (definition :macro with-write-lock)) ", "
-        (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-read-write-lock)) ", " (ref (definition :macro with-write-lock)) ", "
+	  (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
 
     (definition (:macro with-write-lock) "with-write-lock (read-write-lock) &body body"
-     "Waits until the given lock is available for write
+      "Waits until the given lock is available for write
 	      access, then executes its body with the lock held."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param read-write-lock}" ccldoc::=> "an object of type
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param read-write-lock}" ccldoc::=> "an object of type
 		        CCL:READ-WRITE-LOCK.")
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Waits until {param read-write-lock} has no
+      (defsection "Description"
+	(para "Waits until {param read-write-lock} has no
 	      readers and no writer other than "
-        (ref (definition :variable *current-process*)) ",
+	  (ref (definition :variable *current-process*)) ",
 	      then ensures that "
-        (ref (definition :variable *current-process*)) " is the
+	  (ref (definition :variable *current-process*)) " is the
 	      writer of it.  With the lock held, executes {param body}.
 	    ")
-       (para "After executing {param body}, if
+	(para "After executing {param body}, if
 	      "
-        (ref (definition :variable *current-process*)) " was not the writer of
+	  (ref (definition :variable *current-process*)) " was not the writer of
 	      {param read-write-lock} before
 	      {function with-write-lock} was called, the lock is
 	      released.  If it was already the writer, it remains the
 	      writer."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-read-write-lock)) ", " (ref (definition :macro with-read-lock)) ", "
-        (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-read-write-lock)) ", " (ref (definition :macro with-read-lock)) ", "
+	  (ref (definition :function make-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
 
     (definition (:function make-semaphore) "make-semaphore"
-     "Creates and returns a semaphore, which can be used
+      "Creates and returns a semaphore, which can be used
 	      for synchronization between threads."
-     (defsection "Arguments and Values"
-       (listing :definition (item "{param semaphore}" ccldoc::=> "a newly-allocated object of type CCL:SEMAPHORE.")))
-     (defsection "Description"
-       (para #:|Creates and returns an object of type CCL:SEMAPHORE.
+      (defsection "Arguments and Values"
+	(listing :definition (item "{param semaphore}" ccldoc::=> "a newly-allocated object of type CCL:SEMAPHORE.")))
+      (defsection "Description"
+	(para #:|Creates and returns an object of type CCL:SEMAPHORE.
 	      A semaphore has an associated "count" which may be incremented
 	      and decremented atomically; incrementing it represents sending
 	      a signal, and decrementing it represents handling that signal.
 	      {param semaphore} has an initial count of 0.|))
-     (defsection "See Also"
-       (clause (ref (definition :function signal-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
-        (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function signal-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
+	  (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input)))))
     (definition (:function signal-semaphore) "signal-semaphore semaphore"
-     "Atomically increments the count of a given
+      "Atomically increments the count of a given
 	      semaphore."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param semaphore}" ccldoc::=> "an object of type CCL:SEMAPHORE.")
-         (item "{param result}" ccldoc::=> "an integer representing an error identifier
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param semaphore}" ccldoc::=> "an object of type CCL:SEMAPHORE.")
+	  (item "{param result}" ccldoc::=> "an integer representing an error identifier
 		        which was returned by the underlying OS call.")))
-     (defsection "Description"
-       (para #:|Atomically increments {param semaphore}'s
+      (defsection "Description"
+	(para #:|Atomically increments {param semaphore}'s
 	      "count" by 1; this
 	      may enable a waiting thread to resume execution.|))
-     (defsection "See Also"
-       (clause (ref (definition :function make-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
-        (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para "{param result} should probably be interpreted
+      (defsection "See Also"
+	(clause (ref (definition :function make-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
+	  (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para "{param result} should probably be interpreted
 	      and acted on by {function signal-semaphore}, because
 	      it is not likely to be meaningful to a lisp program, and the
 	      most common cause of failure is a type error.")))
     (definition (:function wait-on-semaphore) "wait-on-semaphore semaphore"
-     "Waits until the given semaphore has a positive
+      "Waits until the given semaphore has a positive
 	      count which can be atomically decremented."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param semaphore}" ccldoc::=> "an object of type CCL:SEMAPHORE.")
-         (item "{param result}" ccldoc::=> "an integer representing an error identifier
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param semaphore}" ccldoc::=> "an object of type CCL:SEMAPHORE.")
+	  (item "{param result}" ccldoc::=> "an integer representing an error identifier
 		        which was returned by the underlying OS call.")))
-     (defsection "Description"
-       (para "Waits until {param semaphore}
+      (defsection "Description"
+	(para "Waits until {param semaphore}
 	      has a positive count that can be
 	      atomically decremented; this will succeed exactly once for each
 	      corresponding call to SIGNAL-SEMAPHORE."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-semaphore)) ", " (ref (definition :function signal-semaphore)) ", "
-        (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para "{param result} should probably be interpreted
+      (defsection "See Also"
+	(clause (ref (definition :function make-semaphore)) ", " (ref (definition :function signal-semaphore)) ", "
+	  (ref (definition :function timed-wait-on-semaphore)) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :function process-output-wait)) ", " (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para "{param result} should probably be interpreted
 	      and acted on by {function wait-on-semaphore}, because
 	      it is not likely to be meaningful to a lisp program, and the
 	      most common cause of failure is a type error.")))
     (definition (:function timed-wait-on-semaphore) "timed-wait-on-semaphore semaphore timeout"
-     "Waits until the given semaphore has a positive
+      "Waits until the given semaphore has a positive
 	      count which can be atomically decremented, or until a timeout
 	      expires."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param semaphore}" ccldoc::=> "An object of type CCL:SEMAPHORE.")
-         (item "{param timeout}" ccldoc::=> "a time interval in seconds.  May be any
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param semaphore}" ccldoc::=> "An object of type CCL:SEMAPHORE.")
+	  (item "{param timeout}" ccldoc::=> "a time interval in seconds.  May be any
 		        non-negative real number the {function floor} of
 		        which fits in 32 bits.  The default is 1.")
-         (item "{param result}" ccldoc::=> "T if {function timed-wait-on-semaphore}
+	  (item "{param result}" ccldoc::=> "T if {function timed-wait-on-semaphore}
 		        returned because it was able to decrement the count of
 		        {param semaphore}; NIL if it returned because
 		        the duration {param timeout} has been
 		        exceeded.")))
-     (defsection "Description"
-       (para "Waits until {param semaphore}
+      (defsection "Description"
+	(para "Waits until {param semaphore}
 	      has a positive count that can be
 	      atomically decremented, or until the duration
 	      {param timeout} has
 	      elapsed."))
-     (defsection "See Also"
-       (clause (ref (definition :function make-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
-        (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input)))))
+      (defsection "See Also"
+	(clause (ref (definition :function make-semaphore)) ", " (ref (definition :function wait-on-semaphore)) ", "
+	  (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input)))))
     (definition (:function process-input-wait) "process-input-wait fd {code &optional} timeout"
-     "Waits until input is available on a given
+      "Waits until input is available on a given
 	      file-descriptor."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
 		        used by the OS to refer to an open file, socket, or similar
 		        I/O connection.  See "
-          (ref (definition :generic-function stream-device)) ".")
-         (item "{param timeout}" ccldoc::=>
-          "either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.")))
-     (defsection "Description"
-       "Wait until input is available on {param fd}.
+	    (ref (definition :generic-function stream-device)) ".")
+	  (item "{param timeout}" ccldoc::=>
+	    "either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.")))
+      (defsection "Description"
+	"Wait until input is available on {param fd}.
 	      This uses the {code select()} system call, and is
 	      generally a fairly
 	      efficient way of blocking while waiting for input. More
@@ -1436,30 +1436,30 @@ A process cannot meaningfully attempt to enable itself.")
 	      Note that it's possible to read without blocking if
 	      the file is at its end - although, of course, the read will
 	      return zero bytes.")
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
-        (ref (definition :function make-semaphore)) ", " (ref (definition :function process-output-wait)) ", "
-        (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para "{function process-input-wait} has a timeout parameter,
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
+	  (ref (definition :function make-semaphore)) ", " (ref (definition :function process-output-wait)) ", "
+	  (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para "{function process-input-wait} has a timeout parameter,
 	      and
 	      "
-        (ref (definition :function process-output-wait)) " does not.  This
+	  (ref (definition :function process-output-wait)) " does not.  This
 	      inconsistency should probably be corrected.
 	    ")))
     (definition (:function process-output-wait) "process-output-wait fd {code &optional} timeout"
-     "Waits until output is possible on a given file
+      "Waits until output is possible on a given file
 	      descriptor."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
 		        used by the OS to refer to an open file, socket, or similar
 		        I/O connection.  See "
-          (ref (definition :generic-function stream-device)) ".")
-         (item "{param timeout}" ccldoc::=>
-          "either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.")))
-     (defsection "Description"
-       "Wait until output is possible on {param fd} or until {param timeout}, if
+	    (ref (definition :generic-function stream-device)) ".")
+	  (item "{param timeout}" ccldoc::=>
+	    "either NIL or a time interval in milliseconds.  Must be a non-negative integer.  The default is NIL.")))
+      (defsection "Description"
+	"Wait until output is possible on {param fd} or until {param timeout}, if
 	      it is not NIL, has been exceeded.
 	      This uses the {code select()} system call, and is
 	      generally a fairly
@@ -1469,40 +1469,40 @@ A process cannot meaningfully attempt to enable itself.")
 	      a network socket which has not yet established a connection, it
 	      will wait until the connection is established.  This is an
 	      important use, often overlooked.")
-     (defsection "See Also"
-       (clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
-        (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :macro with-terminal-input))))
-     (defsection "Notes"
-       (para (ref (definition :function process-input-wait)) " has a timeout parameter,
+      (defsection "See Also"
+	(clause (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
+	  (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :macro with-terminal-input))))
+      (defsection "Notes"
+	(para (ref (definition :function process-input-wait)) " has a timeout parameter,
 	      and
 	      {function process-output-wait} does not.  This
 	      inconsistency should probably be corrected.
 	    ")))
     (definition (:macro with-terminal-input) "with-terminal-input {code &body} body"
-     "Executes its body in an environment with exclusive
+      "Executes its body in an environment with exclusive
 	      read access to the terminal."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param body}" ccldoc::=> "an implicit progn.")
-         (item "{param result}" ccldoc::=> "the primary value returned by
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param body}" ccldoc::=> "an implicit progn.")
+	  (item "{param result}" ccldoc::=> "the primary value returned by
 		        {param body}.")))
-     (defsection "Description"
-       (para "Requests exclusive read access to the standard terminal
+      (defsection "Description"
+	(para "Requests exclusive read access to the standard terminal
 	      stream, {variable *terminal-io*}.  Executes
 	      {param body} in an environment with that access.
 	    "))
-     (defsection "See Also"
-       (clause (ref (definition :variable *request-terminal-input-via-break*)) ", "
-        (ref (definition :toplevel-command ":Y")) ", " (ref (definition :function make-lock)) ", "
-        (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)))))
+      (defsection "See Also"
+	(clause (ref (definition :variable *request-terminal-input-via-break*)) ", "
+	  (ref (definition :toplevel-command ":Y")) ", " (ref (definition :function make-lock)) ", "
+	  (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)))))
     (definition (:variable *request-terminal-input-via-break*) "*REQUEST-TERMINAL-INPUT-VIA-BREAK*"
-     "Controls how attempts to obtain ownership of
+      "Controls how attempts to obtain ownership of
 	      terminal input are made."
-     (defsection "Value Type" (para "A boolean.")) (defsection "Initial Value" (para "NIL."))
-     (defsection "Description"
-       (para "Controls how attempts to obtain ownership of terminal input
+      (defsection "Value Type" (para "A boolean.")) (defsection "Initial Value" (para "NIL."))
+      (defsection "Description"
+	(para "Controls how attempts to obtain ownership of terminal input
 	      are made. When NIL, a message is printed on *TERMINAL-IO*;
 	      it's expected that the user will later yield
 	      control of the terminal via the :Y toplevel command. When T, a
@@ -1510,57 +1510,57 @@ A process cannot meaningfully attempt to enable itself.")
 	      the break loop will yield the terminal to the requesting process
 	      (unless the :Y command was already used to do so in the break
 	      loop.)"))
-     (defsection "See Also"
-       (clause (ref (definition :macro with-terminal-input)) ", " (ref (definition :toplevel-command ":Y")) ", "
-        (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
-        (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
-        (ref (definition :function process-output-wait)))))
+      (defsection "See Also"
+	(clause (ref (definition :macro with-terminal-input)) ", " (ref (definition :toplevel-command ":Y")) ", "
+	  (ref (definition :function make-lock)) ", " (ref (definition :function make-read-write-lock)) ", "
+	  (ref (definition :function make-semaphore)) ", " (ref (definition :function process-input-wait)) ", "
+	  (ref (definition :function process-output-wait)))))
     (definition (:toplevel-command ":Y") "( :y p)" "Yields control of terminal input to a specified
 	      lisp process (thread)."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param p}" ccldoc::=> "a lisp process (thread), designated either by
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param p}" ccldoc::=> "a lisp process (thread), designated either by
 		        an integer which matches its
 		        {function process-serial-number},
 		        or by a string which is {function equal} to
 		        its {function process-name}.")))
-     (defsection "Description"
-       (para ":Y is a toplevel command, not a function.  As such, it
+      (defsection "Description"
+	(para ":Y is a toplevel command, not a function.  As such, it
 	      can only be used interactively, and only from the initial
 	      process.")
-       (para "The command yields control of terminal input to the
+	(para "The command yields control of terminal input to the
 	      process {param p}, which must have used
 	      "
-        (ref (definition :macro with-terminal-input)) " to request access to the
+	  (ref (definition :macro with-terminal-input)) " to request access to the
 	      terminal input stream."))
-     (defsection "See Also"
-       (clause (ref (definition :macro with-terminal-input)) ", "
-        (ref (definition :variable *request-terminal-input-via-break*)) ", " (ref (definition :function make-lock))
-        ", " (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
-        (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)))))
+      (defsection "See Also"
+	(clause (ref (definition :macro with-terminal-input)) ", "
+	  (ref (definition :variable *request-terminal-input-via-break*)) ", " (ref (definition :function make-lock))
+	  ", " (ref (definition :function make-read-write-lock)) ", " (ref (definition :function make-semaphore)) ", "
+	  (ref (definition :function process-input-wait)) ", " (ref (definition :function process-output-wait)))))
     (definition (:function join-process) "join-process process {code &optional} default"
-     "Waits for a specified process to complete and
+      "Waits for a specified process to complete and
 	returns the values that that process's initial function
 	returned."
-     (defsection "Arguments and Values"
-       (listing :definition
-         (item "{param process}" ccldoc::=> "a process, typically created by "
-          (ref (definition :function process-run-function)) " or by " (ref (definition :function make-process)))
-         (item "{param default}" ccldoc::=> "A default value to be returned if the specified
+      (defsection "Arguments and Values"
+	(listing :definition
+	  (item "{param process}" ccldoc::=> "a process, typically created by "
+	    (ref (definition :function process-run-function)) " or by " (ref (definition :function make-process)))
+	  (item "{param default}" ccldoc::=> "A default value to be returned if the specified
 	      process doesn't exit normally.")
-         (item "{param values}" ccldoc::=> "The values returned by the specified process's
+	  (item "{param values}" ccldoc::=> "The values returned by the specified process's
 	      initial function if that function returns, or the value
 	      of the default argument, otherwise.")))
-     (defsection "Description"
-       (para #:|Waits for the specified process to terminate.  If the
+      (defsection "Description"
+	(para #:|Waits for the specified process to terminate.  If the
 	process terminates "normally" (if its initial function
 	returns), returns the values that that initial function
-	returnes.  If the process does not terminate normally (e.g.,
+	returns.  If the process does not terminate normally (e.g.,
 	if it's terminated via |
-        (ref (definition :function process-kill)) " and a
+	  (ref (definition :function process-kill)) " and a
 	default argument is provided, returns the value of that
 	default argument.  If the process doesn't terminate normally
 	and no default argument is provided, signals an error.")
-       (para "A process can't successfully join itself, and only one
+	(para "A process can't successfully join itself, and only one
 	process can successfully receive notification of another process's
 	termination.")))))

@@ -290,13 +290,12 @@ callback_for_gc_notification(ExceptionInformation *xp, TCR *tcr)
 }
 
 /*
-  Allocate a large list, where "large" means "large enough to
-  possibly trigger the EGC several times if this was done
-  by individually allocating each CONS."  The number of 
-  ocnses in question is in arg_z; on successful return,
-  the list will be in arg_z 
-*/
-
+ * Allocate a large list, where "large" means "large enough to
+ * possibly trigger the EGC several times if this was done by
+ * individually allocating each CONS."  The number of conses to
+ * allocate is in arg_z; arg_y contains the initial element.  On
+ * successful return, the list will be in arg_z.
+ */
 Boolean
 allocate_list(ExceptionInformation *xp, TCR *tcr)
 {
@@ -305,8 +304,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     bytes_needed = (nconses << dnode_shift);
   LispObj
     prev = lisp_nil,
-    current,
-    initial = xpGPR(xp,arg_y);
+    current;
   Boolean notify_pending_gc = false;
 
   if (nconses == 0) {
@@ -320,7 +318,11 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
          nconses;
          prev = current, current+= dnode_size, nconses--) {
       deref(current,0) = prev;
-      deref(current,1) = initial;
+      /*
+       * Note that the GC may relocate the initial element stored in
+       * arg_y, so it's not safe to save arg_y in a local variable.
+       */
+      deref(current, 1) = xpGPR(xp, arg_y);
     }
     xpGPR(xp,arg_z) = prev;
     xpGPR(xp,arg_y) = xpGPR(xp,allocptr);

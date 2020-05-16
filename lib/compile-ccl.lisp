@@ -808,31 +808,36 @@ the lisp and run REBUILD-CCL again.")
 	      ,@body)
 	 (cwd ,wd)))))
 
+(defparameter *ccl-tests-directory* (make-pathname :directory
+                                                   (append (pathname-directory
+                                                            (translate-logical-pathname #P"ccl:"))
+                                                           '(:up "ccl-tests"))))
+
+(defparameter *ansi-tests-directory* (merge-pathnames  "ansi-tests/" *ccl-tests-directory*))
+
 (defun ensure-tests-loaded (&key force update ansi ccl (load t))
   (unless (and (find-package "REGRESSION-TEST") (not force))
-    (if (probe-file "ccl:tests;ansi-tests;")
-      (when update
-	(cwd "ccl:tests;")
-	(run-program *svn-program* '("update") :output t))
-      (let* ((repo (svn-repository))
-	     (url (format nil "~a/trunk/tests" repo))
-	     (s (make-string-output-stream)))
-	(if (null repo)
-	  (error "Can't determine svn repository.  ccl directory is ~s"
-		 (ccl-directory))
+    (if (probe-file *ansi-tests-directory*)
+        (when update
+          (cwd *ccl-tests-directory*)
+          (run-program "git" '("pull") :output t))
+        (let* ((giturl "git@github.com:Clozure/ccl-tests.git")
+               (s (make-string-output-stream)))
 	  (progn
 	    (format t "~&Using ~a to check out test suite from ~a ~
-                       into ccl:tests;~%" *svn-program* url)
-	    (cwd "ccl:")
+        into ~A~%" "git" giturl *ccl-tests-directory*)
+	    (cwd (make-pathname :directory (append (pathname-directory
+                                                    (translate-logical-pathname *ccl-tests-directory*))
+                                                   '(:up))))
 	    (multiple-value-bind (status exit-code)
-                (external-process-status
-                 (run-program *svn-program* (list "checkout" url "tests")
-                              :output s :error s))
+                                 (external-process-status
+                                  (run-program "git" (list "clone" giturl)
+                                               :output s :error s))
 	      (unless (and (eq status :exited)
 			   (eql exit-code 0))
 		(error "Failed to check out test suite: ~%~a"
-		       (get-output-stream-string s))))))))
-    (cwd "ccl:tests;ansi-tests;")
+		       (get-output-stream-string s)))))))
+    (cwd *ansi-tests-directory*)
     (run-program "make" '("-k" "clean") :output t)
     (map nil 'delete-file (directory "*.*fsl"))
     (when load
@@ -840,33 +845,34 @@ the lisp and run REBUILD-CCL again.")
       ;; it without making the test suite non-portable across platforms...
       (handler-bind ((warning (lambda (c)
                                 (if (typep c 'shadowed-typecase-clause)
-                                  (muffle-warning c)
-                                  (when (let ((w (or (and (typep c 'compiler-warning)
-                                                          (eq (compiler-warning-warning-type c) :program-error)
-                                                          (car (compiler-warning-args c)))
-                                                     c)))
-                                          (or (typep (car (compiler-warning-args c))
-                                                     'shadowed-typecase-clause)
-                                              (and (typep w 'simple-warning)
-                                                   (or 
-                                                    (string-equal
-                                                     (simple-condition-format-control w)
-                                                     "Clause ~S ignored in ~S form - shadowed by ~S .")
-                                                    ;; Might as well ignore these as well, they're intentional.
-                                                    (string-equal
-                                                     (simple-condition-format-control w)
-                                                     "Duplicate keyform ~s in ~s statement.")))))
-                                    (muffle-warning c))))))
+                                    (muffle-warning c)
+                                    (when (let ((w (or (and (typep c 'compiler-warning)
+                                                            (eq (compiler-warning-warning-type c) :program-error)
+                                                            (car (compiler-warning-args c)))
+                                                       c)))
+                                            (or (and (typep c 'compiler-warning)
+                                                     (typep (car (compiler-warning-args c))
+                                                       'shadowed-typecase-clause))
+                                                (and (typep w 'simple-warning)
+                                                     (or 
+                                                      (string-equal
+                                                       (simple-condition-format-control w)
+                                                       "Clause ~S ignored in ~S form - shadowed by ~S .")
+                                                      ;; Might as well ignore these as well, they're intentional.
+                                                      (string-equal
+                                                       (simple-condition-format-control w)
+                                                       "Duplicate keyform ~s in ~s statement.")))))
+                                      (muffle-warning c))))))
         ;; This loads the infrastructure
-        (load "ccl:tests;ansi-tests;gclload1.lsp")
+        (load (merge-pathnames *ansi-tests-directory* "gclload1.lsp"))
         ;; This loads the actual tests
         (let ((redef-var (find-symbol "*WARN-IF-REDEFINE-TEST*" :REGRESSION-TEST)))
           (progv (list redef-var) (list (if force nil (symbol-value redef-var)))
             (when ansi
-              (load "ccl:tests;ansi-tests;gclload2.lsp"))
+              (load (merge-pathnames *ansi-tests-directory* "gclload2.lsp")))
             ;; And our own tests
             (when ccl
-              (load "ccl:tests;ansi-tests;ccl.lsp"))))))))
+              (load (merge-pathnames *ansi-tests-directory* "ccl.lsp")))))))))
 
 
 (defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t)
@@ -905,7 +911,7 @@ the lisp and run REBUILD-CCL again.")
         (with-global-optimization-settings ()
           (proclaim `(optimize ,@optimization-settings))
           (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
-          (cwd "ccl:tests;ansi-tests;")
+          (cwd *ansi-tests-directory*)
           (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
                 (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
                 (*print-catch-errors* nil))
@@ -915,7 +921,8 @@ the lisp and run REBUILD-CCL again.")
                                :optimization-settings (or optimization-settings '((speed 1) (space 1) (safety 1) (debug 1) (compilation-speed 1)))))
               ;; Clean up a little
               (map nil #'delete-file
-                   (directory (merge-pathnames *.fasl-pathname* "ccl:tests;ansi-tests;temp*"))))
+                   (directory (merge-pathnames *.fasl-pathname* (merge-pathnames *ansi-tests-directory*
+                                                                                 "temp*")))))
             (let ((failed-tests (symbol-value failed)))
               (when exit
                 (quit (if failed-tests 1 0)))

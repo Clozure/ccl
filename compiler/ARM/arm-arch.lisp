@@ -1026,6 +1026,7 @@
   lisp-sigexit
   jvm-init
   lisp-lstat
+  lisp-realpath
   ;; Dummy entry
   last-kernel-import
 )

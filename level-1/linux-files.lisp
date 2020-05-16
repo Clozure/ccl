@@ -391,17 +391,17 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_mode)
        (pref stat :stat.st_size)
        #+android-target (pref stat :stat.st_mtime)
-       #+(or (and linux-target (not android-target)) solaris-target)
+       #+(or freebsd-target (and linux-target (not android-target)) solaris-target)
        (pref stat :stat.st_mtim.tv_sec)
-       #-(or linux-target solaris-target)
+       #-(or freebsd-target linux-target solaris-target)
        (pref stat :stat.st_mtimespec.tv_sec)
        (pref stat :stat.st_ino)
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
-       #+(or linux-target solaris-target)
+       #+(or freebsd-target linux-target solaris-target)
        (round (pref stat #-android-target :stat.st_mtim.tv_nsec
                          #+android-target :stat.st_mtime_nsec) 1000)
-       #-(or linux-target solaris-target)
+       #-(or freebsd-target linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
        (pref stat :stat.st_dev)
@@ -706,8 +706,12 @@ given is that of a group to which the current user belongs."
   #+windows-target (%windows-realpath namestring)
   #-windows-target
   (%stack-block ((resultbuf #$PATH_MAX))
-    (with-filename-cstrs ((name namestring #|(tilde-expand namestring)|#))
-      (let* ((result (#_realpath name resultbuf)))
+    (with-filename-cstrs ((name namestring))
+      (let* ((result (ff-call
+                      (%kernel-import target::kernel-import-lisp-realpath)
+                      :address name
+                      :address resultbuf
+                      :address)))
         (declare (dynamic-extent result))
         (if (%null-ptr-p result)
 	  (let ((errno (%get-errno)))
@@ -1412,7 +1416,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
   (defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
     (let* ((signaled nil))
       (unwind-protect
-           (let* ((child-pid (#-solaris-target #_fork #+solaris-target #_forkall)))
+           (let ((child-pid (#_fork)))
              (declare (fixnum child-pid))
              (cond ((zerop child-pid)
                     ;; Running in the child; do an exec
@@ -1475,17 +1479,15 @@ itself, by setting the status and exit-code fields.")
            (error-stream nil)
            (close-in-parent nil)
            (close-on-error nil)
-           (proc
-            (make-external-process
-             :pid nil
-             :args args
-             :%status :running
-             :input nil
-             :output nil
-             :error nil
-             :token token
-             :status-hook status-hook
-             :external-format (setq external-format (normalize-external-format t external-format)))))
+           (proc (make-external-process :pid nil
+					:args args
+					:%status :running
+					:input nil
+					:output nil
+					:error nil
+					:token token
+					:status-hook status-hook
+					:external-format external-format)))
       (unwind-protect
            (progn
              (multiple-value-setq (in-fd in-stream close-in-parent close-on-error)
@@ -1513,24 +1515,25 @@ itself, by setting the status and exit-code fields.")
              (setf (external-process-input proc) in-stream
                    (external-process-output proc) out-stream
                    (external-process-error proc) error-stream)
-             (call-with-string-vector
-              #'(lambda (argv)
-                  (process-run-function
-                   (list :name
-                         (format nil "Monitor thread for external process ~a" args)
-                         :stack-size (ash 128 10)
-                         :vstack-size (ash 128 10)
-                         :tstack-size (ash 128 10))
-                   #'run-external-process proc in-fd out-fd error-fd argv env)
-                  (wait-on-semaphore (external-process-signal proc)))
-              args
-              (external-format-character-encoding external-format)))
+	     (process-run-function
+	      (list :name
+		    (format nil "Monitor thread for external process ~a" args)
+		    :stack-size (ash 128 10)
+		    :vstack-size (ash 128 10)
+		    :tstack-size (ash 128 10))
+	      #'(lambda ()
+		  (let ((encoding (external-format-character-encoding
+				   external-format)))
+		    (with-string-vector (argv args encoding)
+		      (run-external-process proc in-fd out-fd error-fd argv
+					    env)))))
+	     (wait-on-semaphore (external-process-signal proc)))
         (dolist (fd close-in-parent) (fd-close fd))
         (unless (external-process-pid proc)
           (dolist (fd close-on-error) (fd-close fd)))
         (when (and wait (external-process-pid proc))
           (with-interrupts-enabled
-              (wait-on-semaphore (external-process-completed proc)))))
+	    (wait-on-semaphore (external-process-completed proc)))))
       (unless (external-process-pid proc)
         ;; something is wrong
         (if (eq (external-process-%status proc) :error)

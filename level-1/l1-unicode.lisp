@@ -1119,6 +1119,41 @@ used in western languages."
     )
   #x80)
 
+(define-8-bit-fixed-width-encoding :IBM866
+    "An 8-bit, fixed-width character encoding in which codes #x00-#x7f
+map to their Unicode equivalents and other codes map to other Unicode
+character values.  Traditionally used on MS-DOS to encode Cyrillic
+characters and box-drawing symbols."
+  (:cp866 :csIBM866)
+  *unicode-to-ibm866-map*
+  *ibm866-to-unicode-string*
+  #(
+    ;; #x80
+    #x0410 #x0411 #x0412 #x0413 #x0414 #x0415 #x0416 #x0417
+    #x0418 #x0419 #x041a #x041b #x041c #x041d #x041e #x041f
+    ;; #x90
+    #x0420 #x0421 #x0422 #x0423 #x0424 #x0425 #x0426 #x0427
+    #x0428 #x0429 #x042a #x042b #x042c #x042d #x042e #x042f
+    ;; #xa0
+    #x0430 #x0431 #x0432 #x0433 #x0434 #x0435 #x0436 #x0437
+    #x0438 #x0439 #x043a #x043b #x043c #x043d #x043e #x043f
+    ;; #xb0
+    #x2591 #x2592 #x2593 #x2502 #x2524 #x2561 #x2562 #x2556
+    #x2555 #x2563 #x2551 #x2557 #x255d #x255c #x255b #x2510
+    ;; #xc0
+    #x2514 #x2534 #x252c #x251c #x2500 #x253c #x255e #x255f
+    #x255a #x2554 #x2569 #x2566 #x2560 #x2550 #x256c #x2567
+    ;; #xd0
+    #x2568 #x2564 #x2565 #x2559 #x2558 #x2552 #x2553 #x256b
+    #x256a #x2518 #x250c #x2588 #x2584 #x258c #x2590 #x2580
+    ;; #xe0
+    #x0440 #x0441 #x0442 #x0443 #x0444 #x0445 #x0446 #x0447
+    #x0448 #x0449 #x044a #x044b #x044c #x044d #x044e #x044f
+    ;; #xf0
+    #x0401 #x0451 #x0404 #x0454 #x0407 #x0457 #x040e #x045e
+    #x00b0 #x2219 #x00b7 #x221a #x2116 #x00a4 #x25a0 #x00a0
+    )
+  #x80)
 
 
 ;;; UTF-8.  Decoding checks for malformed sequences; it might be faster (and

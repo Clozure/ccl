@@ -26,7 +26,7 @@
       The {code home} logical host refers to the user's home directory.")
 
     (defsection "Pathname Namestrings"
-	"The syntax of namestrings is implementation-defined in Common Lisp.
+      "The syntax of namestrings is implementation-defined in Common Lisp.
 	Portable programs cannot assume much of anything about
 	them.  (See section 19.1.1 of the Common Lisp standard for
 	more information.)
@@ -56,8 +56,8 @@
 	operating system command, use the function {function
 	native-translated-namestring}."
 
-	(definition (:function native-translated-namestring) "native-translated-namestring pathname-designator" nil
-	  "This function returns a namestring that represents a
+      (definition (:function native-translated-namestring) "native-translated-namestring pathname-designator" nil
+	"This function returns a namestring that represents a
 	  pathname using the native conventions of the operating
 	  system.  Any quoting or escaping of special characters will
 	  be removed.
@@ -68,24 +68,24 @@
 	  to \"a.b.c\".  By contrast, {code (namestring p)} evaluates
 	  to \"a\\\\.b.c\".")
 
-	"Lisp strings are not interchangable with C strings.  {CCL}
+      "Lisp strings are not interchangeable with C strings.  {CCL}
 provides a reasonably straightforward way to translate a lisp native
 namestring into a C-style string suitable for passing to a foreign
 function."
-	
-        (definition (:macro with-filename-cstrs)
-	    "with-filename-cstrs ( {lbrace}(var value){rbrace}* ) {lbrace}form{rbrace}*" "Suitably encode strings to be used as filenames for foreign code."
-	  "Executes {param forms} in an environemt in which each
+
+      (definition (:macro with-filename-cstrs)
+	"with-filename-cstrs ( {lbrace}(var value){rbrace}* ) {lbrace}form{rbrace}*" "Suitably encode strings to be used as filenames for foreign code."
+	"Executes {param forms} in an environment in which each
 	  {param var} is bound to a stack-allocated foreign
 	  pointer which refers to a C-style string suitable for passing
 	  to foreign code which expects a filename argument.
 
           For example, one might use this macro in the following way:"
 
-	  (code-block "(with-filename-cstrs ((s (native-translated-namestring pathname)))
+	(code-block "(with-filename-cstrs ((s (native-translated-namestring pathname)))
   (#_unlink s))")
 
-          "Various operating systems have different conventions
+	"Various operating systems have different conventions
 	  for how they expect native pathname strings to be encoded.
 	  Darwin expects then to be decomposed UTF-8.  The Unicode
 	  variants to Windows file-handling functions expect UTF-16.
@@ -93,12 +93,12 @@ function."
 	  This macro ensures that the correct encoding is used,
 	  whatever the host operating system.")
 
-	"On non-Darwin and non-Windows systems, {macro with-filename-cstrs}
+      "On non-Darwin and non-Windows systems, {macro with-filename-cstrs}
 calls {function pathname-encoding-name} to determine the encoding to use."
 
-	(definition (:function pathname-encoding-name) "pathname-encoding-name"
-	    nil
-	  "Returns the name of the encoding to be used in
+      (definition (:function pathname-encoding-name) "pathname-encoding-name"
+	nil
+	"Returns the name of the encoding to be used in
 {macro with-filename-cstrs}.  The default is {code nil}, which means
 to use :iso-8859-1.  It may be changed with {code setf}.")))
 
@@ -133,6 +133,3 @@ keyword arguments:"
 
 
   ) ;chapter
-
-
-

@@ -138,7 +138,8 @@
 
 
 ;;;; Addition.
-(defun add-bignums (a b)
+(defun add-bignums (a b &optional res)
+  (declare (ignore res))
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b)))
     (declare (bignum-index len-a len-b))
@@ -157,7 +158,8 @@
 	(%normalize-bignum-macro res))))
 
 ;;; Could do better than this, surely.
-(defun add-bignum-and-fixnum (bignum fixnum)
+(defun add-bignum-and-fixnum (bignum fixnum &optional res)
+  (declare (ignore res))
   (with-small-bignum-buffers ((bigfix fixnum))
     (add-bignums bignum bigfix)))
 
@@ -178,7 +180,8 @@
 
 
 ;;;; Subtraction.
-(defun subtract-bignum (a b)
+(defun subtract-bignum (a b &optional res)
+  (declare (ignore res))
   (let* ((len-a (%bignum-length a))
 	 (len-b (%bignum-length b))
 	 (len-res (1+ (max len-a len-b)))
@@ -675,7 +678,8 @@
 			 c)
 			tt)))))))))))
 
-(defun multiply-bignums (a b)
+(defun multiply-bignums (a b &optional res)
+  (declare (ignore res))
   (let* ((signs-differ (not (eq (bignum-minusp a) (bignum-minusp b)))))
     (flet ((multiply-unsigned-bignums (a b)
 	     (let* ((len-a (%bignum-length a))
@@ -716,8 +720,9 @@
 	(%normalize-bignum-macro res)))))
 
 
-(defun multiply-bignum-and-fixnum (bignum fixnum)
-  (declare (type bignum-type bignum) (fixnum fixnum))
+(defun multiply-bignum-and-fixnum (bignum fixnum &optional res)
+  (declare (type bignum-type bignum) (fixnum fixnum)
+           (ignore res))
   (let* ((bignum-len (%bignum-length bignum))
          (bignum-plus-p (bignum-plusp bignum))
 	 (fixnum-plus-p (not (minusp fixnum)))
@@ -799,10 +804,14 @@
 
   
 
-(defun copy-bignum (bignum)
+(defun copy-bignum (bignum &optional res)
+  (declare (ignore res))
   (let ((res (%allocate-bignum (%bignum-length bignum))))
     (bignum-replace res bignum)
     res))
+
+(defun maybe-copy-bignum (num &optional res)
+  (if (fixnump num) num (copy-bignum num res)))
 
 
 
@@ -927,10 +936,11 @@
 ;;; boundary (that is, n-bits is zero), then we just copy digits.  The last
 ;;; branch handles the general case.
 ;;;
-(defun bignum-ashift-left (bignum x &optional bignum-len)
+(defun bignum-ashift-left (bignum x &optional bignum-len res)
   (declare (type bignum-type bignum)
 	   (fixnum x)
-	   (type (or null bignum-index) bignum-len))
+	   (type (or null bignum-index) bignum-len)
+           (ignore res))
   (multiple-value-bind (digits n-bits)
 		       (truncate x digit-size)
     (declare (fixnum digits n-bits))
@@ -1481,6 +1491,10 @@
           (if no-rem
             quotient            
             (values quotient r)))))))
+
+(defun bignum-truncate-no-rem (x y &optional res)
+  (declare (ignore res))
+  (bignum-truncate x y t))
 
 (defun bignum-rem (x1 y1)
   (declare (type bignum-type x1 y1))  
@@ -2060,7 +2074,8 @@
 		   (%mostly-normalize-bignum-macro v)
 		   (setq v-len (%bignum-length v))))))))))))
 
-(defun %bignum-bignum-gcd (u v)
+(defun %bignum-bignum-gcd (u v &optional res)
+  (declare (ignore res))
   (with-negated-bignum-buffers u v %positive-bignum-bignum-gcd))
 
 (defun unsignedwide->integer (uwidep)

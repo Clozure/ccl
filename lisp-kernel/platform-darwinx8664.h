@@ -19,6 +19,8 @@
 #define PLATFORM_CPU PLATFORM_CPU_X86
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
 
+#define _DARWIN_C_SOURCE
+
 
 #include <sys/signal.h>
 #include <sys/ucontext.h>
@@ -53,14 +55,15 @@ typedef ucontext_t ExceptionInformation;
 #define REG_RIP 16
 #define REG_RFL 17
 
-extern void darwin_sigreturn(ExceptionInformation *,unsigned);
-
 /* xp accessors, sigreturn stuff */
 #define DARWIN_USE_PSEUDO_SIGRETURN 1
 
-#define DarwinSigReturn(context) do {\
-    darwin_sigreturn(context, 0x1e);                 \
-    Bug(context,"sigreturn returned");\
+extern void darwin_sigreturn(ExceptionInformation *, unsigned);
+extern natural os_major_version;
+
+#define DarwinSigReturn(context) do {		     \
+    darwin_sigreturn(context, 0x1e);		     \
+    Bug(context,"sigreturn returned");		     \
   } while (0)
 
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss)))
@@ -76,8 +79,6 @@ extern void darwin_sigreturn(ExceptionInformation *,unsigned);
 #define SIGNUM_FOR_INTN_TRAP SIGSEGV /* Not really, but our Mach handler fakes that */
 #define IS_MAYBE_INT_TRAP(info,xp) ((UC_MCONTEXT(xp)->__es.__trapno == 0xd) && (((UC_MCONTEXT(xp)->__es.__err)&7)==2))
 #define IS_PAGE_FAULT(info,xp) (UC_MCONTEXT(xp)->__es.__trapno == 0xe)
-/* The x86 version of sigreturn just needs the context argument; the
-   hidden, magic "flavor" argument that sigtramp uses is ignored. */
 #define SIGRETURN(context) DarwinSigReturn(context)
 
 #include <mach/mach.h>

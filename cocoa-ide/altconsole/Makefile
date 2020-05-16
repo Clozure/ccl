@@ -5,12 +5,17 @@
 #
 #
 
+INFO_PLIST = AltConsole-Info.plist
+
+ifdef MAC_APP_STORE
+INFO_PLIST = AltConsole-mas-Info.plist
+endif
 
 APPBASE=.
 OBJECTS=main.o AltConsoleDocument.o AltConsoleDocumentController.o
 RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings resource/Clear.tiff
 
-CFLAGS=-g -O -mmacosx-version-min=10.6
+CFLAGS=-g -O -mmacosx-version-min=10.9
 
 AltConsole: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework Cocoa
@@ -22,7 +27,7 @@ $(APPBASE)/AltConsole.app: AltConsole $(RESOURCES) AltConsole-Info.plist
 	cp -r -p $(RESOURCES) $(APPBASE)/AltConsole.app/Contents/Resources/English.lproj
 	mkdir -p $(APPBASE)/AltConsole.app/Contents/MacOS
 	cp -p AltConsole $(APPBASE)/AltConsole.app/Contents/MacOS
-	cp -p AltConsole-Info.plist $(APPBASE)/AltConsole.app/Contents/Info.plist
+	cp -p $(INFO_PLIST) $(APPBASE)/AltConsole.app/Contents/Info.plist
 	touch $(APPBASE)/AltConsole.app
 
 install: $(APPBASE)/AltConsole.app
