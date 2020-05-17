@@ -15,6 +15,7 @@
 ;;; limitations under the License.
 
 (in-package "GUI")
+(export 'TYPEOUT-STREAM :GUI)
 
 ;;
 ;; a typeout window is just an ns-window containing a scroll-view
@@ -93,7 +94,7 @@
 (defloadvar *typeout-window* nil)
 
 (defclass typeout-window (ns:ns-window)
-    ((typeout-view :foreign-type :id :accessor typeout-window-typeout-view))
+  ((typeout-view :foreign-type :id :accessor typeout-window-typeout-view))
   (:metaclass ns:+ns-object))
 (declaim (special typeout-window))
 
@@ -125,21 +126,16 @@
 (objc:defmethod #/sharedPanel ((self +typeout-window))
    (cond (*typeout-window*)
 	 (t
-          (setq *typeout-window* (#/typeoutWindowWithTitle: self "Typeout")))))
+          (setq *typeout-window* (#/typeoutWindowWithTitle: self #@"Typeout")))))
 
 
-
+; NOTE: It's okay to send data to a closed window. Next time you
+;   do it, it will reopen.
 (objc:defmethod (#/close :void) ((self typeout-window))
   (call-next-method)
   (unless (eql self *typeout-window*)
     (with-lock-grabbed (*typeout-windows-lock*)
       (push (%inc-ptr self 0) *typeout-windows*))))
-
-
-
-(objc:defmethod (#/show :void) ((self typeout-window))
-  (#/makeKeyAndOrderFront: self +null-ptr+))
-
 
 (defclass typeout-stream (fundamental-character-output-stream)
   ((string-stream :initform (make-string-output-stream))
@@ -148,9 +144,9 @@
 (defun prepare-typeout-stream (stream)
   (declare (ignorable stream))
   (with-slots (window) stream
-    (#/show window)))
-
-
+    (execute-in-gui (lambda ()
+                      (unless (#/isVisible window)
+                        (activate-window window))))))
 
 ;;;
 ;;;  TYPEOUT-STREAM methods
@@ -167,7 +163,6 @@
 		    (subseq string start end))
 		(slot-value stream 'string-stream)))
 
-  
 (defmethod stream-fresh-line ((stream typeout-stream))
   (prepare-typeout-stream stream)
   (fresh-line (slot-value stream 'string-stream)))
@@ -198,12 +193,18 @@
      (%make-nsstring (get-output-stream-string (slot-value stream 'string-stream))) 
      t)))
   
-
 (defloadvar *typeout-stream* nil)
+
+(defun make-typeout-stream (&rest args)
+  (let* ((ts (apply #'make-instance 'typeout-stream args)))
+    (with-slots (window) ts
+      (add-auto-flush-stream ts)
+      (execute-in-gui (lambda ()
+                        (activate-window window))))
+    ts))
 
 (defun typeout-stream (&optional title)
   (if (null title)
     (or *typeout-stream*
-        (setq *typeout-stream* (make-instance 'typeout-stream)))
-    (make-instance 'typeout-stream :window (#/typeoutWindowWithTitle: typeout-window (%make-nsstring (format nil "~a" title))))))
-
+        (setq *typeout-stream* (make-typeout-stream)))
+    (make-typeout-stream :window (#/typeoutWindowWithTitle: typeout-window (%make-nsstring (format nil "~a" title))))))
