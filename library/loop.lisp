@@ -656,14 +656,17 @@ a LET-like macro, and a SETQ-like macro, which perform LOOP-style destructuring.
 ;;;; Code Analysis Stuff
 
 
-(defun loop-constant-fold-if-possible (form &optional expected-type)
+(defun loop-constant-fold-if-possible (form &optional expected-type error-p)
   (let ((new-form form) (constantp nil) (constant-value nil))
     (when (setq constantp (constantp new-form))
       (setq constant-value (eval new-form)))
     (when (and constantp expected-type)
       (unless (typep constant-value expected-type)
-	(loop-warn "The form ~S evaluated to ~S, which was not of the anticipated type ~S."
-          form constant-value expected-type)
+        (if error-p
+            (loop-error "The form ~S evaluated to ~S, which was not of the anticipated type ~S."
+                       form constant-value expected-type)
+            (loop-warn "The form ~S evaluated to ~S, which was not of the anticipated type ~S."
+                       form constant-value expected-type))
 	(setq constantp nil constant-value nil)))
     (values new-form constantp constant-value)))
 
@@ -1855,9 +1858,10 @@ collected result will be returned as the value of the LOOP."
 			      (loop-gentemp 'loop-limit-) form indexv-type))))
 	 (:by
 	   (multiple-value-setq (form stepby-constantp stepby)
-	     (loop-constant-fold-if-possible form indexv-type))
+             ;;; the by variable must be a positive number (so not zero)
+             (loop-constant-fold-if-possible form `(and ,indexv-type (real (0))) t))
 	   (unless stepby-constantp
-	     (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form indexv-type)))
+	     (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form `(and ,indexv-type (real (0))))))
 	 (t (loop-error
 	      "~S invalid preposition in sequencing or sequence path.~@
 	       Invalid prepositions specified in iteration path descriptor or something?"
