@@ -191,7 +191,7 @@ synchronization between threads."
     (report-bad-arg rw 'read-write-lock)))
   
 
-(defun %make-semaphore-ptr (&key (count 0))
+(defun %make-semaphore-ptr (count)
   (let* ((p (ff-call (%kernel-import target::kernel-import-new-semaphore)
 	     :signed-fullword count
              :address)))
@@ -205,7 +205,7 @@ synchronization between threads."
 (defun make-semaphore (&key (count 0))
   "Create and return a semaphore, which can be used for synchronization
 between threads."
-  (%istruct 'semaphore (%make-semaphore-ptr :count count)))
+  (%istruct 'semaphore (%make-semaphore-ptr count)))
 
 (defun semaphorep (x)
   (istruct-typep x 'semaphore))
