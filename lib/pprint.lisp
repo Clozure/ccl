@@ -330,7 +330,7 @@
                              (if (get-*print-frob* '*print-level*)
                                (- *print-level* *current-level*))
                              nil nil)))
-    (let ((fn (get-printer object table)))
+    (let ((fn (get-printer object (or table *standard-pprint-dispatch-table*))))
       (values (or fn #'non-pretty-print) (not (null fn))))))
 
 (defun get-printer-internal (object hash others)
