@@ -83,7 +83,6 @@ void gc(TCR *, signed_natural);
 int change_hons_area_size(TCR *, signed_natural);
 void delete_protected_area(protected_area_ptr);
 Boolean egc_control(Boolean, BytePtr);
-Boolean free_segments_zero_filled_by_OS;
 Boolean new_heap_segment(ExceptionInformation *, natural, Boolean , TCR *, Boolean *);
 void platform_new_heap_segment(ExceptionInformation *, TCR*, BytePtr, BytePtr);
 /* an type representing 1/4 of a natural word */
