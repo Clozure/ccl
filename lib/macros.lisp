@@ -835,7 +835,9 @@ form is not evaluated if the variable is already BOUNDP."
 
 (defmacro cond (&rest args &aux clause)
   (when args
-     (setq clause (car args))
+    (setq clause (car args))
+    (unless (consp clause)
+      (signal-program-error "Clause ~s should be a non-empty list" clause))
      (if (cdr clause)         
          `(if ,(car clause) (progn ,@(cdr clause)) (cond ,@(cdr args)))
        (if (cdr args) `(or ,(car clause) (cond ,@(cdr args)))
