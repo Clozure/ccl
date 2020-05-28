@@ -151,6 +151,8 @@ wperror(char* message)
 
 LispObj lisp_nil = (LispObj) 0;
 bitvector global_mark_ref_bits = NULL, dynamic_mark_ref_bits = NULL, relocatable_mark_ref_bits = NULL, global_refidx = NULL, dynamic_refidx = NULL,managed_static_refidx = NULL;
+LispObj *global_reloctab = (LispObj*) 0, *GCrelocptr = (LispObj*) 0;
+void *tcr_area_lock = NULL;
 
 
 /* These are all "persistent" : they're initialized when

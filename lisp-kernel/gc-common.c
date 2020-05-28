@@ -92,6 +92,7 @@ LispObj GCarealow = 0, GCareadynamiclow = 0;
 natural GCndnodes_in_area = 0, GCndynamic_dnodes_in_area = 0;
 LispObj GCweakvll = (LispObj)NULL;
 LispObj GCdwsweakvll = (LispObj)NULL;
+LispObj GCfirstunmarked = (LispObj) NULL;
 LispObj GCephemeral_low = 0;
 natural GCn_ephemeral_dnodes = 0;
 natural GCstack_limit = 0;
