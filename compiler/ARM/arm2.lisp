@@ -3353,6 +3353,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                                 (vinsn-sequence-refs-reg-p
                                                  push-vinsn pop-vinsn popped-reg))))
                    (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
+                               (not (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump))
                                (or (null popped-reg-is-reffed)
                                    (null pushed-reg-is-set)
                                    ;; If the popped register is
@@ -3367,8 +3368,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                    ;; be sure of the order in which
                                    ;; they might happen if the sequence
                                    ;; contains jumps or branches.
-                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)
-                                   (not (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump))))
+                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)))
                           ;; We don't try this if anything's pushed on
                           ;; or popped from the vstack in the
                           ;; sequence, but there can be references to
