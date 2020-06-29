@@ -470,7 +470,12 @@
              (result ($ arm::arg_z)))
         (arm2-do-lexical-reference seg arg ea)
         (arm2-set-nargs seg 1)
-        (! ref-constant ($ arm::fname) (backend-immediate-index (arm2-symbol-entry-locative '%cons-magic-next-method-arg)))
+        (let ((idx (backend-immediate-index (arm2-symbol-entry-locative '%cons-magic-next-method-arg))))
+          (if (< (+ arm::misc-data-offset (ash (+ idx 2) 2)) 4096)
+            (! ref-constant ($ arm::fname) idx)
+            (with-imm-target () (idxreg :s32)
+              (arm2-lri seg idxreg (+ arm::misc-data-offset (ash (+ idx 2) 2)))
+              (! ref-indexed-constant ($ arm::fname) idxreg))))
         (! call-known-symbol arg)
         (arm2-do-lexical-setq seg nil ea result)))))
 
@@ -1492,11 +1497,11 @@
     (let* ((reg (arm2-register-constant-p imm)))
       (if reg
         (arm2-copy-register seg dest reg)
-        (let* ((idx (backend-immediate-index imm)))
-          (if (< idx 4094)
+        (let ((idx (backend-immediate-index imm)))
+          (if (< (+ arm::misc-data-offset (ash (+ idx 2) 2)) 4096)
             (! ref-constant dest idx)
             (with-imm-target () (idxreg :s32)
-              (arm2-lri seg idxreg (+ arm::misc-data-offset (ash (1+ idx) 2)))
+              (arm2-lri seg idxreg (+ arm::misc-data-offset (ash (+ idx 2) 2)))
               (! ref-indexed-constant dest idxreg)))))
       dest)))
 
@@ -3370,6 +3375,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                                 (vinsn-sequence-refs-reg-p
                                                  push-vinsn pop-vinsn popped-reg))))
                    (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
+                               (not (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump))
                                (or (null popped-reg-is-reffed)
                                    (null pushed-reg-is-set)
                                    ;; If the popped register is
@@ -3384,8 +3390,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                    ;; be sure of the order in which
                                    ;; they might happen if the sequence
                                    ;; contains jumps or branches.
-                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)
-                                   (not (vinsn-sequence-has-some-attribute-p push-vinsn pop-vinsn :branch :jump))))
+                                   (vinsn-in-sequence-p pushed-reg-is-set popped-reg-is-reffed pop-vinsn)))
                           ;; We don't try this if anything's pushed on
                           ;; or popped from the vstack in the
                           ;; sequence, but there can be references to
@@ -5940,7 +5945,12 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                      (temp ($ arm::temp2)))
                 (declare (cons constant))
                 (rplacd constant reg)
-                (! ref-constant temp (backend-immediate-index (car constant)))
+                (let* ((idx (backend-immediate-index (car constant))))
+                  (if (< (+ arm::misc-data-offset (ash (+ idx 2) 2)) 4096)
+                    (! ref-constant temp idx)
+                    (with-imm-target () (idxreg :s32)
+                      (arm2-lri seg idxreg (+ arm::misc-data-offset (ash (+ idx 2) 2)))
+                      (! ref-indexed-constant temp idxreg))))
                 (arm2-copy-register seg reg temp))))
           (when method-var
             (arm2-seq-bind-var seg method-var arm::next-method-context))
