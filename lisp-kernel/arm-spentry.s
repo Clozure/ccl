@@ -2029,7 +2029,7 @@ _spentry(misc_alloc)
         __(Misc_Alloc(arg_z,imm0,imm2))
         __(bx lr)
 9:
-        __(mov arg_y,#XARRLIMIT)
+        __(mov arg_x,#XARRLIMIT)
         __(set_nargs(3))
         __(b _SPksignalerr)
 

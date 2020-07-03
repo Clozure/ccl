@@ -139,7 +139,7 @@ nil_value = (0x04000000+fulltag_nil)
 misc_bias = fulltag_misc
 cons_bias = fulltag_cons    
         
-unsigned_byte_24_mask = 0xe0000003 /* bits that should be clear in a boxed */
+unsigned_byte_24_mask = 0xfc000003 /* bits that should be clear in a boxed */
                                    /* (UNSIGNED-BYTE 24) */
             
 
