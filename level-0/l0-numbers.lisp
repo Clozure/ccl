@@ -85,11 +85,12 @@
  
 (defun %maybe-make-ratio (numerator denominator res)
   (if res
-      (progn
-        (require-type res 'ratio)
-        (setf (%numerator res) numerator
-              (%denominator res) denominator)
-        res)
+      (number-case res
+        (ratio           
+         (setf (%numerator res) numerator
+               (%denominator res) denominator))
+        (t
+         (%make-ratio numerator denominator)))
       (%make-ratio numerator denominator)))
 
 ; this is no longer used
