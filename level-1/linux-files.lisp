@@ -1413,7 +1413,7 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                          (remove-external-process p)
                          (setq terminated t)))))))))))
       
-  (defun run-external-process (proc in-fd out-fd error-fd argv &optional env)
+  (defun run-external-process (proc in-fd out-fd error-fd argv &optional env dir)
     (let* ((signaled nil))
       (unwind-protect
            (let ((child-pid (#_fork)))
@@ -1423,6 +1423,8 @@ any EXTERNAL-ENTRY-POINTs known to be defined by it to become unresolved."
                     (setq signaled t)
                     (dolist (pair env)
                       (setenv (string (car pair)) (cdr pair)))
+                    (when dir
+                      (%chdir (defaulted-native-namestring dir)))
                     (without-interrupts
                      (exec-with-io-redirection
                       in-fd out-fd error-fd argv)))
@@ -1456,6 +1458,7 @@ itself, by setting the status and exit-code fields.")
                               (error :output) (if-error-exists :error)
                               status-hook (element-type 'character)
                               env
+                              directory
                               (sharing :private)
                               (external-format `(:character-encoding ,*terminal-character-encoding-name*))
                               (silently-ignore-catastrophic-failures
@@ -1526,7 +1529,7 @@ itself, by setting the status and exit-code fields.")
 				   external-format)))
 		    (with-string-vector (argv args encoding)
 		      (run-external-process proc in-fd out-fd error-fd argv
-					    env)))))
+					    env directory)))))
 	     (wait-on-semaphore (external-process-signal proc)))
         (dolist (fd close-in-parent) (fd-close fd))
         (unless (external-process-pid proc)
