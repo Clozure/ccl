@@ -1213,7 +1213,7 @@ uc_uc_test(unsigned char data)
       gcc -dynamiclib -Wall -o libtypetest.dylib typetest.c \\
       -install_name ./libtypetest.dylib
     ")
-    (block "Tip"
+    (text-block "Tip"
       (para #:|Users of 64-bit platforms may need to pass options such
         as "-m64" to gcc, may need to give the output library a different
         extension (such as ".so"), and may need to user slightly different
