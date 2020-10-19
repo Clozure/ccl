@@ -2525,7 +2525,7 @@ This is the prompt string to display.
 This is similar to :prompt, except that it is displayed when the help
 command is typed during input.
                         "))
-      (block nil
+      (text-block nil
 	(para "This may also be a function.  When called with no arguments, it
 should either return a string which is the help text or perform some
 action to help the user, returning nil.
