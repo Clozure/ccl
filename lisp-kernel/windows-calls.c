@@ -29,9 +29,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#ifndef WIN_32
-#define _dosmaperr mingw_dosmaperr
-#else
 void
 _dosmaperr(unsigned long oserrno)
 {
@@ -175,10 +172,14 @@ _dosmaperr(unsigned long oserrno)
     errno = EINVAL;
     break;
   }
+#ifndef WIN_32
+  if (oserrno >= ERROR_WRITE_PROTECT && oserrno <= ERROR_SHARING_BUFFER_EXCEEDED)
+      errno = EACCES;
+  else if (oserrno >= ERROR_INVALID_STARTING_CODESEG && oserrno <= ERROR_INFLOOP_IN_RELOC_CHAIN)
+    errno = ENOEXEC;
+#endif
 }
     
-#endif
-
 #define MAX_FD 32
 
 HANDLE
