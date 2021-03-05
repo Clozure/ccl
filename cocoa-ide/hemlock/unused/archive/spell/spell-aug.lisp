@@ -92,7 +92,7 @@
                                  :flags (word-flags line word-end))))
     (add-flags desc-ptr+2 line word-end)
     (string-table-replace line string-ptr word-end))
-  t)
+  t))
 
 ;;; SPELL-REMOVE-ENTRY destructively uppercases entry in removing it from
 ;;; the dictionary.  First entry is looked up, and if it is found due to a
