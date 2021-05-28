@@ -626,21 +626,25 @@ the socket is not connected."))
       (setq socket (make-instance 'udp-socket
 				  :device fd
 				  :keys keys))
-      (apply #'set-socket-options socket keys)
-      (when (and (eql connect :active)
-                 remote-host remote-port)
-        (%socket-connect fd
-                         (apply #'resolve-address
-				:connect connect
-				:address-family address-family
-                                :host remote-host
-                                :port remote-port
-                                :allow-other-keys t
-                                keys)
-                         nil)
-        (setf (socket-connected socket) t))
-      (setq fd -1)
-      socket)
+      (unwind-protect
+           (progn
+             (apply #'set-socket-options socket keys)
+             (when (and (eql connect :active)
+                        remote-host remote-port)
+               (%socket-connect fd
+                                (apply #'resolve-address
+				       :connect connect
+				       :address-family address-family
+                                       :host remote-host
+                                       :port remote-port
+                                       :allow-other-keys t
+                                       keys)
+                                nil)
+               (setf (socket-connected socket) t))
+             (shiftf socket nil))
+        (setq fd -1)
+        (when socket
+          (close socket))))
     (unless (< fd 0)
       (fd-close fd))))
 
@@ -665,29 +669,33 @@ the socket is not connected."))
                                 (:passive #'make-tcp-listener-socket))
                               fd
                               keys)))
-           (apply #'set-socket-options socket keys)
-           (if (eql connect :passive)
-	     (socket-call nil "listen" (c_listen fd (or backlog 5)))
-	     (let ((timeout-in-milliseconds
-		    (cond
-		      (deadline
-		       (max (round (- deadline (get-internal-real-time))
-				   (/ internal-time-units-per-second 1000))
-			    0))
-		      (connect-timeout
-		       (check-io-timeout connect-timeout)
-		       (round (* connect-timeout 1000)))))
-		   (socket-address (or remote-address
-				       (apply #'resolve-address
-					      :connect connect
-					      :address-family address-family
-					      :host remote-host
-					      :port remote-port
-					      :allow-other-keys t
-					      keys))))
-               (%socket-connect fd socket-address timeout-in-milliseconds)))
-           (setq fd -1)
-           socket))
+           (unwind-protect
+                (progn
+                  (apply #'set-socket-options socket keys)
+                  (if (eql connect :passive)
+	              (socket-call nil "listen" (c_listen fd (or backlog 5)))
+	              (let ((timeout-in-milliseconds
+		              (cond
+		                (deadline
+		                 (max (round (- deadline (get-internal-real-time))
+				             (/ internal-time-units-per-second 1000))
+			              0))
+		                (connect-timeout
+		                 (check-io-timeout connect-timeout)
+		                 (round (* connect-timeout 1000)))))
+		            (socket-address (or remote-address
+				                (apply #'resolve-address
+					               :connect connect
+					               :address-family address-family
+					               :host remote-host
+					               :port remote-port
+					               :allow-other-keys t
+					               keys))))
+                        (%socket-connect fd socket-address timeout-in-milliseconds)))
+                  (shiftf socket nil))
+             (setq fd -1)
+             (when socket
+               (close socket)))))
     (unless (< fd 0)
       (fd-close fd))))
 
@@ -716,11 +724,15 @@ the socket is not connected."))
                          (:active #'make-file-stream-socket)
                          (:passive #'make-file-listener-socket))
                        fd keys))
-         (apply #'set-socket-options socket keys)
-         (when (eql connect :passive)
-           (socket-call nil "listen" (c_listen fd (or backlog 5))))
-         (setq fd -1)
-         socket)
+         (unwind-protect
+              (progn
+                (apply #'set-socket-options socket keys)
+                (when (eql connect :passive)
+                  (socket-call nil "listen" (c_listen fd (or backlog 5))))
+                (shiftf socket nil))
+           (setq fd -1)
+           (when socket
+             (close socket))))
     (unless (< fd 0)
       (fd-close fd))))
 
