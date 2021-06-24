@@ -216,8 +216,9 @@
       (unless (verify-lambda-list lambda-list)
         (signal-program-error $XBadLambdaList lambda-list))
       (let* ((store-vars (cons store-var mv-store-vars)))
-        (multiple-value-bind (lambda-list lambda-temps lambda-vars)
-                             (rename-lambda-vars lambda-list)
+        (multiple-value-bind (bindings lambda-temps)
+            (%destructure-lambda-list lambda-list 'expression nil nil :use-whole-var t)
+          (setq bindings (nreverse bindings))
           (multiple-value-bind (body decls doc)
                                (parse-body body env t)
             (setq body `((block ,access-fn ,@body)))
@@ -234,25 +235,26 @@
                   ',access-fn
                   #'(lambda (,access-form ,environment)
                       (declare (ignore ,environment))
-                      (do* ((,args (cdr ,access-form) (cdr ,args))
+                      (do* ((expression (cdr ,access-form))
+                            (,args (cdr ,access-form) (cdr ,args))
                             (,dummies nil (cons (gensym) ,dummies))
                             (,newval-vars (mapcar #'(lambda (v) (declare (ignore v)) (gensym)) ',store-vars))
                             (,new-access-form nil))
                            ((atom ,args)
+                            (let* ,bindings
+                              ,@(when lambda-temps `((declare ,@(cdar decls)))) ; fixed bogus decl
                             (setq ,new-access-form 
                                   (cons (car ,access-form) ,dummies))
-                            (destructuring-bind ,(append lambda-vars store-vars )
-                                                `,(append ',lambda-temps ,newval-vars)
-                              ,@decls
+                            (destructuring-bind ,(append store-vars )
+                                                `,(append ,newval-vars)
                               (values
                                ,dummies
                                (cdr ,access-form)
                                ,newval-vars
-                               `((lambda ,,lambda-list
-                                   ,',@ignorable
-                                   ,,@body)
-                                 ,@,dummies)
-                               ,new-access-form))))))
+                               `(apply (lambda ,',(mapcar 'car bindings)
+                                         ,,@body)
+                                       '(,,@(mapcar 'cadr bindings)))
+                               ,new-access-form)))))))
                  ,@(if doc (list doc))
                  ',access-fn))))))))
   
