@@ -1190,16 +1190,53 @@
 
 (defun simplify-unions (types)
   (when types
-    (multiple-value-bind (first rest)
-	(if (union-ctype-p (car types))
-	  (values (car (union-ctype-types (car types)))
-		  (append (cdr (union-ctype-types (car types)))
-			  (cdr types)))
-	  (values (car types) (cdr types)))
-      (let ((rest (simplify-unions rest)) u)
-	(dolist (r rest (cons first rest))
-	  (when (setq u (type-union2 first r))
-	    (return (simplify-unions (nsubstitute u r rest)))))))))
+    (let ((types (%simplify-range-unions types)))
+      (multiple-value-bind (first rest)
+          (if (union-ctype-p (car types))
+              (values (car (union-ctype-types (car types)))
+                      (append (cdr (union-ctype-types (car types)))
+                              (cdr types)))
+              (values (car types) (cdr types)))
+        (let ((rest (simplify-unions rest)))
+          (dolist (ctype rest (cons first rest))
+            (let ((found-union (type-union2 first ctype)))
+              (when found-union
+                (return (simplify-unions (nsubstitute found-union ctype rest)))))))))))
+
+(defun %simplify-range-unions (types)
+  (when types
+    ;; Special case for merging numeric types that are neighboring and have
+    ;; a common exclusive bound (one lower, one higher) in presence of other types
+    ;; that might contain that exclusive bound. Example:
+    ;; '(OR (REAL * (-3.5d0)) (REAL (-3.5d0)) (NOT INTEGER))
+    ;; In the above type, (REAL -3.5d0) is hidden inside the (NOT INTEGER)
+    ;; type, but the type system is unable to deduce that without this special case
+    ;; and therefore is unable to simplify this type into T.
+    (let* ((result (copy-list types)))
+      (dolist (ctype types result)
+        (flet ((ctype-copy (high low)
+                 (make-numeric-ctype
+                  :high high :low low
+                  :class (numeric-ctype-class ctype)
+                  :format (numeric-ctype-format ctype)
+                  :complexp (numeric-ctype-complexp ctype)
+                  :enumerable (ctype-enumerable ctype)
+                  :predicate (numeric-ctype-predicate ctype))))
+          (when (and (numeric-ctype-p ctype)
+                     (numeric-ctype-high ctype)
+                     (listp (numeric-ctype-high ctype)))
+            (let* ((bound-ctype
+                     ;; We copy the ctype fully, except for the bounds -
+                     ;; this type must include only the number in question.
+                     (ctype-copy (car (numeric-ctype-high ctype))
+                                 (car (numeric-ctype-high ctype)))))
+              (when (find-if (lambda (x) (csubtypep bound-ctype x)) types)
+                (let ((result-ctype
+                        ;; We copy the ctype fully, except for the upper bound -
+                        ;; we make it inclusive instead of exclusive.
+                        (ctype-copy (car (numeric-ctype-high ctype))
+                                    (numeric-ctype-low ctype))))
+                  (setf result (cons result-ctype (delete ctype result :count 1))))))))))))
 
 (defun type-union2 (type1 type2)
   (declare (type ctype type1 type2))
