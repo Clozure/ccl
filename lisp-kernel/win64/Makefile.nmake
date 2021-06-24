@@ -26,11 +26,15 @@ LD = link
 ASFLAGS = -f win64 -g cv8 -p gas
 AS = yasm
 M4FLAGS = -DWIN64 -DWINDOWS -DX86 -DX8664 -DHAVE_TLS -DEMUTLS
-CDEFINES = /I.. /DWIN64 /DWINDOWS /D_REENTRANT /DX86 /DX8664 /D_GNU_SOURCE /DHAVE_TLS /DEMUTLS /DVC #-DDISABLE_EGC
+CDEFINES = /I.. /DWIN64 /DWINDOWS /D_REENTRANT /DX86 /DX8664 /D_GNU_SOURCE /DHAVE_TLS /DEMUTLS /DVC /D_AMD64_ #-DDISABLE_EGC
+INCLUDECHEADERS = /FI"area.h" /FI"bits.h" /FI"x86-constants.h" /FI"lisp-errors.h" \
+	/FI"gc.h" /FI"lisp.h" /FI"lisp-exceptions.h" /FI"lisp_globals.h" /FI"macros.h" /FI"memprotect.h" \
+	/FI"image.h" /FI"threads.h" /FI"x86-constants64.h" /FI"x86-exceptions.h" /FI"lisptypes.h" /FI"x86-utils.h" \
+	/FI"constants.h" /FI"os-windows.h"
 CDEBUG = /Zi
 COPT =
 LDFLAGS =
-
+PLATFORM_H = platform-win64.h
 .SUFFIXES : .exe .obj .c .asm .s
 
 .s.asm:
@@ -38,7 +42,7 @@ LDFLAGS =
 .asm.obj:
 	$(AS) $(ASFLAGS) -o $@ $<
 .c.obj:
-	$(CC) /c $< $(CDEFINES) $(CDEBUG) $(COPT)
+	$(CC) /FI $(PLATFORM_H) $(INCLUDECHEADERS) /c $< $(CDEFINES) $(CDEBUG) $(COPT)
 
 SPOBJ = pad.obj x86-spjump64.obj x86-spentry64.obj x86-subprims64.obj
 ASMOBJ = x86-asmutils64.obj imports.obj
@@ -55,7 +59,6 @@ SPINC =	lisp.s m4macros.m4 x86-constants.s x86-macros.s errors.s x86-uuo.s \
 CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
 	threads.h x86-constants64.h x86-exceptions.h lisptypes.h
-
 
 KSPOBJ = $(SPOBJ)
 all:	..\wx86cl64

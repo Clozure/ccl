@@ -44,11 +44,25 @@
 #include <windows.h>
 #ifdef WIN_64
 #include <winternl.h>
+#ifndef _MSC_VER
 #include <ntstatus.h>
+#endif
 #endif
 #ifndef EXCEPTION_WRITE_FAULT
 #define EXCEPTION_WRITE_FAULT 1
 #endif
+#endif
+
+#ifdef _MSC_VER
+#define _RPC
+#else
+#define _RPC +rpc
+#endif
+
+#ifdef X8664
+#define _XP 1
+#else
+#define _XP 0
 #endif
 
 void
@@ -89,11 +103,7 @@ early_intn_handler(int signum, siginfo_t *info, ExceptionInformation *xp)
 #endif
 #endif
 
-void
-do_intn()
-{
-  __asm volatile("int $0xcd");
-}
+extern void do_intn();
 
 void
 x86_early_exception_init()
@@ -774,13 +784,7 @@ handle_error(TCR *tcr, ExceptionInformation *xp)
       if (container == lisp_nil) {
         xpPC(xp) = rpc;
       } else {
-        xpPC(xp) = (LispObj)(&(deref(container,
-#ifdef X8664
-                                     1
-#else
-                                     0
-#endif
-)))+rpc;
+        xpPC(xp) = (LispObj)(&(deref(container, _XP))) _RPC;
       }
         
       skip = 0;
@@ -3952,3 +3956,5 @@ handle_watch_trap(ExceptionInformation *xp, TCR *tcr)
   return true;
 }
 
+#undef _XP
+#undef _RPC

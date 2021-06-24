@@ -1,0 +1,208 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="CHEADERS">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="SP">
+      <UniqueIdentifier>{18a41840-e112-4839-9518-98980b1ed87a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SPINC">
+      <UniqueIdentifier>{6aec3197-57a5-4be8-bcb1-95712f200df0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ASM">
+      <UniqueIdentifier>{3f6f7514-acd2-4cd4-ba7c-8240bab8e663}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="C">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="ASMINLINE">
+      <UniqueIdentifier>{b4b85f07-cacb-46bb-9829-d6ff51fd9b92}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="win64\yasm-redefinition.patch" />
+    <None Include="m4macros.m4">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="lisp.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="lisp_globals.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-constants.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-constants64.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-macros.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="x86-uuo.s">
+      <Filter>SPINC</Filter>
+    </None>
+    <None Include="errors.masm" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pmcl-kernel.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="gc-common.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-gc.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="bits.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-exceptions.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="x86-utils.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="image.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="thread_manager.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="lisp-debug.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="memory.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="windows-calls.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="lispdcmd.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="plprint.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="plsym.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="xlbt.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="x86_print.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="msvc-gettimeofday.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="msvc-getpagesize.c">
+      <Filter>C</Filter>
+    </ClCompile>
+    <ClCompile Include="msvc-fseeko64.c">
+      <Filter>C</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="area.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="bits.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-constants.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp-errors.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="gc.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp-exceptions.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="lisp_globals.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="macros.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="memprotect.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="image.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="threads.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-constants64.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-exceptions.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="lisptypes.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="x86-utils.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="platform-win64.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="constants.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="os-windows.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="dirent.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="msvc-gettimeofday.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="sys\time.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="sys\timeb.h">
+      <Filter>CHEADERS</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <YASM Include="win64\do_intn.asm">
+      <Filter>ASMINLINE</Filter>
+    </YASM>
+    <YASM Include="errors.s">
+      <Filter>SPINC</Filter>
+    </YASM>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="imports.s">
+      <Filter>ASM</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-asmutils64.s">
+      <Filter>ASM</Filter>
+    </CustomBuild>
+    <CustomBuild Include="pad.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-spentry64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-spjump64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+    <CustomBuild Include="x86-subprims64.s">
+      <Filter>SP</Filter>
+    </CustomBuild>
+  </ItemGroup>
+</Project>

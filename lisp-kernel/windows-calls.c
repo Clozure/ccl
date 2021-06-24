@@ -17,13 +17,23 @@
 #include "lisp.h"
 #include "x86-exceptions.h"
 #include <io.h>
+#ifdef _MSC_VER
+#include <fcntl.h>
+typedef SSIZE_T ssize_t;
+#include <WinSock2.h>
+#else
 #include <unistd.h>
 #include <sys/fcntl.h>
+#endif
 #include <errno.h>
 #include <sys/stat.h>
 #include <windows.h>
 #include <psapi.h>
+#ifdef _MSC_VER
+#include "dirent.h"
+#else
 #include <dirent.h>
+#endif
 #include <signal.h>
 #undef __argv
 #include <stdio.h>

@@ -37,11 +37,16 @@ typedef natural *bitvector;
 
 #define bitmap_shift_count_mask ((1<<bitmap_shift)-1)
 
+#ifdef _MSC_VER
+static __forceinline int
+set_bit(bitvector bits, natural bitnum);
+static __forceinline int
+#else
 static inline int
-set_bit(bitvector bits,natural bitnum)  __attribute__((always_inline));
-
+set_bit(bitvector bits, natural bitnum)  __attribute__((always_inline));
 static inline int
-set_bit(bitvector bits,natural bitnum)
+#endif
+set_bit(bitvector bits, natural bitnum)
 {
   natural
     windex = bitnum>>bitmap_shift, 
@@ -83,12 +88,16 @@ clr_bit(bitvector bits, natural bitnum)
   }
 }
 
-
+#ifdef _MSC_VER
+static __forceinline unsigned
+ref_bit(bitvector bits, natural bitnum);
+static __forceinline unsigned
+#else
 static inline unsigned
-ref_bit(bitvector bits,natural bitnum) __attribute__((always_inline));
-
+ref_bit(bitvector bits, natural bitnum) __attribute__((always_inline));
+#endif
 static inline unsigned
-ref_bit(bitvector bits,natural bitnum)
+ref_bit(bitvector bits, natural bitnum)
 {
   return ((bits[bitnum>>bitmap_shift] & (BIT0_MASK >> (bitnum & bitmap_shift_count_mask))) != 0);
 }
