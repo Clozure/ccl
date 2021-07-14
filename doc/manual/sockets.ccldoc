@@ -349,7 +349,7 @@ default, four values are returned:"
         keyword argument {code :direction} may be either
         {code :input} (to disallow further input) or
         {code :output} (to disallow further output).
-	Or, since release 1.11.5, {code :both}.")
+        Or, since release 1.11.5, {code :both}.")
 
     (definition (:function socket-os-fd) "socket-os-fd socket" nil
       (para "Returns the native OS's representation of {param
