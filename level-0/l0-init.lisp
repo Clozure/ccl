@@ -40,6 +40,7 @@
     :clozure
     :clozure-common-lisp
     :ansi-cl
+    :ieee-floating-point
     #-windows-target :unix
     :openmcl-unicode-strings
     :ipv6
