@@ -371,7 +371,7 @@
 (defun backq-form (form constantp)
   (if (and constantp (not (self-evaluating-p form))) (list 'quote form) form))
 
-(defparameter *backquote-stack* ())
+(defparameter *backquote-stack* () "A stack of spliced triples or a string naming an excluded literal type.")
 
 (set-macro-character 
  #\`
