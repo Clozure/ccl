@@ -81,49 +81,49 @@
  (qlfun |#A-reader| (stream ignore dimensions)
    (declare (ignore ignore))
    (let ((*backquote-stack* (when *backquote-stack* "array")))
-   (cond (*read-suppress*
-          (read stream () () t)
-          nil)
-         ((not dimensions)
-          (signal-reader-error stream "reader macro #A used without a rank integer"))
-         ((eql dimensions 0) ;0 dimensional array
-          (make-array nil :initial-contents (read-internal stream t nil t)))
-         ((and (integerp dimensions) (> dimensions 0)) 
-          (let ((initial-contents (read-internal stream t nil t)))
-            (cond ((not (typep initial-contents 'sequence))
-                   (signal-reader-error stream "The form following a #~SA reader macro should have been a sequence, but it was: ~S" dimensions initial-contents))
-                  ((= (length initial-contents) 0)
-                   (make-array (make-list dimensions :initial-element 0)))
-                  ((= dimensions 1)
-                   (make-array (length initial-contents) :initial-contents initial-contents))
-                  (t
-                   (let ((dlist (make-list dimensions)))
-                     (do ((dl dlist (cdr dl))
-                          (il initial-contents (if (> (length il) 0)
-                                                 (etypecase il
-                                                   (list (car il))
-                                                   (vector (aref il 0))))))
-                         ((null dl))
-                       (rplaca dl (length il)))
-                     (make-array dlist :initial-contents initial-contents))))))
+     (cond (*read-suppress*
+            (read stream () () t)
+            nil)
+           ((not dimensions)
+            (signal-reader-error stream "reader macro #A used without a rank integer"))
+           ((eql dimensions 0)		;0 dimensional array
+            (make-array nil :initial-contents (read-internal stream t nil t)))
+           ((and (integerp dimensions) (> dimensions 0)) 
+            (let ((initial-contents (read-internal stream t nil t)))
+              (cond ((not (typep initial-contents 'sequence))
+                     (signal-reader-error stream "The form following a #~SA reader macro should have been a sequence, but it was: ~S" dimensions initial-contents))
+                    ((= (length initial-contents) 0)
+                     (make-array (make-list dimensions :initial-element 0)))
+                    ((= dimensions 1)
+                     (make-array (length initial-contents) :initial-contents initial-contents))
+                    (t
+                     (let ((dlist (make-list dimensions)))
+                       (do ((dl dlist (cdr dl))
+                            (il initial-contents (if (> (length il) 0)
+                                                     (etypecase il
+                                                       (list (car il))
+                                                       (vector (aref il 0))))))
+                           ((null dl))
+			 (rplaca dl (length il)))
+                       (make-array dlist :initial-contents initial-contents))))))
            (t (signal-reader-error stream "Dimensions argument to #A not a non-negative integer: ~S" dimensions))))))
 
 (set-dispatch-macro-character #\# #\S
   (qlfun |#S-reader| (input-stream sub-char int &aux list sd)
      (declare (ignore sub-char int))
      (let ((*backquote-stack* (when *backquote-stack* "structure")))
-     (setq list (read-internal input-stream t nil t))
-     (unless *read-suppress*
-       (unless (and (consp list)
-                    (symbolp (%car list))
-                    (setq sd (gethash (%car list) %defstructs%))
-		    (setq sd (sd-constructor sd)))
-         (error "Can't initialize structure from ~S." list))
-       (let ((args ()) (plist (cdr list)))
-         (unless (plistp plist) (report-bad-arg plist '(satisfies plistp)))
-         (while plist
-           (push (make-keyword (pop plist)) args)
-           (push (pop plist) args))
+       (setq list (read-internal input-stream t nil t))
+       (unless *read-suppress*
+	 (unless (and (consp list)
+                      (symbolp (%car list))
+                      (setq sd (gethash (%car list) %defstructs%))
+		      (setq sd (sd-constructor sd)))
+           (error "Can't initialize structure from ~S." list))
+	 (let ((args ()) (plist (cdr list)))
+           (unless (plistp plist) (report-bad-arg plist '(satisfies plistp)))
+           (while plist
+             (push (make-keyword (pop plist)) args)
+             (push (pop plist) args))
            (apply sd (nreverse args)))))))
 
 ;;;from slisp reader2.lisp, and apparently not touched in 20 years.
