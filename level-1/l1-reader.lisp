@@ -2800,9 +2800,10 @@ initially NIL.")
  #\# 
  #\C
  #'(lambda (stream char arg)
-     (require-no-numarg char arg )
+     (require-no-numarg char arg)
+     (let ((*backquote-stack* (when *backquote-stack* "complex")))
      (multiple-value-bind (form note) (read-internal stream t nil t)
-       (values (unless *read-suppress* (apply #'complex form)) (and note (list note))))))
+         (values (unless *read-suppress* (apply #'complex form)) (and note (list note)))))))
 
 (set-dispatch-macro-character 
  #\#

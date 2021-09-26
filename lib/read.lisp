@@ -80,6 +80,7 @@
 (set-dispatch-macro-character #\# #\A
  (qlfun |#A-reader| (stream ignore dimensions)
    (declare (ignore ignore))
+   (let ((*backquote-stack* (when *backquote-stack* "array")))
    (cond (*read-suppress*
           (read stream () () t)
           nil)
@@ -105,11 +106,12 @@
                          ((null dl))
                        (rplaca dl (length il)))
                      (make-array dlist :initial-contents initial-contents))))))
-         (t (signal-reader-error stream "Dimensions argument to #A not a non-negative integer: ~S" dimensions)))))
+           (t (signal-reader-error stream "Dimensions argument to #A not a non-negative integer: ~S" dimensions))))))
 
 (set-dispatch-macro-character #\# #\S
   (qlfun |#S-reader| (input-stream sub-char int &aux list sd)
      (declare (ignore sub-char int))
+     (let ((*backquote-stack* (when *backquote-stack* "structure")))
      (setq list (read-internal input-stream t nil t))
      (unless *read-suppress*
        (unless (and (consp list)
@@ -122,7 +124,7 @@
          (while plist
            (push (make-keyword (pop plist)) args)
            (push (pop plist) args))
-         (apply sd (nreverse args))))))
+           (apply sd (nreverse args)))))))
 
 ;;;from slisp reader2.lisp, and apparently not touched in 20 years.
 (defun parse-integer (string &key (start 0) end (radix 10) junk-allowed)
