@@ -115,15 +115,6 @@ handle_error(ExceptionInformation *, unsigned, unsigned, int*);
 
 typedef char* vector_buf;
 
-void put_altivec_registers(vector_buf);
-void get_altivec_registers(vector_buf);
-
-
-int altivec_available;
-
-
-
-
 #ifdef DARWIN
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGUSR1
 #endif
