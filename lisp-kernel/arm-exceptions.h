@@ -163,6 +163,7 @@ invoke_handler_on_main_stack(int, siginfo_t*, ExceptionInformation *, void *, vo
 
 #ifdef USE_SIGALTSTACK
 #define ALTSTACK(handler) altstack_ ## handler
+void setup_sigaltstack(area *);
 #else
 #define ALTSTACK(handler) handler
 #endif
@@ -172,3 +173,5 @@ normalize_tcr(ExceptionInformation *,TCR *, Boolean);
 
 void
 install_signal_handler(int, void*, unsigned);
+
+void enable_fp_exceptions(void);

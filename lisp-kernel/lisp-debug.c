@@ -808,6 +808,7 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 #ifdef ARM
     TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, rcontext));
+    extern Boolean active_tcr_p(TCR *);
 
     fprintf(dbgout, "rcontext = 0x%lX ", xpcontext);
     if (!active_tcr_p(xpcontext)) {

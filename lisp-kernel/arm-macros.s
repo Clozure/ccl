@@ -269,7 +269,7 @@ define(`trap_unless_lisptag_equal',`
 	__(extract_lisptag($3,$1))
         __(cmp $3,#$2)
         __(beq macro_label(ok))
-	__(uuo_error_reg_not_lisptag(al,$3,$2))
+	__(uuo_error_reg_not_lisptag(c_al,$3,$2))
 macro_label(ok):                
 ')
 
@@ -281,7 +281,7 @@ define(`trap_unless_fixnum',`
         __(new_macro_labels())
         __(test_fixnum($1))
         __(beq macro_label(ok))
-        __(uuo_error_reg_not_lisptag(al,$1,tag_fixnum))
+        __(uuo_error_reg_not_lisptag(c_al,$1,tag_fixnum))
 macro_label(ok):        
         ')
                 
@@ -290,7 +290,7 @@ define(`trap_unless_fulltag_equal',`
 	__(extract_fulltag($3,$1))
         __(cmp $3,#$2)
         __(beq macro_label(ok))
-        __(uuo_error_reg_not_fulltag(al,$1,$2))
+        __(uuo_error_reg_not_fulltag(c_al,$1,$2))
 macro_label(ok):        
 ')
 	
@@ -299,7 +299,7 @@ define(`trap_unless_typecode_equal',`
         __(extract_typecode($3,$1))
         __(cmp $3,#$2)
         __(beq macro_label(ok))
-        __(uuo_error_reg_not_xtype(al,$2))
+        __(uuo_error_reg_not_xtype(c_al,$2))
 macro_label(ok):                
 ')
         
@@ -334,7 +334,7 @@ define(`funcall_nfn',`
         __(ldreq nfn,[fname,#symbol.fcell])
         __(cmpne imm0,#subtag_function)
         __(ldreq pc,[nfn,#_function.entrypoint])
-        __(uuo_error_not_callable(al,nfn))
+        __(uuo_error_not_callable(c_al,nfn))
 
 ')
 
@@ -439,7 +439,7 @@ define(`Cons',`
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
+        __(uuo_alloc_trap(c_al))
 macro_label(ok):                
         __(str $3,[allocptr,#cons.cdr])
         __(str $2,[allocptr,#cons.car])
@@ -479,7 +479,7 @@ define(`Misc_Alloc',`
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
+        __(uuo_alloc_trap(c_al))
 macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
 	__(mov $1,allocptr)
@@ -493,7 +493,7 @@ define(`Misc_Alloc_Fixed',`
         __(ldr allocbase,[rcontext,#tcr.save_allocbase])
         __(cmp allocptr,allocbase)
         __(bhi macro_label(ok))
-        __(uuo_alloc_trap(al))
+        __(uuo_alloc_trap(c_al))
 macro_label(ok):                
 	__(str $2,[allocptr,#misc_header_offset])
 	__(mov $1,allocptr)
@@ -531,7 +531,7 @@ define(`check_enabled_pending_interrupt',`
         __(ldr $1,[rcontext,#tcr.interrupt_pending])
         __(cmp $1,0)
         __(ble $2)
-        __(uuo_interrupt_now(al))
+        __(uuo_interrupt_now(c_al))
         ')
         
 define(`check_pending_interrupt',`
@@ -548,7 +548,7 @@ macro_label(done):
 define(`aligned_bignum_size',`((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1))))')
 
 define(`suspend_now',`
-	__(uuo_suspend_now(al))
+	__(uuo_suspend_now(c_al))
 ')
 
 /* $3 points to a uvector header.  Set $1 to the first dnode-aligned address */
