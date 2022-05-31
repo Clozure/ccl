@@ -72,10 +72,10 @@ _spentry(makes64)
 	__(sarq $fixnumshift,%imm1)
 	__(cmpq %imm1,%imm0)
 	__(jz 0f)
-	__(movd %imm0,%mm0)
+	__(movq %imm0,%imm2)
 	__(movq $two_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(2)))
-	__(movq %mm0,misc_data_offset(%arg_z))
+        __(movq %imm2,misc_data_offset(%arg_z))
 0:	__(repret)
 _endsubp(makes64)	
 
@@ -90,16 +90,16 @@ _startfn(C(makes128))
         /*  %imm0. We'll need to use %imm0 and %imm1 to cons the bignum, and  */
         /*  will need to do some arithmetic (determining significant bigits)  */
         /*  on %imm0 and %imm1 in order to know how large that bignum needs to be.  */
-        /*  Cache %imm0 and %imm1 in %mm0 and %mm1.   */
+        /*  Cache %imm0 and %imm1 in %xmm0 and %xmm1.   */
    
-	__(movd %imm0,%mm0)
-	__(movd %imm1,%mm1)
+	__(movd %imm0,%xmm0)
+	__(movd %imm1,%xmm1)
 	
         /* If %imm1 is just a sign extension of %imm0, make a 64-bit signed integer.   */
 	
 	__(sarq $63,%imm0) 
 	__(cmpq %imm0,%imm1)
-	__(movd %mm0,%imm0)
+	__(movd %xmm0,%imm0)
 	__(je _SPmakes64)
 	
         /* Otherwise, if the high 32 bits of %imm1 are a sign-extension of the  */
@@ -113,13 +113,13 @@ _startfn(C(makes128))
 	__(jz 3f)
 	__(mov $four_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(4)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movq %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movq %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 3:	__(mov $three_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(3)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movd %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movd %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 _endfn
 
@@ -133,38 +133,38 @@ _startfn(C(makeu128))
         /* %imm0. We'll need to use %imm0 and %imm1 to cons the bignum, and  */
         /* will need to do some arithmetic (determining significant bigits)  */
         /* on %imm0 and %imm1 in order to know how large that bignum needs to be.  */
-        /* Cache %imm0 and %imm1 in %mm0 and %mm1.   */
+        /* Cache %imm0 and %imm1 in %xmm0 and %xmm1.   */
 
         /* If the high word is 0, make an unsigned-byte 64 ... 	  */
 	
 	__(testq %imm1,%imm1)
 	__(jz _SPmakeu64)
 	
-	__(movd %imm0,%mm0)
-	__(movd %imm1,%mm1)
+	__(movd %imm0,%xmm0)
+	__(movd %imm1,%xmm1)
 
 	__(js 5f)		/* Sign bit set in %imm1. Need 5 digits   */
 	__(bsrq %imm1,%imm0)
 	__(rcmpb(%imm0_b,$31))
 	__(jae 4f)		/* Some high bits in %imm1.  Need 4 digits   */
 	__(testl %imm1_l,%imm1_l)
-	__(movd %mm0,%imm0)
+	__(movd %xmm0,%imm0)
 	__(jz _SPmakeu64)
 	
 	/* Need 3 digits   */
 	
 	__(movq $three_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(3)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movd %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movd %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 4:	__(movq $four_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(4)))
 	__(jmp 6f)
 5:	__(movq $five_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(5)))
-6:	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movq %mm0,misc_data_offset+8(%arg_z))
+6:	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movq %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 _endfn
 
@@ -3512,18 +3512,18 @@ _spentry(makeu64)
 	__(cmpq %imm0,%imm1)
 	__(je 9f)
 	__(testq %imm0,%imm0)
-	__(movd %imm0,%mm0)
+	__(movq %imm0,%imm2)
 	__(js 3f)
 	/* Make a 2-digit bignum.   */
 	__(movl $two_digit_bignum_header,%imm0_l)
 	__(movl $aligned_bignum_size(2),%imm1_l)
 	__(Misc_Alloc(%arg_z))
-	__(movq %mm0,misc_data_offset(%arg_z))
+	__(movq %imm2,misc_data_offset(%arg_z))
 	__(ret)
 3:	__(movl $three_digit_bignum_header,%imm0_l)
 	__(movl $aligned_bignum_size(3),%imm1_l)
 	__(Misc_Alloc(%arg_z))
-	__(movq %mm0,misc_data_offset(%arg_z))
+	__(movq %imm2,misc_data_offset(%arg_z))
 9:	__(repret)
 _endsubp(makeu64)
 
