@@ -92,14 +92,14 @@ _startfn(C(makes128))
         /*  on %imm0 and %imm1 in order to know how large that bignum needs to be.  */
         /*  Cache %imm0 and %imm1 in %xmm0 and %xmm1.   */
    
-	__(movd %imm0,%xmm0)
-	__(movd %imm1,%xmm1)
+	__(movq %imm0,%xmm0)
+	__(movq %imm1,%xmm1)
 	
         /* If %imm1 is just a sign extension of %imm0, make a 64-bit signed integer.   */
 	
 	__(sarq $63,%imm0) 
 	__(cmpq %imm0,%imm1)
-	__(movd %xmm0,%imm0)
+	__(movq %xmm0,%imm0)
 	__(je _SPmakes64)
 	
         /* Otherwise, if the high 32 bits of %imm1 are a sign-extension of the  */
@@ -140,15 +140,15 @@ _startfn(C(makeu128))
 	__(testq %imm1,%imm1)
 	__(jz _SPmakeu64)
 	
-	__(movd %imm0,%xmm0)
-	__(movd %imm1,%xmm1)
+	__(movq %imm0,%xmm0)
+	__(movq %imm1,%xmm1)
 
 	__(js 5f)		/* Sign bit set in %imm1. Need 5 digits   */
 	__(bsrq %imm1,%imm0)
 	__(rcmpb(%imm0_b,$31))
 	__(jae 4f)		/* Some high bits in %imm1.  Need 4 digits   */
 	__(testl %imm1_l,%imm1_l)
-	__(movd %xmm0,%imm0)
+	__(movq %xmm0,%imm0)
 	__(jz _SPmakeu64)
 	
 	/* Need 3 digits   */
@@ -1316,7 +1316,7 @@ _spentry(nthrowvalues)
 local_label(_nthrowv_nextframe):
 	__(subq $fixnumone,%imm0)
 	__(js local_label(_nthrowv_done))
-	__(movd %imm0,%mm1)
+	__(movq %imm0,%mm1)
 	__(movq rcontext(tcr.catch_top),%temp0)
 	__(movq catch_frame.link(%temp0),%imm1)
 	__(movq catch_frame.db_link(%temp0),%imm0)
@@ -1334,7 +1334,7 @@ local_label(_nthrowv_dont_unbind):
 	__(cmpb $unbound_marker,catch_frame.catch_tag(%temp0))
 	__(je local_label(_nthrowv_do_unwind))
 /* A catch frame.  If the last one, restore context from there.   */
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrowv_skip))
 	__(movq catch_frame.xframe(%temp0),%temp3)
@@ -1365,7 +1365,7 @@ local_label(_nthrowv_skip):
 	__(movq -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))        
         __(movq %imm1,rcontext(tcr.next_tsp))
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrowv_nextframe))
 local_label(_nthrowv_do_unwind):	
 /* This is harder.  Call the cleanup code with the multiple values and   */
@@ -1429,7 +1429,7 @@ local_label(_nthrowv_tpoptest):
 	__(movq (%imm1),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrowv_nextframe))
 local_label(_nthrowv_done):
 	__(movb $0,rcontext(tcr.unwinding))
@@ -1447,7 +1447,7 @@ _spentry(nthrow1value)
 local_label(_nthrow1v_nextframe):
 	__(subq $fixnumone,%imm0)
 	__(js local_label(_nthrow1v_done))
-	__(movd %imm0,%mm1)
+	__(movq %imm0,%mm1)
 	__(movq rcontext(tcr.catch_top),%temp0)
 	__(movq catch_frame.link(%temp0),%imm1)
 	__(movq catch_frame.db_link(%temp0),%imm0)
@@ -1465,7 +1465,7 @@ local_label(_nthrow1v_dont_unbind):
 	__(cmpb $unbound_marker,catch_frame.catch_tag(%temp0))
 	__(je local_label(_nthrow1v_do_unwind))
 /* A catch frame.  If the last one, restore context from there.   */
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrow1v_skip))
 	__(movq catch_frame.xframe(%temp0),%temp3)
@@ -1485,7 +1485,7 @@ local_label(_nthrow1v_skip):
 	__(movq -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))        
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_do_unwind):
 	
@@ -1526,7 +1526,7 @@ __(tra(local_label(_nthrow1v_called_cleanup)))
 	__(movq (%imm1),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))        
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_done):
 	__(movb $0,rcontext(tcr.unwinding))
@@ -2213,7 +2213,7 @@ local_label(stack_misc_alloc_alloc_ivector):
          __(windows_cstack_probe(%imm1,%temp0))
         __endif
         __(movq rcontext(tcr.foreign_sp),%stack_temp) 
-	__(movd %stack_temp,%temp1)
+	__(movq %stack_temp,%temp1)
         __(subq %imm1,rcontext(tcr.foreign_sp))
         __(movq rcontext(tcr.foreign_sp),%temp0)
 0:	__(movapd %fpzero,-dnode_size(%temp1))
@@ -3018,7 +3018,7 @@ _endsubp(misc_alloc)
 
 _startfn(C(destbind1))
 	/* Save entry %rsp in case of error   */
-	__(movd %rsp,%mm0)
+	__(movq %rsp,%mm0)
 	/* Extract required arg count.   */
 	__(movzbl %nargs_b,%imm0_l)
         __(testl %imm0_l,%imm0_l)
@@ -3203,7 +3203,7 @@ local_label(badlist):
 	__(movq $XCALLNOMATCH,%arg_y)
 	/* jmp local_label(destructure_error)   */
 local_label(destructure_error):
-	__(movd %mm0,%rsp)		/* undo everything done to the stack   */
+	__(movq %mm0,%rsp)		/* undo everything done to the stack   */
 	__(movq %whole_reg,%arg_z)
 	__(set_nargs(2))
         __(push %ra0)
@@ -5310,7 +5310,7 @@ _spentry(unused_5)
         __(hlt)
 Xspentry_end:           
 _endsubp(unused_5)
-        
+
         .data
         .globl C(spentry_start)
         .globl C(spentry_end)

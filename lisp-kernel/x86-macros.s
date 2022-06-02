@@ -143,7 +143,7 @@ macro_label(test):
 	__(subq $dnode_size,$1)
 	__(jge macro_label(loop))
         __(movq rcontext(tcr.next_tsp),$2)
-	__(movd %stack_temp,$1)
+	__(movq %stack_temp,$1)
 	__(movq $1,($2))
         __(movq %rbp,tsp_frame.save_rbp($2))
         __(movq $2,rcontext(tcr.save_tsp))
