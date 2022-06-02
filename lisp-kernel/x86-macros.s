@@ -634,14 +634,23 @@ define(`check_pending_enabled_interrupt',`
 /*   bit of tcr.interrupt_pending is set.  If we take the interrupt, we  */
 /*   test and clear the pending bit.  */
 
+ifdef(`X8632',`
 define(`check_pending_interrupt',`
 	new_macro_labels()
-	__(mov rcontext(tcr.tlb_pointer),$1)
-	__(cmp `$'0,INTERRUPT_LEVEL_BINDING_INDEX($1))
+	__(movl rcontext(tcr.tlb_pointer),$1)
+	__(cmpl `$'0,INTERRUPT_LEVEL_BINDING_INDEX($1))
 	__(js macro_label(done))
 	check_pending_enabled_interrupt(macro_label(done))
 macro_label(done):
-')
+')',`
+define(`check_pending_interrupt',`
+	new_macro_labels()
+	__(movq rcontext(tcr.tlb_pointer),$1)
+	__(cmpq `$'0,INTERRUPT_LEVEL_BINDING_INDEX($1))
+	__(js macro_label(done))
+	check_pending_enabled_interrupt(macro_label(done))
+macro_label(done):
+')')
 
 /*  On AMD hardware (at least), a one-byte RET instruction should be */
 /*  prefixed with a REP prefix if it (a) is the target of a  */

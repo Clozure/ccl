@@ -22,6 +22,7 @@ changecom(`/*',`*/')
 /*  (ELF/SVr4) wants and what Darwin(BSD) wants.  */
 
 
+define(`NOstabs',`0')
 define(`BSDstabs',`1')
 define(`ELFstabs',`2')
 define(`COFFstabs',`3')
@@ -30,7 +31,7 @@ undefine(`POWEROPENABI')
 undefine(`rTOC')
 
 
-ifdef(`DARWIN',`define(`SYSstabs',`BSDstabs')
+ifdef(`DARWIN',`define(`SYSstabs',`NOstabs')
 		define(`DarwinAssembler',`')
                 define(`CNamesNeedUnderscores',`')
 	        define(`LocalLabelPrefix',`L')
@@ -117,7 +118,10 @@ define(`_emit_COFF_source_line_stab',`
 
 define(`emit_source_line_stab',`
 	ifelse(eval(SYSstabs),
-             eval(BSDstabs),
+              eval(NOstabs),
+              `',
+              eval(SYSstabs),
+              eval(BSDstabs),
   	      `_emit_BSD_source_line_stab($1)',
               eval(SYSstabs),
               eval(ELFstabs),
@@ -161,8 +165,10 @@ define(`__pwd__',substr(pwd0,0,decr(len(pwd0)))`/')
 
 
 define(`_beginfile',`
+        ifelse(eval(SYSstabs),eval(NOstabs),`',`
 	.stabs "__pwd__",N_SO,0,0,StartTextLabel()
 	.stabs "__file__",N_SO,0,0,StartTextLabel()
+')
 ifdef(`PPC64',`
 ifdef(`DARWIN',`
         .machine ppc64
@@ -173,7 +179,9 @@ StartTextLabel():
 ')
 
 define(`_endfile',`
+        ifelse(eval(SYSstabs),eval(NOstabs),`',`
 	.stabs "",N_SO,0,0,EndTextLabel()
+')
 EndTextLabel():
 # __line__
 ')
@@ -188,9 +196,12 @@ $1:
 ifdef(`WINDOWS',`
 	.def	$1;	.scl	2;	.type	32;	.endef
 ',`
+        ifelse(eval(SYSstabs),eval(NOstabs),`',`
         .stabd 68,0,__line__
-')
+')')
+	ifelse(eval(SYSstabs),eval(ELFstabs),`
 	.stabs "$1:F1",36,0,__line__,$1
+')
 	.set func_start,$1
 # __line__ "__file__" 1 ')
 
@@ -212,7 +223,9 @@ define(`_endfn',`
 LocalLabelPrefix`'__func_name`999':
 ifdef(`WINDOWS',`
 ',`
+        ifelse(eval(SYSstabs),eval(NOstabs),`',`
 	.stabs "",36,0,0,LocalLabelPrefix`'__func_name`999'-__func_name
+')
 	.line __line__
 	ifelse(eval(SYSstabs),eval(ELFstabs),`
         .size __func_name,LocalLabelPrefix`'__func_name`999'-__func_name
