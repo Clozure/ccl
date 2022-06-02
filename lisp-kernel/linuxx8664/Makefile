@@ -39,6 +39,8 @@ else
 HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
+# If the linker supports a "-no-pie" option, use it
+NO_PIE = $(shell ($(LD) --help 2>&1 | grep -q -e "-no-pie") && /bin/echo "-Wl,-no-pie")
 
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
@@ -74,7 +76,7 @@ LINK_MAP = ./elf_x86_64.x
 USE_LINK_MAP = # -T ./elf_x86_64.x
 
 ../../lx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile  $(LINK_MAP)
-	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  -m64 $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) $(NO_PIE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
