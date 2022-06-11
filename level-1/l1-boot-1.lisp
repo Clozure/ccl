@@ -68,7 +68,8 @@
     (format nil "~a~a~d" (string-capitalize os) cpu bits)))
 
 (defun lisp-implementation-version ()
-  (%str-cat "Version " (format nil *openmcl-version* (platform-description))))
+  (%str-cat (format nil "~A Version " (lisp-implementation-type))
+            (format nil *openmcl-version* (platform-description))))
 
 
 

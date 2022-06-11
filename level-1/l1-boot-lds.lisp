@@ -68,8 +68,7 @@ Licence, Version 2.0.
 
 (defun listener-function ()
   (unless (or *inhibit-greeting* *quiet-flag*)
-    (format t "~&~A ~A~%"
-	    (lisp-implementation-type)
+    (format t "~&~A~%"
 	    (lisp-implementation-version))
     (unless *did-show-marketing-blurb*
       (write-string *marketing-blurb* t)
