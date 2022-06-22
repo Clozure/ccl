@@ -185,7 +185,6 @@ C(spjump_start):
         _spjump(nmkunwind)
          .globl C(spjump_end)
 C(spjump_end):
-	.org 0x1000
 	
         _endfile
 		

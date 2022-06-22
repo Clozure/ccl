@@ -19,6 +19,7 @@
 #include "bits.h"
 #include "gc.h"
 #include "area.h"
+#include "lisp-exceptions.h"
 #include "threads.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -1251,6 +1252,7 @@ flush_code_vectors_in_range(LispObj *start,LispObj *end)
   unsigned tag,subtag;
   natural nbytes, nwords;
   char *range_start;
+  extern void flush_cache_lines(void *, natural);
 
   while (current != end) {
     header = *current;

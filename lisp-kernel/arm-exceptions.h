@@ -115,15 +115,6 @@ handle_error(ExceptionInformation *, unsigned, unsigned, int*);
 
 typedef char* vector_buf;
 
-void put_altivec_registers(vector_buf);
-void get_altivec_registers(vector_buf);
-
-
-int altivec_available;
-
-
-
-
 #ifdef DARWIN
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGUSR1
 #endif
@@ -172,6 +163,7 @@ invoke_handler_on_main_stack(int, siginfo_t*, ExceptionInformation *, void *, vo
 
 #ifdef USE_SIGALTSTACK
 #define ALTSTACK(handler) altstack_ ## handler
+void setup_sigaltstack(area *);
 #else
 #define ALTSTACK(handler) handler
 #endif
@@ -181,3 +173,5 @@ normalize_tcr(ExceptionInformation *,TCR *, Boolean);
 
 void
 install_signal_handler(int, void*, unsigned);
+
+void enable_fp_exceptions(void);

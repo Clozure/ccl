@@ -2,6 +2,8 @@
 *.*fsl
 *~.*
 
+.DS_Store
+
 # emacs detritus
 *~
 \#*\#

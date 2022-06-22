@@ -200,16 +200,16 @@ _endfn
         __endif
 	
 _exportfn(C(save_fp_context))
-        __(uuo_debug_trap(al))
+        __(uuo_debug_trap(c_al))
 _endfn        	
 _exportfn(C(restore_fp_context))
-        __(uuo_debug_trap(al))
+        __(uuo_debug_trap(c_al))
 _endfn        	
 _exportfn(C(put_vector_registers))
-        __(uuo_debug_trap(al))
+        __(uuo_debug_trap(c_al))
 _endfn        	
 _exportfn(C(get_vector_registers))
-        __(uuo_debug_trap(al))
+        __(uuo_debug_trap(c_al))
 _endfn
 	
         __ifdef(`ANDROID')

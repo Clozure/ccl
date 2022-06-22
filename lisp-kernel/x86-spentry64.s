@@ -72,10 +72,10 @@ _spentry(makes64)
 	__(sarq $fixnumshift,%imm1)
 	__(cmpq %imm1,%imm0)
 	__(jz 0f)
-	__(movd %imm0,%mm0)
+	__(movq %imm0,%imm2)
 	__(movq $two_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(2)))
-	__(movq %mm0,misc_data_offset(%arg_z))
+        __(movq %imm2,misc_data_offset(%arg_z))
 0:	__(repret)
 _endsubp(makes64)	
 
@@ -90,16 +90,16 @@ _startfn(C(makes128))
         /*  %imm0. We'll need to use %imm0 and %imm1 to cons the bignum, and  */
         /*  will need to do some arithmetic (determining significant bigits)  */
         /*  on %imm0 and %imm1 in order to know how large that bignum needs to be.  */
-        /*  Cache %imm0 and %imm1 in %mm0 and %mm1.   */
+        /*  Cache %imm0 and %imm1 in %xmm0 and %xmm1.   */
    
-	__(movd %imm0,%mm0)
-	__(movd %imm1,%mm1)
+	__(movq %imm0,%xmm0)
+	__(movq %imm1,%xmm1)
 	
         /* If %imm1 is just a sign extension of %imm0, make a 64-bit signed integer.   */
 	
 	__(sarq $63,%imm0) 
 	__(cmpq %imm0,%imm1)
-	__(movd %mm0,%imm0)
+	__(movq %xmm0,%imm0)
 	__(je _SPmakes64)
 	
         /* Otherwise, if the high 32 bits of %imm1 are a sign-extension of the  */
@@ -113,13 +113,13 @@ _startfn(C(makes128))
 	__(jz 3f)
 	__(mov $four_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(4)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movq %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movq %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 3:	__(mov $three_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(3)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movd %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movd %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 _endfn
 
@@ -133,38 +133,38 @@ _startfn(C(makeu128))
         /* %imm0. We'll need to use %imm0 and %imm1 to cons the bignum, and  */
         /* will need to do some arithmetic (determining significant bigits)  */
         /* on %imm0 and %imm1 in order to know how large that bignum needs to be.  */
-        /* Cache %imm0 and %imm1 in %mm0 and %mm1.   */
+        /* Cache %imm0 and %imm1 in %xmm0 and %xmm1.   */
 
         /* If the high word is 0, make an unsigned-byte 64 ... 	  */
 	
 	__(testq %imm1,%imm1)
 	__(jz _SPmakeu64)
 	
-	__(movd %imm0,%mm0)
-	__(movd %imm1,%mm1)
+	__(movq %imm0,%xmm0)
+	__(movq %imm1,%xmm1)
 
 	__(js 5f)		/* Sign bit set in %imm1. Need 5 digits   */
 	__(bsrq %imm1,%imm0)
 	__(rcmpb(%imm0_b,$31))
 	__(jae 4f)		/* Some high bits in %imm1.  Need 4 digits   */
 	__(testl %imm1_l,%imm1_l)
-	__(movd %mm0,%imm0)
+	__(movq %xmm0,%imm0)
 	__(jz _SPmakeu64)
 	
 	/* Need 3 digits   */
 	
 	__(movq $three_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(3)))
-	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movd %mm1,misc_data_offset+8(%arg_z))
+	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movd %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 4:	__(movq $four_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(4)))
 	__(jmp 6f)
 5:	__(movq $five_digit_bignum_header,%imm0)
 	__(Misc_Alloc_Fixed(%arg_z,aligned_bignum_size(5)))
-6:	__(movq %mm0,misc_data_offset(%arg_z))
-	__(movq %mm0,misc_data_offset+8(%arg_z))
+6:	__(movq %xmm0,misc_data_offset(%arg_z))
+	__(movq %xmm1,misc_data_offset+8(%arg_z))
 	__(ret)
 _endfn
 
@@ -1316,7 +1316,7 @@ _spentry(nthrowvalues)
 local_label(_nthrowv_nextframe):
 	__(subq $fixnumone,%imm0)
 	__(js local_label(_nthrowv_done))
-	__(movd %imm0,%mm1)
+	__(movq %imm0,%mm1)
 	__(movq rcontext(tcr.catch_top),%temp0)
 	__(movq catch_frame.link(%temp0),%imm1)
 	__(movq catch_frame.db_link(%temp0),%imm0)
@@ -1334,7 +1334,7 @@ local_label(_nthrowv_dont_unbind):
 	__(cmpb $unbound_marker,catch_frame.catch_tag(%temp0))
 	__(je local_label(_nthrowv_do_unwind))
 /* A catch frame.  If the last one, restore context from there.   */
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrowv_skip))
 	__(movq catch_frame.xframe(%temp0),%temp3)
@@ -1365,7 +1365,7 @@ local_label(_nthrowv_skip):
 	__(movq -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))        
         __(movq %imm1,rcontext(tcr.next_tsp))
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrowv_nextframe))
 local_label(_nthrowv_do_unwind):	
 /* This is harder.  Call the cleanup code with the multiple values and   */
@@ -1429,7 +1429,7 @@ local_label(_nthrowv_tpoptest):
 	__(movq (%imm1),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrowv_nextframe))
 local_label(_nthrowv_done):
 	__(movb $0,rcontext(tcr.unwinding))
@@ -1447,7 +1447,7 @@ _spentry(nthrow1value)
 local_label(_nthrow1v_nextframe):
 	__(subq $fixnumone,%imm0)
 	__(js local_label(_nthrow1v_done))
-	__(movd %imm0,%mm1)
+	__(movq %imm0,%mm1)
 	__(movq rcontext(tcr.catch_top),%temp0)
 	__(movq catch_frame.link(%temp0),%imm1)
 	__(movq catch_frame.db_link(%temp0),%imm0)
@@ -1465,7 +1465,7 @@ local_label(_nthrow1v_dont_unbind):
 	__(cmpb $unbound_marker,catch_frame.catch_tag(%temp0))
 	__(je local_label(_nthrow1v_do_unwind))
 /* A catch frame.  If the last one, restore context from there.   */
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(testq %imm0,%imm0)	/* last catch frame ?   */
 	__(jne local_label(_nthrow1v_skip))
 	__(movq catch_frame.xframe(%temp0),%temp3)
@@ -1485,7 +1485,7 @@ local_label(_nthrow1v_skip):
 	__(movq -(tsp_frame.fixed_overhead+fulltag_misc)(%temp0),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))        
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_do_unwind):
 	
@@ -1526,7 +1526,7 @@ __(tra(local_label(_nthrow1v_called_cleanup)))
 	__(movq (%imm1),%imm1)
         __(movq %imm1,rcontext(tcr.save_tsp))
         __(movq %imm1,rcontext(tcr.next_tsp))        
-	__(movd %mm1,%imm0)
+	__(movq %mm1,%imm0)
 	__(jmp local_label(_nthrow1v_nextframe))
 local_label(_nthrow1v_done):
 	__(movb $0,rcontext(tcr.unwinding))
@@ -2213,7 +2213,7 @@ local_label(stack_misc_alloc_alloc_ivector):
          __(windows_cstack_probe(%imm1,%temp0))
         __endif
         __(movq rcontext(tcr.foreign_sp),%stack_temp) 
-	__(movd %stack_temp,%temp1)
+	__(movq %stack_temp,%temp1)
         __(subq %imm1,rcontext(tcr.foreign_sp))
         __(movq rcontext(tcr.foreign_sp),%temp0)
 0:	__(movapd %fpzero,-dnode_size(%temp1))
@@ -3018,7 +3018,7 @@ _endsubp(misc_alloc)
 
 _startfn(C(destbind1))
 	/* Save entry %rsp in case of error   */
-	__(movd %rsp,%mm0)
+	__(movq %rsp,%mm0)
 	/* Extract required arg count.   */
 	__(movzbl %nargs_b,%imm0_l)
         __(testl %imm0_l,%imm0_l)
@@ -3203,7 +3203,7 @@ local_label(badlist):
 	__(movq $XCALLNOMATCH,%arg_y)
 	/* jmp local_label(destructure_error)   */
 local_label(destructure_error):
-	__(movd %mm0,%rsp)		/* undo everything done to the stack   */
+	__(movq %mm0,%rsp)		/* undo everything done to the stack   */
 	__(movq %whole_reg,%arg_z)
 	__(set_nargs(2))
         __(push %ra0)
@@ -3512,18 +3512,18 @@ _spentry(makeu64)
 	__(cmpq %imm0,%imm1)
 	__(je 9f)
 	__(testq %imm0,%imm0)
-	__(movd %imm0,%mm0)
+	__(movq %imm0,%imm2)
 	__(js 3f)
 	/* Make a 2-digit bignum.   */
 	__(movl $two_digit_bignum_header,%imm0_l)
 	__(movl $aligned_bignum_size(2),%imm1_l)
 	__(Misc_Alloc(%arg_z))
-	__(movq %mm0,misc_data_offset(%arg_z))
+	__(movq %imm2,misc_data_offset(%arg_z))
 	__(ret)
 3:	__(movl $three_digit_bignum_header,%imm0_l)
 	__(movl $aligned_bignum_size(3),%imm1_l)
 	__(Misc_Alloc(%arg_z))
-	__(movq %mm0,misc_data_offset(%arg_z))
+	__(movq %imm2,misc_data_offset(%arg_z))
 9:	__(repret)
 _endsubp(makeu64)
 
@@ -5306,95 +5306,11 @@ _spentry(breakpoint)
         __(hlt)
 _endsubp(breakpoint)
 
-
-        __ifdef(`DARWIN')
-        .if 1
-	.globl  C(lisp_objc_personality)
-C(lisp_objc_personality):
-	jmp *lisp_global(objc_2_personality)
-	
-	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
-EH_frame1:
-	.set L$set$12,LECIE1-LSCIE1
-	.long L$set$12	/* Length of Common Information Entry */
-LSCIE1:
-	.long	0x0	/* CIE Identifier Tag */
-	.byte	0x1	/* CIE Version */
-	.ascii "zPLR\0"	/* CIE Augmentation */
-	.byte	0x1	/* uleb128 0x1; CIE Code Alignment Factor */
-	.byte	0x78	/* sleb128 -8; CIE Data Alignment Factor */
-	.byte	0x10	/* CIE RA Column */
-	.byte	0x7
-	.byte	0x9b
-	.long	_lisp_objc_personality+4@GOTPCREL
-	.byte	0x10	/* LSDA Encoding (pcrel) */
-	.byte	0x10	/* FDE Encoding (pcrel) */
-	.byte	0xc	/* DW_CFA_def_cfa */
-	.byte	0x7	/* uleb128 0x7 */
-	.byte	0x8	/* uleb128 0x8 */
-	.byte	0x90	/* DW_CFA_offset, column 0x10 */
-	.byte	0x1	/* uleb128 0x1 */
-	.align 3
-LECIE1:
-        .globl _SPffcall.eh
-_SPffcall.eh:
-        .long LEFDEffcall-LSFDEffcall
-LSFDEffcall:      
-        .long LSFDEffcall-EH_frame1 /* FDE CIE offset */
-        .quad Lffcall-. /* FDE Initial Location */
-        .quad Lffcall_end-Lffcall /* FDE address range */
-        .byte 8 /* uleb128 0x8; Augmentation size */
-        .quad LLSDA1-.           /* Language Specific Data Area */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_setup-Lffcall
-	.byte	0xe	/* DW_CFA_def_cfa_offset */
-	.byte	0x10	/* uleb128 0x10 */
-	.byte	0x86	/* DW_CFA_offset, column 0x6 */
-	.byte	0x2	/* uleb128 0x2 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_setup_end-Lffcall_setup
-	.byte	0xd	/* DW_CFA_def_cfa_register */
-	.byte	0x6	/* uleb128 0x6 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_call_end-Lffcall_call
-	.byte	0x83	/* DW_CFA_offset, column 0x3 */
-	.byte	0x3	/* uleb128 0x3 */
-	.align 3
-LEFDEffcall:
-        .globl _SPffcall_return_registers.eh
-_SPffcall_return_registers.eh:
-        .long LEFDEffcall_return_registers-LSFDEffcall_return_registers
-LSFDEffcall_return_registers:      
-        .long LSFDEffcall_return_registers-EH_frame1 /* FDE CIE offset */
-        .quad Lffcall_return_registers-. /* FDE Initial Location */
-        .quad Lffcall_return_registers_end-Lffcall_return_registers /* FDE address range */
-        .byte 8 /* uleb128 0x8; Augmentation size */
-        .quad LLSDA2-.           /* Language Specific Data Area */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_return_registers_setup-Lffcall_return_registers
-	.byte	0xe	/* DW_CFA_def_cfa_offset */
-	.byte	0x10	/* uleb128 0x10 */
-	.byte	0x86	/* DW_CFA_offset, column 0x6 */
-	.byte	0x2	/* uleb128 0x2 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_return_registers_setup_end-Lffcall_return_registers_setup
-	.byte	0xd	/* DW_CFA_def_cfa_register */
-	.byte	0x6	/* uleb128 0x6 */
-	.byte	0x4	/* DW_CFA_advance_loc4 */
-	.long Lffcall_return_registers_call_end-Lffcall_return_registers_call
-	.byte	0x83	/* DW_CFA_offset, column 0x3 */
-	.byte	0x3	/* uleb128 0x3 */
-	.align 3
-LEFDEffcall_return_registers:
-        .text
-        .endif
-        __endif
-        
 _spentry(unused_5)
         __(hlt)
 Xspentry_end:           
 _endsubp(unused_5)
-        
+
         .data
         .globl C(spentry_start)
         .globl C(spentry_end)
