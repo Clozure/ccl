@@ -88,7 +88,8 @@
       (number-case res
         (ratio           
          (setf (%numerator res) numerator
-               (%denominator res) denominator))
+               (%denominator res) denominator)
+         res)
         (t
          (%make-ratio numerator denominator)))
       (%make-ratio numerator denominator)))
