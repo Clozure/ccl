@@ -775,6 +775,12 @@
 	    (t				; with-simple-restart
 	     (throw tag (values nil t)))))))
 
+(define-condition restart-failure (control-error)
+  ((restart :initarg :restart :reader restart-failure-restart))
+  (:report (lambda (c s)
+             (format s "The ~a restart failed to transfer control dynamically as expected."
+                     (restart-name (restart-failure-restart c))))))
+
 (defun invoke-restart-no-return (restart &rest values)
   (declare (dynamic-extent values))
   (apply #'invoke-restart restart values)
