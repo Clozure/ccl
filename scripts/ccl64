@@ -1,4 +1,7 @@
 #!/bin/sh
+
+set -eu
+
 #
 # Change the definition of CCL_DEFAULT_DIRECTORY below to refer to
 # your Clozure CL installation directory.  The lisp will use this
@@ -8,7 +11,7 @@
 # Any definition of CCL_DEFAULT_DIRECTORY already present in the
 # environment takes precedence over definition made below.
 
-if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
+if [ -z "${CCL_DEFAULT_DIRECTORY:-}" ]; then
   CCL_DEFAULT_DIRECTORY=/usr/local/src/ccl
 fi
 
@@ -18,65 +21,43 @@ fi
 # the following line:
 #OPENMCL_KERNEL=some_name
 
-if [ -z "$OPENMCL_KERNEL" ]; then
-  case `uname -s` in
-    Darwin)
-    case `arch` in
-      ppc*)
-      OPENMCL_KERNEL=dppccl64
-      ;;
-      i386|x86_64)
-      OPENMCL_KERNEL=dx86cl64
-      ;;
-    esac
-    ;;
-    Linux)
-    case `uname -m` in
-      ppc64)
-      OPENMCL_KERNEL=ppccl64
-      ;;
-      x86_64)
-      OPENMCL_KERNEL=lx86cl64
-      ;;
+if [ -z "${OPENMCL_KERNEL:-}" ]; then
+  case "$(uname -s)" in
+    Darwin) case "$(arch)" in
+      ppc*) OPENMCL_KERNEL=dppccl64 ;;
+      i386|x86_64) OPENMCL_KERNEL=dx86cl64 ;;
+      arm64) OPENMCL_KERNEL=dx86cl64 ;;  # Run under Rosetta, for now
       *)
-      echo "Can't determine machine architecture.  Fix this."
-      exit 1
-      ;;
-    esac
-    ;;
-    FreeBSD)
-    case `uname -m` in
-      amd64)
-      OPENMCL_KERNEL=fx86cl64
-      ;;
+        echo "Unsupported architecture"
+        exit 1 ;;
+      esac ;;
+    Linux) case "$(uname -m)" in
+      ppc64) OPENMCL_KERNEL=ppccl64 ;;
+      x86_64) OPENMCL_KERNEL=lx86cl64 ;;
       *)
-      echo "unsupported architecture"
-      exit 1
-      ;;
-    esac
-    ;;
-    SunOS)
-    case `uname -m` in
-      i86pc)
-      OPENMCL_KERNEL=sx86cl64
-      ;;
+        echo "Unsupported architecture"
+        exit 1 ;;
+      esac ;;
+    FreeBSD) case "$(uname -m)" in
+      amd64) OPENMCL_KERNEL=fx86cl64 ;;
       *)
-      echo "unsupported architecture"
-      exit 1
-      ;;
-    esac
-    ;;
+        echo "Unsupported architecture"
+        exit 1 ;;
+    esac ;;
+    SunOS) case "$(uname -m)" in
+      i86pc) OPENMCL_KERNEL=sx86cl64 ;;
+      *)
+        echo "Unsupported architecture"
+        exit 1 ;;
+    esac ;;
     CYGWIN*)
-    OPENMCL_KERNEL=wx86cl64.exe
-    CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY"
-    ;;
+      OPENMCL_KERNEL=wx86cl64.exe
+      CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY" ;;
     *)
-    echo "Can't determine host OS.  Fix this."
-    exit 1
-    ;;
+      echo "Can't determine host OS."
+      exit 1 ;;
   esac
 fi
 
 export CCL_DEFAULT_DIRECTORY
-exec ${CCL_DEFAULT_DIRECTORY}/${OPENMCL_KERNEL} "$@"
-
+exec "${CCL_DEFAULT_DIRECTORY}/${OPENMCL_KERNEL}" "$@"
