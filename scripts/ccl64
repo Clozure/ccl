@@ -2,7 +2,6 @@
 
 set -eu
 
-#
 # Change the definition of CCL_DEFAULT_DIRECTORY below to refer to
 # your Clozure CL installation directory.  The lisp will use this
 # environment variable to set up translations for the CCL: logical
@@ -26,7 +25,14 @@ if [ -z "${OPENMCL_KERNEL:-}" ]; then
     Darwin) case "$(arch)" in
       ppc*) OPENMCL_KERNEL=dppccl64 ;;
       i386|x86_64) OPENMCL_KERNEL=dx86cl64 ;;
-      arm64) OPENMCL_KERNEL=dx86cl64 ;;  # Run under Rosetta, for now
+      arm64)
+        if [ "${CCL_USE_ROSETTA:-0}" = 1 ]; then
+          # Run under the MacOS Rosetta binary translator
+          OPENMCL_KERNEL=dx86cl64
+        else
+          echo "Unsupported architecture"
+          exit 1
+        fi ;;
       *)
         echo "Unsupported architecture"
         exit 1 ;;
