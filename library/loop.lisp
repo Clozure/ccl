@@ -1857,11 +1857,14 @@ collected result will be returned as the value of the LOOP."
 			    (loop-make-variable
 			      (loop-gentemp 'loop-limit-) form indexv-type))))
 	 (:by
-	   (multiple-value-setq (form stepby-constantp stepby)
-             ;;; the by variable must be a positive number (so not zero)
-             (loop-constant-fold-if-possible form `(and ,indexv-type (real (0))) t))
-	   (unless stepby-constantp
-	     (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form `(and ,indexv-type (real (0))))))
+          (let ((by-type (if (listp indexv-type) ; has range limits
+                             (ccl::numeric-ctype-class (ccl::specifier-type indexv-type)) ; ignore any range limits from indexv-type here
+                             indexv-type)))
+            (multiple-value-setq (form stepby-constantp stepby)
+              ;;; the by variable must be a positive number (so not zero)
+              (loop-constant-fold-if-possible form `(and ,by-type (real (0))) t))
+            (unless stepby-constantp
+              (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form `(and ,by-type (real (0)))))))
 	 (t (loop-error
 	      "~S invalid preposition in sequencing or sequence path.~@
 	       Invalid prepositions specified in iteration path descriptor or something?"
