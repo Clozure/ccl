@@ -1841,7 +1841,7 @@ collected result will be returned as the value of the LOOP."
 	  (cond ((eq prep :downfrom) (setq dir ':down))
 		((eq prep :upfrom) (setq dir ':up)))
 	  (multiple-value-setq (form start-constantp start-value)
-	    (loop-constant-fold-if-possible form indexv-type))
+	    (loop-constant-fold-if-possible form))
 	  (setq indexv (loop-make-iteration-variable indexv form indexv-type)))
 	 ((:upto :to :downto :above :below)
 	  (cond ((loop-tequal prep :upto) (setq inclusive-iteration (setq dir ':up)))
@@ -1851,20 +1851,17 @@ collected result will be returned as the value of the LOOP."
 		((loop-tequal prep :below) (setq dir ':up)))
 	  (setq limit-given t)
 	  (multiple-value-setq (form limit-constantp limit-value)
-	    (loop-constant-fold-if-possible form indexv-type))
+	    (loop-constant-fold-if-possible form nil))
 	  (setq endform (if limit-constantp
 			    `',limit-value
 			    (loop-make-variable
-			      (loop-gentemp 'loop-limit-) form indexv-type))))
+			      (loop-gentemp 'loop-limit-) form nil))))
 	 (:by
-          (let ((by-type (if (listp indexv-type) ; has range limits
-                             (ccl::numeric-ctype-class (ccl::specifier-type indexv-type)) ; ignore any range limits from indexv-type here
-                             indexv-type)))
-            (multiple-value-setq (form stepby-constantp stepby)
-              ;;; the by variable must be a positive number (so not zero)
-              (loop-constant-fold-if-possible form `(and ,by-type (real (0))) t))
-            (unless stepby-constantp
-              (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form `(and ,by-type (real (0)))))))
+          (multiple-value-setq (form stepby-constantp stepby)
+            ;;; the by variable must be a positive number (so not zero)
+            (loop-constant-fold-if-possible form `(real (0)) t))
+          (unless stepby-constantp
+            (loop-make-variable (setq stepby (loop-gentemp 'loop-step-by-)) form `(real (0)))))
 	 (t (loop-error
 	      "~S invalid preposition in sequencing or sequence path.~@
 	       Invalid prepositions specified in iteration path descriptor or something?"
@@ -1884,7 +1881,7 @@ collected result will be returned as the value of the LOOP."
 	    (when (or limit-given default-top)
 	      (unless limit-given
 		(loop-make-variable (setq endform (loop-gentemp 'loop-seq-limit-))
-				    nil indexv-type)
+				    nil nil)
 		(push `(setq ,endform ,default-top) *loop-prologue*))
 	      (setq testfn (if inclusive-iteration '> '>=)))
 	    (setq step (if (eql stepby 1) `(1+ ,indexv) `(+ ,indexv ,stepby))))
@@ -1919,7 +1916,7 @@ collected result will be returned as the value of the LOOP."
       '((:from :upfrom :downfrom) (:to :upto :downto :above :below) (:by))
       nil (list (list kwd val)))))
 
-
+;; Seems to be unused
 (defun loop-sequence-elements-path (variable data-type prep-phrases
 				    &key fetch-function size-function sequence-type element-type)
   (multiple-value-bind (indexv indexv-user-specified-p) (named-variable 'index)
