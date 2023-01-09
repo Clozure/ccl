@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#pragma once
+#endif
+
 #define TCR_FLAG_BIT_FOREIGN fixnumshift
 #define TCR_FLAG_BIT_AWAITING_PRESET (fixnumshift+1)
 #define TCR_FLAG_BIT_ALT_SUSPEND (fixnumshift+2)
