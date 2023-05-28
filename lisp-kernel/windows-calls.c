@@ -385,9 +385,9 @@ pipe_read(HANDLE hfile, void *buf, unsigned int count)
       }
     }
     if (navail != 0) {
-      return lisp_standard_read(hfile, buf, count);
+      return lisp_standard_read(hfile, buf, (navail < count) ? navail : count);
     }
-    if (SleepEx(50, TRUE) == WAIT_IO_COMPLETION) {
+    if (SleepEx(1, TRUE) == WAIT_IO_COMPLETION) {
       errno = EINTR;
       return -1;
     }
