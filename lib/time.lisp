@@ -68,18 +68,33 @@
                            -60)
                     (unless toobig (not (zerop (pref tm :tm.tm_isdst)))))))))))
 
+;; Use #_localtime to determine if DST was in effect for the supplied time
+;; but use #_GetTimeZoneInformation to get the DST bias as Windows' struct tm
+;; doesn't include the time's timezone offset as it does on Unix.
+;; Again, as in the Unix version, if the given time won't fit as a signed offset
+;; from the base time, use the base time and assume DST was not in effect.
 #+windows-target
 (defun get-timezone (time)
-  (declare (ignore time))
-  (rlet ((tzinfo #>TIME_ZONE_INFORMATION))
-    (let* ((id (#_GetTimeZoneInformation tzinfo))
-           (minutes-west (pref tzinfo #>TIME_ZONE_INFORMATION.Bias))
-           (is-dst (= id #$TIME_ZONE_ID_DAYLIGHT)))
-      (values (floor (+ minutes-west
-                        (if is-dst
-                          (pref tzinfo #>TIME_ZONE_INFORMATION.DaylightBias)
-                          0)))
-              is-dst))))
+  (let* ((toobig (not (typep time '(signed-byte
+                                    #+32-bit-target 32
+                                    #+64-bit-target 64)))))
+    (when toobig
+      (setq time 0))
+    (rlet ((when :time_t)
+           (tzinfo #>TIME_ZONE_INFORMATION))
+      (setf (pref when :time_t) time)
+      (with-macptrs ((tm (#_localtime when)))
+        (if (%null-ptr-p tm)
+          (values 0 nil)
+          (let* ((id (#_GetTimeZoneInformation tzinfo))
+                 (minutes-west (pref tzinfo #>TIME_ZONE_INFORMATION.Bias))
+                 (is-dst (and (not toobig) (not (zerop (pref tm :tm.tm_isdst))))))
+            (declare (ignore id))
+            (values (floor (+ minutes-west
+                              (if is-dst
+                                  (pref tzinfo #>TIME_ZONE_INFORMATION.DaylightBias)
+                                  0)))
+                    is-dst)))))))
 
 
 
