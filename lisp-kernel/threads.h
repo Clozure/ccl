@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#pragma once
+#include <minwinbase.h>
+#include <time.h>
+#endif
+
 #include <stdlib.h>
 #ifndef WINDOWS
 #include <unistd.h>
@@ -195,7 +201,11 @@ void thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size);
 Boolean create_system_thread(size_t stack_size, 
 			     void* stackaddr,
 #ifdef WINDOWS
-                             unsigned CALLBACK (*start_routine)(void *)
+#ifdef _MSC_VER
+           unsigned (CALLBACK *start_routine)(void *)
+#else
+           unsigned CALLBACK (*start_routine)(void *)
+#endif
 #else
 			     void* (*start_routine)(void *)
 #endif

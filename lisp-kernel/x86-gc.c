@@ -23,7 +23,11 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _MSC_VER
+#include <WinSock2.h>
+#else
 #include <sys/time.h>
+#endif
 
 #ifdef X8632
 natural

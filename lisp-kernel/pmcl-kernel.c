@@ -128,6 +128,9 @@ Boolean use_mach_exception_handling =
 #endif
 
 #ifdef WINDOWS
+#ifdef _MSC_VER
+#include <WinSock2.h>
+#endif
 #include <windows.h>
 #include <stdio.h>
 void
@@ -1136,7 +1139,8 @@ determine_executable_name()
 wchar_t *
 ensure_real_path(wchar_t *path)
 {
-  int bufsize = 256, n;
+  const auto bufsize = 256;
+  int n;
 
   do {
     wchar_t buf[bufsize];

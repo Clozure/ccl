@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#pragma once
+#endif
+
 #define SIGNAL_FOR_PROCESS_INTERRUPT SIGINT
 #ifndef SIGBUS
 #define SIGBUS 10

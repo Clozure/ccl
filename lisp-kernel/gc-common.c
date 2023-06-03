@@ -28,6 +28,10 @@
 #include <sys/time.h>
 #endif
 
+#ifdef _MSC_VER
+#include <WinSock2.h>
+#endif
+
 #ifndef timeradd
 # define timeradd(a, b, result)						      \
   do {									      \
