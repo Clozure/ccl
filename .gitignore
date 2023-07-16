@@ -17,6 +17,8 @@
 /armcl
 /?x86cl
 /?x86cl64
+/wx86cl.exe
+/wx86cl64.exe
 /*headers/
 /*headers64/
 

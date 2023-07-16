@@ -1,5 +1,6 @@
 OUTPUT_FORMAT(pei-x86-64)
-SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
+SEARCH_DIR("=/mingw64/x86_64-w64-mingw32/lib"); SEARCH_DIR("=/mingw64/lib"); SEARCH_DIR("=/usr/local
+/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
 SECTIONS
 {
   /* Make the virtual address and file offset synced if the alignment is
@@ -7,6 +8,11 @@ SECTIONS
   . = SIZEOF_HEADERS;
   . = ALIGN(__section_alignment__);
 
+  /*
+   * Reserve space in low-ish memory for the subprim jump table and
+   * the so-called "nilreg area" (although NIL hasn't been kept in a
+   * register for decades).
+   */
   .spfoo  __image_base__ + __section_alignment__ :
   {
     __spfoo_start__ = . ;
@@ -14,20 +20,31 @@ SECTIONS
     __spfoo_end__ = . ;
   }
 
-  .text  BLOCK(__section_alignment__) :
+  .text  BLOCK(__section_alignment__) : 
   {
-     *(.init)
+    *(.init)
     *(.text)
     *(SORT(.text$*))
      *(.text.*)
     *(.glue_7t)
     *(.glue_7)
     . = ALIGN(8);
-     ___CTOR_LIST__ = .; __CTOR_LIST__ = . ;
-			LONG (-1); LONG (-1);*(.ctors); *(.ctor); *(SORT(.ctors.*));  LONG (0); LONG (0);
-     ___DTOR_LIST__ = .; __DTOR_LIST__ = . ;
-			LONG (-1); LONG (-1); *(.dtors); *(.dtor); *(SORT(.dtors.*));  LONG (0); LONG (0);
-     *(.fini)
+     ___CTOR_LIST__ = .;
+       __CTOR_LIST__ = .;
+       LONG (-1); LONG (-1);
+       *(.ctors);
+       *(.ctor);
+       *(SORT(.ctors.*));
+       LONG (0); LONG (0);
+
+       ___DTOR_LIST__ = .;
+       __DTOR_LIST__ = .;
+       LONG (-1); LONG (-1);
+       *(.dtors);
+       *(.dtor);
+       *(SORT(.dtors.*));
+       LONG (0); LONG (0);
+    *(.fini)
     /* ??? Why is .gcc_exc here?  */
      *(.gcc_exc)
     PROVIDE (etext = .);
@@ -51,7 +68,7 @@ SECTIONS
   .rdata BLOCK(__section_alignment__) :
   {
     *(.rdata)
-             *(SORT(.rdata$*))
+         *(SORT(.rdata$*))
     __rt_psrelocs_start = .;
     *(.rdata_runtime_pseudo_reloc)
     __rt_psrelocs_end = .;
@@ -126,12 +143,18 @@ SECTIONS
     *(SORT(.CRT$XT*))  /* Termination */
     ___crt_xt_end__ = . ;
   }
+  /* Windows TLS expects .tls$AAA to be at the start and .tls$ZZZ to be
+     at the end of the .tls section.  This is important because _tls_start MUST
+     be at the beginning of the section to enable SECREL32 relocations with TLS
+     data.  */
   .tls BLOCK(__section_alignment__) :
   {
     ___tls_start__ = . ;
-    *(.tls)
-    *(.tls$)
-    *(SORT(.tls$*))
+    KEEP (*(.tls$AAA))
+    KEEP (*(.tls))
+    KEEP (*(.tls$))
+    KEEP (*(SORT(.tls$*)))
+    KEEP (*(.tls$ZZZ))
     ___tls_end__ = . ;
   }
   .endjunk BLOCK(__section_alignment__) :
@@ -141,7 +164,7 @@ SECTIONS
     PROVIDE ( _end = .);
      __end__ = .;
   }
-  .rsrc BLOCK(__section_alignment__) :
+  .rsrc BLOCK(__section_alignment__) : 
   {
     *(.rsrc)
     *(SORT(.rsrc$*))
@@ -167,68 +190,202 @@ SECTIONS
   {
     *(.debug_aranges)
   }
+  .zdebug_aranges BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_aranges)
+  }
   .debug_pubnames BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_pubnames)
   }
-  .debug_pubtypes BLOCK(__section_alignment__) (NOLOAD) :
+  .zdebug_pubnames BLOCK(__section_alignment__) (NOLOAD) :
   {
-    *(.debug_pubtypes)
+    *(.zdebug_pubnames)
   }
   /* DWARF 2.  */
   .debug_info BLOCK(__section_alignment__) (NOLOAD) :
   {
-    *(.debug_info) *(.gnu.linkonce.wi.*)
+    *(.debug_info .gnu.linkonce.wi.*)
+  }
+  .zdebug_info BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_info .zdebug.gnu.linkonce.wi.*)
   }
   .debug_abbrev BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_abbrev)
   }
+  .zdebug_abbrev BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_abbrev)
+  }
   .debug_line BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_line)
+  }
+  .zdebug_line BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_line)
   }
   .debug_frame BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_frame*)
   }
+  .zdebug_frame BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_frame*)
+  }
   .debug_str BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_str)
+  }
+  .zdebug_str BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_str)
   }
   .debug_loc BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_loc)
   }
+  .zdebug_loc BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_loc)
+  }
   .debug_macinfo BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_macinfo)
+  }
+  .zdebug_macinfo BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_macinfo)
   }
   /* SGI/MIPS DWARF 2 extensions.  */
   .debug_weaknames BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_weaknames)
   }
+  .zdebug_weaknames BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_weaknames)
+  }
   .debug_funcnames BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_funcnames)
+  }
+  .zdebug_funcnames BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_funcnames)
   }
   .debug_typenames BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_typenames)
   }
+  .zdebug_typenames BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_typenames)
+  }
   .debug_varnames BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_varnames)
   }
+  .zdebug_varnames BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_varnames)
+  }
   /* DWARF 3.  */
+  .debug_pubtypes BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_pubtypes)
+  }
+  .zdebug_pubtypes BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_pubtypes)
+  }
   .debug_ranges BLOCK(__section_alignment__) (NOLOAD) :
   {
     *(.debug_ranges)
   }
+  .zdebug_ranges BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_ranges)
+  }
   /* DWARF 4.  */
   .debug_types BLOCK(__section_alignment__) (NOLOAD) :
   {
-    *(.debug_types) *(.gnu.linkonce.wt.*)
+    *(.debug_types .gnu.linkonce.wt.*)
+  }
+  .zdebug_types BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_types .gnu.linkonce.wt.*)
+  }
+  /* DWARF 5.  */
+  .debug_addr BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_addr)
+  }
+  .zdebug_addr BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_addr)
+  }
+  .debug_line_str BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_line_str)
+  }
+  .zdebug_line_str BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_line_str)
+  }
+  .debug_loclists BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_loclists)
+  }
+  .zdebug_loclists BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_loclists)
+  }
+  .debug_macro BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_macro)
+  }
+  .zdebug_macro BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_macro)
+  }
+  .debug_names BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_names)
+  }
+  .zdebug_names BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_names)
+  }
+  .debug_rnglists BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_rnglists)
+  }
+  .zdebug_rnglists BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_rnglists)
+  }
+  .debug_str_offsets BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_str_offsets)
+  }
+  .zdebug_str_offsets BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_str_offsets)
+  }
+  .debug_sup BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_sup)
+  }
+  /* For Go and Rust.  */
+  .debug_gdb_scripts BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.debug_gdb_scripts)
+  }
+  .zdebug_gdb_scripts BLOCK(__section_alignment__) (NOLOAD) :
+  {
+    *(.zdebug_gdb_scripts)
   }
 }

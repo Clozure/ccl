@@ -13,47 +13,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This makefile is written to be used with the mingw toolchain
-# running in the Cygwin environment or Msys2 environment.
-
-# If running in the Cygwin environment:
-# Install the following Cygwin packages:
-# * make
-# * m4
-# * mingw64-i686-binutils
-# * mingw64-i686-gcc-core
-# * mingw64-i686-headers
-# * mingw64-i686-pthreads
-# * mingw64-i686-runtime
+# This makefile written to be used with the MSYS2 software building
+# platform, which is available from https://www.msys2.org.
 #
-# Accept the dependencies the installation tool may add.
+# MSYS2 provides a number of "environments". For the lisp kernel on
+# Windows/x8632, We want the MINGW32 environment (32-bit x86, MSVCRT C
+# library).
+#
+# After installing MSYS2, open a MINGW32 shell and install these packages
+# with pacman:
+#
+# pacman -S mingw-w64-i686-gcc
+# pacman -S m4 make
+#
+# Accept any required dependencies. This should install all the
+# necessary tools. (If m4 or make are already installed, there's no
+# need to re-install them.)
 
-# If running in the Msys2 environment:
-# Install the following Msys2 packages using pacman -S:
-# * make
-# * m4
-# * mingw-w64-i686-binutils
-# * mingw-w64-i686-crt
-# * mingw-w64-i686-gcc
-# * mingw-w64-i686-headers
-# * mingw-w64-i686-winpthreads
-# Accept the dependencies the installation tool may add.
-# Currently only install make, m4 and mingw-w64-i686-gcc will install other
-# mingw-w64-* dependencies. May change in the future.
+# If git is available, use it to include revision information.
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = rm
 
-ifeq ($(MSYSTEM),)
-CC = i686-w64-mingw32-gcc
-AS = i686-w64-mingw32-as
-LD = i686-w64-mingw32-ld
-else
-CC = /mingw32/bin/i686-w64-mingw32-gcc
-AS = /mingw32/bin/as
-LD = /mingw32/bin/ld
-endif
+# These are expected to be from "/mingw32/bin"
+CC = cc
+AS = as
+LD = ld
 
 M4 = m4
 
@@ -66,16 +52,6 @@ COPT = -O
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-win32.h
-
-# If the linker supports a "--hash-style=" option, use traditional
-# SysV hash tables.  (If it doesn't support that option, assume
-# that traditional hash tables will be used by default.)
-ld_has_hash_style = $(shell $(LD) --help | grep "hash-style=")
-ifeq ($(ld_has_hash_style),)
-HASH_STYLE=
-else
-HASH_STYLE="-Wl,--hash-style=sysv"
-endif
 
 # There may be some confusion about whether or not C symbols have
 # leading underscores or not.  The assembler sources seem to
@@ -117,11 +93,12 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 KSPOBJ = $(SPOBJ)
 all:	../../wx86cl.exe
 
-OSLIBS = -lpsapi -lws2_32
+OSLIBS = -lpsapi -lws2_32 -ladvapi32
 
 ../../wx86cl.exe: $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile
 	$(CC) -m32 -o ../../wx86cl.exe  -Wl,--image-base=0x10000 \
 	-Wl,--enable-auto-import \
+	-no-pie \
 	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 

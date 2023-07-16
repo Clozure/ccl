@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <windows.h>
 #include <psapi.h>
+#include <ntsecapi.h>
 #include <dirent.h>
 #include <signal.h>
 #undef __argv
@@ -1069,5 +1070,18 @@ wchar_t *
 lisp_realpath(wchar_t *filename, wchar_t *resolved_name)
 {
     return NULL;
+}
+
+/*
+ * This is a kludge to ensure that advapi32.dll is linked with the
+ * lisp kernel.  Lisp's RNG needs to call SystemFunction036 aka
+ * RtlGenRandom from that library.
+ */
+void
+reference_advapi32()
+{
+  char buf[4];
+  ULONG len = sizeof(buf);
+  SystemFunction036(&buf, len);
 }
 

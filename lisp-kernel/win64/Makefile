@@ -13,50 +13,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This makefile is written to be used with the mingw toolchain
-# running in the Cygwin environment or Msys2 environment.
-
-# If running in the Cygwin environment:
-# Install the following Cygwin packages:
-# * make
-# * m4
-# * mingw64-x86_64-binutils
-# * mingw64-x86_64-gcc-core
-# * mingw64-x86_64-headers
-# * mingw64-x86_64-pthreads
-# * mingw64-x86_64-runtime
+# This makefile written to be used with the MSYS2 software building
+# platform, which is available from https://www.msys2.org.
 #
-# Accept the dependencies the installation tool may add.
+# MSYS2 provides a number of "environments". For the lisp kernel on
+# Windows/x8664, we want the MINGW64 environment (64-bit x86, MSVCRT C
+# library).
+#
+# The reason for using the MSVCRT C library is that the interface
+# databases used by CCL for the #_ reader macro and friends are built
+# from MSVCRT headers.
+#
+# After installing MSYS2, open a MINGW64 shell and install these packages
+# with pacman:
+#
+# pacman -S mingw-w64-x86_64-gcc
+# pacman -S m4 make
+#
+# Accept any required dependencies. This should install all the
+# necessary tools. (If m4 or make are already installed, there's no
+# to re-install them.)
 
-# If running in the Msys2 environment:
-# Install the following Msys2 packages using pacman -S:
-# * make
-# * m4
-# * mingw-w64-x86_64-binutils
-# * mingw-w64-x86_64-crt
-# * mingw-w64-x86_64-gcc
-# * mingw-w64-x86_64-headers
-# * mingw-w64-x86_64-winpthreads
-# Accept the dependencies the installation tool may add.
-# Currently only install make, m4 and mingw-w64-x86_64-gcc will install other
-# mingw-w64-* dependencies. May change in the future.
-# Running make using msys2-installation-directory/mingw64.exe, not msys2.exe.
+# If git is available, use it to include revision information.
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 VPATH = ../
 RM = rm
-# gcc64, as64: until there's a real win64 gcc, assume that gcc and gas
-# are installed under these names
 
-ifeq ($(MSYSTEM),)
-CC = x86_64-w64-mingw32-gcc
-AS = x86_64-w64-mingw32-as
-LD = x86_64-w64-mingw32-ld
-else
-CC = /mingw64/bin/x86_64-w64-mingw32-gcc
-AS = /mingw64/bin/as
-LD = /mingw64/bin/ld
-endif
+# These are expected to be from "/mingw64/bin"
+CC = cc
+AS = as
+LD = ld
 
 M4 = m4
 
@@ -124,8 +111,7 @@ OSLIBS = -lpsapi -lws2_32 -static -lpthread
 
 
 ../../wx86cl64.exe:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile pei-x86-64.x
-	$(CC) -Wl,--image-base=0x10000 -Wl,-script=pei-x86-64.x -m64 $(CDEBUG)   $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
-
+	$(CC) -Wl,--image-base=0x10000 -Wl,-script=pei-x86-64.x -m64 -no-pie $(CDEBUG)   $(HASH_STYLE) -o $@ $(USE_LINK_MAP) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
