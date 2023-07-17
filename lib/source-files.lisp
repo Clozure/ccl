@@ -462,7 +462,11 @@ The returned list is guaranteed freshly consed (ie suitable for nconc'ing)."
              (if (and (find-class 'xref-entry nil)
                       (xref-entry-p name))
                (setq implicit-type (xref-entry-type name) implicit-name (xref-entry-full-name name))
-               (setq implicit-type t implicit-name name)))))
+               (setq implicit-type t implicit-name
+                     (if (and (consp name) ; ensure things work for functions internal to methods and functions
+                              (eql :INTERNAL (car name)))
+                         (car (last name)) ; handles anonymous :INTERNAL as well as named :INTERNAL (i.e. flet and labels)
+                         name))))))
         (setq implicit-dt-class (class-of (definition-type-instance implicit-type)))
         (with-lock-grabbed (*source-files-lock*)
           (loop for (nil . dt) in *definition-types*
