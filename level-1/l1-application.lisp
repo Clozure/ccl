@@ -37,7 +37,7 @@
 (defvar *standard-version-argument*
   (make-command-line-argument
    :keyword :version
-   :help-string "print (LISP-IMPLEMENTATION-VERSION) and exit"
+   :help-string "print version information and exit"
    :option-char #\V
    :long-name "version"))
 
@@ -192,7 +192,8 @@ listener thread (if that concept makes sense); return NIL otherwise."
 (defmethod application-version-string ((a application))
   "Return a string which (arbitrarily) represents the application version.
 Default version returns Clozure CL version info."
-  (lisp-implementation-version))
+  (format nil "~a ~a" (lisp-implementation-type)
+          (lisp-implementation-version)))
 
 (defmethod application-ui-operation ((a application) operation &rest args)
   (let* ((ui-object (application-ui-object a)))
