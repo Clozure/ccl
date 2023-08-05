@@ -353,7 +353,7 @@
               (! nfp-store-unboxed-word reg offset)))
         (#. memspec-nfp-type-double-float
             (if nested
-              (! nfp-store-unboxed-double-float-nested reg offset)
+              (! nfp-store-double-float-nested reg offset)
               (! nfp-store-double-float reg offset)))
         (#. memspec-nfp-type-single-float
             (if nested
