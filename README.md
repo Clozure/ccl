@@ -15,4 +15,4 @@ If you want to run the development version of CCL, please see https://github.com
 
 To report a bug or request an enhancement, please make an issue at https://github.com/Clozure/ccl/issues.
 
-If you run into problems, please send mail to openmcl-devel@clozure.com, ask on #ccl on freenode, or create an issue here, especially if you think you have found a bug.
+If you run into problems, please send mail to openmcl-devel@clozure.com, ask on #ccl on libera.chat, or create an issue here, especially if you think you have found a bug.
