@@ -56,7 +56,7 @@ ifdef(`LINUX',`define(`SYSstabs',`ELFstabs')
                define(`rTOC',`r2')', `
 	       define(`EABI',`')')')
 
-ifdef(`FREEBSD',`define(`SYSstabs',`ELFstabs')
+ifdef(`FREEBSD',`define(`SYSstabs',`NOstabs')
 	       define(`HaveWeakSymbols',`')
 	       define(`LocalLabelPrefix',`.L')
 	       define(`MacroLabelPrefix',`.L__')
