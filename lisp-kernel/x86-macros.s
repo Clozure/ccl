@@ -652,14 +652,6 @@ define(`check_pending_interrupt',`
 macro_label(done):
 ')')
 
-/*  On AMD hardware (at least), a one-byte RET instruction should be */
-/*  prefixed with a REP prefix if it (a) is the target of a  */
-/*  branch or (b) immediately follows a conditional branch not taken. */
-define(`repret',`
-        __(.byte 0xf3)
-        __(ret)
-')
-
 ifdef(`X8632',`
 define(`regnum',`ifelse($1, `%eax', `0',
        $1, `%ecx', `1',

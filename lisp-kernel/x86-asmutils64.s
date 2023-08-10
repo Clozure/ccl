@@ -29,7 +29,7 @@ _exportfn(C(flush_cache_lines))
 	__(addq %carg2,%carg0)
 	__(subq $1,%carg1)
 2:	__(jg 1b)	
-	__(repret)
+	__(ret)
 _endfn
 
 _exportfn(C(current_stack_pointer))
@@ -288,6 +288,6 @@ _exportfn(C(zero_dnodes))
         __(lea 16(%carg0),%carg0)
         __(subq $1,%carg1)
 1:      __(jne 0b)
-        __(repret)
+        __(ret)
 _endfn        
 	_endfile

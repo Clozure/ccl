@@ -1560,7 +1560,7 @@
 (define-x8664-vinsn (return-or-fix-overflow :jumpLR)(()
                                             ())
   (jo :fix)
-  (:byte #xf3) (ret)
+  (ret)
   :fix
   (jmp (:@ .SPfix-overflow)))
 

@@ -291,7 +291,7 @@ _exportfn(C(zero_dnodes))
         __(lea dnode_size(%edx),%edx)
         __(subl $1,%ecx)
 1:      __(jne 0b)
-        __(repret)
+        __(ret)
 _endfn        
         _endfile
 
