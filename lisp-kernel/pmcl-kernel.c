@@ -1904,7 +1904,9 @@ main
     setvbuf(dbgout, NULL, _IONBF, 0);
     init_winsock();
     init_windows_io();
+#ifndef TCR_IN_GPR
     reserve_tls_slots();
+#endif
     utf_16_argv = CommandLineToArgvW(GetCommandLineW(),&wide_argc);
   }
 #endif
