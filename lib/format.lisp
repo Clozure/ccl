@@ -1960,7 +1960,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (format-error "incompatible values for k and d")))
       (when (not exp) (setq exp (accurate-scale-exponent (abs number))))
       AGAIN
-      (let* ((expt (- exp 1 #|default value of k|#))
+      (let* ((expt (- exp (if (and d (not w)) 1 k)))
              (estr (let ((*print-base* 10))
                      (princ-to-string (abs expt))))
              (elen (max (length estr) (or e 0)))
@@ -1971,7 +1971,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (if w
           (progn 
           (setq fwidth (if d 
-                         (if (> k 0)(+ d 2)(+ d k 1))
+                         (if (> k 0)(+ d 2)(+ d k 2))
                          (if (> k 0) spaceleft (+ spaceleft k))))
           (when (minusp exp) ; i don't claim to understand this
             (setq fwidth (- fwidth exp))
