@@ -1971,11 +1971,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (if w
           (progn 
           (setq fwidth (if d 
-                         (if (> k 0)(+ d 2)(+ d k 2))
+                         (if (> k 0)(+ d 2)(+ d k 1))
                          (if (> k 0) spaceleft (+ spaceleft k))))
           (when (minusp exp) ; i don't claim to understand this
             (setq fwidth (- fwidth exp))
-            (when (< k 0) (setq fwidth (1- fwidth)))))          
+            ;(when (< k 0) (setq fwidth (1- fwidth)))
+            ))
           (when (and d  (not (zerop number))) ; d and no w
             (setq scale (- 2  k exp))))  ; 2 used to be 1  - 5/31
         (when (or (and w e ovf (> elen e))(and w fwidth (not (plusp fwidth))))
@@ -2049,26 +2050,26 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                 (write-char #\0 stream)))
             (stream-write-entire-string stream estr))))))
 #|
-; (format t "~7,3,,-2e" 8.88) s.b. .009e+3 
+; (format t "~7,3,,-2e" 8.88) ; ".009E+3"
 ; (format t "~10,5,,2e" 8.888888888) ; "88.8889E-1"
 ; (format t "~10,5,,-2e" 8.88)   "0.00888E+3"
 ; (format t "~10,5,,-2e" .00123445) ; "0.00123E+0"
 ; (format t "~10,5,,-3e" .00123445) ; "0.00012E+1"
-; (format t "~10,,,-2e" .123445)
-; (format t "~10,5,,2e" .0012349999e-4)
-; (format t "~10,5,,2e" 9.9999999)
-; (format t "~10,5,,2e" 0.0)
-; (format t "~10,5,,0e" 40000000.0)
-; (format t "~10,5,,2e" 9.9999999)
-; (format t "~7,,,-2e" 8.88) s.b. .009e+3 ??
-; (format t "~10,,,2e" 8.888888)
-; (format t "~10,,,-2e" 8.88)
-; (format t "~10,,,-2e" 0.0)
-; (format t "~10,,,2e" 0.0) 
-; (format t "~10,,,2e" 9.9999999)
-; (format t "~10,,,2e" 9.9999999e100)
-; (format t "~10,5,3,2,'xe" 10e100)
-; (format t "~9,3,2,-2e" 1100.0)
+; (format t "~10,,,-2e" .123445) ; ".001234E+2"
+; (format t "~10,5,,2e" .0012349999e-4) ; "12.3500E-8"
+; (format t "~10,5,,2e" 9.9999999) ; "10.0000E+0"
+; (format t "~10,5,,2e" 0.0) ; "00.0000E-2" Acceptable
+; (format t "~10,5,,0e" 40000000.0) ; "0.40000E+8"
+; (format t "~10,5,,2e" 9.9999999) ; "10.0000E+0"
+; (format t "~7,,,-2e" 8.88) ; ".009E+3"
+; (format t "~10,,,2e" 8.888888) ; "88.8889E-1"
+; (format t "~10,,,-2e" 8.88) ; "0.00888E+3"
+; (format t "~10,,,-2e" 0.0) ; "  0.000E+2" Acceptable
+; (format t "~10,,,2e" 0.0) ; "   00.0E-2" Acceptable
+; (format t "~10,,,2e" 9.9999999) ; "   10.0E+0"
+; (format t "~10,,,2e" 9.9999999e100) ; Error
+; (format t "~10,5,3,2,'xe" 10e100) ; Error
+; (format t "~9,3,2,-2e" 1100.0) ; "0.001E+06"
 (defun foo (x)
   (format nil
           "~9,2,1,,'*e|~10,3,2,2,'?,,'$e|~9,3,2,-2,'%@e|~9,2e"
