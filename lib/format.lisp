@@ -1960,25 +1960,23 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (format-error "incompatible values for k and d")))
       (when (not exp) (setq exp (accurate-scale-exponent (abs number))))
       AGAIN
-      (let* ((expt (- exp (if (and d (not w)) 1 k)))
+      (let* ((expt (- exp k))
              (estr (let ((*print-base* 10))
                      (princ-to-string (abs expt))))
              (elen (max (length estr) (or e 0)))
              (spaceleft (if w (- w 2 elen) nil))
-             (fwidth) scale)
+             (fwidth))
         (when (and w (or atsign (minusp (float-sign number)))) ; 5/25
           (setq spaceleft (1- spaceleft)))
-        (if w
+        (if (or w d)
           (progn 
           (setq fwidth (if d 
                          (if (> k 0)(+ d 2)(+ d k 1))
                          (if (> k 0) spaceleft (+ spaceleft k))))
           (when (minusp exp) ; i don't claim to understand this
             (setq fwidth (- fwidth exp))
-            ;(when (< k 0) (setq fwidth (1- fwidth)))
-            ))
-          (when (and d  (not (zerop number))) ; d and no w
-            (setq scale (- 2  k exp))))  ; 2 used to be 1  - 5/31
+            ; (when (< k 0) (setq fwidth (1- fwidth)))
+            )))
         (when (or (and w e ovf (> elen e))(and w fwidth (not (plusp fwidth))))
           ;;exponent overflow
           (dotimes (i w) (declare (fixnum i)) (write-char ovf stream))
@@ -1987,10 +1985,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
             (setq fwidth nil)))
         (when (not string)
           (multiple-value-bind (new-string before-pt) (flonum-to-string number fwidth 
-                                                                        (if (not fwidth) d)
-                                                                        (if (not fwidth) scale))
+                                                                        (if (not fwidth) d))
             (setq string new-string)
-            (when scale (setq before-pt (- (+ 1 before-pt) k scale))) ; sign right?            
             (when (neq exp before-pt)
               ;(print (list 'agn exp before-pt))
               ;(setq string new-string)
