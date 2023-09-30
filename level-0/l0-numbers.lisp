@@ -660,7 +660,7 @@
                                                                (p1 (*-2-into t2 t3)))
                                  (let ((nd (if (eql t2 1) t3 p1)))
                                    (if (eql nd 1)
-                                       nn
+                                       (maybe-copy-bignum nn)
                                        (%maybe-make-ratio (maybe-copy-bignum nn) (maybe-copy-bignum nd) res)))))))))))
              (integer (subtract-ratio-int x y))
              (double-float (rat-dfloat - x y))
