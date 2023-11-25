@@ -207,7 +207,7 @@
                     (qualifier (if (eql subtag target::subtag-bignum)
                                  "32-bit "
                                  "")))
-               (format s "Cannot allocate a ~s with ~d elements.~&Objects of type ~s can can have at most ~&~d ~aelements in this implementation."
+               (format s "Cannot allocate a ~s with ~d elements.~&Objects of type ~s can have at most ~&~d ~aelements in this implementation."
                        typename
                        element-count
                        (copy-tree typename)
