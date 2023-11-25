@@ -62,7 +62,7 @@ A32 = $(shell ($(AS) --help -v 2>&1 | grep -q -e "-a32") && /bin/echo "-a32")
 .s.o:
 	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(A32) $(ASFLAGS) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -march=armv7-a $(FLOAT_ABI_OPTION) $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) -marm -march=armv7-a -mfpu=vfp $(FLOAT_ABI_OPTION) $(WFORMAT)  -o $@
 
 SPOBJ = pad.o  arm-spentry.o
 ASMOBJ = arm-asmutils.o imports.o
