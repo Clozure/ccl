@@ -1656,10 +1656,10 @@
     (#_NSRectFill bounds)
     (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.3333 1.0))
     ;; Draw borders on top and bottom.
-    (ns:with-ns-rect (r 0 0.5 (ns:ns-rect-width bounds) 0.5)
+    (ns:with-ns-rect (r 0 0 (ns:ns-rect-width bounds) 0.5)
       (#_NSRectFill r))
     (ns:with-ns-rect (r 0 (- (ns:ns-rect-height bounds) 0.5)
-			(ns:ns-rect-width bounds) (- (ns:ns-rect-height bounds) 0.5))
+                        (ns:ns-rect-width bounds) 0.5)
       (#_NSRectFill r))
     (draw-modeline-string self)
     (#/restoreGraphicsState context)))
