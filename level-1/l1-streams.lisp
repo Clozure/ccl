@@ -3560,9 +3560,9 @@
 
 (defmethod stream-listen ((s fundamental-character-input-stream))
   (let* ((ch (stream-read-char-no-hang s)))
-    (when (and ch (not (eq ch :eof)))
-      (stream-unread-char s ch))
-    ch))
+    (and (not (null ch))
+	 (not (eq ch :eof))
+	 (progn (stream-unread-char stream ch) t))))
 
 (defmethod stream-clear-input ((s fundamental-character-input-stream))
   )
