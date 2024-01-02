@@ -12,6 +12,209 @@
 ;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 ;;; See the License for the specific language governing permissions and
 ;;; limitations under the License.
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require "ARM64-ARCH"))
+
+(in-package "ARM64")
+
+(defun count-trailing-zeros-64 (u64)
+  (do* ((i 0 (1+ i)))
+       ((or (= i 64) (logbitp i u64))
+        i)
+    (declare (fixnum i))))
+
+(defun count-leading-zeros-64 (u64)
+  (do* ((count 0 (1+ count))
+        (i 63 (1- i)))
+       ((or (= count 64) (logbitp i u64))
+        count)
+    (declare (fixnum count i))))
+
+(defun count-leading-zeros-32 (u32)
+  (do* ((count 0 (1+ count))
+        (i 31 (1- i)))
+       ((or (= count 32) (logbitp i u32))
+        count)
+    (declare (fixnum count i))))
+
+#|
+(defun test-ctz ()
+  (let* ((n #xffffffffffffffff))
+    (loop for i from 0 to 64 do
+          (format t "~16,'0x: " n)
+          (format t "~d~%" (count-trailing-zeros-64 n))
+          (setq n (ldb (byte 64 0) (ash n 1))))))
+
+(defun test-clz ()
+  (let* ((all-ones #xffffffffffffffff)
+         (n all-ones))
+    (loop for i from 0 to 64 do
+          (format t "~16,'0x: " n)
+          (format t "~2d~%" (count-leading-zeros-64 n))
+          (setq n (ldb (byte 64 0) (ash n -1))))))
+|#
+
+(defun clear-trailing-ones-64 (u64)
+  (ldb (byte 64 0) (logand u64 (1+ u64))))
+
+(defun rotate-right-64 (u64 n)
+  (let* ((right (logand n 63))
+         (left (logand (- n) 63)))
+    (logior (ldb (byte 64 0) (ash u64 (- right)))
+            (ldb (byte 64 0) (ash u64 left)))))
+
+;;; Adapted from https://dougallj.wordpress.com/2021/10/30/bit-twiddling-optimising-aarch64-logical-immediate-encoding-and-decoding/
+
+(defun %encode-logical-immediate (u64)
+  ;; Consider an ARM64 logical immediate as a pattern of "o" ones preceded
+  ;; by "z" more-significant zeroes, repeated to fill a 64-bit integer.
+  ;; o > 0, z > 0, and the size (o + z) is a power of two in [2,64]. This
+  ;; part of the pattern is encoded in the fields "imms" and "N".
+  ;;
+  ;; "immr" encodes a further right rotate of the repeated pattern, allowing
+  ;; a wide range of useful bitwise constants to be represented.
+  ;;
+  ;; (The spec describes the "immr" rotate as rotating the "o + z" bit
+  ;; pattern before repeating it to fill 64-bits, but, as it's a repeating
+  ;; pattern, rotating afterwards is equivalent.)
+  ;;
+  ;; This encoding is not allowed to represent all-zero or all-one values,
+  ;; which must have been excluded prior to calling this function,
+  ;;
+  ;; To detect an immediate that may be encoded in this scheme, we first
+  ;; remove the right-rotate, by rotating such that the least significant
+  ;; bit is a one and the most significant bit is a zero.
+  ;;
+  ;; We do this by clearing any trailing one bits, then counting the
+  ;; trailing zeroes. This finds an "edge", where zero goes to one.
+  ;; We then rotate the original value right by that amount, moving
+  ;; the first one to the least significant bit.
+  (let* ((rotation (count-trailing-zeros-64 (clear-trailing-ones-64 u64)))
+         (normalized (rotate-right-64 u64 (logand rotation 63)))
+         ;; Now we have normalized the value, and determined the
+         ;; rotation, we can determine "z" by counting the leading
+         ;; zeroes, and "o" by counting the trailing ones. (These will
+         ;; both be positive, as we already rejected 0 and ~0, and
+         ;; rotated the value to start with a zero and end with a
+         ;; one.)
+         (zeros (count-leading-zeros-64 normalized))
+         (ones (count-trailing-zeros-64 (ldb (byte 64 0) (lognot normalized))))
+         (size (+ zeros ones)))
+    ;; Detect the repeating pattern (by comparing every repetition to the
+    ;; one next to it, using rotate).
+    (if (/= (rotate-right-64 u64 (logand size 63)) u64)
+      nil
+      ;; We do not need to further validate size to ensure it is a
+      ;; power of two between 2 and 64. The only "minimal" patterns
+      ;; that can repeat to fill a 64-bit value must have a length
+      ;; that is a factor of 64 (i.e. it is a power of two in the
+      ;; range [1,64]). And our pattern cannot be of length one (as we
+      ;; already rejected 0 and ~0).
+      ;;
+      ;; By "minimal" patterns I refer to patterns which do not
+      ;; themselves contain repetitions. For example, '010101' is a
+      ;; non-minimal pattern of a non-power-of-two length that can
+      ;; pass the above rotational test. It consists of the minimal
+      ;; pattern '01'. All our patterns are minimal, as they contain
+      ;; only one contiguous run of ones separated by at least one
+      ;; zero.
+      ;;
+      ;; Finally, we encode the values. "rotation" is the amount we
+      ;; rotated right by to "undo" the right-rotate encoded in immr,
+      ;; so must be negated.
+      ;;
+      ;; size 2:  N=0 immr=00000r imms=11110s
+      ;; size 4:  N=0 immr=0000rr imms=1110ss
+      ;; size 8:  N=0 immr=000rrr imms=110sss
+      ;; size 16: N=0 immr=00rrrr imms=10ssss
+      ;; size 32: N=0 immr=0rrrrr imms=0sssss
+      ;; size 64: N=1 immr=rrrrrr imms=ssssss
+      (let* ((immr (logand (- rotation) (1- size)))
+             (imms (logior (- (ash size 1))
+                           (1- ones)))
+             (n (ash size (- 6))))
+        (logior (ash n 12) (ash immr 6) (ldb (byte 6 0) imms))))))
+
+(defun encode-logical-immediate (n)
+  "Return a 13 bit encoding of n, or NIL if it can't be encoded."
+  (let* ((u64 (ldb (byte 64 0) n))
+         (u64-inverted (ldb (byte 64 0) (lognot u64))))
+    (if (or (/= n u64)                  ;n too big
+            (zerop u64)                 ;can't encode all zeros...
+            (zerop u64-inverted))       ;...or all ones
+      nil
+      (%encode-logical-immediate u64))))
+
+;;; Form of an encoded logical immediate:
+;;;
+;;;      1
+;;;  2 1 0 9 8 7 6 5 4 3 2 1 0
+;;; +-+-+-+-+-+-+-+-+-+-+-+-+-+
+;;; |N|   immr    |    imms   |
+;;; +-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+(defconstant mask-lookup
+  #(#xffffffffffffffff                  ;size = 64
+    #x00000000ffffffff                  ;size = 32
+    #x0000ffff0000ffff                  ;size = 16
+    #x00ff00ff00ff00ff                  ;size = 8
+    #x0f0f0f0f0f0f0f0f                  ;size = 4
+    #x3333333333333333))                ;size = 2
+
+(defun decode-logical-immediate (imm)
+  (let* ((n (ldb (byte 1 12) imm))
+         (immr (ldb (byte 6 6) imm))
+         (imms (ldb (byte 6 0) imm))
+         (pattern (logior (ash n 6) (logand (lognot imms) #x3f))))
+    (if (zerop (logand pattern (1- pattern)))
+      nil
+      (let* ((leading-zeros (count-leading-zeros-32 pattern))
+             (imms-mask (ash #x7fffffff (- leading-zeros)))
+             (mask (aref mask-lookup (- leading-zeros 25)))
+             (s (logand (1+ imms) imms-mask)))
+        (rotate-right-64 (logxor mask (ash mask s)) immr)))))
+
+#|
+(defun all-logical-immediates ()
+  "Return a list of all possible encoded logical immediates."
+  ;; https://gist.github.com/dinfuehr/9e1c2f28d0f912eae5e595207cb835c2
+  (flet ((encode-imms (size length)
+           (logior length (ecase size
+                            (2  #b111100)
+                            (4  #b111000)
+                            (8  #b110000)
+                            (16 #b100000)
+                            ((32 64) #b000000)))))
+    (let ((results nil))
+      (dolist (size '(2 4 8 16 32 64))
+        (loop for length from 0 below (1- size) do
+              (loop for rotation from 0 below size do
+                    (let ((n (if (= size 64) 1 0))
+                          (immr rotation)
+                          (imms (encode-imms size length)))
+                      (push (logior (ash n 12)
+                                    (ash immr 6)
+                                    (ldb (byte 6 0) imms))
+                            results)))))
+      (nreverse results))))
+
+(defun test-logical-immediate-encode-decode (&optional show-values)
+  (let ((values (all-logical-immediates)))
+    (assert (= (length values) 5334))
+    (dolist (val values t)
+      (let ((decoded (decode-logical-immediate val)))
+        (assert (not (null decoded)))
+        (assert (= val (encode-logical-immediate decoded)))
+        (when show-values
+          (let ((n (ldb (byte 1 12) val))
+                (immr (ldb (byte 6 6) val))
+                (imms (ldb (byte 6 0) val)))
+            (format t "~&~(~16,'0x~) ~64,'0b N=~b immr=~6,'0b imms=~6,'0b" decoded decoded
+                    n immr imms)))))))
+|#
+
 (defparameter *arm64-operand-qualifiers*
   '(
     nil
