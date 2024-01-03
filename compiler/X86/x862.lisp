@@ -2802,7 +2802,7 @@
                       (! trap-unless-complex-single-float result-reg))
                     (! get-complex-single-float reg result-reg)
                     reg))
-                 ((:s64-vector :fixnum-vector)
+                 ((:signed-64-bit-vector :fixnum-vector)
                   (let* ((reg (make-unwired-lreg next-imm-target :mode hard-reg-class-gpr-mode-s64)))
                     (if (eq type-keyword :fixnum-vector)
                       (progn
