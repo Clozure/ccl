@@ -262,6 +262,34 @@
 (defmacro encode-arm64-operand-qualifiers (list)
   (mapcar #'%encode-arm64-operand-qualifier list))
 
+(defparameter *arm64-condition-names*
+  '(("eq" . 0)                          ;equal
+    ("ne" . 1)                          ;not equal
+    ("cs" . 2) ("hs" . 2)               ;carry set, unsigned higher or same
+    ("cc" . 3) ("lo" . 3)               ;carry clear, unsigned lower
+    ("mi" . 4)                          ;minus, negative
+    ("pl" . 5)                          ;plus, positive or zero
+    ("vs" . 6)                          ;overflow
+    ("vc" . 7)                          ;no overflow
+    ("hi" . 8)                          ;unsigned higher
+    ("ls" . 9)                          ;unsigned lower or same
+    ("ge" . 10)                         ;signed >=
+    ("lt" . 11)                         ;signed <
+    ("gt" . 12)                         ;signed >
+    ("le" . 13)                         ;signed <=
+    ("al" . 14)                         ;always
+    ("nv" . 15)))                       ;identical to always
+
+(defun lookup-arm64-condition-name (name)
+  (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
+
+(defun lookup-arm64-condition-value (val)
+  (car (rassoc val *arm64-condition-names* :test #'eq)))
+
+(defun need-arm64-condition-name (name)
+  (or (lookup-arm64-condition-name name)
+      (error "Unknown ARM64 condition name ~s." name)))
+
 
 (defstruct arm64-opcode
   name
@@ -1138,3 +1166,5 @@
  
 
   )
+
+(provide "ARM64-ASM")
