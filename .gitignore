@@ -9,6 +9,9 @@
 \#*\#
 .\#*
 
+TAGS
+tags
+
 /.gdb*
 
 /*.image
