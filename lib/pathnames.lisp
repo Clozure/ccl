@@ -281,16 +281,17 @@
 			       :host (pathname-host pathname)
 			       :device (pathname-device pathname)
 			       :directory (subseq dir 0 i))))
-		 (unless (probe-file newpath)
+		 (unless (directoryp newpath)
 		   (let ((namestring (native-translated-namestring newpath)))
 		     (when verbose
 		       (format *standard-output* "~&Creating directory: ~A~%"
 			       namestring))
 		     (%mkdir namestring mode)
-		     (unless (probe-file newpath)
+		     (unless (directoryp newpath)
 		       (error 'file-error
 			      :pathname namestring
-			      :error-type "Can't create directory ~S."))
+			      :error-type (format nil "Can't create directory ~~S~@[, since a file by that name exists and is not a directory~]"
+						  (probe-file newpath))))
 		     (setf created-p t)))))
       (values pathspec created-p))))
 
