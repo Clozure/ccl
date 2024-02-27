@@ -586,7 +586,8 @@ image."
 
 (defun nearest-source-note (note)
   (loop for n = note then (code-note-parent-note n)
-        thereis (and n (code-note-source-note n))))
+        while n
+        thereis (code-note-source-note n)))
 
 (defun code-note-emitted-parent (note)
   (loop while (setq note (code-note-parent-note note))
