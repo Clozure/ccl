@@ -4789,7 +4789,8 @@
     (< idx end)))
 
 (defmethod stream-clear-input ((s string-input-stream))
-  (basic-stream-ioblock s)
+  (let ((ioblock (basic-stream-ioblock s)))
+    (setf (string-input-stream-ioblock-index ioblock) (string-input-stream-ioblock-end ioblock)))
   nil)
 
 (defun string-input-stream-character-read-vector (ioblock vector start end)
