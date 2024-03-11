@@ -580,7 +580,11 @@
                      (file-error-pathname c)))))
 
 (define-condition simple-file-error (simple-condition file-error)
-  ()
+  ((errno
+    :type (or integer null)
+    :initarg :errno
+    :initform nil
+    :reader simple-file-error-errno))
   (:report (lambda (c s)
 	     (apply #'format s (slot-value c 'error-type) 
 		    (file-error-pathname c)
