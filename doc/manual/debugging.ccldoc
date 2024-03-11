@@ -326,14 +326,20 @@ error is signaled.")
 	    ")))
       (defsection "Examples"
 	(para "
-	The function {code foo}, already defined, does
-	something with a list of numbers. The following code uses a
+	With the function {code foo} defined as follows
+	"
+		(code-block "
+(defun foo (numlist)
+  (apply '+ numlist))
+	")
+		"
+	The following code uses a
 	piece of advice to make foo return zero if any of its
 	arguments is not a number. Using :around advice, you can do
 	the following:
 	"
 	  (code-block "
-(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+(advise foo (if (some #'(lambda (n) (not (numberp n))) (car arglist))
 	      0
 	      (:do-it))
 	:when :around :name :zero-if-not-nums)
@@ -342,7 +348,7 @@ error is signaled.")
 	To do the same thing using a :before piece of advice:
 	"
 	  (code-block "
-(advise foo (if (some #'(lambda (n) (not (numberp n))) arglist)
+(advise foo (if (some #'(lambda (n) (not (numberp n))) (car arglist))
 	      (return 0))
 	:when :before :name :zero-if-not-nums)
 	"))))
