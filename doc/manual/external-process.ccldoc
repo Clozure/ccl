@@ -40,7 +40,7 @@
         this.")))
   (defsection "External-Program Dictionary"
     (definition (:function run-program)
-     "run-program program args &key (wait t) pty sharing input if-input-does-not-exist output (if-output-exists :error) (error :output) (if-error-exists :error) status-hook external-format env (silently-ignore-catastrophic-failures *silently-ignore-catastrophic-failure-in-run-program*)"
+     "run-program program args &key (wait t) pty sharing input if-input-does-not-exist output (if-output-exists :error) (error :output) (if-error-exists :error) status-hook external-format env directory (silently-ignore-catastrophic-failures *silently-ignore-catastrophic-failure-in-run-program*)"
      "Invokes an external program as an OS subprocess
 	    of lisp."
      (defsection "Arguments and Values"
@@ -109,6 +109,10 @@
 		    value are case sensitive strings. See "
           (ref (definition :function setenv)) ".
 		  ")
+         (item "{param directory}" ccldoc::=> "
+                    A string or pathname denoting directory that will
+                    become the working directory of the external
+                    process.")
          (item "{param silently-ignore-catastrophic-failures}" ccldoc::=> "
 		    If NIL, signal an error if run-program is unable
 		    to start the program. If non-NIL, treat failure to
