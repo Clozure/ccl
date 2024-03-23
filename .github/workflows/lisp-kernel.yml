@@ -1,0 +1,12 @@
+name: Build lisp kernel
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: build
+      run: make
+      working-directory: lisp-kernel/linuxx8664
