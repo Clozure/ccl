@@ -3,10 +3,33 @@ name: Build lisp kernel
 on: workflow_dispatch
 
 jobs:
-  build:
+  linux:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: build
+    - name: Build for Linux x86-64
       run: make
       working-directory: lisp-kernel/linuxx8664
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: mingw-w64-x86_64-gcc git m4 make
+    - uses: actions/checkout@v3
+    - name: Build for Windows x86-64
+      run: make
+      working-directory: lisp-kernel/win64
+
+  macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build for macOS x86-64
+      run: make
+      working-directory: lisp-kernel/darwinx8664
