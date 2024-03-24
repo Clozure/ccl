@@ -6,7 +6,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build for Linux x86-64
       run: make
       working-directory: lisp-kernel/linuxx8664
@@ -21,7 +21,7 @@ jobs:
       with:
         msystem: MINGW64
         install: mingw-w64-x86_64-gcc git m4 make
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build for Windows x86-64
       run: make
       working-directory: lisp-kernel/win64
@@ -29,7 +29,7 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build for macOS x86-64
       run: make
       working-directory: lisp-kernel/darwinx8664
