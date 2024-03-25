@@ -219,19 +219,68 @@
 
 (defun create-directory (path &key (mode #o777))
   (let* ((pathname (translate-logical-pathname (merge-pathnames path)))
-	 (created-p nil)
-	 (parent-dirs (let* ((pd (pathname-directory pathname)))
-			(if (eq (car pd) :relative)
-			  (pathname-directory (merge-pathnames
-					       pathname
-					       (mac-default-directory)))
-			  pd)))
-	 (nparents (length parent-dirs)))
+	 (created-p-or-culprit (create-parent-directories pathname mode nil)))
+    (when (stringp created-p-or-culprit)
+      (error 'simple-file-error
+	     :error-type "Can't create directory ~s, since file ~a exists and is not a directory"
+	     :pathname pathname
+	     :format-arguments (list created-p-or-culprit)))
+    (values pathname created-p-or-culprit)))
+
+(defun ensure-directories-exist (pathspec &key verbose (mode #o777))
+  "Test whether the directories containing the specified file
+  actually exist, and attempt to create them if they do not.
+  The MODE argument is an extension to control the Unix permission
+  bits.  Portable programs should avoid using the :MODE keyword
+  argument."
+  (let* ((pathname (let ((pathspec (translate-logical-pathname (merge-pathnames pathspec))))
+		     (make-directory-pathname :device (pathname-device pathspec)
+					      :directory (pathname-directory pathspec))))
+	 (created-p-or-culprit (create-parent-directories pathname mode verbose)))
+    (when (stringp created-p-or-culprit)
+      (error 'file-error
+	     :error-type (format nil "Can't create directory ~s, since file ~~a exists and is not a directory"
+				pathname)
+	     :pathname created-p-or-culprit))
+    (values pathspec created-p-or-culprit)))
+
+(defun create-parent-directories (pathname mode verbose)
+  ;; The heart of CCL:CREATE-DIRECTORY and CL:ENSURE-DIRECTORIES-EXIST
+  ;; Return value is:
+  ;;	NIL if all parent-dirs already existed
+  ;;	T if any parent-dirs were created
+  ;;	native namestring of non-directory if its existence caused failure
+  ;; This DEFAULTED-NATIVE-NAMESTRING should produce exactly one trailing slash
+  ;;	but hard to prove anything involving filesystems.
+  ;; Per POSIX:
+  ;;	(%unix-file-kind "existing-plain-file/") => NIL
+  ;;	(%unix-file-kind "existing-plain-file") => :FILE
+  ;; BUGS:
+  ;;  Inevitable file/directory create/delete race conditions.
+  ;;  Only tested where like-named files and directories cannot coexist.
+  (flet ((ensure-no-trailing-slash (name)
+	   (do* ((old (length name))
+		 (new old (1- new)))
+		((or (< new 2)
+		     (char/= (char name (1- new)) #\/))
+		 (if (= old new)
+		     name
+		     (subseq name 0 new)))
+	     (declare (fixnum old new)))))
+    (declare (inline ensure-no-trailing-slash))
     (when (wild-pathname-p pathname)
       (error 'file-error :error-type "Inappropriate use of wild pathname ~s"
-	     :pathname pathname))
-    (do* ((i 1 (1+ i)))
-	 ((> i nparents) (values pathname created-p))
+			 :pathname pathname))
+    (do* ((parent-dirs (let ((pd (pathname-directory pathname)))
+			 (if (eq (car pd) :relative)
+			     (pathname-directory (merge-pathnames
+						  pathname
+						  (mac-default-directory)))
+			     pd)))
+	  (nparents (length parent-dirs))
+	  (created-p nil)
+	  (i 1 (1+ i)))
+	 ((> i nparents) created-p)
       (declare (fixnum i))
       (let* ((parent (make-pathname
 		      :name :unspecific
@@ -241,60 +290,20 @@
 		      :directory (subseq parent-dirs 0 i)))
 	     (parent-name (defaulted-native-namestring parent))
 	     (parent-kind (%unix-file-kind parent-name)))
-
-	(if parent-kind
-	  (unless (eq parent-kind :directory)
-	    (error 'simple-file-error
-		   :error-type "Can't create directory ~s, since file ~a exists and is not a directory"
-		   :pathname pathname
-		   :format-arguments (list parent-name)))
-	  (let* ((result (%mkdir parent-name mode)))
+	(unless (eq parent-kind :directory)
+	  (when verbose
+	    (format *standard-output* "~&Creating directory: ~A~%"
+		    parent-name))
+	  (let ((result (%mkdir parent-name mode)))
 	    (declare (fixnum result))
-	    (if (< result 0)
-	      (signal-file-error result parent-name)
-	      (setq created-p t))))))))
+	    (cond ((zerop result)
+		   (setq created-p t))
+		  ((and (= result #.(- #$EEXIST))
+			(null parent-kind))
+		   (return (ensure-no-trailing-slash parent-name)))
+		  (t (signal-file-error result parent-name)))))))))
 
-
-(defun ensure-directories-exist (pathspec &key verbose (mode #o777))
-  "Test whether the directories containing the specified file
-  actually exist, and attempt to create them if they do not.
-  The MODE argument is an extension to control the Unix permission
-  bits.  Portable programs should avoid using the :MODE keyword
-  argument."
-  (let ((pathname (let ((pathspec (translate-logical-pathname (merge-pathnames pathspec))))
-		    (make-directory-pathname :device (pathname-device pathspec)
-					     :directory (pathname-directory pathspec))))
-	(created-p nil))
-    (when (wild-pathname-p pathname)
-      (error 'file-error
-	     :error-type "Inappropriate use of wild pathname ~s"
-	     :pathname pathname))
-    (let ((dir (pathname-directory pathname)))
-      (if (eq (car dir) :relative)
-	(setq dir (pathname-directory (merge-pathnames
-				       pathname
-				       (mac-default-directory)))))
-      (loop for i from 1 upto (length dir)
-	    do (let ((newpath (make-pathname
-			       :name :unspecific
-			       :type :unspecific
-			       :host (pathname-host pathname)
-			       :device (pathname-device pathname)
-			       :directory (subseq dir 0 i))))
-		 (unless (probe-file newpath)
-		   (let ((namestring (native-translated-namestring newpath)))
-		     (when verbose
-		       (format *standard-output* "~&Creating directory: ~A~%"
-			       namestring))
-		     (%mkdir namestring mode)
-		     (unless (probe-file newpath)
-		       (error 'file-error
-			      :pathname namestring
-			      :error-type "Can't create directory ~S."))
-		     (setf created-p t)))))
-      (values pathspec created-p))))
-
-(defun dirpath-to-filepath (path)
+(defun dirpath-to-filepath (path)	
   (setq path (translate-logical-pathname (merge-pathnames path)))
   (let* ((dir (pathname-directory path))
          (super (butlast dir))
