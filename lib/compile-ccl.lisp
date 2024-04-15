@@ -578,6 +578,12 @@ not runtime errors reported by a successfully created process."
 (defvar *build-time-optional-features* nil)
 (defvar *ccl-save-source-locations* :no-text)
 
+(defun report-build-environment (stream)
+  (format stream "~&Rebuilding ~a using ~a"
+          (lisp-implementation-type)
+          (lisp-implementation-version))
+  (format stream "~&Path to source code: ~s" (truename "ccl:")))
+
 (defun rebuild-ccl (&key update full clean kernel force (reload t) exit
                          reload-arguments verbose optional-features
                          (save-source-locations *ccl-save-source-locations*)
@@ -599,9 +605,7 @@ the lisp and run REBUILD-CCL again.")
 	  (return-from rebuild-ccl nil))))
     (when (or clean force)
       ;; for better bug reports...
-      (format t "~&Rebuilding ~a using ~a"
-              (lisp-implementation-type)
-              (lisp-implementation-version))
+      (report-build-environment t)
       (unless allow-constant-redefinition-p
         (when (or force clean update)
           (setq allow-constant-redefinition t))))
