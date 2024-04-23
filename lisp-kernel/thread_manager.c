@@ -1689,56 +1689,6 @@ lisp_thread_entry(void *param)
 #endif
 }
 
-typedef 
-short (*suspendf)();
-
-
-void
-suspend_current_cooperative_thread()
-{
-  static suspendf cooperative_suspend = NULL;
-  void *xFindSymbol(void*,char*);
-
-  if (cooperative_suspend == NULL) {
-    cooperative_suspend = (suspendf)xFindSymbol(NULL, "SetThreadState");
-  }
-  if (cooperative_suspend) {
-    cooperative_suspend(1 /* kCurrentThreadID */,
-                        1 /* kStoppedThreadState */,
-                        0 /* kAnyThreadID */);
-  }
-}
-
-void *
-cooperative_thread_startup(void *arg)
-{
-
-  TCR *tcr = get_tcr(0);
-  LispObj *start_vsp;
-
-  if (!tcr) {
-    return NULL;
-  }
-#ifndef WINDOWS
-  pthread_cleanup_push(tcr_cleanup,(void *)tcr);
-#endif
-  SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
-  start_vsp = tcr->save_vsp;
-  do {
-    SEM_RAISE(TCR_AUX(tcr)->reset_completion);
-    suspend_current_cooperative_thread();
-      
-    start_lisp(tcr, 0);
-    tcr->save_vsp = start_vsp;
-  } while (tcr->flags & (1<<TCR_FLAG_BIT_AWAITING_PRESET));
-#ifndef WINDOWS
-  pthread_cleanup_pop(true);
-#else
-  tcr_cleanup(tcr);
-#endif
-  return NULL;
-}
-
 void *
 xNewThread(natural control_stack_size,
 	   natural value_stack_size,
@@ -1768,6 +1718,11 @@ xNewThread(natural control_stack_size,
 #endif
 
   return TCR_TO_TSD(activation.tcr);
+}
+
+void *
+do_nothing(void) {
+  return 0;
 }
 
 Boolean
