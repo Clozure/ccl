@@ -371,7 +371,7 @@
 (defun backq-form (form constantp)
   (if (and constantp (not (self-evaluating-p form))) (list 'quote form) form))
 
-(defparameter *backquote-stack* ())
+(defparameter *backquote-stack* () "A stack of spliced triples or strings naming excluded literal types.")
 
 (set-macro-character 
  #\`
@@ -393,8 +393,9 @@
  (nfunction
   |, reader| 
   (lambda (stream char &aux (stack *backquote-stack*))
-    (when (null stack)
-      (signal-reader-error stream "Comma not inside backquote"))
+    (typecase stack
+      (null (signal-reader-error stream "Comma not inside backquote"))
+      (string (signal-reader-error stream "Comma inside backquoted ~A literal (only list or vector allowed)" stack)))
     (let ((*backquote-stack* (cdddr stack)))
       (setq char (tyi stream))
       (cond ((eq char #\@)
