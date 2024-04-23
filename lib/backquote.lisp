@@ -395,7 +395,7 @@
   (lambda (stream char &aux (stack *backquote-stack*))
     (typecase stack
       (null (signal-reader-error stream "Comma not inside backquote"))
-      (string (signal-reader-error stream "Comma inside ~A literal" stack)))
+      (string (signal-reader-error stream "Comma inside backquoted ~A literal (only list or vector allowed)" stack)))
     (let ((*backquote-stack* (cdddr stack)))
       (setq char (tyi stream))
       (cond ((eq char #\@)
