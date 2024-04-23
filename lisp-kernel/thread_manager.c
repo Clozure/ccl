@@ -1368,9 +1368,11 @@ shutdown_thread_tcr(void *arg)
     if (tcr->flags & (1<<TCR_FLAG_BIT_FOREIGN)) {
       LispObj callback_macptr = nrs_FOREIGN_THREAD_CONTROL.vcell,
 	callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
-    
+      int (*foreign_thread_control)(int) = (int (*)(int))callback_ptr;
+
       tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
-      ((void (*)())ptr_from_lispobj(callback_ptr))(1);
+      foreign_thread_control(1);
+      //((void (*)(int))ptr_from_lispobj(callback_ptr))(1);
       tsd_set(lisp_global(TCR_KEY), NULL);
     }
 #ifdef DARWIN
@@ -1847,6 +1849,7 @@ get_tcr(Boolean create)
   if ((current == NULL) && create) {
     LispObj callback_macptr = nrs_FOREIGN_THREAD_CONTROL.vcell,
       callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
+    int (*foreign_thread_control)(int) = (int (*)(int))callback_ptr;
     int i, nbindwords = 0;
     extern natural initial_stack_size;
     
@@ -1877,13 +1880,13 @@ get_tcr(Boolean create)
       *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
     }
-    nbindwords = ((int (*)())ptr_from_lispobj(callback_ptr))(-1);
+    nbindwords = foreign_thread_control(-1);
     for (i = 0; i < nbindwords; i++) {
       *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
     }
     TCR_AUX(current)->shutdown_count = 1;
-    ((void (*)())ptr_from_lispobj(callback_ptr))(0);
+    foreign_thread_control(0);
 
   }
   
@@ -2047,7 +2050,7 @@ create_thread_context_frame(mach_port_t, natural *, siginfo_t *, TCR*, native_th
 
 Boolean mach_suspend_tcr(TCR *tcr)
 {
-  thread_act_t thread = (thread_act_t)(tcr->native_thread_id);
+  mach_port_t thread = (mach_port_t)((intptr_t)tcr->native_thread_id);
   kern_return_t kret = thread_suspend(thread);
 
   if (kret == 0) {
@@ -2209,7 +2212,7 @@ resume_tcr(TCR *tcr)
 Boolean mach_resume_tcr(TCR *tcr)
 {
   ExceptionInformation *xp = tcr->suspend_context;
-  mach_port_t thread = (mach_port_t)(tcr->native_thread_id);
+  mach_port_t thread = (mach_port_t)((intptr_t)(tcr->native_thread_id));
 #if WORD_SIZE == 64
   MCONTEXT_T mc = UC_MCONTEXT(xp);
 #else
