@@ -1,0 +1,55 @@
+name: Build and test
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+env:
+  URL: https://github.com/Clozure/ccl/releases/latest/download/linuxx86.tar.gz
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          path: ccl
+
+      - name: Fetch bootstrapping binaries
+        run: |
+          curl --no-progress-meter -L -O ${{ env.URL }}
+
+      - name: Install bootstrapping binaries
+        run: |
+          cd ccl
+          tar xf ../linuxx86.tar.gz
+
+      - name: Compile lisp kernel
+        run: |
+          cd ccl/lisp-kernel/linuxx8664
+          make
+
+      - name: Rebuild CCL
+        run: |
+          cd ccl
+          ./lx86cl64 --batch --quiet -n -e '(rebuild-ccl :clean t)' </dev/null
+          # Now see if it works to start up the just-compiled lisp.
+          # Note that "git describe" doesn't work in a shallow clone
+          # (because we don't have any tags), so we don't expect to see the
+          # usual version like "Version 1.12.2 (v1.12.2-27-gae44c6ad)" in the
+          # welcome banner.
+          ./lx86cl64 --batch -n </dev/null
+
+      - name: Check out tests
+        uses: actions/checkout@v4
+        with:
+          repository: Clozure/ccl-tests
+          path: ccl-tests
+
+      - name: Run tests
+        run: |
+          cd ccl-tests
+          make CCL=../ccl/lx86cl64
+  
+          
