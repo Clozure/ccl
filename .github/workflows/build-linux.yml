@@ -18,7 +18,10 @@ jobs:
 
       - name: Fetch bootstrapping binaries
         run: |
-          curl --no-progress-meter -L -O ${{ env.URL }}
+          # be silent, still report errors,
+          # return a non-zero exit code on failure,
+          # follow redirections
+          curl -sSfL -O ${{ env.URL }}
 
       - name: Install bootstrapping binaries
         run: |
