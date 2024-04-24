@@ -1,5 +1,7 @@
 # Clozure CL
 
+[![Build and Test](https://github.com/Clozure/ccl/actions/workflows/build-linux.yml/badge.svg)](https://github.com/Clozure/ccl/actions/workflows/build-linux.yml)
+
 This is the source code for Clozure CL.
 
 Because CCL is written in itself, you need an already-working version
