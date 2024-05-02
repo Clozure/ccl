@@ -640,13 +640,12 @@ are running on, or NIL if we can't find any useful information."
 
 (defun gentemp (&optional (prefix "T") (package *package*))
   "Creates a new symbol interned in package PACKAGE with the given PREFIX."
-  (loop
-    (let* ((new-pname (%str-cat (ensure-simple-string prefix) 
-                                (%integer-to-string %gentemp-counter)))
-           (sym (find-symbol new-pname package)))
-      (if sym
-        (setq %gentemp-counter (%i+ %gentemp-counter 1))
-        (return (values (intern new-pname package))))))) ; 1 value.
+  (let ((prefix (ensure-simple-string prefix)))
+    (loop
+      (multiple-value-bind (sym where)
+          (intern (%str-cat prefix (%integer-to-string (incf %gentemp-counter))) package)
+        (when (null where)
+          (return sym))))))
 
 
 
