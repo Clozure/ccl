@@ -232,7 +232,9 @@
  
     (prepare-mcl-environment "ccl:bin;prepare-mcl-environment" ("ccl:lib;prepare-mcl-environment.lisp"))
     (defsystem        "ccl:tools;defsystem"      ("ccl:tools;defsystem.lisp"))
-    (asdf             "ccl:tools;asdf"	    ("ccl:tools;asdf.lisp"))
+    (asdf             "ccl:tools;asdf"           ("ccl:tools;asdf.lisp"))
     (jp-encode        "ccl:bin;jp-encode"        ("ccl:library;jp-encode.lisp"))
     (cn-encode        "ccl:bin;cn-encode"        ("ccl:library;cn-encode.lisp"))
-    (hashenv          "ccl:bin;hashenv"          ("ccl:xdump;hashenv.lisp"))))
+    (hashenv          "ccl:bin;hashenv"          ("ccl:xdump;hashenv.lisp"))
+    (prefixed-stream  "ccl:library;prefixed-stream"  ("ccl:library;prefixed-stream.lisp"))
+    (timestamped-stream "ccl:library;timestamped-stream" ("ccl:library;timestamped-stream.lisp"))))

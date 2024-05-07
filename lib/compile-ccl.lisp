@@ -257,6 +257,8 @@
     defsystem
     jp-encode
     cn-encode
+    prefixed-stream
+    timestamped-stream
     ))
 
 
