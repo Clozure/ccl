@@ -28,6 +28,8 @@
     (stream-write-char stream char)))
 
 (defmethod stream-write-string ((ps prefixed-stream) string &optional (start 0) (end (length string)))
+  (setf start (or start 0)
+        end (or end (length string)))
   (with-slots (prefix stream last-char) ps
     (when (eql (shiftf last-char (if (plusp end) (aref string (1- end)) #\Nul)) #\Newline)
       (fresh-line stream)
