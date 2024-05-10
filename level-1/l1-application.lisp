@@ -127,7 +127,7 @@
 
 (defmethod summarize-option-syntax ((a application))
   (flet ((summarize-option (o)
-	   (format nil "~8t-~a, --~a : ~a~%"
+	   (format nil "~8t~:[   ~;~:*-~a,~] --~a : ~a~%"
 		   (command-line-argument-option-char o)
 		   (command-line-argument-long-name o)
 		   (command-line-argument-help-string o))))
