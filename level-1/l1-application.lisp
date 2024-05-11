@@ -160,8 +160,8 @@
     (%usage-exit
      (format nil
 	     (case error-flag
-	       (:missing-argument "Missing argument to ~a option")
-	       (:duplicate-argument "Duplicate ~a option")
+	       (:missing-operand "Missing argument to ~a option")
+	       (:duplicate-option "Duplicate ~a option")
 	       (:unknown-option "Unknown option: ~a")
 	       (t "~a"))
 	     opts)
