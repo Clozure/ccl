@@ -1968,10 +1968,32 @@
 	(copy-bignum result)
 	result))))
 
-(defun %float-random (number state)
-  (let ((ratio (gvector :ratio (random target::target-most-positive-fixnum state) target::target-most-positive-fixnum)))
-    (declare (dynamic-extent ratio))
-    (* number ratio)))
+;;; In IEEE 754 binary formats, numbers in the interval [1, 2) have
+;;; the same exponent value.
+;;;
+;;; 1.0f0 is 0 01111111 00000000000000000000000
+;;; 1.0d0 is 0 01111111111 0000000000000000000000000000000000000000000000000000
+;;;
+;;; Recall that the exponent is biased by 127 or 1023, and that the
+;;; significand includes an implicit leading 1 bit to the left of the
+;;; binary point.
+;;;
+;;; Thus, we can fill the fraction bits with random bits to generate a
+;;; number in the interval [1, 2). Subtracting 1 then yields a value
+;;; in [0, 1).
+
+(defun %single-float-random (number state)
+  (declare (single-float number))
+  (let ((bits (%mrg31k3p state)))
+    (* number
+       (1- (the single-float (make-short-float-from-fixnums bits 127 1))))))
+
+(defun %double-float-random (number state)
+  (declare (double-float number))
+  (let ((hi (%mrg31k3p state))
+        (lo (%mrg31k3p state)))
+    (* number
+       (1- (the double-float (make-float-from-fixnums hi lo 1023 1))))))
 
 (defun random (number &optional (state *random-state*))
   (if (not (typep state 'random-state)) (report-bad-arg state 'random-state))
@@ -1983,10 +2005,10 @@
      (if (< number mrg31k3p-limit)
        (fast-mod (%mrg31k3p state) number)
        (%big-fixnum-random number state)))
-    ((and (typep number 'double-float) (> (the double-float number) 0.0))
-     (%float-random number state))
-    ((and (typep number 'short-float) (> (the short-float number) 0.0s0))
-     (%float-random number state))
+    ((and (typep number 'double-float) (> (the double-float number) 0.0d0))
+     (%double-float-random number state))
+    ((and (typep number 'single-float) (> (the single-float number) 0.0f0))
+     (%single-float-random number state))
     ((and (bignump number) (> number 0))
      (%bignum-random number state))
     (t (report-bad-arg number '(or (integer (0)) (float (0.0)))))))
