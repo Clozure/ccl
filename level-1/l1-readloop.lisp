@@ -239,6 +239,7 @@
 				     'constant
 				     'variable)))
   (setf (gethash name *symbol-macros*) expansion)
+  (record-source-file name 'symbol-macro)
   name)
 
 (defvar *macroexpand-hook* 'funcall
