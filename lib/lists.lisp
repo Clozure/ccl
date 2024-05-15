@@ -736,8 +736,10 @@ on the example (nset-exclusive-or (list 1 1) (list 1))
         (pop argstail))
       (setq res (apply function args))
       (case accumulate
-        (:nconc 
-         (setq temp (last (nconc temp res))))
+        (:nconc (when res
+                  (let ((next-temp (last res)))
+                    (rplacd temp res)
+                    (setq temp next-temp))))
         (:list  (rplacd temp (list res))
                 (setq temp (cdr temp)))))))
 
