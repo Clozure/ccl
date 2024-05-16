@@ -10,6 +10,34 @@ is the default), ignore the EOF.
 Note, though, that an internally-defined number of consecutive EOFs
 will exit lisp anyway.")
 
+  (definition (:variable *listener-prompt-format*)
+      "*listener-prompt-format*" nil
+      (defsection "Description"
+        (para
+         "A format control used to display the listener prompt.  The format
+          control will receive the current break level as an
+          argument.")
+        (para
+         "The default is {code \"~[?~:;~:*~d >~] \"}.  Decoded, that means if
+          the argument (the break level) is 0, then print {code \"? \"}.
+          Otherwise, print {code \"n > \"}, where {param n}
+          is the break level.")
+        (para
+         "Because a format control can also be a function, you can customize
+the listener prompt in any way you like. For example, to make the prompt
+contain the current package name, you could write the following format
+control:")
+        (code-block "
+(defun my-prompt-formatter (stream break-level)
+  (princ (package-name *package*) stream)
+  (if (plusp break-level)
+    (format stream \" ~d > \" break-level)
+    (write-string \"> \" stream)))
+")
+        (para
+         "To use this, do {code (setq ccl:*listener-prompt-format* #'my-prompt-formatter)}.  This would be a reasonable thing to put in your "
+         (ref (:section "The Init File") "init file."))))
+
   (definition (:toplevel-command ":pwd") ":pwd" nil
     "Print the pathname of the current directory.")
 
