@@ -523,13 +523,13 @@ function to the indicated name is true.")
 
 
 ;;; If a type declaration applied to a reference, the reference is
-;;; likely encapsulate in a TYPED-FORM and we won't reach this code.
+;;; likely encapsulated in a TYPED-FORM and we won't reach this code.
 ;;; The only case that we handle here is that where the variable is
 ;;; never SETQed and we can tell something about the type of its
 ;;; initial value.
 (def-simple-type-infer infer-lexical-reference lexical-reference trust-decls (var)
-  (acode-var-type var trust-decls))
-
+  (unless (%ilogbitp $vbitsetq (nx-var-bits var))
+    (acode-var-type var trust-decls)))
 
 (def-simple-type-infer infer-aref (%aref1 simple-typed-aref2 general-aref2 simple-typed-aref3 general-aref3) trust-decls (array &rest args)
   (declare (ignore args))
