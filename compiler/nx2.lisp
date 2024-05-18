@@ -521,7 +521,9 @@
         (or (var-type var)
             (setf (var-type var)
                   (let* ((initform (var-initform var)))
-                    (cond ((and initform (not (logbitp $vbitsetq bits)))
+                    (cond ((and initform
+                                (not (or (logbitp $vbitsetq bits)
+                                         (logbitp $vbitclosed bits))))
                            (acode-form-type initform trust-decls))
                           ((and trust-decls (var-declared-type var)))
                           (t '*))))))))
