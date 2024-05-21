@@ -1277,7 +1277,7 @@
 
 (define-compiler-macro * (&optional (n0 nil n0p) (n1 nil n1p) &rest more)
   (if more
-    `(*-2 ,n0 (* ,n1 ,@more))
+    `(* (*-2 ,n0 ,n1) ,@more)
     (if n1p
       `(*-2 ,n0 ,n1)
       (if n0p
