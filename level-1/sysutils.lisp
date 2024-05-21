@@ -358,14 +358,6 @@
 (defun preload-all-functions ()
   nil)
 
-
- ; used by arglist
-(defun temp-cons (a b)
-  (cons a b))
-
-
-
-
 (defun copy-into-float (src dest)
   (%copy-double-float src dest))
 
