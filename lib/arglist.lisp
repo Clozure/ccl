@@ -45,35 +45,12 @@
 (record-arglist 'nfunction '(function-name lambda-expression))
 
 
-; Returns two values: the arglist & it's functions binding.
-; If the second arg is NIL, there was no function binding.
+;;; Returns two values: the arglist, and possibly a keyword indicating
+;;; how we figured it out.  If the second value is NIL, there was no
+;;; function binding.
 (defun arglist (sym &optional include-bindings)
-  (%arglist sym include-bindings))
-
-(defun arglist-string (sym &optional include-bindings)
   (multiple-value-bind (res type)
-                       (%arglist-internal sym include-bindings)
-    (values
-     (if (stringp res)
-       res
-       (and res (with-standard-io-syntax (princ-to-string res))))
-     type)))
-
-(defun set-arglist (sym arglist)
-  (let ((real-sym (arglist-sym-and-def sym)))
-    (when (or real-sym (null sym))
-      (if (eq arglist t)
-        (remhash real-sym %lambda-lists%)
-        (setf (gethash real-sym %lambda-lists%) arglist)))))
-
-(defsetf arglist set-arglist)
-
-; Same as ARGLIST, but has the option of using TEMP-CONS instead of CONS
-; to cons up the list.
-(defun %arglist (sym &optional include-bindings)
-  (multiple-value-bind (res type)
-                       (%arglist-internal
-                        sym include-bindings)
+      (%arglist-internal sym include-bindings)
     (when (stringp res)
       (with-input-from-string (stream res)
         (setq res nil)
@@ -95,6 +72,24 @@
                   (car res)
                   (nreverse res))))))
     (values res type)))
+
+(defun arglist-string (sym &optional include-bindings)
+  (multiple-value-bind (res type)
+                       (%arglist-internal sym include-bindings)
+    (values
+     (if (stringp res)
+       res
+       (and res (with-standard-io-syntax (princ-to-string res))))
+     type)))
+
+(defun set-arglist (sym arglist)
+  (let ((real-sym (arglist-sym-and-def sym)))
+    (when (or real-sym (null sym))
+      (if (eq arglist t)
+        (remhash real-sym %lambda-lists%)
+        (setf (gethash real-sym %lambda-lists%) arglist)))))
+
+(defsetf arglist set-arglist)
 
 (defun %arglist-internal (sym include-bindings 
                               &aux def type)
