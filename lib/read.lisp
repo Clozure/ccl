@@ -239,7 +239,7 @@
                                (if (eq tree lab)
                                  (progn
                                    (unless (memq tree scanned)
-                                     (setq scanned (%temp-cons tree scanned))
+                                     (push tree scanned)
                                      (circle-subst (cddr tree)))
                                    (cddr tree))
                                  (progn
