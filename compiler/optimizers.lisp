@@ -205,18 +205,18 @@
     (dolist (form (cdr call))
       (setq form (nx-transform form env))
       (if (numberp form)
-        (setq constants (%temp-cons form constants))
-        (setq forms (%temp-cons form forms))))
+        (push form constants)
+        (push form forms)))
     (if constants
       (let* ((op (car call))
              (constant (if (cdr constants)
-                         (handler-case (apply op (reverse constants))
+                         (handler-case (apply op (nreverse constants))
                            (error (c) (declare (ignore c))
                                   (return-from fold-constant-subforms
                                     (values call t))))
                          (car constants))))
         (values (if forms
-                  (cons op (cons constant (reverse forms)))
+                  (cons op (cons constant (nreverse forms)))
                   constant)
                 t))
       (values call nil))))
