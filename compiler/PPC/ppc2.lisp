@@ -8688,12 +8688,6 @@
                                                 (t :u32))))))))
       (^)))
 
-
-
-             
-(defppc2 ppc2-%temp-list %temp-list (seg vreg xfer arglist)
-  (ppc2-use-operator (%nx1-operator list) seg vreg xfer arglist))
-
 ;;; Under MacsBug 5.3 (and some others ?), this'll do a low-level user
 ;;; break.  If the debugger doesn't recognize the trap instruction,
 ;;; you'll have to manually advance the PC past it.  "arg" winds up in the

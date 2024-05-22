@@ -11310,11 +11310,6 @@
       (x862-x8664-ff-call-return seg vreg resultspec)
       (^))))
 
-
-             
-(defx862 x862-%temp-list %temp-list (seg vreg xfer arglist)
-  (x862-use-operator (%nx1-operator list) seg vreg xfer arglist))
-
 (defx862 x862-%debug-trap %debug-trap (seg vreg xfer arg)
   (x862-one-targeted-reg-form seg arg ($ *x862-arg-z*))
   (! %debug-trap)

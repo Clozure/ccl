@@ -9371,14 +9371,6 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                          (t :u32))))))))
         (^))))))
 
-
-
-
-
-             
-(defarm2 arm2-%temp-list %temp-list (seg vreg xfer arglist)
-  (arm2-use-operator (%nx1-operator list) seg vreg xfer arglist))
-
 ;;; Under MacsBug 5.3 (and some others ?), this'll do a low-level user
 ;;; break.  If the debugger doesn't recognize the trap instruction,
 ;;; you'll have to manually advance the PC past it.  "arg" winds up in the

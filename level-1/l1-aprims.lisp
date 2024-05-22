@@ -69,8 +69,6 @@
   "Return constructs and returns a list of its arguments."
   args)
 
-(%fhave '%temp-list #'list)
-
 (defun list* (arg &rest others)
   "Return a list of the arguments with last cons a dotted pair"
   (cond ((null others) arg)

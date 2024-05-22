@@ -1032,7 +1032,7 @@
       (decomp-form (car form-list))
       `(,op ,@(decomp-formlist form-list)))))
 
-(defdecomp (prog1 multiple-value-prog1 or list %temp-list values) (op form-list)
+(defdecomp (prog1 multiple-value-prog1 or list values) (op form-list)
   `(,op ,@(decomp-formlist form-list)))
 
 (defdecomp multiple-value-call (op fn form-list)

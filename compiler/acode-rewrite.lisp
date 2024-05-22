@@ -681,7 +681,7 @@
       ))))
 
 
-(def-acode-rewrite acode-rewrite-formlist (list values %temp-list vector) asserted-type (formlist)
+(def-acode-rewrite acode-rewrite-formlist (list values vector) asserted-type (formlist)
   (dolist (form formlist) (rewrite-acode-form form)))
 
 (def-acode-rewrite acode-rewrite-multiple-value-bind multiple-value-bind asserted-type (vars valform body p2decls)

@@ -804,7 +804,7 @@
                 (nx1-form :value v)))
               
 
-(defnx1 nx1-list-vector-values ((list) (vector) (values) (%temp-list)) context (&rest args)
+(defnx1 nx1-list-vector-values ((list) (vector) (values)) context (&rest args)
   (make-acode (%nx1-default-operator) (nx1-formlist context args)))
 
 
