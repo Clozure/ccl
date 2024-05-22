@@ -268,7 +268,7 @@
      (with-variable-c-frame  #.(logior operator-acode-list-mask operator-assignment-free-mask) :infer)
      (uvref  #.(logior operator-assignment-free-mask operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask) :infer)
      (uvset  #.(logior operator-single-valued-mask operator-acode-subforms-mask) :infer)
-     (%temp-cons  #.(logior operator-assignment-free-mask operator-single-valued-mask operator-acode-subforms-mask operator-side-effect-free-mask) cons)
+     ()                                 ;was %temp-cons
      (%temp-List  #.(logior operator-single-valued-mask operator-side-effect-free-mask) list)
      (%make-uvector  #.(logior operator-assignment-free-mask operator-single-valued-mask  operator-side-effect-free-mask operator-acode-subforms-mask) :infer)
      (%decls-body  0 :infer)

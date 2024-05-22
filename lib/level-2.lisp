@@ -420,7 +420,6 @@
                    (%alloc-misc count subtag)))
     (%eval-redef %setf-double-float (x y))
     (%eval-redef %lisp-word-ref (x y))
-    (%eval-redef %temp-cons (x y))
     (%eval-redef require-fixnum (x))
     (%eval-redef require-symbol (x))
     (%eval-redef require-list (x))

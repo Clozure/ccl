@@ -11315,11 +11315,6 @@
 (defx862 x862-%temp-list %temp-list (seg vreg xfer arglist)
   (x862-use-operator (%nx1-operator list) seg vreg xfer arglist))
 
-(defx862 x862-%temp-cons %temp-cons (seg vreg xfer car cdr)
-  (x862-use-operator (%nx1-operator cons) seg vreg xfer car cdr))
-
-
-
 (defx862 x862-%debug-trap %debug-trap (seg vreg xfer arg)
   (x862-one-targeted-reg-form seg arg ($ *x862-arg-z*))
   (! %debug-trap)
