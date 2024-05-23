@@ -77,16 +77,20 @@
                                       :default-initial-value default-initial-value)
           (when environment
             (setq bindings (nconc bindings (list `(,environment ,env-var)))))
-          (when whole
-            (setq bindings (nconc bindings (list `(,whole ,whole-var)))))
           (values
             `(lambda (,whole-var ,env-var)
                (declare (ignorable ,whole-var ,env-var))
                (block ,name
-                 (let* ,(nreverse bindings)
-                   ,@(when binding-decls `((declare ,@binding-decls)))
-                   ,@local-decs
-                   ,@body)))
+                 (,@(cond ((null whole)
+                           `(progn))
+                          ((symbolp whole)
+                           `(let ((,whole ,whole-var))))
+                          (t
+                           `(destructuring-bind ,whole ,whole-var)))
+                  (let* ,(nreverse bindings)
+                    ,@(when binding-decls `((declare ,@binding-decls)))
+                    ,@local-decs
+                    ,@body))))
             doc))))))
 
 (defun lambda-list-bounds (lambda-list)

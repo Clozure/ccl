@@ -199,8 +199,6 @@ Will differ from *compiling-file* during an INCLUDE")
 		       orig-src))
     ;; This should not be necessary, but it is.
     (setq output-file (namestring output-file))
-    (when (physical-pathname-p orig-src) ; only back-translate to things likely to exist at load time
-      (setq orig-src (back-translate-pathname orig-src '("home" "ccl"))))
     (when (and (not force)
                (probe-file output-file)
                (not (fasl-file-p output-file)))

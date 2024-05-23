@@ -2824,7 +2824,7 @@ initially NIL.")
                 (or explicit-package
                     (and (not escapes)
                          (%token-to-number tb (%validate-radix *read-base*))))))
-        (%err-disp $XBADSYM)
+        (signal-reader-error stream "Invalid reader syntax.")
         (%string-from-token tb)))))
 
 (set-dispatch-macro-character

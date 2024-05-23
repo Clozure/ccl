@@ -643,10 +643,10 @@ decremented by the second argument, DELTA, which defaults to 1."
               last-getter getter)))
     (if last-let-list
       `(let* ,(nreverse last-let-list)
-         (multiple-value-prog1 ,last-getter
-           ,body))
-      `(multiple-value-prog1 ,last-getter
-         ,body))))
+         (values (multiple-value-prog1 ,last-getter
+           ,body)))
+      `(values (multiple-value-prog1 ,last-getter
+         ,body)))))
 
 ;(shiftf (car x)(cadr x) 3)
 
