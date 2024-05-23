@@ -361,7 +361,11 @@
                          (parse-body body&decls env)
                        `(lambda ,arglist ,@decls ,@(mexpand body env))))
                    form))
-              ((eval-when the locally block return-from)
+              (locally
+                  (multiple-value-bind (body decls)
+                      (parse-body (cdr form) env)
+                    `(locally ,@decls ,@(mexpand body env))))
+              ((eval-when the block return-from)
                  (list* (first form) (second form) (mexpand (cddr form) env)))
               (setq
                  `(setq ,@(loop for (name value) on (rest form) by #'cddr
