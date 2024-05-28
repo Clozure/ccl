@@ -60,10 +60,10 @@
 (defloadvar *did-show-marketing-blurb* nil)
 
 (defparameter *marketing-blurb* "
-For more information about CCL, please see http://ccl.clozure.com.
+For more information about CCL, please see https://ccl.clozure.com.
 
-CCL is free software.  It is distributed under the terms of the Apache
-Licence, Version 2.0.
+CCL is free software.
+It is distributed under the terms of the Apache Licence, Version 2.0.
 ")
 
 (defun listener-function ()
