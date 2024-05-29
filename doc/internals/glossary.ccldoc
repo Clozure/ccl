@@ -1,0 +1,57 @@
+(glossary-section "Glossary of Terms"
+  (glossentry "acode"
+    (para
+     "An intermediate representation of Lisp code produced by the compiler
+      front-end. Short for “alphatized code,” meaning “has undergone
+      alpha reduction,” which in turn means “all lambda-bound
+      variables have been consistently renamed.”"))
+
+  (glossentry "dnode"
+    (para "Two native words. Lisp heap memory is allocated in units
+          of dnodes."))
+
+  (glossentry "gvector"
+    (para "A {term uvector} whose elements are nodes."))
+
+  (glossentry "immediate"
+    (para "A value in memory or a register that is a raw, untagged value."))
+
+  (glossentry "ivector"
+    (para "A {term uvector} whose elements are immediates."))
+
+  (glossentry "node"
+    (para "A value in memory or a register that is a tagged lisp datum."))
+
+  (glossentry "punt, puntable"
+    (para
+     "If a variable is bound to a simple expression and is never setq’d,
+      then all references to the variable can be replaced by
+      references to the simple expression in question. This process is
+      called “punting.”"))
+
+  (glossentry "tagged return address"
+    (para
+     "On x86, the call instruction unconditionally pushes a return address
+      onto the stack. The compiler aligns the call instruction (via
+      insertion of nop instructions) such that the pushed return
+      address will have a special tag that the GC can recognize."))
+
+  (glossentry "uuo"
+    (para
+     "An “unimplemented user operation.” Sometimes called a trap (after the
+      PowerPC instructions). An illegal instruction used as a way for
+      lisp code to request service from the lisp kernel (such as
+      allocate more memory, initiate a GC, and so forth)."))
+
+  (glossentry "uvector"
+    (para
+     "A memory-allocated object with a header word that describes the
+      object’s type and the number of elements it contains. (The name
+      comes from Spice Lisp.)"))
+
+  (glossentry "value stack"
+    (para
+     "A stack that contains tagged lisp objects (nodes) such as function
+      arguments, local variables, and other stack-allocated lisp
+      objects. The contents of the value stack between its bottom and
+      top are always unambiguously nodes.")))

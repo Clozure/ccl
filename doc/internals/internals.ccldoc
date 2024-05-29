@@ -1,0 +1,5 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(document "Clozure CL Internals"
+  (include-file "glossary.ccldoc" :in-package :ccl)
+  (index-section "Symbol Index"))
