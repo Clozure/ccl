@@ -870,13 +870,20 @@
                    (setf (acode-operator w) (%nx1-operator %ilsl)
                          (acode-operands w) (list amt num)
                          (acode.asserted-type w) nil))))
-              ((and  (setq newtype (bounded-integer-type-for-ash
-                                  (acode-form-type num trust-decls)
+              ((and (setq newtype (bounded-integer-type-for-ash
+                                   (acode-form-type num trust-decls)
                                    (acode-form-type amt trust-decls)))
                     (subtypep (type-specifier newtype) fixnum-type))
                (when (and (acode-form-typep num fixnum-type trust-decls)
                           (acode-form-typep amt fixnum-type trust-decls))
-                 (setf (acode-operator w) (%nx1-operator fixnum-ash)))
+                 (let* ((amt-ctype (bounded-integer-type-p
+                                    (acode-form-type amt trust-decls)))
+                        ;; amt-ctype is non-nil because of newtype
+                        (low (numeric-ctype-low amt-ctype))
+                        (high (numeric-ctype-high amt-ctype))
+                        (max-shift (max (abs low) (abs high))))
+                   (when (<= max-shift maxbits)
+                     (setf (acode-operator w) (%nx1-operator fixnum-ash)))))
                (setf (acode.asserted-type w) (type-specifier newtype)))))))
 
 (def-acode-rewrite acode-rewrite-multiple-value-call multiple-value-call asserted-type (callable formlist)
