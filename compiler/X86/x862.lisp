@@ -2390,19 +2390,11 @@
           (multiple-value-setq (src val-reg)
             (x862-two-targeted-reg-forms seg array ($ *x862-temp0*) new val-reg))
           (multiple-value-setq (src unscaled-i unscaled-j val-reg)
-            (if needs-memoization
-              (progn
-                (x862-four-targeted-reg-forms seg
-                                              array ($ *x862-temp0*)
-                                              i ($ x8664::arg_x)
-                                              j ($ *x862-arg-y*)
-                                              new val-reg)
-                (values ($ *x862-temp0*) ($ x8664::arg_x) ($ *x862-arg-y*) ($ *x862-arg-z*)))
-              (x862-four-untargeted-reg-forms seg
-                                              array ($ *x862-temp0*)
-                                              i ($ x8664::arg_x)
-                                              j ($ *x862-arg-y*)
-                                              new val-reg))))
+            (x862-four-targeted-reg-forms seg
+                                          array ($ *x862-temp0*)
+                                          i ($ x8664::arg_x)
+                                          j ($ *x862-arg-y*)
+                                          new val-reg)))
         (let* ((*available-backend-imm-temps* *available-backend-imm-temps*))
           (when (and (= (hard-regspec-class val-reg) hard-reg-class-gpr)
                      (logbitp (hard-regspec-value val-reg)
@@ -2432,14 +2424,11 @@
               (! trap-unless-fixnum unscaled-j)))
           (with-imm-target () dim1
             (let* ((idx-reg ($ *x862-arg-y*)))
-              (if constidx
-                (if needs-memoization
-                  (x862-lri seg *x862-arg-y* (ash constidx *x862-target-fixnum-shift*)))
-                (progn
-                  (if safe                  
-                    (! check-2d-bound dim1 unscaled-i unscaled-j src)
-                    (! 2d-dim1 dim1 src))
-                  (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j)))
+              (unless constidx
+                (if safe
+                  (! check-2d-bound dim1 unscaled-i unscaled-j src)
+                  (! 2d-dim1 dim1 src))
+                (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
               (let* ((v ($ x8664::arg_x)))
                 (if simple
                   (! array-data-vector-ref v src)
