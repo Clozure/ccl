@@ -1949,7 +1949,7 @@
                           (! 2d-dim1 dim1 src))
                         (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j))
                       (with-node-target (idx-reg node-val) v
-                        (if safe
+                        (if simple
                           (! array-data-vector-ref v src)
                           (progn
                             (setq v src)
