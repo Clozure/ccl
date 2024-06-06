@@ -2274,90 +2274,58 @@
 
 
 
-(defun x862-aset2-via-gvset (seg vreg xfer  array i j new safe type-keyword  dim0 dim1 &optional (simple t))
-  (target-arch-case
-   (:x8632 (error "not for x8632 yet")))
+(defun x862-aset2-via-gvset (seg vreg xfer array i j new safe type-keyword constval &optional (simple t))
   (with-x86-local-vinsn-macros (seg target)
     (let* ((i-known-fixnum (acode-fixnum-form-p i))
            (j-known-fixnum (acode-fixnum-form-p j))
-           (arch (backend-target-arch *target-backend*))
-           (is-node (member type-keyword (arch::target-gvector-types arch)))
-           (constval (x862-constant-value-ok-for-type-keyword type-keyword new))
-           (needs-memoization (and is-node (x862-acode-needs-memoization new)))
-           (src)
-           (continue-label (backend-get-next-label))
-           (unscaled-i)
-           (unscaled-j)
-           (val-reg (x862-target-reg-for-aset vreg type-keyword))
-           (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum
-                 (>= i-known-fixnum 0)
-                 (>= j-known-fixnum 0)
-                 (< i-known-fixnum dim0)
-                 (< j-known-fixnum dim1)
-                 (+ (* i-known-fixnum dim1) j-known-fixnum))))
-      (progn
-        (if constidx
-          (multiple-value-setq (src val-reg)
-            (x862-two-targeted-reg-forms seg array ($ *x862-temp0*) new val-reg))
-          (multiple-value-setq (src unscaled-i unscaled-j val-reg)
-            (if needs-memoization
+           (src ($ x8664::temp0))
+           (unscaled-i ($ x8664::arg_x))
+           (unscaled-j ($ x8664::arg_y))
+           (val-reg ($ x8664::arg_z))
+           (continue-label (backend-get-next-label)))
+      (x862-four-targeted-reg-forms seg
+                                    array src
+                                    i unscaled-i
+                                    j unscaled-j
+                                    new val-reg)
+      (when safe
+        (when (typep safe 'fixnum)
+          (if simple
+            (! trap-unless-simple-array-2
+               src
+               (dpb safe target::arrayH.flags-cell-subtag-byte
+                    (ash 1 $arh_simple_bit))
+               (nx-error-for-simple-2d-array-type type-keyword))
+            (with-crf-target () crf
+              (! set-z-if-typed-array crf src safe 2)
+              (x862-branch seg (x862-make-compound-cd continue-label 0)
+                           x86::x86-e-bits t)
+              (x862-copy-register seg ($ x8664::arg_y) src)
+              (! ref-constant ($ x8664::arg_z)
+                 (x86-immediate-label `(array ,(element-subtype-type safe)
+                                              (* *))))
+              (x862-absolute-natural seg($ x8664::arg_x) nil
+                                     (ash $xwrongtype x8664::fixnumshift))
+              (! set-nargs 3)
+              (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
+              (@ continue-label))))
+        (unless i-known-fixnum
+          (! trap-unless-fixnum unscaled-i))
+        (unless j-known-fixnum
+          (! trap-unless-fixnum unscaled-j)))
+      (with-imm-target () dim1
+        (let* ((idx-reg ($ x8664::arg_y)))
+          (if safe
+            (! check-2d-bound dim1 unscaled-i unscaled-j src)
+            (! 2d-dim1 dim1 src))
+          (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j)
+          (let* ((v ($ x8664::arg_x)))
+            (if simple
+              (! array-data-vector-ref v src)
               (progn
-                (x862-four-targeted-reg-forms seg
-                                              array ($ *x862-temp0*)
-                                              i ($ x8664::arg_x)
-                                              j ($ *x862-arg-y*)
-                                              new val-reg)
-                (values ($ *x862-temp0*) ($ x8664::arg_x) ($ *x862-arg-y*) ($ *x862-arg-z*)))
-              (x862-four-untargeted-reg-forms seg
-                                              array ($ *x862-temp0*)
-                                              i ($ x8664::arg_x)
-                                              j ($ *x862-arg-y*)
-                                              new val-reg))))
-        (let* ((*available-backend-imm-temps* *available-backend-imm-temps*))
-          (when (and (= (hard-regspec-class val-reg) hard-reg-class-gpr)
-                     (logbitp (hard-regspec-value val-reg)
-                              *backend-imm-temps*))
-            (use-imm-temp (hard-regspec-value val-reg)))
-          (when safe
-            (when (typep safe 'fixnum)
-              (if simple
-                (! trap-unless-simple-array-2
-                   src
-                   (dpb safe target::arrayH.flags-cell-subtag-byte
-                        (ash 1 $arh_simple_bit))
-                   (nx-error-for-simple-2d-array-type type-keyword))
-                (with-crf-target () crf
-                  (! set-z-if-typed-array crf src safe 2)
-                  (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
-            (x862-copy-register seg ($ x8664::arg_y) src)
-            (! ref-constant ($ x8664::arg_z) (x86-immediate-label
-                                              `(array ,(element-subtype-type safe) (* *))))
-            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
-            (! set-nargs 3)
-            (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
-            (@ continue-label))))
-            (unless i-known-fixnum
-              (! trap-unless-fixnum unscaled-i))
-            (unless j-known-fixnum
-              (! trap-unless-fixnum unscaled-j)))
-          (with-imm-target () dim1
-            (let* ((idx-reg ($ *x862-arg-y*)))
-              (if constidx
-                (if needs-memoization
-                  (x862-lri seg *x862-arg-y* (ash constidx *x862-target-fixnum-shift*)))
-                (progn
-                  (if safe
-                    (! check-2d-bound dim1 unscaled-i unscaled-j src)
-                    (! 2d-dim1 dim1 src))
-                  (! 2d-unscaled-index idx-reg dim1 unscaled-i unscaled-j)))
-              (let* ((v ($ x8664::arg_x)))
-                (if simple
-                  (! array-data-vector-ref v src)
-                  (progn
-                    (x862-copy-register seg v src)
-                    (! deref-vector-header v idx-reg)))
-                (x862-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (x862-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization)))))))))
+                (x862-copy-register seg v src)
+                (! deref-vector-header v idx-reg)))
+            (x862-vset1 seg vreg xfer type-keyword v idx-reg nil val-reg (x862-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval t)))))))
 
 (defun x862-aset2 (seg vreg xfer  array i j new safe type-keyword  dim0 dim1 &optional (simple t))
   (target-arch-case
@@ -2373,7 +2341,7 @@
                                    (x862-acode-needs-memoization new))))
       (if needs-memoization
         (x862-aset2-via-gvset seg vreg xfer array i j new safe type-keyword
-                              dim0 dim1 simple)
+                              constval simple)
         (let* ((constidx
                  (and dim0 dim1 i-known-fixnum j-known-fixnum
                       (>= i-known-fixnum 0)
