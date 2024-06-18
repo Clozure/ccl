@@ -317,6 +317,13 @@
 (define-compiler-macro 1+ (x)
   `(+ ,x 1))
 
+(define-compiler-macro ash (&whole call &environment env integer count)
+  (if (and (integerp count) (zerop count))
+      (if (nx-form-typep integer 'integer env)
+          integer
+          call)
+      call))
+
 (define-compiler-macro append  (&whole call
                                        &optional arg0
                                        &rest
