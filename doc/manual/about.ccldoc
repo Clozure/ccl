@@ -1,7 +1,6 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "About {CCL}"
-  (defsection "Introduction to {CCL}"
     "{CCL} is a fast, mature, open source Common Lisp
       implementation that runs on Linux, Mac OS X, FreeBSD, and Windows.
       {CCL} was forked from Macintosh Common Lisp (MCL) in 1998
@@ -80,4 +79,4 @@ Features of {CCL} include"
       product of Clozure Associates. Clozure continues to extend,
       improve, and develop {CCL} in response to customer and user
       needs, and offers full support and development services for
-      {CCL}.")))
+      {CCL}."))

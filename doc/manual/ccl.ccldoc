@@ -21,7 +21,7 @@
 	(push `(:row (:item ,a) (:item ,b)) rows)))
     `(:table "Exported Symbols" ,@rows)))
 
-(document "{CCL} Documentation"
+(document "Clozure Common Lisp"
   (include-file "about.ccldoc" :in-package :ccl)
   (include-file "install.ccldoc" :in-package :ccl)
   (include-file "build.ccldoc" :in-package :ccl)
