@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
+
+:root {
+    --toc-width: 22em;
+    --toc-margin-l: 1em;
+}
+
+h1, h2, h3, h4, h5 {
+    font-family: system-ui, sans-serif;
+    font-stretch: condensed;
+}
+
+tt, code, pre {
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+}
+
+body {
+    margin: 0;
+    font-family: Merriweather, serif;
+    font-size: medium;
+    line-height: 1.4;
+}
+
+#contents {
+    max-width: 50em;
+    margin: auto;
+    padding: 0 1em;
+}
+
+#toc {
+    padding: 0 1em;
+}
+
+@media screen and (min-width: 1025px) {
+    header {
+        margin-left: calc(var(--toc-width) + var(--toc-margin-l));
+    }
+
+    header h1 {
+        margin: auto;
+        max-width: 30em;
+    }
+
+    #toc {
+        overflow: auto;
+        width: var(--toc-width);
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        padding: unset;
+        margin-left: var(--toc-margin-l);
+    }
+    #toc nav ul {
+        padding-left: 1em;
+        font-family: system-ui;
+        font-stretch: condensed;
+    }
+    #contents-wrapper {
+        margin-left: calc(var(--toc-width) + var(--toc-margin-l));
+    }
+}
+
+pre > code {
+    display: block;
+    overflow: auto;
+    padding: 0.5em;
+    border: 1px solid #eee;
+    line-height: normal;
+}
+samp {
+    background: #fafafa;
+}
+pre > samp {
+    display: block;
+    overflow: auto;
+    padding: 0.5em;
+    border: 1px solid #eee;
+    line-height: normal;
+}
+
+.definition {
+    margin-bottom: 1.5em;
+}
+
+.definition-kind {
+    float: right;
+}
