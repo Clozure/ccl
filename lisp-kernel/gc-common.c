@@ -1296,7 +1296,7 @@ reclaim_static_dnodes()
     }
   }
   lisp_global(STATIC_CONSES) = head;
-  lisp_global(FREE_STATIC_CONSES)+=(nfree<<fixnumshift);
+  lisp_global(FREE_STATIC_CONSES) = nfree << fixnumshift;
 }
 
 Boolean
