@@ -429,6 +429,13 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
         add_area_holding_area_lock(a);
         break;
       case AREA_STATIC_CONS:
+	if (bias) {
+	  LispObj static_conses = lisp_global(STATIC_CONSES);
+	  if (static_conses && static_conses != lisp_nil) {
+	    lisp_global(STATIC_CONSES) += bias;
+	    relocate_area_contents(a, bias);
+	  }
+	}
         /* not yet
  lower_heap_start(static_cons_area->low,tenured_area);
         */
