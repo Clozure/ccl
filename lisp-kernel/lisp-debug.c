@@ -710,17 +710,17 @@ char *
 area_code_name(int code)
 {
   switch (code) {
-    case AREA_VOID: return "void";
-    case AREA_CSTACK: return "cstack";
-    case AREA_VSTACK: return "vstack";
-    case AREA_TSTACK: return "tstack";
-    case AREA_READONLY: return "readonly";
-    case AREA_WATCHED: return "watched";
-    case AREA_STATIC_CONS: return "static cons";
-    case AREA_MANAGED_STATIC: return "managed static";
-    case AREA_STATIC: return "static";
-    case AREA_DYNAMIC: return "dynamic";
-    default: return "unknown";
+    case AREA_VOID: return "--";
+    case AREA_CSTACK: return "cs";
+    case AREA_VSTACK: return "vs";
+    case AREA_TSTACK: return "ts";
+    case AREA_READONLY: return "ro";
+    case AREA_WATCHED: return "wa";
+    case AREA_STATIC_CONS: return "sc";
+    case AREA_MANAGED_STATIC: return "ms";
+    case AREA_STATIC: return "st";
+    case AREA_DYNAMIC: return "dy";
+    default: return "??";
   }
 }
 
@@ -731,11 +731,12 @@ debug_memory_areas(ExceptionInformation *xp, siginfo_t *info, int arg)
   char label[100];
 
   fprintf(dbgout, "Lisp memory areas:\n");
-  fprintf(dbgout, "%20s %20s %20s\n", "code", "low", "high");
+  fprintf(dbgout, "%21s %19s %19s %17s\n", "code", "low", "high", "size");
   for (a = header->succ; a != header; a = a->succ) {
-    snprintf(label, sizeof(label), "%s (%d)", area_code_name(a->code),
+    snprintf(label, sizeof(label), "%p %s (%d)", a, area_code_name(a->code),
 	     a->code >> fixnumshift);
-    fprintf(dbgout, "%20s %20p %20p\n", label, a->low, a->high);
+    fprintf(dbgout, "%21s %19p %19p %17#x\n", label, a->low, a->high,
+      a->high - a->low);
   }
   return debug_continue;
 }
