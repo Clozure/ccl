@@ -32,7 +32,7 @@ extern LispObj lisp_nil;
 #define TCR_KEY (-10)     	/* tsd key for per-thread tcr */
 #define TCR_AREA_LOCK (-11)       /* all_areas/tcr queue lock */
 #define EXCEPTION_LOCK (-12)	/* serialize exception handling */
-#define STATIC_CONSES (-13)
+#define STATIC_CONSES (-13)     /* freelist of static conses */
 #define DEFAULT_ALLOCATION_QUANTUM (-14)
 #define INTFLAG (-15)
 #define GC_INHIBIT_COUNT (-16)
