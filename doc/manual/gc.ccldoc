@@ -257,6 +257,34 @@ that provided by earlier {CCL} versions."))
 	(para "Sets the list encapsulated in {code population} to
         {code contents}.  {code Contents} is not copied,
         it is used directly."))))
+
+  (defsection "Static conses"
+    (para
+     "A static cons is just like a regular cons cell, except the GC
+      never moves it.")
+
+    (definition (:function static-cons) "static-cons car-value cdr-value"
+        nil
+      "Allocates and returns a cons cell that does not move on garbage
+       collection and thus does not trigger re-hashing when used as a
+       key in a hash table.  Usage is equivalent to regular cons.")
+
+    (definition (:function reserved-static-conses) "reserved-static-conses"
+        nil
+      "Returns the number of static conses that have been reserved since the
+       lisp was created.  This number will be a multiple of 32768.
+       The memory for static conses is, in many respects, part of the
+       dynamic heap.  It is physically adjacent to it (immediately
+       precedes the dynamic heap area in memory), and its contents are
+       subject to full GC (but not compaction).")
+
+    (definition (:function free-static-conses) "free-static-conses"
+        nil
+      "Returns the length of the static cons freelist.  In other words,
+       this is number of static conses available for use before space
+       for another 32768 static cons cells is reserved."))
+
+
   (defsection "Garbage-Collection Dictionary"
     (definition (:function gc) "gc" nil
       (defsection "Description" (para "Causes a full GC to occur as soon as possible. Returns NIL.")))
