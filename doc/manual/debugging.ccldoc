@@ -303,10 +303,10 @@ error is signaled.")
 	    ")
 	  (item "{param form}" ccldoc::=> "
 	      A form to execute before, after, or around the advised
-	      function. The form can refer to the variable arglist
+	      function. The form can refer to the variable {code arglist}
 	      that is bound to the arguments with which the advised
-	      function was called. You can exit from form with
-	      (return).
+	      function was called. You can exit from {param form} with
+	      {code (return)}.
 	    ")
 	  (item "{param name}" ccldoc::=> "
 	      A name that identifies the piece of advice.
