@@ -21,7 +21,7 @@ M4 = m4
 M4FLAGS = -DFREEBSD -DX86 -DX8664 -DHAVE_TLS
 CDEFINES = -DFREEBSD -D_REENTRANT -DX86 -DX8664 -D_GNU_SOURCE -DHAVE_TLS -DVC_REVISION="$(VC_REVISION)"
 CDEBUG = -g
-COPT = #-O2
+COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
