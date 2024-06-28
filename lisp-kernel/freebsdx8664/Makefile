@@ -59,6 +59,7 @@ OSLIBS = -lm -lthr
 
 ../../fx86cl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 	$(CC) -m64 $(CDEBUG) -Wl,--export-dynamic -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	elfctl -e +noaslr $@
 
 
 $(SPOBJ): $(SPINC)
