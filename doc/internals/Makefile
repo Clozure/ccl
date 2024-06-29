@@ -14,7 +14,7 @@ CCLDOC_ROOT=~/ccl/ccldoc
 CSS=../manual/style.css
 
 ccl.html: *.ccldoc $(CSS)
-	ccl --batch \
+	$(CCL) --batch \
 	 -e "(require :asdf)" \
 	 -e "(push \"$(CCLDOC_ROOT)/source/\" asdf:*central-registry*)" \
 	 -e "(asdf:load-system :ccldoc)" \
