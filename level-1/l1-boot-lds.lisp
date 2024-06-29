@@ -63,7 +63,7 @@
 For more information about CCL, please see https://ccl.clozure.com.
 
 CCL is free software.
-It is distributed under the terms of the Apache Licence, Version 2.0.
+It is distributed under the terms of the Apache License, Version 2.0.
 ")
 
 (defun listener-function ()
