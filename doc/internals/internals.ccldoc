@@ -1,5 +1,8 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
+(ccldoc:def-expander CCL () "Clozure CL")
+
 (document "Clozure CL Internals"
+  (include-file "implementation.ccldoc" :in-package :ccl)
   (include-file "glossary.ccldoc" :in-package :ccl)
   (index-section "Symbol Index"))

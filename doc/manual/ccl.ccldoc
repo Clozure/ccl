@@ -40,7 +40,6 @@
   (include-file "gc.ccldoc" :in-package :ccl)
 
   (include-file "limits.ccldoc" :in-package :ccl)
-  (include-file "implementation.ccldoc" :in-package :ccl)
   (include-file "modifying.ccldoc" :in-package :ccl)
 
   (include-file "profile.ccldoc" :in-package :ccl)
