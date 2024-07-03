@@ -953,7 +953,8 @@
 
 
 
-  
+;;; If x is a static cons, return its index value as a fixnum.
+;;; Otherwise return nil.
 (defx86lapfunction %staticp ((x arg_z))
   (check-nargs 1)
   (ref-global static-cons-area temp0)
@@ -968,6 +969,9 @@
   (cmovaq (% imm1) (% arg_z))
   (single-value-return))
 
+;;; Return the static cons corresponding to the index n,
+;;; or nil if there's no such static cons (i.e., n is out
+;;; of range, or the static cons has been gc'd).
 (defx86lapfunction %static-inverse-cons ((n arg_z))
   (check-nargs 1)
   (testl ($ target::tagmask) (% arg_z.l))
