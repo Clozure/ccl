@@ -685,7 +685,19 @@ the socket is not connected."))
 					      :port remote-port
 					      :allow-other-keys t
 					      keys))))
-               (%socket-connect fd socket-address timeout-in-milliseconds)))
+               (handler-bind
+                   ((socket-creation-error
+                     (lambda (c)
+                       (declare (ignore c))
+                       ;; When connect fails, the fd is no longer usable,
+                       ;; and must be closed.  Because we've already made
+                       ;; a stream using this fd, close the fd by closing
+                       ;; the stream.
+                       (close socket)
+                       ;; Don't try to close fd again in the unwind-protect
+                       ;; cleanup form.
+                       (setq fd -1))))
+                 (%socket-connect fd socket-address timeout-in-milliseconds))))
            (setq fd -1)
            socket))
     (unless (< fd 0)
