@@ -429,3 +429,8 @@
   (movq (% imm1) (@ x8664::misc-data-offset (% c)))
   (single-value-return 3))
 
+(defx86lapfunction %bignum-oddp ((bignum arg_z))
+  (testb ($ 1) (@ x8664::misc-data-offset (% bignum)))
+  (movl ($ (target-nil-value)) (%l arg_z))
+  (cmovnzl (@ (+ target::t-offset target::symbol.vcell) (% arg_z)) (%l arg_z))
+  (single-value-return))

@@ -2077,9 +2077,7 @@
 (defun %logcount-complement (bignum idx)
   (- 32 (the fixnum (%ilogcount (bignum-ref bignum idx)))))
 
-(defun %bignum-evenp (bignum)
-  (not (logbitp 0 (the fixnum (bignum-ref bignum 0)))))
-
+#-x8664-target
 (defun %bignum-oddp (bignum)
   (logbitp 0 (the fixnum (bignum-ref bignum 0))))
 
