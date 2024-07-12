@@ -251,7 +251,5 @@ extern Boolean
 did_gc_notification_since_last_full_gc;
 
 extern BytePtr heap_dirty_limit;
-extern void zero_dnodes(void *,natural);
-
 
 #endif                          /* __GC_H__ */

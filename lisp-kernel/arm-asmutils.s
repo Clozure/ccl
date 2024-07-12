@@ -252,27 +252,6 @@ _exportfn(call_handler_on_main_stack)
         __(bx ip)
 _endfn                
 
-/* zero N (r1) dnodes, starting at the dnode-aligned address in r0 */
-_exportfn(C(zero_dnodes))
-        __(adr r2,9f)
-        __(fldmiad r2,{d0-d7})
-        __(ands r2,r1,#7)
-        __(sub r1,r1,r2)
-        __(b 1f)
-0:      __(subs r2,r2,#1)        
-        __(fstd d0,[r0])
-        __(add r0,r0,#dnode_size)
-1:      __(bne 0b)
-        __(cmp r1,#0)
-        __(b 3f)
-2:      __(subs r1,r1,#8)
-        __(fstmiad r0!,{d0-d7})
-3:      __(bne 2b)
-        __(bx lr)
-        .align 3
-9:      .long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-_endfn             
-
 _exportfn(C(dmb))
         __(dmb)
         __(bx lr)

@@ -2033,9 +2033,9 @@ new_heap_segment(ExceptionInformation *xp, natural need, Boolean extend, TCR *tc
   platform_new_heap_segment(xp, tcr, (BytePtr)oldlimit, (BytePtr)newlimit);
   if ((BytePtr)oldlimit < heap_dirty_limit) {
     if ((BytePtr)newlimit < heap_dirty_limit) {
-      zero_dnodes((void *)oldlimit,area_dnode(newlimit,oldlimit)); 
+      memset((void *)oldlimit, 0, newlimit - oldlimit);
     } else {
-      zero_dnodes((void *)oldlimit,area_dnode(heap_dirty_limit,oldlimit));
+      memset((void *)oldlimit, 0, (size_t)heap_dirty_limit - oldlimit);
     }
   }
   if ((BytePtr)newlimit > heap_dirty_limit) {
