@@ -729,6 +729,9 @@
     (type-specifier ctype)))
 
 
+(defun quoted-zero-p (form)
+  (and (quoted-form-p form)
+       (eql 0 (%cadr form))))
 
 (define-compiler-macro make-array (&whole call &environment env dims &rest keys)
   (if (constant-keywords-p keys)
@@ -768,13 +771,16 @@
                                     initial-contents-p)))
                      (if
                        (or (null initial-element-p)
-                           (cond ((eql element-type-keyword :double-float-vector)
+                           (cond ((eq element-type-keyword :double-float-vector)
                                   (eql initial-element 0.0d0))
-                                 ((eql element-type-keyword :single-float-vector)
-                                  (eql initial-element 0.0s0))
-                                 ((eql element-type :simple-string)
+                                 ((eq element-type-keyword :single-float-vector)
+                                  (eql initial-element 0.0f0))
+                                 ((eq element-type-keyword :simple-string)
                                   (eql initial-element #\Null))
-                                 (t (eql initial-element 0))))
+                                 (t (or (eql initial-element 0)
+                                        ;; for :initial-element '0
+                                        ;; this actually comes up in the wild
+                                        (quoted-zero-p initial-element)))))
                        `(allocate-typed-vector ,element-type-keyword ,dims)
                        `(allocate-typed-vector ,element-type-keyword ,dims ,initial-element)))
                     (t                        ;Should do more here
