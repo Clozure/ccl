@@ -434,12 +434,21 @@ operating system resources associated with the socket."))
 
 (defmethod socket-connect ((stream file-listener-socket)) :passive)
 
-(defun %socket-connect (fd socket-address &optional timeout-in-milliseconds)
-  (let ((err (c_connect fd (sockaddr socket-address) (sockaddr-length socket-address) timeout-in-milliseconds)))
+(defun %socket-connect (fd socket-address &optional timeout-msecs)
+  (let ((err (c_connect fd (sockaddr socket-address)
+                        (sockaddr-length socket-address) timeout-msecs)))
     (declare (fixnum err))
     (unless (eql err 0)
       #||(fd-close fd)||#
       (socket-error nil "connect" err nil :connect-address socket-address))))
+
+(defun %socket-bind (fd socket-address)
+  (let ((err (c_bind fd
+                     (sockaddr socket-address)
+                     (sockaddr-length socket-address))))
+    (declare (fixnum err))
+    (unless (eql err 0)
+      (socket-error nil "bind" err nil))))
 
 (defmethod socket-type ((stream udp-socket)) :datagram)
 (defmethod socket-connect ((stream udp-socket)) (socket-connected stream))
@@ -510,75 +519,33 @@ the socket is not connected."))
   #-windows-target
   (not (logtest #$O_NONBLOCK (fd-get-flags fd))))
 
-(defun set-socket-options (socket
-                           &key 
-                             keepalive
-                             reuse-address
-                             nodelay
-                             broadcast
-                             linger
-                             (address-family :internet)
-                             local-port
-                             local-host
-                             local-address
-                             local-filename
-                             type
-                             connect
-                             out-of-band-inline
-			   &allow-other-keys)
+(defun %set-socket-options (fd &key keepalive reuse-address broadcast
+                                 out-of-band-inline linger
+                                 address-family type
+                                 nodelay
+                            &allow-other-keys)
   ;; see man socket(7) tcp(7) ip(7)
-  (let ((fd (socket-device socket)))
-    (when keepalive
-      (int-setsockopt fd #$SOL_SOCKET #$SO_KEEPALIVE 1))
-    (when reuse-address
-      (int-setsockopt fd #$SOL_SOCKET #$SO_REUSEADDR 1))
-    (when broadcast
-      (int-setsockopt fd #$SOL_SOCKET #$SO_BROADCAST 1))
-    (when out-of-band-inline
-      (int-setsockopt fd #$SOL_SOCKET #$SO_OOBINLINE 1))
-    (when (member address-family '(:internet :internet6))
-      (when (eq type :stream)
-	(rlet ((plinger :linger))
-	  (setf (pref plinger :linger.l_onoff) (if linger 1 0)
-		(pref plinger :linger.l_linger) (or linger 0))
-	  (socket-call socket "setsockopt"
-		       (c_setsockopt fd #$SOL_SOCKET #$SO_LINGER
-				     plinger (record-length :linger)))))
-      (when nodelay
-	(int-setsockopt fd
-			#+linux-target #$SOL_TCP
-			#-linux-target #$IPPROTO_TCP
-			#$TCP_NODELAY 1))
-      (when (or local-port local-host local-address)
-        (socket-bind-local socket (or local-address
-                                      (resolve-address :host local-host
-                                                       :port local-port
-                                                       :connect connect
-                                                       :address-family address-family
-                                                       :socket-type type)))))
-    (when (and (eq address-family :file)
-	       (eq connect :passive))
-      (unless local-filename
-        (error "need :local-filename argument to create passive file socket"))
-      #+windows-target (error "can't create file socket on Windows")
-      #-windows-target (socket-bind-local socket (make-instance 'unix-socket-address :path local-filename)))))
-
-;; I hope the inline declaration makes the &rest/apply's go away...
-(declaim (inline make-ip-socket))
-(defun make-ip-socket (&rest keys &key (type :stream) &allow-other-keys)
-  (declare (dynamic-extent keys))
-  (ecase type
-    (:stream (apply #'make-tcp-socket keys))
-    (:datagram (apply #'make-udp-socket keys))))
-
-#-windows-target
-(declaim (inline make-file-socket))
-#-windows-target
-(defun make-file-socket (&rest keys &key type &allow-other-keys)
-  (declare (dynamic-extent keys))
-  (ecase type
-    ((nil :stream) (apply #'make-stream-file-socket keys))
-    (:datagram (apply #'make-datagram-file-socket keys))))
+  (when keepalive
+    (int-setsockopt fd #$SOL_SOCKET #$SO_KEEPALIVE 1))
+  (when reuse-address
+    (int-setsockopt fd #$SOL_SOCKET #$SO_REUSEADDR 1))
+  (when broadcast
+    (int-setsockopt fd #$SOL_SOCKET #$SO_BROADCAST 1))
+  (when out-of-band-inline
+    (int-setsockopt fd #$SOL_SOCKET #$SO_OOBINLINE 1))
+  (when linger
+    (check-type linger (signed-byte 32))
+    (rlet ((plinger :linger))
+      (setf (pref plinger :linger.l_onoff) 1
+            (pref plinger :linger.l_linger) linger)
+      (let ((err (c_setsockopt fd #$SOL_SOCKET #$SO_LINGER
+			       plinger (record-length :linger))))
+        (unless (eql err 0)
+          (socket-error nil "setsockopt/linger" fd nil)))))
+  (when (and (memq address-family '(:internet :internet6))
+             (eq type :stream))
+    (when nodelay
+      (int-setsockopt fd #$IPPROTO_TCP #$TCP_NODELAY 1))))
 
 (defun make-socket (&rest keys
 		    &key
@@ -596,7 +563,7 @@ the socket is not connected."))
                       fd)
   "Create and return a new socket."
   (declare (dynamic-extent keys))
-  (declare (ignore type connect remote-host remote-port remote-address
+  (declare (ignore connect remote-host remote-port remote-address
 		   eol format keepalive reuse-address nodelay
 		   broadcast linger local-port local-host
 		   local-address backlog class out-of-band-inline
@@ -605,42 +572,71 @@ the socket is not connected."))
 		   input-timeout output-timeout deadline fd))
   (ecase address-family
     #-windows-target
-    ((:file) (apply #'make-file-socket keys))
-    ((:internet :internet6) (apply #'make-ip-socket keys))))
+    ((:file)
+     (ecase type
+       ((nil :stream) (apply #'make-stream-file-socket keys))
+       (:datagram (error "Datagram file sockets aren't implemented."))))
+    ((:internet :internet6)
+     (ecase type
+       (:stream (apply #'make-tcp-socket keys))
+       (:datagram (apply #'make-udp-socket keys))))))
 
 (defun make-udp-socket (&rest keys
                         &key
                           (fd -1)
                           (connect :active)
                           (address-family :internet)
-                          remote-host remote-port
+                          (type :datagram)
+                          remote-host remote-port remote-address
+                          local-host local-port local-address
                         &allow-other-keys)
+  (assert (eq type :datagram))
   (unwind-protect
-    (let (socket)
-      (when (< fd 0)
-        (setq fd (socket-call nil "socket"
-                              (c_socket (ecase address-family
-                                          (:internet #$PF_INET)
-                                          (:internet6 #$PF_INET6))
-                                        #$SOCK_DGRAM #$IPPROTO_UDP))))
-      (setq socket (make-instance 'udp-socket
-				  :device fd
-				  :keys keys))
-      (apply #'set-socket-options socket keys)
-      (when (and (eql connect :active)
-                 remote-host remote-port)
-        (%socket-connect fd
-                         (apply #'resolve-address
-				:connect connect
-				:address-family address-family
-                                :host remote-host
-                                :port remote-port
-                                :allow-other-keys t
-                                keys)
-                         nil)
-        (setf (socket-connected socket) t))
-      (setq fd -1)
-      socket)
+       (let (socket connectedp)
+         (when (< fd 0)
+           (setq fd (socket-call nil "socket"
+                                 (c_socket (ecase address-family
+                                             (:internet #$PF_INET)
+                                             (:internet6 #$PF_INET6))
+                                           #$SOCK_DGRAM #$IPPROTO_UDP))))
+         (apply #'%set-socket-options fd keys)
+         (when (or local-address local-port local-host)
+           (let ((local (or local-address
+                            (resolve-address :host local-host
+                                             :port local-port
+                                             ;; Specify :passive
+                                             ;; because we want a
+                                             ;; socket address ready
+                                             ;; for use with bind.
+                                             ;; See note about
+                                             ;; AI_PASSIVE in
+                                             ;; getaddrinfo(3)
+                                             :connect :passive
+                                             :address-family address-family
+                                             :socket-type type))))
+             (%socket-bind fd local)))
+         (when (and (eq connect :active)
+                    (or remote-address
+                        (and remote-host remote-port)))
+           (let ((remote (or remote-address
+                             (resolve-address :host remote-host
+                                              :port remote-port
+                                              ;; Specify :active
+                                              ;; because we want a
+                                              ;; socket address ready
+                                              ;; for use with connect.
+                                              :connect :active
+                                              :address-family address-family
+                                              :socket-type type))))
+             (%socket-connect fd remote nil)
+             (setq connectedp t)))
+         ;; Now that the fd is all set up, make the socket object.
+         (setq socket (make-instance 'udp-socket
+                                     :device fd
+                                     :keys keys))
+         (setf (socket-connected socket) connectedp)
+         (setq fd -1)
+         socket)
     (unless (< fd 0)
       (fd-close fd))))
 
@@ -649,26 +645,35 @@ the socket is not connected."))
                           (connect :active)
                           (fd -1)
                           (address-family :internet)
+                          (type :stream)
+                          local-host local-port local-address
                           remote-host remote-port remote-address
                           backlog connect-timeout deadline
                         &allow-other-keys)
+  (assert (eq type :stream))
   (unwind-protect
-       (progn
+       (let (socket)
 	 (when (< fd 0)
            (setq fd (socket-call nil "socket"
                                  (c_socket (ecase address-family
                                              (:internet #$PF_INET)
                                              (:internet6 #$PF_INET6))
                                            #$SOCK_STREAM #$IPPROTO_TCP))))
-         (let ((socket (apply (ecase connect
-                                (:active #'make-tcp-stream-socket)
-                                (:passive #'make-tcp-listener-socket))
-                              fd
-                              keys)))
-           (apply #'set-socket-options socket keys)
-           (if (eql connect :passive)
-	     (socket-call nil "listen" (c_listen fd (or backlog 5)))
-	     (let ((timeout-in-milliseconds
+         (apply #'%set-socket-options fd keys)
+         (when (or local-port local-host local-address)
+           (let ((local (or local-address
+                            (resolve-address :host local-host
+                                             :port local-port
+                                             ;; want socket addr for bind
+                                             :connect :passive
+                                             :address-family address-family
+                                             :socket-type type))))
+             (%socket-bind fd local)))
+         (ecase connect
+           (:passive
+            (socket-call nil "listen" (c_listen fd (or backlog 5))))
+           (:active
+            (let ((timeout-msecs
 		    (cond
 		      (deadline
 		       (max (round (- deadline (get-internal-real-time))
@@ -677,29 +682,22 @@ the socket is not connected."))
 		      (connect-timeout
 		       (check-io-timeout connect-timeout)
 		       (round (* connect-timeout 1000)))))
-		   (socket-address (or remote-address
-				       (apply #'resolve-address
-					      :connect connect
-					      :address-family address-family
-					      :host remote-host
-					      :port remote-port
-					      :allow-other-keys t
-					      keys))))
-               (handler-bind
-                   ((socket-creation-error
-                     (lambda (c)
-                       (declare (ignore c))
-                       ;; When connect fails, the fd is no longer usable,
-                       ;; and must be closed.  Because we've already made
-                       ;; a stream using this fd, close the fd by closing
-                       ;; the stream.
-                       (close socket)
-                       ;; Don't try to close fd again in the unwind-protect
-                       ;; cleanup form.
-                       (setq fd -1))))
-                 (%socket-connect fd socket-address timeout-in-milliseconds))))
-           (setq fd -1)
-           socket))
+		  (remote (or remote-address
+			      (resolve-address :host remote-host
+				               :port remote-port
+                                               ;; want socket addr for connect
+                                               :connect :active
+				               :address-family address-family
+                                               :socket-type type))))
+              (%socket-connect fd remote timeout-msecs))))
+         ;; Now that the fd is all set up, make the socket object.
+         (setq socket (apply (ecase connect
+                               (:active #'make-tcp-stream-socket)
+                               (:passive #'make-tcp-listener-socket))
+                             fd
+                             keys))
+         (setq fd -1)
+         socket)
     (unless (< fd 0)
       (fd-close fd))))
 
@@ -718,49 +716,46 @@ the socket is not connected."))
                                   (connect :active)
                                   backlog
                                   (fd -1)
+                                  local-filename
+                                  remote-filename
                                 &allow-other-keys)
   (unwind-protect
        (let (socket)
          (when (< fd 0)
-           (setq fd (socket-call nil "socket" (c_socket #$PF_LOCAL #$SOCK_STREAM 0))))
-         (setq socket
-                (apply (ecase connect
-                         (:active #'make-file-stream-socket)
-                         (:passive #'make-file-listener-socket))
-                       fd keys))
-         (apply #'set-socket-options socket keys)
-         (when (eql connect :passive)
-           (socket-call nil "listen" (c_listen fd (or backlog 5))))
+           (setq fd (socket-call nil "socket" (c_socket #$PF_LOCAL
+                                                        #$SOCK_STREAM 0))))
+         (apply #'%set-socket-options fd keys)
+         (ecase connect
+           (:passive
+            (unless local-filename
+              (error "need :local-filename argument to create server file ~
+                       stream socket"))
+            (let ((local (make-instance 'unix-socket-address
+                                        :path local-filename)))
+              (%socket-bind fd local)
+              (socket-call nil "listen" (c_listen fd (or backlog 5)))))
+           (:active
+            (unless remote-filename
+              (error "need :remote-filename argument to create client file ~
+                       stream socket"))
+            (let ((remote (make-instance 'unix-socket-address
+                                         :path remote-filename)))
+              (%socket-connect fd remote))))
+         (setq socket (apply (ecase connect
+                               (:active #'make-file-stream-socket)
+                               (:passive #'make-file-listener-socket))
+                             fd keys))
          (setq fd -1)
          socket)
     (unless (< fd 0)
       (fd-close fd))))
 
-(defun make-datagram-file-socket (&rest keys)
-  (declare (ignore keys))
-  (error "Datagram file sockets aren't implemented."))
-
-#-windows-target
-(defun file-socket-connect (fd remote-filename)
-  (%socket-connect fd (make-instance 'unix-socket-address :path remote-filename)))
-
-#+windows-target
-(defun file-socket-connect (fd remote-filename)
-  (declare (ignore fd))
-  (error "Can't create file socket to ~s on Windows" remote-filename))
-  
 (defun make-tcp-stream-socket (fd &rest keys &key &allow-other-keys)
   (apply #'make-tcp-stream fd keys))
 
 #-windows-target
-(defun make-file-stream-socket (fd &rest keys
-                                   &key remote-filename
-                                   &allow-other-keys)
-  (unless remote-filename
-    (error "need :remote-filename argument when creating file stream socket"))
-  (file-socket-connect fd remote-filename)
+(defun make-file-stream-socket (fd &rest keys &key &allow-other-keys)
   (apply #'make-file-socket-stream fd keys))
-
 
 (defun make-tcp-stream (fd
                         &key (format :bivalent)
@@ -1057,21 +1052,11 @@ unsigned IP address."
         (pref valptr :signed)
 	(socket-error socket "getsockopt" err nil)))))
 
-(defun timeval-setsockopt (socket level optname timeout)
-    (multiple-value-bind (seconds micros)
-        (microseconds timeout)
-      (rlet ((valptr :timeval :tv_sec seconds :tv_usec micros))
-        (socket-call socket "setsockopt"
-          (c_setsockopt socket level optname valptr (record-length :timeval))))))
-                   
-(defun int-setsockopt (socket level optname optval)
+(defun int-setsockopt (fd level optname optval)
   (rlet ((valptr :signed))
     (setf (pref valptr :signed) optval)
-    (socket-call socket "setsockopt"
-      (c_setsockopt socket level optname valptr (record-length :signed)))))
-
-
-
+    (socket-call nil (format nil "setsockopt ~d/~d" optname optval)
+      (c_setsockopt fd level optname valptr (record-length :signed)))))
             
 (defun c_gethostbyaddr (addr-in-net-byte-order)
   (rletZ ((sin #>sockaddr_in))
@@ -1689,11 +1674,6 @@ the resulting sockaddr."
                                             1))
                           #-darwin-target
                           (%get-cstring (pref sockaddr :sockaddr_un.sun_path))))))
-
-(defmethod socket-bind-local (socket socket-address)
-  (socket-call socket "bind" (c_bind (socket-device socket)
-                                     (sockaddr socket-address)
-                                     (sockaddr-length socket-address))))
 
 (defun get-socket-address-from-call (socket function call-name)
   (let ((socket-address (make-instance 'socket-address)))
