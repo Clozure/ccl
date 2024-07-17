@@ -342,7 +342,8 @@ make-socket-args. The socket gets closed on exit."
   (:documentation "Return :internet, :internet6 or :file, as appropriate."))
 
 (defmethod socket-address-family ((socket ip-socket))
-  :internet)
+  ;; This is more expensive than one would like.
+  (socket-address-family (local-socket-address socket)))
 
 (defmethod socket-address-family ((socket file-socket))
   :file)
