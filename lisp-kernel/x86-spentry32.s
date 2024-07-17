@@ -2078,7 +2078,7 @@ C(egc_write_barrier_end):
 _endsubp(store_node_conditional)
 
 _spentry(setqsym)
-	__(bt $sym_vbit_const,symbol.flags(%arg_y))
+	__(btl $sym_vbit_const,symbol.flags(%arg_y))
 	__(jae _SPspecset)
 	__(mov %arg_y,%arg_z)
 	__(mov $XCONST,%arg_y)
