@@ -33,8 +33,15 @@
     #-windows-target
     (max 1000 (#_sysconf #$_SC_CLK_TCK)))
 
+(defconstant +ns-per-second+ 1000000000)
+
+(defconstant +ns-per-millisecond+ (floor +ns-per-second+ 1000))
+
 (defloadvar *ns-per-tick*
-    (floor 1000000000 *ticks-per-second*))
+    (floor +ns-per-second+ *ticks-per-second*))
+
+(defloadvar *ns-per-internal-time-unit*
+    (floor +ns-per-second+ internal-time-units-per-second))
 
 #-windows-target
 (defun %nanosleep (seconds nanoseconds)
@@ -76,40 +83,40 @@
                     :address (or ptz (%null-ptr))
                     :int))
 
-(defloadvar *lisp-start-timeval*
-    (progn
-      (let* ((r (make-record :timeval)))
-        (gettimeofday r)
-        r)))
+#-(or darwin-target windows-target)
+(defloadvar preferred-posix-clock-id
+  (rlet ((ts :timespec))
+    (if (eql 0 (#_clock_gettime #$CLOCK_MONOTONIC ts))
+      #$CLOCK_MONOTONIC
+      #$CLOCK_REALTIME)))
 
+#+darwin-target
+(defloadvar darwin-ns-per-unit
+    (rlet ((timebase-info :mach_timebase_info_data_t))
+      (#_mach_timebase_info timebase-info)
+      (floor (pref timebase-info :mach_timebase_info_data_t.numer)
+             (pref timebase-info :mach_timebase_info_data_t.denom))))
 
-(defloadvar *internal-real-time-session-seconds* nil)
-
+(defun current-time-in-nanoseconds ()
+  #-(or darwin-target windows-target)
+  (rlet ((ts :timespec))
+    (#_clock_gettime preferred-posix-clock-id ts)
+    (+ (* (pref ts :timespec.tv_sec) +ns-per-second+)
+       (pref ts :timespec.tv_nsec)))
+  #+darwin-target
+  (* (#_mach_absolute_time) darwin-ns-per-unit)
+  #+windows-target
+  (* (#_GetTickCount64) +ns-per-millisecond+))
 
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
-  (rlet ((tv :timeval))
-    (gettimeofday tv)
-    (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
-           (initial *internal-real-time-session-seconds*))
-      (if initial
-        (locally
-            (declare (type (unsigned-byte 32) initial))
-          (+ (* internal-time-units-per-second
-                (the (unsigned-byte 32)
-                  (- (the (unsigned-byte 32) (pref tv :timeval.tv_sec))
-                     initial)))
-             units))
-        (progn
-          (setq *internal-real-time-session-seconds*
-                (pref tv :timeval.tv_sec))
-          units)))))
+  (values (truncate (current-time-in-nanoseconds)
+                    *ns-per-internal-time-unit*)))
 
 (defun get-tick-count ()
-  (values (floor (get-internal-real-time)
-                 (floor internal-time-units-per-second
-                        *ticks-per-second*))))
+  (values (truncate (current-time-in-nanoseconds)
+                    *ns-per-tick*)))
 
 
 
