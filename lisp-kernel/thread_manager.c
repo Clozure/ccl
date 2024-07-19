@@ -662,6 +662,11 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
 #endif
 #ifdef SOLARIS
   stack_t st;
+  /*
+   * If we #include <thread.h> then a conflicting definition
+   * for rwlock_destroy comes into scope.
+   */
+  extern int thr_stksegment(stack_t *ss);
   
   thr_stksegment(&st);
   *size = st.ss_size;

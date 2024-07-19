@@ -42,6 +42,7 @@
 #endif
 #ifdef WINDOWS
 #include <windows.h>
+#include <io.h>
 #ifdef WIN_64
 #include <winternl.h>
 #include <ntstatus.h>
@@ -2242,7 +2243,6 @@ windows_arbstack_exception_handler(EXCEPTION_POINTERS *exception_pointers)
 
     if ((current_sp >= cs->low) &&
         (current_sp < cs->high)) {
-      debug_show_registers(context, exception_pointers->ExceptionRecord, 0);
       FBug(context, "Exception on foreign stack\n");
       return EXCEPTION_CONTINUE_EXECUTION;
     }

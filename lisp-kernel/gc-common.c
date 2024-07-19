@@ -23,10 +23,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef WINDOWS
 #include <sys/time.h>
-#endif
+
 
 #ifndef timeradd
 # define timeradd(a, b, result)						      \

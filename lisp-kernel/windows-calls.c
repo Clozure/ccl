@@ -29,6 +29,7 @@
 #undef __argv
 #include <stdio.h>
 #include <math.h>
+#include <sys/time.h>
 
 void
 _dosmaperr(unsigned long oserrno)

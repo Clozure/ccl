@@ -1537,37 +1537,36 @@ remap_spjump()
 void
 remap_spjump()
 {
-  extern opcode spjump_start;
+  extern char spjump_start[];
+  char *dest =  (char *)SPJUMP_TARGET_ADDRESS;
   DWORD old_protect;
 
-  if ((void *)(&spjump_start) != (void *) SPJUMP_TARGET_ADDRESS) {
-    if (!VirtualProtect((pc) SPJUMP_TARGET_ADDRESS,
-                        0x1000,
-                        PAGE_READWRITE,
-                        &old_protect)) {
+  if (spjump_start == dest) {
+    return;
+  } else {
+    if (!VirtualProtect(dest, 0x1000, PAGE_READWRITE, &old_protect)) {
       wperror("VirtualProtect spjump");
       _exit(1);
     }
-    memmove((pc) SPJUMP_TARGET_ADDRESS, &spjump_start, 0x1000);
+    memmove(dest, spjump_start, 0x1000);
   }
 }
 #else
 void
 remap_spjump()
 {
-  extern opcode spjump_start;
-  pc new = mmap((pc) SPJUMP_TARGET_ADDRESS,
-                0x1000,
-                PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANON | MAP_FIXED,
-                -1,
-                0),
-    old = &spjump_start;
-  if (new == (pc)-1) {
+  extern char spjump_start[];
+  char *new = mmap((char *)SPJUMP_TARGET_ADDRESS,
+                   0x1000,
+                   PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANON | MAP_FIXED,
+                   -1,
+                   0);
+  if (new == MAP_FAILED) {
     perror("remap spjump");
     _exit(1);
   }
-  memmove(new, old, 0x1000);
+  memmove(new, spjump_start, 0x1000);
 }
 #endif
 #endif
@@ -1921,10 +1920,17 @@ main
 #endif
 #ifdef WINDOWS
   real_executable_name = determine_executable_name();
+  {
+    SYSTEM_INFO info;
+
+    GetSystemInfo(&info);
+    page_size = info.dwPageSize;
+  }
 #else
   real_executable_name = determine_executable_name(argv[0]);
+  page_size = getpagesize();
 #endif
-  page_size = getpagesize(); /* Implement with GetSystemInfo on Windows w/o MinGW */
+
 
   check_bogus_fp_exceptions();
 #ifdef LINUX
@@ -2298,7 +2304,7 @@ check_for_embedded_image (
                           )
 {
 #ifdef WINDOWS
-  int fd = wopen(path, O_RDONLY);
+  int fd = _wopen(path, O_RDONLY);
 #else  
   int fd = open(path, O_RDONLY);
 #endif
@@ -2326,7 +2332,7 @@ load_image(
 )
 {
 #ifdef WINDOWS
-  int fd = wopen(path, O_RDONLY, 0666), err;
+  int fd = _wopen(path, O_RDONLY, 0666), err;
 #else
   int fd = open(path, O_RDONLY, 0666), err;
 #endif
