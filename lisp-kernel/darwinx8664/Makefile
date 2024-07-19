@@ -15,7 +15,7 @@
 
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
-OSVERSION=10.9
+OSVERSION=10.13
 
 MDYNAMIC_NO_PIC = $(shell ($(CC) --help -v 2>&1 | grep -q -e "-mdynamic-no-pic") && /bin/echo "-mdynamic-no-pic")
 
