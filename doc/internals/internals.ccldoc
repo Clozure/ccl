@@ -3,6 +3,8 @@
 (ccldoc:def-expander CCL () "Clozure CL")
 
 (document "Clozure CL Internals"
+  (include-file "assembler.ccldoc" :in-package :ccl)
+  (include-file "backend.ccldoc" :in-package :ccl)
   (include-file "implementation.ccldoc" :in-package :ccl)
   (include-file "glossary.ccldoc" :in-package :ccl)
   (index-section "Symbol Index"))

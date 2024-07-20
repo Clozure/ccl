@@ -1,0 +1,60 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Assembler"
+  "The built-in assembler is used both for {term LAP} functions and for
+   defining {term vinsn} templates."
+
+  (defsection "ARM (32-bit)"
+    "In general, an ARM memory operand is of the form “register + <offset>”,
+     where <offset> can be an immediate constant, a register, or
+     a shifted register."
+
+    (code-block
+      "(:$ n) -> immediate
+
+Offset addressing:
+(:@ r <offset>) -> ea = register + optional offset
+(:+@ r <offset>) -> same as above
+(:-@ r <offset) -> ea = register - optional offset
+
+Pre-indexed addressing (with writeback):
+(:@! r <offset>) -> ea = register + optional offset; write ea back to r
+(:+@! r <offset>) -> same as above
+(:-@! r <offset>) -> ea = register - optional offset; write ea back to r
+
+Post-indexed addressing (with writeback):
+(:@+ r <offset>) -> ea = r; write ea + offset back to r
+(:@- r <offset>) -> ea = r; write ea - offset back to r
+
+<offset> can be an immediate, a register, or a shifted register.
+
+(:lsl r1 imm/r2) -> offset = r1 shifted by imm/r2
+(:lsr r1 imm/r2) -> 
+(:asr r1 imm/r2) -> 
+(:ror r1 imm/r2) ->
+# rotate right with extend; the carry flag will be rotated into bit 31
+(:rrx r)) -> "))
+
+  (defsection "x86"
+    "The LAP notatation for x86 is based on the AT&T style syntax
+     as used in traditional Unix assemblers like GNU as.  Notably,
+     the destination operand generally comes last, instead of first, as in
+     the Intel syntax."
+    (code-block
+      "(% r) -> register
+($ n) -> immediate
+(@ a) -> memory operand
+
+The general memory operand syntax is
+([seg] [disp] [base] [index] [scale])
+but not all combinations are meaningful.  For instance, a [seg] by iteslf
+is pretty useless.
+
+Thus one might write:
+(:@ x8664::misc-data-offset (:%q vec) (:%q word-index) 8)
+
+(:rcontext a) -> memory operand, using segment register or gpr
+(:self fn) -> special self-reference, used by the gc on 32-bit x86
+s -> a label"))
+
+) ;chapter

@@ -22,6 +22,11 @@
   (glossentry "node"
     (para "A value in memory or a register that is a tagged lisp datum."))
 
+  (glossentry "LAP"
+    "An old acronym for Lisp Assembly Program.  A notation for
+     writing assembly language in Lisp-like syntax.  Not surprisingly,
+     the exact LAP syntax varies, depending on processor architecture.")
+
   (glossentry "punt, puntable"
     (para
      "If a variable is bound to a simple expression and is never setq’d,
@@ -54,4 +59,13 @@
      "A stack that contains tagged lisp objects (nodes) such as function
       arguments, local variables, and other stack-allocated lisp
       objects. The contents of the value stack between its bottom and
-      top are always unambiguously nodes.")))
+      top are always unambiguously nodes."))
+
+  (glossentry "vinsn"
+    "Virtual Instruction.  A pre-assembled fragment of code used as
+     a code generation template by the compiler backend.
+
+     Vinsns are written in a {term LAP}-like notation, but a key difference
+     is that vinsns are expanded/assembled as much as possible at vinsn
+     definition time.  When a vinsn is emitted at compile time, the operands
+     in the vinsn template are then filled in."))

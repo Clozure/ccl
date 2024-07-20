@@ -1,0 +1,38 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Backend"
+  (para
+   "Writing "
+   (code-block "(with-imm-target (other-reg) reg ...)")
+   " means that we want to assign a register to “reg”, but it can’t be
+    “other-reg.  The vinsn operator type {code :imm} generally means
+    “can hold a fixnum or other lisp immediate type.”  In other words,
+    such an operand can be placed in an immediate (unboxed) register.
+
+    One can also write "
+   (code-block "(with-node-target (other-reg) reg ...)")
+   " if the register has to be able to hold boxed lisp objects (nodes).")
+
+  (para
+   "The difference between {code with-xxx-temps} and {code
+    with-xxx-target} is that {code with-xxx-temps} means to find a
+    register and mark it as being in use, i.e, not available for
+    allocation as a temporary.
+
+    On the other hand, {code with-xxx-target} means to find a register
+    that is not marked as being in use, and which does not conflict
+    with these other specified reigsters.
+
+    As an example, you might want to say “get the vector, index, and
+    new value into any 3 registers; it doesn't matter which 3, but in
+    general we want them to be distinct from each other.”  While
+    getting those 3 values into those registers, we might do some
+    pushing and popping, but we should otherwise be free to allocate
+    temporaries that conflict with those registers as long as things
+    wind up in the right places.
+
+    In a few other cases, it’s reasonable to say “mark this as being
+    in use, so that it isn't allocated as a temporary inside a vinsn.”
+    That’s useful in some cases, but a bit more dangerous (in that we
+    can run out of registers through overuse of this fairly easily.)"))
+
