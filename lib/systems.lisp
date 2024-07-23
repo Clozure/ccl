@@ -236,5 +236,5 @@
     (jp-encode        "ccl:bin;jp-encode"        ("ccl:library;jp-encode.lisp"))
     (cn-encode        "ccl:bin;cn-encode"        ("ccl:library;cn-encode.lisp"))
     (hashenv          "ccl:bin;hashenv"          ("ccl:xdump;hashenv.lisp"))
-    (prefixed-stream  "ccl:library;prefixed-stream"  ("ccl:library;prefixed-stream.lisp"))
-    (timestamped-stream "ccl:library;timestamped-stream" ("ccl:library;timestamped-stream.lisp"))))
+    (prefixed-stream  "ccl:bin;prefixed-stream"  ("ccl:library;prefixed-stream.lisp"))
+    (timestamped-stream "ccl:bin;timestamped-stream" ("ccl:library;timestamped-stream.lisp"))))
