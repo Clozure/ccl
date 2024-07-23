@@ -28,6 +28,7 @@ typedef struct ucontext ExceptionInformation;
 #include "x86-constants32.h"
 
 #include <sys/regset.h>
+#include <sys/fp.h>
 #include <limits.h>
 #define REG_EAX EAX
 #define REG_EBX EBX
