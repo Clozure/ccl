@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 #
 # Copyright 2005-2006 Clozure Associates
 #
@@ -17,18 +18,15 @@ VC_REVISION != sh -c "git describe --dirty 2>/dev/null || echo unknown"
 
 VPATH = ..
 RM = /bin/rm
-AS = as
 M4 = m4
-ASFLAGS = --32
 M4FLAGS = -DFREEBSD -DX86 -DX8632 -DHAVE_TLS
-CDEFINES = -DFREEBSD -D_REENTRANT -DX86 -DX8632 -D_GNU_SOURCE -DHAVE_TLS -DVC_REVISION="$(VC_REVISION)"
+CDEFINES = -DFREEBSD -DX86 -DX8632 -DHAVE_TLS -DVC_REVISION="$(VC_REVISION)"
 CDEBUG = -g
-COPT = #-O2
+COPT = -O
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
 PLATFORM_H = platform-freebsdx8632.h
-
 
 
 SPOBJ = pad.o x86-spjump32.o x86-spentry32.o x86-subprims32.o
@@ -49,26 +47,25 @@ CHEADERS = area.h bits.h x86-constants.h lisp-errors.h gc.h lisp.h \
 	x86-utils.h \
 	threads.h x86-constants32.h x86-exceptions.h $(PLATFORM_H)
 
-.if $(MACHINE) == "amd64"
-CROSS = -B/usr/lib32
-.endif
-
 KSPOBJ = $(SPOBJ)
 all:	../../fx86cl
 
 
-OSLIBS = -lm -lthr $(CROSS)
+OSLIBS = -lm -lthr
 
 .s.o:
-	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
+	$(M4) $(M4FLAGS) -I../ $< | $(CC) -c -m32 -g -x assembler -o $@ -
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) $(WFORMAT) -m32 -o $@
 
 LINKSCRIPTFILE = # 
 LINKSCRIPT =  # -T $(LINKSCRIPTFILE)
 
+# ASLR is off on 32-bit FreeBSD by default, but disable it here
+# explicitly to match what we do in the freebsd8664 Makefile
 ../../fx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(LINKSCRIPTFILE)
 	$(CC) -m32 $(CDEBUG)  -Wl,--export-dynamic  $(LINKSCRIPT)  -o $@  $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+	elfctl -e +noaslr $@
 
 
 $(SPOBJ): $(SPINC)
