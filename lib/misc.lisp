@@ -935,7 +935,7 @@ are running on, or NIL if we can't find any useful information."
 		  (merge-pathnames (ccl-directory) ".git"))))
     (multiple-value-bind (status exit-code)
 	(external-process-status
-	 (run-program "git" (list "--git-dir" git-dir "describe" "HEAD")
+	 (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
 		      :output s :error :output))
       (when (and (eq status :exited)
 		 (= exit-code 0))
