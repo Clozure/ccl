@@ -39,7 +39,7 @@ WFORMAT = -Wno-format
 PLATFORM_H = platform-darwinx8664.h
 
 .s.o:
-	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -mmacosx-version-min=$(OSVERSION) -o $@
+	$(M4) $(M4FLAGS) -I../ $< | $(AS) $(ASFLAGS) -mmacosx-version-min=$(OSVERSION) -o $@ -
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< -arch x86_64 $(CDEFINES) \
 	$(CDEBUG) $(COPT) $(WFORMAT) $(MDYNAMIC_NO_PIC) \
