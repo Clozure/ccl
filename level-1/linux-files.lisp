@@ -379,10 +379,6 @@ given is that of a group to which the current user belongs."
   (int-errno-call (#_setgid uid)))
   
 
-;;; On Linux, "stat" & friends are implemented in terms of deeper,
-;;; darker things that need to know what version of the stat buffer
-;;; they're talking about.
-
 #-windows-target
 (defun %stat-values (result stat)
   (if (eql 0 (the fixnum result)) 
@@ -456,9 +452,6 @@ given is that of a group to which the current user belongs."
 (defun %%stat (name stat)
   (with-filename-cstrs ((cname #+windows-target (windows-strip-trailing-slash name) #-windows-target name))
     (%stat-values
-     #+(and linux-target (not android-target))
-     (#_ __xstat #$_STAT_VER_LINUX cname stat)
-     #-(and linux-target (not android-target))
      (int-errno-ffcall (%kernel-import target::kernel-import-lisp-stat)
                        :address cname
                        :address stat
@@ -467,9 +460,6 @@ given is that of a group to which the current user belongs."
 
 (defun %%fstat (fd stat)
   (%stat-values
-   #+(and linux-target (not android-target))
-   (#_ __fxstat #$_STAT_VER_LINUX fd stat)
-   #-(and linux-target (not android-target))
    (int-errno-ffcall (%kernel-import target::kernel-import-lisp-fstat)
                      :int fd
                      :address stat
@@ -480,9 +470,6 @@ given is that of a group to which the current user belongs."
 (defun %%lstat (name stat)
   (with-filename-cstrs ((cname name))
     (%stat-values
-     #+(and linux-target (not android-target))
-     (#_ __lxstat #$_STAT_VER_LINUX cname stat)
-     #-(and linux-target (not android-target))
      (int-errno-ffcall (%kernel-import target::kernel-import-lisp-lstat)
 		       :address cname
 		       :address stat
