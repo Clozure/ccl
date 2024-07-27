@@ -22,15 +22,15 @@
 
 #+linuxx8664-target
 (progn
-  (defconstant gp-regs-offset (+ (get-field-offset :ucontext.uc_mcontext)
+  (defconstant gp-regs-offset (+ (get-field-offset :ucontext_t.uc_mcontext)
                                  (get-field-offset :mcontext_t.gregs)))
   (defmacro xp-gp-regs (xp) xp)
   (defconstant flags-register-offset #$REG_EFL)
   (defconstant rip-register-offset #$REG_RIP)
   (defun xp-mxcsr (xp)
-    (pref xp :ucontext.uc_mcontext.fpregs.mxcsr))
+    (pref xp :ucontext_t.uc_mcontext.fpregs.mxcsr))
   (defmacro xp-xmm-regs (xp)
-    `(pref ,xp :ucontext.uc_mcontext.fpregs._xmm))
+    `(pref ,xp :ucontext_t.uc_mcontext.fpregs._xmm))
   (defparameter *encoded-gpr-to-indexed-gpr*
     #(13                                ;rax
       14                                ;rcx
@@ -198,12 +198,12 @@
 (progn
   (defconstant gp-regs-offset 0)
   (defmacro xp-gp-regs (xp)
-    `(pref (pref ,xp :ucontext.uc_mcontext) :mcontext_t.gregs))
+    `(pref (pref ,xp :ucontext_t.uc_mcontext) :mcontext_t.gregs))
   (defun xp-mxcsr (xp)
-    (pref (pref (pref xp :ucontext.uc_mcontext) :mcontext_t.fpregs)
+    (pref (pref (pref xp :ucontext_t.uc_mcontext) :mcontext_t.fpregs)
           :_fpstate.mxcsr))
   (defmacro xp-xmm-regs (xp)
-    `(pref (pref ,xp :ucontext.uc_mcontext.fpregs) :_fpstate._xmm))
+    `(pref (pref ,xp :ucontext_t.uc_mcontext.fpregs) :_fpstate._xmm))
   (defconstant flags-register-offset #$REG_EFL)
   (defconstant eip-register-offset #$REG_EIP)
   (defparameter *encoded-gpr-to-indexed-gpr*
