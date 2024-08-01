@@ -567,7 +567,6 @@
            (*available-backend-crf-temps* arm-cr-fields)
            (bits 0)
            (*logical-register-counter* -1)
-           (*backend-all-lregs* ())
            (*arm2-undo-count* 0)
            (*backend-labels* (arm2-make-stack 64 target::subtag-simple-vector))
            (*arm2-undo-stack* (arm2-make-stack 64  target::subtag-simple-vector))
