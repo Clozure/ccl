@@ -1053,6 +1053,13 @@ unsigned IP address."
         (pref valptr :signed)
 	(socket-error socket "getsockopt" err nil)))))
 
+(defun timeval-setsockopt (socket level optname timeout)
+  (multiple-value-bind (seconds micros)
+      (microseconds timeout)
+    (rlet ((valptr :timeval :tv_sec seconds :tv_usec micros))
+      (socket-call socket "setsockopt"
+        (c_setsockopt socket level optname valptr (record-length :timeval))))))
+
 (defun int-setsockopt (fd level optname optval)
   (rlet ((valptr :signed))
     (setf (pref valptr :signed) optval)
