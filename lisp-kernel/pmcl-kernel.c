@@ -1928,7 +1928,7 @@ main
   }
 #else
   real_executable_name = determine_executable_name(argv[0]);
-  page_size = getpagesize();
+  page_size = sysconf(_SC_PAGESIZE);
 #endif
 
 
@@ -2634,7 +2634,7 @@ init_ccl_for_android(ANativeActivity *activity)
   android_vm = activity->vm;
 
   current_sp = (BytePtr) current_stack_pointer();
-  page_size = getpagesize();
+  page_size = sysconf(_SC_PAGESIZE);
   
   if (!check_arm_cpu()) {
     __android_log_print(ANDROID_LOG_FATAL,"nativeCCL","CPU doesn't support required features");

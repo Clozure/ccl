@@ -125,7 +125,7 @@
 (defun %make-executable-page ()
   #-windows-target
   (#_mmap (%null-ptr)
-          #-android-target (#_getpagesize) #+android-target (#_sysconf #$_SC_PAGE_SIZE)
+          (get-page-size)
           (logior #$PROT_READ #$PROT_WRITE #$PROT_EXEC)
           (logior #$MAP_PRIVATE #$MAP_ANON)
           -1
@@ -141,7 +141,7 @@
 (defstatic *current-callback-page* nil)
 
 (defun reset-callback-storage ()
-  (setq *available-bytes-for-callbacks* #-windows-target #-android-target (#_getpagesize) #+android-target (#_sysconf #$_SC_PAGE_SIZE) #+windows-target (ash 1 16)
+  (setq *available-bytes-for-callbacks* #-windows-target (get-page-size) #+windows-target (ash 1 16)
         *current-callback-page* (%make-executable-page)))
 
 (defun %allocate-callback-pointer (n)

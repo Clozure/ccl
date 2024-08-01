@@ -2227,16 +2227,15 @@ not, why not; and what its result code was if it completed."
 (defun yield ()
   (process-allow-schedule))
 
-(defloadvar *host-page-size*
-    #-(or windows-target android-target)
-    (#_getpagesize)
-    #+windows-target
-    (rlet ((info #>SYSTEM_INFO))
-      (#_GetSystemInfo info)
-      (pref info #>SYSTEM_INFO.dwPageSize))
-    #+android-target
-    (#_sysconf #$_SC_PAGE_SIZE)
-    )
+(defun get-page-size ()
+  #-windows-target
+  (#_sysconf #$_SC_PAGESIZE)
+  #+windows-target
+  (rlet ((info #>SYSTEM_INFO))
+    (#_GetSystemInfo info)
+    (pref info #>SYSTEM_INFO.dwPageSize)))
+
+(defloadvar *host-page-size* (get-page-size))
 
 ;;(assert (= (logcount *host-page-size*) 1))
 
