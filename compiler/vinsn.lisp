@@ -2269,7 +2269,7 @@ o           (unless (and (eql use (interval-begin interval))
                            *backend-fp-temps*
                            *backend-crf-temps*))
              (build-interval-list header)
-             #(and later +x86-target)
+             #+(and later x86-target)
              (when (eq *linear-scan-verbose* :very)
                (ls-format "~&**********************************************~s" (afunc-name *x862-cur-afunc*))
                (dolist (n fg )
