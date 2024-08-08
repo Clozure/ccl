@@ -250,7 +250,7 @@
         (millis millis (- stop start))
         (stop (+ start millis)))
        ((or (<= millis 0)
-            (not (eql (#_SleepEx millis #$true) #$WAIT_IO_COMPLETION))))))
+            (not (eql (#_SleepEx millis #$TRUE) #$WAIT_IO_COMPLETION))))))
 
 (defun sleep (seconds)
   "This function causes execution to be suspended for N seconds. N may

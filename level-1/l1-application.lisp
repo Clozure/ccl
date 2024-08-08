@@ -311,7 +311,7 @@ Default version returns Clozure CL version info."
 (defun housekeeping-loop ()
   (with-standard-abort-handling nil 
     (loop
-      #+windows-target (#_SleepEx 333 #$true)
+      #+windows-target (#_SleepEx 333 #$TRUE)
       #-windows-target (%nanosleep *periodic-task-seconds* *periodic-task-nanoseconds*)
       (housekeeping))))
   

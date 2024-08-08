@@ -2002,7 +2002,7 @@ space, and prefixed with PREFIX."
           (setq terminated (eql (#_WaitForSingleObjectEx
                                  (external-process-pid p)
                                  1000
-                                 #$true)
+                                 #$TRUE)
                                 #$WAIT_OBJECT_0))))))
   
 
