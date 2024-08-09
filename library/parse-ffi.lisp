@@ -265,12 +265,20 @@
            (operands (cdr expression))
            (noperands (length operands)))
       (case operator
-        (c::resolve-type (let* ((foreign-type  (ignore-errors (parse-c-ffi-type (car operands)))))
+        (c::resolve-type (let* ((foreign-type (ignore-errors (parse-c-ffi-type (car operands)))))
                            (when foreign-type
                              (setf (cdr expression) nil
                                    (car expression) foreign-type)
                              )))
         (c::curly-bracketed-list ())
+        ;; conditional expression
+        ((if) (let* ((test (eval-parsed-c-expression (first operands)
+                                                     constant-alist))
+                     (then (eval-parsed-c-expression (second operands)
+                                                     constant-alist))
+                     (else (eval-parsed-c-expression (third operands)
+                                                     constant-alist)))
+                (if (= test 1) then else)))
         (t
          (if (typep operator 'foreign-type)
            operator
@@ -294,7 +302,7 @@
                      (when bits
                        (ash (+ bits 7) -3))))
                   (t
-                   ;(break "~s" expression)
+                   ;;(break "~s" expression)
 		   nil))))
              (2
               (let* ((a (car operands))
@@ -321,13 +329,12 @@
                                         (<= (integer-length b) 16))
                                  (progn                                   
                                    (%int-to-ptr (logand b #xffffffff)))))))
-                               
-                                           
+                  (c::== (if (= a b) 1 0))
                   (t 
-		   ;(break "binary op = ~s ~s ~s" operator a b)
+		   ;;(break "binary op = ~s ~s ~s" operator a b)
 		   nil))))
              (t
-              ;(break "expression = ~s" expression)
+              ;;(break "expression = ~s" expression)
 	      nil)))))))))
 
 (defun eval-c-expression (macro constant-alist macro-table)
