@@ -70,7 +70,7 @@
 (progn
 (defmacro with-xp-registers-and-gpr-offset ((xp register-number)
                                             (registers offset) &body body)
-  (let* ((regform `(pref ,xp :ucontext.uc_mcontext)))
+  (let* ((regform `(pref ,xp :ucontext_t.uc_mcontext)))
     `(with-macptrs ((,registers ,regform))
       (let ((,offset (xp-gpr-offset ,register-number)))
         ,@body))))
@@ -126,7 +126,7 @@
     (values (%get-ptr registers offset))))
 
 (defun return-address-offset (xp fn machine-state-offset)
-  (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext.uc_mcontext
+  (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext_t.uc_mcontext
                                 #+darwinarm-target :ucontext_t.uc_mcontext.__ss)))
     (if (functionp fn)
       (or (%code-vector-pc (uvref fn 1) (%inc-ptr regs machine-state-offset))

@@ -89,7 +89,7 @@
 ;;; and the FPSCR values in that info as an unsigned 32-bit integer.
 ;;; Return a null pointer an 0 if this info can't be found.
 (defun xp-vfp-info (xp)
-  (let* ((p (pref xp :ucontext.uc_regspace)))
+  (let* ((p (pref xp :ucontext_t.uc_regspace)))
     (loop
       (let* ((magic (%get-unsigned-long p)))
         (case magic
