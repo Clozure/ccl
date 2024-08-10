@@ -278,7 +278,7 @@
                                                      constant-alist))
                      (else (eval-parsed-c-expression (third operands)
                                                      constant-alist)))
-                (if (= test 1) then else)))
+                (if (not (eql test 0)) then else)))
         (t
          (if (typep operator 'foreign-type)
            operator
@@ -330,7 +330,14 @@
                                  (progn                                   
                                    (%int-to-ptr (logand b #xffffffff)))))))
                   (c::== (if (= a b) 1 0))
-                  (t 
+                  (c::!= (if (/= a b) 1 0))
+                  (c::> (if (> a b) 1 0))
+                  (c::< (if (< a b) 1 0))
+                  (c::>= (if (>= a b) 1 0))
+                  (c::<= (if (<= a b) 1 0))
+                  (c::&& (if (or (eql a 0) (eql b 0)) 0 1))
+                  (c::\|\| (if (and (eql a 0) (eql b 0)) 0 1))
+                  (t
 		   ;;(break "binary op = ~s ~s ~s" operator a b)
 		   nil))))
              (t
