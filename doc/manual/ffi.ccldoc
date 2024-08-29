@@ -650,43 +650,65 @@ macptr to the block.")
           decoded according to {param encoding-name}.")))
 
   (defsection "The Interface Database"
-    (defsection "Overview"
-      "{CCL} uses a set of database files which contain
-        foreign type, record, constant, and function definitions
-        derived from the operating system's header files, be that
-        Linux or Darwin.  An archive containing these database files
-        (and the shell scripts which were used in their creation) is
-        available; see the Distributions page for information about
-        obtaining current interface database files.
+      "{CCL} uses a set of database files which contain foreign type,
+       record, constant, and function definitions derived from the
+       operating system’s header files.  These database files (and the
+       shell scripts which were used in their creation) are included
+       with releases of CCL.
 
-Not surprisingly, different platforms use different database files.
+       Each platform uses its own set of database files, contained in
+       a per-platform subdirectory of the {system ccl} directory."
 
-{CCL} defines reader macros that consult these databases:"
+      (table "Interface Database Directories"
+        (row (item "platform") (item "directory"))
+        (row (item "Linux x86") (item "{code x86-headers}"))
+        (row (item "Linux x86-64") (item "{code x86-headers64}"))
+        (row (item "Linux ARM") (item "{code arm-headers}"))
+        (row (item "Darwin (macOS) x86-64")
+             (item "{code darwin-x86-headers64}"))
+        (row (item "FreeBSD x86") (item "{code freebsd-headers}"))
+        (row (item "FreeBSD x86-64") (item "{code freebsd-headers64}"))
+        (row (item "Windows x86") (item "{code win32-headers}"))
+        (row (item "Windows x86-64") (item "{code win64-headers}"))
+        (row (item "Solaris x86") (item "{code solarisx86-headers}"))
+        (row (item "Solaris x86-64") (item "{code solarisx64-headers}")))
+
+       "CCL defines reader macros that consult these databases:"
+
       (listing :bullet
-	(item "#$foo looks up the value of the constant definition of foo")
-	(item "#_foo looks up the foreign function definition for foo"))
-      "In both cases, the symbol foo is interned in the {code OS}
-        package. The #$ reader macro has the side-effect of defining
-        foo as a constant (as if via DEFCONSTANT); the #_ reader macro
-        has the side effect of defining foo as a macro which will
-        expand into an (EXTERNAL-CALL form.)
+        (item "{code #$foo} looks up the value of the constant
+                definition of {sample foo}")
+	(item "{code #_foo} looks up the foreign function definition
+               for {sample foo}"))
 
-        It's important to remember that the side-effect happens
-        when the form containing the reader macro is
-        read. Macroexpansion functions that expand into forms which
-        contain instances of those reader macros don't do what one
-        might think that they do, unless the macros are expanded in
-        the same lisp session as the reader macro was read in.
+      "In both cases, the symbol {code foo} is interned in the {code OS}
+       package.  The {code #$} reader macro has the side-effect of
+       defining {code foo} as a constant (as if via {code
+       defconstant}); the {code #_} reader macro has the side-effect
+       of defining {code foo} as a macro which will expand into an {code
+       external-call} form.
 
-        In addition, references to foreign type,
-        structure/union, and field names (when used in the RREF/PREF
-        and RLET macros) will cause these database files to be
-        consulted.
+       It is important to remember that the side-effect happens when
+       the form containing the reader macro is read.  Macroexpansion
+       functions that expand into forms which contain instances of
+       those reader macros don't do what one might think that they do,
+       unless the macros are expanded in the same lisp session as the
+       reader macro was read in.
 
-        Since the {CCL} sources contain instances of these
-        reader macros (and references to foreign record types and
-        fields), compiling {CCL} from those sources depends on the
-        ability to find and use (see {section Building the Heap Image}).")
+       In addition, references to foreign type, structure/union, and
+       field names (when used in the {code rref}/{code pref} and {code
+       rlet} macros) will cause these database files to be consulted.
+
+       There is also a {code #&} reader macro for accessing foreign
+       variables, but the {code #$} reader macro will try to look up a
+       foreign variable if it does not find a constant defintion.  So
+       in practice, one rarely uses {code #&}.
+
+       Since the CCL sources contain instances of these reader
+       macros (and references to foreign record types and fields),
+       compiling CCL from those sources depends on the ability to
+       find and use the interface database files (see {section
+       Building the Heap Image})."
 
     (defsection "Other issues:"
       (listing :bullet
@@ -829,6 +851,125 @@ The file might wind up looking something like:|
 	    whenever you need to
         access the foreign type information in those database
         files.")))
+
+
+  (defsection "The Interface Translator"
+    (defsection "Overview"
+      "{CCL} uses an interface translation system based on the
+       {link http://www.ccs.neu.edu/home/lth/ffigen/ FFIGEN system}. The
+       interface translator makes the constant, type, structure, and
+       function definitions in a set of C-language header files
+       available to lisp code.
+
+       The basic idea of the FFIGEN scheme is to perform this
+       translation in two steps.  The first step is use a C compiler’s
+       parser and front-end to translate {code .h} files into
+       semantically equivalent {code .ffi} files, which represent the
+       definitions from the headers using a syntax based on
+       S-expressions.
+
+       Then, in the second step, Lisp code processes the
+       convenient {code .ffi} representation, without having to
+       concern itself with the semantics of header file inclusion and
+       most of the arcana of C parsing.  The output of this step is
+       the interface database files mentioned in
+       {section The Interface Database}.")
+
+    (defsection "GCC-based ffigen"
+      "The original FFIGEN system used a modified version of the C compiler
+       lcc to produce .ffi files. Since many OS header files contain
+       GCC-specific constructs, {CCL}’s translation system initially
+       used a modified version of GCC 4.0.0 (also called, somewhat
+       confusingly, ffigen or ffigen4).
+
+       Information on building and installing this GCC-based version
+       of ffigen are found at the {link
+       http://trac.clozure.com/openmcl/wiki/BuildFFIGEN BuildFFIGEN
+       topic} on the Trac wiki.
+
+       This version of the translator is quite out-of-date, and it
+       takes some effort even to get it to compile on current
+       systems.  There are also some constructs in current header
+       files that it does not support.  It might be of historical
+       interest, but it is probably no longer suitable for use.")
+
+    (defsection "libclang-based ffigen"
+      "The Clang project offers a stable interface to the Clang front-end
+       via a C-callable library named
+       {link https://clang.llvm.org/doxygen/group__CINDEX.html libclang}.
+
+       The project {link https://github.com/Clozure/ccl-ffigen ccl-ffigen}
+       is a new translator (named ffigen5, creatively enough) that uses
+       libclang (instead of lcc or GCC 4.0.0) to turn the system {code
+       .h} files into {code .ffi} files that can be processed by Lisp
+       code.
+
+       By basing the translator on the stable interface of libclang,
+       {CCL} developers hope to ease maintainability and avoid the
+       tendency to treat the pre-built interface databases as opaque
+       binary artifacts that get blindly carried forward with each
+       release.
+
+       As of the {CCL} 1.13 release, the interface databases for all
+       systems except the Mac and Windows were created using the new
+       libclang-based ffigen5.")
+
+    (defsection "Translating header files"
+       "A component shell script called h-to-ffi.sh reads a
+        specified .h file (and optional preprocessor arguments) and writes
+         a (hopefully) equivalent .ffi file to standard output, calling
+        the ffigen program with appropriate  arguments."
+
+        #:|For each interface directory (see FIXTHIS)
+        {emphasis subdir} distributed with {CCL}, a shell
+        script (distributed with {CCL} as
+        "ccl:headers;{emphasis subdir};C;populate.sh"
+        (or some other platform-specific headers directory)
+        calls h-to-ffi.sh on a large number of the header
+        files in /usr/include (or some other {emphasis system header
+          path}) and creates a parallel directory tree in
+        "ccl:headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};"
+        (or
+        "ccl:darwin-headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};", etc.),
+        populating that directory with .ffi files.
+
+        A lisp function defined in "ccl:library;parse-ffi.lisp"
+        reads the .ffi files in a specified interface directory
+        {emphasis subdir} and generates new versions of the
+        databases (files with the extension .cdb).
+
+        The CDB databases are used by the #$ and #_ reader
+        macros and are used in the expansion of RREF, RLET, and
+        related macros.|)
+    (defsection "Details: rebuilding the CDB databases, step by step"
+      (listing :number
+	(item #:|Ensure that the FFIGEN program is installed. See
+	        the"README" file generated during the FFIGEN build process for
+	        specific installation instructions.This example assumes
+	        LinuxPPC; for other platforms, substitute the appropriate
+		headers directory. |)
+	(item #:|Edit the
+	        "ccl:headers;{emphasis subdir};C;populate.sh"shell
+	        script. When you're confident that the files
+	        and preprocessor options match your environment, cd to
+	        the"ccl:headers;{emphasis subdir};C;" directory
+	        and invoke ./populate.sh. Repeat this step until you're
+	        able to cleanly translate all files referenced in the shell
+	        script.|)
+	(item
+	  (para "Run {CCL}:
+            "
+	    (code-block #:|
+              ? (require "PARSE-FFI")
+              PARSE-FFI
+
+              ? (ccl::parse-standard-ffi-files :SUBDIR)
+              ;;; lots of output ... after a while, shiny new .cdb files should
+              ;;; appear in "ccl:headers;subdir;"
+          |))
+	  (para "It may be necessary to call CCL::PARSE-STANDARD-FFI-FILES
+                  twice, to ensure that forward-references are resolved ")))))
+
   (defsection "Using Shared Libraries"
     (defsection "Overview"
       (para "{CCL} provides facilities to open and close shared
@@ -921,88 +1062,7 @@ The file might wind up looking something like:|
 	        properly.|))
       (para "Thanks to Michael Klingbeil for getting both kinds of
         Darwin shared libraries working in {CCL}.")))
-  (defsection "The Interface Translator"
-    (defsection "Overview"
-      #:|{CCL} uses an interface translation system based on the FFIGEN
-	    system, which is described at
-	    {link http://www.ccs.neu.edu/home/lth/ffigen/ this page}
-	    The interface translator makes
-	    the constant, type, structure, and function definitions in a set of
-	    C-language header files available to lisp code.
 
-        The basic idea of the FFIGEN scheme is to use the C
-        compiler's frontend and parser to translate .h files into
-        semantically equivalent .ffi files, which represent the
-        definitions from the headers using a syntax based on
-        S-expressions.  Lisp code can then concentrate on the .ffi
-        representation, without having to concern itself with the
-        semantics of header file inclusion or the arcana of C
-        parsing.
-
-        The original FFIGEN system used a modified version of
-        the LCC C compiler to produce .ffi files. Since many OS
-        header files contain GCC-specific constructs, {CCL}'s
-        translation system uses a modified version of GCC (called,
-        somewhat confusingly, ffigen.)
-
-	See {link http://trac.clozure.com/openmcl/wiki/BuildFFIGEN
-	here} for information on building and installing ffigen.
-
-
-        A component shell script called h-to-ffi.sh reads a
-        specified .h file (and optional preprocessor arguments) and writes
-         a (hopefully) equivalent .ffi file to standard output, calling
-        the ffigen program with appropriate  arguments.
-
-        For each interface directory (see FIXTHIS)
-        {emphasis subdir} distributed with {CCL}, a shell
-        script (distributed with {CCL} as
-        "ccl:headers;{emphasis subdir};C;populate.sh"
-        (or some other platform-specific headers directory)
-        calls h-to-ffi.sh on a large number of the header
-        files in /usr/include (or some other {emphasis system header
-          path}) and creates a parallel directory tree in
-        "ccl:headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};"
-        (or
-        "ccl:darwin-headers;{emphasis subdir};C;{emphasis system};{emphasis header};{emphasis path};", etc.),
-        populating that directory with .ffi files.
-
-        A lisp function defined in "ccl:library;parse-ffi.lisp"
-        reads the .ffi files in a specified interface directory
-        {emphasis subdir} and generates new versions of the
-        databases (files with the extension .cdb).
-
-        The CDB databases are used by the #$ and #_ reader
-        macros and are used in the expansion of RREF, RLET, and
-        related macros.|)
-    (defsection "Details: rebuilding the CDB databases, step by step"
-      (listing :number
-	(item #:|Ensure that the FFIGEN program is installed. See
-	        the"README" file generated during the FFIGEN build process for
-	        specific installation instructions.This example assumes
-	        LinuxPPC; for other platforms, substitute the appropriate
-		headers directory. |)
-	(item #:|Edit the
-	        "ccl:headers;{emphasis subdir};C;populate.sh"shell
-	        script. When you're confident that the files
-	        and preprocessor options match your environment, cd to
-	        the"ccl:headers;{emphasis subdir};C;" directory
-	        and invoke ./populate.sh. Repeat this step until you're
-	        able to cleanly translate all files referenced in the shell
-	        script.|)
-	(item
-	  (para "Run {CCL}:
-            "
-	    (code-block #:|
-              ? (require "PARSE-FFI")
-              PARSE-FFI
-
-              ? (ccl::parse-standard-ffi-files :SUBDIR)
-              ;;; lots of output ... after a while, shiny new .cdb files should
-              ;;; appear in "ccl:headers;subdir;"
-          |))
-	  (para "It may be necessary to call CCL::PARSE-STANDARD-FFI-FILES
-                  twice, to ensure that forward-references are resolved ")))))
   (defsection "Case-sensitivity of foreign names in {CCL}"
     (defsection "Overview"
       "As of release 0.11, {CCL} addresses the fact that
@@ -2564,53 +2624,58 @@ calling {code free()}.")
                 (deallocate (resource x))))"))
       (defsection "See Also" (clause "{section Tutorial: Allocating Foreign Data on the Lisp Heap }")))
 
-    (definition (:function unuse-interface-dir) "unuse-interface-dir dir-id" nil
-      (para "Tells {CCL} to remove the interface directory denoted by
-	      {param dir-id} from the list of interface directories which are
-	      consulted for foreign type and function
-	      information. Returns T if the directory was on the
-	      search list, NIL otherwise.")
-      (defsection "Values"
-	(listing :definition
-	  (item "{param dir-id}" ccldoc::=> #:|A keyword whose pname, mapped to lower case, names a subdirectory of "ccl:headers;" (or "ccl:darwin-headers;")|))))
+    (definition (:function unuse-interface-dir) "unuse-interface-dir dir-id"
+        nil
+      "This function removes the interface directory denoted by {param
+       dir-id} from the list of interface directories which are
+       consulted for foreign type and function information. Returns
+       {code t} if the directory was on the search list, and {code nil}
+       otherwise."
+
+      (para
+       "The parameter {param dir-id} should be a keyword.  The keyword’s
+        pname, mapped to lowercase, names a subdirectory of the interface
+        database directory.  See "
+       (ref (table "Interface Database Directories")) " for a list of the
+       platform-specific interface database directory names."))
 
     (definition (:function use-interface-dir) "use-interface-dir dir-id" nil
-      (para "Tells {CCL} to add the interface directory denoted by
-	      dir-id to the list of interface directories which it consults for
-	      foreign type and function information. Arranges that that
-	      directory is searched before any others.")
-      (para "Note that {function use-interface-dir}
-	      merely adds an entry
-	      to a search list.
-	      If the named directory doesn't exist in the file system
-	      or doesn't
-	      contain a set of database files, a runtime error may occur
-	      when {CCL}
-	      tries to open some database file in that directory, and it
-	      will try to
-	      open such a database file whenever it needs to find any
-	      foreign type or
-	      function information. "
-	(ref (definition :function unuse-interface-dir)) "
-	      may come in
-	      handy in that case.")
-      (defsection "Values"
-	(listing :definition
-	  (item "{param dir-id}" ccldoc::=> #:|A keyword whose pname, mapped to lower case, names a
-		        subdirectory of "ccl:headers;" (or
-		        "ccl:darwin-headers;")|)))
-      (defsection "Examples"
-	(para "One typically wants interface information to be
-	      available at compile-time (or, in many cases, at read-time).
-	      A typical idiom would be:")
-	(code-block "(eval-when (:compile-toplevel :execute)
-          (use-interface-dir :GTK))")
-	(para "Using the :GTK interface directory makes available
-	      information on
-	      foreign types, functions, and constants.  It's generally
-	      necessary to
-	      load foreign libraries before actually calling the
-	      foreign code, which for GTK can be done like this:")
-	(code-block "(load-gtk-libraries)")
-	(para "It should now be possible to do things like:")
-	(code-block "(#_gtk_widget_destroy w)")))))
+      "This function adds the interface directory denoted by {param dir-id}
+       to the the list of interface directories which are consulted
+       for foreign type and function information.  It also arranges
+       that the specified directory will be searched before any
+       others."
+
+      (para
+       "The parameter {param dir-id} should be a keyword.  The keyword’s
+        pname, mapped to lowercase, names a subdirectory of the interface
+        database directory for the current platform, e.g., of
+        “ccl:x86-headers64;” for Linux on x86-64.  See "
+       (ref (table "Interface Database Directories")) "for a list of the
+       platform-specific interface database directory names.")
+
+      "Note that {function use-interface-dir} merely adds an entry to a
+       search list.  If the named directory doesn’t exist in the file
+       system or doesn’t contain a set of database files, a runtime
+       error may occur when {CCL} tries to open some database file in
+       that directory (and it will try to open such a database file
+       whenever it needs to find any foreign type or function
+       information)."
+
+      (para "In that case, the function "
+            (ref (definition :function unuse-interface-dir)) " may come
+             in handy.")
+
+      (para "One typically wants interface information to be available at
+	      compile-time (or, in many cases, at read-time).  A
+	      typical idiom would be:")
+      (code-block "(eval-when (:compile-toplevel :execute)
+  (use-interface-dir :GTK))")
+      (para
+       "Using the :GTK interface directory makes available information
+        on foreign types, functions, and constants.  It is generally
+        necessary to load foreign libraries before actually calling
+        the foreign code, which for GTK can be done like this:")
+      (code-block "(load-gtk-libraries)")
+      (para "It should now be possible to do things like:")
+      (code-block "(#_gtk_widget_destroy w)"))))
