@@ -79,7 +79,9 @@ USE_LINK_SCRIPT = # -T $(LINK_SCRIPT)
 PIE = -no-pie
 
 ../../lx86cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) Makefile  $(LINK_SCRIPT)
-	$(CC)  -m32 $(PIE) $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  -m32 $(PIE) $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -o $@ $(USE_LINK_SCRIPT) $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed \
+	  -Wl,-z,noexecstack \
+	  $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
