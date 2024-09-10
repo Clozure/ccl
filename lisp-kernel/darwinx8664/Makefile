@@ -29,7 +29,7 @@ ASFLAGS = -arch x86_64 -g
 CDEFINES = -DDARWIN -DX86 -DX8664 -DTCR_IN_GPR -DVC_REVISION=$(VC_REVISION) \
 	   -DUSE_DTRACE
 CDEBUG = -g
-COPT = -O
+COPT = -O0
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format

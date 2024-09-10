@@ -302,6 +302,7 @@
   qualifiers
   flags)
 
+(defparameter *instruction-table* #())
 
 
 '(

@@ -1,0 +1,7 @@
+;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
+
+(chapter "Cross Copmpiling"
+  "Cross compiling is the process of using a compiler running on a {term
+   host} system to generate code for a different {term target}
+   system."
+   ) ;chapter
