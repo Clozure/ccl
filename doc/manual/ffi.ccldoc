@@ -1,24 +1,32 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "The Foreign Function Interface"
-  "{CCL} can call external code that uses the platform's C ABI.  C++
-functions cannot be called directly.  All of the mechanisms used to do
-this are ultimately based on the function {function %ff-call}, but the
-{code #_} reader macro and the {macro external-call} macro are
-typically more convenient and easier to use.
+  "{CCL} can call external code that uses the platform’s C ABI.
+All of the mechanisms used to do this are ultimately based on the
+function {function %ff-call}, but the {code #_} reader macro and the
+{macro external-call} macro are typically more convenient and easier
+to use.
 
-There is also a mechanism to let external code call into lisp.  This is
-useful when you want to pass a lisp function as a callback function. (See
-{macro defcallback}.)"
+There is also a mechanism to let external C code call into Lisp. The
+{macro defcallback} macro allows you to define a Lisp function that
+can be used as a function pointer callable from C.
+
+The terms “external” and “foreign” are used somewhat interchangeably.
+Both terms are used to refer to code or data that is outside of
+Lisp, which is, by contrast, “native.”"
 
   (defsection "Brief Examples"
-    "A few examples may be useful before discussing the FFI facilities
-in detail.
+    "A few examples may be useful before discussing the FFI facilities in
+     detail.
 
-     Most functions that are in the system C library are included in the
-interface database that comes with {CCL}.  The reader macro {code #_}
-consults that database for information about the foreign code, and makes
-foreign functions easy to use."
+     Many functions that are in the system C library are described in
+     an interface database that comes
+     with {CCL} (see {section The Interface Database}).
+     The reader macro {code #_} consults that
+     database for information about the foreign function, such as the
+     types of its arguments and return value.  This allows the foreign
+     function to be called in a convenient way."
+
     (code-block "? (#_getpid)
 2845
 ? (#_log2 2048d0)
@@ -26,8 +34,8 @@ foreign functions easy to use."
 ? (with-encoded-cstrs :ascii ((s \"Yow!\"))
     (#_write 1 s 4))")
 
-    "These same calls can be made with the slightly lower-level
-{macro external-call}."
+    "These same calls can be made with the slightly lower-level {macro
+     external-call} macro."
 
     (code-block "? (external-call \"getpid\" :pid_t)
 2845
@@ -36,39 +44,54 @@ foreign functions easy to use."
 ? (with-encoded-cstrs :ascii ((s \"Yow!\"))
     (external-call \"write\" :int 1 :address s :size_t 4 :ssize_t))")
 
-    "Note that with {macro external-call}, it is necessary to specify
-the foreign types of the arguments and return values.  The {code #_}
-reader macro uses the interface database to determine that the
-function {code getpid} (for example) returns a {code pid_t} value, and
-it is therefore not necessary to specify it explicitly.
+    "Note that when using {macro external-call}, it is necessary to write
+     out the foreign types of the arguments and return values.  The
+     benefit of the {code #_} reader macro is that it looks up that
+     information from the interface database, thereby removing the need
+     to specify the foreign type information explicitly.
 
-Finally, just to frighten pets and small children, here is a fairly
-complicated example (adapted  from a man page for {code getpwuid_r}):"
+     As a final introductory example, here is a demonstration of how
+     one might call the function {code getpwuid_r}.  First, here is
+     some sample C code from the {code getpwuid_r} man page on macOS:"
+
+    (code-block "#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <pwd.h>
+int bufsize;
+if ((bufsize = sysconf(_SC_GETPW_R_SIZE_MAX)) == -1)
+  abort();
+char buffer[bufsize];
+struct passwd pwd, *result = NULL;
+if (getpwuid_r(getuid(), &pwd, buffer, bufsize, &result) != 0 || !result)
+  abort();
+printf(\"%s\\n\", pwd.pw_dir);")
+
+    "Here is how one might do a similar thing from Lisp:"
+
     (code-block "? (let ((bufsize (#_sysconf #$_SC_GETPW_R_SIZE_MAX)))
     (when (= bufsize -1)
-      (error \"sysconf failed\"))
-    (%stack-block ((buf bufsize))
+      (error \"sysconf failed\"))(%stack-block ((buf 4096))
       (rlet ((pw (:struct :passwd))
 	     (result :address))
-        (let ((err (#_getpwuid_r (#_getuid) pw buf bufsize result)))
+        (let ((err (#_getpwuid_r (#_getuid) pw buf 4096 result)))
 	  (when (or (not (zerop err))
 		    (%null-ptr-p (%get-ptr result)))
 	    (error \"getpwuid_r failed\"))
-	  (let ((cname (pref pw :passwd.pw_name))
-	        (gid (pref pw :passwd.pw_gid)))
-	    (format t \"~&user ~s gid is ~d\" (get-encoded-string :ascii
-		  					        cname
-							        (#_strlen cname))
-		  gid))))))"))
+          (let* ((cname (pref pw :passwd.pw_name))
+                 (gid (pref pw :passwd.pw_gid))
+                 (name (get-encoded-string :ascii cname (#_strlen cname))))
+            (format t \"~&user ~a gid is ~d\" name gid))))))"))
 
   (defsection "Specifying And Using Foreign Types"
     "{CCL} provides a fairly rich language for defining and specifying
-     foreign data types (this language is derived from CMUCL's “alien
+     foreign data types (this language is derived from CMUCL’s “alien
      type” system.)
 
      In practice, most foreign type definitions are introduced into
      {CCL} via its interface database, though it is also possible to
-     define foreign types interactively and/or programmatically.
+     define foreign types interactively or programmatically.
 
      {CCL}'s foreign type system is “evolving” (a polite word for
      not-quite-complete): there are some inconsistencies involving
@@ -82,21 +105,22 @@ complicated example (adapted  from a man page for {code getpwuid_r}):"
 
     (defsection "Type Annotations"
       "As of version 1.2, {CCL} supports annotating the types of
-          foreign pointers on Mac OS X. Forms that create pointers to
-          foreign memory-that is, {code MACPTR}s-store
-          with the {code MACPTR} object a type annotation that
+          foreign pointers on Mac OS X.  A {code macptr} is the
+name {CCL} uses for pointers to foreign memory.
+          It is possible to store
+          with the {code macptr} object a type annotation that
           identifies the foreign type of the object pointed
-          to. Calling {code PRINT-OBJECT} on a {code MACPTR}
+          to. Calling {code print-object} on a {code macptr}
           attempts to print information about the identified foreign
           type, including whether it was allocated on the heap or the
-          stack, and whether it's scheduled for automatic reclamation by
+          stack, and whether it is scheduled for automatic reclamation by
           the garbage collector.
 
           Support for type annotation is not yet complete. In
-          particular, some uses of {code PREF}
-          and {code SLOT-VALUE} do not yet take type annotations into
-          account, and neither do {code DESCRIBE}
-          and {code INSPECT}.")
+          particular, some uses of {macro pref}
+          and {code slot-value} do not yet take type annotations into
+          account, and neither do {code describe}
+          and {code inspect}.")
 
     (defsection "Foreign Types as Classes"
       "Some types of foreign pointers take advantage of the
@@ -223,7 +247,7 @@ For example,"
     (defsection "Overview"
       "{CCL} provides a number of constructs for calling foreign
         functions from Lisp code, all of which are based on the
-        function {function %ff-call}. In many cases, {CCL}'s
+        function {function %ff-call}. In many cases, {CCL}’s
         interface translator provides information about the foreign
         function's entrypoint name and argument and return types; this
         enables the use of the {code #_} reader macro (described
@@ -683,7 +707,7 @@ macptr to the block.")
 
       "In both cases, the symbol {code foo} is interned in the {code OS}
        package.  The {code #$} reader macro has the side-effect of
-       defining {code foo} as a constant (as if via {code
+       defining {code foo} as a constant (as if by {code
        defconstant}); the {code #_} reader macro has the side-effect
        of defining {code foo} as a macro which will expand into an {code
        external-call} form.
@@ -724,92 +748,76 @@ macptr to the block.")
 	        an issue with Darwin and FreeBSD."))
       (para "For information about building the database files,
 	    see {section The Interface Translator}.")))
-  (defsection "Using Interface Directories"
-    (defsection "Overview"
-      (para "As distributed, the {code ccl:headers;} (for LinuxPPC)
-        directory is organized like:")
-      (code-block "
-        headers/
-        headers/gl/
-        headers/gl/C/
-        headers/gl/C/populate.sh
-        headers/gl/constants.cdb
-        headers/gl/functions.cdb
-        headers/gl/records.cdb
-        headers/gl/objc-classes.cdb
-        headers/gl/objc-methods.cdb
-        headers/gl/types.cdb
-        headers/gnome/
-        headers/gnome/C/
-        headers/gnome/C/populate.sh
-        headers/gnome/constants.cdb
-        headers/gnome/functions.cdb
-        headers/gnome/records.cdb
-        headers/gnome/objc-classes.cdb
-        headers/gnome/objc-methods.cdb
-        headers/gnome/types.cdb
-        headers/gtk/
-        headers/gtk/C/
-        headers/gtk/C/populate.sh
-        headers/gtk/constants.cdb
-        headers/gtk/functions.cdb
-        headers/gtk/records.cdb
-        headers/gtk/objc-classes.cdb
-        headers/gtk/objc-methods.cdb
-        headers/gtk/types.cdb
-        headers/libc/
-        headers/libc/C/
-        headers/libc/C/populate.sh
-        headers/libc/constants.cdb
-        headers/libc/functions.cdb
-        headers/libc/records.cdb
-        headers/libc/objc-classes.cdb
-        headers/libc/objc-methods.cdb
-        headers/libc/types.cdb
-      ")
-      "e.g, as a set of parallel subdirectories, each with a
-        lowercase name and each of which contains a set of 6 database
-        files and a {code C} subdirectory which contains a shell script
-        used in the database creation process.
 
-        As one might assume, the database files in each of these
-        subdirectories contain foreign type, constant, and function
-        definitions - as well as Objective-C class and method info -that
-        correspond (roughly) to the information contained in the
-        header files associated with a “-dev” package in a Linux
-        distribution.  {code libc} corresponds pretty closely to the
-        interfaces associated with glibc/libc6 header files, {code gl}
-        corresponds to an openGL+GLUT development package, {code gtk}
-        and {code gnome} contain interface information from the GTK+1.2 and
-        GNOME libraries, respectively.
+  (defsection "Interface Directories"
+    (para "The top-level interface database directory for each platform
+     (see " (:ref (:table "Interface Database Directories")) ") contains one or
+     more subdirectories.  These subdirectories are calles interface
+     directories.")
 
-        For Darwin, the {code ccl:darwin-headers;} directory contains
-        a {code libc} subdirectory, whose contents roughly correspond to
-        those of {code /usr/include} under Darwin, as well as
-        subdirectories corresponding to the MacOSX Carbon and Cocoa
-        frameworks.
+    (para "For example, the interface database directory for Liunx on 64-bit x86
+     is named {code x86-headers64}. It looks like
+     this (as distributed in {CCL} 1.13):")
+    
+    (code-block "x86-headers64
+x86-headers64/elf
+x86-headers64/elf/C
+x86-headers64/elf/C/translate.sh
+x86-headers64/elf/constants.cdb
+x86-headers64/elf/functions.cdb
+x86-headers64/elf/objc-classes.cdb
+x86-headers64/elf/objc-methods.cdb
+x86-headers64/elf/records.cdb
+x86-headers64/elf/types.cdb
+x86-headers64/elf/vars.cdb
+x86-headers64/libc
+x86-headers64/libc/C
+x86-headers64/libc/C/translate.sh
+x86-headers64/libc/constants.cdb
+x86-headers64/libc/functions.cdb
+x86-headers64/libc/objc-classes.cdb
+x86-headers64/libc/objc-methods.cdb
+x86-headers64/libc/records.cdb
+x86-headers64/libc/vars.cdb
+x86-headers64/libc/types.cdb")
 
-        To see the precise set of .h files used to generate the
-        database files in a given interface directory, consult the
-        corresponding {code populate.sh} shell script (in the interface
-        directory's {code C} subdirectory.)
+    "The interface database directory contains a set of parallel
+     subdirectories, each with a lowercase name and each of which
+     contains a set of 6 database files (with the {code .cdb}
+     extension) and a {code C} subdirectory which contains a shell
+     script used in the database creation process.
 
-        The intent is that this initial set can be augmented to
-        meet local needs, and that this can be done in a fairly
-        incremental fashion: one needn't have unrelated header files
-        installed in order to generate interface databases for a
-        package of interest.
+     As one might assume, the database files in each of these
+     subdirectories contain foreign type, constant, and function
+     definitions (as well as Objective-C class and method information)
+     that roughly correspond to the information contained in the
+     header files for the library in question.  Thus, the data in
+     {code libc} corresponds roughly to the headers for libc; {code
+     elf} has data for libelf, and so forth.
 
-        Hopefully, this scheme will also make it easier to
-        distribute patches and bug fixes.
+     The header file information is not necessarily complete: the libc
+     headers, for example, generally only include the basic headers
+     specified by POSIX, and some additional platform-specific headers
+     needed to compile {CCL} itself.
 
-        {CCL} maintains a list of directories; when looking
-        for a foreign type, constant, function, or record definition,
-        it'll consult the database files in each directory on that
-        list. Initially, the list contains an entry for the {code libc}
-        interface directory. {CCL} needs to be explicitly told to
-        look in other interface directories should it need to do
-        so.")
+     To see the precise set of {code .h} files used to generate the database
+     iles in a given interface directory, consult the corresponding
+     {code translate.sh} shell script in the interface directory’s
+     {code C} subdirectory.
+
+     The intent is that this initial set of interface directories can
+     be augmented to meet local needs.
+
+     {CCL} maintains a list of interface directories that it will
+     search when looking for a foreign type, constant, function, or
+     record definition.  Initially, the list contains only an entry
+     for the {code libc} interface directory.
+
+     {CCL} needs to be explicitly told to look in additional interface
+     directories: their mere presence in the filesystem is not
+     sufficient.  Use the functions {function use-interface-dir} and
+     {function unuse-interface-dir} to manage the list of interface
+     directories that will be searched."
 
     (defsection "Creating new interface directories"
       #:|This example refers to "ccl:headers;", which is
@@ -858,7 +866,7 @@ The file might wind up looking something like:|
       "{CCL} uses an interface translation system based on the
        {link http://www.ccs.neu.edu/home/lth/ffigen/ FFIGEN system}. The
        interface translator makes the constant, type, structure, and
-       function definitions in a set of C-language header files
+       function definitions from a set of C-language header files
        available to lisp code.
 
        The basic idea of the FFIGEN scheme is to perform this
@@ -869,7 +877,7 @@ The file might wind up looking something like:|
        S-expressions.
 
        Then, in the second step, Lisp code processes the
-       convenient {code .ffi} representation, without having to
+       more convenient {code .ffi} representation, without having to
        concern itself with the semantics of header file inclusion and
        most of the arcana of C parsing.  The output of this step is
        the interface database files mentioned in
@@ -879,7 +887,7 @@ The file might wind up looking something like:|
       "The original FFIGEN system used a modified version of the C compiler
        lcc to produce .ffi files. Since many OS header files contain
        GCC-specific constructs, {CCL}’s translation system initially
-       used a modified version of GCC 4.0.0 (also called, somewhat
+       used a modified version of GCC 4.0.0 (also called, perhaps
        confusingly, ffigen or ffigen4).
 
        Information on building and installing this GCC-based version
@@ -2159,16 +2167,14 @@ Examples:|
           these operations may have an impact on performance.")))
 
     (definition (:reader-macro "#>") "#>" nil
-      (defsection "Description"
-	(para "In {CCL} 1.2 and later, the #> reader macro reads
-          the following text as a keyword, preserving the case of the
-          text. For example:")
-	(code-block "
-          CL-USER> #>FooBar
-          :<F>OO<B>AR
-        ")
-	(para "The resulting keyword can be used as the name of foreign
-          types, records, and accessors.")))
+      "In {CCL} 1.2 and later, the {code #>} reader macro reads the
+       following text as a keyword, preserving the case of the
+       text. For example:"
+      (code-block "CL-USER> #>FooBar
+:<F>OO<B>AR")
+      "The resulting keyword can be used as the name of foreign types,
+       records, and accessors.")
+
     (definition (:function close-shared-library) "close-shared-library library {code &key} completely"
       "Stops using a shared library, informing the operating
 	      system that it can be unloaded if appropriate."
