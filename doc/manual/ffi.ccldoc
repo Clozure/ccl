@@ -820,46 +820,48 @@ x86-headers64/libc/types.cdb")
      directories that will be searched."
 
     (defsection "Creating new interface directories"
-      #:|This example refers to "ccl:headers;", which is
-        appropriate for LinuxPPC. The procedure's analogous under
-        Darwin, where the "ccl:darwin-headers;" directory would be
-        used instead.
+      "This example refers to {code ccl:freebsd-headers64;}, which is the
+      interface database directory for FreeBSD on 64-bit x86.  Use the "
+      (ref (table "Interface Database Directories")
+           "appropriate directory for the platform of interest")
+      "."
 
-        To create a new interface directory, "foo", and a set of
-        database files in that directory:|
-      (listing :number
-	(item #:|Create a subdirectory of "ccl:headers;" named
-	        "foo".|)
-	(item #:|Create a subdirectory of "ccl:headers;foo;" named
-	        "C".|)
-	(item #:|Create a file in "ccl:headers;foo;C;" named
-	        "populate.sh".
+      "Suppose we want to create an interface directory {code foo}, which
+      will contain information from the header file {code foo.h}.
 
-One way of accomplishing the above steps is:|
-	  (code-block #:|
-            ? (close (open "ccl:headers;foo;C;populate.sh" :direction :output :
-                           if-does-not-exist :create :if-exists :overwrite))
-          |))
-	(item #:|Edit the file created above, using the "populate.sh"
-	        files in the distribution as guidelines.
+      Start by creating {code freebsd-headers64/foo/C/} by whatever means
+      you like.
 
-The file might wind up looking something like:|
-	  (code-block "#/bin/sh
-            h-to-ffi.sh `foo-config -cflags` /usr/include/foo/foo.h")))
-      (para "Refer to {section The Interface Translator} for
-        information about running the interface translator and .ffi
-        parser.")
-      (para #:|Assuming that all went well, there should now be .cdb
-        files in "ccl:headers;foo;". You can then do
-        |
-	(code-block "
-          ? (use-interface-dir :foo)
-	    ")
-	"
-	    whenever you need to
-        access the foreign type information in those database
-        files.")))
+      Next, in the {code C/} subdirectory, create a file named {code
+      translate.sh}.
 
+      One way to do this all at once would be:"
+      (code-block #:|? (close (open "ccl:freebsd-headers64;foo;C;translate.sh" :direction :output
+               :if-does-not-exist :create :if-exists :overwrite))|)
+
+      "Edit the file created above, using the {code translate.sh} files in
+       the distribution as guidelines.  A fairly minimal example might
+       might wind up looking something like this:"
+      (code-block "#/bin/sh
+ffigen5 -m64 -x c -isystem /usr/include /usr/include/foo.h -o foo.ffi")
+
+      "Now, go into {code freebsd-headers64/foo/C/} and run the {code
+       translate.sh} script. Assuming that you have {code ffigen5}
+       installed somwhere on your path, this will produce a file
+       called {code foo.ffi}."
+
+      "With the {code .ffi} file in hand, the next step takes place in Lisp.
+       Start {CCL}, and then evaluate the following:"
+      (code-block "(require 'parse-ffi)
+(ccl::parse-standard-ffi-files :foo)")
+      "If all goes well, there should now be {code .cdb} files in
+      {code freebsd-headers64/foo/}.  At this point, you can use
+      {code (use-interface-dir :foo)} whenever you want to access the
+      foreign type information in those database files.
+
+      Refer to {section The Interface Translator} for more detailed
+      information about running the interface translator and {code
+      .ffi} parser."))
 
   (defsection "The Interface Translator"
     (defsection "Overview"
@@ -1942,7 +1944,7 @@ You can use code such as this to make all this happen:|
 	(para "Does a lookup on that symbol in " (ref (section "The Interface Database") "the {CCL} interface database")
 	  ", signalling an error if no foreign function
 	      information can be found for the symbol in any active "
-	  (ref (section "Using Interface Directories") "interface directory") ".")
+	  (ref (section "The Interface Database") "interface directory") ".")
 	#:|Notes the foreign function information, including the foreign
 	      function's return type, the number and type of the foreign
 	      function's required arguments, and an indication of whether or
@@ -2630,21 +2632,6 @@ calling {code free()}.")
                 (deallocate (resource x))))"))
       (defsection "See Also" (clause "{section Tutorial: Allocating Foreign Data on the Lisp Heap }")))
 
-    (definition (:function unuse-interface-dir) "unuse-interface-dir dir-id"
-        nil
-      "This function removes the interface directory denoted by {param
-       dir-id} from the list of interface directories which are
-       consulted for foreign type and function information. Returns
-       {code t} if the directory was on the search list, and {code nil}
-       otherwise."
-
-      (para
-       "The parameter {param dir-id} should be a keyword.  The keyword’s
-        pname, mapped to lowercase, names a subdirectory of the interface
-        database directory.  See "
-       (ref (table "Interface Database Directories")) " for a list of the
-       platform-specific interface database directory names."))
-
     (definition (:function use-interface-dir) "use-interface-dir dir-id" nil
       "This function adds the interface directory denoted by {param dir-id}
        to the the list of interface directories which are consulted
@@ -2654,23 +2641,21 @@ calling {code free()}.")
 
       (para
        "The parameter {param dir-id} should be a keyword.  The keyword’s
-        pname, mapped to lowercase, names a subdirectory of the interface
-        database directory for the current platform, e.g., of
-        “ccl:x86-headers64;” for Linux on x86-64.  See "
-       (ref (table "Interface Database Directories")) "for a list of the
-       platform-specific interface database directory names.")
+       pname, mapped to lowercase, names a subdirectory of the
+       interface database directory for the current platform, e.g., of
+       “ccl:x86-headers64;” for Linux on x86-64.  See "
+      (ref (table "Interface Database Directories"))
+      " for a list of the
+      platform-specific interface database directory names.")
 
       "Note that {function use-interface-dir} merely adds an entry to a
-       search list.  If the named directory doesn’t exist in the file
-       system or doesn’t contain a set of database files, a runtime
-       error may occur when {CCL} tries to open some database file in
-       that directory (and it will try to open such a database file
-       whenever it needs to find any foreign type or function
-       information)."
-
-      (para "In that case, the function "
-            (ref (definition :function unuse-interface-dir)) " may come
-             in handy.")
+      search list.  If the named directory doesn’t exist in the file
+      system or doesn’t contain a set of database files, a runtime
+      error may occur when {CCL} tries to open some database file in
+      that directory (and it will try to open such a database file
+      whenever it needs to find any foreign type or function
+      information).  In that case, the function {function
+      unuse-interface-dir}) may come in handy."
 
       (para "One typically wants interface information to be available at
 	      compile-time (or, in many cases, at read-time).  A
@@ -2684,4 +2669,19 @@ calling {code free()}.")
         the foreign code, which for GTK can be done like this:")
       (code-block "(load-gtk-libraries)")
       (para "It should now be possible to do things like:")
-      (code-block "(#_gtk_widget_destroy w)"))))
+      (code-block "(#_gtk_widget_destroy w)"))
+
+    (definition (:function unuse-interface-dir) "unuse-interface-dir dir-id"
+        nil
+      "This function removes the interface directory denoted by {param
+       dir-id} from the list of interface directories which are
+       consulted for foreign type and function information.  Returns
+       {code t} if the directory was on the search list, and {code nil}
+       otherwise."
+      (para
+       "The parameter {param dir-id} should be a keyword.  The keyword’s
+        pname, mapped to lowercase, names a subdirectory of the interface
+        database directory.  See "
+       (ref (table "Interface Database Directories")) " for a list of the
+       platform-specific interface database directory names."))
+    ))
