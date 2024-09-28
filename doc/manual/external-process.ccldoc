@@ -25,18 +25,8 @@
 ;;; Let the shell expand wildcards.
 ? (run-program "sh" '("-c" "ls *.lisp") :output t)|)
 
-    (para "Naturally, tese last examples will only produce output if {CCL}'s
+    (para "Naturally, these last examples will only produce output if {CCL}'s
       current directory contains {code .lisp} files."))
-
-  (defsection "Limitations and known bugs"
-    (para
-     "{CCL} and the external process may get confused about who owns which
-      streams when input, output, or error are specified as T and wait
-      is specified as NIL.")
-    (para
-     "External processes that need to talk to a terminal device may not
-      work properly; the environment (SLIME, ILISP) under which {CCL}
-      is run can affect this."))
 
   (definition (:function run-program)
      "run-program program args &key (wait t) pty sharing input if-input-does-not-exist output (if-output-exists :error) (error :output) (if-error-exists :error) status-hook external-format env (silently-ignore-catastrophic-failures *silently-ignore-catastrophic-failure-in-run-program*)"
@@ -190,4 +180,13 @@
        exit code or terminating signal if the first value is other
        than {code :running}.")
 
+    (defsection "Limitations and known bugs"
+    (para
+     "{CCL} and the external process may get confused about who owns which
+      streams when input, output, or error are specified as T and wait
+      is specified as NIL.")
+    (para
+     "External processes that need to talk to a terminal device may not
+      work properly; the environment (SLIME, ILISP) under which {CCL}
+      is run can affect this."))
 ) ;chapter
