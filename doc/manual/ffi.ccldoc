@@ -59,13 +59,17 @@ Lisp, which is, by contrast, “native.”"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pwd.h>
+
 int bufsize;
+
 if ((bufsize = sysconf(_SC_GETPW_R_SIZE_MAX)) == -1)
   abort();
+
 char buffer[bufsize];
 struct passwd pwd, *result = NULL;
 if (getpwuid_r(getuid(), &pwd, buffer, bufsize, &result) != 0 || !result)
   abort();
+
 printf(\"%s\\n\", pwd.pw_dir);")
 
     "Here is how one might do a similar thing from Lisp:"
@@ -848,12 +852,14 @@ ffigen5 -m64 -x c -isystem /usr/include /usr/include/foo.h -o foo.ffi")
       "Now, go into {code freebsd-headers64/foo/C/} and run the {code
        translate.sh} script. Assuming that you have {code ffigen5}
        installed somwhere on your path, this will produce a file
-       called {code foo.ffi}."
+       called {code foo.ffi} the current directory.
 
-      "With the {code .ffi} file in hand, the next step takes place in Lisp.
+      With the {code .ffi} file in hand, the next step takes place in Lisp.
        Start {CCL}, and then evaluate the following:"
+
       (code-block "(require 'parse-ffi)
 (ccl::parse-standard-ffi-files :foo)")
+
       "If all goes well, there should now be {code .cdb} files in
       {code freebsd-headers64/foo/}.  At this point, you can use
       {code (use-interface-dir :foo)} whenever you want to access the

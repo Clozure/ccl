@@ -1,54 +1,53 @@
 ;;; -*- Mode: Lisp; Package: CCL; Coding: utf-8; -*-
 
 (chapter "Streams"
-  (defsection "Stream Extensions"
-    (defsection "Stream External Format"
-      "{function stream-external-format} can be applied to
+  (defsection "Stream External Format"
+    "The function {function stream-external-format} can be applied to
     (and may return a non-null result for) open streams that are not
-    {code FILE-STREAM}s.
+    {code file-stream} objects.
 
-    {function (setf stream-external-format)} can be used to
-    change the external format of open streams created with {function open} or {function make-socket}.
-    ")
+    The function {function (setf stream-external-format)} can be used
+    to change the external format of open streams created with
+    {function open} or {function make-socket}.")
 
-    (defsection "Additional keywords for OPEN and MAKE-SOCKET"
-      (para "{function open} and
-      {function make-socket} have each been extended to take
-      the additional keyword arguments: {code :CLASS},
-      {code :SHARING}, and
-      {code :BASIC}.")
-      (listing :definition
-        (item "{code :CLASS}" ccldoc::=> "A symbol that names the desired class of the stream.
-	  The specified class must inherit from
-	  {code FILE-STREAM} for
-	  {function open}.")
-        (item "{code :SHARING}" ccldoc::=>
-         (para "Specifies how a stream can be used by multiple
-	  threads.  The possible values are:
-	  {code :PRIVATE}, {code :LOCK} and
-	  {code :EXTERNAL}. {code :PRIVATE} is
-	  the default.  {code NIL} is also accepted as a
-	  synonym for {code :EXTERNAL}.")
-         (listing :definition
-           (item "{code :PRIVATE}" ccldoc::=> #:|Specifies that the stream can only be accessed
-		by the thread that first tries to do I/O to it; that
-                thread becomes the "owner" of the stream and
-                is not necessarily the same thread as the one which
-                created the stream.  This is the default.
-		(There was some discussion on openmcl-devel about the
-		idea of "transferring ownership" of a stream; this has
-		not yet been implemented.)  Attempts to do I/O on a
-		stream with :PRIVATE sharing from a thread other than
-		the stream's owner yield an error.|)
-           (item "{code :LOCK}" ccldoc::=> #:|Specifies that all access to the stream require
-		the calling thread to obtain a lock. There are
-		separate "read" and "write" locks for IO streams.
-		This makes it possible for instance, for one thread to
-		read from such a stream while another thread writes to
-		it.  (see also |
-            (ref (definition :function make-read-write-lock)) (ref (definition :macro with-read-lock))
-            (ref (definition :macro with-write-lock)) ")")
-           (item "{code :EXTERNAL}" ccldoc::=> "Specifies that I/O primitives enforce no access
+  (defsection "Additional keywords for {code open} and {code make-socket}"
+    (para
+     "{function open} and {function make-socket} have each been extended to
+      take the additional keyword arguments {code :class}, {code
+      :sharing}, and {code :basic}.")
+
+    (listing :definition
+      (item "{code :class}" =>
+        "A symbol that names the desired class of the stream.
+	The specified class must inherit from {code file-stream} for
+        {function open}.")
+      (item "{code :sharing}" =>
+        "Specifies how a stream can be used by multiple threads.
+         The possible values are: {code :private}, {code :lock} and
+         {code :external}.  The default is {code :private}.  The value
+         {code nil} is also accepted as a synonym for {code :external}."
+        (listing :definition
+          (item "{code :private}" =>
+            "Specifies that the stream can only be accessed by the thread that
+	     first tries to do I/O to it; that thread becomes the
+	     “owner” of the stream and is not necessarily the same
+	     thread as the one which created the stream.  This is the
+	     default.
+
+             There has been some discussion about the idea of
+	     “transferring ownership” of a stream, but this has not
+	     yet been implemented.  Attempts to do I/O on a stream
+	     with {code :private} sharing from a thread other than the
+	     stream's owner yield an error.")
+          (item "{code :lock}" =>
+            "Specifies that all access to the stream require the
+	     calling thread to obtain a lock. There are separate
+	     “read” and “write” locks for IO streams.  This makes it
+	     possible for instance, for one thread to read from such a
+	     stream while another thread writes to it.  See also
+             {function make-read-write-lock}, {macro with-read-lock}, and
+             {macro with-write-lock}.")
+          (item "{code :external} or {code nil}" => "Specifies that I/O primitives enforce no access
 		protocol.  This may be appropriate for some types of
 		application which can control stream access via
 		application-level protocols.  Note that since even the
@@ -56,51 +55,49 @@
 		state (and simultaneous access from multiple threads
 		can therefore lead to corruption of that state), some
 		care must be taken in the design of such protocols.")))
-        (item "{code :BASIC}" ccldoc::=> "A boolean that indicates whether or not the stream is
-	  a Gray stream, i.e. whether or not the stream is an instance
-	  of {code FUNDAMENTAL-STREAM} or
-	  {code CCL::BASIC-STREAM}(see {section Basic Versus Fundamental Streams}).  Defaults to
-	  {code T}.")))
+      (item "{code :basic}" =>
+        "A boolean that indicates whether or not the stream is a Gray stream,
+	 i.e., whether or not the stream is an instance of {code
+	 fundamental-stream} or {code ccl::basic-stream} (see {section
+	 Basic Versus Fundamental Streams}).  Defaults to {code t}.")))
 
-    (defsection "Basic Versus Fundamental Streams"
-      #:|Gray streams (see {section Creating Your Own Stream Classes with Gray Streams})
-      all inherit from {code FUNDAMENTAL-STREAM} whereas
-      basic streams inherit from {code CCL::BASIC-STREAM}.
-      The tradeoff between FUNDAMENTAL and BASIC streams is entirely
-      between flexibility and performance, potential or actual.  I/O
-      primitives can recognize BASIC-STREAMs and exploit knowledge of
-      implementation details. FUNDAMENTAL stream classes can be
-      subclassed and extended in a standard way (the Gray streams
-      protocol).
+  (defsection "Basic Versus Fundamental Streams"
+    "Gray streams (see
+     {section Creating Your Own Stream Classes with Gray Streams})
+      all inherit from {code fundamental-stream} whereas
+     basic streams inherit from {code ccl::basic-stream}.  The
+     tradeoff between {code fundamental} and {code basic} streams is
+     entirely between flexibility and performance, potential or
+     actual.  I/O primitives can recognize {code basic-stream}s and
+     exploit knowledge of implementation details.  On the other hand,
+     {code fundamental} stream classes can be subclassed and extended
+     in a standard way (using the Gray streams protocol).
 
-      For existing stream classes (FILE-STREAMs, SOCKETs, and
-      the internal CCL::FD-STREAM classes used to implement file
-      streams and sockets), a lot of code can be shared between the
-      FUNDAMENTAL and BASIC implementations.  The biggest difference
-      should be that that code can be reached from I/O primitives like
-      READ-CHAR without going through some steps that're there to
-      support generality and extensibility, and skipping those steps
-      when that support isn't needed can improve I/O performance.
+     For existing stream classes ({code file-stream}s, {code socket}s,
+     and the internal {code ccl::fd-stream} classes used to implement
+     file streams and sockets), a lot of code can be shared between
+     the {code fundamental} and {code basic} implementations.  The
+     biggest difference should be that that code can be reached from
+     I/O primitives like {function read-char} without going through
+     some steps that are there to support generality and
+     extensibility, and skipping those steps when that support is not
+     needed can improve I/O performance.
       
+     The Gray stream method {function stream-read-char} should work on
+     appropriate {code basic-stream}s.  (There may still be cases
+     where such methods are undefined; such cases should be considered
+     bugs.)  It is not guaranteed that Gray stream methods would ever
+     be called by I/O primitives to read a character from a {code
+     basic-stream}, though there are still cases where this happens.
 
-      The Gray stream method
-      {function stream-read-char} should work on appropriate
-      {code BASIC-STREAM}s.  (There may still be cases
-      where such methods are undefined; such cases should be
-      considered bugs.)  It is not guaranteed that Gray stream methods
-      would ever be called by I/O primitives to read a character from
-      a {code BASIC-STREAM}, though there are still cases
-      where this happens.
+     A simple loop reading 2M characters from a text file runs about
+     10X faster when the file is opened the new defaults
+     {code (:sharing :private :basic t)} than it had before these
+     changes were made.  That sounds good, until one realizes that
+     the “equivalent” C loop can be about 10X faster still...")
 
-      A simple loop reading 2M characters from a text file runs
-      about 10X faster when the file is opened the new defaults
-      {code (:SHARING :PRIVATE :BASIC T)} than it had
-      before these changes were made.  That sounds good, until one
-      realizes that the "equivalent" C loop can be about 10X faster
-      still ...|)
-
-    (defsection "Stream Timeouts and Deadlines"
-      (para "A stream that is associated with a file descriptor has
+  (defsection "Stream Timeouts and Deadlines"
+    (para "A stream that is associated with a file descriptor has
         attributes and accessors:
         {function stream-input-timeout},
         {function stream-output-timeout}, and
@@ -120,32 +117,32 @@
         signalled.  A deadline takes precedence over any
         input/output timeouts that may be set."))
 
-    (defsection "Open File Streams"
-      (para "{CCL} maintains a list of open file streams.  This helps
+  (defsection "Open File Streams"
+    (para "{CCL} maintains a list of open file streams.  This helps
         to ensure that streams get closed in an orderly manner when
         the lisp exits.  The following thread-safe functions manage
         this list.")
 
-      (definition (:function open-file-streams) "open-file-streams" nil
-	"Returns a fresh list of file streams that are currently open.")
+    (definition (:function open-file-streams) "open-file-streams" nil
+      "Returns a fresh list of file streams that are currently open.")
 
-      (definition (:function note-open-file-stream)
-	  "note-open-file-stream file-stream" nil
-	"Adds {param file-stream} to the internal list of open file
+    (definition (:function note-open-file-stream)
+	"note-open-file-stream file-stream" nil
+      "Adds {param file-stream} to the internal list of open file
          streams that is returned by {function open-file-streams}.
          This function is thread-safe.  It will usually only be called
          from custom stream code when a file-stream is created.")
 
-      (definition (:function remove-open-file-stream)
-	  "remove-open-file-stream file-stream" nil
-	"Removes {param file-stream} from the internal list of open file
+    (definition (:function remove-open-file-stream)
+	"remove-open-file-stream file-stream" nil
+      "Removes {param file-stream} from the internal list of open file
          streams that is returned by {function open-file-streams}.
          This function is thread-safe.  It will usually only be called
          from custom stream code when a file-stream is closed."))
 
-    (defsection "Creating Your Own Stream Classes with Gray Streams"
-      (defsection "Overview"
-	"This section is still being written and revised, because
+  (defsection "Creating Your Own Stream Classes with Gray Streams"
+    (defsection "Overview"
+      "This section is still being written and revised, because
         it is woefully incomplete.  The dictionary section currently
         only lists a couple functions.  Caveat lector.
 
@@ -369,89 +366,89 @@
 	        into the list {param list}, returning the number of elements
 	        actually read (which may be less than count in case of
 	        a premature end-of-file.)")
-       (defsection "Arguments and Values"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-input-stream.")
-           (item "{param list}" ccldoc::=> "a list. When a STREAM-READ-LIST method is called by
+        (defsection "Arguments and Values"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-input-stream.")
+                   (item "{param list}" ccldoc::=> "a list. When a STREAM-READ-LIST method is called by
 		          READ-SEQUENCE, this argument is guaranteed to be a proper
 		          list.")
-           (item "{param count}" ccldoc::=> "a non-negative integer. When a STREAM-READ-LIST method
+                   (item "{param count}" ccldoc::=> "a non-negative integer. When a STREAM-READ-LIST method
 		          is called by READ-SEQUENCE, this argument is guaranteed not
 		          to be greater than the length of the list."))))
 
       (definition (:generic-function stream-write-list) "stream-write-list stream list count" nil
-       (para "Write the first {param count} elements of {param list} to
+        (para "Write the first {param count} elements of {param list} to
 	        {param stream}. The return value of this method is ignored.")
-       (defsection "Arguments and Values"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-output-stream.")
-           (item "{param list}" ccldoc::=> "a list. When a STREAM-WRITE-LIST method is called by
+        (defsection "Arguments and Values"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-output-stream.")
+                   (item "{param list}" ccldoc::=> "a list. When a STREAM-WRITE-LIST method is called by
 		          WRITE-SEQUENCE, this argument is guaranteed to be a proper
 		          list.")
-           (item "{param count}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-LIST
+                   (item "{param count}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-LIST
 		          method is called by WRITE-SEQUENCE, this argument is
 		          guaranteed not to be greater than the length of the list."))))
 
       (definition (:generic-function stream-read-vector) "stream-read-vector stream vector start end" nil
-       (para "Read successive elements from stream into {param
+        (para "Read successive elements from stream into {param
 	        vector}, starting at element {param start} (inclusive)
 	        and continuing through element {param
 	        end} (exclusive.) Should return the index of the
 	        vector element beyond the last one stored into, which
 	        may be less than {param end} in case of premature
 	        end-of-file.")
-       (defsection "Arguments and Values"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-input-stream")
-           (item "{param vector}" ccldoc::=> "a vector. When a STREAM-READ-VECTOR method is called
+        (defsection "Arguments and Values"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-input-stream")
+                   (item "{param vector}" ccldoc::=> "a vector. When a STREAM-READ-VECTOR method is called
 		          by {code read-sequence}, this argument is guaranteed to be a simple
 		          one-dimensional array.")
-           (item "{param start}" ccldoc::=> "a non-negative integer. When a STREAM-READ-VECTOR
+                   (item "{param start}" ccldoc::=> "a non-negative integer. When a STREAM-READ-VECTOR
 		          method is called by READ-SEQUENCE, this argument is
 		          guaranteed to be no greater than end and not greater than
 		          the length of vector.")
-           (item "{param end}" ccldoc::=> "a non-negative integer. When a STREAM-READ-VECTOR
+                   (item "{param end}" ccldoc::=> "a non-negative integer. When a STREAM-READ-VECTOR
 		          method is called by READ-SEQUENCE, this argument is
 		          guaranteed to be no less than end and not greater than the
 		          length of vector."))))
 
       (definition (:generic-function stream-write-vector) "stream-write-vector stream vector start end" nil
-       (para "should try to write successive elements of {param
+        (para "should try to write successive elements of {param
                 vector} to {param stream}, starting at element {param
                 start} (inclusive) and continuing through element
                 {param end} (exclusive.)")
-       (defsection "Arguments and Values"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-output-stream")
-           (item "{param vector}" ccldoc::=> "a vector. When a STREAM-WRITE-VECTOR method is called
+        (defsection "Arguments and Values"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "a stream, presumably a fundamental-output-stream")
+                   (item "{param vector}" ccldoc::=> "a vector. When a STREAM-WRITE-VECTOR method is called
 		          by WRITE-SEQUENCE, this argument is guaranteed to be a
 		          simple one-dimensional array.")
-           (item "{param start}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-VECTOR
+                   (item "{param start}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-VECTOR
 		          method is called by WRITE-SEQUENCE, this argument is
 		          guaranteed to be no greater than end and not greater than
 		          the length of vector.")
-           (item "{param end}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-VECTOR
+                   (item "{param end}" ccldoc::=> "a non-negative integer. When a STREAM-WRITE-VECTOR
 		          method is called by WRITE-SEQUENCE, this argument is
 		          guaranteed to be no less than end and not greater than the
 		          length of vector."))))
 
       (definition (:generic-function stream-device) "ccl::stream-device s direction"
-       "Returns the OS file descriptor associated with a
+          "Returns the OS file descriptor associated with a
 	        given lisp stream."
-       (defsection "Method Signatures"
-         "{code {function stream-device}
+        (defsection "Method Signatures"
+          "{code {function stream-device}
 	        (s stream) direction => fd}")
-       (defsection "Arguments and Values"
-         (listing :definition
-           (item "{param s}" ccldoc::=> "a stream.")
-           (item "{param direction}" ccldoc::=> "either :INPUT or :OUTPUT.")
-           (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
+        (defsection "Arguments and Values"
+          (listing :definition
+                   (item "{param s}" ccldoc::=> "a stream.")
+                   (item "{param direction}" ccldoc::=> "either :INPUT or :OUTPUT.")
+                   (item "{param fd}" ccldoc::=> "a file descriptor, which is a non-negative integer
 		          used by the OS to refer to an open file, socket, or similar
 		          I/O connection.  NIL if there is no file descriptor associated
 		          with {param s} in the direction given by
 		          {param direction}.")))
-       (defsection "Description"
-         (para "Returns the file descriptor associated with
+        (defsection "Description"
+          (para "Returns the file descriptor associated with
 	        {param s} in the direction given by
 	        {param direction}.  It is necessary to specify
 	        {param direction} because the input and output
@@ -459,36 +456,36 @@
 	        one of them has been redirected by the Unix shell.")))
 
       (definition (:generic-function stream-read-ivector) "stream-read-ivector stream ivector start-octet max-octets"
-       nil
-       (defsection "Description"
-         (para "Reads up to max-octets octets from stream into ivector,
+          nil
+        (defsection "Description"
+          (para "Reads up to max-octets octets from stream into ivector,
 	        storing them at start-octet. Returns the number of octets actually
 	        read."))
-       (defsection "Arguments"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "An input stream. The method defined on
+        (defsection "Arguments"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "An input stream. The method defined on
 		          BUFFERED-INPUT-STREAMs requires that the size in octets of
 		          an instance of the stream's element type is 1.")
-           (item "{param ivector}" ccldoc::=> "Any ivector.")
-           (item "{param start-octet}" ccldoc::=> "A non-negative integer.")
-           (item "{param max-octets}" ccldoc::=> "A non-negative integer. The return value may be less
+                   (item "{param ivector}" ccldoc::=> "Any ivector.")
+                   (item "{param start-octet}" ccldoc::=> "A non-negative integer.")
+                   (item "{param max-octets}" ccldoc::=> "A non-negative integer. The return value may be less
 		          than the value of this parameter if EOF was encountered."))))
 
       (definition (:generic-function stream-write-ivector) "stream-write-ivector stream ivector start-octet max-octets"
-       nil
-       (defsection "Description"
-         (para "Writes max-octets octets to stream from ivector, starting at
+          nil
+        (defsection "Description"
+          (para "Writes max-octets octets to stream from ivector, starting at
 	        start-octet. Returns max-octets."))
-       (defsection "Arguments"
-         (listing :definition
-           (item "{param stream}" ccldoc::=> "An input stream. The method defined on
+        (defsection "Arguments"
+          (listing :definition
+                   (item "{param stream}" ccldoc::=> "An input stream. The method defined on
 		          BUFFERED-OUTPUT-STREAMs requires that the size in octets of
 		          an instance of the stream's element type is 1.")
-           (item "{param ivector}" ccldoc::=> "Any ivector")
-           (item "{param start-octet}" ccldoc::=> "A non-negative integer.")
-           (item "{param max-octet}" ccldoc::=> "A non-negative integer.")))
-       (defsection "Examples"
-         (code-block #:|
+                   (item "{param ivector}" ccldoc::=> "Any ivector")
+                   (item "{param start-octet}" ccldoc::=> "A non-negative integer.")
+                   (item "{param max-octet}" ccldoc::=> "A non-negative integer.")))
+        (defsection "Examples"
+          (code-block #:|
 ;;; Write the contents of a (SIMPLE-ARRAY(UNSIGNED-BYTE 16) 3) 
 ;;; to a character file stream. Read back the characters.
 (let* ((a (make-array 3 
@@ -536,5 +533,5 @@
      tty, then {code *terminal-io*} will be hooked up to that.
      Otherwise, the input and output streams of {code *terminal-io*}
      will correspond to the operating system's standard input and
-     standard output."))
+     standard output.")
 ) ;chapter

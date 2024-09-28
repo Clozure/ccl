@@ -69,6 +69,11 @@ pre > code {
     border: 1px solid #eee;
     line-height: normal;
 }
+
+pre > code > p {
+    margin: 0;
+}
+
 samp {
     background: #fafafa;
 }
