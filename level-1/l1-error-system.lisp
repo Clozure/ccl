@@ -122,8 +122,8 @@
    (by :initarg :by))
   (:report (lambda (c s)
              (with-slots (construct clause by) c
-               (format s "Clause ~S ignored in ~S form - shadowed by ~S ."
-                       clause construct by)))))
+               (format s "Ignoring ~S clause ~S because it is shadowed by ~S."
+                       construct clause by)))))
 
 (define-condition simple-error (simple-condition error) ())
 
