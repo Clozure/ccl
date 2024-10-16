@@ -140,6 +140,26 @@
          This function is thread-safe.  It will usually only be called
          from custom stream code when a file-stream is closed."))
 
+  (defsection "Auto-flushing Streams"
+    "{CCL} supports a mechanism for automatically flushing (by calling
+     {function force-output}) a set of user-specified output streams.
+
+     This is implemented by a mostly-idle thread that wakes up about 3
+     times per second.
+
+     Certain system-defined streams, such as the output side of
+     {variable *terminal-io*}, are auto-flushed by default. "
+
+    (definition (:function add-auto-flush-stream)
+	"add-auto-flush-stream output-stream" nil
+      "Adds {param output-stream} to a list of streams whose buffered output
+       should be peridically flushed.")  
+
+    (definition (:function remove-auto-flush-stream)
+	"remove-auto-flush-stream output-stream" nil
+      "Remove {param output-stream} from the list of automatically-flushed
+       streams."))
+
   (defsection "Creating Your Own Stream Classes with Gray Streams"
     (defsection "Overview"
       "This section is still being written and revised, because
