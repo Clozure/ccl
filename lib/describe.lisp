@@ -1053,7 +1053,8 @@
   (or (constantp sym) (proclaimed-special-p sym) (boundp sym)
       (special-operator-p sym) (macro-function sym) (fboundp sym)
       (type-specifier-p sym) (record-type-p sym nil)
-      (find-class sym nil)))
+      (find-class sym nil)
+      (compiler-macro-function sym)))
 
 (defmethod inspector-class ((sym symbol)) 'usual-basics-first-inspector)
 
@@ -1142,7 +1143,8 @@
                       (t nil))
                 (if (type-specifier-p sym) "Type Specifier")
                 (if (record-type-p sym nil) "Record Type")
-                (if (find-class sym nil) "Class Name")))
+                (if (find-class sym nil) "Class Name")
+                (if (compiler-macro-function sym) "Compiler Macro")))
         flag)
     (with-output-to-string (s)
       (dolist (type types)
