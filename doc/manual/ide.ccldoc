@@ -211,13 +211,9 @@ oshirion:ccl mikel$
 	  (item "{param type-string}" ccldoc::=> "Specifies type of bundle to create. You should normally
             never need to change the default value, which Mac OS X uses to
             identify application bundles.")
-	  (item "{param creator-string}" ccldoc::=> "Specifies the " (term "creator code")
+	  (item "{param creator-string}" ccldoc::=> "Specifies the (now basically obsolete) " (term "creator code")
 	    ", which uniquely identifies the application
-            under Mac OS X. The default creator code is that of {CCL}. For
-            more information about reserving and assigning creator codes,
-            see
-            Apple's {link http://developer.apple.com/datatype/index.html developer
-              page} on the topic.")
+            under Mac OS X. The default creator code is that of {CCL}.")
 	  (item "{param directory}" ccldoc::=> #:|The directory in which {code BUILD-APPLICATION}
             creates the application bundle. By default, it creates the
             bundle in the current working directory. Unless you

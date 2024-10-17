@@ -268,9 +268,9 @@
     (listing :definition
       (item
 	(clause
-	  "{link http://developer.apple.com/technologies/mac/cocoa.html Mac OS X - Cocoa}, {link http://developer.apple.com/library/mac/#documentation/General/Conceptual/DevPedia-CocoaCore/Cocoa.html 
+	  "{link http://developer.apple.com/library/mac/#documentation/General/Conceptual/DevPedia-CocoaCore/Cocoa.html
                 Cocoa Core Competencies
-              }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/CocoaFundamentals/WhatIsCocoa/WhatIsCocoa.html 
+              }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/CocoaFundamentals/WhatIsCocoa/WhatIsCocoa.html
                 Cocoa Fundamentals Guide
               }")
 	ccldoc::=> "
@@ -279,15 +279,15 @@
 	      ")
       (item
 	(clause
-	  "{link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjectiveC/Introduction/introObjectiveC.html 
+	  "{link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjectiveC/Introduction/introObjectiveC.html
                 The Objective-C Programming Language
-              }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Introduction/Introduction.html 
+              }, {link http://developer.apple.com/library/mac/#documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Introduction/Introduction.html
                 Objective-C Runtime Programming Guide
               }")
 	ccldoc::=>
 	"These provide a conceptual overview and programming guide to Objective-C the language and runtime, respectively.")
       (item
-	"{link http://developer.apple.com/library/mac/#documentation/Cocoa/Reference/ObjCRuntimeRef/Reference/reference.html 
+	"{link https://developer.apple.com/documentation/objectivec/objective-c_runtime
                 Objective-C Runtime Reference
               }"
 	ccldoc::=> "
@@ -296,7 +296,7 @@
 	        a reference, not a tutorial.
 	      ")
       (item
-	"{link http://developer.apple.com/documentation/Cocoa/Reference/ApplicationKit/ObjC_classic/index.html Application Kit Framework Reference}"
+	"{link https://developer.apple.com/documentation/appkit Application Kit Framework Reference}"
 	ccldoc::=> "
 	        This is the other very important Cocoa reference; it covers GUI programming with Cocoa / Application Kit Framework
 	        in considerable depth.  This is a reference, not a tutorial.
