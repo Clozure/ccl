@@ -1485,6 +1485,21 @@ tcr_cleanup(void *arg)
   }
   tcr->valence = TCR_STATE_FOREIGN;
   TCR_AUX(tcr)->shutdown_count = 1;
+
+#ifndef WINDOWS
+#ifdef LINUX
+  /*
+   * On Linux, there have been reports of getting SIGNAL_FOR_PROCESS_INTERRUPT
+   * as a thread is exiting.  Ignore that signal here, because this thread
+   * is in the process of exiting. (See issue #517.)
+   */
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGNAL_FOR_PROCESS_INTERRUPT);
+  pthread_sigmask(SIG_BLOCK, &set, NULL);
+#endif
+#endif
+
   shutdown_thread_tcr(tcr);
   tsd_set(lisp_global(TCR_KEY), NULL);
 }
