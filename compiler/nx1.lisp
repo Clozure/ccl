@@ -2018,9 +2018,13 @@
         (%define-arm-lap-function name `((let ,bindings ,@body))
 				    (dpb (length bindings) $lfbits-numreq 0))))
 
-                    
-
-
+(defnx1 nx1-arm64-lap-function (arm64-lap-function) context (name bindings
+                                                                  &body body)
+  (declare (ftype (function (t t t)) %define-arm64-lap-function))
+  (require "ARM64-LAP")
+  (setf (afunc-lfun *nx-current-function*)
+        (%define-arm64-lap-function name `((let ,bindings ,@body))
+				    (dpb (length bindings) $lfbits-numreq 0))))
 
 (defun nx1-env-body (context body old-env &optional (typecheck (nx-declarations-typecheck *nx-lexical-environment*)))
   (do* ((form (nx1-progn-body context body))

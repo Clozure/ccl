@@ -77,7 +77,7 @@ tag_shift = 56
 /* 56-bit fixnums have the sign-extension of bit 55 in their
    high 8 bits. */
 
-tag_positive_fixnum = 0         /* non-negative *
+tag_positive_fixnum = 0         /* non-negative */
 tag_negative_fixnum = 0xff
 
 /* If we do addition or subtraction on a pair of (SIGNED-BYTE 56) values,

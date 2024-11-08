@@ -18,6 +18,9 @@
 
 (in-package "ARM64")
 
+(defvar *constants* ())
+(defvar *lap-labels* ())
+
 (defun count-trailing-zeros-64 (u64)
   (do* ((i 0 (1+ i)))
        ((or (= i 64) (logbitp i u64))
@@ -302,6 +305,7 @@
   qualifiers
   flags)
 
+(defparameter *instruction-table* #())
 
 
 '(
@@ -1166,5 +1170,29 @@
  
 
   )
+
+(defun lookup-instruction (name)
+  )
+
+(eval-when (:execute :load-toplevel)
+  (defstruct (instruction-element (:include ccl::dll-node))
+    address
+    (size 0))
+
+  (defstruct (lap-instruction (:include instruction-element (size 4))
+                              (:constructor %make-lap-instruction (source)))
+    source
+    (opcode 0))
+
+  (defstruct (lap-label (:include instruction-element)
+                        (:constructor %%make-lap-label (name)))
+    name
+    refs))
+
+(ccl::def-standard-initial-binding *lap-label-freelist*
+    (ccl::make-dll-node-freelist))
+(ccl::def-standard-initial-binding *lap-instruction-freelist*
+    (ccl::make-dll-node-freelist))
+
 
 (provide "ARM64-ASM")
