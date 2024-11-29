@@ -1824,7 +1824,20 @@ space, and prefixed with PREFIX."
 
   (defun make-windows-command-line (strings)
     (with-output-to-string (out)
-      (do* ((strings strings (cdr strings)))
+      ;; The program name (i.e., argv[0]) is parsed differently than the program arguments.
+      ;; (See https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
+      ;; Only check for embedded whitespace in the program name and, if present, quote the
+      ;; entire program name.
+      (when (car strings)
+        (let* ((string (car strings))
+               (needs-quoting? (find-if #'whitespacep string)))
+          (when needs-quoting?
+            (write-char #\" out))
+          (write-string string out)
+          (when needs-quoting?
+            (write-char #\" out))
+          (when (cdr strings) (write-char #\space out))))
+      (do* ((strings (cdr strings) (cdr strings)))
            ((atom strings)     
             (if strings (write-string strings out)))
         (let* ((string (car strings))
@@ -1847,15 +1860,15 @@ space, and prefixed with PREFIX."
                         (setq quote-backslash k)
                         (return))
                        (t (setq literal-backslash k)
-                          (return)))))
+                        (return)))))
                  (if (> quote-backslash 0)
-                   (progn
-                     (write-char #\\ out)
-                     (write-char #\\ out)
-                     (decf quote-backslash))
-                   (progn
-                     (write-char #\\ out)
-                     (decf literal-backslash))))
+                     (progn
+                       (write-char #\\ out)
+                       (write-char #\\ out)
+                       (decf quote-backslash))
+                     (progn
+                       (write-char #\\ out)
+                       (decf literal-backslash))))
                 ((#\space #\tab)
                  (write-char #\" out)
                  (write-char c out)
