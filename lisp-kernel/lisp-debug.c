@@ -115,7 +115,7 @@ open_debug_output(int fd)
     if (setvbuf(f, NULL, _IONBF, 0) == 0) {
 #ifdef WINDOWS
       if (fileno(stdin) < 0) {
-        stdin->_file = 0;
+        freopen("CONIN$", "r", stdin);      
       }
 #endif
       dbgout = f;
