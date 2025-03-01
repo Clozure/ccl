@@ -87,6 +87,7 @@
                  (simple-file-error (make-condition condition-name
                                              :pathname (car errargs)
                                              :error-type format-string
+                                             :format-control format-string
                                              :format-arguments (cdr errargs)))
                  (undefined-function (make-condition condition-name
                                                      :name (car errargs)))
