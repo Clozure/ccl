@@ -1153,7 +1153,15 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
 #endif
 #ifdef X8664
 #ifdef LINUX
-  struct _libc_xmmreg * xmmp = NULL;
+  struct xmm {
+    char fpdata[16];
+  };
+  struct xmm *xmmp;
+  if (xp->uc_mcontext.fpregs)
+    xmmp = (struct xmm *)&(xp->uc_mcontext.fpregs->_xmm[0]);
+  else
+    /* no fp state, apparently */
+    return debug_continue;
 #endif
 #ifdef DARWIN
   struct xmm {
@@ -1174,14 +1182,6 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
   upad128_t *xmmp = xpXMMregs(xp);
 #endif
   float *sp;
-
-#ifdef LINUX
-  if (xp->uc_mcontext.fpregs)
-    xmmp = &(xp->uc_mcontext.fpregs->_xmm[0]);
-  else
-    /* no fp state, apparently */
-    return debug_continue;
-#endif
 
   for (i = 0; i < 16; i++, xmmp++) {
     sp = (float *) xmmp;

@@ -29,7 +29,6 @@
 #ifdef LINUX
 #include <strings.h>
 #include <sys/mman.h>
-#include <fpu_control.h>
 #include <linux/prctl.h>
 #endif
 #ifdef DARWIN
