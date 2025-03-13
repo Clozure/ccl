@@ -25,8 +25,8 @@
    conventions (e.g., return -1 or NULL and set errno on error.)
 */
 
-#ifndef _LARGEFILE64_SOURCE_
-#define _LARGEFILE64_SOURCE_
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE
 #endif
 #include <errno.h>
 #include <unistd.h>

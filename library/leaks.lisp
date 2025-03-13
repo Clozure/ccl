@@ -214,7 +214,11 @@
     res))
 
 ;; Linux-only malloc leak finding
-#+(and linux-target (not android-target))
+;;
+;; mtrace is glibc-specific, so on non-glibc Linux systems, start-mtrace and
+;; stop-mtrace will fail at runtime when looking up mtrace or muntrace. Since we
+;; have no glibc feature, failing at runtime is just about all we can do anyway.
+#+linux-target
 (progn
 
 ;; (ccl::start-mtrace LOGFILE)

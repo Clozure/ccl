@@ -28,7 +28,6 @@
 #include <strings.h>
 #include <sys/mman.h>
 #ifndef ANDROID
-#include <fpu_control.h>
 #include <linux/prctl.h>
 #endif
 #endif
