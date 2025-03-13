@@ -212,31 +212,24 @@
                                 #+64-bit-target (pref dynamic-entries
                                                       :<E>lf64_<D>yn.d_un.d_val)))
                       (#. #$DT_STRTAB
+                          ;; On some architectures, glibc mangles the DT_STRTAB
+                          ;; entry into an absolute address, and there appears
+                          ;; to be no portable way to detect when that happens.
+                          ;; We assume that no displacement can be larger than
+                          ;; the base address; this should hold unless a huge
+                          ;; object is loaded at an extremely low address.
                           (%setf-macptr dyn-strings
-                                        ;; Try to guess whether we're dealing
-                                        ;; with a displacement or with an
-                                        ;; absolute address.  There may be
-                                        ;; a better way to determine this,
-                                        ;; but for now we assume that absolute
-                                        ;; addresses aren't negative and that
-                                        ;; displacements are.
-                                        (let* ((disp (%get-signed-natural
+                                        (let* ((disp (%get-natural
                                                       dynamic-entries
-                                                      target::node-size)))
+                                                      target::node-size))
+                                               (addr (link_map.l_addr map)))
+                                          ;; Don't risk anything if we don't have to.
                                           #+(or freebsd-target solaris-target android-target)
-                                          (%inc-ptr (pref map :link_map.l_addr) disp)
+                                          (%inc-ptr addr disp)
                                           #-(or freebsd-target solaris-target android-target)
-                                          (let* ((udisp #+32-bit-target (pref dynamic-entries
-                                                                              :<E>lf32_<D>yn.d_un.d_val)
-                                                        #+64-bit-target (pref dynamic-entries
-                                                                              :<E>lf64_<D>yn.d_un.d_val)))
-                                            (if (and (> udisp (pref map :link_map.l_addr))
-                                                     (< udisp (%ptr-to-int dynamic-entries)))
-                                              (%int-to-ptr udisp)
-                                              (%int-to-ptr 
-                                               (if (< disp 0) 
-                                                 (+ disp (pref map :link_map.l_addr))
-                                                 disp))))))))
+                                          (if (> disp (%ptr-to-int addr))
+                                              (%int-to-ptr disp)
+                                              (%inc-ptr addr disp))))))
                 (%setf-macptr dynamic-entries
                               (%inc-ptr dynamic-entries
                                         #+32-bit-target
