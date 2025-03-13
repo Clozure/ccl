@@ -27,13 +27,11 @@
 #ifdef LINUX
 #include <strings.h>
 #include <sys/mman.h>
-#include <fpu_control.h>
 #include <linux/prctl.h>
 #endif
 
 #ifdef DARWIN
 #include <sys/mman.h>
-#define _FPU_RESERVED 0xffffff00
 #ifndef SA_NODEFER
 #define SA_NODEFER 0
 #endif
@@ -41,6 +39,10 @@
 
 /* a distinguished UUO at a distinguished address */
 extern void pseudo_sigreturn(ExceptionInformation *);
+#endif
+
+#ifndef _FPU_RESERVED
+#define _FPU_RESERVED 0xffffff00
 #endif
 
 

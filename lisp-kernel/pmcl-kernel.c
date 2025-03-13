@@ -35,7 +35,7 @@
 #endif
 
 #ifdef LINUX
-#ifndef ANDROID
+#ifdef __GLIBC__
 #include <mcheck.h>
 #endif
 #include <dirent.h>
@@ -1704,11 +1704,20 @@ check_arm_cpu()
 #include <asm/prctl.h>
 #include <sys/prctl.h>
 
+#ifdef __GLIBC__
+#include <gnu/libc-version.h>
+#else
+static const char *
+gnu_get_libc_version(void)
+{
+  return "(unknown)";
+}
+#endif
+
 void
 ensure_gs_available(char *progname)
 {
   LispObj fs_addr = 0L, gs_addr = 0L, cur_thread = (LispObj)pthread_self();
-  char *gnu_get_libc_version(void);
   /*
    * According arch_prctl(2), there's no function prototype for
    * arch_prctl().  Thus, we have to declare it ourselves.
