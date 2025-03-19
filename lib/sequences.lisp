@@ -326,13 +326,13 @@
   (setq source-end (check-sequence-bounds source-sequence source-start
                                           source-end))
   (locally (declare (fixnum target-start target-end source-start source-end))
-    (let* ((typecode (typecode source-sequence))
-           (n (- source-end source-start)))
-      (if (and (not (listp source-sequence))
-               (simple-array-p source-sequence)
-               (= (the fixnum (- target-end target-start)) n)
+    (let ((typecode (typecode source-sequence)))
+      (if (and (simple-array-p source-sequence)
                (= typecode (typecode target-sequence)))
-        (%uvector-replace target-sequence target-start source-sequence source-start n typecode)
+        (%uvector-replace target-sequence target-start source-sequence source-start
+                          (min (the fixnum (- source-end source-start))
+                               (the fixnum (- target-end target-start)))
+                          typecode)
         
     (seq-dispatch 
      target-sequence
