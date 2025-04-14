@@ -638,6 +638,11 @@
                `(load-byte ,size ,position ,integer)))))
         (t call)))
 
+(define-compiler-macro mask-field (&whole call byte integer)
+  (if (typep byte 'unsigned-byte)
+      `(logand ,byte ,integer)
+      call))
+
 (define-compiler-macro length (&whole call &environment env seq)
   (if (nx-form-typep seq '(simple-array * (*)) env)
     `(uvsize ,seq)
