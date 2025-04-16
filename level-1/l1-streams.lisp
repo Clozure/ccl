@@ -3483,13 +3483,21 @@
 ;;;  Fundamental streams.
 
 (defclass fundamental-stream (stream)
-    ())
+    ((open-p :initform t :accessor fundamental-stream-open-p)))
 
 (defclass fundamental-input-stream (fundamental-stream input-stream)
     ((shared-resource :initform nil :accessor input-stream-shared-resource)))
 
 (defclass fundamental-output-stream (fundamental-stream output-stream)
     ())
+
+(defmethod open-stream-p ((stream fundamental-stream))
+  (fundamental-stream-open-p stream))
+
+(defmethod close ((stream fundamental-stream) &key abort)
+  (declare (ignore abort))
+  (prog1 (open-stream-p stream)
+    (setf (fundamental-stream-open-p stream) nil)))
 
 (defmethod input-stream-p ((x t))
   (report-bad-arg x 'stream))
@@ -3552,9 +3560,9 @@
 
 (defmethod stream-listen ((s fundamental-character-input-stream))
   (let* ((ch (stream-read-char-no-hang s)))
-    (when (and ch (not (eq ch :eof)))
-      (stream-unread-char s ch))
-    ch))
+    (and (not (null ch))
+	 (not (eq ch :eof))
+	 (progn (stream-unread-char stream ch) t))))
 
 (defmethod stream-clear-input ((s fundamental-character-input-stream))
   )
