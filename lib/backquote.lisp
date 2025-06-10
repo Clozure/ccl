@@ -404,7 +404,8 @@
              (cons (%cadr stack) (read stream t nil t)))
             (t
              (untyi char stream)
-             (cons (%car stack) (read stream t nil t))))))))
+             (cons (%car stack) (or (read stream t nil t)
+				    (list 'quote nil)))))))))
 )
 
 (provide 'backquote)
