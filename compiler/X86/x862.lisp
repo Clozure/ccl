@@ -9951,6 +9951,7 @@
   
   (setq vals (copy-list vals))
   (let* ((old-stack (x862-encode-stack))
+         (*x862-nfp-depth* *x862-nfp-depth*)
          (val nil)
          (bits nil)
          (valcopy vals))
