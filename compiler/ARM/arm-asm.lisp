@@ -313,6 +313,20 @@
      #x0fff00ff
      (:prefer-separate-cond))
 
+   ;; The memory-barrier instructions require ARMv7.
+   (define-arm-instruction dmb ()
+     #xf57ff05f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction dsb ()
+     #xf57ff04f
+     #xffffffff
+     (:non-conditional))
+   (define-arm-instruction isb ()
+     #xf57ff06f
+     #xffffffff
+     (:non-conditional))
+
    ;; movw, movt require ARMv6T2 or later
    (define-arm-instruction movw (:rd :imm16)
      #x03000000
@@ -867,22 +881,9 @@
      #x0fff0ff0
      ())
 
-   ;; CLREX requires ARMv6T2 or later.  The memory-barrier instructions
-   ;; require ARMv7.
+   ;; CLREX requires ARMv6T2 or later.
    (define-arm-instruction clrex ()
      #xf57ff01f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction isb ()
-     #xf57ff06f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction dmb ()
-     #xf57ff05f
-     #xffffffff
-     (:non-conditional))
-   (define-arm-instruction dsb ()
-     #xf57ff04f
      #xffffffff
      (:non-conditional))
    (define-arm-instruction wfe ()
