@@ -21,6 +21,45 @@
 (defvar *constants* ())
 (defvar *lap-labels* ())
 
+(defun extract-rd (opcode)
+  (ldb (byte 5 0) opcode))
+
+(defun extract-rn (opcode)
+  (ldb (byte 5 5) opcode))
+
+(defun extract-rm (opcode)
+  (ldb (byte 5 16) opcode))
+
+(defconstant $aimm-shift-bit 22)
+
+;;; Extract arithmetic immediate.  Returns an unsigned immediate in
+;;; the range 0 to 4095, possibly shifted left by 12 bits if the
+;;; opcode specifies that.
+(defun extract-aimm (opcode)
+  (let ((imm12 (ldb (byte 12 10) opcode)))
+    (if (logbitp $aimm-shift-bit opcode)
+      (ash imm12 12)
+      imm12)))
+
+;;; Interpret the given N as a two's complement value that is WIDTH
+;;; bits long.
+(defun sign-extend (n width)
+  (logior n (- (mask-field (byte 1 (1- width)) n))))
+
+;;; Extract offset in the range +/-1 MB
+(defun extract-addr-adr (opcode)
+  (let* ((immlo (ldb (byte 2 29) opcode))
+         (immhi (ldb (byte 19 5) opcode))
+         (imm (logior (ash immhi 2) immlo)))
+    (sign-extend imm 21)))
+
+;;; Extract offset in the range +/-4 GB
+(defun extract-addr-adrp (opcode)
+  (let* ((immlo (ldb (byte 2 29) opcode))
+         (immhi (ldb (byte 19 5) opcode))
+         (imm (logior (ash immhi 2) immlo)))
+    (sign-extend (ash imm 12) 21)))
+
 (defun count-trailing-zeros-64 (u64)
   (do* ((i 0 (1+ i)))
        ((or (= i 64) (logbitp i u64))
@@ -157,7 +196,6 @@
 ;;; |N|   immr    |    imms   |
 ;;; +-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-
 (defconstant mask-lookup
   #(#xffffffffffffffff                  ;size = 64
     #x00000000ffffffff                  ;size = 32
@@ -178,6 +216,11 @@
              (mask (aref mask-lookup (- leading-zeros 25)))
              (s (logand (1+ imms) imms-mask)))
         (rotate-right-64 (logxor mask (ash mask s)) immr)))))
+
+(defun extract-logical-immediate (opcode)
+  (let ((limm (ldb (byte 13 10) opcode)))
+    (decode-logical-immediate limm)))
+
 
 #|
 (defun all-logical-immediates ()
@@ -220,11 +263,11 @@
 
 (defparameter *arm64-operand-qualifiers*
   '(
-    nil
-    :w	
-    :x
-    :wsp	
-    :sp	
+    nil                                 ;no further qualification on an operand
+    :w	                                ;Wn, WZR, or WSP
+    :x                                  ;Xn, XZR, or SP
+    :wsp	                        ;WSP
+    :sp	                                ;SP
     :s_b
     :s_h
     :s_s
