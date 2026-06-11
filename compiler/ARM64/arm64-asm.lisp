@@ -1,22 +1,607 @@
-;;;
-;;; Copyright 2016 Clozure Associates
-;;;
-;;; Licensed under the Apache License, Version 2.0 (the "License");
-;;; you may not use this file except in compliance with the License.
-;;; You may obtain a copy of the License at
-;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
-;;;
-;;; Unless required by applicable law or agreed to in writing, software
-;;; distributed under the License is distributed on an "AS IS" BASIS,
-;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-;;; See the License for the specific language governing permissions and
-;;; limitations under the License.
+;;;;-*- Mode: Lisp; Package: (ARM64 :use CL) -*-
+;;;;
+;;;; SPDX-License-Identifier: Apache-2.0
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "ARM64-ARCH"))
 
 (in-package "ARM64")
+
+(defvar *registers-by-name* (make-hash-table :test #'equalp))
+
+(defconstant $sp #b001)                 ;r31 role is stack pointer
+
+(defstruct register
+  name         ;canonical name
+  number       ;as encoded in instruction
+  size         ;in bits
+  (family :gpr :type (member :gpr :fpr))  ;register file: GPR vs FP/SIMD
+  flags)
+
+(defmethod make-load-form ((r register) &optional env)
+  (declare (ignore env))
+  (make-load-form-saving-slots r))
+
+;;; Given a string designator for a register name, figure out
+;;; everything that implies.
+;;; Returns (values name number size family flags).
+(defun %parse-register-name (namespec)
+  (let ((name (string-downcase (string namespec))))
+    (cond
+      ((string= name "sp") (values name 31 64 :gpr $sp))
+      ((string= name "wsp") (values name 31 32 :gpr $sp))
+      ((string= name "xzr") (values name 31 64 :gpr 0))
+      ((string= name "wzr") (values name 31 32 :gpr 0))
+      (t (multiple-value-bind (size family)
+             (ecase (char name 0)
+               (#\x (values 64 :gpr))
+               (#\w (values 32 :gpr))
+               (#\s (values 32 :fpr))
+               (#\d (values 64 :fpr)))
+           (let ((number (parse-integer name :start 1)))
+             (when (and (eq family :gpr) (= number 31))
+               (error "Write xzr/wzr/sp/wsp, not ~a." name))
+             (unless (<= 0 number (if (eq family :gpr) 30 31))
+               (error "Register number out of range: ~a" name))
+             (values name number size family 0)))))))
+
+(defmacro reg (namespec)
+  (multiple-value-bind (name number size family flags)
+      (%parse-register-name namespec)
+    `(make-register :name ,name :number ,number :size ,size
+                    :family ,family :flags ,flags)))
+
+(defparameter *registers*
+  (vector
+   ;; 64 bit
+   (reg x0) (reg x1) (reg x2) (reg x3) (reg x4) (reg x5) (reg x6)
+   (reg x7) (reg x8) (reg x9) (reg x10) (reg x11) (reg x12) (reg x13)
+   (reg x14) (reg x15) (reg x16) (reg x17) (reg x18) (reg x19) (reg x20)
+   (reg x21) (reg x22) (reg x23) (reg x24) (reg x25) (reg x26) (reg x27)
+   (reg x28) (reg x29) (reg x30) (reg xzr) (reg sp)
+   ;; 32 bit
+   (reg w0) (reg w1) (reg w2) (reg w3) (reg w4) (reg w5) (reg w6)
+   (reg w7) (reg w8) (reg w9) (reg w10) (reg w11) (reg w12) (reg w13)
+   (reg w14) (reg w15) (reg w16) (reg w17) (reg w18) (reg w19) (reg w20)
+   (reg w21) (reg w22) (reg w23) (reg w24) (reg w25) (reg w26) (reg w27)
+   (reg w28) (reg w29) (reg w30) (reg wzr) (reg wsp)
+   ;; scalar single-float
+   (reg s0) (reg s1) (reg s2) (reg s3) (reg s4) (reg s5) (reg s6)
+   (reg s7) (reg s8) (reg s9) (reg s10) (reg s11) (reg s12) (reg s13)
+   (reg s14) (reg s15) (reg s16) (reg s17) (reg s18) (reg s19) (reg s20)
+   (reg s21) (reg s22) (reg s23) (reg s24) (reg s25) (reg s26) (reg s27)
+   (reg s28) (reg s29) (reg s30) (reg s31)
+   ;; scalar double-float
+   (reg d0) (reg d1) (reg d2) (reg d3) (reg d4) (reg d5) (reg d6)
+   (reg d7) (reg d8) (reg d9) (reg d10) (reg d11) (reg d12) (reg d13)
+   (reg d14) (reg d15) (reg d16) (reg d17) (reg d18) (reg d19) (reg d20)
+   (reg d21) (reg d22) (reg d23) (reg d24) (reg d25) (reg d26) (reg d27)
+   (reg d28) (reg d29) (reg d30) (reg d31)))
+
+(defun hash-registers ()
+  (dotimes (i (length *registers*))
+    (let ((r (svref *registers* i)))
+      (setf (gethash (register-name r) *registers-by-name*) r))))
+
+(hash-registers)
+
+;;; Constants that map to indexes into *registers*
+(ccl::defenum ()
+   x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  x10 x11 x12 x13 x14 x15
+   x16 x17 x18 x19 x20 x21 x22 x23 x24 x25 x26 x27 x28 x29 x30 xzr sp
+   ;; 32-bit names
+   w0  w1  w2  w3  w4  w5  w6  w7  w8  w9  w10 w11 w12 w13 w14 w15
+   w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 wzr wsp
+   ;; single-float names
+   s0  s1  s2  s3  s4  s5  s6  s7  s8  s9  s10 s11 s12 s13 s14 s15
+   s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26 s27 s28 s29 s30 s31
+   ;; double-float names
+   d0  d1  d2  d3  d4  d5  d6  d7  d8  d9  d10 d11 d12 d13 d14 d15
+   d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31)
+
+(defmacro define-register-alias (alias known)
+  (let ((known-entry (gensym)))
+    `(let ((,known-entry (gethash ,(string known) *registers-by-name*)))
+       (unless ,known-entry
+         (error "register ~a not defined" ',known))
+       (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
+       (defconstant ,alias ,known))))
+
+;;; Lisp names
+(define-register-alias imm0 x0)         ;unboxed, volatile registers
+(define-register-alias imm1 x1)
+(define-register-alias imm2 x2)
+(define-register-alias imm3 x3)
+(define-register-alias imm4 x4)
+(define-register-alias imm5 x5)
+;; x6
+(define-register-alias fn x7)
+(define-register-alias nfn x8)
+
+(define-register-alias arg_x x10)       ;next-to-next-to-last argument
+(define-register-alias arg_y x11)       ;next-to-last argument
+(define-register-alias arg_z x12)       ;last argument
+
+(define-register-alias temp0 x13)       ;boxed, volatile registers
+(define-register-alias temp1 x14)       ; Some may be defined on function
+(define-register-alias temp2 x15)       ; entry.
+(define-register-alias temp3 x16)
+;; x17
+;; x18 permanantly reserved (at least on Darwin)
+(define-register-alias save0 x19)       ;boxed, non-volatile registers
+(define-register-alias save1 x20)
+(define-register-alias save2 x21)
+(define-register-alias save3 x22)
+
+(define-register-alias rnil x23)        ;nil (and used to reference nilreg area)
+(define-register-alias tsp x24)         ;temp stack pointer (maybe not useful)
+(define-register-alias vsp x25)         ;value stack pointer (grows down)
+(define-register-alias allocptr x26)
+(define-register-alias allocbase x27)
+(define-register-alias rcontext x28)    ;per-thread data
+
+;;; lap-form is a list and its car isn't a pseudo-op or lapmacro
+(defun assemble (seg lap-form)
+  (declare (ignore seg))
+  (let ((insn (%make-lap-instruction lap-form)))
+    (destructuring-bind (name . opvals) lap-form
+      (let ((templates (gethash (string-downcase name)
+                                *instruction-template-lists*)))
+        (unless templates
+          (error "Unknown instruction ~s" lap-form))
+        (let ((operands (mapcar #'parse-operand opvals)))
+          (setf (lap-instruction-parsed-operands insn) operands)
+          (dolist (template templates
+                            (explain-no-match name opvals operands templates))
+            (when (match-template template operands)
+              (format t "~&Using template ~s" template)
+              (setf (lap-instruction-word insn)
+                    (instruction-template-base-opcode template))
+              (return insn))))))))
+
+;;; Matching parsed operands against a template.  A template matches iff its
+;;; operand specs and the parsed operands agree in count and, pairwise, the
+;;; operand satisfies the spec.  Matching is a cheap boolean predicate run
+;;; against every candidate; encoding is a separate later pass.
+
+(defun register-role-ok-p (reg want-sp)
+  ;; Role only bites at register 31: 0..30 satisfy both the plain (31⇒ZR) and
+  ;; the /sp (31⇒SP) forms.
+  (or (< (register-number reg) 31)
+      (if want-sp
+        (logtest (register-flags reg) $sp)
+        (not (logtest (register-flags reg) $sp)))))
+
+(defun register-class-matches-p (class reg-operand)
+  (let ((reg (register-operand-register reg-operand)))
+    (case class
+      ((:x :x/sp :w :w/sp)
+       (multiple-value-bind (width want-sp)
+           (ecase class
+             (:x    (values 64 nil))
+             (:x/sp (values 64 t))
+             (:w    (values 32 nil))
+             (:w/sp (values 32 t)))
+         (and (eq (register-family reg) :gpr)
+              (eql (register-size reg) width)
+              (null (register-operand-modifier reg-operand)) ;plain ⇒ no shift/extend
+              (register-role-ok-p reg want-sp))))
+      ((:x-shift :w-shift :x-ext :w-ext)
+       ;; TODO: shifted/extended register matching (legal shift set + range).
+       nil)
+      (t nil))))
+
+(defun immediate-class-matches-p (class imm-operand template)
+  ;; TODO: value/shift predicates (:aimm :limm :uimm12 :simm9 :uoff), the last
+  ;; parameterized by (instruction-template-scale-shift template).
+  (declare (ignore class imm-operand template))
+  nil)
+
+(defun memory-spec-matches-p (spec mem-operand template)
+  ;; TODO: match base role (:x/sp) and the offset form against the :mem-FORM group.
+  (declare (ignore spec mem-operand template))
+  nil)
+
+(defun operand-matches-spec-p (spec operand template)
+  (cond
+    ((keywordp spec)                    ;bare keyword ⇒ immediate class
+     (and (immediate-operand-p operand)
+          (immediate-class-matches-p spec operand template)))
+    ((mem-spec-p spec)                  ;(:mem-FORM …) ⇒ memory group
+     (and (memory-operand-p operand)
+          (memory-spec-matches-p spec operand template)))
+    ((consp spec)                       ;(role class) ⇒ register
+     (and (register-operand-p operand)
+          (register-class-matches-p (cadr spec) operand)))
+    (t nil)))
+
+(defun match-template (template operands)
+  (let ((specs (instruction-template-operand-specs template)))
+    (and (= (length specs) (length operands))
+         (every (lambda (spec operand)
+                  (operand-matches-spec-p spec operand template))
+                specs operands))))
+
+;;; Rendering operand specs in human-readable, GAS-ish form.  Used now for
+;;; "no match" diagnostics; reusable later for disassembly/documentation.
+
+(defun mem-spec-p (spec)
+  (and (consp spec)
+       (keywordp (car spec))
+       (eql 0 (search "MEM-" (symbol-name (car spec))))))
+
+(defun render-gpr-token (class suffix)
+  (case class
+    (:x       (format nil "X~a" suffix))
+    (:w       (format nil "W~a" suffix))
+    (:x/sp    (format nil "X~a|SP" suffix))
+    (:w/sp    (format nil "W~a|WSP" suffix))
+    (:wsp     "WSP")
+    (:sp      "SP")
+    (:x-shift (format nil "X~a{, shift #amt}" suffix))
+    (:w-shift (format nil "W~a{, shift #amt}" suffix))
+    (:x-ext   (format nil "X~a{, extend #amt}" suffix))
+    (:w-ext   (format nil "W~a{, extend #amt}" suffix))
+    (t (format nil "~(~a~)" class))))
+
+(defun render-register-spec (spec)
+  ;; SPEC is (role class), e.g. (:rd :x).  The role's trailing letter
+  ;; (d/n/m/t) becomes the operand suffix.
+  (render-gpr-token (cadr spec)
+                    (subseq (string-downcase (string (car spec))) 1)))
+
+(defun render-immediate-spec (class)
+  (case class
+    (:aimm   "#imm{, LSL #12}")
+    (:limm   "#bitmask")
+    (:uimm12 "#uimm12")
+    (:simm9  "#simm9")
+    (:immr   "#immr")
+    (:imms   "#imms")
+    (:uoff   "#off")
+    (t (format nil "#~(~a~)" class))))
+
+(defun render-mem-spec (spec)
+  ;; SPEC is (:mem-FORM (:base qual) (:imm qual) ...).
+  (let (base off)
+    (dolist (component (cdr spec))
+      (case (car component)
+        (:base (setq base (render-gpr-token (cadr component) "n")))
+        (:imm  (setq off (render-immediate-spec (cadr component))))))
+    (format nil "[~a~@[{, ~a}~]]" (or base "Xn|SP") off)))
+
+(defun render-operand-spec (spec)
+  (cond
+    ((keywordp spec)   (render-immediate-spec spec))
+    ((mem-spec-p spec) (render-mem-spec spec))
+    ((consp spec)      (render-register-spec spec))
+    (t (princ-to-string spec))))
+
+(defun render-template-operand-specs (template)
+  (let ((specs (instruction-template-operand-specs template)))
+    (if specs
+      (format nil "~{~a~^, ~}" (mapcar #'render-operand-spec specs))
+      "")))
+
+(defun template-arity (template)
+  (length (instruction-template-operand-specs template)))
+
+(defun no-match-forms (lname templates)
+  ;; The mnemonic's accepted forms, rendered and deduplicated, one per line.
+  (mapcar (lambda (form)
+            (if (string= form "") lname (format nil "~a ~a" lname form)))
+          (remove-duplicates (mapcar #'render-template-operand-specs templates)
+                             :test #'string=)))
+
+(defun spec-expected-kind (spec)
+  (cond ((keywordp spec)   :immediate)
+        ((mem-spec-p spec) :memory)
+        ((consp spec)      :register)))
+
+(defun operand-kind (operand)
+  (cond ((register-operand-p operand)  :register)
+        ((immediate-operand-p operand) :immediate)
+        ((memory-operand-p operand)    :memory)))
+
+;;; Invoked only when no template matched.  Always signals an error, sharpest
+;;; diagnosis first: an arity mismatch, then an operand whose KIND fits no
+;;; candidate at its position (this stays correct even while the detail
+;;; predicates are stubs, since it only compares register/immediate/memory),
+;;; otherwise a listing of the forms the mnemonic accepts.
+(defun explain-no-match (name opvals operands templates)
+  (let* ((lname (string-downcase (string name)))
+         (arity (length opvals))
+         (arities (sort (remove-duplicates (mapcar #'template-arity templates)) #'<)))
+    (unless (member arity arities)
+      (error "~a takes ~{~a~^ or ~} operand(s), but got ~d: ~s"
+             lname arities arity (cons name opvals)))
+    (let ((right-arity (remove arity templates :key #'template-arity :test-not #'=)))
+      (loop for i from 0
+            for opval in opvals
+            for operand in operands
+            for kind = (operand-kind operand)
+            unless (some (lambda (template)
+                           (eq kind (spec-expected-kind
+                                     (nth i (instruction-template-operand-specs template)))))
+                         right-arity)
+              do (error "~a: operand ~d (~s) should be ~{~(~a~)~^ or ~}.~%~a accepts:~%~{  ~a~%~}"
+                        lname (1+ i) opval
+                        (remove-duplicates
+                         (mapcar (lambda (template)
+                                   (spec-expected-kind
+                                    (nth i (instruction-template-operand-specs template))))
+                                 right-arity))
+                        lname (no-match-forms lname right-arity)))
+      (error "~a: ~s matches no form.~%~a accepts:~%~{  ~a~%~}"
+             lname (cons name opvals) lname (no-match-forms lname right-arity)))))
+
+;;; The operand classes: each names the set of concrete operands acceptable in
+;;; a register role (:x …) or as an immediate (:aimm …).  (≈ binutils opnd_qualifier.)
+(defparameter *operand-classes*
+  '(:x             ;Xn or XZR
+    :x/sp          ;Xn or SP
+    :w             ;Wn or WZR
+    :w/sp          ;Wn or WSP
+    :aimm          ;uimm12, maybe shifted left 12 bits
+    :limm          ;fancy logical immediate
+    :immr
+    :imms
+    :simm9
+    :uimm12
+    :uoff          ;unsigned byte offset, multiple of access size
+    :x-shift       ;Xn lsl/lsr/asr by 0...63
+    :w-shift       ;Wn, maybe shifted
+    :x-ext         ;Xn, maybe shifted
+    :w-ext         ;Wn, maybe extended
+    ))
+
+(defstruct immediate-operand
+  value
+  shift)
+
+(defstruct register-operand
+  register
+  modifier                              ;NIL, or a shift/extend keyword:
+                                        ; :lsl :lsr :asr :ror | :uxtb…:uxtx :sxtb…:sxtx
+  (amount 0))                           ;shift/extend amount; encoder range-checks
+
+(defstruct memory-operand
+  base                                  ;a register-operand (Xn or SP)
+  offset                                ;NIL, or an immediate- or register-operand
+                                        ; (a register offset carries its own
+                                        ; shift/extend in its modifier/amount)
+  pre-indexed-p
+  post-indexed-p)
+
+;;; Turning LAP operand notation into operand structs.  Parsing is
+;;; deliberately context-free: it validates shape and syntax (is this a
+;;; register? is this modifier a shift/extend at all?) but defers everything
+;;; instruction-dependent (legal shift set, amount ranges, SP-vs-ZR role) to
+;;; the matcher/encoder.
+
+(defparameter *shift-operators*  '(:lsl :lsr :asr :ror))
+(defparameter *extend-operators* '(:uxtb :uxth :uxtw :uxtx :sxtb :sxth :sxtw :sxtx))
+
+(defun need-register (designator)
+  (or (gethash (string designator) *registers-by-name*)
+      (error "No register named ~a" designator)))
+
+(defun register-named (designator)
+  ;; *registers-by-name* is an equalp table, so the lookup is case-insensitive.
+  (gethash (string designator) *registers-by-name*))
+
+(defun register-designator-p (x)
+  (and (symbolp x) (not (keywordp x)) (register-named x)))
+
+(defun parse-register-operand (form)
+  ;; FORM is a bare register name (x0) or a list (x0 modifier {amount}).
+  (let (name modifier (amount 0))
+    (if (consp form)
+      (destructuring-bind (regname mod &optional (amt 0)) form
+        (setq name regname modifier mod amount amt))
+      (setq name form))
+    (let ((reg (register-named name)))
+      (unless reg
+        (error "Unknown register ~s" name))
+      (when (and modifier
+                 (not (or (member modifier *shift-operators*)
+                          (member modifier *extend-operators*))))
+        (error "~s is not a shift or extend operator: ~s" modifier form))
+      (make-register-operand :register reg :modifier modifier :amount amount))))
+
+(defun parse-immediate-operand (form)
+  ;; FORM is (:$ value) or (:$ value :lsl amount).  LSL is the only shift any
+  ;; A64 immediate ever takes; legal amounts are an encoder concern.
+  (destructuring-bind (marker value &rest modifiers) form
+    (declare (ignore marker))
+    (let ((shift 0))
+      (when modifiers
+        (destructuring-bind (op amount) modifiers
+          (unless (eq op :lsl)
+            (error "Only LSL may shift an immediate: ~s" form))
+          (setq shift amount)))
+      (make-immediate-operand :value value :shift shift))))
+
+(defun parse-memory-operand (form)
+  ;; FORM is (:@ base) / (:@ base offset) / (:@! …) pre-index / (:@+ …) post-index.
+  ;; The offset is itself an operand, so we recurse through parse-operand.
+  (destructuring-bind (marker base &optional offset) form
+    (make-memory-operand
+     :base           (parse-register-operand base)
+     :offset         (and offset (parse-operand offset))
+     :pre-indexed-p  (eq marker :@!)
+     :post-indexed-p (eq marker :@+))))
+
+(defun parse-operand (form)
+  (cond
+    ((register-designator-p form) (parse-register-operand form)) ;bare  x0
+    ((consp form)
+     (case (car form)
+       (:$           (parse-immediate-operand form))            ;(:$ -4 …)
+       ((:@ :@! :@+) (parse-memory-operand form))               ;(:@ x28 …)
+       (t (if (register-designator-p (car form))
+            (parse-register-operand form)                       ;(x1 :lsl 3)
+            (error "Unrecognized operand ~s" form)))))
+    (t (error "Unrecognized operand ~s" form))))
+
+(defstruct (instruction-element (:include ccl::dll-node))
+  address
+  (size 0))
+
+;;; An instruction in the process of being assembled
+(defstruct (lap-instruction (:include instruction-element (size 4))
+                            (:constructor %make-lap-instruction (source)))
+  source
+  (word -1)
+  parsed-operands)
+
+(defstruct (lap-label (:include instruction-element)
+                      (:constructor %%make-lap-label (name)))
+  name
+  refs)
+
+(defun insert-rd (insn-word operand)
+  (let ((r (register-operand-register operand)))
+    (dpb (register-number r) (byte 5 0) insn-word)))
+
+(defun insert-rn (insn-word operand)
+  (let ((r (register-operand-register operand)))
+    (dpb (register-number r) (byte 5 5) insn-word)))
+
+(defun insert-rm (insn-word operand)
+  (let ((r (register-operand-register operand)))
+    (dpb (register-number r) (byte 5 16) insn-word)))
+
+(defparameter *instruction-flags*
+  '((:alias . 0)))                      ;encoder-only; disassembler ignores it
+
+(defun %encode-instruction-flags (flags)
+  (flet ((encode-one-flag (name)
+           (ash 1 (or (cdr (assoc name *instruction-flags* :test #'eq))
+                      (error "Unknown instruction flag ~s" name)))))
+    (if flags
+      (if (atom flags)
+        (encode-one-flag flags)
+        (let ((mask 0))
+          (dolist (f flags mask)
+            (setq mask (logior mask (encode-one-flag f))))))
+      0)))
+
+(defmacro encode-instruction-flags (flags)
+  (%encode-instruction-flags flags))
+
+(defstruct instruction-template
+  name
+  operand-specs
+  base-opcode
+  mask            ;for disassembly: masks out variable parts of instruction
+  scale-shift     ;log2(access size in bytes) for memory accessors
+  alias-printer   ;optional function to rewrite disassembled insn as
+                  ; as preferred alias
+  (flags 0))
+
+(defmacro define-instruction-template (name operand-specs base-opcode mask
+                                       &key scale-shift alias-printer flags)
+  `(make-instruction-template :name ,(string-downcase name)
+                              :operand-specs ',operand-specs
+                              :base-opcode ,base-opcode
+                              :mask ,mask
+                              :scale-shift ,scale-shift
+                              :alias-printer ,alias-printer
+                              :flags (encode-instruction-flags ,flags)))
+
+(defparameter *instruction-groups*
+  '(:addsub-carry :addsub-ext :addsub-imm :addsub-shift :condbranch
+    :dp-2src :dp-3src :exception :extract :float2fix :float2int
+    :floatccmp :floatcmp :floatdp1 :floatdp2 :floatdp3 :floatimm
+    :floatsel :ic-system :ldst-imm9 :ldst-pos :ldst-regoff :ldst-unpriv
+    :ldst-unscaled :ldstexcl :ldstnapair-offs :ldstpair-indexed
+    :ldstpair-off :loadlit :log-imm :log-shift :movewide :pcreladdr
+    :testbranch))
+;; data processing -- immediate
+;; branch / exception / system
+;; loads and stores
+;; data processing -- register
+;; data processing -- scalar FP & Advanced SIMD
+
+(defconstant $rm/rn/rd-mask #xffe0fc00)
+(defconstant $addsub-imm-mask #xff000000)
+
+;;; The operands in the operand list in these templates may be considered
+;;; as operand specs.
+;;;
+;;; Here's the vocabulary:
+;;;
+;;; Bare keywords, such as :aimm or :limm represent a immediate
+;;; value of various sorts.  They have particular valid ranges, and
+;;; go into differeing bit-fields within the instruction word.
+;;;
+;;; (:mem-* ...) represent a memory operand.  Generally speaking,
+;;; all memory operands include a base register and an offset.
+;;; :mem-scaled represents an immediate offset that is scaled by the
+;;; memory access size.
+;;; :mem-unscaled is an immediate offset in the range -256--255.
+;;; There also need to be :mem-shifted  and :mem-extended, where
+;;; the offset is a register that is shifted or extended in some way. 
+;;;
+;;; Otherwise, something like (:rd :x) represents a register.  In this
+;;; example, the first item, :rd, represents a role.  In this case,
+;;; the role is the Rd field in an instruction word.  The second item,
+;;; :x in this case, represents a class: the set of concrete registers
+;;; that are eligible to fill the specified role.
+
+(defparameter *instruction-templates*
+  (macrolet ((def (&rest args)
+               `(define-instruction-template ,@args)))
+    (vector
+     ;; add/subtract (with carry) C4-583
+     (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
+     (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
+     (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
+     (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
+     (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
+     (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
+     (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
+     (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
+     (def sbcs ((:rd :w) (:rn :w) (:rm :w)) $rm/rn/rd-mask #x7a000000)
+     (def sbcs ((:rd :x) (:rn :x) (:rm :x)) $rm/rn/rd-mask #xfa000000)
+     (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
+     (def ngcss ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
+
+     ;; add/subtract (immediate) C4-524
+     (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
+     (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
+     (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
+     (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
+     (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
+     (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
+     (def adds ((:rd :w/sp) (:rn :w/sp) :aimm) #x31000000 #xff000000)
+     (def adds ((:rd :x/sp) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
+     (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
+     (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
+     (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
+     (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
+     (def subs ((:rd :w/sp) (:rn :w/sp) :aimm) #x71000000 #xff000000)
+     (def subs ((:rd :x/sp) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
+     (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
+     (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
+
+     (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
+     (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
+     (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff))) #xf9400000
+       #xffc00000 :scale-shift 3)
+     (def ldur ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000
+       #xffe0c00)
+     )))
+
+(defvar *instruction-template-lists* (make-hash-table :test #'equalp))
+
+(defun initialize-templates ()
+  (clrhash *instruction-template-lists*)
+  (dotimes (i (length *instruction-templates*))
+    (let* ((template (svref *instruction-templates* i))
+           (name (instruction-template-name template)))
+      (push template (gethash name *instruction-template-lists*)))))
 
 (defun count-trailing-zeros-64 (u64)
   (do* ((i 0 (1+ i)))
@@ -215,53 +800,6 @@
                     n immr imms)))))))
 |#
 
-(defparameter *arm64-operand-qualifiers*
-  '(
-    nil
-    :w	
-    :x
-    :wsp	
-    :sp	
-    :s_b
-    :s_h
-    :s_s
-    :s_d
-    :s_q
-    :v_8b
-    :v_16b
-    :v_4h
-    :v_8h
-    :v_2s
-    :v_4s
-    :v_1d
-    :v_2d
-    :v_1q
-    :imm_0_7
-    :imm_0_15
-    :imm_0_31
-    :imm_0_63
-    :imm_1_32
-    :imm_1_64
-    :lsl
-    :msl
-    :w-ext                              ;word reg, maybe extended
-    :x-ext                              ;x reg, maybe extended
-    :w-shift                            ;word reg, maybe shifted
-    :x-shift                            ;x reg, maybe shifted
-    :aimm                               ;12-bit constant, maybe shifted left 12 bits
-    :retrieve
-    ))
-
-(defun %encode-arm64-operand-qualifier (q)
-  (or (position q *arm64-operand-qualifiers*)
-      (error "Unknown arm64 operand qualifier: ~s" q)))
-
-(defmacro encode-arm64-operand-qualifier (q)
-  (%encode-arm64-operand-qualifier q))
-
-(defmacro encode-arm64-operand-qualifiers (list)
-  (mapcar #'%encode-arm64-operand-qualifier list))
-
 (defparameter *arm64-condition-names*
   '(("eq" . 0)                          ;equal
     ("ne" . 1)                          ;not equal
@@ -290,20 +828,30 @@
   (or (lookup-arm64-condition-name name)
       (error "Unknown ARM64 condition name ~s." name)))
 
+(defparameter *a64-operands*
+  '(:rd
+    :rn
+    :rm
+    :rt
+    :rt2
 
-(defstruct arm64-opcode
-  name
-  value
-  mask
-  class
-  ??
-  features
-  operands
-  qualifiers
-  flags)
+    :rd/sp
+    :rn/sp
+    :rm/sp
+
+    :fd
+    :fn
+    :fm
+    :fa
+    :ft
+    :ft2
+
+    :imm
+    :limm                               ;logical immediate
+    ))
 
 
-
+(defparameter *junk*
 '(
   ("adc" #x1a000000 #xffe0fc00 :addsub-carry 0 :CORE '(:Rd :Rn :Rm) '(:w :w :w) 0)
   ("adc" #x9a000000 #xffe0fc00 :addsub-carry 0 :CORE '(:Rd :Rn :Rm) '(:x :x :x) 0) 
@@ -1163,8 +1711,6 @@
   ("blt" #x5400000b #xff00001f :condbranch 0 :CORE '(:ADDR-PCREL19) QL-PCREL-NIL (F-ALIAS  F-PSEUDO)) 
   ("bgt" #x5400000c #xff00001f :condbranch 0 :CORE '(:ADDR-PCREL19) QL-PCREL-NIL (F-ALIAS  F-PSEUDO)) 
   ("ble" #x5400000d #xff00001f :condbranch 0 :CORE '(:ADDR-PCREL19) QL-PCREL-NIL (F-ALIAS  F-PSEUDO))
- 
-
-  )
+))
 
 (provide "ARM64-ASM")
