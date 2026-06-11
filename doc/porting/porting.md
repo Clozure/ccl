@@ -17,7 +17,6 @@ probably 99% or more of the code in an x86-64 image for FreeBSD is
 identical to the code in an x86-64 image for Linux.
 
 ## Overview
-
 What you're generally going to need to do is to cross-compile a set
 of fasl files and a bootstrapping image from some host
 machine on which CCL already runs.  Once you've done that, you copy
@@ -31,9 +30,7 @@ to use any platform on which CCL already runs as the host; in practice,
 it may work better if the host and target share the same word size
 and endianness.
 
-
 ## Define the architecture description
-
 For a new architecture, define a new architecture description
 (for examples, see `ccl:compiler;**.*-arch.lisp`).  The architecture
 description contains information about the target and the
@@ -43,9 +40,9 @@ them; the "backend" contains some additional platform stuff
 (FFI details, FASL extension, etc.))
 
 ## Define the `backend` structure
-
-A lot of platform-specific attributes (by no means all) are
-encapsulated in a structure called a BACKEND.  The existing BACKENDs
+A lot of platform-specific attributes (but by no means all) are
+encapsulated in a structure called a `backend`.  The existing `backend`
+structures 
 for x8664 platforms are defined in
 "ccl:compiler;X86;X8664;x8664-backend.lisp".  The backend definitions
 in that file are conditionalized so that only the native backend is
@@ -53,7 +50,7 @@ ordinarily defined; you probably want to add similar conditionalization
 when editing that file, but you also want to mouse on the DEFSTRUCT
 (e.g., select it and do C-M-x or equivalent in Emacs) while running
 the host.  You want to ensure that the new backend is defined in the
-host and that it's on *KNOWN-BACKENDS* and *KNOWN-X8664-BACKENDS*.
+host and that it's on `*KNOWN-BACKENDS*` and `*KNOWN-X8664-BACKENDS*`.
 Once it is, call
 
 ? (ccl::fixup-x8664-backend)
@@ -173,3 +170,35 @@ the idea is to ensure that the page at #x5000 is unused; we map
 it read/write at runtime and copy the subprim addresses from whereever
 they wound up into that page.)
 
+## Assembler
+
+We need an assembler for two reasons.  Some special Lisp functions are
+implemented in a notation called LAP.  These are defined using an
+architecture-specific macro named something like `defarm64lapfunction`.
+
+The other place we need the assembler is for vinsn templates.  These are
+assembly language fragments that are partly pre-assembled.  The compiler
+backend emits vinsns as it translates the output of the compiler front-end
+into object code.
+
+Other ports have used GNU binutils as a source for instruction
+encoding data and assembler structure.  The architecture-specific
+directories ccl:compiler;**; contain the assembler and disassembler
+files for existing ports.  Look at `*-asm.lisp`, `*-lap.lisp`, and
+`*-disassemble.lisp`.
+
+For examples of assembler input, see `*-vinsn.lisp` and the files in
+`ccl:level-0;**;*.lisp`.  The `*-bignum.lisp` files are non-trivial, but
+not too difficult to follow.
+
+We need a disassembler (for `cl:disassemble` at least). On RISC-style
+architectures, we can often reuse the assembler's data structures to
+implement disassembly.  On x86, which has a variable-length instruction
+encoding, we can't do that, and we have 3000 lines of code to implement
+the x86 disassembler. By contrast, we only need about 500 lines for each
+of the PowerPC and ARM disassemblers.
+
+An assembler could be a project on its own (and so could a
+disassembler for that matter), but it is only a part of CCL.  Make
+something reasonable, knowing that it is internal implementation
+functionality.

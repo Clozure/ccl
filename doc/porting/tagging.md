@@ -33,3 +33,5 @@ extract-typecode-fixnum: same, but box return value
 
 ivector-typecode-p: is the reference in question an ivector?
 gvector-typecode-p: is the reference in question a gvector?
+
+## 64-bit ARM

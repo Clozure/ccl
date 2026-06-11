@@ -237,3 +237,21 @@ The elements of the uvector start at
 On arm64, do we want tags for symbols and functions?
 
 typecode returns an object's lisptag or the subtag, if the object is a miscobj.
+
+## arm64 assembler
+
+We need an assembler for two reasons.  Some Lisp functions are implemented
+in a notation called LAP.  These are defined using an architecture-specific
+macro named something like `defarm64lapfunction`.
+
+The other place we need the assembler is for vinsn templates.  These are
+assembly language fragments that are partly pre-assembled.  The compiler
+backend emits vinsns as it translates the output of the compiler front-end
+into object code.
+
+We also need a disassembler (for `cl:disassemble` at least). On RISC-style
+architectures, we can often reuse the assembler's data structures to
+implement disassembly.  On x86, which has a variable-length instruction
+encoding, we can't do that, and we have 3000 lines of code to implement
+the x86 disassembler. By contrast, we only need about 500 lines for each
+of the PowerPC and ARM disassemblers.
