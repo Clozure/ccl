@@ -7,14 +7,12 @@
 
 (in-package "ARM64")
 
-(defvar *registers-by-name* (make-hash-table :test #'equalp))
-
 (defconstant $sp #b001)                 ;r31 role is stack pointer
 
 (defstruct register
   name         ;canonical name
   number       ;as encoded in instruction
-  size         ;in bits
+  width        ;in bits
   (family :gpr :type (member :gpr :fpr))  ;register file: GPR vs FP/SIMD
   flags)
 
@@ -22,17 +20,16 @@
   (declare (ignore env))
   (make-load-form-saving-slots r))
 
-;;; Given a string designator for a register name, figure out
-;;; everything that implies.
-;;; Returns (values name number size family flags).
-(defun %parse-register-name (namespec)
-  (let ((name (string-downcase (string namespec))))
+;;; Given a designator for a register name, figure out everything the
+;;; name implies.  Returns (values name number width family flags).
+(defun %parse-register-name (designator)
+  (let ((name (string-downcase designator)))
     (cond
       ((string= name "sp") (values name 31 64 :gpr $sp))
       ((string= name "wsp") (values name 31 32 :gpr $sp))
       ((string= name "xzr") (values name 31 64 :gpr 0))
       ((string= name "wzr") (values name 31 32 :gpr 0))
-      (t (multiple-value-bind (size family)
+      (t (multiple-value-bind (width family)
              (ecase (char name 0)
                (#\x (values 64 :gpr))
                (#\w (values 32 :gpr))
@@ -43,12 +40,13 @@
                (error "Write xzr/wzr/sp/wsp, not ~a." name))
              (unless (<= 0 number (if (eq family :gpr) 30 31))
                (error "Register number out of range: ~a" name))
-             (values name number size family 0)))))))
+             (values name number width family 0)))))))
 
+;;; An abbreviation to be short in writing.
 (defmacro reg (namespec)
-  (multiple-value-bind (name number size family flags)
+  (multiple-value-bind (name number width family flags)
       (%parse-register-name namespec)
-    `(make-register :name ,name :number ,number :size ,size
+    `(make-register :name ,name :number ,number :width ,width
                     :family ,family :flags ,flags)))
 
 (defparameter *registers*
@@ -78,14 +76,7 @@
    (reg d21) (reg d22) (reg d23) (reg d24) (reg d25) (reg d26) (reg d27)
    (reg d28) (reg d29) (reg d30) (reg d31)))
 
-(defun hash-registers ()
-  (dotimes (i (length *registers*))
-    (let ((r (svref *registers* i)))
-      (setf (gethash (register-name r) *registers-by-name*) r))))
-
-(hash-registers)
-
-;;; Constants that map to indexes into *registers*
+;;; Constants for indexes into *registers* (not sure if useful).
 (ccl::defenum ()
    x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  x10 x11 x12 x13 x14 x15
    x16 x17 x18 x19 x20 x21 x22 x23 x24 x25 x26 x27 x28 x29 x30 xzr sp
@@ -99,6 +90,15 @@
    d0  d1  d2  d3  d4  d5  d6  d7  d8  d9  d10 d11 d12 d13 d14 d15
    d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31)
 
+(defvar *registers-by-name* (make-hash-table :test #'equalp))
+
+(defun hash-registers ()
+  (dotimes (i (length *registers*))
+    (let ((r (svref *registers* i)))
+      (setf (gethash (register-name r) *registers-by-name*) r))))
+
+(hash-registers)
+
 (defmacro define-register-alias (alias known)
   (let ((known-entry (gensym)))
     `(let ((,known-entry (gethash ,(string known) *registers-by-name*)))
@@ -107,14 +107,18 @@
        (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
        (defconstant ,alias ,known))))
 
-;;; Lisp names
+(define-register-alias fp x29)          ;frame pointer
+(define-register-alias lr x30)          ;link register
+
+;;; Lisp register names
 (define-register-alias imm0 x0)         ;unboxed, volatile registers
 (define-register-alias imm1 x1)
 (define-register-alias imm2 x2)
 (define-register-alias imm3 x3)
 (define-register-alias imm4 x4)
 (define-register-alias imm5 x5)
-;; x6
+(define-register-alias nargs x6)        ;can be used for other purposes too
+
 (define-register-alias fn x7)
 (define-register-alias nfn x8)
 
@@ -126,39 +130,363 @@
 (define-register-alias temp1 x14)       ; Some may be defined on function
 (define-register-alias temp2 x15)       ; entry.
 (define-register-alias temp3 x16)
-;; x17
-;; x18 permanantly reserved (at least on Darwin)
+(define-register-alias temp4 x17)
+
+;; x18 reserved "platform register" (at least on Darwin)
 (define-register-alias save0 x19)       ;boxed, non-volatile registers
 (define-register-alias save1 x20)
 (define-register-alias save2 x21)
 (define-register-alias save3 x22)
 
-(define-register-alias rnil x23)        ;nil (and used to reference nilreg area)
+(define-register-alias rnil x23)        ;nil (and to reference nilreg area)
 (define-register-alias tsp x24)         ;temp stack pointer (maybe not useful)
 (define-register-alias vsp x25)         ;value stack pointer (grows down)
 (define-register-alias allocptr x26)
 (define-register-alias allocbase x27)
 (define-register-alias rcontext x28)    ;per-thread data
 
-(defun encode-operands (instruction template)
-  (format t "~&Using template ~s" template))
+(defparameter *instruction-flags*
+  '((:alias . 0)))                      ;disassembler ignores aliases
 
+(defun %encode-instruction-flags (flags)
+  (flet ((encode-one-flag (name)
+           (ash 1 (or (cdr (assoc name *instruction-flags* :test #'eq))
+                      (error "Unknown instruction flag ~s" name)))))
+    (if flags
+      (if (atom flags)
+        (encode-one-flag flags)
+        (let ((mask 0))
+          (dolist (f flags mask)
+            (setq mask (logior mask (encode-one-flag f))))))
+      0)))
+
+(defmacro encode-instruction-flags (flags)
+  (%encode-instruction-flags flags))
+
+(defstruct instruction-template
+  name
+  operand-specs
+  base-opcode
+  mask            ;for disassembly: masks out variable parts of instruction
+  alias-printer   ;optional function to rewrite disassembled insn as
+                  ; as preferred alias
+  (flags 0))
+
+(defmacro define-instruction-template (name operand-specs base-opcode mask
+                                       &key alias-printer flags)
+  `(make-instruction-template :name ,(string-downcase name)
+                              :operand-specs ',operand-specs
+                              :base-opcode ,base-opcode
+                              :mask ,mask
+                              :alias-printer ,alias-printer
+                              :flags (encode-instruction-flags ,flags)))
+
+(defparameter *instruction-groups*
+  '(:addsub-carry :addsub-ext :addsub-imm :addsub-shift :condbranch
+    :dp-2src :dp-3src :exception :extract :float2fix :float2int
+    :floatccmp :floatcmp :floatdp1 :floatdp2 :floatdp3 :floatimm
+    :floatsel :ic-system :ldst-imm9 :ldst-pos :ldst-regoff :ldst-unpriv
+    :ldst-unscaled :ldstexcl :ldstnapair-offs :ldstpair-indexed
+    :ldstpair-off :loadlit :log-imm :log-shift :movewide :pcreladdr
+    :testbranch))
+;; data processing -- immediate
+;; branch / exception / system
+;; loads and stores
+;; data processing -- register
+;; data processing -- scalar FP & Advanced SIMD
+
+(defconstant $rm/rn/rd-mask #xffe0fc00)
+(defconstant $addsub-imm-mask #xff000000)
+(defconstant $addsub-shift-mask #xff200000)
+(defconstant $addsub-ext-mask #xffe00000)
+(defconstant $log-shift-mask #xff200000)
+(defconstant $ldst-pos-mask #xffc00000)  ;load/store register, unsigned immediate
+(defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
+
+;;; The operands in the operand list in these templates may be considered
+;;; as operand specs.
+;;;
+;;; Here's the vocabulary:
+;;;
+;;; Bare keywords, such as :aimm or :limm represent a immediate
+;;; value of various sorts.  They have particular valid ranges, and
+;;; go into differeing bit-fields within the instruction word.
+;;;
+;;; (:mem-* ...) represent a memory operand.  Generally speaking,
+;;; all memory operands include a base register and an offset.
+;;; :mem-scaled represents an immediate offset that is scaled by the
+;;; memory access size.
+;;; :mem-unscaled is an immediate offset in the range -256--255.
+;;; There also need to be :mem-shifted  and :mem-extended, where
+;;; the offset is a register that is shifted or extended in some way.
+;;;
+;;; Otherwise, something like (:rd :x) represents a register.  In this
+;;; example, the first item, :rd, represents a role.  In this case,
+;;; the role is the Rd field in an instruction word.  The second item,
+;;; :x in this case, represents a class: the set of concrete registers
+;;; that are eligible to fill the specified role.
+
+
+;;; A64 instruction table
+;;;
+;;; Each entry in the table is called an instruction template (or
+;;; template for short).
+;;;
+;;; A template includes the instruction name, a list of operand specs,
+;;; and a fully-resolved base opcode (SF/size bits already included).
+;;; (Other slots in the template are for the disassembler.)
+;;;
+;;; There are three kinds of operands: register, immediate, and memory.
+;;;
+;;; An operand class (e.g., :x, :w, :aimm, &c.) may be thought of as a
+;;; set of acceptable operands.  If we have an operand, we can ask
+;;; "does the operand belong to this class?"
+;;;
+;;; A role (:rd/:rn/:base) represents a field in the instruction word
+;;; where the encoded operand will go.
+
+(defparameter *instruction-templates*
+  (macrolet ((def (&rest args)
+               `(define-instruction-template ,@args)))
+    (vector
+     ;; add/subtract (with carry) C4-583
+     (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
+     (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
+     (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
+     (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
+     (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
+     (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
+     (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
+     (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
+     (def sbcs ((:rd :w) (:rn :w) (:rm :w)) #x7a000000 $rm/rn/rd-mask)
+     (def sbcs ((:rd :x) (:rn :x) (:rm :x)) #xfa000000 $rm/rn/rd-mask)
+     (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
+     (def ngcss ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
+
+     ;; add/subtract (immediate) C4-524
+     (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
+     (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
+     (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
+     (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
+     (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
+     (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
+     (def adds ((:rd :w/sp) (:rn :w/sp) :aimm) #x31000000 #xff000000)
+     (def adds ((:rd :x/sp) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
+     (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
+     (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
+     (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
+     (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
+     (def subs ((:rd :w/sp) (:rn :w/sp) :aimm) #x71000000 #xff000000)
+     (def subs ((:rd :x/sp) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
+     (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
+     (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
+
+     ;; add/subtract (shifted register) C4-587.  Rd/Rn are ZR-form (no SP);
+     ;; Rm carries an optional lsl/lsr/asr shift (imm6, 0..63/0..31).
+     (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x0b000000 $addsub-shift-mask)
+     (def add ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
+     (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
+     (def adds ((:rd :x) (:rn :x) (:rm :x-shift)) #xab000000 $addsub-shift-mask)
+     (def cmn ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :flags :alias)
+     (def cmn ((:rn :x) (:rm :x-shift)) #xab00001f 0 :flags :alias)
+     (def sub ((:rd :w) (:rn :w) (:rm :w-shift)) #x4b000000 $addsub-shift-mask)
+     (def sub ((:rd :x) (:rn :x) (:rm :x-shift)) #xcb000000 $addsub-shift-mask)
+     (def subs ((:rd :w) (:rn :w) (:rm :w-shift)) #x6b000000 $addsub-shift-mask)
+     (def subs ((:rd :x) (:rn :x) (:rm :x-shift)) #xeb000000 $addsub-shift-mask)
+     (def cmp ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :flags :alias)
+     (def cmp ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :flags :alias)
+     (def neg ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :flags :alias)
+     (def neg ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :flags :alias)
+     (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :flags :alias)
+     (def negs( (:rd :x) (:rm :x-shift)) #xeb0003e0 0 :flags :alias)
+
+     ;; add/subtract (extended register) C4-585.  Rd/Rn are SP-form; Rm is an
+     ;; extended register (uxtb..sxtx, optional 3-bit amount).  The flag-setting
+     ;; adds/subs use ZR for Rd.  SP in Rd/Rn is what selects this over the
+     ;; shifted form for the same surface syntax.
+     (def add ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
+     (def add ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
+     (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
+     (def adds ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xab200000 $addsub-ext-mask)
+     (def cmn ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :flags :alias)
+     (def cmn ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :flags :alias)
+     (def sub ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x4b200000 $addsub-ext-mask)
+     (def sub ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #xcb200000 $addsub-ext-mask)
+     (def subs ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x6b200000 $addsub-ext-mask)
+     (def subs ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xeb200000 $addsub-ext-mask)
+     (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :flags :alias)
+     (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :flags :alias)
+
+     (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
+     (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
+
+     ;; logical (shifted register) C4-595.  opc@30:29 picks and/orr/eor/ands;
+     ;; N@21 picks the bic/orn/eon/bics variants.  Rm allows lsl/lsr/asr/ROR.
+     ;; mov (register) is orr-with-Rn=zr; it competes with mov (to/from SP)
+     ;; above — two-plain-regs vs an SP operand decides which template matches.
+     (def and ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a000000 $log-shift-mask)
+     (def and ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a000000 $log-shift-mask)
+     (def bic ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a200000 $log-shift-mask)
+     (def bic ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a200000 $log-shift-mask)
+     (def orr ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a000000 $log-shift-mask)
+     (def orr ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa000000 $log-shift-mask)
+     (def mov ((:rd :w) (:rm :w)) #x2a0003e0 0 :flags :alias)
+     (def mov ((:rd :x) (:rm :x)) #xaa0003e0 0 :flags :alias)
+     (def orn ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a200000 $log-shift-mask)
+     (def orn ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa200000 $log-shift-mask)
+     (def mvn ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :flags :alias)
+     (def mvn ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :flags :alias)
+     (def eor ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a000000 $log-shift-mask)
+     (def eor ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca000000 $log-shift-mask)
+     (def eon ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a200000 $log-shift-mask)
+     (def eon ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca200000 $log-shift-mask)
+     (def ands ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a000000 $log-shift-mask)
+     (def ands ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea000000 $log-shift-mask)
+     (def tst ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :flags :alias)
+     (def tst ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :flags :alias)
+     (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
+     (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
+
+     ;; load/store register (unsigned immediate) C4-575
+     ;;
+     ;; size@31:30 = access width (and the :uoffN scale); opc@23:22 =
+     ;; store/load/sign-extend.  Base is always :x/sp; Rt's class is
+     ;; its transfer width (W, or X for the sign-extending and 64-bit
+     ;; forms).
+     ;;
+     ;; byte
+     (def strb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39000000 $ldst-pos-mask)
+     (def ldrb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39400000 $ldst-pos-mask)
+     (def ldrsb ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39800000 $ldst-pos-mask)
+     (def ldrsb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39c00000 $ldst-pos-mask)
+     ;; halfword
+     (def strh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79000000 $ldst-pos-mask)
+     (def ldrh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79400000 $ldst-pos-mask)
+     (def ldrsh ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79800000 $ldst-pos-mask)
+     (def ldrsh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79c00000 $ldst-pos-mask)
+     ;; word
+     (def str ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9000000 $ldst-pos-mask)
+     (def ldr ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9400000 $ldst-pos-mask)
+     (def ldrsw ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9800000 $ldst-pos-mask)
+     ;; doubleword
+     (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
+     (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
+
+     ;; load/store register (unscaled immediate) C4-560
+     ;;
+     ;; Same size/opc layout as the unsigned-immediate forms above,
+     ;; but 25:24 = 00 and a signed imm9 byte offset (-256..255) that
+     ;; is never scaled — so every form's offset is :simm9.  Reached
+     ;; by the U-infix mnemonics; the ldr→ldur unscaled fallback is a
+     ;; later encode-time concern, not wired here.
+
+     ;; byte
+     (def sturb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38000000 $ldst-unscaled-mask)
+     (def ldurb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38400000 $ldst-unscaled-mask)
+     (def ldursb ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38800000 $ldst-unscaled-mask)
+     (def ldursb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38c00000 $ldst-unscaled-mask)
+     ;; halfword
+     (def sturh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78000000 $ldst-unscaled-mask)
+     (def ldurh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78400000 $ldst-unscaled-mask)
+     (def ldursh ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78800000 $ldst-unscaled-mask)
+     (def ldursh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78c00000 $ldst-unscaled-mask)
+     ;; word
+     (def stur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8000000 $ldst-unscaled-mask)
+     (def ldur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8400000 $ldst-unscaled-mask)
+     (def ldursw ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8800000 $ldst-unscaled-mask)
+     ;; doubleword
+     (def stur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
+     (def ldur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
+     )))
+
+(defvar *instruction-template-lists* (make-hash-table :test #'equalp))
+
+(defun initialize-templates ()
+  (clrhash *instruction-template-lists*)
+  (dotimes (i (length *instruction-templates*))
+    (let* ((template (svref *instruction-templates* i))
+           (name (instruction-template-name template)))
+      (push template (gethash name *instruction-template-lists*)))))
+
+
+
+
+
+;;; Encoding is the dual of matching: walk the same (spec . operand) pairs and
+;;; fold each operand's bits into the word at the field its spec names.  A
+;;; matched template means every operand's range was already checked, so the
+;;; encoders just place bits — no validation.  Register field positions live in
+;;; insert-rd/rn/rm; the field for an immediate is determined by its class.
+
+(defun encode-register (word role operand)
+  (when (register-operand-modifier operand)
+    ;; shift/extend fields aren't encoded yet (their matching predicate is also
+    ;; still a stub, so a modified register can't reach here via a real match).
+    (error "shift/extend register encoding not yet implemented: ~s" operand))
+  (ecase role
+    ((:rd :rt)   (insert-rd word operand))   ;field at bits 4:0   (Rd / Rt)
+    ((:rn :base) (insert-rn word operand))   ;field at bits 9:5   (Rn / base)
+    (:rm         (insert-rm word operand)))) ;field at bits 20:16
+
+(defun encode-immediate (word class operand)
+  (let ((value (immediate-operand-value operand))
+        (shift (immediate-operand-shift operand)))
+    (flet ((uoff (scale)                    ;scaled offset: value >> scale → imm12
+             (dpb (ash value (- scale)) (byte 12 10) word)))
+      (case class
+        (:aimm  (dpb value (byte 12 10)             ;imm12 @ 21:10
+                     (dpb (if (eql shift 12) 1 0) (byte 1 22) word)))  ;sh @ 22
+        (:simm9 (dpb value (byte 9 12) word))       ;imm9 @ 20:12 (dpb keeps low 9 bits)
+        (:limm  (dpb (encode-logical-immediate value) (byte 13 10) word)) ;N:immr:imms @ 22:10
+        (:uoff0 (uoff 0))
+        (:uoff1 (uoff 1))
+        (:uoff2 (uoff 2))
+        (:uoff3 (uoff 3))
+        (:uoff4 (uoff 4))
+        (t (error "encoding of immediate class ~s not implemented" class))))))
+
+(defun encode-memory (word spec operand)
+  ;; SPEC is (:mem-FORM (:base …) (:imm imm-class)).  Base → Rn; the offset is
+  ;; itself an immediate operand, so reuse encode-immediate.  A missing offset
+  ;; is #0, already present in the base-opcode.
+  (let* ((imm-class (cadr (assoc :imm (cdr spec))))
+         (offset    (memory-operand-offset operand))
+         (word      (insert-rn word (memory-operand-base operand))))
+    (if offset
+      (encode-immediate word imm-class offset)
+      word)))
+
+(defun encode-operand (word spec operand)   ;like match-operand
+  (cond
+    ((keywordp spec)   (encode-immediate word spec operand))
+    ((mem-spec-p spec) (encode-memory    word spec operand))
+    ((consp spec)      (encode-register  word (car spec) operand))
+    (t word)))
+
+(defun encode-operands (insn template)
+  (let ((word (instruction-template-base-opcode template)))
+    (loop for spec    in (instruction-template-operand-specs template)
+          for operand in (instruction-parsed-operands insn)
+          do (setf word (encode-operand word spec operand)))
+    (setf (instruction-word insn) word)))
+
+;;; Assembly proceeds in three stages: parse -> match -> encode.
+;;; Parsing turns the LAP syntax into register/immediate/memory-operand
+;;; structs.
 ;;; lap-form is a list and its car isn't a pseudo-op or lapmacro
 (defun assemble (seg lap-form)
   (declare (ignore seg))
-  (let ((insn (%make-lap-instruction lap-form)))
+  (let ((insn (%make-instruction lap-form)))
     (destructuring-bind (name . opvals) lap-form
       (let ((templates (gethash (string-downcase name)
                                 *instruction-template-lists*)))
         (unless templates
           (error "Unknown instruction ~s" lap-form))
         (let ((operands (mapcar #'parse-operand opvals)))
-          (setf (lap-instruction-parsed-operands insn) operands)
+          (setf (instruction-parsed-operands insn) operands)
           (dolist (template templates
                             (explain-no-match name opvals operands templates))
             (when (match-template template operands)
-              (setf (lap-instruction-word insn)
-                    (instruction-template-base-opcode template))
               (encode-operands insn template)
               (return insn)))
           )))))
@@ -173,7 +501,7 @@
 (defun register-operand-class-p (r-op class)
   (let* ((r (register-operand-register r-op))
          (family (register-family r))
-         (width (register-size r))
+         (width (register-width r))
          (r31-role (if (= (register-number r) 31)
                      (if (logtest (register-flags r) $sp)
                        :stack-pointer
@@ -245,7 +573,7 @@
                  (immediate-operand-class-p offset imm-class))
                 (t nil))))))            ;register offset ⇒ a different :mem form
 
-(defun operand-matches-spec-p (spec operand)
+(defun match-operand (operand spec)
   (cond
     ((keywordp spec)                    ;bare keyword ⇒ immediate class
      (and (immediate-operand-p operand)
@@ -261,7 +589,7 @@
 (defun match-template (template operands)
   (let ((specs (instruction-template-operand-specs template)))
     (and (= (length specs) (length operands))
-         (every #'operand-matches-spec-p specs operands))))
+         (every #'match-operand operands specs))))
 
 ;;; Rendering operand specs in human-readable, GAS-ish form.  Used now for
 ;;; "no match" diagnostics; reusable later for disassembly/documentation.
@@ -502,14 +830,14 @@
   (size 0))
 
 ;;; An instruction in the process of being assembled
-(defstruct (lap-instruction (:include instruction-element (size 4))
-                            (:constructor %make-lap-instruction (source)))
+(defstruct (instruction (:include instruction-element (size 4))
+                        (:constructor %make-instruction (source)))
   source
   (word -1)
   parsed-operands)
 
-(defstruct (lap-label (:include instruction-element)
-                      (:constructor %%make-lap-label (name)))
+(defstruct (label (:include instruction-element)
+                  (:constructor %%make-label (name)))
   name
   refs)
 
@@ -525,249 +853,6 @@
   (let ((r (register-operand-register operand)))
     (dpb (register-number r) (byte 5 16) insn-word)))
 
-(defparameter *instruction-flags*
-  '((:alias . 0)))                      ;encoder-only; disassembler ignores it
-
-(defun %encode-instruction-flags (flags)
-  (flet ((encode-one-flag (name)
-           (ash 1 (or (cdr (assoc name *instruction-flags* :test #'eq))
-                      (error "Unknown instruction flag ~s" name)))))
-    (if flags
-      (if (atom flags)
-        (encode-one-flag flags)
-        (let ((mask 0))
-          (dolist (f flags mask)
-            (setq mask (logior mask (encode-one-flag f))))))
-      0)))
-
-(defmacro encode-instruction-flags (flags)
-  (%encode-instruction-flags flags))
-
-(defstruct instruction-template
-  name
-  operand-specs
-  base-opcode
-  mask            ;for disassembly: masks out variable parts of instruction
-  alias-printer   ;optional function to rewrite disassembled insn as
-                  ; as preferred alias
-  (flags 0))
-
-(defmacro define-instruction-template (name operand-specs base-opcode mask
-                                       &key alias-printer flags)
-  `(make-instruction-template :name ,(string-downcase name)
-                              :operand-specs ',operand-specs
-                              :base-opcode ,base-opcode
-                              :mask ,mask
-                              :alias-printer ,alias-printer
-                              :flags (encode-instruction-flags ,flags)))
-
-(defparameter *instruction-groups*
-  '(:addsub-carry :addsub-ext :addsub-imm :addsub-shift :condbranch
-    :dp-2src :dp-3src :exception :extract :float2fix :float2int
-    :floatccmp :floatcmp :floatdp1 :floatdp2 :floatdp3 :floatimm
-    :floatsel :ic-system :ldst-imm9 :ldst-pos :ldst-regoff :ldst-unpriv
-    :ldst-unscaled :ldstexcl :ldstnapair-offs :ldstpair-indexed
-    :ldstpair-off :loadlit :log-imm :log-shift :movewide :pcreladdr
-    :testbranch))
-;; data processing -- immediate
-;; branch / exception / system
-;; loads and stores
-;; data processing -- register
-;; data processing -- scalar FP & Advanced SIMD
-
-(defconstant $rm/rn/rd-mask #xffe0fc00)
-(defconstant $addsub-imm-mask #xff000000)
-(defconstant $addsub-shift-mask #xff200000)
-(defconstant $addsub-ext-mask #xffe00000)
-(defconstant $log-shift-mask #xff200000)
-(defconstant $ldst-pos-mask #xffc00000)  ;load/store register, unsigned immediate
-(defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
-
-;;; The operands in the operand list in these templates may be considered
-;;; as operand specs.
-;;;
-;;; Here's the vocabulary:
-;;;
-;;; Bare keywords, such as :aimm or :limm represent a immediate
-;;; value of various sorts.  They have particular valid ranges, and
-;;; go into differeing bit-fields within the instruction word.
-;;;
-;;; (:mem-* ...) represent a memory operand.  Generally speaking,
-;;; all memory operands include a base register and an offset.
-;;; :mem-scaled represents an immediate offset that is scaled by the
-;;; memory access size.
-;;; :mem-unscaled is an immediate offset in the range -256--255.
-;;; There also need to be :mem-shifted  and :mem-extended, where
-;;; the offset is a register that is shifted or extended in some way.
-;;;
-;;; Otherwise, something like (:rd :x) represents a register.  In this
-;;; example, the first item, :rd, represents a role.  In this case,
-;;; the role is the Rd field in an instruction word.  The second item,
-;;; :x in this case, represents a class: the set of concrete registers
-;;; that are eligible to fill the specified role.
-
-(defparameter *instruction-templates*
-  (macrolet ((def (&rest args)
-               `(define-instruction-template ,@args)))
-    (vector
-     ;; add/subtract (with carry) C4-583
-     (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
-     (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
-     (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
-     (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
-     (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
-     (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
-     (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
-     (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
-     (def sbcs ((:rd :w) (:rn :w) (:rm :w)) #x7a000000 $rm/rn/rd-mask)
-     (def sbcs ((:rd :x) (:rn :x) (:rm :x)) #xfa000000 $rm/rn/rd-mask)
-     (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
-     (def ngcss ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
-
-     ;; add/subtract (immediate) C4-524
-     (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
-     (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
-     (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
-     (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
-     (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
-     (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
-     (def adds ((:rd :w/sp) (:rn :w/sp) :aimm) #x31000000 #xff000000)
-     (def adds ((:rd :x/sp) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
-     (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
-     (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
-     (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
-     (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
-     (def subs ((:rd :w/sp) (:rn :w/sp) :aimm) #x71000000 #xff000000)
-     (def subs ((:rd :x/sp) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
-     (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
-     (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
-
-     ;; add/subtract (shifted register) C4-587.  Rd/Rn are ZR-form (no SP);
-     ;; Rm carries an optional lsl/lsr/asr shift (imm6, 0..63/0..31).
-     (def add  ((:rd :w) (:rn :w) (:rm :w-shift)) #x0b000000 $addsub-shift-mask)
-     (def add  ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
-     (def adds ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
-     (def adds ((:rd :x) (:rn :x) (:rm :x-shift)) #xab000000 $addsub-shift-mask)
-     (def cmn  ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :flags :alias)
-     (def cmn  ((:rn :x) (:rm :x-shift)) #xab00001f 0 :flags :alias)
-     (def sub  ((:rd :w) (:rn :w) (:rm :w-shift)) #x4b000000 $addsub-shift-mask)
-     (def sub  ((:rd :x) (:rn :x) (:rm :x-shift)) #xcb000000 $addsub-shift-mask)
-     (def subs ((:rd :w) (:rn :w) (:rm :w-shift)) #x6b000000 $addsub-shift-mask)
-     (def subs ((:rd :x) (:rn :x) (:rm :x-shift)) #xeb000000 $addsub-shift-mask)
-     (def cmp  ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :flags :alias)
-     (def cmp  ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :flags :alias)
-     (def neg  ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :flags :alias)
-     (def neg  ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :flags :alias)
-     (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :flags :alias)
-     (def negs ((:rd :x) (:rm :x-shift)) #xeb0003e0 0 :flags :alias)
-
-     ;; add/subtract (extended register) C4-585.  Rd/Rn are SP-form; Rm is an
-     ;; extended register (uxtb..sxtx, optional 3-bit amount).  The flag-setting
-     ;; adds/subs use ZR for Rd.  SP in Rd/Rn is what selects this over the
-     ;; shifted form for the same surface syntax.
-     (def add  ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
-     (def add  ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
-     (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
-     (def adds ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xab200000 $addsub-ext-mask)
-     (def cmn  ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :flags :alias)
-     (def cmn  ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :flags :alias)
-     (def sub  ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x4b200000 $addsub-ext-mask)
-     (def sub  ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #xcb200000 $addsub-ext-mask)
-     (def subs ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x6b200000 $addsub-ext-mask)
-     (def subs ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xeb200000 $addsub-ext-mask)
-     (def cmp  ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :flags :alias)
-     (def cmp  ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :flags :alias)
-
-     (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
-     (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
-
-     ;; logical (shifted register) C4-595.  opc@30:29 picks and/orr/eor/ands;
-     ;; N@21 picks the bic/orn/eon/bics variants.  Rm allows lsl/lsr/asr/ROR.
-     ;; mov (register) is orr-with-Rn=zr; it competes with mov (to/from SP)
-     ;; above — two-plain-regs vs an SP operand decides which template matches.
-     (def and  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a000000 $log-shift-mask)
-     (def and  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a000000 $log-shift-mask)
-     (def bic  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a200000 $log-shift-mask)
-     (def bic  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a200000 $log-shift-mask)
-     (def orr  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a000000 $log-shift-mask)
-     (def orr  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa000000 $log-shift-mask)
-     (def mov  ((:rd :w) (:rm :w)) #x2a0003e0 0 :flags :alias)
-     (def mov  ((:rd :x) (:rm :x)) #xaa0003e0 0 :flags :alias)
-     (def orn  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a200000 $log-shift-mask)
-     (def orn  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa200000 $log-shift-mask)
-     (def mvn  ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :flags :alias)
-     (def mvn  ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :flags :alias)
-     (def eor  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a000000 $log-shift-mask)
-     (def eor  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca000000 $log-shift-mask)
-     (def eon  ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a200000 $log-shift-mask)
-     (def eon  ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca200000 $log-shift-mask)
-     (def ands ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a000000 $log-shift-mask)
-     (def ands ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea000000 $log-shift-mask)
-     (def tst  ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :flags :alias)
-     (def tst  ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :flags :alias)
-     (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
-     (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
-
-     ;; load/store register (unsigned immediate) C4-575
-     ;;
-     ;; size@31:30 = access width (and the :uoffN scale); opc@23:22 =
-     ;; store/load/sign-extend.  Base is always :x/sp; Rt's class is
-     ;; its transfer width (W, or X for the sign-extending and 64-bit
-     ;; forms).
-     ;;
-     ;; byte
-     (def strb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39000000 $ldst-pos-mask)
-     (def ldrb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39400000 $ldst-pos-mask)
-     (def ldrsb ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39800000 $ldst-pos-mask)
-     (def ldrsb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39c00000 $ldst-pos-mask)
-     ;; halfword
-     (def strh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79000000 $ldst-pos-mask)
-     (def ldrh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79400000 $ldst-pos-mask)
-     (def ldrsh ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79800000 $ldst-pos-mask)
-     (def ldrsh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79c00000 $ldst-pos-mask)
-     ;; word
-     (def str ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9000000 $ldst-pos-mask)
-     (def ldr ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9400000 $ldst-pos-mask)
-     (def ldrsw ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9800000 $ldst-pos-mask)
-     ;; doubleword
-     (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
-     (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
-
-     ;; load/store register (unscaled immediate) C4-560
-     ;;
-     ;; Same size/opc layout as the unsigned-immediate forms above,
-     ;; but 25:24 = 00 and a signed imm9 byte offset (-256..255) that
-     ;; is never scaled — so every form's offset is :simm9.  Reached
-     ;; by the U-infix mnemonics; the ldr→ldur unscaled fallback is a
-     ;; later encode-time concern, not wired here.
-
-     ;; byte
-     (def sturb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38000000 $ldst-unscaled-mask)
-     (def ldurb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38400000 $ldst-unscaled-mask)
-     (def ldursb ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38800000 $ldst-unscaled-mask)
-     (def ldursb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38c00000 $ldst-unscaled-mask)
-     ;; halfword
-     (def sturh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78000000 $ldst-unscaled-mask)
-     (def ldurh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78400000 $ldst-unscaled-mask)
-     (def ldursh ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78800000 $ldst-unscaled-mask)
-     (def ldursh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78c00000 $ldst-unscaled-mask)
-     ;; word
-     (def stur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8000000 $ldst-unscaled-mask)
-     (def ldur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8400000 $ldst-unscaled-mask)
-     (def ldursw ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8800000 $ldst-unscaled-mask)
-     ;; doubleword
-     (def stur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
-     (def ldur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
-     )))
-
-(defvar *instruction-template-lists* (make-hash-table :test #'equalp))
-
-(defun initialize-templates ()
-  (clrhash *instruction-template-lists*)
-  (dotimes (i (length *instruction-templates*))
-    (let* ((template (svref *instruction-templates* i))
-           (name (instruction-template-name template)))
-      (push template (gethash name *instruction-template-lists*)))))
 
 ;;; Sanity-check the hand-entered template table.  These checks need only
 ;;; base-opcode + mask + the operand classes — NOT operand bit positions — so
