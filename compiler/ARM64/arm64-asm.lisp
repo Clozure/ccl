@@ -202,6 +202,9 @@
 (defconstant $log-shift-mask #xff200000)
 (defconstant $ldst-pos-mask #xffc00000)  ;load/store register, unsigned immediate
 (defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
+(defconstant $movewide-mask #xff800000) ;move wide (immediate)
+(defconstant $bitfield-mask #xffc00000) ;bitfield
+(defconstant $extract-mask #xffe00000) ;extract
 
 ;;; The operands in the operand list in these templates may be considered
 ;;; as operand specs.
@@ -397,6 +400,28 @@
      ;; doubleword
      (def stur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
      (def ldur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
+
+     ;; move wide (immediate).  opc@30:29 picks movn/movz/movk; hw@22:21 is the
+     ;; LSL shift / 16 (0,16,32,48 for X; 0,16 for W).  imm16 @ 20:5.
+     (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
+     (def movn ((:rd :x) :movw-x) #x92800000 $movewide-mask)
+     (def movz ((:rd :w) :movw-w) #x52800000 $movewide-mask)
+     (def movz ((:rd :x) :movw-x) #xd2800000 $movewide-mask)
+     (def movk ((:rd :w) :movw-w) #x72800000 $movewide-mask)
+     (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
+
+     ;; bitfield.  opc@30:29 picks sbfm/bfm/ubfm; N@22 = sf.  immr @ 21:16,
+     ;; imms @ 15:10 (each 0..63 for X, 0..31 for W).
+     (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
+     (def sbfm ((:rd :x) (:rn :x) :immr-x :imms-x) #x93400000 $bitfield-mask)
+     (def bfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x33000000 $bitfield-mask)
+     (def bfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xb3400000 $bitfield-mask)
+     (def ubfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x53000000 $bitfield-mask)
+     (def ubfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xd3400000 $bitfield-mask)
+
+     ;; extract (extr).  N@22 = sf.  lsb is the imms field @ 15:10.
+     (def extr ((:rd :w) (:rn :w) (:rm :w) :imms-w) #x13800000 $extract-mask)
+     (def extr ((:rd :x) (:rn :x) (:rm :x) :imms-x) #x93c00000 $extract-mask)
      )))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
@@ -446,10 +471,14 @@
     :wsp           ;WSP, specifically
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
-    :immr
-    :imms
     :simm9
     :uimm12
+    :movw-x        ;16-bit immediate, LSL 0/16/32/48 (move wide, X)
+    :movw-w        ;16-bit immediate, LSL 0/16 (move wide, W)
+    :immr-x        ;immr field, 0..63 (bitfield, X)
+    :immr-w        ;immr field, 0..31 (bitfield, W)
+    :imms-x        ;imms field, 0..63 (bitfield imms / extr lsb, X)
+    :imms-w        ;imms field, 0..31 (bitfield imms / extr lsb, W)
     :uoff0         ;scaled unsigned offset; N = log2(access size in bytes),
     :uoff1         ; so the access-size scale is baked into the class and the
     :uoff2         ; offset predicate needs no external scale-shift
@@ -644,7 +673,11 @@
         (:uoff2 (uoff-p 2))
         (:uoff3 (uoff-p 3))
         (:uoff4 (uoff-p 4))
-        ((:uimm12 :immr :imms)
+        (:movw-x (and (typep value '(unsigned-byte 16)) (member shift '(0 16 32 48))))
+        (:movw-w (and (typep value '(unsigned-byte 16)) (member shift '(0 16))))
+        ((:immr-x :imms-x) (and (eql shift 0) (typep value '(integer 0 63))))
+        ((:immr-w :imms-w) (and (eql shift 0) (typep value '(integer 0 31))))
+        (:uimm12
          ;; to be filled in
          nil)))))
 
@@ -764,8 +797,8 @@
              ;; Scale byte offset value by memory access size
              (dpb (ash value (- scale)) (byte 12 10) word)))
       (case class
-        (:aimm (setf (ldb (byte 12 10) word) value
-                     (ldb (byte 1 22) word) (if (= shift 12) 1 0)))
+        (:aimm (dpb value (byte 12 10)
+                    (dpb (if (= shift 12) 1 0) (byte 1 22) word)))
         (:simm9 (dpb value (byte 9 12) word))
         (:limm (dpb (encode-logical-immediate value) (byte 13 10) word))
         (:uoff0 (uoff 0))
@@ -773,6 +806,10 @@
         (:uoff2 (uoff 2))
         (:uoff3 (uoff 3))
         (:uoff4 (uoff 4))
+        ((:movw-x :movw-w)                ;imm16 @ 20:5, hw (= shift/16) @ 22:21
+         (dpb (ash shift -4) (byte 2 21) (dpb value (byte 16 5) word)))
+        ((:immr-x :immr-w) (dpb value (byte 6 16) word))
+        ((:imms-x :imms-w) (dpb value (byte 6 10) word))
         (t (error "encoding of immediate class ~s not implemented" class))))))
 
 (defun encode-memory-operand (word operand spec)
@@ -838,8 +875,9 @@
     (:limm   "#bitmask")
     (:uimm12 "#uimm12")
     (:simm9  "#simm9")
-    (:immr   "#immr")
-    (:imms   "#imms")
+    ((:movw-x :movw-w) "#imm16{, LSL #shift}")
+    ((:immr-x :immr-w) "#immr")
+    ((:imms-x :imms-w) "#imms")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4) "#off")
     (t (format nil "#~(~a~)" class))))
 
