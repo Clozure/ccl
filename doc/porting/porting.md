@@ -202,3 +202,34 @@ An assembler could be a project on its own (and so could a
 disassembler for that matter), but it is only a part of CCL.  Make
 something reasonable, knowing that it is internal implementation
 functionality.
+
+## vinsn templates
+We want to be able to write vinsn templates using a (mostly) LAP-like
+syntax, but ideally don't want to have to repeatedly expand those
+vinsn-definition-time-invariant elements of that syntax.
+For example, if DEST is a vinsn parameter and the vinsn body
+contains:
+  `(ldr DEST (:@ rcontext (:$ arm::tcr.db-link)))`
+then we know at definition time:
+ 1) the opcode of the LDR instruction (obviously)
+ 2) the fact that the LDR's `:mem12` operand uses indexed
+    addressing with an immediate operand and no writeback
+ 3) in this example, we also know the value of the RB field
+    and the value of the immediate operand, which happens
+    to be positive (setting the U bit).
+ We can apply this knowledge at definition time, and set
+ the appropriate bits (U, RN, IMM12) in the opcode.
+ We don't, of course, know the value of DEST at vinsn-definition
+ time, but we do know that it's the Nth vinsn parameter, so we
+ can turn this example into something like:
+ ```
+ `(,(augmented-opcode-for-LDR) #(rd-field) #(index-of-DEST)
+```
+
+## Stacks
+Depending on the platform, CCL uses up to three stacks: a control stack,
+a value stack, and a temp stack.
+
+The value stack is always unambiguously nodes.
+
+The control stack contains frames.

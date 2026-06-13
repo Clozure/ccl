@@ -150,7 +150,7 @@ if CL array types are in orde
 
 The subtags are ordered for the benefit of arrayp, vectorp
 also ivector-typecode-p, gvector-typecode-p
-
+```
 SINGLE-FLOAT                          1
 SYMBOL                            10101
 RATIO                             10110
@@ -193,12 +193,12 @@ UNSIGNED-64-BIT-VECTOR         11101010
 BIT-VECTOR                     11110111
 SINGLE-FLOAT-VECTOR            11111001
 DOUBLE-FLOAT-VECTOR            11111010
-
+```
 Note that the 64-bit subtags end in #b1010
 
 32-bit: #b1001 (fulltag-immheader-1)
 64-bit: #b1010 (fulltag-immheader-2)
-
+```
 nodeheader-0 (#b0101): (10 values)
       2:SYMBOL                            10101
       6:CATCH-FRAME                      100101
@@ -210,7 +210,8 @@ nodeheader-0 (#b0101): (10 values)
      21:BASIC-STREAM                   10000101
      23:FUNCTION                       10010101
      26:ARRAY-HEADER                   10100101
-
+```
+```
 nodeheader-1 (#b0110): (9 values)
       3:RATIO                             10110
       7:COMPLEX                          100110
@@ -221,7 +222,7 @@ nodeheader-1 (#b0110): (9 values)
      22:INSTANCE                       10000110
      27:VECTOR-HEADER                  10100110
      29:SIMPLE-VECTOR                  10110110
-
+```
 ## arm64 tags
 
 suppose fulltag-misc is #b0100
