@@ -208,6 +208,9 @@
       (setq fulltag (logand (the (unsigned-byte 8) (typecode x)) x8664::fulltagmask))
       (or (= fulltag x8664::fulltag-nodeheader-0)
           (= fulltag x8664::fulltag-nodeheader-1))))
+  #+arm64-target
+  (= (the fixnum (logand (the fixnum (typecode x)) arm64::tag-mask))
+     arm64::tag-nodeheader)
   )
 
 
@@ -219,12 +222,12 @@
      target::fulltag-immheader)
   #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-immheader)
-  #+x8664-target
-  (let* ((fulltag (logand (the fixnum (typecode x)) x8664::fulltagmask)))
+  #+(or x8664-target arm64-target)
+  (let* ((fulltag (logand (the fixnum (typecode x)) target::fulltagmask)))
     (declare (fixnum fulltag))
-    (or (= fulltag x8664::fulltag-immheader-0)
-        (= fulltag x8664::fulltag-immheader-1)
-        (= fulltag x8664::fulltag-immheader-2)))
+    (or (= fulltag target::fulltag-immheader-0)
+        (= fulltag target::fulltag-immheader-1)
+        (= fulltag target::fulltag-immheader-2)))
   )
 
 (setf (type-predicate 'ivector) 'ivectorp)
@@ -232,8 +235,8 @@
 (defun miscobjp (x)
   #+(or ppc32-target x8632-target x8664-target arm-target)
   (= (the fixnum (lisptag x)) target::tag-misc)
-  #+ppc64-target
-  (= (the fixnum (fulltag x)) ppc64::fulltag-misc)
+  #+(or ppc64-target arm64-target)
+  (= (the fixnum (fulltag x)) target::fulltag-misc)
   )
 
 (defun simple-vector-p (x)
