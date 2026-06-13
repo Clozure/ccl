@@ -10,6 +10,8 @@
 (require "ARCH")
 (in-package "ARM64")
 
+;;; For register definitions, see arm64-asm.lisp.
+
 ;;; Kernel globals are allocated "below" nil.  This list (used to map
 ;;; symbolic names to rnil-relative offsets) must (of course) exactly
 ;;; match the kernel's notion of where things are.
@@ -149,13 +151,10 @@
 (defconstant bitmap-shift 6)
 
 (defconstant fixnumone (ash 1 fixnumshift))
-
-;;; -2^{n-1}
 (defconstant target-most-negative-fixnum
-  (ash -1 (1- (- nbits-in-word nfixnumtagbits))))
-;;; 2^{n-1] - 1
+  (ash -1 (1- (- nbits-in-word nfixnumtagbits)))) ;-2^{n-1}
 (defconstant target-most-positive-fixnum
-  (1- (ash 1 (1- (- nbits-in-word nfixnumtagbits)))))
+  (1- (ash 1 (1- (- nbits-in-word nfixnumtagbits))))) ;2^{n-1] - 1
 
 ;;; 3-bit "tag" or "lisptag" values
 (defconstant tag-fixnum       #b000) ;all fixnums, whether odd or even
@@ -165,7 +164,7 @@
 (defconstant tag-4            #b100) ;miscobj and immheader-1
 (defconstant tag-5            #b101) ;immheader-0 and immheader-2
 (defconstant tag-nodeheader   #b110) ;nodeheader-0 and nodeheader-1
-(defconstant tag-7            #b111) ;tbd: fulltag-{symbol,function}
+(defconstant tag-7            #b111) ;fulltag-{symbol,function}
 
 ;;; 4-bit "fulltag" values
 (defconstant fulltag-even-fixnum  #b0000)
@@ -175,7 +174,7 @@
 (defconstant fulltag-misc         #b0100) ;arbitrary uvector (miscobj)
 (defconstant fulltag-immheader-0  #b0101)
 (defconstant fulltag-nodeheader-0 #b0110)
-(defconstant fulltag-symbol       #b0111) ;special
+(defconstant fulltag-symbol       #b0111)
 (defconstant fulltag-odd-fixnum   #b1000)
 (defconstant fulltag-reserved     #b1001) ;reserved (for single-float)
 (defconstant fulltag-imm-1        #b1010) ;markers
@@ -183,7 +182,7 @@
 (defconstant fulltag-immheader-1  #b1100)
 (defconstant fulltag-immheader-2  #b1101)
 (defconstant fulltag-nodeheader-1 #b1110)
-(defconstant fulltag-function     #b1111) ; (x8664 uses this)
+(defconstant fulltag-function     #b1111)
 
 ;;; The numeric order of subtags matters.
 ;;; * A gvector array subtag must be >= subtag-array-header
@@ -194,11 +193,11 @@
 
 (defconstant subtag-single-float fulltag-single-float)
 
-
 (defmacro define-subtag (name tag value)
   `(defconstant ,(ccl::form-symbol "SUBTAG-" name)
      (logior ,tag (ash ,value ntagbits))))
 
+;;; gvector array subtags
 (define-subtag arrayH fulltag-nodeheader-0 10)
 (define-subtag vectorH fulltag-nodeheader-1 10)
 (define-subtag simple-vector fulltag-nodeheader-1 11)
@@ -228,11 +227,11 @@
 (defconstant max-8-bit-ivector-subtag subtag-u8-vector)
 (define-subtag bit-vector ivector-class-other-bit 15)
 
+;;; A few sanity tests
 (eval-when (:compile-toplevel)
   ;; ivector header fulltags must be ordered according to element size
-  (assert (< ivector-class-other-bit ivector-class-32-bit ivector-class-64-bit))
-  ;; might as well check
-  (assert (< min-8-bit-ivector-subtag max-8-bit-ivector-subtag))
+  (assert (< ivector-class-other-bit ivector-class-32-bit
+             ivector-class-64-bit))
   ;; CL ivector subtags must be >= min-cl-ivector-subtag
   (assert (every #'(lambda (s) (>= s min-cl-ivector-subtag))
                (list subtag-complex-single-float-vector
@@ -253,9 +252,9 @@
   ;; required ordering for CL gvector types
   (assert (< subtag-arrayH subtag-vectorH subtag-simple-vector)))
 
-;;; There's some room for expansion in non-array ivector space.
 (define-subtag macptr ivector-class-64-bit 1)
 (define-subtag dead-macptr ivector-class-64-bit 2)
+;; additional non-array subtags up to 8 are available for expansion
 
 (define-subtag bignum ivector-class-32-bit 1)
 (define-subtag double-float ivector-class-32-bit 2)
@@ -263,6 +262,7 @@
 (define-subtag complex-single-float ivector-class-32-bit 4)
 (define-subtag complex-double-float ivector-class-32-bit 5)
 (define-subtag code-vector ivector-class-32-bit 6)
+;; additional non-array subtags up to 8 are available for expansion
 
 (define-subtag symbol fulltag-nodeheader-0 1)
 (define-subtag catch-frame fulltag-nodeheader-0 2)
@@ -294,8 +294,8 @@
 (defconstant illegal-marker subtag-illegal)
 (define-subtag no-thread-local-binding fulltag-imm-1 4)
 (defconstant no-thread-local-binding-marker subtag-no-thread-local-binding)
-(define-subtag reserved-frame fulltag-imm-1 5)
-(defconstant reserved-frame-marker subtag-reserved-frame)
+(define-subtag lisp-frame-marker fulltag-imm-1 5)
+(defconstant lisp-frame-marker subtag-lisp-frame-marker)
 
 (defconstant canonical-nil-value (+ #x13000 fulltag-nil)) ;xxx nil can't be a constant
 (defconstant canonical-t-value (+ #x13020 fulltag-symbol)) ;xxx see above
@@ -353,14 +353,23 @@
 ;;; can't arrange for misc-data-offset to be a multiple of 8:
 ;;; fulltag-misc would have to be #bx000, and those fulltags are used
 ;;; for fixnums.
+;;;
+;;; Frankly, this is probably not worth the fuss, and it would not
+;;; be a big deal to say that we just have a 255 offset and leave it
+;;; at that.
 
 (defconstant max-64-bit-constant-index (ash (- #xff misc-data-offset) -3))
-(defconstant max-32-bit-constant-index (ash (- (ash #xfff 2) misc-data-offset) -2))
-(defconstant max-16-bit-constant-index (ash (- (ash #xfff 1) misc-data-offset) -1))
+(defconstant max-32-bit-constant-index (ash (- (ash #xfff 2) misc-data-offset)
+                                            -2))
+(defconstant max-16-bit-constant-index (ash (- (ash #xfff 1) misc-data-offset)
+                                            -1))
 (defconstant max-8-bit-constant-index (- #xfff misc-data-offset))
-;; Assuming we index memory by bytes
+;; Assuming we index bit-vector  memory by bytes
 (defconstant max-1-bit-constant-index (ash (- #xfff misc-data-offset) 3))
 ) ; eval-when
+
+
+;;; Memory layout of Lisp objects
 
 (defmacro define-storage-layout (name origin &rest cells)
   `(progn
@@ -462,7 +471,11 @@
   whostate-2)
 
 
-;;; If we're pointing at the "symbol-vector", we can use these
+;;; Symbols have their own fulltag, but they're otherwise just like a
+;;; miscobj.  We can convert between the differently- tagged
+;;; references with %symptr->symvector and %symvector->symptr.
+
+;;; If we're referencing a miscobj, we can use this:
 (define-fixedsized-object symptr ()
   pname
   vcell
@@ -472,6 +485,7 @@
   plist
   binding-index)
 
+;;; And for the symbol-tagged case, we use this:
 (define-fixedsized-object symbol (fulltag-symbol)
   pname
   vcell
@@ -500,7 +514,6 @@
                       ;  subtype of underlying simple vector. 
   ;; Dimensions follow
   )
-
 (defconstant arrayH.rank-cell 0)
 (defconstant arrayH.physsize-cell 1)
 (defconstant arrayH.data-vector-cell 2)
@@ -515,9 +528,7 @@
 
 ;;; The lisp kernel uses these (rather generically named) structures
 ;;; to keep track of various memory regions it (or the lisp) is
-;;; interested in.
-
-;;; Should match lisp-kernel/area.h
+;;; interested in.  This definition must match lisp-kernel/area.h.
 (define-storage-layout area 0
   pred                     ;pointer to preceding area in DLL
   succ                     ;pointer to next area in DLL
@@ -552,8 +563,7 @@
   why)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-(defconstant tcr-bias 0)
-)
+  (defconstant tcr-bias 0)
 
 (define-storage-layout tcr (- tcr-bias)
   prev                            ;in doubly-linked list
@@ -600,8 +610,7 @@
   safe-ref-address
   pending-io-info
   io-datum
-  nfp
-)
+  nfp)
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
 
@@ -645,7 +654,7 @@
 
 ;;; On the Mac, we can't have a static area at a fixed address.
 ;;;
-;;; On other ports, NIL is basically a really popular constant, and it
+;;; On other ports, nil is basically a really popular constant, and it
 ;;; happens to be a pointer to a fixed address in low-ish memory.
 ;;;
 ;;; So, it looks like we're going to have to bring back nilreg.
@@ -676,6 +685,7 @@
       (- (+ fulltag-nil (* (1+ pos) node-size)))
       (error "Unknown kernel global: ~s" sym))))
 
+;;; These definitions must match lisp-kernel/imports.s.
 (ccl::defenum (:prefix "KERNEL-IMPORT-" :start 0 :step node-size)
   fd-setsize-bytes
   do-fd-set
@@ -741,9 +751,9 @@
   lisp-sigexit
   jvm-init
   lisp-lstat
-  lisp-realpath
-  )
+  lisp-realpath)
 
+;;; "nrs" means nil-relative symbol
 (defmacro nrs-offset (name)
   (let* ((pos (position name *nilreg-relative-symbols* :test #'eq)))
     (if pos (* (1- pos) symbol.size))))
@@ -947,10 +957,11 @@
   `(arch::defarchmacro :arm64 ,name ,lambda-list ,@body))
 
 (defarm64archmacro ccl::%make-sfloat ()
-  (error "~s shouldn't be used in code targeting ARM64" 'ccl::%make-sfloat))
+  (error "~s shouldn't be used in code targeting arm64" 'ccl::%make-sfloat))
 
 (defarm64archmacro ccl::%make-dfloat ()
-  `(ccl::%alloc-misc arm64::double-float.element-count arm64::subtag-double-float))
+  `(ccl::%alloc-misc arm64::double-float.element-count
+                     arm64::subtag-double-float))
 
 (defarm64archmacro ccl::%numerator (x)
   `(ccl::%svref ,x arm64::ratio.numer-cell))
@@ -962,16 +973,20 @@
   (let* ((thing (gensym)))
     `(let* ((,thing ,x))
       (case (ccl::typecode ,thing)
-        (#.arm64::subtag-complex-single-float (ccl::%complex-single-float-realpart ,thing))
-        (#.arm64::subtag-complex-double-float (ccl::%complex-double-float-realpart ,thing))
+        (#.arm64::subtag-complex-single-float
+         (ccl::%complex-single-float-realpart ,thing))
+        (#.arm64::subtag-complex-double-float
+         (ccl::%complex-double-float-realpart ,thing))
         (t (ccl::%svref ,thing arm64::complex.realpart-cell))))))
                     
 (defarm64archmacro ccl::%imagpart (x)
   (let* ((thing (gensym)))
     `(let* ((,thing ,x))
       (case (ccl::typecode ,thing)
-        (#.arm64::subtag-complex-single-float (ccl::%complex-single-float-imagpart ,thing))
-        (#.arm64::subtag-complex-double-float (ccl::%complex-double-float-imagpart ,thing))
+        (#.arm64::subtag-complex-single-float
+         (ccl::%complex-single-float-imagpart ,thing))
+        (#.arm64::subtag-complex-double-float
+         (ccl::%complex-double-float-imagpart ,thing))
         (t (ccl::%svref ,thing arm64::complex.imagpart-cell))))))
 
 (defarm64archmacro ccl::%get-single-float-from-double-ptr (ptr offset)
