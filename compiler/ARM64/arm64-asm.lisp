@@ -213,6 +213,7 @@
 (defconstant $log-shift-mask #xff200000)
 (defconstant $ldst-pos-mask #xffc00000)  ;load/store register, unsigned immediate
 (defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
+(defconstant $ldst-regoff-mask #xffe00c00) ;load/store register, register offset
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -419,6 +420,28 @@
      ;; doubleword
      (def stur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
      (def ldur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
+
+     ;; load/store register (register offset) C4-573.  Same size@31:30 /
+     ;; opc@23:22 as the immediate forms; the index is Rm @ 20:16 with an
+     ;; extend option @ 15:13 and a scale bit S @ 12.  The :regoffN class
+     ;; carries the natural scale (N = log2 access size).
+     ;; byte
+     (def strb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38200800 $ldst-regoff-mask)
+     (def ldrb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38600800 $ldst-regoff-mask)
+     (def ldrsb ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38a00800 $ldst-regoff-mask)
+     (def ldrsb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38e00800 $ldst-regoff-mask)
+     ;; halfword
+     (def strh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78200800 $ldst-regoff-mask)
+     (def ldrh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78600800 $ldst-regoff-mask)
+     (def ldrsh ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78a00800 $ldst-regoff-mask)
+     (def ldrsh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78e00800 $ldst-regoff-mask)
+     ;; word
+     (def str ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8200800 $ldst-regoff-mask)
+     (def ldr ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8600800 $ldst-regoff-mask)
+     (def ldrsw ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8a00800 $ldst-regoff-mask)
+     ;; doubleword
+     (def str ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8200800 $ldst-regoff-mask)
+     (def ldr ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8600800 $ldst-regoff-mask)
 
      ;; move wide (immediate).  opc@30:29 picks movn/movz/movk; hw@22:21 is the
      ;; LSL shift / 16 (0,16,32,48 for X; 0,16 for W).  imm16 @ 20:5.
@@ -704,6 +727,10 @@
     :uoff2         ; offset predicate needs no external scale-shift
     :uoff3
     :uoff4
+    :regoff0       ;register index with natural scale N = log2(access size):
+    :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
+    :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from the amount.
+    :regoff3
     :x-shift       ;Xn lsl/lsr/asr by 0...63 (add/sub shifted register)
     :w-shift       ;Wn lsl/lsr/asr by 0...31
     :x-shift-ror   ;Xn lsl/lsr/asr/ror by 0...63 (logical shifted register)
@@ -957,25 +984,56 @@
          ;; to be filled in
          nil)))))
 
+(defun regoff-scale (class)
+  ;; The natural scale (log2 access size) baked into a :regoffN class.
+  (ecase class (:regoff0 0) (:regoff1 1) (:regoff2 2) (:regoff3 3)))
+
+(defun index-option (width modifier)
+  ;; The 3-bit option field for a register-offset index, or NIL if the
+  ;; width/modifier pairing is illegal.  A bare register or lsl means a
+  ;; 64-bit index (UXTX); the w-extends take a 32-bit index.
+  (case modifier
+    ((nil :lsl) (and (eql width 64) 3))
+    (:uxtw (and (eql width 32) 2))
+    (:sxtw (and (eql width 32) 6))
+    (:sxtx (and (eql width 64) 7))))
+
+(defun match-index-operand (r-op scale)
+  ;; A register-offset index: a non-SP GPR with a legal extend for its
+  ;; width and an amount of either 0 (S=0) or the natural scale (S=1).
+  (and (register-operand-p r-op)
+       (let* ((reg (register-operand-register r-op))
+              (modifier (register-operand-modifier r-op))
+              (amount (register-operand-amount r-op)))
+         (and (eq (register-family reg) :gpr)
+              (not (logtest (register-flags reg) $sp))
+              (index-option (register-width reg) modifier)
+              (member amount (list 0 scale))))))
+
 (defun match-memory-operand (mem-operand spec)
-  ;; SPEC is (:mem-FORM (:base base-class) (:imm imm-class)).  The
-  ;; :mem-scaled / :mem-unscaled forms are plain (not
-  ;; pre/post-indexed); the base must satisfy base-class and the
-  ;; offset must satisfy imm-class.  A missing offset means [Xn] ≡
-  ;; [Xn, #0], which any offset class accepts.
+  ;; SPEC is (:mem-FORM (:base base-class) ...).  The plain forms are
+  ;; never pre/post-indexed and the base must satisfy base-class.  The
+  ;; :mem-scaled / :mem-unscaled forms carry (:imm imm-class) and accept
+  ;; an immediate offset (or none, ⇒ #0); :mem-regoff carries (:index
+  ;; index-class) and accepts a register index.
   (and (not (memory-operand-pre-indexed-p mem-operand))
        (not (memory-operand-post-indexed-p mem-operand))
-       (let ((base-class (cadr (assoc :base (cdr spec))))
-             (imm-class  (cadr (assoc :imm (cdr spec))))
-             (base       (memory-operand-base mem-operand))
-             (offset     (memory-operand-offset mem-operand)))
+       (let ((base   (memory-operand-base mem-operand))
+             (offset (memory-operand-offset mem-operand)))
          (and (register-operand-p base)
-              (register-operand-class-p base base-class)
-              (cond
-                ((null offset) t)       ;[Xn] ≡ [Xn, #0]
-                ((immediate-operand-p offset)
-                 (immediate-operand-class-p offset imm-class))
-                (t nil))))))            ;register offset ⇒ a different :mem form
+              (match-register-operand base (cadr (assoc :base (cdr spec))))
+              (ecase (car spec)
+                ((:mem-scaled :mem-unscaled)
+                 (let ((imm-class (cadr (assoc :imm (cdr spec)))))
+                   (cond
+                     ((null offset) t)  ;[Xn] ≡ [Xn, #0]
+                     ((immediate-operand-p offset)
+                      (match-immediate-operand offset imm-class))
+                     (t nil))))         ;a register offset ⇒ the regoff form
+                (:mem-regoff
+                 (and offset
+                      (match-index-operand
+                       offset (regoff-scale (cadr (assoc :index (cdr spec))))))))))))
 
 (defun match-operand (operand spec)
   (cond
@@ -1124,15 +1182,28 @@
          (set-field-value insn (byte 19 5) (ash value -2)))
         (t (error "encoding of immediate class ~s not implemented" class))))))
 
+(defun encode-index-operand (insn r-op)
+  ;; A register-offset index: Rm @ 20:16, the extend option @ 15:13, and
+  ;; S @ 12 (set iff the index is scaled, i.e. the amount is nonzero).
+  (let* ((reg (register-operand-register r-op))
+         (modifier (register-operand-modifier r-op))
+         (amount (register-operand-amount r-op)))
+    (set-field-value insn (byte 5 16) (register-number reg))
+    (set-field-value insn (byte 3 13) (index-option (register-width reg) modifier))
+    (set-field-value insn (byte 1 12) (if (zerop amount) 0 1))))
+
 (defun encode-memory-operand (insn operand spec)
-  ;; SPEC is (:mem-FORM (:base …) (:imm imm-class)).  Base → Rn; the offset is
-  ;; itself an immediate operand, so reuse encode-immediate.  A missing offset
-  ;; is #0, already present in the base-opcode.
-  (let ((imm-class (cadr (assoc :imm (cdr spec))))
-        (offset (memory-operand-offset operand)))
-    (insert-rn insn (memory-operand-base operand))
-    (when offset
-      (encode-immediate-operand insn offset imm-class))))
+  ;; Base → Rn; the offset is encoded per the addressing form: an
+  ;; immediate (reusing encode-immediate-operand; a missing offset is #0,
+  ;; already in the base-opcode) or a register index.
+  (insert-rn insn (memory-operand-base operand))
+  (let ((offset (memory-operand-offset operand)))
+    (ecase (car spec)
+      ((:mem-scaled :mem-unscaled)
+       (when offset
+         (encode-immediate-operand insn offset (cadr (assoc :imm (cdr spec))))))
+      (:mem-regoff
+       (encode-index-operand insn offset)))))
 
 (defun encode-label-operand (insn operand class)
   ;; Record a reference from INSN to the named label; finalize patches
@@ -1173,7 +1244,7 @@
 ;;; "no match" diagnostics; reusable later for disassembly/documentation.
 
 (defparameter *memory-specs*
-  '(:mem-scaled :mem-unscaled))
+  '(:mem-scaled :mem-unscaled :mem-regoff))
 
 (defun mem-spec-p (spec)
   (and (consp spec)
@@ -1229,7 +1300,8 @@
     (dolist (component (cdr spec))
       (case (car component)
         (:base (setq base (render-gpr-token (cadr component) "n")))
-        (:imm  (setq off (render-immediate-spec (cadr component))))))
+        (:imm  (setq off (render-immediate-spec (cadr component))))
+        (:index (setq off "Xm|Wm{, extend #amt}"))))
     (format nil "[~a~@[{, ~a}~]]" (or base "Xn|SP") off)))
 
 (defun render-operand-spec (spec)
