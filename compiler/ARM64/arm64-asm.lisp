@@ -219,6 +219,7 @@
 (defconstant $ldst-excl-ld-mask #xfffffc00) ;load exclusive, stlr/ldar (free Rn/Rt)
 (defconstant $ldst-excl-stp-mask #xffe08000) ;store-exclusive pair (free Rs/Rt2/Rn/Rt)
 (defconstant $ldst-excl-ldp-mask #xffff8000) ;load-exclusive pair (free Rt2/Rn/Rt)
+(defconstant $lse-atomic-mask #xffe0fc00) ;LSE atomics/cas/swp (free Rs/Rn/Rt)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -281,6 +282,76 @@
 
 ;;; Section references are to the Arm Architecture Reference Manual
 ;;; for A-profile architecture ARM DDI 0487H.a
+
+(progn
+;;; LSE atomics (FEAT_LSE), C6.2.  These families are large but perfectly
+;;; regular -- size @ 31:30, the ordering bits, and an operation selector --
+;;; so we generate them rather than spell out ~200 near-identical templates.
+;;; They all share the (Rs, Rt, [Xn]) shape the :rs role and :mem-base form
+;;; already provide; ST<op> is the Rt=31 alias of LD<op>.  CASP (register-pair
+;;; compare-and-swap) is omitted: it needs consecutive even/odd register-pair
+;;; validation we don't have yet.
+(defun lse-atomic-templates ()
+  (let ((templates '())
+        ;; size code @ 31:30, mnemonic size suffix, operand width class
+        (sizes '((0 "b" :w) (1 "h" :w) (2 "" :w) (3 "" :x)))
+        ;; ordering suffix and (A R) for the load/swap variants
+        (ld-orders '(("" 0 0) ("a" 1 0) ("l" 0 1) ("al" 1 1)))
+        ;; o3=0 read-modify-write ops: mnemonic stem and opc @ 14:12
+        (ld-ops '(("add" 0) ("clr" 1) ("eor" 2) ("set" 3)
+                  ("smax" 4) ("smin" 5) ("umax" 6) ("umin" 7))))
+    (flet ((emit (name specs base mask &optional alias)
+             (push (make-instruction-template
+                    :name (string-downcase name)
+                    :operand-specs specs
+                    :base-opcode base
+                    :mask mask
+                    :flags (%encode-instruction-flags (and alias :alias)))
+                   templates))
+           ;; atomic memory op: size 111000 A R 1 Rs o3 opc 00 Rn Rt
+           (atomic (size a r o3 opc)
+             (logior (ash size 30) (ash #x38 24) (ash a 23) (ash r 22)
+                     (ash 1 21) (ash o3 15) (ash opc 12)))
+           ;; compare-and-swap: size 001000 1 L 1 Rs o0 11111 Rn Rt
+           (cas-base (size l o0)
+             (logior (ash size 30) (ash #x08 24) (ash 1 23) (ash l 22)
+                     (ash 1 21) (ash o0 15) (ash #x1f 10))))
+      (dolist (sz sizes)
+        (destructuring-bind (size suff wclass) sz
+          (let ((rs (list :rs wclass))
+                (rt (list :rt wclass))
+                (mem '(:mem-base (:base :x/sp))))
+            (dolist (op ld-ops)
+              (destructuring-bind (stem opc) op
+                ;; LD<op>: read-modify-write, prior value loaded into Rt
+                (dolist (ord ld-orders)
+                  (destructuring-bind (osuff a r) ord
+                    (emit (format nil "ld~a~a~a" stem osuff suff)
+                          (list rs rt mem)
+                          (atomic size a r 0 opc) $lse-atomic-mask)))
+                ;; ST<op>/ST<op>L: alias of LD<op>{L} with Rt=31 (no result)
+                (dolist (ord '(("" 0) ("l" 1)))
+                  (destructuring-bind (osuff r) ord
+                    (emit (format nil "st~a~a~a" stem osuff suff)
+                          (list rs mem)
+                          (logior (atomic size 0 r 0 opc) #x1f) 0 t)))))
+            ;; SWP: o3=1, opc=0; value in Rs swapped with memory into Rt
+            (dolist (ord ld-orders)
+              (destructuring-bind (osuff a r) ord
+                (emit (format nil "swp~a~a" osuff suff)
+                      (list rs rt mem)
+                      (atomic size a r 1 0) $lse-atomic-mask)))
+            ;; CAS: compare value in Rs (read-write), new value in Rt
+            (dolist (ord '(("" 0 0) ("a" 1 0) ("l" 0 1) ("al" 1 1)))
+              (destructuring-bind (osuff l o0) ord
+                (emit (format nil "cas~a~a" osuff suff)
+                      (list rs rt mem)
+                      (cas-base size l o0) $lse-atomic-mask)))))))
+    (nreverse templates)))
+
+#+nil
+(defparameter *augmented-templates*
+  (concatenate 'vector *instruction-tempaltes* (lse-atomic-templates))))
 
 (defparameter *instruction-templates*
   (vector
