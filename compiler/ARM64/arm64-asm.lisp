@@ -221,6 +221,7 @@
 (defconstant $ldst-excl-ldp-mask #xffff8000) ;load-exclusive pair (free Rt2/Rn/Rt)
 (defconstant $lse-atomic-mask #xffe0fc00) ;LSE atomics/cas/swp (free Rs/Rn/Rt)
 (defconstant $fp-dp2src-mask #xffe0fc00) ;FP data-processing 2-source (fadd/fmul/...)
+(defconstant $fp-dp1src-mask #xfffffc00) ;FP data-processing 1-source (fabs/fneg/fcvt/...)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -877,6 +878,36 @@
    (def fminnm ((:rd :d) (:rn :d) (:rm :d)) #x1e607800 $fp-dp2src-mask)
    (def fnmul ((:rd :s) (:rn :s) (:rm :s)) #x1e208800 $fp-dp2src-mask)
    (def fnmul ((:rd :d) (:rn :d) (:rm :d)) #x1e608800 $fp-dp2src-mask)
+
+   ;; FP data-processing (1 source).  ftype @ 23:22 (00=S, 01=D); opcode @
+   ;; 20:15 picks the operation.  fcvt is the odd one: its opcode encodes the
+   ;; destination type while ftype is the source, so Rd and Rn differ in type.
+   (def fmov ((:rd :s) (:rn :s)) #x1e204000 $fp-dp1src-mask)
+   (def fmov ((:rd :d) (:rn :d)) #x1e604000 $fp-dp1src-mask)
+   (def fabs ((:rd :s) (:rn :s)) #x1e20c000 $fp-dp1src-mask)
+   (def fabs ((:rd :d) (:rn :d)) #x1e60c000 $fp-dp1src-mask)
+   (def fneg ((:rd :s) (:rn :s)) #x1e214000 $fp-dp1src-mask)
+   (def fneg ((:rd :d) (:rn :d)) #x1e614000 $fp-dp1src-mask)
+   (def fsqrt ((:rd :s) (:rn :s)) #x1e21c000 $fp-dp1src-mask)
+   (def fsqrt ((:rd :d) (:rn :d)) #x1e61c000 $fp-dp1src-mask)
+   ;; fcvt between single and double (source type from ftype, dest from opcode)
+   (def fcvt ((:rd :d) (:rn :s)) #x1e22c000 $fp-dp1src-mask)
+   (def fcvt ((:rd :s) (:rn :d)) #x1e624000 $fp-dp1src-mask)
+   ;; round to integral value (frintN/P/M/Z/A/X/I)
+   (def frintn ((:rd :s) (:rn :s)) #x1e244000 $fp-dp1src-mask)
+   (def frintn ((:rd :d) (:rn :d)) #x1e644000 $fp-dp1src-mask)
+   (def frintp ((:rd :s) (:rn :s)) #x1e24c000 $fp-dp1src-mask)
+   (def frintp ((:rd :d) (:rn :d)) #x1e64c000 $fp-dp1src-mask)
+   (def frintm ((:rd :s) (:rn :s)) #x1e254000 $fp-dp1src-mask)
+   (def frintm ((:rd :d) (:rn :d)) #x1e654000 $fp-dp1src-mask)
+   (def frintz ((:rd :s) (:rn :s)) #x1e25c000 $fp-dp1src-mask)
+   (def frintz ((:rd :d) (:rn :d)) #x1e65c000 $fp-dp1src-mask)
+   (def frinta ((:rd :s) (:rn :s)) #x1e264000 $fp-dp1src-mask)
+   (def frinta ((:rd :d) (:rn :d)) #x1e664000 $fp-dp1src-mask)
+   (def frintx ((:rd :s) (:rn :s)) #x1e274000 $fp-dp1src-mask)
+   (def frintx ((:rd :d) (:rn :d)) #x1e674000 $fp-dp1src-mask)
+   (def frinti ((:rd :s) (:rn :s)) #x1e27c000 $fp-dp1src-mask)
+   (def frinti ((:rd :d) (:rn :d)) #x1e67c000 $fp-dp1src-mask)
    ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
