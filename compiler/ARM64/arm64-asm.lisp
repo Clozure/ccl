@@ -443,6 +443,41 @@
      (def str ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8200800 $ldst-regoff-mask)
      (def ldr ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8600800 $ldst-regoff-mask)
 
+     ;; load/store register (immediate, pre/post-indexed) C4-560.  Same
+     ;; signed imm9 @ 20:12 as the unscaled forms; idx @ 11:10 = 01 (post,
+     ;; |#x400) or 11 (pre, |#xc00) selects writeback.  Pushing the value
+     ;; stack is str ...,[vsp,#-n]!; popping is ldr ...,[vsp],#n.
+     ;; byte
+     (def strb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38000c00 $ldst-unscaled-mask)
+     (def strb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38000400 $ldst-unscaled-mask)
+     (def ldrb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38400c00 $ldst-unscaled-mask)
+     (def ldrb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38400400 $ldst-unscaled-mask)
+     (def ldrsb ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38800c00 $ldst-unscaled-mask)
+     (def ldrsb ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x38800400 $ldst-unscaled-mask)
+     (def ldrsb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38c00c00 $ldst-unscaled-mask)
+     (def ldrsb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38c00400 $ldst-unscaled-mask)
+     ;; halfword
+     (def strh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78000c00 $ldst-unscaled-mask)
+     (def strh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78000400 $ldst-unscaled-mask)
+     (def ldrh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78400c00 $ldst-unscaled-mask)
+     (def ldrh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78400400 $ldst-unscaled-mask)
+     (def ldrsh ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78800c00 $ldst-unscaled-mask)
+     (def ldrsh ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x78800400 $ldst-unscaled-mask)
+     (def ldrsh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78c00c00 $ldst-unscaled-mask)
+     (def ldrsh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78c00400 $ldst-unscaled-mask)
+     ;; word
+     (def str ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8000c00 $ldst-unscaled-mask)
+     (def str ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8000400 $ldst-unscaled-mask)
+     (def ldr ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8400c00 $ldst-unscaled-mask)
+     (def ldr ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8400400 $ldst-unscaled-mask)
+     (def ldrsw ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8800c00 $ldst-unscaled-mask)
+     (def ldrsw ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8800400 $ldst-unscaled-mask)
+     ;; doubleword
+     (def str ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8000c00 $ldst-unscaled-mask)
+     (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)
+     (def ldr ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8400c00 $ldst-unscaled-mask)
+     (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
+
      ;; move wide (immediate).  opc@30:29 picks movn/movz/movk; hw@22:21 is the
      ;; LSL shift / 16 (0,16,32,48 for X; 0,16 for W).  imm16 @ 20:5.
      (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
@@ -1011,29 +1046,35 @@
               (member amount (list 0 scale))))))
 
 (defun match-memory-operand (mem-operand spec)
-  ;; SPEC is (:mem-FORM (:base base-class) ...).  The plain forms are
-  ;; never pre/post-indexed and the base must satisfy base-class.  The
-  ;; :mem-scaled / :mem-unscaled forms carry (:imm imm-class) and accept
-  ;; an immediate offset (or none, ⇒ #0); :mem-regoff carries (:index
-  ;; index-class) and accepts a register index.
-  (and (not (memory-operand-pre-indexed-p mem-operand))
-       (not (memory-operand-post-indexed-p mem-operand))
-       (let ((base   (memory-operand-base mem-operand))
-             (offset (memory-operand-offset mem-operand)))
-         (and (register-operand-p base)
-              (match-register-operand base (cadr (assoc :base (cdr spec))))
-              (ecase (car spec)
-                ((:mem-scaled :mem-unscaled)
-                 (let ((imm-class (cadr (assoc :imm (cdr spec)))))
+  ;; SPEC is (:mem-FORM (:base base-class) ...) and the base must satisfy
+  ;; base-class.  The index mode is part of the form: :mem-scaled /
+  ;; :mem-unscaled / :mem-regoff are plain (no writeback); :mem-pre /
+  ;; :mem-post are the writeback forms.  The immediate forms carry (:imm
+  ;; imm-class); :mem-regoff carries (:index index-class).
+  (let ((base   (memory-operand-base mem-operand))
+        (offset (memory-operand-offset mem-operand))
+        (pre    (memory-operand-pre-indexed-p mem-operand))
+        (post   (memory-operand-post-indexed-p mem-operand)))
+    (flet ((imm-offset-p ()
+             ;; an immediate offset of the spec's :imm class, required here
+             (and offset (immediate-operand-p offset)
+                  (match-immediate-operand offset (cadr (assoc :imm (cdr spec)))))))
+      (and (register-operand-p base)
+           (match-register-operand base (cadr (assoc :base (cdr spec))))
+           (ecase (car spec)
+             ((:mem-scaled :mem-unscaled)
+              (and (not pre) (not post)
                    (cond
                      ((null offset) t)  ;[Xn] ≡ [Xn, #0]
                      ((immediate-operand-p offset)
-                      (match-immediate-operand offset imm-class))
+                      (match-immediate-operand offset (cadr (assoc :imm (cdr spec)))))
                      (t nil))))         ;a register offset ⇒ the regoff form
-                (:mem-regoff
-                 (and offset
-                      (match-index-operand
-                       offset (regoff-scale (cadr (assoc :index (cdr spec))))))))))))
+             (:mem-regoff
+              (and (not pre) (not post) offset
+                   (match-index-operand
+                    offset (regoff-scale (cadr (assoc :index (cdr spec)))))))
+             (:mem-pre  (and pre (imm-offset-p)))
+             (:mem-post (and post (imm-offset-p))))))))
 
 (defun match-operand (operand spec)
   (cond
@@ -1199,7 +1240,9 @@
   (insert-rn insn (memory-operand-base operand))
   (let ((offset (memory-operand-offset operand)))
     (ecase (car spec)
-      ((:mem-scaled :mem-unscaled)
+      ;; the pre/post writeback bits @ 11:10 are baked into the base
+      ;; opcode, so these encode just like the plain immediate forms.
+      ((:mem-scaled :mem-unscaled :mem-pre :mem-post)
        (when offset
          (encode-immediate-operand insn offset (cadr (assoc :imm (cdr spec))))))
       (:mem-regoff
@@ -1244,7 +1287,7 @@
 ;;; "no match" diagnostics; reusable later for disassembly/documentation.
 
 (defparameter *memory-specs*
-  '(:mem-scaled :mem-unscaled :mem-regoff))
+  '(:mem-scaled :mem-unscaled :mem-regoff :mem-pre :mem-post))
 
 (defun mem-spec-p (spec)
   (and (consp spec)
@@ -1302,7 +1345,11 @@
         (:base (setq base (render-gpr-token (cadr component) "n")))
         (:imm  (setq off (render-immediate-spec (cadr component))))
         (:index (setq off "Xm|Wm{, extend #amt}"))))
-    (format nil "[~a~@[{, ~a}~]]" (or base "Xn|SP") off)))
+    (setq base (or base "Xn|SP"))
+    (case (car spec)
+      (:mem-pre  (format nil "[~a, ~a]!" base off))
+      (:mem-post (format nil "[~a], ~a" base off))
+      (t (format nil "[~a~@[{, ~a}~]]" base off)))))
 
 (defun render-operand-spec (spec)
   (cond
