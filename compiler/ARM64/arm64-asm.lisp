@@ -222,6 +222,7 @@
 (defconstant $lse-atomic-mask #xffe0fc00) ;LSE atomics/cas/swp (free Rs/Rn/Rt)
 (defconstant $fp-dp2src-mask #xffe0fc00) ;FP data-processing 2-source (fadd/fmul/...)
 (defconstant $fp-dp1src-mask #xfffffc00) ;FP data-processing 1-source (fabs/fneg/fcvt/...)
+(defconstant $fp-dp3src-mask #xffe08000) ;FP data-processing 3-source (fmadd/fmsub/...)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -908,6 +909,17 @@
    (def frintx ((:rd :d) (:rn :d)) #x1e674000 $fp-dp1src-mask)
    (def frinti ((:rd :s) (:rn :s)) #x1e27c000 $fp-dp1src-mask)
    (def frinti ((:rd :d) (:rn :d)) #x1e67c000 $fp-dp1src-mask)
+
+   ;; FP data-processing (3 source).  28:24 = 11111; o1 @ 21 and o0 @ 15
+   ;; pick fmadd/fmsub/fnmadd/fnmsub.  Ra @ 14:10 is the addend (the :ra role).
+   (def fmadd ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f000000 $fp-dp3src-mask)
+   (def fmadd ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f400000 $fp-dp3src-mask)
+   (def fmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f008000 $fp-dp3src-mask)
+   (def fmsub ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f408000 $fp-dp3src-mask)
+   (def fnmadd ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f200000 $fp-dp3src-mask)
+   (def fnmadd ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f600000 $fp-dp3src-mask)
+   (def fnmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f208000 $fp-dp3src-mask)
+   (def fnmsub ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f608000 $fp-dp3src-mask)
    ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
