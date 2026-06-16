@@ -214,6 +214,7 @@
 (defconstant $ldst-pos-mask #xffc00000)  ;load/store register, unsigned immediate
 (defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
 (defconstant $ldst-regoff-mask #xffe00c00) ;load/store register, register offset
+(defconstant $ldstpair-mask #xffc00000) ;load/store register pair (all index modes)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -477,6 +478,24 @@
      (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)
      (def ldr ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8400c00 $ldst-unscaled-mask)
      (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
+
+     ;; load/store register pair C4-555.  opc@31:30 = size, L@22 = load;
+     ;; idx@24:23 = 10 (signed offset, :mem-scaled) / 01 (post) / 11 (pre).
+     ;; Rt @ 4:0, Rt2 @ 14:10; imm7 @ 21:15 is a signed offset scaled by
+     ;; the access size (:poff2 for W, :poff3 for X).  stp ...,[sp,#-16]!
+     ;; pushes a frame; ldp ...,[sp],#16 pops it.
+     (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)
+     (def stp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29800000 $ldstpair-mask)
+     (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
+     (def ldp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29400000 $ldstpair-mask)
+     (def ldp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29c00000 $ldstpair-mask)
+     (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)
+     (def stp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9000000 $ldstpair-mask)
+     (def stp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9800000 $ldstpair-mask)
+     (def stp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8800000 $ldstpair-mask)
+     (def ldp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9400000 $ldstpair-mask)
+     (def ldp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9c00000 $ldstpair-mask)
+     (def ldp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8c00000 $ldstpair-mask)
 
      ;; move wide (immediate).  opc@30:29 picks movn/movz/movk; hw@22:21 is the
      ;; LSL shift / 16 (0,16,32,48 for X; 0,16 for W).  imm16 @ 20:5.
@@ -766,6 +785,8 @@
     :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
     :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from the amount.
     :regoff3
+    :poff2         ;load/store-pair signed scaled offset, imm7 @ 21:15 (W pair)
+    :poff3         ; ... and the X pair (scale 3); the access size is baked in
     :x-shift       ;Xn lsl/lsr/asr by 0...63 (add/sub shifted register)
     :w-shift       ;Wn lsl/lsr/asr by 0...31
     :x-shift-ror   ;Xn lsl/lsr/asr/ror by 0...63 (logical shifted register)
@@ -992,7 +1013,11 @@
     (flet ((uoff-p (scale)
              (and (eql shift 0)
                   (zerop (logand value (1- (ash 1 scale))))   ;multiple of access size
-                  (typep (ash value (- scale)) '(unsigned-byte 12)))))
+                  (typep (ash value (- scale)) '(unsigned-byte 12))))
+           (poff-p (scale)                  ;signed scaled 7-bit (load/store pair)
+             (and (eql shift 0)
+                  (zerop (logand value (1- (ash 1 scale))))
+                  (typep (ash value (- scale)) '(signed-byte 7)))))
       (ecase class
         (:aimm  (and (member shift '(0 12)) (typep value '(unsigned-byte 12))))
         (:simm9 (and (eql shift 0) (typep value '(signed-byte 9))))
@@ -1002,6 +1027,8 @@
         (:uoff2 (uoff-p 2))
         (:uoff3 (uoff-p 3))
         (:uoff4 (uoff-p 4))
+        (:poff2 (poff-p 2))
+        (:poff3 (poff-p 3))
         (:movw-x (and (typep value '(unsigned-byte 16)) (member shift '(0 16 32 48))))
         (:movw-w (and (typep value '(unsigned-byte 16)) (member shift '(0 16))))
         ((:immr-x :imms-x :tbit-x) (and (eql shift 0) (typep value '(integer 0 63))))
@@ -1130,6 +1157,12 @@
   (set-field-value insn (byte 5 10)
                    (register-number (register-operand-register operand))))
 
+;;; Rt2 (the second transfer register of a load/store pair) shares the
+;;; 14:10 field with Ra.
+(defun insert-rt2 (insn operand)
+  (set-field-value insn (byte 5 10)
+                   (register-number (register-operand-register operand))))
+
 (defparameter *shift-types*
   #(:lsl :lsr :asr :ror))
 
@@ -1162,6 +1195,7 @@
     ((:rn :base) (insert-rn insn operand))
     (:rm (insert-rm insn operand))
     (:ra (insert-ra insn operand))
+    (:rt2 (insert-rt2 insn operand))
     ;; one source register written into both Rn and Rm (cinc/cinv/cneg)
     (:rn+rm (insert-rn insn operand) (insert-rm insn operand)))
   (let ((modifier (register-operand-modifier operand))
@@ -1195,6 +1229,8 @@
         (:uoff2 (uoff 2))
         (:uoff3 (uoff 3))
         (:uoff4 (uoff 4))
+        (:poff2 (set-field-value insn (byte 7 15) (ash value -2)))
+        (:poff3 (set-field-value insn (byte 7 15) (ash value -3)))
         ((:movw-x :movw-w)                ;imm16 @ 20:5, hw (= shift/16) @ 22:21
          (set-field-value insn (byte 16 5) value)
          (set-field-value insn (byte 2 21) (ash shift -4)))
@@ -1334,7 +1370,7 @@
     (:nzcv "#nzcv")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
     (:pcrel "label")
-    ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4) "#off")
+    ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4 :poff2 :poff3) "#off")
     (t (format nil "#~(~a~)" class))))
 
 (defun render-mem-spec (spec)
