@@ -507,6 +507,36 @@
      (def udiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00800 $dp-2src-mask)
      (def sdiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00c00 $dp-2src-mask)
      (def sdiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00c00 $dp-2src-mask)
+     ;; variable shifts (also 2-source): opcode 8..11 @ 15:10.
+     (def lslv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 $dp-2src-mask)
+     (def lslv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 $dp-2src-mask)
+     (def lsrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 $dp-2src-mask)
+     (def lsrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 $dp-2src-mask)
+     (def asrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 $dp-2src-mask)
+     (def asrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 $dp-2src-mask)
+     (def rorv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 $dp-2src-mask)
+     (def rorv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 $dp-2src-mask)
+
+     ;; shift aliases.  The register forms alias lslv/lsrv/asrv/rorv; the
+     ;; immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror), with
+     ;; immr/imms computed from the shift amount.  Register vs immediate
+     ;; third operand selects the form.
+     (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :flags :alias)
+     (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :flags :alias)
+     (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :flags :alias)
+     (def lsl ((:rd :x) (:rn :x) :lsl-imm-x) #xd3400000 0 :flags :alias)
+     (def lsr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 0 :flags :alias)
+     (def lsr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 0 :flags :alias)
+     (def lsr ((:rd :w) (:rn :w) :lsr-imm-w) #x53000000 0 :flags :alias)
+     (def lsr ((:rd :x) (:rn :x) :lsr-imm-x) #xd3400000 0 :flags :alias)
+     (def asr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 0 :flags :alias)
+     (def asr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 0 :flags :alias)
+     (def asr ((:rd :w) (:rn :w) :asr-imm-w) #x13000000 0 :flags :alias)
+     (def asr ((:rd :x) (:rn :x) :asr-imm-x) #x93400000 0 :flags :alias)
+     (def ror ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 0 :flags :alias)
+     (def ror ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 0 :flags :alias)
+     (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :flags :alias)
+     (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :flags :alias)
 
      ;; PC-relative addressing.  op@31 picks adr/adrp; the 21-bit value is
      ;; split immlo @ 30:29, immhi @ 23:5.  adr: byte offset; adrp: page offset
@@ -657,6 +687,12 @@
     :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb); 15 = full system
     :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
+    :lsl-imm-x     ;lsl #n alias of ubfm: immr=(-n)&63, imms=63-n (X)
+    :lsl-imm-w     ; ... and the W form (immr=(-n)&31, imms=31-n)
+    :lsr-imm-x     ;lsr/asr #n alias of u/sbfm: immr=n, imms=63 (X)
+    :lsr-imm-w     ; ... and the W form (immr=n, imms=31)
+    :asr-imm-x     ;asr #n: same field encoding as :lsr-imm-x, sbfm base
+    :asr-imm-w
     :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
     :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
@@ -912,6 +948,10 @@
         (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
         (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
+        ((:lsl-imm-x :lsr-imm-x :asr-imm-x)
+         (and (eql shift 0) (typep value '(integer 0 63))))
+        ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
+         (and (eql shift 0) (typep value '(integer 0 31))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
         (:uimm12
          ;; to be filled in
@@ -1069,6 +1109,16 @@
         (:baropt (set-field-value insn (byte 4 8) value))
         (:imm5 (set-field-value insn (byte 5 16) value))
         (:nzcv (set-field-value insn (byte 4 0) value))
+        ;; immediate shifts encode as bitfield moves: lsl #n has
+        ;; immr=(-n) mod width, imms=msb-n; lsr/asr #n have immr=n, imms=msb.
+        (:lsl-imm-x (set-field-value insn (byte 6 16) (logand (- value) 63))
+                    (set-field-value insn (byte 6 10) (- 63 value)))
+        (:lsl-imm-w (set-field-value insn (byte 6 16) (logand (- value) 31))
+                    (set-field-value insn (byte 6 10) (- 31 value)))
+        ((:lsr-imm-x :asr-imm-x) (set-field-value insn (byte 6 16) value)
+                                 (set-field-value insn (byte 6 10) 63))
+        ((:lsr-imm-w :asr-imm-w) (set-field-value insn (byte 6 16) value)
+                                 (set-field-value insn (byte 6 10) 31))
         (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
          (set-field-value insn (byte 2 29) value)
          (set-field-value insn (byte 19 5) (ash value -2)))
@@ -1168,6 +1218,7 @@
     (:baropt "#option")
     (:imm5 "#imm5")
     (:nzcv "#nzcv")
+    ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4) "#off")
     (t (format nil "#~(~a~)" class))))
