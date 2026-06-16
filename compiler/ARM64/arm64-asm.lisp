@@ -626,6 +626,55 @@
    (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
    (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
 
+   ;;; Scalar FP load/store.  These are the integer load/store encodings
+   ;;; with the SIMD&FP V bit (#x04000000) set and an S/D transfer register;
+   ;;; S uses the size=10 (scale 2) base, D the size=11 (scale 3) base.  All
+   ;;; the addressing forms, masks, and offset classes are reused unchanged.
+
+   ;; FP load/store register (unsigned immediate)
+   (def str ((:rt :s) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xbd000000 $ldst-pos-mask)
+   (def ldr ((:rt :s) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xbd400000 $ldst-pos-mask)
+   (def str ((:rt :d) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xfd000000 $ldst-pos-mask)
+   (def ldr ((:rt :d) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xfd400000 $ldst-pos-mask)
+
+   ;; FP load/store register (unscaled immediate)
+   (def stur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc000000 $ldst-unscaled-mask)
+   (def ldur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc400000 $ldst-unscaled-mask)
+   (def stur ((:rt :d) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xfc000000 $ldst-unscaled-mask)
+   (def ldur ((:rt :d) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xfc400000 $ldst-unscaled-mask)
+
+   ;; FP load/store register (immediate post-indexed)
+   (def str ((:rt :s) (:mem-post (:base :x/sp) (:imm :simm9))) #xbc000400 $ldst-unscaled-mask)
+   (def ldr ((:rt :s) (:mem-post (:base :x/sp) (:imm :simm9))) #xbc400400 $ldst-unscaled-mask)
+   (def str ((:rt :d) (:mem-post (:base :x/sp) (:imm :simm9))) #xfc000400 $ldst-unscaled-mask)
+   (def ldr ((:rt :d) (:mem-post (:base :x/sp) (:imm :simm9))) #xfc400400 $ldst-unscaled-mask)
+
+   ;; FP load/store register (immediate pre-indexed)
+   (def str ((:rt :s) (:mem-pre (:base :x/sp) (:imm :simm9))) #xbc000c00 $ldst-unscaled-mask)
+   (def ldr ((:rt :s) (:mem-pre (:base :x/sp) (:imm :simm9))) #xbc400c00 $ldst-unscaled-mask)
+   (def str ((:rt :d) (:mem-pre (:base :x/sp) (:imm :simm9))) #xfc000c00 $ldst-unscaled-mask)
+   (def ldr ((:rt :d) (:mem-pre (:base :x/sp) (:imm :simm9))) #xfc400c00 $ldst-unscaled-mask)
+
+   ;; FP load/store register (register offset)
+   (def str ((:rt :s) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xbc200800 $ldst-regoff-mask)
+   (def ldr ((:rt :s) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xbc600800 $ldst-regoff-mask)
+   (def str ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc200800 $ldst-regoff-mask)
+   (def ldr ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc600800 $ldst-regoff-mask)
+
+   ;; FP load/store pair (offset, pre-indexed, post-indexed)
+   (def stp ((:rt :s) (:rt2 :s) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x2d000000 $ldstpair-mask)
+   (def ldp ((:rt :s) (:rt2 :s) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x2d400000 $ldstpair-mask)
+   (def stp ((:rt :s) (:rt2 :s) (:mem-pre (:base :x/sp) (:imm :poff2))) #x2d800000 $ldstpair-mask)
+   (def ldp ((:rt :s) (:rt2 :s) (:mem-pre (:base :x/sp) (:imm :poff2))) #x2dc00000 $ldstpair-mask)
+   (def stp ((:rt :s) (:rt2 :s) (:mem-post (:base :x/sp) (:imm :poff2))) #x2c800000 $ldstpair-mask)
+   (def ldp ((:rt :s) (:rt2 :s) (:mem-post (:base :x/sp) (:imm :poff2))) #x2cc00000 $ldstpair-mask)
+   (def stp ((:rt :d) (:rt2 :d) (:mem-scaled (:base :x/sp) (:imm :poff3))) #x6d000000 $ldstpair-mask)
+   (def ldp ((:rt :d) (:rt2 :d) (:mem-scaled (:base :x/sp) (:imm :poff3))) #x6d400000 $ldstpair-mask)
+   (def stp ((:rt :d) (:rt2 :d) (:mem-pre (:base :x/sp) (:imm :poff3))) #x6d800000 $ldstpair-mask)
+   (def ldp ((:rt :d) (:rt2 :d) (:mem-pre (:base :x/sp) (:imm :poff3))) #x6dc00000 $ldstpair-mask)
+   (def stp ((:rt :d) (:rt2 :d) (:mem-post (:base :x/sp) (:imm :poff3))) #x6c800000 $ldstpair-mask)
+   (def ldp ((:rt :d) (:rt2 :d) (:mem-post (:base :x/sp) (:imm :poff3))) #x6cc00000 $ldstpair-mask)
+
    ;;; Data Processing -- Register
 
    ;; Data-processing (2 source)
