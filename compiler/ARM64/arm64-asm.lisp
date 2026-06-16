@@ -217,6 +217,9 @@
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
 (defconstant $pcrel-mask #x9f000000) ;PC-relative addressing
+(defconstant $uncond-branch-imm-mask #xfc000000) ;b, bl
+(defconstant $cmp-branch-mask #xff000000) ;cbz, cbnz
+(defconstant $test-branch-mask #x7f000000) ;tbz, tbnz (bit 31 is b5, not fixed)
 
 ;;; The operands in the operand list in these templates may be considered
 ;;; as operand specs.
@@ -440,6 +443,47 @@
      ;; (value << 12).  Raw 21-bit immediate for now; label resolution is later.
      (def adr ((:rd :x) :pcrel) #x10000000 $pcrel-mask)
      (def adrp ((:rd :x) :pcrel) #x90000000 $pcrel-mask)
+
+     ;; unconditional branch (immediate) C4-536.  op@31 picks b/bl; the
+     ;; target is a 26-bit word displacement @ 25:0, resolved by finalize.
+     (def b ((:label :b26)) #x14000000 $uncond-branch-imm-mask)
+     (def bl ((:label :b26)) #x94000000 $uncond-branch-imm-mask)
+
+     ;; compare and branch (immediate) C4-536.  sf@31; op@24 picks cbz/cbnz.
+     ;; Rt @ 4:0, 19-bit word displacement @ 23:5.
+     (def cbz ((:rt :w) (:label :b19)) #x34000000 $cmp-branch-mask)
+     (def cbz ((:rt :x) (:label :b19)) #xb4000000 $cmp-branch-mask)
+     (def cbnz ((:rt :w) (:label :b19)) #x35000000 $cmp-branch-mask)
+     (def cbnz ((:rt :x) (:label :b19)) #xb5000000 $cmp-branch-mask)
+
+     ;; conditional branch (immediate) C4-528.  The 4-bit condition is
+     ;; baked into the mnemonic and the opcode @ 3:0; the only operand is
+     ;; the 19-bit word displacement @ 23:5.  No condition operand kind.
+     (def b.eq ((:label :b19)) #x54000000 #xff00001f)
+     (def b.ne ((:label :b19)) #x54000001 #xff00001f)
+     (def b.cs ((:label :b19)) #x54000002 #xff00001f)
+     (def b.cc ((:label :b19)) #x54000003 #xff00001f)
+     (def b.mi ((:label :b19)) #x54000004 #xff00001f)
+     (def b.pl ((:label :b19)) #x54000005 #xff00001f)
+     (def b.vs ((:label :b19)) #x54000006 #xff00001f)
+     (def b.vc ((:label :b19)) #x54000007 #xff00001f)
+     (def b.hi ((:label :b19)) #x54000008 #xff00001f)
+     (def b.ls ((:label :b19)) #x54000009 #xff00001f)
+     (def b.ge ((:label :b19)) #x5400000a #xff00001f)
+     (def b.lt ((:label :b19)) #x5400000b #xff00001f)
+     (def b.gt ((:label :b19)) #x5400000c #xff00001f)
+     (def b.le ((:label :b19)) #x5400000d #xff00001f)
+     (def b.al ((:label :b19)) #x5400000e #xff00001f) ;pointless
+     (def b.nv ((:label :b19)) #x5400000f #xff00001f) ;also pointless
+
+     ;; test and branch (immediate) C4-537.  op@24 picks tbz/tbnz.  The
+     ;; bit number is split b5 @ 31 + b40 @ 23:19; since b5 is bit 31, the
+     ;; same base serves W and X — the register width follows the bit
+     ;; range (W: 0..31, X: 0..63).  14-bit word displacement @ 18:5.
+     (def tbz ((:rt :w) :tbit-w (:label :b14)) #x36000000 $test-branch-mask)
+     (def tbz ((:rt :x) :tbit-x (:label :b14)) #x36000000 $test-branch-mask)
+     (def tbnz ((:rt :w) :tbit-w (:label :b14)) #x37000000 $test-branch-mask)
+     (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
      )))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
@@ -460,17 +504,18 @@
 (defun assemble (seg lap-form)
   (declare (ignore seg))
   (let ((insn (%make-instruction lap-form)))
-    (destructuring-bind (name . opvals) lap-form
+    (destructuring-bind (name . lap-operands) lap-form
       (let ((templates (gethash (string-downcase name)
                                 *instruction-template-lists*)))
         (unless templates
           (error "Unknown instruction ~s" lap-form))
         ;; 1. Parse LAP-format operands into operand structs
-        (let ((operands (mapcar #'parse-operand opvals)))
+        (let ((operands (mapcar #'parse-operand lap-operands)))
           (setf (instruction-parsed-operands insn) operands)
           ;; 2. find a template whose operands match ours
           (dolist (template templates
-                            (explain-no-match name opvals operands templates))
+                            (explain-no-match name lap-operands operands
+                                              templates))
             (when (match-template template operands)
               ;; 3. encode the operands into the instruction word
               (setf (instruction-template insn) template)
@@ -498,7 +543,12 @@
     :immr-w        ;immr field, 0..31 (bitfield, W)
     :imms-x        ;imms field, 0..63 (bitfield imms / extr lsb, X)
     :imms-w        ;imms field, 0..31 (bitfield imms / extr lsb, W)
+    :tbit-x        ;tbz/tbnz bit number 0..63, split b5 @ 31 + b40 @ 23:19 (X)
+    :tbit-w        ;tbz/tbnz bit number 0..31 (W); b5 is always 0
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
+    :b26           ;branch target, imm26 @ 25:0 (b, bl)
+    :b19           ;branch target, imm19 @ 23:5 (b.cond, cbz/cbnz)
+    :b14           ;branch target, imm14 @ 18:5 (tbz/tbnz)
     :uoff0         ;scaled unsigned offset; N = log2(access size in bytes),
     :uoff1         ; so the access-size scale is baked into the class and the
     :uoff2         ; offset predicate needs no external scale-shift
@@ -534,24 +584,19 @@
   pre-indexed-p
   post-indexed-p)
 
+(defstruct label-operand
+  name)                               ;the label's name (a symbol)
+
 (defun need-register (designator)
   (or (gethash (string designator) *registers-by-name*)
       (error "No register named ~a" designator)))
 
-(defun register-named (designator)
+(defun register-name-p (designator)
   (gethash (string designator) *registers-by-name*))
-
-(defun register-designator-p (x)
-  (or (and x (symbolp x) (not (keywordp x)))
-      (stringp x)))
 
 (defun parse-register-operand (form)
   ;; Recognize a plain register name like x0 or a shifted or extended
   ;; register of the form (x0 modifier {amount})
-  (unless (or (register-designator-p form)
-              (and (listp form)
-                   (<= 2 (length form) 3)))
-    (error "Invalid register form ~s" form))
   (flet ((parse-shift/extend (form)
            (destructuring-bind (name modifier &optional (amount 0)) form
              (unless (or (member modifier *shift-operators* :test #'eq)
@@ -560,7 +605,9 @@
              (make-register-operand :register (need-register name)
                                     :modifier modifier :amount amount))))
     (if (consp form)
-      (parse-shift/extend form)
+      (if (<= 2 (length form) 3)
+        (error "Invalid register form ~s" form)
+        (parse-shift/extend form))
       (make-register-operand :register (need-register form)))))
 
 (defun parse-immediate-operand (form)
@@ -587,15 +634,24 @@
      :pre-indexed-p (eq marker :@!)
      :post-indexed-p (eq marker :@+))))
 
+(defun parse-label-operand (form)
+  ;; A branch target written as a bare symbol naming a label.
+  (make-label-operand :name form))
+
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
-    ((register-designator-p form) (parse-register-operand form))
+    ((and form (symbolp form))
+     ;; A bare symbol naming a register is a register; any other bare
+     ;; symbol is a label reference (a branch target).
+     (if (register-name-p form)
+       (parse-register-operand form)
+       (parse-label-operand form)))
     ((consp form)
      (case (car form)
        (:$ (parse-immediate-operand form))
        ((:@ :@! :@+) (parse-memory-operand form))
-       (t (if (register-designator-p (car form))
+       (t (if (register-name-p (car form))
             ;; maybe a scaled/extended register like (x0 modifier {amt})
             (parse-register-operand form)
             (error "Unrecognized operand ~s" form)))))
@@ -695,8 +751,8 @@
         (:uoff4 (uoff-p 4))
         (:movw-x (and (typep value '(unsigned-byte 16)) (member shift '(0 16 32 48))))
         (:movw-w (and (typep value '(unsigned-byte 16)) (member shift '(0 16))))
-        ((:immr-x :imms-x) (and (eql shift 0) (typep value '(integer 0 63))))
-        ((:immr-w :imms-w) (and (eql shift 0) (typep value '(integer 0 31))))
+        ((:immr-x :imms-x :tbit-x) (and (eql shift 0) (typep value '(integer 0 63))))
+        ((:immr-w :imms-w :tbit-w) (and (eql shift 0) (typep value '(integer 0 31))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
         (:uimm12
          ;; to be filled in
@@ -724,6 +780,8 @@
 
 (defun match-operand (operand spec)
   (cond
+    ((label-spec-p spec)                ;(:label class) ⇒ branch target
+     (label-operand-p operand))         ;reach is checked at finalize
     ((keywordp spec)                    ;bare keyword ⇒ immediate class
      (and (immediate-operand-p operand)
           (match-immediate-operand operand spec)))
@@ -835,6 +893,9 @@
          (set-field-value insn (byte 2 21) (ash shift -4)))
         ((:immr-x :immr-w) (set-field-value insn (byte 6 16) value))
         ((:imms-x :imms-w) (set-field-value insn (byte 6 10) value))
+        ((:tbit-x :tbit-w)                ;bit number: b40 @ 23:19, b5 @ 31
+         (set-field-value insn (byte 5 19) (ldb (byte 5 0) value))
+         (set-field-value insn (byte 1 31) (ldb (byte 1 5) value)))
         (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
          (set-field-value insn (byte 2 29) value)
          (set-field-value insn (byte 19 5) (ash value -2)))
@@ -850,8 +911,16 @@
     (when offset
       (encode-immediate-operand insn offset imm-class))))
 
+(defun encode-label-operand (insn operand class)
+  ;; Record a reference from INSN to the named label; finalize patches
+  ;; the displacement field once all addresses are known.  CLASS
+  ;; (:b26/:b19/:b14) is the reftype that selects the field.  The field
+  ;; is left zero (its base-opcode value) until then.
+  (note-label-reference (label-operand-name operand) insn class))
+
 (defun encode-operand (insn operand spec)   ;like match-operand
   (cond
+    ((label-spec-p spec) (encode-label-operand insn operand (cadr spec)))
     ((keywordp spec) (encode-immediate-operand insn operand spec))
     ((mem-spec-p spec) (encode-memory-operand insn operand spec))
     ((consp spec) (encode-register-operand insn operand (car spec) (cadr spec)))))
@@ -872,6 +941,11 @@
 (defun mem-spec-p (spec)
   (and (consp spec)
        (member (car spec) *memory-specs* :test #'eq)))
+
+(defun label-spec-p (spec)
+  ;; (:label class), where class is one of :b26/:b19/:b14.
+  (and (consp spec)
+       (eq (car spec) :label)))
 
 (defun render-gpr-token (class suffix)
   (case class
@@ -902,6 +976,7 @@
     ((:movw-x :movw-w) "#imm16{, LSL #shift}")
     ((:immr-x :immr-w) "#immr")
     ((:imms-x :imms-w) "#imms")
+    ((:tbit-x :tbit-w) "#bit")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4) "#off")
     (t (format nil "#~(~a~)" class))))
@@ -917,6 +992,7 @@
 
 (defun render-operand-spec (spec)
   (cond
+    ((label-spec-p spec) "label")
     ((keywordp spec)   (render-immediate-spec spec))
     ((mem-spec-p spec) (render-mem-spec spec))
     ((consp spec)      (render-register-spec spec))
@@ -939,14 +1015,16 @@
                              :test #'string=)))
 
 (defun spec-expected-kind (spec)
-  (cond ((keywordp spec)   :immediate)
+  (cond ((label-spec-p spec) :label)
+        ((keywordp spec)   :immediate)
         ((mem-spec-p spec) :memory)
         ((consp spec)      :register)))
 
 (defun operand-kind (operand)
   (cond ((register-operand-p operand)  :register)
         ((immediate-operand-p operand) :immediate)
-        ((memory-operand-p operand)    :memory)))
+        ((memory-operand-p operand)    :memory)
+        ((label-operand-p operand)     :label)))
 
 ;;; Invoked only when no template matched.  Always signals an error, sharpest
 ;;; diagnosis first: an arity mismatch, then an operand whose KIND fits no
@@ -998,6 +1076,149 @@
                   (:constructor %%make-label (name)))
   name
   refs)
+
+;;; Labels and branch fixups.
+;;;
+;;; Labels are zero-size elements spliced into the same doubly-linked
+;;; section as instructions; a label therefore inherits the address of
+;;; whatever instruction follows it.  Assembly is two-pass: pass one
+;;; emits elements and, for each branch, records a (insn . reftype)
+;;; reference on the target label without resolving it; FINALIZE is pass
+;;; two, computing label addresses and patching branch displacements.
+;;;
+;;; Unlike the ARM32 port there is no constant-pool drain: arm64 reaches
+;;; lisp constants through the fn register, not PC-relative, so the only
+;;; thing FINALIZE resolves is branch reach.  And unlike ARM there is no
+;;; +8 PC bias: on A64 the PC reads as the branch instruction's own
+;;; address.
+
+(defvar *lap-labels* ()
+  "The labels of the function currently being assembled: an alist keyed
+by name that auto-promotes to a hash-table past 255 entries.")
+
+(defun emit-element (element seg)
+  (ccl::append-dll-node element seg)
+  element)
+
+(defun section-size (seg)
+  (let ((last (ccl::dll-header-last seg)))
+    (if (eq last seg)                   ;empty
+      0
+      (+ (instruction-element-address last)
+         (instruction-element-size last)))))
+
+(defun set-element-addresses (seg)
+  ;; One non-iterative pass: lay out elements at successive addresses.
+  ;; Labels have size 0, so each takes the address of the next real
+  ;; instruction.
+  (let ((address 0))
+    (ccl::do-dll-nodes (element seg)
+      (setf (instruction-element-address element) address)
+      (incf address (instruction-element-size element)))))
+
+;;; A label can only be emitted once.  Until it is, its pred slot is nil.
+(defun label-emitted-p (lab)
+  (not (null (label-pred lab))))
+
+(defun make-label (name)
+  (let ((lab (%%make-label name)))
+    (if (typep *lap-labels* 'hash-table)
+      (setf (gethash name *lap-labels*) lab)
+      (progn
+        (push lab *lap-labels*)
+        (when (> (length *lap-labels*) 255)
+          (let ((hash (make-hash-table :size 512 :test #'eq)))
+            (dolist (l *lap-labels*)
+              (setf (gethash (label-name l) hash) l))
+            (setq *lap-labels* hash)))))
+    lab))
+
+(defun find-label (name)
+  (if (typep *lap-labels* 'hash-table)
+    (gethash name *lap-labels*)
+    (car (member name *lap-labels* :test #'eq :key #'label-name))))
+
+(defun note-label-reference (name insn reftype)
+  (let ((lab (or (find-label name)
+                 (make-label name))))
+    (push (cons insn reftype) (label-refs lab))
+    lab))
+
+(defun emit-label (seg name)
+  (let ((lab (find-label name)))
+    (if lab
+      (when (label-emitted-p lab)
+        (error "Label ~s: multiply defined." name))
+      (setq lab (make-label name)))
+    (emit-element lab seg)))
+
+(defmacro do-lap-labels ((lab &optional result) &body body)
+  (let ((thunk (gensym))
+        (k (gensym))
+        (xlab (gensym)))
+    `(flet ((,thunk (,lab) ,@body))
+       (if (typep *lap-labels* 'hash-table)
+         (maphash (lambda (,k ,xlab)
+                    (declare (ignore ,k))
+                    (,thunk ,xlab))
+                  *lap-labels*)
+         (dolist (,xlab *lap-labels*)
+           (,thunk ,xlab)))
+       ,result)))
+
+;;; The branch field for each reftype: (bytespec . signed-width).
+(defparameter *branch-fields*
+  '((:b26 . #.(cons (byte 26 0) 26))
+    (:b19 . #.(cons (byte 19 5) 19))
+    (:b14 . #.(cons (byte 14 5) 14))))
+
+(defun set-branch-displacement (insn reftype words)
+  ;; WORDS is the target displacement in instructions (bytes / 4).
+  (destructuring-bind (bytespec . width)
+      (or (cdr (assoc reftype *branch-fields*))
+          (error "Unknown branch reftype ~s." reftype))
+    (unless (typep words (list 'signed-byte width))
+      (error "Branch target out of range: ~d words won't fit in ~
+              a signed ~d-bit field (~s)." words width reftype))
+    (set-field-value insn bytespec words)))
+
+(defun finalize (seg)
+  ;; Assign addresses, then patch every branch's displacement field.
+  ;; One shot: no outliers, no re-addressing, no iteration.
+  (set-element-addresses seg)
+  (do-lap-labels (lab)
+    (if (label-emitted-p lab)
+      (let ((labaddr (instruction-element-address lab)))
+        (dolist (ref (label-refs lab))
+          (destructuring-bind (insn . reftype) ref
+            (let ((words (ash (- labaddr (instruction-element-address insn))
+                              -2)))
+              (set-branch-displacement insn reftype words)))))
+      (when (label-refs lab)
+        (error "LAP label ~s was referenced but not defined."
+               (label-name lab)))))
+  (ash (section-size seg) -2))
+
+;;; Bring-up driver: assemble a list of LAP forms (instructions, and
+;;; bare symbols standing for label definitions) into a fresh section,
+;;; resolve branch labels, and return the section.
+(defun assemble-section (forms)
+  (let ((seg (ccl::make-dll-header))
+        (*lap-labels* ()))
+    (dolist (form forms)
+      (if (symbolp form)
+        (emit-label seg form)
+        (emit-element (assemble seg form) seg)))
+    (finalize seg)
+    seg))
+
+(defun section-words (seg)
+  ;; The encoded 32-bit words of SEG's instructions, in order.
+  (let ((words '()))
+    (ccl::do-dll-nodes (element seg)
+      (when (instruction-p element)
+        (push (instruction-word element) words)))
+    (nreverse words)))
 
 
 (progn
