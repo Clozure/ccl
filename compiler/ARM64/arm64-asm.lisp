@@ -852,6 +852,8 @@
     :w/sp          ;Wn or WSP
     :sp            ;SP, specifically
     :wsp           ;WSP, specifically
+    :s             ;Sn, scalar single-float (FP/SIMD reg, 32-bit view)
+    :d             ;Dn, scalar double-float (FP/SIMD reg, 64-bit view)
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
     :simm9
@@ -1067,6 +1069,12 @@
                   (= required-width width)
                   (null modifier)
                   (eq r31-role :stack-pointer)))
+           (fpr-p (required-width)
+             ;; a scalar FP/SIMD register at the given access width (Sn/Dn);
+             ;; no r31 special case -- v31 is an ordinary register
+             (and (eq family :fpr)
+                  (= required-width width)
+                  (null modifier)))
            (shifted-p (required-width allow-ror)
              ;; Rm shifted by lsl/lsr/asr (+ror for logical), or a bare
              ;; register (lsl #0); never SP.
@@ -1100,6 +1108,8 @@
         (:w/sp (ordinary-gpr-p 32 :stack-pointer))
         (:sp (sp-p 64))
         (:wsp (sp-p 32))
+        (:s (fpr-p 32))
+        (:d (fpr-p 64))
         (:x-shift (shifted-p 64 nil))
         (:w-shift (shifted-p 32 nil))
         (:x-shift-ror (shifted-p 64 t))
@@ -1451,6 +1461,8 @@
     (:w/sp    (format nil "W~a|WSP" suffix))
     (:wsp     "WSP")
     (:sp      "SP")
+    (:s       (format nil "S~a" suffix))
+    (:d       (format nil "D~a" suffix))
     ((:x-shift :x-shift-ror) (format nil "X~a{, shift #amt}" suffix))
     ((:w-shift :w-shift-ror) (format nil "W~a{, shift #amt}" suffix))
     (:x-ext   (format nil "X~a{, extend #amt}" suffix))
