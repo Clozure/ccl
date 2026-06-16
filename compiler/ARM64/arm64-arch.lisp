@@ -187,9 +187,7 @@
 ;;; The numeric order of subtags matters.
 ;;; * A gvector array subtag must be >= subtag-array-header
 ;;; * An ivector array subtag must >= min-cl-ivector-subtag
-;;;
 ;;; * A gvector vector subtag must be >= subtag-vector-header
-;;; * An ivector array subtag must be >= min-cl-ivector-subtag
 
 (defconstant subtag-single-float fulltag-single-float)
 
@@ -900,7 +898,7 @@
    :max-8-bit-constant-index max-8-bit-constant-index
    :max-1-bit-constant-index max-1-bit-constant-index
    :word-shift 3
-   :code-vector-prefix ()
+   :code-vector-prefix '(#x00000000)    ;udf #0
    :gvector-types '(:ratio :complex :symbol :function :catch-frame
                     :struct :istruct :pool :population :hash-vector
                     :package :value-cell :instance :lock :slot-vector
