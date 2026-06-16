@@ -215,6 +215,10 @@
 (defconstant $ldst-unscaled-mask #xffe00c00) ;load/store register, unscaled immediate
 (defconstant $ldst-regoff-mask #xffe00c00) ;load/store register, register offset
 (defconstant $ldstpair-mask #xffc00000) ;load/store register pair (all index modes)
+(defconstant $ldst-excl-st-mask #xffe0fc00) ;store exclusive (free Rs/Rn/Rt)
+(defconstant $ldst-excl-ld-mask #xfffffc00) ;load exclusive, stlr/ldar (free Rn/Rt)
+(defconstant $ldst-excl-stp-mask #xffe08000) ;store-exclusive pair (free Rs/Rt2/Rn/Rt)
+(defconstant $ldst-excl-ldp-mask #xffff8000) ;load-exclusive pair (free Rt2/Rn/Rt)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -419,6 +423,44 @@
    (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
 
    ;;; C4.1.66  Loads and Stores
+
+      ;; Load/store exclusive pair
+   (def stxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88200000 $ldst-excl-stp-mask)
+   (def stxp ((:rs :w) (:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc8200000 $ldst-excl-stp-mask)
+   (def stlxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88208000 $ldst-excl-stp-mask)
+   (def stlxp ((:rs :w) (:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc8208000 $ldst-excl-stp-mask)
+   (def ldxp ((:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x887f0000 $ldst-excl-ldp-mask)
+   (def ldxp ((:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc87f0000 $ldst-excl-ldp-mask)
+   (def ldaxp ((:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x887f8000 $ldst-excl-ldp-mask)
+   (def ldaxp ((:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc87f8000 $ldst-excl-ldp-mask)
+
+   ;; Load/store exclusive register
+   (def stxrb ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x08007c00 $ldst-excl-st-mask)
+   (def stxrh ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x48007c00 $ldst-excl-st-mask)
+   (def stxr ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x88007c00 $ldst-excl-st-mask)
+   (def stxr ((:rs :w) (:rt :x) (:mem-base (:base :x/sp))) #xc8007c00 $ldst-excl-st-mask)
+   (def stlxrb ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x0800fc00 $ldst-excl-st-mask)
+   (def stlxrh ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x4800fc00 $ldst-excl-st-mask)
+   (def stlxr ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x8800fc00 $ldst-excl-st-mask)
+   (def stlxr ((:rs :w) (:rt :x) (:mem-base (:base :x/sp))) #xc800fc00 $ldst-excl-st-mask)
+   (def ldxrb ((:rt :w) (:mem-base (:base :x/sp))) #x085f7c00 $ldst-excl-ld-mask)
+   (def ldxrh ((:rt :w) (:mem-base (:base :x/sp))) #x485f7c00 $ldst-excl-ld-mask)
+   (def ldxr ((:rt :w) (:mem-base (:base :x/sp))) #x885f7c00 $ldst-excl-ld-mask)
+   (def ldxr ((:rt :x) (:mem-base (:base :x/sp))) #xc85f7c00 $ldst-excl-ld-mask)
+   (def ldaxrb ((:rt :w) (:mem-base (:base :x/sp))) #x085ffc00 $ldst-excl-ld-mask)
+   (def ldaxrh ((:rt :w) (:mem-base (:base :x/sp))) #x485ffc00 $ldst-excl-ld-mask)
+   (def ldaxr ((:rt :w) (:mem-base (:base :x/sp))) #x885ffc00 $ldst-excl-ld-mask)
+   (def ldaxr ((:rt :x) (:mem-base (:base :x/sp))) #xc85ffc00 $ldst-excl-ld-mask)
+
+   ;; Load/store ordered
+   (def stlrb ((:rt :w) (:mem-base (:base :x/sp))) #x089ffc00 $ldst-excl-ld-mask)
+   (def stlrh ((:rt :w) (:mem-base (:base :x/sp))) #x489ffc00 $ldst-excl-ld-mask)
+   (def stlr ((:rt :w) (:mem-base (:base :x/sp))) #x889ffc00 $ldst-excl-ld-mask)
+   (def stlr ((:rt :x) (:mem-base (:base :x/sp))) #xc89ffc00 $ldst-excl-ld-mask)
+   (def ldarb ((:rt :w) (:mem-base (:base :x/sp))) #x08dffc00 $ldst-excl-ld-mask)
+   (def ldarh ((:rt :w) (:mem-base (:base :x/sp))) #x48dffc00 $ldst-excl-ld-mask)
+   (def ldar ((:rt :w) (:mem-base (:base :x/sp))) #x88dffc00 $ldst-excl-ld-mask)
+   (def ldar ((:rt :x) (:mem-base (:base :x/sp))) #xc8dffc00 $ldst-excl-ld-mask)
 
       ;; Load/store register pair (post-indexed)
    (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
@@ -1090,7 +1132,11 @@
                    (match-index-operand
                     offset (regoff-scale (cadr (assoc :index (cdr spec)))))))
              (:mem-pre  (and pre (imm-offset-p)))
-             (:mem-post (and post (imm-offset-p))))))))
+             (:mem-post (and post (imm-offset-p)))
+             ;; bare [Xn]: base only, no offset, no writeback (load/store
+             ;; exclusive).  A stray offset must not match -- there is no
+             ;; immediate field to put it in.
+             (:mem-base (and (not pre) (not post) (null offset))))))))
 
 (defun match-operand (operand spec)
   (cond
@@ -1182,7 +1228,8 @@
   (ecase role
     ((:rd :rt) (insert-rd insn operand))
     ((:rn :base) (insert-rn insn operand))
-    (:rm (insert-rm insn operand))
+    ;; Rs (the exclusive-status / compare register) shares the Rm field @ 20:16.
+    ((:rm :rs) (insert-rm insn operand))
     (:ra (insert-ra insn operand))
     (:rt2 (insert-rt2 insn operand))
     ;; one source register written into both Rn and Rm (cinc/cinv/cneg)
@@ -1271,7 +1318,9 @@
        (when offset
          (encode-immediate-operand insn offset (cadr (assoc :imm (cdr spec))))))
       (:mem-regoff
-       (encode-index-operand insn offset)))))
+       (encode-index-operand insn offset))
+      ;; bare [Xn]: Rn is already inserted above; nothing more to encode.
+      (:mem-base))))
 
 (defun encode-label-operand (insn operand class)
   ;; Record a reference from INSN to the named label; finalize patches
@@ -1312,7 +1361,7 @@
 ;;; "no match" diagnostics; reusable later for disassembly/documentation.
 
 (defparameter *memory-specs*
-  '(:mem-scaled :mem-unscaled :mem-regoff :mem-pre :mem-post))
+  '(:mem-scaled :mem-unscaled :mem-regoff :mem-pre :mem-post :mem-base))
 
 (defun mem-spec-p (spec)
   (and (consp spec)
