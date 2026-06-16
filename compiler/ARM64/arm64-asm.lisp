@@ -223,6 +223,8 @@
 (defconstant $fp-dp2src-mask #xffe0fc00) ;FP data-processing 2-source (fadd/fmul/...)
 (defconstant $fp-dp1src-mask #xfffffc00) ;FP data-processing 1-source (fabs/fneg/fcvt/...)
 (defconstant $fp-dp3src-mask #xffe08000) ;FP data-processing 3-source (fmadd/fmsub/...)
+(defconstant $fp-cmp-mask #xffe0fc1f) ;FP compare, register form (free Rm/Rn)
+(defconstant $fp-cmp-zero-mask #xfffffc1f) ;FP compare against #0.0 (free Rn only)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -920,6 +922,29 @@
    (def fnmadd ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f600000 $fp-dp3src-mask)
    (def fnmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f208000 $fp-dp3src-mask)
    (def fnmsub ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f608000 $fp-dp3src-mask)
+
+   ;; FP compare.  opcode2 @ 4:0 selects the variant (bit 4 = signaling,
+   ;; bit 3 = compare-with-zero); the zero form takes the literal #0.0 and
+   ;; leaves Rm = 0.  Sets the PSTATE flags, so there's no Rd.
+   (def fcmp ((:rn :s) (:rm :s)) #x1e202000 $fp-cmp-mask)
+   (def fcmp ((:rn :d) (:rm :d)) #x1e602000 $fp-cmp-mask)
+   (def fcmp ((:rn :s) :fpzero) #x1e202008 $fp-cmp-zero-mask)
+   (def fcmp ((:rn :d) :fpzero) #x1e602008 $fp-cmp-zero-mask)
+   (def fcmpe ((:rn :s) (:rm :s)) #x1e202010 $fp-cmp-mask)
+   (def fcmpe ((:rn :d) (:rm :d)) #x1e602010 $fp-cmp-mask)
+   (def fcmpe ((:rn :s) :fpzero) #x1e202018 $fp-cmp-zero-mask)
+   (def fcmpe ((:rn :d) :fpzero) #x1e602018 $fp-cmp-zero-mask)
+
+   ;; FP conditional compare.  cond @ 15:12, nzcv @ 3:0 (reuse the integer
+   ;; :nzcv / :cond operands); op @ 4 picks fccmp vs the signaling fccmpe.
+   (def fccmp ((:rn :s) (:rm :s) :nzcv :cond) #x1e200400 $condcmp-mask)
+   (def fccmp ((:rn :d) (:rm :d) :nzcv :cond) #x1e600400 $condcmp-mask)
+   (def fccmpe ((:rn :s) (:rm :s) :nzcv :cond) #x1e200410 $condcmp-mask)
+   (def fccmpe ((:rn :d) (:rm :d) :nzcv :cond) #x1e600410 $condcmp-mask)
+
+   ;; FP conditional select.  cond @ 15:12; Rd = cond ? Rn : Rm.
+   (def fcsel ((:rd :s) (:rn :s) (:rm :s) :cond) #x1e200c00 $condsel-mask)
+   (def fcsel ((:rd :d) (:rn :d) (:rm :d) :cond) #x1e600c00 $condsel-mask)
    ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
@@ -987,6 +1012,7 @@
     :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb); 15 = full system
     :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
+    :fpzero        ;the literal #0.0 (fcmp/fcmpe zero form); encodes nothing
     :lsl-imm-x     ;lsl #n alias of ubfm: immr=(-n)&63, imms=63-n (X)
     :lsl-imm-w     ; ... and the W form (immr=(-n)&31, imms=31-n)
     :lsr-imm-x     ;lsr/asr #n alias of u/sbfm: immr=n, imms=63 (X)
@@ -1268,6 +1294,7 @@
         (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
         (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
+        (:fpzero (and (eql shift 0) (numberp value) (zerop value)))
         ((:lsl-imm-x :lsr-imm-x :asr-imm-x)
          (and (eql shift 0) (typep value '(integer 0 63))))
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
@@ -1478,6 +1505,7 @@
         (:baropt (set-field-value insn (byte 4 8) value))
         (:imm5 (set-field-value insn (byte 5 16) value))
         (:nzcv (set-field-value insn (byte 4 0) value))
+        (:fpzero)                       ;the #0.0 literal is baked into the base opcode
         ;; immediate shifts encode as bitfield moves: lsl #n has
         ;; immr=(-n) mod width, imms=msb-n; lsr/asr #n have immr=n, imms=msb.
         (:lsl-imm-x (set-field-value insn (byte 6 16) (logand (- value) 63))
@@ -1605,6 +1633,7 @@
     (:baropt "#option")
     (:imm5 "#imm5")
     (:nzcv "#nzcv")
+    (:fpzero "#0.0")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4 :poff2 :poff3) "#off")
