@@ -226,6 +226,7 @@
 (defconstant $condcmp-mask #xffe00c10) ;conditional compare (ccmp/ccmn), reg & imm
 (defconstant $dp-3src-mask #xffe08000) ;data-processing 3-source (madd/msub/...)
 (defconstant $dp-2src-mask #xffe0fc00) ;data-processing 2-source (sdiv/udiv); also smulh/umulh
+(defconstant $dp-1src-mask #xfffffc00) ;data-processing 1-source (rbit/rev/clz/cls)
 
 ;;; The operands in the operand list in these templates may be considered
 ;;; as operand specs.
@@ -269,436 +270,427 @@
 ;;; A role (:rd/:rn/:base) represents a field in the instruction word
 ;;; where the encoded operand will go.
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; To be shorter in writing
+  (defmacro def (&rest args)
+    `(define-instruction-template ,@args)))
+
+;;; Section references are to the Arm Architecture Reference Manual
+;;; for A-profile architecture ARM DDI 0487H.a
+
 (defparameter *instruction-templates*
-  (macrolet ((def (&rest args)
-               `(define-instruction-template ,@args)))
-    (vector
-     ;; add/subtract (with carry) C4-583
-     (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
-     (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
-     (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
-     (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
-     (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
-     (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
-     (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
-     (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
-     (def sbcs ((:rd :w) (:rn :w) (:rm :w)) #x7a000000 $rm/rn/rd-mask)
-     (def sbcs ((:rd :x) (:rn :x) (:rm :x)) #xfa000000 $rm/rn/rd-mask)
-     (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
-     (def ngcss ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
+  (vector
+   ;;; C4.1.1  Reserved
+   
+   ;; 16-bit immediate in (byte 16 0)
+   (def udf (:udf16) #x00000000 #xffff0000)
+   
+   ;;; C4.1.64  Data Processing -- Immediate
 
-     ;; add/subtract (immediate) C4-524
-     (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
-     (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
-     (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
-     (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
-     (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
-     (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
-     (def adds ((:rd :w/sp) (:rn :w/sp) :aimm) #x31000000 #xff000000)
-     (def adds ((:rd :x/sp) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
-     (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
-     (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
-     (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
-     (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
-     (def subs ((:rd :w/sp) (:rn :w/sp) :aimm) #x71000000 #xff000000)
-     (def subs ((:rd :x/sp) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
-     (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
-     (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
+   ;; PC-rel. addressing
+   ;; 21-bit immediate split into immlo in (byte 2 29) and immhi in
+   ;; (byte 19 5)
+   (def adr ((:rd :x) :pcrel) #x10000000 $pcrel-mask)
+   (def adrp ((:rd :x) :pcrel) #x90000000 $pcrel-mask)
 
-     ;; add/subtract (shifted register) C4-587.  Rd/Rn are ZR-form (no SP);
-     ;; Rm carries an optional lsl/lsr/asr shift (imm6, 0..63/0..31).
-     (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x0b000000 $addsub-shift-mask)
-     (def add ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
-     (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
-     (def adds ((:rd :x) (:rn :x) (:rm :x-shift)) #xab000000 $addsub-shift-mask)
-     (def cmn ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :flags :alias)
-     (def cmn ((:rn :x) (:rm :x-shift)) #xab00001f 0 :flags :alias)
-     (def sub ((:rd :w) (:rn :w) (:rm :w-shift)) #x4b000000 $addsub-shift-mask)
-     (def sub ((:rd :x) (:rn :x) (:rm :x-shift)) #xcb000000 $addsub-shift-mask)
-     (def subs ((:rd :w) (:rn :w) (:rm :w-shift)) #x6b000000 $addsub-shift-mask)
-     (def subs ((:rd :x) (:rn :x) (:rm :x-shift)) #xeb000000 $addsub-shift-mask)
-     (def cmp ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :flags :alias)
-     (def cmp ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :flags :alias)
-     (def neg ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :flags :alias)
-     (def neg ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :flags :alias)
-     (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :flags :alias)
-     (def negs( (:rd :x) (:rm :x-shift)) #xeb0003e0 0 :flags :alias)
+   ;; Add/subtract (immediate)
+   (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
+   (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
+   (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
+   (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
+   (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
+   (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
+   (def adds ((:rd :w) (:rn :w/sp) :aimm) #x31000000 #xff000000)
+   (def adds ((:rd :x) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
+   (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
+   (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
+   (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
+   (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
+   (def subs ((:rd :w) (:rn :w/sp) :aimm) #x71000000 #xff000000)
+   (def subs ((:rd :x) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
+   (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
+   (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
 
-     ;; add/subtract (extended register) C4-585.  Rd/Rn are SP-form; Rm is an
-     ;; extended register (uxtb..sxtx, optional 3-bit amount).  The flag-setting
-     ;; adds/subs use ZR for Rd.  SP in Rd/Rn is what selects this over the
-     ;; shifted form for the same surface syntax.
-     (def add ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
-     (def add ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
-     (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
-     (def adds ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xab200000 $addsub-ext-mask)
-     (def cmn ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :flags :alias)
-     (def cmn ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :flags :alias)
-     (def sub ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x4b200000 $addsub-ext-mask)
-     (def sub ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #xcb200000 $addsub-ext-mask)
-     (def subs ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x6b200000 $addsub-ext-mask)
-     (def subs ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xeb200000 $addsub-ext-mask)
-     (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :flags :alias)
-     (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :flags :alias)
+   ;; Logical (immediate)
+   (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
+   (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
+   (def orr ((:rd :w/sp) (:rn :w) :limm) #x32000000 #xff800000)
+   (def orr ((:rd :x/sp) (:rn :x) :limm) #xb2000000 #xff800000)
+   (def mov ((:rd :w/sp) :limm) #x320003e0 0 :flags :alias)
+   (def mov ((:rd :x/sp) :limm) #xb20003e0 0 :flags :alias)
+   (def eor ((:rd :w/sp) (:rn :w) :limm) #x52000000 #xff800000)
+   (def eor ((:rd :x/sp) (:rn :x) :limm) #xd2000000 #xff800000)
+   (def ands ((:rd :w) (:rn :w) :limm) #x72000000 #xff800000)
+   (def ands ((:rd :x) (:rn :x) :limm) #xf2000000 #xff800000)
+   (def tst ((:rn :w) :limm) #x7200001f 0 :flags :alias)
+   (def tst ((:rn :x) :limm) #xf200001f 0 :flags :alias)
 
-     (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
-     (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
+   ;; Move wide (immediate)
+   (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
+   (def movn ((:rd :x) :movw-x) #x92800000 $movewide-mask)
+   (def movz ((:rd :w) :movw-w) #x52800000 $movewide-mask)
+   (def movz ((:rd :x) :movw-x) #xd2800000 $movewide-mask)
+   (def movk ((:rd :w) :movw-w) #x72800000 $movewide-mask)
+   (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
 
-     ;; logical (shifted register) C4-595.  opc@30:29 picks and/orr/eor/ands;
-     ;; N@21 picks the bic/orn/eon/bics variants.  Rm allows lsl/lsr/asr/ROR.
-     ;; mov (register) is orr-with-Rn=zr; it competes with mov (to/from SP)
-     ;; above — two-plain-regs vs an SP operand decides which template matches.
-     (def and ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a000000 $log-shift-mask)
-     (def and ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a000000 $log-shift-mask)
-     (def bic ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a200000 $log-shift-mask)
-     (def bic ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a200000 $log-shift-mask)
-     (def orr ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a000000 $log-shift-mask)
-     (def orr ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa000000 $log-shift-mask)
-     (def mov ((:rd :w) (:rm :w)) #x2a0003e0 0 :flags :alias)
-     (def mov ((:rd :x) (:rm :x)) #xaa0003e0 0 :flags :alias)
-     (def orn ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a200000 $log-shift-mask)
-     (def orn ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa200000 $log-shift-mask)
-     (def mvn ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :flags :alias)
-     (def mvn ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :flags :alias)
-     (def eor ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a000000 $log-shift-mask)
-     (def eor ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca000000 $log-shift-mask)
-     (def eon ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a200000 $log-shift-mask)
-     (def eon ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca200000 $log-shift-mask)
-     (def ands ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a000000 $log-shift-mask)
-     (def ands ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea000000 $log-shift-mask)
-     (def tst ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :flags :alias)
-     (def tst ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :flags :alias)
-     (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
-     (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
+   ;; Bitfield
+   (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
+   (def sbfm ((:rd :x) (:rn :x) :immr-x :imms-x) #x93400000 $bitfield-mask)
+   (def bfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x33000000 $bitfield-mask)
+   (def bfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xb3400000 $bitfield-mask)
+   (def ubfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x53000000 $bitfield-mask)
+   (def ubfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xd3400000 $bitfield-mask)
 
-     ;; load/store register (unsigned immediate) C4-575
-     ;;
-     ;; size@31:30 = access width (and the :uoffN scale); opc@23:22 =
-     ;; store/load/sign-extend.  Base is always :x/sp; Rt's class is
-     ;; its transfer width (W, or X for the sign-extending and 64-bit
-     ;; forms).
-     ;;
-     ;; byte
-     (def strb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39000000 $ldst-pos-mask)
-     (def ldrb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39400000 $ldst-pos-mask)
-     (def ldrsb ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39800000 $ldst-pos-mask)
-     (def ldrsb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39c00000 $ldst-pos-mask)
-     ;; halfword
-     (def strh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79000000 $ldst-pos-mask)
-     (def ldrh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79400000 $ldst-pos-mask)
-     (def ldrsh ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79800000 $ldst-pos-mask)
-     (def ldrsh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79c00000 $ldst-pos-mask)
-     ;; word
-     (def str ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9000000 $ldst-pos-mask)
-     (def ldr ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9400000 $ldst-pos-mask)
-     (def ldrsw ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9800000 $ldst-pos-mask)
-     ;; doubleword
-     (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
-     (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
+   ;; Extract
+   (def extr ((:rd :w) (:rn :w) (:rm :w) :imms-w) #x13800000 $extract-mask)
+   (def extr ((:rd :x) (:rn :x) (:rm :x) :imms-x) #x93c00000 $extract-mask)
 
-     ;; load/store register (unscaled immediate) C4-560
-     ;;
-     ;; Same size/opc layout as the unsigned-immediate forms above,
-     ;; but 25:24 = 00 and a signed imm9 byte offset (-256..255) that
-     ;; is never scaled — so every form's offset is :simm9.  Reached
-     ;; by the U-infix mnemonics; the ldr→ldur unscaled fallback is a
-     ;; later encode-time concern, not wired here.
+   ;;; C4.1.65  Branches, Exception Generating, and System instructions
 
-     ;; byte
-     (def sturb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38000000 $ldst-unscaled-mask)
-     (def ldurb  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38400000 $ldst-unscaled-mask)
-     (def ldursb ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38800000 $ldst-unscaled-mask)
-     (def ldursb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38c00000 $ldst-unscaled-mask)
-     ;; halfword
-     (def sturh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78000000 $ldst-unscaled-mask)
-     (def ldurh  ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78400000 $ldst-unscaled-mask)
-     (def ldursh ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78800000 $ldst-unscaled-mask)
-     (def ldursh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78c00000 $ldst-unscaled-mask)
-     ;; word
-     (def stur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8000000 $ldst-unscaled-mask)
-     (def ldur   ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8400000 $ldst-unscaled-mask)
-     (def ldursw ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8800000 $ldst-unscaled-mask)
-     ;; doubleword
-     (def stur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
-     (def ldur   ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
+   ;; Conditional branch (immediate)
+   ;; The 4-bit condition is pre-inserted into (byte 4 0) of the base opcode.
+   ;; A 19-bit word offset is inserted into (byte 19 5).
+   (def b.eq ((:label :b19)) #x54000000 #xff00001f)
+   (def b.ne ((:label :b19)) #x54000001 #xff00001f)
+   (def b.cs ((:label :b19)) #x54000002 #xff00001f)
+   (def b.cc ((:label :b19)) #x54000003 #xff00001f)
+   (def b.mi ((:label :b19)) #x54000004 #xff00001f)
+   (def b.pl ((:label :b19)) #x54000005 #xff00001f)
+   (def b.vs ((:label :b19)) #x54000006 #xff00001f)
+   (def b.vc ((:label :b19)) #x54000007 #xff00001f)
+   (def b.hi ((:label :b19)) #x54000008 #xff00001f)
+   (def b.ls ((:label :b19)) #x54000009 #xff00001f)
+   (def b.ge ((:label :b19)) #x5400000a #xff00001f)
+   (def b.lt ((:label :b19)) #x5400000b #xff00001f)
+   (def b.gt ((:label :b19)) #x5400000c #xff00001f)
+   (def b.le ((:label :b19)) #x5400000d #xff00001f)
+   (def b.al ((:label :b19)) #x5400000e #xff00001f)   ;pointless
+   (def b.nv ((:label :b19)) #x5400000f #xff00001f)   ;also pointless
 
-     ;; load/store register (register offset) C4-573.  Same size@31:30 /
-     ;; opc@23:22 as the immediate forms; the index is Rm @ 20:16 with an
-     ;; extend option @ 15:13 and a scale bit S @ 12.  The :regoffN class
-     ;; carries the natural scale (N = log2 access size).
-     ;; byte
-     (def strb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38200800 $ldst-regoff-mask)
-     (def ldrb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38600800 $ldst-regoff-mask)
-     (def ldrsb ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38a00800 $ldst-regoff-mask)
-     (def ldrsb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38e00800 $ldst-regoff-mask)
-     ;; halfword
-     (def strh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78200800 $ldst-regoff-mask)
-     (def ldrh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78600800 $ldst-regoff-mask)
-     (def ldrsh ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78a00800 $ldst-regoff-mask)
-     (def ldrsh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78e00800 $ldst-regoff-mask)
-     ;; word
-     (def str ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8200800 $ldst-regoff-mask)
-     (def ldr ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8600800 $ldst-regoff-mask)
-     (def ldrsw ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8a00800 $ldst-regoff-mask)
-     ;; doubleword
-     (def str ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8200800 $ldst-regoff-mask)
-     (def ldr ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8600800 $ldst-regoff-mask)
+   ;; Exception generation
+   ;; 16-bit immediate in (byte 16 5)
+   (def svc (:exc16) #xd4000001 #xffe0001f)
+   (def brk (:exc16) #xd4200000 #xffe0001f)
+   (def hlt (:exc16) #xd4400000 #xffe0001f)
 
-     ;; load/store register (immediate, pre/post-indexed) C4-560.  Same
-     ;; signed imm9 @ 20:12 as the unscaled forms; idx @ 11:10 = 01 (post,
-     ;; |#x400) or 11 (pre, |#xc00) selects writeback.  Pushing the value
-     ;; stack is str ...,[vsp,#-n]!; popping is ldr ...,[vsp],#n.
-     ;; byte
-     (def strb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38000c00 $ldst-unscaled-mask)
-     (def strb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38000400 $ldst-unscaled-mask)
-     (def ldrb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38400c00 $ldst-unscaled-mask)
-     (def ldrb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38400400 $ldst-unscaled-mask)
-     (def ldrsb ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38800c00 $ldst-unscaled-mask)
-     (def ldrsb ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x38800400 $ldst-unscaled-mask)
-     (def ldrsb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38c00c00 $ldst-unscaled-mask)
-     (def ldrsb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38c00400 $ldst-unscaled-mask)
-     ;; halfword
-     (def strh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78000c00 $ldst-unscaled-mask)
-     (def strh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78000400 $ldst-unscaled-mask)
-     (def ldrh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78400c00 $ldst-unscaled-mask)
-     (def ldrh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78400400 $ldst-unscaled-mask)
-     (def ldrsh ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78800c00 $ldst-unscaled-mask)
-     (def ldrsh ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x78800400 $ldst-unscaled-mask)
-     (def ldrsh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78c00c00 $ldst-unscaled-mask)
-     (def ldrsh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78c00400 $ldst-unscaled-mask)
-     ;; word
-     (def str ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8000c00 $ldst-unscaled-mask)
-     (def str ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8000400 $ldst-unscaled-mask)
-     (def ldr ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8400c00 $ldst-unscaled-mask)
-     (def ldr ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8400400 $ldst-unscaled-mask)
-     (def ldrsw ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8800c00 $ldst-unscaled-mask)
-     (def ldrsw ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8800400 $ldst-unscaled-mask)
-     ;; doubleword
-     (def str ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8000c00 $ldst-unscaled-mask)
-     (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)
-     (def ldr ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8400c00 $ldst-unscaled-mask)
-     (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
+   ;; Hints
+   (def nop () #xd503201f #xffffffff)
+   (def yield () #xd503203f #xffffffff)
+   (def wfe () #xd503205f #xffffffff)
+   (def sev () #xd503209f #xffffffff)
 
-     ;; load/store register pair C4-555.  opc@31:30 = size, L@22 = load;
-     ;; idx@24:23 = 10 (signed offset, :mem-scaled) / 01 (post) / 11 (pre).
-     ;; Rt @ 4:0, Rt2 @ 14:10; imm7 @ 21:15 is a signed offset scaled by
-     ;; the access size (:poff2 for W, :poff3 for X).  stp ...,[sp,#-16]!
-     ;; pushes a frame; ldp ...,[sp],#16 pops it.
-     (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)
-     (def stp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29800000 $ldstpair-mask)
-     (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
-     (def ldp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29400000 $ldstpair-mask)
-     (def ldp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29c00000 $ldstpair-mask)
-     (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)
-     (def stp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9000000 $ldstpair-mask)
-     (def stp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9800000 $ldstpair-mask)
-     (def stp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8800000 $ldstpair-mask)
-     (def ldp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9400000 $ldstpair-mask)
-     (def ldp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9c00000 $ldstpair-mask)
-     (def ldp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8c00000 $ldstpair-mask)
+   ;; Barriers
+   ;; The bare form defaults to SY; an explicit (:$ option) may be
+   ;; used to select a domain (e.g. 11 = ish, 10 = ishst).  Support
+   ;; for named options is not implemented.
+   ;; clrex ignores its CRm operand, so there's just one form (CRm=15).
+   (def clrex () #xd5033f5f #xffffffff)
+   (def dmb () #xd5033fbf #xffffffff)
+   (def dmb (:baropt) #xd50330bf #xfffff0ff)
+   (def dsb () #xd5033f9f #xffffffff)
+   (def dsb (:baropt) #xd503309f #xfffff0ff)
+   (def isb () #xd5033fdf #xffffffff)
 
-     ;; move wide (immediate).  opc@30:29 picks movn/movz/movk; hw@22:21 is the
-     ;; LSL shift / 16 (0,16,32,48 for X; 0,16 for W).  imm16 @ 20:5.
-     (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
-     (def movn ((:rd :x) :movw-x) #x92800000 $movewide-mask)
-     (def movz ((:rd :w) :movw-w) #x52800000 $movewide-mask)
-     (def movz ((:rd :x) :movw-x) #xd2800000 $movewide-mask)
-     (def movk ((:rd :w) :movw-w) #x72800000 $movewide-mask)
-     (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
+   ;; Unconditional branch (register)
+   (def br ((:rn :x)) #xd61f0000 #xfffffc1f)
+   (def blr ((:rn :x)) #xd63f0000 #xfffffc1f)
+   ;; Plain ret defaults to x30 (lr) in (byte 5 5)
+   (def ret () #xd65f03c0 #xffffffff)
+   (def ret ((:rn :x)) #xd65f0000 #xfffffc1f)
 
-     ;; bitfield.  opc@30:29 picks sbfm/bfm/ubfm; N@22 = sf.  immr @ 21:16,
-     ;; imms @ 15:10 (each 0..63 for X, 0..31 for W).
-     (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
-     (def sbfm ((:rd :x) (:rn :x) :immr-x :imms-x) #x93400000 $bitfield-mask)
-     (def bfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x33000000 $bitfield-mask)
-     (def bfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xb3400000 $bitfield-mask)
-     (def ubfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x53000000 $bitfield-mask)
-     (def ubfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xd3400000 $bitfield-mask)
+   ;; Unconditional branch (immediate)
+   ;; 26-bit word displacement in (byte 26 0)
+   (def b ((:label :b26)) #x14000000 $uncond-branch-imm-mask)
+   (def bl ((:label :b26)) #x94000000 $uncond-branch-imm-mask)
 
-     ;; extract (extr).  N@22 = sf.  lsb is the imms field @ 15:10.
-     (def extr ((:rd :w) (:rn :w) (:rm :w) :imms-w) #x13800000 $extract-mask)
-     (def extr ((:rd :x) (:rn :x) (:rm :x) :imms-x) #x93c00000 $extract-mask)
+   ;; Compare and branch (immediate)
+   ;; Rt in (byte 4 0), 19-bit word displacement in (byte 19 5)
+   (def cbz ((:rt :w) (:label :b19)) #x34000000 $cmp-branch-mask)
+   (def cbz ((:rt :x) (:label :b19)) #xb4000000 $cmp-branch-mask)
+   (def cbnz ((:rt :w) (:label :b19)) #x35000000 $cmp-branch-mask)
+   (def cbnz ((:rt :x) (:label :b19)) #xb5000000 $cmp-branch-mask)
 
-     ;; conditional select C4-530.  sf@31; op@30 and op2@11:10 pick the
-     ;; four instructions; cond @ 15:12 (the (:? cc) operand).
-     (def csel ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800000 $condsel-mask)
-     (def csel ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800000 $condsel-mask)
-     (def csinc ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800400 $condsel-mask)
-     (def csinc ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800400 $condsel-mask)
-     (def csinv ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800000 $condsel-mask)
-     (def csinv ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800000 $condsel-mask)
-     (def csneg ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800400 $condsel-mask)
-     (def csneg ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800400 $condsel-mask)
+   ;; Test and branch (immediate)
+   ;; The bit number is in two parts: (byte 1 31) and (byte 4 19).
+   ;; 14-bit word displacement in (byte 14 5)
+   (def tbz ((:rt :w) :tbit-w (:label :b14)) #x36000000 $test-branch-mask)
+   (def tbz ((:rt :x) :tbit-x (:label :b14)) #x36000000 $test-branch-mask)
+   (def tbnz ((:rt :w) :tbit-w (:label :b14)) #x37000000 $test-branch-mask)
+   (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
 
-     ;; conditional-select aliases.  Each encodes the inverse condition
-     ;; (:cond-inv).  cset/csetm bake Rn=Rm=zr (31); cinc/cinv/cneg write
-     ;; their one source register into both Rn and Rm (the :rn+rm role).
-     (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :flags :alias)
-     (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :flags :alias)
-     (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :flags :alias)
-     (def csetm ((:rd :x) :cond-inv) #xda9f03e0 0 :flags :alias)
-     (def cinc ((:rd :w) (:rn+rm :w) :cond-inv) #x1a800400 0 :flags :alias)
-     (def cinc ((:rd :x) (:rn+rm :x) :cond-inv) #x9a800400 0 :flags :alias)
-     (def cinv ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800000 0 :flags :alias)
-     (def cinv ((:rd :x) (:rn+rm :x) :cond-inv) #xda800000 0 :flags :alias)
-     (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :flags :alias)
-     (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :flags :alias)
+   ;;; C4.1.66  Loads and Stores
 
-     ;; conditional compare C4-528.  sf@31; op@30 picks ccmn/ccmp; bit 11
-     ;; picks register (0) vs immediate (1) form; cond @ 15:12, nzcv @ 3:0.
-     ;; Register form: Rm @ 20:16; immediate form: imm5 @ 20:16.
-     (def ccmp ((:rn :w) (:rm :w) :nzcv :cond) #x7a400000 $condcmp-mask)
-     (def ccmp ((:rn :x) (:rm :x) :nzcv :cond) #xfa400000 $condcmp-mask)
-     (def ccmn ((:rn :w) (:rm :w) :nzcv :cond) #x3a400000 $condcmp-mask)
-     (def ccmn ((:rn :x) (:rm :x) :nzcv :cond) #xba400000 $condcmp-mask)
-     (def ccmp ((:rn :w) :imm5 :nzcv :cond) #x7a400800 $condcmp-mask)
-     (def ccmp ((:rn :x) :imm5 :nzcv :cond) #xfa400800 $condcmp-mask)
-     (def ccmn ((:rn :w) :imm5 :nzcv :cond) #x3a400800 $condcmp-mask)
-     (def ccmn ((:rn :x) :imm5 :nzcv :cond) #xba400800 $condcmp-mask)
+      ;; Load/store register pair (post-indexed)
+   (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
+   (def stp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8800000 $ldstpair-mask)
+   (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)     
+   (def ldp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8c00000 $ldstpair-mask)
 
-     ;; data-processing (3-source) C4-526.  op31 @ 23:21, o0 @ 15 pick the
-     ;; instruction; Ra @ 14:10.  The long forms produce an X from two Ws.
-     (def madd ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b000000 $dp-3src-mask)
-     (def madd ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b000000 $dp-3src-mask)
-     (def msub ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b008000 $dp-3src-mask)
-     (def msub ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b008000 $dp-3src-mask)
-     (def smaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b200000 $dp-3src-mask)
-     (def smsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b208000 $dp-3src-mask)
-     (def umaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba00000 $dp-3src-mask)
-     (def umsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba08000 $dp-3src-mask)
-     ;; the high-multiplies have no Ra operand (it's fixed at 31)
-     (def smulh ((:rd :x) (:rn :x) (:rm :x)) #x9b407c00 $dp-2src-mask)
-     (def umulh ((:rd :x) (:rn :x) (:rm :x)) #x9bc07c00 $dp-2src-mask)
-     ;; multiply aliases: madd/msub/... with Ra = zr (31)
-     (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :flags :alias)
-     (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :flags :alias)
-     (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :flags :alias)
-     (def mneg ((:rd :x) (:rn :x) (:rm :x)) #x9b00fc00 0 :flags :alias)
-     (def smull ((:rd :x) (:rn :w) (:rm :w)) #x9b207c00 0 :flags :alias)
-     (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :flags :alias)
-     (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :flags :alias)
-     (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :flags :alias)
+   ;; Load/store register pair (offset)
+   (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)     
+   (def ldp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29400000 $ldstpair-mask)
+   (def stp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9000000 $ldstpair-mask)
+   (def ldp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9400000 $ldstpair-mask)
 
-     ;; data-processing (2-source) C4-525.  opcode @ 15:10.
-     (def udiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00800 $dp-2src-mask)
-     (def udiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00800 $dp-2src-mask)
-     (def sdiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00c00 $dp-2src-mask)
-     (def sdiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00c00 $dp-2src-mask)
-     ;; variable shifts (also 2-source): opcode 8..11 @ 15:10.
-     (def lslv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 $dp-2src-mask)
-     (def lslv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 $dp-2src-mask)
-     (def lsrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 $dp-2src-mask)
-     (def lsrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 $dp-2src-mask)
-     (def asrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 $dp-2src-mask)
-     (def asrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 $dp-2src-mask)
-     (def rorv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 $dp-2src-mask)
-     (def rorv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 $dp-2src-mask)
+   ;; Load/store register pair (pre-indexed)
+   (def stp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29800000 $ldstpair-mask)
+   (def ldp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29c00000 $ldstpair-mask)
+   (def stp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9800000 $ldstpair-mask)
+   (def ldp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9c00000 $ldstpair-mask)
 
-     ;; shift aliases.  The register forms alias lslv/lsrv/asrv/rorv; the
-     ;; immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror), with
-     ;; immr/imms computed from the shift amount.  Register vs immediate
-     ;; third operand selects the form.
-     (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :flags :alias)
-     (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :flags :alias)
-     (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :flags :alias)
-     (def lsl ((:rd :x) (:rn :x) :lsl-imm-x) #xd3400000 0 :flags :alias)
-     (def lsr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 0 :flags :alias)
-     (def lsr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 0 :flags :alias)
-     (def lsr ((:rd :w) (:rn :w) :lsr-imm-w) #x53000000 0 :flags :alias)
-     (def lsr ((:rd :x) (:rn :x) :lsr-imm-x) #xd3400000 0 :flags :alias)
-     (def asr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 0 :flags :alias)
-     (def asr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 0 :flags :alias)
-     (def asr ((:rd :w) (:rn :w) :asr-imm-w) #x13000000 0 :flags :alias)
-     (def asr ((:rd :x) (:rn :x) :asr-imm-x) #x93400000 0 :flags :alias)
-     (def ror ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 0 :flags :alias)
-     (def ror ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 0 :flags :alias)
-     (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :flags :alias)
-     (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :flags :alias)
+   ;; Load/store register (unscaled immediate)
+   (def sturb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38000000 $ldst-unscaled-mask)
+   (def ldurb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38400000 $ldst-unscaled-mask)
+   (def ldursb ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38800000 $ldst-unscaled-mask)
+   (def ldursb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38c00000 $ldst-unscaled-mask)
+   (def sturh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78000000 $ldst-unscaled-mask)
+   (def ldurh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78400000 $ldst-unscaled-mask)
+   (def ldursh ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78800000 $ldst-unscaled-mask)
+   (def ldursh ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x78c00000 $ldst-unscaled-mask)
+   (def stur ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8000000 $ldst-unscaled-mask)
+   (def ldur ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8400000 $ldst-unscaled-mask)
+   (def ldursw ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xb8800000 $ldst-unscaled-mask)
+   (def stur ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
+   (def ldur ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
 
-     ;; PC-relative addressing.  op@31 picks adr/adrp; the 21-bit value is
-     ;; split immlo @ 30:29, immhi @ 23:5.  adr: byte offset; adrp: page offset
-     ;; (value << 12).  Raw 21-bit immediate for now; label resolution is later.
-     (def adr ((:rd :x) :pcrel) #x10000000 $pcrel-mask)
-     (def adrp ((:rd :x) :pcrel) #x90000000 $pcrel-mask)
+   ;; Load/store register (immediate post-indexed)
+   (def strb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38000400 $ldst-unscaled-mask)
+   (def ldrb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38400400 $ldst-unscaled-mask)
+   (def ldrsb ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x38800400 $ldst-unscaled-mask)
+   (def ldrsb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38c00400 $ldst-unscaled-mask)   
+   (def strh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78000400 $ldst-unscaled-mask)
+   (def ldrh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78400400 $ldst-unscaled-mask)
+   (def ldrsh ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x78800400 $ldst-unscaled-mask)
+   (def ldrsh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78c00400 $ldst-unscaled-mask)
+   (def str ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8000400 $ldst-unscaled-mask)
+   (def ldr ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8400400 $ldst-unscaled-mask)
+   (def ldrsw ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8800400 $ldst-unscaled-mask)
+   (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)   
+   (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
 
-     ;; unconditional branch (immediate) C4-536.  op@31 picks b/bl; the
-     ;; target is a 26-bit word displacement @ 25:0, resolved by finalize.
-     (def b ((:label :b26)) #x14000000 $uncond-branch-imm-mask)
-     (def bl ((:label :b26)) #x94000000 $uncond-branch-imm-mask)
+   ;; Load/store register (immediate pre-indexed)
+   (def strb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38000c00 $ldst-unscaled-mask)
+   (def ldrb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38400c00 $ldst-unscaled-mask)
+   (def ldrsb ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38800c00 $ldst-unscaled-mask)
+   (def ldrsb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38c00c00 $ldst-unscaled-mask)
+   (def strh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78000c00 $ldst-unscaled-mask)
+   (def ldrh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78400c00 $ldst-unscaled-mask)
+   (def ldrsh ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78800c00 $ldst-unscaled-mask)
+   (def ldrsh ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x78c00c00 $ldst-unscaled-mask)
+   (def str ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8000c00 $ldst-unscaled-mask)
+   (def ldr ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8400c00 $ldst-unscaled-mask)
+   (def ldrsw ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xb8800c00 $ldst-unscaled-mask)
+   (def str ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8000c00 $ldst-unscaled-mask)
+   (def ldr ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8400c00 $ldst-unscaled-mask)
 
-     ;; compare and branch (immediate) C4-536.  sf@31; op@24 picks cbz/cbnz.
-     ;; Rt @ 4:0, 19-bit word displacement @ 23:5.
-     (def cbz ((:rt :w) (:label :b19)) #x34000000 $cmp-branch-mask)
-     (def cbz ((:rt :x) (:label :b19)) #xb4000000 $cmp-branch-mask)
-     (def cbnz ((:rt :w) (:label :b19)) #x35000000 $cmp-branch-mask)
-     (def cbnz ((:rt :x) (:label :b19)) #xb5000000 $cmp-branch-mask)
+   ;; Load/store register (register offset)
+   (def strb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38200800 $ldst-regoff-mask)
+   (def ldrb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38600800 $ldst-regoff-mask)
+   (def ldrsb ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38a00800 $ldst-regoff-mask)
+   (def ldrsb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38e00800 $ldst-regoff-mask)
+   (def strh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78200800 $ldst-regoff-mask)
+   (def ldrh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78600800 $ldst-regoff-mask)
+   (def ldrsh ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78a00800 $ldst-regoff-mask)
+   (def ldrsh ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff1))) #x78e00800 $ldst-regoff-mask)
+   (def str ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8200800 $ldst-regoff-mask)
+   (def ldr ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8600800 $ldst-regoff-mask)
+   (def ldrsw ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xb8a00800 $ldst-regoff-mask)
+   (def str ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8200800 $ldst-regoff-mask)
+   (def ldr ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8600800 $ldst-regoff-mask)
 
-     ;; conditional branch (immediate) C4-528.  The 4-bit condition is
-     ;; baked into the mnemonic and the opcode @ 3:0; the only operand is
-     ;; the 19-bit word displacement @ 23:5.  No condition operand kind.
-     (def b.eq ((:label :b19)) #x54000000 #xff00001f)
-     (def b.ne ((:label :b19)) #x54000001 #xff00001f)
-     (def b.cs ((:label :b19)) #x54000002 #xff00001f)
-     (def b.cc ((:label :b19)) #x54000003 #xff00001f)
-     (def b.mi ((:label :b19)) #x54000004 #xff00001f)
-     (def b.pl ((:label :b19)) #x54000005 #xff00001f)
-     (def b.vs ((:label :b19)) #x54000006 #xff00001f)
-     (def b.vc ((:label :b19)) #x54000007 #xff00001f)
-     (def b.hi ((:label :b19)) #x54000008 #xff00001f)
-     (def b.ls ((:label :b19)) #x54000009 #xff00001f)
-     (def b.ge ((:label :b19)) #x5400000a #xff00001f)
-     (def b.lt ((:label :b19)) #x5400000b #xff00001f)
-     (def b.gt ((:label :b19)) #x5400000c #xff00001f)
-     (def b.le ((:label :b19)) #x5400000d #xff00001f)
-     (def b.al ((:label :b19)) #x5400000e #xff00001f) ;pointless
-     (def b.nv ((:label :b19)) #x5400000f #xff00001f) ;also pointless
+   ;; Load/store register (unsigned immediate)
+   (def strb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39000000 $ldst-pos-mask)
+   (def ldrb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39400000 $ldst-pos-mask)
+   (def ldrsb ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39800000 $ldst-pos-mask)
+   (def ldrsb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39c00000 $ldst-pos-mask)
+   (def strh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79000000 $ldst-pos-mask)
+   (def ldrh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79400000 $ldst-pos-mask)
+   (def ldrsh ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79800000 $ldst-pos-mask)
+   (def ldrsh ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff1))) #x79c00000 $ldst-pos-mask)
+   (def str ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9000000 $ldst-pos-mask)
+   (def ldr ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9400000 $ldst-pos-mask)
+   (def ldrsw ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xb9800000 $ldst-pos-mask)
+   (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
+   (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
 
-     ;; test and branch (immediate) C4-537.  op@24 picks tbz/tbnz.  The
-     ;; bit number is split b5 @ 31 + b40 @ 23:19; since b5 is bit 31, the
-     ;; same base serves W and X — the register width follows the bit
-     ;; range (W: 0..31, X: 0..63).  14-bit word displacement @ 18:5.
-     (def tbz ((:rt :w) :tbit-w (:label :b14)) #x36000000 $test-branch-mask)
-     (def tbz ((:rt :x) :tbit-x (:label :b14)) #x36000000 $test-branch-mask)
-     (def tbnz ((:rt :w) :tbit-w (:label :b14)) #x37000000 $test-branch-mask)
-     (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
+   ;;; Data Processing -- Register
 
-     (def br ((:rn :x)) #xd61f0000 #xfffffc1f)
-     (def blr ((:rn :x)) #xd63f0000 #xfffffc1f)
-     ;; ret defaults its register to x30 (lr).  Rather than an
-     ;; optional-operand mechanism, the no-operand form is its own
-     ;; template with Rn=30 baked into the opcode (#xd65f0000 | 30<<5).
-     (def ret () #xd65f03c0 #xffffffff)
-     (def ret ((:rn :x)) #xd65f0000 #xfffffc1f)
+   ;; Data-processing (2 source)
+   (def udiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00800 $dp-2src-mask)
+   (def udiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00800 $dp-2src-mask)
+   (def sdiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00c00 $dp-2src-mask)
+   (def sdiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00c00 $dp-2src-mask)
+   (def lslv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 $dp-2src-mask)
+   (def lslv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 $dp-2src-mask)
+   (def lsrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 $dp-2src-mask)
+   (def lsrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 $dp-2src-mask)
+   (def asrv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 $dp-2src-mask)
+   (def asrv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 $dp-2src-mask)
+   (def rorv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 $dp-2src-mask)
+   (def rorv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 $dp-2src-mask)
 
-     ;; exception generation C4-543.  11010100 opc imm16 op2 LL; the
-     ;; 16-bit immediate is @ 20:5, (opc,LL) pick the instruction.
-     (def svc (:exc16) #xd4000001 #xffe0001f)
-     (def brk (:exc16) #xd4200000 #xffe0001f)
-     (def hlt (:exc16) #xd4400000 #xffe0001f)
-     ;; udf (permanently undefined) is a different encoding entirely:
-     ;; opcode 0x0000 in 31:16, the 16-bit immediate @ 15:0.  udf #0 is
-     ;; the all-zero word planted at the head of every code vector.
-     (def udf (:udf16) #x00000000 #xffff0000)
+   ;; shift aliases.  The register forms alias lslv/lsrv/asrv/rorv; the
+   ;; immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror), with
+   ;; immr/imms computed from the shift amount.  Register vs immediate
+   ;; third operand selects the form.
+   (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :flags :alias)
+   (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :flags :alias)
+   (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :flags :alias)
+   (def lsl ((:rd :x) (:rn :x) :lsl-imm-x) #xd3400000 0 :flags :alias)
+   (def lsr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 0 :flags :alias)
+   (def lsr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 0 :flags :alias)
+   (def lsr ((:rd :w) (:rn :w) :lsr-imm-w) #x53000000 0 :flags :alias)
+   (def lsr ((:rd :x) (:rn :x) :lsr-imm-x) #xd3400000 0 :flags :alias)
+   (def asr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 0 :flags :alias)
+   (def asr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 0 :flags :alias)
+   (def asr ((:rd :w) (:rn :w) :asr-imm-w) #x13000000 0 :flags :alias)
+   (def asr ((:rd :x) (:rn :x) :asr-imm-x) #x93400000 0 :flags :alias)
+   (def ror ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 0 :flags :alias)
+   (def ror ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 0 :flags :alias)
+   (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :flags :alias)
+   (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :flags :alias)
 
-     ;; hints C4-541.  HINT #imm with imm = CRm:op2; these four are all
-     ;; CRm=0 with op2 @ 7:5 selecting the hint.  No operands.
-     (def nop () #xd503201f #xffffffff)
-     (def yield () #xd503203f #xffffffff)
-     (def wfe () #xd503205f #xffffffff)
-     (def sev () #xd503209f #xffffffff)
+   ;; Data-processing (1 source)
+   (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
+   (def rbit ((:rd :x) (:rn :x)) #xdac00000 $dp-1src-mask)
+   (def rev16 ((:rd :w) (:rn :w)) #x5ac00400 $dp-1src-mask)
+   (def rev16 ((:rd :x) (:rn :x)) #xdac00400 $dp-1src-mask)
+   (def rev ((:rd :w) (:rn :w)) #x5ac00800 $dp-1src-mask)
+   (def rev ((:rd :x) (:rn :x)) #xdac00c00 $dp-1src-mask)
+   (def rev32 ((:rd :x) (:rn :x)) #xdac00800 $dp-1src-mask)
+   (def clz ((:rd :w) (:rn :w)) #x5ac01000 $dp-1src-mask)
+   (def clz ((:rd :x) (:rn :x)) #xdac01000 $dp-1src-mask)
+   (def cls ((:rd :w) (:rn :w)) #x5ac01400 $dp-1src-mask)
+   (def cls ((:rd :x) (:rn :x)) #xdac01400 $dp-1src-mask)
 
-     ;; barriers C4-540.  ... 0011 CRm op2 11111; op2 @ 7:5 picks the
-     ;; barrier, CRm @ 11:8 is the option/domain (15 = full system).  The
-     ;; bare form defaults to SY; an explicit (:$ option) selects a domain
-     ;; (e.g. 11 = ish, 10 = ishst) without named-option parsing.
-     (def dmb () #xd5033fbf #xffffffff)
-     (def dmb (:baropt) #xd50330bf #xfffff0ff)
-     (def dsb () #xd5033f9f #xffffffff)
-     (def dsb (:baropt) #xd503309f #xfffff0ff)
-     (def isb () #xd5033fdf #xffffffff)
-     ;; clrex ignores its CRm operand, so there's just one form (CRm=15).
-     (def clrex () #xd5033f5f #xffffffff)
-     )))
+   ;; Logical (shifted register)
+   (def and ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a000000 $log-shift-mask)
+   (def and ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a000000 $log-shift-mask)
+   (def bic ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a200000 $log-shift-mask)
+   (def bic ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a200000 $log-shift-mask)
+   (def orr ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a000000 $log-shift-mask)
+   (def orr ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa000000 $log-shift-mask)
+   (def mov ((:rd :w) (:rm :w)) #x2a0003e0 0 :flags :alias)
+   (def mov ((:rd :x) (:rm :x)) #xaa0003e0 0 :flags :alias)
+   (def orn ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a200000 $log-shift-mask)
+   (def orn ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa200000 $log-shift-mask)
+   (def mvn ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :flags :alias)
+   (def mvn ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :flags :alias)
+   (def eor ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a000000 $log-shift-mask)
+   (def eor ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca000000 $log-shift-mask)
+   (def eon ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a200000 $log-shift-mask)
+   (def eon ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca200000 $log-shift-mask)
+   (def ands ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a000000 $log-shift-mask)
+   (def ands ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea000000 $log-shift-mask)
+   (def tst ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :flags :alias)
+   (def tst ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :flags :alias)
+   (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
+   (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
+
+   ;; Add/subtract (shifted register)
+   (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x0b000000 $addsub-shift-mask)
+   (def add ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
+   (def adds ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
+   (def adds ((:rd :x) (:rn :x) (:rm :x-shift)) #xab000000 $addsub-shift-mask)
+   (def cmn ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :flags :alias)
+   (def cmn ((:rn :x) (:rm :x-shift)) #xab00001f 0 :flags :alias)
+   (def sub ((:rd :w) (:rn :w) (:rm :w-shift)) #x4b000000 $addsub-shift-mask)
+   (def sub ((:rd :x) (:rn :x) (:rm :x-shift)) #xcb000000 $addsub-shift-mask)
+   (def subs ((:rd :w) (:rn :w) (:rm :w-shift)) #x6b000000 $addsub-shift-mask)
+   (def subs ((:rd :x) (:rn :x) (:rm :x-shift)) #xeb000000 $addsub-shift-mask)
+   (def cmp ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :flags :alias)
+   (def cmp ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :flags :alias)
+   (def neg ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :flags :alias)
+   (def neg ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :flags :alias)
+   (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :flags :alias)
+   (def negs ((:rd :x) (:rm :x-shift)) #xeb0003e0 0 :flags :alias)
+
+   ;; Add/subtract (extended register)
+   (def add ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
+   (def add ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
+   (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
+   (def adds ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xab200000 $addsub-ext-mask)
+   (def cmn ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :flags :alias)
+   (def cmn ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :flags :alias)
+   (def sub ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x4b200000 $addsub-ext-mask)
+   (def sub ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #xcb200000 $addsub-ext-mask)
+   (def subs ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x6b200000 $addsub-ext-mask)
+   (def subs ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xeb200000 $addsub-ext-mask)
+   (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :flags :alias)
+   (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :flags :alias)
+
+   ;; Add/subtract (with carry)
+   (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
+   (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
+   (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
+   (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
+   (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
+   (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
+   (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
+   (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
+   (def sbcs ((:rd :w) (:rn :w) (:rm :w)) #x7a000000 $rm/rn/rd-mask)
+   (def sbcs ((:rd :x) (:rn :x) (:rm :x)) #xfa000000 $rm/rn/rd-mask)
+   (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
+   (def ngcs ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
+
+   ;; Conditional compare (register)
+   (def ccmp ((:rn :w) (:rm :w) :nzcv :cond) #x7a400000 $condcmp-mask)
+   (def ccmp ((:rn :x) (:rm :x) :nzcv :cond) #xfa400000 $condcmp-mask)
+   (def ccmn ((:rn :w) (:rm :w) :nzcv :cond) #x3a400000 $condcmp-mask)
+   (def ccmn ((:rn :x) (:rm :x) :nzcv :cond) #xba400000 $condcmp-mask)
+
+   ;; Conditional compare (immediate)
+   (def ccmp ((:rn :w) :imm5 :nzcv :cond) #x7a400800 $condcmp-mask)
+   (def ccmp ((:rn :x) :imm5 :nzcv :cond) #xfa400800 $condcmp-mask)
+   (def ccmn ((:rn :w) :imm5 :nzcv :cond) #x3a400800 $condcmp-mask)
+   (def ccmn ((:rn :x) :imm5 :nzcv :cond) #xba400800 $condcmp-mask)
+
+   ;; Conditional select
+   (def csinc ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800400 $condsel-mask)
+   (def csinc ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800400 $condsel-mask)
+   (def csinv ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800000 $condsel-mask)
+   (def csinv ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800000 $condsel-mask)
+   (def csneg ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800400 $condsel-mask)
+   (def csneg ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800400 $condsel-mask)
+   (def csel ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800000 $condsel-mask)
+   (def csel ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800000 $condsel-mask)
+
+   ;; Conditional-select aliases.  Each encodes the inverse condition
+   ;; (:cond-inv).  cset/csetm set Rn=Rm=zr (31); cinc/cinv/cneg write
+   ;; their one source register into both Rn and Rm (the :rn+rm role).
+   (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :flags :alias)
+   (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :flags :alias)
+   (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :flags :alias)
+   (def csetm ((:rd :x) :cond-inv) #xda9f03e0 0 :flags :alias)
+   (def cinc ((:rd :w) (:rn+rm :w) :cond-inv) #x1a800400 0 :flags :alias)
+   (def cinc ((:rd :x) (:rn+rm :x) :cond-inv) #x9a800400 0 :flags :alias)
+   (def cinv ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800000 0 :flags :alias)
+   (def cinv ((:rd :x) (:rn+rm :x) :cond-inv) #xda800000 0 :flags :alias)
+   (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :flags :alias)
+   (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :flags :alias)
+
+   ;; Data-processing (3-source)
+   (def madd ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b000000 $dp-3src-mask)
+   (def madd ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b000000 $dp-3src-mask)
+   (def msub ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b008000 $dp-3src-mask)
+   (def msub ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b008000 $dp-3src-mask)
+   (def smaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b200000 $dp-3src-mask)
+   (def smsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b208000 $dp-3src-mask)
+   (def umaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba00000 $dp-3src-mask)
+   (def umsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba08000 $dp-3src-mask)
+   ;; the high-multiplies have no Ra operand (it's fixed at 31)
+   (def smulh ((:rd :x) (:rn :x) (:rm :x)) #x9b407c00 $dp-2src-mask)
+   (def umulh ((:rd :x) (:rn :x) (:rm :x)) #x9bc07c00 $dp-2src-mask)
+   ;; multiply aliases: madd/msub/... with Ra = zr (31)
+   (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :flags :alias)
+   (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :flags :alias)
+   (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :flags :alias)
+   (def mneg ((:rd :x) (:rn :x) (:rm :x)) #x9b00fc00 0 :flags :alias)
+   (def smull ((:rd :x) (:rn :w) (:rm :w)) #x9b207c00 0 :flags :alias)
+   (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :flags :alias)
+   (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :flags :alias)
+   (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :flags :alias)
+   ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
 
@@ -750,7 +742,6 @@
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
     :simm9
-    :uimm12
     :movw-x        ;16-bit immediate, LSL 0/16/32/48 (move wide, X)
     :movw-w        ;16-bit immediate, LSL 0/16 (move wide, W)
     :immr-x        ;immr field, 0..63 (bitfield, X)
@@ -814,8 +805,8 @@
   base                              ;a register operand
   offset                            ;nil or the offset, specified as
                                     ; an immediate or register operand
-  pre-indexed-p
-  post-indexed-p)
+  pre-indexed-p                     ;one or the other;
+  post-indexed-p)                   ; having both set makes no sense
 
 (defstruct label-operand
   name)                               ;the label's name (a symbol)
@@ -824,12 +815,12 @@
   name                                ;the condition name (a symbol)
   value)                              ;its 4-bit encoding
 
-(defun need-register (designator)
-  (or (gethash (string designator) *registers-by-name*)
-      (error "No register named ~a" designator)))
+(defun need-register (name)
+  (or (gethash (string name) *registers-by-name*)
+      (error "No register named ~a" name)))
 
-(defun register-name-p (designator)
-  (gethash (string designator) *registers-by-name*))
+(defun register-name-p (name)
+  (gethash (string name) *registers-by-name*))
 
 (defun parse-register-operand (form)
   ;; Recognize a plain register name like x0 or a shifted or extended
@@ -1042,9 +1033,7 @@
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
          (and (eql shift 0) (typep value '(integer 0 31))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
-        (:uimm12
-         ;; to be filled in
-         nil)))))
+        ))))
 
 (defun regoff-scale (class)
   ;; The natural scale (log2 access size) baked into a :regoffN class.
@@ -1358,7 +1347,6 @@
   (case class
     (:aimm   "#imm{, LSL #12}")
     (:limm   "#bitmask")
-    (:uimm12 "#uimm12")
     (:simm9  "#simm9")
     ((:movw-x :movw-w) "#imm16{, LSL #shift}")
     ((:immr-x :immr-w) "#immr")
