@@ -220,6 +220,7 @@
 (defconstant $ldst-excl-stp-mask #xffe08000) ;store-exclusive pair (free Rs/Rt2/Rn/Rt)
 (defconstant $ldst-excl-ldp-mask #xffff8000) ;load-exclusive pair (free Rt2/Rn/Rt)
 (defconstant $lse-atomic-mask #xffe0fc00) ;LSE atomics/cas/swp (free Rs/Rn/Rt)
+(defconstant $fp-dp2src-mask #xffe0fc00) ;FP data-processing 2-source (fadd/fmul/...)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -351,7 +352,7 @@
 
 #+nil
 (defparameter *augmented-templates*
-  (concatenate 'vector *instruction-tempaltes* (lse-atomic-templates))))
+  (concatenate 'vector *instruction-templates* (lse-atomic-templates))))
 
 (defparameter *instruction-templates*
   (vector
@@ -852,6 +853,30 @@
    (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :flags :alias)
    (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :flags :alias)
    (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :flags :alias)
+
+   ;;; Data Processing -- Scalar Floating-Point
+
+   ;; FP data-processing (2 source).  ftype @ 23:22 (00=S, 01=D); opcode @
+   ;; 15:12 picks the operation.  Rd/Rn/Rm are the usual fields, so the only
+   ;; per-template differences are ftype and opcode, baked into the base.
+   (def fmul ((:rd :s) (:rn :s) (:rm :s)) #x1e200800 $fp-dp2src-mask)
+   (def fmul ((:rd :d) (:rn :d) (:rm :d)) #x1e600800 $fp-dp2src-mask)
+   (def fdiv ((:rd :s) (:rn :s) (:rm :s)) #x1e201800 $fp-dp2src-mask)
+   (def fdiv ((:rd :d) (:rn :d) (:rm :d)) #x1e601800 $fp-dp2src-mask)
+   (def fadd ((:rd :s) (:rn :s) (:rm :s)) #x1e202800 $fp-dp2src-mask)
+   (def fadd ((:rd :d) (:rn :d) (:rm :d)) #x1e602800 $fp-dp2src-mask)
+   (def fsub ((:rd :s) (:rn :s) (:rm :s)) #x1e203800 $fp-dp2src-mask)
+   (def fsub ((:rd :d) (:rn :d) (:rm :d)) #x1e603800 $fp-dp2src-mask)
+   (def fmax ((:rd :s) (:rn :s) (:rm :s)) #x1e204800 $fp-dp2src-mask)
+   (def fmax ((:rd :d) (:rn :d) (:rm :d)) #x1e604800 $fp-dp2src-mask)
+   (def fmin ((:rd :s) (:rn :s) (:rm :s)) #x1e205800 $fp-dp2src-mask)
+   (def fmin ((:rd :d) (:rn :d) (:rm :d)) #x1e605800 $fp-dp2src-mask)
+   (def fmaxnm ((:rd :s) (:rn :s) (:rm :s)) #x1e206800 $fp-dp2src-mask)
+   (def fmaxnm ((:rd :d) (:rn :d) (:rm :d)) #x1e606800 $fp-dp2src-mask)
+   (def fminnm ((:rd :s) (:rn :s) (:rm :s)) #x1e207800 $fp-dp2src-mask)
+   (def fminnm ((:rd :d) (:rn :d) (:rm :d)) #x1e607800 $fp-dp2src-mask)
+   (def fnmul ((:rd :s) (:rn :s) (:rm :s)) #x1e208800 $fp-dp2src-mask)
+   (def fnmul ((:rd :d) (:rn :d) (:rm :d)) #x1e608800 $fp-dp2src-mask)
    ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
