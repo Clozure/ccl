@@ -220,6 +220,10 @@
 (defconstant $uncond-branch-imm-mask #xfc000000) ;b, bl
 (defconstant $cmp-branch-mask #xff000000) ;cbz, cbnz
 (defconstant $test-branch-mask #x7f000000) ;tbz, tbnz (bit 31 is b5, not fixed)
+(defconstant $condsel-mask #xffe00c00) ;conditional select (csel/csinc/csinv/csneg)
+(defconstant $condcmp-mask #xffe00c10) ;conditional compare (ccmp/ccmn), reg & imm
+(defconstant $dp-3src-mask #xffe08000) ;data-processing 3-source (madd/msub/...)
+(defconstant $dp-2src-mask #xffe0fc00) ;data-processing 2-source (sdiv/udiv); also smulh/umulh
 
 ;;; The operands in the operand list in these templates may be considered
 ;;; as operand specs.
@@ -438,6 +442,72 @@
      (def extr ((:rd :w) (:rn :w) (:rm :w) :imms-w) #x13800000 $extract-mask)
      (def extr ((:rd :x) (:rn :x) (:rm :x) :imms-x) #x93c00000 $extract-mask)
 
+     ;; conditional select C4-530.  sf@31; op@30 and op2@11:10 pick the
+     ;; four instructions; cond @ 15:12 (the (:? cc) operand).
+     (def csel ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800000 $condsel-mask)
+     (def csel ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800000 $condsel-mask)
+     (def csinc ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800400 $condsel-mask)
+     (def csinc ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800400 $condsel-mask)
+     (def csinv ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800000 $condsel-mask)
+     (def csinv ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800000 $condsel-mask)
+     (def csneg ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800400 $condsel-mask)
+     (def csneg ((:rd :x) (:rn :x) (:rm :x) :cond) #xda800400 $condsel-mask)
+
+     ;; conditional-select aliases.  Each encodes the inverse condition
+     ;; (:cond-inv).  cset/csetm bake Rn=Rm=zr (31); cinc/cinv/cneg write
+     ;; their one source register into both Rn and Rm (the :rn+rm role).
+     (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :flags :alias)
+     (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :flags :alias)
+     (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :flags :alias)
+     (def csetm ((:rd :x) :cond-inv) #xda9f03e0 0 :flags :alias)
+     (def cinc ((:rd :w) (:rn+rm :w) :cond-inv) #x1a800400 0 :flags :alias)
+     (def cinc ((:rd :x) (:rn+rm :x) :cond-inv) #x9a800400 0 :flags :alias)
+     (def cinv ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800000 0 :flags :alias)
+     (def cinv ((:rd :x) (:rn+rm :x) :cond-inv) #xda800000 0 :flags :alias)
+     (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :flags :alias)
+     (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :flags :alias)
+
+     ;; conditional compare C4-528.  sf@31; op@30 picks ccmn/ccmp; bit 11
+     ;; picks register (0) vs immediate (1) form; cond @ 15:12, nzcv @ 3:0.
+     ;; Register form: Rm @ 20:16; immediate form: imm5 @ 20:16.
+     (def ccmp ((:rn :w) (:rm :w) :nzcv :cond) #x7a400000 $condcmp-mask)
+     (def ccmp ((:rn :x) (:rm :x) :nzcv :cond) #xfa400000 $condcmp-mask)
+     (def ccmn ((:rn :w) (:rm :w) :nzcv :cond) #x3a400000 $condcmp-mask)
+     (def ccmn ((:rn :x) (:rm :x) :nzcv :cond) #xba400000 $condcmp-mask)
+     (def ccmp ((:rn :w) :imm5 :nzcv :cond) #x7a400800 $condcmp-mask)
+     (def ccmp ((:rn :x) :imm5 :nzcv :cond) #xfa400800 $condcmp-mask)
+     (def ccmn ((:rn :w) :imm5 :nzcv :cond) #x3a400800 $condcmp-mask)
+     (def ccmn ((:rn :x) :imm5 :nzcv :cond) #xba400800 $condcmp-mask)
+
+     ;; data-processing (3-source) C4-526.  op31 @ 23:21, o0 @ 15 pick the
+     ;; instruction; Ra @ 14:10.  The long forms produce an X from two Ws.
+     (def madd ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b000000 $dp-3src-mask)
+     (def madd ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b000000 $dp-3src-mask)
+     (def msub ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b008000 $dp-3src-mask)
+     (def msub ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b008000 $dp-3src-mask)
+     (def smaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b200000 $dp-3src-mask)
+     (def smsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b208000 $dp-3src-mask)
+     (def umaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba00000 $dp-3src-mask)
+     (def umsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba08000 $dp-3src-mask)
+     ;; the high-multiplies have no Ra operand (it's fixed at 31)
+     (def smulh ((:rd :x) (:rn :x) (:rm :x)) #x9b407c00 $dp-2src-mask)
+     (def umulh ((:rd :x) (:rn :x) (:rm :x)) #x9bc07c00 $dp-2src-mask)
+     ;; multiply aliases: madd/msub/... with Ra = zr (31)
+     (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :flags :alias)
+     (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :flags :alias)
+     (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :flags :alias)
+     (def mneg ((:rd :x) (:rn :x) (:rm :x)) #x9b00fc00 0 :flags :alias)
+     (def smull ((:rd :x) (:rn :w) (:rm :w)) #x9b207c00 0 :flags :alias)
+     (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :flags :alias)
+     (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :flags :alias)
+     (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :flags :alias)
+
+     ;; data-processing (2-source) C4-525.  opcode @ 15:10.
+     (def udiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00800 $dp-2src-mask)
+     (def udiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00800 $dp-2src-mask)
+     (def sdiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00c00 $dp-2src-mask)
+     (def sdiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00c00 $dp-2src-mask)
+
      ;; PC-relative addressing.  op@31 picks adr/adrp; the 21-bit value is
      ;; split immlo @ 30:29, immhi @ 23:5.  adr: byte offset; adrp: page offset
      ;; (value << 12).  Raw 21-bit immediate for now; label resolution is later.
@@ -484,6 +554,43 @@
      (def tbz ((:rt :x) :tbit-x (:label :b14)) #x36000000 $test-branch-mask)
      (def tbnz ((:rt :w) :tbit-w (:label :b14)) #x37000000 $test-branch-mask)
      (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
+
+     (def br ((:rn :x)) #xd61f0000 #xfffffc1f)
+     (def blr ((:rn :x)) #xd63f0000 #xfffffc1f)
+     ;; ret defaults its register to x30 (lr).  Rather than an
+     ;; optional-operand mechanism, the no-operand form is its own
+     ;; template with Rn=30 baked into the opcode (#xd65f0000 | 30<<5).
+     (def ret () #xd65f03c0 #xffffffff)
+     (def ret ((:rn :x)) #xd65f0000 #xfffffc1f)
+
+     ;; exception generation C4-543.  11010100 opc imm16 op2 LL; the
+     ;; 16-bit immediate is @ 20:5, (opc,LL) pick the instruction.
+     (def svc (:exc16) #xd4000001 #xffe0001f)
+     (def brk (:exc16) #xd4200000 #xffe0001f)
+     (def hlt (:exc16) #xd4400000 #xffe0001f)
+     ;; udf (permanently undefined) is a different encoding entirely:
+     ;; opcode 0x0000 in 31:16, the 16-bit immediate @ 15:0.  udf #0 is
+     ;; the all-zero word planted at the head of every code vector.
+     (def udf (:udf16) #x00000000 #xffff0000)
+
+     ;; hints C4-541.  HINT #imm with imm = CRm:op2; these four are all
+     ;; CRm=0 with op2 @ 7:5 selecting the hint.  No operands.
+     (def nop () #xd503201f #xffffffff)
+     (def yield () #xd503203f #xffffffff)
+     (def wfe () #xd503205f #xffffffff)
+     (def sev () #xd503209f #xffffffff)
+
+     ;; barriers C4-540.  ... 0011 CRm op2 11111; op2 @ 7:5 picks the
+     ;; barrier, CRm @ 11:8 is the option/domain (15 = full system).  The
+     ;; bare form defaults to SY; an explicit (:$ option) selects a domain
+     ;; (e.g. 11 = ish, 10 = ishst) without named-option parsing.
+     (def dmb () #xd5033fbf #xffffffff)
+     (def dmb (:baropt) #xd50330bf #xfffff0ff)
+     (def dsb () #xd5033f9f #xffffffff)
+     (def dsb (:baropt) #xd503309f #xfffff0ff)
+     (def isb () #xd5033fdf #xffffffff)
+     ;; clrex ignores its CRm operand, so there's just one form (CRm=15).
+     (def clrex () #xd5033f5f #xffffffff)
      )))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
@@ -545,6 +652,13 @@
     :imms-w        ;imms field, 0..31 (bitfield imms / extr lsb, W)
     :tbit-x        ;tbz/tbnz bit number 0..63, split b5 @ 31 + b40 @ 23:19 (X)
     :tbit-w        ;tbz/tbnz bit number 0..31 (W); b5 is always 0
+    :exc16         ;16-bit exception immediate @ 20:5 (brk/hlt/svc)
+    :udf16         ;16-bit undefined immediate @ 15:0 (udf)
+    :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb); 15 = full system
+    :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
+    :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
+    :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
+    :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
     :b26           ;branch target, imm26 @ 25:0 (b, bl)
     :b19           ;branch target, imm19 @ 23:5 (b.cond, cbz/cbnz)
@@ -586,6 +700,10 @@
 
 (defstruct label-operand
   name)                               ;the label's name (a symbol)
+
+(defstruct condition-operand
+  name                                ;the condition name (a symbol)
+  value)                              ;its 4-bit encoding
 
 (defun need-register (designator)
   (or (gethash (string designator) *registers-by-name*)
@@ -638,6 +756,42 @@
   ;; A branch target written as a bare symbol naming a label.
   (make-label-operand :name form))
 
+(defparameter *arm64-condition-names*
+  '(("eq" . 0)                          ;equal
+    ("ne" . 1)                          ;not equal
+    ("cs" . 2) ("hs" . 2)               ;carry set, unsigned higher or same
+    ("cc" . 3) ("lo" . 3)               ;carry clear, unsigned lower
+    ("mi" . 4)                          ;minus, negative
+    ("pl" . 5)                          ;plus, positive or zero
+    ("vs" . 6)                          ;overflow
+    ("vc" . 7)                          ;no overflow
+    ("hi" . 8)                          ;unsigned higher
+    ("ls" . 9)                          ;unsigned lower or same
+    ("ge" . 10)                         ;signed >=
+    ("lt" . 11)                         ;signed <
+    ("gt" . 12)                         ;signed >
+    ("le" . 13)                         ;signed <=
+    ("al" . 14)                         ;always
+    ("nv" . 15)))                       ;identical to always
+
+(defun lookup-arm64-condition-name (name)
+  (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
+
+(defun lookup-arm64-condition-value (val)
+  (car (rassoc val *arm64-condition-names* :test #'eq)))
+
+(defun need-arm64-condition-name (name)
+  (or (lookup-arm64-condition-name name)
+      (error "Unknown ARM64 condition name ~s." name)))
+
+(defun parse-condition-operand (form)
+  ;; A condition written (:? cc), e.g. (:? eq).  The name is validated
+  ;; here so a bogus condition is caught at parse time.
+  (destructuring-bind (marker name) form
+    (declare (ignore marker))
+    (make-condition-operand :name name
+                            :value (need-arm64-condition-name name))))
+
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
@@ -650,6 +804,7 @@
     ((consp form)
      (case (car form)
        (:$ (parse-immediate-operand form))
+       (:? (parse-condition-operand form))
        ((:@ :@! :@+) (parse-memory-operand form))
        (t (if (register-name-p (car form))
             ;; maybe a scaled/extended register like (x0 modifier {amt})
@@ -753,6 +908,10 @@
         (:movw-w (and (typep value '(unsigned-byte 16)) (member shift '(0 16))))
         ((:immr-x :imms-x :tbit-x) (and (eql shift 0) (typep value '(integer 0 63))))
         ((:immr-w :imms-w :tbit-w) (and (eql shift 0) (typep value '(integer 0 31))))
+        ((:exc16 :udf16) (and (eql shift 0) (typep value '(unsigned-byte 16))))
+        (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
+        (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
+        (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
         (:uimm12
          ;; to be filled in
@@ -782,6 +941,8 @@
   (cond
     ((label-spec-p spec)                ;(:label class) ⇒ branch target
      (label-operand-p operand))         ;reach is checked at finalize
+    ((member spec '(:cond :cond-inv))   ;a (:? cc) condition (maybe inverted)
+     (condition-operand-p operand))
     ((keywordp spec)                    ;bare keyword ⇒ immediate class
      (and (immediate-operand-p operand)
           (match-immediate-operand operand spec)))
@@ -826,6 +987,10 @@
   (set-field-value insn (byte 5 16)
                    (register-number (register-operand-register operand))))
 
+(defun insert-ra (insn operand)
+  (set-field-value insn (byte 5 10)
+                   (register-number (register-operand-register operand))))
+
 (defparameter *shift-types*
   #(:lsl :lsr :asr :ror))
 
@@ -856,7 +1021,10 @@
   (ecase role
     ((:rd :rt) (insert-rd insn operand))
     ((:rn :base) (insert-rn insn operand))
-    (:rm (insert-rm insn operand)))
+    (:rm (insert-rm insn operand))
+    (:ra (insert-ra insn operand))
+    ;; one source register written into both Rn and Rm (cinc/cinv/cneg)
+    (:rn+rm (insert-rn insn operand) (insert-rm insn operand)))
   (let ((modifier (register-operand-modifier operand))
         (amount (register-operand-amount operand)))
     (case class
@@ -896,6 +1064,11 @@
         ((:tbit-x :tbit-w)                ;bit number: b40 @ 23:19, b5 @ 31
          (set-field-value insn (byte 5 19) (ldb (byte 5 0) value))
          (set-field-value insn (byte 1 31) (ldb (byte 1 5) value)))
+        (:exc16 (set-field-value insn (byte 16 5) value))
+        (:udf16 (set-field-value insn (byte 16 0) value))
+        (:baropt (set-field-value insn (byte 4 8) value))
+        (:imm5 (set-field-value insn (byte 5 16) value))
+        (:nzcv (set-field-value insn (byte 4 0) value))
         (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
          (set-field-value insn (byte 2 29) value)
          (set-field-value insn (byte 19 5) (ash value -2)))
@@ -918,9 +1091,23 @@
   ;; is left zero (its base-opcode value) until then.
   (note-label-reference (label-operand-name operand) insn class))
 
+(defun encode-condition-operand (insn operand &optional invert)
+  ;; The condition is a 4-bit field @ 15:12 in the conditional-select and
+  ;; conditional-compare instructions (not the 3:0 spot b.cond uses).  The
+  ;; cset/cinc/... aliases encode the inverse condition; al/nv have no
+  ;; inverse (their low bit isn't a negation), so inverting them is an error.
+  (let ((value (condition-operand-value operand)))
+    (when invert
+      (if (< value 14)
+        (setq value (logxor value 1))
+        (error "condition ~s has no inverse" (condition-operand-name operand))))
+    (set-field-value insn (byte 4 12) value)))
+
 (defun encode-operand (insn operand spec)   ;like match-operand
   (cond
     ((label-spec-p spec) (encode-label-operand insn operand (cadr spec)))
+    ((eq spec :cond) (encode-condition-operand insn operand))
+    ((eq spec :cond-inv) (encode-condition-operand insn operand t))
     ((keywordp spec) (encode-immediate-operand insn operand spec))
     ((mem-spec-p spec) (encode-memory-operand insn operand spec))
     ((consp spec) (encode-register-operand insn operand (car spec) (cadr spec)))))
@@ -977,6 +1164,10 @@
     ((:immr-x :immr-w) "#immr")
     ((:imms-x :imms-w) "#imms")
     ((:tbit-x :tbit-w) "#bit")
+    ((:exc16 :udf16) "#imm16")
+    (:baropt "#option")
+    (:imm5 "#imm5")
+    (:nzcv "#nzcv")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4) "#off")
     (t (format nil "#~(~a~)" class))))
@@ -993,6 +1184,7 @@
 (defun render-operand-spec (spec)
   (cond
     ((label-spec-p spec) "label")
+    ((member spec '(:cond :cond-inv)) "(:? cc)")
     ((keywordp spec)   (render-immediate-spec spec))
     ((mem-spec-p spec) (render-mem-spec spec))
     ((consp spec)      (render-register-spec spec))
@@ -1016,6 +1208,7 @@
 
 (defun spec-expected-kind (spec)
   (cond ((label-spec-p spec) :label)
+        ((member spec '(:cond :cond-inv)) :condition)
         ((keywordp spec)   :immediate)
         ((mem-spec-p spec) :memory)
         ((consp spec)      :register)))
@@ -1024,7 +1217,8 @@
   (cond ((register-operand-p operand)  :register)
         ((immediate-operand-p operand) :immediate)
         ((memory-operand-p operand)    :memory)
-        ((label-operand-p operand)     :label)))
+        ((label-operand-p operand)     :label)
+        ((condition-operand-p operand) :condition)))
 
 ;;; Invoked only when no template matched.  Always signals an error, sharpest
 ;;; diagnosis first: an arity mismatch, then an operand whose KIND fits no
@@ -1439,33 +1633,6 @@ by name that auto-promotes to a hash-table past 255 entries.")
         (rotate-right-64 (logxor mask (ash mask s)) immr)))))
 
 
-(defparameter *arm64-condition-names*
-  '(("eq" . 0)                          ;equal
-    ("ne" . 1)                          ;not equal
-    ("cs" . 2) ("hs" . 2)               ;carry set, unsigned higher or same
-    ("cc" . 3) ("lo" . 3)               ;carry clear, unsigned lower
-    ("mi" . 4)                          ;minus, negative
-    ("pl" . 5)                          ;plus, positive or zero
-    ("vs" . 6)                          ;overflow
-    ("vc" . 7)                          ;no overflow
-    ("hi" . 8)                          ;unsigned higher
-    ("ls" . 9)                          ;unsigned lower or same
-    ("ge" . 10)                         ;signed >=
-    ("lt" . 11)                         ;signed <
-    ("gt" . 12)                         ;signed >
-    ("le" . 13)                         ;signed <=
-    ("al" . 14)                         ;always
-    ("nv" . 15)))                       ;identical to always
-
-(defun lookup-arm64-condition-name (name)
-  (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
-
-(defun lookup-arm64-condition-value (val)
-  (car (rassoc val *arm64-condition-names* :test #'eq)))
-
-(defun need-arm64-condition-name (name)
-  (or (lookup-arm64-condition-name name)
-      (error "Unknown ARM64 condition name ~s." name)))
 
 
 (defparameter *junk*
