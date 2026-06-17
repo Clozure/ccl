@@ -225,6 +225,8 @@
 (defconstant $fp-dp3src-mask #xffe08000) ;FP data-processing 3-source (fmadd/fmsub/...)
 (defconstant $fp-cmp-mask #xffe0fc1f) ;FP compare, register form (free Rm/Rn)
 (defconstant $fp-cmp-zero-mask #xfffffc1f) ;FP compare against #0.0 (free Rn only)
+(defconstant $fp-cvt-mask #xfffffc00) ;FP<->int convert, fmov gpr<->fpr (free Rn/Rd)
+(defconstant $fp-imm-mask #xffe01fe0) ;FP move immediate (free imm8 @ 20:13, Rd)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
 (defconstant $extract-mask #xffe00000) ;extract
@@ -945,6 +947,38 @@
    ;; FP conditional select.  cond @ 15:12; Rd = cond ? Rn : Rm.
    (def fcsel ((:rd :s) (:rn :s) (:rm :s) :cond) #x1e200c00 $condsel-mask)
    (def fcsel ((:rd :d) (:rn :d) (:rm :d) :cond) #x1e600c00 $condsel-mask)
+
+   ;; Conversion between FP and integer.  sf @ 31 (W/X), ftype @ 23:22 (S/D),
+   ;; rmode @ 20:19 + opcode @ 18:16 pick the operation -- so every GPR-width x
+   ;; FP-type combination is its own template.  scvtf/ucvtf take int->fp (Rd is
+   ;; the FP reg); fcvtzs/fcvtzu are fp->int, round toward zero (Rd is the GPR).
+   (def scvtf ((:rd :s) (:rn :w)) #x1e220000 $fp-cvt-mask)
+   (def scvtf ((:rd :s) (:rn :x)) #x9e220000 $fp-cvt-mask)
+   (def scvtf ((:rd :d) (:rn :w)) #x1e620000 $fp-cvt-mask)
+   (def scvtf ((:rd :d) (:rn :x)) #x9e620000 $fp-cvt-mask)
+   (def ucvtf ((:rd :s) (:rn :w)) #x1e230000 $fp-cvt-mask)
+   (def ucvtf ((:rd :s) (:rn :x)) #x9e230000 $fp-cvt-mask)
+   (def ucvtf ((:rd :d) (:rn :w)) #x1e630000 $fp-cvt-mask)
+   (def ucvtf ((:rd :d) (:rn :x)) #x9e630000 $fp-cvt-mask)
+   (def fcvtzs ((:rd :w) (:rn :s)) #x1e380000 $fp-cvt-mask)
+   (def fcvtzs ((:rd :x) (:rn :s)) #x9e380000 $fp-cvt-mask)
+   (def fcvtzs ((:rd :w) (:rn :d)) #x1e780000 $fp-cvt-mask)
+   (def fcvtzs ((:rd :x) (:rn :d)) #x9e780000 $fp-cvt-mask)
+   (def fcvtzu ((:rd :w) (:rn :s)) #x1e390000 $fp-cvt-mask)
+   (def fcvtzu ((:rd :x) (:rn :s)) #x9e390000 $fp-cvt-mask)
+   (def fcvtzu ((:rd :w) (:rn :d)) #x1e790000 $fp-cvt-mask)
+   (def fcvtzu ((:rd :x) (:rn :d)) #x9e790000 $fp-cvt-mask)
+
+   ;; fmov between a GPR and an FP register (raw bit copy: opcode 110 = to GPR,
+   ;; 111 = from GPR).  Only the same-size pairings W<->S and X<->D are legal.
+   (def fmov ((:rd :w) (:rn :s)) #x1e260000 $fp-cvt-mask)
+   (def fmov ((:rd :s) (:rn :w)) #x1e270000 $fp-cvt-mask)
+   (def fmov ((:rd :x) (:rn :d)) #x9e660000 $fp-cvt-mask)
+   (def fmov ((:rd :d) (:rn :x)) #x9e670000 $fp-cvt-mask)
+
+   ;; fmov scalar immediate: the 8-bit FP constant @ 20:13 (encode-fp-imm8).
+   (def fmov ((:rd :s) :fpimm8) #x1e201000 $fp-imm-mask)
+   (def fmov ((:rd :d) :fpimm8) #x1e601000 $fp-imm-mask)
    ))
 
 (defvar *instruction-template-lists* (make-hash-table :test #'equalp))
@@ -1013,6 +1047,7 @@
     :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
     :fpzero        ;the literal #0.0 (fcmp/fcmpe zero form); encodes nothing
+    :fpimm8        ;8-bit FP move immediate @ 20:13 (fmov scalar immediate)
     :lsl-imm-x     ;lsl #n alias of ubfm: immr=(-n)&63, imms=63-n (X)
     :lsl-imm-w     ; ... and the W form (immr=(-n)&31, imms=31-n)
     :lsr-imm-x     ;lsr/asr #n alias of u/sbfm: immr=n, imms=63 (X)
@@ -1260,6 +1295,56 @@
         (:x-ext (extended-p 64))
         (:w-ext (extended-p 32))))))
 
+;;; See if the floating-point value can be encoded as a special
+;;; floating-point immediate.  Section C2.2.3 in the manual discusses
+;;; the format.
+;;;
+;;; The format is a little obscure, but the key is to note that every
+;;; encodable value is +/-(1 + m/16) * 2^e with m in [0, 15] and e in
+;;; the range -3 to 4.  Thus, an encodable significand uses only its
+;;; top 4 fraction bits and the exponent is in a narrow range around
+;;; zero.
+;;;
+;;; This is a job for integer-decode-float.
+(defun encode-fp-imm8 (value)
+  (when (and (floatp value) (not (zerop value)))
+    (multiple-value-bind (significand exponent sign)
+        (integer-decode-float value)
+      (let ((nbits (float-digits value)))
+        ;; The significand we get from integer-decode-float is scaled
+        ;; such that the high bit is the now-explicit hidden bit, and
+        ;; the remaining bits are the fraction.  The imm8 float
+        ;; immediate can encode a fraction of 4 bits, so if the lower
+        ;; part of the significand is clear, then maybe the provided
+        ;; value is encodable.
+        (when (zerop (ldb (byte (- nbits 5) 0) significand))
+          ;; Now check exponent range.
+          (let ((m (ldb (byte 4 (- nbits 5)) significand))
+                (e (+ exponent (1- nbits))));unbiased exponent of the MSB
+            (when (<= -3 e 4)               ;exponent in range
+              (let ((k (+ e 3)))            ;0 to 7; e = k-3
+                (logior (if (minusp sign) #x80 0)
+                        (ash (logxor 1 (ldb (byte 1 2) k)) 6)
+                        (ash (ldb (byte 2 0) k) 4)
+                        m)))))))))
+
+;;; Create a single-float representation of the imm8 float immediate.
+;;; See C2.2.3 in the manual.
+(defun decode-fp-imm8 (imm8)
+  (check-type imm8 (unsigned-byte 8))
+  (let* ((sign (ldb (byte 1 7) imm8))   ;negative if set
+         (b    (ldb (byte 1 6) imm8))   ;exponent selector
+         (cd   (ldb (byte 2 4) imm8))   ; in two parts
+         (m    (ldb (byte 4 0) imm8))   ;fraction
+         (k    (logior (ash (logxor 1 b) 2) cd))   ;k = e+3
+         (e    (- k 3)))                           ;unbiased exponent
+    (ccl::make-short-float-from-fixnums
+     ;; insert into top 4 bits of mantissa
+     (dpb m (byte 4 19) 0)
+     ;; CCL misdefines ieee-single-float-bias: it's 126, not 127 as expected
+     (+ (1+ ccl::ieee-single-float-bias) e)
+     (if (= sign 1) -1 1))))
+
 ;;; The access-size scale for a scaled offset is baked into the class (:uoffN,
 ;;; N = log2 of the access size in bytes), so the class is self-describing and
 ;;; this predicate needs only the operand and the class — no template.  Values
@@ -1295,6 +1380,7 @@
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
         (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:fpzero (and (eql shift 0) (numberp value) (zerop value)))
+        (:fpimm8 (and (eql shift 0) (encode-fp-imm8 value)))
         ((:lsl-imm-x :lsr-imm-x :asr-imm-x)
          (and (eql shift 0) (typep value '(integer 0 63))))
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
@@ -1506,6 +1592,7 @@
         (:imm5 (set-field-value insn (byte 5 16) value))
         (:nzcv (set-field-value insn (byte 4 0) value))
         (:fpzero)                       ;the #0.0 literal is baked into the base opcode
+        (:fpimm8 (set-field-value insn (byte 8 13) (encode-fp-imm8 value)))
         ;; immediate shifts encode as bitfield moves: lsl #n has
         ;; immr=(-n) mod width, imms=msb-n; lsr/asr #n have immr=n, imms=msb.
         (:lsl-imm-x (set-field-value insn (byte 6 16) (logand (- value) 63))
@@ -1634,6 +1721,7 @@
     (:imm5 "#imm5")
     (:nzcv "#nzcv")
     (:fpzero "#0.0")
+    (:fpimm8 "#fpimm")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4 :poff2 :poff3) "#off")
