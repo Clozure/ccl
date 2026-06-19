@@ -745,6 +745,26 @@
    (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :flags :alias)
    (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :flags :alias)
 
+   ;; sign/zero-extend aliases of sbfm/ubfm: fixed immr=0, imms=7/15/31 baked
+   ;; into the base, so they take only Rd, Rn (source is always Wn).
+   (def sxtb ((:rd :w) (:rn :w)) #x13001c00 0 :flags :alias)
+   (def sxtb ((:rd :x) (:rn :w)) #x93401c00 0 :flags :alias)
+   (def sxth ((:rd :w) (:rn :w)) #x13003c00 0 :flags :alias)
+   (def sxth ((:rd :x) (:rn :w)) #x93403c00 0 :flags :alias)
+   (def sxtw ((:rd :x) (:rn :w)) #x93407c00 0 :flags :alias)
+   (def uxtb ((:rd :w) (:rn :w)) #x53001c00 0 :flags :alias)
+   (def uxth ((:rd :w) (:rn :w)) #x53003c00 0 :flags :alias)
+
+   ;; bitfield insert aliases: immr=(-lsb) mod width, imms=width-1 (separable,
+   ;; so #lsb and #width each drive one field).  Extract forms (sbfx/ubfx/
+   ;; bfxil) deferred -- imms there depends on both operands.
+   (def sbfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x13000000 0 :flags :alias)
+   (def sbfiz ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #x93400000 0 :flags :alias)
+   (def ubfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x53000000 0 :flags :alias)
+   (def ubfiz ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #xd3400000 0 :flags :alias)
+   (def bfi   ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x33000000 0 :flags :alias)
+   (def bfi   ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #xb3400000 0 :flags :alias)
+
    ;; Data-processing (1 source)
    (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
    (def rbit ((:rd :x) (:rn :x)) #xdac00000 $dp-1src-mask)
@@ -1022,7 +1042,7 @@
 ;;; This is the entry point to the assembler.
 
 ;;; lap-form is a list and its car isn't a pseudo-op or lapmacro
-(defun assemble (seg lap-form)
+(defun assemble-instruction (seg lap-form)
   (declare (ignore seg))
   (let ((insn (%make-instruction lap-form)))
     (destructuring-bind (name . lap-operands) lap-form
@@ -1080,6 +1100,10 @@
     :lsr-imm-w     ; ... and the W form (immr=n, imms=31)
     :asr-imm-x     ;asr #n: same field encoding as :lsr-imm-x, sbfm base
     :asr-imm-w
+    :bfiz-lsb-x    ;sbfiz/ubfiz/bfi #lsb (X): immr = (-lsb) & 63
+    :bfiz-lsb-w    ; ... and the W form (immr = (-lsb) & 31)
+    :bf-width-x    ;sbfiz/ubfiz/bfi #width (X): imms = width-1
+    :bf-width-w    ; ... and the W form
     :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
     :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
@@ -1237,7 +1261,7 @@
   (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
 
 (defun lookup-arm64-condition-value (val)
-  (car (rassoc val *arm64-condition-names* :test #'eq)))
+  (car (rassoc val *arm64-condition-names* :test #'eql)))
 
 (defun need-arm64-condition-name (name)
   (or (lookup-arm64-condition-name name)
@@ -1447,6 +1471,10 @@
          (and (eql shift 0) (typep value '(integer 0 63))))
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
          (and (eql shift 0) (typep value '(integer 0 31))))
+        (:bfiz-lsb-x (and (eql shift 0) (typep value '(integer 0 63))))
+        (:bfiz-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
+        (:bf-width-x (and (eql shift 0) (typep value '(integer 1 64))))
+        (:bf-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
         ))))
 
@@ -1657,6 +1685,10 @@
                                  (set-field-value insn (byte 6 10) 63))
         ((:lsr-imm-w :asr-imm-w) (set-field-value insn (byte 6 16) value)
                                  (set-field-value insn (byte 6 10) 31))
+        ;; bitfield insert: immr=(-lsb) mod width (from #lsb), imms=width-1.
+        (:bfiz-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
+        (:bfiz-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
+        ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
         (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
          (set-field-value insn (byte 2 29) value)
          (set-field-value insn (byte 19 5) (ash value -2)))
@@ -1777,6 +1809,8 @@
     (:fpzero "#0.0")
     (:fpimm8 "#fpimm")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
+    ((:bfiz-lsb-x :bfiz-lsb-w) "#lsb")
+    ((:bf-width-x :bf-width-w) "#width")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4 :poff2 :poff3) "#off")
     (t (format nil "#~(~a~)" class))))
@@ -1882,7 +1916,7 @@
 
 (defstruct (label (:include instruction-element)
                   (:constructor %%make-label (name)))
-  name
+  name                                  ;a symbol
   refs)
 
 ;;; Labels and branch fixups.
@@ -1893,12 +1927,6 @@
 ;;; emits elements and, for each branch, records a (insn . reftype)
 ;;; reference on the target label without resolving it; FINALIZE is pass
 ;;; two, computing label addresses and patching branch displacements.
-;;;
-;;; Unlike the ARM32 port there is no constant-pool drain: arm64 reaches
-;;; lisp constants through the fn register, not PC-relative, so the only
-;;; thing FINALIZE resolves is branch reach.  And unlike ARM there is no
-;;; +8 PC bias: on A64 the PC reads as the branch instruction's own
-;;; address.
 
 (defvar *lap-labels* ()
   "The labels of the function currently being assembled: an alist keyed
@@ -2016,7 +2044,7 @@ by name that auto-promotes to a hash-table past 255 entries.")
     (dolist (form forms)
       (if (symbolp form)
         (emit-label seg form)
-        (emit-element (assemble seg form) seg)))
+        (emit-element (assemble-instruction seg form) seg)))
     (finalize seg)
     seg))
 
