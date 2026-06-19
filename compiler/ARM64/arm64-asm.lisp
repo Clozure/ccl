@@ -7,6 +7,19 @@
 
 (in-package "ARM64")
 
+(defvar *constants* ())
+(defvar *labels* ())
+
+;; return fn-relative byte offset to constant named by form
+(defun arm64-constant-offset (form)
+  (let ((index (or (cdr (assoc form *constants* :test 'equal))
+                   (let ((n (length *constants*)))
+                     (push (cons form n) *constants*)
+                     n))))
+    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
+       arm64::misc-data-offset)))
+
+
 (defstruct register
   name         ;canonical name
   number       ;as encoded in instruction
@@ -101,6 +114,7 @@
 
 (hash-registers)
 
+;;; Add a permanent alias for a register.
 (defmacro define-register-alias (alias known)
   (let ((known-entry (gensym)))
     `(let ((,known-entry (gethash ,(string known) *registers-by-name*)))
@@ -108,6 +122,18 @@
          (error "register ~a not defined" ',known))
        (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
        (defconstant ,alias ,known))))
+
+;;; Look up a register by name.
+(defun lookup-register (name)
+  (let ((s (string name)))
+    (gethash s *registers-by-name*)))
+
+(defun need-register (name)
+  (or (lookup-register name)
+      (error "No register named ~a" name)))
+
+(defun register-name-p (name)
+  (lookup-register name))
 
 (define-register-alias fp x29)          ;frame pointer
 (define-register-alias lr x30)          ;link register
@@ -1085,7 +1111,7 @@
                                    :sxtb :sxth :sxtw :sxtx))
 
 (defstruct immediate-operand
-  value       ;an integer
+  value       ;an integer, or a float for :fpimm8
   shift       ;how many bits to shift by (:lsl only), if applicable
   )
 
@@ -1108,28 +1134,41 @@
   name                                ;the condition name (a symbol)
   value)                              ;its 4-bit encoding
 
-(defun need-register (name)
-  (or (gethash (string name) *registers-by-name*)
-      (error "No register named ~a" name)))
+(defun evaluate-register-symbol (symbol)
+  (multiple-value-bind (val condition)
+      (ignore-errors (eval symbol))
+    (if condition
+      (error "Evaluation of ~s signaled assembly-time error ~s" symbol
+             condition)
+      val)))
 
-(defun register-name-p (name)
-  (gethash (string name) *registers-by-name*))
+(defun resolve-register (form)
+  ;; Allow form to be an equate alias (cf. arm64-lap-equate-form)
+  (cond
+    ((register-name-p form))           ;returns register struct
+    ((symbolp form)
+     (let ((val (evaluate-register-symbol form)))
+       (if (register-p val)
+         val
+         (error "~s should name a register, but evaluates to ~s"
+                form val))))
+    (t (error "~s does not name a register" form))))
 
 (defun parse-register-operand (form)
   ;; Recognize a plain register name like x0 or a shifted or extended
-  ;; register of the form (x0 modifier {amount})
+  ;; register of the form (x0 modifier [amount]).
   (flet ((parse-shift/extend (form)
            (destructuring-bind (name modifier &optional (amount 0)) form
              (unless (or (member modifier *shift-operators* :test #'eq)
                          (member modifier *extend-operators* :test #'eq))
                (error "~s is not a shift or extend operator" modifier))
-             (make-register-operand :register (need-register name)
+             (make-register-operand :register (resolve-register name)
                                     :modifier modifier :amount amount))))
     (if (consp form)
       (if (<= 2 (length form) 3)
-        (error "Invalid register form ~s" form)
-        (parse-shift/extend form))
-      (make-register-operand :register (need-register form)))))
+        (parse-shift/extend form)
+        (error "Invalid register form ~s" form))
+      (make-register-operand :register (resolve-register form)))))
 
 (defun parse-immediate-operand (form)
   ;; Regcognize (:$ value) or (:$ value :lsl amount).
@@ -1144,7 +1183,24 @@
     (when op
       (unless (eq op :lsl)
         (error "Only :lsl is valid for an immediate: ~s" form)))
+    (setf value (eval-immediate-expression value)
+          shift (eval-immediate-expression shift))
     (make-immediate-operand :value value :shift shift)))
+
+(defun eval-immediate-expression (form)
+  (cond
+    ((realp form) form)               ;might be a float
+    ((and (consp form) (eq (car form) 'quote))
+     (let ((n (cadr form)))
+       (unless (integerp n)
+         (error "Quoted immediate must be an integer: ~s" form))
+       (ash n fixnumshift)))
+    (t (multiple-value-bind (value condition)
+           (ignore-errors (eval form))
+         (if condition
+           (error "Evaluation of ~s signaled assembly-time error ~s" form
+                  condition)
+           value)))))
 
 (defun parse-memory-operand (form)
   ;; Recognize (:@ base), (:@ base offset), (:@! ...), (:@+ ...)
@@ -1185,7 +1241,7 @@
 
 (defun need-arm64-condition-name (name)
   (or (lookup-arm64-condition-name name)
-      (error "Unknown ARM64 condition name ~s." name)))
+      (error "Unknown arm64 condition name ~s." name)))
 
 (defun parse-condition-operand (form)
   ;; A condition written (:? cc), e.g. (:? eq).  The name is validated
@@ -1195,22 +1251,28 @@
     (make-condition-operand :name name
                             :value (need-arm64-condition-name name))))
 
+;; labels start with #\@
+(defun label-name-p (symbol)
+  (let ((pname (symbol-name symbol)))
+    (and (plusp (length pname))
+         (char= (char pname 0) #\@))))
+
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
     ((and form (symbolp form))
-     ;; A bare symbol naming a register is a register; any other bare
-     ;; symbol is a label reference (a branch target).
-     (if (register-name-p form)
-       (parse-register-operand form)
-       (parse-label-operand form)))
+     ;; An @-prefixed bare symbol is a label; anything else bare names
+     ;; a register
+     (if (label-name-p form)
+       (parse-label-operand form)
+       (parse-register-operand form)))
     ((consp form)
      (case (car form)
        (:$ (parse-immediate-operand form))
        (:? (parse-condition-operand form))
        ((:@ :@! :@+) (parse-memory-operand form))
-       (t (if (register-name-p (car form))
-            ;; maybe a scaled/extended register like (x0 modifier {amt})
+       (t (if (symbolp (car form))
+            ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
             (parse-register-operand form)
             (error "Unrecognized operand ~s" form)))))
     (t (error "Unrecognized operand ~s" form))))
@@ -1482,8 +1544,6 @@
 ;;; insert-rd/rn/rm; the field for an immediate is determined by its
 ;;; class.
 
-;;; A64's analog of ARM's set-field-value: one 32-bit word, so it's just
-;;; dpb-in-place into the insn's word slot.
 (defun set-field-value (insn bytespec value)
   (setf (ldb bytespec (instruction-word insn)) value))
 
@@ -1523,15 +1583,6 @@
   (or (position name *extend-options* :test #'eq)
       (error "Unknown extend option ~s" name)))
 
-;;; A shifted register encodes its shift type in bits 23:22; an extended
-;;; register encodes its extend option in bits 15:13.
-(defun shift-type-code (op)
-  (ecase op (:lsl 0) (:lsr 1) (:asr 2) (:ror 3)))
-
-(defun extend-option-code (op)
-  (ecase op (:uxtb 0) (:uxth 1) (:uxtw 2) (:uxtx 3)
-            (:sxtb 4) (:sxth 5) (:sxtw 6) (:sxtx 7)))
-
 ;;; ROLE places the register number; CLASS says whether to also place shift or
 ;;; extend fields (the role of a shifted/extended Rm is just :rm, so the class
 ;;; is what distinguishes the two forms).
@@ -1550,14 +1601,17 @@
     (case class
       ((:x-shift :w-shift :x-shift-ror :w-shift-ror)
        ;; shift type @ 23:22, imm6 amount @ 15:10; a bare register is lsl #0
-       (set-field-value insn (byte 2 22) (shift-type-code (or modifier :lsl)))
+       (set-field-value insn (byte 2 22) (encode-shift-type (or modifier
+                                                                :lsl)))
        (set-field-value insn (byte 6 10) amount))
       ((:x-ext :w-ext)
        ;; option @ 15:13, imm3 amount @ 12:10; a bare register or lsl encodes
        ;; as uxtx (64-bit) / uxtw (32-bit)
        (let ((option (if (or (null modifier) (eq modifier :lsl))
-                       (if (eq class :x-ext) 3 2)
-                       (extend-option-code modifier))))
+                       (if (eq class :x-ext)
+                         (encode-extend-option :uxtx)
+                         (encode-extend-option :uxtw))
+                       (encode-extend-option modifier))))
          (set-field-value insn (byte 3 13) option)
          (set-field-value insn (byte 3 10) amount))))))
 
