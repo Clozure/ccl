@@ -1752,6 +1752,24 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     return;
   }
 
+  if (allocptr_tag == tag_fixnum) {
+    /*
+     * If a thread is suspended just before the instruction that adjusts
+     * allocptr, the valid allocptr value is still untagged.  Normalizing the
+     * thread for GC will replace allocptr with VOID_ALLOCPTR; leave the PC at
+     * the allocation start so the resumed thread takes the normal allocation
+     * trap and receives a fresh segment.
+     */
+    if (IS_SUB_RM_FROM_ALLOCPTR(instr) ||
+        IS_SUB_LO_FROM_ALLOCPTR(instr) ||
+        IS_SUB_FROM_ALLOCPTR(instr)) {
+      if (!alloc_disp) {
+        update_bytes_allocated(tcr, (void *)ptr_from_lispobj(cur_allocptr));
+        xpGPR(xp, allocptr) = VOID_ALLOCPTR;
+      }
+      return;
+    }
+  }
 
   
   if (allocptr_tag != tag_fixnum) {
