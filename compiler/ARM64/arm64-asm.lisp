@@ -8,7 +8,6 @@
 (in-package "ARM64")
 
 (defvar *constants* ())
-(defvar *labels* ())
 
 ;; return fn-relative byte offset to constant named by form
 (defun arm64-constant-offset (form)
@@ -386,13 +385,26 @@
 (defparameter *augmented-templates*
   (concatenate 'vector *instruction-templates* (lse-atomic-templates))))
 
+;;; Note that order matters here: when searching for a  template,
+;;; we pick the first one that matches.  Therefore, keep the preferred
+;;; forms first when needed.
+
 (defparameter *instruction-templates*
   (vector
+   ;; nullary UUOs (uuo format #b111)
+   (def uuo-alloc-trap () (logior (ash 0 3) #x7) #xffffffff)
+   (def uuo-error-wrong-nargs () (logior (ash 1 3) #x7)  #xffffffff)
+   (def uuo-gc-trap () (logior (ash 2 3) #x7) #xffffffff)
+   (def uuo-debug-trap () (logior (ash 3 3) #x7) #xffffffff)
+
+   ;; unary UUOs (uuo format #b001)
+   ;; binary UUOs (uuo format #b010)
+
    ;;; C4.1.1  Reserved
-   
+
    ;; 16-bit immediate in (byte 16 0)
    (def udf (:udf16) #x00000000 #xffff0000)
-   
+
    ;;; C4.1.64  Data Processing -- Immediate
 
    ;; PC-rel. addressing
@@ -419,19 +431,13 @@
    (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
    (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
 
-   ;; Logical (immediate)
-   (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
-   (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
-   (def orr ((:rd :w/sp) (:rn :w) :limm) #x32000000 #xff800000)
-   (def orr ((:rd :x/sp) (:rn :x) :limm) #xb2000000 #xff800000)
+   ;; Move (immediate) aliases.  We prefer movw, so they're listed first.
+   (def mov ((:rd :w) :movw-mov-w)  #x52800000 0 :flags :alias)
+   (def mov ((:rd :x) :movw-mov-x)  #xd2800000 0 :flags :alias)
+   (def mov ((:rd :w) :movw-movn-w) #x12800000 0 :flags :alias)
+   (def mov ((:rd :x) :movw-movn-x) #x92800000 0 :flags :alias)
    (def mov ((:rd :w/sp) :limm) #x320003e0 0 :flags :alias)
    (def mov ((:rd :x/sp) :limm) #xb20003e0 0 :flags :alias)
-   (def eor ((:rd :w/sp) (:rn :w) :limm) #x52000000 #xff800000)
-   (def eor ((:rd :x/sp) (:rn :x) :limm) #xd2000000 #xff800000)
-   (def ands ((:rd :w) (:rn :w) :limm) #x72000000 #xff800000)
-   (def ands ((:rd :x) (:rn :x) :limm) #xf2000000 #xff800000)
-   (def tst ((:rn :w) :limm) #x7200001f 0 :flags :alias)
-   (def tst ((:rn :x) :limm) #xf200001f 0 :flags :alias)
 
    ;; Move wide (immediate)
    (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
@@ -440,6 +446,18 @@
    (def movz ((:rd :x) :movw-x) #xd2800000 $movewide-mask)
    (def movk ((:rd :w) :movw-w) #x72800000 $movewide-mask)
    (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
+
+   ;; Logical (immediate)
+   (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
+   (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
+   (def orr ((:rd :w/sp) (:rn :w) :limm) #x32000000 #xff800000)
+   (def orr ((:rd :x/sp) (:rn :x) :limm) #xb2000000 #xff800000)
+   (def eor ((:rd :w/sp) (:rn :w) :limm) #x52000000 #xff800000)
+   (def eor ((:rd :x/sp) (:rn :x) :limm) #xd2000000 #xff800000)
+   (def ands ((:rd :w) (:rn :w) :limm) #x72000000 #xff800000)
+   (def ands ((:rd :x) (:rn :x) :limm) #xf2000000 #xff800000)
+   (def tst ((:rn :w) :limm) #x7200001f 0 :flags :alias)
+   (def tst ((:rn :x) :limm) #xf200001f 0 :flags :alias)
 
    ;; Bitfield
    (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
@@ -569,11 +587,11 @@
       ;; Load/store register pair (post-indexed)
    (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
    (def stp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8800000 $ldstpair-mask)
-   (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)     
+   (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)
    (def ldp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8c00000 $ldstpair-mask)
 
    ;; Load/store register pair (offset)
-   (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)     
+   (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)
    (def ldp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29400000 $ldstpair-mask)
    (def stp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9000000 $ldstpair-mask)
    (def ldp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9400000 $ldstpair-mask)
@@ -603,7 +621,7 @@
    (def strb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38000400 $ldst-unscaled-mask)
    (def ldrb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38400400 $ldst-unscaled-mask)
    (def ldrsb ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x38800400 $ldst-unscaled-mask)
-   (def ldrsb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38c00400 $ldst-unscaled-mask)   
+   (def ldrsb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38c00400 $ldst-unscaled-mask)
    (def strh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78000400 $ldst-unscaled-mask)
    (def ldrh ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x78400400 $ldst-unscaled-mask)
    (def ldrsh ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x78800400 $ldst-unscaled-mask)
@@ -611,7 +629,7 @@
    (def str ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8000400 $ldst-unscaled-mask)
    (def ldr ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8400400 $ldst-unscaled-mask)
    (def ldrsw ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xb8800400 $ldst-unscaled-mask)
-   (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)   
+   (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)
    (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
 
    ;; Load/store register (immediate pre-indexed)
@@ -1034,7 +1052,12 @@
   (dotimes (i (length *instruction-templates*))
     (let* ((template (svref *instruction-templates* i))
            (name (instruction-template-name template)))
-      (push template (gethash name *instruction-template-lists*)))))
+      (push template (gethash name *instruction-template-lists*))))
+  ;; template order can be significant, so put them in original order
+  (maphash #'(lambda (k v)
+               (setf (gethash k *instruction-template-lists*)
+                     (nreverse v)))
+           *instruction-template-lists*))
 
 (initialize-templates)
 
@@ -1043,7 +1066,6 @@
 
 ;;; lap-form is a list and its car isn't a pseudo-op or lapmacro
 (defun assemble-instruction (seg lap-form)
-  (declare (ignore seg))
   (let ((insn (%make-instruction lap-form)))
     (destructuring-bind (name . lap-operands) lap-form
       (let ((templates (gethash (string-downcase name)
@@ -1061,6 +1083,8 @@
               ;; 3. encode the operands into the instruction word
               (setf (instruction-template insn) template)
               (encode-operands insn)
+              (when seg
+                (emit-element seg insn))
               (return insn))))))))
 
 ;;; Parsing operands in LAP notation
@@ -1127,6 +1151,10 @@
     :w-shift-ror   ;Wn lsl/lsr/asr/ror by 0...31
     :x-ext         ;Xn, maybe shifted
     :w-ext         ;Wn, maybe extended
+    :movw-mov-w    ;wide immediate for W
+    :movw-mov-x    ;wide immediate for X
+    :movw-movn-w   ;negated wide immedate for W
+    :movw-movn-x   ;negated wide immediate for X
     ))
 
 ;;; The logical instructions permit :ror but register shifts don't.
@@ -1186,6 +1214,7 @@
              (unless (or (member modifier *shift-operators* :test #'eq)
                          (member modifier *extend-operators* :test #'eq))
                (error "~s is not a shift or extend operator" modifier))
+             (setq amount (eval-immediate-expression amount))
              (make-register-operand :register (resolve-register name)
                                     :modifier modifier :amount amount))))
     (if (consp form)
@@ -1431,6 +1460,20 @@
      (+ (1+ ccl::ieee-single-float-bias) e)
      (if (= sign 1) -1 1))))
 
+;;; If the integer n can be encoded as a wide immmediate, return
+;;; (values imm16 hw)
+(defun encode-wide-immediate (n &optional (width 64))
+  (unless (or (= width 64) (= width 32))
+    (error "Size must be either 32 or 64, not ~s" width))
+  (when (typep n `(unsigned-byte ,width))
+    (do* ((pos 0 (+ pos 16))
+          (hw 0 (1+ hw))          ;hw field in movz/movn/movk encoding
+          (imm16 (ldb (byte 16 0) n) (ldb (byte 16 pos) n)))
+         ((= pos width))
+      (format t "~&shift: ~s, imm16: ~d" pos imm16)
+      (when (= n (ash imm16 pos))
+        (return (values imm16 hw))))))
+
 ;;; The access-size scale for a scaled offset is baked into the class (:uoffN,
 ;;; N = log2 of the access size in bytes), so the class is self-describing and
 ;;; this predicate needs only the operand and the class — no template.  Values
@@ -1476,6 +1519,16 @@
         (:bf-width-x (and (eql shift 0) (typep value '(integer 1 64))))
         (:bf-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
+        (:movw-mov-w  (and (eql shift 0)
+                           (encode-wide-immediate value 32)))
+        (:movw-mov-x  (and (eql shift 0)
+                           (encode-wide-immediate value 64)))
+        (:movw-movn-w (and (eql shift 0)
+                           (encode-wide-immediate
+                            (ldb (byte 32 0) (lognot value)) 32)))
+        (:movw-movn-x (and (eql shift 0)
+                           (encode-wide-immediate
+                            (ldb (byte 64 0) (lognot value)) 64)))
         ))))
 
 (defun regoff-scale (class)
@@ -1692,6 +1745,18 @@
         (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
          (set-field-value insn (byte 2 29) value)
          (set-field-value insn (byte 19 5) (ash value -2)))
+        ((:movw-mov-w :movw-mov-x)
+         (multiple-value-bind (imm16 hw)
+             (encode-wide-immediate value (if (eq class :movw-mov-x) 64 32))
+           (set-field-value insn (byte 16 5) imm16)
+           (set-field-value insn (byte 2 21) hw)))
+        ((:movw-movn-w :movw-movn-x)
+         (let ((width (if (eq class :movw-movn-x) 64 32)))
+           (multiple-value-bind (imm16 hw)
+               (encode-wide-immediate (ldb (byte width 0) (lognot value))
+                                      width)
+             (set-field-value insn (byte 16 5) imm16)
+             (set-field-value insn (byte 2 21) hw))))
         (t (error "encoding of immediate class ~s not implemented" class))))))
 
 (defun encode-index-operand (insn r-op)
@@ -1901,10 +1966,15 @@
              lname (cons name opvals) lname (no-match-forms lname right-arity)))))
 
 
-
 (defstruct (instruction-element (:include ccl::dll-node))
   address
   (size 0))
+
+(ccl::def-standard-initial-binding *instruction-freelist*
+                                   (ccl::make-dll-node-freelist))
+
+;;; The instructions of the function being assembled
+(defvar *instructions* ())
 
 ;;; An instruction in the process of being assembled
 (defstruct (instruction (:include instruction-element (size 4))
@@ -1914,10 +1984,18 @@
   (word 0 :type (unsigned-byte 32))  ;encoded instruction word
   parsed-operands)
 
-(defstruct (label (:include instruction-element)
-                  (:constructor %%make-label (name)))
-  name                                  ;a symbol
-  refs)
+(defun make-instruction (form)
+  (let ((insn (ccl::alloc-dll-node *instruction-freelist*)))
+    (if (typep insn 'instruction)
+      (progn
+        (setf (instruction-source insn) form
+              (instruction-template insn) nil
+              (instruction-word insn) 0
+              (instruction-parsed-operands insn) nil
+              (instruction-address insn) nil
+              (instruction-size insn) 0)
+        insn)
+      (%make-instruction form))))
 
 ;;; Labels and branch fixups.
 ;;;
@@ -1928,11 +2006,28 @@
 ;;; reference on the target label without resolving it; FINALIZE is pass
 ;;; two, computing label addresses and patching branch displacements.
 
-(defvar *lap-labels* ()
-  "The labels of the function currently being assembled: an alist keyed
-by name that auto-promotes to a hash-table past 255 entries.")
+(ccl::def-standard-initial-binding *label-freelist*
+                                   (ccl::make-dll-node-freelist))
 
-(defun emit-element (element seg)
+;;; The labels of the function being assembled
+(defvar *labels* ())
+
+(defstruct (label (:include instruction-element)
+                  (:constructor %%make-label (name)))
+  name                                  ;a symbol
+  refs)
+
+(defun %make-label (name)
+  (let ((lab (ccl::alloc-dll-node *label-freelist*)))
+    (if lab
+      (progn
+        (setf (label-address lab) nil
+              (label-refs lab) nil
+              (label-name lab) name)
+        name)
+      (%%make-label name))))
+
+(defun emit-element (seg element)
   (ccl::append-dll-node element seg)
   element)
 
@@ -1957,22 +2052,22 @@ by name that auto-promotes to a hash-table past 255 entries.")
   (not (null (label-pred lab))))
 
 (defun make-label (name)
-  (let ((lab (%%make-label name)))
-    (if (typep *lap-labels* 'hash-table)
-      (setf (gethash name *lap-labels*) lab)
+  (let ((lab (%make-label name)))
+    (if (typep *labels* 'hash-table)
+      (setf (gethash name *labels*) lab)
       (progn
-        (push lab *lap-labels*)
-        (when (> (length *lap-labels*) 255)
+        (push lab *labels*)
+        (when (> (length *labels*) 255)
           (let ((hash (make-hash-table :size 512 :test #'eq)))
-            (dolist (l *lap-labels*)
+            (dolist (l *labels*)
               (setf (gethash (label-name l) hash) l))
-            (setq *lap-labels* hash)))))
+            (setq *labels* hash)))))
     lab))
 
 (defun find-label (name)
-  (if (typep *lap-labels* 'hash-table)
-    (gethash name *lap-labels*)
-    (car (member name *lap-labels* :test #'eq :key #'label-name))))
+  (if (typep *labels* 'hash-table)
+    (gethash name *labels*)
+    (car (member name *labels* :test #'eq :key #'label-name))))
 
 (defun note-label-reference (name insn reftype)
   (let ((lab (or (find-label name)
@@ -1986,19 +2081,19 @@ by name that auto-promotes to a hash-table past 255 entries.")
       (when (label-emitted-p lab)
         (error "Label ~s: multiply defined." name))
       (setq lab (make-label name)))
-    (emit-element lab seg)))
+    (emit-element seg lab)))
 
 (defmacro do-lap-labels ((lab &optional result) &body body)
   (let ((thunk (gensym))
         (k (gensym))
         (xlab (gensym)))
     `(flet ((,thunk (,lab) ,@body))
-       (if (typep *lap-labels* 'hash-table)
+       (if (typep *labels* 'hash-table)
          (maphash (lambda (,k ,xlab)
                     (declare (ignore ,k))
                     (,thunk ,xlab))
-                  *lap-labels*)
-         (dolist (,xlab *lap-labels*)
+                  *labels*)
+         (dolist (,xlab *labels*)
            (,thunk ,xlab)))
        ,result)))
 
@@ -2040,7 +2135,7 @@ by name that auto-promotes to a hash-table past 255 entries.")
 ;;; resolve branch labels, and return the section.
 (defun assemble-section (forms)
   (let ((seg (ccl::make-dll-header))
-        (*lap-labels* ()))
+        (*labels* ()))
     (dolist (form forms)
       (if (symbolp form)
         (emit-label seg form)
