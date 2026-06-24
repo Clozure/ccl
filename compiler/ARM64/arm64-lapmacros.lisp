@@ -23,4 +23,34 @@
   (let ((l (arm64-bitfield-imm lsb)) (w (arm64-bitfield-imm width)))
     `(bfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
 
+;;; This needs pc_luser_xp support so that building the frame looks
+;;; atomic to the gc
+(defarm64lapmacro build-lisp-frame (&optional (marker-reg 'imm0))
+  `(progn
+     (mov ,marker-reg (:$ arm64::lisp-frame-marker))
+     (stp ,marker-reg vsp (:@! sp (:$ -32)))
+     (stp arm64::fn arm64::lr (:@ sp (:$ 16)))))
+
+(defarm64lapmacro restore-lisp-frame ()
+  `(progn
+     (ldp fn lr (:@ sp (:$ 16)))
+     (ldr vsp (:@ sp (:$ 8)))            ;ignore marker
+     (add sp sp (:$ 32))))
+
+(defarm64lapmacro call-subprim (spname)
+  (let ((offset (arm64::subprimitive-offset spname)))
+    (if offset
+      `(progn
+         (add imm0 rnil (:$ ,offset))
+         (blr imm0))
+      (error "unknown subprimitive name ~s" spname))))
+
+(defarm64lapmacro check-nargs (min)
+  (let ((ok (gensym "@")))
+    `(progn
+       (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
+       (b.eq ,ok)
+       (uuo-error-wrong-nargs)
+       ,ok)))
+
 (provide "ARM64-LAPMACROS")
