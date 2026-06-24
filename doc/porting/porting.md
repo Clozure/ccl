@@ -203,6 +203,19 @@ disassembler for that matter), but it is only a part of CCL.  Make
 something reasonable, knowing that it is internal implementation
 functionality.
 
+## Integrate LAP into compiler front-end & cross-dumper
+
+Once the assembler and the LAP interface functions are ready,
+add the appropriate special form to the compiler front-end.
+In nx1.lisp, there are several `nx1-xxx-lap-function` definitions;
+follow the example.  Also list the new special form in l1-utils.lisp
+where 
+
+This special form will be used a couple of places in addition to
+%define-xxx-lap-function.  The cross dumper x<arch>fasload.lisp
+
+
+
 ## vinsn templates
 We want to be able to write vinsn templates using a (mostly) LAP-like
 syntax, but ideally don't want to have to repeatedly expand those
@@ -233,3 +246,94 @@ a value stack, and a temp stack.
 The value stack is always unambiguously nodes.
 
 The control stack contains frames.
+
+## Memory allocation
+Historically, CCL has managed a single dynamic area, which is where allocation takes place.
+
+CCL uses a bump allocator.  The `allocptr` is the current top.  Allocation
+groups downward; `allocbase` is the low limit.
+
+Allocation:
+
+A thread tries to allocate an object whose physical size in bytes is X and whose tag is Y by:
+
+1. decrementing the "high" pointer by (- X Y)
+
+1. trapping if the high pointer is less than the low pointer
+
+1. using the (tagged) high pointer to initialize the object, if necessary
+
+1. clearing the low bits of the high pointer
+
+There are a few different states of partial allocation; the GC must be
+able to recognize these states and deal with them (either by emulating
+the rest of the allocation or backing it out).
+
+# Lisp kernel
+The Lisp kernel is C and assembly code that provides GC and other runtime support for Lisp.
+
+C and assembly language files need to agree with the Lisp compiler on
+numerous constants and memory layout descriptions.
+
+| Lisp files    | Lisp kernel files |
+| ---           | --- |
+| arm-arch.lisp | arm-constants.h, arm-constants.s |
+
+Generally, in `lisp-kernel/` there are a handful of files specific to each
+architecture, named like `arm-*.[csh]`.  A new architecture will need a
+similar set of files.
+
+## Assembler macros and m4
+CCL preprocesses `.s` files with m4.  Although m4 is considerably more
+capable than assembler macros, there are downsides.
+ * it is harder to see the actual source the assembler sees
+ * m4 macros do extra work to emitting source line information
+ * as part of the source line machinery, the `__` macro has to wrap each
+ instruction.  This is ugly.
+ * the m4 macros use obsolete stabs directives
+
+The arm64 port attempts to stop using m4 to get better source code
+visibility and improved source line information.  The hope is that assembler
+macros and the C preprocessor will be expressive enough to get away with this.
+
+One other thing that that the arm64 port will try is to use a single
+`arm64-constants.h` that is constructed such that it can be included in
+both assembly and C source files.  Having to duplicate information
+from `.lisp` files is bad enough: having to duplicate it twice in separate
+`arm64-constants.h` for C and `arm64-constants.s` for assembly just makes it
+worse.  At least if it's all in one place it should be a little easier
+to maintain.
+
+## Subprimitives
+Subprims are little assembly-language snippets that run in the Lisp world.
+In other words, they use Lisp register and stack conventions, and must be
+written in a GC-safe way.
+
+## GC safety
+CCL's garbage collector design is such that a GC may happen at any
+instruction boundary.  This means that it is essential to keep nodes in
+node registers at all times: the GC might need to relocate the objects,
+and in that case, it will update any node registers with their new
+locations.  This also means that interior pointers
+(e.g., registers holding a pointer into the middle of some uvector) are
+not allowed.
+
+In other words, all references to garbage-collected memory
+must be relative to a node register containing a tagged pointer. This
+is sometimes a burden, especially on systems with few registers.
+
+## Lisp calling convention
+Lisp's internal calling covention differs from the one used by C.
+
+On most ports, the last three arguments to a function are passed in
+registers, namely arg_x, arg_y, and arg_z.  Any earlier arguments are
+passed on the stack.  The nargs register (which may be an alias for
+some other register) contains the actual number of arguments, tagged
+as a fixnum.
+
+The registers nfn, fname, and next-method-context are also part
+of the calling convention, but they are used only briefly at function
+entry and are therefore rather short-lived.  They are typically aliases
+for temp registers.  The nfn register ("new function") is used to
+establish the new fn register (and be sure that the old value of fn
+is stashed somewhere, because otherwise it might get gc'd).
