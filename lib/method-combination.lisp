@@ -571,9 +571,8 @@
          (when args-specified? (error ":ARGUMENTS specified twice"))
          (setq arguments (cdr (pop forms))
                args-specified? t)
-         (do ((args arguments (cdr args)))
-             ((null args))
-           (setf (car args) (require-type (car args) 'symbol))))
+         (unless (verify-lambda-list arguments nil t)
+           (error "~s is not a proper :ARGUMENTS lambda-list" arguments)))
         (:generic-function
          (when gf-symbol-specified? (error ":GENERIC-FUNCTION specified twice"))
          (setq generic-fn-symbol
