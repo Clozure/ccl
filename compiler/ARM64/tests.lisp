@@ -53,3 +53,9 @@
                 (imms (ldb (byte 6 0) val)))
             (format t "~&~(~16,'0x~) ~64,'0b N=~b immr=~6,'0b imms=~6,'0b" decoded decoded
                     n immr imms)))))))
+
+(defun test-fp-imm8 ()
+  (dotimes (i 256 t)
+    (let* ((decoded (decode-fp-imm8 i))
+           (encoded (encode-fp-imm8 decoded)))
+      (assert (= encoded i)))))
