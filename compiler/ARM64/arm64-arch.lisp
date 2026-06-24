@@ -109,7 +109,9 @@
     ))
 
 (defparameter *subprims-shift* 3)
-(defparameter *subprims-base* 0)        ;will need to be relative to some register
+;; The subprim jump table is at an offset from (tagged) rnil.  There's
+;; room for 50 nil-relative symbols before the subprim jump table starts.
+(defparameter *subprims-base* (+ (- fulltag-nil) (* 50 node-size)))
 (defvar *subprims*)
 
 (let ((offset *subprims-base*)
@@ -123,7 +125,11 @@
                  `(define-subprim ',name)))
       (setq *subprims*
             (vector
+             (defsubprim .SPfix-nfn-entrypoint) ;must be first
              (defsubprim .SPbuiltin-plus)
+             (defsubprim .SPbuiltin-minus)
+             (defsubprim .SPbuiltin-times)
+             (defsubprim .SPbuiltin-div)
              ;; ...
              )))))
                
@@ -561,7 +567,7 @@
   why)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defconstant tcr-bias 0)
+  (defconstant tcr-bias 0))
 
 (define-storage-layout tcr (- tcr-bias)
   prev                            ;in doubly-linked list
