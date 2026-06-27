@@ -12,127 +12,7 @@
 
 ;;; For register definitions, see arm64-asm.lisp.
 
-;;; Kernel globals are allocated "below" nil.  This list (used to map
-;;; symbolic names to rnil-relative offsets) must (of course) exactly
-;;; match the kernel's notion of where things are.
-;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" & the
-;;; lisp_globals record in "ccl:lisp-kernel;*constants*.s"
-(defparameter *kernel-globals*
-  '(get-tcr                      ;callback to obtain (real) tcr
-    tcr-count
-    interrupt-signal             ;used by PROCESS-INTERRUPT
-    kernel-imports               ;some things we need to have imported for us
-    objc-2-personality
-    savetoc                      ;used to save TOC on some platforms
-    saver13                      ;used to save r13 on some platforms
-    subprims-base                ;start of dynamic subprims jump table
-    ret1valaddr                  ;magic multiple-values return address.
-    tcr-key                      ;tsd key for thread's tcr
-    area-lock                    ;serialize access to gc
-    exception-lock               ;serialize exception handling
-    static-conses                ;when FREEZE is in effect
-    default-allocation-quantum   ;log2_heap_segment_size, as a fixnum.
-    intflag                      ;interrupt-pending flag
-    gc-inhibit-count             ;for gc locking
-    refbits                      ;oldspace refbits
-    oldspace-dnode-count         ;number of dnodes in dynamic space that are
-                                 ; older than youngest generation
-    float-abi                    ;non-zero if using hard float abi
-    fwdnum                       ;fixnum: GC "forwarder" call count.
-    gc-count                     ;fixnum: GC call count.
-    gcable-pointers              ;linked-list of weak macptrs.
-    heap-start                   ;start of lisp heap
-    heap-end                     ;end of lisp heap
-    statically-linked            ;true if the lisp kernel is statically linked
-    stack-size                   ;value of --stack-size arg
-    objc-2-begin-catch           ;objc_begin_catch
-    kernel-path
-    all-areas                    ;doubly-linked area list
-    lexpr-return                 ;multiple-value lexpr return address
-    lexpr-return1v               ;single-value lexpr return address
-    in-gc                        ;non-zero when GC-ish thing active
-    free-static-conses           ;fixnum
-    objc-2-end-catch             ;_objc_end_catch
-    short-float-zero             ;low half of 1.0d0
-    double-float-one             ;high half of 1.0d0
-    static-cons-area
-    exception-saved-registers    ;saved registers from exception frame
-    oldest-ephemeral             ;dnode address of oldest ephemeral object or 0
-    tenured-area                 ;the tenured_area
-    errno                        ;address of C lib errno
-    argv                         ;address of C lib argv
-    host-platform                ;0 on MacOS, 1 on Linux, 2 on VxWorks ...
-    batch-flag                   ;non-zero if --batch specified
-    unwind-resume                ;_Unwind_Resume
-    weak-gc-method               ;weak gc algorithm.
-    image-name                   ;current image name
-    initial-tcr                  ;initial thread's context record
-    weakvll                      ;all populations as of last GC
-    ))
-
-;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" and the nrs record
-;;; in "ccl:lisp-kernel;*constants*.s".
-(defparameter *nilreg-relative-symbols*
-  '(t
-    nil
-    ccl::%err-disp
-    ccl::cmain
-    eval
-    ccl::apply-evaluated-function
-    error
-    ccl::%defun
-    ccl::%defvar
-    ccl::%defconstant
-    ccl::%macro
-    ccl::%kernel-restart
-    *package*
-    ccl::*total-bytes-freed*
-    :allow-other-keys
-    ccl::%toplevel-catch%
-    ccl::%toplevel-function%
-    ccl::%pascal-functions%
-    ccl::restore-lisp-pointers
-    ccl::*total-gc-microseconds*
-    ccl::%builtin-functions%
-    ccl::%unbound-function%
-    ccl::%init-misc
-    ccl::%macro-code%
-    ccl::%closure-code%
-    ccl::%new-gcable-ptr
-    ccl::*gc-event-status-bits*
-    ccl::*post-gc-hook*
-    ccl::%handlers%
-    ccl::%all-packages%
-    ccl::*keyword-package*
-    ccl::%os-init-function%
-    ccl::%foreign-thread-control
-    ))
-
-(defparameter *subprims-shift* 3)
-;; The subprim jump table is at an offset from (tagged) rnil.  There's
-;; room for 50 nil-relative symbols before the subprim jump table starts.
-(defparameter *subprims-base* (+ (- fulltag-nil) (* 50 node-size)))
-(defvar *subprims*)
-
-(let ((offset *subprims-base*)
-      (step (ash 1 *subprims-shift*)))
-  (flet ((define-subprim (name)
-           (ccl::make-subprimitive-info :name (string name)
-                                        :offset (prog1
-                                                    offset
-                                                  (incf offset step)))))
-    (macrolet ((defsubprim (name)
-                 `(define-subprim ',name)))
-      (setq *subprims*
-            (vector
-             (defsubprim .SPfix-nfn-entrypoint) ;must be first
-             (defsubprim .SPbuiltin-plus)
-             (defsubprim .SPbuiltin-minus)
-             (defsubprim .SPbuiltin-times)
-             (defsubprim .SPbuiltin-div)
-             ;; ...
-             )))))
-               
+;;; Tagging scheme
 (eval-when (:compile-toplevel :load-toplevel :execute)
 (defconstant nbits-in-word 64)
 (defconstant nbits-in-byte 8)
@@ -371,6 +251,136 @@
 ;; Assuming we index bit-vector  memory by bytes
 (defconstant max-1-bit-constant-index (ash (- #xfff misc-data-offset) 3))
 ) ; eval-when
+
+
+;;; Kernel globals are allocated "below" nil.  This list (used to map
+;;; symbolic names to rnil-relative offsets) must (of course) exactly
+;;; match the kernel's notion of where things are.
+;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" & the
+;;; lisp_globals record in "ccl:lisp-kernel;*constants*.s"
+(defparameter *kernel-globals*
+  '(get-tcr                      ;callback to obtain (real) tcr
+    tcr-count
+    interrupt-signal             ;used by PROCESS-INTERRUPT
+    kernel-imports               ;some things we need to have imported for us
+    objc-2-personality
+    savetoc                      ;used to save TOC on some platforms
+    saver13                      ;used to save r13 on some platforms
+    subprims-base                ;start of dynamic subprims jump table
+    ret1valaddr                  ;magic multiple-values return address.
+    tcr-key                      ;tsd key for thread's tcr
+    area-lock                    ;serialize access to gc
+    exception-lock               ;serialize exception handling
+    static-conses                ;when FREEZE is in effect
+    default-allocation-quantum   ;log2_heap_segment_size, as a fixnum.
+    intflag                      ;interrupt-pending flag
+    gc-inhibit-count             ;for gc locking
+    refbits                      ;oldspace refbits
+    oldspace-dnode-count         ;number of dnodes in dynamic space that are
+                                 ; older than youngest generation
+    float-abi                    ;non-zero if using hard float abi
+    fwdnum                       ;fixnum: GC "forwarder" call count.
+    gc-count                     ;fixnum: GC call count.
+    gcable-pointers              ;linked-list of weak macptrs.
+    heap-start                   ;start of lisp heap
+    heap-end                     ;end of lisp heap
+    statically-linked            ;true if the lisp kernel is statically linked
+    stack-size                   ;value of --stack-size arg
+    objc-2-begin-catch           ;objc_begin_catch
+    kernel-path
+    all-areas                    ;doubly-linked area list
+    lexpr-return                 ;multiple-value lexpr return address
+    lexpr-return1v               ;single-value lexpr return address
+    in-gc                        ;non-zero when GC-ish thing active
+    free-static-conses           ;fixnum
+    objc-2-end-catch             ;_objc_end_catch
+    short-float-zero             ;low half of 1.0d0
+    double-float-one             ;high half of 1.0d0
+    static-cons-area
+    exception-saved-registers    ;saved registers from exception frame
+    oldest-ephemeral             ;dnode address of oldest ephemeral object or 0
+    tenured-area                 ;the tenured_area
+    errno                        ;address of C lib errno
+    argv                         ;address of C lib argv
+    host-platform                ;0 on MacOS, 1 on Linux, 2 on VxWorks ...
+    batch-flag                   ;non-zero if --batch specified
+    unwind-resume                ;_Unwind_Resume
+    weak-gc-method               ;weak gc algorithm.
+    image-name                   ;current image name
+    initial-tcr                  ;initial thread's context record
+    weakvll                      ;all populations as of last GC
+    ))
+
+;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" and the nrs record
+;;; in "ccl:lisp-kernel;*constants*.s".
+(defparameter *nilreg-relative-symbols*
+  '(t
+    nil
+    ccl::%err-disp
+    ccl::cmain
+    eval
+    ccl::apply-evaluated-function
+    error
+    ccl::%defun
+    ccl::%defvar
+    ccl::%defconstant
+    ccl::%macro
+    ccl::%kernel-restart
+    *package*
+    ccl::*total-bytes-freed*
+    :allow-other-keys
+    ccl::%toplevel-catch%
+    ccl::%toplevel-function%
+    ccl::%pascal-functions%
+    ccl::restore-lisp-pointers
+    ccl::*total-gc-microseconds*
+    ccl::%builtin-functions%
+    ccl::%unbound-function%
+    ccl::%init-misc
+    ccl::%macro-code%
+    ccl::%closure-code%
+    ccl::%new-gcable-ptr
+    ccl::*gc-event-status-bits*
+    ccl::*post-gc-hook*
+    ccl::%handlers%
+    ccl::%all-packages%
+    ccl::*keyword-package*
+    ccl::%os-init-function%
+    ccl::%foreign-thread-control
+    ))
+
+(defparameter *subprims-shift* 3)
+;; The subprim jump table is at an offset from (tagged) rnil.  There's
+;; room for 50 nil-relative symbols before the subprim jump table starts.
+(defparameter *subprims-base* (+ (- fulltag-nil) (* 50 node-size)))
+(defvar *subprims*)
+
+(let ((offset *subprims-base*)
+      (step (ash 1 *subprims-shift*)))
+  (flet ((define-subprim (name)
+           (ccl::make-subprimitive-info :name (string name)
+                                        :offset (prog1
+                                                    offset
+                                                  (incf offset step)))))
+    (macrolet ((defsubprim (name)
+                 `(define-subprim ',name)))
+      (setq *subprims*
+            (vector
+             (defsubprim .SPfix-nfn-entrypoint) ;must be first
+             (defsubprim .SPbuiltin-plus)
+             (defsubprim .SPbuiltin-minus)
+             (defsubprim .SPbuiltin-times)
+             (defsubprim .SPbuiltin-div)
+             ;; ...
+             )))))
+
+(defun subprimitive-offset (name)
+  (when (and name (or (symbolp name) (stringp name)))
+    (let ((info (find name *subprims* :test #'string-equal
+                                      :key  #'ccl::subprimitive-info-name)))
+      (when info
+        (ccl::subprimitive-info-offset info)))))
+               
 
 
 ;;; Memory layout of Lisp objects
