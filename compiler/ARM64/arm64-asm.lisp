@@ -7,7 +7,11 @@
 
 (in-package "ARM64")
 
+;;; Various data pertinent to the function being assembled
+(defvar *labels* ())
 (defvar *constants* ())
+(defvar *instructions* ())
+
 
 ;; return fn-relative byte offset to constant named by form
 (defun arm64-constant-offset (form)
@@ -18,6 +22,7 @@
     (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
        arm64::misc-data-offset)))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defstruct register
   name         ;canonical name
@@ -122,18 +127,6 @@
        (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
        (defconstant ,alias ,known))))
 
-;;; Look up a register by name.
-(defun lookup-register (name)
-  (let ((s (string name)))
-    (gethash s *registers-by-name*)))
-
-(defun need-register (name)
-  (or (lookup-register name)
-      (error "No register named ~a" name)))
-
-(defun register-name-p (name)
-  (lookup-register name))
-
 (define-register-alias fp x29)          ;frame pointer
 (define-register-alias lr x30)          ;link register
 
@@ -181,20 +174,42 @@
 (define-register-alias allocbase x27)
 (define-register-alias rcontext x28)    ;per-thread data
 
-(defparameter *instruction-flags*
-  '((:alias . 0)))                      ;disassembler ignores aliases
+) ;eval-when
 
-(defun %encode-instruction-flags (flags)
-  (flet ((encode-one-flag (name)
-           (ash 1 (or (cdr (assoc name *instruction-flags* :test #'eq))
-                      (error "Unknown instruction flag ~s" name)))))
-    (if flags
-      (if (atom flags)
-        (encode-one-flag flags)
-        (let ((mask 0))
-          (dolist (f flags mask)
-            (setq mask (logior mask (encode-one-flag f))))))
-      0)))
+;; Temporary register aliases established via LAP notation
+;; (see arm64-lap-equate-form).  This is an alist mapping
+;; symbols to register structs.
+(defvar *lap-register-equates* ())
+
+;;; Look up a register by name.
+(defun lookup-register (name)
+  (or (gethash (string name) *registers-by-name*)
+      (cdr (assoc name *lap-register-equates*))))
+
+(defun need-register (name)
+  (or (lookup-register name)
+      (error "No register named ~a" name)))
+
+(defun register-name-p (name)
+  (lookup-register name))
+
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *instruction-flags*
+    '((:alias . 0)))                      ;disassembler ignores aliases
+
+  (defun %encode-instruction-flags (flags)
+    (flet ((encode-one-flag (name)
+             (ash 1 (or (cdr (assoc name *instruction-flags* :test #'eq))
+                        (error "Unknown instruction flag ~s" name)))))
+      (if flags
+        (if (atom flags)
+          (encode-one-flag flags)
+          (let ((mask 0))
+            (dolist (f flags mask)
+              (setq mask (logior mask (encode-one-flag f))))))
+        0)))
+)
 
 (defmacro encode-instruction-flags (flags)
   (%encode-instruction-flags flags))
@@ -398,6 +413,10 @@
    (def uuo-debug-trap () (logior (ash 3 3) #x7) #xffffffff)
 
    ;; unary UUOs (uuo format #b001)
+   (def uuo-error-too-few-args () 0 #xffffffff)
+   (def uuo-error-too-many-args () 0 #xffffffff)
+   (def uuo-error-wrong-number-of-args () 0 #xffffffff)
+   
    ;; binary UUOs (uuo format #b010)
 
    ;;; C4.1.1  Reserved
@@ -479,7 +498,9 @@
    (def b.eq ((:label :b19)) #x54000000 #xff00001f)
    (def b.ne ((:label :b19)) #x54000001 #xff00001f)
    (def b.cs ((:label :b19)) #x54000002 #xff00001f)
+   (def b.hs ((:label :b19)) #x54000002 0 :flags :alias)
    (def b.cc ((:label :b19)) #x54000003 #xff00001f)
+   (def b.lo ((:label :b19)) #x54000003 0 :flags :alias)
    (def b.mi ((:label :b19)) #x54000004 #xff00001f)
    (def b.pl ((:label :b19)) #x54000005 #xff00001f)
    (def b.vs ((:label :b19)) #x54000006 #xff00001f)
@@ -1012,10 +1033,11 @@
    (def fcsel ((:rd :s) (:rn :s) (:rm :s) :cond) #x1e200c00 $condsel-mask)
    (def fcsel ((:rd :d) (:rn :d) (:rm :d) :cond) #x1e600c00 $condsel-mask)
 
-   ;; Conversion between FP and integer.  sf @ 31 (W/X), ftype @ 23:22 (S/D),
-   ;; rmode @ 20:19 + opcode @ 18:16 pick the operation -- so every GPR-width x
-   ;; FP-type combination is its own template.  scvtf/ucvtf take int->fp (Rd is
-   ;; the FP reg); fcvtzs/fcvtzu are fp->int, round toward zero (Rd is the GPR).
+   ;; Conversion between FP and integer.  sf @ 31 (W/X), ftype @ 23:22
+   ;; (S/D), rmode @ 20:19 + opcode @ 18:16 pick the operation -- so
+   ;; every GPR-width x FP-type combination is its own template.
+   ;; scvtf/ucvtf take int->fp (Rd is the FP reg); fcvtzs/fcvtzu are
+   ;; fp->int, round toward zero (Rd is the GPR).
    (def scvtf ((:rd :s) (:rn :w)) #x1e220000 $fp-cvt-mask)
    (def scvtf ((:rd :s) (:rn :x)) #x9e220000 $fp-cvt-mask)
    (def scvtf ((:rd :d) (:rn :w)) #x1e620000 $fp-cvt-mask)
@@ -1068,8 +1090,7 @@
 (defun assemble-instruction (seg lap-form)
   (let ((insn (%make-instruction lap-form)))
     (destructuring-bind (name . lap-operands) lap-form
-      (let ((templates (gethash (string-downcase name)
-                                *instruction-template-lists*)))
+      (let ((templates (gethash (string name) *instruction-template-lists*)))
         (unless templates
           (error "Unknown instruction ~s" lap-form))
         ;; 1. Parse LAP-format operands into operand structs
@@ -1102,7 +1123,7 @@
     :d             ;Dn, scalar double-float (FP/SIMD reg, 64-bit view)
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
-    :simm9
+    :simm9         ;signed 9-bit immediate for unscaled register offset
     :movw-x        ;16-bit immediate, LSL 0/16/32/48 (move wide, X)
     :movw-w        ;16-bit immediate, LSL 0/16 (move wide, W)
     :immr-x        ;immr field, 0..63 (bitfield, X)
@@ -1138,7 +1159,6 @@
     :uoff1         ; so the access-size scale is baked into the class and the
     :uoff2         ; offset predicate needs no external scale-shift
     :uoff3
-    :uoff4
     :regoff0       ;register index with natural scale N = log2(access size):
     :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
     :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from the amount.
@@ -1186,26 +1206,6 @@
   name                                ;the condition name (a symbol)
   value)                              ;its 4-bit encoding
 
-(defun evaluate-register-symbol (symbol)
-  (multiple-value-bind (val condition)
-      (ignore-errors (eval symbol))
-    (if condition
-      (error "Evaluation of ~s signaled assembly-time error ~s" symbol
-             condition)
-      val)))
-
-(defun resolve-register (form)
-  ;; Allow form to be an equate alias (cf. arm64-lap-equate-form)
-  (cond
-    ((register-name-p form))           ;returns register struct
-    ((symbolp form)
-     (let ((val (evaluate-register-symbol form)))
-       (if (register-p val)
-         val
-         (error "~s should name a register, but evaluates to ~s"
-                form val))))
-    (t (error "~s does not name a register" form))))
-
 (defun parse-register-operand (form)
   ;; Recognize a plain register name like x0 or a shifted or extended
   ;; register of the form (x0 modifier [amount]).
@@ -1215,13 +1215,13 @@
                          (member modifier *extend-operators* :test #'eq))
                (error "~s is not a shift or extend operator" modifier))
              (setq amount (eval-immediate-expression amount))
-             (make-register-operand :register (resolve-register name)
+             (make-register-operand :register (need-register name)
                                     :modifier modifier :amount amount))))
     (if (consp form)
       (if (<= 2 (length form) 3)
         (parse-shift/extend form)
         (error "Invalid register form ~s" form))
-      (make-register-operand :register (resolve-register form)))))
+      (make-register-operand :register (need-register form)))))
 
 (defun parse-immediate-operand (form)
   ;; Regcognize (:$ value) or (:$ value :lsl amount).
@@ -1304,21 +1304,14 @@
     (make-condition-operand :name name
                             :value (need-arm64-condition-name name))))
 
-;; labels start with #\@
-(defun label-name-p (symbol)
-  (let ((pname (symbol-name symbol)))
-    (and (plusp (length pname))
-         (char= (char pname 0) #\@))))
-
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
     ((and form (symbolp form))
-     ;; An @-prefixed bare symbol is a label; anything else bare names
-     ;; a register
-     (if (label-name-p form)
-       (parse-label-operand form)
-       (parse-register-operand form)))
+     ;; A bare symbol can be either a register name or a label.
+     (if (lookup-register form)
+       (parse-register-operand form)
+       (parse-label-operand form)))
     ((consp form)
      (case (car form)
        (:$ (parse-immediate-operand form))
@@ -1497,7 +1490,6 @@
         (:uoff1 (uoff-p 1))
         (:uoff2 (uoff-p 2))
         (:uoff3 (uoff-p 3))
-        (:uoff4 (uoff-p 4))
         (:poff2 (poff-p 2))
         (:poff3 (poff-p 3))
         (:movw-x (and (typep value '(unsigned-byte 16)) (member shift '(0 16 32 48))))
@@ -1622,33 +1614,28 @@
 ;;; at the field according to the spec names.  A matched template means every
 ;;; operand's range was already checked, so the encoders insert
 ;;; operand bits with no further ado.  Register field positions live in
-;;; insert-rd/rn/rm; the field for an immediate is determined by its
+;;; *register-fields*; the field for an immediate is determined by its
 ;;; class.
 
 (defun set-field-value (insn bytespec value)
   (setf (ldb bytespec (instruction-word insn)) value))
 
-(defun insert-rd (insn operand)
-  (set-field-value insn (byte 5 0)
+(defparameter *register-fields*
+ `((:rd . ,(byte 5 0)) (:rt . ,(byte 5 0))
+   (:rn . ,(byte 5 5)) (:base . ,(byte 5 5))
+   (:ra . ,(byte 5 10)) (:rt2 . ,(byte 5 10))
+   (:rm . ,(byte 5 16)) (:rs . ,(byte 5 16))))
+
+(defun register-field (role)
+  (or (cdr (assoc role *register-fields*))
+      (error "No register field for role ~s" role)))
+
+(defun insert-register (insn role operand)
+  (set-field-value insn (register-field role)
                    (register-number (register-operand-register operand))))
 
-(defun insert-rn (insn operand)
-  (set-field-value insn (byte 5 5)
-                   (register-number (register-operand-register operand))))
-
-(defun insert-rm (insn operand)
-  (set-field-value insn (byte 5 16)
-                   (register-number (register-operand-register operand))))
-
-(defun insert-ra (insn operand)
-  (set-field-value insn (byte 5 10)
-                   (register-number (register-operand-register operand))))
-
-;;; Rt2 (the second transfer register of a load/store pair) shares the
-;;; 14:10 field with Ra.
-(defun insert-rt2 (insn operand)
-  (set-field-value insn (byte 5 10)
-                   (register-number (register-operand-register operand))))
+(defun extract-register (word role)
+  (ldb (register-field role) word))
 
 (defparameter *shift-types*
   #(:lsl :lsr :asr :ror))
@@ -1669,14 +1656,11 @@
 ;;; is what distinguishes the two forms).
 (defun encode-register-operand (insn operand role class)
   (ecase role
-    ((:rd :rt) (insert-rd insn operand))
-    ((:rn :base) (insert-rn insn operand))
-    ;; Rs (the exclusive-status / compare register) shares the Rm field @ 20:16.
-    ((:rm :rs) (insert-rm insn operand))
-    (:ra (insert-ra insn operand))
-    (:rt2 (insert-rt2 insn operand))
-    ;; one source register written into both Rn and Rm (cinc/cinv/cneg)
-    (:rn+rm (insert-rn insn operand) (insert-rm insn operand)))
+    ((:rd :rt :rn :base :rm :rs :ra :rt2)
+     (insert-register insn role operand))
+    (:rn+rm
+     (insert-register insn :rn operand)
+     (insert-register insn :rm operand)))
   (let ((modifier (register-operand-modifier operand))
         (amount (register-operand-amount operand)))
     (case class
@@ -1696,68 +1680,115 @@
          (set-field-value insn (byte 3 13) option)
          (set-field-value insn (byte 3 10) amount))))))
 
+(defparameter *immediate-field-specs*
+  `((:simm9 ,(byte 9 12) :signed t)
+    (:uoff0 ,(byte 12 10) :scale 0)
+    (:uoff1 ,(byte 12 10) :scale 1)
+    (:uoff2 ,(byte 12 10) :scale 2)
+    (:uoff3 ,(byte 12 10) :scale 3)
+    (:poff2 ,(byte 7 15) :scale 2 :signed t)
+    (:poff3 ,(byte 7 15) :scale 3 :signed t)
+    (:immr-x ,(byte 6 16))
+    (:immr-w ,(byte 6 16))
+    (:imms-x ,(byte 6 10))
+    (:imms-w ,(byte 6 10))
+    (:exc16 ,(byte 16 5))
+    (:udf16 ,(byte 16 0))
+    (:baropt ,(byte 4 8))
+    (:imm5 ,(byte 5 16))
+    (:nzcv ,(byte 4 0))))
+
+(defun immediate-field-spec (class)
+  (or (cdr (assoc class *immediate-field-specs*))
+      (error "No immediate field spec for ~s" class)))
+
+(defun insert-immediate-field (insn class value)
+  (destructuring-bind (bytespec &key (scale 0) signed)
+      (immediate-field-spec class)
+    (declare (ignore signed))
+    (set-field-value insn bytespec (ash value (- scale)))))
+
+(defun sign-extend (integer width)
+  (if (logbitp (1- width) integer)
+    (- integer (ash 1 width))
+    integer))
+
+(defun extract-immediate-field (word class)
+  (destructuring-bind (bytespec &key (scale 0) signed)
+      (immediate-field-spec class)
+    (let* ((raw (ldb bytespec word))
+           (unscaled (if signed
+                       (sign-extend raw (byte-size bytespec))
+                       raw)))
+      (ash unscaled scale))))
+
 (defun encode-immediate-operand (insn operand class)
   (let ((value (immediate-operand-value operand))
         (shift (immediate-operand-shift operand)))
-    (flet ((uoff (scale)                ;scale byte offset by memory access size
-             (set-field-value insn (byte 12 10) (ash value (- scale)))))
-      (case class
-        (:aimm (set-field-value insn (byte 12 10) value)
-               (set-field-value insn (byte 1 22) (if (= shift 12) 1 0)))
-        (:simm9 (set-field-value insn (byte 9 12) value))
-        (:limm (set-field-value insn (byte 13 10) (encode-logical-immediate value)))
-        (:uoff0 (uoff 0))
-        (:uoff1 (uoff 1))
-        (:uoff2 (uoff 2))
-        (:uoff3 (uoff 3))
-        (:uoff4 (uoff 4))
-        (:poff2 (set-field-value insn (byte 7 15) (ash value -2)))
-        (:poff3 (set-field-value insn (byte 7 15) (ash value -3)))
-        ((:movw-x :movw-w)                ;imm16 @ 20:5, hw (= shift/16) @ 22:21
-         (set-field-value insn (byte 16 5) value)
-         (set-field-value insn (byte 2 21) (ash shift -4)))
-        ((:immr-x :immr-w) (set-field-value insn (byte 6 16) value))
-        ((:imms-x :imms-w) (set-field-value insn (byte 6 10) value))
-        ((:tbit-x :tbit-w)                ;bit number: b40 @ 23:19, b5 @ 31
-         (set-field-value insn (byte 5 19) (ldb (byte 5 0) value))
-         (set-field-value insn (byte 1 31) (ldb (byte 1 5) value)))
-        (:exc16 (set-field-value insn (byte 16 5) value))
-        (:udf16 (set-field-value insn (byte 16 0) value))
-        (:baropt (set-field-value insn (byte 4 8) value))
-        (:imm5 (set-field-value insn (byte 5 16) value))
-        (:nzcv (set-field-value insn (byte 4 0) value))
-        (:fpzero)                       ;the #0.0 literal is baked into the base opcode
-        (:fpimm8 (set-field-value insn (byte 8 13) (encode-fp-imm8 value)))
-        ;; immediate shifts encode as bitfield moves: lsl #n has
-        ;; immr=(-n) mod width, imms=msb-n; lsr/asr #n have immr=n, imms=msb.
-        (:lsl-imm-x (set-field-value insn (byte 6 16) (logand (- value) 63))
-                    (set-field-value insn (byte 6 10) (- 63 value)))
-        (:lsl-imm-w (set-field-value insn (byte 6 16) (logand (- value) 31))
-                    (set-field-value insn (byte 6 10) (- 31 value)))
-        ((:lsr-imm-x :asr-imm-x) (set-field-value insn (byte 6 16) value)
-                                 (set-field-value insn (byte 6 10) 63))
-        ((:lsr-imm-w :asr-imm-w) (set-field-value insn (byte 6 16) value)
-                                 (set-field-value insn (byte 6 10) 31))
-        ;; bitfield insert: immr=(-lsb) mod width (from #lsb), imms=width-1.
-        (:bfiz-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
-        (:bfiz-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
-        ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
-        (:pcrel                           ;immlo (low 2 bits) @ 30:29, immhi @ 23:5
-         (set-field-value insn (byte 2 29) value)
-         (set-field-value insn (byte 19 5) (ash value -2)))
-        ((:movw-mov-w :movw-mov-x)
+    (case class
+      ;; Some classes are encoded in special ways (via custom encode
+      ;; functions, or into multiple fields in the instruction).
+      (:aimm
+       (set-field-value insn (byte 12 10) value)
+       (set-field-value insn (byte 1 22) (if (= shift 12) 1 0)))
+      (:limm (set-field-value insn (byte 13 10)
+                              (encode-logical-immediate value)))
+      ((:movw-x :movw-w)
+       (set-field-value insn (byte 16 5) value)
+       (set-field-value insn (byte 2 21) (ash shift -4)))
+      ((:tbit-x :tbit-w)
+       (set-field-value insn (byte 5 19) (ldb (byte 5 0) value))
+       (set-field-value insn (byte 1 31) (ldb (byte 1 5) value)))
+      (:fpimm8 (set-field-value insn (byte 8 13) (encode-fp-imm8 value)))
+      (:pcrel
+       (set-field-value insn (byte 2 29) (ldb (byte 2 0) value))
+       (set-field-value insn (byte 19 5) (ash value -2)))
+      (:fpzero)  ;encode nothing: 0.0 literal included in base opcode
+      ;; These classes only occur in alias templates.  The disassembler
+      ;; never sees them.
+      (:lsl-imm-x
+       (set-field-value insn (byte 6 16) (logand (- value) 63))
+       (set-field-value insn (byte 6 10) (- 63 value)))
+      (:lsl-imm-w
+       (set-field-value insn (byte 6 16) (logand (- value) 31))
+       (set-field-value insn (byte 6 10) (- 31 value)))
+      ((:lsr-imm-x :asr-imm-x)
+       (set-field-value insn (byte 6 16) value)
+       (set-field-value insn (byte 6 10) 63))
+      ((:lsr-imm-w :asr-imm-w)
+       (set-field-value insn (byte 6 16) value)
+       (set-field-value insn (byte 6 10) 31))
+      (:bfiz-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
+      (:bfiz-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
+      ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
+      ((:movw-mov-w :movw-mov-x)
+       (multiple-value-bind (imm16 hw)
+           (encode-wide-immediate value (if (eq class :movw-mov-x) 64 32))
+         (set-field-value insn (byte 16 5) imm16)
+         (set-field-value insn (byte 2 21) hw)))
+      ((:movw-movn-w :movw-movn-x)
+       (let ((width (if (eq class :movw-movn-x) 64 32)))
          (multiple-value-bind (imm16 hw)
-             (encode-wide-immediate value (if (eq class :movw-mov-x) 64 32))
+             (encode-wide-immediate (ldb (byte width 0) (lognot value))
+                                    width)
            (set-field-value insn (byte 16 5) imm16)
-           (set-field-value insn (byte 2 21) hw)))
-        ((:movw-movn-w :movw-movn-x)
-         (let ((width (if (eq class :movw-movn-x) 64 32)))
-           (multiple-value-bind (imm16 hw)
-               (encode-wide-immediate (ldb (byte width 0) (lognot value))
-                                      width)
-             (set-field-value insn (byte 16 5) imm16)
-             (set-field-value insn (byte 2 21) hw))))
-        (t (error "encoding of immediate class ~s not implemented" class))))))
+           (set-field-value insn (byte 2 21) hw))))
+      ;; Remaining classes are regular.
+      (t (insert-immediate-field insn class value)))))
+
+;; Return an immediate-operand struct with value and shift filled in.
+(defun decode-immediate-operand (word class)
+  (flet ((imm (value &optional (shift 0))
+           (make-immediate-operand :value value :shift shift)))
+    (case class
+      (:aimm (imm (ldb (byte 12 10) word) (if (logbitp 22 word) 12 0)))
+      (:limm (imm (decode-logical-immediate (ldb (byte 13 10) word))))
+      ((:movw-x :movw-w)
+       (imm (ldb (byte 16 5) word) (* 16 (ldb (byte 2 21) word))))
+      ((:tbit-x :tbit-w)
+       (imm (dpb (ldb (byte 1 31) word) (byte 1 5) (ldb (byte 5 19) word))))
+      (:fpimm8 (imm (decode-fp-imm8 (ldb (byte 8 13) word))))
+      (t (imm (extract-immediate-field word class))))))
 
 (defun encode-index-operand (insn r-op)
   ;; A register-offset index: Rm @ 20:16, the extend option @ 15:13, and
@@ -1773,7 +1804,7 @@
   ;; Base → Rn; the offset is encoded per the addressing form: an
   ;; immediate (reusing encode-immediate-operand; a missing offset is #0,
   ;; already in the base-opcode) or a register index.
-  (insert-rn insn (memory-operand-base operand))
+  (insert-register insn :base (memory-operand-base operand))
   (let ((offset (memory-operand-offset operand)))
     (ecase (car spec)
       ;; the pre/post writeback bits @ 11:10 are baked into the base
@@ -1877,7 +1908,7 @@
     ((:bfiz-lsb-x :bfiz-lsb-w) "#lsb")
     ((:bf-width-x :bf-width-w) "#width")
     (:pcrel "label")
-    ((:uoff0 :uoff1 :uoff2 :uoff3 :uoff4 :poff2 :poff3) "#off")
+    ((:uoff0 :uoff1 :uoff2 :uoff3 :poff2 :poff3) "#off")
     (t (format nil "#~(~a~)" class))))
 
 (defun render-mem-spec (spec)
@@ -1973,9 +2004,6 @@
 (ccl::def-standard-initial-binding *instruction-freelist*
                                    (ccl::make-dll-node-freelist))
 
-;;; The instructions of the function being assembled
-(defvar *instructions* ())
-
 ;;; An instruction in the process of being assembled
 (defstruct (instruction (:include instruction-element (size 4))
                         (:constructor %make-instruction (source)))
@@ -2008,9 +2036,6 @@
 
 (ccl::def-standard-initial-binding *label-freelist*
                                    (ccl::make-dll-node-freelist))
-
-;;; The labels of the function being assembled
-(defvar *labels* ())
 
 (defstruct (label (:include instruction-element)
                   (:constructor %%make-label (name)))
@@ -2369,8 +2394,10 @@
              (s (logand (1+ imms) imms-mask)))
         (rotate-right-64 (logxor mask (ash mask s)) immr)))))
 
-
-
+;;; work to do here
+(defun vinsn-simplify-instruction (form name-list)
+  (declare (ignore name-list))
+  form)
 
 (defparameter *junk*
 '(
