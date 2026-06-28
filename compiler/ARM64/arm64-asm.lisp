@@ -12,16 +12,6 @@
 (defvar *constants* ())
 (defvar *instructions* ())
 
-
-;; return fn-relative byte offset to constant named by form
-(defun arm64-constant-offset (form)
-  (let ((index (or (cdr (assoc form *constants* :test 'equal))
-                   (let ((n (length *constants*)))
-                     (push (cons form n) *constants*)
-                     n))))
-    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
-       arm64::misc-data-offset)))
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defstruct register
@@ -119,7 +109,8 @@
                  (t zero-register)))))
 
 (defun fpr-ref (number width)
-  (svref *registers* (+ (ecase width (32 s0) (64 d0)) number)))
+  (let ((base (ecase width (32 s0) (64 d0))))
+    (svref *registers* (+ base number))))
 
 (defvar *registers-by-name* (make-hash-table :test #'equalp))
 
@@ -131,13 +122,18 @@
 
 (hash-registers)
 
+;;; An alist of the form (("x0" . "imm0") ...)
+(defparameter *register-alias-names* ())
+
 ;;; Add a permanent alias for a register.
 (defmacro define-register-alias (alias known)
   (let ((known-entry (gensym)))
     `(let ((,known-entry (gethash ,(string known) *registers-by-name*)))
        (unless ,known-entry
-         (error "register ~a not defined" ',known))
+         (error "Register ~a not defined" ',known))
        (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
+       (push (cons ,(string-downcase known) ,(string-downcase alias))
+             *register-alias-names*)
        (defconstant ,alias ,known))))
 
 (define-register-alias fp x29)          ;frame pointer
@@ -426,9 +422,9 @@
    (def uuo-debug-trap () (logior (ash 3 3) #x7) #xffffffff)
 
    ;; unary UUOs (uuo format #b001)
-   (def uuo-error-too-few-args () 0 #xffffffff)
-   (def uuo-error-too-many-args () 0 #xffffffff)
-   (def uuo-error-wrong-number-of-args () 0 #xffffffff)
+   (def uuo-error-too-few-args () (logior (ash 0 3) #x1)  #xffffffff)
+   (def uuo-error-too-many-args () (logior (ash 1 3) #x1)  #xffffffff)
+   (def uuo-error-wrong-number-of-args () (logior (ash 2 3) #x1) #xffffffff)
    
    ;; binary UUOs (uuo format #b010)
 
@@ -817,7 +813,7 @@
 
    ;; bitfield insert aliases: immr=(-lsb) mod width, imms=width-1 (separable,
    ;; so #lsb and #width each drive one field).  Extract forms (sbfx/ubfx/
-   ;; bfxil) deferred -- imms there depends on both operands.
+   ;; bfxil) are lapmacros.
    (def sbfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x13000000 0 :flags :alias)
    (def sbfiz ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #x93400000 0 :flags :alias)
    (def ubfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x53000000 0 :flags :alias)
@@ -1205,12 +1201,11 @@
                                    :sxtb :sxth :sxtw :sxtx))
 
 (defstruct immediate-operand
-  value       ;an integer, or a float for :fpimm8
-  shift       ;how many bits to shift by (:lsl only), if applicable
-  )
+  value          ;an integer, or a float for :fpimm8
+  shift)         ;how many bits to shift by (:lsl only), if applicable
 
 (defstruct register-operand
-  register
+  register                     ;a register struct
   modifier                     ;nil or a shift/extend operator keyword
   (amount 0))                  ;shift/extend amount
 
@@ -1221,8 +1216,11 @@
   pre-indexed                       ;one or the other;
   post-indexed)                     ; having both set makes no sense
 
+;;; A reference to a label, i.e., the operand of a branch instruction.
 (defstruct label-operand
-  name)                               ;the label's name (a symbol)
+  name
+  offset                  ;byte offset (read by disassembler)
+  target)                 ;target instruction index (set by disassembler)
 
 (defstruct condition-operand
   name                                ;the condition name (a symbol)
@@ -1246,8 +1244,8 @@
       (make-register-operand :register (need-register form)))))
 
 (defun parse-immediate-operand (form)
-  ;; Regcognize (:$ value) or (:$ value :lsl amount).
-  ;; Legal values and shift amounts are not checked here.
+  ;; Regcognize (:$ value) or (:$ value :lsl amount).  Legal values
+  ;; and shift amounts are not checked here.
   (unless (and (consp form)
                (eq (car form) :$)
                (let ((l (length form)))
@@ -1256,6 +1254,9 @@
   (destructuring-bind (marker value &optional op (shift 0)) form
     (declare (ignore marker))
     (when op
+      ;; There are a few Advanced SIMD modified-immediate instructions
+      ;; that use the shift operator MSL.  If we ever support those,
+      ;; this will need to change.
       (unless (eq op :lsl)
         (error "Only :lsl is valid for an immediate: ~s" form)))
     (setf value (eval-immediate-expression value)
@@ -1306,7 +1307,7 @@
     ("gt" . 12)                         ;signed >
     ("le" . 13)                         ;signed <=
     ("al" . 14)                         ;always
-    ("nv" . 15)))                       ;identical to always
+    ("nv" . 15)))                       ;identical to always (despite name)
 
 (defun lookup-arm64-condition-name (name)
   (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
@@ -1327,8 +1328,7 @@
                             :value (need-arm64-condition-name name))))
 
 (defparameter *system-registers*
-  ;; name -> the 15-bit op0:op1:CRn:CRm:op2 encoding (the field @ 19:5).
-  ;; Extend as needed; these are the ones bring-up wants first.
+  ;; name -> the 15-bit op0:op1:CRn:CRm:op2 encoding for msr/mrs
   '(("fpsr" . #x5a21)                 ;FP status (sticky exception bits)
     ("fpcr" . #x5a20)                 ;FP control
     ("nzcv" . #x5a10)                 ;condition flags
@@ -1366,10 +1366,9 @@
 
 ;;; Matching parsed operands against a template
 
-;;; Matching parsed operands against a template.  A template matches iff its
-;;; operand specs and the parsed operands agree in count and, pairwise, the
-;;; operand satisfies the spec.  Matching is a cheap boolean predicate run
-;;; against every candidate; encoding is a separate later pass.
+;;; A template matches when its operand specs and the parsed operands
+;;; agree in number and, pairwise, the operand satisfies the spec.
+;;; Encoding is a separate later pass.
 
 ;;; Return true if the register in the register-operand is a member of
 ;;; the given operand class.
@@ -1497,28 +1496,27 @@
 ;;; (values imm16 hw)
 (defun encode-wide-immediate (n &optional (width 64))
   (unless (or (= width 64) (= width 32))
-    (error "Size must be either 32 or 64, not ~s" width))
+    (error "Width must be either 32 or 64, not ~s" width))
   (when (typep n `(unsigned-byte ,width))
     (do* ((pos 0 (+ pos 16))
           (hw 0 (1+ hw))          ;hw field in movz/movn/movk encoding
           (imm16 (ldb (byte 16 0) n) (ldb (byte 16 pos) n)))
          ((= pos width))
-      (format t "~&shift: ~s, imm16: ~d" pos imm16)
       (when (= n (ash imm16 pos))
         (return (values imm16 hw))))))
 
-;;; The access-size scale for a scaled offset is baked into the class (:uoffN,
-;;; N = log2 of the access size in bytes), so the class is self-describing and
-;;; this predicate needs only the operand and the class — no template.  Values
-;;; are assumed already resolved to integers.
+;;; Some immediate operands are written already scaled by the memory
+;;; access size.  We encode the scale in the operand class (e.g.,
+;;; :uoff2 means that the written value is shifted left 2 bits).
 (defun match-immediate-operand (imm-op class)
   (let ((value (immediate-operand-value imm-op))
         (shift (immediate-operand-shift imm-op)))
     (flet ((uoff-p (scale)
              (and (eql shift 0)
-                  (zerop (logand value (1- (ash 1 scale))))   ;multiple of access size
+                  ;; multiple of access size?
+                  (zerop (logand value (1- (ash 1 scale))))
                   (typep (ash value (- scale)) '(unsigned-byte 12))))
-           (poff-p (scale)                  ;signed scaled 7-bit (load/store pair)
+           (poff-p (scale)      ;signed scaled 7-bit (load/store pair)
              (and (eql shift 0)
                   (zerop (logand value (1- (ash 1 scale))))
                   (typep (ash value (- scale)) '(signed-byte 7)))))
@@ -1532,10 +1530,14 @@
         (:uoff3 (uoff-p 3))
         (:poff2 (poff-p 2))
         (:poff3 (poff-p 3))
-        (:movw-x (and (typep value '(unsigned-byte 16)) (member shift '(0 16 32 48))))
-        (:movw-w (and (typep value '(unsigned-byte 16)) (member shift '(0 16))))
-        ((:immr-x :imms-x :tbit-x) (and (eql shift 0) (typep value '(integer 0 63))))
-        ((:immr-w :imms-w :tbit-w) (and (eql shift 0) (typep value '(integer 0 31))))
+        (:movw-x (and (typep value '(unsigned-byte 16))
+                      (member shift '(0 16 32 48))))
+        (:movw-w (and (typep value '(unsigned-byte 16))
+                      (member shift '(0 16))))
+        ((:immr-x :imms-x :tbit-x) (and (eql shift 0)
+                                        (typep value '(integer 0 63))))
+        ((:immr-w :imms-w :tbit-w) (and (eql shift 0)
+                                        (typep value '(integer 0 31))))
         ((:exc16 :udf16) (and (eql shift 0) (typep value '(unsigned-byte 16))))
         (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
@@ -1561,8 +1563,7 @@
                             (ldb (byte 32 0) (lognot value)) 32)))
         (:movw-movn-x (and (eql shift 0)
                            (encode-wide-immediate
-                            (ldb (byte 64 0) (lognot value)) 64)))
-        ))))
+                            (ldb (byte 64 0) (lognot value)) 64)))))))
 
 (defun regoff-scale (class)
   ;; The natural scale (log2 access size) baked into a :regoffN class.
@@ -1610,9 +1611,10 @@
              ((:mem-scaled :mem-unscaled)
               (and (not pre) (not post)
                    (cond
-                     ((null offset) t)  ;[Xn] ≡ [Xn, #0]
+                     ((null offset) t)  ;(:@ xn) means (:@ xn (:$ 0))
                      ((immediate-operand-p offset)
-                      (match-immediate-operand offset (cadr (assoc :imm (cdr spec)))))
+                      (match-immediate-operand offset
+                                               (cadr (assoc :imm (cdr spec)))))
                      (t nil))))         ;a register offset ⇒ the regoff form
              (:mem-regoff
               (and (not pre) (not post) offset
@@ -1937,32 +1939,23 @@
         (:mem-base
          (make-memory-operand :base base))))))
 
-(defun decode-condition-operand (word &optional invert)
-  ;; The 4-bit condition @ 15:12 (csel/ccmp family), the inverse of
-  ;; encode-condition-operand.  An :cond-inv operand was encoded as the
-  ;; inverse, so re-invert to recover the source name -- though :cond-inv
-  ;; occurs only in alias templates, which the disassembler skips, so in
-  ;; practice only the plain path runs.
-  (let ((value (ldb (byte 4 12) word)))
-    (when invert (setq value (logxor value 1)))
-    (make-condition-operand :name (lookup-arm64-condition-value value)
-                            :value value)))
-
-(defun decode-label-operand (word class)
-  ;; The branch field holds a signed instruction-count displacement from
-  ;; this instruction.  Lacking the instruction's address, we can only
-  ;; report that as a byte offset; resolving it to a target label needs the
-  ;; whole-code-vector pass (see the LABELED slot).  CLASS is the reftype
-  ;; (:b26/:b19/:b14) that selects the field, as in *branch-fields*.
-  (destructuring-bind (bytespec . width) (cdr (assoc class *branch-fields*))
-    (* 4 (sign-extend (ldb bytespec word) width))))
-
 (defun encode-label-operand (insn operand class)
   ;; Record a reference from INSN to the named label; finalize patches
   ;; the displacement field once all addresses are known.  CLASS
   ;; (:b26/:b19/:b14) is the reftype that selects the field.  The field
   ;; is left zero (its base-opcode value) until then.
   (note-label-reference (label-operand-name operand) insn class))
+
+(defun decode-label-operand (word class)
+  ;; The branch field holds a signed instruction-count displacement from
+  ;; this instruction.  Lacking the instruction's address, we record it as a
+  ;; signed byte offset; resolve-labels turns it into a target di-vector
+  ;; index in the whole-code-vector pass (see the LABELED slot).  CLASS is
+  ;; the reftype (:b26/:b19/:b14) that selects the field, as in
+  ;; *branch-fields*.
+  (destructuring-bind (bytespec . width) (cdr (assoc class *branch-fields*))
+    (make-label-operand :offset (* 4 (sign-extend (ldb bytespec word)
+                                                  width)))))
 
 (defun encode-condition-operand (insn operand &optional invert)
   ;; The condition is a 4-bit field @ 15:12 in the conditional-select and
@@ -1977,7 +1970,18 @@
                                               operand))))
     (set-field-value insn (byte 4 12) value)))
 
-(defun encode-operand (insn operand spec)   ;like match-operand
+(defun decode-condition-operand (word &optional invert)
+  ;; The 4-bit condition @ 15:12 (csel/ccmp family), the inverse of
+  ;; encode-condition-operand.  An :cond-inv operand was encoded as the
+  ;; inverse, so re-invert to recover the source name -- though :cond-inv
+  ;; occurs only in alias templates, which the disassembler skips, so in
+  ;; practice only the plain path runs.
+  (let ((value (ldb (byte 4 12) word)))
+    (when invert (setq value (logxor value 1)))
+    (make-condition-operand :name (lookup-arm64-condition-value value)
+                            :value value)))
+
+(defun encode-operand (insn operand spec)
   (cond
     ((label-spec-p spec) (encode-label-operand insn operand (cadr spec)))
     ((eq spec :cond) (encode-condition-operand insn operand))
@@ -2189,6 +2193,7 @@
 (ccl::def-standard-initial-binding *label-freelist*
                                    (ccl::make-dll-node-freelist))
 
+;; A label definition
 (defstruct (label (:include instruction-element)
                   (:constructor %%make-label (name)))
   name                                  ;a symbol
