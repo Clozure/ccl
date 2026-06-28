@@ -29,7 +29,7 @@
   `(progn
      (mov ,marker-reg (:$ arm64::lisp-frame-marker))
      (stp ,marker-reg vsp (:@! sp (:$ -32)))
-     (stp arm64::fn arm64::lr (:@ sp (:$ 16)))))
+     (stp fn lr (:@ sp (:$ 16)))))
 
 (defarm64lapmacro restore-lisp-frame ()
   `(progn
@@ -45,12 +45,36 @@
          (blr imm0))
       (error "unknown subprimitive name ~s" spname))))
 
-(defarm64lapmacro check-nargs (min)
-  (let ((ok (gensym "@")))
-    `(progn
-       (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
-       (b.eq ,ok)
-       (uuo-error-wrong-nargs)
-       ,ok)))
+(defarm64lapmacro check-nargs (min &optional (max min))
+  (let ((ok1 (gensym "@"))
+        (ok2 (gensym "@")))
+    (if (= max min)
+      `(progn
+         (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
+         (b.eq ,ok1)
+         (uuo-error-wrong-nargs)
+         ,ok1)
+      (if (null max)
+        (unless (= min 0)
+          `(progn
+             (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
+             (b.hs ,ok1)
+             (uuo-error-wrong-nargs)
+             ,ok1))
+        (if (= min 0)
+          `(progn
+             (cmp nargs (:$ (ash ,max arm::fixnumshift)))
+             (b.ls ,ok1)
+             (uuo-error-wrong-nargs)
+             ,ok1)
+          `(progn
+             (cmp nargs (:$ (ash ,min arm::fixnumshift)))
+             (b.hs ,ok1)
+             (uuo-error-wrong-nargs)
+             ,ok1
+             (cmp nargs (:$ (ash ,max arm::fixnumshift)))
+             (b.ls ,ok2)
+             (uuo-error-wrong-nargs)
+             ,ok2))))))
 
 (provide "ARM64-LAPMACROS")
