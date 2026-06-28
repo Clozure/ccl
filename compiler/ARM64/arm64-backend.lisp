@@ -20,15 +20,183 @@
 
 ;;; This defines a template.  All expressions in the body must be
 ;;; evaluable at macroexpansion time.
-(defun %define-arm-vinsn (backend vinsn-name results args temps body)
-  (declare (ignore backend vinsn-name results args temps body)))
+(defun %define-arm64-vinsn (backend vinsn-name results args temps body)
+  (let* ((arch-name (backend-target-arch-name backend))
+         (template-hash (backend-p2-template-hash-name backend))
+         (name-list ())
+         (attrs 0)
+         (nhybrids 0)
+         (local-labels ())
+         (referenced-labels ())
+         (source-indicator (form-symbol arch-name "-VINSN"))
+         (opcode-alist ()))
+    (flet ((valid-spec-name (x)
+             (or (and (consp x)
+                      (consp (cdr x))
+                      (endp (cddr x))
+                      (atom (car x))
+                      (or (assoc (cadr x) *vreg-specifier-constant-constraints*
+                                 :test #'eq)
+                          (assoc (cadr x) *spec-class-storage-class-alist*
+                                 :test #'eq)
+                          (eq (cadr x) :label)
+                          (and (consp (cadr x))
+                               (or (assoc (caadr x)
+                                          *vreg-specifier-constant-constraints*
+                                          :test #'eq)
+                                   (assoc (caadr x)
+                                          *spec-class-storage-class-alist*
+                                          :test #'eq))))
+                      (car x))
+                 (error "Invalid vreg spec: ~s" x)))
+           (add-spec-name (vname)
+             (if (member vname name-list :test #'eq)
+               (error "Duplicate name ~s in vinsn ~s" vname vinsn-name)
+               (push vname name-list))))
+      (declare (dynamic-extent #'valid-spec-name #'add-spec-name))
+      (when (consp vinsn-name)
+        (setq attrs (encode-vinsn-attributes (cdr vinsn-name))
+              vinsn-name (car vinsn-name)))
+      (unless (and (symbolp vinsn-name)
+                   (eq *ccl-package* (symbol-package vinsn-name)))
+        (setq vinsn-name (intern (string vinsn-name) *ccl-package*)))
+      (dolist (n (append args temps))
+        (add-spec-name (valid-spec-name n)))
+      (setq name-list (nreverse name-list))
+      ;; We now know that "args" is an alist; we don't know if
+      ;; "results" is.  First, make sure that there are no duplicate
+      ;; result names (and validate "results".)
+      (do* ((res results tail)
+            (tail (cdr res) (cdr tail)))
+           ((null res))
+        (let ((name (valid-spec-name (car res))))
+          (if (assoc name tail :test #'eq)
+            (error "Duplicate result name ~s in ~s." name results))))
+      (let ((non-hybrid-results ())
+            (match-args args))
+        (dolist (res results)
+          (let ((res-name (car res)))
+            (if (not (assoc res-name args :test #'eq))
+              (if (not (= nhybrids 0))
+                (error "result ~s should also name an argument." res-name)
+                (push res-name non-hybrid-results))
+              (if (eq res-name (caar match-args))
+                (setf nhybrids (1+ nhybrids)
+                      match-args (cdr match-args))
+                (error "~S - hybrid results should appear in same ~
+                        order as arguments." res-name)))))
+        (dolist (name non-hybrid-results)
+          (add-spec-name name)))
+      (let* ((k -1))
+        (declare (fixnum k))
+        (let* ((name-alist (mapcar #'(lambda (n) (cons n (list (incf k))))
+                                   name-list)))
+          (labels ((find-name (n)
+                   (let* ((pair (assoc n name-alist :test #'eq)))
+                     (declare (list pair))
+                     (if pair
+                       (cdr pair)
+                       (or (subprim-name->offset n backend)
+                           (error "Unknown name ~s" n)))))
+                   (simplify-operand (op)
+                     (if (atom op)
+                       (if (typep op 'fixnum)
+                         op
+                         (if (constantp op)
+                           (progn
+                             (if (keywordp op)
+                               (pushnew op referenced-labels))
+                             (eval op))
+                           (find-name op)))
+                       (if (eq (car op) :apply)
+                         `(,(cadr op) ,@(mapcar #'simplify-operand (cddr op)))
+                         (simplify-operand (eval op))))) ; Handler-case this?
+                   (simplify-constraint (guard)
+                     ;; A constraint is one of
+                     ;;
+                     ;; (:eq|:lt|:gt vreg-name constant)
+                     ;;
+                     ;; value" of vreg relop constant
+                     ;;
+                     ;; (:pred <function-name> <operand>* ;
+                     ;; <function-name> unquoted, each <operand>
+                     ;; is a vreg-name or constant expression.
+                     ;;
+                     ;; (:type vreg-name typeval) ; vreg is of
+                     ;; "type" typeval
+                     ;;
+                     ;;(:not <constraint>) ; constraint is false
+                     ;; (:and <constraint> ...)        ;  conjuntion
+                     ;; (:or <constraint> ...)         ;  disjunction
+                     ;; There's no "else"; we'll see how ugly it
+                     ;; is without one.
+                     (destructuring-bind (guardname &rest others) guard
+                       (ecase guardname
+                         (:not
+                          (destructuring-bind (negation) others
+                            `(:not ,(simplify-constraint negation))))
+                         (:pred
+                          (destructuring-bind (predicate &rest operands) others
+                            `(:pred ,predicate ,@(mapcar #'simplify-operand
+                                                         operands))))
+                         ((:eq :lt :gt :type)
+                          (destructuring-bind (vreg constant) others
+                            (unless (constantp constant)
+                              (error "~s: not constant in constraint ~s."
+                                     constant guard))
+                            `(,guardname ,(find-name vreg) ,(eval constant))))
+                         ((:or :and)
+                          (unless others
+                            (error "Missing constraint list in ~s ." guard))
+                          `(,guardname ,(mapcar
+                                         #'simplify-constraint others))))))
+                   (simplify-form (form)
+                     (if (atom form)
+                       (progn
+                         (if (keywordp form) (push form local-labels))
+                         form)
+                       (destructuring-bind (&whole w opname &rest opvals) form
+                         (if (consp opname) ; A constraint, we presume ...
+                           (cons (simplify-constraint opname)
+                                 (mapcar #'simplify-form opvals))
+                           (if (keywordp opname)
+                             form
+                             (arm64::vinsn-simplify-instruction
+                              form name-list)))))))
+            (let* ((template (make-vinsn-template
+                              :name vinsn-name
+                              :result-vreg-specs results
+                              :argument-vreg-specs args
+                              :temp-vreg-specs temps
+                              :nhybrids nhybrids
+                              :results&args (append results
+                                                    (nthcdr nhybrids args))
+                              :nvp (- (+ (length results) (length args)
+                                         (length temps))
+                                      nhybrids)
+                              :body (prog1
+                                        (mapcar #'simplify-form body)
+                                      (dolist (ref referenced-labels)
+                                        (unless (memq ref local-labels)
+                                          (error
+                                           "local label ~S was referenced but ~
+                                            never defined in VINSN-TEMPLATE ~
+                                            definition for ~s" ref
+                                            vinsn-name))))
+                              :local-labels local-labels
+                              :attributes attrs
+                              :opcode-alist opcode-alist)))
+              `(progn
+                 (set-vinsn-template ',vinsn-name ,template ,template-hash)
+                 (record-source-file ',vinsn-name ',source-indicator)
+                 ',vinsn-name))))))))
 
 #+(or darwinarm64-target (not arm64-target))
 (defvar *darwinarm64-backend*
   (make-backend :lookup-opcode #'false
                 :lookup-macro #'false
                 :lap-opcodes #()
-                :define-vinsn 'define-arm64-vinsn
+                :define-vinsn '%define-arm64-vinsn
                 :platform-syscall-mask (logior platform-os-darwin platform-cpu-arm64)
                 :p2-dispatch *arm642-specials*
                 :p2-vinsn-templates *arm64-vinsn-templates*
@@ -135,3 +303,5 @@
                                 (arg-coerce #'null-coerce-foreign-arg)
                                 (result-coerce #'null-coerce-foreign-result))
   (declare (ignore callform args arg-coerce result-coerce)))
+
+(provide "ARM64-BACKEND")
