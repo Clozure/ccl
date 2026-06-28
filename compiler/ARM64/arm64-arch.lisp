@@ -3,7 +3,7 @@
 ;;;; SPDX-License-Identifier: Apache-2.0
 
 (defpackage "ARM64"
-  (:use "CL")
+  (:use "CL" "CCL")
   #+arm64-target
   (:nicknames "TARGET"))
 
