@@ -27,13 +27,10 @@
 ;;; or a register, possibly modified, e.g. (:@ x0 (x1 :lsl 3)) or
 ;;; (:@ x0 (w1 :uxtw 2)).
 ;;;
-;;; a symbol whose name starts with "@" denotes a label
+;;; label
+;;;  * a symbol that doesn't name a register
 
 (defvar *arm64-lap-lfun-bits* 0)
-
-(def-standard-initial-binding *lap-label-freelist* (make-dll-node-freelist))
-(def-standard-initial-binding *lap-instruction-freelist* (make-dll-node-freelist))
-
 
 (defun arm64-lap-macro-function (name)
   (declare (special *arm64-backend*))
@@ -62,6 +59,15 @@
         (values form nil)))
     (values form nil)))
 
+;; return fn-relative byte offset to constant named by form
+(defun arm64-constant-offset (form)
+  (let ((index (or (cdr (assoc form arm64::*constants* :test 'equal))
+                   (let ((n (length arm64::*constants*)))
+                     (push (cons form n) arm64::*constants*)
+                     n))))
+    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
+       arm64::misc-data-offset)))
+
 (defun arm64-show-dll-nodes (elements)
   (do-dll-nodes (e elements)
     (format t "~&~s " e)
@@ -70,6 +76,7 @@
   (terpri))
 
 (defun %define-arm64-lap-function (name body &optional (bits 0))
+  (declare (ignore bits))
   (with-dll-node-freelist (elements arm64::*instruction-freelist*)
     (let* ((arm64::*labels* ())
            (arm64::*constants* ())
@@ -81,18 +88,10 @@
       (rplacd name-cell (length arm64::*constants*))
       (push name-cell arm64::*constants*)
       (setq section-size (arm64::finalize current))
-      (format t "~&section size: ~s" section-size)
-
-      (arm64-show-dll-nodes current)
+      ;; (format t "~&section size: ~s" section-size)
+      ;; (arm64-show-dll-nodes current)
       (arm64-lap-generate-code current section-size *arm64-lap-lfun-bits*)
       )))
-
-;;; maybe plain uvref is ok?
-(defun set-arm64-code-vector-word (code-vector i insn)
-  (declare (type (simple-array (unsigned-byte 32)) code-vector)
-           (fixnum i)
-           (optimize (speed 3) (safety 0)))
-  (setf (aref code-vector i) (arm64::instruction-word insn)))
 
 (defun arm64-lap-generate-code (seg code-vector-size &optional (bits 0))
   (declare (fixnum code-vector-size))
@@ -100,22 +99,27 @@
          (cross-compiling (target-arch-case
                            (:arm64 (not (eq *host-backend* target-backend)))
                            (t t)))
+         (prefix (arch::target-code-vector-prefix
+                  (backend-target-arch *target-backend*)))
+         (prefix-size (length prefix))
          (constants-size (+ 3 (length arm64::*constants*)))
          (constants-vector (%alloc-misc
                             constants-size
                             (if cross-compiling
                               target::subtag-xfunction
                               target::subtag-function)))
-         (i 0))
+         (i prefix-size))
     (declare (fixnum i constants-size))
     (let* ((code-vector (%alloc-misc
-                         code-vector-size
+                         (+ code-vector-size prefix-size)
                          (if cross-compiling
                            target::subtag-xcode-vector
                            arm64::subtag-code-vector))))
+      (dotimes (j prefix-size)
+        (setf (uvref code-vector j) (pop prefix)))
       (do-dll-nodes (insn seg)
         (unless (eql (arm64::instruction-element-size insn) 0)
-          (set-arm64-code-vector-word code-vector i insn)
+          (setf (uvref code-vector i) (arm64::instruction-word insn))
           (incf i)))
       (dolist (pair arm64::*constants*)
         (let ((imm (car pair))
@@ -140,7 +144,9 @@
 ;;; before being evaluated.
 (defun arm64-lap-equate-form (eqlist body current)
   (collect ((symbols)
-            (vals))
+            (vals)
+            (rsymbols)
+            (rvals))
     (dolist (pair eqlist)
       (destructuring-bind (symbol value) pair
         (unless (and symbol (symbolp symbol)
@@ -151,19 +157,24 @@
                            (or (typep value 'symbol)
                                (typep value 'string))
                            (arm64::lookup-register value))))
-          (symbols symbol)
           (if regval
-            (vals regval)               ;regval is a register struct
-            (vals (eval value))))))
-    (progv (symbols) (vals)
-      (dolist (form body current)
-        (setq current (arm64-lap-form form current))))))
+            (progn
+              (rsymbols symbol)
+              (rvals regval))
+            (progn
+              (symbols symbol)
+              (vals (eval value)))))))
+    ;; Keep registers separate from the progv bindings so the assembler
+    ;; can tell a register alias from a label without having to eval.
+    (let ((arm64::*lap-register-equates*
+            (pairlis (rsymbols) (rvals) arm64::*lap-register-equates*)))
+      (progv (symbols) (vals)
+        (dolist (form body current)
+          (setq current (arm64-lap-form form current)))))))
 
 (defun arm64-lap-form (form current)
   (if (and form (symbolp form))
-    (if (arm64::label-name-p form)
-      (arm64::emit-label current form)
-      (error "Invalid label name ~s; labels must start with @" form))
+    (arm64::emit-label current form)
     (if (or (atom form) (not (symbolp (car form))))
       (error "Invalid arm64 lap form ~s" form)
       (multiple-value-bind (expansion expanded)
