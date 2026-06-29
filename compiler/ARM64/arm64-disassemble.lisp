@@ -38,7 +38,9 @@
     ("ubfm" . rewrite-ubfm)
     ("sbfm" . rewrite-sbfm)
     ("bfm" . rewrite-bfm)
-    ("extr" . rewrite-extr)))
+    ("extr" . rewrite-extr)
+    ("movz" . rewrite-movz)
+    ("movn" . rewrite-movn)))
 
 (defun find-template (insn-word)
   (dotimes (i (length *instruction-templates*))
@@ -148,18 +150,64 @@
 
 (defun rewrite-orn (di) (rewrite-drop-zr di "mvn" 1))    ;orn Rd,xzr,Rm{,shift}
 
+(defun movz-form-p (value datasize)
+  ;; True if VALUE is movz-representable -- using the assembler's own oracle, so
+  ;; the disassembler and assembler agree on which mov-immediate form wins.
+  (and (encode-wide-immediate value datasize) t))
+
+(defun movn-form-p (value datasize)
+  ;; True if VALUE is movn-representable: its datasize-wide inverse is movz-able.
+  (movz-form-p (logand (lognot value) (1- (ash 1 datasize))) datasize))
+
 (defun rewrite-orr (di)
-  ;; orr Rd, xzr, Rm (unshifted) => mov Rd, Rm (register).  A shifted orr is
-  ;; not the register mov, and the bitmask-immediate orr (a different mov) has
-  ;; an immediate third operand; both fall through unchanged here.
+  ;; orr Rd, xzr, Rm (unshifted)  => mov Rd, Rm     (register)
+  ;; orr Rd, xzr, #bitmask        => mov Rd, #bitmask, but only when the value
+  ;; is neither movz- nor movn-representable -- the assembler tries movz, then
+  ;; movn, then orr-bitmask, so a value those reach first must stay orr to
+  ;; round-trip.  A shifted orr is not a mov and falls through unchanged.
   (let* ((operands (di-operands di))
+         (rd (first operands))
          (rn (second operands))
-         (rm (third operands)))
-    (when (and (zr-operand-p rn)
-               (register-operand-p rm)
-               (null (register-operand-modifier rm)))
+         (rm (third operands))
+         (d (register-width (register-operand-register rd))))
+    (when (zr-operand-p rn)
+      (cond
+        ((and (register-operand-p rm)
+              (null (register-operand-modifier rm)))
+         (setf (di-mnemonic di) "mov" (di-operands di) (list rd rm)))
+        ((and (immediate-operand-p rm)
+              (let ((v (immediate-operand-value rm)))
+                (and (not (movz-form-p v d)) (not (movn-form-p v d)))))
+         (setf (di-mnemonic di) "mov" (di-operands di) (list rd rm)))))))
+
+(defun rewrite-movz (di)
+  ;; movz Rd, #imm16, lsl #shift  => mov Rd, #(imm16 << shift).  Only the
+  ;; non-canonical zero (imm16=0 with a nonzero shift) must stay movz: the
+  ;; assembler would re-encode mov #0 with shift 0, a different word.
+  (let* ((operands (di-operands di))
+         (rd (first operands))
+         (imm-op (second operands))
+         (imm16 (immediate-operand-value imm-op))
+         (shift (or (immediate-operand-shift imm-op) 0)))
+    (unless (and (zerop imm16) (plusp shift))
       (setf (di-mnemonic di) "mov"
-            (di-operands di) (list (first operands) rm)))))
+            (di-operands di) (list rd (decoded-immediate (ash imm16 shift)))))))
+
+(defun rewrite-movn (di)
+  ;; movn Rd, #imm16, lsl #shift  => mov Rd, #~(imm16 << shift).  Skip it when
+  ;; the loaded value is movz-representable (the assembler would pick movz and
+  ;; produce a different word), or for the non-canonical zero shift.
+  (let* ((operands (di-operands di))
+         (rd (first operands))
+         (imm-op (second operands))
+         (imm16 (immediate-operand-value imm-op))
+         (shift (or (immediate-operand-shift imm-op) 0))
+         (d (register-width (register-operand-register rd)))
+         (value (logand (lognot (ash imm16 shift)) (1- (ash 1 d)))))
+    (when (and (not (and (zerop imm16) (plusp shift)))
+               (not (movz-form-p value d)))
+      (setf (di-mnemonic di) "mov"
+            (di-operands di) (list rd (decoded-immediate value))))))
 
 ;; The variable-shift data-processing instructions are always disassembled
 ;; under their lsl/lsr/asr/ror spellings; the operands are unchanged.
