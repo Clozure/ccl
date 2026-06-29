@@ -34,7 +34,11 @@
     ("rorv" . rewrite-rorv)
     ("csinc" . rewrite-csinc)
     ("csinv" . rewrite-csinv)
-    ("csneg" . rewrite-csneg)))
+    ("csneg" . rewrite-csneg)
+    ("ubfm" . rewrite-ubfm)
+    ("sbfm" . rewrite-sbfm)
+    ("bfm" . rewrite-bfm)
+    ("extr" . rewrite-extr)))
 
 (defun find-template (insn-word)
   (dotimes (i (length *instruction-templates*))
@@ -212,6 +216,125 @@
       (setf (di-mnemonic di) "cneg"
             (di-operands di) (list (first operands) rn inverse)))))
 
+;;; Bitfield aliases.  The canonical sbfm/ubfm/bfm carry two raw 6-bit fields,
+;;; immr and imms; each preferred alias is selected by a condition on them and
+;;; re-presents them as a shift, a width, or a lsb/width pair.  The extract
+;;; forms sbfx/ubfx/bfxil are lapmacros on the assembler side (their imms is
+;;; lsb+width-1, coupling both operands), but that is invisible here: we emit
+;;; the alias and the lapmacro re-encodes it.  lsb=immr, width=imms-immr+1.
+
+(defun decoded-immediate (value)
+  (make-immediate-operand :value value :shift 0))
+
+(defun register-operand-with-width (operand width)
+  ;; Same GPR as OPERAND but at the given access width (Xn -> Wn for the
+  ;; sxtb/sxth/sxtw aliases, whose source is always a W register).
+  (make-register-operand
+   :register (gpr-ref (register-number (register-operand-register operand))
+                      width)))
+
+(defun rewrite-ubfm (di)
+  (let* ((operands (di-operands di))
+         (rd (first operands))
+         (rn (second operands))
+         (immr (immediate-operand-value (third operands)))
+         (imms (immediate-operand-value (fourth operands)))
+         (d (register-width (register-operand-register rd))))
+    (cond
+      ;; uxtb/uxth: 32-bit zero-extend of a byte/halfword
+      ((and (= d 32) (= immr 0) (= imms 7))
+       (setf (di-mnemonic di) "uxtb" (di-operands di) (list rd rn)))
+      ((and (= d 32) (= immr 0) (= imms 15))
+       (setf (di-mnemonic di) "uxth" (di-operands di) (list rd rn)))
+      ;; lsr #immr: imms is the all-ones top
+      ((= imms (1- d))
+       (setf (di-mnemonic di) "lsr"
+             (di-operands di) (list rd rn (decoded-immediate immr))))
+      ;; lsl #(d-1-imms): immr is one past imms.  Checked before ubfiz, which
+      ;; this also satisfies (imms < immr).
+      ((= immr (1+ imms))
+       (setf (di-mnemonic di) "lsl"
+             (di-operands di) (list rd rn (decoded-immediate (- (1- d) imms)))))
+      ;; ubfiz #lsb,#width
+      ((< imms immr)
+       (setf (di-mnemonic di) "ubfiz"
+             (di-operands di) (list rd rn
+                                    (decoded-immediate (logand (- immr) (1- d)))
+                                    (decoded-immediate (1+ imms)))))
+      ;; ubfx #lsb,#width
+      (t
+       (setf (di-mnemonic di) "ubfx"
+             (di-operands di) (list rd rn
+                                    (decoded-immediate immr)
+                                    (decoded-immediate (- (1+ imms) immr))))))))
+
+(defun rewrite-sbfm (di)
+  (let* ((operands (di-operands di))
+         (rd (first operands))
+         (rn (second operands))
+         (immr (immediate-operand-value (third operands)))
+         (imms (immediate-operand-value (fourth operands)))
+         (d (register-width (register-operand-register rd))))
+    (cond
+      ;; sxtb/sxth/sxtw: sign-extend byte/half/word; source is a W register
+      ((and (= immr 0) (= imms 7))
+       (setf (di-mnemonic di) "sxtb"
+             (di-operands di) (list rd (register-operand-with-width rn 32))))
+      ((and (= immr 0) (= imms 15))
+       (setf (di-mnemonic di) "sxth"
+             (di-operands di) (list rd (register-operand-with-width rn 32))))
+      ((and (= d 64) (= immr 0) (= imms 31))
+       (setf (di-mnemonic di) "sxtw"
+             (di-operands di) (list rd (register-operand-with-width rn 32))))
+      ;; asr #immr
+      ((= imms (1- d))
+       (setf (di-mnemonic di) "asr"
+             (di-operands di) (list rd rn (decoded-immediate immr))))
+      ;; sbfiz #lsb,#width
+      ((< imms immr)
+       (setf (di-mnemonic di) "sbfiz"
+             (di-operands di) (list rd rn
+                                    (decoded-immediate (logand (- immr) (1- d)))
+                                    (decoded-immediate (1+ imms)))))
+      ;; sbfx #lsb,#width
+      (t
+       (setf (di-mnemonic di) "sbfx"
+             (di-operands di) (list rd rn
+                                    (decoded-immediate immr)
+                                    (decoded-immediate (- (1+ imms) immr))))))))
+
+(defun rewrite-bfm (di)
+  ;; bfm Rd, Rn, immr, imms:
+  ;;   imms < immr, Rn=zr  => bfc Rd, #lsb, #width        (clear)
+  ;;   imms < immr         => bfi Rd, Rn, #lsb, #width     (insert)
+  ;;   imms >= immr        => bfxil Rd, Rn, #lsb, #width   (insert low; lapmacro)
+  (let* ((operands (di-operands di))
+         (rd (first operands))
+         (rn (second operands))
+         (immr (immediate-operand-value (third operands)))
+         (imms (immediate-operand-value (fourth operands)))
+         (d (register-width (register-operand-register rd)))
+         (lsb (decoded-immediate (logand (- immr) (1- d))))
+         (width (decoded-immediate (1+ imms))))
+    (cond
+      ((< imms immr)
+       (if (zr-operand-p rn)
+         (setf (di-mnemonic di) "bfc" (di-operands di) (list rd lsb width))
+         (setf (di-mnemonic di) "bfi" (di-operands di) (list rd rn lsb width))))
+      (t
+       (setf (di-mnemonic di) "bfxil"
+             (di-operands di) (list rd rn
+                                    (decoded-immediate immr)
+                                    (decoded-immediate (- (1+ imms) immr))))))))
+
+(defun rewrite-extr (di)
+  ;; extr Rd, Rn, Rm, #lsb with Rn=Rm is a rotate: ror Rd, Rn, #lsb.
+  (let* ((operands (di-operands di))
+         (rn (second operands)))
+    (when (same-register-p rn (third operands))
+      (setf (di-operands di) (list (first operands) rn (fourth operands))
+            (di-mnemonic di) "ror"))))
+
 (defun disassemble-code-vector (code-vector &optional (stream *standard-output*))
   (print-di-vector stream (make-di-vector code-vector)))
 
@@ -313,7 +436,8 @@
         (register-operand (print-register-operand stream offset))
         (immediate-operand (print-immediate-operand stream offset))))))
     
-(defun print-condition-operand (stream operand))
+(defun print-condition-operand (stream operand)
+  (format stream "(:? ~(~a~))" (condition-operand-name operand)))
 
 (defun ccl::arm64-disassemble-xfunction (xfunction &optional (stream *debug-io*))
   (let* ((code-vector (uvref xfunction 1))
