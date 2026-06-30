@@ -393,7 +393,7 @@
 
 (defun disassemble-code-vector (code-vector &optional
                                               (stream *standard-output*))
-  (print-di-vector stream (make-di-vector code-vector)))
+  (print-di-vector (make-di-vector code-vector) stream))
 
 (defun make-di-vector (code-vector)
   (let* ((n (uvsize code-vector))
@@ -429,32 +429,32 @@
   (or (di-label di)
       (setf (di-label di) (format nil "L~d" (* 4 index)))))
 
-(defun print-di-vector (stream di-vector)
+(defun print-di-vector (di-vector stream)
   (dotimes (i (length di-vector))
     (let ((di (svref di-vector i)))
       (when (di-label di)
         (format stream "~&~a" (di-label di)))
-      (print-di stream di))))
+      (print-di di stream))))
 
-(defun print-di (stream di)
+(defun print-di (di stream)
   (let ((operands (di-operands di)))
     (format stream "~&  (~a" (di-mnemonic di))
     (dolist (op operands)
       (write-char #\space stream)
-      (print-operand stream op))
+      (print-operand op stream))
     (format stream ")"))
   (when *disassemble-print-instruction-word*
     (format stream "~60t; ~8,'0x" (di-word di))))
 
-(defun print-operand (stream operand)
+(defun print-operand (operand stream)
   (etypecase operand
-    (register-operand (print-register-operand stream operand))
-    (immediate-operand (print-immediate-operand stream operand))
-    (memory-operand (print-memory-operand stream operand))
-    (condition-operand (print-condition-operand stream operand))
-    (label-operand (print-label-operand stream operand))))
+    (register-operand (print-register-operand operand stream))
+    (immediate-operand (print-immediate-operand operand stream))
+    (memory-operand (print-memory-operand operand stream))
+    (condition-operand (print-condition-operand operand stream))
+    (label-operand (print-label-operand operand stream))))
 
-(defun print-label-operand (stream operand)
+(defun print-label-operand (operand stream)
   ;; A reference that resolved to a local label prints as that label's name;
   ;; one that lands outside this code vector falls back to the signed byte
   ;; displacement.
@@ -463,7 +463,7 @@
       (write-string name stream)
       (format stream "~d" (label-operand-offset operand)))))
 
-(defun print-register-operand (stream operand)
+(defun print-register-operand (operand stream)
   (let* ((r (register-operand-register operand))
          (name (register-name r)))
     (when *disassemble-print-lisp-register-names*
@@ -477,7 +477,7 @@
                (register-operand-amount operand)))
       (t (format stream "~a" name)))))
 
-(defun print-immediate-operand (stream operand)
+(defun print-immediate-operand (operand stream)
   (format stream "(:$ ")
   (let ((shift (immediate-operand-shift operand))
         (value (immediate-operand-value operand)))
@@ -488,22 +488,22 @@
       (format stream " :lsl ~d" shift))
     (format stream ")")))
 
-(defun print-memory-operand (stream operand)
+(defun print-memory-operand (operand stream)
   (cond ((memory-operand-pre-indexed operand)
          (format stream "(:@! "))
         ((memory-operand-post-indexed operand)
          (format stream "(:@+ "))
         (t
          (format stream "(:@ ")))
-  (print-register-operand stream (memory-operand-base operand))
+  (print-register-operand (memory-operand-base operand) stream)
   (let ((offset (memory-operand-offset operand)))
     (when offset
       (write-char #\space stream)
       (etypecase offset
-        (register-operand (print-register-operand stream offset))
-        (immediate-operand (print-immediate-operand stream offset))))))
+        (register-operand (print-register-operand offset stream))
+        (immediate-operand (print-immediate-operand offset stream))))))
     
-(defun print-condition-operand (stream operand)
+(defun print-condition-operand (operand stream)
   (format stream "(:? ~(~a~))" (condition-operand-name operand)))
 
 (defun ccl::arm64-disassemble-xfunction (xfunction &optional
@@ -511,4 +511,4 @@
   (let* ((code-vector (uvref xfunction 1))
          (di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
-    (print-di-vector stream di-vector)))
+    (print-di-vector di-vector stream)))
