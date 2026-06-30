@@ -26,15 +26,15 @@
   (make-load-form-saving-slots r))
 
 ;;; Flags in the register defstruct
-(defconstant $sp #b001)                 ;r31 role is stack pointer
+(defconstant $rflag-sp 1)               ;r31 role is stack pointer
 
 ;;; Given a designator for a register name, figure out everything the
 ;;; name implies.  Returns (values name number width family flags).
 (defun %parse-register-name (designator)
   (let ((name (string-downcase designator)))
     (cond
-      ((string= name "sp") (values name 31 64 :gpr $sp))
-      ((string= name "wsp") (values name 31 32 :gpr $sp))
+      ((string= name "sp") (values name 31 64 :gpr $rflag-sp))
+      ((string= name "wsp") (values name 31 32 :gpr $rflag-sp))
       ((string= name "xzr") (values name 31 64 :gpr 0))
       ((string= name "wzr") (values name 31 32 :gpr 0))
       (t (multiple-value-bind (width family)
@@ -228,17 +228,14 @@
   operand-specs
   base-opcode
   mask            ;for disassembly: masks out variable parts of instruction
-  alias-printer   ;optional function to rewrite disassembled insn as
-                  ; as preferred alias
   (flags 0))
 
 (defmacro define-instruction-template (name operand-specs base-opcode mask
-                                       &key alias-printer flags)
+                                       &key flags)
   `(make-instruction-template :name ,(string-downcase name)
                               :operand-specs ',operand-specs
                               :base-opcode ,base-opcode
                               :mask ,mask
-                              :alias-printer ,alias-printer
                               :flags (encode-instruction-flags ,flags)))
 
 (defparameter *instruction-groups*
@@ -814,12 +811,15 @@
    ;; bitfield insert aliases: immr=(-lsb) mod width, imms=width-1 (separable,
    ;; so #lsb and #width each drive one field).  Extract forms (sbfx/ubfx/
    ;; bfxil) are lapmacros.
-   (def sbfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x13000000 0 :flags :alias)
-   (def sbfiz ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #x93400000 0 :flags :alias)
-   (def ubfiz ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x53000000 0 :flags :alias)
-   (def ubfiz ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #xd3400000 0 :flags :alias)
-   (def bfi   ((:rd :w) (:rn :w) :bfiz-lsb-w :bf-width-w) #x33000000 0 :flags :alias)
-   (def bfi   ((:rd :x) (:rn :x) :bfiz-lsb-x :bf-width-x) #xb3400000 0 :flags :alias)
+   (def sbfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x13000000 0 :flags :alias)
+   (def sbfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #x93400000 0 :flags :alias)
+   (def ubfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x53000000 0 :flags :alias)
+   (def ubfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xd3400000 0 :flags :alias)
+   (def bfi   ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x33000000 0 :flags :alias)
+   (def bfi   ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xb3400000 0 :flags :alias)
+   ;; bfc is bfi with Rn=zr (bits 9:5 baked to 31): clear a bitfield.
+   (def bfc   ((:rd :w) :bf-lsb-w :bf-width-w) #x330003e0 0 :flags :alias)
+   (def bfc   ((:rd :x) :bf-lsb-x :bf-width-x) #xb34003e0 0 :flags :alias)
 
    ;; Data-processing (1 source)
    (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
@@ -1163,8 +1163,8 @@
     :lsr-imm-w     ; ... and the W form (immr=n, imms=31)
     :asr-imm-x     ;asr #n: same field encoding as :lsr-imm-x, sbfm base
     :asr-imm-w
-    :bfiz-lsb-x    ;sbfiz/ubfiz/bfi #lsb (X): immr = (-lsb) & 63
-    :bfiz-lsb-w    ; ... and the W form (immr = (-lsb) & 31)
+    :bf-lsb-x    ;sbfiz/ubfiz/bfi #lsb (X): immr = (-lsb) & 63
+    :bf-lsb-w    ; ... and the W form (immr = (-lsb) & 31)
     :bf-width-x    ;sbfiz/ubfiz/bfi #width (X): imms = width-1
     :bf-width-w    ; ... and the W form
     :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
@@ -1378,7 +1378,7 @@
          (width (register-width r))
          (amount (register-operand-amount r-op))
          (r31-role (if (= (register-number r) 31)
-                     (if (logtest (register-flags r) $sp)
+                     (if (logtest (register-flags r) $rflag-sp)
                        :stack-pointer
                        :zero-register)))
          (modifier (register-operand-modifier r-op)))
@@ -1549,8 +1549,8 @@
          (and (eql shift 0) (typep value '(integer 0 63))))
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
          (and (eql shift 0) (typep value '(integer 0 31))))
-        (:bfiz-lsb-x (and (eql shift 0) (typep value '(integer 0 63))))
-        (:bfiz-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
+        (:bf-lsb-x (and (eql shift 0) (typep value '(integer 0 63))))
+        (:bf-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
         (:bf-width-x (and (eql shift 0) (typep value '(integer 1 64))))
         (:bf-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
@@ -1587,7 +1587,7 @@
               (modifier (register-operand-modifier r-op))
               (amount (register-operand-amount r-op)))
          (and (eq (register-family reg) :gpr)
-              (not (logtest (register-flags reg) $sp))
+              (not (logtest (register-flags reg) $rflag-sp))
               (index-option (register-width reg) modifier)
               (member amount (list 0 scale))))))
 
@@ -1830,8 +1830,8 @@
       ((:lsr-imm-w :asr-imm-w)
        (set-field-value insn (byte 6 16) value)
        (set-field-value insn (byte 6 10) 31))
-      (:bfiz-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
-      (:bfiz-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
+      (:bf-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
+      (:bf-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
       ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
       ((:movw-mov-w :movw-mov-x)
        (multiple-value-bind (imm16 hw)
@@ -2061,7 +2061,7 @@
     (:fpzero "#0.0")
     (:fpimm8 "#fpimm")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
-    ((:bfiz-lsb-x :bfiz-lsb-w) "#lsb")
+    ((:bf-lsb-x :bf-lsb-w) "#lsb")
     ((:bf-width-x :bf-width-w) "#width")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :poff2 :poff3) "#off")
