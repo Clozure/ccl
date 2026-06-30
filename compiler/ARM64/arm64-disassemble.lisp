@@ -4,7 +4,9 @@
 
 (in-package "ARM64")
 
-(defvar *print-lisp-register-names* t)
+(defvar *disassemble-print-lisp-register-names* t)
+(defvar *disassemble-print-hex-threshold* 100)
+(defvar *disassemble-print-instruction-word* t)
 
 (defstruct (disassembled-instruction (:conc-name di-))
   (word 0 :type (unsigned-byte 32))
@@ -12,6 +14,10 @@
   mnemonic
   operands)
 
+;; Some encodings should disassemble to preferred aliases.  The
+;; rewrite function may alter the disassembled-instruction struct (by
+;; modifying its name and operands) so that the preferred alias will be
+;; printed.
 (defparameter *alias-rewriters*
   '(("add" . rewrite-add)
     ("adds" . rewrite-adds)
@@ -42,6 +48,9 @@
     ("movz" . rewrite-movz)
     ("movn" . rewrite-movn)))
 
+(defun find-rewriter (mnemonic)
+  (cdr (assoc mnemonic *alias-rewriters* :test #'equalp)))
+
 (defun find-template (insn-word)
   (dotimes (i (length *instruction-templates*))
     (let* ((template (svref *instruction-templates* i))
@@ -61,10 +70,8 @@
               (mapcar #'(lambda (spec)
                           (decode-operand insn-word spec))
                       (instruction-template-operand-specs template)))
-        ;; If the instruction has a preferred alias, dissassemble
-        ;; to that form.
-        (let ((rewriter (cdr (assoc mnemonic *alias-rewriters*
-                                    :test 'equalp))))
+        ;; Update the di if the instruction has a preferred dissassembly.
+        (let ((rewriter (find-rewriter mnemonic)))
           (when rewriter (funcall rewriter di)))))
     di))
 
@@ -93,30 +100,24 @@
        (let ((shift (immediate-operand-shift operand)))
          (or (null shift) (zerop shift)))))
 
-(defun rewrite-rd-zr (di mnemonic)
-  ;; When the destination is the zero register, drop it and rename the di.
-  (let ((operands (di-operands di)))
-    (when (zr-operand-p (first operands))
-      (setf (di-mnemonic di) mnemonic
-            (di-operands di) (rest operands)))))
+(defun remove-nth (n list)
+  (append (subseq list 0 n) (nthcdr (1+ n) list)))
 
 (defun rewrite-subs (di)
   (let ((operands (di-operands di)))
     (cond
       ((zr-operand-p (first operands))
+       ;; subs ZR, Rn, x => cmp Rn, x (where x is anything)
        (setf (di-mnemonic di) "cmp"
              (di-operands di) (rest operands)))
       ((zr-operand-p (second operands))
+       ;; subs Rd, ZR, Rm => negs Rd, Rm
        (setf (di-mnemonic di) "negs"
-             (di-operands di) (list* (car operands) (cddr operands)))))))
-
-(defun rewrite-adds (di) (rewrite-rd-zr di "cmn"))
-(defun rewrite-ands (di) (rewrite-rd-zr di "tst"))
+             (di-operands di) (remove-nth 1 operands))))))
 
 (defun rewrite-add (di)
-  ;; add Rd, Rn, #0 => mov Rd, Rn, but only when SP is Rd or Rn.  Between two
-  ;; ordinary registers add#0 is not preferred as mov (that's the orr form);
-  ;; the mov spelling exists for add because orr cannot name the stack pointer.
+  ;; Rewrite add Rd, Rn, #0 => mov Rd, Rn, but only when Rd or Rn is SP.
+  ;; Section C6.2.4 of the manual specifies this special case.
   (let* ((operands (di-operands di))
          (rd (first operands))
          (rn (second operands))
@@ -126,21 +127,19 @@
       (setf (di-mnemonic di) "mov"
             (di-operands di) (list rd rn)))))
 
-(defun remove-nth (n list)
-  (append (subseq list 0 n) (nthcdr (1+ n) list)))
-
 (defun rewrite-drop-zr (di mnemonic index)
-  ;; When the operand at INDEX is the zero register, drop it and rename.  This
-  ;; is the shape behind neg/mvn/ngc/ngcs (Rn=zr, index 1) and the multiply
-  ;; aliases mul/mneg/smull/... (Ra=zr, index 3).
+  ;; When the operand at index is the zero register, drop it and rename.
   (let ((operands (di-operands di)))
     (when (zr-operand-p (nth index operands))
       (setf (di-mnemonic di) mnemonic
             (di-operands di) (remove-nth index operands)))))
 
-(defun rewrite-sub (di) (rewrite-drop-zr di "neg" 1))    ;sub Rd,xzr,Rm{,shift}
+(defun rewrite-adds (di) (rewrite-drop-zr di "cmn" 0))   ;adds ZR, Rn, x
+(defun rewrite-ands (di) (rewrite-drop-zr di "tst" 0))   ;ands ZR, Rn, x
+(defun rewrite-orn (di) (rewrite-drop-zr di "mvn" 1))    ;orn Rd,xzr,Rm{,shift}
 (defun rewrite-sbc (di) (rewrite-drop-zr di "ngc" 1))    ;sbc Rd,xzr,Rm
 (defun rewrite-sbcs (di) (rewrite-drop-zr di "ngcs" 1))  ;sbcs Rd,xzr,Rm
+(defun rewrite-sub (di) (rewrite-drop-zr di "neg" 1))    ;sub Rd,xzr,Rm{,shift}
 (defun rewrite-madd (di) (rewrite-drop-zr di "mul" 3))   ;madd Rd,Rn,Rm,xzr
 (defun rewrite-msub (di) (rewrite-drop-zr di "mneg" 3))
 (defun rewrite-smaddl (di) (rewrite-drop-zr di "smull" 3))
@@ -148,15 +147,13 @@
 (defun rewrite-umaddl (di) (rewrite-drop-zr di "umull" 3))
 (defun rewrite-umsubl (di) (rewrite-drop-zr di "umnegl" 3))
 
-(defun rewrite-orn (di) (rewrite-drop-zr di "mvn" 1))    ;orn Rd,xzr,Rm{,shift}
-
 (defun movz-form-p (value datasize)
-  ;; True if VALUE is movz-representable -- using the assembler's own oracle, so
-  ;; the disassembler and assembler agree on which mov-immediate form wins.
+  ;; Can value be encoded as a wide immediate for movz?
   (and (encode-wide-immediate value datasize) t))
 
 (defun movn-form-p (value datasize)
-  ;; True if VALUE is movn-representable: its datasize-wide inverse is movz-able.
+  ;; Can value be encoded as a wide immedaite for movn?  In other words,
+  ;; is its datasize-wide inverse valid for movz?
   (movz-form-p (logand (lognot value) (1- (ash 1 datasize))) datasize))
 
 (defun rewrite-orr (di)
@@ -191,7 +188,8 @@
          (shift (or (immediate-operand-shift imm-op) 0)))
     (unless (and (zerop imm16) (plusp shift))
       (setf (di-mnemonic di) "mov"
-            (di-operands di) (list rd (decoded-immediate (ash imm16 shift)))))))
+            (di-operands di) (list rd (decoded-immediate
+                                       (ash imm16 shift)))))))
 
 (defun rewrite-movn (di)
   ;; movn Rd, #imm16, lsl #shift  => mov Rd, #~(imm16 << shift).  Skip it when
@@ -291,9 +289,11 @@
     (cond
       ;; uxtb/uxth: 32-bit zero-extend of a byte/halfword
       ((and (= d 32) (= immr 0) (= imms 7))
-       (setf (di-mnemonic di) "uxtb" (di-operands di) (list rd rn)))
+       (setf (di-mnemonic di) "uxtb"
+             (di-operands di) (list rd rn)))
       ((and (= d 32) (= immr 0) (= imms 15))
-       (setf (di-mnemonic di) "uxth" (di-operands di) (list rd rn)))
+       (setf (di-mnemonic di) "uxth"
+             (di-operands di) (list rd rn)))
       ;; lsr #immr: imms is the all-ones top
       ((= imms (1- d))
        (setf (di-mnemonic di) "lsr"
@@ -302,19 +302,22 @@
       ;; this also satisfies (imms < immr).
       ((= immr (1+ imms))
        (setf (di-mnemonic di) "lsl"
-             (di-operands di) (list rd rn (decoded-immediate (- (1- d) imms)))))
+             (di-operands di) (list rd rn
+                                    (decoded-immediate (- (1- d) imms)))))
       ;; ubfiz #lsb,#width
       ((< imms immr)
        (setf (di-mnemonic di) "ubfiz"
              (di-operands di) (list rd rn
-                                    (decoded-immediate (logand (- immr) (1- d)))
+                                    (decoded-immediate (logand (- immr)
+                                                               (1- d)))
                                     (decoded-immediate (1+ imms)))))
       ;; ubfx #lsb,#width
       (t
        (setf (di-mnemonic di) "ubfx"
              (di-operands di) (list rd rn
                                     (decoded-immediate immr)
-                                    (decoded-immediate (- (1+ imms) immr))))))))
+                                    (decoded-immediate
+                                     (- (1+ imms) immr))))))))
 
 (defun rewrite-sbfm (di)
   (let* ((operands (di-operands di))
@@ -338,24 +341,26 @@
       ((= imms (1- d))
        (setf (di-mnemonic di) "asr"
              (di-operands di) (list rd rn (decoded-immediate immr))))
-      ;; sbfiz #lsb,#width
+      ;; sbfiz #lsb, #width
       ((< imms immr)
        (setf (di-mnemonic di) "sbfiz"
              (di-operands di) (list rd rn
-                                    (decoded-immediate (logand (- immr) (1- d)))
+                                    (decoded-immediate (logand (- immr)
+                                                               (1- d)))
                                     (decoded-immediate (1+ imms)))))
-      ;; sbfx #lsb,#width
+      ;; sbfx #lsb, #width
       (t
        (setf (di-mnemonic di) "sbfx"
              (di-operands di) (list rd rn
                                     (decoded-immediate immr)
-                                    (decoded-immediate (- (1+ imms) immr))))))))
+                                    (decoded-immediate
+                                     (- (1+ imms) immr))))))))
 
 (defun rewrite-bfm (di)
   ;; bfm Rd, Rn, immr, imms:
-  ;;   imms < immr, Rn=zr  => bfc Rd, #lsb, #width        (clear)
-  ;;   imms < immr         => bfi Rd, Rn, #lsb, #width     (insert)
-  ;;   imms >= immr        => bfxil Rd, Rn, #lsb, #width   (insert low; lapmacro)
+  ;;   imms < immr, Rn=zr  => bfc Rd, #lsb, #width       (clear)
+  ;;   imms < immr         => bfi Rd, Rn, #lsb, #width   (insert)
+  ;;   imms >= immr        => bfxil Rd, Rn, #lsb, #width (insert low; lapmacro)
   (let* ((operands (di-operands di))
          (rd (first operands))
          (rn (second operands))
@@ -367,13 +372,16 @@
     (cond
       ((< imms immr)
        (if (zr-operand-p rn)
-         (setf (di-mnemonic di) "bfc" (di-operands di) (list rd lsb width))
-         (setf (di-mnemonic di) "bfi" (di-operands di) (list rd rn lsb width))))
+         (setf (di-mnemonic di) "bfc"
+               (di-operands di) (list rd lsb width))
+         (setf (di-mnemonic di) "bfi"
+               (di-operands di) (list rd rn lsb width))))
       (t
        (setf (di-mnemonic di) "bfxil"
              (di-operands di) (list rd rn
                                     (decoded-immediate immr)
-                                    (decoded-immediate (- (1+ imms) immr))))))))
+                                    (decoded-immediate
+                                     (- (1+ imms) immr))))))))
 
 (defun rewrite-extr (di)
   ;; extr Rd, Rn, Rm, #lsb with Rn=Rm is a rotate: ror Rd, Rn, #lsb.
@@ -383,7 +391,8 @@
       (setf (di-operands di) (list (first operands) rn (fourth operands))
             (di-mnemonic di) "ror"))))
 
-(defun disassemble-code-vector (code-vector &optional (stream *standard-output*))
+(defun disassemble-code-vector (code-vector &optional
+                                              (stream *standard-output*))
   (print-di-vector stream (make-di-vector code-vector)))
 
 (defun make-di-vector (code-vector)
@@ -433,7 +442,9 @@
     (dolist (op operands)
       (write-char #\space stream)
       (print-operand stream op))
-    (format stream ")")))
+    (format stream ")"))
+  (when *disassemble-print-instruction-word*
+    (format stream "~60t; ~8,'0x" (di-word di))))
 
 (defun print-operand (stream operand)
   (etypecase operand
@@ -455,7 +466,7 @@
 (defun print-register-operand (stream operand)
   (let* ((r (register-operand-register operand))
          (name (register-name r)))
-    (when *print-lisp-register-names*
+    (when *disassemble-print-lisp-register-names*
       (setq name (or (cdr (assoc name *register-alias-names*
                                  :test #'string-equal))
                      name)))
@@ -470,12 +481,20 @@
   (format stream "(:$ ")
   (let ((shift (immediate-operand-shift operand))
         (value (immediate-operand-value operand)))
-    (if (and shift (/= shift 0))
-      (format stream "~d :lsl ~d)" value shift)
-      (format stream "~d)" value))))
+    (if (> (abs value) *disassemble-print-hex-threshold*)
+      (format stream "#x~x" value)
+      (format stream "~d" value))
+    (when (and shift (/= shift 0))
+      (format stream " :lsl ~d" shift))
+    (format stream ")")))
 
 (defun print-memory-operand (stream operand)
-  (format stream "(:@ ")
+  (cond ((memory-operand-pre-indexed operand)
+         (format stream "(:@! "))
+        ((memory-operand-post-indexed operand)
+         (format stream "(:@+ "))
+        (t
+         (format stream "(:@ ")))
   (print-register-operand stream (memory-operand-base operand))
   (let ((offset (memory-operand-offset operand)))
     (when offset
@@ -487,7 +506,8 @@
 (defun print-condition-operand (stream operand)
   (format stream "(:? ~(~a~))" (condition-operand-name operand)))
 
-(defun ccl::arm64-disassemble-xfunction (xfunction &optional (stream *debug-io*))
+(defun ccl::arm64-disassemble-xfunction (xfunction &optional
+                                                     (stream *debug-io*))
   (let* ((code-vector (uvref xfunction 1))
          (di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
