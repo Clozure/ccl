@@ -7,6 +7,7 @@
 (defvar *disassemble-print-lisp-register-names* t)
 (defvar *disassemble-print-hex-threshold* 100)
 (defvar *disassemble-print-instruction-word* t)
+(defvar *disassemble-show-preferred-aliases* t)
 
 (defstruct (disassembled-instruction (:conc-name di-))
   (word 0 :type (unsigned-byte 32))
@@ -71,8 +72,9 @@
                           (decode-operand insn-word spec))
                       (instruction-template-operand-specs template)))
         ;; Update the di if the instruction has a preferred dissassembly.
-        (let ((rewriter (find-rewriter mnemonic)))
-          (when rewriter (funcall rewriter di)))))
+        (when *disassemble-show-preferred-aliases*
+          (let ((rewriter (find-rewriter mnemonic)))
+            (when rewriter (funcall rewriter di))))))
     di))
 
 ;; True if operand represents a bare, unmodified zero register (xzr/wzr).
