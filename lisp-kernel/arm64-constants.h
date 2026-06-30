@@ -29,6 +29,7 @@ DEFCONST(subtagmask, ((1<<num_subtag_bits)-1))
 DEFCONST(ncharcodebits, 8)
 DEFCONST(charcode_shift, 8)
 DEFCONST(node_size, 8)
+#undef dnode_size
 DEFCONST(dnode_size, 16)
 DEFCONST(node_shift, 3)
 DEFCONST(nargregs, 3)
@@ -160,6 +161,7 @@ DEFCONST(subtag_value_cell, SUBTAG(fulltag_nodeheader_1, 5))
 DEFCONST(subtag_xfunction, SUBTAG(fulltag_nodeheader_1, 6))
 DEFCONST(subtag_lock, SUBTAG(fulltag_nodeheader_1, 7))
 DEFCONST(subtag_instance, SUBTAG(fulltag_nodeheader_1, 8))
+DEFCONST(subtag_pseudofunction, SUBTAG(fulltag_nodeheader_1, 9))
 
 DEFCONST(subtag_character, SUBTAG(fulltag_imm_0, 0))
 
@@ -286,11 +288,21 @@ _structf macptr
 _endstructf
 #endif
 
-DEFCONST(bigit_size, 4)
 DEFCONST(two_digit_bignum_header, ((2<<num_subtag_bits)|subtag_bignum))
+DEFCONST(three_digit_bignum_header, ((3<<num_subtag_bits)|subtag_bignum))
+DEFCONST(four_digit_bignum_header, ((4<<num_subtag_bits)|subtag_bignum))
 
+/* bignum digits are 32 bits even though they could be 64 bits */
+DEFCONST(bigit_size, 4)
 #define aligned_bignum_size(ndigits)                                    \
   ((node_size + (bigit_size*(ndigits)) + (dnode_size-1)) & ~(dnode_size-1))
+
+#if !defined(__ASSEMBLER__)
+typedef struct xframe_list {
+  ExceptionInformation *curr;
+  struct xframe_list *prev;
+} xframe_list;
+#endif
 
 /* thread context record struct */
 #ifdef __ASSEMBLER__

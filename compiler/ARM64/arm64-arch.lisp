@@ -166,6 +166,7 @@
 (define-subtag xfunction fulltag-nodeheader-1 6)
 (define-subtag lock fulltag-nodeheader-1 7)
 (define-subtag instance fulltag-nodeheader-1 8)
+(define-subtag pseudofunction fulltag-nodeheader-1 9)
 
 (define-subtag character fulltag-imm-0 0)
 
