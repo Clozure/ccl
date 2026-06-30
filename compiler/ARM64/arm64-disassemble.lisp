@@ -77,7 +77,7 @@
             (when rewriter (funcall rewriter di))))))
     di))
 
-;; True if operand represents a bare, unmodified zero register (xzr/wzr).
+;; True if operand represents the bare, unmodified zero register (xzr/wzr).
 (defun zr-operand-p (operand)
   (and (register-operand-p operand)
        (null (register-operand-modifier operand))
@@ -102,6 +102,7 @@
        (let ((shift (immediate-operand-shift operand)))
          (or (null shift) (zerop shift)))))
 
+;; Return list with the nth element omitted.
 (defun remove-nth (n list)
   (append (subseq list 0 n) (nthcdr (1+ n) list)))
 
@@ -209,8 +210,8 @@
       (setf (di-mnemonic di) "mov"
             (di-operands di) (list rd (decoded-immediate value))))))
 
-;; The variable-shift data-processing instructions are always disassembled
-;; under their lsl/lsr/asr/ror spellings; the operands are unchanged.
+;; The variable-shift data-processing instructions are disassembled as
+;; lsl/lsr/asr/ror; the operands are unchanged.
 (defun rewrite-lslv (di) (setf (di-mnemonic di) "lsl"))
 (defun rewrite-lsrv (di) (setf (di-mnemonic di) "lsr"))
 (defun rewrite-asrv (di) (setf (di-mnemonic di) "asr"))
@@ -264,19 +265,24 @@
       (setf (di-mnemonic di) "cneg"
             (di-operands di) (list (first operands) rn inverse)))))
 
-;;; Bitfield aliases.  The canonical sbfm/ubfm/bfm carry two raw 6-bit fields,
-;;; immr and imms; each preferred alias is selected by a condition on them and
-;;; re-presents them as a shift, a width, or a lsb/width pair.  The extract
-;;; forms sbfx/ubfx/bfxil are lapmacros on the assembler side (their imms is
-;;; lsb+width-1, coupling both operands), but that is invisible here: we emit
-;;; the alias and the lapmacro re-encodes it.  lsb=immr, width=imms-immr+1.
+;;; Bitfield aliases.  There are a bunch of them.
+;;;
+;;; The canonical sbfm/ubfm/bfm carry two raw 6-bit fields, immr and
+;;; imms.  Each preferred alias is selected by a condition on them and
+;;; then displays them as a shift, a width, or a lsb/width pair.  The
+;;; extract forms sbfx/ubfx/bfxil are lapmacros on the assembler side
+;;; (their imms is lsb+width-1, coupling both operands), but that is
+;;; invisible here: we emit the alias and the lapmacro re-encodes it.
+;;; lsb=immr, width=imms-immr+1.
 
+;; Make an immediate operand with the value fully decoded (i.e., any
+;; shifts already performed, etc.)
 (defun decoded-immediate (value)
   (make-immediate-operand :value value :shift 0))
 
 (defun register-operand-with-width (operand width)
-  ;; Same GPR as OPERAND but at the given access width (Xn -> Wn for the
-  ;; sxtb/sxth/sxtw aliases, whose source is always a W register).
+  ;; Return a register operand corresponding to the supplied operand except
+  ;; that it has the specified width.  For example: x13 -> w13.
   (make-register-operand
    :register (gpr-ref (register-number (register-operand-register operand))
                       width)))
@@ -296,7 +302,7 @@
       ((and (= d 32) (= immr 0) (= imms 15))
        (setf (di-mnemonic di) "uxth"
              (di-operands di) (list rd rn)))
-      ;; lsr #immr: imms is the all-ones top
+      ;; lsr #immr: imms is 31 or 63
       ((= imms (1- d))
        (setf (di-mnemonic di) "lsr"
              (di-operands di) (list rd rn (decoded-immediate immr))))
@@ -306,14 +312,14 @@
        (setf (di-mnemonic di) "lsl"
              (di-operands di) (list rd rn
                                     (decoded-immediate (- (1- d) imms)))))
-      ;; ubfiz #lsb,#width
+      ;; ubfiz #lsb, #width
       ((< imms immr)
        (setf (di-mnemonic di) "ubfiz"
              (di-operands di) (list rd rn
                                     (decoded-immediate (logand (- immr)
                                                                (1- d)))
                                     (decoded-immediate (1+ imms)))))
-      ;; ubfx #lsb,#width
+      ;; if we get here: ubfx #lsb, #width
       (t
        (setf (di-mnemonic di) "ubfx"
              (di-operands di) (list rd rn
@@ -329,7 +335,7 @@
          (imms (immediate-operand-value (fourth operands)))
          (d (register-width (register-operand-register rd))))
     (cond
-      ;; sxtb/sxth/sxtw: sign-extend byte/half/word; source is a W register
+      ;; sxtb/sxth/sxtw: source is a W register
       ((and (= immr 0) (= imms 7))
        (setf (di-mnemonic di) "sxtb"
              (di-operands di) (list rd (register-operand-with-width rn 32))))
@@ -393,10 +399,6 @@
       (setf (di-operands di) (list (first operands) rn (fourth operands))
             (di-mnemonic di) "ror"))))
 
-(defun disassemble-code-vector (code-vector &optional
-                                              (stream *standard-output*))
-  (print-di-vector (make-di-vector code-vector) stream))
-
 (defun make-di-vector (code-vector)
   (let* ((n (uvsize code-vector))
          (v (make-array n)))
@@ -427,7 +429,7 @@
 (defun ensure-label (di index)
   ;; The name of the label defined at DI, defining one (named by its byte
   ;; offset from the start of the code vector, like L0, L4, L8 ...) if this
-  ;; is the first reference to it.  Matches the other CCL disassemblers.
+  ;; is the first reference to it.
   (or (di-label di)
       (setf (di-label di) (format nil "L~d" (* 4 index)))))
 
@@ -507,6 +509,12 @@
     
 (defun print-condition-operand (operand stream)
   (format stream "(:? ~(~a~))" (condition-operand-name operand)))
+
+(defun disassemble-code-vector (code-vector &optional
+                                              (stream *debug-io*))
+  (let ((di-vector (make-di-vector code-vector)))
+    (resolve-labels di-vector)
+    (print-di-vector di-vector stream)))
 
 (defun ccl::arm64-disassemble-xfunction (xfunction &optional
                                                      (stream *debug-io*))
