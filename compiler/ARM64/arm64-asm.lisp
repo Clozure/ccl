@@ -2336,7 +2336,8 @@
     (dolist (form forms)
       (if (symbolp form)
         (emit-label seg form)
-        (emit-element (assemble-instruction seg form) seg)))
+        ;; ASSEMBLE-INSTRUCTION already emits into SEG when given one.
+        (assemble-instruction seg form)))
     (finalize seg)
     seg))
 
@@ -2622,10 +2623,25 @@
     (:double-float (values :fpr 64))
     (t nil)))
 
-;;; Try to parse one vinsn-body operand (a register or a branch-target
-;;; label).  Returns two values: an operand struct for template matching
-;;; and a dumpable descriptor to store.  Returns NIL if OP is something we
-;;; can't handle here yet (immediate/memory/condition), in which case the
+;;; Match-time stand-in for an immediate whose value isn't known until
+;;; expand time (a const-parameter hole or an (:apply ...) expression).
+;;; VINSN-MATCH-TEMPLATE lets it match any immediate-class operand spec;
+;;; the actual range is checked at expand time.
+(defparameter *wild-immediate* '#:wild-immediate)
+
+;;; Resolve one argument of an immediate (:apply fn ...) form to a
+;;; dumpable descriptor: (:opnd index) for a parameter, else a constant.
+(defun vinsn-imm-apply-arg (arg name-list)
+  (let ((index (and (symbolp arg) (position arg name-list :test #'eq))))
+    (if index
+      (list :opnd index)
+      (eval-immediate-expression arg))))
+
+;;; Try to parse one vinsn-body operand (a register, a branch-target
+;;; label, or an immediate).  Returns two values: an operand struct (or
+;;; the *WILD-IMMEDIATE* marker) for template matching, and a dumpable
+;;; descriptor to store.  Returns NIL if OP is something we can't handle
+;;; yet (memory, condition, shifted/extended register), in which case the
 ;;; caller abandons simplification of the instruction.
 (defun vinsn-parse-operand (op name-list param-types)
   (cond
@@ -2634,6 +2650,32 @@
     ((keywordp op)
      (values (make-label-operand :name op) ;name is a placeholder for matching
              (list :local-label op)))
+    ;; An immediate: (:$ value) or (:$ value :lsl amount).
+    ((and (consp op) (eq (car op) :$))
+     (destructuring-bind (value-form &optional lsl (shift-form 0)) (cdr op)
+       (when (and lsl (not (eq lsl :lsl)))
+         (error "Only :lsl is valid in a vinsn immediate: ~s" op))
+       (let ((shift (eval-immediate-expression shift-form)))
+         (cond
+           ;; a value computed at expand time: (:apply fn args...)
+           ((and (consp value-form) (eq (car value-form) :apply))
+            (values *wild-immediate*
+                    (list* :imm-apply shift (cadr value-form)
+                           (mapcar #'(lambda (a)
+                                       (vinsn-imm-apply-arg a name-list))
+                                   (cddr value-form)))))
+           ;; a const-parameter hole (value known only at expand time)
+           ((and (symbolp value-form)
+                 (position value-form name-list :test #'eq))
+            (values *wild-immediate*
+                    (list :imm-opnd
+                          (position value-form name-list :test #'eq)
+                          shift)))
+           ;; a literal constant, known now: match by value (this is what
+           ;; lets e.g. (mov reg (:$ const)) pick the right movz/movn/orr)
+           (t (let ((value (eval-immediate-expression value-form)))
+                (values (make-immediate-operand :value value :shift shift)
+                        (list :imm value shift))))))))
     ((symbolp op)
      (let ((index (position op name-list :test #'eq)))
        (if index
@@ -2658,6 +2700,20 @@
              (values (make-register-operand :register reg)
                      (list :reg (register-number reg))))))))))
 
+;;; Like MATCH-TEMPLATE, but a *WILD-IMMEDIATE* operand matches any
+;;; immediate-class spec (a bare keyword that isn't a condition).  Used to
+;;; select a template when an immediate's value isn't known until expand
+;;; time; the value's range is checked then.
+(defun vinsn-match-template (template operands)
+  (let ((specs (instruction-template-operand-specs template)))
+    (and (= (length specs) (length operands))
+         (every #'(lambda (operand spec)
+                    (if (eq operand *wild-immediate*)
+                      (and (keywordp spec)
+                           (not (member spec '(:cond :cond-inv))))
+                      (match-operand operand spec)))
+                operands specs))))
+
 ;;; Returns two values: the simplified body form, and (unless we fell
 ;;; back) an opcode-alist entry (ordinal name . operand-specs) recording
 ;;; enough to re-resolve the template's ordinal at load time.  See
@@ -2679,11 +2735,23 @@
               (push desc descriptors)))
           (setq match-operands (nreverse match-operands)
                 descriptors (nreverse descriptors))
-          ;; First matching template wins, exactly as the assembler
-          ;; does; for register operands shape-match is a full match.
-          (dolist (template candidates)
-            (when (match-template template match-operands)
-              (let ((ordinal (instruction-template-ordinal template)))
+          ;; First matching template wins, exactly as the assembler does;
+          ;; for registers/labels/literal immediates shape-match is a full
+          ;; match.  But when a wild immediate is present the value can't
+          ;; disambiguate value-multiplexed forms (e.g. mov's movz/movn/orr
+          ;; aliases), so require a unique match and otherwise complain --
+          ;; the vinsn should name a concrete (non-alias) instruction.
+          (let* ((has-wild (member *wild-immediate* match-operands :test #'eq))
+                 (matches (remove-if-not
+                           #'(lambda (tp) (vinsn-match-template tp match-operands))
+                           candidates)))
+            (when matches
+              (when (and has-wild (cdr matches))
+                (error "Ambiguous immediate in vinsn instruction ~s: ~d ~
+                        templates match; name a concrete (non-alias) ~
+                        instruction." form (length matches)))
+              (let* ((template (car matches))
+                     (ordinal (instruction-template-ordinal template)))
                 (return-from vinsn-simplify-instruction
                   (values (cons ordinal descriptors)
                           (list* ordinal

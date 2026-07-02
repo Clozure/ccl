@@ -1453,17 +1453,47 @@
 ;;; object.  A (:label class) spec builds a label-operand -- naming either
 ;;; a backend vinsn-label passed in through VP, or a template-local label;
 ;;; any other spec builds a register-operand.
+;;; Build an immediate-operand for a filled-in body operand.  DESC is
+;;; (:imm value shift), (:imm-opnd vp-index shift), or
+;;; (:imm-apply shift fn . args) where each arg is a constant or an
+;;; (:opnd vp-index) hole.  SPEC is the immediate class.  Since a wild
+;;; immediate's value wasn't known when the template was chosen, its range
+;;; is only checkable now: matching guaranteed the class, not the fit.
+(defun arm642-vinsn-immediate-operand (desc spec vp)
+  (multiple-value-bind (value shift)
+      (ecase (car desc)
+        (:imm (values (cadr desc) (caddr desc)))
+        (:imm-opnd (values (svref vp (cadr desc)) (caddr desc)))
+        (:imm-apply
+         (destructuring-bind (shift fn . args) (cdr desc)
+           (values (apply fn (mapcar #'(lambda (a)
+                                         (if (and (consp a) (eq (car a) :opnd))
+                                           (svref vp (cadr a))
+                                           a))
+                                     args))
+                   shift))))
+    (let ((imm (arm64::make-immediate-operand :value value :shift shift)))
+      (unless (arm64::match-immediate-operand imm spec)
+        (compiler-bug "vinsn immediate ~s (shift ~s) out of range for ~
+                       operand class ~s" value shift spec))
+      imm)))
+
 (defun arm642-vinsn-operand (desc spec vp unique-labels)
-  (if (arm64::label-spec-p spec)
-    (arm64::make-label-operand
-     :name (ecase (car desc)
-             (:opnd (svref vp (cadr desc)))            ;backend (vinsn) label
-             (:local-label (cdr (assq (cadr desc) unique-labels)))))
-    (arm642-vinsn-register-operand
-     (ecase (car desc)
-       (:opnd (svref vp (cadr desc)))
-       (:reg (cadr desc)))
-     spec)))
+  (cond
+    ((arm64::label-spec-p spec)
+     (arm64::make-label-operand
+      :name (ecase (car desc)
+              (:opnd (svref vp (cadr desc)))           ;backend (vinsn) label
+              (:local-label (cdr (assq (cadr desc) unique-labels))))))
+    ;; A bare-keyword spec that isn't a condition is an immediate class.
+    ((and (keywordp spec) (not (member spec '(:cond :cond-inv))))
+     (arm642-vinsn-immediate-operand desc spec vp))
+    (t
+     (arm642-vinsn-register-operand
+      (ecase (car desc)
+        (:opnd (svref vp (cadr desc)))
+        (:reg (cadr desc)))
+      spec))))
 
 ;;; Expand one instruction of a vinsn template's body into a machine
 ;;; instruction and emit it into the section.  FORM is one simplified
