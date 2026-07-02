@@ -2189,7 +2189,10 @@
               (instruction-word insn) 0
               (instruction-parsed-operands insn) nil
               (instruction-address insn) nil
-              (instruction-size insn) 0)
+              ;; Every A64 instruction is one 4-byte word.  (%make-instruction
+              ;; and the struct default agree; a recycled node must too, or
+              ;; addressing/branch displacements come out wrong.)
+              (instruction-size insn) 4)
         insn)
       (%make-instruction form))))
 
@@ -2619,29 +2622,41 @@
     (:double-float (values :fpr 64))
     (t nil)))
 
-;;; Try to parse one vinsn-body operand as a register.  Returns two
-;;; values: an operand struct for template matching and a dumpable
-;;; descriptor to store.  Returns NIL if OP isn't a register we can
-;;; handle here (caller then abandons simplification of the instruction).
-(defun vinsn-parse-register-operand (op name-list param-types)
-  (when (symbolp op)
-    (let ((index (position op name-list :test #'eq)))
-      (if index
-        ;; a vinsn parameter: a hole
-        (multiple-value-bind (family width)
-            (vinsn-gpr-class->family+width (cdr (assoc op param-types
-                                                       :test #'eq)))
-          (when family
-            (values (make-register-operand
-                     :register (if (eq family :gpr)
-                                 (gpr-ref 0 width)
-                                 (fpr-ref 0 width)))
-                    (list :opnd index))))
-        ;; a literal register name (e.g. vsp, sp, fn)
-        (let ((reg (lookup-register op)))
-          (when reg
-            (values (make-register-operand :register reg)
-                    (list :reg (register-number reg)))))))))
+;;; Try to parse one vinsn-body operand (a register or a branch-target
+;;; label).  Returns two values: an operand struct for template matching
+;;; and a dumpable descriptor to store.  Returns NIL if OP is something we
+;;; can't handle here yet (immediate/memory/condition), in which case the
+;;; caller abandons simplification of the instruction.
+(defun vinsn-parse-operand (op name-list param-types)
+  (cond
+    ;; A bare keyword names a template-local label (e.g. :ok): defined
+    ;; elsewhere in this body and referenced here by a branch.
+    ((keywordp op)
+     (values (make-label-operand :name op) ;name is a placeholder for matching
+             (list :local-label op)))
+    ((symbolp op)
+     (let ((index (position op name-list :test #'eq)))
+       (if index
+         ;; a vinsn parameter (a hole)
+         (let ((class (cdr (assoc op param-types :test #'eq))))
+           (if (eq class :label)
+             ;; a branch target passed in as a backend (vinsn) label
+             (values (make-label-operand :name op)
+                     (list :opnd index))
+             ;; a register parameter
+             (multiple-value-bind (family width)
+                 (vinsn-gpr-class->family+width class)
+               (when family
+                 (values (make-register-operand
+                          :register (if (eq family :gpr)
+                                      (gpr-ref 0 width)
+                                      (fpr-ref 0 width)))
+                         (list :opnd index))))))
+         ;; a literal register name (e.g. vsp, sp, fn)
+         (let ((reg (lookup-register op)))
+           (when reg
+             (values (make-register-operand :register reg)
+                     (list :reg (register-number reg))))))))))
 
 ;;; Returns two values: the simplified body form, and (unless we fell
 ;;; back) an opcode-alist entry (ordinal name . operand-specs) recording
@@ -2656,7 +2671,7 @@
               (descriptors '()))
           (dolist (op opvals)
             (multiple-value-bind (mop desc)
-                (vinsn-parse-register-operand op name-list param-types)
+                (vinsn-parse-operand op name-list param-types)
               ;; An operand we can't handle yet: leave the form as-is
               ;; (the expander falls back to its legacy path).
               (unless mop (return-from vinsn-simplify-instruction form))

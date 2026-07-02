@@ -1107,9 +1107,9 @@
                     (declare (fixnum flags nprev))
 
                     (backend-immediate-index keyvect)
-                    (arm642-lri seg arm::arg_y
+                    (arm642-lri seg arm64::arg_y
                                 (ash flags *arm642-target-fixnum-shift*))
-                    (arm642-lri seg arm::imm0
+                    (arm642-lri seg arm64::imm0
                                 (ash nprev *arm642-target-fixnum-shift*))
                     (! keyword-bind)))
                 (when rest
@@ -1139,7 +1139,7 @@
                               (! req-heap-rest-arg)
                               (! heap-cons-rest-arg))))))))
                 (when hardopt
-                  (arm642-lri seg arm::imm0 (ash num-opt *arm642-target-fixnum-shift*))
+                  (arm642-lri seg arm64::imm0 (ash num-opt *arm642-target-fixnum-shift*))
 
                   ;; .SPopt-supplied-p wants nargs to contain the
                   ;; actual arg-count minus the number of "fixed"
@@ -1183,7 +1183,7 @@
                       (! ref-indexed-constant temp idxreg))))
                 (arm642-copy-register seg reg temp))))
           (when method-var
-            (arm642-seq-bind-var seg method-var arm::next-method-context))
+            (arm642-seq-bind-var seg method-var arm64::next-method-context))
           ;; If any arguments are still in arg_x, arg_y, arg_z, that's
           ;; because they weren't vpushed in a "simple" entry case and
           ;; belong in some NVR.  Put them in their NVRs, so that we
@@ -1201,13 +1201,6 @@
                     (arm642-copy-register seg reg arg-reg-num)
                     (setf (var-ea var) reg))))))
           (setq *arm642-entry-vsp-saved-p* t)
-          #|                            ;
-          (when stack-consed-rest
-          (if rest-ignored-p
-          (if nil (arm2-jsrA5 $sp-popnlisparea))
-          (progn
-          (arm2-open-undo $undostkblk))))
-          |#
           (when stack-consed-rest
             (arm642-open-undo $undostkblk))
           (setq *arm642-entry-vstack* *arm642-vstack*)
@@ -1427,7 +1420,7 @@
       (let* ((id (vinsn-label-id v)))
         (if (or (typep id 'fixnum) (null id))
           (when (or t (vinsn-label-refs v) (null id))
-            (setf (vinsn-label-info v) (arm64::emit-lap-label current v)))))
+            (setf (vinsn-label-info v) (arm64::emit-label current v)))))
       (arm642-expand-vinsn v current)))
     ;;; Fix up var-eas from lregs to their values before lregs are freed.
   (dolist (s *arm642-recorded-symbols*)
@@ -1453,26 +1446,42 @@
      (:s (arm64::fpr-ref number 32))
      (:d (arm64::fpr-ref number 64)))))
 
+;;; Build the operand struct for one filled-in body operand.  DESC is the
+;;; stored descriptor, SPEC the template's operand spec at this position,
+;;; VP the expanding vinsn's variable-parts, and UNIQUE-LABELS the map
+;;; from each template-local label keyword to a fresh per-expansion label
+;;; object.  A (:label class) spec builds a label-operand -- naming either
+;;; a backend vinsn-label passed in through VP, or a template-local label;
+;;; any other spec builds a register-operand.
+(defun arm642-vinsn-operand (desc spec vp unique-labels)
+  (if (arm64::label-spec-p spec)
+    (arm64::make-label-operand
+     :name (ecase (car desc)
+             (:opnd (svref vp (cadr desc)))            ;backend (vinsn) label
+             (:local-label (cdr (assq (cadr desc) unique-labels)))))
+    (arm642-vinsn-register-operand
+     (ecase (car desc)
+       (:opnd (svref vp (cadr desc)))
+       (:reg (cadr desc)))
+     spec)))
+
 ;;; Expand one instruction of a vinsn template's body into a machine
 ;;; instruction and emit it into the section.  FORM is one simplified
 ;;; body element -- (template-index . operand-descriptors) -- as produced
 ;;; at definition time by VINSN-SIMPLIFY-INSTRUCTION.  VP is the
 ;;; variable-parts vector of the vinsn (instance) being expanded, with
-;;; lregs already replaced by physical register numbers.  We fill the
-;;; operand holes from VP, build the operand structs, encode, and append
-;;; the resulting machine instruction.
-(defun arm642-emit-instruction-from-vinsn (form vp current)
+;;; lregs already replaced by physical register numbers.  UNIQUE-LABELS
+;;; maps template-local label keywords to this expansion's label objects.
+;;; We fill the operand holes, build the operand structs, encode, and
+;;; append the resulting machine instruction.
+(defun arm642-emit-instruction-from-vinsn (form vp current unique-labels)
   (let* ((template (svref arm64::*instruction-templates* (car form)))
          (specs (arm64::instruction-template-operand-specs template))
          (insn (arm64::make-instruction form)))
     (setf (arm64::instruction-template insn) template
           (arm64::instruction-parsed-operands insn)
           (mapcar #'(lambda (desc spec)
-                      (arm642-vinsn-register-operand
-                       (ecase (car desc)
-                         (:opnd (svref vp (cadr desc)))
-                         (:reg (cadr desc)))
-                       spec))
+                      (arm642-vinsn-operand desc spec vp unique-labels))
                   (cdr form) specs))
     (arm64::encode-operands insn)
     (arm64::emit-element current insn)))
@@ -1480,7 +1489,8 @@
 (defun arm642-expand-vinsn (vinsn current)
   (let* ((template (vinsn-template vinsn))
          (vp (vinsn-variable-parts vinsn))
-         (nvp (vinsn-template-nvp template)))
+         (nvp (vinsn-template-nvp template))
+         (unique-labels '()))
     (declare (fixnum nvp))
     ;; Replace lregs in the variable-parts vector with their assigned
     ;; physical register numbers.
@@ -1488,13 +1498,21 @@
       (let ((val (svref vp i)))
         (when (typep val 'lreg)
           (setf (svref vp i) (lreg-value val)))))
+    ;; Give each template-local label a fresh object for this expansion,
+    ;; so that repeated uses of the same vinsn don't collide in the
+    ;; section's label namespace.
+    (dolist (name (vinsn-template-local-labels template))
+      (push (cons name (cons name nil)) unique-labels))
     (dolist (form (vinsn-template-body template))
       (cond
+        ((keywordp form)
+         ;; A template-local label definition point (e.g. :ok).
+         (arm64::emit-label current (cdr (assq form unique-labels))))
         ((and (consp form) (typep (car form) 'fixnum))
          ;; A simplified instruction: (template-index . descriptors).
-         (arm642-emit-instruction-from-vinsn form vp current))
+         (arm642-emit-instruction-from-vinsn form vp current unique-labels))
         (t
-         ;; Not yet handled by the register-only prototype (labels,
-         ;; predicate groups, pseudo-ops, and instructions with
-         ;; immediate/memory operands).  Retain a diagnostic for now.
+         ;; Not yet handled by the prototype (predicate groups, pseudo-ops,
+         ;; and instructions with immediate/memory operands).  Retain a
+         ;; diagnostic for now.
          (format t "~&; arm642-expand-vinsn: unhandled form ~s" form))))))
