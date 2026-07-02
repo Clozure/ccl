@@ -62,3 +62,8 @@
   (ldr vsp (:@ sp (:$ 8)))              ;ignore marker
   (add sp sp (:$ 32))
   (ret))
+
+;;; Reconcile the template ordinals baked into the vinsns just defined
+;;; with the assembler's current template table, in case this file was
+;;; compiled against a differently-ordered table.
+(fixup-arm64-vinsn-templates)

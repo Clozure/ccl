@@ -1436,5 +1436,65 @@
       (when (typep ea 'lreg)
         (setf (var-ea var) (lreg-value ea))))))
 
+;;; Build a register-operand for a filled-in vinsn operand.  NUMBER is
+;;; the physical register number; SPEC is the template's operand spec
+;;; (role class) at this position, which tells us the register view.
+;;; Mirrors the class mapping in DECODE-REGISTER-OPERAND.
+(defun arm642-vinsn-register-operand (number spec)
+  (arm64::make-register-operand
+   :register
+   (ecase (cadr spec)
+     ((:x :x-shift :x-shift-ror :x-ext) (arm64::gpr-ref number 64))
+     (:x/sp (arm64::gpr-ref number 64 t))
+     ((:w :w-shift :w-shift-ror :w-ext) (arm64::gpr-ref number 32))
+     (:w/sp (arm64::gpr-ref number 32 t))
+     (:sp (arm64::gpr-ref 31 64 t))
+     (:wsp (arm64::gpr-ref 31 32 t))
+     (:s (arm64::fpr-ref number 32))
+     (:d (arm64::fpr-ref number 64)))))
+
+;;; Expand one instruction of a vinsn template's body into a machine
+;;; instruction and emit it into the section.  FORM is one simplified
+;;; body element -- (template-index . operand-descriptors) -- as produced
+;;; at definition time by VINSN-SIMPLIFY-INSTRUCTION.  VP is the
+;;; variable-parts vector of the vinsn (instance) being expanded, with
+;;; lregs already replaced by physical register numbers.  We fill the
+;;; operand holes from VP, build the operand structs, encode, and append
+;;; the resulting machine instruction.
+(defun arm642-emit-instruction-from-vinsn (form vp current)
+  (let* ((template (svref arm64::*instruction-templates* (car form)))
+         (specs (arm64::instruction-template-operand-specs template))
+         (insn (arm64::make-instruction form)))
+    (setf (arm64::instruction-template insn) template
+          (arm64::instruction-parsed-operands insn)
+          (mapcar #'(lambda (desc spec)
+                      (arm642-vinsn-register-operand
+                       (ecase (car desc)
+                         (:opnd (svref vp (cadr desc)))
+                         (:reg (cadr desc)))
+                       spec))
+                  (cdr form) specs))
+    (arm64::encode-operands insn)
+    (arm64::emit-element current insn)))
+
 (defun arm642-expand-vinsn (vinsn current)
-  (format t "~&vinsn ~s" vinsn))
+  (let* ((template (vinsn-template vinsn))
+         (vp (vinsn-variable-parts vinsn))
+         (nvp (vinsn-template-nvp template)))
+    (declare (fixnum nvp))
+    ;; Replace lregs in the variable-parts vector with their assigned
+    ;; physical register numbers.
+    (dotimes (i nvp)
+      (let ((val (svref vp i)))
+        (when (typep val 'lreg)
+          (setf (svref vp i) (lreg-value val)))))
+    (dolist (form (vinsn-template-body template))
+      (cond
+        ((and (consp form) (typep (car form) 'fixnum))
+         ;; A simplified instruction: (template-index . descriptors).
+         (arm642-emit-instruction-from-vinsn form vp current))
+        (t
+         ;; Not yet handled by the register-only prototype (labels,
+         ;; predicate groups, pseudo-ops, and instructions with
+         ;; immediate/memory operands).  Retain a diagnostic for now.
+         (format t "~&; arm642-expand-vinsn: unhandled form ~s" form))))))

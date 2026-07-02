@@ -37,6 +37,9 @@
      (ldr vsp (:@ sp (:$ 8)))            ;ignore marker
      (add sp sp (:$ 32))))
 
+(defarm64lapmacro unbox-fixnum (dest src)
+  `(asr ,dest ,src (:$ arm64::fixnumshift)))
+
 (defarm64lapmacro call-subprim (spname)
   (let ((offset (arm64::subprimitive-offset spname)))
     (if offset

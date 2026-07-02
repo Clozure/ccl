@@ -90,7 +90,12 @@
       (let* ((k -1))
         (declare (fixnum k))
         (let* ((name-alist (mapcar #'(lambda (n) (cons n (list (incf k))))
-                                   name-list)))
+                                   name-list))
+               ;; Map each parameter name to its storage-class keyword, so
+               ;; VINSN-SIMPLIFY-INSTRUCTION can tell an X operand from a W,
+               ;; D, or S when selecting a template.
+               (param-types (mapcar #'(lambda (s) (cons (car s) (cadr s)))
+                                    (append results args temps))))
           (labels ((find-name (n)
                    (let* ((pair (assoc n name-alist :test #'eq)))
                      (declare (list pair))
@@ -161,8 +166,15 @@
                                  (mapcar #'simplify-form opvals))
                            (if (keywordp opname)
                              form
-                             (arm64::vinsn-simplify-instruction
-                              form name-list)))))))
+                             (multiple-value-bind (simplified entry)
+                                 (arm64::vinsn-simplify-instruction
+                                  form name-list param-types)
+                               ;; Record (ordinal name . specs) so the
+                               ;; ordinal can be re-resolved at load time.
+                               (when entry
+                                 (pushnew entry opcode-alist
+                                          :key #'car :test #'eql))
+                               simplified)))))))
             (let* ((template (make-vinsn-template
                               :name vinsn-name
                               :result-vreg-specs results
@@ -228,6 +240,58 @@
                                      (make-hash-table :test #'equalp)))))
 
 (fixup-arm64-backend)
+
+;;; A vinsn template body bakes in, for each instruction, the ordinal of
+;;; the assembler template it was matched against at vinsn-definition
+;;; time.  If the assembler's template vector is reordered after the
+;;; vinsns were compiled, those ordinals go stale.  Re-resolve them: for
+;;; each recorded (ordinal name . operand-specs) entry, find the template
+;;; of that name whose operand-specs match and read its current ordinal,
+;;; rewriting the body where the ordinal changed.  Mirrors the x86 port's
+;;; FIXUP-OPCODE-ORDINALS; the ARM64 assembler is name-indexed and
+;;; templates carry their operand-specs, so we key on name + specs.
+(defun fixup-arm64-vinsn-ordinals (vinsn-template)
+  (let ((changed '()))
+    (dolist (entry (vinsn-template-opcode-alist vinsn-template))
+      (destructuring-bind (old-ordinal name . specs) entry
+        (let ((candidates (gethash name arm64::*instruction-template-lists*)))
+          (unless candidates
+            (error "Unknown ARM64 instruction ~a in vinsn fixup; ~
+                    it was a known instruction when the vinsn was defined."
+                   name))
+          (let ((new-ordinal
+                 (dolist (template candidates
+                                   (error "No ARM64 template matches ~a ~s ~
+                                           in vinsn fixup." name specs))
+                   (when (equal (arm64::instruction-template-operand-specs
+                                 template)
+                                specs)
+                     (return (arm64::instruction-template-ordinal template))))))
+            (unless (eql old-ordinal new-ordinal)
+              (setf (car entry) new-ordinal)
+              (push (cons old-ordinal new-ordinal) changed))))))
+    (when changed
+      (labels ((update-instruction (form)
+                 (let ((pair (and (typep (car form) 'fixnum)
+                                  (assoc (car form) changed :test #'eql))))
+                   (when pair (setf (car form) (cdr pair)))))
+               (fixup-form (form)
+                 (unless (atom form)
+                   (if (atom (car form))
+                     (update-instruction form)
+                     (dolist (f (cdr form)) (fixup-form f))))))
+        (dolist (form (vinsn-template-body vinsn-template))
+          (fixup-form form))))))
+
+;;; Re-resolve template ordinals in every defined vinsn.  Idempotent.
+;;; TEMPLATE-HASH maps vinsn names to (name . vinsn-template) cells.
+(defun fixup-arm64-vinsn-templates (&optional (template-hash
+                                               *arm64-vinsn-templates*))
+  (maphash #'(lambda (name cell)
+               (declare (ignore name))
+               (when (cdr cell)         ;defined (not merely referenced)
+                 (fixup-arm64-vinsn-ordinals (cdr cell))))
+           template-hash))
 
 #+arm64-target
 (setq *host-backend* *arm64-backend* *target-backend* *arm64-backend*)

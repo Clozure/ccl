@@ -228,7 +228,10 @@
   operand-specs
   base-opcode
   mask            ;for disassembly: masks out variable parts of instruction
-  (flags 0))
+  (flags 0)
+  ordinal)        ;this template's own index in *instruction-templates*;
+                  ; set by initialize-templates.  Lets a template name its
+                  ; own index in O(1) (for vinsn simplification and fixup).
 
 (defmacro define-instruction-template (name operand-specs base-opcode mask
                                        &key flags)
@@ -1091,12 +1094,21 @@
   (dotimes (i (length *instruction-templates*))
     (let* ((template (svref *instruction-templates* i))
            (name (instruction-template-name template)))
+      (setf (instruction-template-ordinal template) i)
       (push template (gethash name *instruction-template-lists*))))
   ;; template order can be significant, so put them in original order
   (maphash #'(lambda (k v)
                (setf (gethash k *instruction-template-lists*)
                      (nreverse v)))
-           *instruction-template-lists*))
+           *instruction-template-lists*)
+  ;; If vinsn templates have already been loaded, their baked-in template
+  ;; ordinals may now be stale (the vector may have been reordered since
+  ;; they were compiled): re-resolve them against the current table.  On
+  ;; the first load neither the function nor the templates exist yet.
+  (when (and (fboundp 'ccl::fixup-arm64-vinsn-templates)
+             (boundp 'ccl::*arm64-vinsn-templates*))
+    (funcall 'ccl::fixup-arm64-vinsn-templates
+             (symbol-value 'ccl::*arm64-vinsn-templates*))))
 
 (initialize-templates)
 
@@ -2551,9 +2563,119 @@
              (s (logand (1+ imms) imms-mask)))
         (rotate-right-64 (logxor mask (ash mask s)) immr)))))
 
-;;; work to do here
-(defun vinsn-simplify-instruction (form name-list)
-  (declare (ignore name-list))
+;;; Vinsn instruction "simplification" (definition time).
+;;;
+;;; A vinsn body instruction is LAP with holes: some operands name vinsn
+;;; parameters (results/args/temps) rather than concrete registers.  We
+;;; do the expensive, value-independent work here, once, when the vinsn
+;;; is defined: parse the operands and select the assembler template.
+;;; The result stored in the template body is
+;;;
+;;;    (template-index . operand-descriptors)
+;;;
+;;; where TEMPLATE-INDEX indexes *INSTRUCTION-TEMPLATES* and each
+;;; descriptor is (:opnd vp-index) for a parameter or (:reg number) for a
+;;; literal register.  At expand time we only fill the holes and encode.
+;;;
+;;; This prototype handles register-only instructions.  Any instruction
+;;; with an operand we don't yet understand (immediate, memory, label,
+;;; shifted/extended register) is left unsimplified -- the raw form is
+;;; returned and the expander falls back to its legacy path -- so that
+;;; vinsns using those operands remain loadable.
+
+;;; W/X POLICY.  On arm64 a register is just a register: a number plus a
+;;; file (GPR/FPR), with node-vs-immediate as the GC-firm sub-split.  W3
+;;; and X3 are not two registers -- they're two views of register #3, and
+;;; which view an instruction uses is one bit (SF + the :x/:w operand
+;;; class).  So width is a property of the *instruction operand*, not of
+;;; the register: it lives here and in the assembler, never in register
+;;; identity or the allocator.  (This is unlike x86, where AL/EAX/RAX are
+;;; genuinely distinct register entries; do not import that model.)  The
+;;; Lisp aliases (imm0, arg_z, temp3, ...) correctly name X registers,
+;;; because a register's canonical name is its full-width view.
+;;;
+;;; We derive an operand's width from its vreg's storage class: node and
+;;; 64-bit unboxed values (:lisp/:u64/:s64/:address/:imm) use X; the
+;;; 32-bit unboxed modes (:u32/:s32) use W.  arm64 GPRs have no B/H view,
+;;; so 8/16-bit values are handled with W-form ops plus explicit
+;;; extend/mask instructions, not a narrower register -- hence the width
+;;; axis is strictly binary (W or X).
+;;;
+;;; This default keeps vinsn bodies clean (bare register names, no width
+;;; tags) and is correct for essentially everything during bring-up,
+;;; where all operands are node or 64-bit.  When a vinsn eventually wants
+;;; a non-default view of a register (e.g. the W view of a node register,
+;;; or forcing X on a :u32), add a per-operand override to the body
+;;; syntax -- e.g. (:w reg) / (:x reg) resolved here -- rather than
+;;; changing register identity.  Deferred until a concrete 32-bit vinsn
+;;; needs it.
+;;;
+;;; Returns (values family width) or NIL.
+(defun vinsn-gpr-class->family+width (class)
+  (case class
+    ((:lisp :lisp-lreg :imm :wordptr :u64 :s64 :address) (values :gpr 64))
+    ((:u32 :s32 :u16 :s16 :u8 :s8) (values :gpr 32))
+    (:single-float (values :fpr 32))
+    (:double-float (values :fpr 64))
+    (t nil)))
+
+;;; Try to parse one vinsn-body operand as a register.  Returns two
+;;; values: an operand struct for template matching and a dumpable
+;;; descriptor to store.  Returns NIL if OP isn't a register we can
+;;; handle here (caller then abandons simplification of the instruction).
+(defun vinsn-parse-register-operand (op name-list param-types)
+  (when (symbolp op)
+    (let ((index (position op name-list :test #'eq)))
+      (if index
+        ;; a vinsn parameter: a hole
+        (multiple-value-bind (family width)
+            (vinsn-gpr-class->family+width (cdr (assoc op param-types
+                                                       :test #'eq)))
+          (when family
+            (values (make-register-operand
+                     :register (if (eq family :gpr)
+                                 (gpr-ref 0 width)
+                                 (fpr-ref 0 width)))
+                    (list :opnd index))))
+        ;; a literal register name (e.g. vsp, sp, fn)
+        (let ((reg (lookup-register op)))
+          (when reg
+            (values (make-register-operand :register reg)
+                    (list :reg (register-number reg)))))))))
+
+;;; Returns two values: the simplified body form, and (unless we fell
+;;; back) an opcode-alist entry (ordinal name . operand-specs) recording
+;;; enough to re-resolve the template's ordinal at load time.  See
+;;; FIXUP-ARM64-VINSN-TEMPLATES.
+(defun vinsn-simplify-instruction (form name-list &optional param-types)
+  (destructuring-bind (name . opvals) form
+    (let ((candidates (gethash (string-downcase (string name))
+                               *instruction-template-lists*)))
+      (when candidates
+        (let ((match-operands '())
+              (descriptors '()))
+          (dolist (op opvals)
+            (multiple-value-bind (mop desc)
+                (vinsn-parse-register-operand op name-list param-types)
+              ;; An operand we can't handle yet: leave the form as-is
+              ;; (the expander falls back to its legacy path).
+              (unless mop (return-from vinsn-simplify-instruction form))
+              (push mop match-operands)
+              (push desc descriptors)))
+          (setq match-operands (nreverse match-operands)
+                descriptors (nreverse descriptors))
+          ;; First matching template wins, exactly as the assembler
+          ;; does; for register operands shape-match is a full match.
+          (dolist (template candidates)
+            (when (match-template template match-operands)
+              (let ((ordinal (instruction-template-ordinal template)))
+                (return-from vinsn-simplify-instruction
+                  (values (cons ordinal descriptors)
+                          (list* ordinal
+                                 (instruction-template-name template)
+                                 (instruction-template-operand-specs
+                                  template)))))))))))
+  ;; Unknown instruction, or no template matched: leave form as-is.
   form)
 
 
