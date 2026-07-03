@@ -1478,6 +1478,25 @@
                        operand class ~s" value shift spec))
       imm)))
 
+;;; Build a memory-operand.  DESC is (:mem marker base-desc off-desc);
+;;; SPEC is (:mem-FORM (:base class) [(:imm class)]).  The base register's
+;;; view comes from the (:base class) sub-spec; a present immediate offset
+;;; is range-checked against the (:imm class) sub-spec.  Register offsets
+;;; are not handled yet (VINSN-PARSE-MEMORY-OPERAND won't produce them).
+(defun arm642-vinsn-memory-operand (desc spec vp)
+  (destructuring-bind (marker base-desc off-desc) (cdr desc)
+    (arm64::make-memory-operand
+     :base (arm642-vinsn-register-operand
+            (ecase (car base-desc)
+              (:opnd (svref vp (cadr base-desc)))
+              (:reg (cadr base-desc)))
+            (assoc :base (cdr spec)))
+     :offset (when off-desc
+               (arm642-vinsn-immediate-operand
+                off-desc (cadr (assoc :imm (cdr spec))) vp))
+     :pre-indexed (eq marker :@!)
+     :post-indexed (eq marker :@+))))
+
 (defun arm642-vinsn-operand (desc spec vp unique-labels)
   (cond
     ((arm64::label-spec-p spec)
@@ -1485,6 +1504,8 @@
       :name (ecase (car desc)
               (:opnd (svref vp (cadr desc)))           ;backend (vinsn) label
               (:local-label (cdr (assq (cadr desc) unique-labels))))))
+    ((arm64::mem-spec-p spec)
+     (arm642-vinsn-memory-operand desc spec vp))
     ;; A bare-keyword spec that isn't a condition is an immediate class.
     ((and (keywordp spec) (not (member spec '(:cond :cond-inv))))
      (arm642-vinsn-immediate-operand desc spec vp))
@@ -1533,16 +1554,38 @@
     ;; section's label namespace.
     (dolist (name (vinsn-template-local-labels template))
       (push (cons name (cons name nil)) unique-labels))
-    (dolist (form (vinsn-template-body template))
-      (cond
-        ((keywordp form)
-         ;; A template-local label definition point (e.g. :ok).
-         (arm64::emit-label current (cdr (assq form unique-labels))))
-        ((and (consp form) (typep (car form) 'fixnum))
-         ;; A simplified instruction: (template-index . descriptors).
-         (arm642-emit-instruction-from-vinsn form vp current unique-labels))
-        (t
-         ;; Not yet handled by the prototype (predicate groups, pseudo-ops,
-         ;; and instructions with immediate/memory operands).  Retain a
-         ;; diagnostic for now.
-         (format t "~&; arm642-expand-vinsn: unhandled form ~s" form))))))
+    (labels ((pred-operand (vf)
+               ;; A predicate operand in %DEFINE-ARM64-VINSN's simplified
+               ;; form: (index) is a parameter hole, (fn args...) an
+               ;; (:apply), and an atom a constant.
+               (cond ((atom vf) vf)
+                     ((and (null (cdr vf)) (typep (car vf) 'fixnum))
+                      (svref vp (car vf)))
+                     (t (apply (car vf) (mapcar #'pred-operand (cdr vf))))))
+             (eval-predicate (f)
+               (ecase (car f)
+                 (:pred (apply (cadr f) (mapcar #'pred-operand (cddr f))))
+                 (:not  (not  (eval-predicate (cadr f))))
+                 (:or   (some  #'eval-predicate (cadr f)))
+                 (:and  (every #'eval-predicate (cadr f)))))
+             (expand-form (form)
+               (cond
+                 ((keywordp form)
+                  ;; A template-local label definition point (e.g. :ok).
+                  (arm64::emit-label current (cdr (assq form unique-labels))))
+                 ((and (consp form) (typep (car form) 'fixnum))
+                  ;; A simplified instruction: (template-index . descriptors).
+                  (arm642-emit-instruction-from-vinsn form vp current
+                                                      unique-labels))
+                 ((and (consp form) (consp (car form)))
+                  ;; A predicate group: ((:pred ...) subform...).  Expand the
+                  ;; body only when the predicate holds at this expansion.
+                  (when (eval-predicate (car form))
+                    (dolist (sub (cdr form)) (expand-form sub))))
+                 (t
+                  ;; Not yet handled: pseudo-ops (:code/:data/:word) and
+                  ;; condition operands.  Retain a diagnostic for now.
+                  (format t "~&; arm642-expand-vinsn: unhandled form ~s"
+                          form)))))
+      (dolist (form (vinsn-template-body template))
+        (expand-form form)))))
