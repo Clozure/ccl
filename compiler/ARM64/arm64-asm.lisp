@@ -25,7 +25,7 @@
   (declare (ignore env))
   (make-load-form-saving-slots r))
 
-;;; Flags in the register defstruct
+;;; Flags in the register defstruct (there's only one)
 (defconstant $rflag-sp 1)               ;r31 role is stack pointer
 
 ;;; Given a designator for a register name, figure out everything the
@@ -122,7 +122,7 @@
 
 (hash-registers)
 
-;;; An alist of the form (("x0" . "imm0") ...)
+;;; For the disassembler: an alist of the form (("x0" . "imm0") ...)
 (defparameter *register-alias-names* ())
 
 ;;; Add a permanent alias for a register.
@@ -199,10 +199,6 @@
   (or (lookup-register name)
       (error "No register named ~a" name)))
 
-(defun register-name-p (name)
-  (lookup-register name))
-
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *instruction-flags*
     '((:alias . 0)))                      ;disassembler ignores aliases
@@ -229,31 +225,17 @@
   base-opcode
   mask            ;for disassembly: masks out variable parts of instruction
   (flags 0)
-  ordinal)        ;this template's own index in *instruction-templates*;
-                  ; set by initialize-templates.  Lets a template name its
-                  ; own index in O(1) (for vinsn simplification and fixup).
+  ordinal)        ;this template's own index in *instruction-templates*
 
 (defmacro define-instruction-template (name operand-specs base-opcode mask
-                                       &key flags)
+                                       &rest flags)
   `(make-instruction-template :name ,(string-downcase name)
                               :operand-specs ',operand-specs
                               :base-opcode ,base-opcode
                               :mask ,mask
                               :flags (encode-instruction-flags ,flags)))
 
-(defparameter *instruction-groups*
-  '(:addsub-carry :addsub-ext :addsub-imm :addsub-shift :condbranch
-    :dp-2src :dp-3src :exception :extract :float2fix :float2int
-    :floatccmp :floatcmp :floatdp1 :floatdp2 :floatdp3 :floatimm
-    :floatsel :ic-system :ldst-imm9 :ldst-pos :ldst-regoff :ldst-unpriv
-    :ldst-unscaled :ldstexcl :ldstnapair-offs :ldstpair-indexed
-    :ldstpair-off :loadlit :log-imm :log-shift :movewide :pcreladdr
-    :testbranch))
-;; data processing -- immediate
-;; branch / exception / system
-;; loads and stores
-;; data processing -- register
-;; data processing -- scalar FP & Advanced SIMD
+;;; masks for various instruction groups
 
 (defconstant $rm/rn/rd-mask #xffe0fc00)
 (defconstant $addsub-imm-mask #xff000000)
@@ -444,28 +426,28 @@
    ;; Add/subtract (immediate)
    (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
    (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
-   (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :flags :alias)
-   (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :flags :alias)
-   (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :flags :alias)
-   (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :flags :alias)
+   (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :alias)
+   (def mov ((:rd :w/sp) (:rn :wsp)) #x11000000 0 :alias)
+   (def mov ((:rd :sp) (:rn :x/sp)) #x91000000 0 :alias)
+   (def mov ((:rd :x/sp) (:rn :sp)) #x91000000 0 :alias)
    (def adds ((:rd :w) (:rn :w/sp) :aimm) #x31000000 #xff000000)
    (def adds ((:rd :x) (:rn :x/sp) :aimm) #xb1000000 #xff000000)
-   (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :flags :alias)
-   (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :flags :alias)
+   (def cmn ((:rn :w/sp) :aimm) #x3100001f 0 :alias)
+   (def cmn ((:rn :x/sp) :aimm) #xb100001f 0 :alias)
    (def sub ((:rd :w/sp) (:rn :w/sp) :aimm) #x51000000 #xff000000)
    (def sub ((:rd :x/sp) (:rn :x/sp) :aimm) #xd1000000 #xff000000)
    (def subs ((:rd :w) (:rn :w/sp) :aimm) #x71000000 #xff000000)
    (def subs ((:rd :x) (:rn :x/sp) :aimm) #xf1000000 #xff000000)
-   (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :flags :alias)
-   (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :flags :alias)
+   (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :alias)
+   (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :alias)
 
-   ;; Move (immediate) aliases.  We prefer movw, so they're listed first.
-   (def mov ((:rd :w) :movw-mov-w)  #x52800000 0 :flags :alias)
-   (def mov ((:rd :x) :movw-mov-x)  #xd2800000 0 :flags :alias)
-   (def mov ((:rd :w) :movw-movn-w) #x12800000 0 :flags :alias)
-   (def mov ((:rd :x) :movw-movn-x) #x92800000 0 :flags :alias)
-   (def mov ((:rd :w/sp) :limm) #x320003e0 0 :flags :alias)
-   (def mov ((:rd :x/sp) :limm) #xb20003e0 0 :flags :alias)
+   ;; Move (immediate) aliases.  Listed in order of preference.
+   (def mov ((:rd :w) :movw-mov-w)  #x52800000 0 :alias)
+   (def mov ((:rd :x) :movw-mov-x)  #xd2800000 0 :alias)
+   (def mov ((:rd :w) :movw-movn-w) #x12800000 0 :alias)
+   (def mov ((:rd :x) :movw-movn-x) #x92800000 0 :alias)
+   (def mov ((:rd :w/sp) :limm) #x320003e0 0 :alias)
+   (def mov ((:rd :x/sp) :limm) #xb20003e0 0 :alias)
 
    ;; Move wide (immediate)
    (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
@@ -484,8 +466,8 @@
    (def eor ((:rd :x/sp) (:rn :x) :limm) #xd2000000 #xff800000)
    (def ands ((:rd :w) (:rn :w) :limm) #x72000000 #xff800000)
    (def ands ((:rd :x) (:rn :x) :limm) #xf2000000 #xff800000)
-   (def tst ((:rn :w) :limm) #x7200001f 0 :flags :alias)
-   (def tst ((:rn :x) :limm) #xf200001f 0 :flags :alias)
+   (def tst ((:rn :w) :limm) #x7200001f 0 :alias)
+   (def tst ((:rn :x) :limm) #xf200001f 0 :alias)
 
    ;; Bitfield
    (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
@@ -507,9 +489,9 @@
    (def b.eq ((:label :b19)) #x54000000 #xff00001f)
    (def b.ne ((:label :b19)) #x54000001 #xff00001f)
    (def b.cs ((:label :b19)) #x54000002 #xff00001f)
-   (def b.hs ((:label :b19)) #x54000002 0 :flags :alias)
+   (def b.hs ((:label :b19)) #x54000002 0 :alias)
    (def b.cc ((:label :b19)) #x54000003 #xff00001f)
-   (def b.lo ((:label :b19)) #x54000003 0 :flags :alias)
+   (def b.lo ((:label :b19)) #x54000003 0 :alias)
    (def b.mi ((:label :b19)) #x54000004 #xff00001f)
    (def b.pl ((:label :b19)) #x54000005 #xff00001f)
    (def b.vs ((:label :b19)) #x54000006 #xff00001f)
@@ -538,8 +520,7 @@
    ;; Barriers and system register access
    ;; The bare form defaults to SY; an explicit (:$ option) selects a
    ;; domain (e.g. 11 = ish, 10 = ishst).  Named options aren't implemented.
-   ;; The bare forms bake CRm=15; the (:baropt) forms accept any CRm (and so
-   ;; match binutils' base encoding, whose CRm defaults to 15).
+   ;; The bare forms bake in CRm=15; the (:baropt) forms accept any CRm.
    (def clrex () #xd5033f5f #xffffffff)
    (def clrex (:baropt) #xd503305f #xfffff0ff)
    (def dmb () #xd5033fbf #xffffffff)
@@ -584,7 +565,7 @@
 
    ;;; C4.1.66  Loads and Stores
 
-      ;; Load/store exclusive pair
+   ;; Load/store exclusive pair
    (def stxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88200000 $ldst-excl-stp-mask)
    (def stxp ((:rs :w) (:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc8200000 $ldst-excl-stp-mask)
    (def stlxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88208000 $ldst-excl-stp-mask)
@@ -780,49 +761,50 @@
    (def rorv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 $dp-2src-mask)
    (def rorv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 $dp-2src-mask)
 
-   ;; shift aliases.  The register forms alias lslv/lsrv/asrv/rorv; the
-   ;; immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror), with
-   ;; immr/imms computed from the shift amount.  Register vs immediate
-   ;; third operand selects the form.
-   (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :flags :alias)
-   (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :flags :alias)
-   (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :flags :alias)
-   (def lsl ((:rd :x) (:rn :x) :lsl-imm-x) #xd3400000 0 :flags :alias)
-   (def lsr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 0 :flags :alias)
-   (def lsr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 0 :flags :alias)
-   (def lsr ((:rd :w) (:rn :w) :lsr-imm-w) #x53000000 0 :flags :alias)
-   (def lsr ((:rd :x) (:rn :x) :lsr-imm-x) #xd3400000 0 :flags :alias)
-   (def asr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 0 :flags :alias)
-   (def asr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 0 :flags :alias)
-   (def asr ((:rd :w) (:rn :w) :asr-imm-w) #x13000000 0 :flags :alias)
-   (def asr ((:rd :x) (:rn :x) :asr-imm-x) #x93400000 0 :flags :alias)
-   (def ror ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 0 :flags :alias)
-   (def ror ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 0 :flags :alias)
-   (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :flags :alias)
-   (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :flags :alias)
+   ;; Shift aliases.  The register forms alias lslv/lsrv/asrv/rorv;
+   ;; the immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror),
+   ;; with immr/imms computed from the shift amount.
+   (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :alias)
+   (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :alias)
+   (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :alias)
+   (def lsl ((:rd :x) (:rn :x) :lsl-imm-x) #xd3400000 0 :alias)
+   (def lsr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02400 0 :alias)
+   (def lsr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02400 0 :alias)
+   (def lsr ((:rd :w) (:rn :w) :lsr-imm-w) #x53000000 0 :alias)
+   (def lsr ((:rd :x) (:rn :x) :lsr-imm-x) #xd3400000 0 :alias)
+   (def asr ((:rd :w) (:rn :w) (:rm :w)) #x1ac02800 0 :alias)
+   (def asr ((:rd :x) (:rn :x) (:rm :x)) #x9ac02800 0 :alias)
+   (def asr ((:rd :w) (:rn :w) :asr-imm-w) #x13000000 0 :alias)
+   (def asr ((:rd :x) (:rn :x) :asr-imm-x) #x93400000 0 :alias)
+   (def ror ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 0 :alias)
+   (def ror ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 0 :alias)
+   (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :alias)
+   (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :alias)
 
-   ;; sign/zero-extend aliases of sbfm/ubfm: fixed immr=0, imms=7/15/31 baked
-   ;; into the base, so they take only Rd, Rn (source is always Wn).
-   (def sxtb ((:rd :w) (:rn :w)) #x13001c00 0 :flags :alias)
-   (def sxtb ((:rd :x) (:rn :w)) #x93401c00 0 :flags :alias)
-   (def sxth ((:rd :w) (:rn :w)) #x13003c00 0 :flags :alias)
-   (def sxth ((:rd :x) (:rn :w)) #x93403c00 0 :flags :alias)
-   (def sxtw ((:rd :x) (:rn :w)) #x93407c00 0 :flags :alias)
-   (def uxtb ((:rd :w) (:rn :w)) #x53001c00 0 :flags :alias)
-   (def uxth ((:rd :w) (:rn :w)) #x53003c00 0 :flags :alias)
+   ;; Sign/zero-extend aliases of sbfm/ubfm: fixed immr=0,
+   ;; imms=7/15/31 baked into the base, so they take only Rd, Rn
+   ;; (source is always Wn).
+   (def sxtb ((:rd :w) (:rn :w)) #x13001c00 0 :alias)
+   (def sxtb ((:rd :x) (:rn :w)) #x93401c00 0 :alias)
+   (def sxth ((:rd :w) (:rn :w)) #x13003c00 0 :alias)
+   (def sxth ((:rd :x) (:rn :w)) #x93403c00 0 :alias)
+   (def sxtw ((:rd :x) (:rn :w)) #x93407c00 0 :alias)
+   (def uxtb ((:rd :w) (:rn :w)) #x53001c00 0 :alias)
+   (def uxth ((:rd :w) (:rn :w)) #x53003c00 0 :alias)
 
-   ;; bitfield insert aliases: immr=(-lsb) mod width, imms=width-1 (separable,
-   ;; so #lsb and #width each drive one field).  Extract forms (sbfx/ubfx/
-   ;; bfxil) are lapmacros.
-   (def sbfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x13000000 0 :flags :alias)
-   (def sbfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #x93400000 0 :flags :alias)
-   (def ubfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x53000000 0 :flags :alias)
-   (def ubfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xd3400000 0 :flags :alias)
-   (def bfi   ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x33000000 0 :flags :alias)
-   (def bfi   ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xb3400000 0 :flags :alias)
-   ;; bfc is bfi with Rn=zr (bits 9:5 baked to 31): clear a bitfield.
-   (def bfc   ((:rd :w) :bf-lsb-w :bf-width-w) #x330003e0 0 :flags :alias)
-   (def bfc   ((:rd :x) :bf-lsb-x :bf-width-x) #xb34003e0 0 :flags :alias)
+   ;; Bitfield insert aliases: immr=(-lsb) mod width, imms=width-1
+   ;; (separable, so #lsb and #width each drive one field).  Extract
+   ;; forms (sbfx/ubfx/ bfxil) are lapmacros.
+   (def sbfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x13000000 0 :alias)
+   (def sbfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #x93400000 0 :alias)
+   (def ubfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x53000000 0 :alias)
+   (def ubfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xd3400000 0 :alias)
+   (def bfi ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x33000000 0 :alias)
+   (def bfi ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xb3400000 0 :alias)
+
+   ;; bfc is bfi with Rn=zr
+   (def bfc ((:rd :w) :bf-lsb-w :bf-width-w) #x330003e0 0 :alias)
+   (def bfc ((:rd :x) :bf-lsb-x :bf-width-x) #xb34003e0 0 :alias)
 
    ;; Data-processing (1 source)
    (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
@@ -844,20 +826,20 @@
    (def bic ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a200000 $log-shift-mask)
    (def orr ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a000000 $log-shift-mask)
    (def orr ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa000000 $log-shift-mask)
-   (def mov ((:rd :w) (:rm :w)) #x2a0003e0 0 :flags :alias)
-   (def mov ((:rd :x) (:rm :x)) #xaa0003e0 0 :flags :alias)
+   (def mov ((:rd :w) (:rm :w)) #x2a0003e0 0 :alias)
+   (def mov ((:rd :x) (:rm :x)) #xaa0003e0 0 :alias)
    (def orn ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x2a200000 $log-shift-mask)
    (def orn ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xaa200000 $log-shift-mask)
-   (def mvn ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :flags :alias)
-   (def mvn ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :flags :alias)
+   (def mvn ((:rd :w) (:rm :w-shift-ror)) #x2a2003e0 0 :alias)
+   (def mvn ((:rd :x) (:rm :x-shift-ror)) #xaa2003e0 0 :alias)
    (def eor ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a000000 $log-shift-mask)
    (def eor ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca000000 $log-shift-mask)
    (def eon ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x4a200000 $log-shift-mask)
    (def eon ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xca200000 $log-shift-mask)
    (def ands ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a000000 $log-shift-mask)
    (def ands ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea000000 $log-shift-mask)
-   (def tst ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :flags :alias)
-   (def tst ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :flags :alias)
+   (def tst ((:rn :w) (:rm :w-shift-ror)) #x6a00001f 0 :alias)
+   (def tst ((:rn :x) (:rm :x-shift-ror)) #xea00001f 0 :alias)
    (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
    (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
 
@@ -866,32 +848,32 @@
    (def add ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
    (def adds ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
    (def adds ((:rd :x) (:rn :x) (:rm :x-shift)) #xab000000 $addsub-shift-mask)
-   (def cmn ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :flags :alias)
-   (def cmn ((:rn :x) (:rm :x-shift)) #xab00001f 0 :flags :alias)
+   (def cmn ((:rn :w) (:rm :w-shift)) #x2b00001f 0 :alias)
+   (def cmn ((:rn :x) (:rm :x-shift)) #xab00001f 0 :alias)
    (def sub ((:rd :w) (:rn :w) (:rm :w-shift)) #x4b000000 $addsub-shift-mask)
    (def sub ((:rd :x) (:rn :x) (:rm :x-shift)) #xcb000000 $addsub-shift-mask)
    (def subs ((:rd :w) (:rn :w) (:rm :w-shift)) #x6b000000 $addsub-shift-mask)
    (def subs ((:rd :x) (:rn :x) (:rm :x-shift)) #xeb000000 $addsub-shift-mask)
-   (def cmp ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :flags :alias)
-   (def cmp ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :flags :alias)
-   (def neg ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :flags :alias)
-   (def neg ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :flags :alias)
-   (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :flags :alias)
-   (def negs ((:rd :x) (:rm :x-shift)) #xeb0003e0 0 :flags :alias)
+   (def cmp ((:rn :w) (:rm :w-shift)) #x6b00001f 0 :alias)
+   (def cmp ((:rn :x) (:rm :x-shift)) #xeb00001f 0 :alias)
+   (def neg ((:rd :w) (:rm :w-shift)) #x4b0003e0 0 :alias)
+   (def neg ((:rd :x) (:rm :x-shift)) #xcb0003e0 0 :alias)
+   (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :alias)
+   (def negs ((:rd :x) (:rm :x-shift)) #xeb0003e0 0 :alias)
 
    ;; Add/subtract (extended register)
    (def add ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
    (def add ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
    (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
    (def adds ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xab200000 $addsub-ext-mask)
-   (def cmn ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :flags :alias)
-   (def cmn ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :flags :alias)
+   (def cmn ((:rn :w/sp) (:rm :w-ext)) #x2b20001f 0 :alias)
+   (def cmn ((:rn :x/sp) (:rm :x-ext)) #xab20001f 0 :alias)
    (def sub ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x4b200000 $addsub-ext-mask)
    (def sub ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #xcb200000 $addsub-ext-mask)
    (def subs ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x6b200000 $addsub-ext-mask)
    (def subs ((:rd :x) (:rn :x/sp) (:rm :x-ext)) #xeb200000 $addsub-ext-mask)
-   (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :flags :alias)
-   (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :flags :alias)
+   (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :alias)
+   (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :alias)
 
    ;; Add/subtract (with carry)
    (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
@@ -900,12 +882,12 @@
    (def adcs ((:rd :x) (:rn :x) (:rm :x)) #xba000000 $rm/rn/rd-mask)
    (def sbc ((:rd :w) (:rn :w) (:rm :w)) #x5a000000 $rm/rn/rd-mask)
    (def sbc ((:rd :x) (:rn :x) (:rm :x)) #xda000000 $rm/rn/rd-mask)
-   (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :flags :alias)
-   (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :flags :alias)
+   (def ngc ((:rd :w) (:rm :w)) #x5a0003e0 0 :alias)
+   (def ngc ((:rd :x) (:rm :x)) #xda0003e0 0 :alias)
    (def sbcs ((:rd :w) (:rn :w) (:rm :w)) #x7a000000 $rm/rn/rd-mask)
    (def sbcs ((:rd :x) (:rn :x) (:rm :x)) #xfa000000 $rm/rn/rd-mask)
-   (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :flags :alias)
-   (def ngcs ((:rd :x) (:rm :x)) #xfa0003e0 0 :flags :alias)
+   (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :alias)
+   (def ngcs ((:rd :x) (:rm :x)) #xfa0003e0 0 :alias)
 
    ;; Conditional compare (register)
    (def ccmp ((:rn :w) (:rm :w) :nzcv :cond) #x7a400000 $condcmp-mask)
@@ -932,16 +914,16 @@
    ;; Conditional-select aliases.  Each encodes the inverse condition
    ;; (:cond-inv).  cset/csetm set Rn=Rm=zr (31); cinc/cinv/cneg write
    ;; their one source register into both Rn and Rm (the :rn+rm role).
-   (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :flags :alias)
-   (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :flags :alias)
-   (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :flags :alias)
-   (def csetm ((:rd :x) :cond-inv) #xda9f03e0 0 :flags :alias)
-   (def cinc ((:rd :w) (:rn+rm :w) :cond-inv) #x1a800400 0 :flags :alias)
-   (def cinc ((:rd :x) (:rn+rm :x) :cond-inv) #x9a800400 0 :flags :alias)
-   (def cinv ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800000 0 :flags :alias)
-   (def cinv ((:rd :x) (:rn+rm :x) :cond-inv) #xda800000 0 :flags :alias)
-   (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :flags :alias)
-   (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :flags :alias)
+   (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :alias)
+   (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :alias)
+   (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :alias)
+   (def csetm ((:rd :x) :cond-inv) #xda9f03e0 0 :alias)
+   (def cinc ((:rd :w) (:rn+rm :w) :cond-inv) #x1a800400 0 :alias)
+   (def cinc ((:rd :x) (:rn+rm :x) :cond-inv) #x9a800400 0 :alias)
+   (def cinv ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800000 0 :alias)
+   (def cinv ((:rd :x) (:rn+rm :x) :cond-inv) #xda800000 0 :alias)
+   (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :alias)
+   (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :alias)
 
    ;; Data-processing (3-source)
    (def madd ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b000000 $dp-3src-mask)
@@ -956,20 +938,18 @@
    (def smulh ((:rd :x) (:rn :x) (:rm :x)) #x9b407c00 $dp-2src-mask)
    (def umulh ((:rd :x) (:rn :x) (:rm :x)) #x9bc07c00 $dp-2src-mask)
    ;; multiply aliases: madd/msub/... with Ra = zr (31)
-   (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :flags :alias)
-   (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :flags :alias)
-   (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :flags :alias)
-   (def mneg ((:rd :x) (:rn :x) (:rm :x)) #x9b00fc00 0 :flags :alias)
-   (def smull ((:rd :x) (:rn :w) (:rm :w)) #x9b207c00 0 :flags :alias)
-   (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :flags :alias)
-   (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :flags :alias)
-   (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :flags :alias)
+   (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :alias)
+   (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :alias)
+   (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :alias)
+   (def mneg ((:rd :x) (:rn :x) (:rm :x)) #x9b00fc00 0 :alias)
+   (def smull ((:rd :x) (:rn :w) (:rm :w)) #x9b207c00 0 :alias)
+   (def smnegl ((:rd :x) (:rn :w) (:rm :w)) #x9b20fc00 0 :alias)
+   (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :alias)
+   (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :alias)
 
    ;;; Data Processing -- Scalar Floating-Point
 
-   ;; FP data-processing (2 source).  ftype @ 23:22 (00=S, 01=D); opcode @
-   ;; 15:12 picks the operation.  Rd/Rn/Rm are the usual fields, so the only
-   ;; per-template differences are ftype and opcode, baked into the base.
+   ;; FP data-processing (2 source)
    (def fmul ((:rd :s) (:rn :s) (:rm :s)) #x1e200800 $fp-dp2src-mask)
    (def fmul ((:rd :d) (:rn :d) (:rm :d)) #x1e600800 $fp-dp2src-mask)
    (def fdiv ((:rd :s) (:rn :s) (:rm :s)) #x1e201800 $fp-dp2src-mask)
@@ -989,9 +969,7 @@
    (def fnmul ((:rd :s) (:rn :s) (:rm :s)) #x1e208800 $fp-dp2src-mask)
    (def fnmul ((:rd :d) (:rn :d) (:rm :d)) #x1e608800 $fp-dp2src-mask)
 
-   ;; FP data-processing (1 source).  ftype @ 23:22 (00=S, 01=D); opcode @
-   ;; 20:15 picks the operation.  fcvt is the odd one: its opcode encodes the
-   ;; destination type while ftype is the source, so Rd and Rn differ in type.
+   ;; FP data-processing (1 source)
    (def fmov ((:rd :s) (:rn :s)) #x1e204000 $fp-dp1src-mask)
    (def fmov ((:rd :d) (:rn :d)) #x1e604000 $fp-dp1src-mask)
    (def fabs ((:rd :s) (:rn :s)) #x1e20c000 $fp-dp1src-mask)
@@ -1000,7 +978,7 @@
    (def fneg ((:rd :d) (:rn :d)) #x1e614000 $fp-dp1src-mask)
    (def fsqrt ((:rd :s) (:rn :s)) #x1e21c000 $fp-dp1src-mask)
    (def fsqrt ((:rd :d) (:rn :d)) #x1e61c000 $fp-dp1src-mask)
-   ;; fcvt between single and double (source type from ftype, dest from opcode)
+   ;; fcvt between single and double
    (def fcvt ((:rd :d) (:rn :s)) #x1e22c000 $fp-dp1src-mask)
    (def fcvt ((:rd :s) (:rn :d)) #x1e624000 $fp-dp1src-mask)
    ;; round to integral value (frintN/P/M/Z/A/X/I)
@@ -1019,8 +997,7 @@
    (def frinti ((:rd :s) (:rn :s)) #x1e27c000 $fp-dp1src-mask)
    (def frinti ((:rd :d) (:rn :d)) #x1e67c000 $fp-dp1src-mask)
 
-   ;; FP data-processing (3 source).  28:24 = 11111; o1 @ 21 and o0 @ 15
-   ;; pick fmadd/fmsub/fnmadd/fnmsub.  Ra @ 14:10 is the addend (the :ra role).
+   ;; FP data-processing (3 source)
    (def fmadd ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f000000 $fp-dp3src-mask)
    (def fmadd ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f400000 $fp-dp3src-mask)
    (def fmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f008000 $fp-dp3src-mask)
@@ -1030,9 +1007,7 @@
    (def fnmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f208000 $fp-dp3src-mask)
    (def fnmsub ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f608000 $fp-dp3src-mask)
 
-   ;; FP compare.  opcode2 @ 4:0 selects the variant (bit 4 = signaling,
-   ;; bit 3 = compare-with-zero); the zero form takes the literal #0.0 and
-   ;; leaves Rm = 0.  Sets the PSTATE flags, so there's no Rd.
+   ;; FP compare
    (def fcmp ((:rn :s) (:rm :s)) #x1e202000 $fp-cmp-mask)
    (def fcmp ((:rn :d) (:rm :d)) #x1e602000 $fp-cmp-mask)
    (def fcmp ((:rn :s) :fpzero) #x1e202008 $fp-cmp-zero-mask)
@@ -1042,22 +1017,18 @@
    (def fcmpe ((:rn :s) :fpzero) #x1e202018 $fp-cmp-zero-mask)
    (def fcmpe ((:rn :d) :fpzero) #x1e602018 $fp-cmp-zero-mask)
 
-   ;; FP conditional compare.  cond @ 15:12, nzcv @ 3:0 (reuse the integer
-   ;; :nzcv / :cond operands); op @ 4 picks fccmp vs the signaling fccmpe.
-   (def fccmp ((:rn :s) (:rm :s) :nzcv :cond) #x1e200400 $condcmp-mask)
+   ;; FP conditional compare
+    (def fccmp ((:rn :s) (:rm :s) :nzcv :cond) #x1e200400 $condcmp-mask)
    (def fccmp ((:rn :d) (:rm :d) :nzcv :cond) #x1e600400 $condcmp-mask)
    (def fccmpe ((:rn :s) (:rm :s) :nzcv :cond) #x1e200410 $condcmp-mask)
    (def fccmpe ((:rn :d) (:rm :d) :nzcv :cond) #x1e600410 $condcmp-mask)
 
-   ;; FP conditional select.  cond @ 15:12; Rd = cond ? Rn : Rm.
+   ;; FP conditional select
    (def fcsel ((:rd :s) (:rn :s) (:rm :s) :cond) #x1e200c00 $condsel-mask)
    (def fcsel ((:rd :d) (:rn :d) (:rm :d) :cond) #x1e600c00 $condsel-mask)
 
-   ;; Conversion between FP and integer.  sf @ 31 (W/X), ftype @ 23:22
-   ;; (S/D), rmode @ 20:19 + opcode @ 18:16 pick the operation -- so
-   ;; every GPR-width x FP-type combination is its own template.
-   ;; scvtf/ucvtf take int->fp (Rd is the FP reg); fcvtzs/fcvtzu are
-   ;; fp->int, round toward zero (Rd is the GPR).
+   ;; Conversion between FP and integer
+   ;; Every GPR-width by FP-type combination gets its own template.
    (def scvtf ((:rd :s) (:rn :w)) #x1e220000 $fp-cvt-mask)
    (def scvtf ((:rd :s) (:rn :x)) #x9e220000 $fp-cvt-mask)
    (def scvtf ((:rd :d) (:rn :w)) #x1e620000 $fp-cvt-mask)
@@ -1075,14 +1046,13 @@
    (def fcvtzu ((:rd :w) (:rn :d)) #x1e790000 $fp-cvt-mask)
    (def fcvtzu ((:rd :x) (:rn :d)) #x9e790000 $fp-cvt-mask)
 
-   ;; fmov between a GPR and an FP register (raw bit copy: opcode 110 = to GPR,
-   ;; 111 = from GPR).  Only the same-size pairings W<->S and X<->D are legal.
+   ;; fmov between a GPR and an FP register (without conversion)
    (def fmov ((:rd :w) (:rn :s)) #x1e260000 $fp-cvt-mask)
    (def fmov ((:rd :s) (:rn :w)) #x1e270000 $fp-cvt-mask)
    (def fmov ((:rd :x) (:rn :d)) #x9e660000 $fp-cvt-mask)
    (def fmov ((:rd :d) (:rn :x)) #x9e670000 $fp-cvt-mask)
 
-   ;; fmov scalar immediate: the 8-bit FP constant @ 20:13 (encode-fp-imm8).
+   ;; fmov scalar immediate: see encode-fp-imm8, decode-fp-imm8.
    (def fmov ((:rd :s) :fpimm8) #x1e201000 $fp-imm-mask)
    (def fmov ((:rd :d) :fpimm8) #x1e601000 $fp-imm-mask)
    ))
@@ -2567,36 +2537,57 @@
              (s (logand (1+ imms) imms-mask)))
         (rotate-right-64 (logxor mask (ash mask s)) immr)))))
 
-;;; Vinsn instruction "simplification" (definition time).
+;;; Vinsn instruction "simplification" (done at definition time).
 ;;;
-;;; A vinsn body instruction is LAP with holes: some operands name vinsn
-;;; parameters (results/args/temps) rather than concrete registers.  We
-;;; do the expensive, value-independent work here, once, when the vinsn
-;;; is defined: parse the operands and select the assembler template.
-;;; The result stored in the template body is
+;;; The instructions in a vinsn body are written using a LAP-like
+;;; syntax, but within vinsns, instruction operands may be
+;;; parameterized: that is, the operands may include "holes" that
+;;; will be filled in by vinsn parameters (results/args/temps)
+;;; at vinsn expand time.
 ;;;
-;;;    (template-index . operand-descriptors)
-;;;
-;;; where TEMPLATE-INDEX indexes *INSTRUCTION-TEMPLATES* and each
-;;; descriptor is (:opnd vp-index) for a parameter or (:reg number) for a
-;;; literal register.  At expand time we only fill the holes and encode.
-;;;
-;;; This prototype handles register-only instructions.  Any instruction
-;;; with an operand we don't yet understand (immediate, memory, label,
-;;; shifted/extended register) is left unsimplified -- the raw form is
-;;; returned and the expander falls back to its legacy path -- so that
-;;; vinsns using those operands remain loadable.
+;;; The "simplification" involves sort of partially assembling the
+;;; instructions: we can at least parse the operands and pre-select
+;;; the instruction template so that we don't have to repeatedly
+;;; do that at vinsn expansion time.
 
-;;; W/X POLICY.  On arm64 a register is just a register: a number plus a
-;;; file (GPR/FPR), with node-vs-immediate as the GC-firm sub-split.  W3
-;;; and X3 are not two registers -- they're two views of register #3, and
-;;; which view an instruction uses is one bit (SF + the :x/:w operand
-;;; class).  So width is a property of the *instruction operand*, not of
-;;; the register: it lives here and in the assembler, never in register
-;;; identity or the allocator.  (This is unlike x86, where AL/EAX/RAX are
-;;; genuinely distinct register entries; do not import that model.)  The
-;;; Lisp aliases (imm0, arg_z, temp3, ...) correctly name X registers,
-;;; because a register's canonical name is its full-width view.
+;;; A "simplified" vinsn instruction looks like
+;;;
+;;;    (ordinal . operand-descriptors)
+;;;
+;;; where ordinal is the index of the matched instruction template in
+;;; *instruction-templates*, and each operand-descriptor says how to
+;;; build one operand at expand time by filling in the holes with data
+;;; provided in the variable-parts (vp) vector.  At vinsn expand time
+;;; we have only to fill the holes and encode, reusing the assembler's
+;;; encode-operands function.
+;;;
+;;; Operand descriptors look like this:
+;;;
+;;;   register    (:opnd index)   parameter register, or a label parameter
+;;;               (:reg number)   literal register (vsp, sp, fn, ...)
+;;;   label       (:local-label kw)   template-local branch target (:ok)
+;;;   immediate   (:imm value shift) | (:imm-opnd index shift)
+;;;               (:imm-apply shift fn arg...)   arg is (:opnd i) or a constant
+;;;   memory      (:mem marker base-desc off-desc)   off-desc nil / imm / reg
+;;;   condition   (:cond value) | (:cond-opnd index)
+;;;   shifted/ext (:shifted-reg reg-desc modifier amount)
+;;;
+;;; Template selection is first-match, exactly as the assembler does.  A
+;;; hole whose value isn't known until expand time is treated as a wild
+;;; immediate or wild condition that matches any operand spec of the right
+;;; class; because such a hole can't disambiguate value-multiplexed aliases
+;;; (mov's movz/movn/orr), a wild match must be unique or we signal an error
+;;; asking the vinsn to name a concrete instruction.  Value-dependent checks
+;;; (an immediate's range) are deferred to expand time.
+;;;
+;;; VINSN-SIMPLIFY-INSTRUCTION returns a second value as well: an
+;;; opcode-alist entry recording enough to re-resolve the baked ordinal at
+;;; load time, in case this file was compiled against a differently-ordered
+;;; template table (see FIXUP-ARM64-VINSN-TEMPLATES).
+;;;
+;;; A form we can't simplify -- an unknown mnemonic, operands matching no
+;;; template, or an operand shape not yet parseable (e.g. a parameterized
+;;; shift amount) -- is returned unchanged.
 ;;;
 ;;; We derive an operand's width from its vreg's storage class: node and
 ;;; 64-bit unboxed values (:lisp/:u64/:s64/:address/:imm) use X; the
@@ -2629,6 +2620,10 @@
 ;;; the actual range is checked at expand time.
 (defparameter *wild-immediate* '#:wild-immediate)
 
+;;; Match-time stand-in for a condition (:? cc) whose value comes from a
+;;; parameter.  Matches a :cond / :cond-inv operand spec.
+(defparameter *wild-condition* '#:wild-condition)
+
 ;;; Resolve one argument of an immediate (:apply fn ...) form to a
 ;;; dumpable descriptor: (:opnd index) for a parameter, else a constant.
 (defun vinsn-imm-apply-arg (arg name-list)
@@ -2637,12 +2632,69 @@
       (list :opnd index)
       (eval-immediate-expression arg))))
 
-;;; Try to parse one vinsn-body operand (a register, a branch-target
-;;; label, or an immediate).  Returns two values: an operand struct (or
-;;; the *WILD-IMMEDIATE* marker) for template matching, and a dumpable
-;;; descriptor to store.  Returns NIL if OP is something we can't handle
-;;; yet (memory, condition, shifted/extended register), in which case the
-;;; caller abandons simplification of the instruction.
+;;; Parse (:$ value) or (:$ value :lsl amount).  Returns two values: a
+;;; dumpable descriptor and the literal value, or :UNKNOWN if the value
+;;; isn't known until expand time (a const-parameter hole or (:apply ...)).
+(defun vinsn-parse-immediate (op name-list)
+  (destructuring-bind (value-form &optional lsl (shift-form 0)) (cdr op)
+    (when (and lsl (not (eq lsl :lsl)))
+      (error "Only :lsl is valid in a vinsn immediate: ~s" op))
+    (let ((shift (eval-immediate-expression shift-form)))
+      (cond
+        ((and (consp value-form) (eq (car value-form) :apply))
+         (values (list* :imm-apply shift (cadr value-form)
+                        (mapcar #'(lambda (a)
+                                    (vinsn-imm-apply-arg a name-list))
+                                (cddr value-form)))
+                 :unknown))
+        ((and (symbolp value-form) (position value-form name-list :test #'eq))
+         (values (list :imm-opnd (position value-form name-list :test #'eq)
+                       shift)
+                 :unknown))
+        (t (let ((value (eval-immediate-expression value-form)))
+             (values (list :imm value shift) value)))))))
+
+;;; Parse a vinsn memory operand (:@ base [offset]) / (:@! ...) / (:@+ ...).
+;;; Returns (values memory-operand descriptor), or nil if we lose.
+(defun vinsn-parse-memory-operand (op name-list param-types)
+  (destructuring-bind (marker base &optional offset) op
+    (multiple-value-bind (base-mop base-desc)
+        (vinsn-parse-operand base name-list param-types)
+      (when (and base-mop (register-operand-p base-mop))
+        (cond
+          ((null offset)
+           ;; plain register
+           (values (make-memory-operand :base base-mop :offset nil
+                                        :pre-indexed (eq marker :@!)
+                                        :post-indexed (eq marker :@+))
+                   (list :mem marker base-desc nil)))
+          ((and (consp offset) (eq (car offset) :$))
+           ;; immediate offset
+           (multiple-value-bind (off-desc value)
+               (vinsn-parse-immediate offset name-list)
+             (values (make-memory-operand
+                      :base base-mop
+                      :offset (make-immediate-operand
+                               :value (if (eq value :unknown) 0 value)
+                               :shift 0)
+                      :pre-indexed (eq marker :@!)
+                      :post-indexed (eq marker :@+))
+                     (list :mem marker base-desc off-desc))))
+          (t
+           ;; register offset
+           (multiple-value-bind (off-mop off-desc)
+               (vinsn-parse-operand offset name-list param-types)
+             (when (and off-mop (register-operand-p off-mop))
+               (values (make-memory-operand
+                        :base base-mop :offset off-mop
+                        :pre-indexed (eq marker :@!)
+                        :post-indexed (eq marker :@+))
+                       (list :mem marker base-desc off-desc))))))))))
+
+;;; Try to parse a single vinsn instruction operand.  If we win,
+;;; return two values: an operand struct (or wildcard marker) to be
+;;; used in template matching, and an operand descriptor to
+;;; save. Otherwise return nil.
 (defun vinsn-parse-operand (op name-list param-types)
   (cond
     ;; A bare keyword names a template-local label (e.g. :ok): defined
@@ -2650,32 +2702,46 @@
     ((keywordp op)
      (values (make-label-operand :name op) ;name is a placeholder for matching
              (list :local-label op)))
-    ;; An immediate: (:$ value) or (:$ value :lsl amount).
+    ;; An immediate: (:$ value) or (:$ value :lsl amount).  A literal value
+    ;; is matched by value (so e.g. (mov reg (:$ const)) picks the right
+    ;; movz/movn/orr); an unknown value uses the wild marker.
     ((and (consp op) (eq (car op) :$))
-     (destructuring-bind (value-form &optional lsl (shift-form 0)) (cdr op)
-       (when (and lsl (not (eq lsl :lsl)))
-         (error "Only :lsl is valid in a vinsn immediate: ~s" op))
-       (let ((shift (eval-immediate-expression shift-form)))
-         (cond
-           ;; a value computed at expand time: (:apply fn args...)
-           ((and (consp value-form) (eq (car value-form) :apply))
-            (values *wild-immediate*
-                    (list* :imm-apply shift (cadr value-form)
-                           (mapcar #'(lambda (a)
-                                       (vinsn-imm-apply-arg a name-list))
-                                   (cddr value-form)))))
-           ;; a const-parameter hole (value known only at expand time)
-           ((and (symbolp value-form)
-                 (position value-form name-list :test #'eq))
-            (values *wild-immediate*
-                    (list :imm-opnd
-                          (position value-form name-list :test #'eq)
-                          shift)))
-           ;; a literal constant, known now: match by value (this is what
-           ;; lets e.g. (mov reg (:$ const)) pick the right movz/movn/orr)
-           (t (let ((value (eval-immediate-expression value-form)))
-                (values (make-immediate-operand :value value :shift shift)
-                        (list :imm value shift))))))))
+     (multiple-value-bind (desc value) (vinsn-parse-immediate op name-list)
+       (if (eq value :unknown)
+         (values *wild-immediate* desc)
+         (values (make-immediate-operand :value value :shift (caddr desc))
+                 desc))))
+    ;; A memory operand: (:@ base [offset]) and the writeback variants.
+    ((and (consp op) (member (car op) '(:@ :@! :@+) :test #'eq))
+     (vinsn-parse-memory-operand op name-list param-types))
+    ;; A condition: (:? cc).  A parameter cc is treated as a wild
+    ;; condition (value supplied at expand time); a literal condition
+    ;; name is matched now.
+    ((and (consp op) (eq (car op) :?))
+     (let* ((cc (cadr op))
+            (index (and (symbolp cc) (position cc name-list :test #'eq))))
+       (if index
+         (values *wild-condition* (list :cond-opnd index))
+         (let ((value (need-arm64-condition-name cc)))
+           (values (make-condition-operand :name cc :value value)
+                   (list :cond value))))))
+    ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
+    ;; base register may be a hole or literal; the amount must be constant.
+    ((and (consp op) (symbolp (car op))
+          (or (member (cadr op) *shift-operators* :test #'eq)
+              (member (cadr op) *extend-operators* :test #'eq)))
+     (destructuring-bind (reg modifier &optional (amount-form 0)) op
+       (multiple-value-bind (reg-mop reg-desc)
+           (vinsn-parse-operand reg name-list param-types)
+         (when (and reg-mop (register-operand-p reg-mop)
+                    ;; a hole shift amount isn't supported yet -> fall back
+                    (not (and (symbolp amount-form)
+                              (position amount-form name-list :test #'eq))))
+           (let ((amount (eval-immediate-expression amount-form)))
+             (values (make-register-operand
+                      :register (register-operand-register reg-mop)
+                      :modifier modifier :amount amount)
+                     (list :shifted-reg reg-desc modifier amount)))))))
     ((symbolp op)
      (let ((index (position op name-list :test #'eq)))
        (if index
@@ -2700,18 +2766,19 @@
              (values (make-register-operand :register reg)
                      (list :reg (register-number reg))))))))))
 
-;;; Like MATCH-TEMPLATE, but a *WILD-IMMEDIATE* operand matches any
-;;; immediate-class spec (a bare keyword that isn't a condition).  Used to
-;;; select a template when an immediate's value isn't known until expand
-;;; time; the value's range is checked then.
+;;; Like match-template, but support *wild-immediate* and *wild-condition*
+;;; markers.
 (defun vinsn-match-template (template operands)
   (let ((specs (instruction-template-operand-specs template)))
     (and (= (length specs) (length operands))
          (every #'(lambda (operand spec)
-                    (if (eq operand *wild-immediate*)
-                      (and (keywordp spec)
-                           (not (member spec '(:cond :cond-inv))))
-                      (match-operand operand spec)))
+                    (cond
+                      ((eq operand *wild-immediate*)
+                       (and (keywordp spec)
+                            (not (member spec '(:cond :cond-inv)))))
+                      ((eq operand *wild-condition*)
+                       (member spec '(:cond :cond-inv)))
+                      (t (match-operand operand spec))))
                 operands specs))))
 
 ;;; Returns two values: the simplified body form, and (unless we fell
@@ -2719,47 +2786,57 @@
 ;;; enough to re-resolve the template's ordinal at load time.  See
 ;;; FIXUP-ARM64-VINSN-TEMPLATES.
 (defun vinsn-simplify-instruction (form name-list &optional param-types)
+  ;; This is like assemble-instruction.
   (destructuring-bind (name . opvals) form
-    (let ((candidates (gethash (string-downcase (string name))
-                               *instruction-template-lists*)))
+    (let ((candidates (gethash (string name) *instruction-template-lists*)))
       (when candidates
-        (let ((match-operands '())
-              (descriptors '()))
+        (let ((match-operands ())
+              (descriptors ()))
           (dolist (op opvals)
             (multiple-value-bind (mop desc)
                 (vinsn-parse-operand op name-list param-types)
-              ;; An operand we can't handle yet: leave the form as-is
-              ;; (the expander falls back to its legacy path).
-              (unless mop (return-from vinsn-simplify-instruction form))
+              ;; If we don't understand an operand (like a
+              ;; parameterized shift amount), return the instruction
+              ;; form unsimplified, and the expander will choke on it
+              ;; later.
+              (unless mop
+                (return-from vinsn-simplify-instruction form))
               (push mop match-operands)
               (push desc descriptors)))
           (setq match-operands (nreverse match-operands)
                 descriptors (nreverse descriptors))
-          ;; First matching template wins, exactly as the assembler does;
-          ;; for registers/labels/literal immediates shape-match is a full
-          ;; match.  But when a wild immediate is present the value can't
-          ;; disambiguate value-multiplexed forms (e.g. mov's movz/movn/orr
-          ;; aliases), so require a unique match and otherwise complain --
-          ;; the vinsn should name a concrete (non-alias) instruction.
-          (let* ((has-wild (member *wild-immediate* match-operands :test #'eq))
-                 (matches (remove-if-not
-                           #'(lambda (tp) (vinsn-match-template tp match-operands))
-                           candidates)))
-            (when matches
-              (when (and has-wild (cdr matches))
-                (error "Ambiguous immediate in vinsn instruction ~s: ~d ~
-                        templates match; name a concrete (non-alias) ~
-                        instruction." form (length matches)))
-              (let* ((template (car matches))
-                     (ordinal (instruction-template-ordinal template)))
-                (return-from vinsn-simplify-instruction
-                  (values (cons ordinal descriptors)
-                          (list* ordinal
-                                 (instruction-template-name template)
-                                 (instruction-template-operand-specs
-                                  template)))))))))))
+          ;; Select the template.  With all-concrete operands the first
+          ;; matching template wins, exactly as the assembler does, so we
+          ;; stop at the first match.  A wild immediate/condition hole,
+          ;; though, can't disambiguate value-multiplexed aliases (e.g.
+          ;; mov's movz/movn/orr forms): there we must prove the match is
+          ;; unique -- scanning all candidates -- and otherwise complain
+          ;; that the vinsn should use a specific (non-alias) instruction.
+          (flet ((simplified (template)
+                   (let ((ordinal (instruction-template-ordinal template)))
+                     (return-from vinsn-simplify-instruction
+                       (values (cons ordinal descriptors)
+                               (list* ordinal
+                                      (instruction-template-name template)
+                                      (instruction-template-operand-specs
+                                       template)))))))
+            (if (or (member *wild-immediate* match-operands :test #'eq)
+                    (member *wild-condition* match-operands :test #'eq))
+              (let ((matches (remove-if-not
+                              #'(lambda (tp)
+                                  (vinsn-match-template tp match-operands))
+                              candidates)))
+                (when matches
+                  (when (cdr matches)
+                    (error "Ambiguous immediate or condition in vinsn ~
+                            instruction ~s: ~d templates match; use a ~
+                            specific (non-alias) instruction."
+                           form (length matches)))
+                  (simplified (car matches))))
+              (dolist (tp candidates)
+                (when (vinsn-match-template tp match-operands)
+                  (simplified tp)))))))))
   ;; Unknown instruction, or no template matched: leave form as-is.
   form)
-
 
 (provide "ARM64-ASM")
