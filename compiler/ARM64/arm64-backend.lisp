@@ -93,8 +93,15 @@
                                    name-list))
                ;; Map each parameter name to its storage-class keyword, so
                ;; VINSN-SIMPLIFY-INSTRUCTION can tell an X operand from a W,
-               ;; D, or S when selecting a template.
-               (param-types (mapcar #'(lambda (s) (cons (car s) (cadr s)))
+               ;; D, or S when selecting a template.  A wired spec is
+               ;; (class value) (e.g. (:u64 imm0) or (:crf 0)); we want just
+               ;; the class keyword, not the whole list.
+               (param-types (mapcar #'(lambda (s)
+                                        (let ((class (cadr s)))
+                                          (cons (car s)
+                                                (if (consp class)
+                                                  (car class)
+                                                  class))))
                                     (append results args temps))))
           (labels ((find-name (n)
                    (let* ((pair (assoc n name-alist :test #'eq)))
