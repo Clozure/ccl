@@ -12,7 +12,8 @@
                                      ((v :lisp)
                                       (idx :u32))
                                      ())
-  (ldur dest (:@ v (:$ (:apply arm64::misc-data-offset idx)))))
+  ;; this range is limited
+  (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
 
 (define-arm64-vinsn check-exact-nargs (()
                                        ((n :u16const)))
@@ -32,6 +33,7 @@
                                                        ((reg :lisp)))
   (str reg (:@! vsp (:$ (- arm64::node-size)))))
 
+#|
 ;;; Save NFP: allocate an NFP frame on the C stack for unboxed temporaries.
 ;;; Frame layout: [saved-old-tcr.nfp at SP+0] [data at SP+8 ... SP+8+max_depth]
 ;;; Sets tcr.nfp = new SP so nested NFP vinsns can find the frame.
@@ -53,6 +55,7 @@
    (ldr temp (:@ sp (:$ 0)))
    (str temp (:@ rcontext (:$ arm64::tcr.nfp)))
    (add sp sp (:$ (:apply arm642-nfp-frame-size)))))
+|#
 
 ;;; Return from function: restore context and return.
 (define-arm64-vinsn (popj :lispcontext :pop :lrRestore :jumpLR)
@@ -62,6 +65,46 @@
   (ldr vsp (:@ sp (:$ 8)))              ;ignore marker
   (add sp sp (:$ 32))
   (ret))
+
+(define-arm64-vinsn unbox-s64 (((dest :s64))
+                               ((src :lisp)))
+  (asr dest src (:$ arm64::fixnumshift))
+  ;; is it a fixnum?
+  (ands xzr src (:$ arm64::fixnummask))
+  (b.eq :good)
+  ;; maybe a 2-digit bignum?
+  (and dest src (:$ arm64::fulltagmask))
+  (cmp dest (:$ arm64::fulltag-misc))
+  (b.eq :miscobj)
+  :bad
+  (uuo-error-reg-not-type src (:$ub arch::error-object-not-signed-byte-64))
+  :miscobj
+  (ldr dest (:@ src (:$ arm64::misc-header-offset)))
+  (cmp dest (:$ arm64::two-digit-bignum-header))
+  (b.ne :bad)
+  (ldr dest (:@ src (:$ arm64::misc-data-offset)))
+  :good)
+
+;;; Materialize a Lisp boolean branchlessly: DEST = CC ? t : nil, where CC
+;;; is a 4-bit condition code and the NZCV flags were set by a preceding
+;;; compare.  t lives at rnil + t-offset; put it in TRUE, then conditionally
+;;; select it or nil (in rnil) into DEST.
+(define-arm64-vinsn cond->boolean (((dest :lisp))
+                                   ((cc :u8const))
+                                   ((true :imm)))
+  (add true rnil (:$ arm64::t-offset))
+  (csel dest true rnil (:? cc)))
+
+(define-arm64-vinsn load-nil (((dest :lisp))
+                              ())
+  (mov dest rnil))
+
+(define-arm64-vinsn vframe-load (((dest :lisp))
+                                  ((frame-offset :u16const)
+                                   (cur-vsp :u16const)))
+  (ldr dest (:@ arm64::vsp (:$ (:apply - (:apply - cur-vsp
+                                                 arm64::word-size-in-bytes)
+                                       frame-offset)))))
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was

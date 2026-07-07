@@ -14,7 +14,6 @@
 (defparameter *arm642-debug-mask* 0)
 (defconstant arm642-debug-verbose-bit 0)
 (defconstant arm642-debug-vinsns-bit 1)
-
 (defparameter *arm642-target-node-size* 0)
 (defparameter *arm642-target-dnode-size* 0)
 (defparameter *arm642-target-fixnum-shift* 0)
@@ -130,7 +129,7 @@
 
 (defparameter *arm642-tail-call-aliases*
   ()
-  #| '((%call-next-method . (%tail-call-next-method . 1))) |#  
+  #| '((%call-next-method . (%tail-call-next-method . 1))) |#
 )
 
 
@@ -178,17 +177,13 @@
   (when vreg
     (with-arm64-local-vinsn-macros (seg vreg)
       (if (memory-spec-p ea)
-        (if (eql (memspec-type ea) memspec-nfp-offset)
-          (arm642-nfp-ref seg vreg ea)
-          (ensuring-node-target (target vreg)
-            (let* ((reg (unless (node-reg-p vreg)
-                          (or (arm642-reg-for-ea ea)
-                              (arm642-try-non-conflicting-reg target 0)))))
-              (when reg (setq target reg))
-              (arm642-stack-to-register seg ea target)
-              (if (addrspec-vcell-p ea)
-                (! vcell-ref target target)))))
+        (ensuring-node-target (target vreg)
+          (progn
+            (arm642-stack-to-register seg ea target)
+            (if (addrspec-vcell-p ea)
+              (! vcell-ref target target))))
         (<- ea)))))
+
 
 (defun arm642-ensure-binding-indices-for-vcells (vcells)
   (dolist (cell vcells)
@@ -199,14 +194,14 @@
   (progn
     (dolist (a  (afunc-inner-functions afunc))
       (unless (afunc-lfun a)
-        (arm642-compile a 
-                      (if lambda-form 
-                        (afunc-lambdaform a)) 
+        (arm642-compile a
+                      (if lambda-form
+                        (afunc-lambdaform a))
                       *arm642-record-symbols*))) ; always compile inner guys
     (let* ((*arm642-cur-afunc* afunc)
            (*arm642-returning-values* nil)
            (*arm642-woi* nil)
-           (*encoded-reg-value-byte* (byte 5 0))           
+           (*encoded-reg-value-byte* (byte 5 0))
            (*arm642-open-code-inline* nil)
            (*arm642-optimize-for-space* nil)
            (*arm642-register-restore-count* nil)
@@ -276,7 +271,7 @@
        *backend-labels*
        (set-fill-pointer
         *arm642-undo-stack*
-        (set-fill-pointer 
+        (set-fill-pointer
          *arm642-undo-because*
          (set-fill-pointer
           *backend-immediates* 0))))
@@ -294,13 +289,11 @@
                  (format t "~% vinsns for ~s (after generation)" (afunc-name afunc))
                  (do-dll-nodes (v vinsns) (format t "~&~s" v))
                  (format t "~%~%"))
-            
+
                (with-dll-node-freelist (code arm64::*instruction-freelist*)
                  (let* ((arm64::*labels* nil)
-                          (sections (vector code))
-                          debug-info)
-                     (declare (dynamic-extent sections))
-                     (arm642-expand-vinsns vinsns code sections)
+                        debug-info)
+                     (arm642-expand-vinsns vinsns code)
                      (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
                        (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
                      (setq debug-info (afunc-lfun-info afunc))
@@ -316,7 +309,7 @@
                      (if (or fname lambda-form *arm642-recorded-symbols*)
                        (backend-new-immediate fname)
                        (setq bits (logior (ash -1 $lfbits-noname-bit) bits)))
-                     
+
                      (unless (afunc-parent afunc)
                        (arm642-fixup-fwd-refs afunc))
                      (setf (afunc-all-vars afunc) nil)
@@ -413,7 +406,7 @@
   (let* ((lap-label (vinsn-note-address note)))
     (if lap-label
       (arm64::label-address lap-label)
-      (compiler-bug "Missing or bad ~s label: ~s" 
+      (compiler-bug "Missing or bad ~s label: ~s"
                     (if start-p 'start 'end) sym))))
 
 (defun arm642-digest-symbols ()
@@ -456,21 +449,12 @@
             *arm642-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls
                                                           decls))))))
 
+;;; Punt on the nvrs for now.  The PPC ports appear to model the vstack
+;;; as a collection of lcell objects (historically defined in vreg.lisp),
+;;; but those definitions got taken out at some point after we stopped
+;;; maintaining the ppc ports due to lack of hardware.
 (defun arm642-save-nvrs (seg n)
   (declare (ignore seg n)))
-
-(defun arm642-save-non-volatile-fprs (seg n)
-  (unless (eql n 0)
-    (with-arm64-local-vinsn-macros (seg)
-      (! push-nvfprs n (logior (ash n arm64::num-subtag-bits)
-                               arm64::subtag-double-float-vector)))
-    (setq *arm642-non-volatile-fpr-count* n)))
-
-(defun arm642-restore-non-volatile-fprs (seg)
-  (let* ((n *arm642-non-volatile-fpr-count*))
-    (unless (eql n 0)
-      (with-arm64-local-vinsn-macros (seg)
-        (! pop-nvfprs n)))))
 
 (defun arm642-restore-nvrs (seg multiple-values-on-stack)
   (declare (ignore seg multiple-values-on-stack)))
@@ -526,6 +510,41 @@
   (when keys
     (apply #'arm642-init-keys seg vloc  keys))
   (arm642-seq-bind seg (%car auxen) (%cadr auxen)))
+
+(defun arm642-initopt (seg vloc spvloc vars inits spvars)
+  (with-arm64-local-vinsn-macros (seg)
+    (dolist (var vars vloc)
+      (let* ((initform (pop inits))
+             (spvar (pop spvars))
+             (reg (nx2-assign-register-var var))
+             (sp-reg ($ arm64::arg_z))
+             (regloadedlabel (if reg (backend-get-next-label))))
+        (unless (nx-null initform)
+          (arm642-stack-to-register seg (arm642-vloc-ea spvloc) sp-reg)
+          (let ((skipinitlabel (backend-get-next-label)))
+            (with-crf-target () crf
+              (arm642-compare-register-to-nil seg crf
+                                              (arm642-make-compound-cd
+                                               0 skipinitlabel)
+                                              sp-reg arm64::cond-eq t))
+            (if reg
+              (arm642-form seg reg regloadedlabel initform)
+              (arm642-register-to-stack seg
+                                        (arm642-one-untargeted-reg-form
+                                         seg initform ($ arm64::arg_z))
+                                        (arm642-vloc-ea vloc)))
+            (@ skipinitlabel)))
+        (if reg
+          (progn
+            (arm642-init-regvar seg var reg (arm642-vloc-ea vloc))
+            (@ regloadedlabel))
+          (arm642-bind-var seg var vloc))
+        (when spvar
+          (if (setq reg (nx2-assign-register-var spvar))
+            (arm642-init-regvar seg spvar reg (arm642-vloc-ea spvloc))
+            (arm642-bind-var seg spvar spvloc))))
+      (setq vloc (%i+ vloc *arm642-target-node-size*))
+      (if spvloc (setq spvloc (%i+ spvloc *arm642-target-node-size*))))))
 
 ;;; Return NIL if arg register should be vpushed, else var.
 (defun arm642-retain-arg-register (var)
@@ -591,6 +610,41 @@
         (! check-exact-nargs nargs))
       (arm642-argregs-entry seg rev-fixed-args))))
 
+;;; No more than three &optional args; all default to NIL and none have
+;;; supplied-p vars.  No &key/&rest.
+(defun arm642-simple-opt-entry (seg rev-opt-args rev-req-args)
+  (let* ((min (length rev-req-args))
+         (nopt (length rev-opt-args))
+         (max (+ min nopt)))
+    (declare (type (unsigned-byte 16) min nopt max))
+    (with-arm64-local-vinsn-macros (seg)
+      (unless *arm642-reckless*
+        (when rev-req-args
+          (! check-min-nargs min))
+        (! check-max-nargs max))
+      (if (= nopt 1)
+        (! default-1-arg min)
+        (if (= nopt 2)
+          (! default-2-args min)
+          (! default-3-args min)))
+      (arm642-argregs-entry seg (append rev-opt-args rev-req-args)))))
+
+;;; if "num-fixed" is > 0, we've already ensured that at least that many args
+;;; were provided; that may enable us to generate better code for saving the
+;;; argument registers.
+;;; We're responsible for computing the caller's VSP and saving
+;;; caller's state.
+(defun arm642-lexpr-entry (seg num-fixed)
+  (with-arm64-local-vinsn-macros (seg)
+    (! save-lexpr-argregs num-fixed)
+    (dotimes (i num-fixed)
+      (! copy-lexpr-argument))
+    (! save-lisp-context-lexpr)))
+
+(defun arm642-load-lexpr-address (seg dest)
+  (with-arm64-local-vinsn-macros (seg)
+    (! load-vframe-address dest *arm642-vstack*)))
+
 (defun arm642-vloc-ea (n &optional vcell-p)
   (setq n (make-memory-spec (dpb memspec-frame-address memspec-type-byte n)))
   (if vcell-p
@@ -622,7 +676,7 @@
                  (when ,code-note
                    (with-arm64-local-vinsn-macros (,seg-var)
                      (arm642-store-immediate ,seg-var ,code-note arm64::temp0)
-                     (with-node-temps (arm64::temp0) (zero) 
+                     (with-node-temps (arm64::temp0) (zero)
                        (! lri zero 0)
                        (! misc-set-c-node ($ zero) ($ arm64::temp0) 1))))
                  (,arm64-with-note-body ,form-var ,seg-var ,@other-vars)
@@ -653,6 +707,39 @@
               (arm642-form seg nil nil f))
             (apply fn seg vreg xfer (acode-operands form))))))))
 
+(defun arm642-form-typep (form type)
+  (acode-form-typep form type *arm642-trust-declarations*))
+
+(defun arm642-form-type (form)
+  (acode-form-type form *arm642-trust-declarations*))
+
+(defun arm642-use-operator (op seg vreg xfer &rest forms)
+  (declare (dynamic-extent forms))
+  (apply (svref *arm642-specials* (%ilogand operator-id-mask op))
+         seg vreg xfer forms))
+
+(defun arm642-nil (seg vreg xfer)
+  (with-arm64-local-vinsn-macros (seg vreg xfer)
+    (if (arm642-for-value-p vreg)
+      (ensuring-node-target (target vreg)
+        (! load-nil target)))
+    (arm642-branch seg (arm642-cd-false xfer) vreg)))
+
+(defun arm642-t (seg vreg xfer)
+  (with-arm64-local-vinsn-macros (seg vreg xfer)
+    (if (arm642-for-value-p vreg)
+      (ensuring-node-target (target vreg)
+        (! load-t target)))
+    (arm642-branch seg (arm642-cd-true xfer) vreg)))
+
+(defun arm642-for-value-p (vreg)
+  (and vreg (not (backend-crf-p vreg))))
+
+(defun arm642-mvpass (seg form &optional xfer)
+  (with-arm64-local-vinsn-macros (seg)
+    (arm642-form seg ($ arm64::arg_z)
+                 (logior (or xfer 0) $backend-mvpass-mask) form)))
+
 (defun arm642-adjust-vstack (delta)
   (arm642-set-vstack (%i+ *arm642-vstack* delta)))
 
@@ -660,43 +747,173 @@
   (arm642-regmap-note-vstack-delta new *arm642-vstack*)
   (setq *arm642-vstack* new))
 
-(defun arm642-register-for-frame-offset (offset &optional suggested)
-  (let* ((mask *arm642-gpr-locations-valid-mask*)
-         (info *arm642-gpr-locations*))
-    (if (and suggested
-             (logbitp suggested mask)
-             (memq offset (svref info suggested)))
-      suggested
-      (dotimes (reg 32)
-        (when (and (logbitp reg mask)
-                   (memq offset (svref info reg)))
-          (return reg))))))
-
 (defun arm642-stack-to-register (seg memspec reg)
   (with-arm64-local-vinsn-macros (seg)
-    (let* ((offset (memspec-frame-address-offset memspec)))
-      (if (eql (hard-regspec-class reg) hard-reg-class-fpr)
-        (with-node-target () temp
-          (arm642-stack-to-register seg memspec temp)
-          (arm642-copy-register seg reg temp))
-        (let* ((mask *arm642-gpr-locations-valid-mask*)
-               (info *arm642-gpr-locations*)
-               (regno (%hard-regspec-value reg))
-               (other (arm642-register-for-frame-offset offset regno)))
-          (unless (eql regno other)
-            (cond (other
-                   (let* ((vinsn (! copy-node-gpr reg other)))
-                     (setq *arm642-gpr-locations-valid-mask*
-                           (logior mask (ash 1 regno)))
-                     (setf (svref info regno)
-                           (copy-list (svref info other)))
-                     vinsn))
-                  (t
-                   (let* ((vinsn (! vframe-load reg offset *arm642-vstack*)))
-                     (setq *arm642-gpr-locations-valid-mask*
-                           (logior mask (ash 1 regno)))
-                     (setf (svref info regno) (list offset))
-                     vinsn)))))))))
+    (! vframe-load reg (memspec-frame-address-offset memspec)
+       *arm642-vstack*)))
+
+(defun arm642-lcell-to-register (seg lcell reg)
+  (with-arm64-local-vinsn-macros (seg)
+    (! lcell-load reg lcell (arm642-vstack-mark-top))))
+
+(defun arm642-register-to-lcell (seg reg lcell)
+  (with-arm64-local-vinsn-macros (seg)
+    (! lcell-store reg lcell (arm642-vstack-mark-top))))
+
+(defun arm642-register-to-stack (seg reg memspec)
+  (with-arm64-local-vinsn-macros (seg)
+    (! vframe-store reg (memspec-frame-address-offset memspec)
+       *arm642-vstack*)))
+
+(defun arm642-ea-open (ea)
+  (if (and ea (not (typep ea 'lreg)) (addrspec-vcell-p ea))
+    (make-memory-spec (memspec-frame-address-offset ea))
+    ea))
+
+(defun arm642-set-nargs (seg n)
+  (if (> n call-arguments-limit)
+    (compiler-bug "~s exceeded." 'call-arguments-limit)
+    (with-arm64-local-vinsn-macros (seg)
+      (! set-nargs n))))
+
+(defun arm642-single-float-bits (the-sf)
+  (single-float-bits the-sf))
+
+(defun arm642-double-float-bits (the-df)
+  (double-float-bits the-df))
+
+(defun arm642-immediate (seg vreg xfer form)
+  (with-arm64-local-vinsn-macros (seg vreg xfer)
+    (if vreg
+      (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+               (or (and (typep form 'double-float)
+                        (= (get-regspec-mode vreg)
+                           hard-reg-class-fpr-mode-double))
+                   (and (typep form 'short-float)
+                        (= (get-regspec-mode vreg)
+                           hard-reg-class-fpr-mode-single))))
+        (if (zerop form)
+          (if (eql form 0.0d0)
+            (! zero-double-float-register vreg)
+            (! zero-single-float-register vreg))
+          (if (typep form 'short-float)
+            (let* ((bits (arm642-single-float-bits form)))
+              (with-imm-temps () ((bitsreg :u32))
+                (! lri bitsreg bits)
+                (! load-single-float-constant vreg bitsreg)))
+            (multiple-value-bind (high low) (arm642-double-float-bits form)
+              (declare (integer high low))
+              (with-imm-temps () ((highreg :u32) (lowreg :u32))
+                (if (zerop high)
+                  (setq highreg ($ arm64::xzr))
+                  (! lri highreg high))
+                (if (zerop low)
+                  (setq lowreg ($ arm64::xzr))
+                  (! lri lowreg low))
+                (! load-double-float-constant vreg highreg lowreg)))))
+        (if (and (typep form '(unsigned-byte 32))
+                 (= (hard-regspec-class vreg) hard-reg-class-gpr)
+                 (= (get-regspec-mode vreg)
+                    hard-reg-class-gpr-mode-u32))
+          (arm642-lri seg vreg form)
+          (ensuring-node-target
+              (target vreg)
+            (if (characterp form)
+              (! load-character-constant target (char-code form))
+              (arm642-store-immediate seg form target)))))
+      (if (and (listp form)
+               *load-time-eval-token*
+               (eq (car form) *load-time-eval-token*))
+        (arm642-store-immediate seg form ($ arm64::temp0))))
+    (^)))
+
+(defun arm642-register-constant-p (form)
+  (and (acode-p form)
+       (or (memq form *arm642-vcells*)
+           (memq form *arm642-fcells*))
+       (car (acode-operands form))))
+
+(defun arm642-store-immediate (seg imm dest)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((reg (arm642-register-constant-p imm)))
+      (if reg
+        (arm642-copy-register seg dest reg)
+        (let* ((idx (backend-immediate-index imm)))
+          ;; The reach of (ldur dest (:@ fn (:$ (+ misc-data-offset
+          ;;                                       1 ;for entrypoint
+          ;;                                       1 ;for code-vector
+          ;;                                       (* 8 idx)))))
+          ;; is relatively small: in this case, idx can be at most 31,
+          ;; making the offset 254, which just fits into an (signed-byte 9).
+          (if (<= idx 31)
+            (! ref-constant dest idx)
+            (with-imm-target () (idxreg :s64)
+              (arm642-lri seg idxreg (+ arm64::misc-data-offset
+                                        (ash (+ idx 2) 3)))
+              (! ref-indexed-constant dest idxreg)))))
+      dest)))
+
+;;; Returns label iff form is (local-go <tag>) and can go without
+;;; adjusting stack.
+(defun arm642-go-label (form)
+  (let ((current-stack (arm642-encode-stack)))
+    (while (and (acode-p form)
+                (or (eq (acode-operator form) (%nx1-operator progn))
+                    (eq (acode-operator form) (%nx1-operator local-tagbody))))
+      (setq form (caar  (acode-operands form))))
+    (when (acode-p form)
+      (let ((op (acode-operator form)))
+        (if (and (eq op (%nx1-operator local-go))
+                 (arm642-equal-encodings-p
+                  (%caddr (car (acode-operands form))) current-stack))
+          (%cadr (car (acode-operands form)))
+          (if (and (eq op (%nx1-operator local-return-from))
+                   (nx-null (cadr (acode-operands form))))
+            (let ((tagdata (car (car (acode-operands form)))))
+              (and (arm642-equal-encodings-p (cdr tagdata) current-stack)
+                   (null (caar tagdata))
+                   (< 0 (cdar tagdata) $backend-mvpass)
+                   (cdar tagdata)))))))))
+
+(defun arm642-single-valued-form-p (form)
+  (setq form (acode-unwrapped-form-value form))
+  (or (nx-null form)
+      (nx-t form)
+      (if (acode-p form)
+        (let ((op (acode-operator form)))
+          (or (%ilogbitp operator-single-valued-bit op)
+              (and (eql op (%nx1-operator values))
+                   (let ((values (car (acode-operands form))))
+                     (and values (null (cdr values)))))
+              nil)))))                 ;learn about functions someday
+
+(defun arm642-box-s32 (seg node-dest s32-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (! s32->fixnum node-dest s32-src)))
+
+(defun arm642-box-u32 (seg node-dest u32-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (! u32->fixnum node-dest u32-src)))
+
+(defun arm642-box-s64 (seg node-dest s64-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (if *arm642-open-code-inline*
+      (! s64->integer node-dest s64-src)
+      (let ((arg_z ($ arm64::arg_z))
+            (imm0 ($ arm64::imm0 :mode :s64)))
+        (arm642-copy-register seg imm0 s64-src)
+        (! call-subprim (subprim-name->offset '.SPmakes64))
+        (arm642-copy-register seg node-dest arg_z)))))
+
+(defun arm642-box-u64 (seg node-dest u64-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (if *arm642-open-code-inline*
+      (! u64->integer node-dest u64-src)
+      (let ((arg_z ($ arm64::arg_z))
+            (imm0 ($ arm64::imm0 :mode :u64)))
+        (arm642-copy-register seg imm0 u64-src)
+        (! call-subprim (subprim-name->offset '.SPmakeu64))
+        (arm642-copy-register seg node-dest arg_z)))))
 
 (defun arm642-symbol-locative-p (imm)
   (and (consp imm)
@@ -720,35 +937,89 @@
                  (eq (acode-operator form)
                      (%nx1-operator simple-function)))))))
 
+(defun arm642-one-lreg-form (seg form lreg)
+  (arm642-form seg lreg nil form)
+  lreg)
+
+(defun arm642-one-targeted-reg-form (seg form reg)
+  (arm642-one-lreg-form seg form reg))
+
+(defun arm642-one-untargeted-lreg-form (seg form reg)
+  (arm642-one-lreg-form seg form (if (typep reg 'lreg)
+                                   reg
+                                   (make-unwired-lreg reg))))
+
+(defun arm642-one-untargeted-reg-form (seg form suggested)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((gpr-p (= (hard-regspec-class suggested) hard-reg-class-gpr))
+           (node-p (if gpr-p (= (get-regspec-mode suggested)
+                                hard-reg-class-gpr-mode-node))))
+      (if node-p
+        (let* ((ref (arm642-lexical-reference-ea form))
+               (reg (backend-ea-physical-reg ref hard-reg-class-gpr)))
+          (if reg
+            ref
+            (if (nx-null form)
+              ($ arm64::rnil)
+              (if (and (acode-p form)
+                       (eq (acode-operator form) (%nx1-operator immediate))
+                       (setq reg (arm642-register-constant-p
+                                  (car (acode-operands form)))))
+                reg
+                (if (and (acode-p form)
+                         (eq (acode-operator form)
+                             (%nx1-operator %current-tcr)))
+                  ($ arm64::rcontext)
+                  (arm642-one-untargeted-lreg-form seg form suggested))))))
+        (arm642-one-untargeted-lreg-form seg form suggested)))))
+
+(defun arm642-two-targeted-reg-forms (seg aform areg bform breg)
+  (let* ((avar (arm642-lexical-reference-p aform))
+         (atriv (and (arm642-trivial-p bform) (nx2-node-gpr-p breg)))
+         (aconst (and (not atriv)
+                      (or (arm64-side-effect-free-form-p aform)
+                          (if avar (nx2-var-not-set-by-form-p avar bform)))))
+         (apushed (not (or atriv aconst))))
+    (progn
+      (unless aconst
+        (if atriv
+          (arm642-one-targeted-reg-form seg aform areg)
+          (setq apushed
+                (arm642-push-register
+                 seg (arm642-one-untargeted-reg-form
+                      seg aform (arm642-acc-reg-for areg))))))
+      (arm642-one-targeted-reg-form seg bform breg)
+      (if aconst
+        (arm642-one-targeted-reg-form seg aform areg)
+        (if apushed
+          (arm642-elide-pushes seg apushed (arm642-pop-register seg areg)))))
+    (values areg breg)))
+
 (defun arm642-lri (seg reg value)
   (with-arm64-local-vinsn-macros (seg)
-    (if (>= value 0)      
-      (! lri reg value)     
+    (if (>= value 0)
+      (! lri reg value)
       (! lri reg (logand value #xffffffffffffffff)))))
 
-(defun arm642-box-u64 (seg node-dest u64-src)
-  (with-arm64-local-vinsn-macros (seg)
-    (let ((arg_z ($ arm64::arg_z))
-          (imm0 ($ arm64::imm0 :mode :u64)))
-      (arm642-copy-register seg imm0 u64-src)
-      (! call-subprim (subprim-name->offset '.SPmakeu64))
-      (arm642-copy-register seg node-dest arg_z))))
+(defun arm642-lexical-reference-ea (form &optional (no-closed-p t))
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
+    (if (eq (acode-operator form) (%nx1-operator lexical-reference))
+      (let* ((addr (var-ea (car (acode-operands form)))))
+        (if (typep addr 'lreg)
+          addr
+          (unless (and no-closed-p (addrspec-vcell-p addr ))
+            addr))))))
 
-(defun arm642-box-s64 (seg node-dest s64-src)
-  (with-arm64-local-vinsn-macros (seg)
-    (let ((arg_z ($ arm64::arg_z))
-          (imm0 ($ arm64::imm0 :mode :s64)))
-      (arm642-copy-register seg imm0 s64-src)
-      (! call-subprim (subprim-name->offset '.SPmakes64))
-      (arm642-copy-register seg node-dest arg_z))))
-
-(defun arm64-vpush-register (seg src &optional inhibit-note)
+(defun arm642-vpush-register (seg src &optional inhibit-note)
   (with-arm64-local-vinsn-macros (seg)
     (prog1
         (! vpush-register src)
       (unless inhibit-note
-        (arm64-regmap-note-store src *arm642-vstack*))
-      (arm64-adjust-vstack *arm642-target-node-size*))))
+        (arm642-regmap-note-store src *arm642-vstack*))
+      (arm642-adjust-vstack *arm642-target-node-size*))))
+
+(defun arm642-vpush-register-arg (seg src)
+  (arm642-vpush-register seg src))
 
 (defun arm642-copy-register (seg dest src)
   (with-arm64-local-vinsn-macros (seg)
@@ -849,7 +1120,7 @@
                     (unless (eql  dest-gpr src-gpr)
                       (! copy-gpr dest src)))
                    (#.hard-reg-class-gpr-mode-u16
-                    (! u16->s32 dest src))                 
+                    (! u16->s32 dest src))
                    (#.hard-reg-class-gpr-mode-s16
                     (! s16->s32 dest src))
                    (#.hard-reg-class-gpr-mode-u8
@@ -918,7 +1189,7 @@
                       (#.hard-reg-class-gpr-mode-node
                        (case dest-mode
                          (#.hard-reg-class-fpr-mode-double
-                          (unless (or (logbitp hard-reg-class-fpr-type-double 
+                          (unless (or (logbitp hard-reg-class-fpr-type-double
                                                (get-node-regspec-type-modes
                                                 src))
                                       *arm642-reckless*)
@@ -1016,7 +1287,7 @@
 (defun arm642-encoding-undo-count (encoding)
   (svref encoding 0))
 
-(defun arm642-encoding-cstack-depth (encoding) 
+(defun arm642-encoding-cstack-depth (encoding)
   (svref encoding 1))
 
 (defun arm642-encoding-vstack-depth (encoding)
@@ -1032,7 +1303,7 @@
 
 (defun arm642-open-undo (&optional (reason $undocatch)
                            (curstack (arm642-encode-stack)))
-  (set-fill-pointer 
+  (set-fill-pointer
    *arm642-undo-stack*
    (set-fill-pointer *arm642-undo-because* *arm642-undo-count*))
   (vector-push-extend curstack *arm642-undo-stack*)
@@ -1044,19 +1315,50 @@
                         (i (aref *arm642-undo-stack* new-count)))
   (multiple-value-setq (*arm642-undo-count* *arm642-cstack* *arm642-vstack* )
     (arm642-decode-stack i))
-  (set-fill-pointer 
+  (set-fill-pointer
    *arm642-undo-stack*
    (set-fill-pointer *arm642-undo-because* new-count)))
+
+;;; "Trivial" means can be evaluated without allocating or modifying registers.
+;;; Interim definition, which will probably stay here forever.
+(defun arm642-trivial-p (form &aux op bits)
+  (setq form (nx-untyped-form form))
+  (and (acode-p form)
+       (not (eq (setq op (acode-operator form)) (%nx1-operator call)))
+       (or (nx-null form)
+           (nx-t form)
+           (eq op (%nx1-operator simple-function))
+           (eq op (%nx1-operator fixnum))
+           (eq op (%nx1-operator immediate))
+           #+nil
+           (eq op (%nx1-operator bound-special-ref))
+           (and
+            (or (eq op (%nx1-operator inherited-arg))
+                (eq op (%nx1-operator lexical-reference)))
+            (or (%ilogbitp $vbitpunted (setq bits (nx-var-bits
+                                                   (car (acode-operands
+                                                         form)))))
+                (neq
+                 (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
+                 (%ilogand (%ilogior (%ilsl $vbitclosed 1) (%ilsl $vbitsetq 1))
+                           bits)))))))
+
+(defun arm642-lexical-reference-p (form)
+  (when (acode-p form)
+    (let ((op (acode-operator (setq form (acode-unwrapped-form-value form)))))
+      (when (or (eq op (%nx1-operator lexical-reference))
+                (eq op (%nx1-operator inherited-arg)))
+        (car (acode-operands form))))))
 
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defmacro defarm642 (name locative arglist &body forms)
     (multiple-value-bind (body decls)
         (parse-body forms nil t)
       (destructuring-bind (vcode-block dest control &rest other-args) arglist
-        (let* ((fun `(nfunction ,name 
+        (let* ((fun `(nfunction ,name
                                 (lambda (,vcode-block ,dest ,control
                                          ,@other-args)
-                                  ,@decls 
+                                  ,@decls
                                   (block ,name
                                     (with-arm64-local-vinsn-macros
                                         (,vcode-block ,dest ,control)
@@ -1066,6 +1368,21 @@
              (svset *arm642-specials*
                     (%ilogand #.operator-id-mask (%nx1-operator ,locative))
                     ,fun)))))))
+
+
+
+(defun arm642-cd-compound-p (xfer)
+  (if xfer (logbitp $backend-compound-branch-target-bit xfer)))
+
+(defun arm642-cd-true (xfer)
+ (if (arm642-cd-compound-p xfer)
+   (ldb $backend-compound-branch-true-byte xfer)
+  xfer))
+
+(defun arm642-cd-false (xfer)
+ (if (arm642-cd-compound-p xfer)
+   (ldb $backend-compound-branch-false-byte xfer)
+   xfer))
 
 (defun arm642-branch (seg xfer crf &optional cr-bit true-p)
   (declare (notinline arm642-branch))
@@ -1089,7 +1406,7 @@
                    (nbranch (if true-p falsebranch truebranch))
                    (tn0 (neq 0 tbranch))
                    (tnret (neq $backend-return tbranch))
-                   (nn0 (neq 0 nbranch)) 
+                   (nn0 (neq 0 nbranch))
                    (nnret (neq $backend-return nbranch))
                    (tlabel (if (and tnret tn0) (aref *backend-labels* tbranch)))
                    (nlabel (if (and nnret nn0) (aref *backend-labels* nbranch))))
@@ -1134,18 +1451,14 @@
 (defun arm642-do-return (seg)
   (let* ((*arm642-vstack* *arm642-vstack*))
     (with-arm64-local-vinsn-macros (seg)
-      (progn    
-        (arm642-set-vstack (arm642-unwind-stack seg $backend-return 0 0 #x7fffff))              
+      (progn
+        (arm642-set-vstack (arm642-unwind-stack seg $backend-return 0 0 #x7fffff))
         (if *arm642-returning-values*
-          (progn  
+          (progn
             (arm642-restore-nvrs seg t)
-            (arm642-restore-non-volatile-fprs seg)
-            (! restore-nfp)
             (! nvalret))
           (progn
             (arm642-restore-nvrs seg nil)
-            (arm642-restore-non-volatile-fprs seg)
-            (! restore-nfp)
             (! popj)))))
     nil))
 
@@ -1173,12 +1486,23 @@
   (dolist (var (%car auxen))
     (arm642-close-var seg var)))
 
+(defun arm642-init-regvar (seg var reg addr)
+  (with-arm64-local-vinsn-macros (seg)
+    (arm642-stack-to-register seg addr reg)
+    (arm642-set-var-ea seg var ($ reg))))
+
+(defun arm642-simple-var (var &aux (bits (cadr var)))
+  (if (or (%ilogbitp $vbitclosed bits)
+          (%ilogbitp $vbitspecial bits))
+    (nx-error "Non-simple-variable ~S" (%car var))
+    var))
+
 ;; The cmp instruction takes a 12-bit immediate; return true if n fits.
 (defun arm642-aimm-p (n)
   (< (ash n arm64::fixnumshift) 4096))
 
-(defun arm642-expand-vinsns (header current &optional sections)
-  (do-dll-nodes (v header) 
+(defun arm642-expand-vinsns (header current)
+  (do-dll-nodes (v header)
     (if (%vinsn-label-p v)
       (let* ((id (vinsn-label-id v)))
         (if (or (typep id 'fixnum) (null id))
@@ -1192,22 +1516,34 @@
       (when (typep ea 'lreg)
         (setf (var-ea var) (lreg-value ea))))))
 
-;;; Build a register-operand for a filled-in vinsn operand.  NUMBER is
-;;; the physical register number; SPEC is the template's operand spec
-;;; (role class) at this position, which tells us the register view.
-;;; Mirrors the class mapping in DECODE-REGISTER-OPERAND.
-(defun arm642-vinsn-register-operand (number spec)
-  (arm64::make-register-operand
-   :register
-   (ecase (cadr spec)
-     ((:x :x-shift :x-shift-ror :x-ext) (arm64::gpr-ref number 64))
-     (:x/sp (arm64::gpr-ref number 64 t))
-     ((:w :w-shift :w-shift-ror :w-ext) (arm64::gpr-ref number 32))
-     (:w/sp (arm64::gpr-ref number 32 t))
-     (:sp (arm64::gpr-ref 31 64 t))
-     (:wsp (arm64::gpr-ref 31 32 t))
-     (:s (arm64::fpr-ref number 32))
-     (:d (arm64::fpr-ref number 64)))))
+;;; Build a register-operand for a filled-in vinsn operand.  DESC is the
+;;; register descriptor -- (:opnd i) / (:reg n) for a plain register, or
+;;; (:shifted-reg reg-desc modifier amount) for a shifted/extended one.
+;;; SPEC is the template's operand spec (role class), giving the register
+;;; view.  Mirrors the class mapping in DECODE-REGISTER-OPERAND.
+(defun arm642-vinsn-register-operand (desc spec vp)
+  (multiple-value-bind (number modifier amount)
+      (ecase (car desc)
+        (:opnd (values (svref vp (cadr desc)) nil 0))
+        (:reg  (values (cadr desc) nil 0))
+        (:shifted-reg
+         (destructuring-bind (reg-desc modifier amount) (cdr desc)
+           (values (ecase (car reg-desc)
+                     (:opnd (svref vp (cadr reg-desc)))
+                     (:reg  (cadr reg-desc)))
+                   modifier amount))))
+    (arm64::make-register-operand
+     :register
+     (ecase (cadr spec)
+       ((:x :x-shift :x-shift-ror :x-ext) (arm64::gpr-ref number 64))
+       (:x/sp (arm64::gpr-ref number 64 t))
+       ((:w :w-shift :w-shift-ror :w-ext) (arm64::gpr-ref number 32))
+       (:w/sp (arm64::gpr-ref number 32 t))
+       (:sp (arm64::gpr-ref 31 64 t))
+       (:wsp (arm64::gpr-ref 31 32 t))
+       (:s (arm64::fpr-ref number 32))
+       (:d (arm64::fpr-ref number 64)))
+     :modifier modifier :amount amount)))
 
 ;;; Build the operand struct for one filled-in body operand.  DESC is the
 ;;; stored descriptor, SPEC the template's operand spec at this position,
@@ -1216,12 +1552,24 @@
 ;;; object.  A (:label class) spec builds a label-operand -- naming either
 ;;; a backend vinsn-label passed in through VP, or a template-local label;
 ;;; any other spec builds a register-operand.
+;;; Evaluate one (:imm-apply ...) argument descriptor against the vp
+;;; vector: (:opnd i) is a hole filled from vp, (:apply fn arg...) is a
+;;; nested apply evaluated recursively, anything else is a constant.
+(defun arm642-eval-imm-apply-arg (a vp)
+  (cond
+    ((and (consp a) (eq (car a) :opnd)) (svref vp (cadr a)))
+    ((and (consp a) (eq (car a) :apply))
+     (apply (cadr a) (mapcar #'(lambda (x) (arm642-eval-imm-apply-arg x vp))
+                             (cddr a))))
+    (t a)))
+
 ;;; Build an immediate-operand for a filled-in body operand.  DESC is
 ;;; (:imm value shift), (:imm-opnd vp-index shift), or
-;;; (:imm-apply shift fn . args) where each arg is a constant or an
-;;; (:opnd vp-index) hole.  SPEC is the immediate class.  Since a wild
-;;; immediate's value wasn't known when the template was chosen, its range
-;;; is only checkable now: matching guaranteed the class, not the fit.
+;;; (:imm-apply shift fn . args) where each arg is a constant, an
+;;; (:opnd vp-index) hole, or a nested (:apply fn arg...).  SPEC is the
+;;; immediate class.  Since a wild immediate's value wasn't known when the
+;;; template was chosen, its range is only checkable now: matching
+;;; guaranteed the class, not the fit.
 (defun arm642-vinsn-immediate-operand (desc spec vp)
   (multiple-value-bind (value shift)
       (ecase (car desc)
@@ -1230,9 +1578,7 @@
         (:imm-apply
          (destructuring-bind (shift fn . args) (cdr desc)
            (values (apply fn (mapcar #'(lambda (a)
-                                         (if (and (consp a) (eq (car a) :opnd))
-                                           (svref vp (cadr a))
-                                           a))
+                                         (arm642-eval-imm-apply-arg a vp))
                                      args))
                    shift))))
     (let ((imm (arm64::make-immediate-operand :value value :shift shift)))
@@ -1241,24 +1587,51 @@
                        operand class ~s" value shift spec))
       imm)))
 
-;;; Build a memory-operand.  DESC is (:mem marker base-desc off-desc);
-;;; SPEC is (:mem-FORM (:base class) [(:imm class)]).  The base register's
-;;; view comes from the (:base class) sub-spec; a present immediate offset
-;;; is range-checked against the (:imm class) sub-spec.  Register offsets
-;;; are not handled yet (VINSN-PARSE-MEMORY-OPERAND won't produce them).
+;;; Build a register-offset index operand.  Its register view follows the
+;;; extend modifier -- uxtw/sxtw take a 32-bit W index; a bare register,
+;;; lsl, or sxtx take a 64-bit X index -- so the width can't come from the
+;;; spec (which only carries the scale, e.g. :regoff3).
+(defun arm642-vinsn-index-operand (desc vp)
+  (multiple-value-bind (number modifier amount)
+      (ecase (car desc)
+        (:opnd (values (svref vp (cadr desc)) nil 0))
+        (:reg  (values (cadr desc) nil 0))
+        (:shifted-reg
+         (destructuring-bind (reg-desc modifier amount) (cdr desc)
+           (values (ecase (car reg-desc)
+                     (:opnd (svref vp (cadr reg-desc)))
+                     (:reg  (cadr reg-desc)))
+                   modifier amount))))
+    (arm64::make-register-operand
+     :register (arm64::gpr-ref number (if (member modifier '(:uxtw :sxtw)) 32 64))
+     :modifier modifier :amount amount)))
+
+;;; Build a memory-operand.  DESC is (:mem marker base-desc off-desc); SPEC
+;;; is (:mem-FORM (:base class) ...).  The base view comes from (:base
+;;; class).  An immediate offset is range-checked against (:imm class); a
+;;; register index (the :mem-regoff form) is built by its extend/scale.
 (defun arm642-vinsn-memory-operand (desc spec vp)
   (destructuring-bind (marker base-desc off-desc) (cdr desc)
     (arm64::make-memory-operand
-     :base (arm642-vinsn-register-operand
-            (ecase (car base-desc)
-              (:opnd (svref vp (cadr base-desc)))
-              (:reg (cadr base-desc)))
-            (assoc :base (cdr spec)))
+     :base (arm642-vinsn-register-operand base-desc (assoc :base (cdr spec)) vp)
      :offset (when off-desc
-               (arm642-vinsn-immediate-operand
-                off-desc (cadr (assoc :imm (cdr spec))) vp))
+               (if (eq (car spec) :mem-regoff)
+                 (arm642-vinsn-index-operand off-desc vp)
+                 (arm642-vinsn-immediate-operand
+                  off-desc (cadr (assoc :imm (cdr spec))) vp)))
      :pre-indexed (eq marker :@!)
      :post-indexed (eq marker :@+))))
+
+;;; Build a condition-operand.  DESC is (:cond value) for a literal
+;;; condition, or (:cond-opnd vp-index) for a parameter whose 4-bit
+;;; condition value is supplied at expand time.  (A :cond-inv spec, as on
+;;; the cset/cinc aliases, is inverted later by ENCODE-CONDITION-OPERAND.)
+(defun arm642-vinsn-condition-operand (desc vp)
+  (let ((value (ecase (car desc)
+                 (:cond (cadr desc))
+                 (:cond-opnd (svref vp (cadr desc))))))
+    (arm64::make-condition-operand
+     :name (arm64::lookup-arm64-condition-value value) :value value)))
 
 (defun arm642-vinsn-operand (desc spec vp unique-labels)
   (cond
@@ -1269,15 +1642,13 @@
               (:local-label (cdr (assq (cadr desc) unique-labels))))))
     ((arm64::mem-spec-p spec)
      (arm642-vinsn-memory-operand desc spec vp))
+    ((member spec '(:cond :cond-inv))
+     (arm642-vinsn-condition-operand desc vp))
     ;; A bare-keyword spec that isn't a condition is an immediate class.
-    ((and (keywordp spec) (not (member spec '(:cond :cond-inv))))
+    ((keywordp spec)
      (arm642-vinsn-immediate-operand desc spec vp))
     (t
-     (arm642-vinsn-register-operand
-      (ecase (car desc)
-        (:opnd (svref vp (cadr desc)))
-        (:reg (cadr desc)))
-      spec))))
+     (arm642-vinsn-register-operand desc spec vp))))
 
 ;;; Expand one instruction of a vinsn template's body into a machine
 ;;; instruction and emit it into the section.  FORM is one simplified
@@ -1346,8 +1717,11 @@
                   (when (eval-predicate (car form))
                     (dolist (sub (cdr form)) (expand-form sub))))
                  (t
-                  ;; Not yet handled: pseudo-ops (:code/:data/:word) and
-                  ;; condition operands.  Retain a diagnostic for now.
+                  ;; Nothing else is expected.  arm64 code vectors are
+                  ;; purely instructions (plus the leading udf #0 sentinel),
+                  ;; so there are no :code/:data/:word pseudo-ops: constants
+                  ;; live in the function's constants vector, reached
+                  ;; fn-relative.  A form landing here is a bug.
                   (format t "~&; arm642-expand-vinsn: unhandled form ~s"
                           form)))))
       (dolist (form (vinsn-template-body template))
@@ -1392,8 +1766,8 @@
       (with-arm64-p2-declarations p2decls
         (setq *arm642-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
-        (multiple-value-setq (pregs reglocatives) 
-         
+        (multiple-value-setq (pregs reglocatives)
+
           (nx2-afunc-allocate-global-registers afunc (unless no-regs *arm642-nvrs*)))
         (@ (backend-get-next-label))    ; generic self-reference label, should be label #1
         (when keys;; Ensure keyvect is the first immediate
@@ -1402,7 +1776,7 @@
           (arm642-code-coverage-entry seg code-note))
         (unless next-method-p
           (setq method-var nil))
-        
+
         (let* ((rev-req (reverse req))
                (rev-fixed (if inherited-vars (reverse (append inherited-vars req)) rev-req))
                (num-fixed (length rev-fixed))
@@ -1417,7 +1791,7 @@
                 ;; If the minumum acceptable number of args is
                 ;; non-zero, ensure that at least that many were
                 ;; received.  If there's an upper bound, enforce it.
-                
+
                 (when rev-fixed
                   (if (arm642-aimm-p num-fixed)
                     (! check-min-nargs num-fixed)
@@ -1437,7 +1811,7 @@
                   (unless opt
                     (! vpush-argregs num-fixed))
                   (let* ((keyvect (%car (%cdr (%cdr (%cdr (%cdr keys))))))
-                         (flags (the fixnum (logior (the fixnum (if rest 4 0)) 
+                         (flags (the fixnum (logior (the fixnum (if rest 4 0))
                                                     (the fixnum (if (or methodp allow-other-keys-p) 1 0)))))
                          (nprev (+ num-fixed num-opt)))
                     (declare (fixnum flags nprev))
@@ -1484,9 +1858,9 @@
                   (unless (= 0 num-fixed)
                     (! scale-nargs num-fixed))
                   (! opt-supplied-p))
-                (let* ((nwords-vpushed (+ num-fixed 
-                                          num-opt 
-                                          (if hardopt num-opt 0) 
+                (let* ((nwords-vpushed (+ num-fixed
+                                          num-opt
+                                          (if hardopt num-opt 0)
                                           (if lexprp 0 (if rest 1 0))
                                           (ash (length (%cadr keys)) 1)))
                        (nbytes-vpushed (* nwords-vpushed *arm642-target-node-size*)))
@@ -1494,15 +1868,12 @@
 
                   (arm642-set-vstack nbytes-vpushed)
                   (setq optsupvloc (- *arm642-vstack* (* num-opt *arm642-target-node-size*)))))))
-          ;; Caller's context is saved; *arm642-vstack* is valid.  Might still have method-var
-          ;; to worry about.
-          (! save-nfp)
-
-          (arm642-save-non-volatile-fprs seg nsaved-fprs)
+          ;; Caller's context is saved; *arm642-vstack* is valid.
+          ;; Might still have method-var to worry about.
           (unless (= 0 pregs)
             ;; Save NVRs; load constants into any that get constants.
             (arm642-save-nvrs seg pregs)
-            
+
 
             (dolist (pair reglocatives)
               (declare (cons pair))
@@ -1572,7 +1943,7 @@
             (when methodp
               (setq bits (logior (ash 1 $lfbits-method-bit) bits))
               (when next-method-p
-                (setq bits (logior (%ilsl $lfbits-nextmeth-bit 1) bits))))) 
+                (setq bits (logior (%ilsl $lfbits-nextmeth-bit 1) bits)))))
           bits)))))
 
 (defarm642 arm642-lexical-reference lexical-reference (seg vreg xfer varnode)
@@ -1584,3 +1955,81 @@
           (compiler-bug "bogus ref to var ~s (~s) : ~s " varnode (var-name varnode) ea-or-form))
         (arm642-do-lexical-reference seg vreg ea-or-form)
         (^)))))
+
+
+(defun arm642-branch-unless-arg-fixnum (seg reg label)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((flags (make-hard-crf-reg 0)))
+      (! test-fixnum flags reg)
+      (! cbranch-false label flags arm64::cond-eq))))
+
+(defun arm642-branch-unless-both-args-fixnums (seg x y label)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((flags (make-hard-crf-reg 0)))
+      (! test-fixnums flags x y)
+      (! cbranch-false label flags arm64::cond-eq))))
+
+(defun arm642-check-fixnum-overflow (seg crf target &optional labelno)
+  (with-arm64-local-vinsn-macros  (seg)
+    (let* ((no-overflow (backend-get-next-label))
+           (label (if labelno (aref *backend-labels* labelno))))
+      (! cbranch-false (or label (aref *backend-labels* no-overflow))
+         crf arm64::cond-vs)
+      (if *arm642-open-code-inline*
+        (! handle-fixnum-overflow-inline target target)
+        (let* ((target-other (not (eql (hard-regspec-value target)
+                                       arm64::arg_z)))
+               (arg (if target-other
+                      (make-wired-lreg arm64::arg_z)
+                      target))
+               (result (make-wired-lreg arm64::arg_z)))
+          (when target-other
+            (arm642-copy-register seg arg target))
+          (! call-subprim-1 result (subprim-name->offset '.SPfix-overflow) arg)
+          (when target-other
+            (arm642-copy-register seg target result))))
+      (when labelno (-> labelno))
+      (@ no-overflow))))
+
+(defun arm642-inline-add2 (seg vreg xfer form1 form2)
+  (with-arm64-local-vinsn-macros (seg vreg xfer)
+    (arm642-two-targeted-reg-forms seg
+                                   form1 ($ arm64::arg_y)
+                                   form2 ($ arm64::arg_z))
+    (let* ((out-of-line (backend-get-next-label))
+           (done (backend-get-next-label)))
+      (ensuring-node-target (target vreg)
+        (if (acode-fixnum-form-p form1)
+          (arm642-branch-unless-arg-fixnum seg ($ arm64::arg_z)
+                                           (aref *backend-labels* out-of-line))
+          (if (acode-fixnum-form-p form2)
+            (arm642-branch-unless-arg-fixnum seg ($ arm64::arg_y)
+                                               (aref *backend-labels*
+                                                     out-of-line))
+            (arm642-branch-unless-both-args-fixnums
+             seg ($ arm64::arg_y) ($ arm64::arg_z) (aref *backend-labels*
+                                                         out-of-line))))
+        (let* ((flags (make-hard-crf-reg 0)))
+          (! fixnum-add-set-flags ($ arm64::arg_z) flags ($ arm64::arg_y)
+             ($ arm64::arg_z))
+          (arm642-check-fixnum-overflow seg flags ($ arm64::arg_z) done))
+        (@ out-of-line)
+        (! call-subprim-2 ($ arm64::arg_z)
+           (subprim-name->offset '.SPbuiltin-plus) ($ arm64::arg_y)
+           ($ arm64::arg_z))
+        (@ done)
+        (arm642-copy-register seg target ($ arm64::arg_z)))
+      (^))))
+
+;;; Return T if form is declared to be something that couldn't be a fixnum.
+(defun arm642-explicit-non-fixnum-type-p (form)
+  (let* ((type (arm642-form-type form))
+         (target-fixnum-type (nx-target-type 'fixnum)))
+    (and (not (subtypep type target-fixnum-type))
+         (not (subtypep target-fixnum-type type)))))
+
+(defarm642 arm642-add2 add2 (seg vreg xfer form1 form2)
+  (if (or (arm642-explicit-non-fixnum-type-p form1)
+          (arm642-explicit-non-fixnum-type-p form2))
+    (arm642-binary-builtin seg vreg xfer '+-2 form1 form2)
+    (arm642-inline-add2 seg vreg xfer form1 form2)))

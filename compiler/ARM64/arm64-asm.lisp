@@ -1273,23 +1273,43 @@
   ;; A branch target written as a bare symbol naming a label.
   (make-label-operand :name form))
 
+(ccl::defenum (:prefix "COND-")
+  eq
+  ne
+  cs
+  cc
+  mi
+  pl
+  vs
+  vc
+  hi
+  ls
+  ge
+  lt
+  gt
+  le
+  al
+  nv)
+(defconstant cond-hs cond-cs)
+(defconstant cond-lo cond-cc)
+
 (defparameter *arm64-condition-names*
-  '(("eq" . 0)                          ;equal
-    ("ne" . 1)                          ;not equal
-    ("cs" . 2) ("hs" . 2)               ;carry set, unsigned higher or same
-    ("cc" . 3) ("lo" . 3)               ;carry clear, unsigned lower
-    ("mi" . 4)                          ;minus, negative
-    ("pl" . 5)                          ;plus, positive or zero
-    ("vs" . 6)                          ;overflow
-    ("vc" . 7)                          ;no overflow
-    ("hi" . 8)                          ;unsigned higher
-    ("ls" . 9)                          ;unsigned lower or same
-    ("ge" . 10)                         ;signed >=
-    ("lt" . 11)                         ;signed <
-    ("gt" . 12)                         ;signed >
-    ("le" . 13)                         ;signed <=
-    ("al" . 14)                         ;always
-    ("nv" . 15)))                       ;identical to always (despite name)
+  `(("eq" . ,cond-eq)                   ;equal
+    ("ne" . ,cond-ne)                   ;not equal
+    ("cs" . ,cond-cs) ("hs" . ,cond-hs) ;carry set, unsigned higher or same
+    ("cc" . ,cond-cc) ("lo" . ,cond-lo) ;carry clear, unsigned lower
+    ("mi" . ,cond-mi)                   ;minus, negative
+    ("pl" . ,cond-pl)                   ;plus, positive or zero
+    ("vs" . ,cond-vs)                   ;overflow
+    ("vc" . ,cond-vc)                   ;no overflow
+    ("hi" . ,cond-hi)                   ;unsigned higher
+    ("ls" . ,cond-ls)                   ;unsigned lower or same
+    ("ge" . ,cond-ge)                   ;signed >=
+    ("lt" . ,cond-lt)                   ;signed <
+    ("gt" . ,cond-gt)                   ;signed >
+    ("le" . ,cond-le)                   ;signed <=
+    ("al" . ,cond-al)                   ;always
+    ("nv" . ,cond-nv)))                 ;identical to always (despite name)
 
 (defun lookup-arm64-condition-name (name)
   (cdr (assoc name *arm64-condition-names* :test #'string-equal)))
@@ -2567,7 +2587,8 @@
 ;;;               (:reg number)   literal register (vsp, sp, fn, ...)
 ;;;   label       (:local-label kw)   template-local branch target (:ok)
 ;;;   immediate   (:imm value shift) | (:imm-opnd index shift)
-;;;               (:imm-apply shift fn arg...)   arg is (:opnd i) or a constant
+;;;               (:imm-apply shift fn arg...)   arg is (:opnd i), a constant,
+;;;                                              or a nested (:apply fn arg...)
 ;;;   memory      (:mem marker base-desc off-desc)   off-desc nil / imm / reg
 ;;;   condition   (:cond value) | (:cond-opnd index)
 ;;;   shifted/ext (:shifted-reg reg-desc modifier amount)
@@ -2625,12 +2646,17 @@
 (defparameter *wild-condition* '#:wild-condition)
 
 ;;; Resolve one argument of an immediate (:apply fn ...) form to a
-;;; dumpable descriptor: (:opnd index) for a parameter, else a constant.
+;;; dumpable descriptor: (:opnd index) for a parameter, a nested
+;;; (:apply fn arg...) for a nested apply, else a constant.
 (defun vinsn-imm-apply-arg (arg name-list)
-  (let ((index (and (symbolp arg) (position arg name-list :test #'eq))))
-    (if index
-      (list :opnd index)
-      (eval-immediate-expression arg))))
+  (cond
+    ((and (consp arg) (eq (car arg) :apply))
+     (list* :apply (cadr arg)
+            (mapcar #'(lambda (a) (vinsn-imm-apply-arg a name-list))
+                    (cddr arg))))
+    ((and (symbolp arg) (position arg name-list :test #'eq))
+     (list :opnd (position arg name-list :test #'eq)))
+    (t (eval-immediate-expression arg))))
 
 ;;; Parse (:$ value) or (:$ value :lsl amount).  Returns two values: a
 ;;; dumpable descriptor and the literal value, or :UNKNOWN if the value
