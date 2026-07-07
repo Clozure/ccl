@@ -372,6 +372,7 @@
              (defsubprim .SPbuiltin-minus)
              (defsubprim .SPbuiltin-times)
              (defsubprim .SPbuiltin-div)
+             (defsubprim .SPfix-overflow)
              ;; ...
              )))))
 

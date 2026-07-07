@@ -126,11 +126,37 @@
 (define-arm64-vinsn test-fixnums (((dest :crf))
                                   ((x :lisp)
                                    (y :lisp))
-                                  ((temp :u32)))
+                                  ((temp :u64)))
   (orr temp x y)
   (tst temp (:$ arm64::fixnummask)))
 
 
+(define-arm64-vinsn fixnum-add-set-flags (((dest :imm)
+                                           (flags (:crf 0)))
+                                          ((x :imm)
+                                           (y :imm)))
+  (adds dest x y))
+
+(define-arm64-vinsn (call-subprim-1 :call :subprim) (((dest :imm))
+                                                     ((spno :u16const)
+                                                      (x :imm))
+                                                     ((temp (:u64 #.arm64::imm0))))
+  (movz temp (:$ spno))
+  (ldr temp (:@ rnil temp))
+  (blr temp))
+
+(define-arm64-vinsn (call-subprim-2 :call :subprim) (((dest :imm))
+                                                     ((spoffset :u16const)
+                                                      (x :imm)
+                                                      (y :imm))
+                                                     ((temp (:u64 #.arm64::imm0))))
+  (movz temp (:$ spoffset))
+  (ldr temp (:@ rnil temp))
+  (blr temp))
+
+(define-arm64-vinsn (jump :jump) (()
+                                  ((label :label)))
+  (b label))
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
