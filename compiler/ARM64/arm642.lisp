@@ -1623,13 +1623,20 @@
      :post-indexed (eq marker :@+))))
 
 ;;; Build a condition-operand.  DESC is (:cond value) for a literal
-;;; condition, or (:cond-opnd vp-index) for a parameter whose 4-bit
-;;; condition value is supplied at expand time.  (A :cond-inv spec, as on
-;;; the cset/cinc aliases, is inverted later by ENCODE-CONDITION-OPERAND.)
+;;; condition, or (:cond-opnd vp-index [:invert]) for a parameter whose
+;;; 4-bit condition value is supplied at expand time.  A literal (:~ cc)
+;;; is already inverted at definition time, so only the parameter form
+;;; carries :invert, meaning "XOR 1 the value read from vp" (used by the
+;;; cbranch-false vinsn).  (A :cond-inv spec, as on the cset/cinc aliases,
+;;; is instead inverted later by ENCODE-CONDITION-OPERAND.)
 (defun arm642-vinsn-condition-operand (desc vp)
   (let ((value (ecase (car desc)
                  (:cond (cadr desc))
                  (:cond-opnd (svref vp (cadr desc))))))
+    (when (and (eq (car desc) :cond-opnd) (eq (caddr desc) :invert))
+      (unless (< value 14)
+        (error "condition value ~s has no inverse" value))
+      (setq value (logxor value 1)))
     (arm64::make-condition-operand
      :name (arm64::lookup-arm64-condition-value value) :value value)))
 
@@ -1642,7 +1649,7 @@
               (:local-label (cdr (assq (cadr desc) unique-labels))))))
     ((arm64::mem-spec-p spec)
      (arm642-vinsn-memory-operand desc spec vp))
-    ((member spec '(:cond :cond-inv))
+    ((member spec '(:cond :cond-inv :cond-b))
      (arm642-vinsn-condition-operand desc vp))
     ;; A bare-keyword spec that isn't a condition is an immediate class.
     ((keywordp spec)

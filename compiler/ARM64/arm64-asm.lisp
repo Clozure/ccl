@@ -505,6 +505,12 @@
    (def b.al ((:label :b19)) #x5400000e #xff00001f)   ;pointless
    (def b.nv ((:label :b19)) #x5400000f #xff00001f)   ;also pointless
 
+   ;; This template provides a way to write a conditional branch whose
+   ;; condition is an operand, (:? cc) or (:~ cc), rather than baked
+   ;; into the mnemonic.  The condition fills (byte 4 0); the label
+   ;; fills (byte 19 5).
+   (def b.c (:cond-b (:label :b19)) #x54000000 0 :alias)
+
    ;; Exception generation
    ;; 16-bit immediate in (byte 16 5)
    (def svc (:exc16) #xd4000001 #xffe0001f)
@@ -1151,6 +1157,7 @@
     :bf-width-w    ; ... and the W form
     :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
     :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
+    :cond-b        ;4-bit condition @ 3:0 (b.cond), written (:? cc) or (:~ cc)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
     :b26           ;branch target, imm26 @ 25:0 (b, bl)
     :b19           ;branch target, imm19 @ 23:5 (b.cond, cbz/cbnz)
@@ -1321,13 +1328,21 @@
   (or (lookup-arm64-condition-name name)
       (error "Unknown arm64 condition name ~s." name)))
 
-(defun parse-condition-operand (form)
-  ;; A condition written (:? cc), e.g. (:? eq).  The name is validated
-  ;; here so a bogus condition is caught at parse time.
+(defun parse-condition-operand (form &optional invert)
+  ;; A condition written (:? cc), e.g. (:? eq), or its inverse (:~ cc).
+  ;; The name is validated here so a bogus condition is caught at parse
+  ;; time.  Inversion is XOR 1 on the 4-bit code; al/nv have no inverse.
   (destructuring-bind (marker name) form
     (declare (ignore marker))
-    (make-condition-operand :name name
-                            :value (need-arm64-condition-name name))))
+    (let ((value (need-arm64-condition-name name)))
+      (if invert
+        (progn
+          (unless (< value 14)
+            (error "condition ~s has no inverse" name))
+          (setq value (logxor value 1))
+          (make-condition-operand :name (lookup-arm64-condition-value value)
+                                  :value value))
+        (make-condition-operand :name name :value value)))))
 
 (defparameter *system-registers*
   ;; name -> the 15-bit op0:op1:CRn:CRm:op2 encoding for msr/mrs
@@ -1358,6 +1373,7 @@
      (case (car form)
        (:$ (parse-immediate-operand form))
        (:? (parse-condition-operand form))
+       (:~ (parse-condition-operand form t))
        ((:@ :@! :@+) (parse-memory-operand form))
        (t (if (symbolp (car form))
             ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
@@ -1633,7 +1649,7 @@
   (cond
     ((label-spec-p spec)                ;(:label class) ⇒ branch target
      (label-operand-p operand))         ;reach is checked at finalize
-    ((member spec '(:cond :cond-inv))   ;a (:? cc) condition (maybe inverted)
+    ((member spec '(:cond :cond-inv :cond-b)) ;a (:? cc) condition (maybe inverted)
      (condition-operand-p operand))
     ((keywordp spec)                    ;bare keyword ⇒ immediate class
      (and (immediate-operand-p operand)
@@ -1983,11 +1999,26 @@
     (make-condition-operand :name (lookup-arm64-condition-value value)
                             :value value)))
 
+(defun encode-condition-branch-operand (insn operand)
+  ;; b.cond: the 4-bit condition lives at 3:0 (not the 15:12 spot csel/ccmp
+  ;; use).  Any inversion (the (:~ cc) form) was already folded into the
+  ;; operand's value at parse or expand time, so we just write it.
+  (set-field-value insn (byte 4 0) (condition-operand-value operand)))
+
+(defun decode-condition-branch-operand (word)
+  ;; The 4-bit condition @ 3:0 (b.cond).  Only reached if a :cond-b template
+  ;; ever participates in disassembly; b.c is an alias, so in practice the
+  ;; specific b.<cond> forms decode these instead.
+  (let ((value (ldb (byte 4 0) word)))
+    (make-condition-operand :name (lookup-arm64-condition-value value)
+                            :value value)))
+
 (defun encode-operand (insn operand spec)
   (cond
     ((label-spec-p spec) (encode-label-operand insn operand (cadr spec)))
     ((eq spec :cond) (encode-condition-operand insn operand))
     ((eq spec :cond-inv) (encode-condition-operand insn operand t))
+    ((eq spec :cond-b) (encode-condition-branch-operand insn operand))
     ((keywordp spec) (encode-immediate-operand insn operand spec))
     ((mem-spec-p spec) (encode-memory-operand insn operand spec))
     ((consp spec) (encode-register-operand insn operand (first spec)
@@ -1998,6 +2029,7 @@
     ((label-spec-p spec) (decode-label-operand word (cadr spec)))
     ((eq spec :cond) (decode-condition-operand word))
     ((eq spec :cond-inv) (decode-condition-operand word t))
+    ((eq spec :cond-b) (decode-condition-branch-operand word))
     ((keywordp spec) (decode-immediate-operand word spec))
     ((mem-spec-p spec) (decode-memory-operand word spec))
     ((consp spec) (decode-register-operand word (first spec) (second spec)))))
@@ -2086,7 +2118,7 @@
 (defun render-operand-spec (spec)
   (cond
     ((label-spec-p spec) "label")
-    ((member spec '(:cond :cond-inv)) "(:? cc)")
+    ((member spec '(:cond :cond-inv :cond-b)) "(:? cc)")
     ((keywordp spec)   (render-immediate-spec spec))
     ((mem-spec-p spec) (render-mem-spec spec))
     ((consp spec)      (render-register-spec spec))
@@ -2110,7 +2142,7 @@
 
 (defun spec-expected-kind (spec)
   (cond ((label-spec-p spec) :label)
-        ((member spec '(:cond :cond-inv)) :condition)
+        ((member spec '(:cond :cond-inv :cond-b)) :condition)
         ((keywordp spec)   :immediate)
         ((mem-spec-p spec) :memory)
         ((consp spec)      :register)))
@@ -2590,7 +2622,7 @@
 ;;;               (:imm-apply shift fn arg...)   arg is (:opnd i), a constant,
 ;;;                                              or a nested (:apply fn arg...)
 ;;;   memory      (:mem marker base-desc off-desc)   off-desc nil / imm / reg
-;;;   condition   (:cond value) | (:cond-opnd index)
+;;;   condition   (:cond value) | (:cond-opnd index [:invert])
 ;;;   shifted/ext (:shifted-reg reg-desc modifier amount)
 ;;;
 ;;; Template selection is first-match, exactly as the assembler does.  A
@@ -2740,17 +2772,30 @@
     ;; A memory operand: (:@ base [offset]) and the writeback variants.
     ((and (consp op) (member (car op) '(:@ :@! :@+) :test #'eq))
      (vinsn-parse-memory-operand op name-list param-types))
-    ;; A condition: (:? cc).  A parameter cc is treated as a wild
-    ;; condition (value supplied at expand time); a literal condition
-    ;; name is matched now.
-    ((and (consp op) (eq (car op) :?))
-     (let* ((cc (cadr op))
+    ;; A condition: (:? cc) or its inverse (:~ cc).  A parameter cc is
+    ;; treated as a wild condition (value supplied at expand time; the
+    ;; inversion, if any, is applied then); a literal condition name is
+    ;; resolved and inverted now.
+    ((and (consp op) (member (car op) '(:? :~) :test #'eq))
+     (let* ((invert (eq (car op) :~))
+            (cc (cadr op))
             (index (and (symbolp cc) (position cc name-list :test #'eq))))
        (if index
-         (values *wild-condition* (list :cond-opnd index))
+         (values *wild-condition*
+                 (if invert
+                   (list :cond-opnd index :invert)
+                   (list :cond-opnd index)))
          (let ((value (need-arm64-condition-name cc)))
-           (values (make-condition-operand :name cc :value value)
-                   (list :cond value))))))
+           (if invert
+             (progn
+               (unless (< value 14)
+                 (error "condition ~s has no inverse" cc))
+               (setq value (logxor value 1))
+               (values (make-condition-operand
+                        :name (lookup-arm64-condition-value value) :value value)
+                       (list :cond value)))
+             (values (make-condition-operand :name cc :value value)
+                     (list :cond value)))))))
     ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
     ;; base register may be a hole or literal; the amount must be constant.
     ((and (consp op) (symbolp (car op))
@@ -2801,9 +2846,9 @@
                     (cond
                       ((eq operand *wild-immediate*)
                        (and (keywordp spec)
-                            (not (member spec '(:cond :cond-inv)))))
+                            (not (member spec '(:cond :cond-inv :cond-b)))))
                       ((eq operand *wild-condition*)
-                       (member spec '(:cond :cond-inv)))
+                       (member spec '(:cond :cond-inv :cond-b)))
                       (t (match-operand operand spec))))
                 operands specs))))
 

@@ -95,6 +95,22 @@
   (add true rnil (:$ arm64::t-offset))
   (csel dest true rnil (:? cc)))
 
+;;; Branch to LABEL when the CRBIT condition (a 4-bit condition code,
+;;; e.g. arm64::cond-eq) holds; cbranch-false branches when it doesn't.
+;;; The condition is an operand of b.c, and (:~ crbit) inverts it (XOR 1),
+;;; exactly as on ARM32.
+(define-arm64-vinsn (cbranch-true :branch) (()
+                                           ((label :label)
+                                            (crf :crf)
+                                            (crbit :u8const)))
+  (b.c (:? crbit) label))
+
+(define-arm64-vinsn (cbranch-false :branch) (()
+                                            ((label :label)
+                                             (crf :crf)
+                                             (crbit :u8const)))
+  (b.c (:~ crbit) label))
+
 (define-arm64-vinsn load-nil (((dest :lisp))
                               ())
   (mov dest rnil))
@@ -105,6 +121,16 @@
   (ldr dest (:@ arm64::vsp (:$ (:apply - (:apply - cur-vsp
                                                  arm64::word-size-in-bytes)
                                        frame-offset)))))
+
+
+(define-arm64-vinsn test-fixnums (((dest :crf))
+                                  ((x :lisp)
+                                   (y :lisp))
+                                  ((temp :u32)))
+  (orr temp x y)
+  (tst temp (:$ arm64::fixnummask)))
+
+
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
