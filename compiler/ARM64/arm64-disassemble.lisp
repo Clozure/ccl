@@ -504,7 +504,9 @@
     (when offset
       (write-char #\space stream)
       (etypecase offset
-        (register-operand (print-register-operand offset stream))
+        (register-operand
+         (print-register-operand offset stream)
+         (write-char #\) stream))
         (immediate-operand (print-immediate-operand offset stream))))))
     
 (defun print-condition-operand (operand stream)
