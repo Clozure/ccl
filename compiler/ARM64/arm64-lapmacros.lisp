@@ -66,16 +66,16 @@
              ,ok1))
         (if (= min 0)
           `(progn
-             (cmp nargs (:$ (ash ,max arm::fixnumshift)))
+             (cmp nargs (:$ (ash ,max arm64::fixnumshift)))
              (b.ls ,ok1)
              (uuo-error-wrong-nargs)
              ,ok1)
           `(progn
-             (cmp nargs (:$ (ash ,min arm::fixnumshift)))
+             (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
              (b.hs ,ok1)
              (uuo-error-wrong-nargs)
              ,ok1
-             (cmp nargs (:$ (ash ,max arm::fixnumshift)))
+             (cmp nargs (:$ (ash ,max arm64::fixnumshift)))
              (b.ls ,ok2)
              (uuo-error-wrong-nargs)
              ,ok2))))))
