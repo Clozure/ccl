@@ -175,6 +175,8 @@
                arm-lap-function
                #+x86-target
                x86-lap-function
+               #+arm64-target
+               arm64-lap-function
                fbind
                with-c-frame with-variable-c-frame))
   (%macro-have sym sym))
