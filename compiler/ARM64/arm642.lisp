@@ -21,9 +21,7 @@
 (defparameter *arm642-target-bits-in-word* 0)
 (defparameter *arm642-target-num-arg-regs* 0)
 (defparameter *arm642-target-num-save-regs* 0)
-(defparameter *arm642-target-half-fixnum-type*
-  `(signed-byte ,(- *arm642-target-bits-in-word*
-                    (1+ *arm642-target-fixnum-shift*))))
+(defparameter *arm642-target-half-fixnum-type* '(signed-byte 60))
 (defparameter *arm642-nfp-depth* 0)
 (defparameter *arm642-max-nfp-depth* 0)
 (defparameter *arm642-all-nfp-pushes* ())
@@ -2040,3 +2038,114 @@
           (arm642-explicit-non-fixnum-type-p form2))
     (arm642-binary-builtin seg vreg xfer '+-2 form1 form2)
     (arm642-inline-add2 seg vreg xfer form1 form2)))
+
+(defarm642 arm642-%complex-single-float-realpart %complex-single-float-realpart
+    (seg vreg xfer arg)
+  (if (null vreg)
+    (arm642-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-realpart target
+           (arm642-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defarm642 arm642-%complex-single-float-imagpart %complex-single-float-imagpart
+    (seg vreg xfer arg)
+  (if (null vreg)
+    (arm642-form  seg  nil xfer arg)
+    (with-fp-target () (target :single-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-single-float)
+        (! %complex-single-float-imagpart target
+           (arm642-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defarm642 arm642-%complex-double-float-realpart %complex-double-float-realpart
+    (seg vreg xfer arg)
+  (if (null vreg)
+    (arm642-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-realpart target
+           (arm642-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+
+(defarm642 arm642-%complex-double-float-imagpart %complex-double-float-imagpart
+    (seg vreg xfer arg)
+  (if (null vreg)
+    (arm642-form  seg  nil xfer arg)
+    (with-fp-target () (target :double-float)
+      (when (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                 (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (setq target vreg))
+      (with-fp-target (target) (val :complex-double-float)
+        (! %complex-double-float-imagpart target
+           (arm642-one-untargeted-reg-form seg arg val))
+        (<- target)
+        (^ )))))
+
+(defarm642 arm642-%make-complex-single-float %make-complex-single-float
+    (seg vreg xfer r i)
+  (if (null vreg)
+    (progn
+      (arm642-form seg nil nil r)
+      (arm642-form seg nil xfer i))
+    (with-fp-target () (target :complex-single-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg)
+                    hard-reg-class-fpr-mode-complex-single-float))
+        (setq target vreg))
+      (arm642-two-targeted-reg-forms seg
+                                   r ($ (* 2 (%hard-regspec-value target))
+                                        :class :fpr
+                                        :mode :single-float)
+                                   i ($ (1+ (* 2 (%hard-regspec-value target)))
+                                        :class :fpr
+                                        :mode :single-float))
+      (<- target)
+      (^))))
+
+(defarm642 arm642-%make-complex-double-float %make-complex-double-float
+    (seg vreg xfer r i)
+  (if (null vreg)
+    (progn
+      (arm642-form seg nil nil r)
+      (arm642-form seg nil xfer i))
+    (with-fp-target () (target :complex-double-float)
+      (if (and (eql (hard-regspec-class vreg) hard-reg-class-fpr)
+               (eql (get-regspec-mode vreg)
+                    hard-reg-class-fpr-mode-complex-double-float))
+        (setq target vreg))
+      (arm642-two-targeted-reg-forms seg
+                                     r ($ (%hard-regspec-value target)
+                                          :class :fpr
+                                          :mode :double-float)
+                                     i ($ (1+ (%hard-regspec-value target))
+                                          :class :fpr
+                                          :mode :double-float))
+      (<- target)
+      (^))))
+
+(defarm642 arm642-complex complex (seg vreg xfer r i)
+  (arm642-call-fn seg vreg xfer (make-acode (%nx1-operator immediate) 'complex)
+                  (list nil (list i r)) nil))
+
+(defarm642 arm642-realpart realpart (seg vreg xfer n)
+  (arm642-call-fn seg vreg xfer (make-acode (%nx1-operator immediate) 'realpart)
+                  (list nil (list n)) nil))
+
+(defarm642 arm642-imagpart imagpart (seg vreg xfer n)
+  (arm642-call-fn seg vreg xfer (make-acode (%nx1-operator immediate) 'imagpart)
+                 (list nil (list n)) nil))
