@@ -259,6 +259,20 @@
    (fmov (:d dest) r))
   (ins (:d dest 1) (:d i 0)))
 
+;;; Population count of an unboxed 64-bit word.  AArch64 has no GPR popcount,
+;;; so go through the SIMD side: move the word into a vector register, count
+;;; the bits in each of the 8 bytes (CNT), horizontally sum the byte counts
+;;; (ADDV) into a byte scalar, and read that back into a GPR.  The count fits
+;;; in a byte (<= 64), so the low 32 bits carry it and the :w read zeroes the
+;;; rest of DEST.
+(define-arm64-vinsn u64-popcount (((dest :u64))
+                                  ((src :u64))
+                                  ((vtmp :double-float)))
+  (fmov vtmp src)
+  (cnt (:8b vtmp) (:8b vtmp))
+  (addv (:b vtmp) (:8b vtmp))
+  (fmov (:w dest) (:s vtmp)))
+
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was

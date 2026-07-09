@@ -454,6 +454,7 @@
   (etypecase operand
     (register-operand (print-register-operand operand stream))
     (vector-element-operand (print-vector-element-operand operand stream))
+    (vector-arrangement-operand (print-vector-arrangement-operand operand stream))
     (immediate-operand (print-immediate-operand operand stream))
     (memory-operand (print-memory-operand operand stream))
     (condition-operand (print-condition-operand operand stream))
@@ -465,6 +466,12 @@
           (vector-element-operand-esize operand)
           (register-name (vector-element-operand-register operand))
           (vector-element-operand-index operand)))
+
+(defun print-vector-arrangement-operand (operand stream)
+  ;; Print in the LAP arrangement notation, e.g. (:8b q0) for V0.8B.
+  (format stream "(~(~s~) ~a)"
+          (vector-arrangement-operand-arrangement operand)
+          (register-name (vector-arrangement-operand-register operand))))
 
 (defun print-label-operand (operand stream)
   ;; A reference that resolved to a local label prints as that label's name;

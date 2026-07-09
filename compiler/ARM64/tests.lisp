@@ -146,6 +146,10 @@
     (ins (:s q0 1) (:s q1 0))
     (dup d0 (:d q1 1))
     (dup s0 (:s q1 1))
+    ;; advanced simd whole-vector ops (arrangement operands)
+    (cnt (:8b q0) (:8b q0))
+    (cnt (:16b q3) (:16b q2))
+    (addv b0 (:8b q1))
     ;; system register access and barriers
     (mrs x0 fpsr)
     (mrs x2 fpcr)

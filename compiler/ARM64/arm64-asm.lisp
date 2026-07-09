@@ -43,7 +43,9 @@
                (#\w (values 32 :gpr))
                (#\s (values 32 :fpr))
                (#\d (values 64 :fpr))
-               (#\q (values 128 :fpr)))
+               (#\q (values 128 :fpr))
+               (#\b (values 8 :fpr))
+               (#\h (values 16 :fpr)))
            (let ((number (parse-integer name :start 1)))
              (when (and (eq family :gpr) (= number 31))
                (error "Write xzr/wzr/sp/wsp, not ~a." name))
@@ -89,7 +91,19 @@
    (reg q7) (reg q8) (reg q9) (reg q10) (reg q11) (reg q12) (reg q13)
    (reg q14) (reg q15) (reg q16) (reg q17) (reg q18) (reg q19) (reg q20)
    (reg q21) (reg q22) (reg q23) (reg q24) (reg q25) (reg q26) (reg q27)
-   (reg q28) (reg q29) (reg q30) (reg q31)))
+   (reg q28) (reg q29) (reg q30) (reg q31)
+   ;; byte view
+   (reg b0) (reg b1) (reg b2) (reg b3) (reg b4) (reg b5) (reg b6)
+   (reg b7) (reg b8) (reg b9) (reg b10) (reg b11) (reg b12) (reg b13)
+   (reg b14) (reg b15) (reg b16) (reg b17) (reg b18) (reg b19) (reg b20)
+   (reg b21) (reg b22) (reg b23) (reg b24) (reg b25) (reg b26) (reg b27)
+   (reg b28) (reg b29) (reg b30) (reg b31)
+   ;; halfword view
+   (reg h0) (reg h1) (reg h2) (reg h3) (reg h4) (reg h5) (reg h6)
+   (reg h7) (reg h8) (reg h9) (reg h10) (reg h11) (reg h12) (reg h13)
+   (reg h14) (reg h15) (reg h16) (reg h17) (reg h18) (reg h19) (reg h20)
+   (reg h21) (reg h22) (reg h23) (reg h24) (reg h25) (reg h26) (reg h27)
+   (reg h28) (reg h29) (reg h30) (reg h31)))
 
 ;;; Constants for indexes into *registers*
 (ccl::defenum ()
@@ -106,7 +120,13 @@
    d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31
    ;; 128-bit names
    q0  q1  q2  q3  q4  q5  q6  q7  q8  q9  q10 q11 q12 q13 q14 q15
-   q16 q17 q18 q19 q20 q21 q22 q23 q24 q25 q26 q27 q28 q29 q30 q31)
+   q16 q17 q18 q19 q20 q21 q22 q23 q24 q25 q26 q27 q28 q29 q30 q31
+   ;; byte names
+   b0  b1  b2  b3  b4  b5  b6  b7  b8  b9  b10 b11 b12 b13 b14 b15
+   b16 b17 b18 b19 b20 b21 b22 b23 b24 b25 b26 b27 b28 b29 b30 b31
+   ;; halfword names
+   h0  h1  h2  h3  h4  h5  h6  h7  h8  h9  h10 h11 h12 h13 h14 h15
+   h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31)
 
 (defun gpr-ref (number width &optional r31-is-sp)
   (multiple-value-bind (base stack-pointer zero-register)
@@ -122,7 +142,9 @@
   (let ((base (ecase width
                 (32 s0)
                 (64 d0)
-                (128 q0))))
+                (128 q0)
+                (8 b0)
+                (16 h0))))
     (svref *registers* (+ base number))))
 
 (defvar *registers-by-name* (make-hash-table :test #'equalp))
@@ -420,7 +442,7 @@
    (def uuo-error-too-few-args () (logior (ash 0 3) #x1)  #xffffffff)
    (def uuo-error-too-many-args () (logior (ash 1 3) #x1)  #xffffffff)
    (def uuo-error-wrong-number-of-args () (logior (ash 2 3) #x1) #xffffffff)
-   
+
    ;; binary UUOs (uuo format #b010)
 
    ;;; C4.1.1  Reserved
@@ -1008,6 +1030,25 @@
    (def dup ((:rd :s) (:rn :elt5)) #x5e040400 #xffe7fc00)
    (def dup ((:rd :d) (:rn :elt5)) #x5e080400 #xffeffc00)
 
+   ;; Advanced SIMD whole-vector ops (arrangement operands).  C7 CNT/ADDV.
+   ;; CNT: per-byte population count, Vd.<T> <- popcount(Vn.<T>), byte
+   ;; arrangements only (size fixed 00, Q free for 8b vs 16b).
+   (def cnt ((:rd :varr) (:rn :varr)) #x0e205800 #xbffffc00)
+   ;; ADDV: horizontal add across the vector into a scalar Bd/Hd/Sd (the
+   ;; "Advanced SIMD across lanes" group).  Only the byte form is provided
+   ;; here -- size pinned to 00 in the mask, dest a byte scalar :b -- which
+   ;; is all %ilogcount/popcount needs.
+   ;;
+   ;; To generalize (e.g. addv over 4h/8h/4s, or the siblings saddlv/uaddlv/
+   ;; smaxv/sminv/umaxv/uminv, all same shape at #x?e30?800): widen the mask
+   ;; to #xbf3ffc00 so size (bits 23:22) is operand-determined, and size the
+   ;; scalar dest from the arrangement -- Bd/Hd/Sd for the same-size
+   ;; reductions, one step wider (Hd/Sd/Dd) for the *LV widening variants.
+   ;; That needs a dest class that reads its width from the source
+   ;; arrangement's size field (the :b dest here is a fixed byte); today
+   ;; each size would otherwise be a separate template.
+   (def addv ((:rd :b) (:rn :varr)) #x0e31b800 #xbffffc00)
+
    ;; round to integral value (frintN/P/M/Z/A/X/I)
    (def frintn ((:rd :s) (:rn :s)) #x1e244000 $fp-dp1src-mask)
    (def frintn ((:rd :d) (:rn :d)) #x1e644000 $fp-dp1src-mask)
@@ -1147,8 +1188,11 @@
     :wsp           ;WSP, specifically
     :s             ;Sn, scalar single-float (FP/SIMD reg, 32-bit view)
     :d             ;Dn, scalar double-float (FP/SIMD reg, 64-bit view)
+    :b             ;8-bit view, SIMD&FP reg
+    :h             ;16-bit view, SIMD&FP reg
     :elt5          ;a vector lane Vn.Ts[i] whose size+index encode into imm5
     :elt4          ;a vector lane Vn.Ts[i] whose index encodes into imm4
+    :varr          ;a whole vector Vn.<T> (arrangement -> Q @ 30, size @ 23:22)
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
     :simm9         ;signed 9-bit immediate for unscaled register offset
@@ -1226,6 +1270,14 @@
   register                              ;register number
   esize                                 ;(member (:b :h :s :d))
   index)                                ;lane number
+
+;;; A whole-vector operand with an arrangement specifier, e.g. Vn.8B -- the
+;;; register viewed as N lanes of a given element size.  ARRANGEMENT is one
+;;; of :8b :16b :4h :8h :2s :4s :1d :2d.  Used by the SIMD data-processing
+;;; instructions (cnt, addv, ...) that operate on a whole vector at once.
+(defstruct vector-arrangement-operand
+  register
+  arrangement)
 
 (defstruct memory-operand
   base                              ;a register operand
@@ -1396,6 +1448,32 @@
         (error "~s: ~s is not an FP/SIMD register" form reg))
       (make-vector-element-operand :register r :esize esize :index index))))
 
+(defun parse-vector-arrangement-operand (form)
+  ;; (:8b|:16b|:4h|... reg) names a whole SIMD register with an arrangement,
+  ;; e.g. (:8b q0) for V0.8B.  REG is any FP/SIMD register name.
+  (destructuring-bind (arrangement reg) form
+    (let ((r (need-register reg)))
+      (unless (eq (register-family r) :fpr)
+        (error "~s: ~s is not an FP/SIMD register" form reg))
+      (make-vector-arrangement-operand :register r :arrangement arrangement))))
+
+(defun parse-register-view-operand (form)
+  ;; (:s|:d|:w|:x reg) names a non-default view of REG's register number:
+  ;; the S/D scalar-FP view or the W/X GPR-width view.  Mirrors the
+  ;; register-view override used in vinsn bodies, so LAP can write e.g.
+  ;; (:s d0) for the S view (= s0) or (:w imm0) for the W view.  The view
+  ;; keyword picks the family, so only the register number is taken from REG.
+  (destructuring-bind (view reg) form
+    (let ((number (register-number (need-register reg))))
+      (make-register-operand
+       :register (ecase view
+                   (:s (fpr-ref number 32))
+                   (:d (fpr-ref number 64))
+                   (:b (fpr-ref number 8))
+                   (:h (fpr-ref number 16))
+                   (:w (gpr-ref number 32))
+                   (:x (gpr-ref number 64)))))))
+
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
@@ -1414,7 +1492,13 @@
        (:? (parse-condition-operand form))
        (:~ (parse-condition-operand form t))
        ((:@ :@! :@+) (parse-memory-operand form))
-       ((:b :h :s :d) (parse-vector-element-operand form))
+       ;; (:s x)/(:d x)/(:w x)/(:x x) are register-view overrides; the S/D
+       ;; forms grow a third element to become a vector lane (:d x i).
+       ((:b :h :s :d) (if (cddr form)
+                        (parse-vector-element-operand form)
+                        (parse-register-view-operand form)))
+       ((:w :x) (parse-register-view-operand form))
+       ((:8b :16b :4h :8h :2s :4s :1d :2d) (parse-vector-arrangement-operand form))
        (t (if (symbolp (car form))
             ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
             (parse-register-operand form)
@@ -1493,6 +1577,8 @@
         (:wsp (sp-p 32))
         (:s (fpr-p 32))
         (:d (fpr-p 64))
+        (:b (fpr-p 8))
+        (:h (fpr-p 16))
         (:x-shift (shifted-p 64 nil))
         (:w-shift (shifted-p 32 nil))
         (:x-shift-ror (shifted-p 64 t))
@@ -1700,6 +1786,9 @@
     ((and (consp spec)                  ;(role :elt5|:elt4) ⇒ vector lane
           (vector-element-class-p (cadr spec)))
      (vector-element-operand-p operand))
+    ((and (consp spec)                  ;(role :varr) ⇒ whole-vector arrangement
+          (vector-arrangement-class-p (cadr spec)))
+     (vector-arrangement-operand-p operand))
     ((consp spec)                       ;(role class) ⇒ register
      (and (register-operand-p operand)
           (match-register-operand operand (cadr spec))))
@@ -1795,6 +1884,8 @@
       (:wsp  (make-register-operand :register (gpr-ref 31 32 t)))
       (:s    (make-register-operand :register (fpr-ref number 32)))
       (:d    (make-register-operand :register (fpr-ref number 64)))
+      (:b    (make-register-operand :register (fpr-ref number 8)))
+      (:h    (make-register-operand :register (fpr-ref number 16)))
       ;; shifted
       ((:x-shift :w-shift :x-shift-ror :w-shift-ror)
        (let ((type (svref *shift-types* (ldb (byte 2 22) word)))
@@ -1876,6 +1967,44 @@
                 (:elt5 imm5-index)
                 (:elt4 (ash (ldb (byte 4 11) word)
                             (- (element-size-shift esize)))))))))
+
+;;; A vector arrangement (Vn.<T>) encodes as a Q bit (bit 30, the "wide"
+;;; half of each pair) and a 2-bit element size (bits 23:22): B/H/S/D =
+;;; 0/1/2/3.  These positions are shared across the SIMD data-processing
+;;; formats (two-register misc, across-lanes, ...), so one class serves all.
+(defparameter *arrangements*
+  ;; arrangement -> (Q . size)
+  '((:8b 0 . 0) (:16b 1 . 0)
+    (:4h 0 . 1) (:8h 1 . 1)
+    (:2s 0 . 2) (:4s 1 . 2)
+    (:1d 0 . 3) (:2d 1 . 3)))
+
+(defun arrangement-q+size (arrangement)
+  (let ((entry (cdr (assoc arrangement *arrangements* :test #'eq))))
+    (or entry (error "Unknown vector arrangement ~s" arrangement))))
+
+(defun q+size-arrangement (q size)
+  (or (car (rassoc (cons q size) *arrangements* :test #'equal))
+      (error "No vector arrangement for Q=~d size=~d" q size)))
+
+;;; The :varr class, in the (role class) spec form, names a
+;;; vector-arrangement-operand: the role's register field takes the number,
+;;; and the arrangement drives the Q and size bits.
+(defun vector-arrangement-class-p (class)
+  (eq class :varr))
+
+(defun encode-vector-arrangement-operand (insn operand role)
+  (set-field-value insn (register-field role)
+                   (register-number (vector-arrangement-operand-register operand)))
+  (destructuring-bind (q . size)
+      (arrangement-q+size (vector-arrangement-operand-arrangement operand))
+    (set-field-value insn (byte 1 30) q)
+    (set-field-value insn (byte 2 22) size)))
+
+(defun decode-vector-arrangement-operand (word role)
+  (make-vector-arrangement-operand
+   :register (fpr-ref (extract-register word role) 128)
+   :arrangement (q+size-arrangement (ldb (byte 1 30) word) (ldb (byte 2 22) word))))
 
 (defparameter *immediate-field-specs*
   `((:simm9 ,(byte 9 12) :signed t)
@@ -2131,6 +2260,8 @@
     ((mem-spec-p spec) (encode-memory-operand insn operand spec))
     ((and (consp spec) (vector-element-class-p (second spec)))
      (encode-vector-element-operand insn operand (first spec) (second spec)))
+    ((and (consp spec) (vector-arrangement-class-p (second spec)))
+     (encode-vector-arrangement-operand insn operand (first spec)))
     ((consp spec) (encode-register-operand insn operand (first spec)
                                            (second spec)))))
 
@@ -2144,6 +2275,8 @@
     ((mem-spec-p spec) (decode-memory-operand word spec))
     ((and (consp spec) (vector-element-class-p (second spec)))
      (decode-vector-element-operand word (first spec) (second spec)))
+    ((and (consp spec) (vector-arrangement-class-p (second spec)))
+     (decode-vector-arrangement-operand word (first spec)))
     ((consp spec) (decode-register-operand word (first spec) (second spec)))))
 
 (defun encode-operands (insn)
@@ -2178,6 +2311,8 @@
     (:sp      "SP")
     (:s       (format nil "S~a" suffix))
     (:d       (format nil "D~a" suffix))
+    (:b       (format nil "B~a" suffix))
+    (:h       (format nil "H~a" suffix))
     ((:x-shift :x-shift-ror) (format nil "X~a{, shift #amt}" suffix))
     ((:w-shift :w-shift-ror) (format nil "W~a{, shift #amt}" suffix))
     (:x-ext   (format nil "X~a{, extend #amt}" suffix))
@@ -2910,6 +3045,25 @@
                        (list :cond value)))
              (values (make-condition-operand :name cc :value value)
                      (list :cond value)))))))
+    ;; A vector arrangement operand: (:8b x) / (:16b x) / ... names Vx.<T>,
+    ;; a whole SIMD register with an element arrangement (for cnt/addv/...).
+    ;; x is a parameter hole or a literal FP register name.
+    ((and (consp op) (consp (cdr op)) (null (cddr op))
+          (member (car op) '(:8b :16b :4h :8h :2s :4s :1d :2d) :test #'eq)
+          (symbolp (cadr op)))
+     (let* ((arrangement (car op))
+            (inner (cadr op))
+            (hole (position inner name-list :test #'eq)))
+       (if hole
+         (values (make-vector-arrangement-operand
+                  :register (fpr-ref 0 128) :arrangement arrangement)
+                 (list :varr-opnd hole arrangement))
+         (let ((reg (lookup-register inner)))
+           (when reg
+             (values (make-vector-arrangement-operand
+                      :register (fpr-ref (register-number reg) 128)
+                      :arrangement arrangement)
+                     (list :varr-reg (register-number reg) arrangement)))))))
     ;; A vector lane operand: (:s x i) / (:d x i) names Vx.<S|D>[i], one
     ;; lane of a SIMD register (for ins/dup/mov element).  x is a parameter
     ;; hole or a literal FP register name; i is a constant lane index.  It's
@@ -2932,14 +3086,16 @@
                       :register (fpr-ref (register-number reg) 128)
                       :esize esize :index index)
                      (list :velt-reg (register-number reg) esize index)))))))
-    ;; A register-view override: (:s r) / (:d r) / (:w r) / (:x r)
-    ;; forces the scalar FP view (Sn/Dn) or GPR width (Wn/Xn) of
-    ;; the register r, ignoring its declared operand class.
+    ;; A register-view override: (:b r) / (:h r) / (:s r) / (:d r) / (:w r)
+    ;; / (:x r) forces the Bn/Hn/Sn/Dn scalar-FP view or the Wn/Xn GPR-width
+    ;; view of the register r, ignoring its declared operand class.
     ((and (consp op) (consp (cdr op)) (null (cddr op))
-          (member (car op) '(:s :d :w :x) :test #'eq)
+          (member (car op) '(:b :h :s :d :w :x) :test #'eq)
           (symbolp (cadr op)))
      (multiple-value-bind (family width)
          (ecase (car op)
+           (:b (values :fpr 8))
+           (:h (values :fpr 16))
            (:s (values :fpr 32))
            (:d (values :fpr 64))
            (:w (values :gpr 32))

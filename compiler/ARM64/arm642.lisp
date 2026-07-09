@@ -1533,6 +1533,16 @@
                                     (:velt-reg reg-or-index))
                                   128)
         :esize esize :index index)))
+    ((:varr-opnd :varr-reg)
+     ;; A whole-vector arrangement operand.  The number goes to the role
+     ;; field, the arrangement to the Q and size bits, at encode.
+     (destructuring-bind (reg-or-index arrangement) (cdr desc)
+       (arm64::make-vector-arrangement-operand
+        :register (arm64::fpr-ref (ecase (car desc)
+                                    (:varr-opnd (svref vp reg-or-index))
+                                    (:varr-reg reg-or-index))
+                                  128)
+        :arrangement arrangement)))
     (t
      (multiple-value-bind (number modifier amount)
          (ecase (car desc)
@@ -1554,7 +1564,9 @@
           (:sp (arm64::gpr-ref 31 64 t))
           (:wsp (arm64::gpr-ref 31 32 t))
           (:s (arm64::fpr-ref number 32))
-          (:d (arm64::fpr-ref number 64)))
+          (:d (arm64::fpr-ref number 64))
+          (:b (arm64::fpr-ref number 8))
+          (:h (arm64::fpr-ref number 16)))
         :modifier modifier :amount amount)))))
 
 ;;; Build the operand struct for one filled-in body operand.  DESC is the
