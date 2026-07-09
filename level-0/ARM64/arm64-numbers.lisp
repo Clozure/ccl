@@ -18,3 +18,16 @@
   (fmov (:w imm0) (:s d0))
   (lsl arg_z imm0 (:$ arm64::fixnumshift))
   (ret))
+
+;; positive count: shift left, negative count: shift right
+(defarm64lapfunction %iash ((number arg_y) (count arg_z))
+  (unbox-fixnum imm1 count)
+  (negs imm2 imm1)
+  (b.lt @left)
+  (unbox-fixnum imm0 number)
+  (asr imm0 imm0 imm2)
+  (box-fixnum arg_z imm0)
+  (ret)
+  @left
+  (lsl arg_z number imm1)
+  (ret))
