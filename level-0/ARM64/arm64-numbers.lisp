@@ -14,7 +14,7 @@
 (defarm64lapfunction %ilogcount ((number arg_z))
   (fmov d0 number)
   (cnt (:8b d0) (:8b d0))
-  (addv (:b d0) (:8b d0))
+  (addv b0 (:8b d0))
   (fmov (:w imm0) (:s d0))
   (lsl arg_z imm0 (:$ arm64::fixnumshift))
   (ret))
