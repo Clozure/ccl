@@ -2039,6 +2039,122 @@
     (arm642-binary-builtin seg vreg xfer '+-2 form1 form2)
     (arm642-inline-add2 seg vreg xfer form1 form2)))
 
+;;; Make a gcable macptr.
+(defarm642 arm642-%new-ptr %new-ptr (seg vreg xfer size clear-p )
+  (arm642-call-fn seg vreg xfer
+                  (make-acode (%nx1-operator immediate) '%new-gcable-ptr)
+                  (list nil (list clear-p size))
+                  nil))
+
+(defarm642 arm642-ash ash (seg vreg xfer num amt)
+  (arm642-two-targeted-reg-forms seg num ($ arm64::arg_y) amt ($ arm64::arg_z))
+  (arm642-fixed-call-builtin seg vreg xfer '.SPbuiltin-ash))
+
+(defarm642 arm642-fixnum-ash fixnum-ash (seg vreg xfer num amt)
+  (multiple-value-bind (rnum ramt)
+      (arm642-two-untargeted-reg-forms seg num ($ arm64::arg_y)
+                                       amt ($ arm64::arg_z))
+    (let* ((amttype (specifier-type (acode-form-type
+                                     amt *arm642-trust-declarations*))))
+      (ensuring-node-target (target vreg)
+        (if (and (typep amttype 'numeric-ctype)
+                 (>= (numeric-ctype-low amttype) 0))
+          (! fixnum-ash-left target rnum ramt)
+          (! fixnum-ash target rnum ramt)))
+      (^))))
+
+(defarm642 arm642-fixnum-ref-double-float %fixnum-ref-double-float
+    (seg vreg xfer base index)
+  (if (null vreg)
+    (progn
+      (arm642-form base seg nil nil)
+      (arm642-form index seg nil xfer))
+    (let* ((fix (acode-fixnum-form-p index)))
+      (unless (typep fix '(unsigned-byte 12))
+        (setq fix nil))
+      (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+               (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
+        (cond (fix
+               (! fixnum-ref-c-double-float vreg
+                  (arm642-one-untargeted-reg-form seg base arm64::arg_z) fix))
+              (t
+               (multiple-value-bind (rbase rindex)
+                   (arm642-two-untargeted-reg-forms seg base arm64::arg_y
+                                                    index arm64::arg_z)
+                 (! fixnum-ref-double-float vreg rbase rindex))))
+        (with-fp-target () (target :double-float)
+          (cond (fix
+                 (! fixnum-ref-c-double-float target
+                    (arm642-one-untargeted-reg-form seg base arm64::arg_z) fix))
+                (t
+                 (multiple-value-bind (rbase rindex)
+                     (arm642-two-untargeted-reg-forms seg base arm64::arg_y
+                                                      index arm64::arg_z)
+                   (! fixnum-ref-double-float target rbase rindex))))
+          (<- target)))
+      (^))))
+
+(defarm642 arm642-fixnum-set-double-float %fixnum-set-double-float
+    (seg vreg xfer base index val)
+  (let* ((fix (acode-fixnum-form-p index)))
+    (unless (typep fix '(unsigned-byte 12))
+      (setq fix nil))
+    (cond ((or (null vreg)
+               (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
+                    (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double)))
+           (let* ((fhint (or vreg ($ arm64::d0 :class :fpr
+                                               :mode :double-float))))
+             (if fix
+               (multiple-value-bind (rbase rval)
+                   (arm642-two-untargeted-reg-forms seg base
+                                                    ($ arm64::arg_z) val fhint)
+                 (! fixnum-set-c-double-float rbase fix rval)
+                 (<- rval))
+               (multiple-value-bind (rbase rindex rval)
+                   (arm642-three-untargeted-reg-forms seg base ($ arm64::arg_y)
+                                                      index ($ arm64::arg_z) val
+                                                      fhint)
+                 (! fixnum-set-double-float rbase rindex rval)
+                 (<- rval)))))
+          (t
+           (if fix
+             (multiple-value-bind (rbase rboxed)
+                 (arm642-two-untargeted-reg-forms seg base ($ arm64::arg_y) val
+                                                  ($ arm64::arg_z))
+               (with-fp-target () (rval :double-float)
+                 (arm642-copy-register seg rval rboxed)
+                 (! fixnum-set-c-double-float rbase fix rval))
+               (<- rboxed))
+             (multiple-value-bind (rbase rindex rboxed)
+                 (arm642-three-untargeted-reg-forms seg base ($ arm64::arg_x)
+                                                    index ($ arm64::arg_y)
+                                                    val ($ arm64::arg_z))
+               (with-fp-target () (rval :double-float)
+                 (arm642-copy-register seg rval rboxed)
+                 (! fixnum-set-double-float rbase rindex rval))
+               (<- rboxed)))))
+    (^)))
+
+(defarm642 arm642-t t (seg vreg xfer)
+  (arm642-t seg vreg xfer))
+
+(defarm642 arm642-nil nil (seg vreg xfer)
+  (arm642-nil seg vreg xfer))
+
+(defarm642 arm642-ivector-typecode-p ivector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (arm642-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! ivector-typecode-p target
+                (arm642-one-untargeted-reg-form seg val arm64::arg_z)))
+           (^))))
+
+(defarm642 arm642-gvector-typecode-p gvector-typecode-p (seg vreg xfer val)
+  (cond ((null vreg) (arm642-form seg vreg xfer val))
+        (t (ensuring-node-target (target vreg)
+             (! gvector-typecode-p target
+                (arm642-one-untargeted-reg-form seg val arm64::arg_z)))
+           (^))))
+
 (defarm642 arm642-%complex-single-float-realpart %complex-single-float-realpart
     (seg vreg xfer arg)
   (if (null vreg)
@@ -2080,7 +2196,6 @@
            (arm642-one-untargeted-reg-form seg arg val))
         (<- target)
         (^ )))))
-
 
 (defarm642 arm642-%complex-double-float-imagpart %complex-double-float-imagpart
     (seg vreg xfer arg)

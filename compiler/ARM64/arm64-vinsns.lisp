@@ -158,6 +158,87 @@
                                   ((label :label)))
   (b label))
 
+
+#|
+(define-arm64-vinsn fixnum-ref-c-double-float (((dest :double-float))
+                                               ((base :imm)
+                                                (idx :u16const)))
+  (lfd dest (:apply ash idx 3) base))
+
+(define-arm64-vinsn fixnum-ref-double-float (((dest :double-float))
+                                             ((base :imm)
+                                              (idx :imm)))
+  (lfdx dest base idx))
+
+
+(define-arm64-vinsn fixnum-set-c-double-float (()
+                                               ((base :imm)
+                                                (idx :u16const)
+                                                (val :double-float)))
+  (stfd val (:apply ash idx 3) base))
+
+(define-arm64-vinsn fixnum-set-double-float (()
+                                             ((base :imm)
+                                              (idx :imm)
+                                              (val :double-float)))
+  (stfdx val base idx))
+
+(define-arm64-vinsn ivector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u64)
+                                         (mask :u64)))
+  (srdi temp src arm64::fixnumshift)
+  
+  (clrldi temp temp (- 64 arm64::ntagbits))
+  (li mask 1)
+  (sld mask mask temp)
+  (andi. mask mask (logior (ash 1 arm64::fulltag-immheader-0)
+                           (ash 1 arm64::fulltag-immheader-1)
+                           (ash 1 arm64::fulltag-immheader-2)
+                           (ash 1 arm64::fulltag-immheader-3)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (bne :done)
+  (mr dest arm::rzero)
+  :done)
+
+(define-arm64-vinsn gvector-typecode-p (((dest :lisp))
+                                        ((src :lisp))
+                                        ((temp :u64)
+                                         (mask :u64)))
+  (srdi temp src arm64::fixnumshift)
+  
+  (clrldi temp temp (- 64 arm64::ntagbits))
+  (li mask 1)
+  (sld mask mask temp)
+  (andi. mask mask (logior (ash 1 arm64::fulltag-nodeheader-0)
+                           (ash 1 arm64::fulltag-nodeheader-1)
+                           (ash 1 arm64::fulltag-nodeheader-2)
+                           (ash 1 arm64::fulltag-nodeheader-3)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (mr dest src))
+  (bne :done)
+  (mr dest arm::rzero)
+  :done)
+|#
+
+;;; The real part is the low lane, which aliases the scalar Sn/Dn view of
+;;; the same register.  (:s src) / (:d src) force that view so FMOV sees two
+;;; same-size operands; without the override src carries its :complex-*
+;;; class and no equal-width FMOV template matches.
+(define-arm64-vinsn %complex-single-float-realpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (fmov dest (:s src)))
+
+(define-arm64-vinsn %complex-double-float-realpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (fmov dest (:d src)))
+
+
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
 ;;; compiled against a differently-ordered table.

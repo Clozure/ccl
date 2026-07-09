@@ -2678,6 +2678,8 @@
     ((:u32 :s32 :u16 :s16 :u8 :s8) (values :gpr 32))
     (:single-float (values :fpr 32))
     (:double-float (values :fpr 64))
+    (:complex-single-float (values :fpr 64))
+    (:complex-double-float (values :fpr 128))
     (t nil)))
 
 ;;; Match-time stand-in for an immediate whose value isn't known until
@@ -2809,6 +2811,38 @@
                        (list :cond value)))
              (values (make-condition-operand :name cc :value value)
                      (list :cond value)))))))
+    ;; A register-view override: (:s x) / (:d x) / (:w x) / (:x x) forces
+    ;; the scalar FP view (Sn/Dn) or GPR width (Wn/Xn) of x's register,
+    ;; ignoring x's declared operand class.  Used when a vinsn wants a
+    ;; non-default view of a register it was handed -- e.g. reading the
+    ;; single-float (Sn) low half of a :complex-single-float operand, or the
+    ;; double-float (Dn) low half of a :complex-double-float (whose native
+    ;; 128-bit Qn view no scalar FMOV template accepts).  x is a parameter
+    ;; hole or a literal register name.  We only fix family+width here; the number
+    ;; comes from the vp and the emitted width from the matched template, so
+    ;; the descriptor is the same one a bare operand would produce.
+    ((and (consp op) (consp (cdr op)) (null (cddr op))
+          (member (car op) '(:s :d :w :x) :test #'eq)
+          (symbolp (cadr op)))
+     (multiple-value-bind (family width)
+         (ecase (car op)
+           (:s (values :fpr 32))
+           (:d (values :fpr 64))
+           (:w (values :gpr 32))
+           (:x (values :gpr 64)))
+       (flet ((ref (number)
+                (if (eq family :gpr) (gpr-ref number width) (fpr-ref number width))))
+         (let* ((inner (cadr op))
+                (index (position inner name-list :test #'eq)))
+           (if index
+             ;; a parameter hole
+             (values (make-register-operand :register (ref 0))
+                     (list :opnd index))
+             ;; a literal register name (e.g. (:x fn))
+             (let ((reg (lookup-register inner)))
+               (when reg
+                 (values (make-register-operand :register (ref (register-number reg)))
+                         (list :reg (register-number reg))))))))))
     ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
     ;; base register may be a hole or literal; the amount must be constant.
     ((and (consp op) (symbolp (car op))
@@ -2920,7 +2954,11 @@
               (dolist (tp candidates)
                 (when (vinsn-match-template tp match-operands)
                   (simplified tp)))))))))
-  ;; Unknown instruction, or no template matched: leave form as-is.
+  ;; Unknown instruction, or no template matched: leave form as-is so the
+  ;; rest of the file still compiles.  During bring-up this is expected for
+  ;; not-yet-implemented vinsns; warn (don't halt) so the unmatched forms
+  ;; stay visible, and let the expander choke only if one is actually used.
+  (warn "arm64 vinsn: no template matched ~s" form)
   form)
 
 (provide "ARM64-ASM")
