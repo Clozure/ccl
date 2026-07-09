@@ -42,7 +42,8 @@
                (#\x (values 64 :gpr))
                (#\w (values 32 :gpr))
                (#\s (values 32 :fpr))
-               (#\d (values 64 :fpr)))
+               (#\d (values 64 :fpr))
+               (#\q (values 128 :fpr)))
            (let ((number (parse-integer name :start 1)))
              (when (and (eq family :gpr) (= number 31))
                (error "Write xzr/wzr/sp/wsp, not ~a." name))
@@ -82,7 +83,13 @@
    (reg d7) (reg d8) (reg d9) (reg d10) (reg d11) (reg d12) (reg d13)
    (reg d14) (reg d15) (reg d16) (reg d17) (reg d18) (reg d19) (reg d20)
    (reg d21) (reg d22) (reg d23) (reg d24) (reg d25) (reg d26) (reg d27)
-   (reg d28) (reg d29) (reg d30) (reg d31)))
+   (reg d28) (reg d29) (reg d30) (reg d31)
+   ;; 128-bit fprs
+   (reg q0) (reg q1) (reg q2) (reg q3) (reg q4) (reg q5) (reg q6)
+   (reg q7) (reg q8) (reg q9) (reg q10) (reg q11) (reg q12) (reg q13)
+   (reg q14) (reg q15) (reg q16) (reg q17) (reg q18) (reg q19) (reg q20)
+   (reg q21) (reg q22) (reg q23) (reg q24) (reg q25) (reg q26) (reg q27)
+   (reg q28) (reg q29) (reg q30) (reg q31)))
 
 ;;; Constants for indexes into *registers*
 (ccl::defenum ()
@@ -96,7 +103,10 @@
    s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26 s27 s28 s29 s30 s31
    ;; double-float names
    d0  d1  d2  d3  d4  d5  d6  d7  d8  d9  d10 d11 d12 d13 d14 d15
-   d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31)
+   d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31
+   ;; 128-bit names
+   q0  q1  q2  q3  q4  q5  q6  q7  q8  q9  q10 q11 q12 q13 q14 q15
+   q16 q17 q18 q19 q20 q21 q22 q23 q24 q25 q26 q27 q28 q29 q30 q31)
 
 (defun gpr-ref (number width &optional r31-is-sp)
   (multiple-value-bind (base stack-pointer zero-register)
@@ -109,7 +119,10 @@
                  (t zero-register)))))
 
 (defun fpr-ref (number width)
-  (let ((base (ecase width (32 s0) (64 d0))))
+  (let ((base (ecase width
+                (32 s0)
+                (64 d0)
+                (128 q0))))
     (svref *registers* (+ base number))))
 
 (defvar *registers-by-name* (make-hash-table :test #'equalp))
