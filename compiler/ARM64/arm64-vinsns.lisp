@@ -66,6 +66,7 @@
   (add sp sp (:$ 32))
   (ret))
 
+#|
 (define-arm64-vinsn unbox-s64 (((dest :s64))
                                ((src :lisp)))
   (asr dest src (:$ arm64::fixnumshift))
@@ -79,11 +80,12 @@
   :bad
   (uuo-error-reg-not-type src (:$ub arch::error-object-not-signed-byte-64))
   :miscobj
-  (ldr dest (:@ src (:$ arm64::misc-header-offset)))
+  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
   (cmp dest (:$ arm64::two-digit-bignum-header))
   (b.ne :bad)
-  (ldr dest (:@ src (:$ arm64::misc-data-offset)))
+  (ldur dest (:@ src (:$ arm64::misc-data-offset)))
   :good)
+|#
 
 ;;; Materialize a Lisp boolean branchlessly: DEST = CC ? t : nil, where CC
 ;;; is a 4-bit condition code and the NZCV flags were set by a preceding
@@ -96,20 +98,20 @@
   (csel dest true rnil (:? cc)))
 
 ;;; Branch to LABEL when the CRBIT condition (a 4-bit condition code,
-;;; e.g. arm64::cond-eq) holds; cbranch-false branches when it doesn't.
-;;; The condition is an operand of b.c, and (:~ crbit) inverts it (XOR 1),
-;;; exactly as on ARM32.
+;;; e.g. arm64::cond-eq) holds; cbranch-false branches when it
+;;; doesn't.  The condition is an operand of b.cond, and (:~ crbit)
+;;; inverts it (XOR 1), exactly as on ARM32.
 (define-arm64-vinsn (cbranch-true :branch) (()
                                            ((label :label)
                                             (crf :crf)
                                             (crbit :u8const)))
-  (b.c (:? crbit) label))
+  (b.cond (:? crbit) label))
 
 (define-arm64-vinsn (cbranch-false :branch) (()
                                             ((label :label)
                                              (crf :crf)
                                              (crbit :u8const)))
-  (b.c (:~ crbit) label))
+  (b.cond (:~ crbit) label))
 
 (define-arm64-vinsn load-nil (((dest :lisp))
                               ())
@@ -226,17 +228,36 @@
   :done)
 |#
 
-;;; The real part is the low lane, which aliases the scalar Sn/Dn view of
-;;; the same register.  (:s src) / (:d src) force that view so FMOV sees two
-;;; same-size operands; without the override src carries its :complex-*
-;;; class and no equal-width FMOV template matches.
+;;; Real part is lane 0, imaginary part lane 1.
 (define-arm64-vinsn %complex-single-float-realpart (((dest :single-float))
                                                     ((src :complex-single-float)))
-  (fmov dest (:s src)))
+  (dup dest (:s src 0)))
 
 (define-arm64-vinsn %complex-double-float-realpart (((dest :double-float))
                                                     ((src :complex-double-float)))
-  (fmov dest (:d src)))
+  (dup dest (:d src 0)))
+
+(define-arm64-vinsn %complex-single-float-imagpart (((dest :single-float))
+                                                    ((src :complex-single-float)))
+  (dup dest (:s src 1)))
+
+(define-arm64-vinsn %complex-double-float-imagpart (((dest :double-float))
+                                                    ((src :complex-double-float)))
+  (dup dest (:d src 1)))
+
+(define-arm64-vinsn %make-complex-single-float (((dest :complex-single-float))
+                                                ((r :single-float)
+                                                 (i :single-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (fmov (:s dest) r))
+  (ins (:s dest 1) (:s i 0)))
+
+(define-arm64-vinsn %make-complex-double-float (((dest :complex-double-float))
+                                                ((r :double-float)
+                                                 (i :double-float)))
+  ((:not (:pred = (:apply %hard-regspec-value r) (:apply %hard-regspec-value dest)))
+   (fmov (:d dest) r))
+  (ins (:d dest 1) (:d i 0)))
 
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined

@@ -1515,33 +1515,47 @@
         (setf (var-ea var) (lreg-value ea))))))
 
 ;;; Build a register-operand for a filled-in vinsn operand.  DESC is the
-;;; register descriptor -- (:opnd i) / (:reg n) for a plain register, or
-;;; (:shifted-reg reg-desc modifier amount) for a shifted/extended one.
-;;; SPEC is the template's operand spec (role class), giving the register
-;;; view.  Mirrors the class mapping in DECODE-REGISTER-OPERAND.
+;;; register descriptor -- (:opnd i) / (:reg n) for a plain register,
+;;; (:shifted-reg reg-desc modifier amount) for a shifted/extended one, or
+;;; (:velt-opnd i esize index) / (:velt-reg n esize index) for a vector
+;;; lane.  SPEC is the template's operand spec (role class), giving the
+;;; register view.  Mirrors the class mapping in DECODE-REGISTER-OPERAND.
 (defun arm642-vinsn-register-operand (desc spec vp)
-  (multiple-value-bind (number modifier amount)
-      (ecase (car desc)
-        (:opnd (values (svref vp (cadr desc)) nil 0))
-        (:reg  (values (cadr desc) nil 0))
-        (:shifted-reg
-         (destructuring-bind (reg-desc modifier amount) (cdr desc)
-           (values (ecase (car reg-desc)
-                     (:opnd (svref vp (cadr reg-desc)))
-                     (:reg  (cadr reg-desc)))
-                   modifier amount))))
-    (arm64::make-register-operand
-     :register
-     (ecase (cadr spec)
-       ((:x :x-shift :x-shift-ror :x-ext) (arm64::gpr-ref number 64))
-       (:x/sp (arm64::gpr-ref number 64 t))
-       ((:w :w-shift :w-shift-ror :w-ext) (arm64::gpr-ref number 32))
-       (:w/sp (arm64::gpr-ref number 32 t))
-       (:sp (arm64::gpr-ref 31 64 t))
-       (:wsp (arm64::gpr-ref 31 32 t))
-       (:s (arm64::fpr-ref number 32))
-       (:d (arm64::fpr-ref number 64)))
-     :modifier modifier :amount amount)))
+  (case (car desc)
+    ((:velt-opnd :velt-reg)
+     ;; A vector lane operand.  The number goes to the role field and
+     ;; esize/index to imm5/imm4 at encode; the 128-bit Vn view is just a
+     ;; carrier for the number.
+     (destructuring-bind (reg-or-index esize index) (cdr desc)
+       (arm64::make-vector-element-operand
+        :register (arm64::fpr-ref (ecase (car desc)
+                                    (:velt-opnd (svref vp reg-or-index))
+                                    (:velt-reg reg-or-index))
+                                  128)
+        :esize esize :index index)))
+    (t
+     (multiple-value-bind (number modifier amount)
+         (ecase (car desc)
+           (:opnd (values (svref vp (cadr desc)) nil 0))
+           (:reg  (values (cadr desc) nil 0))
+           (:shifted-reg
+            (destructuring-bind (reg-desc modifier amount) (cdr desc)
+              (values (ecase (car reg-desc)
+                        (:opnd (svref vp (cadr reg-desc)))
+                        (:reg  (cadr reg-desc)))
+                      modifier amount))))
+       (arm64::make-register-operand
+        :register
+        (ecase (cadr spec)
+          ((:x :x-shift :x-shift-ror :x-ext) (arm64::gpr-ref number 64))
+          (:x/sp (arm64::gpr-ref number 64 t))
+          ((:w :w-shift :w-shift-ror :w-ext) (arm64::gpr-ref number 32))
+          (:w/sp (arm64::gpr-ref number 32 t))
+          (:sp (arm64::gpr-ref 31 64 t))
+          (:wsp (arm64::gpr-ref 31 32 t))
+          (:s (arm64::fpr-ref number 32))
+          (:d (arm64::fpr-ref number 64)))
+        :modifier modifier :amount amount)))))
 
 ;;; Build the operand struct for one filled-in body operand.  DESC is the
 ;;; stored descriptor, SPEC the template's operand spec at this position,

@@ -141,6 +141,11 @@
     ;; fp
     (fadd s0 s1 s2)
     (fmov d0 (:$ 1.0))
+    ;; advanced simd lane insert/extract (element copy)
+    (ins (:d q0 1) (:d q1 0))
+    (ins (:s q0 1) (:s q1 0))
+    (dup d0 (:d q1 1))
+    (dup s0 (:s q1 1))
     ;; system register access and barriers
     (mrs x0 fpsr)
     (mrs x2 fpcr)

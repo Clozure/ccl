@@ -522,7 +522,7 @@
    ;; condition is an operand, (:? cc) or (:~ cc), rather than baked
    ;; into the mnemonic.  The condition fills (byte 4 0); the label
    ;; fills (byte 19 5).
-   (def b.c (:cond-b (:label :b19)) #x54000000 0 :alias)
+   (def b.cond (:cond-b (:label :b19)) #x54000000 0 :alias)
 
    ;; Exception generation
    ;; 16-bit immediate in (byte 16 5)
@@ -1000,6 +1000,14 @@
    ;; fcvt between single and double
    (def fcvt ((:rd :d) (:rn :s)) #x1e22c000 $fp-dp1src-mask)
    (def fcvt ((:rd :s) (:rn :d)) #x1e624000 $fp-dp1src-mask)
+
+   ;; Advanced SIMD lane insert/extract (element copy).
+   (def ins ((:rd :elt5) (:rn :elt4)) #x6e000400 #xffe08400)
+   (def mov ((:rd :elt5) (:rn :elt4)) #x6e000400 0 :alias)
+   ;; dup (scalar destination)
+   (def dup ((:rd :s) (:rn :elt5)) #x5e040400 #xffe7fc00)
+   (def dup ((:rd :d) (:rn :elt5)) #x5e080400 #xffeffc00)
+
    ;; round to integral value (frintN/P/M/Z/A/X/I)
    (def frintn ((:rd :s) (:rn :s)) #x1e244000 $fp-dp1src-mask)
    (def frintn ((:rd :d) (:rn :d)) #x1e644000 $fp-dp1src-mask)
@@ -1139,6 +1147,8 @@
     :wsp           ;WSP, specifically
     :s             ;Sn, scalar single-float (FP/SIMD reg, 32-bit view)
     :d             ;Dn, scalar double-float (FP/SIMD reg, 64-bit view)
+    :elt5          ;a vector lane Vn.Ts[i] whose size+index encode into imm5
+    :elt4          ;a vector lane Vn.Ts[i] whose index encodes into imm4
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm          ;fancy logical immediate
     :simm9         ;signed 9-bit immediate for unscaled register offset
@@ -1210,6 +1220,12 @@
   register                     ;a register struct
   modifier                     ;nil or a shift/extend operator keyword
   (amount 0))                  ;shift/extend amount
+
+;;; A vector element reference: one lane of a SIMD register, e.g. Vn.D[1].
+(defstruct vector-element-operand
+  register                              ;register number
+  esize                                 ;(member (:b :h :s :d))
+  index)                                ;lane number
 
 (defstruct memory-operand
   base                              ;a register operand
@@ -1370,6 +1386,16 @@
 (defun system-register-name (value)
   (car (rassoc value *system-registers* :test #'eql)))
 
+(defun parse-vector-element-operand (form)
+  ;; (:s|:d|:b|:h reg index) names one lane of a SIMD register, e.g.
+  ;; (:d q1 0) for V1.D[0].  REG is any FP/SIMD register name -- only its
+  ;; number matters, the element size comes from the leading keyword.
+  (destructuring-bind (esize reg index) form
+    (let ((r (need-register reg)))
+      (unless (eq (register-family r) :fpr)
+        (error "~s: ~s is not an FP/SIMD register" form reg))
+      (make-vector-element-operand :register r :esize esize :index index))))
+
 (defun parse-operand (form)
   ;; Recognize an operand written in LAP notation.
   (cond
@@ -1388,6 +1414,7 @@
        (:? (parse-condition-operand form))
        (:~ (parse-condition-operand form t))
        ((:@ :@! :@+) (parse-memory-operand form))
+       ((:b :h :s :d) (parse-vector-element-operand form))
        (t (if (symbolp (car form))
             ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
             (parse-register-operand form)
@@ -1670,6 +1697,9 @@
     ((mem-spec-p spec)                  ;(:mem-FORM …) ⇒ memory group
      (and (memory-operand-p operand)
           (match-memory-operand operand spec)))
+    ((and (consp spec)                  ;(role :elt5|:elt4) ⇒ vector lane
+          (vector-element-class-p (cadr spec)))
+     (vector-element-operand-p operand))
     ((consp spec)                       ;(role class) ⇒ register
      (and (register-operand-p operand)
           (match-register-operand operand (cadr spec))))
@@ -1781,6 +1811,71 @@
               (width (if (member option '(:uxtx :sxtx)) 64 32)))
          (make-register-operand :register (gpr-ref number width)
                                 :modifier option :amount amount))))))
+
+;;; Advanced SIMD lane operands (INS/DUP/MOV element).  The imm5 field
+;;; (bits 20:16) fuses element size and one lane index: the least-significant
+;;; set bit marks the size (B/H/S/D at bit 0/1/2/3), and the bits above it
+;;; hold the index.  The imm4 field (bits 14:11) holds a second lane index
+;;; (the INS source), positioned by the same size shift.
+
+(defparameter *element-size-shifts* '((:b . 0) (:h . 1) (:s . 2) (:d . 3)))
+
+(defun element-size-shift (esize)
+  (or (cdr (assoc esize *element-size-shifts* :test #'eq))
+      (error "Unknown vector element size ~s" esize)))
+
+(defun encode-vector-imm5 (esize index)
+  (let ((sh (element-size-shift esize)))
+    (logior (ash 1 sh) (ash index (1+ sh)))))
+
+(defun encode-vector-imm4 (esize index)
+  (ash index (element-size-shift esize)))
+
+(defun decode-vector-imm5 (bits)
+  ;; The bits argument is the raw imm5 field.  Returns (values esize index).
+  (cond ((logbitp 0 bits) (values :b (ash bits -1)))
+        ((logbitp 1 bits) (values :h (ash bits -2)))
+        ((logbitp 2 bits) (values :s (ash bits -3)))
+        ((logbitp 3 bits) (values :d (ash bits -4)))
+        (t (error "Invalid vector element imm5 #b~5,'0b" bits))))
+
+;;; The element operand classes, in the (role class) spec form: :elt5 puts
+;;; its lane (and the size) in imm5; :elt4 puts its lane in imm4.  Both name
+;;; a vector-element-operand; the role says which register field (Rd/Rn)
+;;; takes the vector number.
+(defun vector-element-class-p (class)
+  (or (eq class :elt5) (eq class :elt4)))
+
+(defun operand-register (operand)
+  ;; The register struct of a plain register or a vector element operand.
+  (etypecase operand
+    (register-operand (register-operand-register operand))
+    (vector-element-operand (vector-element-operand-register operand))))
+
+(defun encode-vector-element-operand (insn operand role class)
+  (set-field-value insn (register-field role)
+                   (register-number (operand-register operand)))
+  (let ((esize (vector-element-operand-esize operand))
+        (index (vector-element-operand-index operand)))
+    (ecase class
+      (:elt5 (set-field-value insn (byte 5 16) (encode-vector-imm5 esize
+                                                                   index)))
+      (:elt4 (set-field-value insn (byte 4 11) (encode-vector-imm4 esize
+                                                                   index))))))
+
+(defun decode-vector-element-operand (word role class)
+  (let ((number (extract-register word role)))
+    (multiple-value-bind (esize imm5-index)
+        (decode-vector-imm5 (ldb (byte 5 16) word))
+      (make-vector-element-operand
+       :register (fpr-ref number 128)   ;the width doesn't really matter
+       :esize esize
+       ;; :elt5 carries its own index in imm5; :elt4 takes the size from
+       ;; imm5 (the paired :elt5 operand) but its index from imm4.
+       :index (ecase class
+                (:elt5 imm5-index)
+                (:elt4 (ash (ldb (byte 4 11) word)
+                            (- (element-size-shift esize)))))))))
 
 (defparameter *immediate-field-specs*
   `((:simm9 ,(byte 9 12) :signed t)
@@ -2034,6 +2129,8 @@
     ((eq spec :cond-b) (encode-condition-branch-operand insn operand))
     ((keywordp spec) (encode-immediate-operand insn operand spec))
     ((mem-spec-p spec) (encode-memory-operand insn operand spec))
+    ((and (consp spec) (vector-element-class-p (second spec)))
+     (encode-vector-element-operand insn operand (first spec) (second spec)))
     ((consp spec) (encode-register-operand insn operand (first spec)
                                            (second spec)))))
 
@@ -2045,6 +2142,8 @@
     ((eq spec :cond-b) (decode-condition-branch-operand word))
     ((keywordp spec) (decode-immediate-operand word spec))
     ((mem-spec-p spec) (decode-memory-operand word spec))
+    ((and (consp spec) (vector-element-class-p (second spec)))
+     (decode-vector-element-operand word (first spec) (second spec)))
     ((consp spec) (decode-register-operand word (first spec) (second spec)))))
 
 (defun encode-operands (insn)
@@ -2811,16 +2910,31 @@
                        (list :cond value)))
              (values (make-condition-operand :name cc :value value)
                      (list :cond value)))))))
-    ;; A register-view override: (:s x) / (:d x) / (:w x) / (:x x) forces
-    ;; the scalar FP view (Sn/Dn) or GPR width (Wn/Xn) of x's register,
-    ;; ignoring x's declared operand class.  Used when a vinsn wants a
-    ;; non-default view of a register it was handed -- e.g. reading the
-    ;; single-float (Sn) low half of a :complex-single-float operand, or the
-    ;; double-float (Dn) low half of a :complex-double-float (whose native
-    ;; 128-bit Qn view no scalar FMOV template accepts).  x is a parameter
-    ;; hole or a literal register name.  We only fix family+width here; the number
-    ;; comes from the vp and the emitted width from the matched template, so
-    ;; the descriptor is the same one a bare operand would produce.
+    ;; A vector lane operand: (:s x i) / (:d x i) names Vx.<S|D>[i], one
+    ;; lane of a SIMD register (for ins/dup/mov element).  x is a parameter
+    ;; hole or a literal FP register name; i is a constant lane index.  It's
+    ;; the extra index element that tells this apart from the scalar view
+    ;; below.  Only :s/:d are needed so far.
+    ((and (consp op) (consp (cdr op)) (consp (cddr op)) (null (cdddr op))
+          (member (car op) '(:s :d) :test #'eq)
+          (symbolp (cadr op)))
+     (let* ((esize (car op))
+            (inner (cadr op))
+            (index (eval-immediate-expression (caddr op)))
+            (hole (position inner name-list :test #'eq)))
+       (if hole
+         (values (make-vector-element-operand
+                  :register (fpr-ref 0 128) :esize esize :index index)
+                 (list :velt-opnd hole esize index))
+         (let ((reg (lookup-register inner)))
+           (when reg
+             (values (make-vector-element-operand
+                      :register (fpr-ref (register-number reg) 128)
+                      :esize esize :index index)
+                     (list :velt-reg (register-number reg) esize index)))))))
+    ;; A register-view override: (:s r) / (:d r) / (:w r) / (:x r)
+    ;; forces the scalar FP view (Sn/Dn) or GPR width (Wn/Xn) of
+    ;; the register r, ignoring its declared operand class.
     ((and (consp op) (consp (cdr op)) (null (cddr op))
           (member (car op) '(:s :d :w :x) :test #'eq)
           (symbolp (cadr op)))
@@ -2831,17 +2945,20 @@
            (:w (values :gpr 32))
            (:x (values :gpr 64)))
        (flet ((ref (number)
-                (if (eq family :gpr) (gpr-ref number width) (fpr-ref number width))))
+                (if (eq family :gpr)
+                  (gpr-ref number width)
+                  (fpr-ref number width))))
          (let* ((inner (cadr op))
                 (index (position inner name-list :test #'eq)))
            (if index
-             ;; a parameter hole
+             ;; a parameter
              (values (make-register-operand :register (ref 0))
                      (list :opnd index))
              ;; a literal register name (e.g. (:x fn))
              (let ((reg (lookup-register inner)))
                (when reg
-                 (values (make-register-operand :register (ref (register-number reg)))
+                 (values (make-register-operand :register
+                                                (ref (register-number reg)))
                          (list :reg (register-number reg))))))))))
     ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
     ;; base register may be a hole or literal; the amount must be constant.
@@ -2863,7 +2980,7 @@
     ((symbolp op)
      (let ((index (position op name-list :test #'eq)))
        (if index
-         ;; a vinsn parameter (a hole)
+         ;; a vinsn parameter
          (let ((class (cdr (assoc op param-types :test #'eq))))
            (if (eq class :label)
              ;; a branch target passed in as a backend (vinsn) label
