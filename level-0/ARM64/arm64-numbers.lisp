@@ -31,3 +31,37 @@
   @left
   (lsl arg_z number imm1)
   (ret))
+
+;; (integer-length n) = (- 63 (cls n))
+(defarm64lapfunction %fixnum-intlen ((number arg_z))
+  (unbox-fixnum imm0 number)
+  (cls imm0 imm0)                       ;result in [0, 63]
+  (eor imm0 imm0 (:$ 63))               ;trick: computes (- 63 cls)
+  (box-fixnum arg_z imm0)
+  (ret))
+
+(defarm64lapfunction %truncate-double-float->fixnum ((arg arg_z))
+  (get-double-float d0 arg)
+  (fcvtzs imm0 d0)
+  (box-fixnum arg_z imm0)
+  (ret))
+
+(defarm64lapfunction %truncate-single-float->fixnum ((arg arg_z))
+  (get-single-float-bits imm0 arg)
+  (fmov s0 (:w imm0))
+  (fcvtzs imm0 s0)
+  (box-fixnum arg_z imm0)
+  (ret))
+
+(defarm64lapfunction %round-nearest-double-float->fixnum ((arg arg_z))
+  (get-double-float d0 arg)
+  (fcvtns imm0 d0)
+  (box-fixnum arg_z imm0)
+  (ret))
+
+(defarm64lapfunction %round-nearest-single-float->fixnum ((arg arg_z))
+  (get-single-float-bits imm0 arg)
+  (fmov s0 (:w imm0))
+  (fcvtns imm0 s0)
+  (box-fixnum arg_z imm0)
+  (ret))

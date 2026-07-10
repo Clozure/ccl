@@ -1105,6 +1105,7 @@
    (def ucvtf ((:rd :s) (:rn :x)) #x9e230000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :w)) #x1e630000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :x)) #x9e630000 $fp-cvt-mask)
+   ;; truncate (round toward zero)
    (def fcvtzs ((:rd :w) (:rn :s)) #x1e380000 $fp-cvt-mask)
    (def fcvtzs ((:rd :x) (:rn :s)) #x9e380000 $fp-cvt-mask)
    (def fcvtzs ((:rd :w) (:rn :d)) #x1e780000 $fp-cvt-mask)
@@ -1113,6 +1114,15 @@
    (def fcvtzu ((:rd :x) (:rn :s)) #x9e390000 $fp-cvt-mask)
    (def fcvtzu ((:rd :w) (:rn :d)) #x1e790000 $fp-cvt-mask)
    (def fcvtzu ((:rd :x) (:rn :d)) #x9e790000 $fp-cvt-mask)
+   ;; round to nearest, ties to even
+   (def fcvtns ((:rd :w) (:rn :s)) #x1e200000 $fp-cvt-mask)
+   (def fcvtns ((:rd :x) (:rn :s)) #x9e200000 $fp-cvt-mask)
+   (def fcvtns ((:rd :w) (:rn :d)) #x1e600000 $fp-cvt-mask)
+   (def fcvtns ((:rd :x) (:rn :d)) #x9e600000 $fp-cvt-mask)
+   (def fcvtnu ((:rd :w) (:rn :s)) #x1e210000 $fp-cvt-mask)
+   (def fcvtnu ((:rd :x) (:rn :s)) #x9e210000 $fp-cvt-mask)
+   (def fcvtnu ((:rd :w) (:rn :d)) #x1e610000 $fp-cvt-mask)
+   (def fcvtnu ((:rd :x) (:rn :d)) #x9e610000 $fp-cvt-mask)
 
    ;; fmov between a GPR and an FP register (without conversion)
    (def fmov ((:rd :w) (:rn :s)) #x1e260000 $fp-cvt-mask)

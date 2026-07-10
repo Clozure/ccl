@@ -37,11 +37,18 @@
      (ldr vsp (:@ sp (:$ 8)))            ;ignore marker
      (add sp sp (:$ 32))))
 
+(defarm64lapmacro unbox-fixnum (dest src)
+  `(asr ,dest ,src (:$ arm64::fixnumshift)))
+
 (defarm64lapmacro box-fixnum (dest src)
   `(lsl ,dest ,src (:$ arm64::fixnumshift)))
 
-(defarm64lapmacro unbox-fixnum (dest src)
-  `(asr ,dest ,src (:$ arm64::fixnumshift)))
+(defarm64lapmacro get-double-float (dest node)
+  `(ldur ,dest (:@ ,node (:$ arm64::double-float.value))))
+
+;; a single-float is stored in top 32 bits
+(defarm64lapmacro get-single-float-bits (dest node)
+  `(lsr ,dest ,node (:$ 32)))
 
 (defarm64lapmacro call-subprim (spname)
   (let ((offset (arm64::subprimitive-offset spname)))
