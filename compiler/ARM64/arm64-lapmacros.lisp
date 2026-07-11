@@ -23,6 +23,18 @@
   (let ((l (arm64-bitfield-imm lsb)) (w (arm64-bitfield-imm width)))
     `(bfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
 
+(defarm64lapmacro load-constant (dest constant)
+  (let ((offset (arm64-constant-offset constant)))
+    (if (typep offset '(signed-byte 9))
+      `(ldur ,dest (:@ fn (:$ ,offset)))
+      (error "constant ~s is too far away: use load-indexed-constant"
+             constant))))
+
+(defarm64lapmacro load-indexed-constant (dest constant idxreg)
+  `(progn
+     (movz ,idxreg (:$ ,(arm64-constant-offset constant)))
+     (ldr ,dest (:@ fn ,idxreg))))
+
 ;;; This needs pc_luser_xp support so that building the frame looks
 ;;; atomic to the gc
 (defarm64lapmacro build-lisp-frame (&optional (marker-reg 'imm0))
@@ -57,6 +69,10 @@
          (add imm0 rnil (:$ ,offset))
          (blr imm0))
       (error "unknown subprimitive name ~s" spname))))
+
+(defarm64lapmacro set-nargs (n)
+  (check-type n (unsigned-byte 13))
+  `(movz nargs (:$ ',n)))
 
 (defarm64lapmacro check-nargs (min &optional (max min))
   (let ((ok1 (gensym "@"))
