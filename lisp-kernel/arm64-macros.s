@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include "arm64-constants.h"
+#include "arm64-uuo.s"
+
 /* Mach-O wants a leading underscore; ELF doesn't. */
 #if defined(__APPLE__)
 #define C(name) _##name
@@ -7,26 +10,30 @@
 #define C(name) name
 #endif
 
-        .macro spentry name
-        .text
-        .p2align 4
-        .global _SP\name
+        .macro note_function_start name
 #if !defined(__APPLE__)
         /* mark the symbol as a function for ELF platforms */
-        .type _SP\name, %function
+        .type \name, %function
 #endif
+        .endm
+
+        .macro note_function_end name
+#if !defined(__APPLE__)
+        /* record function size for ELF platforms */
+        .size \name, . - \name
+#endif
+        .endm
+
+        .macro spentry name
+        .text
+        .p2align 2
+        .global _SP\name
+        note_function_start _SP\name
 _SP\name:
         .endm
 
-        .macro  endsp name
-#if !defined(__APPLE__)
-        /* record function size for ELF platforms */
-        .size _SP\name, . - _SP\name
-#endif
-        .endm        
-
-        .macro uuo_alloc_trap
-        udf #1
+        .macro endsp name
+        note_function_end _SP\name
         .endm
 
         .macro clear_allocptr_tag
@@ -37,7 +44,7 @@ _SP\name:
         sub allocptr, allocptr, #(cons.size - fulltag_cons)
         cmp allocptr, allocbase
         b.hi 1f
-        uuo_alloc_trap
+        uuo_alloc
 1:      str \cdr, [allocptr, #cons.cdr]
         str \car, [allocptr, #cons.car]
         mov \dest, allocptr
@@ -52,7 +59,7 @@ _SP\name:
         sub allocptr, allocptr, \size
         cmp allocptr, allocbase
         b.hi 1f
-        uuo_alloc_trap
+        uuo_alloc
 1:      str \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
@@ -62,8 +69,12 @@ _SP\name:
         sub allocptr, allocptr, #(\sizeconst - fulltag_misc)
         cmp allocptr, allocbase
         b.hi 1f
-        uuo_alloc_trap
+        uuo_alloc
 1:      str \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
+        .endm
+
+        .macro extract_header dest, miscobj
+        ldur \dest, [\miscobj, #misc_header_offset]
         .endm
