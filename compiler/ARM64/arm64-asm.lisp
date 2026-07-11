@@ -185,18 +185,18 @@
 (define-register-alias nargs x6)        ;unboxed, but nargs fixnum tagged
 
 (define-register-alias fn x7)
-;;(define-register-alias ... x8)        ;tbd
 
-(define-register-alias arg_w x9)        ;for future use
-(define-register-alias arg_x x10)       ;next-to-next-to-last argument
-(define-register-alias arg_y x11)       ;next-to-last argument
-(define-register-alias arg_z x12)       ;last argument
+(define-register-alias arg_w x8)        ;for future use
+(define-register-alias arg_x x9)       ;next-to-next-to-last argument
+(define-register-alias arg_y x10)       ;next-to-last argument
+(define-register-alias arg_z x11)       ;last argument
 
-(define-register-alias temp0 x13)       ;boxed, volatile registers
-(define-register-alias temp1 x14)       ; Some may be defined on function
-(define-register-alias temp2 x15)       ; entry as part of the calling
-(define-register-alias temp3 x16)       ; convention
-(define-register-alias temp4 x17)
+(define-register-alias temp0 x12)       ;boxed, volatile registers
+(define-register-alias temp1 x13)       ;boxed, volatile registers
+(define-register-alias temp2 x14)       ; Some may be defined on function
+(define-register-alias temp3 x15)       ; entry as part of the calling
+(define-register-alias temp4 x16)       ; convention
+(define-register-alias temp5 x17)
 
 ;;; The calling sequence may pass some additional arguments in
 ;;; temp registers.
@@ -1343,14 +1343,23 @@
           shift (eval-immediate-expression shift))
     (make-immediate-operand :value value :shift shift)))
 
+;; return fn-relative byte offset to constant named by form
+(defun arm64-constant-offset (form)
+  (let ((index (or (cdr (assoc form arm64::*constants* :test 'equal))
+                   (let ((n (length arm64::*constants*)))
+                     (push (cons form n) arm64::*constants*)
+                     n))))
+    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
+       arm64::misc-data-offset)))
+
 (defun eval-immediate-expression (form)
   (cond
     ((realp form) form)               ;might be a float
-    ((and (consp form) (eq (car form) 'quote))
-     (let ((n (cadr form)))
-       (unless (integerp n)
-         (error "Quoted immediate must be an integer: ~s" form))
-       (ash n fixnumshift)))
+    ((ccl::quoted-form-p form)
+     (let ((quoted (ccl::nx-unquote form)))
+       (if (integerp quoted)
+         (ash quoted arm64::fixnumshift)   ;'2 notation for fixnum 2
+         (arm64-constant-offset quoted)))) ;byte offset to fn-relative constant
     (t (multiple-value-bind (value condition)
            (ignore-errors (eval form))
          (if condition

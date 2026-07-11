@@ -6,6 +6,7 @@
  *
  * N.B.: This file in included in both .c and .s files.
  */
+#pragma once
 
 #ifdef __ASSEMBLER__
 #  define DEFCONST(name, val) name = val
@@ -35,26 +36,26 @@ DEFCONST(node_shift, 3)
 DEFCONST(nargregs, 3)
 DEFCONST(nsaveregs, 4)
 
-/* registers */
+/* lisp names for registers */
 #ifdef __ASSEMBLER__
 imm0 .req x0
 imm1 .req x1
 imm2 .req x2
 imm3 .req x3
 imm4 .req x4
-imm5 .req x6
+imm5 .req x5
 nargs .req x6
 fn .req x7
-/* x8 tbd */
-arg_w .req x9
-arg_x .req x10
-arg_y .req x11
-arg_z .req x12
-temp0 .req x13
-temp1 .req x14
-temp2 .req x15
-temp3 .req x16
-temp4 .req x17
+arg_w .req x8
+arg_x .req x9
+arg_y .req x10
+arg_z .req x11
+temp0 .req x12
+temp1 .req x13
+temp2 .req x14
+temp3 .req x15
+temp4 .req x16
+temp5 .req x17
 next_method_context .req temp1
 nfn .req temp2
 fname .req temp3
@@ -69,6 +70,42 @@ vsp .req x25
 allocptr .req x26
 allocbase .req x27
 rcontext .req x28
+
+/* register numbers */
+Rimm0 = 0
+Rimm1 = 1
+Rimm2 = 2
+Rimm3 = 3
+Rimm4 = 4
+Rimm5 = 5
+Rnargs = 6
+Rfn = 7
+Rarg_w = 8
+Rarg_x = 9
+Rarg_y = 10
+Rarg_z = 11
+Rtemp0 = 12
+Rtemp1 = 13
+Rtemp2 = 14
+Rtemp3 = 15
+Rtemp4 = 16
+Rtemp5 = 17
+Rnext_method_context = Rtemp1
+Rnfn = Rtemp2
+Rfname = Rtemp3
+/* x18 reserved */
+Rsave0 = 19
+Rsave1 = 20
+Rsave2 = 21
+Rsave3 = 22
+Rrnil = 23
+Rtsp = 24
+Rvsp = 25
+Rallocptr = 26
+Rallocptr = 27
+Rallocptr = 28
+Rfp = 29
+Rlr = 30
 #endif
 
 DEFCONST(tag_fixnum,       0b000)
@@ -229,6 +266,9 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
                 .set _struct_org, _struct_org - node_size
                 .set \name\().\fld, _struct_org
         .endm
+        .macro _struct_label fld
+                .set \name\().\fld, _struct_org
+        .endm
         .macro _endstructf
                 .set \name\().element_count, ((_struct_org - node_size) - _struct_base) / node_size
                 _ends
@@ -242,6 +282,7 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
                 .purgem _dword
                 .purgem _node
                 .purgem _rnode
+                .purgem _struct_label
                 .purgem _endstructf
                 .purgem _ends
         .endm
@@ -255,6 +296,13 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
 #endif
 
 #ifdef __ASSEMBLER__
+/* A function has its own tag, although it's otherwise a miscobj */
+_struct _function, -fulltag_function
+ _node header
+ _node entrypoint
+ _node codevector
+_ends
+
 _struct cons, -cons_bias
   _node cdr
   _node car
@@ -276,10 +324,44 @@ _structf complex_single_float
 _endstructf
 
 _structf complex_double_float
-_node pad
+  _node pad
   _field realpart, 8
   _field imagpart, 8
 _endstructf
+
+_structf symbol
+  _node pname
+  _node vcell
+  _node fcell
+  _node package_predicate
+  _node flags
+  _node plist
+  _node binding_index
+_endstructf
+
+_structf vectorH
+ _node logsize
+ _node physsize
+ _node data_vector
+ _node displacement
+ _node flags
+_endstructf
+
+_structf arrayH
+ _node rank
+ _node physsize
+ _node data_vector
+ _node displacement
+ _node flags
+ _struct_label dim0
+_endstructf
+
+_struct lisp_frame
+ _node marker
+ _node savevsp
+ _node savefn
+ _node savelr
+_ends
 
 _structf macptr
   _node address
@@ -294,7 +376,7 @@ DEFCONST(four_digit_bignum_header, ((4<<num_subtag_bits)|subtag_bignum))
 
 /* bignum digits are 32 bits even though they could be 64 bits */
 DEFCONST(bigit_size, 4)
-#define aligned_bignum_size(ndigits)                                    \
+#define aligned_bignum_size(ndigits) \
   ((node_size + (bigit_size*(ndigits)) + (dnode_size-1)) & ~(dnode_size-1))
 
 #if !defined(__ASSEMBLER__)
