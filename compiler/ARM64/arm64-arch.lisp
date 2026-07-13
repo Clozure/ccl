@@ -47,8 +47,8 @@
 (defconstant tag-single-float #b001) ;single-float (and nothing but)
 (defconstant tag-imm          #b010) ;characters, markers, etc.
 (defconstant tag-list         #b011) ;cons cell or nil
-(defconstant tag-4            #b100) ;miscobj and immheader-1
-(defconstant tag-5            #b101) ;immheader-0 and immheader-2
+(defconstant tag-4            #b100) ;miscobj and immheader-0
+(defconstant tag-5            #b101) ;immheader-1 and immheader-2
 (defconstant tag-nodeheader   #b110) ;nodeheader-0 and nodeheader-1
 (defconstant tag-7            #b111) ;fulltag-{symbol,function}
 
@@ -57,18 +57,23 @@
 (defconstant fulltag-single-float #b0001)
 (defconstant fulltag-imm-0        #b0010) ;characters
 (defconstant fulltag-cons         #b0011) ;a cons cell
-(defconstant fulltag-misc         #b0100) ;arbitrary uvector (miscobj)
-(defconstant fulltag-immheader-0  #b0101)
+(defconstant fulltag-immheader-0  #b0100)
+(defconstant fulltag-immheader-1  #b0101)
 (defconstant fulltag-nodeheader-0 #b0110)
 (defconstant fulltag-symbol       #b0111)
 (defconstant fulltag-odd-fixnum   #b1000)
 (defconstant fulltag-reserved     #b1001) ;reserved (for single-float)
 (defconstant fulltag-imm-1        #b1010) ;markers
 (defconstant fulltag-nil          #b1011) ;nil and nothing but
-(defconstant fulltag-immheader-1  #b1100)
+(defconstant fulltag-misc         #b1100) ;uvector/miscobj (see note below)
 (defconstant fulltag-immheader-2  #b1101)
 (defconstant fulltag-nodeheader-1 #b1110)
 (defconstant fulltag-function     #b1111)
+
+;;; Note on fulltag-misc: the value (12) was selected deliberately.
+;;; This allows us to branch directly to a tagged code-vector pointer:
+;;; we land right on the first real instruction in the code-vector
+;;; (word 0 is the udf #0 sentinel prefix).
 
 ;;; The numeric order of subtags matters.
 ;;; * A gvector array subtag must be >= subtag-array-header
@@ -182,6 +187,62 @@
 (define-subtag lisp-frame-marker fulltag-imm-1 5)
 (defconstant lisp-frame-marker subtag-lisp-frame-marker)
 
+;;; Extended type codes ("xtypes") for wrong-type UUOs.  The 8-bit
+;;; expected-type field of a wrong-type UUO holds either a lisptag, a
+;;; fulltag, a uvector subtag byte, or an xtype code.  These type
+;;; codes all go into a single 256-entry namespace, so they must not
+;;; conflict.
+;;;
+;;; These values are used in *arm64-xtype-specifiers* and duplicated
+;;; in lisp-kernel/arm64-uuo.s (and they must, of course, match what
+;;; we list here).
+;;;
+;;; Two kinds of code already occupy that namespace:
+;;;
+;;;  * The bare lisptag/fulltag bytes #x00-#x0f.
+;;;  * Real uvector subtags, of the form (fulltag | (index << ntagbits)).
+;;;
+;;; The xtype codes below avoid conflict with the above codes by using
+;;; a high nibble of at least 1 (avoiding potential conflict with the
+;;; entries for lisptag/fulltag values), and a low nibble of
+;;; fulltag-odd-fixnum (8) or fulltag-even-fixnum (0).  A subtag can
+;;; never be fixnum-tagged, so these xtype codes cannot conflict with
+;;; any defined subtags.
+
+(defconstant xtype-integer #x18)
+(defconstant xtype-s64 #x28)
+(defconstant xtype-u64 #x38)
+(defconstant xtype-s32 #x48)
+(defconstant xtype-u32 #x58)
+(defconstant xtype-s16 #x68)
+(defconstant xtype-u16 #x78)
+(defconstant xtype-s8 #x88)
+(defconstant xtype-u8 #x98)
+(defconstant xtype-bit #xa8)
+(defconstant xtype-rational #xb8)
+(defconstant xtype-real #xc8)
+(defconstant xtype-number #xd8)
+(defconstant xtype-cons #xe8)   ;a real cons
+                                ;#xf8 free
+(defconstant xtype-char-code #x10)
+(defconstant xtype-unsigned-byte-24 #x20)
+(defconstant xtype-array2d #x30)
+(defconstant xtype-array3d #x40)
+(defconstant xtype-null #x50)
+
+;;; A sanity check: no synthetic xtype may collide with a real subtag
+;;; byte or with a bare tag code (#x00-#x0f).
+(eval-when (:compile-toplevel)
+  (let ((non-fixnum-low-nibbles '(#| 0 |# 1 2 3 4 5 6 7
+                                  #| 8 |# 9 10 11 12 13 14 15)))
+    (dolist (xt (list xtype-integer xtype-s64 xtype-u64 xtype-s32 xtype-u32
+                      xtype-s16 xtype-u16 xtype-s8 xtype-u8 xtype-bit
+                      xtype-rational xtype-real xtype-number xtype-cons
+                      xtype-char-code xtype-unsigned-byte-24
+                      xtype-array2d xtype-array3d xtype-null))
+      (assert (>= xt #x10))
+      (assert (not (member (logand xt fulltagmask) non-fixnum-low-nibbles))))))
+
 (defconstant canonical-nil-value (+ #x13000 fulltag-nil)) ;xxx nil can't be a constant
 (defconstant canonical-t-value (+ #x13020 fulltag-symbol)) ;xxx see above
 (defconstant misc-bias fulltag-misc)
@@ -201,47 +262,23 @@
 ;;; complex-double-float elements are 16-byte aligned.
 (defconstant misc-complex-dfloat-offset (+ misc-data-offset node-size))
 
-;;; There are two variants of the base + immediate addressing mode.
-;;; One variant supports an 9-bit signed offset.  Other than being a
-;;; rather small range (-256 to 255), it works in a straightforward
-;;; way: the effective address is the base register + the value of the
-;;; 9-bit signed immediate.
+;;; There are two variants of base + immediate addressing: a 9-bit
+;;; signed byte offset (-256 to 255, used with ldur), and a 12-bit
+;;; unsigned offset scaled by the access size (so the byte offset must
+;;; be non-negative and a multiple of that size).
 ;;;
-;;; The other variant is tricky.  The immediate offset is encoded as a
-;;; 12-bit unsigned value, but that value is scaled by the access
-;;; size.  However, the assembly language always expresses the offset
-;;; as a byte offset.
+;;; fulltag-misc is 12, which makes misc-data-offset -4.  Therefore,
+;;; although we have to use the unscaled form for index 0, index 1 and
+;;; up sit at a non-negative multiple of the access size for 32-bit
+;;; and lower access sizes, so we can use the scaled form for them.
 ;;;
-;;; For example, (ldr x0 (:# x1 (:$ 24))) means (in C-like notation)
-;;; "x0 = x1[3]".  Although we write the byte offset "24" in the
-;;; assembly language, the assembler actually encodes "3" (the byte
-;;; offset divided by the memory access size) into the imm12 field of
-;;; the ldr instruction word.
-;;;
-;;; Therefore, to use the 12-bit unsigned immediate encoding, the byte
-;;; offset must be a multiple of the access size (and non-negative, of
-;;; course).
-;;;
-;;; When indexing a uvector, the immediate has to include not only the
-;;; index value itself, but also the appropriate offset to subtract
-;;; off the tag and account for the uvector header.
-;;;
-;;; So, the fulltag for a uvector can make a difference when we want
-;;; to use a constant index: if we choose #b0100 for fulltag-misc,
-;;; then that means misc-data-offset will be 4 (a non-negative
-;;; multiple of 4), and we can therefore use the 12-bit unsigned
-;;; immediate encoding when we have a constant index into uvectors
-;;; with 32-, 16-, and 8-bit element types.
-;;;
-;;; We are limited to the 9-bit signed immediate encoding when we have
-;;; a constant index into a uvector with 64-bit elements, because we
-;;; can't arrange for misc-data-offset to be a multiple of 8:
-;;; fulltag-misc would have to be #bx000, and those fulltags are used
+;;; To use the scaled offset for 64-bit elements, misc-data-offset
+;;; would have to be a multiple of 8: fulltag-misc would need to be
+;;; one of #bx000 and that's not possible because those tags are used
 ;;; for fixnums.
 ;;;
-;;; Frankly, this is probably not worth the fuss, and it would not
-;;; be a big deal to say that we just have a 255 offset and leave it
-;;; at that.
+;;; This is probably not that important: we could likely just use the
+;;; unscaled offset in all cases and not be greatly inconvenienced.
 
 (defconstant max-64-bit-constant-index (ash (- #xff misc-data-offset) -3))
 (defconstant max-32-bit-constant-index (ash (- (ash #xfff 2) misc-data-offset)
@@ -510,6 +547,11 @@
   flags
   plist
   binding-index)
+
+(define-fixedsized-object function (fulltag-function)
+  code-vector
+  ;; constants and metadata follow
+  )
 
 (define-fixedsized-object vectorH ()
   logsize             ;fill pointer if there is one, physsize otherwise
@@ -819,6 +861,8 @@
     (:array-header . ,subtag-arrayH)
     (:xfunction . ,subtag-xfunction)
     (:min-cl-ivectpor-subtag . ,min-cl-ivector-subtag)))
+
+(export '*uvector-subtags*)
 
 ;;; This should return NIL unless it's sure of how the indicated
 ;;; type would be represented (in particular, it should return

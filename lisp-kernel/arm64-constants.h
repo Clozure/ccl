@@ -102,10 +102,12 @@ Rrnil = 23
 Rtsp = 24
 Rvsp = 25
 Rallocptr = 26
-Rallocptr = 27
-Rallocptr = 28
+Rallocbase = 27
+Rrcontext = 28
 Rfp = 29
 Rlr = 30
+Rsp = 31
+Rzr = 31
 #endif
 
 DEFCONST(tag_fixnum,       0b000)
@@ -121,15 +123,15 @@ DEFCONST(fulltag_even_fixnum,  0b0000)
 DEFCONST(fulltag_single_float, 0b0001)
 DEFCONST(fulltag_imm_0,        0b0010)
 DEFCONST(fulltag_cons,         0b0011)
-DEFCONST(fulltag_misc,         0b0100)
-DEFCONST(fulltag_immheader_0,  0b0101)
+DEFCONST(fulltag_immheader_0,  0b0100)
+DEFCONST(fulltag_immheader_1,  0b0101)
 DEFCONST(fulltag_nodeheader_0, 0b0110)
 DEFCONST(fulltag_symbol,       0b0111)
 DEFCONST(fulltag_odd_fixnum,   0b1000)
 DEFCONST(fulltag_reserved,     0b1001)
 DEFCONST(fulltag_imm_1,        0b1010)
 DEFCONST(fulltag_nil,          0b1011)
-DEFCONST(fulltag_immheader_1,  0b1100)
+DEFCONST(fulltag_misc,         0b1100)
 DEFCONST(fulltag_immheader_2,  0b1101)
 DEFCONST(fulltag_nodeheader_1, 0b1110)
 DEFCONST(fulltag_function,     0b1111)
@@ -296,13 +298,6 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
 #endif
 
 #ifdef __ASSEMBLER__
-/* A function has its own tag, although it's otherwise a miscobj */
-_struct _function, -fulltag_function
- _node header
- _node entrypoint
- _node codevector
-_ends
-
 _struct cons, -cons_bias
   _node cdr
   _node car
@@ -329,7 +324,8 @@ _structf complex_double_float
   _field imagpart, 8
 _endstructf
 
-_structf symbol
+/* A symbol has its own tag, but is otherwise a miscobj */
+_structf symbol, -fulltag_symbol
   _node pname
   _node vcell
   _node fcell
@@ -338,6 +334,12 @@ _structf symbol
   _node plist
   _node binding_index
 _endstructf
+
+/* A function has its own tag, but is otherwise a miscobj */
+_struct _function, -fulltag_function
+ _node header
+ _node code_vector
+_ends
 
 _structf vectorH
  _node logsize
