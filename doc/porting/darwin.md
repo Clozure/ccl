@@ -24,10 +24,12 @@ the debugger prints out.
 On an Intel Mac, that same `cc -Wl,-pagezero_size,0x4000 -g foo.c`
 does produce a working binary.
 
-On other ports, `nil` is basically a really popular constant, and it
-happens to be a pointer to a fixed address in low-ish memory.  But it
-looks like we're going to have to keep `nil` in a register (rnil).  This means
-we will access kernel globals and `nil`-relative symbols as offsets from rnil.
+On other ports, `nil` is basically a really popular constant, and when
+treated as a pointer, it refers to a fixed address in low-ish memory.
+On an Apple Silicon Mac, it looks like we're going to have to keep `nil` in
+a register (rnil) because we can't rely on having a fixed address for it.
+This means we will access kernel globals and `nil`-relative symbols as
+offsets from rnil.
 
 ## ARM ABI
 Official ARM documentation: https://github.com/ARM-software/abi-aa
@@ -55,10 +57,12 @@ Apple recognizes that this policy affects dynamic languages.  They
 document their accomodation for this at
 https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon.
 
-In short, you are supposed to call `mmap` with the `MAP_JIT` flags.
-Threads can then call `pthread_jit_write_protect_np` to enable and
-disable write access.  Note that this operates on a per-thread basis.
+In short, you are supposed to call `mmap` with the `MAP_JIT` flags to
+allocate a distinguished region of memory.  Threads can then call
+`pthread_jit_write_protect_np` to enable and disable write access.
+Note that this operates on a per-thread basis.
 Officially, only a single `MAP_JIT` region is supported.
 
 CCL has traditionally managed a single dynamic memory area that contains
-code and other data.  I don't see how we can keep 
+code and other data.  Given the W^X policy, I see no alternative to a separate
+memory area just for code-vector objects.
