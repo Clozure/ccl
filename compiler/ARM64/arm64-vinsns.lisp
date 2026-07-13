@@ -117,6 +117,15 @@
                               ())
   (mov dest rnil))
 
+(define-arm64-vinsn (ref-constant :constant-ref) (((dest :lisp))
+                                                  ((src :s16const)))
+  (ldur dest (:@ fn (:$ (:apply + arm64::function.constants
+                                (:apply ash src 3))))))
+
+(define-arm64-vinsn ref-indexed-constant (((dest :lisp))
+                                          ((idxreg :s64)))
+  (ldr dest (:@ fn idxreg)))
+
 (define-arm64-vinsn vframe-load (((dest :lisp))
                                   ((frame-offset :u16const)
                                    (cur-vsp :u16const)))

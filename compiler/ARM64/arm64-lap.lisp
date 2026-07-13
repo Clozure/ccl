@@ -59,15 +59,6 @@
         (values form nil)))
     (values form nil)))
 
-;; return fn-relative byte offset to constant named by form
-(defun arm64-constant-offset (form)
-  (let ((index (or (cdr (assoc form arm64::*constants* :test 'equal))
-                   (let ((n (length arm64::*constants*)))
-                     (push (cons form n) arm64::*constants*)
-                     n))))
-    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
-       arm64::misc-data-offset)))
-
 (defun arm64-show-dll-nodes (elements)
   (do-dll-nodes (e elements)
     (format t "~&~s " e)

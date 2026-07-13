@@ -250,7 +250,6 @@
 (defconstant t-offset (- canonical-t-value canonical-nil-value))
 
 (defconstant misc-header-offset (- fulltag-misc))
-;; This needs to be non-negative (see below)
 (defconstant misc-data-offset (+ misc-header-offset node-size))
 (defconstant misc-subtag-offset misc-header-offset)
 (defconstant misc-dfloat-offset misc-data-offset)
@@ -404,7 +403,6 @@
                  `(define-subprim ',name)))
       (setq *subprims*
             (vector
-             (defsubprim .SPfix-nfn-entrypoint) ;must be first
              (defsubprim .SPbuiltin-plus)
              (defsubprim .SPbuiltin-minus)
              (defsubprim .SPbuiltin-times)
@@ -550,6 +548,7 @@
 
 (define-fixedsized-object function (fulltag-function)
   code-vector
+  constants
   ;; constants and metadata follow
   )
 

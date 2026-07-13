@@ -24,7 +24,7 @@
     `(bfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
 
 (defarm64lapmacro load-constant (dest constant)
-  (let ((offset (arm64-constant-offset constant)))
+  (let ((offset (arm64::constant-offset constant)))
     (if (typep offset '(signed-byte 9))
       `(ldur ,dest (:@ fn (:$ ,offset)))
       (error "constant ~s is too far away: use load-indexed-constant"
@@ -32,7 +32,7 @@
 
 (defarm64lapmacro load-indexed-constant (dest constant idxreg)
   `(progn
-     (movz ,idxreg (:$ ,(arm64-constant-offset constant)))
+     (movz ,idxreg (:$ ,(arm64::constant-offset constant)))
      (ldr ,dest (:@ fn ,idxreg))))
 
 ;;; This needs pc_luser_xp support so that building the frame looks

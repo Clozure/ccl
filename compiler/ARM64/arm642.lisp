@@ -837,17 +837,14 @@
       (if reg
         (arm642-copy-register seg dest reg)
         (let* ((idx (backend-immediate-index imm)))
-          ;; The reach of (ldur dest (:@ fn (:$ (+ misc-data-offset
-          ;;                                       1 ;for entrypoint
-          ;;                                       1 ;for code-vector
+          ;; The reach of (ldur dest (:@ fn (:$ (+ function.constants
           ;;                                       (* 8 idx)))))
           ;; is relatively small: in this case, idx can be at most 31,
-          ;; making the offset 254, which just fits into an (signed-byte 9).
+          ;; making the offset 249, which still fits into an (signed-byte 9).
           (if (<= idx 31)
             (! ref-constant dest idx)
             (with-imm-target () (idxreg :s64)
-              (arm642-lri seg idxreg (+ arm64::misc-data-offset
-                                        (ash (+ idx 2) 3)))
+              (arm642-lri seg idxreg (+ arm64::function.constants (ash idx 3)))
               (! ref-indexed-constant dest idxreg)))))
       dest)))
 

@@ -187,7 +187,7 @@
 (define-register-alias fn x7)
 
 (define-register-alias arg_w x8)        ;for future use
-(define-register-alias arg_x x9)       ;next-to-next-to-last argument
+(define-register-alias arg_x x9)        ;next-to-next-to-last argument
 (define-register-alias arg_y x10)       ;next-to-last argument
 (define-register-alias arg_z x11)       ;last argument
 
@@ -1344,13 +1344,12 @@
     (make-immediate-operand :value value :shift shift)))
 
 ;; return fn-relative byte offset to constant named by form
-(defun arm64-constant-offset (form)
-  (let ((index (or (cdr (assoc form arm64::*constants* :test 'equal))
-                   (let ((n (length arm64::*constants*)))
-                     (push (cons form n) arm64::*constants*)
+(defun constant-offset (form)
+  (let ((index (or (cdr (assoc form *constants* :test 'equal))
+                   (let ((n (length *constants*)))
+                     (push (cons form n) *constants*)
                      n))))
-    (+ (ash (+ index 2) arm64::word-shift) ;skip entrypoint, code-vector
-       arm64::misc-data-offset)))
+    (+ arm64::function.constants (ash index arm64::word-shift))))
 
 (defun eval-immediate-expression (form)
   (cond
@@ -1359,7 +1358,7 @@
      (let ((quoted (ccl::nx-unquote form)))
        (if (integerp quoted)
          (ash quoted arm64::fixnumshift)   ;'2 notation for fixnum 2
-         (arm64-constant-offset quoted)))) ;byte offset to fn-relative constant
+         (constant-offset quoted)))) ;byte offset to fn-relative constant
     (t (multiple-value-bind (value condition)
            (ignore-errors (eval form))
          (if condition
