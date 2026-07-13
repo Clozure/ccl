@@ -116,3 +116,82 @@ Coming up next: add support for arm64 vinsn notation; define arm64 visns;
 start filling in the arm642.lisp file (which is essentially the compiler
 backend & code generator).  When that starts working, we'll be able to
 cross-compile simple lambdas.
+
+
+# compiling simple lambdas
+
+At this point, the assembler (and maybe the disassemler) works well
+enough to define simple lap functions.
+```
+CCL> (let ((*target-backend* (find-backend :darwinarm64)))
+  (%define-arm64-lap-function
+   'foo
+   '((let ((offset arg_z))
+       (cmp nargs (:$ '3))
+       (b.le @done)
+       (sub imm0 nargs (:$ '3))
+       (add vsp vsp imm0)
+       @done
+       (mov arg_z rnil)
+       (ret)))))
+#<XFUNCTION #x302001C7977D>
+CCL> (arm64-disassemble-xfunction *)
+  (udf (:$ 0))                                              ; 00000000
+  (cmp nargs (:$ 24))                                       ; F10060DF
+  (b.le L20)                                                ; 5400006D
+  (sub imm0 nargs (:$ 24))                                  ; D10060C0
+  (add vsp vsp imm0)                                        ; 8B000339
+L20
+  (mov arg_z rnil)                                          ; AA1703EC
+  (ret)                                                     ; D65F03C0
+NIL
+CCL> 
+```
+
+The next step is to cross-compile simple lambdas. 
+
+`(compile-named-function '(lambda (x) x) :target :darwinarm64)`
+
+In order to proceed,
+it's necessary to start filling out arm642.lisp, and defining some arm64
+vinsns.
+
+Do `(setq *arm642-debug-mask* 2)`, and when the minimum parts of arm642 are filled in, you'll get:
+```
+CCL> (compile-named-function '(lambda (x) x) :target :darwinarm64)
+
+ vinsns for NIL (after generation)
+#<@0 CHECK-EXACT-NARGS 1>
+#<@0 SAVE-LISP-CONTEXT-NO-STACK-ARGS>
+#<@0 VPUSH-REGISTER #<LREG 2 GPR [12]/LISP>>
+#<@0 SAVE-NFP>
+#<@0 RESTORE-NFP>
+#<@0 POPJ>
+```
+
+
+
+# Calling functions
+
+On a non-x86 port, there is a separate value stack and control stack.
+The value stack is always unambiguously nodes, from top to bottom.
+
+The control stack (which is typically the architectural stack pointer)
+contains frames.  Non-leaf functions need to save a frame.  A leaf
+function doesn't clobber its return address or reference any constants.
+Building a frame is a multi-instruction sequence, and `pc_luser_xp()`
+needs to recognize the case of building a frame on the control stack
+and make it look like an atomic operation.
+
+# Returning values
+
+Single values are returned in `arg_z`.  Multiple values are returned
+on the stack, in left-to-right order (i.e., for a stack that grows down,
+the rightmost value is on the top of the stack).
+
+# Calling external (foreign) functions
+
+The register and stack usage conventions for lisp code and external
+(or foreign) are completely different.  For arm64, the AAPCS64 document
+describes the standard ABI.  Apple platforms diverge from the
+standard ABI in a few places.  See https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms for information about that.
