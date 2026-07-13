@@ -172,14 +172,19 @@ they wound up into that page.)
 
 ## Assembler
 
-We need an assembler for two reasons.  Some special Lisp functions are
+A port needs an assembler for two reasons.  Some special Lisp functions are
 implemented in a notation called LAP.  These are defined using an
 architecture-specific macro named something like `defarm64lapfunction`.
 
 The other place we need the assembler is for vinsn templates.  These are
-assembly language fragments that are partly pre-assembled.  The compiler
-backend emits vinsns as it translates the output of the compiler front-end
-into object code.
+parameterized assembly language fragments that are and "simplified" at
+defintion time.  The idea behind simplification is that part of the work
+involved in assembing the vinsn body can be done at vinsn definition time.
+Then, when the vinsn is turned into machine code (we call that process
+"expansion"), we don't have to repeat that work.
+
+The compiler backend emits vinsns as it translates the output of
+the compiler front-end into object code.
 
 Other ports have used GNU binutils as a source for instruction
 encoding data and assembler structure.  The architecture-specific
@@ -191,17 +196,23 @@ For examples of assembler input, see `*-vinsn.lisp` and the files in
 `ccl:level-0;**;*.lisp`.  The `*-bignum.lisp` files are non-trivial, but
 not too difficult to follow.
 
-We need a disassembler (for `cl:disassemble` at least). On RISC-style
-architectures, we can often reuse the assembler's data structures to
-implement disassembly.  On x86, which has a variable-length instruction
-encoding, we can't do that, and we have 3000 lines of code to implement
-the x86 disassembler. By contrast, we only need about 500 lines for each
-of the PowerPC and ARM disassemblers.
+### Disassembler
+Although a disassembler (for `cl:disassemble`) is not generally a
+commonly-used part of a Common Lisp implementation, it is very helpful
+(especially on a new port) for getting an early idea of what compiled
+code looks like.
+
+On RISC-style architectures, we can often reuse the assembler's
+instruction table and data structures to implement disassembly,
+and if the cpu architecture permits it, that is generally worth doing.
+On x86, which has a variable-length instruction encoding, the disassembly
+job is rather complicated, and we require about 3000 lines of code to
+implement it.  By contrast, the RISC-like ports only need about 500 lines.
 
 An assembler could be a project on its own (and so could a
-disassembler for that matter), but it is only a part of CCL.  Make
-something reasonable, knowing that it is internal implementation
-functionality.
+disassembler, for that matter), but it is only a part of CCL.  Design
+and implement something reasonable, knowing that it is internal
+implementation functionality.
 
 ## Integrate LAP into compiler front-end & cross-dumper
 
@@ -209,11 +220,10 @@ Once the assembler and the LAP interface functions are ready,
 add the appropriate special form to the compiler front-end.
 In nx1.lisp, there are several `nx1-xxx-lap-function` definitions;
 follow the example.  Also list the new special form in l1-utils.lisp
-where 
+by the "Define special forms" comment.
 
 This special form will be used a couple of places in addition to
 %define-xxx-lap-function.  The cross dumper x<arch>fasload.lisp
-
 
 
 ## vinsn templates
@@ -243,9 +253,15 @@ then we know at definition time:
 Depending on the platform, CCL uses up to three stacks: a control stack,
 a value stack, and a temp stack.
 
-The value stack is always unambiguously nodes.
+Except on the x86 ports, there is a separate value stack and control stack.
+The value stack is always unambiguously nodes, from top to bottom.
 
-The control stack contains frames.
+The control stack (which is typically the architectural stack pointer)
+contains frames.  Non-leaf functions need to save a frame.  A leaf
+function doesn't clobber its return address or reference any constants.
+Building a frame is a multi-instruction sequence, and `pc_luser_xp()`
+needs to recognize the case of building a frame on the control stack
+and make it look like an atomic operation.
 
 ## Memory allocation
 Historically, CCL has managed a single dynamic area, which is where allocation takes place.
@@ -323,7 +339,7 @@ must be relative to a node register containing a tagged pointer. This
 is sometimes a burden, especially on systems with few registers.
 
 ## Lisp calling convention
-Lisp's internal calling covention differs from the one used by C.
+Lisp's internal calling covention differs completely from the one used by C.
 
 On most ports, the last three arguments to a function are passed in
 registers, namely arg_x, arg_y, and arg_z.  Any earlier arguments are
@@ -337,3 +353,95 @@ entry and are therefore rather short-lived.  They are typically aliases
 for temp registers.  The nfn register ("new function") is used to
 establish the new fn register (and be sure that the old value of fn
 is stashed somewhere, because otherwise it might get gc'd).
+
+# Calling functions
+
+# Returning values
+Single values are returned in `arg_z`.  Multiple values are returned
+on the stack, in left-to-right order (i.e., for a stack that grows down,
+the rightmost value is on the top of the stack).
+
+# Calling external (foreign) functions
+The register and stack usage conventions for lisp code and external
+(or foreign) are completely different.  For arm64, the AAPCS64 document
+describes the standard ABI.  Apple platforms diverge from the
+standard ABI in a few places.  See https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms for information about that.
+
+## Architecture-specific variants
+
+level-1/xxx/xxx-clos.lisp: GF trampolines
+
+
+## Error handling
+CCL likes to use architecture-specific instructions to signal errors.
+It calls these UUOs (unimplemented user operations, terminology
+from the PDP-10, I believe).  The details vary, but the main idea is
+that a UUO will cause a signal (SIGILL, SIGSEGV, whatever) that the
+lisp kernel will catch and handle.
+
+Some UUOs request services from
+the lisp kernel (e.g., start a gc, configure gc paramers), and these
+are handled in the lisp kernel directly.
+
+Others are caught by the exception/signal handler in the lisp kernel,
+which then calls back into Lisp, where the error is ultimately signaled.
+You can see some of the Lisp-side code for this in
+the files `ccl:level-1;*-error-signal.lisp` and `*-trap-support.lisp`.
+These files contain code that knows how to examine a signal context
+and decode what happened.
+
+
+## xload-level-0
+
+One of the things that's been on the to-do list for a long time is to
+fix a few aspects of how xload-level-0 works.  Currently, it tries to
+compile and cross-load everything in level-0 and platform-specific
+subdirectories (rather than a specified set of common and platform-specific
+files.)  There are some weird artifacts of this:
+
+- until DIRECTORY was changed to ignore them, xload-level-0 used to
+ be confused by Emacs lock files (#.foo.lisp) and can still get confused
+ by other cruft.
+- there are accidental load-order dependencies; the main application
+ startup function (defined in nfasload.lisp) runs after other initialization
+ functions run, simply because "nfasload" follows the other files in
+ sort order.
+- Some "common" files are completely conditionalize (l0-bignum32/64, etc.)
+
+## Function-like things in a symbol's function cell
+From a comment in l0-def.lisp:
+
+ There are three kinds of things which can go in the function
+ cell of a symbol:
+  1. A function
+  2. The thing which is the value of %unbound-function%:
+    a 1-element vector whose 0th element is a code vector
+    which causes an "undefined function" error to be signalled.
+  3. A macro or special-form definition,
+    which is a 2-element vector whose 0th element is a code vector
+    which signals a "can't apply macro or special form" error when
+    executed and whose 1st element is a macro or special-operator
+    name.  It doesn't matter what type of gvector cases 2 and 3
+    are.
+
+This is true for the ppc port.  On the ARM port, it's not possible to
+branch to a code-vector directly, so it invents the pseudofunction,
+which has basically the same layout as a function object, but isn't one. On
+the x86 port, we just cons up a function vector and write a few bytes of
+code that start at the entry point.  On the ARM64, I'm thinking cases
+2 and 3 above are going to be real functions, but their code vectors
+will be distingushed objects.  So, if the code vector of function in the
+function cell is eq to %unbound-function%, then the symbol is not fboundp.
+
+For macros and special operators, we detect the sitaution like this:
+```
+;; Element 0 (past the header) is a code vector; element 1 is a marker:
+;; the expander for a macro, or the special-operator name (not a function)
+;; for a special form.
+(defun special-operator-p (symbol)
+  "If the symbol globally names a special form, return T, otherwise NIL."
+  (let ((def (fboundp symbol)))
+    (and (functionp def)
+         (eq (uvref def 0) %macro-code%)      ; the shared macro/special trampoline
+         (not (lfunp (uvref def 1))))))        ;name:  special-op; else macro
+```
