@@ -143,6 +143,10 @@ exception_fn_name( ExceptionInformation *, int, char *, size_t );
 #include "arm-exceptions.h"
 #endif
 
+#ifdef ARM64
+#include "arm64-exceptions.h"
+#endif
+
 #ifdef DARWIN
 void darwin_exception_init(TCR *tcr);
 #endif

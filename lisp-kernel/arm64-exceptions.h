@@ -1,15 +1,19 @@
-/*
- * Copyright 2016 Clozure Associates
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+#pragma once
+
+void enable_fp_exceptions(void);
+
+#ifdef DARWIN
+typedef arm_thread_state64_t native_thread_state_t;
+#define NATIVE_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
+#define NATIVE_THREAD_STATE_FLAVOR ARM_THREAD_STATE64
+typedef arm_neon_state64_t native_float_state_t;
+#define NATIVE_FLOAT_STATE_COUNT ARM_NEON_STATE64_COUNT
+#define NATIVE_FLOAT_STATE_FLAVOR ARM_NEON_STATE64
+typedef arm_exception_state64_t native_exception_state_t;
+#define NATIVE_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
+#define NATIVE_EXCEPTION_STATE_FLAVOR ARM_EXCEPTION_STATE64
+
+void associate_tcr_with_exception_port(mach_port_t, TCR *);
+void disassociate_tcr_from_exception_port(mach_port_t);
+
+#endif
