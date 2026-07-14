@@ -1522,6 +1522,47 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 /* type of pointer to saved fp state */
 #ifdef X8664
 typedef fpregset_t FPREGS;
+
+#define CCL_FP_XSTATE_MAGIC1 0x46505853U
+#define CCL_FP_XSTATE_MAGIC2 0x46505845U
+#define CCL_MAX_XSTATE_SIZE (1024U * 1024U)
+#define CCL_FP_XSTATE_SW_BYTES_OFFSET 464U
+#define CCL_FP_XSTATE_EXTENDED_SIZE_OFFSET 468U
+#define CCL_FP_XSTATE_XSTATE_SIZE_OFFSET 480U
+
+static size_t
+linux_fpregs_size_in_bytes(FPREGS state, Boolean *extended_p)
+{
+  const BytePtr bytes = (BytePtr)state;
+  uint32_t magic1, extended_size, xstate_size;
+  uint32_t magic2;
+
+  memcpy(&magic1,
+         bytes + CCL_FP_XSTATE_SW_BYTES_OFFSET,
+         sizeof(magic1));
+  memcpy(&extended_size,
+         bytes + CCL_FP_XSTATE_EXTENDED_SIZE_OFFSET,
+         sizeof(extended_size));
+  memcpy(&xstate_size,
+         bytes + CCL_FP_XSTATE_XSTATE_SIZE_OFFSET,
+         sizeof(xstate_size));
+
+  *extended_p = false;
+  if ((magic1 == CCL_FP_XSTATE_MAGIC1) &&
+      (extended_size >= (sizeof(*state) + sizeof(magic2))) &&
+      (extended_size <= CCL_MAX_XSTATE_SIZE) &&
+      (xstate_size >= sizeof(*state)) &&
+      (xstate_size == (extended_size - sizeof(magic2)))) {
+    memcpy(&magic2,
+           bytes + extended_size - sizeof(magic2),
+           sizeof(magic2));
+    if (magic2 == CCL_FP_XSTATE_MAGIC2) {
+      *extended_p = true;
+      return extended_size;
+    }
+  }
+  return sizeof(*state);
+}
 #else
 typedef struct _fpstate *FPREGS;
 #endif
@@ -1531,8 +1572,31 @@ copy_fpregs(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
   FPREGS src = (FPREGS)(xp->uc_mcontext.fpregs), dest;
   
   if (src) {
+#ifdef X8664
+    extern void ensure_safe_for_string_operations(void);
+    Boolean extended = false;
+    size_t nbytes;
+    BytePtr destination;
+
+    ensure_safe_for_string_operations();
+    nbytes = sizeof(*src);
+    if (copy_exception_avx_state) {
+      nbytes = linux_fpregs_size_in_bytes(src, &extended);
+    }
+    destination =
+      (BytePtr)truncate_to_power_of_2((BytePtr)current - nbytes, 6);
+    dest = (FPREGS)destination;
+    memcpy(dest, src, nbytes);
+    if (!extended) {
+      uint32_t no_magic = 0;
+      memcpy(destination + CCL_FP_XSTATE_SW_BYTES_OFFSET,
+             &no_magic,
+             sizeof(no_magic));
+    }
+#else
     dest = ((FPREGS)current)-1;
     *dest = *src;
+#endif
     *destptr = dest;
     current = (LispObj *) dest;
   }
