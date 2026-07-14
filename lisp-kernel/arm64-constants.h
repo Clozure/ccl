@@ -36,6 +36,8 @@ DEFCONST(node_shift, 3)
 DEFCONST(nargregs, 3)
 DEFCONST(nsaveregs, 4)
 
+DEFCONST(call_arguments_limit, 0x10000)
+
 /* lisp names for registers */
 #ifdef __ASSEMBLER__
 imm0 .req x0
@@ -217,13 +219,24 @@ DEFCONST(subtag_lisp_frame_marker, SUBTAG(fulltag_imm_1, 5))
 DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
 
 
+/*
+ * The generic C constants (special_binding, hash_table_vector_header, the
+ * TCR flag bits, INTERRUPT_LEVEL_BINDING_INDEX, ...) that the struct tcr below
+ * and much of the C kernel depend on.  x86/ppc reach constants.h through their
+ * C-only arch headers; because this header is shared by the assembler too, we
+ * pull it in ourselves, guarded out of the assembler pass.
+ */
+#ifndef __ASSEMBLER__
+#include "constants.h"
+#endif
+
 /* struct definitions */
 
 #ifdef __ASSEMBLER__
 /*
  * A struct definition generates a set of assembler equates: for each field,
- * STRUCT.field is the byte offset of that field from a suitably tagged
- * pointer, and STRUCT.size is the total size.  Example:
+ * name.field is the byte offset of that field from a suitably tagged
+ * pointer, and name.size is the total size.  Example:
  *
  *      _struct cons, -cons_bias
  *      _node cdr
@@ -233,7 +246,7 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
  * yields cons.cdr = -cons_bias, cons.car = -cons_bias + node_size, and
  * cons.size = 2 * node_size.
  *
- * Keep this working on both clang and GNU as.
+ * This needs to work on both clang and GNU as.
  */
 
 .macro _struct name, bias=0
@@ -271,8 +284,12 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
         .macro _struct_label fld
                 .set \name\().\fld, _struct_org
         .endm
+        .macro _struct_pad n                  /* advance without a label */
+                .set _struct_org, _struct_org + \n
+        .endm
         .macro _endstructf
-                .set \name\().element_count, ((_struct_org - node_size) - _struct_base) / node_size
+                .set \name\().element_count, \
+                     ((_struct_org - node_size) - _struct_base) / node_size
                 _ends
         .endm
         .macro _ends
@@ -285,12 +302,13 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
                 .purgem _node
                 .purgem _rnode
                 .purgem _struct_label
+                .purgem _struct_pad
                 .purgem _endstructf
                 .purgem _ends
         .endm
 .endm
 /* Fixed-size lisp object: one-word header, accessed via a fulltag_misc
-   pointer.  Also defines STRUCT.element_count (see _endstructf). */
+   pointer.  Also defines name.element_count (see _endstructf). */
 .macro _structf name, bias=-misc_bias
         _struct \name, \bias
         _node header
@@ -375,7 +393,6 @@ _endstructf
 DEFCONST(two_digit_bignum_header, ((2<<num_subtag_bits)|subtag_bignum))
 DEFCONST(three_digit_bignum_header, ((3<<num_subtag_bits)|subtag_bignum))
 DEFCONST(four_digit_bignum_header, ((4<<num_subtag_bits)|subtag_bignum))
-
 /* bignum digits are 32 bits even though they could be 64 bits */
 DEFCONST(bigit_size, 4)
 #define aligned_bignum_size(ndigits) \
@@ -388,31 +405,53 @@ typedef struct xframe_list {
 } xframe_list;
 #endif
 
-/* thread context record struct */
 #ifdef __ASSEMBLER__
+
+/* Symbol bits that we care about */
+sym_vbit_bound = (0+fixnumshift)
+sym_vbit_bound_mask = (1<<sym_vbit_bound)
+sym_vbit_const = (1+fixnumshift)
+sym_vbit_const_mask = (1<<sym_vbit_const)
+
+_struct area
+  _node pred
+  _node succ
+  _node low
+  _node high
+  _node active
+  _node softlimit
+  _node hardlimit
+   _node code
+  _node markbits
+  _node ndwords
+  _node older
+  _node younger
+  _node h
+  _node sofprot
+  _node hardprot
+  _node owner
+  _node refbits
+  _node nextref
+_ends
+
+/* thread context record struct */
 _struct tcr
   _node next            /* in doubly-linked list   */
   _node prev            /* in doubly-linked list   */
-  _node single_float_convert
-  _node linear          /* our linear  non-segment-based address.   */
-  _node save_fp         /* lisp RBP when in foreign code    */
-  _word lisp_mxcsr
-  _word foreign_mxcsr
   _node db_link         /* special binding chain head   */
   _node catch_top       /* top catch frame   */
   _node save_vsp        /* VSP when in foreign code   */
   _node save_tsp        /* TSP when in foreign code   */
-  _node foreign_sp      /* Saved foreign SP when in lisp code   */
   _node cs_area         /* cstack area pointer   */
   _node vs_area         /* vstack area pointer   */
   _node ts_area         /* tstack area pointer   */
   _node cs_limit        /* cstack overflow limit   */
-  _dword bytes_consed
+  _dword bytes_allocated
   _node log2_allocation_quantum
   _node interrupt_pending
   _node xframe          /* per-thread exception frame list   */
   _node errno_loc       /* per-thread  errno location   */
-  _node ffi_exception   /* mxcsr exception bits from ff-call   */
+  _node foreign_fpsr    /* fpsr exception bits on return from ff-call */
   _node osid            /* OS thread id   */
   _node valence         /* odd when in foreign code       */
   _node foreign_exception_status
@@ -437,27 +476,33 @@ _struct tcr
   _node shutdown_count
   _node next_tsp
   _node safe_ref_address
-  _node pending_io_info
-  _node io_datum
+  _node io_datum /* Darwin: Mach thread exception port */
   _node nfp
+  _field spare, 20*node_size
+  _field sptab, 256*node_size   /* subprims table (see arm64-spentry.s) */
 _ends
+
+.if tcr.spare - 336
+.error "tcr.spare moved; sync tcr.spare in arm64-arch.lisp"
+.endif
+.if tcr.sptab - 496
+.error "tcr.sptab moved; sync tcr.sptab in arm64-arch.lisp"
+.endif
+.if tcr.size - 2544
+.error "tcr.size changed; re-check arm64-arch.lisp"
+.endif
+
 #else
+
+#define TCR_BIAS 0
+
 typedef struct tcr {
   struct tcr *next;
   struct tcr *prev;
-  struct {
-    uint32_t tag;
-    float f;
-  } single_float_convert;
-  struct tcr* linear;
-  LispObj *save_fp;            /* RBP when in foreign code */
-  uint32_t lisp_mxcsr;
-  uint32_t foreign_mxcsr;
   special_binding* db_link;     /* special binding chain head */
   LispObj catch_top;            /* top catch frame */
   LispObj *save_vsp;  /* VSP when in foreign code */
   LispObj *save_tsp;  /* TSP when in foreign code */
-  LispObj *foreign_sp;
   struct area *cs_area; /* cstack area pointer */
   struct area *vs_area; /* vstack area pointer */
   struct area *ts_area; /* tstack area pointer */
@@ -467,7 +512,7 @@ typedef struct tcr {
   signed_natural interrupt_pending;     /* pending interrupt flag */
   xframe_list *xframe; /* exception-frame linked list */
   int *errno_loc;               /* per-thread (?) errno location */
-  LispObj ffi_exception;        /* fpscr bits from ff-call */
+  LispObj foreign_fpsr;        /* fpsr bits from ff-call */
   LispObj osid;                 /* OS thread id */
   signed_natural valence;                       /* odd when in foreign code */
   signed_natural foreign_exception_status;      /* non-zero -> call lisp_exit_hook */
@@ -492,8 +537,22 @@ typedef struct tcr {
   natural shutdown_count;
   LispObj *next_tsp;
   void *safe_ref_address;
-  void *pending_io_info;
-  void *io_datum;
+  void *io_datum;               /* Darwin: Mach thread exception port */
   void *nfp;
+  LispObj spare[20];
+  LispObj sptab[256];           /* subprims table (see arm64-spentry.s) */
 } TCR;
+
+#include <stddef.h>
+#include <assert.h>
+/*
+ * Try to detect struct tcr layout changes that require corresponding
+ * udpates in arm64-arch.lisp.
+ */
+static_assert(offsetof(TCR, spare) == 336,
+               "TCR.spare changed; update tcr.spare in arm64-arch.lisp");
+static_assert(offsetof(TCR, sptab) == 496,
+               "TCR.sptab changed; update tcr.sptab in arm64-arch.lisp");
+static_assert(sizeof(TCR) == 2544,
+               "sizeof(TCR) changed; update arm64-arch.lisp");
 #endif
