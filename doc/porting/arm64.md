@@ -72,10 +72,9 @@ A **quoted** value gets special treatment:
   assembler shifts it left by `fixnumshift` (3). So `(:$ '2)` is `16`, the
   boxed fixnum 2.
 - `(:$ 'name)` for a symbol is the fn-relative **byte offset** to the
-  constant named `name` in the function's constant vector. The symbol is
-  interned into the vector on first use; the offset skips word 0 (the
-  entrypoint) and word 1 (the code-vector), so the first constant lands just
-  past them. Use it as a load offset off `fn`, e.g.
+  constant named `name`. The symbol is interned into the list of constants
+  on first use. The offset refers directly to the constant in
+  question, so it can be used as a load offset from `fn`, e.g.
   `(ldur dest (:@ fn (:$ 'name)))`.
 
 **Conditions** are `(:? cc)` for a condition name (`eq`, `ne`, `lt`, `ge`,
