@@ -2,13 +2,8 @@
 
 #include "arm64-constants.h"
 #include "arm64-uuo.s"
-
-/* Mach-O wants a leading underscore; ELF doesn't. */
-#if defined(__APPLE__)
-#define C(name) _##name
-#else
-#define C(name) name
-#endif
+#include "arm64-asm.h"
+#include "arm64-lisp-globals.s"
 
         .macro note_function_start name
 #if !defined(__APPLE__)
