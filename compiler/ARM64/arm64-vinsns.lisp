@@ -26,7 +26,7 @@
                                                      ()
                                                      ((marker-reg :imm)))
   (mov marker-reg (:$ arm64::lisp-frame-marker))
-  (stp marker-reg vsp (:@! sp (:$ 32)))
+  (stp marker-reg vsp (:@! sp (:$ -32)))
   (stp fn lr (:@ sp (:$ 16))))
   
 (define-arm64-vinsn (vpush-register :push :node :vsp) (()
