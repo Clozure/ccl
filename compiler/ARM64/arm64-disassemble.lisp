@@ -269,11 +269,7 @@
 ;;;
 ;;; The canonical sbfm/ubfm/bfm carry two raw 6-bit fields, immr and
 ;;; imms.  Each preferred alias is selected by a condition on them and
-;;; then displays them as a shift, a width, or a lsb/width pair.  The
-;;; extract forms sbfx/ubfx/bfxil are lapmacros on the assembler side
-;;; (their imms is lsb+width-1, coupling both operands), but that is
-;;; invisible here: we emit the alias and the lapmacro re-encodes it.
-;;; lsb=immr, width=imms-immr+1.
+;;; then displays them as a shift, a width, or a lsb/width pair.
 
 ;; Make an immediate operand with the value fully decoded (i.e., any
 ;; shifts already performed, etc.)
@@ -368,7 +364,7 @@
   ;; bfm Rd, Rn, immr, imms:
   ;;   imms < immr, Rn=zr  => bfc Rd, #lsb, #width       (clear)
   ;;   imms < immr         => bfi Rd, Rn, #lsb, #width   (insert)
-  ;;   imms >= immr        => bfxil Rd, Rn, #lsb, #width (insert low; lapmacro)
+  ;;   imms >= immr        => bfxil Rd, Rn, #lsb, #width (insert low)
   (let* ((operands (di-operands di))
          (rd (first operands))
          (rn (second operands))

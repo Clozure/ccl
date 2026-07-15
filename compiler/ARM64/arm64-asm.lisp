@@ -834,8 +834,7 @@
    (def uxth ((:rd :w) (:rn :w)) #x53003c00 0 :alias)
 
    ;; Bitfield insert aliases: immr=(-lsb) mod width, imms=width-1
-   ;; (separable, so #lsb and #width each drive one field).  Extract
-   ;; forms (sbfx/ubfx/ bfxil) are lapmacros.
+   ;; (separable, so #lsb and #width each drive one field).
    (def sbfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x13000000 0 :alias)
    (def sbfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #x93400000 0 :alias)
    (def ubfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x53000000 0 :alias)
@@ -846,6 +845,17 @@
    ;; bfc is bfi with Rn=zr
    (def bfc ((:rd :w) :bf-lsb-w :bf-width-w) #x330003e0 0 :alias)
    (def bfc ((:rd :x) :bf-lsb-x :bf-width-x) #xb34003e0 0 :alias)
+
+   ;; Bitfield extract aliases: immr=lsb, imms=lsb+width-1.  Unlike
+   ;; the insert forms, imms depends on *both* operands, so the width
+   ;; operand's encoder has to look back and read the lsb operand (see
+   ;; bfx-lsb-value).
+   (def sbfx ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x13000000 0 :alias)
+   (def sbfx ((:rd :x) (:rn :x) :bfx-lsb-x :bfx-width-x) #x93400000 0 :alias)
+   (def ubfx ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x53000000 0 :alias)
+   (def ubfx ((:rd :x) (:rn :x) :bfx-lsb-x :bfx-width-x) #xd3400000 0 :alias)
+   (def bfxil ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x33000000 0 :alias)
+   (def bfxil ((:rd :x) (:rn :x) :bfx-lsb-x :bfx-width-x) #xb3400000 0 :alias)
 
    ;; Data-processing (1 source)
    (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
@@ -1216,8 +1226,10 @@
     :tbit-w        ;tbz/tbnz bit number 0..31 (W); b5 is always 0
     :exc16         ;16-bit exception immediate @ 20:5 (brk/hlt/svc)
     :udf16         ;16-bit undefined immediate @ 15:0 (udf)
-    :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb); 15 = full system
-    :sysreg        ;named system register, 15-bit op0:op1:CRn:CRm:op2 @ 19:5 (mrs/msr)
+    :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb)
+                   ;  15 = full system
+    :sysreg        ;named system register, 15-bit op0:op1:CRn:CRm:op2 @ 19:5
+                   ; (mrs/msr)
     :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
     :fpzero        ;the literal #0.0 (fcmp/fcmpe zero form); encodes nothing
@@ -1228,11 +1240,16 @@
     :lsr-imm-w     ; ... and the W form (immr=n, imms=31)
     :asr-imm-x     ;asr #n: same field encoding as :lsr-imm-x, sbfm base
     :asr-imm-w
-    :bf-lsb-x    ;sbfiz/ubfiz/bfi #lsb (X): immr = (-lsb) & 63
-    :bf-lsb-w    ; ... and the W form (immr = (-lsb) & 31)
+    :bf-lsb-x      ;sbfiz/ubfiz/bfi #lsb (X): immr = (-lsb) & 63
+    :bf-lsb-w      ; and the W form (immr = (-lsb) & 31)
     :bf-width-x    ;sbfiz/ubfiz/bfi #width (X): imms = width-1
-    :bf-width-w    ; ... and the W form
-    :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...), written (:? cc)
+    :bf-width-w    ; and the W form
+    :bfx-lsb-x     ;sbfx/ubfx/bfxil #lsb (X): immr = lsb
+    :bfx-lsb-w     ; and the W form
+    :bfx-width-x   ;sbfx/ubfx/bfxil #width (X): imms = lsb+width-1 (reads lsb)
+    :bfx-width-w   ; and the W form
+    :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...),
+                   ; written (:? cc)
     :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
     :cond-b        ;4-bit condition @ 3:0 (b.cond), written (:? cc) or (:~ cc)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
@@ -1245,7 +1262,7 @@
     :uoff3
     :regoff0       ;register index with natural scale N = log2(access size):
     :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
-    :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from the amount.
+    :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from amount.
     :regoff3
     :poff2         ;load/store-pair signed scaled offset, imm7 @ 21:15 (W pair)
     :poff3         ; ... and the X pair (scale 3); the access size is baked in
@@ -1715,6 +1732,12 @@
         (:bf-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
         (:bf-width-x (and (eql shift 0) (typep value '(integer 1 64))))
         (:bf-width-w (and (eql shift 0) (typep value '(integer 1 32))))
+        (:bfx-lsb-x (and (eql shift 0) (typep value '(integer 0 63))))
+        (:bfx-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
+        ;; The correct bound is 1..(regsize-lsb), but in vinsns we may not
+        ;; know the lsb until expand time.  The encoder will check.
+        (:bfx-width-x (and (eql shift 0) (typep value '(integer 1 64))))
+        (:bfx-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
         (:movw-mov-w  (and (eql shift 0)
                            (encode-wide-immediate value 32)))
@@ -2067,6 +2090,25 @@
                        raw)))
       (ash unscaled scale))))
 
+;;; ubfx/sbfx/bfxil are written with #lsb, #width operands but they
+;;; are aliases for u/s/bfm, whose imms field is lsb+width-1.  This is
+;;; a function of *both* operands, and we'd prefer it if we could deal
+;;; with operands as a single unit.
+;;;
+;;; However, it is much easier to use ubfx than it is to use ubfm.  We
+;;; therefore make an exception to that preference here.
+;;;
+;;; The ldb operand stands on its own, so it needs no special
+;;; treatment.  But the width operand needs to know what the lsb
+;;; operand is.  So, we look back at it.
+(defun bfx-lsb-value (insn)
+  (do ((ops (instruction-parsed-operands insn) (cdr ops))
+       (specs (instruction-template-operand-specs (instruction-template insn))
+              (cdr specs)))
+      ((endp ops))
+    (when (member (car specs) '(:bfx-lsb-x :bfx-lsb-w))
+      (return (immediate-operand-value (car ops))))))
+
 (defun encode-immediate-operand (insn operand class)
   (let ((value (immediate-operand-value operand))
         (shift (immediate-operand-shift operand)))
@@ -2106,6 +2148,16 @@
       (:bf-lsb-x (set-field-value insn (byte 6 16) (logand (- value) 63)))
       (:bf-lsb-w (set-field-value insn (byte 6 16) (logand (- value) 31)))
       ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
+      ((:bfx-lsb-x :bfx-lsb-w) (set-field-value insn (byte 6 16) value))
+      ((:bfx-width-x :bfx-width-w)
+       ;; In order to be able to encode this, we have to reach back to
+       ;; the already-encoded :bfx-lsb-x/w operand.
+       (let* ((lsb (bfx-lsb-value insn))
+              (regsize (if (eq class :bfx-width-x) 64 32)))
+         (unless (<= (+ lsb value) regsize)
+           (error "bitfield lsb ~d + width ~d exceeds register size ~d"
+                  lsb value regsize))
+         (set-field-value insn (byte 6 10) (+ lsb value -1))))
       ((:movw-mov-w :movw-mov-x)
        (multiple-value-bind (imm16 hw)
            (encode-wide-immediate value (if (eq class :movw-mov-x) 64 32))
@@ -2359,9 +2411,10 @@
     (:nzcv "#nzcv")
     (:fpzero "#0.0")
     (:fpimm8 "#fpimm")
-    ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w) "#shift")
-    ((:bf-lsb-x :bf-lsb-w) "#lsb")
-    ((:bf-width-x :bf-width-w) "#width")
+    ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w)
+     "#shift")
+    ((:bf-lsb-x :bf-lsb-w :bfx-lsb-x :bfx-lsb-w) "#lsb")
+    ((:bf-width-x :bf-width-w :bfx-width-x :bfx-width-w) "#width")
     (:pcrel "label")
     ((:uoff0 :uoff1 :uoff2 :uoff3 :poff2 :poff3) "#off")
     (t (format nil "#~(~a~)" class))))

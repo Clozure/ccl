@@ -184,6 +184,61 @@
             passed failed errored skipped)
     (values passed failed errored skipped)))
 
+;;; Direct-encoding oracle for :alias templates.
+;;;
+;;; An alias's operands are a friendlier restatement of some base
+;;; instruction's fields (a shift amount, a lsb/width pair, a fixed
+;;; extend), and the alias's operand classes compute the base's raw
+;;; immr/imms from them.  Round-trip testing can't cover this: aliases
+;;; are encoder-only (excluded from disassembly), so reencode-word sees
+;;; the base mnemonic, not the alias.  Instead we assemble the alias and
+;;; the hand-written base form and require identical words -- an
+;;; independent check of the field arithmetic, including the bitfield
+;;; extract forms whose imms couples *both* operands.
+(defparameter *alias-encoding-pairs*
+  '(;; bitfield extract: immr=lsb, imms=lsb+width-1
+    ((ubfx x0 x1 (:$ 3) (:$ 10))  (ubfm x0 x1 (:$ 3) (:$ 12)))
+    ((ubfx w0 w1 (:$ 2) (:$ 5))   (ubfm w0 w1 (:$ 2) (:$ 6)))
+    ((sbfx x5 x6 (:$ 0) (:$ 8))   (sbfm x5 x6 (:$ 0) (:$ 7)))
+    ((sbfx w2 w3 (:$ 4) (:$ 4))   (sbfm w2 w3 (:$ 4) (:$ 7)))
+    ((bfxil x7 x8 (:$ 1) (:$ 16)) (bfm  x7 x8 (:$ 1) (:$ 16)))
+    ((ubfx x0 x1 (:$ 0) (:$ 64))  (ubfm x0 x1 (:$ 0) (:$ 63)))  ;full width
+    ;; bitfield insert: immr=(-lsb) mod regsize, imms=width-1
+    ((ubfiz x0 x1 (:$ 3) (:$ 10)) (ubfm x0 x1 (:$ 61) (:$ 9)))
+    ((sbfiz w2 w3 (:$ 4) (:$ 4))  (sbfm w2 w3 (:$ 28) (:$ 3)))
+    ((bfi x7 x8 (:$ 1) (:$ 16))   (bfm  x7 x8 (:$ 63) (:$ 15)))
+    ((bfc x5 (:$ 2) (:$ 8))       (bfm  x5 xzr (:$ 62) (:$ 7)))
+    ;; shift-immediate: lsl/lsr alias ubfm, asr aliases sbfm
+    ((lsl x0 x1 (:$ 4))           (ubfm x0 x1 (:$ 60) (:$ 59)))
+    ((lsr x0 x1 (:$ 4))           (ubfm x0 x1 (:$ 4) (:$ 63)))
+    ((asr x0 x1 (:$ 4))           (sbfm x0 x1 (:$ 4) (:$ 63)))
+    ;; sign/zero-extend: fixed immr=0, imms=7/15/31.  The sxt* X-forms
+    ;; take a W source (the base sbfm reads Wn), so the alias source is Wn.
+    ((sxtb x0 w1)                 (sbfm x0 x1 (:$ 0) (:$ 7)))
+    ((sxth x0 w1)                 (sbfm x0 x1 (:$ 0) (:$ 15)))
+    ((sxtw x0 w1)                 (sbfm x0 x1 (:$ 0) (:$ 31)))
+    ((uxtb w0 w1)                 (ubfm w0 w1 (:$ 0) (:$ 7)))
+    ((uxth w0 w1)                 (ubfm w0 w1 (:$ 0) (:$ 15)))))
+
+(defun run-alias-encoding-tests (&optional (pairs *alias-encoding-pairs*))
+  ;; Assemble each (ALIAS CANONICAL) pair and require identical words.
+  (let ((passed 0) (failed 0) (errored 0))
+    (dolist (pair pairs)
+      (destructuring-bind (alias canonical) pair
+        (handler-case
+            (let ((a (assemble-word alias))
+                  (c (assemble-word canonical)))
+              (cond
+                ((= a c) (incf passed))
+                (t (incf failed)
+                   (format t "~&FAIL ~s => #x~8,'0x, but ~s => #x~8,'0x~%"
+                           alias a canonical c))))
+          (error (e)
+            (incf errored)
+            (format t "~&ERROR ~s vs ~s: ~a~%" alias canonical e)))))
+    (format t "~&~d passed, ~d failed, ~d errored~%" passed failed errored)
+    (values passed failed errored)))
+
 ;;; Oracle sweep of *binutils-data*, the binutils reference table.
 ;;;
 ;;; Each row is ("mnemonic" opcode mask :group op CLASS '(roles) quals flags),

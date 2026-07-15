@@ -1,28 +1,5 @@
 (in-package "CCL")
 
-;;; Check for and report invalid immediate operand syntax
-(defun arm64-bitfield-imm (operand)
-  (if (and (consp operand) (eq (car operand) :$) (= (length operand) 2))
-    (cadr operand)
-    (error "bitfield lsb/width must be written (:$ n), not ~s" operand)))
-
-;;; Implement these bitfield extract aliases as lapmacros because in
-;;; these cases the underlying imms operand is a function of *both*
-;;; immediate operands of the alias.  The assembler expects to encode
-;;; a field in the instruction from a single operand.
-
-(defarm64lapmacro sbfx (rd rn lsb width)
-  (let ((l (arm64-bitfield-imm lsb)) (w (arm64-bitfield-imm width)))
-    `(sbfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
-
-(defarm64lapmacro ubfx (rd rn lsb width)
-  (let ((l (arm64-bitfield-imm lsb)) (w (arm64-bitfield-imm width)))
-    `(ubfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
-
-(defarm64lapmacro bfxil (rd rn lsb width)
-  (let ((l (arm64-bitfield-imm lsb)) (w (arm64-bitfield-imm width)))
-    `(bfm ,rd ,rn (:$ ,l) (:$ (+ ,l ,w -1)))))
-
 (defarm64lapmacro load-constant (dest constant)
   (let ((offset (arm64::constant-offset constant)))
     (if (typep offset '(signed-byte 9))
