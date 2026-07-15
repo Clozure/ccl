@@ -282,28 +282,122 @@ This special form will be used a couple of places in addition to
 %define-xxx-lap-function.  The cross dumper x<arch>fasload.lisp
 
 
-## vinsn templates
-We want to be able to write vinsn templates using a (mostly) LAP-like
-syntax, but ideally don't want to have to repeatedly expand those
-vinsn-definition-time-invariant elements of that syntax.
-For example, if DEST is a vinsn parameter and the vinsn body
-contains:
-  `(ldr DEST (:@ rcontext (:$ arm::tcr.db-link)))`
-then we know at definition time:
- 1) the opcode of the LDR instruction (obviously)
- 2) the fact that the LDR's `:mem12` operand uses indexed
-    addressing with an immediate operand and no writeback
- 3) in this example, we also know the value of the RB field
-    and the value of the immediate operand, which happens
-    to be positive (setting the U bit).
- We can apply this knowledge at definition time, and set
- the appropriate bits (U, RN, IMM12) in the opcode.
- We don't, of course, know the value of DEST at vinsn-definition
- time, but we do know that it's the Nth vinsn parameter, so we
- can turn this example into something like:
+## vinsns
+
+Vinsns ("virtual instructions") are the building blocks used by the backend
+to generate machine code.
+### Defining vinsns
+A port defines a vinsn with something like `define-arm64-vinsn`.
+This builds a struct called a `vinsn-template`: it includes a name,
+a number of vreg specs (i.e., the result/arg/temp parameter specs in
+the definition like `(dest :lisp)`), and a body (which is a list of forms).
+
+We want to write vinsn tempates using a LAP-like notation, but with
+the ability to parameterize the instruction forms.
+
+Each (probably-parameterized) assembly-language instruction form in the
+body is **simplified** via `vinsn-simplify-instruction`.  The idea here
+is that some of the work required to assemble a particular instruction
+can be done at vinsn definition time.
+
+The ports take somewhat different approaches to how much they try to
+do during simplification.  The arm64 port more or less follows the x86 port.
+On these ports, two things happen at defintion time:
+
+ 1. Instruction template selection — given the mnemonic and operand types,
+ find the matching template from a candidate list, and record its ordinal
+ (i.e., its index in the instruction templates vector).  This saves us
+ the work of finding the instruction template again when the vinsn template
+ is expanded (which will be discussed later).
+ 2. Operands are simplified — constant expressions are evaluated,
+ memory operands are canonicalized, register names are resolved
+ to their register numbers.
+
+ A sample template:
  ```
- `(,(augmented-opcode-for-LDR) #(rd-field) #(index-of-DEST)
+ (define-arm64-vinsn cond->boolean (((dest :lisp))
+                                    ((cc :u8const))
+                                    ((true :imm)))
+  (add true rnil (:$ arm64::t-offset))
+  (csel dest true rnil (:? cc)))
+  ```
+  After simplificatio:
+  ```
+#S(VINSN-TEMPLATE
+   :NAME COND->BOOLEAN
+   :RESULT-VREG-SPECS ((DEST :LISP))
+   :ARGUMENT-VREG-SPECS ((CC :U8CONST))
+   :TEMP-VREG-SPECS ((TRUE :IMM)) :LOCAL-LABELS NIL
+   :BODY ((11 (:OPND 2) (:REG 23) (:IMM 28 0))
+          (377 (:OPND 0) (:OPND 2) (:REG 23) (:COND-OPND 1)))
+   :NHYBRIDS 0 :NVP 3
+   :RESULTS&ARGS ((DEST :LISP) (CC :U8CONST))
+   :ATTRIBUTES 0
+   :OPCODE-ALIST ((377 "csel" (:RD :X) (:RN :X) (:RM :X) :COND)
+                  (11 "add" (:RD :X/SP) (:RN :X/SP) :AIMM)))
 ```
+
+After simplification, the vinsn template is fully-defined.
+
+### Emit time (or selection)
+This is what happens when we write `(! name operands ...)` in the
+backend.  This creates
+a vinsn instance (via `%make-vinsn`) that pairs the vinsn template with a
+variable-parts vector (called vp), populated by match-template-vregs with the
+actual operands.
+
+The vinsn instance is added to the vinsn-list, which contains vinsn instances
+and labels.  No machine code yet.
+
+### Expansion time
+This is when vinsns are turned into machine instructions.  The vinsns
+are expanded one at a time: `arm642-expand-vinsns` walks the vinsn-list;
+`arm642-expand-vinsn` **expands** one vinsn instance: it substitutes
+lregs->register numbers in vp (the variable parts), then walks the
+template's body, filling each previously-simplified body element's
+holes from vp.  With everything filled in, the each body element is
+encoded into a machine instruction and added to the output list.
+
+## Backend (p2) notes
+
+### with-xxx-temps, with-xxx-target
+WITH-xxx-TEMPS basically says "find a register and mark it as
+being in use, e.g., not available for allocation as a temporary."
+
+WITH-xxx-TARGET basically says "find a register that's not
+marked as being in use and which doesn't conflict with these
+other specified registers."
+
+You might (for instance) want to say "get the vector, index, and
+new value into any 3 registers; it doesn't matter which 3, but
+in general we want them to be distinct from each other". While
+getting those 3 values into those registers, we might do some
+pushing and popping, but we should otherwise be free to allocate
+temporaries that conflict with those registers as long as things
+wind up in the right places.
+
+In a few other cases, it's reasonable to say "mark this as being
+in use, so that it isn't allocated as a temporary inside a vinsn".
+That's useful in some cases, but a bit more dangerous (in that
+we can run out of registers through overuse of this fairly easily.)
+
+### lreg
+A wired lreg is made via make-wired-lreg or via the `($ arm64::imm0)`
+local vinsn macro. It names a specific physical register that must be
+used exactly.
+
+An unwired lreg (make-unwired-lreg) carries a chosen value, but indicates
+that a specific physical register is not important.
+
+Register availability is tracked with bitmasks.
+
+| registers | in-use |
+|-|-|
+| `*backend-node-temps*` | `*available-backend-node-temps*` |
+| `*backend-imm-temps*` | `*available-backend-imm-temps*` |
+| `*backend-fp-temps*` | `*available-backend-fp-temps*` |
+| `*backend-crf-temps*` | `*available-backend-crf-temps*` |
+
 
 ## Stacks
 Depending on the platform, CCL uses up to three stacks: a control stack,
