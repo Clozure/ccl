@@ -39,6 +39,62 @@ that name vector types and the actual 8-bit tags used to implement
 them; the "backend" contains some additional platform stuff
 (FFI details, FASL extension, etc.))
 
+### Tagging
+
+Given some arbitrary object reference, we need to be able tell what
+kind of an object it is.
+
+CCL allocates lisp objects in memory on double-node (dnode)
+boundaries.  Because of this, some of the low bits of an address
+are redundant.
+
+On a 32-bit platform, a dnode is 8 bytes (64 bits) long.  That means
+that the low three bits of an address are redundant: we only really
+need to the upper 29 bits to know the address of a dnode-aligned
+object.
+
+On a 64-bit platform, a dnode is 16 bytes (128 bits) long, and the low
+four bits are redundant in a similar way: the upper 60 bits are sufficient
+to address a dnode-aligned object.
+
+We call the redundant low 3 or 4 bits the "tag bits," and say that
+we are using "low tags".
+
+It is very tempting to exploit the arm64 TBI feature (where the
+top 8 bits of addresses are ignored) to use a high tag scheme.
+There are two main reasons I think it is better (i.e., lower risk,
+less effort) to stick to a lowtag scheme.
+
+The first and most important reason is uncertainty over the future
+availability of the feature.  As of today, macOS and Linux (at least)
+enable the TBI feature.  But I think there is medium-term risk that
+memory safety features like ARM's Memory Tagging Extension and
+[Apple's Memory Integrity Enforcement](https://security.apple.com/blog/memory-integrity-enforcement/)
+will become widely adopted, and they are incompatible with the TBI feature.
+
+By contrast, a lowtag scheme doesn't rely on any special hardware or
+operating system support.
+
+The other reason is consistency with the other ports.  This is a
+weaker reason, because we generally want to exploit architecture-specific
+features wherever we can.  But it is true that lots of low-level
+logic is designed to work with a lowtag representation.
+
+Tagging considerations:
+ * It's important to quickly recognize fixnums.
+ * It's important to quickly recognize lists (for car/cdr);  it's also
+   desirable to quickly recognize cons cells.
+ * It's desirable for vectorp, arrayp, and specific-array-type-p to be
+   fast.  We need at least 12 immediate CL vector types:
+     * {signed,unsigned}-byte {8,16,32,64}
+     * single-float, double-float
+     * bit
+     * at least one character type
+   As node types, we need:
+     * simple-array
+     * vector-header
+     * array-header
+
 ## Define the `backend` structure
 A lot of platform-specific attributes (but by no means all) are
 encapsulated in a structure called a `backend`.  The existing `backend`
@@ -356,12 +412,23 @@ is stashed somewhere, because otherwise it might get gc'd).
 
 # Calling functions
 
-# Returning values
+On a non-x86 port, there is a separate value stack and control stack.
+The value stack is always unambiguously nodes, from top to bottom.
+
+The control stack (which is typically the architectural stack pointer)
+contains frames.  Non-leaf functions need to save a frame.  A leaf
+function doesn't clobber its return address or reference any constants.
+Building a frame is a multi-instruction sequence, and `pc_luser_xp()`
+needs to recognize the case of building a frame on the control stack
+and make it look like an atomic operation.  The gc needs to scan
+certain frames on the control stack.
+
+## Returning values
 Single values are returned in `arg_z`.  Multiple values are returned
 on the stack, in left-to-right order (i.e., for a stack that grows down,
 the rightmost value is on the top of the stack).
 
-# Calling external (foreign) functions
+## Calling external (foreign) functions
 The register and stack usage conventions for lisp code and external
 (or foreign) are completely different.  For arm64, the AAPCS64 document
 describes the standard ABI.  Apple platforms diverge from the
