@@ -386,10 +386,15 @@
     ccl::%foreign-thread-control
     ))
 
-(defparameter *subprims-shift* 3)
-;; The subprim jump table is at an offset from (tagged) rnil.  There's
-;; room for 50 nil-relative symbols before the subprim jump table starts.
-(defparameter *subprims-base* (+ (- fulltag-nil) (* 50 node-size)))
+;; The idea here is that the subprim address table will be referenced
+;; relative to rcontext.  The lisp kernel will make sure that every
+;; thread's TCR will contain the table.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *subprims-shift* 3)
+  (defconstant tcr.spare 336)
+  (defconstant tcr.sptab 496)
+  (defparameter *subprims-base* tcr.sptab))
+
 (defvar *subprims*)
 
 (let ((offset *subprims-base*)
@@ -407,8 +412,125 @@
              (defsubprim .SPbuiltin-minus)
              (defsubprim .SPbuiltin-times)
              (defsubprim .SPbuiltin-div)
+             (defsubprim .SPbuiltin-eq)
+             (defsubprim .SPbuiltin-ne)
+             (defsubprim .SPbuiltin-gt)
+             (defsubprim .SPbuiltin-ge)
+             (defsubprim .SPbuiltin-lt)
+             (defsubprim .SPbuiltin-le)
+             (defsubprim .SPbuiltin-eql)
+             (defsubprim .SPbuiltin-length)
+             (defsubprim .SPbuiltin-seqtype)
+             (defsubprim .SPbuiltin-assq)
+             (defsubprim .SPbuiltin-memq)
+             (defsubprim .SPbuiltin-logbitp)
+             (defsubprim .SPbuiltin-logior)
+             (defsubprim .SPbuiltin-logand)
+             (defsubprim .SPbuiltin-ash)
+             (defsubprim .SPbuiltin-negate)
+             (defsubprim .SPbuiltin-logxor)
+             (defsubprim .SPbuiltin-aref1)
+             (defsubprim .SPbuiltin-aset1)
+             (defsubprim .SPfuncall)
+             (defsubprim .SPmkcatch1v)
+             (defsubprim .SPmkcatchmv)
+             (defsubprim .SPmkunwind)
+             (defsubprim .SPbind)
+             (defsubprim .SPconslist)
+             (defsubprim .SPconslist-star)
+             (defsubprim .SPmakes32)
+             (defsubprim .SPmakeu32)
              (defsubprim .SPfix-overflow)
-             ;; ...
+             (defsubprim .SPmakeu64)
+             (defsubprim .SPmakes64)
+             (defsubprim .SPmvpass)
+             (defsubprim .SPvalues)
+             (defsubprim .SPnvalret)
+             (defsubprim .SPthrow)
+             (defsubprim .SPnthrowvalues)
+             (defsubprim .SPnthrow1value)
+             (defsubprim .SPbind-self)
+             (defsubprim .SPbind-nil)
+             (defsubprim .SPbind-self-boundp-check)
+             (defsubprim .SPrplaca)
+             (defsubprim .SPrplacd)
+             (defsubprim .SPgvset)
+             (defsubprim .SPset-hash-key)
+             (defsubprim .SPstore-node-conditional)
+             (defsubprim .SPset-hash-key-conditional)
+             (defsubprim .SPstkconslist)
+             (defsubprim .SPstkconslist-star)
+             (defsubprim .SPmkstackv)
+             (defsubprim .SPsetqsym)
+             (defsubprim .SPprogvsave)
+             (defsubprim .SPstack-misc-alloc)
+             (defsubprim .SPgvector)
+             (defsubprim .SPfitvals)
+             (defsubprim .SPnthvalue)
+             (defsubprim .SPdefault-optional-args)
+             (defsubprim .SPopt-supplied-p)
+             (defsubprim .SPheap-rest-arg)
+             (defsubprim .SPreq-heap-rest-arg)
+             (defsubprim .SPheap-cons-rest-arg)
+             (defsubprim .SPcheck-fpu-exception)
+             (defsubprim .SPdiscard-stack-object)
+             (defsubprim .SPksignalerr)
+             (defsubprim .SPstack-rest-arg)
+             (defsubprim .SPreq-stack-rest-arg)
+             (defsubprim .SPstack-cons-rest-arg)
+             (defsubprim .SPcall-closure)
+             (defsubprim .SPspreadargz)
+             (defsubprim .SPtfuncallgen)
+             (defsubprim .SPtfuncallslide)
+             (defsubprim .SPjmpsym)
+             (defsubprim .SPtcallsymgen)
+             (defsubprim .SPtcallsymslide)
+             (defsubprim .SPtcallnfngen)
+             (defsubprim .SPtcallnfnslide)
+             (defsubprim .SPmisc-ref)
+             (defsubprim .SPsubtag-misc-ref)
+             (defsubprim .SPmakestackblock)
+             (defsubprim .SPmakestackblock0)
+             (defsubprim .SPmakestacklist)
+             (defsubprim .SPstkgvector)
+             (defsubprim .SPmisc-alloc)
+             (defsubprim .SPatomic-incf-node)
+             (defsubprim .SPrecover-values)
+             (defsubprim .SPinteger-sign)
+             (defsubprim .SPsubtag-misc-set)
+             (defsubprim .SPmisc-set)
+             (defsubprim .SPspread-lexprz)
+             (defsubprim .SPreset)
+             (defsubprim .SPmvslide)
+             (defsubprim .SPsave-values)
+             (defsubprim .SPadd-values)
+             (defsubprim .SPmisc-alloc-init)
+             (defsubprim .SPstack-misc-alloc-init)
+             (defsubprim .SPpopj)
+             (defsubprim .SPgetu64)
+             (defsubprim .SPgets64)
+             (defsubprim .SPspecref)
+             (defsubprim .SPspecrefcheck)
+             (defsubprim .SPspecset)
+             (defsubprim .SPgets32)
+             (defsubprim .SPgetu32)
+             (defsubprim .SPmvpasssym)
+             (defsubprim .SPunbind)
+             (defsubprim .SPunbind-n)
+             (defsubprim .SPunbind-to)
+             (defsubprim .SPprogvrestore)
+             (defsubprim .SPbind-interrupt-level-0)
+             (defsubprim .SPbind-interrupt-level-m1)
+             (defsubprim .SPbind-interrupt-level)
+             (defsubprim .SPunbind-interrupt-level)
+             (defsubprim .SParef2)
+             (defsubprim .SParef3)
+             (defsubprim .SPaset2)
+             (defsubprim .SPaset3)
+             (defsubprim .SPkeyword-bind)
+             (defsubprim .SPffcall)
+             (defsubprim .SPdebind)
+             (defsubprim .SPcallback)
              )))))
 
 (defun subprimitive-offset (name)
@@ -418,8 +540,6 @@
       (when info
         (ccl::subprimitive-info-offset info)))))
                
-
-
 ;;; Memory layout of Lisp objects
 
 (defmacro define-storage-layout (name origin &rest cells)
@@ -623,14 +743,13 @@
   (defconstant tcr-bias 0))
 
 (define-storage-layout tcr (- tcr-bias)
-  prev                            ;in doubly-linked list
+  ;; this next/prev order is correct: other ports are wrong
   next                            ;in doubly-linked list
-  lisp-fpscr
-  db-link                         ;special binding chain head 
+  prev                            ;in doubly-linked list
+  db-link                         ;special binding chain head
   catch-top                       ;top catch frame 
   save-vsp                        ;SP when in foreign code 
   save-tsp                        ;TSP, at all times
-  foreign-sp                      ;SP when in lisp code
   cs-area                         ;cstack area pointer 
   vs-area                         ;vstack area pointer 
   ts-area                         ;tstack area pointer 
@@ -640,7 +759,7 @@
   interrupt-pending               ;fixnum
   xframe                          ;exception frame linked list
   errno-loc                       ;thread-private, maybe
-  ffi-exception                   ;fpscr bits from ff-call.
+  foreign-fpsr                    ;fpscr bits from ff-call.
   osid                            ;OS thread id 
   valence                         ;odd when in foreign code 
   foreign-exception-status
@@ -665,9 +784,13 @@
   shutdown-count
   next-tsp
   safe-ref-address
-  pending-io-info
-  io-datum
-  nfp)
+  io-datum                        ;Darwin: Mach thread exception port
+  nfp
+  ;; spare slots plus sptab follow
+  )
+
+(assert (= tcr.spare tcr.size))
+(assert (= tcr.sptab (+ tcr.spare (* 20 arm64::node-size))))
 
 (defconstant interrupt-level-binding-index (ash 1 fixnumshift))
 
