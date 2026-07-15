@@ -202,7 +202,6 @@ DEFCONST(subtag_value_cell, SUBTAG(fulltag_nodeheader_1, 5))
 DEFCONST(subtag_xfunction, SUBTAG(fulltag_nodeheader_1, 6))
 DEFCONST(subtag_lock, SUBTAG(fulltag_nodeheader_1, 7))
 DEFCONST(subtag_instance, SUBTAG(fulltag_nodeheader_1, 8))
-DEFCONST(subtag_pseudofunction, SUBTAG(fulltag_nodeheader_1, 9))
 
 DEFCONST(subtag_character, SUBTAG(fulltag_imm_0, 0))
 
