@@ -1956,22 +1956,21 @@
     (report-bad-arg object 'readtable))
   object)
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (def-accessors %svref
-      token.string
+    token.string
     token.ipos
     token.opos
-    token.len
-    )
+    token.len)
 
   (defmacro with-token-buffer ((name) &body body &environment env)
     (multiple-value-bind (body decls) (parse-body body env nil)
       `(let* ((,name (vector (%get-token-string 16) 0 0 16 nil)))
-        (declare (dynamic-extent ,name))
-        (unwind-protect
-             (locally ,@decls ,@body)
-          (%return-token-string ,name)))))
-  )
+         (declare (dynamic-extent ,name))
+         (unwind-protect
+              (locally ,@decls ,@body)
+           (%return-token-string ,name)))))
+)
 
 (defun read-dispatch (stream char)
   (let* ((alistp (typep (rdtab.macros *readtable*) 'list))
