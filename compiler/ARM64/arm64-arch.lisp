@@ -981,7 +981,7 @@
     (:vector-header . ,subtag-vectorH)
     (:array-header . ,subtag-arrayH)
     (:xfunction . ,subtag-xfunction)
-    (:min-cl-ivectpor-subtag . ,min-cl-ivector-subtag)))
+    (:min-cl-ivector-subtag . ,min-cl-ivector-subtag)))
 
 (export '*uvector-subtags*)
 

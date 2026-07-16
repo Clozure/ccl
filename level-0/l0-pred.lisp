@@ -209,7 +209,7 @@
       (or (= fulltag x8664::fulltag-nodeheader-0)
           (= fulltag x8664::fulltag-nodeheader-1))))
   #+arm64-target
-  (= (the fixnum (logand (the fixnum (typecode x)) arm64::tag-mask))
+  (= (the fixnum (logand (the fixnum (typecode x)) arm64::tagmask))
      arm64::tag-nodeheader)
   )
 
