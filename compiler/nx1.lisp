@@ -1469,6 +1469,7 @@
    (nx1-ff-call-internal
     context address-expression arg-specs-and-result-spec
     (ecase (backend-name *target-backend*)
+      ((:darwinarm64 :linuxarm64) (%nx1-operator aapcs64-ff-call))
       ((:linuxppc32 :linuxarm :darwinarm :androidarm) (%nx1-operator eabi-ff-call))
       ((:darwinppc32 :linuxppc64 :darwinppc64) (%nx1-operator poweropen-ff-call))
       ((:darwinx8632 :linuxx8632 :win32 :solarisx8632 :freebsdx8632) (%nx1-operator i386-ff-call))
@@ -2020,7 +2021,7 @@
 
 (defnx1 nx1-arm64-lap-function (arm64-lap-function) context (name bindings
                                                                 &body body)
-  (declare (ftype (function (t t t)) %define64-arm-lap-function))
+  (declare (ftype (function (t t t)) %define-arm64-lap-function))
   (require "ARM64-LAP")
   (setf (afunc-lfun *nx-current-function*)
         (%define-arm64-lap-function name `((let ,bindings ,@body))

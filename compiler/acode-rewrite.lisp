@@ -766,7 +766,10 @@
   (rewrite-acode-form size)
   (rewrite-acode-form body asserted-type))
 
-(def-acode-rewrite acode-rewrite-ff-call (ff-call eabi-ff-call poweropen-ff-call i386-ff-call) asserted-type (address argspecs argvals resultspec &optional monitor)
+(def-acode-rewrite acode-rewrite-ff-call (ff-call eabi-ff-call
+                                          poweropen-ff-call i386-ff-call
+                                          aapcs64-ff-call)
+    asserted-type (address argspecs argvals resultspec &optional monitor)
   (declare (ignore argspecs resultspec monitor))
   (rewrite-acode-form address)
   (dolist (val argvals) (rewrite-acode-form val)))

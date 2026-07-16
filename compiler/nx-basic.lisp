@@ -1045,7 +1045,7 @@
   `(,op ,@(decomp-arglist arglist)))
 
 (defdecomp (i386-syscall syscall eabi-syscall poweropen-syscall
-            i386-ff-call ff-call eabi-ff-call poweropen-ff-call)
+            i386-ff-call ff-call eabi-ff-call poweropen-ff-cal aapc64-ff-calll)
            (op target argspecs argvals resultspec &rest rest)
   `(,op
     ,(decomp-form target)
