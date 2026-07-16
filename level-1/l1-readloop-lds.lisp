@@ -775,6 +775,7 @@ commands but aren't")
                                       #+ppc-target *fake-stack-frames*
                                       #+x86-target (%current-frame-ptr)
                                       #+arm-target (or (current-fake-stack-frame) (%current-frame-ptr))
+                                      #+arm64-target (%current-frame-ptr)
                                       (db-link)
                                       (1+ *break-level*)))
          (*default-integer-command* `(:c 0 ,(1- (length (cdr (bt.restarts context))))))
