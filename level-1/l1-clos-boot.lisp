@@ -1919,7 +1919,7 @@ to replace that class with ~s" name old-class new-class)
     (make-built-in-class 'complex-double-float-vector *vector-class*)
     )
 
-  #+x8664-target
+  #+(or x8664-target arm64-target)
   (progn
     (make-built-in-class 'symbol-vector (find-class 'gvector))
     (make-built-in-class 'function-vector (find-class 'gvector)))
@@ -2097,6 +2097,62 @@ to replace that class with ~s" name old-class new-class)
               *t-class*
               *t-class*
               *t-class*
+              (find-class 'fixnum-vector)
+              (find-class 'doubleword-vector)
+              (find-class 'unsigned-doubleword-vector)
+              (find-class 'double-float-vector))))
+
+  #+arm64-target
+  (progn
+    (defparameter *immheader-0-classes*   ;ivector-class-other-bit
+      (vector *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              (find-class 'complex-double-float-vector)
+              (find-class 'word-vector)
+              (find-class 'unsigned-word-vector)
+              *t-class*
+              (find-class 'byte-vector)
+              (find-class 'unsigned-byte-vector)
+              (find-class 'bit-vector)))
+
+    (defparameter *immheader-1-classes*   ;ivector-class-32-bit
+      (vector *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              (find-class 'base-string)
+              (find-class 'long-vector)
+              (find-class 'unsigned-long-vector)
+              (find-class 'short-float-vector)))
+
+    (defparameter *immheader-2-classes*   ;ivector-class-64-bit
+      (vector *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              *t-class*
+              (find-class 'complex-single-float-vector)
               (find-class 'fixnum-vector)
               (find-class 'doubleword-vector)
               (find-class 'unsigned-doubleword-vector)
@@ -2335,6 +2391,18 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm::fulltag-nil)) *null-class*
                 (%svref v (+ slice arm::fulltag-imm)) *immediate-class*))
+        #+arm64-target
+        (do* ((slice 0 (+ 16 slice)))
+             ((= slice 256))
+          (declare (type (unsigned-byte 8) slice))
+          (setf (%svref v (+ slice arm64::fulltag-even-fixnum)) *fixnum-class*
+                (%svref v (+ slice arm64::fulltag-odd-fixnum))  *fixnum-class*
+                (%svref v (+ slice arm64::fulltag-cons)) *cons-class*
+                (%svref v (+ slice arm64::fulltag-nil)) *null-class*
+                (%svref v (+ slice arm64::fulltag-single-float)) (find-class
+                                                                  'short-float)
+                (%svref v (+ slice arm64::fulltag-imm-0)) *immediate-class*
+                (%svref v (+ slice arm64::fulltag-imm-1)) *immediate-class*))
 
         (macrolet ((map-subtag (subtag class-name)
                      `(setf (%svref v ,subtag) (find-class ',class-name))))
@@ -2349,6 +2417,8 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag ppc64::subtag-code-vector code-vector)
           #+arm-target
           (map-subtag arm::subtag-code-vector code-vector)
+          #+arm64-target
+          (map-subtag arm64::subtag-code-vector code-vector)
           #+ppc32-target
           (map-subtag ppc32::subtag-creole-object creole-object)
           (map-subtag target::subtag-xcode-vector xcode-vector)
@@ -2387,7 +2457,9 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-simple-vector simple-vector)
           (map-subtag target::subtag-slot-vector slot-vector)
           #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
-          #+x8664-target (map-subtag x8664::subtag-function function-vector))
+          #+x8664-target (map-subtag x8664::subtag-function function-vector)
+          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector)
+          #+arm64-target (map-subtag arm64::subtag-function function-vector))
         (setf (%svref v target::subtag-arrayH)
               #'(lambda (x)
                   (if (logbitp $arh_simple_bit
@@ -2420,7 +2492,8 @@ to replace that class with ~s" name old-class new-class)
         (setf (%svref v #+ppc-target target::subtag-symbol
                       #+arm-target target::subtag-symbol
 		      #+x8632-target target::subtag-symbol
-		      #+x8664-target target::tag-symbol)
+		      #+x8664-target target::tag-symbol
+                      #+arm64-target arm64::fulltag-symbol)
               #-ppc64-target
               #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
                               *keyword-class*
@@ -2437,7 +2510,8 @@ to replace that class with ~s" name old-class new-class)
                       #+ppc-target target::subtag-function
                       #+arm-target target::subtag-function
                       #+x8632-target target::subtag-function
-                      #+x8664-target target::tag-function) 
+                      #+x8664-target target::tag-function
+                      #+arm64-target arm64::fulltag-function)
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
               #'(lambda (v)
@@ -2445,7 +2519,7 @@ to replace that class with ~s" name old-class new-class)
                     (declare (fixnum subtype))
                     (if (eql subtype target::subtag-simple-vector)
                       *general-vector-class*
-                      #-x8664-target
+                      #-(or x8664-target arm64-target)
                       (%svref *ivector-vector-classes*
                               #+ppc32-target
                               (ash (the fixnum (- subtype ppc32::min-cl-ivector-subtag))
@@ -2468,7 +2542,16 @@ to replace that class with ~s" name old-class new-class)
                               ((= class x8664::fulltag-immheader-2)
                                (%svref *immheader-2-classes* idx))
                               (t *t-class*)))
-                               
+                      #+arm64-target
+                      (let* ((class (logand arm64::fulltagmask subtype))
+                             (idx (ash subtype (- arm64::ntagbits))))
+                        (cond ((= class arm64::fulltag-immheader-0)
+                               (%svref *immheader-0-classes* idx))
+                              ((= class arm64::fulltag-immheader-1)
+                               (%svref *immheader-1-classes* idx))
+                              ((= class arm64::fulltag-immheader-2)
+                               (%svref *immheader-2-classes* idx))
+                              (t *t-class*)))
                       ))))
         (setf (%svref v target::subtag-lock)
               #'(lambda (thing)
