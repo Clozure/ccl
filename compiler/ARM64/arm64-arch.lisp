@@ -1268,6 +1268,8 @@
 (defconstant fasl-version #x1)
 (defconstant fasl-max-version #x1)
 (defconstant fasl-min-version #x1)
-(defparameter *image-abi-version* #x1)
+;; Next free after ARM32's 1045; the placeholder #x1 fails every
+;; kernel's "image too old" minimum check (image.h ABI_VERSION).
+(defparameter *image-abi-version* 1046)
 
 (provide "ARM64-ARCH")
