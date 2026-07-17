@@ -696,14 +696,25 @@
 
 (defun fasl-read-gvector (s subtype)
   (let* ((n (%fasl-read-count s))
-         (vector (%alloc-misc n subtype)))
+         (vector (%alloc-misc n subtype))
+         (result vector))
     (declare (fixnum n subtype))
-    (%epushval s vector)
+    ;; NO-OP since the fulltag_function removal (patch 0055): an arm64
+    ;; function IS its misc-tagged uvector (fulltag-misc + header
+    ;; subtag-function), so function-vector-to-function is the identity
+    ;; here -- a typecode assertion, not a retag.  It reads as the general
+    ;; form: on a target whose function tag is a fulltag, the epushed
+    ;; value and faslval must carry it (funcall and self-reference need
+    ;; it), exactly as x86's $fasl-clfun does; the slots are filled
+    ;; through VECTOR either way.
+    #+arm64-target (when (= subtype arm64::subtag-function)
+                     (setq result (function-vector-to-function vector)))
+    (%epushval s result)
     (dotimes (i n)
       (setf (%svref vector i) (%fasl-expr s)))
     #+arm-target (when (= subtype arm::subtag-function)
                    (%fix-fn-entrypoint vector))
-    (setf (faslstate.faslval s) vector)))
+    (setf (faslstate.faslval s) result)))
 
 (deffaslop $fasl-vgvec (s)
   (let* ((subtype (%fasl-read-byte s)))
