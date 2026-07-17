@@ -696,14 +696,22 @@
 
 (defun fasl-read-gvector (s subtype)
   (let* ((n (%fasl-read-count s))
-         (vector (%alloc-misc n subtype)))
+         (vector (%alloc-misc n subtype))
+         (result vector))
     (declare (fixnum n subtype))
-    (%epushval s vector)
+    ;; arm64 functions are fulltag-function POINTERS, distinct from the
+    ;; subtag-function VECTOR built here; the epushed value + faslval must
+    ;; be that pointer (funcall and self-reference need it), exactly as
+    ;; x86's $fasl-clfun does.  function-vector-to-function is a pure retag
+    ;; of the same object, so the slots are still filled through VECTOR.
+    #+arm64-target (when (= subtype arm64::subtag-function)
+                     (setq result (function-vector-to-function vector)))
+    (%epushval s result)
     (dotimes (i n)
       (setf (%svref vector i) (%fasl-expr s)))
     #+arm-target (when (= subtype arm::subtag-function)
                    (%fix-fn-entrypoint vector))
-    (setf (faslstate.faslval s) vector)))
+    (setf (faslstate.faslval s) result)))
 
 (deffaslop $fasl-vgvec (s)
   (let* ((subtype (%fasl-read-byte s)))
