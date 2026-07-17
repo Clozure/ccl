@@ -139,7 +139,14 @@ extern LispObj lisp_nil;
    i.e. lisp_nil, which set_nil() stores at image-load time from the loaded
    static area's actual base, before any lisp_global/nrs_symbol use. */
 #define nil_value lisp_nil
-#define lisp_global(g) (((LispObj *)(nil_value-fulltag_nil-dnode_size))[(g)])
+/* Globals array base = untagged nil (0x13000): the kernel-global lisp
+   accessor is -(fulltag-nil + (1+pos)*8) relative to tagged nil
+   (arm64-arch.lisp %kernel-global), so global g=-1 sits at nil-fulltag-8.
+   The nil pun is TWO conses (0x13000..0x13020, xload
+   arm64-initialize-static-space); the first nrs symbol (T, header
+   observed in the image) starts at 0x13020 = nil-fulltag+2*dnode_size,
+   matching canonical-t-value (#x13020+fulltag-symbol). */
+#define lisp_global(g) (((LispObj *)(nil_value-fulltag_nil))[(g)])
 #define nrs_symbol(s) (((lispsymbol *)(nil_value-fulltag_nil+2*dnode_size))[(s)])
 #endif
 
