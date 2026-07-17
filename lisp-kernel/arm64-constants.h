@@ -415,6 +415,29 @@ _structf catch_frame
  _node xframe                   /* exception frame chain */
  _node nfp
 _endstructf
+
+/* Foreign-call argument frame, built by HIS alloc-c-frame vinsn
+ * (arm64-vinsns.lisp:287) and consumed by _SPffcall.  The layout is his:
+ * `header' is a subtag_u64_vector header whose count covers everything
+ * after it; `savedsp' is the SP from before the allocation (his "element
+ * 0").  There is deliberately NO savelr -- 4 words are RESERVED at the
+ * frame TOP for a boundary lisp_frame, published by shrinking the count
+ * by 4 (arm642.lisp:6323).  The 8 AAPCS64 GPR argument words live at
+ * c_frame.params; stack (overflow) args sit immediately above them.
+ * 16m30: this block used to say {backlink@0, savelr@8}, so _SPffcall
+ * stored lr over savedsp and restored sp from the header -> sp=0xded. */
+_struct c_frame
+ _node header
+ _node savedsp
+ _struct_label params
+_ends
+
+/* Assembler-visible mirrors of the TCR_STATE_* values (constants.h is
+ * guarded out of the assembler pass above; this block is inside the
+ * __ASSEMBLER__ section, so these don't collide with the C-side
+ * defines). */
+TCR_STATE_LISP = 0
+TCR_STATE_FOREIGN = 1
 #endif
 
 DEFCONST(two_digit_bignum_header, ((2<<num_subtag_bits)|subtag_bignum))
