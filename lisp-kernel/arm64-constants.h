@@ -392,6 +392,21 @@ _structf macptr
   _node type
 _endstructf
 
+/* Assembler-visible mirror of constants.h INTERRUPT_LEVEL_BINDING_INDEX:
+ * the *INTERRUPT-LEVEL* thread-local-binding byte offset (binding
+ * index 1, fixnum-boxed = <<fixnumshift). */
+INTERRUPT_LEVEL_BINDING_INDEX = (1 << fixnumshift)
+
+/* A special-binding stack entry, as pushed on the VALUE stack by
+ * _SPbind and friends and walked via tcr.db_link: the saved value,
+ * the symbol's tlb byte offset (a boxed binding index), and the
+ * previous db_link. */
+_struct binding
+ _node link
+ _node sym
+ _node val
+_ends
+
 _struct tsp_frame
  _node backlink
  _node type
