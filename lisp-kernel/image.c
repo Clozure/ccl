@@ -369,6 +369,19 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
       if (a == NULL) {
 	return 0;
       }
+#ifdef ARM64
+      /* lisp_nil is a runtime value on ARM64 (lisp_globals.h); establish
+         it as soon as the static section is mapped, BEFORE any later
+         section's loader touches lisp_global() -- allocate_dynamic_area()
+         writes lisp_global(HEAP_START).  Geometry matches the xload
+         writer: static space maps at STATIC_BASE_ADDRESS (0x12000), a
+         4KB filler ivector precedes NIL, so NIL = low + 4K + fulltag_nil
+         = canonical-nil-value (#x1300b, arm64-arch.lisp:245). */
+      if (sect->code == AREA_STATIC) {
+        image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+        set_nil(image_nil);
+      }
+#endif
     }
 
     for (i = 0, sect = sections; i < nsections; i++, sect++) {
