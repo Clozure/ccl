@@ -432,16 +432,16 @@
 
 (defparameter *instruction-templates*
   (vector
-   ;; nullary UUOs (uuo format #b111)
-   (def uuo-alloc-trap () (logior (ash 0 3) #x7) #xffffffff)
-   (def uuo-error-wrong-nargs () (logior (ash 1 3) #x7)  #xffffffff)
-   (def uuo-gc-trap () (logior (ash 2 3) #x7) #xffffffff)
-   (def uuo-debug-trap () (logior (ash 3 3) #x7) #xffffffff)
+   ;; misc-format UUOs (arm64-uuo.s: udf #((info << 2) | uuo_format_misc))
+   (def uuo-alloc-trap () (ash 1 2) #xffffffff)
+   (def uuo-error-wrong-nargs () (ash 8 2) #xffffffff)
+   (def uuo-gc-trap () (ash 2 2) #xffffffff)
+   (def uuo-debug-trap () (ash 3 2) #xffffffff)
 
-   ;; unary UUOs (uuo format #b001)
-   (def uuo-error-too-few-args () (logior (ash 0 3) #x1)  #xffffffff)
-   (def uuo-error-too-many-args () (logior (ash 1 3) #x1)  #xffffffff)
-   (def uuo-error-wrong-number-of-args () (logior (ash 2 3) #x1) #xffffffff)
+   ;; nargs-check UUOs (misc infos 6/7/8, arm64-uuo.s renumber)
+   (def uuo-error-too-few-args () (ash 6 2) #xffffffff)
+   (def uuo-error-too-many-args () (ash 7 2) #xffffffff)
+   (def uuo-error-wrong-number-of-args () (ash 8 2) #xffffffff)
 
    ;; binary UUOs (uuo format #b010)
 
