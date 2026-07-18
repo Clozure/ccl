@@ -167,7 +167,7 @@ DEFCONST(subtag_single_float_vector, SUBTAG(ivector_class_32_bit, 15))
 
 DEFCONST(subtag_complex_double_float_vector, SUBTAG(ivector_class_other_bit,9))
 DEFCONST(min_cl_ivector_subtag, subtag_complex_double_float_vector)
-DEFCONST(subtag_s16_vector, SUBTAG(ivector_class_other_bit, 9))
+DEFCONST(subtag_s16_vector, SUBTAG(ivector_class_other_bit, 10))
 DEFCONST(subtag_u16_vector, SUBTAG(ivector_class_other_bit, 11))
 /* missing 12 was an 8-bit simple base string */
 DEFCONST(subtag_s8_vector, SUBTAG(ivector_class_other_bit, 13))
