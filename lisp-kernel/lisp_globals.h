@@ -140,7 +140,7 @@ extern LispObj lisp_nil;
    static area's actual base, before any lisp_global/nrs_symbol use. */
 #define nil_value lisp_nil
 #define lisp_global(g) (((LispObj *)(nil_value-fulltag_nil-dnode_size))[(g)])
-#define nrs_symbol(s) (((lispsymbol *)(nil_value-fulltag_nil+dnode_size))[(s)])
+#define nrs_symbol(s) (((lispsymbol *)(nil_value-fulltag_nil+2*dnode_size))[(s)])
 #endif
 
 #define nrs_T 				(nrs_symbol(0))		/* t */
