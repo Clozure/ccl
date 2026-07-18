@@ -402,18 +402,27 @@
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 0))
 #+arm-target
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 1))
+#+arm64-target
+(defvar *fi-trampoline-code*
+  (uvref (function-to-function-vector #'funcallable-trampoline) 0))
 
 
 #+ppc-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 0))
 #+arm-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 1))
+#+arm64-target
+(defvar *unset-fin-code*
+  (uvref (function-to-function-vector #'unset-fin-trampoline) 0))
 
 
 #+ppc-target
 (defvar *gf-proto-code* (uvref *gf-proto* 0))
 #+arm-target
 (defvar *gf-proto-code* (uvref *gf-proto* 1))
+#+arm64-target
+(defvar *gf-proto-code*
+  (uvref (function-to-function-vector *gf-proto*) 0))
 
 ;;; The "early" version of %ALLOCATE-GF-INSTANCE.
 (setf (fdefinition '%allocate-gf-instance)
@@ -440,6 +449,20 @@
 			      0
 			      (%ilogior (%ilsl $lfbits-gfn-bit 1)
 					(%ilogand $lfbits-args-mask 0))))
+                   ;; arm64: ppc-shaped function vector (code-vector =
+                   ;; element 0), built misc-tagged then retagged to a
+                   ;; callable fulltag-function pointer.
+                   #+arm64-target
+                   (function-vector-to-function
+                    (gvector :function
+                             *gf-proto-code*
+                             wrapper
+                             slots
+                             dt
+                             #'%%0-arg-dcode
+                             0
+                             (%ilogior (%ilsl $lfbits-gfn-bit 1)
+                                       (%ilogand $lfbits-args-mask 0))))
                    #+x86-target
                    (%clone-x86-function *gf-proto*
                                         wrapper
@@ -474,6 +497,9 @@
 
 #+arm-target
 (defvar *cm-proto-code* (uvref *cm-proto* 1))
+#+arm64-target
+(defvar *cm-proto-code*
+  (uvref (function-to-function-vector *cm-proto*) 0))
 
 (defun %cons-combined-method (gf thing dcode)
   ;; set bits and name = gf
@@ -490,6 +516,16 @@
            gf
            (%ilogior (%ilsl $lfbits-cm-bit 1)
                             (%ilogand $lfbits-args-mask (lfun-bits gf)))))
+  ;; arm64: same ppc-shaped build + retag as %allocate-gf-instance.
+  #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+            *cm-proto-code*
+            thing
+            dcode
+            gf
+            (%ilogior (%ilsl $lfbits-cm-bit 1)
+                      (%ilogand $lfbits-args-mask (lfun-bits gf)))))
   #+x86-target
   (%clone-x86-function *cm-proto*
                        thing
