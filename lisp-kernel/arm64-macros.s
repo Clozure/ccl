@@ -38,9 +38,10 @@ _SP\name:
         .macro Cons dest, car, cdr
         sub allocptr, allocptr, #(cons.size - fulltag_cons)
         cmp allocptr, allocbase
-        b.hi 1f
+        b.hi .Lcons\@
         uuo_alloc
-1:      str \cdr, [allocptr, #cons.cdr]
+.Lcons\@:
+        str \cdr, [allocptr, #cons.cdr]
         str \car, [allocptr, #cons.car]
         mov \dest, allocptr
         clear_allocptr_tag
@@ -53,9 +54,10 @@ _SP\name:
         sub \size, \size, #fulltag_misc
         sub allocptr, allocptr, \size
         cmp allocptr, allocbase
-        b.hi 1f
+        b.hi .Lmalloc\@
         uuo_alloc
-1:      str \header, [allocptr, #misc_header_offset]
+.Lmalloc\@:
+        str \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
         .endm
@@ -63,9 +65,10 @@ _SP\name:
         .macro Misc_Alloc_Fixed dest, header, sizeconst
         sub allocptr, allocptr, #(\sizeconst - fulltag_misc)
         cmp allocptr, allocbase
-        b.hi 1f
+        b.hi .Lmaf\@
         uuo_alloc
-1:      str \header, [allocptr, #misc_header_offset]
+.Lmaf\@:
+        str \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
         .endm
