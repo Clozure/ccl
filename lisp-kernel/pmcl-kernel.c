@@ -1184,10 +1184,8 @@ usage_exit(char *herald, int exit_status, char* other_args)
   fprintf(dbgout, "\t--debug : try to ensure that kernel debugger uses a TTY for I/O\n");
 #ifdef LINUX
 #ifdef X86
-#if WORD_SIZE==64
-  fprintf(dbgout,  "\t--avx :signal handlers preserve AVX(YMM) registers on x8664 Linux.  This the default on Linux >=3.0\n");
- fprintf(dbgout,  "\t--no-avx :signal handler don't preserve AVX(YMM) registers on x8664 Linux, This the default on Linux <3.0\n");
-#endif
+  fprintf(dbgout,  "\t--avx : signal handlers preserve AVX (YMM) registers on x86 Linux.  This is the default on Linux >= 3.0\n");
+  fprintf(dbgout,  "\t--no-avx : signal handlers do not preserve AVX (YMM) registers on x86 Linux.  This is the default on Linux < 3.0\n");
 #endif
 #endif
   fprintf(dbgout, "\t-I, --image-name <image-name>\n");
@@ -1921,7 +1919,7 @@ main
 
   check_os_version(argv[0]);
 #ifdef LINUX
-#if WORD_SIZE==64
+#ifdef X86
   if (os_major_version >= 3) {
     copy_exception_avx_state = true;
   }
