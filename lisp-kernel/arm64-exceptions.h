@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 void enable_fp_exceptions(void);
 
 #ifdef DARWIN
@@ -15,5 +17,8 @@ typedef arm_exception_state64_t native_exception_state_t;
 
 void associate_tcr_with_exception_port(mach_port_t, TCR *);
 void disassociate_tcr_from_exception_port(mach_port_t);
+
+typedef uint64_t *pc;
+typedef uint32_t opcode;
 
 #endif

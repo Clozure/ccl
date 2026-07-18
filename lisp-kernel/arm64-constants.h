@@ -8,6 +8,10 @@
  */
 #pragma once
 
+#ifndef __ASSEMBLER__
+#include "lisptypes.h"
+#endif
+
 #ifdef __ASSEMBLER__
 #  define DEFCONST(name, val) name = val
 #else
@@ -37,6 +41,10 @@ DEFCONST(nargregs, 3)
 DEFCONST(nsaveregs, 4)
 
 DEFCONST(call_arguments_limit, 0x10000)
+DEFCONST(heap_segment_size, 0x20000)
+DEFCONST(log2_heap_segment_size, 17)
+// XXX - This is not going to work on macOS
+DEFCONST(STATIC_BASE_ADDRESS, 0x03fff000)
 
 /* lisp names for registers */
 #ifdef __ASSEMBLER__
@@ -207,9 +215,11 @@ DEFCONST(subtag_character, SUBTAG(fulltag_imm_0, 0))
 
 DEFCONST(subtag_unbound, SUBTAG(fulltag_imm_1, 1))
 DEFCONST(unbound_marker, subtag_unbound)
+DEFCONST(unbound, unbound_marker)
 DEFCONST(undefined, unbound_marker)
 DEFCONST(subtag_slot_unbound, SUBTAG(fulltag_imm_1, 2))
 DEFCONST(slot_unbound_marker, subtag_slot_unbound)
+DEFCONST(slot_unbound, subtag_slot_unbound)
 DEFCONST(subtag_illegal, SUBTAG(fulltag_imm_1, 3))
 DEFCONST(illegal_marker, subtag_illegal)
 DEFCONST(subtag_no_thread_local_binding, SUBTAG(fulltag_imm_1, 4))
@@ -227,6 +237,7 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
  */
 #ifndef __ASSEMBLER__
 #include "constants.h"
+#define fixnum_bitmask(n)  (1LL<<((n)+fixnumshift))
 #endif
 
 /* struct definitions */
@@ -375,6 +386,19 @@ _structf arrayH
  _struct_label dim0
 _endstructf
 
+_structf macptr
+  _node address
+  _node domain
+  _node type
+_endstructf
+
+_struct tsp_frame
+ _node backlink
+ _node type
+ _struct_label fixed_overhead
+ _struct_label data_offset
+_ends
+
 _struct lisp_frame
  _node marker
  _node savevsp
@@ -382,10 +406,14 @@ _struct lisp_frame
  _node savelr
 _ends
 
-_structf macptr
-  _node address
-  _node domain
-  _node type
+_structf catch_frame
+ _node catch_tag                /* #<unbound> -> unwind-protect, else catch */
+ _node link                     /* backpointer to previous catch frame */
+ _node mvflag                   /* 0 if single-valued catch, else fixnum 1 */
+ _node db_link                  /* head of special-binding chain */
+ _field regs, 4*node_size       /* save0 through save3 */
+ _node xframe                   /* exception frame chain */
+ _node nfp
 _endstructf
 #endif
 
@@ -542,6 +570,13 @@ typedef struct tcr {
   LispObj sptab[256];           /* subprims table (see arm64-spentry.s) */
 } TCR;
 
+typedef struct lisp_frame {
+  LispObj marker;
+  LispObj savevsp;
+  LispObj savefn;
+  LispObj savelr;
+} lisp_frame;
+
 #include <stddef.h>
 #include <assert.h>
 /*
@@ -554,4 +589,9 @@ static_assert(offsetof(TCR, sptab) == 496,
                "TCR.sptab changed; update tcr.sptab in arm64-arch.lisp");
 static_assert(sizeof(TCR) == 2544,
                "sizeof(TCR) changed; update arm64-arch.lisp");
+
+#define ABI_VERSION_MIN 1
+#define ABI_VERSION_CURRENT 1
+#define ABI_VERSION_MAX 1
+
 #endif

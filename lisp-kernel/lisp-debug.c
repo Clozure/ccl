@@ -981,6 +981,9 @@ debug_thread_info(ExceptionInformation *xp, siginfo_t *info, int arg)
 #ifdef ARM
               (natural)(xpGPR(xp,Rsp))
 #endif
+#ifdef ARM64
+              (natural)(xpSP(xp))
+#endif
               );
     }
   }

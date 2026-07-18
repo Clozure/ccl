@@ -14,6 +14,10 @@ typedef mcontext_t MCONTEXT_T;
 typedef ucontext_t ExceptionInformation;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 
+#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
+// this will end up being some random address
+#define IMAGE_BASE_ADDRESS 0x300000000000L
+
 #include "lisptypes.h"
 #include "arm64-constants.h"
 
@@ -23,6 +27,11 @@ extern void darwin_sigreturn(ExceptionInformation *, unsigned);
     Bug(context,"sigreturn returned");               \
   } while (0)
 #define SIGRETURN(context) DarwinSigReturn(context)
+
+#define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss.__x)))
+#define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
+#define xpSP(x) (UC_MCONTEXT(x)->__ss.__sp)
+#define xpPC(x) (*(pc *)&(UC_MCONTEXT(x)->__ss.__pc))
 
 #include <mach/mach.h>
 #include <mach/mach_error.h>
