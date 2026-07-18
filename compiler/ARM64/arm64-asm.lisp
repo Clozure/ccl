@@ -311,7 +311,7 @@
 ;;;
 ;;; Here's the vocabulary:
 ;;;
-;;; Bare keywords, such as :aimm or :limm represent a immediate
+;;; Bare keywords, such as :aimm or :limm-x represent a immediate
 ;;; value of various sorts.  They have particular valid ranges, and
 ;;; go into differeing bit-fields within the instruction word.
 ;;;
@@ -481,8 +481,8 @@
    (def mov ((:rd :x) :movw-mov-x)  #xd2800000 0 :alias)
    (def mov ((:rd :w) :movw-movn-w) #x12800000 0 :alias)
    (def mov ((:rd :x) :movw-movn-x) #x92800000 0 :alias)
-   (def mov ((:rd :w/sp) :limm) #x320003e0 0 :alias)
-   (def mov ((:rd :x/sp) :limm) #xb20003e0 0 :alias)
+   (def mov ((:rd :w/sp) :limm-w) #x320003e0 0 :alias)
+   (def mov ((:rd :x/sp) :limm-x) #xb20003e0 0 :alias)
 
    ;; Move wide (immediate)
    (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
@@ -493,16 +493,16 @@
    (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
 
    ;; Logical (immediate)
-   (def and ((:rd :w/sp) (:rn :w) :limm) #x12000000 #xff800000)
-   (def and ((:rd :x/sp) (:rn :x) :limm) #x92000000 #xff800000)
-   (def orr ((:rd :w/sp) (:rn :w) :limm) #x32000000 #xff800000)
-   (def orr ((:rd :x/sp) (:rn :x) :limm) #xb2000000 #xff800000)
-   (def eor ((:rd :w/sp) (:rn :w) :limm) #x52000000 #xff800000)
-   (def eor ((:rd :x/sp) (:rn :x) :limm) #xd2000000 #xff800000)
-   (def ands ((:rd :w) (:rn :w) :limm) #x72000000 #xff800000)
-   (def ands ((:rd :x) (:rn :x) :limm) #xf2000000 #xff800000)
-   (def tst ((:rn :w) :limm) #x7200001f 0 :alias)
-   (def tst ((:rn :x) :limm) #xf200001f 0 :alias)
+   (def and ((:rd :w/sp) (:rn :w) :limm-w) #x12000000 #xff800000)
+   (def and ((:rd :x/sp) (:rn :x) :limm-x) #x92000000 #xff800000)
+   (def orr ((:rd :w/sp) (:rn :w) :limm-w) #x32000000 #xff800000)
+   (def orr ((:rd :x/sp) (:rn :x) :limm-x) #xb2000000 #xff800000)
+   (def eor ((:rd :w/sp) (:rn :w) :limm-w) #x52000000 #xff800000)
+   (def eor ((:rd :x/sp) (:rn :x) :limm-x) #xd2000000 #xff800000)
+   (def ands ((:rd :w) (:rn :w) :limm-w) #x72000000 #xff800000)
+   (def ands ((:rd :x) (:rn :x) :limm-x) #xf2000000 #xff800000)
+   (def tst ((:rn :w) :limm-w) #x7200001f 0 :alias)
+   (def tst ((:rn :x) :limm-x) #xf200001f 0 :alias)
 
    ;; Bitfield
    (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
@@ -1214,7 +1214,8 @@
     :elt4          ;a vector lane Vn.Ts[i] whose index encodes into imm4
     :varr          ;a whole vector Vn.<T> (arrangement -> Q @ 30, size @ 23:22)
     :aimm          ;uimm12, maybe shifted left 12 bits
-    :limm          ;fancy logical immediate
+    :limm-x        ;logical bitmask immediate, 64-bit
+    :limm-w        ;logical bitmask immediate, 32-bit (replicated to 64, N=0)
     :simm9         ;signed 9-bit immediate for unscaled register offset
     :movw-x        ;16-bit immediate, LSL 0/16/32/48 (move wide, X)
     :movw-w        ;16-bit immediate, LSL 0/16 (move wide, W)
@@ -1702,7 +1703,8 @@
       (ecase class
         (:aimm  (and (member shift '(0 12)) (typep value '(unsigned-byte 12))))
         (:simm9 (and (eql shift 0) (typep value '(signed-byte 9))))
-        (:limm  (and (eql shift 0) (encode-logical-immediate value)))
+        (:limm-x (and (eql shift 0) (encode-logical-immediate value)))
+        (:limm-w (and (eql shift 0) (encode-logical-immediate-32 value)))
         (:uoff0 (uoff-p 0))
         (:uoff1 (uoff-p 1))
         (:uoff2 (uoff-p 2))
@@ -2118,8 +2120,10 @@
       (:aimm
        (set-field-value insn (byte 12 10) value)
        (set-field-value insn (byte 1 22) (if (= shift 12) 1 0)))
-      (:limm (set-field-value insn (byte 13 10)
-                              (encode-logical-immediate value)))
+      (:limm-x (set-field-value insn (byte 13 10)
+                                (encode-logical-immediate value)))
+      (:limm-w (set-field-value insn (byte 13 10)
+                                (encode-logical-immediate-32 value)))
       ((:movw-x :movw-w)
        (set-field-value insn (byte 16 5) value)
        (set-field-value insn (byte 2 21) (ash shift -4)))
@@ -2179,7 +2183,9 @@
            (make-immediate-operand :value value :shift shift)))
     (case class
       (:aimm (imm (ldb (byte 12 10) word) (if (logbitp 22 word) 12 0)))
-      (:limm (imm (decode-logical-immediate (ldb (byte 13 10) word))))
+      (:limm-x (imm (decode-logical-immediate (ldb (byte 13 10) word))))
+      (:limm-w (imm (ldb (byte 32 0)
+                         (decode-logical-immediate (ldb (byte 13 10) word)))))
       ((:movw-x :movw-w)
        (imm (ldb (byte 16 5) word) (* 16 (ldb (byte 2 21) word))))
       ((:tbit-x :tbit-w)
@@ -2398,7 +2404,7 @@
 (defun render-immediate-spec (class)
   (case class
     (:aimm   "#imm{, LSL #12}")
-    (:limm   "#bitmask")
+    ((:limm-x :limm-w) "#bitmask")
     (:simm9  "#simm9")
     ((:movw-x :movw-w) "#imm16{, LSL #shift}")
     ((:immr-x :immr-w) "#immr")
@@ -2868,14 +2874,24 @@
         (logior (ash n 12) (ash immr 6) (ldb (byte 6 0) imms))))))
 
 (defun encode-logical-immediate (n)
-  "Return a 13 bit encoding of n, or NIL if it can't be encoded."
-  (let* ((u64 (ldb (byte 64 0) n))
-         (u64-inverted (ldb (byte 64 0) (lognot u64))))
-    (if (or (/= n u64)                  ;n too big
-            (zerop u64)                 ;can't encode all zeros...
-            (zerop u64-inverted))       ;...or all ones
-      nil
-      (%encode-logical-immediate u64))))
+  "Return a 13 bit encoding of n, or NIL if it can't be encoded.  N may be
+   written signed (e.g. -16 for the mask #xfffffffffffffff0) or unsigned; it
+   just has to fit 64 bits one way or the other."
+  (when (typep n '(or (signed-byte 64) (unsigned-byte 64)))
+    (let* ((u64 (ldb (byte 64 0) n))
+           (u64-inverted (ldb (byte 64 0) (lognot u64))))
+      (unless (or (zerop u64)           ;can't encode all zeros...
+                  (zerop u64-inverted)) ;...or all ones
+        (%encode-logical-immediate u64)))))
+
+(defun encode-logical-immediate-32 (n)
+  "Return a 13-bit encoding of the 32-bit bitmask n, or nil if it can't
+   be encoded."
+  (when (typep n '(or (signed-byte 32) (unsigned-byte 32)))
+    (let ((u32 (ldb (byte 32 0) n)))
+      ;; Replicate the provided 32-bit bitmask into 64 bits so that
+      ;; the pattern width is guaranteed to be <= 32.
+      (encode-logical-immediate (logior u32 (ash u32 32))))))
 
 ;;; Form of an encoded logical immediate:
 ;;;
