@@ -531,7 +531,7 @@
 
 (defun ccl::arm64-disassemble-xfunction (xfunction &optional
                                                      (stream *debug-io*))
-  (let* ((code-vector (uvref xfunction 1))
+  (let* ((code-vector (uvref xfunction 0))
          (di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
     (print-di-vector di-vector stream)))

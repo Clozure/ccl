@@ -84,7 +84,7 @@
       (arm64-lap-generate-code current section-size *arm64-lap-lfun-bits*)
       )))
 
-(defun arm64-lap-generate-code (seg code-vector-size &optional (bits 0))
+(defun arm64-lap-generate-code (seg code-vector-size &optional (lfbits 0))
   (declare (fixnum code-vector-size))
   (let* ((target-backend *target-backend*)
          (cross-compiling (target-arch-case
@@ -93,12 +93,11 @@
          (prefix (arch::target-code-vector-prefix
                   (backend-target-arch *target-backend*)))
          (prefix-size (length prefix))
-         (constants-size (+ 3 (length arm64::*constants*)))
-         (constants-vector (%alloc-misc
-                            constants-size
-                            (if cross-compiling
-                              target::subtag-xfunction
-                              target::subtag-function)))
+         (constants-size (+ 2 (length arm64::*constants*)))
+         (constants-vector (%alloc-misc constants-size
+                                        (if cross-compiling
+                                          target::subtag-xfunction
+                                          target::subtag-function)))
          (i prefix-size))
     (declare (fixnum i constants-size))
     (let* ((code-vector (%alloc-misc
@@ -115,10 +114,9 @@
       (dolist (pair arm64::*constants*)
         (let ((imm (car pair))
               (k (cdr pair)))
-          (setf (uvref constants-vector (+ 2 k)) imm)))
-      (setf (uvref constants-vector (1- constants-size)) bits
-            (uvref constants-vector 1) code-vector
-            (uvref constants-vector 0) 0)
+          (setf (uvref constants-vector (1+ k)) imm)))
+      (setf (uvref constants-vector (1- constants-size)) lfbits
+            (uvref constants-vector 0) code-vector)
       constants-vector)))
 
 (defun arm64-lap-pseudo-op (directive arg current)
