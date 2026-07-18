@@ -1523,6 +1523,14 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
 #ifdef X8664
 typedef fpregset_t FPREGS;
 
+/* These magic words and offsets come from the Linux x86 signal-frame ABI in
+   <asm/sigcontext.h>.  Its struct _fpx_sw_bytes occupies bytes 464..511 of
+   the 512-byte FXSAVE frame: magic1 is at 464, extended_size at 468, and
+   xstate_size at 480.  MAGIC2 is the final word of the extended state area.
+   Keep private definitions here rather than including kernel UAPI types that
+   overlap the sigcontext types exposed by libc.  CCL_MAX_XSTATE_SIZE is not
+   part of the ABI; it is a defensive bound on the size copied from a signal
+   frame. */
 #define CCL_FP_XSTATE_MAGIC1 0x46505853U
 #define CCL_FP_XSTATE_MAGIC2 0x46505845U
 #define CCL_MAX_XSTATE_SIZE (1024U * 1024U)
