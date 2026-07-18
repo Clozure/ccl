@@ -850,6 +850,28 @@ minimum number of elements to add if it must be extended."
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
 
+#+arm64-target
+(defun subtag-bytes (subtag element-count)
+  ;; Must agree with misc-byte-count in compiler/ARM64/arm64-arch.lisp
+  ;; (the sizing the cross-dump used for every ivector in the image).
+  (declare (fixnum subtag element-count))
+  (unless (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                   (logior (ash 1 arm64::fulltag-immheader-0)
+                           (ash 1 arm64::fulltag-immheader-1)
+                           (ash 1 arm64::fulltag-immheader-2)))
+    (error "Not an ivector subtag: ~s" subtag))
+  (case (logand subtag arm64::fulltagmask)
+    (#.arm64::ivector-class-64-bit (ash element-count 3))
+    (#.arm64::ivector-class-32-bit (ash element-count 2))
+    (t
+     (if (= subtag arm64::subtag-bit-vector)
+       (ash (+ 7 element-count) -3)
+       (if (= subtag arm64::subtag-complex-double-float-vector)
+         (ash element-count 4)
+         (if (>= subtag arm64::min-8-bit-ivector-subtag)
+           element-count
+           (ash element-count 1)))))))
+
 (defun element-type-subtype (type)
   "Convert element type specifier to internal array subtype code"
   (ctype-subtype (specifier-type type)))

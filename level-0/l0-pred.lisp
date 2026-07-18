@@ -1054,6 +1054,10 @@
   (if thing
     (= (the fixnum (lisptag thing)) x8664::tag-symbol)
     t)
+  #+arm64-target
+  (if thing
+    (= (the fixnum (fulltag thing)) arm64::fulltag-symbol)
+    t)
   )
       
 (defun packagep (thing)
