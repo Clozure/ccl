@@ -47,6 +47,8 @@
   (l1-load "x86-callback-support")
   #+arm-target
   (l1-load "arm-callback-support")
+  #+arm64-target
+  (l1-load "arm64-callback-support")
   (l1-load "l1-callbacks")
   (l1-load "l1-sort")
   (bin-load "lists")
