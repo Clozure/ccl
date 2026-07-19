@@ -265,6 +265,11 @@
         #+arm-target
         (= (logand subtag arm::fulltagmask)
            arm::fulltag-immheader)
+        #+arm64-target
+        (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                 (logior (ash 1 arm64::fulltag-immheader-0)
+                         (ash 1 arm64::fulltag-immheader-1)
+                         (ash 1 arm64::fulltag-immheader-2)))
       (error "~s is not an ivector subtype." element-type))
     (let* ((size-in-octets (ccl::subtag-bytes subtag element-count)))
       (multiple-value-bind (vector pointer)
