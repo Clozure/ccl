@@ -4300,6 +4300,15 @@
       (%%typep thing #.(specifier-type t))))
 
 (defun make-simple-type-predicate (function datum)
+  ;; arm64: ppc-shaped function vector, patch-0018/0020 model.
+  #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+            (uvref (function-to-function-vector *simple-predicate-function-prototype*) 0)
+            datum
+            function
+            nil
+            (dpb 1 $lfbits-numreq 0)))
   #+ppc-target
   (gvector :function
            (uvref *simple-predicate-function-prototype* 0)
