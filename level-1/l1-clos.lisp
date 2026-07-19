@@ -369,6 +369,17 @@
                          (standard-effective-slot-definition.slot-id slotd)))
                   i))))
       (let* ((lookup-f
+              #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+                                  #'%small-map-slot-id-lookup
+                                  #'%large-map-slot-id-lookup)) 0)
+                        map
+                        table
+                        (dpb 1 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
               #+ppc-target
               (gvector :function
 				(%svref (if small
@@ -399,6 +410,20 @@
 				     (ash -1 $lfbits-noname-bit))))
 	     (class (%wrapper-class wrapper))
 	     (get-f
+              #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+                                  #'%small-slot-id-value
+                                  #'%large-slot-id-value)) 0)
+                        map
+                        table
+                        class
+                        #'%maybe-std-slot-value-using-class
+                        #'%slot-id-ref-missing
+                        (dpb 2 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
               #+ppc-target
               (gvector :function
                        (%svref (if small
@@ -437,6 +462,20 @@
                                    (dpb 2 $lfbits-numreq
                                         (ash -1 $lfbits-noname-bit))))
 	     (set-f
+              #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+                                  #'%small-set-slot-id-value
+                                  #'%large-set-slot-id-value)) 0)
+                        map
+                        table
+                        class
+                        #'%maybe-std-setf-slot-value-using-class
+                        #'%slot-id-set-missing
+                        (dpb 3 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
               #+ppc-target
               (gvector :function
                        (%svref (if small
@@ -1689,6 +1728,19 @@ governs whether DEFCLASS makes that distinction or not.")
 	 (dt (if gf-p (make-gf-dispatch-table)))
 	 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
 	 (fn
+          ;; arm64: ppc shape + retag (patch-0018 model); *unset-fin-code*
+          ;; has an arm64 defvar in l1-dcode (patch 0018).
+          #+arm64-target
+           (function-vector-to-function
+            (gvector :function
+                     *unset-fin-code*
+                     wrapper
+                     slots
+                     dt
+                     #'false
+                     0
+                     (logior (ash 1 $lfbits-gfn-bit)
+                             (ash 1 $lfbits-aok-bit))))
           #+ppc-target
            (gvector :function
                     *unset-fin-code*
