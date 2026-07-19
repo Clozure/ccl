@@ -620,16 +620,22 @@
   flags
   link)
 
-;;; XXX no idea about this for ARM64 right now
-;;; Catch frames go on the cstack, below a lisp frame whose savelr
-;;; field references the catch exit point/unwind-protect cleanup code.
+;;; Kernel ground truth (lisp-kernel _structf catch_frame + mkcatch):
+;;; PPC64's layout with nsaveregs=4.  Catch frames are misc-tagged
+;;; uvectors on the temp stack; the caller's continuation lives in a
+;;; control-stack lisp_frame referenced by the csp slot.  regs[] holds
+;;; save0..save3 in ascending order (str save0 at regs+0).
 (define-fixedsized-object catch-frame ()
+  catch-tag            ;#<unbound> -> unwind-protect, else catch
   link                 ;tagged pointer to next older catch frame
   mvflag               ;0 if single-value, 1 if uwp or multiple-value
-  catch-tag            ;#<unbound> -> unwind-protect, else catch
+  csp                  ;saved control-stack lisp_frame pointer
   db-link              ;value of dynamic-binding link on thread entry.
+  save-save0           ;saved registers, save0 first
+  save-save1
+  save-save2
+  save-save3
   xframe               ;exception-frame link
-  last-lisp-frame
   nfp)
 
 (define-fixedsized-object lock ()
