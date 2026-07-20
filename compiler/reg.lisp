@@ -161,7 +161,7 @@
 (defparameter *encoded-reg-value-byte*
   #+x8664-target (byte 4 0)
   #+x8632-target (byte 3 0)
-  #+(or arm-target ppc-target) (byte 5 0))
+  #+(or arm-target ppc-target arm64-target) (byte 5 0))
 
 ; Return physical regspec's value:
 (defmacro hard-regspec-value (regspec)
