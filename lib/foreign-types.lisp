@@ -104,8 +104,8 @@
                         (:freebsdx8632 "ccl:freebsd-headers;")
                         (:linuxarm "ccl:arm-headers;")
                         (:darwinarm "ccl:darwin-arm-headers;")
-                        (:androidarm "ccl:android-headers;")
-                        (:linuxarm64 "ccl:arm64-headers;")
+                       (:androidarm "ccl:android-headers;")
+                        (:linuxarm64 "ccl:arm64-headers64;")
                         (:darwinarm64 "ccl:darwin-arm64-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
