@@ -117,7 +117,17 @@
           (setf (uvref constants-vector (1+ k)) imm)))
       (setf (uvref constants-vector (1- constants-size)) lfbits
             (uvref constants-vector 0) code-vector)
-      constants-vector)))
+      ;; %alloc-misc returns a misc-tagged vector; hand the resident
+      ;; (non-cross) path to function-vector-to-function so both ends name
+      ;; the conversion, as $fasl-clfun does.  NOT a retag on arm64: since
+      ;; the fulltag_function removal (patch 0055) a function IS its
+      ;; misc-tagged uvector (header subtag-function, 0x96), so this is
+      ;; the identity plus a typecode assertion -- the PPC64 shape.
+      ;; Cross-compile keeps the raw subtag-xfunction vector (the image
+      ;; writer tags it).
+      (if cross-compiling
+        constants-vector
+        (function-vector-to-function constants-vector)))))
 
 (defun arm64-lap-pseudo-op (directive arg current)
   (ecase directive

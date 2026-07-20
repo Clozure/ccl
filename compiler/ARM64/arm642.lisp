@@ -656,7 +656,16 @@
     (arm642-fixup-fwd-refs f))
   (let ((fwd-refs (afunc-fwd-refs afunc)))
     (when fwd-refs
-      (let* ((v (afunc-lfun afunc))
+      ;; afunc-lfun comes back through function-vector-to-function on the
+      ;; resident path; %svref/uvsize below are vector accessors, so take
+      ;; the vector view for symmetry.  On arm64 that pair is the identity
+      ;; since the fulltag_function removal (patch 0055) -- a function is
+      ;; already its misc-tagged uvector -- so this is a typecode
+      ;; assertion, not a tag change.  Cross-compile leaves it raw.
+      (let* ((v (let ((raw (afunc-lfun afunc)))
+                  (if (eq *host-backend* *target-backend*)
+                    (%function-to-function-vector raw)
+                    raw)))
              (vlen (uvsize v)))
         (declare (fixnum vlen))
         (dolist (ref fwd-refs)
