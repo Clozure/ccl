@@ -10,10 +10,10 @@
 
 (define-arm64-vinsn misc-ref-c-node (((dest :lisp))
                                      ((v :lisp)
-                                      (idx :u32))
+                                      (idx :s16const))
                                      ())
   ;; this range is limited
-  (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
+  (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset (:apply ash idx 3))))))
 
 (define-arm64-vinsn check-exact-nargs (()
                                        ((n :u16const)))
