@@ -185,6 +185,8 @@
 (defconstant no-thread-local-binding-marker subtag-no-thread-local-binding)
 (define-subtag lisp-frame-marker fulltag-imm-1 5)
 (defconstant lisp-frame-marker subtag-lisp-frame-marker)
+(define-subtag stack-alloc-marker fulltag-imm-1 6)
+(defconstant stack-alloc-marker subtag-stack-alloc-marker)
 
 ;;; Extended type codes ("xtypes") for wrong-type UUOs.  The 8-bit
 ;;; expected-type field of a wrong-type UUO holds either a lisptag, a

@@ -22,6 +22,7 @@
 #+ppc-target (require "PPC-BACKTRACE")
 #+x86-target (require "X86-BACKTRACE")
 #+arm-target (require "ARM-BACKTRACE")
+#+arm64-target (require "ARM64-BACKTRACE")
 
 
 (defparameter *backtrace-show-internal-frames* nil)
