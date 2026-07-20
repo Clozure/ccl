@@ -657,7 +657,13 @@
     (arm642-fixup-fwd-refs f))
   (let ((fwd-refs (afunc-fwd-refs afunc)))
     (when fwd-refs
-      (let* ((v (afunc-lfun afunc))
+      ;; ARM64-DEVIATION (16m23): afunc-lfun is now fulltag_function on
+      ;; the resident path; %svref/uvsize below are misc accessors, so
+      ;; take a misc view.  Cross-compile (host != target) leaves it raw.
+      (let* ((v (let ((raw (afunc-lfun afunc)))
+                  (if (eq *host-backend* *target-backend*)
+                    (%function-to-function-vector raw)
+                    raw)))
              (vlen (uvsize v)))
         (declare (fixnum vlen))
         (dolist (ref fwd-refs)

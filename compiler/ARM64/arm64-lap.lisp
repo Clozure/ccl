@@ -117,7 +117,15 @@
           (setf (uvref constants-vector (1+ k)) imm)))
       (setf (uvref constants-vector (1- constants-size)) lfbits
             (uvref constants-vector 0) code-vector)
-      constants-vector)))
+      ;; ARM64-DEVIATION (resident retag, 16m23): %alloc-misc returns a
+      ;; misc-tagged vector; Matt's fulltag_function(15) is distinct from
+      ;; fulltag_misc(12), so the resident (non-cross) path must retag it
+      ;; to a real callable function (passes require-function checks, e.g.
+      ;; %defun).  Cross-compile keeps the raw subtag-xfunction vector (the
+      ;; image writer tags it).  Mirrors $fasl-clfun's retag.
+      (if cross-compiling
+        constants-vector
+        (function-vector-to-function constants-vector)))))
 
 (defun arm64-lap-pseudo-op (directive arg current)
   (ecase directive
