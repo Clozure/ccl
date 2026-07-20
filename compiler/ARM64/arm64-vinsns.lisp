@@ -426,7 +426,7 @@
                                                       (x :imm))
                                                      ((temp (:u64 #.arm64::imm0))))
   (movz temp (:$ spno))
-  (ldr temp (:@ rnil temp))
+  (ldr temp (:@ rcontext temp))
   (blr temp))
 
 (define-arm64-vinsn (call-subprim-2 :call :subprim) (((dest :imm))
@@ -435,7 +435,7 @@
                                                       (y :imm))
                                                      ((temp (:u64 #.arm64::imm0))))
   (movz temp (:$ spoffset))
-  (ldr temp (:@ rnil temp))
+  (ldr temp (:@ rcontext temp))
   (blr temp))
 
 (define-arm64-vinsn (jump :jump) (()
