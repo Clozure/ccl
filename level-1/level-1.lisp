@@ -95,6 +95,8 @@
   (l1-load "x86-trap-support")
   #+arm-target
   (l1-load "arm-trap-support")
+  #+arm64-target
+  (l1-load "arm64-trap-support")
   (l1-load "l1-format")
   (l1-load "l1-sysio")
   (l1-load "l1-pathnames")

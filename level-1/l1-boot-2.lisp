@@ -48,6 +48,8 @@
     (l1-load "x86-error-signal")
     #+arm-target
     (l1-load "arm-error-signal")
+    #+arm64-target
+    (l1-load "arm64-error-signal")
     (l1-load "l1-error-signal")
     (l1-load "l1-sockets")
     (setq *LEVEL-1-LOADED* t))
