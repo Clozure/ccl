@@ -80,45 +80,45 @@ vsp .req x25
 allocptr .req x26
 allocbase .req x27
 rcontext .req x28
+#endif
 
 /* register numbers */
-Rimm0 = 0
-Rimm1 = 1
-Rimm2 = 2
-Rimm3 = 3
-Rimm4 = 4
-Rimm5 = 5
-Rnargs = 6
-Rfn = 7
-Rarg_w = 8
-Rarg_x = 9
-Rarg_y = 10
-Rarg_z = 11
-Rtemp0 = 12
-Rtemp1 = 13
-Rtemp2 = 14
-Rtemp3 = 15
-Rtemp4 = 16
-Rtemp5 = 17
-Rnext_method_context = Rtemp1
-Rnfn = Rtemp2
-Rfname = Rtemp3
+DEFCONST(Rimm0, 0)
+DEFCONST(Rimm1, 1)
+DEFCONST(Rimm2, 2)
+DEFCONST(Rimm3, 3)
+DEFCONST(Rimm4, 4)
+DEFCONST(Rimm5, 5)
+DEFCONST(Rnargs, 6)
+DEFCONST(Rfn, 7)
+DEFCONST(Rarg_w, 8)
+DEFCONST(Rarg_x, 9)
+DEFCONST(Rarg_y, 10)
+DEFCONST(Rarg_z, 11)
+DEFCONST(Rtemp0, 12)
+DEFCONST(Rtemp1, 13)
+DEFCONST(Rtemp2, 14)
+DEFCONST(Rtemp3, 15)
+DEFCONST(Rtemp4, 16)
+DEFCONST(Rtemp5, 17)
+DEFCONST(Rnext_method_context, Rtemp1)
+DEFCONST(Rnfn, Rtemp2)
+DEFCONST(Rfname, Rtemp3)
 /* x18 reserved */
-Rsave0 = 19
-Rsave1 = 20
-Rsave2 = 21
-Rsave3 = 22
-Rrnil = 23
-Rtsp = 24
-Rvsp = 25
-Rallocptr = 26
-Rallocbase = 27
-Rrcontext = 28
-Rfp = 29
-Rlr = 30
-Rsp = 31
-Rzr = 31
-#endif
+DEFCONST(Rsave0, 19)
+DEFCONST(Rsave1, 20)
+DEFCONST(Rsave2, 21)
+DEFCONST(Rsave3, 22)
+DEFCONST(Rrnil, 23)
+DEFCONST(Rtsp, 24)
+DEFCONST(Rvsp, 25)
+DEFCONST(Rallocptr, 26)
+DEFCONST(Rallocbase, 27)
+DEFCONST(Rrcontext, 28)
+DEFCONST(Rfp, 29)
+DEFCONST(Rlr, 30)
+DEFCONST(Rsp, 31)
+DEFCONST(Rzr, 31)
 
 DEFCONST(tag_fixnum,       0b000)
 DEFCONST(tag_single_float, 0b001)
@@ -467,6 +467,7 @@ _struct tcr
   _node prev            /* in doubly-linked list   */
   _node db_link         /* special binding chain head   */
   _node catch_top       /* top catch frame   */
+  _node last_lisp_frame
   _node save_vsp        /* VSP when in foreign code   */
   _node save_tsp        /* TSP when in foreign code   */
   _node cs_area         /* cstack area pointer   */
@@ -501,7 +502,6 @@ _struct tcr
   _node tlb_limit
   _node tlb_pointer     /* Consider using tcr+N as tlb_pointer   */
   _node shutdown_count
-  _node next_tsp
   _node safe_ref_address
   _node io_datum /* Darwin: Mach thread exception port */
   _node nfp
@@ -528,6 +528,7 @@ typedef struct tcr {
   struct tcr *prev;
   special_binding* db_link;     /* special binding chain head */
   LispObj catch_top;            /* top catch frame */
+  LispObj *last_lisp_frame; /* top frame on cstack when in foreign code */
   LispObj *save_vsp;  /* VSP when in foreign code */
   LispObj *save_tsp;  /* TSP when in foreign code */
   struct area *cs_area; /* cstack area pointer */
@@ -562,7 +563,6 @@ typedef struct tcr {
   natural tlb_limit;
   LispObj *tlb_pointer;
   natural shutdown_count;
-  LispObj *next_tsp;
   void *safe_ref_address;
   void *io_datum;               /* Darwin: Mach thread exception port */
   void *nfp;

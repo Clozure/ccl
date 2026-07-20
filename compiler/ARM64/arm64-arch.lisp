@@ -538,7 +538,7 @@
                                       :key  #'ccl::subprimitive-info-name)))
       (when info
         (ccl::subprimitive-info-offset info)))))
-               
+
 ;;; Memory layout of Lisp objects
 
 (defmacro define-storage-layout (name origin &rest cells)
@@ -685,9 +685,9 @@
   rank                ;NEVER 1
   physsize            ;total size of (possibly displaced) data vector
   data-vector         ;object this header describes
-  displacement        ;true displacement or 0  
+  displacement        ;true displacement or 0
   flags               ;has-fill-pointer, displaced-to, adjustable bits;
-                      ;  subtype of underlying simple vector. 
+                      ;  subtype of underlying simple vector.
   ;; Dimensions follow
   )
 (defconstant arrayH.rank-cell 0)
@@ -746,12 +746,13 @@
   next                            ;in doubly-linked list
   prev                            ;in doubly-linked list
   db-link                         ;special binding chain head
-  catch-top                       ;top catch frame 
-  save-vsp                        ;SP when in foreign code 
-  save-tsp                        ;TSP, at all times
-  cs-area                         ;cstack area pointer 
-  vs-area                         ;vstack area pointer 
-  ts-area                         ;tstack area pointer 
+  catch-top                       ;top catch frame
+  last-lisp-frame
+  save-vsp                        ;vsp when in foreign code
+  save-tsp                        ;tsp when in foreign code
+  cs-area                         ;cstack area pointer
+  vs-area                         ;vstack area pointer
+  ts-area                         ;tstack area pointer
   cs-limit                        ;cstack overflow limit
   total-bytes-allocated           ;
   log2-allocation-quantum         ;unboxed
@@ -759,8 +760,8 @@
   xframe                          ;exception frame linked list
   errno-loc                       ;thread-private, maybe
   foreign-fpsr                    ;fpscr bits from ff-call.
-  osid                            ;OS thread id 
-  valence                         ;odd when in foreign code 
+  osid                            ;OS thread id
+  valence                         ;odd when in foreign code
   foreign-exception-status
   native-thread-info
   native-thread-id
@@ -772,7 +773,7 @@
   suspend-count
   suspend-context
   pending-exception-context
-  suspend                         ;semaphore for suspension notify 
+  suspend                         ;semaphore for suspension notify
   resume                          ;sempahore for resumption notify
   flags                           ;foreign, being reset, ...
   gc-context
@@ -781,7 +782,6 @@
   tlb-limit
   tlb-pointer
   shutdown-count
-  next-tsp
   safe-ref-address
   io-datum                        ;Darwin: Mach thread exception port
   nfp
@@ -951,7 +951,7 @@
     (:xcode-vector . ,subtag-xcode-vector)
     (:macptr . ,subtag-macptr)
     (:catch-frame . ,subtag-catch-frame)
-    (:struct . ,subtag-struct)    
+    (:struct . ,subtag-struct)
     (:istruct . ,subtag-istruct)
     (:pool . ,subtag-pool)
     (:population . ,subtag-weak)
@@ -972,7 +972,7 @@
     (:unsigned-32-bit-vector . ,subtag-u32-vector)
     (:signed-64-bit-vector . ,subtag-s64-vector)
     (:fixnum-vector . ,subtag-fixnum-vector)
-    (:unsigned-64-bit-vector . ,subtag-u64-vector)    
+    (:unsigned-64-bit-vector . ,subtag-u64-vector)
     (:single-float-vector . ,subtag-single-float-vector)
     (:double-float-vector . ,subtag-double-float-vector)
     (:simple-vector . ,subtag-simple-vector)
@@ -1159,7 +1159,7 @@
         (#.arm64::subtag-complex-double-float
          (ccl::%complex-double-float-realpart ,thing))
         (t (ccl::%svref ,thing arm64::complex.realpart-cell))))))
-                    
+
 (defarm64archmacro ccl::%imagpart (x)
   (let* ((thing (gensym)))
     `(let* ((,thing ,x))
