@@ -18,7 +18,6 @@ typedef arm_exception_state64_t native_exception_state_t;
 void associate_tcr_with_exception_port(mach_port_t, TCR *);
 void disassociate_tcr_from_exception_port(mach_port_t);
 
-typedef uint64_t *pc;
-typedef uint32_t opcode;
+typedef uint32_t opcode, *pc;   /* AArch64 instructions are 32-bit */
 
 #endif
