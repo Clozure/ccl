@@ -747,12 +747,16 @@
    (def ldr ((:rt :s) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xbd400000 $ldst-pos-mask)
    (def str ((:rt :d) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xfd000000 $ldst-pos-mask)
    (def ldr ((:rt :d) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xfd400000 $ldst-pos-mask)
+   (def str ((:rt :q) (:mem-scaled (:base :x/sp) (:imm :uoff4))) #x3d800000 $ldst-pos-mask)
+   (def ldr ((:rt :q) (:mem-scaled (:base :x/sp) (:imm :uoff4))) #x3dc00000 $ldst-pos-mask)
 
    ;; FP load/store register (unscaled immediate)
    (def stur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc000000 $ldst-unscaled-mask)
    (def ldur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc400000 $ldst-unscaled-mask)
    (def stur ((:rt :d) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xfc000000 $ldst-unscaled-mask)
    (def ldur ((:rt :d) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xfc400000 $ldst-unscaled-mask)
+   (def stur ((:rt :q) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x3c800000 $ldst-unscaled-mask)
+   (def ldur ((:rt :q) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x3cc00000 $ldst-unscaled-mask)
 
    ;; FP load/store register (immediate post-indexed)
    (def str ((:rt :s) (:mem-post (:base :x/sp) (:imm :simm9))) #xbc000400 $ldst-unscaled-mask)
@@ -1208,6 +1212,7 @@
     :wsp           ;WSP, specifically
     :s             ;Sn, scalar single-float (FP/SIMD reg, 32-bit view)
     :d             ;Dn, scalar double-float (FP/SIMD reg, 64-bit view)
+    :q             ;Qn, 128-bit view, SIMD&FP reg
     :b             ;8-bit view, SIMD&FP reg
     :h             ;16-bit view, SIMD&FP reg
     :elt5          ;a vector lane Vn.Ts[i] whose size+index encode into imm5
@@ -1261,6 +1266,7 @@
     :uoff1         ; so the access-size scale is baked into the class and the
     :uoff2         ; offset predicate needs no external scale-shift
     :uoff3
+    :uoff4         ; ... and the 128-bit (Q) access, scale 4
     :regoff0       ;register index with natural scale N = log2(access size):
     :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
     :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from amount.
@@ -1505,6 +1511,7 @@
        :register (ecase view
                    (:s (fpr-ref number 32))
                    (:d (fpr-ref number 64))
+                   (:q (fpr-ref number 128))
                    (:b (fpr-ref number 8))
                    (:h (fpr-ref number 16))
                    (:w (gpr-ref number 32))
@@ -1613,6 +1620,7 @@
         (:wsp (sp-p 32))
         (:s (fpr-p 32))
         (:d (fpr-p 64))
+        (:q (fpr-p 128))
         (:b (fpr-p 8))
         (:h (fpr-p 16))
         (:x-shift (shifted-p 64 nil))
@@ -1709,6 +1717,7 @@
         (:uoff1 (uoff-p 1))
         (:uoff2 (uoff-p 2))
         (:uoff3 (uoff-p 3))
+        (:uoff4 (uoff-p 4))
         (:poff2 (poff-p 2))
         (:poff3 (poff-p 3))
         (:movw-x (and (typep value '(unsigned-byte 16))
@@ -1927,6 +1936,7 @@
       (:wsp  (make-register-operand :register (gpr-ref 31 32 t)))
       (:s    (make-register-operand :register (fpr-ref number 32)))
       (:d    (make-register-operand :register (fpr-ref number 64)))
+      (:q    (make-register-operand :register (fpr-ref number 128)))
       (:b    (make-register-operand :register (fpr-ref number 8)))
       (:h    (make-register-operand :register (fpr-ref number 16)))
       ;; shifted
@@ -2055,6 +2065,7 @@
     (:uoff1 ,(byte 12 10) :scale 1)
     (:uoff2 ,(byte 12 10) :scale 2)
     (:uoff3 ,(byte 12 10) :scale 3)
+    (:uoff4 ,(byte 12 10) :scale 4)
     (:poff2 ,(byte 7 15) :scale 2 :signed t)
     (:poff3 ,(byte 7 15) :scale 3 :signed t)
     (:immr-x ,(byte 6 16))
