@@ -30,6 +30,46 @@
 (defparameter *arm642-stack-vars* ())
 (defparameter *arm642-tagbody-info* ())
 
+(defun arm642-max-nfp-depth ()
+  ;; Maximum extent, in bytes, of the NFP data area.  This is the size
+  ;; of the unboxed data region only;  the frame's header word and
+  ;; saved-nfp link are added by ARM642-NFP-FRAME-SIZE.
+  (or *arm642-max-nfp-depth*
+      (setq *arm642-max-nfp-depth*
+            (let* ((max 0))
+              (declare (fixnum max))
+              (dolist (v *arm642-all-nfp-pushes* max)
+                (when (and v (vinsn-succ v))    ;not elided
+                  (let* ((depth (+ (the fixnum
+                                        (svref (vinsn-variable-parts v) 1))
+                                   (if (vinsn-attribute-p v :uses-frame-pointer)
+                                     16
+                                     8))))
+                    (declare (fixnum depth))
+                    (when (> depth max)
+                      (setq max depth)))))))))
+
+;;; The NFP frame is a u64-vector on the control stack.
+;;; Layout:
+;;;   word 0            : u64-vector header (immheader)
+;;;   word 1 (element 0): saved previous tcr.nfp (the frame link; unboxed)
+;;;   word 2.. (elt 1..): unboxed NFP data (ARM642-MAX-NFP-DEPTH bytes)
+;;; Data therefore lives at frame-base + (2 * node-size) + offset.  The whole
+;;; frame is rounded up to a dnode so SP stays 16-byte aligned.
+(defun arm642-nfp-frame-size ()
+  (logandc2 (+ (arm642-max-nfp-depth)
+               (* 2 arm64::node-size)           ;header + saved-nfp
+               (1- arm64::dnode-size))
+            (1- arm64::dnode-size)))
+
+(defun arm642-nfp-header ()
+  ;; u64-vector header whose element count covers the whole frame, so
+  ;; skip_over_ivector lands exactly on the caller's frame.  Constant at
+  ;; compile time (ARM642-MAX-NFP-DEPTH is known).
+  (logior (ash (1- (ash (arm642-nfp-frame-size) (- arm64::word-shift)))
+               arm64::num-subtag-bits)
+          arm64::subtag-u64-vector))
+
 (defmacro with-arm64-p2-declarations (declsform &body body)
   `(let* ((*arm642-tail-allow* *arm642-tail-allow*)
           (*arm642-reckless* *arm642-reckless*)
@@ -168,8 +208,200 @@
 
 (defvar *arm642-gpr-locations* nil)
 (defvar *arm642-gpr-locations-valid-mask* 0)
+(defvar *arm642-gpr-constants* nil)
+(defvar *arm642-gpr-constants-valid-mask* 0)
 
 (declaim (fixnum *arm642-vstack* *arm642-cstack*))
+
+(defun arm642-gprs-containing-constant (c)
+  (let* ((in *arm642-gpr-constants-valid-mask*)
+         (vals *arm642-gpr-constants*)
+         (out 0))
+    (declare (fixnum in out) (simple-vector vals))
+    (dotimes (i 32 out)
+      (declare (type (mod 32) i))
+      (when (and (logbitp i in)
+                 (eql c (svref vals i)))
+        (setq out (logior out (ash 1 i)))))))
+
+(defun arm642-nfp-ref (seg vreg ea)
+  (with-arm64-local-vinsn-macros (seg vreg)
+    (let* ((offset (logand #xfff8 ea))
+           (type (logand #x7 ea))
+           (vreg-class (hard-regspec-class vreg))
+           (vreg-mode (get-regspec-mode vreg))
+           (nested (> *arm642-undo-count* 0))
+           (vinsn nil)
+           (reg vreg))
+      (ecase type
+        (#. memspec-nfp-type-natural
+         (unless (and (eql vreg-class hard-reg-class-gpr)
+                      (eql vreg-mode hard-reg-class-gpr-mode-u64))
+           (setq reg (available-imm-temp
+                      *available-backend-imm-temps*
+                      :u64)))
+         (setq vinsn
+               (if nested
+                 (! nfp-load-unboxed-word-nested reg offset)
+                 (! nfp-load-unboxed-word reg offset))))
+        (#. memspec-nfp-type-double-float
+         (unless (and (eql vreg-class hard-reg-class-fpr)
+                      (eql vreg-mode hard-reg-class-fpr-mode-double))
+           (setq reg (available-fp-temp
+                      *available-backend-fp-temps*
+                      :double-float)))
+         (setq vinsn
+               (if nested
+                 (! nfp-load-double-float-nested reg offset)
+                 (! nfp-load-double-float reg offset))))
+        (#. memspec-nfp-type-single-float
+         (unless (and (eql vreg-class hard-reg-class-fpr)
+                      (eql vreg-mode hard-reg-class-fpr-mode-single))
+           (setq reg (available-fp-temp
+                      *available-backend-fp-temps*
+                      :single-float)))
+         (setq vinsn
+               (if nested
+                 (! nfp-load-single-float-nested reg offset)
+                 (! nfp-load-single-float  reg offset))))
+        (#. memspec-nfp-type-complex-double-float
+         (unless (and (eql vreg-class hard-reg-class-fpr)
+                      (eql vreg-mode
+                           hard-reg-class-fpr-mode-complex-double-float))
+           (setq reg (available-fp-temp
+                      *available-backend-fp-temps*
+                      :complex-double-float)))
+         (setq vinsn
+               (if nested
+                 (! nfp-load-complex-double-float-nested reg offset)
+                 (! nfp-load-complex-double-float reg offset))))
+        (#. memspec-nfp-type-complex-single-float
+         (unless (and (eql vreg-class hard-reg-class-fpr)
+                      (eql vreg-mode
+                           hard-reg-class-fpr-mode-complex-single-float))
+           (setq reg (available-fp-temp
+                      *available-backend-fp-temps*
+                      :complex-single-float)))
+         (setq vinsn
+               (if nested
+                 (! nfp-load-complex-single-float-nested reg offset)
+                 (! nfp-load-complex-single-float  reg offset)))))
+      (when (memspec-single-ref-p ea)
+        (let* ((push-vinsn
+                 (find offset *arm642-all-nfp-pushes*
+                       :key (lambda (v)
+                              (when (typep v 'vinsn)
+                                (svref (vinsn-variable-parts v) 1))))))
+          (when push-vinsn
+            (arm642-elide-pushes seg push-vinsn vinsn))))
+      (<- reg))))
+
+(defun arm642-reg-for-nfp-set (vreg ea)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((type (logand #x7 ea))
+           (vreg-class (if vreg (hard-regspec-class vreg)))
+           (vreg-mode (if vreg (get-regspec-mode vreg))))
+      (ecase type
+        (#. memspec-nfp-type-natural
+         (if (and (eql vreg-class hard-reg-class-gpr)
+                  (eql vreg-mode hard-reg-class-gpr-mode-u64))
+           vreg
+           (make-unwired-lreg
+            (available-imm-temp *available-backend-imm-temps* :u64))))
+        (#. memspec-nfp-type-double-float
+         (if (and (eql vreg-class hard-reg-class-fpr)
+                  (eql vreg-mode hard-reg-class-fpr-mode-double))
+           vreg
+           (make-unwired-lreg
+            (available-fp-temp *available-backend-fp-temps* :double-float))))
+        (#. memspec-nfp-type-single-float
+         (if (and (eql vreg-class hard-reg-class-fpr)
+                  (eql vreg-mode hard-reg-class-fpr-mode-single))
+           vreg
+           (make-unwired-lreg
+            (available-fp-temp *available-backend-fp-temps* :single-float))))
+        (#. memspec-nfp-type-complex-double-float
+         (if (and (eql vreg-class hard-reg-class-fpr)
+                  (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+           vreg
+           (make-unwired-lreg
+            (available-fp-temp *available-backend-fp-temps*
+                               :complex-double-float))))
+        (#. memspec-nfp-type-complex-single-float
+         (if (and (eql vreg-class hard-reg-class-fpr)
+                  (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
+           vreg
+           (make-unwired-lreg
+            (available-fp-temp *available-backend-fp-temps*
+                               :complex-single-float))))))))
+
+(defun arm642-nfp-set (seg reg ea)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((offset (logand #xfff8 ea))
+           (nested (> *arm642-undo-count* 0)))
+      (ecase (logand #x7 ea)
+        (#. memspec-nfp-type-natural
+            (if nested
+              (! nfp-store-unboxed-word-nested reg offset)
+              (! nfp-store-unboxed-word reg offset)))
+        (#. memspec-nfp-type-double-float
+            (if nested
+              (! nfp-store-double-float-nested reg offset)
+              (! nfp-store-double-float reg offset)))
+        (#. memspec-nfp-type-single-float
+            (if nested
+              (! nfp-store-single-float-nested reg offset)
+              (! nfp-store-single-float  reg offset)))
+        (#. memspec-nfp-type-complex-double-float
+            (if nested
+              (! nfp-store-complex-double-float-nested reg offset)
+              (! nfp-store-complex-double-float reg offset)))
+        (#. memspec-nfp-type-complex-single-float
+            (if nested
+              (! nfp-store-complex-single-float-nested reg offset)
+              (! nfp-store-complex-single-float reg offset)))))))
+
+;;; Depending on the variable's type and other attributes, maybe
+;;; push it on the NFP.  Return the nfp-relative EA if we push it.
+(defun arm642-nfp-bind (seg var initform)
+  (let* ((bits (nx-var-bits var)))
+    (unless (logtest bits (logior (ash 1 $vbitspecial)
+                                  (ash 1 $vbitclosed)
+                                  (ash 1 $vbitdynamicextent)))
+      (let* ((type (acode-var-type var *arm642-trust-declarations*))
+             (reg nil)
+             (nfp-bits 0))
+        (cond ((and (subtypep type '(unsigned-byte 64))
+                    nil ;; XXX note early out
+                    (not (subtypep type '(signed-byte 61))))
+               (setq reg (available-imm-temp
+                          *available-backend-imm-temps* :u64)
+                     nfp-bits memspec-nfp-type-natural))
+              ((subtypep type 'single-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :single-float)
+                     nfp-bits memspec-nfp-type-single-float))
+              ((subtypep type 'double-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :double-float)
+                     nfp-bits memspec-nfp-type-double-float))
+              ((subtypep type 'complex-single-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :complex-single-float)
+                     nfp-bits memspec-nfp-type-complex-single-float))
+              ((subtypep type 'complex-double-float)
+               (setq reg (available-fp-temp *available-backend-fp-temps*
+                                            :complex-double-float)
+                     nfp-bits memspec-nfp-type-complex-double-float)))
+        (when reg
+          (let* ((vinsn (arm642-push-register
+                         seg
+                         (arm642-one-untargeted-reg-form seg initform reg))))
+            (when vinsn
+              (push (cons vinsn var) *arm642-nfp-vars*)
+              (make-nfp-address
+               (svref (vinsn-variable-parts vinsn) 1)
+               nfp-bits))))))))
 
 (defun arm642-do-lexical-reference (seg vreg ea)
   (when vreg
@@ -334,6 +566,28 @@
 
 (defun arm642-make-stack (size &optional (subtype target::subtag-s16-vector))
   (make-uarray-1 subtype size t 0 nil nil nil nil t nil))
+
+;;; C-frame geometry for outgoing foreign calls; see ALLOC-C-FRAME in
+;;; arm64-vinsns.lisp.  A C frame is a u64-vector wrapping, from low address
+;;; to high: the header word, the saved previous SP (element 0, consumed by
+;;; DISCARD-C-FRAME), N-C-ARG-WORDS of outgoing stack arguments, and 4 words
+;;; reserved for the boundary lisp frame.  That frame lands at the HIGH end,
+;;; just below the caller's old SP -- i.e. the C frame is stacked on top of
+;;; it.  Rounded up to an even number of words so SP stays 16-byte aligned.
+;;;
+;;; The element count deliberately COVERS the reserved frame, so the GC skips
+;;; its uninitialized words; the ff-call sequence builds the frame there and
+;;; then shrinks the count by 4 to publish it.  See ALLOC-C-FRAME.
+(defun arm642-c-frame-words (n-c-arg-words)
+  (let ((words (+ 1                     ;header
+                  1                     ;saved previous SP (element 0)
+                  n-c-arg-words         ;outgoing stack arguments
+                  4)))                  ;reserved boundary lisp frame
+    (logandc2 (1+ words) 1)))           ;round up to even
+
+(defun arm642-c-frame-header (n-c-arg-words)
+  (logior (ash (1- (arm642-c-frame-words n-c-arg-words)) arm64::num-subtag-bits)
+          arm64::subtag-u64-vector))
 
 (defun arm642-fixup-fwd-refs (afunc)
   (dolist (f (afunc-inner-functions afunc))
@@ -910,6 +1164,33 @@
         (! call-subprim (subprim-name->offset '.SPmakeu64))
         (arm642-copy-register seg node-dest arg_z)))))
 
+(defun arm642-tail-call-alias (immref sym &optional arglist)
+  (let ((alias (cdr (assq sym *arm642-tail-call-aliases*))))
+    (if (and alias (or (null arglist)
+                       (eq (+ (length (car arglist)) (length (cadr arglist)))
+                           (cdr alias))))
+      (make-acode (%nx1-operator immediate) (car alias))
+      immref)))
+
+(defun arm642-symbol-entry-locative (sym)
+  (setq sym (require-type sym 'symbol))
+  (when (eq sym '%call-next-method-with-args)
+    (setf (afunc-bits *arm642-cur-afunc*)
+          (%ilogior (%ilsl $fbitnextmethargsp 1) (afunc-bits
+                                                  *arm642-cur-afunc*))))
+  (or (assq sym *arm642-fcells*)
+      (let ((new (list sym)))
+        (push new *arm642-fcells*)
+        new)))
+
+(defun arm642-symbol-value-cell (sym)
+  (setq sym (require-type sym 'symbol))
+  (or (assq sym *arm642-vcells*)
+      (let ((new (list sym)))
+        (push new *arm642-vcells*)
+        (ensure-binding-index sym)
+        new)))
+
 (defun arm642-symbol-locative-p (imm)
   (and (consp imm)
        (or (memq imm *arm642-vcells*)
@@ -932,6 +1213,24 @@
                  (eq (acode-operator form)
                      (%nx1-operator simple-function)))))))
 
+(defun arm64-side-effect-free-form-p (form)
+  (when (acode-p (setq form (acode-unwrapped-form-value form)))
+    (unless (arm64-nfp-ref-p form)
+      (or (arm64-constant-form-p form)
+          ;;(eq (acode-operator form) (%nx1-operator bound-special-ref))
+          (if (eq (acode-operator form) (%nx1-operator lexical-reference))
+            (not (%ilogbitp $vbitsetq (nx-var-bits (car (acode-operands
+                                                         form))))))))))
+
+(defun arm642-push-reg-for-form (seg form suggested &optional targeted)
+  (let* ((reg (if (and (node-reg-p suggested)
+                       (nx2-acode-call-p form)) ;probably ...
+                (arm642-one-targeted-reg-form seg form arm64::arg_z)
+                (if targeted
+                  (arm642-one-targeted-reg-form seg form suggested)
+                  (arm642-one-untargeted-reg-form seg form suggested)))))
+    (arm642-push-register seg reg)))
+
 (defun arm642-one-lreg-form (seg form lreg)
   (arm642-form seg lreg nil form)
   lreg)
@@ -943,6 +1242,50 @@
   (arm642-one-lreg-form seg form (if (typep reg 'lreg)
                                    reg
                                    (make-unwired-lreg reg))))
+
+(defun arm642-push-register (seg areg)
+  (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
+         (fpr-mode-name (if a-float (fpr-mode-value-name
+                                     (get-regspec-mode areg))))
+         (a-node (unless a-float (= (get-regspec-mode areg)
+                                    hard-reg-class-gpr-mode-node)))
+         (nested (> *arm642-undo-count* 0))
+         vinsn)
+    (with-arm64-local-vinsn-macros (seg)
+      (if a-node
+        (setq vinsn (arm642-vpush-register seg areg))
+        (let* ((offset *arm642-nfp-depth*))
+          (setq vinsn
+                (if a-float
+                  (case fpr-mode-name
+                    ((:double-float :complex-single-float)
+                     (if nested
+                       (! nfp-store-double-float-nested areg offset)
+                       (! nfp-store-double-float areg offset)))
+                    (:complex-double-float
+                     ;; Store the 16-byte value at OFFSET (its slot base), THEN
+                     ;; bump OFFSET by an extra 8 so the shared trailing
+                     ;; (incf offset 8) advances the depth by 16 total.  The old
+                     ;; code did the incf *before* the store, writing the value
+                     ;; 8 bytes above its slot -- asymmetric with
+                     ;; arm642-pop-register, which retreats a full 16 and reads
+                     ;; at the slot base.
+                     (prog1
+                         (if nested
+                           (! nfp-store-complex-double-float-nested areg offset)
+                           (! nfp-store-complex-double-float areg offset))
+                       (incf offset 8)))
+                    (:single-float
+                     (if nested
+                       (! nfp-store-single-float-nested areg offset)
+                       (! nfp-store-single-float areg offset))))
+                  (if nested
+                    (! nfp-store-unboxed-word-nested areg offset)
+                    (! nfp-store-unboxed-word areg offset))))
+          (push vinsn *arm642-all-nfp-pushes*)
+          (incf offset 8)
+          (setq *arm642-nfp-depth* offset)))
+      vinsn)))
 
 (defun arm642-one-untargeted-reg-form (seg form suggested)
   (with-arm64-local-vinsn-macros (seg)
@@ -967,6 +1310,225 @@
                   ($ arm64::rcontext)
                   (arm642-one-untargeted-lreg-form seg form suggested))))))
         (arm642-one-untargeted-lreg-form seg form suggested)))))
+
+(defun arm642-pop-register (seg areg)
+  (let* ((a-float (= (hard-regspec-class areg) hard-reg-class-fpr))
+         (fpr-mode-name (if a-float (fpr-mode-value-name (get-regspec-mode
+                                                          areg))))
+         (a-node (unless a-float (= (get-regspec-mode areg)
+                                    hard-reg-class-gpr-mode-node)))
+         (nested (> *arm642-undo-count* 0))
+         vinsn)
+    (with-arm64-local-vinsn-macros (seg)
+      (if a-node
+        (setq vinsn (arm642-vpop-register seg areg))
+        (let* ((offset (- *arm642-nfp-depth* 8)))
+          (setq vinsn
+                (if a-float
+                  (case fpr-mode-name
+                    ((:double-float :complex-single-float)
+                     (if nested
+                       (! nfp-load-double-float-nested areg offset)
+                       (! nfp-load-double-float areg offset)))
+                    (:complex-double-float
+                     (decf offset 8)
+                     (if nested
+                       (! nfp-load-complex-double-float-nested areg offset)
+                       (! nfp-load-complex-double-float areg offset)))
+                    (:single-float
+                     (if nested
+                       (! nfp-load-single-float-nested areg offset)
+                       (! nfp-load-single-float areg offset))))
+                  (if nested
+                    (! nfp-load-unboxed-word-nested areg offset)
+                    (! nfp-load-unboxed-word areg offset))))
+          (setq *arm642-nfp-depth* offset)))
+      vinsn)))
+
+(defun arm642-acc-reg-for (reg)
+  (with-arm64-local-vinsn-macros (seg)
+    (if (and (eql (hard-regspec-class reg) hard-reg-class-gpr)
+             (eql (get-regspec-mode reg) hard-reg-class-gpr-mode-node))
+      ($ arm64::arg_z)
+      reg)))
+
+(defun arm642-copy-fpr (seg dest src)
+  ;; src and dest are distinct FPRs with the same mode.
+  (with-arm64-local-vinsn-macros (seg)
+    (case (fpr-mode-value-name (get-regspec-mode src))
+      (:single-float (! single-to-single dest src))
+      (:double-float (! double-to-double dest src))
+      (:complex-single-float (! complex-single-float-to-complex-single-float
+                                dest src))
+      (:complex-double-float (! complex-double-float-to-complex-double-float
+                                dest src)))))
+
+(defun arm642-elide-pushes (seg push-vinsn pop-vinsn)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((operands (vinsn-variable-parts push-vinsn))
+           (pushed-reg (svref operands 0))
+           (popped-reg (svref (vinsn-variable-parts pop-vinsn) 0))
+           (same-reg (eq (hard-regspec-value pushed-reg)
+                         (hard-regspec-value popped-reg)))
+           (nfp-p (vinsn-attribute-p push-vinsn :nfp)))
+      (when nfp-p
+        (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
+                                   push-vinsn pop-vinsn pushed-reg))
+               (popped-reg-is-set (if same-reg
+                                    pushed-reg-is-set
+                                    (vinsn-sequence-sets-reg-p
+                                     push-vinsn pop-vinsn popped-reg)))
+               (offset (svref operands 1))
+               (nested ())
+               (conflicts ())
+               (win nil))
+          (declare (fixnum offset))
+          (do* ((element (dll-node-succ push-vinsn) (dll-node-succ element)))
+               ((eq element pop-vinsn))
+            (when (typep element 'vinsn)
+              (when (vinsn-attribute-p element :nfp)
+                (let* ((element-offset (svref (vinsn-variable-parts element) 1)))
+                  (declare (fixnum element-offset))
+                  (if (= element-offset offset)
+                    (push element conflicts)
+                    (if (> element-offset offset)
+                      (push element nested)))))))
+          (cond
+            (conflicts nil)
+            ((not (and pushed-reg-is-set popped-reg-is-set))
+             (unless same-reg
+               (let* ((copy (if (eq (hard-regspec-class pushed-reg)
+                                    hard-reg-class-fpr)
+                              (arm642-copy-fpr seg popped-reg pushed-reg)
+                              (! copy-gpr popped-reg pushed-reg))))
+                 (remove-dll-node copy)
+                 (if pushed-reg-is-set
+                   (insert-dll-node-after copy push-vinsn)
+                   (insert-dll-node-before copy pop-vinsn))))
+             (setq win t))
+            ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
+             (let* ((mode (get-regspec-mode pushed-reg))
+                    (mode-name (fpr-mode-value-name mode)))
+               ;; If we're pushing a float register that gets
+               ;; set by the intervening vinsns, try to copy it to and
+               ;; from a free FPR instead.
+               (multiple-value-bind (used-gprs used-fprs)
+                   (regs-set-in-vinsn-sequence push-vinsn pop-vinsn)
+                 (declare (ignore used-gprs))
+                 (let* ((nfprs (case mode-name
+                                 ((:double-float :complex-single-float) 7)
+                                 (:complex-double-float 3)
+                                 (:single-float 14)))
+                        (free-fpr
+                          (dotimes (r nfprs nil)
+                            (unless (logtest (target-fpr-mask r mode)
+                                             used-fprs)
+                              (return r)))))
+                   (when free-fpr
+                     (let* ((reg (make-wired-lreg free-fpr
+                                                  :class hard-reg-class-fpr
+                                                  :mode mode))
+                            (save (arm642-copy-fpr seg reg pushed-reg))
+                            (restore (arm642-copy-fpr seg popped-reg reg)))
+                       (remove-dll-node save)
+                       (insert-dll-node-after save push-vinsn)
+                       (remove-dll-node restore)
+                       (insert-dll-node-before restore pop-vinsn)
+                       (setq win t))))))))
+          (when win
+            (setq *arm642-all-nfp-pushes*
+                  (delete push-vinsn *arm642-all-nfp-pushes*))
+            (let* ((pair (assq push-vinsn *arm642-nfp-vars*)))
+              (when pair
+                (setf (car pair) nil)))
+            (when nested
+              (let* ((size (if (vinsn-attribute-p push-vinsn :uses-frame-pointer)
+                             16
+                             8)))
+                (declare (fixnum size))
+                (dolist (inner nested)
+                  (let* ((inner-operands (vinsn-variable-parts inner)))
+                    (setf (svref inner-operands 1)
+                          (the fixnum
+                               (- (the fixnum (svref inner-operands 1))
+                                  size))))
+                  (let* ((var (cdr (assq inner *arm642-nfp-vars*))))
+                    (when var (setf (var-ea var)
+                                    (- (var-ea var) size)))))))
+            (elide-vinsn push-vinsn)
+            (elide-vinsn pop-vinsn)
+            t)))
+      (when (and (vinsn-attribute-p push-vinsn :vsp))
+        (unless (or
+                 (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :push)
+                 (vinsn-sequence-has-attribute-p push-vinsn pop-vinsn :vsp :pop)
+                 (let* ((pushed-reg-is-set (vinsn-sequence-sets-reg-p
+                                            push-vinsn pop-vinsn pushed-reg))
+                        (popped-reg-is-set (if same-reg
+                                             pushed-reg-is-set
+                                             (vinsn-sequence-sets-reg-p
+                                              push-vinsn pop-vinsn popped-reg)))
+                        (popped-reg-is-reffed (unless same-reg
+                                                (vinsn-sequence-refs-reg-p
+                                                 push-vinsn pop-vinsn
+                                                 popped-reg))))
+                   (cond ((and (not (and pushed-reg-is-set popped-reg-is-set))
+                               (not (vinsn-sequence-has-some-attribute-p
+                                     push-vinsn pop-vinsn :branch :jump))
+                               (or (null popped-reg-is-reffed)
+                                   (null pushed-reg-is-set)
+                                   ;; If the popped register is
+                                   ;; referenced and the pushed
+                                   ;; register is set, we want to be
+                                   ;; sure that the last reference
+                                   ;; happens before the first
+                                   ;; assignent.  We can't be sure
+                                   ;; that either of these things
+                                   ;; actually happened or happen
+                                   ;; unconditionally, and can't
+                                   ;; be sure of the order in which
+                                   ;; they might happen if the sequence
+                                   ;; contains jumps or branches.
+                                   (vinsn-in-sequence-p pushed-reg-is-set
+                                                        popped-reg-is-reffed
+                                                        pop-vinsn)))
+                          ;; We don't try this if anything's pushed on
+                          ;; or popped from the vstack in the
+                          ;; sequence, but there can be references to
+                          ;; other things that were pushed earlier.
+                          ;; Those references use the vstack depth at
+                          ;; the time of the reference and the
+                          ;; canonical frame offset to address
+                          ;; relative to the vsp.  If we elide the
+                          ;; push, the vstack depth will be smaller
+                          ;; than when the reference was
+                          ;; generated.  Fix that up ...
+                          (do* ((element (dll-node-succ push-vinsn)
+                                         (dll-node-succ element)))
+                               ((eq element pop-vinsn))
+                            (when (typep element 'vinsn)
+                              (let* ((template (vinsn-template element))
+                                     (opidx (case (vinsn-template-name template)
+                                              (vframe-store 2)
+                                              (vframe-load 2))))
+                                (when opidx
+                                  (let* ((ops (vinsn-variable-parts element)))
+                                    (declare (simple-vector ops))
+                                    (setf (svref ops opidx)
+                                          (the fixnum
+                                               (- (the fixnum (svref ops opidx))
+                                                  arm64::node-size))))))))
+                          (unless same-reg
+                            (let* ((copy (! copy-gpr popped-reg pushed-reg)))
+                              (remove-dll-node copy)
+                              (if pushed-reg-is-set
+                                (insert-dll-node-after copy push-vinsn)
+                                (insert-dll-node-before copy pop-vinsn))))
+                          (elide-vinsn push-vinsn)
+                          (elide-vinsn pop-vinsn)
+                          t)
+                         (t             ; maybe allocate a node temp
+                          nil)))))))))
 
 (defun arm642-two-targeted-reg-forms (seg aform areg bform breg)
   (let* ((avar (arm642-lexical-reference-p aform))
@@ -996,6 +1558,12 @@
       (! lri reg value)
       (! lri reg (logand value #xffffffffffffffff)))))
 
+(defun arm642-afunc-lfun-ref (afunc)
+  (or (afunc-lfun afunc)
+      (progn
+        (pushnew afunc (afunc-fwd-refs *arm642-cur-afunc*) :test #'eq)
+        afunc)))
+
 (defun arm642-lexical-reference-ea (form &optional (no-closed-p t))
   (when (acode-p (setq form (acode-unwrapped-form-value form)))
     (if (eq (acode-operator form) (%nx1-operator lexical-reference))
@@ -1015,6 +1583,12 @@
 
 (defun arm642-vpush-register-arg (seg src)
   (arm642-vpush-register seg src))
+
+(defun arm642-vpop-register (seg dest)
+  (with-arm64-local-vinsn-macros (seg)
+    (prog1
+        (! vpop-register dest)
+      (arm642-adjust-vstack (- *arm642-target-node-size*)))))
 
 (defun arm642-copy-register (seg dest src)
   (with-arm64-local-vinsn-macros (seg)
@@ -1364,7 +1938,8 @@
                     (%ilogand #.operator-id-mask (%nx1-operator ,locative))
                     ,fun)))))))
 
-
+(defun arm642-mvpass-p (xfer)
+  (if xfer (or (logbitp $backend-mvpass-bit xfer) (eq xfer $backend-mvpass))))
 
 (defun arm642-cd-compound-p (xfer)
   (if xfer (logbitp $backend-compound-branch-target-bit xfer)))
@@ -1492,6 +2067,14 @@
     (nx-error "Non-simple-variable ~S" (%car var))
     var))
 
+(defun arm642-tailcallok (xfer)
+  (and (eq xfer $backend-return)
+       *arm642-tail-allow*
+       (eq 0 *arm642-undo-count*)))
+
+(defun arm642-mv-p (cd)
+  (or (eq cd $backend-return) (arm642-mvpass-p cd)))
+
 ;; The cmp instruction takes a 12-bit immediate; return true if n fits.
 (defun arm642-aimm-p (n)
   (< (ash n arm64::fixnumshift) 4096))
@@ -1562,6 +2145,7 @@
           (:wsp (arm64::gpr-ref 31 32 t))
           (:s (arm64::fpr-ref number 32))
           (:d (arm64::fpr-ref number 64))
+          (:q (arm64::fpr-ref number 128))
           (:b (arm64::fpr-ref number 8))
           (:h (arm64::fpr-ref number 16)))
         :modifier modifier :amount amount)))))
