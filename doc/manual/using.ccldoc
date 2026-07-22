@@ -346,12 +346,12 @@
           leaves command-line arguments for the application instead of
           recognizing and removing runtime options. This lets an application
           use names such as {code --batch}, {code --debug}, and {code -S}.")
-	    (para "The default is true. Once an image marked false is selected,
-          later arguments are not processed as runtime options. Runtime
-          options before an explicit {code -I} image selector still take
-          effect. Values such as {code -R}, {code -S}, and {code -Z} are not
-          saved in the image. This parameter must be true when {param native}
-          is true."))
+	    (para "The default is true. An embedded or default image marked false
+          uses the platform runtime defaults. Once an image marked false is
+          selected, later arguments are not processed as runtime options.
+          Runtime options before an explicit {code -I} image selector still
+          take effect. This parameter must be true when {param native} is
+          true."))
 	  (item "{param native}" ccldoc::=> "If true, saves the image as a native (ELF, Mach-O, PE)
           shared library.  (On platforms where this isn't yet supported,
           a warning is issued and the option is ignored.)
