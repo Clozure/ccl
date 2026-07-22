@@ -1254,8 +1254,18 @@ parse_numeric_option(char *arg, char *argname, natural default_val)
 */
 Boolean copy_exception_avx_state = false;
 
+static Boolean
+image_inhibits_runtime_options (
+#ifdef WINDOWS
+                                wchar_t *path
+#else
+                                char *path
+#endif
+                                );
+
 void
-process_options(int argc, char *argv[], wchar_t *shadow[])
+process_options(int argc, char *argv[], wchar_t *shadow[],
+                Boolean *process_runtime_options)
 {
   int i, j, k, num_elide, flag, arg_error;
   char *arg, *val;
@@ -1300,6 +1310,9 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
 #else
 	  image_name = val;
 #endif
+	  if (image_inhibits_runtime_options(image_name)) {
+	    *process_runtime_options = false;
+	  }
 	}
       } else if ((flag = (strncmp(arg, "-R", 2) == 0)) ||
 		 (strcmp(arg, "--heap-reserve") == 0)) {
@@ -1428,6 +1441,9 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
         if (shadow) {
           shadow[argc] = NULL;
         }
+      }
+      if (!*process_runtime_options) {
+        break;
       }
     }
   }
@@ -1881,6 +1897,7 @@ main
 #endif
     ;
   Boolean lisp_heap_threshold_set_from_command_line = false;
+  Boolean process_runtime_options = true;
   wchar_t **utf_16_argv = NULL;
 
 #ifdef PPC
@@ -2030,28 +2047,6 @@ main
   tcr_area_lock = (void *)new_recursive_lock();
 
   program_name = argv[0];
-#ifdef SINGLE_ARG_SHORTHAND
-  if ((argc == 2) && (*argv[1] != '-')) {
-#ifdef WINDOWS
-    image_name = utf_16_argv[1];
-#else
-    image_name = argv[1];
-#endif
-    argv[1] = NULL;
-#ifdef WINDOWS
-    utf_16_argv[1] = NULL;
-#endif
-  } else {
-#endif  /* SINGLE_ARG_SHORTHAND */
-    process_options(argc,argv,utf_16_argv);
-#ifdef SINGLE_ARG_SHORTHAND
-  }
-#endif
-  if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
-    lisp_heap_threshold_set_from_command_line = true;
-  }
-
-  initial_stack_size = ensure_stack_limit(initial_stack_size);
   if (image_name == NULL) {
     if (check_for_embedded_image(real_executable_name)) {
       image_name = real_executable_name;
@@ -2064,6 +2059,35 @@ main
 #endif
     }
   }
+  if (image_inhibits_runtime_options(image_name)) {
+    process_runtime_options = false;
+  }
+#ifdef SINGLE_ARG_SHORTHAND
+  if (process_runtime_options &&
+      (argc == 2) &&
+      (*argv[1] != '-')) {
+#ifdef WINDOWS
+    image_name = utf_16_argv[1];
+#else
+    image_name = argv[1];
+#endif
+    argv[1] = NULL;
+#ifdef WINDOWS
+    utf_16_argv[1] = NULL;
+#endif
+  } else {
+#endif  /* SINGLE_ARG_SHORTHAND */
+    if (process_runtime_options) {
+      process_options(argc, argv, utf_16_argv, &process_runtime_options);
+    }
+#ifdef SINGLE_ARG_SHORTHAND
+  }
+#endif
+  if (lisp_heap_gc_threshold != DEFAULT_LISP_HEAP_GC_THRESHOLD) {
+    lisp_heap_threshold_set_from_command_line = true;
+  }
+
+  initial_stack_size = ensure_stack_limit(initial_stack_size);
 
   while (1) {
     if (create_reserved_area(reserved_area_size)) {
@@ -2321,12 +2345,40 @@ check_for_embedded_image (
   if (fd >= 0) {
     openmcl_image_file_header h;
 
-    if (find_openmcl_image_file_header (fd, &h)) {
+    if (find_openmcl_image_file_header(fd, &h, true)) {
       image_is_embedded = true;
     }
     close (fd);
   }
   return image_is_embedded;
+}
+
+static Boolean
+image_inhibits_runtime_options (
+#ifdef WINDOWS
+                                wchar_t *path
+#else
+                                char *path
+#endif
+                                )
+{
+#ifdef WINDOWS
+  int fd = _wopen(path, O_RDONLY);
+#else
+  int fd = open(path, O_RDONLY);
+#endif
+  Boolean inhibit_runtime_options = false;
+
+  if (fd >= 0) {
+    openmcl_image_file_header h;
+
+    if (find_openmcl_image_file_header(fd, &h, false)) {
+      inhibit_runtime_options =
+        (h.flags & IMAGE_FLAG_INHIBIT_RUNTIME_OPTIONS) != 0;
+    }
+    close(fd);
+  }
+  return inhibit_runtime_options;
 }
 
 LispObj

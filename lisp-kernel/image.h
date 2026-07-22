@@ -20,6 +20,10 @@
 #define IMAGE_SIG2 (('m'<<24) | ('a'<<16) | ('g'<<8) | 'e')
 #define IMAGE_SIG3 (('F'<<24) | ('i'<<16) | ('l'<<8) | 'e')
 
+/* Old kernels reject images that require an argument policy they cannot
+   honor. */
+#define IMAGE_FLAG_INHIBIT_RUNTIME_OPTIONS (1U << 31)
+
 /* 
    An image file contains a header (which describes the type, size,
    and nominal memory address of one or more sections) and data for
@@ -86,7 +90,9 @@ typedef struct {
 extern LispObj
 load_openmcl_image(int, openmcl_image_file_header*);
 
-extern Boolean find_openmcl_image_file_header(int fd, openmcl_image_file_header *h);
+extern Boolean find_openmcl_image_file_header(int fd,
+                                              openmcl_image_file_header *h,
+                                              Boolean report_errors);
 
 extern void
 prepare_to_write_dynamic_space(area *);

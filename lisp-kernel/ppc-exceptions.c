@@ -521,12 +521,14 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       }
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
         OSErr err;
-        extern OSErr save_application(unsigned, Boolean);
+        extern OSErr save_application(unsigned, Boolean, Boolean);
         TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
         area *vsarea = tcr->vs_area;
 	
         nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
-        err = save_application(arg, egc_was_enabled);
+        err = save_application(arg, egc_was_enabled,
+                               (selector &
+                                GC_TRAP_FUNCTION_INHIBIT_RUNTIME_OPTIONS) != 0);
         if (err == noErr) {
           _exit(0);
         }

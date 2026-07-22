@@ -138,10 +138,12 @@ seek_to_next_page(int fd)
 /*
   fd is positioned to EOF; header has been allocated by caller.
   If we find a trailer (and that leads us to the header), read
-  the header & return true else return false.
+  the header & return true else return false.  Report incompatible
+  image metadata when report_errors is true.
 */
 Boolean
-find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
+find_openmcl_image_file_header(int fd, openmcl_image_file_header *header,
+                               Boolean report_errors)
 {
   openmcl_image_file_trailer trailer;
   int disp;
@@ -185,20 +187,26 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   }
   version = (header->abi_version) & 0xffff;
   if (version < ABI_VERSION_MIN) {
-    fprintf(dbgout, "Heap image (version %d) "
-	    "is too old for this kernel (minimum %d).\n", version,
-	    ABI_VERSION_MIN);
+    if (report_errors) {
+      fprintf(dbgout, "Heap image (version %d) "
+	      "is too old for this kernel (minimum %d).\n", version,
+	      ABI_VERSION_MIN);
+    }
     return false;
   }
   if (version > ABI_VERSION_MAX) {
-    fprintf(dbgout, "Heap image (version %d) "
-	    "is too new for this kernel (maximum %d).\n", version,
-	    ABI_VERSION_MAX);
+    if (report_errors) {
+      fprintf(dbgout, "Heap image (version %d) "
+	      "is too new for this kernel (maximum %d).\n", version,
+	      ABI_VERSION_MAX);
+    }
     return false;
   }
-  flags = header->flags;
+  flags = header->flags & ~IMAGE_FLAG_INHIBIT_RUNTIME_OPTIONS;
   if (flags != PLATFORM) {
-    fprintf(dbgout, "Heap image was saved for another platform.\n");
+    if (report_errors) {
+      fprintf(dbgout, "Heap image was saved for another platform.\n");
+    }
     return false;
   }
   return true;
@@ -347,7 +355,7 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 {
   LispObj image_nil = 0;
   area *a;
-  if (find_openmcl_image_file_header(fd, h)) {
+  if (find_openmcl_image_file_header(fd, h, true)) {
     int i, nsections = h->nsections;
     openmcl_image_section_header sections[nsections], *sect=sections;
     LispObj bias = image_base - ACTUAL_IMAGE_BASE(h);
@@ -573,7 +581,8 @@ prepare_to_write_static_space(Boolean egc_was_enabled)
 
 
 OSErr
-save_application_internal(unsigned fd, Boolean egc_was_enabled)
+save_application_internal(unsigned fd, Boolean egc_was_enabled,
+                          Boolean inhibit_runtime_options)
 {
   openmcl_image_file_header fh;
   openmcl_image_section_header sections[NUM_IMAGE_SECTIONS];
@@ -634,7 +643,8 @@ save_application_internal(unsigned fd, Boolean egc_was_enabled)
   fh.pad0[0] = fh.pad0[1] = 0;
   fh.pad1[0] = fh.pad1[1] = fh.pad1[2] = fh.pad1[3] = 0;
 #endif
-  fh.flags = PLATFORM;
+  fh.flags = PLATFORM | (inhibit_runtime_options ?
+                         IMAGE_FLAG_INHIBIT_RUNTIME_OPTIONS : 0);
 
 #if WORD_SIZE == 64
   image_data_pos = seek_to_next_page(fd);
@@ -698,19 +708,24 @@ save_application_internal(unsigned fd, Boolean egc_was_enabled)
 }
 
 OSErr
-save_application(int fd, Boolean egc_was_enabled)
+save_application(int fd, Boolean egc_was_enabled,
+                 Boolean inhibit_runtime_options)
 {
 #ifdef DARWIN
 #ifdef X86
   extern void save_native_library(int, Boolean);
  
   if (fd < 0) {
+    if (inhibit_runtime_options) {
+      return EINVAL;
+    }
     save_native_library(-fd, egc_was_enabled);
     return 0;
   }
 #endif
 #endif
-  return save_application_internal(fd, egc_was_enabled);
+  return save_application_internal(fd, egc_was_enabled,
+                                   inhibit_runtime_options);
 }
 
       

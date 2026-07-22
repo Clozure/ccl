@@ -264,7 +264,7 @@
       or {code ccl64} script."
 
     (definition (:function save-application)
-      "save-application filename {code &key} toplevel-function init-file error-handler application-class clear-clos-caches (purify t) impurify (mode #o644) prepend-kernel native"
+      "save-application filename {code &key} toplevel-function init-file error-handler application-class clear-clos-caches (purify t) impurify (mode #o644) prepend-kernel (process-runtime-options t) native"
       "Saves a heap image."
 
       (defsection "Description"
@@ -341,6 +341,17 @@
 	   the saved heap image.  This can be useful in some special
 	   cases.
 	 ")
+	  (item "{param process-runtime-options}" ccldoc::=>
+	    (para "When false, marks the saved image so that the Lisp kernel
+          leaves command-line arguments for the application instead of
+          recognizing and removing runtime options. This lets an application
+          use names such as {code --batch}, {code --debug}, and {code -S}.")
+	    (para "The default is true. Once an image marked false is selected,
+          later arguments are not processed as runtime options. Runtime
+          options before an explicit {code -I} image selector still take
+          effect. Values such as {code -R}, {code -S}, and {code -Z} are not
+          saved in the image. This parameter must be true when {param native}
+          is true."))
 	  (item "{param native}" ccldoc::=> "If true, saves the image as a native (ELF, Mach-O, PE)
           shared library.  (On platforms where this isn't yet supported,
           a warning is issued and the option is ignored.)
