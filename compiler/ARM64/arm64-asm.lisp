@@ -3289,7 +3289,7 @@
               ;; form unsimplified, and the expander will choke on it
               ;; later.
               (unless mop
-                (return-from vinsn-simplify-instruction form))
+                (error "don't understand ~s" form))
               (push mop match-operands)
               (push desc descriptors)))
           (setq match-operands (nreverse match-operands)
