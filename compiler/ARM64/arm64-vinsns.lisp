@@ -382,9 +382,13 @@
                                              (crbit :u8const)))
   (b.cond (:~ crbit) label))
 
-(define-arm64-vinsn load-nil (((dest :lisp))
-                              ())
+(define-arm64-vinsn (load-nil :constant-ref) (((dest :lisp))
+                                              ())
   (mov dest rnil))
+
+(define-arm64-vinsn (load-t :constant-ref) (((dest :lisp))
+                                            ())
+  (add dest rnil (:$ arm64::t-offset)))
 
 (define-arm64-vinsn (ref-constant :constant-ref) (((dest :lisp))
                                                   ((src :s16const)))
@@ -546,6 +550,65 @@
   (addv (:b vtmp) (:8b vtmp))           ;add elements across
   (fmov (:w dest) (:s vtmp)))           ;move to gpr
 
+
+(define-arm64-vinsn logior-imm (((dest :imm))
+                                ((src :imm)
+                                 (mask :s64const)))
+  (orr dest src (:$ mask)))
+
+(define-arm64-vinsn %logior2 (((dest :imm))
+                              ((r1 :imm)
+                               (r2 :imm)))
+  (orr dest r1 r2))
+
+(define-arm64-vinsn logand-imm (((dest :imm))
+                                ((src :imm)
+                                 (mask :s64const)))
+  (and dest src (:$ mask)))
+
+(define-arm64-vinsn %logand2 (((dest :imm))
+                              ((r1 :imm)
+                               (r2 :imm)))
+  (and dest r1 r2))
+
+(define-arm64-vinsn logxor-imm (((dest :imm))
+                                ((src :imm)
+                                 (mask :s64const)))
+  (eor dest src (:$ mask)))
+
+(define-arm64-vinsn %logxor2 (((dest :imm))
+                              ((r1 :imm)
+                               (r2 :imm)))
+  (eor dest r1 r2))
+
+(define-arm64-vinsn copy-node-gpr (((dest :lisp))
+                                   ((src :lisp)))
+  ((:not (:pred = (:apply %hard-regspec-value dest)
+                  (:apply %hard-regspec-value src)))
+   (mov dest src)))
+
+(define-arm64-vinsn copy-gpr (((dest t))
+                              ((src t)))
+  ((:not (:pred = (:apply %hard-regspec-value dest)
+                  (:apply %hard-regspec-value src)))
+   (mov (:x dest) (:x src))))
+
+(define-arm64-vinsn (lri :constant-ref) (((dest :imm))
+                                         ((const :u64const)))
+  ((:pred arm64::encode-logical-immediate const)
+   (orr dest xzr (:$ const)))
+  ((:not (:pred arm64::encode-logical-immediate const))
+   (movz dest (:$ (:apply logand #xffff const)))
+   ((:pred /= (:apply logand #xffff (:apply ash const -16)) 0)
+    (movk dest (:$ (:apply logand #xffff (:apply ash const -16)) :lsl 16)))
+   ((:pred /= (:apply logand #xffff (:apply ash const -32)) 0)
+    (movk dest (:$ (:apply logand #xffff (:apply ash const -32)) :lsl 32)))
+   ((:pred /= (:apply logand #xffff (:apply ash const -48)) 0)
+    (movk dest (:$ (:apply logand #xffff (:apply ash const -48)) :lsl 48)))))
+
+(define-arm64-vinsn (vpop-register :pop :node :vsp) (((dest :lisp))
+                                                     ())
+  (ldr dest (:@+ vsp (:$ arm64::node-size))))
 
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
