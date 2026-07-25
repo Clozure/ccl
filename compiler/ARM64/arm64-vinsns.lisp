@@ -91,10 +91,9 @@
 (define-arm64-vinsn (nfp-store-single-float-nested :nfp :set)
     (()
      ((val :single-float)
-      (offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (str val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+      (offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (str val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 (define-arm64-vinsn (nfp-load-single-float :nfp :ref)
     (((val :single-float))
@@ -103,10 +102,9 @@
 
 (define-arm64-vinsn (nfp-load-single-float-nested :nfp :ref)
     (((val :single-float))
-     ((offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (ldr val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+     ((offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (ldr val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 ;;; NFP double-float access.  Identical to the single-float forms except the
 ;;; datum is a D-view FP register, so the scaled STR/LDR offset is by 8.  (NFP
@@ -121,10 +119,9 @@
 (define-arm64-vinsn (nfp-store-double-float-nested :nfp :set)
     (()
      ((val :double-float)
-      (offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (str val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+      (offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (str val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 (define-arm64-vinsn (nfp-load-double-float :nfp :ref)
     (((val :double-float))
@@ -133,10 +130,9 @@
 
 (define-arm64-vinsn (nfp-load-double-float-nested :nfp :ref)
     (((val :double-float))
-     ((offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (ldr val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+     ((offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (ldr val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 ;;; NFP unboxed-word (natural) access.  An unboxed natural is a full 64-bit
 ;;; machine word, so a plain integer STR/LDR (the :x template) does it -- same
@@ -150,10 +146,9 @@
 (define-arm64-vinsn (nfp-store-unboxed-word-nested :nfp :set)
     (()
      ((val :u64)
-      (offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (str val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+      (offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (str val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 (define-arm64-vinsn (nfp-load-unboxed-word :nfp :ref)
     (((val :u64))
@@ -162,10 +157,9 @@
 
 (define-arm64-vinsn (nfp-load-unboxed-word-nested :nfp :ref)
     (((val :u64))
-     ((offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (ldr val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+     ((offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (ldr val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 ;;; NFP complex-single-float access.  A complex-single-float is two packed
 ;;; single-floats = 64 bits, held in the low (D) half of an FP register, so it
@@ -183,10 +177,9 @@
 (define-arm64-vinsn (nfp-store-complex-single-float-nested :nfp :set)
     (()
      ((val :complex-single-float)
-      (offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (str val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+      (offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (str val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 (define-arm64-vinsn (nfp-load-complex-single-float :nfp :ref)
     (((val :complex-single-float))
@@ -195,10 +188,9 @@
 
 (define-arm64-vinsn (nfp-load-complex-single-float-nested :nfp :ref)
     (((val :complex-single-float))
-     ((offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (ldr val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+     ((offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (ldr val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 ;;; NFP complex-double-float access.  A complex-double-float is two
 ;;; doubles = 128 bits, a full Q register, so it occupies a 16-byte
@@ -217,10 +209,9 @@
 (define-arm64-vinsn (nfp-store-complex-double-float-nested :nfp :set :uses-frame-pointer)
     (()
      ((val :complex-double-float)
-      (offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (stur val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+      (offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (stur val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 (define-arm64-vinsn (nfp-load-complex-double-float :nfp :ref :uses-frame-pointer)
     (((val :complex-double-float))
@@ -229,10 +220,9 @@
 
 (define-arm64-vinsn (nfp-load-complex-double-float-nested :nfp :ref :uses-frame-pointer)
     (((val :complex-double-float))
-     ((offset :u16const))
-     ((nfp :imm)))
-  (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))
-  (ldur val (:@ nfp (:$ (:apply + arm64::dnode-size offset)))))
+     ((offset :u16const)))
+  (ldr temp5 (:@ rcontext (:$ arm64::tcr.nfp)))
+  (ldur val (:@ temp5 (:$ (:apply + arm64::dnode-size offset)))))
 
 ;;; Return from function: restore context and return.
 (define-arm64-vinsn (popj :lispcontext :pop :lrRestore :jumpLR)
