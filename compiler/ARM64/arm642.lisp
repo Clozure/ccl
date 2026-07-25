@@ -1473,6 +1473,26 @@
         (! call-subprim (subprim-name->offset '.SPmakeu64))
         (arm642-copy-register seg node-dest arg_z)))))
 
+;;; A u32 or an s32 always fits in a 61-bit fixnum, so boxing one is a
+;;; shift -- no subprim call, no bignum case, and nothing to condition on
+;;; *arm642-open-code-inline* (PPC64 makes exactly this distinction:
+;;; ppc2-box-u32/-box-s32 take the inline path unconditionally under
+;;; :ppc64 and only ppc32 can reach .SPmakeu32/.SPmakes32; ppc2.lisp:1188
+;;; and :1212).  u32->fixnum / s32->fixnum are the ubfiz/sbfiz forms of
+;;; PPC64's u32->integer / s32->integer (sldi, and extsw+sldi).
+;;;
+;;; arm642-vref1 calls both for :signed-32-bit-vector and for the default
+;;; 32-bit element case, so a cross-compile of level-0 stops in l0-array
+;;; with "Undefined function CCL::ARM642-BOX-U32".  arm642-box-u64 was
+;;; already here; these two are its missing siblings.
+(defun arm642-box-u32 (seg node-dest u32-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (! u32->fixnum node-dest u32-src)))
+
+(defun arm642-box-s32 (seg node-dest s32-src)
+  (with-arm64-local-vinsn-macros (seg)
+    (! s32->fixnum node-dest s32-src)))
+
 (defun arm642-vref1 (seg vreg xfer type-keyword src unscaled-idx
                      index-known-fixnum)
   (with-arm64-local-vinsn-macros (seg vreg xfer)
