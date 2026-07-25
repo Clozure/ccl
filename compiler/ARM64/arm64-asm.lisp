@@ -503,6 +503,12 @@
    (def ands ((:rd :x) (:rn :x) :limm-x) #xf2000000 #xff800000)
    (def tst ((:rn :w) :limm-w) #x7200001f 0 :alias)
    (def tst ((:rn :x) :limm-x) #xf200001f 0 :alias)
+   ;; Non-official convenience alias (and/ands of the complemented
+   ;; bitmask).
+   (def bic ((:rd :w/sp) (:rn :w) :limm-not-w) #x12000000 0 :alias)
+   (def bic ((:rd :x/sp) (:rn :x) :limm-not-x) #x92000000 0 :alias)
+   (def bics ((:rd :w) (:rn :w) :limm-not-w) #x72000000 0 :alias)
+   (def bics ((:rd :x) (:rn :x) :limm-not-x) #xf2000000 0 :alias)
 
    ;; Bitfield
    (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
@@ -1221,6 +1227,8 @@
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm-x        ;logical bitmask immediate, 64-bit
     :limm-w        ;logical bitmask immediate, 32-bit (replicated to 64, N=0)
+    :limm-not-x    ;bic/bics: the operand's complement is the 64-bit bitmask
+    :limm-not-w    ; ... and the 32-bit form
     :simm9         ;signed 9-bit immediate for unscaled register offset
     :movw-x        ;16-bit immediate, LSL 0/16/32/48 (move wide, X)
     :movw-w        ;16-bit immediate, LSL 0/16 (move wide, W)
@@ -1713,6 +1721,8 @@
         (:simm9 (and (eql shift 0) (typep value '(signed-byte 9))))
         (:limm-x (and (eql shift 0) (encode-logical-immediate value)))
         (:limm-w (and (eql shift 0) (encode-logical-immediate-32 value)))
+        (:limm-not-x (and (eql shift 0) (encode-logical-immediate-not value)))
+        (:limm-not-w (and (eql shift 0) (encode-logical-immediate-not-32 value)))
         (:uoff0 (uoff-p 0))
         (:uoff1 (uoff-p 1))
         (:uoff2 (uoff-p 2))
@@ -2135,6 +2145,10 @@
                                 (encode-logical-immediate value)))
       (:limm-w (set-field-value insn (byte 13 10)
                                 (encode-logical-immediate-32 value)))
+      (:limm-not-x (set-field-value insn (byte 13 10)
+                                    (encode-logical-immediate-not value)))
+      (:limm-not-w (set-field-value insn (byte 13 10)
+                                    (encode-logical-immediate-not-32 value)))
       ((:movw-x :movw-w)
        (set-field-value insn (byte 16 5) value)
        (set-field-value insn (byte 2 21) (ash shift -4)))
@@ -2415,7 +2429,7 @@
 (defun render-immediate-spec (class)
   (case class
     (:aimm   "#imm{, LSL #12}")
-    ((:limm-x :limm-w) "#bitmask")
+    ((:limm-x :limm-w :limm-not-x :limm-not-w) "#bitmask")
     (:simm9  "#simm9")
     ((:movw-x :movw-w) "#imm16{, LSL #shift}")
     ((:immr-x :immr-w) "#immr")
@@ -2903,6 +2917,18 @@
       ;; Replicate the provided 32-bit bitmask into 64 bits so that
       ;; the pattern width is guaranteed to be <= 32.
       (encode-logical-immediate (logior u32 (ash u32 32))))))
+
+(defun encode-logical-immediate-not (n)
+  "Encode the complement of the 64-bit bitmask n as a logical immediate.
+  (The complement of any encodable bitmask is also encodable.)"
+  (when (typep n '(or (signed-byte 64) (unsigned-byte 64)))
+    (encode-logical-immediate (ldb (byte 64 0) (lognot n)))))
+
+(defun encode-logical-immediate-not-32 (n)
+  "The 32-bit form of encode-logical-immediate-not: treat the bitmask as
+   being 32 bits wide."
+  (when (typep n '(or (signed-byte 32) (unsigned-byte 32)))
+    (encode-logical-immediate-32 (ldb (byte 32 0) (lognot n)))))
 
 ;;; Form of an encoded logical immediate:
 ;;;
