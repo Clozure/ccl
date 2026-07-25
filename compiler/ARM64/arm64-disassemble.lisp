@@ -515,10 +515,9 @@
     (when offset
       (write-char #\space stream)
       (etypecase offset
-        (register-operand
-         (print-register-operand offset stream)
-         (write-char #\) stream))
-        (immediate-operand (print-immediate-operand offset stream))))))
+        (register-operand (print-register-operand offset stream))
+        (immediate-operand (print-immediate-operand offset stream)))
+      (write-char #\) stream))))
     
 (defun print-condition-operand (operand stream)
   (format stream "(:? ~(~a~))" (condition-operand-name operand)))
