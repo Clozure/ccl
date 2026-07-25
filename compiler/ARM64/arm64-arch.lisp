@@ -812,6 +812,13 @@
   writer-signal
   malloced-ptr)
 
+;;; A lisp frame on the control stack
+(define-storage-layout lisp-frame 0
+  marker
+  savevsp
+  savefn
+  savelr)
+
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
 
