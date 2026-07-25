@@ -12,6 +12,22 @@
 (defvar *constants* ())
 (defvar *instructions* ())
 
+;;; Map a subprim name (a symbol or string, e.g. '.SPgvset) to its byte
+;;; offset in the per-thread subprim table, or NIL if there is no such
+;;; subprim.  arm642.lisp already calls this at five sites -- e.g.
+;;; (! call-subprim-3 arg_z (arm64-subprimitive-offset '.SPgvset) ...) in
+;;; arm642-%gvset and the %rplaca/%rplacd pair -- so a cross-compile of
+;;; level-0 dies in l0-array with "Undefined function
+;;; ARM64::ARM64-SUBPRIMITIVE-OFFSET called with arguments (.SPGVSET)".
+;;; Same body and same home as ARM32's arm-subprimitive-offset
+;;; (compiler/ARM/arm-asm.lisp:52), over ARM64's own *subprims* vector.
+(defun arm64-subprimitive-offset (x)
+  (if (and x (or (symbolp x) (stringp x)))
+    (let* ((info (find x arm64::*subprims* :test #'string-equal
+                       :key #'ccl::subprimitive-info-name)))
+      (when info
+        (ccl::subprimitive-info-offset info)))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defstruct register
