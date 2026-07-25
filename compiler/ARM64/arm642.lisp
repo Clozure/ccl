@@ -2820,6 +2820,14 @@
             (! load-nil arm64::arg_x)
             (! misc-set-c-node arm64::arg_x dest cell)
             (! misc-set-c-node arm64::arg_y dest (1+ cell))))
+        ;; Both legs above build the closure through the MISC allocator
+        ;; (%alloc-misc-fixed / .SPstkgvector), so DEST is fulltag-misc
+        ;; even though its header subtag is subtag-function.  arm64 has a
+        ;; dedicated fulltag-function, so the finished closure has to be
+        ;; retagged before it escapes -- otherwise every require-function
+        ;; check on it fails (%defun's did, at cold load).  The cell
+        ;; stores above are misc-relative, so this must come last.
+        (! tag-as-function dest dest)
         dest))))
 
 (defun arm642-symbol-entry-locative (sym)
