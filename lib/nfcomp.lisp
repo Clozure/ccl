@@ -42,6 +42,8 @@
 (require "X8632-ARCH")
 #+x8664-target
 (require "X8664-ARCH")
+#+arm64-target
+(require "ARM64-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
 
@@ -1288,6 +1290,9 @@ Will differ from *compiling-file* during an INCLUDE")
           #.x8664::fulltag-imm-1))
         #+arm-target
         (#.arm::tag-imm)
+        #+arm64-target
+        ((#.arm64::tag-single-float
+          #.arm64::tag-imm))
         (t
          (if
            #+ppc32-target
@@ -1304,6 +1309,11 @@ Will differ from *compiling-file* during an INCLUDE")
                                  (ash 1 x8664::fulltag-immheader-2))))
            #+arm-target
            (= (the fixnum (logand type-code arm::fulltagmask)) arm::fulltag-immheader)
+           #+arm64-target
+           (logbitp (the fixnum (logand type-code arm64::fulltagmask))
+                    (logior (ash 1 arm64::fulltag-immheader-0)
+                            (ash 1 arm64::fulltag-immheader-1)
+                            (ash 1 arm64::fulltag-immheader-2)))
            (case type-code
              (#.target::subtag-dead-macptr (fasl-unknown exp))
              (#.target::subtag-macptr
@@ -1324,6 +1334,13 @@ Will differ from *compiling-file* during an INCLUDE")
               #+x8632-target #.target::subtag-symbol
               #+x8664-target #.target::tag-symbol
               #+arm-target #.target::subtag-symbol (fasl-scan-symbol exp))
+             ;; Symbols and functions share lisptag 7 (TYPECODE returns it
+             ;; for both); only the fulltag (7 vs 15) distinguishes them.
+             #+arm64-target
+             (#.arm64::tag-7
+              (if (symbolp exp)
+                (fasl-scan-symbol exp)
+                (fasl-scan-clfun exp)))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
@@ -1372,6 +1389,17 @@ Will differ from *compiling-file* during an INCLUDE")
     (do* ((k ncode-words (1+ k)))
          ((= k size))
       (fasl-scan-form (uvref fv k)))))
+
+;;; The code vector is a separate object in slot 0 (so there are no
+;;; inline code words to skip), but the function itself is
+;;; fulltag-function, which UVSIZE/%SVREF can't take directly.
+#+arm64-target
+(defun fasl-scan-clfun (f)
+  (let* ((fv (function-to-function-vector f)))
+    (fasl-scan-ref f)
+    (dotimes (i (uvsize fv))
+      (declare (fixnum i))
+      (fasl-scan-form (%svref fv i)))))
 
 (defun funcall-lfun-p (form)
   (and (listp form)
@@ -1770,15 +1798,16 @@ Will differ from *compiling-file* during an INCLUDE")
   (if (and (= (typecode f) target::subtag-xfunction)
            (= (typecode (uvref f 0)) target::subtag-u8-vector))
     (fasl-xdump-clfun f)
-    (let* ((n (uvsize f)))
+    (let* ((fv (if (functionp f) (function-to-function-vector f) f))
+           (n (uvsize fv)))
       (fasl-out-opcode $fasl-function f)
       (fasl-out-count n)
       (dotimes (i n)
         (if (= i 0)
           (target-arch-case
            (:arm (fasl-dump-form 0))
-           (t (fasl-dump-form (%svref f i))))
-          (fasl-dump-form (%svref f i)))))))
+           (t (fasl-dump-form (%svref fv i))))
+          (fasl-dump-form (%svref fv i)))))))
 
 #+x86-target
 (defun fasl-dump-function (f)
