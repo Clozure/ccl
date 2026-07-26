@@ -1388,6 +1388,22 @@ Will differ from *compiling-file* during an INCLUDE")
          ((= k size))
       (fasl-scan-form (uvref fv k)))))
 
+;;; DEAD as of 9fb47830: upstream's #+arm64-target tag-7 clause in
+;;; fasl-scan-dispatch scans a symbol or signals, and the only callers of
+;;; fasl-scan-clfun are the #+x8632/#+x8664 clauses.  Kept for the shape:
+;;; the code vector is a separate object in slot 0 (so there are no
+;;; inline code words to skip), and FUNCTION-TO-FUNCTION-VECTOR is the
+;;; identity here -- since patch 0055 an arm64 function IS its
+;;; misc-tagged uvector (header subtag-function), so UVSIZE/%SVREF would
+;;; take it directly.
+#+arm64-target
+(defun fasl-scan-clfun (f)
+  (let* ((fv (function-to-function-vector f)))
+    (fasl-scan-ref f)
+    (dotimes (i (uvsize fv))
+      (declare (fixnum i))
+      (fasl-scan-form (%svref fv i)))))
+
 (defun funcall-lfun-p (form)
   (and (listp form)
        (eq (%car form) 'funcall)
@@ -1785,15 +1801,16 @@ Will differ from *compiling-file* during an INCLUDE")
   (if (and (= (typecode f) target::subtag-xfunction)
            (= (typecode (uvref f 0)) target::subtag-u8-vector))
     (fasl-xdump-clfun f)
-    (let* ((n (uvsize f)))
+    (let* ((fv (if (functionp f) (function-to-function-vector f) f))
+           (n (uvsize fv)))
       (fasl-out-opcode $fasl-function f)
       (fasl-out-count n)
       (dotimes (i n)
         (if (= i 0)
           (target-arch-case
            (:arm (fasl-dump-form 0))
-           (t (fasl-dump-form (%svref f i))))
-          (fasl-dump-form (%svref f i)))))))
+           (t (fasl-dump-form (%svref fv i))))
+          (fasl-dump-form (%svref fv i)))))))
 
 #+x86-target
 (defun fasl-dump-function (f)
