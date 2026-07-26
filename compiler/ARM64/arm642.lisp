@@ -2193,7 +2193,9 @@
                          (t
                           (if (typep constval '(unsigned-byte 32))
                             (arm642-lri seg reg constval)
-                            (! unbox-u32 reg result-reg))))
+                            (if *arm642-reckless*
+                              (! %unbox-u32 reg result-reg)
+                              (! unbox-u32 reg result-reg)))))
                    reg)))
               (is-16-bit
                (if is-signed
