@@ -170,6 +170,80 @@
     (signed-byte 64)
     (unsigned-byte 64)
     double-float))
+
+)
+
+;;; arm64's three ivector classes are slot-for-slot identical to x8664's
+;;; (verified against every define-subtag form in compiler/ARM64/arm64-arch.lisp:
+;;; 64-bit 11/12/13/14/15 = complex-single-float-vector/fixnum/s64/u64/
+;;; double-float-vector; 32-bit 12/13/14/15 = simple-base-string/s32/u32/
+;;; single-float-vector; other-bit 9/10/11/13/14/15 = complex-double-float-vector/
+;;; s16/u16/s8/u8/bit-vector), so these are x8664's tables unchanged.
+;;; Two slots are unreachable on arm64 and kept only for donor parity:
+;;; immheader-0 slot 12 (arm64 defines no other-bit subtag 12) and immheader-1
+;;; slot 6, which is arm64's code-vector -- not a CL array type, exactly as
+;;; x8664 treats its xcode-vector at 32-bit slot 3.
+#+arm64-target
+(progn
+(defconstant arm64::*immheader-0-array-types*
+  ;; ivector-class-other-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex double-float)
+    (signed-byte 16)
+    (unsigned-byte 16)
+    character
+    (signed-byte 8)
+    (unsigned-byte 8)
+    bit
+    ))
+
+(defconstant arm64::*immheader-1-array-types*
+    ;; ivector-class-32-bit
+  #(
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    character
+    (signed-byte 32)
+    (unsigned-byte 32)
+    single-float))
+
+(defconstant arm64::*immheader-2-array-types*
+  ;; ivector-class-64-bit
+  #(
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex single-float)
+    fixnum
+    (signed-byte 64)
+    (unsigned-byte 64)
+    double-float))
     
 )
 
@@ -221,6 +295,16 @@
       #+arm-target
       (svref arm::*immheader-array-types*
              (ash (the fixnum (- subtag arm::min-cl-ivector-subtag)) -3))
+      #+arm64-target
+      (let* ((class (logand subtag arm64::fulltagmask))
+             (idx (ash subtag (- arm64::ntagbits))))
+        (declare (fixnum class idx))
+        (cond ((= class arm64::ivector-class-64-bit)
+               (%svref arm64::*immheader-2-array-types* idx))
+              ((= class arm64::ivector-class-32-bit)
+               (%svref arm64::*immheader-1-array-types* idx))
+              (t
+               (%svref arm64::*immheader-0-array-types* idx))))
       )))
 
 
