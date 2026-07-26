@@ -459,7 +459,43 @@
    (def uuo-error-too-many-args () (ash 7 2) #xffffffff)
    (def uuo-error-wrong-number-of-args () (ash 8 2) #xffffffff)
 
+   ;; the last misc-format UUO with no template (arm64-uuo.s:82-84).
+   ;; The kernel synthesizes this same word for a deferred process interrupt
+   ;; (DEFERRED_INTERRUPT_INSTRUCTION), and lisp's trap dispatcher tests for
+   ;; it before anything else, so the interrupt-poll sites need to emit it.
+   (def uuo-interrupt-now () (ash 4 2) #xffffffff)
+
    ;; binary UUOs (uuo format #b010)
+   ;; arm64-uuo.s:42-55.  ra in 6:2, rb in 11:7, 4 bits of info in 15:12;
+   ;; the mask covers the info and the format but not the register fields.
+   (def uuo-error-vector-bounds ((:ruuo :x) (:ruuo2 :x)) (logior (ash 0 12) 2) #xfffff003)
+   (def uuo-error-array-bounds ((:ruuo :x) (:ruuo2 :x)) (logior (ash 1 12) 2) #xfffff003)
+   (def uuo-error-integer-divide-by-zero ((:ruuo :x) (:ruuo2 :x)) (logior (ash 2 12) 2) #xfffff003)
+   (def uuo-error-eep-unresolved ((:ruuo :x) (:ruuo2 :x)) (logior (ash 3 12) 2) #xfffff003)
+   (def uuo-error-fpu-exception ((:ruuo :x) (:ruuo2 :x)) (logior (ash 4 12) 2) #xfffff003)
+   (def uuo-error-array-rank ((:ruuo :x) (:ruuo2 :x)) (logior (ash 5 12) 2) #xfffff003)
+   (def uuo-error-array-flags ((:ruuo :x) (:ruuo2 :x)) (logior (ash 6 12) 2) #xfffff003)
+   (def uuo-extra-registers ((:ruuo :x) (:ruuo2 :x)) (logior (ash 7 12) 2) #xfffff003)
+
+   ;; unary UUOs (uuo format #b001)
+   ;; arm64-uuo.s:29-40.  reg in 6:2, 9 bits of info in 15:7.
+   (def uuo-error-reg-not-callable ((:ruuo :x)) (logior (ash 0 7) 1) #xffffff83)
+   (def uuo-error-no-throw-tag ((:ruuo :x)) (logior (ash 1 7) 1) #xffffff83)
+   (def uuo-error-unbound ((:ruuo :x)) (logior (ash 2 7) 1) #xffffff83)
+   (def uuo-error-udf ((:ruuo :x)) (logior (ash 3 7) 1) #xffffff83)
+   (def uuo-error-udf-call ((:ruuo :x)) (logior (ash 4 7) 1) #xffffff83)
+   (def uuo-error-tlb-too-small ((:ruuo :x)) (logior (ash 5 7) 1) #xffffff83)
+
+   ;; wrong_type UUOs (uuo format #b011)
+   ;; arm64-uuo.s:57-64.  reg in 6:2, continuable flag in 7, expected type
+   ;; code in 15:8.  uuo_error_reg_not_lisptag / _not_fulltag / _not_xtype
+   ;; are all this one encoding with a different kind of code, so the
+   ;; operand is just the code: pass a lisptag, a fulltag or an xtype as
+   ;; the situation requires.  The cerror form asks the handler to make the
+   ;; error continuable by writing the user's value back into the trapping
+   ;; register.
+   (def uuo-error-reg-not-xtype ((:ruuo :x) :uuo-xtype) 3 #xffff0083)
+   (def uuo-cerror-reg-not-xtype ((:ruuo :x) :uuo-xtype) #x83 #xffff0083)
 
    ;;; C4.1.1  Reserved
 
@@ -1256,6 +1292,8 @@
     :tbit-w        ;tbz/tbnz bit number 0..31 (W); b5 is always 0
     :exc16         ;16-bit exception immediate @ 20:5 (brk/hlt/svc)
     :udf16         ;16-bit undefined immediate @ 15:0 (udf)
+    :uuo-xtype     ;wrong_type UUO expected-type code @ 15:8: a lisptag, a
+                   ; fulltag or an xtype (arm64-uuo.s:57-60)
     :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb)
                    ;  15 = full system
     :sysreg        ;named system register, 15-bit op0:op1:CRn:CRm:op2 @ 19:5
@@ -1755,6 +1793,9 @@
         ((:immr-w :imms-w :tbit-w) (and (eql shift 0)
                                         (typep value '(integer 0 31))))
         ((:exc16 :udf16) (and (eql shift 0) (typep value '(unsigned-byte 16))))
+        ;; wrong_type UUO expected-type code: a lisptag, a fulltag or an
+        ;; xtype, all of which fit 8 bits (arm64-uuo.s:57-60).
+        (:uuo-xtype (and (eql shift 0) (typep value '(unsigned-byte 8))))
         (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
         (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
@@ -1895,7 +1936,10 @@
  `((:rd . ,(byte 5 0)) (:rt . ,(byte 5 0))
    (:rn . ,(byte 5 5)) (:base . ,(byte 5 5))
    (:ra . ,(byte 5 10)) (:rt2 . ,(byte 5 10))
-   (:rm . ,(byte 5 16)) (:rs . ,(byte 5 16))))
+   (:rm . ,(byte 5 16)) (:rs . ,(byte 5 16))
+   ;; UUO operand registers (arm64-uuo.s): the unary and wrong_type formats
+   ;; put a register in 6:2, and the binary format puts a second one in 11:7.
+   (:ruuo . ,(byte 5 2)) (:ruuo2 . ,(byte 5 7))))
 
 (defun register-field (role)
   (or (cdr (assoc role *register-fields*))
@@ -1927,7 +1971,7 @@
 ;;; is what distinguishes the two forms).
 (defun encode-register-operand (insn operand role class)
   (ecase role
-    ((:rd :rt :rn :base :rm :rs :ra :rt2)
+    ((:rd :rt :rn :base :rm :rs :ra :rt2 :ruuo :ruuo2)
      (insert-register insn role operand))
     (:rn+rm
      (insert-register insn :rn operand)
@@ -2100,6 +2144,7 @@
     (:imms-w ,(byte 6 10))
     (:exc16 ,(byte 16 5))
     (:udf16 ,(byte 16 0))
+    (:uuo-xtype ,(byte 8 8))
     (:baropt ,(byte 4 8))
     (:imm5 ,(byte 5 16))
     (:nzcv ,(byte 4 0))
@@ -2452,6 +2497,7 @@
     ((:imms-x :imms-w) "#imms")
     ((:tbit-x :tbit-w) "#bit")
     ((:exc16 :udf16) "#imm16")
+    (:uuo-xtype "#type")
     (:baropt "#option")
     (:sysreg "sysreg")
     (:imm5 "#imm5")
