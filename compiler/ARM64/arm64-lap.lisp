@@ -67,10 +67,13 @@
   (terpri))
 
 (defun %define-arm64-lap-function (name body &optional (bits 0))
-  (declare (ignore bits))
   (with-dll-node-freelist (elements arm64::*instruction-freelist*)
     (let* ((arm64::*labels* ())
            (arm64::*constants* ())
+           ;; Per-function, from BITS, exactly as ppc-lap.lisp:92 does.  Left
+           ;; global, an (:arglist ...) pseudo-op leaks its encoding into every
+           ;; LAP function assembled afterwards.
+           (*arm64-lap-lfun-bits* bits)
            (name-cell (list name))
            (section-size -1)
            (current elements))
