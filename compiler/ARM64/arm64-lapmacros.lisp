@@ -54,7 +54,10 @@
 (defarm64lapmacro check-nargs (min &optional (max min))
   (let ((ok1 (gensym "@"))
         (ok2 (gensym "@")))
-    (if (= max min)
+    ;; EQ, not =: MAX may be NIL ("no maximum"), and `=' signals a
+    ;; TYPE-ERROR on it before the (null max) branch below is reached.
+    ;; ppc-lapmacros.lisp:220 and arm-lapmacros.lisp:31 both use EQ.
+    (if (eq max min)
       `(progn
          (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
          (b.eq ,ok1)
