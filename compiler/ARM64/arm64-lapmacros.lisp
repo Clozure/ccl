@@ -54,7 +54,7 @@
 (defarm64lapmacro check-nargs (min &optional (max min))
   (let ((ok1 (gensym "@"))
         (ok2 (gensym "@")))
-    (if (= max min)
+    (if (eq max min)
       `(progn
          (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
          (b.eq ,ok1)
