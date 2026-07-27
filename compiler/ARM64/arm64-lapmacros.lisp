@@ -58,29 +58,29 @@
       `(progn
          (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
          (b.eq ,ok1)
-         (uuo-error-wrong-nargs)
+         (uuo-error-wrong-number-of-args)
          ,ok1)
       (if (null max)
         (unless (= min 0)
           `(progn
              (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
              (b.hs ,ok1)
-             (uuo-error-wrong-nargs)
+             (uuo-error-too-few-args)
              ,ok1))
         (if (= min 0)
           `(progn
              (cmp nargs (:$ (ash ,max arm64::fixnumshift)))
              (b.ls ,ok1)
-             (uuo-error-wrong-nargs)
+             (uuo-error-too-many-args)
              ,ok1)
           `(progn
              (cmp nargs (:$ (ash ,min arm64::fixnumshift)))
              (b.hs ,ok1)
-             (uuo-error-wrong-nargs)
+             (uuo-error-too-few-args)
              ,ok1
              (cmp nargs (:$ (ash ,max arm64::fixnumshift)))
              (b.ls ,ok2)
-             (uuo-error-wrong-nargs)
+             (uuo-error-too-many-args)
              ,ok2))))))
 
 (provide "ARM64-LAPMACROS")
