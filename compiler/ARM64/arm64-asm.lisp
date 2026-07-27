@@ -485,6 +485,11 @@
    (def uuo-error-udf ((:ruuo :x)) (logior (ash 3 7) 1) #xffffff83)
    (def uuo-error-udf-call ((:ruuo :x)) (logior (ash 4 7) 1) #xffffff83)
    (def uuo-error-tlb-too-small ((:ruuo :x)) (logior (ash 5 7) 1) #xffffff83)
+   ;; Three-register error (arm64-uuo.s, doc/porting/arm64.md "Errors that
+   ;; need three registers").  The register named here is the slot vector;
+   ;; the emit site MUST follow it with (uuo-extra-registers index dest),
+   ;; which the handler reads as data before resuming past both words.
+   (def uuo-error-slot-unbound ((:ruuo :x)) (logior (ash 6 7) 1) #xffffff83)
 
    ;; wrong_type UUOs (uuo format #b011)
    ;; arm64-uuo.s:57-64.  reg in 6:2, continuable flag in 7, expected type

@@ -38,6 +38,10 @@ uuo_format_unary = 1
   unary_info_udf = 3
   unary_info_udf_call = 4
   unary_info_tlb_too_small = 5
+  // Must be FOLLOWED by a uuo_extra_registers companion carrying
+  // (index, dest); see "Errors that need three registers" in
+  // doc/porting/arm64.md.  reg here is the slot vector.
+  unary_info_slot_unbound = 6
 
 /*
  * Two-register errors
@@ -131,6 +135,14 @@ uuo_format_wrong_type = 3
 
         .macro uuo_error_tlb_too_small reg
         uuo_unary \reg, unary_info_tlb_too_small
+        .endm
+
+        // Three-register error: emit this, then uuo_extra_registers
+        // index, dest.  The handler reads the companion as data and
+        // resumes past BOTH instructions, storing slot-unbound's value
+        // into dest.  A lone one is an internal error.
+        .macro uuo_error_slot_unbound slotv
+        uuo_unary \slotv, unary_info_slot_unbound
         .endm
 
         // binary format
