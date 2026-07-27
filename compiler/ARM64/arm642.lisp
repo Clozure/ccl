@@ -1787,15 +1787,13 @@
                                     new val-reg)
       (when safe
         (when (typep safe 'fixnum)
-          (with-node-target (src unscaled-i unscaled-j val-reg) expected
-            (if simple
-              (progn
-                (! lri expected
-                   (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                             (ash 1 $arh_simple_bit))
-                        arm64::fixnumshift))
-                (! trap-unless-simple-array-2 src expected))
-              (! trap-unless-typed-array-2 src safe))))
+          (if simple
+            (! trap-unless-simple-array-2
+               src
+               (dpb safe target::arrayH.flags-cell-subtag-byte
+                    (ash 1 $arh_simple_bit))
+               (nx-error-for-simple-2d-array-type type-keyword))
+            (! trap-unless-typed-array-2 src safe)))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -1857,15 +1855,13 @@
                     (use-imm-temp (hard-regspec-value val-reg)))
                   (when safe
                     (when (typep safe 'fixnum)
-                      (with-node-target (src node-val unscaled-i unscaled-j) expected
-                        (if simple
-                          (progn
-                            (! lri expected
-                               (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                         (ash 1 $arh_simple_bit))
-                                    arm64::fixnumshift))
-                            (! trap-unless-simple-array-2 src expected))
-                          (! trap-unless-typed-array-2 src safe))))
+                      (if simple
+                        (! trap-unless-simple-array-2
+                           src
+                           (dpb safe target::arrayH.flags-cell-subtag-byte
+                                (ash 1 $arh_simple_bit))
+                           (nx-error-for-simple-2d-array-type type-keyword))
+                        (! trap-unless-typed-array-2 src safe)))
                     (unless i-known-fixnum
                       (! trap-unless-fixnum unscaled-i))
                     (unless j-known-fixnum
@@ -2000,15 +1996,11 @@
           (when safe
             (when (typep safe 'fixnum)
               (if simple
-                (let* ((expected (if constidx
-                                   (with-node-target (src val-reg) expected
-                                     expected)
-                                   (with-node-target (src unscaled-i unscaled-j unscaled-k val-reg) expected
-                                     expected))))
-                  (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                            (ash 1 $arh_simple_bit))
-                                       arm64::fixnumshift))
-                  (! trap-unless-simple-array-3 src expected))
+                (! trap-unless-simple-array-3
+                   src
+                   (dpb safe target::arrayH.flags-cell-subtag-byte
+                        (ash 1 $arh_simple_bit))
+                   (nx-error-for-simple-3d-array-type type-keyword))
                 (! trap-unless-typed-array-3 src safe)))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
@@ -2064,15 +2056,11 @@
       (when safe
         (when (typep safe 'fixnum)
           (if simple
-            (let* ((expected (if constidx
-                               (with-node-target (src) expected
-                                 expected)
-                               (with-node-target (src unscaled-i unscaled-j unscaled-k) expected
-                                 expected))))
-              (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
-                                        (ash 1 $arh_simple_bit))
-                                   arm64::fixnumshift))
-              (! trap-unless-simple-array-3 src expected))
+            (! trap-unless-simple-array-3
+               src
+               (dpb safe target::arrayH.flags-cell-subtag-byte
+                    (ash 1 $arh_simple_bit))
+               (nx-error-for-simple-3d-array-type typekeyword))
             (! trap-unless-typed-array-3 src safe)))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
