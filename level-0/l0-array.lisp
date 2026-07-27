@@ -170,7 +170,68 @@
     (signed-byte 64)
     (unsigned-byte 64)
     double-float))
-    
+
+)
+
+#+arm64-target
+(progn
+(defconstant arm64::*immheader-0-array-types*
+  ;; ivector-class-other-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex double-float)
+    (signed-byte 16)
+    (unsigned-byte 16)
+    character
+    (signed-byte 8)
+    (unsigned-byte 8)
+    bit
+    ))
+
+(defconstant arm64::*immheader-1-array-types*
+  ;; ivector-class-32-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    character
+    (signed-byte 32)
+    (unsigned-byte 32)
+    single-float))
+
+(defconstant arm64::*immheader-2-array-types*
+  ;; ivector-class-64-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex single-float)
+    fixnum
+    (signed-byte 64)
+    (unsigned-byte 64)
+    double-float))
 )
 
 #+arm-target
@@ -221,9 +282,17 @@
       #+arm-target
       (svref arm::*immheader-array-types*
              (ash (the fixnum (- subtag arm::min-cl-ivector-subtag)) -3))
+      #+arm64-target
+      (let* ((class (logand subtag arm64::fulltagmask))
+             (idx (ash subtag (- arm64::ntagbits))))
+        (declare (fixnum class idx))
+        (cond ((= class arm64::ivector-class-64-bit)
+               (%svref arm64::*immheader-2-array-types* idx))
+              ((= class arm64::ivector-class-32-bit)
+               (%svref arm64::*immheader-1-array-types* idx))
+              (t
+               (%svref arm64::*immheader-0-array-types* idx))))
       )))
-
-
 
 (defun adjustable-array-p (array)
   "Return T if (ADJUST-ARRAY ARRAY...) would return an array identical
