@@ -1087,7 +1087,9 @@
     (declare (type (unsigned-byte 16) nargs))
     (with-arm64-local-vinsn-macros (seg)
       (unless *arm642-reckless*
-        (! check-exact-nargs nargs))
+        (if (arm642-aimm-p (ash nargs arm64::fixnumshift))
+          (! check-exact-nargs nargs)
+          (! check-exact-nargs-large nargs)))
       (arm642-argregs-entry seg rev-fixed-args))))
 
 ;;; No more than three &optional args; all default to NIL and none have
@@ -5593,21 +5595,31 @@
           (if (not (or opt rest keys))
             (progn
               (setq arg-regs (arm642-req-nargs-entry seg rev-fixed)))
+            ;; simple-opt-entry and the default-N-args vinsns it emits
+            ;; compare the BOXED count against an add/sub immediate, so
+            ;; a boxed max past imm12 must take the general path below,
+            ;; whose checks have -large fallbacks.
             (if (and (not (or hardopt rest keys))
-                     (<= num-opt $numarm64argregs))
+                     (<= num-opt $numarm64argregs)
+                     (arm642-aimm-p (ash (+ num-fixed num-opt)
+                                         arm64::fixnumshift)))
               (setq arg-regs (arm642-simple-opt-entry seg rev-opt rev-fixed))
               (progn
                 ;; If the minumum acceptable number of args is
                 ;; non-zero, ensure that at least that many were
                 ;; received.  If there's an upper bound, enforce it.
 
+                ;; aimm-p must see the BOXED count: the check vinsns
+                ;; compare (ash n fixnumshift).  (ARM32's raw-value test
+                ;; was sound only because its rotated-immediate encoder
+                ;; makes "raw encodable => boxed encodable" true.)
                 (when rev-fixed
-                  (if (arm642-aimm-p num-fixed)
+                  (if (arm642-aimm-p (ash num-fixed arm64::fixnumshift))
                     (! check-min-nargs num-fixed)
                     (! check-min-nargs-large num-fixed)))
                 (unless (or rest keys)
                   (let* ((max (+ num-fixed num-opt)))
-                    (if (arm642-aimm-p max)
+                    (if (arm642-aimm-p (ash max arm64::fixnumshift))
                       (! check-max-nargs max)
                       (! check-max-nargs-large max))))
                 (unless lexprp
