@@ -1102,7 +1102,9 @@
     (declare (type (unsigned-byte 16) nargs))
     (with-arm64-local-vinsn-macros (seg)
       (unless *arm642-reckless*
-        (! check-exact-nargs nargs))
+        (if (arm642-aimm-nargs-p nargs)
+          (! check-exact-nargs nargs)
+          (! check-exact-nargs-large nargs)))
       (arm642-argregs-entry seg rev-fixed-args))))
 
 ;;; No more than three &optional args; all default to NIL and none have
@@ -5265,7 +5267,12 @@
 
 ;; The cmp instruction takes a 12-bit immediate; return true if n fits.
 (defun arm642-aimm-p (n)
-  (< n 4096))
+  (typep n '(unsigned-byte 12)))
+
+;; Is nargs sufficiently small to be tested with an immediate operand?
+(defun arm642-aimm-nargs-p (nargs)
+  ;; (arm642-aimm-p (ash nargs arm64::fixnumshift))
+  (typep nargs '(unsigned-byte 9)))
 
 ;;; vinsn expansion
 
@@ -5654,7 +5661,9 @@
             (progn
               (setq arg-regs (arm642-req-nargs-entry seg rev-fixed)))
             (if (and (not (or hardopt rest keys))
-                     (<= num-opt $numarm64argregs))
+                     (<= num-opt $numarm64argregs)
+                     (arm642-aimm-nargs-p (+ num-fixed num-opt)))
+              ;; simple-opt-entry requires that nargs fit in an immediate
               (setq arg-regs (arm642-simple-opt-entry seg rev-opt rev-fixed))
               (progn
                 ;; If the minumum acceptable number of args is
@@ -5662,12 +5671,12 @@
                 ;; received.  If there's an upper bound, enforce it.
 
                 (when rev-fixed
-                  (if (arm642-aimm-p num-fixed)
+                  (if (arm642-aimm-nargs-p num-fixed)
                     (! check-min-nargs num-fixed)
                     (! check-min-nargs-large num-fixed)))
                 (unless (or rest keys)
                   (let* ((max (+ num-fixed num-opt)))
-                    (if (arm642-aimm-p max)
+                    (if (arm642-aimm-nargs-p max)
                       (! check-max-nargs max)
                       (! check-max-nargs-large max))))
                 (unless lexprp
