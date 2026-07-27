@@ -5715,6 +5715,10 @@
           (if (not (or opt rest keys))
             (progn
               (setq arg-regs (arm642-req-nargs-entry seg rev-fixed)))
+            ;; simple-opt-entry and the default-N-args vinsns it emits
+            ;; compare the BOXED count against an add/sub immediate, so
+            ;; a boxed max past imm12 must take the general path below,
+            ;; whose checks have -large fallbacks.
             (if (and (not (or hardopt rest keys))
                      (<= num-opt $numarm64argregs)
                      (arm642-aimm-nargs-p (+ num-fixed num-opt)))
@@ -5725,6 +5729,10 @@
                 ;; non-zero, ensure that at least that many were
                 ;; received.  If there's an upper bound, enforce it.
 
+                ;; aimm-p must see the BOXED count: the check vinsns
+                ;; compare (ash n fixnumshift).  (ARM32's raw-value test
+                ;; was sound only because its rotated-immediate encoder
+                ;; makes "raw encodable => boxed encodable" true.)
                 (when rev-fixed
                   (if (arm642-aimm-nargs-p num-fixed)
                     (! check-min-nargs num-fixed)
