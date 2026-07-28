@@ -3245,7 +3245,20 @@
                             (let* ((copy (! copy-gpr popped-reg pushed-reg)))
                               (remove-dll-node copy)
                               (if pushed-reg-is-set
-                                (insert-dll-node-after copy push-vinsn)
+                                ;; PUSHED-REG is assigned later in the
+                                ;; sequence, so the copy has to happen
+                                ;; before that assignment.  It also has to
+                                ;; happen after the last reference to
+                                ;; POPPED-REG, whose value we are about to
+                                ;; overwrite; the test above has already
+                                ;; established that that last reference
+                                ;; precedes the first assignment, so there
+                                ;; is a slot between them.  Inserting after
+                                ;; PUSH-VINSN instead clobbers POPPED-REG
+                                ;; ahead of its own uses.
+                                (insert-dll-node-after copy
+                                                       (or popped-reg-is-reffed
+                                                           push-vinsn))
                                 (insert-dll-node-before copy pop-vinsn))))
                           (elide-vinsn push-vinsn)
                           (elide-vinsn pop-vinsn)
