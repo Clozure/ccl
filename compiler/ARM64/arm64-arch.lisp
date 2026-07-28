@@ -231,6 +231,14 @@
 (defconstant xtype-array3d #x40)
 (defconstant xtype-null #x50)
 
+;;; Kernel error number for funcalling a macro/special-operator name
+;;; (the fcell simple-vector's %macro-code% UUO).  Canonical homes:
+;;; compiler/arch.lisp + lisp-kernel/errors.s + lisp-kernel/lisp-errors.h
+;;; (all in this patch).  Duplicated here because a frozen cross-host
+;;; image bakes arch.lisp, so a NEW arch.lisp constant is invisible to a
+;;; cross compile; this file is (re)loaded by every backend load.
+(defconstant error-apply-macro-or-special 20)
+
 ;;; A sanity check: no synthetic xtype may collide with a real subtag
 ;;; byte or with a bare tag code (#x00-#x0f).
 (eval-when (:compile-toplevel)

@@ -32,6 +32,7 @@ error_suspend_all = 13
 error_resume = 14
 error_resume_all = 15					
 error_cant_call = 17
+error_apply_macro_or_special = 20
         
 error_type_error = 128
 

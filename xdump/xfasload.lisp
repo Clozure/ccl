@@ -340,10 +340,7 @@
 
 
 (defun  %xload-unbound-function% ()
-  (+ *xload-dynamic-space-address*
-     (target-arch-case
-      (:arm64 *xload-target-fulltag-for-functions*)
-      (otherwise *xload-target-fulltag-misc*))))
+  (+ *xload-dynamic-space-address* *xload-target-fulltag-misc*))
 
 (defparameter *xload-dynamic-space* nil)
 (defparameter *xload-readonly-space* nil)
@@ -1062,17 +1059,6 @@
                   *xload-target-backend*)))
           (locally (declare (ftype (function (t) t) xload-arm-set-entrypoint))
             (xload-arm-set-entrypoint udf-object))))
-       (:arm64
-        ;; arm64 gives functions their own fulltag; callers load the
-        ;; code vector from slot 0 of a function-tagged pointer, so the
-        ;; PPC simple-vector pun (misc tag) misreads.  Real function
-        ;; object: {code-vector@0, lfbits@1}.
-        (let* ((udf-object (xload-make-gvector :function 2)))
-          (setf (xload-%svref udf-object 0)
-                (xload-save-code-vector
-                 (backend-xload-info-udf-code
-                  *xload-target-backend*)))
-          (setf (xload-%svref udf-object 1) 0)))
        (otherwise
         ;; The undefined-function object is a 1-element simple-vector (not
         ;; a function vector).  The code-vector in its 0th element should
