@@ -42,6 +42,8 @@
 (require "X8632-ARCH")
 #+x8664-target
 (require "X8664-ARCH")
+#+arm64-target
+(require "ARM64-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
 
@@ -1288,6 +1290,9 @@ Will differ from *compiling-file* during an INCLUDE")
           #.x8664::fulltag-imm-1))
         #+arm-target
         (#.arm::tag-imm)
+        #+arm64-target
+        ((#.arm64::tag-single-float
+          #.arm64::tag-imm))
         (t
          (if
            #+ppc32-target
@@ -1304,6 +1309,11 @@ Will differ from *compiling-file* during an INCLUDE")
                                  (ash 1 x8664::fulltag-immheader-2))))
            #+arm-target
            (= (the fixnum (logand type-code arm::fulltagmask)) arm::fulltag-immheader)
+           #+arm64-target
+           (logbitp (the fixnum (logand type-code arm64::fulltagmask))
+                    (logior (ash 1 arm64::fulltag-immheader-0)
+                            (ash 1 arm64::fulltag-immheader-1)
+                            (ash 1 arm64::fulltag-immheader-2)))
            (case type-code
              (#.target::subtag-dead-macptr (fasl-unknown exp))
              (#.target::subtag-macptr
@@ -1324,6 +1334,11 @@ Will differ from *compiling-file* during an INCLUDE")
               #+x8632-target #.target::subtag-symbol
               #+x8664-target #.target::tag-symbol
               #+arm-target #.target::subtag-symbol (fasl-scan-symbol exp))
+             #+arm64-target
+             (#.arm64::tag-7
+              (if (symbolp exp)
+                (fasl-scan-symbol exp)
+                (error "expected only a symbol")))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
