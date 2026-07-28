@@ -325,6 +325,9 @@ spentry ffcall_return_registers
         str temp0, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
+        /* Discard lisp-side cumulative flags so tcr.foreign_fpsr is the
+         * CALLEE's, not everything since the last ff-call. */
+        msr fpsr, xzr
         blr temp4                               /* ppc:1849 bctrl            */
         /* Store every AAPCS64 result register into the buffer
            (ppc:1851-1871 stores r3-r10/f1-f13). */

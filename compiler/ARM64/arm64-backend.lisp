@@ -363,6 +363,7 @@
         (use-interface-dir :libc ftd)
         (setf (backend-target-foreign-type-data backend) ftd))))
 
+#-arm64-target
 (pushnew *darwinarm64-backend* *known-backends* :key #'backend-name)
 
 
