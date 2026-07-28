@@ -3269,12 +3269,10 @@
   ;; src and dest are distinct FPRs with the same mode.
   (with-arm64-local-vinsn-macros (seg)
     (case (fpr-mode-value-name (get-regspec-mode src))
-      (:single-float (! single-to-single dest src))
-      (:double-float (! double-to-double dest src))
-      (:complex-single-float (! complex-single-float-to-complex-single-float
-                                dest src))
-      (:complex-double-float (! complex-double-float-to-complex-double-float
-                                dest src)))))
+      (:single-float (! copy-single-float dest src))
+      (:double-float (! copy-double-float dest src))
+      (:complex-single-float (! copy-complex-single-float dest src))
+      (:complex-double-float (! copy-complex-double-float dest src)))))
 
 (defun arm642-elide-pushes (seg push-vinsn pop-vinsn)
   (with-arm64-local-vinsn-macros (seg)
