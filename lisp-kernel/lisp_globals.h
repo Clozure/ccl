@@ -139,7 +139,7 @@ extern LispObj lisp_nil;
    i.e. lisp_nil, which set_nil() stores at image-load time from the loaded
    static area's actual base, before any lisp_global/nrs_symbol use. */
 #define nil_value lisp_nil
-#define lisp_global(g) (((LispObj *)(nil_value-fulltag_nil-dnode_size))[(g)])
+#define lisp_global(g) (((LispObj *)(nil_value-fulltag_nil))[(g)])
 #define nrs_symbol(s) (((lispsymbol *)(nil_value-fulltag_nil+2*dnode_size))[(s)])
 #endif
 
