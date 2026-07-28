@@ -1498,7 +1498,7 @@
            (ensuring-node-target (target vreg)
              (if (and index-known-fixnum
                       (<= index-known-fixnum
-                          (arch::target-max-32-bit-constant-index arch)))
+                          (arch::target-max-64-bit-constant-index arch)))
                (! misc-ref-c-node target src index-known-fixnum)
                (with-imm-target () (idx-reg :u64)
                  (if index-known-fixnum
@@ -2305,8 +2305,9 @@
                (compiler-bug "Bug: invalid register targeting for gvset: ~s" (list src unscaled-idx val-reg)))
              (! call-subprim-3 val-reg (subprim-name->offset '.SPgvset) src unscaled-idx val-reg))
             (is-node
-             (if (and index-known-fixnum (<= index-known-fixnum
-                                             (arch::target-max-32-bit-constant-index arch)))
+             (if (and index-known-fixnum
+                      (<= index-known-fixnum
+                          (arch::target-max-64-bit-constant-index arch)))
                (! misc-set-c-node val-reg src index-known-fixnum)
                (with-imm-target () scaled-idx
                  (if index-known-fixnum
