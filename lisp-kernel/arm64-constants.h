@@ -144,7 +144,7 @@ DEFCONST(fulltag_nil,          0b1011)
 DEFCONST(fulltag_misc,         0b1100)
 DEFCONST(fulltag_immheader_2,  0b1101)
 DEFCONST(fulltag_nodeheader_1, 0b1110)
-DEFCONST(fulltag_function,     0b1111)
+DEFCONST(fulltag_15,           0b1111)
 
 DEFCONST(misc_bias, fulltag_misc)
 DEFCONST(cons_bias, fulltag_cons)
@@ -363,8 +363,7 @@ _structf symbol, -fulltag_symbol
   _node binding_index
 _endstructf
 
-/* A function has its own tag, but is otherwise a miscobj */
-_struct _function, -fulltag_function
+_struct _function, -fulltag_misc
  _node header
  _node code_vector
 _ends
@@ -392,6 +391,14 @@ _structf macptr
   _node type
 _endstructf
 
+INTERRUPT_LEVEL_BINDING_INDEX = (1 << fixnumshift)
+
+_struct binding
+ _node link
+ _node sym
+ _node val
+_ends
+
 _struct tsp_frame
  _node backlink
  _node type
@@ -415,6 +422,15 @@ _structf catch_frame
  _node xframe                   /* exception frame chain */
  _node nfp
 _endstructf
+
+_struct c_frame
+ _node header
+ _node savedsp
+ _struct_label params
+_ends
+
+TCR_STATE_LISP = 0
+TCR_STATE_FOREIGN = 1
 #endif
 
 DEFCONST(two_digit_bignum_header, ((2<<num_subtag_bits)|subtag_bignum))
