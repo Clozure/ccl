@@ -133,7 +133,7 @@ typedef struct area_list {
 #define VSTACK_SOFTPROT CSTACK_SOFTPROT
 #endif
 
-#define MIN_TSTACK_SIZE (1<<18)
+#define MIN_TSTACK_SIZE (1<<19)
 #define TSTACK_HARDPROT ((1<<16)+(1<<12))
 #define TSTACK_SOFTPROT ((1<<16)+(1<<12))
 
