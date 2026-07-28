@@ -137,6 +137,26 @@ DEFCONST(fulltag_immheader_0,  0b0100)
 DEFCONST(fulltag_immheader_1,  0b0101)
 DEFCONST(fulltag_nodeheader_0, 0b0110)
 DEFCONST(fulltag_symbol,       0b0111)
+#ifndef __ASSEMBLER__
+/* gc.h:96 and plsym.c both test this name with #ifdef, not #if defined-value:
+ * x86-constants64.h:96 defines fulltag_symbol as a real preprocessor macro, so
+ * those tests work there.  A DEFCONST makes an ENUM member, which #ifdef cannot
+ * see, so arm64 silently compiled the fulltag_misc branch of is_symbol_fulltag --
+ * and symbols are fulltag 7 here, so the predicate never matched anything.
+ *
+ * Consequence, gdb-confirmed: on a full GC, GCTWA (gc-common.c:1768/1804) neither
+ * rescued worthy package-itab symbols nor scrubbed dead ones to unbound_marker, so
+ * compact_dynamic_heap forwarded itab references to unmarked symbols == heap
+ * corruption after the first full GC following heavy interning (an in-image
+ * compile-file will do it).  Bug() backtrace was compact_dynamic_heap ->
+ * node_forwarding_address with tag_n 7.
+ *
+ * The self-referential define keeps the enum as the VALUE while making the NAME
+ * visible to #ifdef.  It also heals plsym.c:24 describe_symbol.  fulltag_symbol is
+ * the only DEFCONST name the preprocessor tests anywhere in kernel C (checked by
+ * comm of the DEFCONST names against the ifdef names). */
+#define fulltag_symbol fulltag_symbol
+#endif
 DEFCONST(fulltag_odd_fixnum,   0b1000)
 DEFCONST(fulltag_reserved,     0b1001)
 DEFCONST(fulltag_imm_1,        0b1010)
