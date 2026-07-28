@@ -144,7 +144,8 @@ DEFCONST(fulltag_nil,          0b1011)
 DEFCONST(fulltag_misc,         0b1100)
 DEFCONST(fulltag_immheader_2,  0b1101)
 DEFCONST(fulltag_nodeheader_1, 0b1110)
-DEFCONST(fulltag_function,     0b1111)
+/* 0b1111 free: fulltag_function removed -- a function is an ordinary
+   miscobj (fulltag_misc + subtag_function); functionp checks the subtag. */
 
 DEFCONST(misc_bias, fulltag_misc)
 DEFCONST(cons_bias, fulltag_cons)
@@ -363,8 +364,8 @@ _structf symbol, -fulltag_symbol
   _node binding_index
 _endstructf
 
-/* A function has its own tag, but is otherwise a miscobj */
-_struct _function, -fulltag_function
+/* A function is an ordinary miscobj (fulltag_misc + subtag_function) */
+_struct _function, -fulltag_misc
  _node header
  _node code_vector
 _ends

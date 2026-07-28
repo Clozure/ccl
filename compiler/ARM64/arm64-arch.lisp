@@ -68,7 +68,8 @@
 (defconstant fulltag-misc         #b1100) ;uvector/miscobj (see note below)
 (defconstant fulltag-immheader-2  #b1101)
 (defconstant fulltag-nodeheader-1 #b1110)
-(defconstant fulltag-function     #b1111)
+;; #b1111 free: fulltag-function removed -- a function is an ordinary
+;; miscobj (fulltag-misc + subtag-function); functionp checks the subtag.
 
 ;;; Note on fulltag-misc: the value (12) was selected deliberately.
 ;;; This allows us to branch directly to a tagged code-vector pointer:
@@ -231,6 +232,14 @@
 (defconstant xtype-array3d #x40)
 (defconstant xtype-null #x50)
 
+;;; Kernel error number for funcalling a macro/special-operator name
+;;; (the fcell simple-vector's %macro-code% UUO).  Canonical homes:
+;;; compiler/arch.lisp + lisp-kernel/errors.s + lisp-kernel/lisp-errors.h
+;;; (all in this patch).  Duplicated here because a frozen cross-host
+;;; image bakes arch.lisp, so a NEW arch.lisp constant is invisible to a
+;;; cross compile; this file is (re)loaded by every backend load.
+(defconstant error-apply-macro-or-special 20)
+
 ;;; A sanity check: no synthetic xtype may collide with a real subtag
 ;;; byte or with a bare tag code (#x00-#x0f).
 (eval-when (:compile-toplevel)
@@ -256,7 +265,7 @@
 (defconstant misc-dfloat-offset misc-data-offset)
 
 (defconstant misc-symbol-offset (- node-size fulltag-symbol))
-(defconstant misc-function-offset (- node-size fulltag-function))
+(defconstant misc-function-offset (- node-size fulltag-misc)) ; = misc-data-offset
 
 ;;; There is a pad word after the uvector header so that the
 ;;; complex-double-float elements are 16-byte aligned.
@@ -673,7 +682,7 @@
   plist
   binding-index)
 
-(define-fixedsized-object function (fulltag-function)
+(define-fixedsized-object function (fulltag-misc)
   code-vector
   constants
   ;; constants and metadata follow
@@ -1134,8 +1143,8 @@
    :null-tag fulltag-nil
    :symbol-tag fulltag-symbol
    :symbol-tag-is-subtag nil
-   :function-tag fulltag-function
-   :function-tag-is-subtag nil
+   :function-tag subtag-function
+   :function-tag-is-subtag t
    :big-endian nil
    :misc-subtag-offset misc-subtag-offset
    :car-offset cons.car

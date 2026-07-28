@@ -1078,7 +1078,26 @@
 
 (let* ((fixnum (lambda (x) (declare (ignore x)) 'fixnum))
        (imm (lambda (x) (if (characterp x) 'character 'immediate)))
-       (bogus (lambda (x) (declare (ignore x)) 'bogus)))
+       (bogus (lambda (x) (declare (ignore x)) 'bogus))
+       (function-type-of
+        (lambda (thing)
+          (let ((bits (lfun-bits thing)))
+            (declare (fixnum bits))
+            (if (logbitp $lfbits-trampoline-bit bits)
+              (let ((inner-fn (closure-function thing)))
+                (if (neq inner-fn thing)
+                  (let ((inner-bits (lfun-bits inner-fn)))
+                    (if (logbitp $lfbits-method-bit inner-bits)
+                      'compiled-lexical-closure
+                      (if (logbitp $lfbits-gfn-bit inner-bits)
+                        'standard-generic-function ; not precisely - see class-of
+                        (if (logbitp  $lfbits-cm-bit inner-bits)
+                          'combined-method
+                          'compiled-lexical-closure))))
+                  'compiled-lexical-closure))
+              (if (logbitp  $lfbits-method-bit bits)
+                'method-function
+                'compiled-function))))))
   (setq *arm64-%type-of-functions*
         (vector
          fixnum                         ;0 fulltag-even-fixnum
@@ -1098,6 +1117,8 @@
                             (high4 (ash typecode (- arm64::ntagbits))))
                        (declare (type (unsigned-byte 8) typecode)
                                 (type (unsigned-byte 4) low4 high4))
+                       (if (= typecode arm64::subtag-function)
+                         (funcall function-type-of x)
                        (let* ((name
                                (cond ((= low4 arm64::fulltag-immheader-0)
                                       (%svref *immheader-0-types* high4))
@@ -1112,27 +1133,10 @@
                                      (t 'bogus))))
                          (or (and (eq name 'lock)
                                   (uvref x arm64::lock.kind-cell))
-                             name)))) ;12 fulltag-misc
+                             name))))) ;12 fulltag-misc
          bogus                          ;13 fulltag-immheader-2
          bogus                          ;14 fulltag-nodeheader-1
-         (lambda (thing)                ;15 fulltag-function
-           (let ((bits (lfun-bits thing)))
-             (declare (fixnum bits))
-             (if (logbitp $lfbits-trampoline-bit bits)
-               (let ((inner-fn (closure-function thing)))
-                 (if (neq inner-fn thing)
-                   (let ((inner-bits (lfun-bits inner-fn)))
-                     (if (logbitp $lfbits-method-bit inner-bits)
-                       'compiled-lexical-closure
-                       (if (logbitp $lfbits-gfn-bit inner-bits)
-                         'standard-generic-function ; not precisely - see class-of
-                         (if (logbitp  $lfbits-cm-bit inner-bits)
-                           'combined-method
-                           'compiled-lexical-closure))))
-                   'compiled-lexical-closure))
-               (if (logbitp  $lfbits-method-bit bits)
-                 'method-function
-                 'compiled-function)))))))
+         bogus)))                       ;15 (was fulltag-function; removed)
 
 (defun %type-of (thing)
   (let* ((f (fulltag thing)))

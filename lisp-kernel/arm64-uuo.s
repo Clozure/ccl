@@ -42,6 +42,10 @@ uuo_format_unary = 1
   // (index, dest); see "Errors that need three registers" in
   // doc/porting/arm64.md.  reg here is the slot vector.
   unary_info_slot_unbound = 6
+  // Funcalled a symbol naming a macro or special operator: the fcell
+  // holds the 2-element simple-vector whose slot 0 is %macro-code%,
+  // whose single instruction is this UUO.  reg = fname.
+  unary_info_apply_macro = 7
 
 /*
  * Two-register errors
@@ -143,6 +147,10 @@ uuo_format_wrong_type = 3
         // into dest.  A lone one is an internal error.
         .macro uuo_error_slot_unbound slotv
         uuo_unary \slotv, unary_info_slot_unbound
+        .endm
+
+        .macro uuo_error_apply_macro reg
+        uuo_unary \reg, unary_info_apply_macro
         .endm
 
         // binary format

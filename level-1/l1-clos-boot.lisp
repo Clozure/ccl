@@ -2475,8 +2475,7 @@ to replace that class with ~s" name old-class new-class)
           #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
           #+x8664-target (map-subtag x8664::subtag-function function-vector)
           ;; arm64: the raw uvectors, reached via %symptr->symvector etc.
-          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector)
-          #+arm64-target (map-subtag arm64::subtag-function function-vector))
+          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector))
         (setf (%svref v target::subtag-arrayH)
               #'(lambda (x)
                   (if (logbitp $arh_simple_bit
@@ -2531,7 +2530,7 @@ to replace that class with ~s" name old-class new-class)
                       #+arm-target target::subtag-function
                       #+x8632-target target::subtag-function
                       #+x8664-target target::tag-function
-                      #+arm64-target arm64::fulltag-function)
+                      #+arm64-target arm64::subtag-function)
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
               #'(lambda (v)
