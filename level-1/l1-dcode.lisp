@@ -398,19 +398,19 @@
 )
 
 
-#+ppc-target
+#+(or ppc-target arm64-target)
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 0))
 #+arm-target
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 1))
 
 
-#+ppc-target
+#+(or ppc-target arm64-target)
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 0))
 #+arm-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 1))
 
 
-#+ppc-target
+#+(or ppc-target arm64-target)
 (defvar *gf-proto-code* (uvref *gf-proto* 0))
 #+arm-target
 (defvar *gf-proto-code* (uvref *gf-proto* 1))
@@ -425,7 +425,7 @@
 							  *standard-generic-function-class*))))
 		 (dt (make-gf-dispatch-table))
 		 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
-		 (fn #+(or ppc-target arm-target)
+		 (fn #+(or ppc-target arm-target arm64-target)
                      (#+arm-target
                       %fix-fn-entrypoint
                       #-arm-target
@@ -469,7 +469,7 @@
 
 
 
-#+ppc-target
+#+(or ppc-target arm64-target)
 (defvar *cm-proto-code* (uvref *cm-proto* 0))
 
 #+arm-target
@@ -477,7 +477,7 @@
 
 (defun %cons-combined-method (gf thing dcode)
   ;; set bits and name = gf
-  #+(or ppc-target arm-target)
+  #+(or ppc-target arm-target arm64-target)
   (#+arm-target
    %fix-fn-entrypoint
    #-arm-target
