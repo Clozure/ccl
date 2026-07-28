@@ -700,6 +700,83 @@ terminate the list"
               (t 'bogus)))))
   )
 
+#+arm64-target
+(progn
+
+  ;;; other element types
+  (defparameter *immheader-0-array-element-types*
+    #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      (complex double-float)
+      (signed-byte 16)
+      (unsigned-byte 16)
+      bogus
+      (signed-byte 8)
+      (unsigned-byte 8)
+      bit))
+
+  ;;; 32-bit element types
+  (defparameter *immheader-1-array-element-types*
+    #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      base-char
+      (signed-byte 32)
+      (unsigned-byte 32)
+      single-float))
+
+  ;;; 64-bit element types
+  (defparameter *immheader-2-array-element-types*
+    #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      (complex single-float)
+      fixnum
+      (signed-byte 64)
+      (unsigned-byte 64)
+      double-float))
+
+
+  (defun element-subtype-type (subtype)
+    (declare (type (unsigned-byte 8) subtype))
+    (if (= subtype arm64::subtag-simple-vector)
+      t
+      (let* ((class (ash subtype (- arm64::ntagbits)))
+             (tag (logand subtype arm64::fulltagmask)))
+        (declare (type (unsigned-byte 4) class tag))
+        (cond ((= tag arm64::fulltag-immheader-0)
+               (%svref *immheader-0-array-element-types* class))
+              ((= tag arm64::fulltag-immheader-1)
+               (%svref *immheader-1-array-element-types* class))
+              ((= tag arm64::fulltag-immheader-2)
+               (%svref *immheader-2-array-element-types* class))
+              (t 'bogus)))))
+  )
+
 #+arm-target
 (progn
   (defparameter array-element-subtypes
