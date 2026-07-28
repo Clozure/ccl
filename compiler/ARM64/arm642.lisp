@@ -6505,6 +6505,82 @@
 ;;; The element count deliberately COVERS the reserved frame, so the GC skips
 ;;; its uninitialized words; the ff-call sequence builds the frame there and
 ;;; then shrinks the count by 4 to publish it.  See ALLOC-C-FRAME.
+;;; The four TYPED multi-dimensional acode handlers.  nx1.lisp:884 emits
+;;; simple-typed-aref2/aref3 (and the aset pair) whenever both the array
+;;; element type and the rank are known at compile time; with no handler for
+;;; the operator the compiler signals CCL::COMPILER-BUG, which is what
+;;; CCL.ISSUE#335 and CCL.BUG#620 report.  Only the DECLARED path was
+;;; affected -- an undeclared (aref a i j) routes through general-aref2 and
+;;; the .SParef2 subprim, which is why 2d arrays otherwise worked.
+;;;
+;;; Placement: these MUST sit after the defarm642 macro (defined at the
+;;; DEFPARAMETER block above, arm642.lisp:5671 at the pin).  Putting them next
+;;; to the arm642-aref2/aref3 helpers instead -- which reads better -- makes
+;;; each form compile as a FUNCTION CALL, so loading arm642 dies with
+;;; "Unbound variable: CCL::ARM642-%AREF2" and takes every arm642-additions
+;;; file down with it, because the aborted load never defines the macro.
+;;;
+;;; Adopted VERBATIM from upstream arm642.lisp @1db0ab68 (commit 41400d3c),
+;;; which adapts PPC64 ppc2.lisp:7615/7667/7724/7817.  Taking his text rather
+;;; than writing our own keeps the pin advance a no-op here instead of a
+;;; divergent shadow.  The helpers they call are his own arm642-aset2/aset3/
+;;; aref3 (this file) plus arm642-aref2, which he defines at tip and which our
+;;; compiler overlay supplies at this pin.
+;;;
+;;; TWO UPSTREAM NOTES, both preserved deliberately rather than fixed:
+;;;   * the eight vinsns these paths need -- 2d-dim1, 2d-unscaled-index,
+;;;     check-2d-bound, 3d-dims, 3d-unscaled-index, check-3d-bound,
+;;;     array-data-vector-ref, trap-unless-simple-array-2 -- are defined
+;;;     NOWHERE in his tree at pin or tip, so these handlers are dead code
+;;;     upstream until the vinsns land.  Ours come from the compiler overlay.
+;;;   * simple-typed-aref3's (if (null vreg) ...) has no else branch and falls
+;;;     through into the aref3 call, so a null-vreg 3d aref evaluates its
+;;;     subforms TWICE.  PPC64 has the same shape at ppc2.lisp:7667.  Kept
+;;;     byte-identical to upstream and reported rather than silently diverged.
+(defarm642 arm642-%aref2 simple-typed-aref2 (seg vreg xfer typename arr i j &optional dim0 dim1)
+  (if (null vreg)
+    (progn
+      (arm642-form seg nil nil arr)
+      (arm642-form seg nil nil i)
+      (arm642-form seg nil xfer j))
+    (let* ((type-keyword (acode-immediate-operand typename))
+           (fixtype (nx-lookup-target-uvector-subtag type-keyword))
+           (safe (unless *arm642-reckless* fixtype))
+           (dim0 (acode-fixnum-form-p dim0))
+           (dim1 (acode-fixnum-form-p dim1)))
+      (arm642-aref2 seg vreg xfer arr i j safe type-keyword dim0 dim1))))
+
+(defarm642 arm642-%aref3 simple-typed-aref3 (seg vreg xfer typename arr i j k &optional dim0 dim1 dim2)
+  (if (null vreg)
+    (progn
+      (arm642-form seg nil nil arr)
+      (arm642-form seg nil nil i)
+      (arm642-form seg nil nil j)
+      (arm642-form seg nil xfer k)))
+  (let* ((type-keyword (acode-immediate-operand typename))
+         (fixtype (nx-lookup-target-uvector-subtag type-keyword))
+         (safe (unless *arm642-reckless* fixtype))
+         (dim0 (acode-fixnum-form-p dim0))
+         (dim1 (acode-fixnum-form-p dim1))
+         (dim2 (acode-fixnum-form-p dim2)))
+    (arm642-aref3 seg vreg xfer arr i j k safe type-keyword dim0 dim1 dim2)))
+
+(defarm642 arm642-%aset2 simple-typed-aset2 (seg vreg xfer typename arr i j new &optional dim0 dim1)
+  (let* ((type-keyword (acode-immediate-operand typename))
+         (fixtype (nx-lookup-target-uvector-subtag type-keyword))
+         (safe (unless *arm642-reckless* fixtype))
+         (dim0 (acode-fixnum-form-p dim0))
+         (dim1 (acode-fixnum-form-p dim1)))
+    (arm642-aset2 seg vreg xfer arr i j new safe type-keyword dim0 dim1)))
+
+(defarm642 arm642-%aset3 simple-typed-aset3 (seg vreg xfer typename arr i j k new &optional dim0 dim1 dim2)
+  (let* ((type-keyword (acode-immediate-operand typename))
+         (fixtype (nx-lookup-target-uvector-subtag type-keyword))
+         (safe (unless *arm642-reckless* fixtype))
+         (dim0 (acode-fixnum-form-p dim0))
+         (dim1 (acode-fixnum-form-p dim1))
+         (dim2 (acode-fixnum-form-p dim2)))
+    (arm642-aset3 seg vreg xfer arr i j k new safe type-keyword dim0 dim1 dim2)))
 (defun arm642-c-frame-words (n-c-arg-words)
   (let ((words (+ 1                     ;header
                   1                     ;saved previous SP (element 0)
