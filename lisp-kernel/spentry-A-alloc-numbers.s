@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "arm64-constants.h"
-#include "arm64-macros.s"   /* pulls arm64-uuo.s @ 115b7aa */
+#include "arm64-macros.s" /* pulls arm64-uuo.s @ 115b7aa */
 #include "arm64-globals-proposed.s"
 
 /*
@@ -16,7 +16,7 @@
  * makestackblock0.
  *
  * makes64/fix_overflow are Matt's OWN already-real examples in his
- * arm64-spentry.s (not owned by this cluster).  gets32/getu32 exist in our
+ * arm64-spentry.s (not owned by this cluster). gets32/getu32 exist in our
  * own high-tag arm64-spentry.s; makes32/makeu32 do not (derived from PPC64
  * only).
  *
@@ -24,17 +24,17 @@
  * tail-jumps depend on is now PROPOSED (ratify with Matt) and shared with
  * the sibling clusters:
  * (a) NRS/global-relative addressing: arm64-globals-proposed.s
- *     (rnil-relative ref_nrs_symbol/ref_nrs_value, indices from the vendor
- *     lisp_globals.s nrs order) -- same idiom as spentry-C/D.
+ * (rnil-relative ref_nrs_symbol/ref_nrs_value, indices from the vendor
+ * lisp_globals.s nrs order) -- same idiom as spentry-C/D.
  * (b) error/trap signalling: the `udf #imm16' UUO scheme (canonical:
- *     arm64-asm.lisp:435-450; namespace doc = PROPOSED-CONSTANTS block
- *     below, BINDING for all clusters) plus the _SPksignalerr subprim
- *     (spentry-D-call-builtins.s:488, real body).
+ * arm64-asm.lisp:435-450; namespace doc = PROPOSED-CONSTANTS block
+ * below, BINDING for all clusters) plus the _SPksignalerr subprim
+ * (spentry-D-call-builtins.s:488, real body).
  */
 
 /* PROPOSED-CONSTANTS (ratify with Matt) -- derived from PPC64 struct/header
  * definitions using the SAME _struct/_structf macro conventions already
- * present in arm64-constants.h; NOT invented.  Cited per-field below. */
+ * present in arm64-constants.h; NOT invented. Cited per-field below. */
 
 /* tsp_frame: ppc-constants64.s:228-233 (backlink, type, then fixed_overhead
  * and data_offset alias the SAME offset -- Matt's _struct macro block in
@@ -51,7 +51,7 @@
 /* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame.
  * Ground truth: his popj vinsn (compiler/ARM64/arm64-vinsns.lisp:61-67)
  * does ldp fn,lr,[sp,#16] / ldr vsp,[sp,#8] ("ignore marker") / add sp,#32,
- * and arm64-constants.h:177-178 defines subtag_lisp_frame_marker.  Layout
+ * and arm64-constants.h:177-178 defines subtag_lisp_frame_marker. Layout
  * matches ARM32 (arm-constants.s:374-379): marker,savevsp,savefn,savelr. */
 .set lisp_frame.marker, 0
 .set lisp_frame.savevsp, 8
@@ -84,7 +84,7 @@
 .set _function.size, 16
 
 /* bignum headers not already in arm64-constants.h (two/three/four_digit_
- * bignum_header ARE already defined there).  Derived via the same
+ * bignum_header ARE already defined there). Derived via the same
  * def_header(name,count,subtag) formula as ppc-constants.s:330-333/
  * ppc-constants32.s:388, using macptr.element_count/subtag_bignum which
  * arm64-constants.h already defines for real. */
@@ -109,7 +109,7 @@
  * (2e10ffb "Sketch out a revised way to encode and write UUOs"),
  * included above -- 2-bit format in the udf imm16 (0 reserved: udf #0 is
  * the code-vector start sentinel; 1 unary reg+info; 2 binary ra+rb+info;
- * 3 misc).  His macros are invoked directly below with register NAMES
+ * 3 misc). His macros are invoked directly below with register NAMES
  * (they encode via the R* numbers in arm64-constants.h).
  * PROPOSED on top (arm64-globals-proposed.s): uuo_interr (misc bit-13
  * flag) for PPC's errnum-carrying traps.
@@ -117,7 +117,7 @@
  * (xtype_integer = 0x18 ... xtype_cons = 0xe8, "Keep these in sync with
  * the values in arm64-arch.lisp"); *arm64-xtype-specifiers*
  * (arm64-trap-support.lisp:215) decodes that numbering and the
- * expected-type field is 8 bits wide.  16m41: ARM32-numbered local
+ * expected-type field is 8 bits wide. : ARM32-numbered local
  * .sets here (integer=4, s64=8, ...) SHADOWED his values, so unboxing
  * traps reported wrong expected types. */
 
@@ -148,18 +148,18 @@ endsp makeu32
  * that digit's own top bit is set) rather than transliterating PPC's
  * per-32-bit-half CR-probe sequence, which relies on POWER's multiple
  * parallel condition-register fields with no 1:1 AArch64 (single NZCV)
- * analog.  rotldi byte-swaps dropped throughout: AArch64 is little-endian,
+ * analog. rotldi byte-swaps dropped throughout: AArch64 is little-endian,
  * so a direct 64-bit store already places digit pairs in the correct
  * byte order with no swap needed (PPC64/CCL historically ran big-endian). */
 spentry makeu128
         cbz     imm0, 6f                       /* whole value fits in imm1 alone */
         /* GC SAFETY (Matt, 2026-07-11 mail): scratch must be an IMM reg,
-         * never a node reg like temp0 -- an unboxed value there has an
-         * arbitrary tag the GC could see. */
+ * never a node reg like temp0 -- an unboxed value there has an
+ * arbitrary tag the GC could see. */
         lsr     imm3, imm0, #32
         cbnz    imm3, 2f                       /* digit3 (imm0's high half) != 0 */
         /* digit3 == 0: 3 or 4 digits, decided by imm0's bit31 (== digit2's
-         * own sign bit, since digit3==0 means imm0 < 2^32). */
+ * own sign bit, since digit3==0 means imm0 < 2^32). */
         lsr     imm3, imm0, #31
         cbnz    imm3, 1f
         mov     imm2, #three_digit_bignum_header
@@ -187,12 +187,12 @@ endsp makeu128
 
 /* Construct a lisp integer out of the signed 128-bit value in imm0 (high 64
  * bits) : imm1 (low 64 bits).
- * ported from ppc-spentry.s:6667-6693 (PPC64 branch).  Unlike makeu128, a
+ * ported from ppc-spentry.s:6667-6693 (PPC64 branch). Unlike makeu128, a
  * signed value never needs a 5th padding digit: a kept top digit's own
  * bit31 already correctly encodes the sign, since the whole point of
  * dropping a would-be digit is only valid when it's pure sign-extension of
  * the one below -- which is exactly the "imm0 == sign_extend(imm1)" /
- * "imm0 fits signed32" tests below.  rotldi byte-swaps dropped (see
+ * "imm0 fits signed32" tests below. rotldi byte-swaps dropped (see
  * makeu128 comment -- little-endian AArch64 needs none). */
 spentry makes128
         asr     imm2, imm1, #63
@@ -221,7 +221,7 @@ endsp makes128
  * flagged in the 2026-07-11 mail). */
 
 /* arg_z should be (unsigned-byte 64); return unboxed value in imm0.
- * ported from ppc-spentry.s:6437-6462 (PPC64 branch).  A 2-digit bignum's
+ * ported from ppc-spentry.s:6437-6462 (PPC64 branch). A 2-digit bignum's
  * combined 64-bit value (digits stored little-endian, direct 64-bit load,
  * no PPC-style rotldi swap needed) must be nonneg; a 3-digit bignum's 3rd
  * (most-significant) 32-bit digit must be exactly 0. */
@@ -252,12 +252,12 @@ spentry getu64
         b.lt    9f
 8:      ret
 9:      /* ppc-spentry.s:6446 uuo_interr(error_object_not_u64,arg_z) -> the
-         * udf xtype trap (fmt 4; same xtype our own tree uses here). */
+ * udf xtype trap (fmt 4; same xtype our own tree uses here). */
         uuo_error_reg_not_xtype arg_z, xtype_u64
 endsp getu64
 
 /* arg_z should be (signed-byte 64); return unboxed value in imm0.
- * ported from ppc-spentry.s:6502-6514 (PPC64 branch).  A 2-digit bignum's
+ * ported from ppc-spentry.s:6502-6514 (PPC64 branch). A 2-digit bignum's
  * combined 64-bit value IS the signed result directly (any bit pattern is
  * valid for signed-64, no extra range check needed, unlike getu64). */
 spentry gets64
@@ -287,7 +287,7 @@ endsp gets64
  * `box_fixnum(imm0,arg_z)`, which would leave imm0 BOXED, contradicting the
  * subprim's own header comment and every other get* subprim's convention --
  * almost certainly a `box_fixnum`/`unbox_fixnum` transcription slip in the
- * vendored source (flag for a future PPC64-diff audit).  Implemented here as
+ * vendored source (flag for a future PPC64-diff audit). Implemented here as
  * the evident intent: arg_z is (signed-byte 32) iff unboxing it round-trips
  * through a 32-bit sign-extend. */
 spentry gets32
@@ -301,12 +301,12 @@ spentry gets32
         mov     imm0, imm1
         ret
 9:      /* ppc-spentry.s:6827 uuo_interr(error_object_not_signed_byte_32,
-         * arg_z) */
+ * arg_z) */
         uuo_error_reg_not_xtype arg_z, xtype_s32
 endsp gets32
 
 /* arg_z should be (unsigned-byte 32); return unboxed value in imm0.
- * ported from ppc-spentry.s:6833-6857.  Reimplemented digit-wise (a plain
+ * ported from ppc-spentry.s:6833-6857. Reimplemented digit-wise (a plain
  * 32-bit LDR zero-extends into the 64-bit register, giving exactly the
  * unsigned digit magnitude with no sign ambiguity) rather than PPC64's
  * paired 64-bit vrefr reads, which fold digit-pair endianness assumptions
@@ -341,7 +341,7 @@ spentry getu32
         cbnz    w2, 9f
 8:      ret
 9:      /* ppc-spentry.s:6857 uuo_interr(error_object_not_unsigned_byte_32,
-         * arg_z) */
+ * arg_z) */
         uuo_error_reg_not_xtype arg_z, xtype_u32
 endsp getu32
 
@@ -381,12 +381,12 @@ spentry specrefcheck
 2:      cmp     arg_z, #unbound_marker
         b.ne    9f
         /* ppc-spentry.s:6722 treqi(arg_z,unbound_marker): the equality is
-         * already established by the b.ne above, so trap unconditionally.
-         * The uuo register operand is the SYMBOL (handler contract,
-         * arm64-exceptions.c uuo_unary_unbound: gpr = symbol) — here the
-         * symbol is in arg_y; arg_z holds the loaded unbound_marker.
-         * (spentry-C's binding path passes arg_z because THERE the value
-         * went to temp0 and arg_z still holds the symbol.) */
+ * already established by the b.ne above, so trap unconditionally.
+ * The uuo register operand is the SYMBOL (handler contract,
+ * arm64-exceptions.c uuo_unary_unbound: gpr = symbol) — here the
+ * symbol is in arg_y; arg_z holds the loaded unbound_marker.
+ * (spentry-C's binding path passes arg_z because THERE the value
+ * went to temp0 and arg_z still holds the symbol.) */
         uuo_error_unbound arg_y         /* macro fixed upstream @ c9e7ffb */
 9:      ret
 endsp specrefcheck
@@ -422,9 +422,9 @@ spentry integer_sign
 endsp integer_sign
 
 /* No inline fixnum fast path -- division always dispatches to the Lisp
- * builtin.  ported from ppc-spentry.s:5578-5579: jump_builtin(_builtin_div,2)
+ * builtin. ported from ppc-spentry.s:5578-5579: jump_builtin(_builtin_div,2)
  * expands to ref_nrs_value(fname,builtin_functions); set_nargs(2);
- * vrefr(fname,fname,_builtin_div); jump_fname().  Same expansion as
+ * vrefr(fname,fname,_builtin_div); jump_fname(). Same expansion as
  * spentry-D-call-builtins.s's jump_builtin macro (D:122-130). */
 spentry builtin_div
         ref_nrs_value fname, builtin_functions  /* ppc-spentry.s:38 */
@@ -437,9 +437,9 @@ endsp builtin_div
 
 /* Allocate a "fulltag_misc" object.  arg_y = element count (boxed fixnum,
  * unsigned), arg_z = subtag (boxed fixnum whose raw value is the subtag
- * byte).  On exit arg_z = the tagged object (header set, contents zero);
+ * byte). On exit arg_z = the tagged object (header set, contents zero);
  * imm0 = the header word used.
- * ported from ppc-spentry.s:3438-3480 (PPC64 branch).  Matt's ARM64 shares
+ * ported from ppc-spentry.s:3438-3480 (PPC64 branch). Matt's ARM64 shares
  * PPC64's fixnumshift=3 == log2(node_size=8) identity, so "arg_y tagged"
  * already equals raw_count*node_size for the node/64-bit-per-element
  * classes with no extra shift needed -- the same trick PPC64 exploits.
@@ -471,9 +471,9 @@ spentry misc_alloc
         b.eq    2f
         lsr     imm1, imm1, #1
         /* Matt's scheme has no ivector_class_8_bit (only 64/32/other,
-         * arm64-constants.h:112-114); within class other_bit the 8-bit
-         * subtags are s8/u8 >= subtag_s8_vector, below that s16/u16
-         * (x86-spentry64.s:2977-2981 misc_alloc, the same tag scheme). */
+ * arm64-constants.h:112-114); within class other_bit the 8-bit
+ * subtags are s8/u8 >= subtag_s8_vector, below that s16/u16
+ * (x86-spentry64.s:2977-2981 misc_alloc, the same tag scheme). */
         cmp     imm3, #subtag_s8_vector
         b.lt    1f                                 /* 16-bit: n*2 stands */
         lsr     imm1, imm1, #1                     /* 8-bit: n*1 */
@@ -487,14 +487,14 @@ spentry misc_alloc
 3:      add     imm1, arg_y, arg_y
         b       1b
 9:      /* ppc-spentry.s:3477-3480: li arg_x,XARRLIMIT; set_nargs(3);
-         * b _SPksignalerr (real subprim: spentry-D-call-builtins.s:488). */
+ * b _SPksignalerr (real subprim: spentry-D-call-builtins.s:488). */
         mov     arg_x, #XARRLIMIT               /* ppc:3478 li arg_x,XARRLIMIT  */
         mov     nargs, #(3 << fixnumshift)      /* ppc:3479 set_nargs(3)        */
         b       _SPksignalerr                   /* ppc:3480                     */
 endsp misc_alloc
 
 /* Allocate a uvector on the tstack (push a tsp frame and heap-cons the
- * object via misc_alloc if there's no room).  Same (arg_y=count,
+ * object via misc_alloc if there's no room). Same (arg_y=count,
  * arg_z=subtag) convention and byte-count arithmetic as misc_alloc above.
  * ported from ppc-spentry.s:1025-1069 (PPC64 branch): dnode_align + a
  * tstack_alloc_limit check, then TSP_Alloc_Var_Boxed_nz (real tsp=x24
@@ -525,17 +525,17 @@ spentry stack_misc_alloc
         b.lt    1f
         lsr     imm1, imm1, #1
 1:      /* imm1 = byte count; dnode_align(imm1,imm1,tsp_frame.fixed_overhead
-         * +node_size) -- the total tsp allocation (frame header + object
-         * header + data), ppc-spentry.s:1058. */
+ * +node_size) -- the total tsp allocation (frame header + object
+ * header + data), ppc-spentry.s:1058. */
         add     imm1, imm1, #(tsp_frame.fixed_overhead + node_size + (dnode_size - 1))
         and     imm1, imm1, #0xfffffffffffffff0
         mov     imm3, #tstack_alloc_limit
         cmp     imm1, imm3
         b.ge    9f
         /* TSP_Alloc_Var_Boxed_nz(imm1): push a new tsp frame of size imm1,
-         * zero its data area, mark it boxed (type=0).  "_nz": imm1 always
-         * includes the fixed frame overhead, so the frame can never be
-         * empty -- ppc-macros.s:695-704,721-725. */
+ * zero its data area, mark it boxed (type=0). "_nz": imm1 always
+ * includes the fixed frame overhead, so the frame can never be
+ * empty -- ppc-macros.s:695-704,721-725. */
         mov     temp4, tsp                        /* old tsp -> backlink */
         sub     tsp, tsp, imm1
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -557,11 +557,11 @@ spentry stack_misc_alloc
         add     imm1, arg_y, arg_y
         b       1b
 9:      /* Too large for the tstack: push one empty UNBOXED tsp frame
-         * (TSP_Alloc_Fixed_Unboxed(0), ppc-spentry.s:1068 -- type=self,
-         * nonzero, so GC skips it) so the compiler's balancing discard-
-         * temp-frame still has a frame to pop, then heap-cons via
-         * misc_alloc instead; arg_y/arg_z are unchanged, matching
-         * misc_alloc's own (count, subtag) calling convention. */
+ * (TSP_Alloc_Fixed_Unboxed(0), ppc-spentry.s:1068 -- type=self,
+ * nonzero, so GC skips it) so the compiler's balancing discard-
+ * temp-frame still has a frame to pop, then heap-cons via
+ * misc_alloc instead; arg_y/arg_z are unchanged, matching
+ * misc_alloc's own (count, subtag) calling convention. */
         mov     temp4, tsp
         sub     tsp, tsp, #tsp_frame.data_offset
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -572,7 +572,7 @@ endsp stack_misc_alloc
 /* arg_z = size in bytes (boxed fixnum).  Allocate a macptr-tagged block of
  * that size on the tstack (or heap-cons a gcable macptr via %new-gcable-ptr
  * if it won't fit).
- * ported from ppc-spentry.s:3297-3321.  macptr.address/domain/type offsets
+ * ported from ppc-spentry.s:3297-3321. macptr.address/domain/type offsets
  * come from arm64-constants.h's already-real _structf macptr; macptr_header
  * is a PROPOSED constant above. */
 spentry makestackblock
@@ -583,7 +583,7 @@ spentry makestackblock
         cmp     imm0, imm1
         b.ge    1f
         /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
+ * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
         mov     temp4, tsp
         sub     tsp, tsp, imm0
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -597,7 +597,7 @@ spentry makestackblock
         str     xzr,  [arg_z, #macptr.type]
         ret
 1:      /* Too big: push one empty unboxed tsp frame, then heap-cons via
-         * %new-gcable-ptr (ppc-spentry.s:3317-3321). */
+ * %new-gcable-ptr (ppc-spentry.s:3317-3321). */
         mov     temp4, tsp
         sub     tsp, tsp, #tsp_frame.data_offset
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -611,8 +611,8 @@ endsp makestackblock
 
 /* arg_y = length (boxed fixnum), arg_z = initial-element (boxed).  Return a
  * fresh list of that length on the tstack, cell by cell (or heap-cons via
- * Cons if it won't fit).  Fully real -- no missing constants/ABI needed.
- * ported from ppc-spentry.s:3351-3388.  rnil used directly for Matt's ARM64
+ * Cons if it won't fit). Fully real -- no missing constants/ABI needed.
+ * ported from ppc-spentry.s:3351-3388. rnil used directly for Matt's ARM64
  * dedicated nil register in place of PPC64's `li reg,nil_value` absolute
  * load. */
 spentry makestacklist
@@ -622,8 +622,8 @@ spentry makestacklist
         add     imm0, imm0, #tsp_frame.fixed_overhead
         b.ge    3f
         /* TSP_Alloc_Var_Boxed(imm0): push frame, zero its data area (may be
-         * empty when arg_y=0, hence the leading compare instead of the "_nz"
-         * do-while form), mark boxed -- ppc-macros.s:681-692,714-718. */
+ * empty when arg_y=0, hence the leading compare instead of the "_nz"
+ * do-while form), mark boxed -- ppc-macros.s:681-692,714-718. */
         mov     temp4, tsp
         sub     tsp, tsp, imm0
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -651,8 +651,8 @@ spentry makestacklist
 10:     b.ne    4b
         ret
 3:      /* Too big for the tstack: push one empty BOXED (zeroed) tsp frame
-         * (TSP_Alloc_Fixed_Boxed(0), ppc-spentry.s:3377), then heap-cons
-         * cell by cell via Cons. */
+ * (TSP_Alloc_Fixed_Boxed(0), ppc-spentry.s:3377), then heap-cons
+ * cell by cell via Cons. */
         mov     temp4, tsp
         sub     tsp, tsp, #tsp_frame.data_offset
         str     temp4, [tsp, #tsp_frame.backlink]
@@ -661,10 +661,10 @@ spentry makestacklist
         mov     arg_y, arg_z
         mov     arg_z, rnil
         /* Loop test POST-Cons: Matt's Cons macro does `cmp allocptr,
-         * allocbase` and CLOBBERS NZCV (the spentry-D:404 class; the
-         * pre-Cons cmp here span an infinite loop, 16m5n).  Entry test
-         * added -- the old code fell into 11f on the stale size-check
-         * flags. */
+ * allocbase` and CLOBBERS NZCV (the spentry-D:404 class; the
+ * pre-Cons cmp here span an infinite loop, ). Entry test
+ * added -- the old code fell into 11f on the stale size-check
+ * flags. */
         cmp     imm1, #0
         b       11f
 6:      Cons    arg_z, arg_y, arg_z
@@ -674,19 +674,19 @@ spentry makestacklist
 endsp makestacklist
 
 /* On entry: arg_x = element count, arg_y = subtag, arg_z = initial value
- * (all boxed).  Allocate via misc_alloc, then tail-call %init-misc% to fill
+ * (all boxed). Allocate via misc_alloc, then tail-call %init-misc% to fill
  * the contents with the initial value.
- * ported from ppc-spentry.s:5231-5247.  lisp_frame is a plain native-SP call
+ * ported from ppc-spentry.s:5231-5247. lisp_frame is a plain native-SP call
  * frame (PROPOSED-CONSTANTS above); AArch64 needs no PPC-style mflr/mtlr
  * dance since x30 (lr) is directly readable/writable, so build/discard_
  * lisp_frame collapse to a plain sub/str.../ldr.../add sp sequence. */
 spentry misc_alloc_init
-        /* 16m41 PARITY NOTE: this twin keeps PPC's temp0 park and is CORRECT,
-         * but only because _SPmisc_alloc preserves temp0 -- registers survive
-         * the allocation trap, and the initval is a node, so a GC there
-         * relocates it in place.  The TSTACK twin below could not keep it:
-         * _SPstack_misc_alloc uses temp0 as its frame-zeroing cursor.  If
-         * misc_alloc ever grows a temp0 use, this breaks the same way. */
+        /*  PARITY NOTE: this twin keeps PPC's temp0 park and is CORRECT,
+ * but only because _SPmisc_alloc preserves temp0 -- registers survive
+ * the allocation trap, and the initval is a node, so a GC there
+ * relocates it in place. The TSTACK twin below could not keep it:
+ * _SPstack_misc_alloc uses temp0 as its frame-zeroing cursor. If
+ * misc_alloc ever grows a temp0 use, this breaks the same way. */
         sub     sp, sp, #lisp_frame.size
         mov     temp4, #lisp_frame_marker
         str     temp4, [sp, #lisp_frame.marker]
@@ -711,18 +711,18 @@ spentry misc_alloc_init
 endsp misc_alloc_init
 
 /* As misc_alloc_init above, but allocates on the tstack via
- * stack_misc_alloc.  ported from ppc-spentry.s:5251-5267. */
+ * stack_misc_alloc. ported from ppc-spentry.s:5251-5267. */
 spentry stack_misc_alloc_init
-        /* 16m41 BUG FIX (regression stage 11, DYNAMIC-EXTENT.13/14): PPC parks
-         * the initval in temp0 across the alloc (ppc:5266 mr arg_y,temp0) and
-         * that does NOT port -- our _SPstack_misc_alloc uses temp0 as the
-         * ZEROING CURSOR for the new tsp frame (`mov temp0,tsp' / `str xzr,
-         * [temp0,#8]!'), so the initval came back as a raw tstack address and
-         * init_misc type-errored.  ARM64-DEVIATION: park it on the VSTACK
-         * instead, which no callee can clobber and which the GC scans as a node
-         * (unlike a register whose safety depends on the callee's clobber set --
-         * see the note on the heap twin above).  The push precedes savevsp so an
-         * unwind restores a vsp that still covers the parked word. */
+        /*  BUG FIX (regression stage 11, DYNAMIC-EXTENT.13/14): PPC parks
+ * the initval in temp0 across the alloc (ppc:5266 mr arg_y,temp0) and
+ * that does NOT port -- our _SPstack_misc_alloc uses temp0 as the
+ * ZEROING CURSOR for the new tsp frame (`mov temp0,tsp' / `str xzr,
+ * [temp0,#8]!'), so the initval came back as a raw tstack address and
+ * init_misc type-errored. ARM64-DEVIATION: park it on the VSTACK
+ * instead, which no callee can clobber and which the GC scans as a node
+ * (unlike a register whose safety depends on the callee's clobber set --
+ * see the note on the heap twin above). The push precedes savevsp so an
+ * unwind restores a vsp that still covers the parked word. */
         str     arg_z, [vsp, #-node_size]!      /* park the initval */
         sub     sp, sp, #lisp_frame.size
         mov     temp4, #lisp_frame_marker
@@ -747,9 +747,9 @@ spentry stack_misc_alloc_init
 endsp stack_misc_alloc_init
 
 /* As makestackblock above, but zero the block's contents.
- * arg_z = size in bytes (boxed fixnum).  Allocate a zeroed macptr-tagged
+ * arg_z = size in bytes (boxed fixnum). Allocate a zeroed macptr-tagged
  * block on the tstack (or heap-cons a gcable macptr with clear-p=T).
- * ported from ppc-spentry.s:3324-3348 (PPC64 branch).  Parity sibling of
+ * ported from ppc-spentry.s:3324-3348 (PPC64 branch). Parity sibling of
  * makestackblock (above, line 545); differences: (1) Zero_TSP_Frame after
  * alloc, (2) only macptr.domain zeroed explicitly (not .type -- already zero
  * from the frame-zero pass), (3) too-big path passes 2 args (size, t=clear). */
@@ -761,13 +761,13 @@ spentry makestackblock0
         cmp     imm0, imm1
         b.ge    makestackblock0_too_big
         /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
+ * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
         mov     temp4, tsp
         sub     tsp, tsp, imm0
         str     temp4, [tsp, #tsp_frame.backlink]
         str     tsp,   [tsp, #tsp_frame.type]
         /* Zero_TSP_Frame(imm0, imm1): zero from tsp+data_offset through
-         * old_tsp-8 inclusive.  ppc-macros.s:681-692. */
+ * old_tsp-8 inclusive. ppc-macros.s:681-692. */
         add     imm0, tsp, #tsp_frame.data_offset
         sub     imm1, temp4, #node_size
         b       makestackblock0_zero_test
@@ -783,13 +783,13 @@ makestackblock0_zero_test:
         add     arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         str     imm1, [arg_z, #macptr.address]
         /* PPC64: stfd fp_zero,macptr.domain -- zeros domain only (type already
-         * zero from Zero_TSP_Frame pass above). */
+ * zero from Zero_TSP_Frame pass above). */
         str     xzr, [arg_z, #macptr.domain]
         ret
 makestackblock0_too_big:
         /* Too big: push one empty unboxed tsp frame, then heap-cons via
-         * %new-gcable-ptr with clear-p=T (ppc-spentry.s:3340-3347).
-         * Two args: arg_y=size, arg_z=t_value (clear-p). */
+ * %new-gcable-ptr with clear-p=T (ppc-spentry.s:3340-3347).
+ * Two args: arg_y=size, arg_z=t_value (clear-p). */
         mov     temp4, tsp
         sub     tsp, tsp, #tsp_frame.data_offset
         str     temp4, [tsp, #tsp_frame.backlink]

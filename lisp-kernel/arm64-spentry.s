@@ -5,49 +5,49 @@
  * His 5 subprim bodies (fix_overflow, makes64, makeu64, the self-described
  * misc_ref "toy", ffcall) VERBATIM, plus THE SPTAB POPULATION, which is ours.
  *
- * WHY THIS IS AN OVERLAY FILE AND NOT A PATCH (16m30 — read before "tidying"
+ * WHY THIS IS AN OVERLAY FILE AND NOT A PATCH ( — read before "tidying"
  * it back into the patch series):
  *
- *   The sptab is the subprim dispatch table: the compiler emits every
- *   subprim call as `ldr xN,[rcontext,#(tcr.sptab + 8*index)]` + `blr xN`, so
- *   an unpopulated row is a jump to address 0.  His tip ships the table with
- *   119 of 123 rows `.quad 0` ("slots not yet implemented hold 0") — only
- *   fix_overflow/makeu64/makes64/misc_ref are wired.  Our 130-of-132 rows are
- *   what make the port able to run at all; the bodies they point at live in
- *   our spentry-{A..E}.s.
+ * The sptab is the subprim dispatch table: the compiler emits every
+ * subprim call as `ldr xN,[rcontext,#(tcr.sptab + 8*index)]` + `blr xN`, so
+ * an unpopulated row is a jump to address 0. His tip ships the table with
+ * 119 of 123 rows `.quad 0` ("slots not yet implemented hold 0") — only
+ * fix_overflow/makeu64/makes64/misc_ref are wired. Our 130-of-132 rows are
+ * what make the port able to run at all; the bodies they point at live in
+ * our spentry-{A..E}.s.
  *
- *   That population existed ONLY as a commit on a test machine's local
- *   branch, in a work-in-progress snapshot atop 6b6540e that was never part
- *   of the patch series.  No patch reproduced it.  It has now silently
- *   evaporated TWICE: 16m22 (stamp-clear reverted it -> "cold-load wild blr
- *   via [rnil+0x358]", recovered as patch 0036) and again in 16m30, when a
- *   pin-advance sync reset this file to "pin + patches 0003/0004" — a state
- *   that md5-matched the x86 BUILD box exactly, and which therefore looked
- *   verified while carrying only 18 populated rows.  Boot died instantly at
- *   `blr` on sptab index 56.
+ * That population existed ONLY as a commit on a test machine's local
+ * branch, in a work-in-progress snapshot atop 6b6540e that was never part
+ * of the patch series. No patch reproduced it. It has now silently
+ * evaporated TWICE: (stamp-clear reverted it -> "cold-load wild blr
+ * via [rnil+0x358]", recovered as patch 0036) and again in , when a
+ * pin-advance sync reset this file to "pin + patches 0003/0004" — a state
+ * that md5-matched the x86 BUILD box exactly, and which therefore looked
+ * verified while carrying only 18 populated rows. Boot died instantly at
+ * `blr` on sptab index 56.
  *
- *   The x86 box is NOT a witness for this file: it cross-compiles level-0 and
- *   never builds an ARM kernel, so its copy of arm64-spentry.s is dead weight
- *   there and drifted to the patch-series state unnoticed.  Cross-box md5
- *   equality proves synchronization, NOT correctness.
+ * The x86 box is NOT a witness for this file: it cross-compiles level-0 and
+ * never builds an ARM kernel, so its copy of arm64-spentry.s is dead weight
+ * there and drifted to the patch-series state unnoticed. Cross-box md5
+ * equality proves synchronization, NOT correctness.
  *
- *   As a full-file overlay the table is version-controlled, ships with the
- *   repo, and cannot be reverted by any patch/stamp operation — the same
- *   reason arm64-exceptions.c and arm64-gc.c are overlays.
+ * As a full-file overlay the table is version-controlled, ships with the
+ * repo, and cannot be reverted by any patch/stamp operation — the same
+ * reason arm64-exceptions.c and arm64-gc.c are overlays.
  *
  * RELATION TO THE PATCH SERIES: patches 0003 (ffcall) and 0004 (bind family)
- * each carry an arm64-spentry.s half plus an arm64-constants.h half.  Their
+ * each carry an arm64-spentry.s half plus an arm64-constants.h half. Their
  * spentry.s halves are ALREADY CONTAINED here and are inert for the ARM build
- * (the make-gate copies this file over the tree's).  Their constants.h halves
- * are still live and must keep applying.  Upstream submission for the table is
+ * (the make-gate copies this file over the tree's). Their constants.h halves
+ * are still live and must keep applying. Upstream submission for the table is
  * a diff of THIS file against his — not a re-derivation of the patches.
  *
- * STILL ZERO (live-verified in the booted TCR, 16m30): indices 64, 65, 86, 121.
+ * STILL ZERO (live-verified in the booted TCR, ): indices 64, 65, 86, 121.
  * Each is a `blr` to 0 the moment the compiler emits a call to it.
  *
  * ⚠️ The row COMMENTS ("// 55 SPstack_misc_alloc") are his ARM32-derived
  * numbering and are NOT the physical index — our inserted rows shifted them.
- * The physical position is what the compiler indexes.  Never read the comment
+ * The physical position is what the compiler indexes. Never read the comment
  * as the index; run tools/subprim-index-lint.py, which compares physical
  * position against the compiler's *subprims* order.
  */
@@ -57,7 +57,7 @@
 
 /*
  * The fixnum in arg_z {over,under}flowed by one bit as the result
- * of an addition or subtraction.  Make a bignum out of it.
+ * of an addition or subtraction. Make a bignum out of it.
  */
 spentry fix_overflow
 C(fix_one_bit_overflow):
@@ -70,7 +70,7 @@ C(fix_one_bit_overflow):
 endsp fix_overflow
         
 /*
- * There's a signed 64-bit value in imm0.  Make a Lisp integer
+ * There's a signed 64-bit value in imm0. Make a Lisp integer
  * from it (either a fixnum or a two-digit bignum).
  */
 spentry makes64
@@ -86,32 +86,32 @@ spentry makes64
 endsp makes64
 
 /*
- * There's an unsigned 64-bit value in imm0.  Make a Lisp integer
+ * There's an unsigned 64-bit value in imm0. Make a Lisp integer
  * from it (either a fixnum or a two- or three-digit bignum).
  */
 spentry makeu64
         tst imm0, #(0xf << 60)
         b.ne 1f
-        // Top 4 bits clear means the value is an (unsigned-byte 60)
-        // and therefore fits in the (signed-byte 61) fixnum range.
+ // Top 4 bits clear means the value is an (unsigned-byte 60)
+ // and therefore fits in the (signed-byte 61) fixnum range.
         lsl arg_z, imm0, #fixnumshift
         ret
 1:      mov imm1, #two_digit_bignum_header
         mov imm2, #aligned_bignum_size(2)
         tbz imm0, #63, 2f       // bit 63 clear: fits in 2 digits
-        // need three digits after all
+ // need three digits after all
         mov imm1, #three_digit_bignum_header
         mov imm2, #aligned_bignum_size(3)
 2:      Misc_Alloc arg_z, imm1, imm2
         stur imm0, [arg_z, #misc_data_offset]
-        // If there is a third digit, it is implicity 0 because alloc
-        // returns zero-filled memory.
+ // If there is a third digit, it is implicity 0 because alloc
+ // returns zero-filled memory.
         ret
 endsp makeu64
 
 
 /*
- * There's a miscobj reference in arg_y.  Reference index arg_z of
+ * There's a miscobj reference in arg_y. Reference index arg_z of
  * said miscobj, and return a properly-tagged lisp object in arg_z.
  * Do type and bounds checking.
  */
@@ -141,14 +141,14 @@ C(misc_ref_common):
  * Call a foreign function.
  *
  * Entry (from the compiler's aapcs64-ff-call handler + alloc-c-frame):
- *   sp -> c_frame: backlink@0 (SP from before the allocation),
- *         savelr@8 (0), the 8 GPR argument words at c_frame.params,
- *         any stack (overflow) argument words immediately above them,
- *         FP staging words above those (dead here: d0-d7 already hold
- *         the FP args, reloaded by compiled code before we're called).
- *   arg_z = the foreign entry point: a macptr, or a fixnum-locative
- *           (an 8-aligned raw address whose bits are their own fixnum).
- *   lr    = return address in the compiled caller.
+ * sp -> c_frame: backlink@0 (SP from before the allocation),
+ * savelr@8 (0), the 8 GPR argument words at c_frame.params,
+ * any stack (overflow) argument words immediately above them,
+ * FP staging words above those (dead here: d0-d7 already hold
+ * the FP args, reloaded by compiled code before we're called).
+ * arg_z = the foreign entry point: a macptr, or a fixnum-locative
+ * (an 8-aligned raw address whose bits are their own fixnum).
+ * lr = return address in the compiled caller.
  *
  * Exit: C integer result in x0 (= imm0), FP result in d0; the c_frame
  * is popped (sp restored from its backlink); no node register holds
@@ -156,44 +156,44 @@ C(misc_ref_common):
  *
  * Register notes: x19-x28 (save0-3, rnil, tsp, vsp, allocptr,
  * allocbase, rcontext) are AAPCS64 callee-saved, so the pinned lisp
- * registers survive the call for free.  fn (x7) is an argument
+ * registers survive the call for free. fn (x7) is an argument
  * register: park it on the value stack (GC-visible via
- * tcr.save_vsp) before the argument load clobbers it.  We don't
+ * tcr.save_vsp) before the argument load clobbers it. We don't
  * save/restore FPCR: lisp runs with the process-default FPCR and a
- * conforming callee doesn't dirty it.  Cumulative FPSR exception
+ * conforming callee doesn't dirty it. Cumulative FPSR exception
  * flags from the callee are published to tcr.foreign_fpsr.
  */
 spentry ffcall
         str fn, [vsp, #-node_size]!
         /* save3 carries the frame base across the call (callee-saved);
-         * its lisp value is parked next to fn. */
+ * its lisp value is parked next to fn. */
         str save3, [vsp, #-node_size]!
         mov save3, sp
-        /* ---- THE BOUNDARY LISP FRAME (16m30; canonical note, the two
-         * siblings in spentry-E-ffi.s point here) ----
-         *
-         * His alloc-c-frame vinsn (arm64-vinsns.lisp:287) builds this frame
-         * as {header@0, savedsp@8, params@16..} and RESERVES 4 words at the
-         * frame TOP for a boundary lisp_frame, with the header's element
-         * count deliberately covering them so the GC skips the uninitialized
-         * words; the ff-call sequence "builds the frame there and then
-         * shrinks the count by 4 to publish it" (arm642.lisp:6323).
-         *
-         * There is therefore NO savelr slot to park lr in, and [sp,#8] is
-         * the saved SP we must not touch.  We used to do
-         * `str lr,[sp,#c_frame.savelr]' with savelr=8 -- clobbering the
-         * saved SP -- and then restore sp from offset 0, which is the
-         * HEADER: sp became 0xded (the header for a 14-word frame,
-         * (13<<8)|subtag_u64_vector) and the caller's own epilogue
-         * `ldp x7,x30,[sp,#16]' took a SIGBUS.
-         *
-         * PPC64 is the shape reference: poweropen_ffcall (ppc-spentry.s:1595)
-         * likewise puts the return address in lisp_frame.savelr of a boundary
-         * frame, never in the c_frame.
-         *
-         * reserved_base = sp + node_size + node_size*(count - 4)
-         *               = sp + node_size*(count - 3).
-         * imm0-2 are free here; arg_z still holds the entry point. */
+        /* ---- THE BOUNDARY LISP FRAME (; canonical note, the two
+ * siblings in spentry-E-ffi.s point here) ----
+ *
+ * His alloc-c-frame vinsn (arm64-vinsns.lisp:287) builds this frame
+ * as {header@0, savedsp@8, params@16..} and RESERVES 4 words at the
+ * frame TOP for a boundary lisp_frame, with the header's element
+ * count deliberately covering them so the GC skips the uninitialized
+ * words; the ff-call sequence "builds the frame there and then
+ * shrinks the count by 4 to publish it" (arm642.lisp:6323).
+ *
+ * There is therefore NO savelr slot to park lr in, and [sp,#8] is
+ * the saved SP we must not touch. We used to do
+ * `str lr,[sp,#c_frame.savelr]' with savelr=8 -- clobbering the
+ * saved SP -- and then restore sp from offset 0, which is the
+ * HEADER: sp became 0xded (the header for a 14-word frame,
+ * (13<<8)|subtag_u64_vector) and the caller's own epilogue
+ * `ldp x7,x30,[sp,#16]' took a SIGBUS.
+ *
+ * PPC64 is the shape reference: poweropen_ffcall (ppc-spentry.s:1595)
+ * likewise puts the return address in lisp_frame.savelr of a boundary
+ * frame, never in the c_frame.
+ *
+ * reserved_base = sp + node_size + node_size*(count - 4)
+ * = sp + node_size*(count - 3).
+ * imm0-2 are free here; arg_z still holds the entry point. */
         ldr imm0, [sp, #c_frame.header]
         lsr imm1, imm0, #num_subtag_bits        /* element count = words-1 */
         sub imm1, imm1, #3
@@ -208,9 +208,9 @@ spentry ffcall
         str imm0, [sp, #c_frame.header]
         /* Unbox the entry point into temp4 (x16 = IP0). */
         /* PPC-faithful discrimination (ppc:1802-1814 extract_typecode):
-         * macptr iff fulltag_misc AND header subtag == subtag_macptr;
-         * anything else the raw bits ARE the address.  A bare tst
-         * #tagmask misclassified 4-aligned C entry points (16m5l). */
+ * macptr iff fulltag_misc AND header subtag == subtag_macptr;
+ * anything else the raw bits ARE the address. A bare tst
+ * #tagmask misclassified 4-aligned C entry points (). */
         and imm2, arg_z, #fulltagmask
         cmp imm2, #fulltag_misc
         b.ne 8f
@@ -227,32 +227,32 @@ spentry ffcall
         str allocptr, [rcontext, #tcr.save_allocptr]
         str allocbase, [rcontext, #tcr.save_allocbase]
         /* Load the outgoing GPR args (clobbers imm0-imm5/nargs/fn) and
-         * pop the frame head + param words so any stack args sit
-         * exactly at SP for the callee. */
+ * pop the frame head + param words so any stack args sit
+ * exactly at SP for the callee. */
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
         ldp x6, x7, [sp, #(c_frame.params + 6*node_size)]
         /* AAPCS64, no stack args (<=8 GPR/<=8 FP, enforced loud in the
-         * w13 codegen): keep SP at the frame head -- the callee's stack
-         * grows BELOW its incoming SP, so popping the frame here hands
-         * the saved lr/backlink to the callee as scratch (16m5c crash:
-         * return jumped into the c_frame).  Stack-arg layout = ratify
-         * item (frame head must move above the param area). */
-        /* Record the lisp<->foreign boundary for the GC (16m41; protocol note
-         * in spentry-E-ffi.s).  The walk must start at the c_frame base: word
-         * 0 there is the frame's own ivector header, whose (already shrunk)
-         * count strides exactly onto the boundary lisp_frame built above.
-         * Park the enclosing boundary in param word 0 -- dead now that the
-         * args are loaded, INSIDE the c_frame ivector so the GC never scans
-         * it, and above SP so the callee cannot touch it.
-         *
-         * ORDER MATTERS, and it is why the arg loads moved above the valence
-         * store: the boundary must be in place BEFORE this thread advertises
-         * foreign valence, or a GC in the window reads a stale boundary and
-         * walks the wrong region (ARM-family ff-call stores it first for the
-         * same reason).  temp0 is scratch: the return path re-nils every temp,
-         * and it is not an AAPCS64 argument register the way imm0 is. */
+ * w13 codegen): keep SP at the frame head -- the callee's stack
+ * grows BELOW its incoming SP, so popping the frame here hands
+ * the saved lr/backlink to the callee as scratch ( crash:
+ * return jumped into the c_frame). Stack-arg layout = ratify
+ * item (frame head must move above the param area). */
+        /* Record the lisp<->foreign boundary for the GC (; protocol note
+ * in spentry-E-ffi.s). The walk must start at the c_frame base: word
+ * 0 there is the frame's own ivector header, whose (already shrunk)
+ * count strides exactly onto the boundary lisp_frame built above.
+ * Park the enclosing boundary in param word 0 -- dead now that the
+ * args are loaded, INSIDE the c_frame ivector so the GC never scans
+ * it, and above SP so the callee cannot touch it.
+ *
+ * ORDER MATTERS, and it is why the arg loads moved above the valence
+ * store: the boundary must be in place BEFORE this thread advertises
+ * foreign valence, or a GC in the window reads a stale boundary and
+ * walks the wrong region (ARM-family ff-call stores it first for the
+ * same reason). temp0 is scratch: the return path re-nils every temp,
+ * and it is not an AAPCS64 argument register the way imm0 is. */
         ldr temp0, [rcontext, #tcr.last_lisp_frame]
         str temp0, [sp, #c_frame.params]
         mov temp0, sp
@@ -268,28 +268,28 @@ spentry ffcall
         ldr allocptr, [rcontext, #tcr.save_allocptr]
         ldr allocbase, [rcontext, #tcr.save_allocbase]
         /* Recover lr from the boundary lisp_frame and sp from the SAVED SP
-         * word -- not from offset 0, which is the header (16m30, see the
-         * entry note).  The count has already been shrunk by 4, so
-         * reserved_base = save3 + node_size*(count + 1).  x0/d0 hold the
-         * results: imm1/imm2 only, never imm0.
-         * SUBPRIM-POPS is the w13 contract: the caller's epilogue runs with
-         * sp back at its own lisp frame (confirmed against the emitted
-         * MAKE-GCABLE-MACPTR epilogue, which pops a 32-byte frame at sp). */
+ * word -- not from offset 0, which is the header (, see the
+ * entry note). The count has already been shrunk by 4, so
+ * reserved_base = save3 + node_size*(count + 1). x0/d0 hold the
+ * results: imm1/imm2 only, never imm0.
+ * SUBPRIM-POPS is the w13 contract: the caller's epilogue runs with
+ * sp back at its own lisp frame (confirmed against the emitted
+ * MAKE-GCABLE-MACPTR epilogue, which pops a 32-byte frame at sp). */
         ldr imm1, [save3, #c_frame.header]
         lsr imm1, imm1, #num_subtag_bits
         add imm1, imm1, #1
         add imm2, save3, imm1, lsl #node_shift
         ldr lr, [imm2, #lisp_frame.savelr]
         ldr imm1, [save3, #c_frame.savedsp]
-        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
+        /* Hand the enclosing foreign boundary back BEFORE sp moves (). */
         ldr imm2, [save3, #c_frame.params]
         str imm2, [rcontext, #tcr.last_lisp_frame]
         mov sp, imm1
         ldr save3, [vsp], #node_size
         ldr fn, [vsp], #node_size
         /* Clear C garbage out of the volatile node registers, then --
-         * and only then -- declare lisp valence: the GC must never see
-         * a stale pointer in a node register of a lisp-valence thread. */
+ * and only then -- declare lisp valence: the GC must never see
+ * a stale pointer in a node register of a lisp-valence thread. */
         mov arg_w, rnil
         mov arg_x, rnil
         mov arg_y, rnil
@@ -306,15 +306,15 @@ spentry ffcall
 endsp ffcall
 
 /*
- * A read-only vector of subprim addresses.  The loader fixes up the
+ * A read-only vector of subprim addresses. The loader fixes up the
  * symbol entries at load-time; init_arm_tcr_sptab() then copies the
- * whole block into each thread's tcr->sptab.  Calling a subprim is
+ * whole block into each thread's tcr->sptab. Calling a subprim is
  * then
  *
- *      (ldr x0 (:@ rcontext (:$ (+ tcr.sptab (ash n word-shift)))))
- *      (blr x0)
+ * (ldr x0 (:@ rcontext (:$ (+ tcr.sptab (ash n word-shift)))))
+ * (blr x0)
  *
- * Slots not yet implemented hold 0.  The entries follow the 32-bit
+ * Slots not yet implemented hold 0. The entries follow the 32-bit
  * ARM order, omitting a few subprims that aren't useful on arm64,
  * but the order doesn't really matter.
  *
@@ -447,13 +447,13 @@ C(sptab):
         .quad _SPffcall // 120 SPffcall
         .quad 0 // 121 SPdebind
         .quad _SPcallback // 122 SPcallback
-        .quad _SPffcall_return_registers // 123 SPffcall_return_registers (PROPOSED extension, 16m5f)
-        .quad _SPtfuncallvsp // 124 SPtfuncallvsp (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin // 125 SPcallbuiltin (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin0 // 126 SPcallbuiltin0 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin1 // 127 SPcallbuiltin1 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin2 // 128 SPcallbuiltin2 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin3 // 129 SPcallbuiltin3 (PROPOSED extension, 16m5f)
-        .quad _SPlexpr_entry // 130 SPlexpr_entry (PROPOSED extension, 16m5f)
-        .quad _SPnmkunwind // 131 SPnmkunwind (PROPOSED extension, 16m5f)
+        .quad _SPffcall_return_registers // 123 SPffcall_return_registers (PROPOSED extension, )
+        .quad _SPtfuncallvsp // 124 SPtfuncallvsp (PROPOSED extension, )
+        .quad _SPcallbuiltin // 125 SPcallbuiltin (PROPOSED extension, )
+        .quad _SPcallbuiltin0 // 126 SPcallbuiltin0 (PROPOSED extension, )
+        .quad _SPcallbuiltin1 // 127 SPcallbuiltin1 (PROPOSED extension, )
+        .quad _SPcallbuiltin2 // 128 SPcallbuiltin2 (PROPOSED extension, )
+        .quad _SPcallbuiltin3 // 129 SPcallbuiltin3 (PROPOSED extension, )
+        .quad _SPlexpr_entry // 130 SPlexpr_entry (PROPOSED extension, )
+        .quad _SPnmkunwind // 131 SPnmkunwind (PROPOSED extension, )
 C(sptab_end):

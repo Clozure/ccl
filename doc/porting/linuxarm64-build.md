@@ -64,8 +64,8 @@ Run with the install directory as cwd — the image resolves `ccl:` and its
 startup fasl relative to itself:
 
 ```
-cd /your/install && ./armcl64 --image-name ./arm64-boot-16m16.image
-echo '(print (list :ok (+ 1 2) (sin 1.0d0)))' | ./armcl64 --image-name ./arm64-boot-16m16.image
+cd /your/install && ./armcl64 --image-name ./arm64-boot-.image
+echo '(print (list :ok (+ 1 2) (sin 1.0d0)))' | ./armcl64 --image-name ./arm64-boot-.image
 ```
 
 Expect `(:OK 3 0.8414709848078965D0)`.

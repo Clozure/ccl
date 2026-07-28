@@ -7,35 +7,35 @@
  * Target: Matt Emerson's upstream ARM64 low-tag design
  *
  * Register map (ARM64 low-tag):
- *   imm0-4 = x0-x4
- *   imm5 = nargs = x6 (TAGGED fixnum)
- *   fn = x7 (VOLATILE in calls)
- *   arg_w = x8, arg_x = x9, arg_y = x10, arg_z = x11
- *   temp0-5 = x12-x17   (authoritative: arm64-constants.h .req block)
- *   save0-3 = x19-x22
- *   rnil = x23
- *   tsp = x24 (REAL tsp register, PPC-style)
- *   vsp = x25
- *   allocptr = x26, allocbase = x27
- *   rcontext = x28
- *   lr = x30
+ * imm0-4 = x0-x4
+ * imm5 = nargs = x6 (TAGGED fixnum)
+ * fn = x7 (VOLATILE in calls)
+ * arg_w = x8, arg_x = x9, arg_y = x10, arg_z = x11
+ * temp0-5 = x12-x17 (authoritative: arm64-constants.h .req block)
+ * save0-3 = x19-x22
+ * rnil = x23
+ * tsp = x24 (REAL tsp register, PPC-style)
+ * vsp = x25
+ * allocptr = x26, allocbase = x27
+ * rcontext = x28
+ * lr = x30
  *
  * Low tags (bottom 4 bits):
- *   fulltag_cons = 0b0011
- *   fulltag_misc = 0b0100
- *   fulltag_nil = 0b1011
- *   tag_fixnum = 0b000 (even fixnums 0b0000, odd 0b1000)
- *   fixnumshift = 3
+ * fulltag_cons = 0b0011
+ * fulltag_misc = 0b0100
+ * fulltag_nil = 0b1011
+ * tag_fixnum = 0b000 (even fixnums 0b0000, odd 0b1000)
+ * fixnumshift = 3
  *
  * Object layout:
- *   misc_header_offset = -4
- *   misc_data_offset = 0
- *   cons.cdr, cons.car per arm64-constants.s _struct cons
+ * misc_header_offset = -4
+ * misc_data_offset = 0
+ * cons.cdr, cons.car per arm64-constants.s _struct cons
  *
- * STATUS: all 41 subprims carry real ported bodies (0 stubs).  Sites that
+ * STATUS: all 41 subprims carry real ported bodies (0 stubs). Sites that
  * depend on constants/conventions Matt has not yet defined are guarded with
  * #error + the intended instruction in a comment (see PROPOSED-CONSTANTS
- * below and upstream-port/MISSING-CONSTANTS-RATIFY.md).
+ * below and MISSING-CONSTANTS-RATIFY.md).
  */
 
 #include "arm64-constants.h"
@@ -46,7 +46,7 @@
  * ===========================================================================
  * PROPOSED-CONSTANTS (ratify with Matt)
  * ---------------------------------------------------------------------------
- * These are NOT in arm64-constants.h.  Values are DERIVED from the cited
+ * These are NOT in arm64-constants.h. Values are DERIVED from the cited
  * sources; the C runtime (arm64-exceptions.c, gc) MUST agree on the struct
  * layouts and the uuo/udf encodings below.
  * ===========================================================================
@@ -97,7 +97,7 @@
 
 /* T = rnil + t_offset.  DERIVED from Matt's arm64-arch.lisp:184-188
    (canonical-nil-value #x13000+fulltag_nil, canonical-t-value
-   #x13020+fulltag_symbol); the absolute addresses are provisional but the
+ #x13020+fulltag_symbol); the absolute addresses are provisional but the
    OFFSET is the ratified geometry.  Same equate as spentry-B/-D. */
 .set t_offset, ((0x13020 + fulltag_symbol) - (0x13000 + fulltag_nil))
 
@@ -436,7 +436,7 @@ endsp throw
         add \e, tsp, \size                    /* end = old tsp                */
         add \p, tsp, #tsp_frame.data_offset
         /* \@-unique labels: a bare 1:/2: inside a macro CAPTURES callers'
-           1f/2f branches that cross the expansion (the 16m5t makes128/
+           1f/2f branches that cross the expansion (the  makes128/
            Misc_Alloc_Fixed class, patch 0011) */
 .Ltavb\@:
         cmp \p, \e
@@ -922,7 +922,7 @@ endsp unbind_interrupt_level
    lisp_global(RET1VALN).  Marker-frame restore order per this file's
    frame idiom (lr from savelr, vsp, fn, discard).
 
-   ORDERING (16m5t root cause): in PPC this is a STANDALONE _exportfn
+   ORDERING ( root cause): in PPC this is a STANDALONE _exportfn
    defined BEFORE _spentry(values) (ppc:1171), and `values' falls
    straight through `mflr loc_pc' into local_label(return_values)
    (ppc:1214-1216).  A prior port mis-inserted this block BETWEEN
@@ -1012,28 +1012,28 @@ endsp values
  * keyword_bind: Function-entry keyword processor.
  *
  * Entry conditions (PPC convention, mapped to ARM64):
- *   nargs          = actual arg count (boxed fixnum)
- *   imm0           = canonical required+optional count (boxed fixnum)
- *   keyword_count  = number of defined keyword args (boxed fixnum, imm3/x3)
- *   keyword_vector = vector of keyword specifier symbols (temp3/x16)
- *   keyword_flags  = flag word, pre-seeded by caller (imm2/x2)
- *   nfn            = the function being entered (temp2/x15)
- *   fn             = caller's fn, to be saved (VOLATILE x7)
- *   lr             = return pc to record in the new frame
+ * nargs = actual arg count (boxed fixnum)
+ * imm0 = canonical required+optional count (boxed fixnum)
+ * keyword_count = number of defined keyword args (boxed fixnum, imm3/x3)
+ * keyword_vector = vector of keyword specifier symbols (temp3/x16)
+ * keyword_flags = flag word, pre-seeded by caller (imm2/x2)
+ * nfn = the function being entered (temp2/x15)
+ * fn = caller's fn, to be saved (VOLATILE x7)
+ * lr = return pc to record in the new frame
  *
  * DEVIATIONS from literal PPC transcription (forced by ISA):
- *   [D1] PPC keeps up to four CR results live simultaneously.  AArch64 has ONE
- *        NZCV.  Where PPC relies on a stale CR, we recompute the comparison or
- *        stash a boolean with `cset` into a free scratch.
- *   [D2] PPC pushes NILs via imm5 (=nargs).  Here nargs is still live, so we
- *        push the dedicated NIL register (rnil) instead.
- *   [D3] `loc_pc` -> lr.  keyword_bind saves lr into lisp_frame.savelr and
- *        returns with `ret`.
+ * [D1] PPC keeps up to four CR results live simultaneously. AArch64 has ONE
+ * NZCV. Where PPC relies on a stale CR, we recompute the comparison or
+ * stash a boolean with `cset` into a free scratch.
+ * [D2] PPC pushes NILs via imm5 (=nargs). Here nargs is still live, so we
+ * push the dedicated NIL register (rnil) instead.
+ * [D3] `loc_pc` -> lr. keyword_bind saves lr into lisp_frame.savelr and
+ * returns with `ret`.
  */
 
 /* Register aliases for keyword_bind (PPC ppc-spentry.s:1414-1422 mapping;
    temp3 = x15 on Matt's map -- an earlier revision mis-aliased the vector
-   to x16/temp4, 16m5o).  nfn (= temp2 = x14) comes from the register map. */
+   to x16/temp4, ).  nfn (= temp2 = x14) comes from the register map. */
 keyword_flags  .req x2    /* imm2 */
 keyword_count  .req x3    /* imm3 */
 keyword_vector .req x15   /* temp3 (= fname; dead by keyword-entry time)  */
@@ -1042,7 +1042,7 @@ valptr         .req x20   /* save1 */
 limit          .req x21   /* save2 */
 
 spentry keyword_bind
-        /* ARM64-DEVIATION (16m5o): PPC's keyword_bind built the fn's ONLY
+        /* ARM64-DEVIATION (): PPC's keyword_bind built the fn's ONLY
            lisp frame here (ppc:1432-1438) because PPC2 emits just save-lr
            before it -- LR survives in loc_pc.  This design has no loc_pc:
            the blr that reaches us already clobbered lr, so the compiled
@@ -1366,10 +1366,10 @@ endsp destructuring_bind
  * destructuring_bind_inner: tree-walking argument destructuring.
  *
  * nargs holds the argument-descriptor longword (NOT a boxed count):
- *   bits 0-7   required count      bits 8-15  optional count
- *   bits 16-23 keyword count       bit  mask_initopt  hard (supplied-p) opts
- *   bit mask_keyp  &key present    bit mask_aok  &allow-other-keys
- *   bit mask_restp &rest present
+ * bits 0-7 required count bits 8-15 optional count
+ * bits 16-23 keyword count bit mask_initopt hard (supplied-p) opts
+ * bit mask_keyp &key present bit mask_aok &allow-other-keys
+ * bit mask_restp &rest present
  * arg_reg = the list being destructured ; keyvect_reg = keyword vector ;
  * whole_reg = whole form (for errors) ; imm4 = saved entry vsp.
  * No lisp frame is built (runs in caller's frame); returns with `ret'.
@@ -1842,15 +1842,15 @@ endsp stkvcell0
  * All 41 subprims in this cluster carry real ported bodies (0 stubs).
  * Every site that depends on a constant/convention Matt has not yet defined
  * is guarded with #error + the intended instruction in a comment; the deduped
- * union lives in upstream-port/MISSING-CONSTANTS-RATIFY.md.  Open #error
+ * union lives in MISSING-CONSTANTS-RATIFY.md. Open #error
  * classes in this file:
- *   - ret1val_addr ref-global idiom (values, ppc:1217)
- *   - error_too_many_values uuo_interr trap convention (values, ppc:1235)
- *   - nrs.kallowotherkeys rnil-relative ref (keyword_bind ppc:1507,
- *     destructuring_bind_inner ppc:3753)
- *   - stack-overflow (trllt) trap convention (savecontextvsp ppc:5333;
- *     savecontext0 ppc:5342)
- *   - deferred-interrupt trap trgti (restoreintlevel ppc:6751)
+ * - ret1val_addr ref-global idiom (values, ppc:1217)
+ * - error_too_many_values uuo_interr trap convention (values, ppc:1235)
+ * - nrs.kallowotherkeys rnil-relative ref (keyword_bind ppc:1507,
+ * destructuring_bind_inner ppc:3753)
+ * - stack-overflow (trllt) trap convention (savecontextvsp ppc:5333;
+ * savecontext0 ppc:5342)
+ * - deferred-interrupt trap trgti (restoreintlevel ppc:6751)
  * PROPOSED (ratify): mask_initopt/keyp/aok/restp adopt the ARM32 bit layout
  * (arm-constants.s:561-567), NOT the PPC big-endian bit indices; must match
  * the compiler's doadlword emission when Matt defines it.

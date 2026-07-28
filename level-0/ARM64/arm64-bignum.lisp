@@ -10,18 +10,18 @@
 ;;;
 ;;; THE BIGNUM DIGIT-ORDER RULE (W7-D50):
 ;;; CCL bignum digits are 32 bits, digit n living at byte offset
-;;; misc-data-offset + 4n.  All 32-bit accesses (lwzx/lwax/stw ↔
+;;; misc-data-offset + 4n. All 32-bit accesses (lwzx/lwax/stw ↔
 ;;; ldr/ldrsw/str W-forms) are therefore ENDIAN-NEUTRAL and port
-;;; line-by-line.  64-bit accesses to a digit PAIR are NOT: on
+;;; line-by-line. 64-bit accesses to a digit PAIR are NOT: on
 ;;; big-endian PPC64 the ld places digit n in the HIGH half, so the
 ;;; PPC64 code rotldi-swaps by 32 after every ld and before every std
-;;; to get/put the LE-style value (digit n low, digit n+1 high).  On
+;;; to get/put the LE-style value (digit n low, digit n+1 high). On
 ;;; little-endian arm64 a plain 64-bit load/store already has digit n
 ;;; in the low half: EVERY ld+rotldi / rotldi+std pair collapses to a
-;;; plain ldr/str/ldur/stur.  Precedent: kernel draft
-;;; upstream-port/lisp-kernel/spentry-B-vectors-misc.s:951-953,966,
+;;; plain ldr/str/ldur/stur. Precedent: kernel draft
+;;; spentry-B-vectors-misc.s:951-953,966,
 ;;; 979-980,992 ("LE: no rotldi") and wave-4 W4-D19 (%fixnum-set-natural
-;;; took the x86 shape for the same reason).  64-bit BITWISE ops on a
+;;; took the x86 shape for the same reason). 64-bit BITWISE ops on a
 ;;; digit pair (%bignum-logior/logand) are order-neutral (both digits
 ;;; transformed independently, stored back in place) — PPC64 itself
 ;;; does no rotate there, port line-by-line.
@@ -29,12 +29,12 @@
 ;;; Alignment note: tagged misc pointer = object base + fulltag-misc(4),
 ;;; so EA of a 64-bit digit-pair access [ptr + misc-data-offset(4) + 8k]
 ;;; is 8-ALIGNED in memory (the +4 bias cancels the tag); 32-bit digit
-;;; accesses land 4-aligned.  misc-data-offset/misc-header-offset are
+;;; accesses land 4-aligned. misc-data-offset/misc-header-offset are
 ;;; not 8-multiples, so 64-bit constant-offset forms use ldur/stur
 ;;; (wave-1 convention); 32-bit forms at +4 use the scaled str/ldr
 ;;; (multiple-of-4, u32-ref precedent in arm64-lapmacros-additions).
 ;;;
-;;; CARRY CHAINS: PPC addc/adde/addze → adds/adcs/adc.  Every region
+;;; CARRY CHAINS: PPC addc/adde/addze → adds/adcs/adc. Every region
 ;;; where the C flag is live between the setting adds and the consuming
 ;;; adc is marked "C LIVE" inline; only flag-safe instructions (mul,
 ;;; umulh, ldr, str, mov — none write NZCV) may intervene, mirroring
@@ -51,9 +51,9 @@
 ;;; %fixnum-to-bignum-set — from ppc64-bignum.lisp:24
 ;;; =====================================================================
 ;;; The caller has allocated a two-digit bignum (quite likely on the
-;;; stack).  If we can fit in a single digit (the high word is just a
+;;; stack). If we can fit in a single digit (the high word is just a
 ;;; sign extension of the low word), truncate the bignum in place.
-;;; Digit stores are 32-bit (endian-neutral, W7-D50).  The fits-in-one-
+;;; Digit stores are 32-bit (endian-neutral, W7-D50). The fits-in-one-
 ;;; digit predicate takes the x86-64 whole-register shape (x86:26-29:
 ;;; sign-extend low 32, compare with full value) because PPC's split
 ;;; srawi/cmpw pair is a 32-bit-compare idiom with no 1:1 arm64 form.
@@ -62,7 +62,7 @@
   (lsr imm1 imm0 (:$ 32))                         ; ppc:26 srdi — high digit
   (sbfx imm2 imm0 (:$ 0) (:$ 32))                           ; ppc:27 srawi 31 → sign-ext of low digit (x86:26-27 shape)
   (cmp imm2 imm0)                                 ; ppc:28 cmpw — eq iff high = sign-ext(low)
-  (stur (:w imm0) (:@ bignum (:$ arm64::misc-data-offset)))  ; ppc:29 stw digit 0 (32-bit; -4 => STUR, 16m5q wall 4; flag-safe)
+  (stur (:w imm0) (:@ bignum (:$ arm64::misc-data-offset)))  ; ppc:29 stw digit 0 (32-bit; -4 => STUR,  wall 4; flag-safe)
   (mov imm2 (:$ arm64::one-digit-bignum-header))  ; ppc:30 (arch.lisp:661; flag-safe)
   (b.eq @chop)                                    ; ppc:31
   (stur (:w imm1) (:@ bignum (:$ (+ arm64::misc-data-offset 4)))) ; ppc:32 stw digit 1 = high word (0 unscaled => STUR pair w/ digit 0)
@@ -75,10 +75,10 @@
 ;;; %multiply-and-add-loop64 — from ppc64-bignum.lisp:39
 ;;; =====================================================================
 ;;; 64-bit-chunk inner multiply loop: r[i..] += x[i] * y[0..ylen-1] with
-;;; carry propagation.  All digit-pair loads/stores were ld/std+rotldi
+;;; carry propagation. All digit-pair loads/stores were ld/std+rotldi
 ;;; on PPC64 (BE); on LE they are plain ldr/str (W7-D50; x86:40-67 uses
-;;; plain movq throughout).  idx is a boxed word index (= byte offset,
-;;; fixnumshift 3 = word-shift).  Register map per the PPC let: i=imm0,
+;;; plain movq throughout). idx is a boxed word index (= byte offset,
+;;; fixnumshift 3 = word-shift). Register map per the PPC let: i=imm0,
 ;;; j=imm1, xx=imm2, yy=imm3, rr=imm4, dd=imm5, cc=nargs (imm5=x5 and
 ;;; nargs=x6 are DISTINCT in Matt's map, arm64-asm.lisp:183-185).
 (defarm64lapfunction %multiply-and-add-loop64
@@ -115,7 +115,7 @@
 ;;; Multiply the (32-bit) digits X and Y, producing a 64-bit result.
 ;;; Add the 32-bit "prev" and "carry-in" digits; return (VALUES high low).
 ;;; Pure boxed arithmetic — no digit memory access, order-neutral (W7-D50);
-;;; port PPC64 line-by-line.  clrlsldi (box of low32) → ubfx + box-fixnum.
+;;; port PPC64 line-by-line. clrlsldi (box of low32) → ubfx + box-fixnum.
 (defarm64lapfunction %multiply-and-add4 ((x 0) (y arg_x) (prev arg_y) (carry-in arg_z))
   (ldr temp0 (:@ vsp (:$ 0)))                     ; ppc:90 x @ vsp+0
   (unbox-fixnum imm0 temp0)                       ; ppc:91 unboxed-x
@@ -133,14 +133,14 @@
   (set-nargs 2)                                   ; ppc:102
   (vpush arg_z)                                   ; ppc:103 vpush low
   (add temp0 vsp (:$ (ash 2 arm64::fixnumshift))) ; ppc:104 la temp0 '2 vsp (= entry vsp)
-  ;; ppc:105 (ba .SPvalues): TAIL no-link jump (DECIDE-10 — .SPvalues not
-  ;; in Matt's *subprims* table; wave-5 `values` precedent).
+ ;; ppc:105 (ba .SPvalues): TAIL no-link jump (DECIDE-10 — .SPvalues not
+ ;; in Matt's *subprims* table; wave-5 `values` precedent).
   (jump-subprim .SPvalues))
 
 ;;; =====================================================================
 ;;; %multiply-and-add3 — from ppc64-bignum.lisp:107
 ;;; =====================================================================
-;;; As %multiply-and-add4 without the "prev" digit.  Order-neutral.
+;;; As %multiply-and-add4 without the "prev" digit. Order-neutral.
 (defarm64lapfunction %multiply-and-add3 ((x arg_x) (y arg_y) (carry-in arg_z))
   (unbox-fixnum imm0 x)                           ; ppc:114 unboxed-x
   (unbox-fixnum imm1 y)                           ; ppc:115 unboxed-y
@@ -155,15 +155,15 @@
   (set-nargs 2)                                   ; ppc:123
   (vpush arg_z)                                   ; ppc:124 vpush low
   (add temp0 vsp (:$ (ash 2 arm64::fixnumshift))) ; ppc:125 la temp0 '2 vsp (= entry vsp)
-  ;; ppc:126 (ba .SPvalues): TAIL no-link (DECIDE-10)
+ ;; ppc:126 (ba .SPvalues): TAIL no-link (DECIDE-10)
   (jump-subprim .SPvalues))
 
 ;;; =====================================================================
 ;;; %multiply-and-add-fixnum-loop — from ppc64-bignum.lisp:128
 ;;; =====================================================================
 ;;; result[0..rlen-1] = x[0..rlen-1] * unboxed-y + carry, over 64-bit
-;;; words.  ld+rotldi / rotldi+stdx → plain ldr/str (W7-D50; x86:128-148
-;;; twin uses plain movq).  rlen and i are boxed word counts.
+;;; words. ld+rotldi / rotldi+stdx → plain ldr/str (W7-D50; x86:128-148
+;;; twin uses plain movq). rlen and i are boxed word counts.
 ;;; PPC register let: carry=imm4, iidx=imm3, unboxed-y=imm0, i=temp0,
 ;;; hi=imm2, rlen=temp1 — kept 1:1.
 (defarm64lapfunction %multiply-and-add-fixnum-loop ((len64 0) (x arg_x) (y arg_y) (result arg_z))
@@ -192,7 +192,7 @@
 ;;; %floor — from ppc64-bignum.lisp:163
 ;;; =====================================================================
 ;;; Return the (possibly truncated) 32-bit quotient and remainder from
-;;; dividing hi:low by divisor.  Pure register arithmetic, order-neutral.
+;;; dividing hi:low by divisor. Pure register arithmetic, order-neutral.
 ;;; divdu → udiv (64÷64 unsigned); remainder via mul+sub (PPC-faithful;
 ;;; msub exists but keep 1:1).
 (defarm64lapfunction %floor ((num-high arg_x) (num-low arg_y) (divisor arg_z))
@@ -211,14 +211,14 @@
   (vpush arg_y)                                   ; ppc:179 quotient
   (vpush arg_z)                                   ; ppc:180 remainder
   (set-nargs 2)                                   ; ppc:181
-  ;; ppc:182 (ba .SPvalues): TAIL no-link (DECIDE-10)
+ ;; ppc:182 (ba .SPvalues): TAIL no-link (DECIDE-10)
   (jump-subprim .SPvalues))
 
 ;;; =====================================================================
 ;;; %multiply — from ppc64-bignum.lisp:186
 ;;; =====================================================================
 ;;; Multiply two (UNSIGNED-BYTE 32) arguments, return (VALUES high low)
-;;; of the 64-bit result.  Order-neutral.
+;;; of the 64-bit result. Order-neutral.
 (defarm64lapfunction %multiply ((x arg_y) (y arg_z))
   (unbox-fixnum imm0 x)                           ; ppc:191
   (unbox-fixnum imm1 y)                           ; ppc:192
@@ -231,15 +231,15 @@
   (vpush arg_z)                                   ; ppc:198 high
   (set-nargs 2)                                   ; ppc:199
   (vpush arg_y)                                   ; ppc:200 low
-  ;; ppc:201 (ba .SPvalues): TAIL no-link (DECIDE-10)
+ ;; ppc:201 (ba .SPvalues): TAIL no-link (DECIDE-10)
   (jump-subprim .SPvalues))
 
 ;;; =====================================================================
 ;;; %set-bignum-length — from ppc64-bignum.lisp:205
 ;;; =====================================================================
 ;;; Any words in the "tail" of the bignum should have been zeroed by the
-;;; caller.  Boxed newlen<<(num-subtag-bits - fixnumshift) = count<<8,
-;;; matching define-header (arch.lisp:653).  subtag-bignum (arch.lisp:143)
+;;; caller. Boxed newlen<<(num-subtag-bits - fixnumshift) = count<<8,
+;;; matching define-header (arch.lisp:653). subtag-bignum (arch.lisp:143)
 ;;; is not a guaranteed logical-immediate pattern → PPC's ori becomes
 ;;; mov+orr(register) (W7-D51).
 (defarm64lapfunction %set-bignum-length ((newlen arg_y) (bignum arg_z))
@@ -255,7 +255,7 @@
 ;;; Count the sign bits in the most significant digit; return fixnum.
 ;;; The MS digit is at byte offset misc-data-offset + 4*(count-1) — a
 ;;; 32-bit indexed access, endian-neutral (W7-D50; x86:213 same address
-;;; arithmetic).  cntlzw → clz (W-form); not → mvn (W-form).
+;;; arithmetic). cntlzw → clz (W-form); not → mvn (W-form).
 (defarm64lapfunction %bignum-sign-bits ((bignum arg_z))
   (vector-size imm0 bignum imm0)                  ; ppc:214 — digit count
   (lsl imm0 imm0 (:$ 2))                          ; ppc:215 sldi 2 — byte size
@@ -273,9 +273,9 @@
 ;;; =====================================================================
 ;;; %signed-bignum-ref — from ppc64-bignum.lisp:227
 ;;; =====================================================================
-;;; Sign-extended 32-bit digit read.  Boxed index n (= n<<3) >> 1 = 4n
-;;; byte offset (fixnumshift 3, same as PPC64).  lwax → ldrsw (regoff,
-;;; arm64-asm.lisp:721).  32-bit indexed access — endian-neutral (W7-D50).
+;;; Sign-extended 32-bit digit read. Boxed index n (= n<<3) >> 1 = 4n
+;;; byte offset (fixnumshift 3, same as PPC64). lwax → ldrsw (regoff,
+;;; arm64-asm.lisp:721). 32-bit indexed access — endian-neutral (W7-D50).
 (defarm64lapfunction %signed-bignum-ref ((bignum arg_y) (index arg_z))
   (lsr imm0 index (:$ 1))                         ; ppc:228 srdi 1 — boxed n → byte offset 4n
   (sub imm0 imm0 (:$ (- arm64::misc-data-offset)))    ; ppc:229 la
@@ -286,10 +286,10 @@
 ;;; =====================================================================
 ;;; %maybe-fixnum-from-one-or-two-digit-bignum — from ppc64-bignum.lisp:239
 ;;; =====================================================================
-;;; One-digit → fixnum of the (signed) digit.  Two-digit → the 64-bit
-;;; digit-pair value if it fits a fixnum, else NIL.  The two-digit read
+;;; One-digit → fixnum of the (signed) digit. Two-digit → the 64-bit
+;;; digit-pair value if it fits a fixnum, else NIL. The two-digit read
 ;;; was ld+rotldi (BE digit swap) → plain ldur on LE (W7-D50; x86:245
-;;; plain movq).  The one-digit read is lwa → ldrsw (32-bit, endian-
+;;; plain movq). The one-digit read is lwa → ldrsw (32-bit, endian-
 ;;; neutral; scaled form, offset 4 = multiple of 4, arm64-asm.lisp:736).
 ;;; PPC uses cr1/cr2 for the two header compares — serialized here into
 ;;; sequential cmp/branch (one-NZCV rule); beqlr → b.eq to a ret label.
@@ -319,10 +319,10 @@
 ;;; %digit-logical-shift-right — from ppc64-bignum.lisp:260
 ;;; =====================================================================
 ;;; PPC srw is a 32-bit shift with count taken mod 64 (counts 32..63 →
-;;; result 0).  A W-form lsr would take the count mod 32 (WRONG for
-;;; count=32).  The 64-bit lsr on the zero-extended digit is exact:
+;;; result 0). A W-form lsr would take the count mod 32 (WRONG for
+;;; count=32). The 64-bit lsr on the zero-extended digit is exact:
 ;;; digit has only low-32 significance, count mod 64 identical → this is
-;;; the x86-64 shape (x86:262-267 shrq).  W7-D52.
+;;; the x86-64 shape (x86:262-267 shrq). W7-D52.
 (defarm64lapfunction %digit-logical-shift-right ((digit arg_y) (count arg_z))
   (unbox-fixnum imm0 digit)                       ; ppc:261 (u32 digit, zero-extended by unbox)
   (unbox-fixnum imm1 count)                       ; ppc:262
@@ -334,9 +334,9 @@
 ;;; %ashr — from ppc64-bignum.lisp:267
 ;;; =====================================================================
 ;;; PPC sraw: arithmetic 32-bit shift, count mod 64 (counts 32..63 →
-;;; all sign bits).  Exact 64-bit equivalent: sign-extend the digit to
+;;; all sign bits). Exact 64-bit equivalent: sign-extend the digit to
 ;;; 64 bits (x86:274 movslq shape), then 64-bit asr — identical for all
-;;; counts 0..63.  W7-D52.
+;;; counts 0..63. W7-D52.
 (defarm64lapfunction %ashr ((digit arg_y) (count arg_z))
   (unbox-fixnum imm0 digit)                       ; ppc:268
   (unbox-fixnum imm1 count)                       ; ppc:269
@@ -350,7 +350,7 @@
 ;;; =====================================================================
 ;;; PPC slw (32-bit shift left, count mod 64) followed by clrlsldi
 ;;; (keep low 32, box): 64-bit lsl then extract low 32 is identical for
-;;; all counts 0..63 (x86:279-285 shlq+movl shape).  W7-D52.
+;;; all counts 0..63 (x86:279-285 shlq+movl shape). W7-D52.
 (defarm64lapfunction %ashl ((digit arg_y) (count arg_z))
   (unbox-fixnum imm0 digit)                       ; ppc:275
   (unbox-fixnum imm1 count)                       ; ppc:276
@@ -380,10 +380,10 @@
 ;;; =====================================================================
 ;;; AND of a fixnum with the first digit PAIR of big (64-bit access):
 ;;; ld+rotldi / rotldi+std → plain ldur/stur on LE (W7-D50; x86:294/302
-;;; plain movq; kernel precedent spentry-B-vectors-misc.s:966).  If dest
+;;; plain movq; kernel precedent spentry-B-vectors-misc.s:966). If dest
 ;;; is NIL, return boxed result (PPC boxes with possible top-3-bit loss
 ;;; for negative fix — faithful, not "fixed"); else store into dest's
-;;; digit pair.  cmp-to-nil then flag-safe and → b.ne, as PPC interleaves.
+;;; digit pair. cmp-to-nil then flag-safe and → b.ne, as PPC interleaves.
 (defarm64lapfunction fix-digit-logand ((fix arg_x) (big arg_y) (dest arg_z))
   (ldur imm1 (:@ big (:$ arm64::misc-data-offset))) ; ppc:293+295 ld+rotldi → LE plain (w2)
   (unbox-fixnum imm0 fix)                         ; ppc:294 (w1)
@@ -399,7 +399,7 @@
 ;;; =====================================================================
 ;;; fix-digit-logandc2 — from ppc64-bignum.lisp:308
 ;;; =====================================================================
-;;; fix AND NOT big-digit-pair.  andc w1,w2 → bic Rd,Rn,Rm (Rn & ~Rm):
+;;; fix AND NOT big-digit-pair. andc w1,w2 → bic Rd,Rn,Rm (Rn & ~Rm):
 ;;; (andc imm1 imm0 imm1) = fix & ~big → (bic imm1 imm0 imm1).
 ;;; 64-bit pair access → plain ldur/stur (W7-D50; x86:308-317).
 (defarm64lapfunction fix-digit-logandc2 ((fix arg_x) (big arg_y) (dest arg_z))
@@ -434,13 +434,13 @@
 ;;; %bignum-logior — from ppc64-bignum.lisp:340
 ;;; =====================================================================
 ;;; Do LOGIOR on the N 32-bit digits of A and B into C, 64 bits at a
-;;; time where possible.  Odd digit (if any) handled first with 32-bit
+;;; time where possible. Odd digit (if any) handled first with 32-bit
 ;;; ops (endian-neutral); the 64-bit loop is a BITWISE op on digit pairs
 ;;; — order-neutral, PPC itself does no rotldi here (W7-D50); port
-;;; line-by-line.  vpopped boxed N (n<<3) >>1 = total byte count 4n.
+;;; line-by-line. vpopped boxed N (n<<3) >>1 = total byte count 4n.
 ;;; NZCV serialization is natural: andi.→b.eq, then cmpdi 4 survives
 ;;; flag-safe sub/ldr/orr/str to the beqlr; in-loop cmpdi 0 survives to
-;;; the bne.  beqlr → b.eq @done (no conditional ret on arm64).
+;;; the bne. beqlr → b.eq @done (no conditional ret on arm64).
 (defarm64lapfunction %bignum-logior ((n 0) (a arg_x) (b arg_y) (c arg_z))
   (vpop imm0)                                     ; ppc:341
   (lsr imm0 imm0 (:$ 1))                          ; ppc:342 srdi 1 — boxed n → byte count

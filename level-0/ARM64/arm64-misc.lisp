@@ -1,16 +1,16 @@
 ;;; -*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;; arm64-misc.lisp — ACTIVE seed of level-0/ARM64/ for Matt Emerson's
-;;; upstream arm64 tree (pin 6b6540e).  Deployed into
+;;; upstream arm64 tree (pin 6b6540e). Deployed into
 ;;; $UPSTREAM_ROOT/level-0/ARM64/ by tools/upstream-compile-test.sh before
 ;;; the xload dump; grows DEMAND-DRIVEN — each boot's cold-load fatal names
-;;; the next function to lift from upstream-port/level-0/drafts/arm64-misc.lisp.
+;;; the next function to lift from arm64-misc.lisp.
 ;;; PPC64 LINE-PORT (source: vendor/ccl/level-0/PPC/ppc-misc.lisp)
 ;;; Per-line citations: "; ppc:NNN" = line NNN of that file.
 ;;;
 ;;; TCR/area offsets resolve SYMBOLICALLY against his arm64-arch.lisp, which
 ;;; the kernel's arm64-constants.h asserts itself in sync with (tcr.spare
-;;; static check) — W4-D20 reconciled at this pin.  Current values, for the
+;;; static check) — W4-D20 reconciled at this pin. Current values, for the
 ;;; reader: tcr.save-vsp=32, tcr.vs-area=56; area.high=24, area.active=32.
 
 (in-package "CCL")
@@ -28,7 +28,7 @@
 ;;; =====================================================================
 ;;; %tcr-toplevel-function — ppc:449
 ;;; =====================================================================
-;;; cr0 used twice (tcr vs rcontext; then high vs active/vsp).  Loads are
+;;; cr0 used twice (tcr vs rcontext; then high vs active/vsp). Loads are
 ;;; flag-safe so each (cmp) is placed just before its branch.
 (defarm64lapfunction %tcr-toplevel-function ((tcr arg_z))
   (check-nargs 1)                                  ; ppc:450
@@ -116,7 +116,7 @@
 ;;; set-%gcable-macptrs% — ppc:505
 ;;; =====================================================================
 ;;; imm0 = &gcable-pointers (rnil + negative kernel-global offset → sub).
-;;; Push ptr onto the gcable list head atomically.  status=(:w temp4)
+;;; Push ptr onto the gcable list head atomically. status=(:w temp4)
 ;;; per the kernel ll/sc idiom (spentry-B:113-129).
 (defarm64lapfunction set-%gcable-macptrs% ((ptr arg_z))
   (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gcable-pointers)))) ; ppc:506
@@ -129,11 +129,11 @@
   (ret))                                           ; ppc:513
 
 ;;; =====================================================================
-;;; get-saved-register-values — ppc:933  (modern arch: plain DEFUN)
+;;; get-saved-register-values — ppc:933 (modern arch: plain DEFUN)
 ;;; =====================================================================
-;;; The PPC LAP vpushes save0..save7 (8-NVR specific).  The x86-64 and
+;;; The PPC LAP vpushes save0..save7 (8-NVR specific). The x86-64 and
 ;;; ARM32 twins both reduce this to (values) (x86-misc:805, arm-misc:1066);
-;;; call-check-regs (l1-readloop) then trivially passes.  Follow them.
+;;; call-check-regs (l1-readloop) then trivially passes. Follow them.
 (defun get-saved-register-values ()
   (values))
 
@@ -161,7 +161,7 @@
 ;;; =====================================================================
 ;;; %store-immediate-conditional — ppc:486
 ;;; =====================================================================
-;;; ll/sc: current=temp1, status=(:w temp4).  offset vpop'd, unboxed, added
+;;; ll/sc: current=temp1, status=(:w temp4). offset vpop'd, unboxed, added
 ;;; into imm1... base kept in imm2 ([Xn]-only; imm1 is macro scratch).
 (defarm64lapfunction %store-immediate-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
   (vpop temp0)                                     ; ppc:487
@@ -243,7 +243,7 @@
 ;;; %atomic-decf-ptr-if-positive — ppc:600
 ;;; =====================================================================
 ;;; cmp imm0 0 flags survive the flag-safe (sub) to b.eq (skip store when
-;;; the loaded value was 0).  Note PPC boxes the ALREADY-decremented imm0 on
+;;; the loaded value was 0). Note PPC boxes the ALREADY-decremented imm0 on
 ;;; the @done path (value was 0 → returns boxed -1) — preserved.
 (defarm64lapfunction %atomic-decf-ptr-if-positive ((ptr arg_z))
   (macptr-ptr imm1 ptr)                            ; ppc:601
@@ -301,7 +301,7 @@
 ;;; =====================================================================
 ;;; %ptr-store-fixnum-conditional — ppc:651
 ;;; =====================================================================
-;;; address=imm0, actual-oldval=imm1.  newval stored as-is (tagged fixnum).
+;;; address=imm0, actual-oldval=imm1. newval stored as-is (tagged fixnum).
 (defarm64lapfunction %ptr-store-fixnum-conditional ((ptr arg_x) (expected-oldval arg_y) (newval arg_z))
   (macptr-ptr imm0 ptr)                            ; ppc:654 (base)
   @again
@@ -321,14 +321,14 @@
 ;;; =====================================================================
 ;;; %fixnum-truncate — ppc-numbers.lisp:251 (#+ppc64-target arm; placed
 ;;; here like called-for-mv-p below, pending the numbers-file story vs
-;;; Matt's own arm64-numbers.lisp).  Promoted 16m14 from the wave-2
+;;; Matt's own arm64-numbers.lisp). Promoted from the wave-2
 ;;; draft (drafts/arm64-numbers.lisp) on l1-lisp-threads demand; the
 ;;; draft's DECIDE sites resolved to since-ratified idioms:
 ;;; jump-subprim (PPC ba), load-nfn-constant (PPC `ld rd 'const nfn`).
-;;; Returns (values quotient remainder).  PPC's divdo. OV-on-zero has no
+;;; Returns (values quotient remainder). PPC's divdo. OV-on-zero has no
 ;;; ARM64 analog: sdiv neither traps nor flags, so the unboxed divisor
-;;; is cbz-tested BEFORE dividing.  PPC's (mtxer rzero) XER-clearing
-;;; dropped (NZCV is not sticky).  negs supplies nego.'s V-on-overflow
+;;; is cbz-tested BEFORE dividing. PPC's (mtxer rzero) XER-clearing
+;;; dropped (NZCV is not sticky). negs supplies nego.'s V-on-overflow
 ;;; (dividend = most-negative-fixnum); the ldur in load-nfn-constant
 ;;; does not disturb NZCV, so the b.vc still tests the negs.
 ;;; =====================================================================
@@ -339,8 +339,8 @@
         (unboxed-product imm3)
         (boxed-quotient temp1)
         (remainder temp2))
-    ;; (cmpdi divisor '-1) — boxed fixnum -1 = raw -8; cmp's aimm is
-    ;; unsigned, so compare via cmn #8 (Z iff divisor = -8).  ppc:259
+ ;; (cmpdi divisor '-1) — boxed fixnum -1 = raw -8; cmp's aimm is
+ ;; unsigned, so compare via cmn #8 (Z iff divisor = -8). ppc:259
     (cmn divisor (:$ (ash 1 arm64::fixnumshift)))
     (unbox-fixnum unboxed-dividend dividend)  ; ppc:260
     (unbox-fixnum unboxed-divisor divisor)    ; ppc:261
@@ -351,7 +351,7 @@
     (mul unboxed-product unboxed-quotient unboxed-divisor) ; ppc:265 (mulld)
     (b @ok)                                   ; ppc:266 (bns+ @ok)
     @div-by-zero
-    ;; ppc:267 (mtxer rzero) — dropped, no XER
+ ;; ppc:267 (mtxer rzero) — dropped, no XER
     (save-lisp-context)                       ; ppc:268
     (set-nargs 3)                             ; ppc:269
     (load-constant arg_x truncate)            ; ppc:270
@@ -362,21 +362,21 @@
     (box-fixnum remainder imm0)               ; ppc:276
     (vpush remainder)                         ; ppc:277
     (set-nargs 2)                             ; ppc:278
-    ;; (la temp0 '2 vsp) — temp0 = entry vsp, the .SPvalues frame base
+ ;; (la temp0 '2 vsp) — temp0 = entry vsp, the .SPvalues frame base
     (add temp0 vsp (:$ (* 2 arm64::fixnumone))) ; ppc:279
     (jump-subprim .SPvalues)                  ; ppc:280 (ba .SPvalues)
     @neg
-    ;; ppc:282 (nego. dividend dividend) — V set iff dividend is
-    ;; most-negative-fixnum (raw #x8000000000000000)
+ ;; ppc:282 (nego. dividend dividend) — V set iff dividend is
+ ;; most-negative-fixnum (raw #x8000000000000000)
     (negs dividend dividend)
     (load-nfn-constant arg_z *least-positive-bignum*) ; ppc:283 (ld ... nfn)
     (b.vc @ret)                               ; ppc:284 (bns @ret)
-    ;; ppc:285 (mtxer rzero) — dropped, no XER
+ ;; ppc:285 (mtxer rzero) — dropped, no XER
     (ldur dividend (:@ arg_z (:$ arm64::symbol.vcell))) ; ppc:286
     @ret
     (mov temp0 vsp)                           ; ppc:288 (mr temp0 vsp)
     (vpush dividend)                          ; ppc:289
-    ;; ppc:290 (vpush rzero) — raw 0 = boxed fixnum 0; xzr supplies it
+ ;; ppc:290 (vpush rzero) — raw 0 = boxed fixnum 0; xzr supplies it
     (vpush xzr)
     (set-nargs 2)                             ; ppc:291
     (jump-subprim .SPvalues)))                ; ppc:292 (ba .SPvalues)
@@ -384,10 +384,10 @@
 ;;; =====================================================================
 ;;; called-for-mv-p — ppc-numbers.lisp:296 (placed here pending the
 ;;; numbers-file story vs Matt's own arm64-numbers.lisp; the demand
-;;; loop only needs it deployed).  ARM32 arm-numbers.lisp:166 is the
+;;; loop only needs it deployed). ARM32 arm-numbers.lisp:166 is the
 ;;; nfp-design sibling: when sp == tcr.nfp an nfp frame is innermost
 ;;; and its slot 0 is the BACKLINK to the caller's lisp frame (the
-;;; 16m5p header reshape guarantees that slot).  Answer: was my caller
+;;; header reshape guarantees that slot). Answer: was my caller
 ;;; invoked for multiple values — i.e. is its frame's savelr the magic
 ;;; ret1valaddr kernel global?
 ;;; =====================================================================
@@ -405,10 +405,10 @@
 
 ;;; =====================================================================
 ;;; %truncate-short-float->fixnum / %round-nearest-short-float->fixnum —
-;;; ppc-numbers.lisp:141/:17x (PPC64 branches).  NAMING (mail item):
+;;; ppc-numbers.lisp:141/:17x (PPC64 branches). NAMING (mail item):
 ;;; the level-0 callers use the PPC64 SHORT-float names; Matt's own
 ;;; arm64-numbers.lisp:49/:62 defines the same bodies under
-;;; %truncate/%round-nearest-SINGLE-float->fixnum.  These twins carry
+;;; %truncate/%round-nearest-SINGLE-float->fixnum. These twins carry
 ;;; HIS bodies verbatim under the canonical names until he ratifies one
 ;;; spelling (then one set dies).
 ;;; =====================================================================
@@ -430,36 +430,36 @@
 ;;; %heap-bytes-allocated — ppc:285 (#+ppc64-target; the ppc32 twin @270 is
 ;;; the same body over a hi/lo pair and is SKIPped)
 ;;;
-;;; Same class as VALUES below and as 16m44's %ffi-exception-status: a
+;;; Same class as VALUES below and as 's %ffi-exception-status: a
 ;;; function every other port defines in its per-arch level-0 file, with no
-;;; arm64 arm anywhere (his tree, this overlay, the patches).  Cost: ANSI
+;;; arm64 arm anywhere (his tree, this overlay, the patches). Cost: ANSI
 ;;; TIME.1-8, all eight of them, because CL:TIME reports through
 ;;; l0-misc.lisp's %heap-bytes-allocated and the tests assert that TIME
 ;;; WRITES to *trace-output* -- so an undefined function there is eight
-;;; failures that say nothing about arm64.  Found by
+;;; failures that say nothing about arm64. Found by
 ;;; tools/probes/ansi-tail-77-clusters.lisp, which named it directly.
 ;;;
 ;;; total_bytes_allocated is only current as of the last allocation-pointer
 ;;; reset, so the live delta (last_allocptr - allocptr) has to be added back
 ;;; -- unless there is no such delta to add:
-;;;   last_allocptr == 0            no allocation since the last reset
-;;;   allocptr == VOID_ALLOCPTR     the allocator is disabled
+;;; last_allocptr == 0 no allocation since the last reset
+;;; allocptr == VOID_ALLOCPTR the allocator is disabled
 ;;; PPC64 spends two condition registers on those two tests; one NZCV does
 ;;; here, serialized (cbz, then cmn).
 ;;;
 ;;; VOID_ALLOCPTR is -dnode_size = -16 on arm64 (gc.h:126); the 0x8000...-16
-;;; spelling at gc.h:124 is PPC64-only.  So `cmn allocptr #16' is right by
+;;; spelling at gc.h:124 is PPC64-only. So `cmn allocptr #16' is right by
 ;;; OUR arch, not by copying PPC's immediate -- which happens to agree.
 ;;;
 ;;; tcr.total-bytes-allocated is a single 64-bit slot here (his arch :757);
 ;;; PPC64 reads its `-high' half, which IS the whole count on a 64-bit
 ;;; machine.
 ;;;
-;;; Promoted from upstream-port/level-0/drafts/arm64-misc.lisp:214 with the
+;;; Promoted from arm64-misc.lisp:214 with the
 ;;; one correction that draft promotion always needs on this lane: the draft
 ;;; ended in (call-subprim .SPmakeu64), which LINKS, where ppc:295 is
 ;;; `ba .SPmakeu64' -- a tail transfer, so .SPmakeu64's return goes to our
-;;; caller.  Getting that wrong is what produced the stage-11 udf #0
+;;; caller. Getting that wrong is what produced the stage-11 udf #0
 ;;; regression in apply+, and tools/draft-tail-subprim-lint.py exists to
 ;;; name these sites; it named this one.
 ;;; =====================================================================
@@ -477,33 +477,33 @@
 ;;; =====================================================================
 ;;; values — ppc:298
 ;;;
-;;; VALUES had NO arm64 definition at all.  It is a per-architecture LAP
+;;; VALUES had NO arm64 definition at all. It is a per-architecture LAP
 ;;; function on every other backend -- ppc-misc.lisp:298,
 ;;; ARM/arm-misc.lisp:577, X86/x86-misc.lisp:394,
 ;;; X86/X8632/x8632-misc.lisp:278 -- and neither Matt's tree (which has no
 ;;; level-0/ARM64/arm64-misc.lisp) nor this overlay nor any patch supplied
-;;; one.  So (fboundp 'values) answered NIL in the running image, observed
+;;; one. So (fboundp 'values) answered NIL in the running image, observed
 ;;; live via tools/probes/ansi-aux-missing-defs.lisp.
 ;;;
 ;;; Why that was invisible until the ANSI suite: VALUES in operator position
 ;;; is handled by the compiler, so (values a b) is fine everywhere and the
-;;; whole boot and REPL ladder never needed the FUNCTION.  Only #'values
+;;; whole boot and REPL ladder never needed the FUNCTION. Only #'values
 ;;; does, and in compiled code that lowers to (%function 'values), resolved
 ;;; against the fbinding -- hence "Undefined function VALUES".
 ;;;
-;;; This is what stages 8 and 9 were both reporting.  ansi-aux.lsp's
+;;; This is what stages 8 and 9 were both reporting. ansi-aux.lsp's
 ;;; eqt/eqlt/equalt/equalpt are each (apply #'values (mapcar #'notnot
 ;;; (multiple-value-list ...))), so loading its fasl dies on the first of
 ;;; them at line 74 and every later definition in the file -- including
-;;; def-fold-test at line 1172 -- is never installed.  That is why stage 8
+;;; def-fold-test at line 1172 -- is never installed. That is why stage 8
 ;;; said "Unbound variable: CL-TEST::CONS.FOLD.1": def-fold-test was not a
 ;;; macro, so (def-fold-test cons.fold.1 ...) read as a function call and
 ;;; evaluated its first argument as a variable.
 ;;;
 ;;; PPC64 is the line-port reference and ARM32 is identical to it here.
-;;; Promoted from upstream-port/level-0/drafts/arm64-misc.lisp:232 with one
+;;; Promoted from arm64-misc.lisp:232 with one
 ;;; correction: the draft ended in (call-subprim .SPvalues), which is `blr`
-;;; and LINKS.  PPC is `ba .SPvalues` -- a tail transfer, so .SPvalues'
+;;; and LINKS. PPC is `ba .SPvalues` -- a tail transfer, so .SPvalues'
 ;;; return goes to VALUES' own caller -- which on this lane is
 ;;; (jump-subprim ...), the spelling the rest of this file already uses for
 ;;; ppc `ba` (see %store-node-conditional and the two .SPvalues jumps in
@@ -544,10 +544,10 @@
 ;;; =====================================================================
 ;;; fudge-heap-pointer — ppc:871 (#+ppc64-target; ppc32 twin @857 SKIP)
 ;;; =====================================================================
-;;; Builds an ivector header inside a malloc'd block (16m15 demand:
-;;; %make-heap-ivector at *terminal-io* io-buffer setup).  clrrdi (clear
-;;; low 4 bits) → and ~15 (ldb-wrapped logimm).  subf rD,rA,rB = rB-rA.
-;;; sth halfword store → sturh (W-src, unscaled -2).  Header goes at the
+;;; Builds an ivector header inside a malloc'd block ( demand:
+;;; %make-heap-ivector at *terminal-io* io-buffer setup). clrrdi (clear
+;;; low 4 bits) → and ~15 (ldb-wrapped logimm). subf rD,rA,rB = rB-rA.
+;;; sth halfword store → sturh (W-src, unscaled -2). Header goes at the
 ;;; untagged base (misc-header-offset = -fulltag-misc in his layout, so
 ;;; [base+0] = [tagged-12]); MATCHED PAIR with %%make-disposable's
 ;;; delta-halfword readback below.
@@ -588,8 +588,8 @@
 
 ;;; =====================================================================
 ;;; %suspend-other-threads / %resume-other-threads — ppc:1006/:1018
-;;; (16m5w demand #3, via walk-dynamic-area's with-other-threads-
-;;; suspended).  uuo-interr kernel services (PPC UUO_INTERR ppc:1400/
+;;; ( demand #3, via walk-dynamic-area's with-other-threads-
+;;; suspended). uuo-interr kernel services (PPC UUO_INTERR ppc:1400/
 ;;; 1406) are LIVE in arm64-exceptions.c (UUO_MISC_IS_INTERR dispatch);
 ;;; the lapmacro emits the PROPOSED misc-format interr encoding.
 ;;; =====================================================================
@@ -606,11 +606,11 @@
   (ret))                                          ; ppc:1022
 
 ;;; =====================================================================
-;;; 16m5y copy cluster — promoted from drafts/arm64-misc.lisp (wave-5
+;;; copy cluster — promoted from drafts/arm64-misc.lisp (wave-5
 ;;; vetted) with the negative-immediate flips: misc-data-offset = -4 is
 ;;; not an encodable add immediate, so (add X Y (:$ misc-data-offset))
 ;;; becomes (sub X Y (:$ (- misc-data-offset))) — the active-seed
-;;; convention (arm64-array.lisp:312 etc.).  Register-offset ldrb/strb
+;;; convention (arm64-array.lisp:312 etc.). Register-offset ldrb/strb
 ;;; take the possibly-negative computed offset in a REGISTER (fine).
 ;;; =====================================================================
 
@@ -674,10 +674,10 @@
 ;;; =====================================================================
 ;;; %copy-ivector-to-ivector — ppc:163 (#+ppc64-target; ppc32 twin @88 SKIP)
 ;;; =====================================================================
-;;; Overlap-aware byte copy.  Three PPC CR fields: cr0 (loop count), cr1
-;;; (src vs dest), cr2 (offsets).  Single-NZCV: cr1/cr2 branch decisions
+;;; Overlap-aware byte copy. Three PPC CR fields: cr0 (loop count), cr1
+;;; (src vs dest), cr2 (offsets). Single-NZCV: cr1/cr2 branch decisions
 ;;; are resolved UP FRONT (sequentially) before either byte loop, which
-;;; then use their own (cmp nbytes 0).  cmpd/cmpdi are SIGNED → b.lt/b.ge.
+;;; then use their own (cmp nbytes 0). cmpd/cmpdi are SIGNED → b.lt/b.ge.
 (defarm64lapfunction %copy-ivector-to-ivector ((src-offset 8)
                                                (src-byte-offset-offset 0)
                                                (dest arg_x)
@@ -734,10 +734,10 @@
 ;;; =====================================================================
 ;;; %copy-gvector-to-gvector — ppc:217
 ;;; =====================================================================
-;;; Node (8-byte) elements.  Boxed element index == byte offset (fixnumshift
+;;; Node (8-byte) elements. Boxed element index == byte offset (fixnumshift
 ;;; == word-shift == 3), so misc-data-offset arithmetic matches PPC verbatim.
-;;; ldrx/strx → regoff (:@ base index).  cr1 (src vs dest) SIGNED; cr2
-;;; (elements) SIGNED.  Same single-NZCV restructuring as the ivector twin.
+;;; ldrx/strx → regoff (:@ base index). cr1 (src vs dest) SIGNED; cr2
+;;; (elements) SIGNED. Same single-NZCV restructuring as the ivector twin.
 (defarm64lapfunction %copy-gvector-to-gvector ((src (* 1 arm64::node-size))
                                                (src-element 0)
                                                (dest arg_x)
@@ -789,8 +789,8 @@
 ;;; =====================================================================
 ;;; %lock-gc-lock — ppc:517
 ;;; =====================================================================
-;;; Atomically incf (or decf if negative) gc-inhibit-count.  PPC has NO
-;;; isync here (commented out) — omitted faithfully.  cmp flags (arg_y vs 0)
+;;; Atomically incf (or decf if negative) gc-inhibit-count. PPC has NO
+;;; isync here (commented out) — omitted faithfully. cmp flags (arg_y vs 0)
 ;;; survive the flag-safe add to b.ge.
 (defarm64lapfunction %lock-gc-lock ()
   (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gc-inhibit-count)))) ; ppc:518 (&global)
@@ -808,7 +808,7 @@
 ;;; =====================================================================
 ;;; %unlock-gc-lock — ppc:534
 ;;; =====================================================================
-;;; cr1 = (arg_y vs -1) via (cmn arg_y #1).  cbnz/stxr do NOT touch NZCV,
+;;; cr1 = (arg_y vs -1) via (cmn arg_y #1). cbnz/stxr do NOT touch NZCV,
 ;;; so the last iteration's cmn flags survive to the post-loop (b.ne) that
 ;;; decides whether to fire the immediate-GC trap (DECIDE-3).
 (defarm64lapfunction %unlock-gc-lock ()
@@ -823,7 +823,7 @@
   (stxr (:w temp4) arg_z (:@ imm0))                ; ppc:544 strcx.
   (cbnz (:w temp4) @again)                          ; ppc:545
   (b.ne @done)                                     ; ppc:546 (bnelr cr1) arg_y!=-1 → return
-  ;; count went -1 -> 0: try an immediate GC.
+ ;; count went -1 -> 0: try an immediate GC.
   (mov imm0 (:$ arch::gc-trap-function-immediate-gc)) ; ppc:549 (li -1 → movn)
   (uuo-gc-trap)                                    ; ppc:550 (trlgei → DECIDE-3; args imm1)
   @done
@@ -831,18 +831,18 @@
 
 ;;; =====================================================================
 ;;; %fixnum-gcd — ppc-numbers.lisp:355 (the #+ppc64-target arm; the
-;;; #+ppc32-target twin at ppc:310 is skipped).  Placed here, not in a
+;;; #+ppc32-target twin at ppc:310 is skipped). Placed here, not in a
 ;;; replacement for Matt's own level-0/ARM64/arm64-numbers.lisp, per the
 ;;; %fixnum-truncate / called-for-mv-p precedent above: our overlay files
 ;;; are COPIED OVER his tree, so owning a file he owns would mean carrying
 ;;; his 8 LAP functions forward by hand at every pin advance.
 ;;;
-;;; PROMOTED 16m34 from the wave-2 draft (drafts/arm64-numbers.lisp:164) on
+;;; PROMOTED from the wave-2 draft (drafts/arm64-numbers.lisp:164) on
 ;;; LIVE REPL demand: (/ 1 3) died with "Undefined function
 ;;; CCL::%FIXNUM-GCD called with arguments (1 3)", so no ratio could be
-;;; constructed.  Callers: l0-numbers.lisp:2066, l0-bignum64.lisp:892/:1998.
+;;; constructed. Callers: l0-numbers.lisp:2066, l0-bignum64.lisp:892/:1998.
 ;;;
-;;; Binary GCD.  n1, n2 must be positive nonzero fixnums (PPC's contract,
+;;; Binary GCD. n1, n2 must be positive nonzero fixnums (PPC's contract,
 ;;; inherited — the ctz idiom below is undefined at 0).
 ;;; ut0/vt0 = trailing-zero counts + fixnumshift, so the final left shift
 ;;; re-boxes the result; u/v = odd parts.
@@ -851,19 +851,19 @@
 ;;; cr0 u/v compare inside it, resolving cr2 only at the equality exit
 ;;; (blelr cr2 ⇒ shift by ut0, else fall through and shift by vt0).
 ;;; AArch64 has ONE NZCV, so the cr2 result is materialized before the loop:
-;;;   (cmp ut0 vt0) (csel ut0 ut0 vt0 (:? le))   ; ut0 := min(ut0, vt0)
+;;; (cmp ut0 vt0) (csel ut0 ut0 vt0 (:? le)) ; ut0 := min(ut0, vt0)
 ;;; after which the equality exit is just the speculative (lsl arg_z u ut0)
 ;;; already in flight, and PPC's second sld + blr collapse into one (ret).
 ;;; VETTED equivalent: PPC's ut0 is read ONLY by that speculative shift and
 ;;; by the blelr it resolves, vt0 ONLY by the else-shift, and neither is
 ;;; written inside the loop — so pre-selecting the min changes the selection
-;;; POINT, not the value.  cmpw is a 32-bit compare but both operands are
+;;; POINT, not the value. cmpw is a 32-bit compare but both operands are
 ;;; ctz+3 ∈ [3,66], so the 64-bit cmp is equivalent.
 ;;;
 ;;; ctz idiom: PPC (neg temp u) (and temp temp u) (cntlzd) (subfic 63) =
-;;; 63 - clz(u & -u) = ctz(u).  Ported literally, with (- 63 clz) as
+;;; 63 - clz(u & -u) = ctz(u). Ported literally, with (- 63 clz) as
 ;;; (eor #63) — equal for clz ∈ [0,63], which holds because u & -u is a
-;;; single set bit for u ≠ 0.  Matt uses the same trick in %fixnum-intlen.
+;;; single set bit for u ≠ 0. Matt uses the same trick in %fixnum-intlen.
 ;;;
 ;;; Flag safety (verified against his assembler): lsl/lsr with a register
 ;;; or immediate count are the lslv/lsrv/UBFM aliases (arm64-asm.lisp:
@@ -898,8 +898,8 @@
     (lsl arg_z u ut0)                      ; ppc:378 (sld) — speculative
     (b.gt @u>v)                            ; ppc:379 (bgt cr0)
     (b.lt @u<v)                            ; ppc:380 (blt cr0)
-    ;; u = v: arg_z already holds u << min(ut0,vt0), covering both
-    ;; ppc:381 (blelr cr2) and ppc:382-383 (sld arg_z u vt0 / blr).
+ ;; u = v: arg_z already holds u << min(ut0,vt0), covering both
+ ;; ppc:381 (blelr cr2) and ppc:382-383 (sld arg_z u vt0 / blr).
     (ret)
     @u>v
     (sub u u v)                            ; ppc:385

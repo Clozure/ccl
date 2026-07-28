@@ -11,25 +11,25 @@
  * Matt's arm64-constants.s ALREADY includes the shared generator
  * (vendor lisp_globals.s via `include(lisp_globals.s)' with
  * lisp_globals_limit = -node_size and nrs_origin = node_size), so the
- * SYMBOLIC layout exists in his m4 layer.  This file provides:
- *   (a) cpp/GNU-as equates for the subset our spentry drafts reference,
- *       mirroring the canonical indices in lisp-kernel/lisp_globals.h
- *       (which is arch-independent and present verbatim in his tree), and
- *   (b) the AArch64 ACCESS MACROS: everything is rnil-relative.  rnil
- *       holds nil_value = <static nil address> + fulltag_nil, and the
- *       kernel globals live at negative node offsets below the untagged
- *       nil address, exactly as on every other CCL target.  ARM64 has no
- *       cheap absolute addressing, but rnil is pinned - so:
- *           global N   is at   [rnil - (N*node_size + fulltag_nil)]
- *       (the -fulltag_nil bias makes the address 8-aligned).
+ * SYMBOLIC layout exists in his m4 layer. This file provides:
+ * (a) cpp/GNU-as equates for the subset our spentry drafts reference,
+ * mirroring the canonical indices in lisp-kernel/lisp_globals.h
+ * (which is arch-independent and present verbatim in his tree), and
+ * (b) the AArch64 ACCESS MACROS: everything is rnil-relative. rnil
+ * holds nil_value = <static nil address> + fulltag_nil, and the
+ * kernel globals live at negative node offsets below the untagged
+ * nil address, exactly as on every other CCL target. ARM64 has no
+ * cheap absolute addressing, but rnil is pinned - so:
+ * global N is at [rnil - (N*node_size + fulltag_nil)]
+ * (the -fulltag_nil bias makes the address 8-aligned).
  *
  * RATIFY-GEOMETRY: for nrs, Matt's placeholder `nrs_origin = node_size'
  * is INCONSISTENT with his own canonical-t-value: with
  * canonical-nil = #x13000+fulltag_nil and canonical-t = #x13020+
  * fulltag_symbol (arm64-arch.lisp:184-185), T's symbol object begins at
  * untagged-nil + 32, i.e. nrs_origin MUST be 32 (and nrs_symbol_fulltag
- * must be fulltag_symbol) for nrs.tsym to BE canonical T.  The equates
- * below use origin 32; then  rnil + t_offset == rnil + nrs.tsym  holds
+ * must be fulltag_symbol) for nrs.tsym to BE canonical T. The equates
+ * below use origin 32; then rnil + t_offset == rnil + nrs.tsym holds
  * identically (28 = 32 + 7 - 11).
  */
 

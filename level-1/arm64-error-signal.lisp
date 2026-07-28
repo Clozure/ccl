@@ -5,24 +5,24 @@
 ;;; arm64-error-signal.lisp — %XERR-DISP (the nrs_ERRDISP callback) for
 ;;; Matt Emerson's upstream ARM64 (low-tag) design, linuxarm64 only.
 ;;;
-;;; The kernel side is upstream-port/lisp-kernel/arm64-exceptions.c
+;;; The kernel side is arm64-exceptions.c
 ;;; handle_error → callback_for_trap(errdisp, xp, where, errnum, rb,
 ;;; continuable): the same PPC-shaped pre-decoded contract as the donor
 ;;; (errnum-style errors come here; raw trap words go to XCMAIN in
 ;;; arm64-trap-support.lisp).
 ;;;
 ;;; Deviations from the donor (cited in place):
-;;;  - PPC's FPU-exception branch (ppc:67-99) back-decodes a PPC FP
-;;;    instruction; AArch64 FP exceptions are untrapped on shipping
-;;;    cores (arm64-exceptions.c handle_sigfpe) and the fpu uuo route
-;;;    goes to XCMAIN, so the branch has no analog here.
-;;;  - handle-udf-call's PC redirect requires the kernel NOT to bump
-;;;    the resume PC (PPC kernel: ppc-exceptions.c:1424-1429).  The
-;;;    arm64 kernel's uuo_unary_udf_call case gains the same bump
-;;;    suppression; until the next ARM kernel rebuild picks that up,
-;;;    the redirect lands 4 bytes past the code-vector entry (path is
-;;;    only reachable by continuing from an undefined-function-call
-;;;    restart).
+;;; - PPC's FPU-exception branch (ppc:67-99) back-decodes a PPC FP
+;;; instruction; AArch64 FP exceptions are untrapped on shipping
+;;; cores (arm64-exceptions.c handle_sigfpe) and the fpu uuo route
+;;; goes to XCMAIN, so the branch has no analog here.
+;;; - handle-udf-call's PC redirect requires the kernel NOT to bump
+;;; the resume PC (PPC kernel: ppc-exceptions.c:1424-1429). The
+;;; arm64 kernel's uuo_unary_udf_call case gains the same bump
+;;; suppression; until the next ARM kernel rebuild picks that up,
+;;; the redirect lands 4 bytes past the code-vector entry (path is
+;;; only reachable by continuing from an undefined-function-call
+;;; restart).
 
 (in-package "CCL")
 
@@ -51,7 +51,7 @@
                              (%err-disp-internal errnum nil frame-ptr))
                             ((logtest errnum arch::error-type-error)
                              (funcall err-fn
-                                      #.(car (rassoc 'type-error *kernel-simple-error-classes*))
+ #.(car (rassoc 'type-error *kernel-simple-error-classes*))
                                       (list rb-value (logandc2 errnum arch::error-type-error))
                                       frame-ptr))
                             ((eql errnum arch::error-udf)
@@ -70,20 +70,20 @@
                             ((eql errnum arch::error-udf-call)
                              (return-from %err-disp
                                (handle-udf-call xp frame-ptr)))
-                            ;; arm64:: (not arch::): the frozen cross-host
-                            ;; image bakes arch.lisp, so a NEW arch::
-                            ;; constant reads as an undeclared free variable
-                            ;; and the fasl's ARCH-package symbol kills cold
-                            ;; load ($XNOPKG "ARCH" -- observed 16m45b).
+ ;; arm64:: (not arch::): the frozen cross-host
+ ;; image bakes arch.lisp, so a NEW arch::
+ ;; constant reads as an undeclared free variable
+ ;; and the fasl's ARCH-package symbol kills cold
+ ;; load ($XNOPKG "ARCH" -- observed ).
                             ((eql errnum arm64::error-apply-macro-or-special)
-                             ;; Funcalled a symbol naming a macro/special
-                             ;; operator (the fcell 2-elt vector's slot 0 =
-                             ;; %macro-code% fired uuo_error_apply_macro;
-                             ;; rb = fname).  PPC delivers exactly
-                             ;; ($XNOTFUN fname args) via ksignalerr
-                             ;; (xppcfasload.lisp:37); condition class
-                             ;; call-special-operator-or-macro, a subclass
-                             ;; of undefined-function.
+ ;; Funcalled a symbol naming a macro/special
+ ;; operator (the fcell 2-elt vector's slot 0 =
+ ;; %macro-code% fired uuo_error_apply_macro;
+ ;; rb = fname). PPC delivers exactly
+ ;; ($XNOTFUN fname args) via ksignalerr
+ ;; (xppcfasload.lisp:37); condition class
+ ;; call-special-operator-or-macro, a subclass
+ ;; of undefined-function.
                              (%err-disp-internal $xnotfun
                                                  (list (maybe-setf-name rb-value)
                                                        (xp-argument-list xp))
@@ -106,7 +106,7 @@
                 (setf (xp-gpr-lisp xp rb) res) ; munge register for continuation
                 )))))))
 
-;;; ppc:110-126.  The trampoline function f is entered by writing its
+;;; ppc:110-126. The trampoline function f is entered by writing its
 ;;; code vector (function slot 0) into the resume PC, exactly the value
 ;;; _SPjmpnfn branches through (spentry-D-call-builtins.s jmpnfn).
 (defun handle-udf-call (xp frame-ptr)
@@ -123,14 +123,14 @@
           (xp-gpr-lisp xp arm64::nargs) 1
           (xp-gpr-lisp xp arm64::arg_z) values
           (xp-gpr-lisp xp arm64::nfn) f)
-    ;; handle_uuo() (in the lisp kernel) must not bump the PC here —
-    ;; see the header deviation note.
-    ;; Since the fulltag-function removal (patch 0055) a function IS its
-    ;; misc-tagged uvector; %function-to-function-vector is
-    ;; identity-with-typecheck.
+ ;; handle_uuo() (in the lisp kernel) must not bump the PC here —
+ ;; see the header deviation note.
+ ;; Since the fulltag-function removal (patch 0055) a function IS its
+ ;; misc-tagged uvector; %function-to-function-vector is
+ ;; identity-with-typecheck.
     (setf (xp-pc-lisp xp) (uvref (%function-to-function-vector f) 0))))
 
-;;; ppc:133-153.  rb is the register number of the stack that
+;;; ppc:133-153. rb is the register number of the stack that
 ;;; overflowed: the kernel's Rsp selector 31 for the control stack
 ;;; (arm64-exceptions.c:112 — NOT arm64::sp, which is a *registers*
 ;;; table index), else vsp/tsp GPR numbers.

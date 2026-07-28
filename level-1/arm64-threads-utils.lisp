@@ -1,7 +1,7 @@
 ;;; -*- Mode: Lisp; Package: CCL -*-
 ;;; ARM64-SPECIFIC — upstream (Matt Emerson low-tag) lane file; the tag
 ;;; geometry mirrors x8664, so the donor is level-1/x86-threads-utils.lisp
-;;; (#+x8664-target branches), not PPC64.  Declared doctrine exception:
+;;; (#+x8664-target branches), not PPC64. Declared doctrine exception:
 ;;; PPC64's file assumes PPC tag/register models with no analog here.
 ;;;
 ;;; arm64-threads-utils.lisp — per-arch threads/frames predicates for Matt
@@ -10,15 +10,15 @@
 ;;; Donor: level-1/x86-threads-utils.lisp (#+x8664-target branches) — the
 ;;; arm64 tag geometry mirrors x8664's (5 header classes split across
 ;;; fulltag-immheader-0/1/2 + fulltag-nodeheader-0/1; dedicated symbol and
-;;; function pointer fulltags), cited "; x86:NNN".  Deviations:
-;;;  - NO tagged-return-address (TRA) cases: AArch64 return addresses live
-;;;    in lr/stack frames, untagged, as on PPC (x8664's fulltag-tra-0/1
-;;;    clauses in valid-header-p/bogus-thing-p have no analog).
-;;;  - catch-frame-sp is the PPC shape (ppc-threads-utils.lisp:84): catch
-;;;    frames are misc-tagged uvectors on the temp stack with an explicit
-;;;    csp slot (kernel ground truth: spentry-C-bind-catch-throw.s
-;;;    _structf catch_frame + mkcatch), not x8664's stack-consed
-;;;    rbp-cell frame.
+;;; function pointer fulltags), cited "; x86:NNN". Deviations:
+;;; - NO tagged-return-address (TRA) cases: AArch64 return addresses live
+;;; in lr/stack frames, untagged, as on PPC (x8664's fulltag-tra-0/1
+;;; clauses in valid-header-p/bogus-thing-p have no analog).
+;;; - catch-frame-sp is the PPC shape (ppc-threads-utils.lisp:84): catch
+;;; frames are misc-tagged uvectors on the temp stack with an explicit
+;;; csp slot (kernel ground truth: spentry-C-bind-catch-throw.s
+;;; _structf catch_frame + mkcatch), not x8664's stack-consed
+;;; rbp-cell frame.
 ;;;
 ;;; The lfun-bits &optional fixups are the PPC file's canonical four
 ;;; (ppc-threads-utils.lisp:25-55; the x86 file duplicates the first pair).
@@ -26,20 +26,20 @@
 (in-package "CCL")
 
 ;;; %frame-backlink and lisp-frame-p live in lib/arm64-backtrace.lisp
-;;; (16m17): they need the fake-stack-frame accessor macros at compile
+;;; (): they need the fake-stack-frame accessor macros at compile
 ;;; time, and the cross gate compiles each file in a host image that
-;;; only gets those macros inside that compile unit.  (The x86-donor
+;;; only gets those macros inside that compile unit. (The x86-donor
 ;;; versions that used to sit here checked the VALUE stack — an x8664
 ;;; frame model; this design's lisp frames are marker frames on the
 ;;; CONTROL stack, kernel arm64-gc.c mark_cstack_area.)
 
 ;;; %%frame-backlink (one step toward the parent/older frame) is a
 ;;; LEVEL-0 LAP primitive (level-0/ARM64/arm64-def.lisp:~300, promoted
-;;; 16m21).  Under the DECIDED cstack-walk design (Option A,
+;;; ). Under the DECIDED cstack-walk design (Option A,
 ;;; comms/ARM64-CSTACK-WALK-DECISION.md), the cstack is a HOMOGENEOUS
 ;;; chain of 32-byte marker frames (nfp + stack-cons live on the TSP),
 ;;; so the walk is a plain +32 stride — NOT the ARM32-twin heterogeneous
-;;; ivector-skip decode (Option B, explicitly not chosen).  It carries a
+;;; ivector-skip decode (Option B, explicitly not chosen). It carries a
 ;;; marker@0 rather than a stored backlink, unlike PPC's one-load
 ;;; %%frame-backlink (ppc-def.lisp:227-230).
 
@@ -114,18 +114,18 @@
     (declare (fixnum fulltag))
     (case fulltag
       ((#.arm64::fulltag-even-fixnum
-        #.arm64::fulltag-odd-fixnum
-        #.arm64::fulltag-single-float
-        #.arm64::fulltag-imm-0
-        #.arm64::fulltag-imm-1)
+ #.arm64::fulltag-odd-fixnum
+ #.arm64::fulltag-single-float
+ #.arm64::fulltag-imm-0
+ #.arm64::fulltag-imm-1)
        t)
-      ;; (fulltag-function removed, patch 0055: functions are ordinary
-      ;;  miscobjs and take the fulltag-misc clause below.)
+ ;; (fulltag-function removed, patch 0055: functions are ordinary
+ ;; miscobjs and take the fulltag-misc clause below.)
       (#.arm64::fulltag-symbol
        (= arm64::subtag-symbol (typecode (%symptr->symvector thing))))
       (#.arm64::fulltag-misc
        (valid-subtag-p (typecode thing)))
-      ;; x8664's fulltag-tra-0/tra-1 clauses have no arm64 analog.
+ ;; x8664's fulltag-tra-0/tra-1 clauses have no arm64 analog.
       (#.arm64::fulltag-cons t)
       (#.arm64::fulltag-nil (null thing))
       (t nil))))
@@ -142,7 +142,7 @@
                       (and (or (typep x 'function)
                                (typep x 'gvector))
                            (on-any-tsp-stack x))
-                      ;; x8664's tag-tra clause has no arm64 analog.
+ ;; x8664's tag-tra clause has no arm64 analog.
                       (and (typep x 'ivector)
                            (on-any-csp-stack x))
                       (%heap-ivector-p x))

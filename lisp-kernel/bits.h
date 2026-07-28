@@ -26,12 +26,12 @@ typedef natural *bitvector;
 #if WORD_SIZE == 64
 #define bitmap_shift 6
 #define BIT0_MASK 0x8000000000000000ULL
-#define ALL_ONES  0xffffffffffffffffULL
+#define ALL_ONES 0xffffffffffffffffULL
 #define NATURAL1 1ULL
 #else
 #define bitmap_shift 5
 #define BIT0_MASK 0x80000000U 
-#define ALL_ONES  0xFFFFFFFFU
+#define ALL_ONES 0xFFFFFFFFU
 #define NATURAL1 1U
 #endif
 

@@ -54,8 +54,8 @@
 
 /* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame
  * (ground truth: his popj vinsn, compiler/ARM64/arm64-vinsns.lisp:61-67,
- * + subtag_lisp_frame_marker, arm64-constants.h:177).  Same equates as
- * spentry-A:55-59 / spentry-E.  Frame builds store #lisp_frame_marker at
+ * + subtag_lisp_frame_marker, arm64-constants.h:177). Same equates as
+ * spentry-A:55-59 / spentry-E. Frame builds store #lisp_frame_marker at
  * slot 0; there is NO backlink word. */
 .set lisp_frame.marker, 0
 .set lisp_frame.savevsp, 8
@@ -64,7 +64,7 @@
 .set lisp_frame.size, 32
 
 /* symbol.fcell / function codevector: slot order from ppc-constants64.s
- * :237-245/:223-226.  Symbols keep their dedicated pointer tag; a function
+ * :237-245/:223-226. Symbols keep their dedicated pointer tag; a function
  * is an ordinary miscobj (fulltag_function removed, patch 0055), so its
  * codevector slot sits at misc_data_offset (-4). */
 .set symbol.fcell, (3*node_size - fulltag_symbol)
@@ -75,7 +75,7 @@
 
 /* T = rnil + t_offset.  Derived from Matt's arm64-arch.lisp:184-188:
  * canonical-nil-value = #x13000+fulltag_nil, canonical-t-value =
- * #x13020+fulltag_symbol, t-offset = their difference (= 0x1c).  The
+ * #x13020+fulltag_symbol, t-offset = their difference (= 0x1c). The
  * absolute addresses are provisional ("xxx nil can't be a constant") but
  * the OFFSET is the ratified geometry: T is the symbol after NIL's
  * cons/symbol pun cell. */
@@ -98,11 +98,11 @@
 .set bitmap_shift, 6
 
 /* UUO / trap encodings.  CANONICAL: arm64-asm.lisp:435-450 (Matt's active
- * layer) = `udf #imm16`, low 3 bits = format.  fmt 3 = unary-misc is a
+ * layer) = `udf #imm16`, low 3 bits = format. fmt 3 = unary-misc is a
  * PROPOSED extension (reg in 7:3, sub in 15:8: 0 not_callable,
  * 1 no_throw_tag, 2 tlb_too_small, 3 unbound, >= 4 = errors.s errnum —
  * not_list below; full namespace doc: spentry-A's trap block).
- * arm64-exceptions.c must decode.  gpr numbers for the registers here. */
+ * arm64-exceptions.c must decode. gpr numbers for the registers here. */
 /* trap_unless_list's trap (ppc-macros.s): object in \gpr is not a list. */
 
 /* discard_lisp_frame: pop one lisp frame from sp. */
@@ -111,7 +111,7 @@
 .endm
 
 /* jump_builtin: dispatch to Lisp builtin handler via %builtin-functions%
- * vector.  Macro equivalent of PPC64 jump_builtin (ppc-spentry.s:37-42);
+ * vector. Macro equivalent of PPC64 jump_builtin (ppc-spentry.s:37-42);
  * nrs/globals idiom per arm64-globals-proposed.s. */
 .macro jump_builtin idx, nargs_count
         ref_nrs_value fname, builtin_functions
@@ -138,12 +138,12 @@ spentry jmpnfn
 endsp jmpnfn
 
 /* ported from ppc-spentry.s:51-52 (PPC64 branch: do_funcall macro,
- * ppc-macros.s).  Call temp0 if it is a symbol or a function, else trap.
+ * ppc-macros.s). Call temp0 if it is a symbol or a function, else trap.
  * PPC dispatches on the TYPECODE (subtag_symbol / subtag_function);
  * here symbols keep a dedicated pointer fulltag, while a function is an
  * ordinary miscobj (fulltag_function removed, patch 0055), so: symbol
  * fulltag -> fcell, misc fulltag + header subtag_function -> call, else
- * trap.  The SYMBOL path jumps through the fcell object's slot 0
+ * trap. The SYMBOL path jumps through the fcell object's slot 0
  * UNCHECKED, exactly like PPC64: a real function's slot 0 is its
  * codevector, and the macro/special-op/udf fcell simple-vectors carry
  * %macro-code%/%udf-code% at slot 0, which signal. */
@@ -175,7 +175,7 @@ endsp funcall
  * dnode math on (arg_y - ref_base), set bit in refbits + ephemeral_refidx
  * with ldxr/stxr) needs the ref_base/oldspace_dnode_count/refbits/
  * ephemeral_refidx GLOBALS, which have no ARM64 anchor yet - the same
- * open idiom as the spentry-B barrier sites.  #error so a build cannot
+ * open idiom as the spentry-B barrier sites. #error so a build cannot
  * silently drop the memoization (young-object refs would be lost by the
  * EGC). */
 /* pc_luser_xp window labels (ppc-spentry.s:480-486 places egc_rplaca at
@@ -338,7 +338,7 @@ spentry nthvalue
 endsp nthvalue
 
 /* ported from ppc-spentry.s:1270-1276 (PPC64 branch).
- * Come here with saved context on top of stack.  Tail into the shared
+ * Come here with saved context on top of stack. Tail into the shared
  * return_values entry exported by spentry-C (_spentry(values):
  * contract there is temp4 = return pc, temp0 = entry vsp). */
 /* pmcl-kernel.c:2110 takes &nvalret for lisp_global(LEXPR_RETURN)
@@ -357,7 +357,7 @@ endsp nvalret
 
 /* ported from ppc-spentry.s:1282-1293 (PPC64 branch).
  * Provide nil defaults for missing &optional args; imm0 = (fixnum) upper
- * limit on required + &optional count.  nargs preserved.
+ * limit on required + &optional count. nargs preserved.
  * ARM64-DEVIATION: PPC parks nil in imm5, but Matt's imm5 ALIASES nargs
  * (arm64-constants.h:45-46, the ledger's imm5/x5-vs-x6 item) - use temp0.
  * The nargs-vs-imm0 compare is redone AFTER the vpush block (whose cmp
@@ -438,7 +438,7 @@ endsp heap_rest_arg
 
 /* ported from ppc-spentry.s:1358-1373 (PPC64 branch).
  * Like heap_rest_arg, but imm0 = (fixnum) count of required args to
- * leave on the vstack.  Flags note as heap_rest_arg. */
+ * leave on the vstack. Flags note as heap_rest_arg. */
 spentry req_heap_rest_arg
         /* vpush_argregs */
         cbz nargs, 2f
@@ -463,7 +463,7 @@ spentry req_heap_rest_arg
 endsp req_heap_rest_arg
 
 /* ported from ppc-spentry.s:1376-1390 (PPC64 branch).
- * As above, argregs already vpushed by caller.  Flags note as
+ * As above, argregs already vpushed by caller. Flags note as
  * heap_rest_arg. */
 spentry heap_cons_rest_arg
         sub imm1, nargs, imm0
@@ -520,15 +520,15 @@ endsp ksignalerr
 /* ported from ppc-spentry.s:2076-2166 (PPC64 branch).
  * Prepend all but the first two (closure code, fn) and last two (name,
  * lfbits) elements of nfn (the closure vector) to the arglist, then call
- * the function in slot 1.  PPC keeps two condition registers live (cr0 =
+ * the function in slot 1. PPC keeps two condition registers live (cr0 =
  * nargs vs nargregs, cr1 = nargs vs 1); flattened here with re-compares
  * placed so no intervening instruction sets NZCV (ldr/str/add/sub/mov are
- * all non-flag-setting).  Labels are .L-local to avoid numeric-label
+ * all non-flag-setting). Labels are .L-local to avoid numeric-label
  * leaks across this long body. */
 spentry call_closure
         /* The closure arrives misc-tagged (fulltag_function removed,
-         * patch 0055), and this body addresses it misc-relative (PPC
-         * shape) - no retag needed, exactly as on PPC. */
+ * patch 0055), and this body addresses it misc-relative (PPC
+ * shape) - no retag needed, exactly as on PPC. */
         /* ppc:2079-2080 vector_length(imm0,nfn,imm0) - 4 slots overhead */
         ldr imm0, [nfn, #misc_header_offset]
         lsr imm0, imm0, #num_subtag_bits
@@ -620,7 +620,7 @@ endsp call_closure
 
 /* ported from ppc-spentry.s:2173-2202: the PPC64 branch of getxlong is
  * EMPTY (the __ifdef(`PPC64') arm has no code - only the PPC32 arm has a
- * body), i.e. this subprim is unreferenced on 64-bit targets.  Ported as
+ * body), i.e. this subprim is unreferenced on 64-bit targets. Ported as
  * a loud trap, exactly like the trap-only PPC64 entries in spentry-E
  * (ffcallX/callbackX). */
 spentry getxlong
@@ -631,8 +631,8 @@ endsp getxlong
 
 /* ported from ppc-spentry.s:2209-2252 (PPC64 branch).
  * Everything up to the last arg has been vpushed; nargs = boxed count of
- * things already pushed.  Spread the list in arg_z, then set arg_x/y/z +
- * nargs as for a normal call.  ppc2-invoke-fn assumes temp1 preserved.
+ * things already pushed. Spread the list in arg_z, then set arg_x/y/z +
+ * nargs as for a normal call. ppc2-invoke-fn assumes temp1 preserved.
  * PPC keeps cr0 (nil check) and cr1 (cons check) live; flattened with
  * the cons check at loop top and the nil check at loop bottom. */
 spentry spreadargz
@@ -864,10 +864,10 @@ spentry builtin_times
 
         /* Check if result fits in fixnum.  GC SAFETY (Matt 2026-07-11):
            imm scratch, never a node reg.
-           16m5t FIX: the old single test `asr imm1,#61 == smulh` accepted
+            FIX: the old single test `asr imm1,#61 == smulh` accepted
            s62 products; fixnums are s61 (value bits = 64-3).  2^60 then
            boxed to 2^63 (= -2^60), and -2^61 boxed to EXACTLY 0 -- the
-           *base-power* doubling loop wedged at 0 (l0-int.lisp:155 spin).
+ *base-power* doubling loop wedged at 0 (l0-int.lisp:155 spin).
            PPC gets this free by multiplying BOXED*unboxed (mulldo. OV ==
            fixnum overflow, ppc:5548); with both operands unboxed we need
            BOTH: product fits s64 (smulh == sign of low) AND low fits s61
@@ -1128,7 +1128,7 @@ endsp builtin_seqtype
 
 /* ported from ppc-spentry.s:5786-5802 (PPC64 branch).
  * PPC keeps three CRs live (cr0 = car match, cr1 = tail nil, cr2 = pair
- * nil); flattened with one compare per branch.  trap_unless_list is only
+ * nil); flattened with one compare per branch. trap_unless_list is only
  * reached with a non-nil operand, so the cons-tag check suffices (on
  * Matt's design nil has its own fulltag, arm64-constants.h:94). */
 spentry builtin_assq
@@ -1157,7 +1157,7 @@ spentry builtin_assq
 endsp builtin_assq
 
 /* ported from ppc-spentry.s:5804-5815 (PPC64 branch); flag/trap notes as
- * builtin_assq.  Returns the tail of arg_z whose car is eq to arg_y. */
+ * builtin_assq. Returns the tail of arg_z whose car is eq to arg_y. */
 spentry builtin_memq
         cmp arg_z, rnil                 /* ppc:5805 cmpri cr1              */
         b 2f                            /* ppc:5806                        */
@@ -1179,7 +1179,7 @@ endsp builtin_memq
 
 /* ported from ppc-spentry.s:5270-5274 (PPC64 branch)
  * callbuiltin: imm0 = boxed index into %builtin-functions%; dispatch to that
- * symbol's function definition.  nargs already set by caller. */
+ * symbol's function definition. nargs already set by caller. */
 spentry callbuiltin
         /* ppc:5271 ref_nrs_value(fname,builtin_functions) */
         /* ppc:5272 la imm0,misc_data_offset(imm0) -- add data bias to index */
@@ -1275,20 +1275,20 @@ spentry builtin_logbitp
         cmp imm1, #tag_fixnum
         b.ne 1f
         /* Bail if arg_y >= logbitp_max_bit (unsigned compare already set above;
-         * but we clobbered flags with the tag checks -- recompute) */
+ * but we clobbered flags with the tag checks -- recompute) */
         cmp arg_y, #(logbitp_max_bit << fixnumshift)
         b.hs 1f
         /* ppc:5830 unbox_fixnum(imm0,arg_y) */
         asr imm0, arg_y, #fixnumshift
         /* ppc:5831 subfic imm0,imm0,logbitp_max_bit -> compute shift amount */
         /* PPC64: rldcl imm0,arg_z,imm0,63 = rotate arg_z left by imm0, clear
-         * bits 0-62, leaving only bit 63 (the target bit rotated to LSB).
-         * ARM64 equivalent: shift arg_z right by (logbitp_max_bit - imm0)
-         * positions within the fixnum bits, then AND #1. But PPC's subfic
-         * computes (logbitp_max_bit - bit_index), so after unboxing arg_z we
-         * right-shift by that amount. Actually simpler: just shift arg_z right
-         * by the bit position and mask. arg_z is a tagged fixnum so bit N of
-         * the fixnum value is at position N+fixnumshift in the register. */
+ * bits 0-62, leaving only bit 63 (the target bit rotated to LSB).
+ * ARM64 equivalent: shift arg_z right by (logbitp_max_bit - imm0)
+ * positions within the fixnum bits, then AND #1. But PPC's subfic
+ * computes (logbitp_max_bit - bit_index), so after unboxing arg_z we
+ * right-shift by that amount. Actually simpler: just shift arg_z right
+ * by the bit position and mask. arg_z is a tagged fixnum so bit N of
+ * the fixnum value is at position N+fixnumshift in the register. */
         add imm0, imm0, #fixnumshift    /* adjust for tag bits */
         lsr imm0, arg_z, imm0           /* shift target bit to bit 0 */
         and imm0, imm0, #1              /* isolate the bit */
@@ -1328,7 +1328,7 @@ spentry builtin_logand
 endsp builtin_logand
 
 /* ported from ppc-spentry.s:5871-5990 (PPC64 branch)
- * builtin_ash: arithmetic shift.  Positive arg_z = left shift, negative = right.
+ * builtin_ash: arithmetic shift. Positive arg_z = left shift, negative = right.
  * PPC64 branch only (5872-5930). */
 spentry builtin_ash
         /* ppc:5873 cmpdi cr1,arg_z,0 */
@@ -1420,8 +1420,8 @@ ash_shift64:
         mov imm0, imm1                  /* ppc:5915 mr imm0,imm1 */
         mov imm1, #0                    /* ppc:5916 li imm1,0 */
         /* ppc:5917-5918: beq _SPmakes128 / b _SPmakeu128
-         * PPC branches on cr0.eq from cntlzd. -- this reflects whether
-         * original value was negative. */
+ * PPC branches on cr0.eq from cntlzd. -- this reflects whether
+ * original value was negative. */
         cmp imm0, #0
         b.lt _SPmakes128
         b _SPmakeu128
@@ -1439,18 +1439,18 @@ spentry builtin_negate
         cmp imm0, #tag_fixnum
         b.ne 1f
         /* ppc:5995 nego. arg_z,arg_z -- negate with overflow detect.
-         * ARM64: negs sets NZCV; V=1 iff overflow (arg_z == INT64_MIN-equivalent,
-         * i.e., most-negative-fixnum). */
+ * ARM64: negs sets NZCV; V=1 iff overflow (arg_z == INT64_MIN-equivalent,
+ * i.e., most-negative-fixnum). */
         negs arg_z, arg_z
         /* ppc:5996 bnslr+ -- return if no overflow */
         b.vc 2f
         /* Overflow: arg_z holds the WRAPPED negation of most-negative-fixnum.
-         * ppc:5997 mtxer rzero (clear OV -- no ARM64 equivalent needed)
-         * ppc:5998-6004: unbox and store as a two-digit bignum with the sign
-         * bit flipped (PPC's rotldi+xoris = flip bit 2^63 of the unboxed
-         * value; the wrapped unboxed result is -2^60 but the true value is
-         * +2^60, and eor #0xe000... corrects the top bits).  This is EXACTLY
-         * Matt's own _SPfix_overflow body (arm64-spentry.s:10-17) -- mirror it. */
+ * ppc:5997 mtxer rzero (clear OV -- no ARM64 equivalent needed)
+ * ppc:5998-6004: unbox and store as a two-digit bignum with the sign
+ * bit flipped (PPC's rotldi+xoris = flip bit 2^63 of the unboxed
+ * value; the wrapped unboxed result is -2^60 but the true value is
+ * +2^60, and eor #0xe000... corrects the top bits). This is EXACTLY
+ * Matt's own _SPfix_overflow body (arm64-spentry.s:10-17) -- mirror it. */
         asr imm0, arg_z, #fixnumshift          /* ppc:5998 unbox_fixnum */
         eor imm0, imm0, #0xe000000000000000    /* ppc:6001-6002 sign-flip trick */
         mov imm1, #two_digit_bignum_header     /* ppc:6000 */
@@ -1539,16 +1539,16 @@ endsp builtin_aset1
  * breakpoint: enter the debugger.
  * PPC: tw 28,sp,sp (unconditional trap).
  *
- * ARM64: uuo_debug_trap (arm64-uuo.s: uuo_misc 3), NOT `brk #N'.  This
+ * ARM64: uuo_debug_trap (arm64-uuo.s: uuo_misc 3), NOT `brk #N'. This
  * carried an #error and a "brk #<encoding> TBD" note for far too long; the
  * encoding was never undecided, it was already defined upstream and simply
- * not looked for.  Two things made it stay wrong: `breakpoint' is not
+ * not looked for. Two things made it stay wrong: `breakpoint' is not
  * reached by our boot or test path, so nothing ever failed; and the note
  * assumed brk, which is the same mistake patch 0047 swept out of 61 other
  * sites -- brk does NOT satisfy the kernel's IS_UUO test
  * (`((i) & 0xffff0000) == 0', arm64-exceptions.c:175), so a brk here would
  * have reached handle_uuo's caller as an unrecognized SIGTRAP rather than
- * as a debugger entry.  udf, which is what uuo_misc emits, does satisfy it.
+ * as a debugger entry. udf, which is what uuo_misc emits, does satisfy it.
  * The macro reaches us via arm64-macros.s:4. */
 spentry breakpoint
         mov x0, #0                      /* ppc:6044 li r3,0 */
@@ -1638,7 +1638,7 @@ spentry mvpasssym
         add imm0, imm0, nargs          /* ppc:6892 */
 1:
         /* ppc:6894 build_lisp_frame(fn,loc_pc,imm0) -- MARKER frame
-         * (Matt's popj layout; no backlink word). */
+ * (Matt's popj layout; no backlink word). */
         sub sp, sp, #lisp_frame.size
         mov temp0, #lisp_frame_marker
         str temp0, [sp, #lisp_frame.marker]
@@ -1656,14 +1656,14 @@ endsp mvpasssym
 
 /* NOTES */
 
-/* OPEN #error SITES (deduped in upstream-port/MISSING-CONSTANTS-RATIFY.md):
+/* OPEN #error SITES (deduped in MISSING-CONSTANTS-RATIFY.md):
  * - breakpoint trap encoding (this file's only remaining #error) --
- *   Matt's-call ratify item.
+ * Matt's-call ratify item.
  * RESOLVED since first draft: NRS/lisp_globals ref idiom
  * (arm64-globals-proposed.s -- jump_builtin, callbuiltin, ksignalerr,
  * reset, mvpass all real now), EGC write-barrier globals (rplaca/rplacd),
  * trap encodings (canonical arm64-uuo.s scheme + PROPOSED extensions; see
- * the trap block above and spentry-A's namespace doc).  All other former
+ * the trap block above and spentry-A's namespace doc). All other former
  * MISSING-CONSTANT holes are derived locally in the header block above
  * (symbol.fcell, _function.codevector, t_offset, lisp_frame marker layout,
  * vectorH.logsize, XSTKOVER, XNOSPREAD, error_object_not_list). */
@@ -1671,47 +1671,47 @@ endsp mvpasssym
 /* PORT-TODO items requiring design decisions or missing mechanisms:
  *
  * 1. fn-volatile protocol (HIGH PRIORITY): PPC64 fn is nonvolatile (callee-saved),
- *    but ARM64 fn=x7 is VOLATILE per upstream design. Every place PPC64 code depends
- *    on fn surviving a BL needs a protocol decision - either:
- *    a) Save/restore fn around calls (where?)
- *    b) Change calling convention to make fn nonvolatile (conflicts with AAPCS64?)
- *    c) Use a different register for fn in ARM64
- *    Affected subprims: jmpsym, funcall, mvpass, tfuncall*, tcall*
+ * but ARM64 fn=x7 is VOLATILE per upstream design. Every place PPC64 code depends
+ * on fn surviving a BL needs a protocol decision - either:
+ * a) Save/restore fn around calls (where?)
+ * b) Change calling convention to make fn nonvolatile (conflicts with AAPCS64?)
+ * c) Use a different register for fn in ARM64
+ * Affected subprims: jmpsym, funcall, mvpass, tfuncall*, tcall*
  *
  * 2. .SPbuiltin dispatch mechanism: RESOLVED -- jump_builtin macro defined
- *    locally (line ~122), fully real via ref_nrs_value
- *    (arm64-globals-proposed.s). All 12 prior PORT-TODO dispatcher sites
- *    replaced with jump_builtin invocations.
+ * locally (line ~122), fully real via ref_nrs_value
+ * (arm64-globals-proposed.s). All 12 prior PORT-TODO dispatcher sites
+ * replaced with jump_builtin invocations.
  *
  * 3. EGC write barrier: rplaca/rplacd have complex refbits/ephemeral_refidx
- *    manipulation that requires access to global state. Need to verify the
- *    mechanism in upstream ARM64.
+ * manipulation that requires access to global state. Need to verify the
+ * mechanism in upstream ARM64.
  *
  * 4. keyword_args / call_closure: These have very complex stack manipulation
- *    that needs careful line-by-line porting with full understanding of the
- *    keyword binding protocol and closure layout.
+ * that needs careful line-by-line porting with full understanding of the
+ * keyword binding protocol and closure layout.
  *
  * 5. Missing subprims referenced: _SPkeyword_bind, _SPmakes128, ret1val_addr,
- *    and various error handlers. These are defined elsewhere and need to be
- *    coordinated.
+ * and various error handlers. These are defined elsewhere and need to be
+ * coordinated.
  *
  * 6. Numeric local labels: This file uses simple numeric labels (1:, 2:, etc.)
- *    following the style of his existing code. These are file-scoped in GNU as,
- *    which matches his style, but differs from our high-tag port's approach
- *    of using local_label() macros. His style is cleaner for short subprims.
+ * following the style of his existing code. These are file-scoped in GNU as,
+ * which matches his style, but differs from our high-tag port's approach
+ * of using local_label() macros. His style is cleaner for short subprims.
  */
 
 /* UNCERTAINTIES:
  *
  * - nargs arithmetic: PPC64 nargs is a TAGGED fixnum (confirmed in both ports).
- *   All nargs comparisons use (nargregs << fixnumshift) to convert untagged
- *   constant to tagged form. This is correct for fixnumshift=3.
+ * All nargs comparisons use (nargregs << fixnumshift) to convert untagged
+ * constant to tagged form. This is correct for fixnumshift=3.
  *
  * - register allocation in complex subprims: Some subprims use many temporaries
- *   and may exceed available ARM64 temp registers (temp0-4 = x13-x17, only 5).
- *   May need to spill to stack or use save registers with care.
+ * and may exceed available ARM64 temp registers (temp0-4 = x13-x17, only 5).
+ * May need to spill to stack or use save registers with care.
  *
  * - Branch distance: Some of the dispatch-heavy subprims (keyword_args,
- *   builtin_length) have many forward/backward branches that may exceed
- *   ARM64's ±1MB branch range if separated. Should be fine within one file.
+ * builtin_length) have many forward/backward branches that may exceed
+ * ARM64's ±1MB branch range if separated. Should be fine within one file.
  */

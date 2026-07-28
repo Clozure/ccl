@@ -138,14 +138,14 @@ raise_thread_interrupt(TCR *target)
     CONTEXT *icontext = ((CONTEXT *) foreign_rsp) -1;
     icontext = (CONTEXT *)(((LispObj)icontext)&~15);
     
-    *icontext = *pcontext;
+ *icontext = *pcontext;
 
-#ifdef WIN_64    
+#ifdef WIN_64 
     xpGPR(pcontext,REG_RCX) = SIGNAL_FOR_PROCESS_INTERRUPT;
     xpGPR(pcontext,REG_RDX) = 0;
     xpGPR(pcontext,REG_R8) = (LispObj) icontext;
     xpGPR(pcontext,REG_RSP) = (LispObj)(((LispObj *)icontext)-1);
-    *(((LispObj *)icontext)-1) = (LispObj)raise_thread_interrupt;
+ *(((LispObj *)icontext)-1) = (LispObj)raise_thread_interrupt;
 #else
     {
       LispObj *p = (LispObj *)icontext;
@@ -153,7 +153,7 @@ raise_thread_interrupt(TCR *target)
       p[0] = SIGNAL_FOR_PROCESS_INTERRUPT;
       p[1] = 0;
       p[2] = (DWORD)icontext;
-      *(--p) = (LispObj)raise_thread_interrupt;;
+ *(--p) = (LispObj)raise_thread_interrupt;;
       xpGPR(pcontext,Isp) = (DWORD)p;
     }
 #endif
@@ -185,7 +185,7 @@ void
 set_thread_affinity(TCR *target, unsigned cpuno)
 {
 #ifdef LINUX
-#ifndef ANDROID                 /* too useful to be in Android ... */
+#ifndef ANDROID /* too useful to be in Android ... */
   pthread_t thread = (pthread_t)(target->osid);
   cpu_set_t mask;
   
@@ -300,7 +300,7 @@ static void inline
 unlock_futex(signed_natural *p)
 {
   if (atomic_decf(p) != FUTEX_AVAIL) {
-    *p = FUTEX_AVAIL;
+ *p = FUTEX_AVAIL;
     futex_wake(p,INT_MAX);
   }
 }
@@ -323,7 +323,7 @@ lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 #endif /* USE_FUTEX */
 
 
-#ifndef USE_FUTEX  
+#ifndef USE_FUTEX 
 int
 unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 {
@@ -402,7 +402,7 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
   if (owner == tcr) {
     m->count++;
     if (was_free) {
-      *was_free = 0;
+ *was_free = 0;
       RELEASE_SPINLOCK(m->spinlock);
       return 0;
     }
@@ -411,7 +411,7 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
     m->owner = tcr;
     m->count = 1;
     if (was_free) {
-      *was_free = 1;
+ *was_free = 1;
     }
     RELEASE_SPINLOCK(m->spinlock);
     return 0;
@@ -429,7 +429,7 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
   if (owner == tcr) {
     m->count++;
     if (was_free) {
-      *was_free = 0;
+ *was_free = 0;
       return 0;
     }
   }
@@ -437,7 +437,7 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
     m->owner = tcr;
     m->count = 1;
     if (was_free) {
-      *was_free = 1;
+ *was_free = 1;
     }
     return 0;
   }
@@ -595,7 +595,7 @@ suspend_resume_handler(int signo, siginfo_t *info, ExceptionInformation *context
     tcr = new_tcr(initial_stack_size, MIN_TSTACK_SIZE);
     TCR_AUX(tcr)->suspend_count = 1;
     tcr->vs_area->active -= node_size;
-    *(--tcr->save_vsp) = lisp_nil;
+ *(--tcr->save_vsp) = lisp_nil;
     register_thread_tcr(tcr);
   }
   if (TCR_INTERRUPT_LEVEL(tcr) <= -(2 << fixnumshift)) {
@@ -626,8 +626,8 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
   
   VirtualQuery(addr, &info, sizeof(info));
   natbase = (natural)info.BaseAddress+info.RegionSize;
-  *size = natbase - (natural)(info.AllocationBase);
-  *base = (void *)natbase;
+ *size = natbase - (natural)(info.AllocationBase);
+ *base = (void *)natbase;
 }
 #else
 void
@@ -635,8 +635,8 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
 {
   pthread_t p = pthread_self();
 #ifdef DARWIN
-  *base = pthread_get_stackaddr_np(p);
-  *size = pthread_get_stacksize_np(p);
+ *base = pthread_get_stackaddr_np(p);
+ *size = pthread_get_stacksize_np(p);
 #endif
 #ifdef LINUX
   pthread_attr_t attr;
@@ -644,7 +644,7 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
   pthread_getattr_np(p,&attr);
   pthread_attr_getstack(&attr, base, size);
   pthread_attr_destroy(&attr);
-  *(natural *)base += *size;
+ *(natural *)base += *size;
 #endif
 #ifdef FREEBSD
   pthread_attr_t attr;
@@ -656,21 +656,21 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
   pthread_attr_get_np(p, &attr);
   pthread_attr_getstackaddr(&attr,&temp_base);
   pthread_attr_getstacksize(&attr,&temp_size);
-  *base = (void *)((natural)temp_base + temp_size);
-  *size = temp_size;
+ *base = (void *)((natural)temp_base + temp_size);
+ *size = temp_size;
   pthread_attr_destroy(&attr);
 #endif
 #ifdef SOLARIS
   stack_t st;
   /*
-   * If we #include <thread.h> then a conflicting definition
-   * for rwlock_destroy comes into scope.
-   */
+ * If we #include <thread.h> then a conflicting definition
+ * for rwlock_destroy comes into scope.
+ */
   extern int thr_stksegment(stack_t *ss);
   
   thr_stksegment(&st);
-  *size = st.ss_size;
-  *base = st.ss_sp;
+ *size = st.ss_size;
+ *base = st.ss_sp;
   
 #endif
 }
@@ -745,7 +745,7 @@ destroy_semaphore(void **s)
 #ifdef USE_WINDOWS_SEMAPHORES
     CloseHandle(*s);
 #endif
-    *s=NULL;
+ *s=NULL;
   }
 }
 
@@ -872,22 +872,22 @@ setup_tcr_extra_segment(TCR *tcr)
 #endif
 #ifdef LINUX
   /*
-   * According arch_prctl(2), there's no function prototype for
-   * arch_prctl().  Thus, we have to declare it ourselves.
-   * Note that addr is unsigned long for SET operations.
-   */
+ * According arch_prctl(2), there's no function prototype for
+ * arch_prctl(). Thus, we have to declare it ourselves.
+ * Note that addr is unsigned long for SET operations.
+ */
   extern int arch_prctl(int code, unsigned long addr);
 
   arch_prctl(ARCH_SET_GS, (natural)tcr);
 #endif
 #ifdef DARWIN
   /*
-   * There's apparently no way to do this.  We used to use a horrible
-   * and slow kludge conditionalized on DARWIN_GS_HACK (which involved
-   * sharing gs between lisp and pthreads), hoping that Apple would
-   * eventually provide a way to set fsbase.  We got tired of waiting,
-   * and have now resigned ourselves to keeping the TCR in a GPR.
-   */
+ * There's apparently no way to do this. We used to use a horrible
+ * and slow kludge conditionalized on DARWIN_GS_HACK (which involved
+ * sharing gs between lisp and pthreads), hoping that Apple would
+ * eventually provide a way to set fsbase. We got tired of waiting,
+ * and have now resigned ourselves to keeping the TCR in a GPR.
+ */
   /* darwin_set_x8664_fs_reg(tcr); */
 #endif
 #ifdef SOLARIS
@@ -1251,7 +1251,7 @@ init_arm_tcr_sptab(TCR *tcr)
   for (p=sptab,q = tcr->sptab;
        p<sptab_end;
        p++,q++) {
-    *q = *p;
+ *q = *p;
   }
 }
 #endif
@@ -1266,8 +1266,8 @@ TCR *
 new_tcr(natural vstack_size, natural tstack_size)
 {
   extern area
-    *allocate_vstack_holding_area_lock(natural),
-    *allocate_tstack_holding_area_lock(natural);
+ *allocate_vstack_holding_area_lock(natural),
+ *allocate_tstack_holding_area_lock(natural);
   area *a;
   int i;
 #ifndef WINDOWS
@@ -1329,7 +1329,7 @@ new_tcr(natural vstack_size, natural tstack_size)
 #endif
 #ifdef X86
   tcr->lisp_mxcsr = (1 << MXCSR_DM_BIT) | 
-#if 1                           /* Mask underflow; too hard to 
+#if 1 /* Mask underflow; too hard to 
                                    deal with denorms if underflow is 
                                    enabled */
     (1 << MXCSR_UM_BIT) | 
@@ -1385,7 +1385,7 @@ shutdown_thread_tcr(void *arg)
 
       tsd_set(lisp_global(TCR_KEY), TCR_TO_TSD(tcr));
       foreign_thread_control(1);
-      //((void (*)(int))ptr_from_lispobj(callback_ptr))(1);
+ //((void (*)(int))ptr_from_lispobj(callback_ptr))(1);
       tsd_set(lisp_global(TCR_KEY), NULL);
     }
 #ifdef DARWIN
@@ -1414,7 +1414,7 @@ shutdown_thread_tcr(void *arg)
     }
     /* If we use the sigaltstack mechanism, we always keep the
        altstack separate from other stacks now.
-    */
+ */
 #ifdef USE_SIGALTSTACK
     {
       stack_t new, current;
@@ -1497,10 +1497,10 @@ tcr_cleanup(void *arg)
 #ifndef WINDOWS
 #ifdef LINUX
   /*
-   * On Linux, there have been reports of getting SIGNAL_FOR_PROCESS_INTERRUPT
-   * as a thread is exiting.  Ignore that signal here, because this thread
-   * is in the process of exiting. (See issue #517.)
-   */
+ * On Linux, there have been reports of getting SIGNAL_FOR_PROCESS_INTERRUPT
+ * as a thread is exiting. Ignore that signal here, because this thread
+ * is in the process of exiting. (See issue #517.)
+ */
   sigset_t set;
   sigemptyset(&set);
   sigaddset(&set, SIGNAL_FOR_PROCESS_INTERRUPT);
@@ -1604,7 +1604,7 @@ create_stack(natural size)
   size=align_to_power_of_2(size, log2_page_size);
   p = (Ptr) MapMemoryForStack((size_t)size);
   if (p != (Ptr)(-1)) {
-    *((size_t *)p) = size;
+ *((size_t *)p) = size;
     return p;
   }
   allocation_failure(true, size);
@@ -1694,7 +1694,7 @@ lisp_thread_entry(void *param)
   pthread_cleanup_push(tcr_cleanup,(void *)tcr);
 #endif
   tcr->vs_area->active -= node_size;
-  *(--tcr->save_vsp) = lisp_nil;
+ *(--tcr->save_vsp) = lisp_nil;
   start_vsp = tcr->save_vsp;
   enable_fp_exceptions();
   SET_TCR_FLAG(tcr,TCR_FLAG_BIT_AWAITING_PRESET);
@@ -1853,7 +1853,7 @@ create_system_thread(size_t stack_size,  void *stackaddr,
      it owns the spinlock, we still deadlock.  It seems that
      the best that we can do is to keep -this- code from
      getting suspended (by grabbing TCR_AREA_LOCK)
-  */
+ */
   LOCK(lisp_global(TCR_AREA_LOCK),current);
   err = pthread_create(&returned_thread, &attr, start_routine, param);
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
@@ -1891,7 +1891,7 @@ get_tcr(Boolean create)
 #endif
 #endif
     current->vs_area->active -= node_size;
-    *(--current->save_vsp) = lisp_nil;
+ *(--current->save_vsp) = lisp_nil;
 #ifdef PPC
 #define NSAVEREGS 8
 #endif
@@ -1908,12 +1908,12 @@ get_tcr(Boolean create)
 #define NSAVEREGS 4
 #endif
     for (i = 0; i < NSAVEREGS; i++) {
-      *(--current->save_vsp) = 0;
+ *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
     }
     nbindwords = foreign_thread_control(-1);
     for (i = 0; i < nbindwords; i++) {
-      *(--current->save_vsp) = 0;
+ *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
     }
     TCR_AUX(current)->shutdown_count = 1;
@@ -1936,12 +1936,12 @@ pc_luser_restore_windows_context(CONTEXT *pcontext, TCR *tcr, pc where)
        the suspend in the same context that we're trying to
        restore */
 #ifdef WIN_64
-    *pcontext = * (CONTEXT *)(pcontext->Rcx);
+ *pcontext = * (CONTEXT *)(pcontext->Rcx);
 #else
     if (where == restore_windows_context_start) {
-      *pcontext = * (CONTEXT *)((pcontext->Esp)+4);
+ *pcontext = * (CONTEXT *)((pcontext->Esp)+4);
     } else {
-      *pcontext = * (CONTEXT *)(pcontext->Ecx);
+ *pcontext = * (CONTEXT *)(pcontext->Ecx);
     }
 #endif
   } else {
@@ -2061,7 +2061,7 @@ suspend_tcr(TCR *tcr)
 
        When people say that Windows sucks, they aren't always just
        talking about all of the other ways that it sucks.
-    */
+ */
     if ((*where == INTN_OPCODE) ||
         ((*where == XUUO_OPCODE_0) && (where[1] == XUUO_OPCODE_1))) {
       SET_TCR_FLAG(tcr,TCR_FLAG_BIT_PENDING_SUSPEND);
@@ -2357,7 +2357,7 @@ free_freed_tcrs ()
 #ifndef HAVE_TLS
 #ifdef WIN_32
     /* We sort of have TLS in that the TEB is per-thread.  We free the
-     * tcr aux vector elsewhere. */
+ * tcr aux vector elsewhere. */
 #else
     free(current);
 #endif
@@ -2534,7 +2534,7 @@ rwlock_rlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
   }
   return 0;
 }
-#endif   
+#endif 
 
 
 /*

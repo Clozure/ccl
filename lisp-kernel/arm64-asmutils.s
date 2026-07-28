@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "arm64-constants.h"
-#include "arm64-macros.s"   /* pulls arm64-uuo.s @ 115b7aa */
+#include "arm64-macros.s" /* pulls arm64-uuo.s @ 115b7aa */
 
 /*
  * PPC64 LINE-PORT (source: vendor/ccl/lisp-kernel/ppc-asmutils.s)
@@ -9,37 +9,37 @@
  * The missing arm64-asmutils.o in Matt's linuxarm64/Makefile (ASMOBJ).
  * Logic from ppc-asmutils.s; AArch64 mechanics from the ARM-family
  * analog arm-asmutils.s (in Matt's tree) where PPC differs -- such
- * blocks carry ARM64-DEVIATION tags.  Plain GNU as + cpp, same as the
+ * blocks carry ARM64-DEVIATION tags. Plain GNU as + cpp, same as the
  * spentry-* drafts.
  *
  * PORT-NOTE / inventory vs the two sources:
- *  - zero_cache_lines (ppc:24): NOT ported -- its only caller
- *    (memory.c:492) is inside a PPC-only branch (dcbz page-zeroing).
- *  - flush_cache_lines: A64 has userspace cache maintenance; the
- *    canonical dc cvau / ic ivau loop replaces PPC's dcbf/icbi and
- *    ARM32's __ARM_NR_cacheflush syscall.  Signature kept from PPC
- *    (base, nlines, line_size) to match xMakeDataExecutable's PPC-shaped
- *    call (pmcl-kernel.c:2212-2221 needs an ARM64 branch upstream --
- *    flagged in the gc report, open question 7).
- *  - set/get/zero_fpscr (ppc:86-116): PPC's one FPSCR splits into
- *    FPCR (control) + FPSR (status); we export fpcr/fpsr pairs AND
- *    keep PPC-named wrappers reading the STATUS reg (they're what the
- *    FP-exception POLLING model reads -- Matt 2026-07-11 mail).
- *  - save/restore_fp_context, put/get_vector_registers (ppc:118-198,
- *    280+): ARM32 ships these as no-op stubs (arm-asmutils.s:202-213);
- *    same here, with the same rationale (the C signal path gets FP
- *    state from the mcontext, not from these).
- *  - store_conditional / atomic_swap / atomic_ior / atomic_and
- *    (ppc:202-258): ldxr/stxr loops, status in w9 (a C-volatile scratch
- *    -- NOT the Lisp w17 convention; this file runs on the C side).
- *    atomic_swap_acquire + release_spin_lock added from the ARM32 set
- *    (arm-asmutils.s:135-158) -- thread_manager.c uses them.
- *  - pseudo_sigreturn (ppc:270): trivial trap-return marker, ARM32
- *    shape (arm-asmutils.s:196-199).
- *  - rt_sigprocmask / call_handler_on_main_stack / __aeabi_uldivmod
- *    (ARM32-only: android syscall shim, arm-exceptions.c helper, EABI
- *    division ABI): NOT ported -- no ARM64 caller.
- *  - dmb/dsb/isb helpers (arm-asmutils.s:255-266): kept.
+ * - zero_cache_lines (ppc:24): NOT ported -- its only caller
+ * (memory.c:492) is inside a PPC-only branch (dcbz page-zeroing).
+ * - flush_cache_lines: A64 has userspace cache maintenance; the
+ * canonical dc cvau / ic ivau loop replaces PPC's dcbf/icbi and
+ * ARM32's __ARM_NR_cacheflush syscall. Signature kept from PPC
+ * (base, nlines, line_size) to match xMakeDataExecutable's PPC-shaped
+ * call (pmcl-kernel.c:2212-2221 needs an ARM64 branch upstream --
+ * flagged in the gc report, open question 7).
+ * - set/get/zero_fpscr (ppc:86-116): PPC's one FPSCR splits into
+ * FPCR (control) + FPSR (status); we export fpcr/fpsr pairs AND
+ * keep PPC-named wrappers reading the STATUS reg (they're what the
+ * FP-exception POLLING model reads -- Matt 2026-07-11 mail).
+ * - save/restore_fp_context, put/get_vector_registers (ppc:118-198,
+ * 280+): ARM32 ships these as no-op stubs (arm-asmutils.s:202-213);
+ * same here, with the same rationale (the C signal path gets FP
+ * state from the mcontext, not from these).
+ * - store_conditional / atomic_swap / atomic_ior / atomic_and
+ * (ppc:202-258): ldxr/stxr loops, status in w9 (a C-volatile scratch
+ * -- NOT the Lisp w17 convention; this file runs on the C side).
+ * atomic_swap_acquire + release_spin_lock added from the ARM32 set
+ * (arm-asmutils.s:135-158) -- thread_manager.c uses them.
+ * - pseudo_sigreturn (ppc:270): trivial trap-return marker, ARM32
+ * shape (arm-asmutils.s:196-199).
+ * - rt_sigprocmask / call_handler_on_main_stack / __aeabi_uldivmod
+ * (ARM32-only: android syscall shim, arm-exceptions.c helper, EABI
+ * division ABI): NOT ported -- no ARM64 caller.
+ * - dmb/dsb/isb helpers (arm-asmutils.s:255-266): kept.
  *
  * AAPCS64: args x0-x7, result x0; x9-x15 volatile scratch.
  */
@@ -71,7 +71,7 @@ C(flush_cache_lines):
         ret
 
 /* ppc-asmutils.s:58-65 / arm-asmutils.s:42-49: dirty a page (write a
- * word, write it back to 0), return 1.  The C protection-fault path
+ * word, write it back to 0), return 1. The C protection-fault path
  * compares the faulting PC against [touch_page, touch_page_end). */
         .globl C(touch_page)
         .globl C(touch_page_end)
@@ -133,7 +133,7 @@ C(set_fpsr):
         ret
 
 /* ARM32 ships these as stubs (arm-asmutils.s:202-213): the signal path
- * reads FP state from the mcontext.  Same here. */
+ * reads FP state from the mcontext. Same here. */
         .globl C(save_fp_context)
 C(save_fp_context):
         ret
@@ -148,7 +148,7 @@ C(get_vector_registers):
         ret
 
 /* Atomically store new (x2) in *x0 if old == expected (x1); return the
- * actual old value.  ppc-asmutils.s:202-216 (lrarx/strcx) -> ldxr/stxr;
+ * actual old value. ppc-asmutils.s:202-216 (lrarx/strcx) -> ldxr/stxr;
  * status in w9 (C-side scratch). */
         .globl C(store_conditional)
 C(store_conditional):
@@ -215,7 +215,7 @@ C(atomic_and):
 
 /* FP exceptions are POLLED on arm64 (Matt 2026-07-11); the PPC
  * prctl-based enable/disable (ppc-asmutils.s:260-267) are no-ops, as on
- * ARM32 (arm-asmutils.s:186-193).  The C-side pair in
+ * ARM32 (arm-asmutils.s:186-193). The C-side pair in
  * arm64-exceptions.c are the ones actually linked; these asm names are
  * NOT exported to avoid duplicate symbols. */
 

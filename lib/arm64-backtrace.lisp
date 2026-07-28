@@ -19,8 +19,8 @@
 ;;; branch-tree parser, ppc:379-736) has no analog because this design
 ;;; keeps NO non-volatile lisp registers (lib/arm64env.lisp R1:
 ;;; empty save pool) — the compiler can never record a saved-register
-;;; variable location.  APPLY-IN-FRAME is therefore unimplemented, as
-;;; on ARM32.  LATENT: revisit if save0-3 ever enter the register
+;;; variable location. APPLY-IN-FRAME is therefore unimplemented, as
+;;; on ARM32. LATENT: revisit if save0-3 ever enter the register
 ;;; pool.
 ;;;
 ;;; %frame-backlink and lisp-frame-p live HERE, not in
@@ -31,7 +31,7 @@
 
 (in-package "CCL")
 
-;;; ppc:20-29.  Slot order is pinned by %cons-fake-stack-frame
+;;; ppc:20-29. Slot order is pinned by %cons-fake-stack-frame
 ;;; (library/lispequ.lisp:211).
 (def-accessors (fake-stack-frame) %svref
   nil                           ; 'fake-stack-frame
@@ -130,7 +130,7 @@
   (let* ((vsp (%frame-savevsp p))
          parent)
     (when (eql vsp 0)
-      ;; This frame is where the code continues after an unwind-protect cleanup form
+ ;; This frame is where the code continues after an unwind-protect cleanup form
       (setq vsp (%frame-savevsp (child-frame p context))))
     (flet ((grand-parent (frame)
              (let ((parent (parent-frame frame context)))

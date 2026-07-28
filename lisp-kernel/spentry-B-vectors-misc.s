@@ -17,7 +17,7 @@
 
 /* PORT-NOTE: All 22 subprims ported line-by-line from PPC64.
    misc_ref (~150 lines) and misc_set (~180 lines) cover integer/node/string/bit
-   vectors, and since 16m37/16m41 ALSO the four float-vector subtags
+   vectors, and since / ALSO the four float-vector subtags
    (single/double) and the two complex ones -- the note here that they were
    "omitted pending Misc_Alloc_Fixed and subtag constants" is stale; both exist
    and both are used by those legs. aref2/3 and aset2/3 provide
@@ -52,9 +52,9 @@
    (ppc-constants64.s:237-245 order; arm64 bias = -fulltag_symbol). */
 .set symbol.binding_index, (7*node_size - fulltag_symbol)
 
-/* misc_complex_dfloat_offset (16m48) — Matt's arm64-arch.lisp:259-261:
-     ;;; There is a pad word after the uvector header so that the
-     ;;; complex-double-float elements are 16-byte aligned.
+/* misc_complex_dfloat_offset () — Matt's arm64-arch.lisp:259-261:
+ ;;; There is a pad word after the uvector header so that the
+ ;;; complex-double-float elements are 16-byte aligned.
      (defconstant misc-complex-dfloat-offset (+ misc-data-offset node-size))
    Element 0 of a complex-double-float VECTOR starts one word past the normal
    data offset, exactly as on x86-64 (x8664-arch.lisp:442).  The lisp side
@@ -76,7 +76,7 @@
    these in sync with the values in arm64-arch.lisp"), which is the
    numbering *arm64-xtype-specifiers* (arm64-trap-support.lisp:215)
    decodes; the expected-type field is 8 bits wide, so nothing here
-   needs compacting.  16m41: local .sets of 40/44 shadowed his values
+   needs compacting.  : local .sets of 40/44 shadowed his values
    and made a tripped aset2/aref2 trap report "(SIGNED-BYTE 64)"
    (0x28 = his xtype_s64) with the ARRAY as datum. */
 
@@ -395,9 +395,9 @@ spentry conslist
         cmp nargs, #0
         b 2f
         /* Loop test POST-Cons: Matt's Cons macro clobbers NZCV via its
-         * allocptr,allocbase compare (spentry-D:404 class) -- the old
-         * pre-Cons cmp made b.ne test the ALLOCATION flags = infinite
-         * loop (16m5n, first &key fn via keyword_bind). */
+ * allocptr,allocbase compare (spentry-D:404 class) -- the old
+ * pre-Cons cmp made b.ne test the ALLOCATION flags = infinite
+ * loop (, first &key fn via keyword_bind). */
 1:      ldr temp0, [vsp]
         add vsp, vsp, #node_size
         Cons arg_z, temp0, arg_z
@@ -507,7 +507,7 @@ spentry progvsave
            ARM64-DEVIATION: PPC's trap_unless_list passes nil (nil is
            list-tagged there); nil has its OWN fulltag here, so the
            nil check is hoisted BEFORE each cons-tag check.  BOTH of them
-           (16m48): the hoist was originally applied only to the temp2 =
+           (): the hoist was originally applied only to the temp2 =
            cdr(fast) check, and fast lands exactly ON nil whenever the list
            has EVEN length -- fast advances two conses per iteration and so
            steps over the last cons of an even list.  A missing nil test at
@@ -598,8 +598,8 @@ endsp progvsave
 /* ===== gvector ===== */
 /* ported from ppc-spentry.s:1125-1149 (PPC64 branch).  Caller vpushes the
  * boxed subtype first, then the elements in order; nargs = byte-scaled
- * (count+1)*node_size counting the subtype (boot-16m5: observed live call
- * site vpush x4 + mov nargs,#0x20).  Result (fulltag_misc) in arg_z. */
+ * (count+1)*node_size counting the subtype (boot-: observed live call
+ * site vpush x4 + mov nargs,#0x20). Result (fulltag_misc) in arg_z. */
 spentry gvector
         sub nargs, nargs, #node_size
         ldr arg_z, [vsp, nargs]               /* boxed subtype (deepest)  */
@@ -645,7 +645,7 @@ misc_ref_common:
            share low-3-bits #b110, and PPC64's jump table routes EVERY
            real nodeheader subtag to the plain node read (ppc:2405ff) —
            the per-subtag chain missed catch-frame/hash-vector/slot-vector/
-           lock/instance/istruct/… (boot-16m5b sibling sweep). */
+           lock/instance/istruct/… (boot- sibling sweep). */
         and imm2, imm1, #7
         cmp imm2, #6                    /* fulltag_nodeheader_{0,1} & 7 */
         b.eq misc_ref_node
@@ -667,7 +667,7 @@ misc_ref_common:
         b.eq misc_ref_s64
         cmp imm1, #subtag_fixnum_vector
         b.eq misc_ref_fixnum_vector
-        /* Float vectors (16m37).  These were absent from BOTH this chain and
+        /* Float vectors ().  These were absent from BOTH this chain and
            misc_set_common's, so uvref/uvset on a single- or double-float
            vector fell through to misc_ref_invalid.  PPC64 routes all four
            float-vector subtags (ppc:2620/2641/2658/2616). */
@@ -675,7 +675,7 @@ misc_ref_common:
         b.eq misc_ref_single_float_vector
         cmp imm1, #subtag_double_float_vector
         b.eq misc_ref_double_float_vector
-        /* COMPLEX float vectors (16m41): 16m37 added only the two real float
+        /* COMPLEX float vectors ():  added only the two real float
            subtags, so :initial-contents on a (complex single-float) or
            (complex double-float) array still fell through to
            misc_ref_invalid -- regression stage 11, EVERY.32. */
@@ -814,7 +814,7 @@ misc_ref_double_float_vector:
            made every kernel-boxed double claim one element, so (uvref d 1)
            was out of bounds: DOUBLE-FLOAT-BITS -- on every float print path
            -- signalled $XARROOB, and EQL against a Lisp-boxed double was
-           false because the two headers disagreed (16m45).
+           false because the two headers disagreed ().
            imm0 must survive Misc_Alloc_Fixed (including a uuo_alloc trip
            through the allocator) -- PPC relies on exactly that, ppc:2701-2704. */
         mov imm1, #((2 << num_subtag_bits) | subtag_double_float)
@@ -822,7 +822,7 @@ misc_ref_double_float_vector:
         str imm0, [arg_z, #double_float.value]
         ret
 misc_ref_complex_single_float_vector:
-        /* 16m41.  Vector element = 2 packed singles = 8 bytes, and the subtag
+        /* .  Vector element = 2 packed singles = 8 bytes, and the subtag
            is in ivector_class_64_bit, so the boxed index IS the byte offset
            (fixnumshift == 3), exactly as misc_ref_double_float_vector.  The
            SCALAR complex_single_float is {realpart:4, imagpart:4}
@@ -844,9 +844,9 @@ misc_ref_complex_single_float_vector:
         str imm0, [arg_z, #complex_single_float.realpart]
         ret
 misc_ref_complex_double_float_vector:
-        /* 16m41.  Vector element = 2 doubles = 16 bytes; the subtag is in
+        /* .  Vector element = 2 doubles = 16 bytes; the subtag is in
            ivector_class_other_bit, so compute the offset: 16i = boxed<<1.
-           16m48: the note here used to say "vector data starts right after
+           : the note here used to say "vector data starts right after
            the header (no x8664-style pad)".  That is FALSE and it is the
            MAKE-SEQUENCE.30 / SUBSEQ.SPECIALIZED-VECTOR.3 bug -- Matt's own
            arm64-arch.lisp:259-261 declares the pad, and every LISP-side
@@ -938,7 +938,7 @@ spentry stkgvector
            `sub tsp` dropped the backlink (PPC's stru writes it as a
            store-with-update side effect) — the frame's [tsp]=0 then fed
            tsp:=0 into the caller's tsp_unlink on the toplevel fn's second
-           lap (16m5k wall, gdb-observed 2026-07-17). */
+           lap ( wall, gdb-observed 2026-07-17). */
         mov imm4, tsp
         sub tsp, tsp, imm0
         str imm4, [tsp, #tsp_frame.backlink]
@@ -1004,7 +1004,7 @@ misc_set_common:
            test, not per-subtag: nodeheader_{0,1} share low-3-bits #b110
            and PPC64's table routes every real nodeheader subtag to gvset
            (ppc:3921ff) — the chain missed catch-frame/hash-vector/
-           slot-vector/lock/instance/istruct/… (boot-16m5b). */
+           slot-vector/lock/instance/istruct/… (boot-). */
         and imm2, imm1, #7
         cmp imm2, #6                    /* fulltag_nodeheader_{0,1} & 7 */
         b.eq _SPgvset
@@ -1027,13 +1027,13 @@ misc_set_common:
         b.eq misc_set_s64
         cmp imm1, #subtag_fixnum_vector
         b.eq misc_set_fixnum_vector
-        /* Float vectors (16m37) -- parity twin of the misc_ref_common
+        /* Float vectors () -- parity twin of the misc_ref_common
            addition; both sides were missing all four float-vector subtags. */
         cmp imm1, #subtag_single_float_vector
         b.eq misc_set_single_float_vector
         cmp imm1, #subtag_double_float_vector
         b.eq misc_set_double_float_vector
-        /* COMPLEX float vectors (16m41) -- parity twin of the misc_ref_common
+        /* COMPLEX float vectors () -- parity twin of the misc_ref_common
            addition; this is the side EVERY.32 actually reached, via
            :initial-contents -> init-uvector-contents -> uvset. */
         cmp imm1, #subtag_complex_single_float_vector
@@ -1050,7 +1050,7 @@ misc_set_common:
         b.eq misc_set_u32
         /* PPC64 jump table (ppc:3954/3971): macptr + dead_macptr store as
            raw 64-bit words (cold load does misc_set(macptr,0,0) to null
-           the address — boot-16m5b wall); double-float/xcode-vector as
+           the address — boot- wall); double-float/xcode-vector as
            2×u32. */
         cmp imm1, #subtag_macptr
         b.eq misc_set_u64
@@ -1246,7 +1246,7 @@ misc_set_double_float_vector:
         str imm0, [imm4, #misc_data_offset]      /* ppc:4338 stdx           */
         ret
 misc_set_complex_single_float_vector:
-        /* 16m41, parity twin of misc_ref_complex_single_float_vector.
+        /* , parity twin of misc_ref_complex_single_float_vector.
            Type-check like misc_set_double_float_vector: fulltag_misc FIRST,
            or reading the header of an immediate faults instead of signalling. */
         and imm2, arg_z, #fulltagmask
@@ -1272,7 +1272,7 @@ misc_set_complex_double_float_vector:
         ldur imm1, [arg_z, #(complex_double_float.realpart + 8)] /* ref leg  */
         lsl imm4, arg_y, #1                     /* 16i = boxed<<1 */
         add imm4, imm4, arg_x
-        add imm4, imm4, #misc_complex_dfloat_offset  /* 16m48: pad; see ref leg */
+        add imm4, imm4, #misc_complex_dfloat_offset  /* : pad; see ref leg */
         stp imm0, imm1, [imm4]
         ret
 misc_set_bad:
@@ -1310,10 +1310,10 @@ endsp progvrestore
  * header, rank, physsize, data-vector, displacement, flags, then dims --
  * slot k sits at (k*node_size - fulltag_misc) from the tagged pointer
  * (fulltag_misc = 12, arm64-constants.h:144; misc-data-offset = -4).
- * 16m41: this block used to hand-number the offsets with PPC64's bias
+ * : this block used to hand-number the offsets with PPC64's bias
  * (-4, i.e. rank@4 ... dim0@44), +8 off for every slot, so the rank
  * check read physsize and aset2/aref2/aset3/aref3 trapped on EVERY
- * valid array.  Symbolic now: correct by construction.  */
+ * valid array. Symbolic now: correct by construction. */
 #ifndef ARRAYH_STRUCT_DEFINED
 .set arrayH.rank,         (1*node_size - fulltag_misc)
 .set arrayH.physsize,     (2*node_size - fulltag_misc)
@@ -1352,7 +1352,7 @@ spentry aref2
         cmp     arg_z, imm0
         b.hs    aref2_not_arrayH
         /* Row-major index: arg_z = arg_z + arg_y * unbox(dim1)
-         * unbox_fixnum(imm0, imm0): imm0 still holds dim1 */
+ * unbox_fixnum(imm0, imm0): imm0 still holds dim1 */
         asr     imm0, imm0, #fixnumshift
         mul     arg_y, arg_y, imm0
         add     arg_z, arg_z, arg_y
@@ -1418,9 +1418,9 @@ spentry aref3
         cmp     arg_x, imm0
         b.hs    aref3_not_arrayH
         /* Row-major: arg_z = k + j*dim2 + i*(dim1*dim2)
-         * PPC64: mullr(arg_y,arg_y,imm2); mullr(imm1,imm2,imm1);
-         *        mullr(arg_x,imm1,arg_x); add arg_z,arg_z,arg_y;
-         *        add arg_z,arg_z,arg_x */
+ * PPC64: mullr(arg_y,arg_y,imm2); mullr(imm1,imm2,imm1);
+ * mullr(arg_x,imm1,arg_x); add arg_z,arg_z,arg_y;
+ * add arg_z,arg_z,arg_x */
         mul     arg_y, arg_y, imm2
         mul     imm1, imm2, imm1
         mul     arg_x, imm1, arg_x
@@ -1543,9 +1543,9 @@ spentry aset3
         cmp     temp0, imm0
         b.hs    aset3_not_arrayH
         /* Row-major: arg_y = k + j*dim2 + i*(dim1*dim2)
-         * PPC64: mullr(arg_x,arg_x,imm2); mullr(imm1,imm2,imm1);
-         *        mullr(temp0,imm1,temp0); add arg_y,arg_y,arg_x;
-         *        add arg_y,arg_y,temp0 */
+ * PPC64: mullr(arg_x,arg_x,imm2); mullr(imm1,imm2,imm1);
+ * mullr(temp0,imm1,temp0); add arg_y,arg_y,arg_x;
+ * add arg_y,arg_y,temp0 */
         mul     arg_x, arg_x, imm2
         mul     imm1, imm2, imm1
         mul     temp0, imm1, temp0
@@ -1572,81 +1572,81 @@ endsp aset3
 /* ===== COMPLETION STATUS & MISSING CONSTANTS ===== */
 /*
  * ALL 22 SUBPRIMS PORTED (logic complete, awaiting constant definitions):
- *   ✓ aref2 (2d array ref) - COMPLETE, exits via misc_ref_common
- *   ✓ aref3 (3d array ref) - COMPLETE, exits via misc_ref_common
- *   ✓ aset2 (2d array set) - COMPLETE, exits via misc_set_common
- *   ✓ aset3 (3d array set) - COMPLETE, exits via misc_set_common
- *   ✓ conslist, conslist_star (heap cons) - COMPLETE
- *   ✓ stkconslist, stkconslist_star (tstack cons) - needs tsp_frame offsets
- *   ✓ mkstackv (tstack vector) - needs tsp_frame offsets
- *   ✓ gvector (heap vector) - COMPLETE except dnode_align macro
- *   ✓ misc_ref (vector read) - COMPLETE: integer/node/string/bit + float and
- *     complex-float vectors (16m37/16m41)
- *   ✓ subtag_misc_ref (explicit subtag) - COMPLETE
- *   ✓ misc_set (vector write) - COMPLETE: same coverage as misc_ref above
- *   ✓ subtag_misc_set (explicit subtag) - COMPLETE
- *   ✓ gvset (GC write barrier) - LOGIC COMPLETE, needs GC globals
- *   ✓ set_hash_key (hash-table write) - LOGIC COMPLETE, needs GC globals
- *   ✓ store_node_conditional (atomic store+barrier) - LOGIC COMPLETE, needs GC globals
- *   ✓ set_hash_key_conditional (atomic hash store) - LOGIC COMPLETE, needs GC globals
- *   ✓ stkconsyz (tstack cons from Y/Z) - COMPLETE
- *   ✓ progvsave (special bindings) - LOGIC COMPLETE (~70 lines), needs tcr/tsp_frame/symbol offsets
- *   ✓ progvrestore (restore bindings) - LOGIC COMPLETE
- *   ✓ stkgvector (tstack general vector) - LOGIC COMPLETE (~30 lines), needs tsp_frame offsets
+ * ✓ aref2 (2d array ref) - COMPLETE, exits via misc_ref_common
+ * ✓ aref3 (3d array ref) - COMPLETE, exits via misc_ref_common
+ * ✓ aset2 (2d array set) - COMPLETE, exits via misc_set_common
+ * ✓ aset3 (3d array set) - COMPLETE, exits via misc_set_common
+ * ✓ conslist, conslist_star (heap cons) - COMPLETE
+ * ✓ stkconslist, stkconslist_star (tstack cons) - needs tsp_frame offsets
+ * ✓ mkstackv (tstack vector) - needs tsp_frame offsets
+ * ✓ gvector (heap vector) - COMPLETE except dnode_align macro
+ * ✓ misc_ref (vector read) - COMPLETE: integer/node/string/bit + float and
+ * complex-float vectors (/)
+ * ✓ subtag_misc_ref (explicit subtag) - COMPLETE
+ * ✓ misc_set (vector write) - COMPLETE: same coverage as misc_ref above
+ * ✓ subtag_misc_set (explicit subtag) - COMPLETE
+ * ✓ gvset (GC write barrier) - LOGIC COMPLETE, needs GC globals
+ * ✓ set_hash_key (hash-table write) - LOGIC COMPLETE, needs GC globals
+ * ✓ store_node_conditional (atomic store+barrier) - LOGIC COMPLETE, needs GC globals
+ * ✓ set_hash_key_conditional (atomic hash store) - LOGIC COMPLETE, needs GC globals
+ * ✓ stkconsyz (tstack cons from Y/Z) - COMPLETE
+ * ✓ progvsave (special bindings) - LOGIC COMPLETE (~70 lines), needs tcr/tsp_frame/symbol offsets
+ * ✓ progvrestore (restore bindings) - LOGIC COMPLETE
+ * ✓ stkgvector (tstack general vector) - LOGIC COMPLETE (~30 lines), needs tsp_frame offsets
  *
  * MISSING CONSTANTS (must be defined in arm64-constants.h or arm64-macros.s):
  *
  * 1. GC write barrier (gvset, set_hash_key, store/set_*_conditional):
- *    - ref_base (global: base of reference bitmap)
- *    - refbits (global: pointer to refbits array)
- *    - ephemeral_refidx (global: pointer to ephemeral index array)
- *    - oldspace_dnode_count (global: size of oldspace in dnodes)
- *    - dnode_shift (constant: 4 for 16-byte dnodes)
- *    - bitmap_shift (constant: 9 for 512-entry bitmap chunks)
+ * - ref_base (global: base of reference bitmap)
+ * - refbits (global: pointer to refbits array)
+ * - ephemeral_refidx (global: pointer to ephemeral index array)
+ * - oldspace_dnode_count (global: size of oldspace in dnodes)
+ * - dnode_shift (constant: 4 for 16-byte dnodes)
+ * - bitmap_shift (constant: 9 for 512-entry bitmap chunks)
  *
  * 2. Symbolic values:
- *    - nil_value (address of NIL object; low-tag design unclear if static)
- *    - t_value (address of T object)
- *    - RESERVATION_DISCHARGE (address for clearing ldxr reservation)
+ * - nil_value (address of NIL object; low-tag design unclear if static)
+ * - t_value (address of T object)
+ * - RESERVATION_DISCHARGE (address for clearing ldxr reservation)
  *
  * 3. Error codes:
- *    - XBADVEC (bad vector type/index error)
- *    - XNOTELT (bad element type error)
- *    - XSETBADVEC (bad vector for set operation)
+ * - XBADVEC (bad vector type/index error)
+ * - XNOTELT (bad element type error)
+ * - XSETBADVEC (bad vector for set operation)
  *
  * 4. TSP frame structure (for stkconslist*, mkstackv, stkgvector, progvsave/restore):
- *    - tsp_frame.fixed_overhead (frame header size, likely 8-16 bytes)
- *    - tsp_frame.data_offset (offset to data area, likely 8)
- *    - tsp_frame.backlink (offset to previous frame link)
- *    - tstack_alloc_limit (global or tcr field for overflow check)
+ * - tsp_frame.fixed_overhead (frame header size, likely 8-16 bytes)
+ * - tsp_frame.data_offset (offset to data area, likely 8)
+ * - tsp_frame.backlink (offset to previous frame link)
+ * - tstack_alloc_limit (global or tcr field for overflow check)
  *
  * 5. TCR offsets (already in constants.h but needs verification):
- *    - tcr.ts_area (offset to tstack area pointer) - VERIFIED at tcr struct definition
- *    - tcr.db_link (special binding chain, for progvsave)
- *    - tcr.tlb_limit, tcr.tlb_pointer (thread-local binding array, for progvsave)
+ * - tcr.ts_area (offset to tstack area pointer) - VERIFIED at tcr struct definition
+ * - tcr.db_link (special binding chain, for progvsave)
+ * - tcr.tlb_limit, tcr.tlb_pointer (thread-local binding array, for progvsave)
  *
  * 6. Alignment macros (referenced but not expanded):
- *    - dnode_align(dest, src, add) - align to 16-byte boundary
+ * - dnode_align(dest, src, add) - align to 16-byte boundary
  *
- * 7. Float/complex support -- CLOSED (16m37 real floats, 16m41 complex): the
- *    constants and Misc_Alloc_Fixed all exist; misc_ref/misc_set dispatch every
- *    float and complex-float vector subtag.  Kept for the register/allocation
- *    notes below.
- *    - subtag_double_float, subtag_single_float, subtag_complex_single_float, etc.
- *    - Allocation macros: Misc_Alloc_Fixed for boxed float returns
- *    - Bignum header constants: one/two/three_digit_bignum_header
+ * 7. Float/complex support -- CLOSED ( real floats, complex): the
+ * constants and Misc_Alloc_Fixed all exist; misc_ref/misc_set dispatch every
+ * float and complex-float vector subtag. Kept for the register/allocation
+ * notes below.
+ * - subtag_double_float, subtag_single_float, subtag_complex_single_float, etc.
+ * - Allocation macros: Misc_Alloc_Fixed for boxed float returns
+ * - Bignum header constants: one/two/three_digit_bignum_header
  *
  * 8. progvsave-specific:
- *    - symbol.binding_index (offset within symbol struct)
- *    - XIMPROPERLIST (error code for improper list)
- *    - Binding trap mechanism (PPC64 trlle → ARM64 conditional brk or bounds check)
+ * - symbol.binding_index (offset within symbol struct)
+ * - XIMPROPERLIST (error code for improper list)
+ * - Binding trap mechanism (PPC64 trlle → ARM64 conditional brk or bounds check)
  *
  * DESIGN NOTES:
- *   - ARM64 low-tag: fixnumshift=3, misc_data_offset=+4, misc_header_offset=-4
- *   - Bit vectors: ARM64 LSB0 bit order (bit 0 is rightmost)
- *   - Atomics: PPC64 ldarx/stdcx. → ARM64 ldxr/stxr + dmb ish (isync → dmb)
- *   - cons.size = 16 (2*node_size from struct definition)
- *   - _rplaca/_rplacd macros expanded inline as str to cons.car/cons.cdr offsets
- *   - Node vectors delegate to _SPgvset for write-barrier handling
- *   - Float/complex handlers marked #error due to missing constants (not design issues)
+ * - ARM64 low-tag: fixnumshift=3, misc_data_offset=+4, misc_header_offset=-4
+ * - Bit vectors: ARM64 LSB0 bit order (bit 0 is rightmost)
+ * - Atomics: PPC64 ldarx/stdcx. → ARM64 ldxr/stxr + dmb ish (isync → dmb)
+ * - cons.size = 16 (2*node_size from struct definition)
+ * - _rplaca/_rplacd macros expanded inline as str to cons.car/cons.cdr offsets
+ * - Node vectors delegate to _SPgvset for write-barrier handling
+ * - Float/complex handlers marked #error due to missing constants (not design issues)
  */

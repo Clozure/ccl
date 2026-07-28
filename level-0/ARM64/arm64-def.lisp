@@ -1,7 +1,7 @@
 ;;; -*- Mode: Lisp; Package: CCL -*-
 ;;;
 ;;; arm64-def.lisp — ACTIVE seed (demand-driven from cold-load fatals;
-;;; lifted from upstream-port/level-0/drafts/arm64-def.lisp wave-4).
+;;; lifted from arm64-def.lisp wave-4).
 ;;; PPC64 LINE-PORT (source: vendor/ccl/level-0/PPC/ppc-def.lisp)
 ;;; Per-line citations: "; ppc:NNN" = line NNN of that file.
 
@@ -23,9 +23,9 @@
 ;;; =====================================================================
 ;;; %function-vector-to-function / %function-to-function-vector — IDENTITY
 ;;; since the fulltag_function removal (patch 0055): a function IS its
-;;; uvector, as on PPC64 (one misc-tagged object).  The type check is
+;;; uvector, as on PPC64 (one misc-tagged object). The type check is
 ;;; kept (x86-def.lisp:21 precedent) so a non-function still traps; the
-;;; retag arithmetic is gone.  Callers (nfasload/l0-def/l1 builders)
+;;; retag arithmetic is gone. Callers (nfasload/l0-def/l1 builders)
 ;;; flow through unchanged.
 (defarm64lapfunction %function-vector-to-function ((arg arg_z))
   (trap-unless-typecode= arg arm64::subtag-function) ; x86:21
@@ -35,10 +35,10 @@
   (trap-unless-typecode= arg arm64::subtag-function)
   (ret))
 
-;;; %nth-immediate — immediate (constant) N of a function.  Donor by NAME
+;;; %nth-immediate — immediate (constant) N of a function. Donor by NAME
 ;;; = x86-def.lisp:37, but the body follows MATT'S arm64 function shape
 ;;; {code-vector@slot0, constants@slot1..} (16k4 / e4440cb), NOT x8664's
-;;; inline-code layout: immediate n = uvector slot (1+ n).  fun is
+;;; inline-code layout: immediate n = uvector slot (1+ n). fun is
 ;;; misc-tagged (fulltag-function removed, patch 0055): slot(1+n) sits at
 ;;; fun-12+8+8(1+n) = fun+4+8n, and boxed n IS 8n — one add + unscaled ldur.
 (defarm64lapfunction %nth-immediate ((fun arg_y) (n arg_z))
@@ -47,8 +47,8 @@
   (ldur arg_z (:@ imm0 (:$ (+ arm64::misc-data-offset arm64::node-size))))
   (ret))
 
-;;; %set-nth-immediate — setter twin, donor x86-def.lisp:45 (16m11b
-;;; demand: l1-clos-boot gf-dcode install).  Store goes through .SPgvset
+;;; %set-nth-immediate — setter twin, donor x86-def.lisp:45 (
+;;; demand: l1-clos-boot gf-dcode install). Store goes through .SPgvset
 ;;; for the GC write barrier (x86:50 jmp .SPgvset), never inline.
 ;;; gvset contract (spentry-B:77): arg_x = misc-tagged vector, arg_y =
 ;;; boxed slot index (= byte offset at fixnumshift 3), arg_z = value.
@@ -57,13 +57,13 @@
 (defarm64lapfunction %set-nth-immediate ((fun arg_x) (n arg_y) (new arg_z))
   (trap-unless-typecode= fun arm64::subtag-function)  ; x86:46
   (add arg_y n (:$ (ash 1 arm64::fixnumshift)))       ; boxed 1+n
-  ;; fun is already the misc-tagged vector (fulltag-function removed,
-  ;; patch 0055) — no retag before .SPgvset.
+ ;; fun is already the misc-tagged vector (fulltag-function removed,
+ ;; patch 0055) — no retag before .SPgvset.
   (jump-subprim .SPgvset))                            ; x86:50
 
 ;;; closure-function — x86-def.lisp:496 verbatim (his function shape:
 ;;; a closure's inner function = immediate 0, with the vector
-;;; indirection for lfun-vector-reached cases).  16m5t demand.
+;;; indirection for lfun-vector-reached cases). demand.
 (defun closure-function (fun)
   (while (and (functionp fun)  (not (compiled-function-p fun)))
     (setq fun (%nth-immediate fun 0))
@@ -96,9 +96,9 @@
   @2-args
   (unbox-fixnum imm0 offset)            ; ppc:105
   (ldr imm0 (:@ fixnum imm0))           ; ppc:106 ldx
-  ;; ppc:107 (ba .SPmakeu64) — TAIL jump.  DECIDE W4-D10 (not in table; needs
-  ;; jmp-subprim/no-link form) + W4-D11 (imm0 is .SPmakeu64's INPUT and
-  ;; call-subprim's dispatch scratch — broken until scratch moves off imm0).
+ ;; ppc:107 (ba .SPmakeu64) — TAIL jump. DECIDE W4-D10 (not in table; needs
+ ;; jmp-subprim/no-link form) + W4-D11 (imm0 is .SPmakeu64's INPUT and
+ ;; call-subprim's dispatch scratch — broken until scratch moves off imm0).
   (jump-subprim .SPmakeu64))
 
 ;;; %fixnum-set — ppc:109
@@ -111,13 +111,13 @@
   @3-args
   (unbox-fixnum imm0 offset)            ; ppc:116
   (str new-value (:@ fixnum imm0))      ; ppc:117 strx — regoff form
-  ;; ppc:118 (mr arg_z new-value) — new-value IS arg_z; no-op elided
+ ;; ppc:118 (mr arg_z new-value) — new-value IS arg_z; no-op elided
   (ret))                                ; ppc:119
 
 ;;; %fixnum-set-natural — ppc:159 (#+ppc64-target arm; ppc32 twin ppc:122 skipped)
 ;;; DEVIATION (DECIDE W4-D19): the PPC64 body pokes bignum digits inline —
 ;;; 32-bit digits in BIG-ENDIAN order (ld+rotldi swap, ppc:176-190); that
-;;; layout does not transfer to little-endian arm64.  The x86-64 twin
+;;; layout does not transfer to little-endian arm64. The x86-64 twin
 ;;; (x86:213-226) instead calls .SPgetu64 to unbox-with-typecheck; mirror it
 ;;; (bignum digits are 32-bit on Matt's design too, arch :143).
 (defarm64lapfunction %fixnum-set-natural ((fixnum arg_x) (offset arg_y) #| &optional |# (new-value arg_z))
@@ -128,13 +128,13 @@
   (mov fixnum offset)                   ; ppc:163
   (mov offset (:$ 0))                   ; ppc:164
   @3-args
-  ;; .SPgetu64: arg_z -> unboxed u64 in imm0, type-error if not (x86:222).
-  ;; DECIDE W4-D10 (not in Matt's table; exists in our spentry-B drafts).
+ ;; .SPgetu64: arg_z -> unboxed u64 in imm0, type-error if not (x86:222).
+ ;; DECIDE W4-D10 (not in Matt's table; exists in our spentry-B drafts).
   (call-subprim .SPgetu64)
   (unbox-fixnum imm1 offset)            ; ppc:166 / x86:223
   (str imm0 (:@ fixnum imm1))           ; ppc:192 stdx / x86:224
   (restore-full-lisp-context)           ; x86:225
-  ;; arg_z (= new-value) preserved by .SPgetu64 — ppc:193 (mr arg_z new-value)
+ ;; arg_z (= new-value) preserved by .SPgetu64 — ppc:193 (mr arg_z new-value)
   (ret))                                ; ppc:194
 
 ;;; =====================================================================
@@ -174,18 +174,18 @@
 ;;; =====================================================================
 ;;; FF-call MakeDataExecutable for I/D-cache sync — REQUIRED on arm64
 ;;; (freshly loaded fasl code vectors must be flushed before execution),
-;;; unlike the x86-64 twin's no-op (x86:98).  PPC builds a PowerOpen
+;;; unlike the x86-64 twin's no-op (x86:98). PPC builds a PowerOpen
 ;;; c-frame + .SPpoweropen-ffcall; here the AAPCS64 c_frame + .SPffcall
 ;;; (kernel contract: `spentry ffcall' in
-;;; upstream-port/lisp-kernel/arm64-spentry.s, 16m30):
-;;;   {header@0, savedsp@8, param0..7@16..72, 4 reserved boundary
-;;;    lisp_frame words@80..111} = 112 bytes / 14 words.
+;;; arm64-spentry.s, ):
+;;; {header@0, savedsp@8, param0..7@16..72, 4 reserved boundary
+;;; lisp_frame words@80..111} = 112 bytes / 14 words.
 ;;; The header is a REAL uvector header whose element count (words-1 = 13)
-;;; deliberately COVERS the 4 reserved words.  _SPffcall derives the
+;;; deliberately COVERS the 4 reserved words. _SPffcall derives the
 ;;; boundary-frame base from that count, parks lr there, publishes the
 ;;; frame by shrinking the count by 4, and on return restores sp from
 ;;; savedsp -- NOT from offset 0, which is the header.
-;;; 16m31: 16m30 renamed backlink/savelr -> header/savedsp but missed this
+;;; : renamed backlink/savelr -> header/savedsp but missed this
 ;;; DEPLOYED twin (its handoff claimed only the undeployed drafts were
 ;;; left), so this body still referenced the now-unbound
 ;;; arm64::c-frame.backlink and walled the XLOAD in l0 arm64-def.
@@ -199,8 +199,8 @@
     (save-lisp-context)                 ; ppc:25
     (getvheader word-offset codev)      ; ppc:26
     (header-size len word-offset)       ; ppc:27
-    ;; ppc:32-33 (stru sp -(c-frame) sp): str sp unencodable (Rt=xzr) —
-    ;; stage the saved SP through imm1 (wave-3 idiom).
+ ;; ppc:32-33 (stru sp -(c-frame) sp): str sp unencodable (Rt=xzr) —
+ ;; stage the saved SP through imm1 (wave-3 idiom).
     (mov imm1 sp)
     (sub sp sp (:$ arm64::c-frame.ffcall-size))  ; 16 head + 8 params + 4 reserved
     (movz imm3 (:$ arm64::c-frame.ffcall-header))
@@ -220,10 +220,10 @@
 ;;; =====================================================================
 ;;; %lookup-subprim-address — ARM-ISA analog (arm-def.lisp:612); no PPC64
 ;;; body exists because PPC64's `ba' encodes subprim addresses directly
-;;; (ppc-callback-support needs no lookup).  Returns the absolute kernel
+;;; (ppc-callback-support needs no lookup). Returns the absolute kernel
 ;;; address of the subprim whose rcontext-relative sptab offset is SUBP —
 ;;; a boxed fixnum holding the same arm64::subprimitive-offset value the
-;;; call-subprim/jump-subprim lapmacros use.  The per-thread sptab
+;;; call-subprim/jump-subprim lapmacros use. The per-thread sptab
 ;;; entries are identical static kernel addresses in every thread, so
 ;;; the current thread's entry is a valid jump target for foreign
 ;;; trampoline code (consumer: level-1/arm64-callback-support.lisp).
@@ -242,7 +242,7 @@
 ;;; %get-kernel-global-from-offset — ppc:45
 ;;; =====================================================================
 ;;; offset = the (negative) rnil-relative offset from arm64::%kernel-global,
-;;; boxed.  PPC adds (target-nil-value); rnil holds tagged nil (x86:151 same).
+;;; boxed. PPC adds (target-nil-value); rnil holds tagged nil (x86:151 same).
 
 (defarm64lapfunction %get-kernel-global-from-offset ((offset arg_z))
   (check-nargs 1)                       ; ppc:46
@@ -274,21 +274,21 @@
 
 ;;; =====================================================================
 ;;; %code-vector-pc — ppc:327 (promoted from the def draft; demand:
-;;; 16m17 arm64-trap-support return-address-offset — xcmain/%xerr-disp
+;;; arm64-trap-support return-address-offset — xcmain/%xerr-disp
 ;;; fake-frame construction).
 ;;; =====================================================================
 ;;; Returns the boxed byte-offset of *pcptr's value within code-vector,
-;;; or nil if the PC is outside it.  loc-pc -> imm2; the nil move is
-;;; NZCV-safe between cmp and b.hs.  32-bit code elements, so
+;;; or nil if the PC is outside it. loc-pc -> imm2; the nil move is
+;;; NZCV-safe between cmp and b.hs. 32-bit code elements, so
 ;;; header-size << 2 = byte size (as PPC64's slri 2, ppc:334).
 (defarm64lapfunction %code-vector-pc ((code-vector arg_y) (pcptr arg_z))
   (macptr-ptr imm0 pcptr)               ; ppc:328
   (ldr imm2 (:@ imm0 (:$ 0)))           ; ppc:329 (ldr loc-pc 0 imm0)
   (sub imm0 imm2 code-vector)           ; ppc:330
-  ;; ppc:331 (subi imm0 imm0 misc-data-offset).  misc-data-offset is
-  ;; NEGATIVE here (-4: fulltag-misc 12, arm64-arch.lisp:268), so
-  ;; subtracting it is an add of the positive constant — the assembler
-  ;; refuses negative immediates (neg-imm drift class, 16m5).
+ ;; ppc:331 (subi imm0 imm0 misc-data-offset). misc-data-offset is
+ ;; NEGATIVE here (-4: fulltag-misc 12, arm64-arch.lisp:268), so
+ ;; subtracting it is an add of the positive constant — the assembler
+ ;; refuses negative immediates (neg-imm drift class, ).
   (add imm0 imm0 (:$ (- arm64::misc-data-offset)))
   (getvheader imm1 code-vector)         ; ppc:332
   (header-size imm1 imm1)               ; ppc:333
@@ -302,21 +302,21 @@
 
 ;;; =====================================================================
 ;;; Frame-walk / catch-top set — ppc:227/236/241/270/289 (promoted from
-;;; the def draft; demand: 16m17 lib/arm64-backtrace cfp-lfun cluster,
-;;; 16m21 %frame-backlink runtime call from the trap reporter/backtrace).
+;;; the def draft; demand: lib/arm64-backtrace cfp-lfun cluster,
+;;; %frame-backlink runtime call from the trap reporter/backtrace).
 ;;; lisp-frame layout is kernel ground truth: marker@0 savevsp@8
 ;;; savefn@16 savelr@24 — 4 nodes = 32 bytes (arm64-constants.h:378
 ;;; `_struct lisp_frame`; spentry-D-call-builtins.s:60-64).
 ;;; =====================================================================
 
-;;; %%frame-backlink — ppc:227.  ARM64-DEVIATION: PPC loads a stored
+;;; %%frame-backlink — ppc:227. ARM64-DEVIATION: PPC loads a stored
 ;;; backlink from lisp-frame word @0, but Matt's marker frame has marker@0
-;;; and NO stored backlink.  Under the DECIDED cstack-walk design (Option
+;;; and NO stored backlink. Under the DECIDED cstack-walk design (Option
 ;;; A, comms/ARM64-CSTACK-WALK-DECISION.md — cstack is a homogeneous 32B
 ;;; frame chain, nfp + stack-cons on the TSP), the parent (older) frame is
 ;;; simply the next 32-byte frame at a higher address, so backlink = p+32
-;;; (kernel-verified lisp_frame size).  Matches the fixed-frame assumption
-;;; the rest of this set already bakes in.  (16m21: this fell through the
+;;; (kernel-verified lisp_frame size). Matches the fixed-frame assumption
+;;; the rest of this set already bakes in. (: this fell through the
 ;;; quartet promotion and was left undefined, looping the trap reporter.)
 (defarm64lapfunction %%frame-backlink ((p arg_z))
   (check-nargs 1)                       ; ppc:228
@@ -341,18 +341,18 @@
   (ldr imm2 (:@ p (:$ 24)))             ; ppc:245 lisp-frame.savelr -> imm2
   (cmp imm0 (:$ arm64::subtag-function)) ; ppc:244
   (b.ne @no)                            ; ppc:246
-  ;; codevector = function slot 0 @ misc-function-offset (-4) — ldur
+ ;; codevector = function slot 0 @ misc-function-offset (-4) — ldur
   (ldur arg_x (:@ arg_y (:$ arm64::misc-function-offset))) ; ppc:247
   (sub imm1 imm2 arg_x)                 ; ppc:248 pc - tagged codevector
-  ;; ppc:249 (la imm1 (- misc-data-offset) imm1).  misc-data-offset is
-  ;; NEGATIVE here (-4), so subtracting it is an add of the positive
-  ;; constant (neg-imm drift class, 16m5).
+ ;; ppc:249 (la imm1 (- misc-data-offset) imm1). misc-data-offset is
+ ;; NEGATIVE here (-4), so subtracting it is an add of the positive
+ ;; constant (neg-imm drift class, ).
   (add imm1 imm1 (:$ (- arm64::misc-data-offset)))
   (getvheader imm0 arg_x)               ; ppc:250
   (header-length imm0 imm0)             ; ppc:251 boxed element count
   (cmp imm1 imm0)                       ; ppc:252 cmplr (unsigned; boxed
-                                        ; count over-bounds byte length
-                                        ; 2x, same slack as PPC64)
+ ; count over-bounds byte length
+ ; 2x, same slack as PPC64)
   (box-fixnum imm1 imm1)                ; ppc:253 (lsl — NZCV-safe)
   (b.hs @no)                            ; ppc:254 bge (unsigned)
   (vpush arg_y)                         ; ppc:255
@@ -390,7 +390,7 @@
 ;;; %copy-function / replace-function-code / closure-function —
 ;;; ppc-def.lisp:1227/1237/1245
 ;;; =====================================================================
-;;; Demand: 16m11a frontier — l1-clos-boot gf-dcode install dies at
+;;; Demand: frontier — l1-clos-boot gf-dcode install dies at
 ;;; `undefined function REPLACE-FUNCTION-CODE` (nargs 2).
 ;;;
 ;;; Since the fulltag-function removal (patch 0055) functions are plain
@@ -398,7 +398,7 @@
 ;;; %function-to-function-vector calls below are identity-with-typecheck.
 ;;; Bodies keep PPC64 semantics (codevector @ slot 0, whole-gvector copy
 ;;; — Matt's function shape is PPC64's, not x8664's inline-code one).
-;;; ppc:1245 closure-function is already active above (16m5t, x86 body).
+;;; ppc:1245 closure-function is already active above (, x86 body).
 
 (defun %copy-function (proto &optional target) ; ppc:1227
   (let* ((protov (%function-to-function-vector proto))
@@ -423,7 +423,7 @@
 
 ;;; =====================================================================
 ;;; Method-context apply family — ppc:1146-1224 (promoted from the def
-;;; draft; demand: 16m11c udf %APPLY-LEXPR-TAIL-WISE, l1-clos-boot; the
+;;; draft; demand: udf %APPLY-LEXPR-TAIL-WISE, l1-clos-boot; the
 ;;; two spread siblings ride along — same dcode application paths).
 ;;; =====================================================================
 ;;; nargs is a TAGGED fixnum (boxed count IS byte count, fixnumshift=3).
@@ -432,7 +432,7 @@
 ;;; lr-preservation idiom (PPC mflr loc-pc / bla / mtlr loc-pc, no loc-pc
 ;;; register here): build-lisp-frame, call the subprim, then pop ONLY fn/lr
 ;;; and discard the frame — vsp must NOT be reloaded because the spread
-;;; subprim pushed the spread args on the vstack.  DECIDE W4-D17.
+;;; subprim pushed the spread args on the vstack. DECIDE W4-D17.
 ;;; Final dispatch through codevector slot 0 (misc-function-offset -4) + br:
 ;;; wave-3 DECIDE-6 recurrence (W4-D15).
 ;;; Kernel bodies exist: spread_lexprz spentry-E:561, spreadargz
@@ -441,13 +441,13 @@
 (defarm64lapfunction %apply-lexpr-with-method-context ((magic arg_x)
                                                        (function arg_y)
                                                        (args arg_z))
-  ;; Somebody's called (or tail-called) us.       ; ppc:1149-1154 comments
+ ;; Somebody's called (or tail-called) us. ; ppc:1149-1154 comments
   (mov next-method-context magic)       ; ppc:1155 (mr temp1 magic)
   (mov nfn function)                    ; ppc:1156
   (set-nargs 0)                         ; ppc:1157
   (build-lisp-frame)                    ; ppc:1158 (mflr loc-pc) — W4-D17
-  ;; .SPspread-lexprz preserves nfn/next-method-context (PPC contract;
-  ;; spentry-E @4883).  DECIDE W4-D10: not in Matt's table.
+ ;; .SPspread-lexprz preserves nfn/next-method-context (PPC contract;
+ ;; spentry-E @4883). DECIDE W4-D10: not in Matt's table.
   (call-subprim .SPspread-lexprz)      ; ppc:1159 (bla)
   (ldp fn lr (:@ sp (:$ 16)))           ; ppc:1160 (mtlr loc-pc)
   (add sp sp (:$ 32))                   ;   discard frame; vsp NOT reloaded
@@ -457,7 +457,7 @@
 (defarm64lapfunction %apply-with-method-context ((magic arg_x)
                                                  (function arg_y)
                                                  (args arg_z))
-  ;; Same shape; spreads a LIST instead of a lexpr.  ; ppc:1169-1174
+ ;; Same shape; spreads a LIST instead of a lexpr. ; ppc:1169-1174
   (mov next-method-context magic)       ; ppc:1175
   (mov nfn function)                    ; ppc:1176
   (set-nargs 0)                         ; ppc:1177
@@ -471,7 +471,7 @@
 ;;; %apply-lexpr-tail-wise — ppc:1188
 ;;; Preconditions ppc:1189-1199 apply verbatim (lexpr via .SPlexpr-entry;
 ;;; LR = lexpr-cleanup code; cleanup EQ ret1valaddr => discard the extra
-;;; MV frame).  Frame field offsets are the MARKER frame's (savevsp@8,
+;;; MV frame). Frame field offsets are the MARKER frame's (savevsp@8,
 ;;; savefn@16, savelr@24; W4-D18 — matches build-lisp-frame/
 ;;; restore-lisp-frame's {marker,vsp,fn,lr}); nargs loaded from the lexpr
 ;;; is BOXED (byte count), so (sub vsp imm0 nargs) is unscaled exactly as
@@ -481,7 +481,7 @@
 ;;; ppc:1204 (mr imm5 nargs) elided — VESTIGIAL dead code in the source:
 ;;; imm5 is never read after the copy (the tail-called method clobbers
 ;;; volatiles), and BOTH other ports drop it (arm-def.lisp:527-557,
-;;; x86-def.lisp:458ff).  NB imm5/nargs are DISTINCT registers on both
+;;; x86-def.lisp:458ff). NB imm5/nargs are DISTINCT registers on both
 ;;; PPC (r8/r11) and Matt's map (x5/x6) — an earlier "aliases" claim
 ;;; here was wrong (record corrected in wave-8 lead-verify).
 (defarm64lapfunction %apply-lexpr-tail-wise ((method arg_y) (args arg_z))
@@ -510,39 +510,39 @@
 
 
 ;;; ---------------------------------------------------------------------
-;;; apply+ — promoted 16m41 (regression stage 11: SETF-APPLY.1-4).
+;;; apply+ — promoted (regression stage 11: SETF-APPLY.1-4).
 ;;;
 ;;; (apply+ f butlast last) = (apply f (append butlast (list last))).
 ;;; This is the ONLY thing (setf (apply #'aref ...) ...) expands into
 ;;; (lib/setf.lisp:505's `(define-setf-method apply ...)' leg), and it is a
 ;;; PER-ARCH LAP definition -- present for PPC/x86/ARM32 and, until now,
 ;;; absent on arm64, so all four SETF-APPLY tests reported
-;;; UNDEFINED-FUNCTION-CALL.  Same class as 16m37's missing VALUES.
+;;; UNDEFINED-FUNCTION-CALL. Same class as 's missing VALUES.
 ;;;
 ;;; LOGIC DONOR: ppc-def.lisp:1256-1278 (line-for-line below).
 ;;; SHAPE DONOR for the two places PPC cannot be followed: arm-def.lisp:591,
 ;;; the other port with no loc-pc register and no conditional-store-free
-;;; branchless push.  Three corrections to the wave-4 draft, each verified
+;;; branchless push. Three corrections to the wave-4 draft, each verified
 ;;; against this lane rather than assumed:
 ;;;
-;;;  1. `(:arglist ...)' pseudo-op, NOT PPC's `(defun (&lap ...))' + a
-;;;     trailing `(lfun-bits #'apply+ ...)'.  arm64-lap.lisp:124 implements
-;;;     :arglist as `(setq *arm64-lap-lfun-bits* (encode-lambda-list arg))',
-;;;     which encodes 3-required-plus-rest exactly as PPC's explicit
-;;;     `(logior $lfbits-rest-bit (dpb 3 $lfbits-numreq 0))'.  Setting both
-;;;     would be redundant; ARM32 sets only the arglist.
-;;;  2. The callee goes in temp0, as PPC does -- NOT in nfn, as ARM32 does.
-;;;     OUR .SPfuncall dispatches on temp0 (spentry-D-call-builtins.s:146
-;;;     `and imm0,temp0,#fulltagmask'), so ARM32's `(ldr nfn (:@ nfn
-;;;     'funcall))' would hand the subprim a stale callee.
-;;;  3. nfn (the constant-pool base for `'funcall') and temp0 (`last') must
-;;;     survive .SPspreadargz.  VERIFIED by reading it
-;;;     (spentry-D-call-builtins.s:631-660): it writes only imm0, imm1,
-;;;     arg_x, arg_y, arg_z, nargs and vsp.  PPC relies on the same contract.
+;;; 1. `(:arglist ...)' pseudo-op, NOT PPC's `(defun (&lap ...))' + a
+;;; trailing `(lfun-bits #'apply+ ...)'. arm64-lap.lisp:124 implements
+;;; :arglist as `(setq *arm64-lap-lfun-bits* (encode-lambda-list arg))',
+;;; which encodes 3-required-plus-rest exactly as PPC's explicit
+;;; `(logior $lfbits-rest-bit (dpb 3 $lfbits-numreq 0))'. Setting both
+;;; would be redundant; ARM32 sets only the arglist.
+;;; 2. The callee goes in temp0, as PPC does -- NOT in nfn, as ARM32 does.
+;;; OUR .SPfuncall dispatches on temp0 (spentry-D-call-builtins.s:146
+;;; `and imm0,temp0,#fulltagmask'), so ARM32's `(ldr nfn (:@ nfn
+;;; 'funcall))' would hand the subprim a stale callee.
+;;; 3. nfn (the constant-pool base for `'funcall') and temp0 (`last') must
+;;; survive .SPspreadargz. VERIFIED by reading it
+;;; (spentry-D-call-builtins.s:631-660): it writes only imm0, imm1,
+;;; arg_x, arg_y, arg_z, nargs and vsp. PPC relies on the same contract.
 ;;;
 ;;; lr across the subprim: build-lisp-frame, call, then pop ONLY fn/lr and
 ;;; discard the frame -- vsp must NOT be reloaded, because the spread pushed
-;;; the spread args onto the vstack.  That is the vetted W4-D17 idiom already
+;;; the spread args onto the vstack. That is the vetted W4-D17 idiom already
 ;;; live in %apply-lexpr-with-method-context above.
 ;;; ARM64-DEVIATION: PPC's branchless `blt cr0 @nopush' is kept as a real
 ;;; branch (a64 has no conditional store; ARM32 uses `strhs' instead).
@@ -566,10 +566,10 @@
   (mov arg_y arg_z)                     ; ppc:1272
   (mov arg_z temp0)                     ; ppc:1273
   (ldur temp0 (:@ nfn (:$ 'funcall)))   ; ppc:1274 constant-pool ref (DECIDE-14)
-  ;; jump-subprim, NOT call-subprim: PPC's `ba' is a tail BRANCH.  call-subprim
-  ;; emits `bl', so .SPfuncall returned into the end of this code vector and
-  ;; execution fell through into the NEXT object's `udf #0' sentinel --
-  ;; "Unhandled exception 4 at 0x300000004ac4, insn 0x00000000".  This is the
-  ;; SAME correction arm64-misc.lisp:457-460 records for the VALUES draft in
-  ;; 16m37; the drafts systematically spell tail subprim jumps as calls.
+ ;; jump-subprim, NOT call-subprim: PPC's `ba' is a tail BRANCH. call-subprim
+ ;; emits `bl', so .SPfuncall returned into the end of this code vector and
+ ;; execution fell through into the NEXT object's `udf #0' sentinel --
+ ;; "Unhandled exception 4 at 0x300000004ac4, insn 0x00000000". This is the
+ ;; SAME correction arm64-misc.lisp:457-460 records for the VALUES draft in
+ ;; ; the drafts systematically spell tail subprim jumps as calls.
   (jump-subprim .SPfuncall))           ; ppc:1275 (ba .SPfuncall) — TAIL

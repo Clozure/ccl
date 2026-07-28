@@ -7,53 +7,53 @@
  * Tree pin: upstream-arm64-tip @ d71a5ad.
  *
  * PORT-NOTE — deviations from the PPC64 source (each tagged inline):
- *  1. Trap encoding: PPC tw/twi/td/tdi conditional traps + UUO major
- *     opcodes are replaced by the `udf #imm16' UUO scheme.  Namespace
- *     source: compiler/ARM64/arm64-asm.lisp:435-450 (Matt's active
- *     layer; lead ruling 2026-07-10 — arm64-uuo.s's hlt scheme is
- *     2012-WIP legacy and is NOT decoded here).
- *     ARM64 trap sites have already BRANCHED (conditional traps become
- *     b.cond around an unconditional udf), so is_conditional_trap()
- *     and PPC's TO-field condition re-evaluation have no analog here.
- *  2. Signal mechanics (sigaltstack, SIGILL routing) follow
- *     arm-exceptions.c (ARM-family Linux reference) where PPC has no
- *     analog; such blocks are tagged ARM64-DEVIATION with line cites.
- *  3. Alloc-sequence emulation: the inline allocator is
- *     arm64-macros.s:36-69 (Cons/Misc_Alloc/Misc_Alloc_Fixed): a
- *     multi-instruction sub/cmp/b.hi/udf sequence, so pc_luser_xp uses
- *     arm-exceptions.c's classify/restart approach (arm-exceptions.c:
- *     1624-1698) rather than PPC's two-instruction back-decode.
- *  4. No FE0/FE1 MSR bits, no PR_SET_FPEXC prctl on AArch64:
- *     enable/disable_fp_exceptions are empty (arm-exceptions.c:55-66).
- *  5. TCR layout: arm64-constants.h C-side struct (W4-D20: where
- *     arm64-arch.lisp disagrees, constants.h is followed).
+ * 1. Trap encoding: PPC tw/twi/td/tdi conditional traps + UUO major
+ * opcodes are replaced by the `udf #imm16' UUO scheme. Namespace
+ * source: compiler/ARM64/arm64-asm.lisp:435-450 (Matt's active
+ * layer; lead ruling 2026-07-10 — arm64-uuo.s's hlt scheme is
+ * 2012-WIP legacy and is NOT decoded here).
+ * ARM64 trap sites have already BRANCHED (conditional traps become
+ * b.cond around an unconditional udf), so is_conditional_trap()
+ * and PPC's TO-field condition re-evaluation have no analog here.
+ * 2. Signal mechanics (sigaltstack, SIGILL routing) follow
+ * arm-exceptions.c (ARM-family Linux reference) where PPC has no
+ * analog; such blocks are tagged ARM64-DEVIATION with line cites.
+ * 3. Alloc-sequence emulation: the inline allocator is
+ * arm64-macros.s:36-69 (Cons/Misc_Alloc/Misc_Alloc_Fixed): a
+ * multi-instruction sub/cmp/b.hi/udf sequence, so pc_luser_xp uses
+ * arm-exceptions.c's classify/restart approach (arm-exceptions.c:
+ * 1624-1698) rather than PPC's two-instruction back-decode.
+ * 4. No FE0/FE1 MSR bits, no PR_SET_FPEXC prctl on AArch64:
+ * enable/disable_fp_exceptions are empty (arm-exceptions.c:55-66).
+ * 5. TCR layout: arm64-constants.h C-side struct (W4-D20: where
+ * arm64-arch.lisp disagrees, constants.h is followed).
  *
  * Register numbers: map authority is compiler/ARM64/arm64-asm.lisp:183-215
  * (Matt's active layer; lead ruling 2026-07-10): imm5=x5 is DISTINCT from
  * nargs=x6; all other assignments as in arm64-constants.h's `.req' block
- * (arg_z=x12, temp0=x13, rnil=x23, tsp=x24, ...).  arm64-constants.h has
+ * (arg_z=x12, temp0=x13, rnil=x23, tsp=x24, ...). arm64-constants.h has
  * exactly one stale line (`imm5 .req x6'); arm64-constants.s's m4 map is
- * wholly stale (rnil=x6, high-tag residue).  See
+ * wholly stale (rnil=x6, high-tag residue). See
  * drafts/arm64-exceptions-report.md.
  */
 
-#include "lisp.h"                 /* ppc-exceptions.c:17 */
-#include "lisp-errors.h"          /* error_* trap codes (shared table) */
-#include "lisp-exceptions.h"      /* ppc-exceptions.c:18 */
-#include "lisp_globals.h"         /* ppc-exceptions.c:19 */
-#include <ctype.h>                /* ppc-exceptions.c:20 */
-#include <stdio.h>                /* ppc-exceptions.c:21 */
-#include <stddef.h>               /* ppc-exceptions.c:22 */
-#include <string.h>               /* ppc-exceptions.c:23 */
-#include <stdarg.h>               /* ppc-exceptions.c:24 */
-#include <errno.h>                /* ppc-exceptions.c:25 */
-#include <stdio.h>                /* ppc-exceptions.c:26 */
-#ifdef LINUX                      /* ppc-exceptions.c:27-31 */
+#include "lisp.h" /* ppc-exceptions.c:17 */
+#include "lisp-errors.h" /* error_* trap codes (shared table) */
+#include "lisp-exceptions.h" /* ppc-exceptions.c:18 */
+#include "lisp_globals.h" /* ppc-exceptions.c:19 */
+#include <ctype.h> /* ppc-exceptions.c:20 */
+#include <stdio.h> /* ppc-exceptions.c:21 */
+#include <stddef.h> /* ppc-exceptions.c:22 */
+#include <string.h> /* ppc-exceptions.c:23 */
+#include <stdarg.h> /* ppc-exceptions.c:24 */
+#include <errno.h> /* ppc-exceptions.c:25 */
+#include <stdio.h> /* ppc-exceptions.c:26 */
+#ifdef LINUX /* ppc-exceptions.c:27-31 */
 #include <strings.h>
 #include <sys/mman.h>
 #endif
 
-#include "threads.h"              /* ppc-exceptions.c:49 */
+#include "threads.h" /* ppc-exceptions.c:49 */
 
 /* ------------------------------------------------------------------ */
 /* lisp_globals.h grew a real ARM64 branch @ 93d72a0 (nil-anchored via
@@ -113,7 +113,7 @@ enum {
 
 /* ------------------------------------------------------------------ */
 /* PROPOSED C-side struct overlays (ratify with Matt; arm64-constants.h
- * has no C struct block yet).  lisp_frame moved to
+ * has no C struct block yet). lisp_frame moved to
  * platform-linuxarm64.h (albt.c needs it too).
  *
  * catch_frame, laid on the UNTAGGED uvector base (untag(tcr->catch_top);
@@ -153,100 +153,100 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
  * and all type errors moved to a new wrong_type format 3.
  *
  * A64 UDF encoding: the permanently-undefined space, instruction word
- * 0x0000IIII (top 16 bits zero, imm16 in the low 16).  Linux/AArch64
+ * 0x0000IIII (top 16 bits zero, imm16 in the low 16). Linux/AArch64
  * delivers it as SIGILL.
  *
  * imm16 low 2 BITS = format:
- *   0 misc: 14 bits of info in 15:2, NEVER all-0.  His values 1-8
- *     (1 alloc, 2 gc, 3 debug, 4 interrupt_now, 5 suspend_now,
- *     6 too_few_args, 7 too_many_args, 8 wrong_number_of_args).
- *     PROPOSED extension (arm64-globals-proposed.s uuo_interr; ratify):
- *     info bit 13 set = "interr": bits 12:5 = errors.s errnum,
- *     bits 4:0 = register.
- *   1 unary: reg in bits 6:2, 9 bits of info in 15:7 (0 not_callable,
- *     1 no_throw_tag, 2 unbound, 3 udf, 4 udf_call, 5 tlb_too_small).
- *   2 binary: ra in 6:2, rb in 11:7, 4 bits of info in 15:12
- *     (0 vector_bounds, 1 array_bounds, 2 integer_divide_by_zero,
- *     3 eep_unresolved, 4 fpu_exception, 5 array_rank, 6 array_flags,
- *     7 two_registers = extra register pair for the preceding uuo).
- *   3 wrong_type: reg in 6:2, continuable flag in bit 7, expected
- *     xtype code in 15:8.
+ * 0 misc: 14 bits of info in 15:2, NEVER all-0. His values 1-8
+ * (1 alloc, 2 gc, 3 debug, 4 interrupt_now, 5 suspend_now,
+ * 6 too_few_args, 7 too_many_args, 8 wrong_number_of_args).
+ * PROPOSED extension (arm64-globals-proposed.s uuo_interr; ratify):
+ * info bit 13 set = "interr": bits 12:5 = errors.s errnum,
+ * bits 4:0 = register.
+ * 1 unary: reg in bits 6:2, 9 bits of info in 15:7 (0 not_callable,
+ * 1 no_throw_tag, 2 unbound, 3 udf, 4 udf_call, 5 tlb_too_small).
+ * 2 binary: ra in 6:2, rb in 11:7, 4 bits of info in 15:12
+ * (0 vector_bounds, 1 array_bounds, 2 integer_divide_by_zero,
+ * 3 eep_unresolved, 4 fpu_exception, 5 array_rank, 6 array_flags,
+ * 7 two_registers = extra register pair for the preceding uuo).
+ * 3 wrong_type: reg in 6:2, continuable flag in bit 7, expected
+ * xtype code in 15:8.
  */
-#define IS_UUO(i)     (((i) & 0xffff0000) == 0)
-#define UUO_IMM16(i)  ((i) & 0xffff)
+#define IS_UUO(i) (((i) & 0xffff0000) == 0)
+#define UUO_IMM16(i) ((i) & 0xffff)
 
-#define uuo_format_misc       0
-#define uuo_format_unary      1
-#define uuo_format_binary     2
+#define uuo_format_misc 0
+#define uuo_format_unary 1
+#define uuo_format_binary 2
 #define uuo_format_wrong_type 3
 
-#define UUO_FORMAT(imm16)      ((imm16) & 3)
-#define UUO_UNARY_GPR(imm16)   (((imm16) >> 2) & 0x1f)
-#define UUO_UNARY_INFO(imm16)  (((imm16) >> 7) & 0x1ff)
-#define UUO_BINARY_RA(imm16)   (((imm16) >> 2) & 0x1f)
-#define UUO_BINARY_RB(imm16)   (((imm16) >> 7) & 0x1f)
+#define UUO_FORMAT(imm16) ((imm16) & 3)
+#define UUO_UNARY_GPR(imm16) (((imm16) >> 2) & 0x1f)
+#define UUO_UNARY_INFO(imm16) (((imm16) >> 7) & 0x1ff)
+#define UUO_BINARY_RA(imm16) (((imm16) >> 2) & 0x1f)
+#define UUO_BINARY_RB(imm16) (((imm16) >> 7) & 0x1f)
 #define UUO_BINARY_INFO(imm16) (((imm16) >> 12) & 0xf)
-#define UUO_MISC_INFO(imm16)   (((imm16) >> 2) & 0x3fff)
-#define UUO_WT_GPR(imm16)         (((imm16) >> 2) & 0x1f)
+#define UUO_MISC_INFO(imm16) (((imm16) >> 2) & 0x3fff)
+#define UUO_WT_GPR(imm16) (((imm16) >> 2) & 0x1f)
 #define UUO_WT_CONTINUABLE(imm16) (((imm16) >> 7) & 1)
-#define UUO_WT_XTYPE(imm16)       (((imm16) >> 8) & 0xff)
+#define UUO_WT_XTYPE(imm16) (((imm16) >> 8) & 0xff)
 /* PROPOSED interr extension fields (misc info bit 13 set) */
 #define UUO_MISC_IS_INTERR(mi) (((mi) >> 13) & 1)
-#define UUO_INTERR_ERRNUM(mi)  (((mi) >> 5) & 0xff)
-#define UUO_INTERR_GPR(mi)     ((mi) & 0x1f)
+#define UUO_INTERR_ERRNUM(mi) (((mi) >> 5) & 0xff)
+#define UUO_INTERR_GPR(mi) ((mi) & 0x1f)
 
 /* unary infos (arm64-uuo.s unary_info_*) */
-#define uuo_unary_not_callable  0
-#define uuo_unary_no_throw_tag  1
-#define uuo_unary_unbound       2
-#define uuo_unary_udf           3
-#define uuo_unary_udf_call      4
+#define uuo_unary_not_callable 0
+#define uuo_unary_no_throw_tag 1
+#define uuo_unary_unbound 2
+#define uuo_unary_udf 3
+#define uuo_unary_udf_call 4
 #define uuo_unary_tlb_too_small 5
-#define uuo_unary_slot_unbound  6   /* patch 0052 (PROPOSED); three-register
+#define uuo_unary_slot_unbound 6 /* patch 0052 (PROPOSED); three-register
                                        error -- see doc/porting/arm64.md */
-#define uuo_unary_apply_macro   7   /* patch 0055: funcalled a macro/
+#define uuo_unary_apply_macro 7 /* patch 0055: funcalled a macro/
                                        special-operator name; gpr = fname */
 
 /* binary infos (arm64-uuo.s binary_info_*) */
-#define uuo_binary_vector_bounds  0
-#define uuo_binary_array_bounds   1
-#define uuo_binary_int_div_zero   2
+#define uuo_binary_vector_bounds 0
+#define uuo_binary_array_bounds 1
+#define uuo_binary_int_div_zero 2
 #define uuo_binary_eep_unresolved 3
-#define uuo_binary_fpu_exception  4
-#define uuo_binary_array_rank     5
-#define uuo_binary_array_flags    6
-#define uuo_binary_two_registers  7
+#define uuo_binary_fpu_exception 4
+#define uuo_binary_array_rank 5
+#define uuo_binary_array_flags 6
+#define uuo_binary_two_registers 7
 
 /* misc infos (arm64-uuo.s uuo_misc macros; 0 is invalid) */
-#define uuo_misc_alloc          1
-#define uuo_misc_gc_trap        2
-#define uuo_misc_debug_trap     3
-#define uuo_misc_interrupt_now  4
-#define uuo_misc_suspend_now    5
-#define uuo_misc_too_few        6
-#define uuo_misc_too_many       7
-#define uuo_misc_wrong_number   8
+#define uuo_misc_alloc 1
+#define uuo_misc_gc_trap 2
+#define uuo_misc_debug_trap 3
+#define uuo_misc_interrupt_now 4
+#define uuo_misc_suspend_now 5
+#define uuo_misc_too_few 6
+#define uuo_misc_too_many 7
+#define uuo_misc_wrong_number 8
 
 /* Whole-instruction forms tested for directly:
    udf #((info<<2) | uuo_format_misc). */
-#define ALLOC_TRAP_INSTRUCTION         (0x00000004)  /* uuo_alloc = udf #4  */
-#define GC_TRAP_INSTRUCTION            (0x00000008)  /* uuo_gc_trap         */
-#define DEBUG_TRAP_INSTRUCTION         (0x0000000c)  /* uuo_debug_trap      */
-#define DEFERRED_INTERRUPT_INSTRUCTION (0x00000010)  /* uuo_interrupt_now   */
+#define ALLOC_TRAP_INSTRUCTION (0x00000004) /* uuo_alloc = udf #4 */
+#define GC_TRAP_INSTRUCTION (0x00000008) /* uuo_gc_trap */
+#define DEBUG_TRAP_INSTRUCTION (0x0000000c) /* uuo_debug_trap */
+#define DEFERRED_INTERRUPT_INSTRUCTION (0x00000010) /* uuo_interrupt_now */
 
 /* ------------------------------------------------------------------ */
 /* Inline-allocator instruction matchers.
  *
  * The allocation sequence is arm64-macros.s:36-69 (Cons / Misc_Alloc /
  * Misc_Alloc_Fixed):
- *     sub  allocptr, allocptr, {#imm | Xm}
- *     cmp  allocptr, allocbase
- *     b.hi 1f
- *     udf  #3   (uuo_alloc = misc 0; assembler-validated 2026-07-11)
- * 1:  str  <header|cdr>, [allocptr, #misc_header_offset|#cons.cdr]
- *    (str  <car>, [allocptr, #cons.car])
- *     mov  <dest>, allocptr
- *     bic  allocptr, allocptr, #fulltagmask
+ * sub allocptr, allocptr, {#imm | Xm}
+ * cmp allocptr, allocbase
+ * b.hi 1f
+ * udf #3 (uuo_alloc = misc 0; assembler-validated 2026-07-11)
+ * 1: str <header|cdr>, [allocptr, #misc_header_offset|#cons.cdr]
+ * (str <car>, [allocptr, #cons.car])
+ * mov <dest>, allocptr
+ * bic allocptr, allocptr, #fulltagmask
  *
  * The matchers below hardcode A64 encodings the same way
  * arm-exceptions.h:79-101 hardcodes ARM32 ones; each carries its
@@ -279,10 +279,10 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 #define IS_SET_ALLOCPTR_HEADER_RD(i) (((i) & 0xffffffe0) == 0xf81fc340)
 /* cons.cdr = -cons_bias = -3 (arm64-constants.h cons struct):
      stur Xt, [x26, #-3] → imm9 = 0x1fd → 0xf81fd340 */
-#define IS_SET_ALLOCPTR_CDR_RD(i)    (((i) & 0xffffffe0) == 0xf81fd340)
+#define IS_SET_ALLOCPTR_CDR_RD(i) (((i) & 0xffffffe0) == 0xf81fd340)
 /* cons.car = -cons_bias + node_size = +5:
      stur Xt, [x26, #5]  → imm9 = 5 → 0xf8005340 */
-#define IS_SET_ALLOCPTR_CAR_RD(i)    (((i) & 0xffffffe0) == 0xf8005340)
+#define IS_SET_ALLOCPTR_CAR_RD(i) (((i) & 0xffffffe0) == 0xf8005340)
 #define RD_field(i) ((i) & 0x1f)
 
 /* MOV Xd, x26 = ORR Xd, xzr, x26: 0xaa1a03e0 | Rd */
@@ -291,7 +291,7 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 /* bic allocptr, allocptr, #fulltagmask assembles as
    AND x26, x26, #0xfffffffffffffff0 (N=1 immr=60 imms=59):
    0x92000000|1<<22|60<<16|59<<10|26<<5|26 = 0x927cef5a */
-#define IS_CLR_ALLOCPTR_TAG(i)       ((i) == 0x927cef5a)
+#define IS_CLR_ALLOCPTR_TAG(i) ((i) == 0x927cef5a)
 
 /* Alloc-sequence classification (ARM64-DEVIATION: arm-exceptions.h:103-111,
    needed because the ARM-family alloc sequence is multi-instruction). */
@@ -306,7 +306,7 @@ typedef enum {
 
 /* ------------------------------------------------------------------ */
 
-#ifndef SA_NODEFER               /* ppc-exceptions.c:35-37 */
+#ifndef SA_NODEFER /* ppc-exceptions.c:35-37 */
 #define SA_NODEFER 0
 #endif
 
@@ -459,7 +459,7 @@ allocate_object(ExceptionInformation *xp,
 
   /* Life is pretty simple if we can simply grab a segment
      without extending the heap.
-  */
+ */
   if (new_heap_segment(xp, bytes_needed, false, tcr, NULL)) {  /* ppc:253 */
     xpGPR(xp, allocptr) += disp_from_allocptr;
     return true;
@@ -468,7 +468,7 @@ allocate_object(ExceptionInformation *xp,
   /* It doesn't make sense to try a full GC if the object
      we're trying to allocate is larger than everything
      allocated so far.
-  */
+ */
   if ((lisp_global(HEAP_END)-lisp_global(HEAP_START)) > bytes_needed) { /* ppc:266 */
     untenure_from_area(tenured_area); /* force a full GC */
     gc_from_xp(xp, 0L);
@@ -483,7 +483,7 @@ allocate_object(ExceptionInformation *xp,
   return false;
 }
 
-#ifndef XNOMEM                    /* ppc-exceptions.c:284-286 */
+#ifndef XNOMEM /* ppc-exceptions.c:284-286 */
 #define XNOMEM 10
 #endif
 
@@ -505,7 +505,7 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
   /* Couldn't allocate the object.  If it's smaller than some arbitrary
      size (say 128K bytes), signal a "chronically out-of-memory" condition;
      else signal a "allocation request failed" condition.
-  */
+ */
   xpGPR(xp,allocptr) = xpGPR(xp,allocbase) = VOID_ALLOCPTR;
   handle_error(xp, bytes_needed < (128<<10) ? XNOMEM : error_alloc_failed, 0, 0, xpPC(xp));
 }
@@ -751,7 +751,7 @@ signal_stack_soft_overflow(ExceptionInformation *xp, unsigned reg)
   /* The cstack just overflowed.  Force the current thread's
      control stack to do so until all stacks are well under their overflow
      limits.
-  */
+ */
   handle_error(xp, error_stack_overflow, reg, 0,  xpPC(xp));
 }
 
@@ -835,7 +835,7 @@ update_area_active (area **aptr, BytePtr value)
   };
   if (a == NULL) Bug(NULL, "Can't find active area");
   a->active = value;
-  *aptr = a;
+ *aptr = a;
 
   for (a = a->younger; a; a = a->younger) {
     a->active = a->high;
@@ -881,11 +881,11 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
     cur_allocptr = (void *) (tcr->save_allocptr);
     update_area_active((area **)&tcr->vs_area, (BytePtr) tcr->save_vsp);
     update_area_active((area **)&tcr->ts_area, (BytePtr) tcr->save_tsp);
-    /* ARM64-DEVIATION (16m41): PPC's "No need to update cs_area" comment does
+    /* ARM64-DEVIATION (): PPC's "No need to update cs_area" comment does
        NOT carry over.  It is true there because ppc-gc.c:1022 walks a backlink
        CHAIN, which self-terminates wherever it starts; our walk is linear over
        [active, high) and asserts it lands on high, so a stale active means it
-       starts in dead stack.  16m40/16m41 observed exactly that: a thread with
+       starts in dead stack.  / observed exactly that: a thread with
        valence=1 (foreign) and an active left over from an earlier exception,
        walked into C frames and strode 1.8e16 words off a spilled 0.9d0.
        tcr.last_lisp_frame is the boundary the ff-call spentries record (see
@@ -947,7 +947,7 @@ gc_like_from_xp(ExceptionInformation *xp,
     } else {
       /* no pending exception, didn't suspend in lisp state:
          must have executed a synchronous ff-call.
-      */
+ */
       other_tcr->gc_context = NULL;
     }
     normalize_tcr(other_tcr->gc_context, other_tcr, true);
@@ -1014,7 +1014,7 @@ impurify_from_xp(ExceptionInformation *xp, signed_natural param)
 
 
 protection_handler
- * protection_handlers[] = {      /* ppc-exceptions.c:854-863 */
+ * protection_handlers[] = { /* ppc-exceptions.c:854-863 */
    do_spurious_wp_fault,
    do_soft_stack_overflow,
    do_soft_stack_overflow,
@@ -1179,7 +1179,7 @@ do_soft_stack_overflow(ExceptionInformation *xp, protected_area_ptr prot_area, B
   /* Trying to write into a guard page on the vstack or tstack.
      Allocate a new stack segment, emulate stwu and stwux for the TSP, and
      signal an error_stack_overflow condition.
-      */
+ */
   lisp_protection_kind which = prot_area->why;
   Boolean on_TSP = (which == kTSPsoftguard);
 
@@ -1294,7 +1294,7 @@ adjust_exception_pc(ExceptionInformation *xp, int delta)
    exists (nrs_CMAIN/nrs_ERRDISP not yet macptrs) -- the alternative is
    lisp_Debugger, which spins on EOF under a detached boot.
 
-   Layout formulas (OBSERVED in the 16m3 image, cited per doctrine 8):
+   Layout formulas (OBSERVED in the  image, cited per doctrine 8):
    symbol fulltag = fulltag_symbol (7); symbol.pname = [sym + 1]
    (= tagged - fulltag_symbol + node_size, arm64-arch.lisp symptr:
    pname is slot 0 after the header).  pname is a misc-tagged string:
@@ -1325,7 +1325,7 @@ uuo_describe_symbol(LispObj sym)
   }
 }
 
-/* Caller context (boot-16m5b): when the named symbol is %ERR-DISP the
+/* Caller context (boot-): when the named symbol is %ERR-DISP the
    interesting fact is the ERROR being signalled, not the udf itself —
    .SPksignalerr jumps through the %err-disp fcell with the errnum in
    arg_z and the culprit lr.  Dump the call frame so each boot names
@@ -1366,7 +1366,7 @@ uuo_cold_load_fatal(ExceptionInformation *xp, pc where, opcode the_uuo,
   return -1;                      /* not reached */
 }
 
-/* Protection-violation flavor of the cold-load fatal (16m5o): before this,
+/* Protection-violation flavor of the cold-load fatal (): before this,
    an unhandled SEGV during cold load called back into a lisp error system
    that doesn't exist yet, and the callback's own fault made a silent
    recursive-signal 100%-CPU spin — every such wall cost a gdb session to
@@ -1599,8 +1599,8 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
            handle_trap's "trllt RA==sp" yellow-zone logic,
            ppc:1564-1629, ported whole. */
         area
-          *CS_area = tcr->cs_area,
-          *VS_area = tcr->vs_area;
+ *CS_area = tcr->cs_area,
+ *VS_area = tcr->vs_area;
 
         natural
           current_SP = xpSP(xp),        /* ppc:1599 xpGPR(sp) */
@@ -1806,7 +1806,7 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
   /* Call back.
      Lisp will handle trampolining through some code that
      will push lr/fn & pc/nfn stack frames for backtrace.
-  */
+ */
   callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
   UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
   ((void (*)())callback_ptr) (xp, arg1, arg2, arg3, arg4, arg5);
@@ -1925,7 +1925,7 @@ exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
   pthread_sigmask(SIG_SETMASK, &mask, NULL);
   tcr->valence = old_valence;
   tcr->pending_exception_context = NULL;
-  /* ARM64-DEVIATION (16m41): restore the lisp<->foreign cstack boundary the
+  /* ARM64-DEVIATION (): restore the lisp<->foreign cstack boundary the
      handler moved.  PPC has no such field because its cstack walk is a
      backlink chain (see normalize_tcr); on a marker/linear walk the boundary
      is the only thing that keeps a foreign-valence thread's walk out of C
@@ -1949,7 +1949,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
      set the TCR's xframe slot to include the current exception
      context.  (ppc:1832-1838.)
 
-     16m41 CORRECTION: the note here said ARM32's tcr->last_lisp_frame save
+      CORRECTION: the note here said ARM32's tcr->last_lisp_frame save
      "does NOT port -- Matt's tcr has no last_lisp_frame field".  That was
      false at this pin (arm64-constants.h:470 asm / :531 C), and dropping the
      save left the field permanently 0, which is what normalize_tcr's ff-call
@@ -1970,11 +1970,11 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
   if ((noErr != PMCL_exception_handler(signum, context, tcr, info,
                                        old_valence))) {
     char msg[512];
-    /* 16m40: NAME THE INSTRUCTION, not just its address.
+    /* : NAME THE INSTRUCTION, not just its address.
        "Unhandled exception 5 at <pc>" is a SIGILL/SIGTRAP whose word this
        handler already looked at and could not decode -- so the one fact
        that identifies the bug is the word itself, and it was the one fact
-       the message omitted.  16m39/16m40 each spent a boot recovering it by
+       the message omitted.  / each spent a boot recovering it by
        hand.  That trick only works while the pc is in the IMAGE, which is
        mapped at a fixed address; for code the RESIDENT compiler generated
        the pc is in the dynamic heap and differs every run, so there is no
@@ -2201,7 +2201,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          allocptr valid; the interrupt handler undoes this (interrupt
          case) or the trap is re-taken (GC case).  ppc:2036-2076 */
       if (alloc_disp) {
-        *alloc_disp = disp;
+ *alloc_disp = disp;
         xpGPR(xp, allocptr) += disp;
       } else {
         update_bytes_allocated(tcr,
@@ -2257,7 +2257,7 @@ interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *context)
           xframe_list xframe_link;
           int old_valence;
           signed_natural disp = 0;
-          /* 16m41: same boundary save/restore as signal_handler. */
+          /* : same boundary save/restore as signal_handler. */
           natural old_last_lisp_frame = tcr->last_lisp_frame;
 
           tcr->last_lisp_frame = (natural)ptr_to_lispobj(xpSP(context));
@@ -2388,9 +2388,9 @@ extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp, unsigned idx_regno)
     new_limit = align_to_power_of_2(index + 1, 12),
     new_bytes = new_limit - old_limit;
   LispObj
-    *old_tlb = tcr->tlb_pointer,
-    *new_tlb = realloc(old_tlb, new_limit),
-    *work;
+ *old_tlb = tcr->tlb_pointer,
+ *new_tlb = realloc(old_tlb, new_limit),
+ *work;
 
   if (new_tlb == NULL) {
     return false;
@@ -2399,7 +2399,7 @@ extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp, unsigned idx_regno)
   work = (LispObj *)((BytePtr)new_tlb + old_limit);
 
   while (new_bytes) {
-    *work++ = no_thread_local_binding_marker;
+ *work++ = no_thread_local_binding_marker;
     new_bytes -= sizeof(LispObj);
   }
   tcr->tlb_pointer = new_tlb;

@@ -9,15 +9,15 @@
 ;;; CLOS slot indices (slot-id.index, gf.dispatch-table, gf.dcode, ...) are
 ;;; TARGET-INDEPENDENT def-accessors enums from vendor/ccl/library/lispequ.lisp
 ;;; (slot-id: :1208-1212 → slot-id.index = 2; generic-function: :1186-1194 →
-;;; gf.dispatch-table = 3, gf.dcode = 4).  Used by NAME, as on PPC.
+;;; gf.dispatch-table = 3, gf.dcode = 4). Used by NAME, as on PPC.
 ;;;
 ;;; FUNCTION OBJECTS (W8-D80, updated by the fulltag-function removal,
 ;;; patch 0055): generic functions and dcode functions are ordinary
-;;; miscobjs.  Slot k of a function is at
-;;;   (+ (* k arm64::node-size) arm64::misc-function-offset)     [-4 + 8k]
+;;; miscobjs. Slot k of a function is at
+;;; (+ (* k arm64::node-size) arm64::misc-function-offset) [-4 + 8k]
 ;;; (misc-function-offset = misc-data-offset now, so these are just the
 ;;; usual misc slot loads) and the final dispatch is ldur codevector
-;;; @ -4 + br.  slot-id objects are istructs — plain svref applies.
+;;; @ -4 + br. slot-id objects are istructs — plain svref applies.
 ;;;
 ;;; ONE-NZCV: PPC's cmplr/cmpri pairs are serialized — unsigned bounds
 ;;; compare (cmplr → b.hs) issued adjacent to its branch; the map-entry
@@ -31,14 +31,14 @@
   (require "ARM64-LAPMACROS"))
 
 ;;; It's easier to keep this in LAP; we want to play around with its
-;;; constants.  ; ppc:19-20
+;;; constants. ; ppc:19-20
 
 ;;; =====================================================================
 ;;; %small-map-slot-id-lookup — ppc:25
 ;;; =====================================================================
 ;;; This just maps a SLOT-ID to a SLOT-DEFINITION or NIL.
 ;;; The map is a vector of (UNSIGNED-BYTE 8); this should
-;;; be used when there are less than 255 slots in the class.  ; ppc:22-24
+;;; be used when there are less than 255 slots in the class. ; ppc:22-24
 ;;; 'map / 'table are function-constant-pool refs (DECIDE-14).
 (defarm64lapfunction %small-map-slot-id-lookup ((slot-id arg_z))
   (ldur temp1 (:@ nfn (:$ 'map)))             ; ppc:26 — DECIDE-14
@@ -60,19 +60,19 @@
 
 ;;; =====================================================================
 ;;; %large-map-slot-id-lookup — ppc:44 [ppc64-sections: ppc64 arm ported;
-;;;   the #+pp32-target (sic) arm ignored]
+;;; the #+pp32-target (sic) arm ignored]
 ;;; =====================================================================
-;;; The same idea, only the map is a vector of (UNSIGNED-BYTE 32).  ; ppc:43
+;;; The same idea, only the map is a vector of (UNSIGNED-BYTE 32). ; ppc:43
 (defarm64lapfunction %large-map-slot-id-lookup ((slot-id arg_z))
   (ldur temp1 (:@ nfn (:$ 'map)))             ; ppc:45 — DECIDE-14
   (svref arg_x slot-id.index slot-id)   ; ppc:46
   (getvheader imm0 temp1)               ; ppc:47
   (header-length imm3 imm0)             ; ppc:48
   (ldur temp0 (:@ nfn (:$ 'table)))           ; ppc:49 — DECIDE-14
-  ;; W8-D81 UPSTREAM BUG: ppc:53 reads (srdi imm0 imm0 1), but imm0 holds
-  ;; the map HEADER there; the boxed index is in arg_x (compare the
-  ;; parallel %large-slot-id-value, ppc:105 (srdi imm0 arg_x 1)).  Ported
-  ;; with the intended source register.  Queue for the next Matt mail.
+ ;; W8-D81 UPSTREAM BUG: ppc:53 reads (srdi imm0 imm0 1), but imm0 holds
+ ;; the map HEADER there; the boxed index is in arg_x (compare the
+ ;; parallel %large-slot-id-value, ppc:105 (srdi imm0 arg_x 1)). Ported
+ ;; with the intended source register. Queue for the next Matt mail.
   (lsr imm0 arg_x (:$ 1))               ; ppc:53 boxed → index*4 (u32 map)
   (sub imm0 imm0 (:$ (- arm64::misc-data-offset))) ; ppc:54
   (mov imm1 (:$ arm64::misc-data-offset)) ; ppc:58
@@ -147,7 +147,7 @@
 ;;; =====================================================================
 ;;; %small-set-slot-id-value — ppc:131
 ;;; =====================================================================
-;;; header-length lands in imm5, as on PPC.  (imm5=x5 and nargs=x6 are
+;;; header-length lands in imm5, as on PPC. (imm5=x5 and nargs=x6 are
 ;;; DISTINCT on Matt's map — corrected record; even under aliasing this
 ;;; would be safe: last read precedes both set-nargs forms, and entry
 ;;; nargs is dead — no check-nargs in the PPC original.)
@@ -205,17 +205,17 @@
   (ldr arg_y (:@ temp0 imm1))           ; ppc:183 slot-definition
   (ldur nfn (:@ nfn (:$ '%maybe-std-setf-slot-value-using-class))) ; ppc:184 — DECIDE-14
   (set-nargs 4)                         ; ppc:185
-  ;; ppc:186 is (svref temp0 0 nfn) — same load as the small twin's
-  ;; (ldr temp0 misc-data-offset nfn); nfn is FUNCTION-tagged → W8-D80.
+ ;; ppc:186 is (svref temp0 0 nfn) — same load as the small twin's
+ ;; (ldr temp0 misc-data-offset nfn); nfn is FUNCTION-tagged → W8-D80.
   (ldur temp0 (:@ nfn (:$ arm64::misc-function-offset))) ; ppc:186 — W8-D80
   (vpush temp1)                         ; ppc:187
   (br temp0)                            ; ppc:188-189
   @missing                              ; ppc:190 (%slot-id-set-missing instance id new-value)
-  ;; ppc:191 loads '%slot-id-ref-missing (with set-nargs 3) although the
-  ;; comment and the small twin (ppc:158) say %slot-id-set-missing.
-  ;; x86-64 does the SAME (x86:151-153: set-missing comment,
-  ;; ref-missing load) — a cross-arch upstream quirk, ported FAITHFULLY.
-  ;; W8-D82 ledger note.
+ ;; ppc:191 loads '%slot-id-ref-missing (with set-nargs 3) although the
+ ;; comment and the small twin (ppc:158) say %slot-id-set-missing.
+ ;; x86-64 does the SAME (x86:151-153: set-missing comment,
+ ;; ref-missing load) — a cross-arch upstream quirk, ported FAITHFULLY.
+ ;; W8-D82 ledger note.
   (ldur nfn (:@ nfn (:$ '%slot-id-ref-missing))) ; ppc:191 — DECIDE-14
   (set-nargs 3)                         ; ppc:192
   (ldur temp0 (:@ nfn (:$ arm64::misc-function-offset))) ; ppc:193 — W8-D80
@@ -223,16 +223,16 @@
 
 ;;; =====================================================================
 ;;; *gf-proto* — ppc:197-218 (#-dont-use-lexprs branch; W8-D83 closed
-;;; 16m10, demanded by l1-dcode load: register-dcode-proto references)
+;;; , demanded by l1-dcode load: register-dcode-proto references)
 ;;; =====================================================================
-;;; The gag lexpr prototype CLOS instantiates for real gfs.  PPC keeps
+;;; The gag lexpr prototype CLOS instantiates for real gfs. PPC keeps
 ;;; the caller's return pc in loc_pc across .SPlexpr-entry (mflr/mtlr);
 ;;; Matt's map has no loc_pc, so the LEXPR-RA channel is temp4 (spentry-E
 ;;; lexpr_entry contract): prologue passes caller's return pc in temp4,
 ;;; the subprim hands back the continuation the body must return through
 ;;; (ret1val_addr on the mv path, lexpr_return1v on the 1v path) in
-;;; temp4, restored into lr before the tail transfer.  call-subprim
-;;; clobbers only imm1+lr, so temp4 survives into the kernel.  nfn (the
+;;; temp4, restored into lr before the tail transfer. call-subprim
+;;; clobbers only imm1+lr, so temp4 survives into the kernel. nfn (the
 ;;; gf) is untouched by lexpr_entry; gf.dispatch-table = 3, gf.dcode = 4
 ;;; (lispequ.lisp:1186-1194), both svrefs re-bias per W8-D80.
 (defparameter *gf-proto*
@@ -273,10 +273,10 @@
 ;;; =====================================================================
 ;;; unset-fin-trampoline — ppc:278
 ;;; =====================================================================
-;;; This can't reference any of the function's constants.  ; ppc:277
+;;; This can't reference any of the function's constants. ; ppc:277
 ;;; (Satisfied: only subprims, immediates and rnil below.)
 ;;; PPC saves lr in loc-pc across the first subprim call and only builds
-;;; a frame later via .SPsavecontextvsp.  No loc-pc register here: build
+;;; a frame later via .SPsavecontextvsp. No loc-pc register here: build
 ;;; the marker frame at ENTRY (savevsp is identical — .SPheap-rest-arg's
 ;;; push is popped again before PPC's frame is built) and let the frame
 ;;; carry lr across both subprim calls (W4-D17 idiom).
@@ -295,7 +295,7 @@
 ;;; =====================================================================
 ;;; gag-one-arg — ppc:291
 ;;; =====================================================================
-;;; is a winner - saves ~15%  ; ppc:290
+;;; is a winner - saves ~15% ; ppc:290
 ;;; nfn = the gf (FUNCTION-tagged): gf.dispatch-table = 3, gf.dcode = 4
 ;;; (lispequ.lisp:1186-1194); both svrefs re-bias per W8-D80.
 (defarm64lapfunction gag-one-arg ((arg arg_z))
@@ -322,10 +322,10 @@
   (br temp0))                           ; ppc:307-308 — DECIDE-15
 
 ;;; =====================================================================
-;;; *cm-proto* — ppc:310-330 (W8-D83 closed 16m10)
+;;; *cm-proto* — ppc:310-330 (W8-D83 closed )
 ;;; =====================================================================
 ;;; Combined-method prototype: same lexpr shape as *gf-proto* (LEXPR-RA
-;;; temp4 channel, see the *gf-proto* header comment).  Slots differ:
+;;; temp4 channel, see the *gf-proto* header comment). Slots differ:
 ;;; combined-method.thing = 1, combined-method.dcode = 2
 ;;; (lispequ.lisp:1178-1184); both svrefs re-bias per W8-D80.
 (defparameter *cm-proto*
