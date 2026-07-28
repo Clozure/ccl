@@ -534,3 +534,7 @@
          (di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
     (print-di-vector di-vector stream)))
+
+(defun ccl::arm64-xdisassemble (function)
+  (ccl::arm64-disassemble-xfunction (ccl::function-to-function-vector function)
+                                    *standard-output*))
