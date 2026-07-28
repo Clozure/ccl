@@ -975,7 +975,170 @@
         
 
 );#+x8664-target
-      
+
+#+arm64-target
+(progn
+(defparameter *nodeheader-0-types*
+  #(bogus
+    symbol-vector
+    catch-frame
+    hash-vector
+    pool
+    population
+    package
+    slot-vector
+    basic-stream
+    function
+    array-header
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    ))
+
+(defparameter *nodeheader-1-types*
+  #(bogus
+    ratio
+    complex
+    structure
+    internal-structure
+    value-cell
+    xfunction
+    lock
+    instance
+    bogus
+    vector-header
+    simple-vector
+    bogus
+    bogus
+    bogus
+    bogus
+    ))
+
+(defparameter *immheader-0-types*
+  #(bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-complex-double-float-vector
+    simple-signed-word-vector
+    simple-unsigned-word-vector
+    bogus
+    simple-signed-byte-vector
+    simple-unsigned-byte-vector
+    bit-vector))
+
+(defparameter *immheader-1-types*
+  #(bogus
+    bignum
+    double-float
+    xcode-vector
+    complex-single-float
+    complex-double-float
+    code-vector
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-base-string
+    simple-signed-long-vector
+    simple-unsigned-long-vector
+    single-float-vector))
+
+(defparameter *immheader-2-types*
+  #(bogus
+    macptr
+    dead-macptr
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-complex-single-float-vector
+    simple-fixnum-vector
+    simple-signed-doubleword-vector
+    simple-unsigned-doubleword-vector
+    double-float-vector))
+
+(defparameter *arm64-%type-of-functions* nil)
+
+(let* ((fixnum (lambda (x) (declare (ignore x)) 'fixnum))
+       (imm (lambda (x) (if (characterp x) 'character 'immediate)))
+       (bogus (lambda (x) (declare (ignore x)) 'bogus))
+       (function-type-of
+        (lambda (thing)
+          (let ((bits (lfun-bits thing)))
+            (declare (fixnum bits))
+            (if (logbitp $lfbits-trampoline-bit bits)
+              (let ((inner-fn (closure-function thing)))
+                (if (neq inner-fn thing)
+                  (let ((inner-bits (lfun-bits inner-fn)))
+                    (if (logbitp $lfbits-method-bit inner-bits)
+                      'compiled-lexical-closure
+                      (if (logbitp $lfbits-gfn-bit inner-bits)
+                        'standard-generic-function ; not precisely - see class-of
+                        (if (logbitp  $lfbits-cm-bit inner-bits)
+                          'combined-method
+                          'compiled-lexical-closure))))
+                  'compiled-lexical-closure))
+              (if (logbitp  $lfbits-method-bit bits)
+                'method-function
+                'compiled-function))))))
+  (setq *arm64-%type-of-functions*
+        (vector
+         fixnum                         ;0 fulltag-even-fixnum
+         (lambda (x) (declare (ignore x)) 'short-float) ;1 fulltag-single-float
+         imm                            ;2 fulltag-imm-0 (characters)
+         (lambda (x) (declare (ignore x)) 'cons) ;3 fulltag-cons
+         bogus                          ;4 fulltag-immheader-0
+         bogus                          ;5 fulltag-immheader-1
+         bogus                          ;6 fulltag-nodeheader-0
+         (lambda (x) (declare (ignore x)) 'symbol) ;7 fulltag-symbol
+         fixnum                         ;8 fulltag-odd-fixnum
+         bogus                          ;9 fulltag-reserved
+         imm                            ;10 fulltag-imm-1 (markers)
+         (lambda (x) (declare (ignore x)) 'null) ;11 fulltag-nil
+         (lambda (x) (let* ((typecode (typecode x))
+                            (low4 (logand typecode arm64::fulltagmask))
+                            (high4 (ash typecode (- arm64::ntagbits))))
+                       (declare (type (unsigned-byte 8) typecode)
+                                (type (unsigned-byte 4) low4 high4))
+                       (if (= typecode arm64::subtag-function)
+                         (funcall function-type-of x)
+                       (let* ((name
+                               (cond ((= low4 arm64::fulltag-immheader-0)
+                                      (%svref *immheader-0-types* high4))
+                                     ((= low4 arm64::fulltag-immheader-1)
+                                      (%svref *immheader-1-types* high4))
+                                     ((= low4 arm64::fulltag-immheader-2)
+                                      (%svref *immheader-2-types* high4))
+                                     ((= low4 arm64::fulltag-nodeheader-0)
+                                      (%svref *nodeheader-0-types* high4))
+                                     ((= low4 arm64::fulltag-nodeheader-1)
+                                      (%svref *nodeheader-1-types* high4))
+                                     (t 'bogus))))
+                         (or (and (eq name 'lock)
+                                  (uvref x arm64::lock.kind-cell))
+                             name))))) ;12 fulltag-misc
+         bogus                          ;13 fulltag-immheader-2
+         bogus                          ;14 fulltag-nodeheader-1
+         bogus)))                       ;15 (was fulltag-function; removed)
+
+(defun %type-of (thing)
+  (let* ((f (fulltag thing)))
+    (funcall (%svref *arm64-%type-of-functions* f) thing)))
+
+);#+arm64-target
 
 ;;; real machine specific huh
 (defun consp (x)
