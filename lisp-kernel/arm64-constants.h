@@ -137,6 +137,9 @@ DEFCONST(fulltag_immheader_0,  0b0100)
 DEFCONST(fulltag_immheader_1,  0b0101)
 DEFCONST(fulltag_nodeheader_0, 0b0110)
 DEFCONST(fulltag_symbol,       0b0111)
+#ifndef __ASSEMBLER__
+#define fulltag_symbol fulltag_symbol /* PROPOSED: gc.h + plsym.c probe this with #ifdef */
+#endif
 DEFCONST(fulltag_odd_fixnum,   0b1000)
 DEFCONST(fulltag_reserved,     0b1001)
 DEFCONST(fulltag_imm_1,        0b1010)
