@@ -534,3 +534,23 @@
          (di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
     (print-di-vector di-vector stream)))
+
+;;; The CCL-facing entry point.  lib/misc.lisp's DISASSEMBLE dispatches to a
+;;; per-backend <arch>-xdisassemble (ppc-xdisassemble, x86-xdisassemble,
+;;; arm-xdisassemble); arm64 had the machinery above but no such entry, so
+;;; DISASSEMBLE signalled "Undefined function CCL::ARM64-XDISASSEMBLE".
+;;;
+;;; Modelled on arm-disassemble.lisp:540.  Two details are load-bearing:
+;;;
+;;;   * the stream is *STANDARD-OUTPUT*, not this file's *debug-io* default,
+;;;     matching every other backend's entry point -- CL:DISASSEMBLE is
+;;;     specified to write to *standard-output*, and that is what a caller
+;;;     binding it (WITH-OUTPUT-TO-STRING) can capture;
+;;;   * FUNCTION-TO-FUNCTION-VECTOR, not the raw function.  ARM32 hands the
+;;;     function straight to its xfunction printer, which UVREFs it; on arm64
+;;;     the function-vector view is the defined way to index a function as a
+;;;     uvector (the archmacro is in arm64-arch.lisp), and it stays correct
+;;;     whether or not functions carry a dedicated pointer tag.
+(defun ccl::arm64-xdisassemble (function)
+  (ccl::arm64-disassemble-xfunction (ccl::function-to-function-vector function)
+                                    *standard-output*))
