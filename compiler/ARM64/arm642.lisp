@@ -9109,13 +9109,11 @@
                (eql (get-regspec-mode vreg)
                     hard-reg-class-fpr-mode-complex-single-float))
         (setq target vreg))
-      (arm642-two-targeted-reg-forms seg
-                                   r ($ (* 2 (%hard-regspec-value target))
-                                        :class :fpr
-                                        :mode :single-float)
-                                   i ($ (1+ (* 2 (%hard-regspec-value target)))
-                                        :class :fpr
-                                        :mode :single-float))
+      (let* ((rreg (make-unwired-lreg target
+                                      :mode hard-reg-class-fpr-mode-single)))
+        (with-fp-target (rreg) (ireg :single-float)
+          (arm642-two-targeted-reg-forms seg r rreg i ireg)
+          (! %make-complex-single-float target rreg ireg)))
       (<- target)
       (^))))
 
@@ -9130,13 +9128,11 @@
                (eql (get-regspec-mode vreg)
                     hard-reg-class-fpr-mode-complex-double-float))
         (setq target vreg))
-      (arm642-two-targeted-reg-forms seg
-                                     r ($ (%hard-regspec-value target)
-                                          :class :fpr
-                                          :mode :double-float)
-                                     i ($ (1+ (%hard-regspec-value target))
-                                          :class :fpr
-                                          :mode :double-float))
+      (let* ((rreg (make-unwired-lreg target
+                                      :mode hard-reg-class-fpr-mode-double)))
+        (with-fp-target (rreg) (ireg :double-float)
+          (arm642-two-targeted-reg-forms seg r rreg i ireg)
+          (! %make-complex-double-float target rreg ireg)))
       (<- target)
       (^))))
 
