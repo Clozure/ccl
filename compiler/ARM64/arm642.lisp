@@ -1662,10 +1662,12 @@
                   (! misc-ref-c-double-float fp-val src index-known-fixnum)
                   (with-imm-target () idx-reg
                     (if index-known-fixnum
-                      (unless unscaled-idx
-                        (setq unscaled-idx idx-reg)
-                        (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
-                    (! misc-ref-double-float fp-val src unscaled-idx)))
+                      (arm642-absolute-natural
+                       seg idx-reg nil
+                       (+ (arch::target-misc-data-offset arch)
+                          (ash index-known-fixnum arm64::word-shift)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-double-float fp-val src idx-reg)))
                 (if (eq vreg-class hard-reg-class-fpr)
                   (<- fp-val)
                   (ensuring-node-target (target vreg)
@@ -1679,15 +1681,69 @@
                   (! misc-ref-c-double-float fp-val src index-known-fixnum)
                   (with-imm-target () idx-reg
                     (if index-known-fixnum
-                      (unless unscaled-idx
-                        (setq unscaled-idx idx-reg)
-                        (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
-                    (! misc-ref-double-float fp-val src unscaled-idx)))
+                      (arm642-absolute-natural
+                       seg idx-reg nil
+                       (+ (arch::target-misc-data-offset arch)
+                          (ash index-known-fixnum arm64::word-shift)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-double-float fp-val src idx-reg)))
                 (if (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-complex-single-float))
                   (<- fp-val)
                   (ensuring-node-target (target vreg)
-                    (! complex-single-float->node target fp-val)))))))
+                    (! complex-single-float->node target fp-val)))))
+             ;; The integer 64-bit element types.  Without these the CASE fell
+             ;; off the end and emitted NOTHING, so a compiled AREF on a
+             ;; (simple-array (signed-byte 64)) left VREG holding whatever was
+             ;; already there -- in practice the index, so (aref a i) returned i.
+             ;; PPC64 ppc2.lisp:1410-1432 has the shape; the index plumbing here
+             ;; is the double-float arm's, not PPC's scale-64bit-misc-index,
+             ;; because low-tag fixnumshift=3 already makes a boxed fixnum index
+             ;; equal to the byte offset of an 8-byte element.
+             ((:signed-64-bit-vector :fixnum-vector)
+              (with-imm-target () (temp :s64)
+                (if (and (eql vreg-class hard-reg-class-gpr)
+                         (eql vreg-mode hard-reg-class-gpr-mode-s64))
+                  (setq temp vreg))
+                (if (and index-known-fixnum
+                         (<= index-known-fixnum
+                             (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-s64 temp src index-known-fixnum)
+                  ;; TEMP is an imm GPR here, so it must be excluded from the
+                  ;; index temp's candidates -- unlike the float arms above,
+                  ;; where FP-VAL is an FPR and cannot alias.
+                  (with-imm-target (temp) idx-reg
+                    (if index-known-fixnum
+                      (arm642-absolute-natural
+                       seg idx-reg nil
+                       (+ (arch::target-misc-data-offset arch)
+                          (ash index-known-fixnum arm64::word-shift)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-s64 temp src idx-reg)))
+                ;; arm642-copy-register boxes s64 -> node via arm642-box-s64,
+                ;; which has both the inline s64->integer path and the
+                ;; .SPmakes64 subprim path, so the bignum case is covered.
+                (<- temp)))
+             (t
+              ;; :unsigned-64-bit-vector -- the only remaining 64-bit ivector
+              ;; type (arm64-arch.lisp:1121 lists exactly five).
+              (with-imm-target () (temp :u64)
+                (if (and (eql vreg-class hard-reg-class-gpr)
+                         (eql vreg-mode hard-reg-class-gpr-mode-u64))
+                  (setq temp vreg))
+                (if (and index-known-fixnum
+                         (<= index-known-fixnum
+                             (arch::target-max-64-bit-constant-index arch)))
+                  (! misc-ref-c-u64 temp src index-known-fixnum)
+                  (with-imm-target (temp) idx-reg
+                    (if index-known-fixnum
+                      (arm642-absolute-natural
+                       seg idx-reg nil
+                       (+ (arch::target-misc-data-offset arch)
+                          (ash index-known-fixnum arm64::word-shift)))
+                      (! scale-64bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-u64 temp src idx-reg)))
+                (<- temp)))))
           (is-128-bit
               (with-fp-target () (fp-val :complex-double-float)
                 (if (and (eql vreg-class hard-reg-class-fpr)
@@ -2243,6 +2299,29 @@
                     (when safe
                       (! trap-unless-typecode= result-reg arm64::subtag-complex-single-float))
                     (! get-complex-single-float reg result-reg)
+                    reg))
+                 ;; The integer 64-bit types.  This CASE had no default arm, so
+                 ;; it RETURNED NIL for them and that NIL travelled to
+                 ;; arm642-vset1 as UNBOXED-VAL-REG, where the first
+                 ;; %hard-regspec-value on it signalled "bad regspec: NIL".
+                 ;; Fixing vset1's own dispatch is not enough on its own --
+                 ;; there has to be an unboxed register to dispatch TO.
+                 ;; PPC64 ppc2.lisp:1908-1919 is the shape.
+                 ((:signed-64-bit-vector :fixnum-vector)
+                  (let* ((reg (make-unwired-lreg next-imm-target
+                                                 :mode hard-reg-class-gpr-mode-s64)))
+                    (if (eq type-keyword :fixnum-vector)
+                      (progn
+                        (when safe
+                          (! trap-unless-fixnum result-reg))
+                        (! fixnum->signed-natural reg result-reg))
+                      (! unbox-s64 reg result-reg))
+                    reg))
+                 (t
+                  ;; :unsigned-64-bit-vector
+                  (let* ((reg (make-unwired-lreg next-imm-target
+                                                 :mode hard-reg-class-gpr-mode-u64)))
+                    (! unbox-u64 reg result-reg)
                     reg))))
               (is-32-bit
                (if is-signed
@@ -2341,17 +2420,40 @@
                       (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
                   (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx)))
                (is-64-bit
+                ;; Dispatch on the element type.  This used to emit
+                ;; misc-set-{c-,}double-float unconditionally, so every INTEGER
+                ;; 64-bit store handed an imm GPR to a vinsn declaring an FPR
+                ;; operand and died in %HARD-REGSPEC-VALUE with "bad regspec:
+                ;; NIL" -- (setf (aref a n) v) on a (simple-array (signed-byte
+                ;; 64)) at speed 3 / safety 0 would not compile at all.
+                ;; PPC64 ppc2.lisp:2024-2045 is the shape.  A complex-single-float
+                ;; deliberately keeps the double-float vinsns: it is two S lanes
+                ;; in one 64-bit slot, so a D-form store moves it bit-for-bit.
                 (with-imm-target (arm64::imm0 arm64::imm1) scaled-idx
                   (if (and index-known-fixnum
                            (<= index-known-fixnum
                                (arch::target-max-64-bit-constant-index arch)))
-                    (! misc-set-c-double-float unboxed-val-reg src index-known-fixnum)
+                    (case type-keyword
+                      ((:double-float-vector :complex-single-float-vector)
+                       (! misc-set-c-double-float unboxed-val-reg src index-known-fixnum))
+                      (t
+                       (if is-signed
+                         (! misc-set-c-s64 unboxed-val-reg src index-known-fixnum)
+                         (! misc-set-c-u64 unboxed-val-reg src index-known-fixnum))))
                     (progn
                       (if index-known-fixnum
-                        (unless unscaled-idx
-                          (setq unscaled-idx scaled-idx)
-                          (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
-                      (! misc-set-double-float unboxed-val-reg src unscaled-idx)))))
+                        (arm642-absolute-natural
+                         seg scaled-idx nil
+                         (+ (arch::target-misc-data-offset arch)
+                            (ash index-known-fixnum arm64::word-shift)))
+                        (! scale-64bit-misc-index scaled-idx unscaled-idx))
+                      (case type-keyword
+                        ((:double-float-vector :complex-single-float-vector)
+                         (! misc-set-double-float unboxed-val-reg src scaled-idx))
+                        (t
+                         (if is-signed
+                           (! misc-set-s64 unboxed-val-reg src scaled-idx)
+                           (! misc-set-u64 unboxed-val-reg src scaled-idx))))))))
                (t
                 (with-imm-target (unboxed-val-reg) scaled-idx
                   (cond
