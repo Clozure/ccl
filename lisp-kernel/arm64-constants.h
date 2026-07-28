@@ -13,9 +13,9 @@
 #endif
 
 #ifdef __ASSEMBLER__
-#  define DEFCONST(name, val) name = val
+# define DEFCONST(name, val) name = val
 #else
-#  define DEFCONST(name, val) enum { name = (val) };
+# define DEFCONST(name, val) enum { name = (val) };
 #endif
 
 DEFCONST(nbits_in_word, 64)
@@ -144,7 +144,8 @@ DEFCONST(fulltag_nil,          0b1011)
 DEFCONST(fulltag_misc,         0b1100)
 DEFCONST(fulltag_immheader_2,  0b1101)
 DEFCONST(fulltag_nodeheader_1, 0b1110)
-DEFCONST(fulltag_function,     0b1111)
+/* 0b1111 free: fulltag_function removed -- a function is an ordinary
+   miscobj (fulltag_misc + subtag_function); functionp checks the subtag. */
 
 DEFCONST(misc_bias, fulltag_misc)
 DEFCONST(cons_bias, fulltag_cons)
@@ -231,13 +232,13 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
 /*
  * The generic C constants (special_binding, hash_table_vector_header, the
  * TCR flag bits, INTERRUPT_LEVEL_BINDING_INDEX, ...) that the struct tcr below
- * and much of the C kernel depend on.  x86/ppc reach constants.h through their
+ * and much of the C kernel depend on. x86/ppc reach constants.h through their
  * C-only arch headers; because this header is shared by the assembler too, we
  * pull it in ourselves, guarded out of the assembler pass.
  */
 #ifndef __ASSEMBLER__
 #include "constants.h"
-#define fixnum_bitmask(n)  (1LL<<((n)+fixnumshift))
+#define fixnum_bitmask(n) (1LL<<((n)+fixnumshift))
 #endif
 
 /* struct definitions */
@@ -246,12 +247,12 @@ DEFCONST(lisp_frame_marker, subtag_lisp_frame_marker)
 /*
  * A struct definition generates a set of assembler equates: for each field,
  * name.field is the byte offset of that field from a suitably tagged
- * pointer, and name.size is the total size.  Example:
+ * pointer, and name.size is the total size. Example:
  *
- *      _struct cons, -cons_bias
- *      _node cdr
- *      _node car
- *      _ends
+ * _struct cons, -cons_bias
+ * _node cdr
+ * _node car
+ * _ends
  *
  * yields cons.cdr = -cons_bias, cons.car = -cons_bias + node_size, and
  * cons.size = 2 * node_size.
@@ -363,8 +364,8 @@ _structf symbol, -fulltag_symbol
   _node binding_index
 _endstructf
 
-/* A function has its own tag, but is otherwise a miscobj */
-_struct _function, -fulltag_function
+/* A function is an ordinary miscobj (fulltag_misc + subtag_function) */
+_struct _function, -fulltag_misc
  _node header
  _node code_vector
 _ends
@@ -392,6 +393,21 @@ _structf macptr
   _node type
 _endstructf
 
+/* Assembler-visible mirror of constants.h INTERRUPT_LEVEL_BINDING_INDEX:
+ * the *INTERRUPT-LEVEL* thread-local-binding byte offset (binding
+ * index 1, fixnum-boxed = <<fixnumshift). */
+INTERRUPT_LEVEL_BINDING_INDEX = (1 << fixnumshift)
+
+/* A special-binding stack entry, as pushed on the VALUE stack by
+ * _SPbind and friends and walked via tcr.db_link: the saved value,
+ * the symbol's tlb byte offset (a boxed binding index), and the
+ * previous db_link. */
+_struct binding
+ _node link
+ _node sym
+ _node val
+_ends
+
 _struct tsp_frame
  _node backlink
  _node type
@@ -415,6 +431,29 @@ _structf catch_frame
  _node xframe                   /* exception frame chain */
  _node nfp
 _endstructf
+
+/* Foreign-call argument frame, built by HIS alloc-c-frame vinsn
+ * (arm64-vinsns.lisp:287) and consumed by _SPffcall. The layout is his:
+ * `header' is a subtag_u64_vector header whose count covers everything
+ * after it; `savedsp' is the SP from before the allocation (his "element
+ * 0"). There is deliberately NO savelr -- 4 words are RESERVED at the
+ * frame TOP for a boundary lisp_frame, published by shrinking the count
+ * by 4 (arm642.lisp:6323). The 8 AAPCS64 GPR argument words live at
+ * c_frame.params; stack (overflow) args sit immediately above them.
+ * : this block used to say {backlink@0, savelr@8}, so _SPffcall
+ * stored lr over savedsp and restored sp from the header -> sp=0xded. */
+_struct c_frame
+ _node header
+ _node savedsp
+ _struct_label params
+_ends
+
+/* Assembler-visible mirrors of the TCR_STATE_* values (constants.h is
+ * guarded out of the assembler pass above; this block is inside the
+ * __ASSEMBLER__ section, so these don't collide with the C-side
+ * defines). */
+TCR_STATE_LISP = 0
+TCR_STATE_FOREIGN = 1
 #endif
 
 DEFCONST(two_digit_bignum_header, ((2<<num_subtag_bits)|subtag_bignum))

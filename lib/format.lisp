@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -63,12 +63,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; Since errors may occur while an indirect control string is being
 ;;; processed, i.e. by ~? or ~{~:}, some sort of backtrace is necessary
 ;;; in order to indicate the location in the control string where the
-;;; error was detected.  To this end, errors detected by format are
+;;; error was detected. To this end, errors detected by format are
 ;;; signalled by throwing a list of the form ((control-string args))
-;;; to the tag FORMAT-ERROR.  This throw will be caught at each level
+;;; to the tag FORMAT-ERROR. This throw will be caught at each level
 ;;; of indirection, and the list of error messages re-thrown with an
 ;;; additional message indicating that indirection was present CONSed
-;;; onto it.  Ultimately, the last throw will be caught by the top level
+;;; onto it. Ultimately, the last throw will be caught by the top level
 ;;; FORMAT function, which will then signal an error to the Slisp error
 ;;; system in such a way that all the errror messages will be displayed
 ;;; in reverse order.
@@ -76,15 +76,15 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 (defun format-error (complaint &rest args)
   (throw 'format-error
          (list (list "~1{~:}~%~S~%~V@T^" complaint args
-                    *format-control-string* (1+ *format-index*)))))
+ *format-control-string* (1+ *format-index*)))))
 
 
 ;;; MACROS
 
 ;;; This macro establishes the correct environment for processing
-;;; an indirect control string.  CONTROL-STRING is the string to
-;;; process, and FORMS are the forms to do the processing.  They 
-;;; invariably will involve a call to SUB-FORMAT.  CONTROL-STRING
+;;; an indirect control string. CONTROL-STRING is the string to
+;;; process, and FORMS are the forms to do the processing. They 
+;;; invariably will involve a call to SUB-FORMAT. CONTROL-STRING
 ;;; is guaranteed to be evaluated exactly once.
 (eval-when (compile eval #-bccl load)
 
@@ -105,14 +105,14 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
              (when error
                    (throw 'format-error
                           (cons (list "While processing indirect control string~%~S~%~V@T^"
-                                      *format-control-string*
+ *format-control-string*
                                       (1+ *format-index*))
                                 error))))))
 ||#
 (defmacro format-indirect-error (error)
   `(throw 'format-error
          (cons (list "While processing indirect control string~%~S~%~V@T^"
-                     *format-control-string*
+ *format-control-string*
                      (1+ *format-index*))
                ,error)))
 
@@ -121,8 +121,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   '(or (pop *format-stream-stack*) (make-string-output-stream :element-type 'base-char))) ; ??
 
 ;;; This macro rebinds collects output to the standard output stream
-;;; in a string.  For efficiency, we avoid consing a new stream on
-;;; every call.  A stack of string streams is maintained in order to
+;;; in a string. For efficiency, we avoid consing a new stream on
+;;; every call. A stack of string streams is maintained in order to
 ;;; guarantee re-entrancy.
 
 (defmacro with-format-string-output (stream-sym &rest forms)
@@ -137,8 +137,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
        (when ,stream-sym (file-position ,stream-sym 0)))))
 
 ;;; This macro decomposes the argument list returned by PARSE-FORMAT-OPERATION.
-;;; PARMVAR is the list of parameters.  PARMDEFS is a list of lists of the form
-;;; (<var> <default>).  The FORMS are evaluated in an environment where each 
+;;; PARMVAR is the list of parameters. PARMDEFS is a list of lists of the form
+;;; (<var> <default>). The FORMS are evaluated in an environment where each 
 ;;; <var> is bound to either the value of the parameter supplied in the 
 ;;; parameter list, or to its <default> value if the parameter was omitted or
 ;;; explicitly defaulted.
@@ -174,13 +174,13 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 ;;; The current control string is kept in *format-control-string*. 
 ;;; The variable *format-index* is the position of the last character
-;;; processed, indexing from zero.  The variable *format-length* is the
+;;; processed, indexing from zero. The variable *format-length* is the
 ;;; length of the control string, which is one greater than the maximum
-;;; value of *format-index*.  
+;;; value of *format-index*. 
 
 
-;;; Gets the next character from the current control string.  It is an
-;;; error if there is none.  Leave *format-index* pointing to the
+;;; Gets the next character from the current control string. It is an
+;;; error if there is none. Leave *format-index* pointing to the
 ;;; character returned.
 
 (defun format-nextchar ()
@@ -243,18 +243,18 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
     (format-error "~~~:[~;:~]~:[~;@~]~c illegal in this context" colon atsign char))
   (setq *format-pprint* t))
 
-;;; Parses a format directive, including flags and parameters.  On entry,
-;;; *format-index* should point to the "~" preceding the command.  On
+;;; Parses a format directive, including flags and parameters. On entry,
+;;; *format-index* should point to the "~" preceding the command. On
 ;;; exit, *format-index* points to the command character itself.
 ;;; Returns the list of parameters, the ":" flag, the "@" flag, and the
-;;; command character as multiple values.  Explicitly defaulted parameters
-;;; appear in the list of parameters as NIL.  Omitted parameters are simply 
+;;; command character as multiple values. Explicitly defaulted parameters
+;;; appear in the list of parameters as NIL. Omitted parameters are simply 
 ;;; not included in the list at all.
 
 (defun parse-format-operation (&optional get-params) ; only caller is format-find-command
   (let ((ch (format-nextchar)) parms colon atsign)
     (when (or (digit-char-p ch)
-              ;(%str-member ch ",#Vv'"))
+ ;(%str-member ch ",#Vv'"))
               (memq ch '(#\- #\, #\# #\V #\v #\')))      
       (cond (get-params
              (setq parms (list (format-get-parameter ch)))
@@ -266,7 +266,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                (until (neq (setq ch (format-peek)) #\,)
                  (setq ch (format-nextchar))
                  (format-skip-parameter ch)))))
-    ; allow either order
+ ; allow either order
     (case ch
       (#\: (setq colon t ch (format-nextchar))
            (when (eq ch #\@)
@@ -282,19 +282,19 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 ;;; Starting at the current value of *format-index*, finds the first
 ;;; occurrence of one of the specified directives. Embedded constructs,
-;;; i.e. those inside ~(~), ~[~], ~{~}, or ~<~>, are ignored.  And error is
-;;; signalled if no satisfactory command is found.  Otherwise, the
+;;; i.e. those inside ~(~), ~[~], ~{~}, or ~<~>, are ignored. And error is
+;;; signalled if no satisfactory command is found. Otherwise, the
 ;;; following are returned as multiple values:
 ;;;
-;;;     The value of *format-index* at the start of the search
-;;;     The index of the "~" character preceding the command
-;;;     The parameter list of the command
-;;;     The ":" flag
-;;;     The "@" flag
-;;;     The command character
+;;; The value of *format-index* at the start of the search
+;;; The index of the "~" character preceding the command
+;;; The parameter list of the command
+;;; The ":" flag
+;;; The "@" flag
+;;; The command character
 ;;;
-;;; Implementation note:  The present implementation is not particulary
-;;; careful with storage allocation.  It would be a good idea to have
+;;; Implementation note: The present implementation is not particulary
+;;; careful with storage allocation. It would be a good idea to have
 ;;; a separate function for skipping embedded constructs which did not
 ;;; bother to cons parameter lists and then throw them away. This issue has been addressed. (akh)
 ;;;
@@ -351,10 +351,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (with-output-to-string (s stream)
 	(apply #'format s control-string format-arguments))
       (let ((*format-top-level* t))
-	(when (xp-structure-p stream)
+	(when (and (fboundp 'xp-structure-p) (xp-structure-p stream))
 	  (setq stream (xp-stream-stream stream))) ; for xp tests only! They call format on a structure
 	(setq stream (if (eq stream t)
-		       *standard-output*
+ *standard-output*
 		       (require-type stream 'stream)))     
 	(if (functionp control-string)
 	  (apply control-string stream format-arguments)
@@ -364,13 +364,13 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                  (*format-justification-semi* nil))
             (declare (type simple-string control-string))
 	    (cond
-	      ;; Try to avoid pprint overhead in this case.
+ ;; Try to avoid pprint overhead in this case.
 	      ((not (position #\~ control-string))
 	       (write-string control-string stream))
 	      ((and (or *print-pretty* *print-circle*)
 		    (not (typep stream 'xp-stream)))
 	       (maybe-initiate-xp-printing
-		#'(lambda (s o)
+ #'(lambda (s o)
 		    (do-sub-format-1 s o))
 		stream format-arguments))
 	      (t 
@@ -400,10 +400,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 
-;;; This function does the real work of format.  The segment of the control
+;;; This function does the real work of format. The segment of the control
 ;;; string between indiced START (inclusive) and END (exclusive) is processed
 ;;; as follows: Text not part of a directive is output without further
-;;; processing.  Directives are parsed along with their parameters and flags,
+;;; processing. Directives are parsed along with their parameters and flags,
 ;;; and the appropriate handlers invoked with the arguments COLON, ATSIGN, and
 ;;; PARMS. 
 ;;;
@@ -421,8 +421,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
      (if (null av)
        (when (pprint-pop-check+ args xp)    ; gets us level and length stuff in logical block
          (throw 'logical-block nil))
-       ;; Could record that might exit here, but nobody cares.
-       #+no (note-format-scan-option *logical-block-options*)))
+ ;; Could record that might exit here, but nobody cares.
+ #+no (note-format-scan-option *logical-block-options*)))
    (if (or (null av) (eql av 0))
      (progn
        (setq *format-arguments* (cdr args))
@@ -473,7 +473,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                (t :linear))))
     (pprint-newline option stream)))
 
-;;; Tabulation  ~T 
+;;; Tabulation ~T 
 
 (defformat #\T format-tab (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -517,7 +517,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (let* ((string *format-control-string*)
          (ipos (1+ *format-index*))
          (epos (format-find-char #\/ ipos *format-length*)))    
-    ; the spec is DUMB here - it requires that : and :: be treated the same
+ ; the spec is DUMB here - it requires that : and :: be treated the same
     (when (not epos) (format-error "Unmatched ~~/"))
     (let ((cpos (format-find-char #\: ipos epos))
           package)
@@ -532,7 +532,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (setq *format-index* epos) ; or 1+ epos?
 	(apply thing stream (pop-format-arg) colon atsign parms)))))
 
-;;; Conditional case conversion  ~( ... ~)
+;;; Conditional case conversion ~( ... ~)
 
 #| coral's old version
 (defformat #\( format-capitalization (stream colon atsign)
@@ -548,7 +548,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                 (nstring-capitalize string))
                (atsign
                 (let ((strlen (length string)))
-                     ;; Capitalize the first word only
+ ;; Capitalize the first word only
                      (nstring-downcase string)
                      (do ((i 0 (1+ i)))
                          ((or (<= strlen i) (alpha-char-p (char string i)))
@@ -587,7 +587,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                       (colon
                        (nstring-capitalize string))
                       (atsign
-                       ;; Capitalize the first word only
+ ;; Capitalize the first word only
                        (nstring-downcase string)
                        (dotimes (i (length string) string)
                          (let ((ch (char string i)))
@@ -601,7 +601,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (throw 'format-escape catchp))
       )))
 
-;;; Up and Out (Escape)  ~^
+;;; Up and Out (Escape) ~^
 
 (defformat #\^ format-escape (stream colon atsign &optional p1 p2 p3)
   (declare (ignore stream))
@@ -617,10 +617,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
               (t (null (if colon *format-colon-rest* *format-arguments*))))
     (throw 'format-escape (if colon 'format-colon-escape t))))
 
-;;; Conditional expression  ~[ ... ]
+;;; Conditional expression ~[ ... ]
 
 
-;;; ~[  - Maybe these guys should deal with ~^ too - i.e. catch format-escape etc.
+;;; ~[ - Maybe these guys should deal with ~^ too - i.e. catch format-escape etc.
 ;;; but I cant think of a case where just throwing to the { catcher fails
 
 (defun format-untagged-condition (stream)
@@ -689,7 +689,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (t (format-untagged-condition stream))))
 
 
-;;; Iteration  ~{ ... ~}
+;;; Iteration ~{ ... ~}
 
 (defformat #\{ format-iteration (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -699,7 +699,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                          (format-find-command-no-params '(#\}) :atsign nil)
       (declare (ignore end-cmd end-atsign))
       (if (= prev tilde)
-        ;; Use an argument as the control string if ~{~} is empty
+ ;; Use an argument as the control string if ~{~} is empty
         (let ((string (pop-format-arg)))
           (cond ((stringp string)
                  (when (not (simple-string-p string)) ; fix here too
@@ -726,9 +726,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 ;;; The two catch tags FORMAT-ESCAPE and FORMAT-COLON-ESCAPE are needed here
-;;; to correctly implement ~^ and ~:^.  The former aborts only the current
+;;; to correctly implement ~^ and ~:^. The former aborts only the current
 ;;; iteration, but the latter aborts the entire iteration process.
-;;; ~{ arg is a list  ~:{ arg is list of sublists, ~@{  arg is spread ~:@{ spread lists
+;;; ~{ arg is a list ~:{ arg is list of sublists, ~@{ arg is spread ~:@{ spread lists
 ;;; We have nuked two catch tags. Instead throw two different values:
 ;;; T if ~^ and 'format-colon-escape if ~:^
 
@@ -763,7 +763,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                  (return-from do-iteration-1  nil))))))
       (if atsign
         (do-iteration-1 stream start end colon at-least-once-p)        
-        ; no atsign - munch on first arg
+ ; no atsign - munch on first arg
         (let* ((*format-arguments* (pop-format-arg))
                (*format-top-level* nil)
                (*format-original-arguments* *format-arguments*))
@@ -772,7 +772,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (do-iteration-1 stream start end colon at-least-once-p)))))
   
 
-;;; Justification  ~< ... ~>
+;;; Justification ~< ... ~>
 
 ;;; Parses a list of clauses delimited by ~; and terminated by ~>.
 ;;; Recursively invoke SUB-FORMAT to process them, and return a list
@@ -808,7 +808,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (values () 0 0))))))
 
 
-;;; Gets the first segment, which is treated specially.  Call 
+;;; Gets the first segment, which is treated specially. Call 
 ;;; FORMAT-GET-TRAILING-SEGMENTS to get the rest.
 
 (defun format-get-segments ()
@@ -818,7 +818,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                          (format-find-command '(#\; #\>) nil T) ; skipping
       (when atsign
         (format-error "Atsign flag not allowed"))
-      ;(setq *format-arguments* blech)
+ ;(setq *format-arguments* blech)
       (let ((first-seg (catch 'format-escape
                          (with-format-string-output stream
                            (sub-format stream prev tilde)))))
@@ -827,8 +827,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
             (progn
               (when parms
                 (setq *format-index* tilde)
-                ; now get the parameters if any - do this way cause of the V thingies
-                ; maybe only necessary in the : case
+ ; now get the parameters if any - do this way cause of the V thingies
+ ; maybe only necessary in the : case
                 (multiple-value-setq (ignore ignore parms)
                                      (format-find-command '(#\; #\>) t T)))              
               (multiple-value-bind
@@ -848,11 +848,11 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 #|
 ;;; Given the total number of SPACES needed for padding, and the number
 ;;; of padding segments needed (PADDINGS), returns a list of such segments.
-;;; We try to allocate the spaces equally to each segment.  When this is
+;;; We try to allocate the spaces equally to each segment. When this is
 ;;; not possible, we allocate the left-over spaces randomly, to improve the
 ;;; appearance of many successive lines of justified text.
 ;;; 
-;;; Query:  Is this right?  Perhaps consistency might be better for the kind
+;;; Query: Is this right? Perhaps consistency might be better for the kind
 ;;; of applications ~<~> is used for.
 
 (defun make-pad-segs (spaces paddings)
@@ -877,8 +877,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       result)))
 
 ;;; Determine the actual width to be used for a field requiring WIDTH
-;;; characters according to the following rule:  If WIDTH is less than or
-;;; equal to MINCOL, use WIDTH as the actual width.  Otherwise, round up 
+;;; characters according to the following rule: If WIDTH is less than or
+;;; equal to MINCOL, use WIDTH as the actual width. Otherwise, round up 
 ;;; to MINCOL + k * COLINC for the smallest possible positive integer k.
 
 (defun format-round-columns (width mincol colinc)
@@ -982,11 +982,11 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (format-check-simple prefix)
       (format-check-simple suffix)
       (let ((args (if (not atsign)
-                      ; This piece of garbage is needed to avoid double length counting from (formatter ...) things
-                      ; but also to allow (flet . t) not to barf.
-                      ; Was formerly simply  (if *format-arguments* (pop-format-arg))
-                      ; Actually wanna not count the arg iff the ~< is at the top level
-                      ; in a format string i.e. "is this the first ~< in THIS string?"                    
+ ; This piece of garbage is needed to avoid double length counting from (formatter ...) things
+ ; but also to allow (flet . t) not to barf.
+ ; Was formerly simply (if *format-arguments* (pop-format-arg))
+ ; Actually wanna not count the arg iff the ~< is at the top level
+ ; in a format string i.e. "is this the first ~< in THIS string?" 
                       (if *format-arguments*
                           (if  (and (listp *format-arguments*)
                                     (first-block-p start))
@@ -1003,10 +1003,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
               (xp-struct (cond ((xp-structure-p stream) stream)
                                ((typep stream 'xp-stream)
                                 (slot-value stream 'xp-structure)))))
-          ; lets avoid unnecessary closures
+ ; lets avoid unnecessary closures
           (cond (xp-struct (logical-block-sub xp-struct args  prefix suffix per-line-p atsign))
                 (t (maybe-initiate-xp-printing
-                    #'(lambda (s o)
+ #'(lambda (s o)
                         (logical-block-sub s o  prefix suffix per-line-p atsign))
                     stream args))))))))
 
@@ -1014,7 +1014,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
     
 ; flet?
 (defun logical-block-sub (stream args  prefix suffix per-line-p atsign)
-  ;(push (list args body-string) barf)
+ ;(push (list args body-string) barf)
   (let ((circle-chk (not (or *format-top-level* (and atsign (eq *current-length* -1)))))) ; i.e. ~<~@<
     (let ((*current-level* (1+ *current-level*)) ; these are for pprint
           (*current-length* -1))
@@ -1058,39 +1058,39 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 ;;;; Floating Point printing
 ;;;
-;;;  Written by Bill Maddox
+;;; Written by Bill Maddox
 ;;;
 ;;;
 ;;;
 ;;; FLONUM-TO-STRING (and its subsidiary function FLOAT-STRING) does most of 
 ;;; the work for all printing of floating point numbers in the printer and in
-;;; FORMAT.  It converts a floating point number to a string in a free or 
-;;; fixed format with no exponent.  The interpretation of the arguments is as 
+;;; FORMAT. It converts a floating point number to a string in a free or 
+;;; fixed format with no exponent. The interpretation of the arguments is as 
 ;;; follows:
 ;;;
-;;;     X        - The floating point number to convert, which must not be
-;;;                negative.
-;;;     WIDTH    - The preferred field width, used to determine the number
-;;;                of fraction digits to produce if the FDIGITS parameter
-;;;                is unspecified or NIL.  If the non-fraction digits and the
-;;;                decimal point alone exceed this width, no fraction digits
-;;;                will be produced unless a non-NIL value of FDIGITS has been
-;;;                specified.  Field overflow is not considerd an error at this
-;;;                level.
-;;;     FDIGITS  - The number of fractional digits to produce. Insignificant
-;;;                trailing zeroes may be introduced as needed.  May be
-;;;                unspecified or NIL, in which case as many digits as possible
-;;;                are generated, subject to the constraint that there are no
-;;;                trailing zeroes.
-;;;     SCALE    - If this parameter is specified or non-NIL, then the number
-;;;                printed is (* x (expt 10 scale)).  This scaling is exact,
-;;;                and cannot lose precision.
-;;;     FMIN     - This parameter, if specified or non-NIL, is the minimum
-;;;                number of fraction digits which will be produced, regardless
-;;;                of the value of WIDTH or FDIGITS.  This feature is used by
-;;;                the ~E format directive to prevent complete loss of
-;;;                significance in the printed value due to a bogus choice of
-;;;                scale factor.
+;;; X - The floating point number to convert, which must not be
+;;; negative.
+;;; WIDTH - The preferred field width, used to determine the number
+;;; of fraction digits to produce if the FDIGITS parameter
+;;; is unspecified or NIL. If the non-fraction digits and the
+;;; decimal point alone exceed this width, no fraction digits
+;;; will be produced unless a non-NIL value of FDIGITS has been
+;;; specified. Field overflow is not considerd an error at this
+;;; level.
+;;; FDIGITS - The number of fractional digits to produce. Insignificant
+;;; trailing zeroes may be introduced as needed. May be
+;;; unspecified or NIL, in which case as many digits as possible
+;;; are generated, subject to the constraint that there are no
+;;; trailing zeroes.
+;;; SCALE - If this parameter is specified or non-NIL, then the number
+;;; printed is (* x (expt 10 scale)). This scaling is exact,
+;;; and cannot lose precision.
+;;; FMIN - This parameter, if specified or non-NIL, is the minimum
+;;; number of fraction digits which will be produced, regardless
+;;; of the value of WIDTH or FDIGITS. This feature is used by
+;;; the ~E format directive to prevent complete loss of
+;;; significance in the printed value due to a bogus choice of
+;;; scale factor.
 ;;;
 ;;; Most of the optional arguments are for the benefit for FORMAT and are not
 ;;; used by the printer.
@@ -1099,25 +1099,25 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; (VALUES DIGIT-STRING DIGIT-LENGTH LEADING-POINT TRAILING-POINT DECPNT)
 ;;; where the results have the following interpretation:
 ;;;
-;;;     DIGIT-STRING    - The decimal representation of X, with decimal point.
-;;;     DIGIT-LENGTH    - The length of the string DIGIT-STRING.
-;;;     LEADING-POINT   - True if the first character of DIGIT-STRING is the
-;;;                       decimal point.
-;;;     TRAILING-POINT  - True if the last character of DIGIT-STRING is the
-;;;                       decimal point.
-;;;     POINT-POS       - The position of the digit preceding the decimal
-;;;                       point.  Zero indicates point before first digit.
-;;;     NZEROS          - number of zeros after point
+;;; DIGIT-STRING - The decimal representation of X, with decimal point.
+;;; DIGIT-LENGTH - The length of the string DIGIT-STRING.
+;;; LEADING-POINT - True if the first character of DIGIT-STRING is the
+;;; decimal point.
+;;; TRAILING-POINT - True if the last character of DIGIT-STRING is the
+;;; decimal point.
+;;; POINT-POS - The position of the digit preceding the decimal
+;;; point. Zero indicates point before first digit.
+;;; NZEROS - number of zeros after point
 ;;;
 ;;; WARNING: For efficiency, there is a single string object *digit-string*
 ;;; which is modified destructively and returned as the value of
-;;; FLONUM-TO-STRING.  Thus the returned value is not valid across multiple 
+;;; FLONUM-TO-STRING. Thus the returned value is not valid across multiple 
 ;;; calls.
 ;;;
-;;; NOTE:  FLONUM-TO-STRING goes to a lot of trouble to guarantee accuracy.
+;;; NOTE: FLONUM-TO-STRING goes to a lot of trouble to guarantee accuracy.
 ;;; Specifically, the decimal number printed is the closest possible 
 ;;; approximation to the true value of the binary number to be printed from 
-;;; among all decimal representations  with the same number of digits.  In
+;;; among all decimal representations with the same number of digits. In
 ;;; free-format output, i.e. with the number of digits unconstrained, it is 
 ;;; guaranteed that all the information is preserved, so that a properly-
 ;;; rounding reader can reconstruct the original binary number, bit-for-bit, 
@@ -1125,9 +1125,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; as necessary to satisfy this condition will be printed.
 ;;;
 ;;;
-;;; FLOAT-STRING actually generates the digits for positive numbers.  The
+;;; FLOAT-STRING actually generates the digits for positive numbers. The
 ;;; algorithm is essentially that of algorithm Dragon4 in "How to Print 
-;;; Floating-Point Numbers Accurately" by Steele and White.  The current 
+;;; Floating-Point Numbers Accurately" by Steele and White. The current 
 ;;; (draft) version of this paper may be found in [CMUC]<steele>tradix.press.
 ;;; DO NOT EVEN THINK OF ATTEMPTING TO UNDERSTAND THIS CODE WITHOUT READING 
 ;;; THE PAPER!
@@ -1146,7 +1146,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
     (cond ((zerop n)(values "" 0 0))
           ((and (not (or width fdigits scale))
                 (double-float-p n)
-                ; cheat for the only (?) number that fails to be aesthetically pleasing
+ ; cheat for the only (?) number that fails to be aesthetically pleasing
                 (= n 1e23))
            (values "1" 24 23))
           (t (let ((string (make-array 12 :element-type 'base-char
@@ -1162,7 +1162,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; rounding picks the float whose rational is
 ;;; 99999999999999991611392. This guy wants to print as
 ;;; 9.999999999999999E+22. The untweaked algorithm generates a leading
-;;; zero in this case.  (actually wants to print as 1e23!)  If we
+;;; zero in this case. (actually wants to print as 1e23!) If we
 ;;; choose s such that r < s - m/2, and r = s/10 - m/2 (which it does
 ;;; in this case) then r * 10 < s => first digit is zero and
 ;;; (remainder (* r 10) s) is r * 10 = new-r, 10 * m = new-m new-r = s
@@ -1176,7 +1176,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (when (= f (if (eql p 53) #.(ash 1 52) (ash 1 (1- p))))
         (setq mm t))
       (when (or (null scale)(zerop scale))
-        ; approximate k
+ ; approximate k
         (let ((fudge 0))
           (setq fudge (truncate (*  (%i+ e p) .301)))
           (when (neq fudge 0)
@@ -1191,7 +1191,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
             (when mm (setq m- scale-factor)))))
       (let ((shift (- e (if scale (- scale) 0))))
         (declare (fixnum shift))
-        ;(print (list e scale shift))
+ ;(print (list e scale shift))
         (cond ((> shift 0)
                (setq r (ash f shift))
                (setq m+ (ash m+ shift))
@@ -1225,7 +1225,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
            (width
             (setq cutoff
                   (if (< k 0) (- 1 width)(1+ (- k width))))
-            ;(if (and fmin (> cutoff (- fmin))) (setq cutoff (- fmin)))
+ ;(if (and fmin (> cutoff (- fmin))) (setq cutoff (- fmin)))
             ))
           (let ((a (if cutoff (- cutoff k) 0))
                 (y s))
@@ -1245,7 +1245,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
              (half-m- (if mm (* m- 5)))
              u high low 
              )
-        ;(print (list r s m+ roundup))
+ ;(print (list r s m+ roundup))
         (unless (and fdigits (>= (- k) fdigits))
           (loop
             (setq k (1- k))
@@ -1261,7 +1261,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                 (vector-push-extend (nth-digit u) string)))
             (when mm (setq half-m- (* half-m- 10) ))
             (setq half-m+ (* half-m+ 10)))
-          ;(print (list r s  high low h k))
+ ;(print (list r s high low h k))
           (vector-push-extend
            (nth-digit (cond
                        ((and low (not high)) u) 
@@ -1270,7 +1270,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                        (t ;(and high low)
                         (if (<= (+ r r) s) u (1+ u)))))
            string))
-        ; second value is exponent, third is exponent - # digits generated
+ ; second value is exponent, third is exponent - # digits generated
         (values string h k)))))
 
 
@@ -1317,9 +1317,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;; This is a modified version of the scale computation from Burger and
 ;; Dybvig's paper "Printing floating-point quickly and accurately."
 ;; We only want the exponent, so most things not needed for the
-;; computation of the exponent have been removed.  We also implemented
+;; computation of the exponent have been removed. We also implemented
 ;; the floating-point log approximation given in Burger and Dybvig.
-;; This is very noticeably faster for large and small numbers.  It is
+;; This is very noticeably faster for large and small numbers. It is
 ;; slower for intermediate sized numbers.
 (defun accurate-scale-exponent (v)
   (declare (type float v))
@@ -1334,9 +1334,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 	(multiple-value-bind (f e)
 	    (integer-decode-float v)
 	  (let ( ;; FIXME: these even tests assume normal IEEE rounding
-		;; mode.  I wonder if we should cater for non-normal?
+ ;; mode. I wonder if we should cater for non-normal?
 		(high-ok (evenp f)))
-	    ;; We only want the exponent here.
+ ;; We only want the exponent here.
 	    (labels ((flog (x)
 		       (declare (type (float (0.0)) x))
 		       (let ((xd (etypecase x
@@ -1380,7 +1380,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 			      m+ float-radix)))
 		(scale r s m+))))))))
 
-;;; Page  ~|
+;;; Page ~|
 
 (defformat #\| format-page (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -1414,7 +1414,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (declare (dynamic-extent parms))
   (format-newline stream colon atsign parms))
 
-;;; Indirection  ~?
+;;; Indirection ~?
 
 (defformat #\? format-indirection (stream colon atsign)
   (format-no-flags colon nil)
@@ -1442,7 +1442,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                 (T ;(functionp string)
                  (if (not atsign)
                    (apply string stream (pop-format-arg))
-                   ; account for the args it eats
+ ; account for the args it eats
                    (setq *format-arguments* (apply string stream *format-arguments*)))))
                nil)))
         (when error (format-indirect-error error))))))
@@ -1450,7 +1450,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 
-;;; Ascii  ~A
+;;; Ascii ~A
 
 (defformat #\A format-princ (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -1467,7 +1467,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 
-;;; S-expression  ~S
+;;; S-expression ~S
 	    
 (defformat #\S format-prin1 (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -1484,7 +1484,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 
-;;; Character  ~C
+;;; Character ~C
 
 (defformat #\C format-print-character (stream colon atsign)
   (let* ((char (character (pop-format-arg)))
@@ -1519,7 +1519,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 ;;; Output a string in a field at MINCOL wide, padding with PADCHAR.
-;;; Pads on the left if PADLEFT is true, else on the right.  If the
+;;; Pads on the left if PADLEFT is true, else on the right. If the
 ;;; length of the string plus the minimum permissible padding, MINPAD,
 ;;; is greater than MINCOL, the actual field size is rounded up to
 ;;; MINCOL + k * COLINC for the smallest possible positive integer k.
@@ -1550,12 +1550,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 
 ;;; This functions does most of the work for the numeric printing
-;;; directives.  The parameters are interpreted as defined for ~D.
+;;; directives. The parameters are interpreted as defined for ~D.
 
 (defun format-print-number (stream number radix print-commas-p print-sign-p parms)
   (declare (dynamic-extent parms))
   (declare (type t number) (type fixnum radix))
-  #+wrong
+ #+wrong
   (when (> (length parms) 2) (setq print-commas-p t)) ; print commas if char or interval provided
   (if (not (integerp number))
       (let ((*print-base* radix)
@@ -1565,7 +1565,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
         (princ number stream))
     (with-format-parameters parms
           ((mincol 0) (padchar #\space) (commachar #\,) (commainterval 3))
-      ; look out for ",0D" - should be ",'0D"
+ ; look out for ",0D" - should be ",'0D"
       (unless (characterp padchar)
         (error "Use '~A instead of ~A for padchar in format directive" padchar padchar))
        (setq print-sign-p 
@@ -1591,7 +1591,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
              (when (and (eq commas 0)
                         (%i<= mincol lg))
                (return-from SIMPLE))
-             ;; Cons-o-rama no more !
+ ;; Cons-o-rama no more !
              (let* ((s (make-string-output-stream)))
                (when  (neq padchar #\space)
                  (dotimes (i (- mincol (+ lg commas) 1))
@@ -1601,7 +1601,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                (dotimes (i (the fixnum commas)) (write-char commachar s))
                (let ((text (get-output-stream-string s)))
                  (declare (type string text))
-                 ;; -1234567,, => -1,234,567
+ ;; -1234567,, => -1,234,567
                  (when (%i> commas 0)
                    (do* ((dest (%i- (length text) 1))
                          (source (%i- dest commas)))
@@ -1615,7 +1615,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                            dest (1- dest))))
                  (format-write-field stream text mincol 1 0 padchar t)
                  (return-from HAIRY)))))
-         ;; SIMPLE case         
+ ;; SIMPLE case 
          (when print-sign-p (write-char print-sign-p stream))
          (%pr-integer number radix stream))))
   nil)
@@ -1756,35 +1756,35 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       ((zerop start))))
 
 
-;;; Decimal  ~D
+;;; Decimal ~D
 
 (defformat #\D format-print-decimal (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (format-print-number stream (pop-format-arg) 10 colon atsign parms))
 
 
-;;; Binary  ~B
+;;; Binary ~B
 
 (defformat #\B format-print-binary (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (format-print-number stream (pop-format-arg) 2 colon atsign parms))
 
 
-;;; Octal  ~O
+;;; Octal ~O
 
 (defformat #\O format-print-octal (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (format-print-number stream (pop-format-arg) 8 colon atsign parms))
 
 
-;;; Hexadecimal  ~X
+;;; Hexadecimal ~X
 
 (defformat #\X format-print-hexadecimal (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (format-print-number stream (pop-format-arg) 16 colon atsign parms))
 
 
-;;; Radix  ~R
+;;; Radix ~R
 
 (defformat #\R format-print-radix (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -1803,15 +1803,15 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ;;; FLOATING-POINT NUMBERS
 
 
-;;; Fixed-format floating point  ~F
+;;; Fixed-format floating point ~F
 
 (defformat #\F format-fixed (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
   (when colon
     (format-error "Colon flag not allowed"))
   (with-format-parameters parms ((w nil) (d nil) (k nil) (ovf nil) (pad #\space))
-    ;;Note that the scale factor k defaults to nil.  This is interpreted as
-    ;;zero by flonum-to-string, but more efficiently.
+ ;;Note that the scale factor k defaults to nil. This is interpreted as
+ ;;zero by flonum-to-string, but more efficiently.
     (let ((number (pop-format-arg))(*print-escape* nil))
       (if (floatp number)
         (format-fixed-aux stream number w d k ovf pad atsign)
@@ -1863,7 +1863,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                          spaceleft (- spaceleft d))))
               ((null d) (setq d (max (- after-pt) 1))))
         (cond ((and w (< spaceleft 0) ovf)
-               ;;field width overflow
+ ;;field width overflow
                (dotimes (i w) (declare (fixnum i)) (write-char ovf stream)))
               (t (when w (dotimes (i spaceleft) (declare (fixnum i)) (write-char pad stream)))
                  (if (minusp (float-sign number)) ; 5/25
@@ -1911,7 +1911,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
                   
 
-;;; Exponential-format floating point  ~E
+;;; Exponential-format floating point ~E
 
 
 (defformat #\E format-exponential (stream colon atsign &rest parms)
@@ -1929,7 +1929,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 #|
 (defun format-exponent-marker (number)
   (if (typep number *read-default-float-format*)
-      #\E
+ #\E
       (cond ((double-floatp) #\D)
             ((short-floatp number) #\S)
             ((single-floatp number) #\F)
@@ -1941,10 +1941,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 )
 
 ;;;Here we prevent the scale factor from shifting all significance out of
-;;;a number to the right.  We allow insignificant zeroes to be shifted in
+;;;a number to the right. We allow insignificant zeroes to be shifted in
 ;;;to the left right, athough it is an error to specify k and d such that this
-;;;occurs.  Perhaps we should detect both these condtions and flag them as
-;;;errors.  As for now, we let the user get away with it, and merely guarantee
+;;;occurs. Perhaps we should detect both these condtions and flag them as
+;;;errors. As for now, we let the user get away with it, and merely guarantee
 ;;;that at least one significant digit will appear.
 ;;; THE ABOVE COMMENT no longer applies
 
@@ -1975,10 +1975,10 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                          (if (> k 0) spaceleft (+ spaceleft k))))
           (when (minusp exp) ; i don't claim to understand this
             (setq fwidth (- fwidth exp))
-            ; (when (< k 0) (setq fwidth (1- fwidth)))
+ ; (when (< k 0) (setq fwidth (1- fwidth)))
             )))
         (when (or (and w e ovf (> elen e))(and w fwidth (not (plusp fwidth))))
-          ;;exponent overflow
+ ;;exponent overflow
           (dotimes (i w) (declare (fixnum i)) (write-char ovf stream))
           (if (plusp fwidth)
             (return-from format-exp-aux nil)
@@ -1988,8 +1988,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                                                                         (if (not fwidth) d))
             (setq string new-string)
             (when (neq exp before-pt)
-              ;(print (list 'agn exp before-pt))
-              ;(setq string new-string)
+ ;(print (list 'agn exp before-pt))
+ ;(setq string new-string)
               (setq exp before-pt)
               (go again))))
           (let ((strlen (length string)))
@@ -2040,7 +2040,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                         stream)
             (write-char (if (minusp expt) #\- #\+) stream)
             (when e 
-              ;;zero-fill before exponent if necessary
+ ;;zero-fill before exponent if necessary
               (dotimes (i (- e (length estr)))
                 (declare (fixnum i))
                 (write-char #\0 stream)))
@@ -2048,7 +2048,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 #|
 ; (format t "~7,3,,-2e" 8.88) ; ".009E+3"
 ; (format t "~10,5,,2e" 8.888888888) ; "88.8889E-1"
-; (format t "~10,5,,-2e" 8.88)   "0.00888E+3"
+; (format t "~10,5,,-2e" 8.88) "0.00888E+3"
 ; (format t "~10,5,,-2e" .00123445) ; "0.00123E+0"
 ; (format t "~10,5,,-3e" .00123445) ; "0.00012E+1"
 ; (format t "~10,,,-2e" .123445) ; ".001234E+2"
@@ -2060,9 +2060,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 ; (format t "~7,,,-2e" 8.88) ; ".009E+3"
 ; (format t "~10,,,2e" 8.888888) ; "88.8889E-1"
 ; (format t "~10,,,-2e" 8.88) ; "0.00888E+3"
-; (format t "~10,,,-2e" 0.0) ; "  0.000E+2" Acceptable
-; (format t "~10,,,2e" 0.0) ; "   00.0E-2" Acceptable
-; (format t "~10,,,2e" 9.9999999) ; "   10.0E+0"
+; (format t "~10,,,-2e" 0.0) ; " 0.000E+2" Acceptable
+; (format t "~10,,,2e" 0.0) ; " 00.0E-2" Acceptable
+; (format t "~10,,,2e" 9.9999999) ; " 10.0E+0"
 ; (format t "~10,,,2e" 9.9999999e100) ; Error
 ; (format t "~10,5,3,2,'xe" 10e100) ; Error
 ; (format t "~9,3,2,-2e" 1100.0) ; "0.001E+06"
@@ -2073,7 +2073,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 |#
 
 
-;;; General Floating Point -  ~G
+;;; General Floating Point - ~G
 
 (defformat #\G format-general-float (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -2081,9 +2081,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
     (format-error "Colon flag not allowed"))
   (with-format-parameters parms ((w nil) (d nil) (e nil) (k nil) (ovf nil) (pad #\space) (marker nil))
     (let ((number (pop-format-arg)))
-      ;;The Excelsior edition does not say what to do if
-      ;;the argument is not a float.  Here, we adopt the
-      ;;conventions used by ~F and ~E.
+ ;;The Excelsior edition does not say what to do if
+ ;;the argument is not a float. Here, we adopt the
+ ;;conventions used by ~F and ~E.
       (if (floatp number)
         (format-general-aux stream number w d e k ovf pad marker atsign)
         (if (rationalp number)
@@ -2102,22 +2102,22 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun format-general-aux (stream number w d e k ovf pad marker atsign)
   (multiple-value-bind (str n #|after-pt|#)(flonum-to-string number)
-    ;;Default d if omitted.  The procedure is taken directly
-    ;;from the definition given in the manual, and is not
-    ;;very efficient, since we generate the digits twice.
-    ;;Future maintainers are encouraged to improve on this.
+ ;;Default d if omitted. The procedure is taken directly
+ ;;from the definition given in the manual, and is not
+ ;;very efficient, since we generate the digits twice.
+ ;;Future maintainers are encouraged to improve on this.
     (let* ((d2 (or d (max (length str) (min n 7))))
            (ee (if e (+ e 2) 4))
            (ww (if w (- w ee) nil))
            (dd (- d2 n)))
       (cond ((<= 0 dd d2)
-             ; this causes us to print 1.0 as 1. - seems weird
+ ; this causes us to print 1.0 as 1. - seems weird
              (format-fixed-aux stream number ww dd nil ovf pad atsign)
              (dotimes (i ee) (declare (fixnum i)) (write-char #\space stream)))
             (t (format-exp-aux stream number w d e (or k 1) ovf pad marker atsign nil n))))))
 
 
-;;; Dollars floating-point format  ~$
+;;; Dollars floating-point format ~$
 
 (defformat #\$ format-dollars (stream colon atsign &rest parms)
   (declare (dynamic-extent parms))
@@ -2160,7 +2160,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defun y-or-n-p (&optional format-string &rest arguments &aux response)
   "Y-OR-N-P prints the message, if any, and reads characters from
-   *QUERY-IO* until the user enters y or Y as an affirmative, or either
+ *QUERY-IO* until the user enters y or Y as an affirmative, or either
    n or N as a negative answer. It asks again if you enter any other
    characters."
   (declare (dynamic-extent arguments))
@@ -2172,9 +2172,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
           (apply 'format *query-io* format-string arguments))
         (princ " (y or n)  " *query-io*)
 	(setq response (read-char *query-io*))
-        ;; Consume input up to trailing newline
+ ;; Consume input up to trailing newline
         (when (peek-char #\NewLine *query-io* nil)
-          ;; And consume the #\newline
+ ;; And consume the #\newline
           (read-char *query-io*))
         (clear-input *query-io*)
 	(if (char-equal response #\y) (return t))
@@ -2225,8 +2225,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 
 (defmacro with-format-scan-options ((var) &body body)
   (let ((cell (gensym)))
-    ;; CELL is used to record range of arg variations that should be deferred til the end
-    ;; of BODY because they represent possible non-local exits.
+ ;; CELL is used to record range of arg variations that should be deferred til the end
+ ;; of BODY because they represent possible non-local exits.
     `(let* ((,cell (cons nil nil))
             (,var ,cell))
        (declare (dynamic-extent ,cell))
@@ -2234,7 +2234,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
            (progn
              ,@body)
          (setq *format-arguments* (car ,cell)
-               *format-arguments-variance* (cdr ,cell))))))
+ *format-arguments-variance* (cdr ,cell))))))
 
 (defvar *format-escape-options* nil)
 
@@ -2385,9 +2385,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 	 (format-require-type count 'integer "count parameter"))
        (if (typep (setq count (nx-transform count)) '(or null integer))
 	 (format-scan-goto colon atsign count)
-	 ;; Else can't tell how much going back or forth, could be anywhere.
+ ;; Else can't tell how much going back or forth, could be anywhere.
 	 (setq *format-arguments* *format-original-arguments*
-	       *format-arguments-variance* (length *format-arguments*)))))
+ *format-arguments-variance* (length *format-arguments*)))))
     ((#\?)
      (with-format-parameters parms ()
        (format-no-flags colon nil))
@@ -2414,12 +2414,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 	      (sym (and package (find-symbol (string-upcase (%substr string ipos epos)) package)))
 	      (arg (pop-format-arg)))
 	 (setq *format-index* epos) ; or 1+ epos?
-	 ;; TODO: should we complain if the symbol doesn't exit?  Perhaps it will be defined
-	 ;; later, and to detect that would need to intern it.  What if the package doesn't exist?
-	 ;; Would need to extend :undefined-function warnings to handle previously-undefined package.
+ ;; TODO: should we complain if the symbol doesn't exit? Perhaps it will be defined
+ ;; later, and to detect that would need to intern it. What if the package doesn't exist?
+ ;; Would need to extend :undefined-function warnings to handle previously-undefined package.
 	 (when sym
 	   (when (nx1-check-typed-call sym (list* '*standard-output* arg colon atsign parms))
-	     ;; Whined, just get out now.
+ ;; Whined, just get out now.
 	     (throw 'format-error nil))))))
     ((#\[)
      (when (and colon atsign) (format-error  "~~:@[ undefined"))
@@ -2440,12 +2440,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
      (with-format-parameters parms ((p1 nil) (p2 nil) (p3 nil))
        (let ((val (nx-transform (cond (p3
 				       (if (every (lambda (p) (nx-could-be-type p 'real)) parms)
-					 ;; If the params could also be chars, don't know enough to constant fold
-					 ;; anyway, so this test will do.
+ ;; If the params could also be chars, don't know enough to constant fold
+ ;; anyway, so this test will do.
 					 `(< ,p1 ,p2 ,p3)
 					 (if (every (lambda (p) (nx-could-be-type p 'character)) parms)
 					   `(char< ,p1 ,p2 ,p3)
-					   ;; At least one can't be real, at least one can't be char.
+ ;; At least one can't be real, at least one can't be char.
 					   (format-error "Wrong type of parameters for three-way comparison"))))
 				      (p2 `(equal ,p1 ,p2))
 				      (p1 `(eq ,p1 0))
@@ -2462,12 +2462,12 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 	 (declare (ignore end-colon))
 	 (with-format-parameters end-parms () (format-no-flags nil end-atsign))
 	 (when (= prev tilde)
-	   ;; Use an argument as the control string if ~{~} is empty
+ ;; Use an argument as the control string if ~{~} is empty
 	   (let ((string (pop-format-arg)))
 	     (unless (nx-could-be-type string '(or string function))
 	       (format-error "Control string is not a string or function"))))
-	 ;; Could try to actually scan the iteration if string is a compile-time string,
-	 ;; by that seems unlikely.
+ ;; Could try to actually scan the iteration if string is a compile-time string,
+ ;; by that seems unlikely.
 	 (if atsign
 	   (setq *format-arguments-variance* (length *format-arguments*))
 	   (format-require-type (pop-format-arg) 'list)))))
@@ -2524,7 +2524,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
   (declare (ignore colon))
   (with-format-parameters params ()
     (format-no-semi #\<))
-    ;; First section can be termined by ~@;
+ ;; First section can be termined by ~@;
   (let ((format-string *format-control-string*)
 	(prefix "")
 	(suffix "")
@@ -2554,7 +2554,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (let ((*logical-block-p* t))
 	(format-scan body-string *format-arguments* *format-arguments-variance*)
 	(setq *format-arguments* nil *format-arguments-variance* 0))
-      ;; If no atsign, we just use up an arg.  Don't bother trying to scan it, unlikely to be a constant.
+ ;; If no atsign, we just use up an arg. Don't bother trying to scan it, unlikely to be a constant.
       (when *format-arguments*
 	(pop-format-arg)))))
 
@@ -2618,8 +2618,8 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 (defun format-scan-optional-clause (start end cond-option)
   (let ((*format-arguments* *format-arguments*)
 	(*format-arguments-variance* *format-arguments-variance*))
-    ;; Let the branch points collect in outer *format-escape-options*, but don't
-    ;; throw there because need to consider the other clauses.
+ ;; Let the branch points collect in outer *format-escape-options*, but don't
+ ;; throw there because need to consider the other clauses.
     (catch 'format-escape
       (sub-format-scan start end)
       (note-format-scan-option cond-option)
@@ -2631,9 +2631,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
            (orig-pos (- (length orig) (length *format-arguments*)))
            (new-pos (or count 0)))
       (format-no-flags colon nil)
-      ;; After backing up, we may not use up all the arguments we backed over,
-      ;; so even though real variance here is 0, increase variance so we don't
-      ;; complain.
+ ;; After backing up, we may not use up all the arguments we backed over,
+ ;; so even though real variance here is 0, increase variance so we don't
+ ;; complain.
       (setq *format-arguments-variance* (max 0 (- orig-pos new-pos)))
       (setq *format-arguments* (nthcdr-no-overflow new-pos orig)))
     (progn
@@ -2653,13 +2653,13 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 		    (max-pos (+ pos (or *format-arguments-variance* 0))))
 	       (when (< max-pos 0)
 		 (format-error "Target position for ~~* out of bounds"))
-	       ;; After backing up, we may not use up all the arguments we backed over.
-	       ;; Increase the variance allowed to cover those arguments, so we don't
-	       ;; complain about not using them.  E.g. (format t "~a ~a ~2:*~a" 1 2) should
-	       ;; be ok, (format t "~a ~a ~2:*" 1 2) should warn.
+ ;; After backing up, we may not use up all the arguments we backed over.
+ ;; Increase the variance allowed to cover those arguments, so we don't
+ ;; complain about not using them. E.g. (format t "~a ~a ~2:*~a" 1 2) should
+ ;; be ok, (format t "~a ~a ~2:*" 1 2) should warn.
 	       (setq max-pos (1- (- max-pos count)))
 	       (if (< pos 0)
 		 (setq *format-arguments* orig
-		       *format-arguments-variance* max-pos)
+ *format-arguments-variance* max-pos)
 		 (setq *format-arguments* (nthcdr pos orig)
-		       *format-arguments-variance* (- max-pos pos)))))))))
+ *format-arguments-variance* (- max-pos pos)))))))))

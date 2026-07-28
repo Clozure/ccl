@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -62,10 +62,10 @@
   (check-io-timeout new))
 
 ;;; Try to return a string containing characters that're near the
-;;; stream's current position, if that makes sense.  Return NIL
+;;; stream's current position, if that makes sense. Return NIL
 ;;; if it doesn't make sense.
 ;;; Some things (SOCKET-ERRORs) are signaled as STREAM-ERRORs
-;;; whose STREAM args aren't streams.  That's wrong, but
+;;; whose STREAM args aren't streams. That's wrong, but
 ;;; defining this method on T keeps things from blowing up worse.
 (defmethod stream-surrounding-characters ((s t))
   (declare (ignore s))
@@ -217,8 +217,8 @@
 
 (defun %make-heap-ivector (subtype size-in-bytes size-in-elts)
   (with-macptrs ((ptr (malloc (+ size-in-bytes
-                                 #+32-bit-target (+ 4 2 7) ; 4 for header, 2 for delta, 7 for round up
-                                 #+64-bit-target (+ 8 2 15) ; 8 for header, 2 for delta, 15 for round up
+ #+32-bit-target (+ 4 2 7) ; 4 for header, 2 for delta, 7 for round up
+ #+64-bit-target (+ 8 2 15) ; 8 for header, 2 for delta, 15 for round up
                                  ))))
     (let ((vect (fudge-heap-pointer ptr subtype size-in-elts))
           (p (%null-ptr)))
@@ -248,23 +248,28 @@
 						  target::num-subtag-bits)))
   (let* ((subtag (ccl::element-type-subtype element-type)))
     (unless
-        #+ppc32-target
+ #+ppc32-target
         (= (logand subtag ppc32::fulltagmask)
                ppc32::fulltag-immheader)
-        #+ppc64-target
+ #+ppc64-target
         (= (logand subtag ppc64::lowtagmask)
            ppc64::lowtag-immheader)
-        #+x8632-target
+ #+x8632-target
         (= (logand subtag x8632::fulltagmask)
 	   x8632::fulltag-immheader)
-        #+x8664-target
+ #+x8664-target
         (logbitp (the (mod 16) (logand subtag x8664::fulltagmask))
                  (logior (ash 1 x8664::fulltag-immheader-0)
                          (ash 1 x8664::fulltag-immheader-1)
                          (ash 1 x8664::fulltag-immheader-2)))
-        #+arm-target
+ #+arm-target
         (= (logand subtag arm::fulltagmask)
            arm::fulltag-immheader)
+ #+arm64-target
+        (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                 (logior (ash 1 arm64::fulltag-immheader-0)
+                         (ash 1 arm64::fulltag-immheader-1)
+                         (ash 1 arm64::fulltag-immheader-2)))
       (error "~s is not an ivector subtype." element-type))
     (let* ((size-in-octets (ccl::subtag-bytes subtag element-count)))
       (multiple-value-bind (vector pointer)
@@ -363,7 +368,7 @@
 (defmethod stream-line-length ((stream stream))
   "This is meant to be shadowed by particular kinds of streams,
    esp those associated with windows."
-  *default-right-margin*)
+ *default-right-margin*)
 
 (defmethod interactive-stream-p ((x t))
   (report-bad-arg x 'stream))
@@ -388,11 +393,11 @@
 
 ;;; For input streams, the IO-BUFFER-COUNT field denotes the number
 ;;; of elements read from the underlying input source (e.g., the
-;;; file system.)  For output streams, it's the high-water mark of
+;;; file system.) For output streams, it's the high-water mark of
 ;;; elements output to the buffer.
 
 (defstruct io-buffer
-               ;; This type is too complex during bootstrapping.
+ ;; This type is too complex during bootstrapping.
   (buffer nil #|:type (or (simple-array * (*)) null)|#)
   (bufptr nil :type (or macptr null))
   (size 0 :type fixnum)			; size (in octets) of buffer
@@ -414,7 +419,7 @@
 (defstruct ioblock
   stream                                ; the stream being buffered
   untyi-char                            ; nil or last value passed to
-                                        ;  stream-unread-char
+ ; stream-unread-char
   (inbuf nil :type (or null io-buffer))
   (outbuf nil :type (or null io-buffer))
   (element-type 'character)
@@ -461,7 +466,7 @@
   (deadline nil))
 
 
-;;; Functions on ioblocks.  So far, we aren't saying anything
+;;; Functions on ioblocks. So far, we aren't saying anything
 ;;; about how streams use them.
 
 (defun ioblock-no-binary-input (ioblock &rest otters)
@@ -792,9 +797,9 @@
              (b1 (aref vector (the fixnum (1+ idx)))))
         (declare (type (unsigned-byte 8) b0 b1))
         (setf (io-buffer-idx buf) (the fixnum (+ idx 2)))
-        #+big-endian-target
+ #+big-endian-target
         (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-        #+little-endian-target
+ #+little-endian-target
         (logior (the (unsigned-byte 16) (ash b1 8)) b0))
       (if (< idx limit)
         (let* ((b0 (aref vector idx))
@@ -805,9 +810,9 @@
             (let* ((b1 (aref vector 0)))
               (declare (type (unsigned-byte 8) b1))
               (setf (io-buffer-idx buf) 1)
-              #+big-endian-target
+ #+big-endian-target
               (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-              #+little-endian-target
+ #+little-endian-target
               (logior (the (unsigned-byte 16) (ash b1 8)) b0))))
         (let* ((n (%ioblock-advance ioblock t)))
           (if (null n)
@@ -820,9 +825,9 @@
                      (b1 (aref vector 1)))
                 (declare (type (unsigned-byte 8) b0 b1))
                 (setf (io-buffer-idx buf) 2)
-                #+big-endian-target
+ #+big-endian-target
                 (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-                #+little-endian-target
+ #+little-endian-target
                 (logior (the (unsigned-byte 16) (ash b1 8)) b0)))))))))
   
 (declaim (inline %ioblock-read-swapped-u16-code-unit))
@@ -839,9 +844,9 @@
              (b1 (aref vector (the fixnum (1+ idx)))))
         (declare (type (unsigned-byte 8) b0 b1))
         (setf (io-buffer-idx buf) (the fixnum (+ idx 2)))
-        #+little-endian-target
+ #+little-endian-target
         (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-        #+big-endian-target
+ #+big-endian-target
         (logior (the (unsigned-byte 16) (ash b1 8)) b0))
       (if (< idx limit)
         (let* ((b0 (aref vector idx))
@@ -852,9 +857,9 @@
             (let* ((b1 (aref vector 0)))
               (declare (type (unsigned-byte 8) b1))
               (setf (io-buffer-idx buf) 1)
-              #+little-endian-target
+ #+little-endian-target
               (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-              #+big-endian-target
+ #+big-endian-target
               (logior (the (unsigned-byte 16) (ash b1 8)) b0))))
         (let* ((n (%ioblock-advance ioblock t)))
           (if (null n)
@@ -867,9 +872,9 @@
                      (b1 (aref vector 1)))
                 (declare (type (unsigned-byte 8) b0 b1))
                 (setf (io-buffer-idx buf) 2)
-                #+little-endian-target
+ #+little-endian-target
                 (logior (the (unsigned-byte 16) (ash b0 8)) b1)
-                #+big-endian-target
+ #+big-endian-target
                 (logior (the (unsigned-byte 16) (ash b1 8)) b0)))))))))
 
 
@@ -889,12 +894,12 @@
                   (b3 (aref vector (the fixnum (+ idx 3)))))
              (declare (type (unsigned-byte 8) b0 b1 b2 b3))
              (setf (io-buffer-idx buf) (the fixnum (+ idx 4)))
-             #+big-endian-target
+ #+big-endian-target
              (logior (the (unsigned-byte 32) (ash b0 24))
                      (the (unsigned-byte 24) (ash b1 16))
                      (the (unsigned-byte 16) (ash b2 8))
                      b3)
-             #+little-endian-target
+ #+little-endian-target
              (logior (the (unsigned-byte 32) (ash b3 24))
                      (the (unsigned-byte 24) (ash b2 16))
                      (the (unsigned-byte 16) (ash b1 8))
@@ -910,12 +915,12 @@
                (let* ((b3 (aref vector 0)))
                  (declare (type (unsigned-byte 8) b3))
                  (setf (io-buffer-idx buf) 1)
-                 #+big-endian-target
+ #+big-endian-target
                  (logior (the (unsigned-byte 32) (ash b0 24))
                          (the (unsigned-byte 24) (ash b1 16))
                          (the (unsigned-byte 16) (ash b2 8))
                          b3)
-                 #+little-endian-target
+ #+little-endian-target
                  (logior (the (unsigned-byte 32) (ash b3 24))
                          (the (unsigned-byte 24) (ash b2 16))
                          (the (unsigned-byte 16) (ash b1 8))
@@ -935,12 +940,12 @@
                         (b3 (aref vector 1)))
                    (declare (type (unsigned-byte 8) b2 b3))
                    (setf (io-buffer-idx buf) 2)
-                   #+big-endian-target
+ #+big-endian-target
                    (logior (the (unsigned-byte 32) (ash b0 24))
                            (the (unsigned-byte 24) (ash b1 16))
                            (the (unsigned-byte 16) (ash b2 8))
                            b3)
-                   #+little-endian-target
+ #+little-endian-target
                    (logior (the (unsigned-byte 32) (ash b3 24))
                            (the (unsigned-byte 24) (ash b2 16))
                            (the (unsigned-byte 16) (ash b1 8))
@@ -959,12 +964,12 @@
                         (b2 (aref vector 1))
                         (b3 (aref vector 2)))
                    (setf (io-buffer-idx buf) 3)
-                   #+big-endian-target
+ #+big-endian-target
                    (logior (the (unsigned-byte 32) (ash b0 24))
                            (the (unsigned-byte 24) (ash b1 16))
                            (the (unsigned-byte 16) (ash b2 8))
                            b3)
-                   #+little-endian-target
+ #+little-endian-target
                    (logior (the (unsigned-byte 32) (ash b3 24))
                            (the (unsigned-byte 24) (ash b2 16))
                            (the (unsigned-byte 16) (ash b1 8))
@@ -983,12 +988,12 @@
                         (b3 (aref vector 3)))
                 (declare (type (unsigned-byte 8) b0 b1 b2 b3))
                 (setf (io-buffer-idx buf) 4)
-                #+big-endian-target
+ #+big-endian-target
                 (logior (the (unsigned-byte 32) (ash b0 24))
                         (the (unsigned-byte 24) (ash b1 16))
                         (the (unsigned-byte 16) (ash b2 8))
                         b3)
-                #+little-endian-target
+ #+little-endian-target
                 (logior (the (unsigned-byte 32) (ash b3 24))
                         (the (unsigned-byte 24) (ash b2 16))
                         (the (unsigned-byte 16) (ash b1 8))
@@ -1010,12 +1015,12 @@
                   (b3 (aref vector (the fixnum (+ idx 3)))))
              (declare (type (unsigned-byte 8) b0 b1 b2 b3))
              (setf (io-buffer-idx buf) (the fixnum (+ idx 4)))
-             #+little-endian-target
+ #+little-endian-target
              (logior (the (unsigned-byte 32) (ash b0 24))
                      (the (unsigned-byte 24) (ash b1 16))
                      (the (unsigned-byte 16) (ash b2 8))
                      b3)
-             #+big-endian-target
+ #+big-endian-target
              (logior (the (unsigned-byte 32) (ash b3 24))
                      (the (unsigned-byte 24) (ash b2 16))
                      (the (unsigned-byte 16) (ash b1 8))
@@ -1031,12 +1036,12 @@
                (let* ((b3 (aref vector 0)))
                  (declare (type (unsigned-byte 8) b3))
                  (setf (io-buffer-idx buf) 1)
-                 #+little-endian-target
+ #+little-endian-target
                  (logior (the (unsigned-byte 32) (ash b0 24))
                          (the (unsigned-byte 24) (ash b1 16))
                          (the (unsigned-byte 16) (ash b2 8))
                          b3)
-                 #+big-endian-target
+ #+big-endian-target
                  (logior (the (unsigned-byte 32) (ash b3 24))
                          (the (unsigned-byte 24) (ash b2 16))
                          (the (unsigned-byte 16) (ash b1 8))
@@ -1056,12 +1061,12 @@
                         (b3 (aref vector 1)))
                    (declare (type (unsigned-byte 8) b2 b3))
                    (setf (io-buffer-idx buf) 2)
-                   #+little-endian-target
+ #+little-endian-target
                    (logior (the (unsigned-byte 32) (ash b0 24))
                            (the (unsigned-byte 24) (ash b1 16))
                            (the (unsigned-byte 16) (ash b2 8))
                            b3)
-                   #+big-endian-target
+ #+big-endian-target
                    (logior (the (unsigned-byte 32) (ash b3 24))
                            (the (unsigned-byte 24) (ash b2 16))
                            (the (unsigned-byte 16) (ash b1 8))
@@ -1080,12 +1085,12 @@
                         (b2 (aref vector 1))
                         (b3 (aref vector 2)))
                    (setf (io-buffer-idx buf) 3)
-                   #+little-endian-target
+ #+little-endian-target
                    (logior (the (unsigned-byte 32) (ash b0 24))
                            (the (unsigned-byte 24) (ash b1 16))
                            (the (unsigned-byte 16) (ash b2 8))
                            b3)
-                   #+big-endian-target
+ #+big-endian-target
                    (logior (the (unsigned-byte 32) (ash b3 24))
                            (the (unsigned-byte 24) (ash b2 16))
                            (the (unsigned-byte 16) (ash b1 8))
@@ -1104,12 +1109,12 @@
                         (b3 (aref vector 3)))
                 (declare (type (unsigned-byte 8) b0 b1 b2 b3))
                 (setf (io-buffer-idx buf) 4)
-                #+little-endian-target
+ #+little-endian-target
                 (logior (the (unsigned-byte 32) (ash b0 24))
                         (the (unsigned-byte 24) (ash b1 16))
                         (the (unsigned-byte 16) (ash b2 8))
                         b3)
-                #+big-endian-target
+ #+big-endian-target
                 (logior (the (unsigned-byte 32) (ash b3 24))
                         (the (unsigned-byte 24) (ash b2 16))
                         (the (unsigned-byte 16) (ash b1 8))
@@ -1223,7 +1228,7 @@
               (%code-char 1st-unit)
               (funcall (ioblock-decode-input-function ioblock)
                        1st-unit
-                       #'%ioblock-read-u8-code-unit
+ #'%ioblock-read-u8-code-unit
                        ioblock))))))))
 
 (defun %private-ioblock-read-u8-encoded-char (ioblock)
@@ -1253,7 +1258,7 @@
               (code-char 1st-unit)
               (funcall (ioblock-decode-input-function ioblock)
                        1st-unit
-                       #'%ioblock-read-u16-code-unit
+ #'%ioblock-read-u16-code-unit
                        ioblock))))))))
 
 (defun %private-ioblock-read-u16-encoded-char (ioblock)
@@ -1283,7 +1288,7 @@
               (code-char 1st-unit)
               (funcall (ioblock-decode-input-function ioblock)
                        1st-unit
-                       #'%ioblock-read-swapped-u16-code-unit
+ #'%ioblock-read-swapped-u16-code-unit
                        ioblock))))))))
 
 (defun %private-ioblock-read-swapped-u16-encoded-char (ioblock)
@@ -1313,7 +1318,7 @@
               (code-char 1st-unit)
               (funcall (ioblock-decode-input-function ioblock)
                        1st-unit
-                       #'%ioblock-read-u32-code-unit
+ #'%ioblock-read-u32-code-unit
                        ioblock))))))))
 
 (defun %private-ioblock-read-u32-encoded-char (ioblock)
@@ -1343,7 +1348,7 @@
               (code-char 1st-unit)
               (funcall (ioblock-decode-input-function ioblock)
                        1st-unit
-                       #'%ioblock-read-swapped-u32-code-unit
+ #'%ioblock-read-swapped-u32-code-unit
                        ioblock))))))))
 
 (defun %private-ioblock-read-swapped-u32-encoded-char (ioblock)
@@ -1427,9 +1432,9 @@
            (ioblock-outpos ioblock)
            finish-p))
 
-;;; ivector should be an ivector.  The ioblock should have an
+;;; ivector should be an ivector. The ioblock should have an
 ;;; element-shift of 0; start-octet and num-octets should of course
-;;; be sane.  This is mostly to give the fasdumper a quick way to
+;;; be sane. This is mostly to give the fasdumper a quick way to
 ;;; write immediate data.
 (defun %ioblock-out-ivect (ioblock ivector start-octet num-octets)
   (unless (= 0 (the fixnum (ioblock-element-shift ioblock)))
@@ -1598,9 +1603,9 @@
          (limit (io-buffer-limit buf))
          (vector (io-buffer-buffer buf))
          (b0 #+big-endian-target (ldb (byte 8 8) element)
-             #+little-endian-target (ldb (byte 8 0) element))
+ #+little-endian-target (ldb (byte 8 0) element))
          (b1 #+big-endian-target (ldb (byte 8 0) element)
-             #+little-endian-target (ldb (byte 8 8) element)))
+ #+little-endian-target (ldb (byte 8 8) element)))
     (declare (fixnum idx limit count)
              (type (simple-array (unsigned-byte 8) (*)) vector)
              (type (unsigned-byte 8) b0 b1))
@@ -1632,9 +1637,9 @@
          (limit (io-buffer-limit buf))
          (vector (io-buffer-buffer buf))
          (b0 #+big-endian-target (ldb (byte 8 8) element)
-             #+little-endian-target (ldb (byte 8 0) element))
+ #+little-endian-target (ldb (byte 8 0) element))
          (b1 #+big-endian-target (ldb (byte 8 0) element)
-             #+little-endian-target (ldb (byte 8 8) element)))
+ #+little-endian-target (ldb (byte 8 8) element)))
     (declare (fixnum idx limit count)
              (type (simple-array (unsigned-byte 8) (*)) vector)
              (type (unsigned-byte 8) b0 b1))
@@ -1673,13 +1678,13 @@
          (limit (io-buffer-limit buf))
          (vector (io-buffer-buffer buf))
          (b0 #+big-endian-target (ldb (byte 8 24) element)
-             #+little-endian-target (ldb (byte 8 0) element))
+ #+little-endian-target (ldb (byte 8 0) element))
          (b1 #+big-endian-target (ldb (byte 8 16) element)
-             #+little-endian-target (ldb (byte 8 8) element))
+ #+little-endian-target (ldb (byte 8 8) element))
          (b2 #+big-endian-target (ldb (byte 8 8) element)
-             #+little-endian-target (ldb (byte 8 16) element))
+ #+little-endian-target (ldb (byte 8 16) element))
          (b3 #+big-endian-target (ldb (byte 8 0) element)
-             #+little-endian-target (ldb (byte 8 24) element)))
+ #+little-endian-target (ldb (byte 8 24) element)))
     (declare (fixnum idx limit count)
              (type (simple-array (unsigned-byte 8) (*)) vector)
              (type (unsigned-byte 8) b0 b1 b2 b3))
@@ -1737,13 +1742,13 @@
          (limit (io-buffer-limit buf))
          (vector (io-buffer-buffer buf))
          (b0 #+little-endian-target (ldb (byte 8 24) element)
-             #+big-endian-target (ldb (byte 8 0) element))
+ #+big-endian-target (ldb (byte 8 0) element))
          (b1 #+little-endian-target (ldb (byte 8 16) element)
-             #+big-endian-target (ldb (byte 8 8) element))
+ #+big-endian-target (ldb (byte 8 8) element))
          (b2 #+little-endian-target (ldb (byte 8 8) element)
-             #+big-endian-target (ldb (byte 8 16) element))
+ #+big-endian-target (ldb (byte 8 16) element))
          (b3 #+little-endian-target (ldb (byte 8 0) element)
-             #+big-endian-target (ldb (byte 8 24) element)))
+ #+big-endian-target (ldb (byte 8 24) element)))
     (declare (fixnum idx limit count)
              (type (simple-array (unsigned-byte 8) (*)) vector)
              (type (unsigned-byte 8) b0 b1 b2 b3))
@@ -1943,7 +1948,7 @@
       (%ioblock-write-u8-element ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
                char
-               #'%ioblock-write-u8-element
+ #'%ioblock-write-u8-element
                ioblock))))
 
 (defun %private-ioblock-write-u8-encoded-char (ioblock char)
@@ -1994,7 +1999,7 @@
       (%ioblock-write-u16-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
                char
-               #'%ioblock-write-u16-code-unit
+ #'%ioblock-write-u16-code-unit
                ioblock))))
 
 (defun %private-ioblock-write-u16-encoded-char (ioblock char)
@@ -2044,7 +2049,7 @@
       (%ioblock-write-swapped-u16-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
                char
-               #'%ioblock-write-swapped-u16-code-unit
+ #'%ioblock-write-swapped-u16-code-unit
                ioblock))))
 
 (defun %private-ioblock-write-swapped-u16-encoded-char (ioblock char)
@@ -2097,7 +2102,7 @@
       (%ioblock-write-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
                code
-               #'%ioblock-write-u32-code-unit
+ #'%ioblock-write-u32-code-unit
                ioblock))))
 
 (defun %private-ioblock-write-u32-encoded-char (ioblock char)
@@ -2147,7 +2152,7 @@
       (%ioblock-write-swapped-u32-code-unit ioblock code)
       (funcall (ioblock-encode-output-function ioblock)
                code
-               #'%ioblock-write-swapped-u32-code-unit
+ #'%ioblock-write-swapped-u32-code-unit
                ioblock))))
 
 (defun %private-ioblock-write-swapped-u32-encoded-char (ioblock char)
@@ -2358,7 +2363,7 @@
                  (n (- end idx)))
             (declare (fixnum p end n))
             (if (and p (eql len 0))
-              ;; Likely a fairly common case
+ ;; Likely a fairly common case
               (let* ((string (make-string n)))
                 (%copy-u8-to-string buf idx string 0 n)
                 (return-from %ioblock-unencoded-read-line
@@ -2616,7 +2621,7 @@
                ioblock)
               ioblock)))
     (if (eql ch #\Return)
-      #\Newline
+ #\Newline
       ch)))
 
 (defun %private-ioblock-read-char-translating-cr-to-newline (ioblock)
@@ -2661,7 +2666,7 @@
                ioblock)
               ioblock)))
     (if (eql ch #\Line_Separator)
-      #\Newline
+ #\Newline
       ch)))
 
 (defun %private-ioblock-read-char-translating-line-separator-to-newline (ioblock)
@@ -2693,7 +2698,7 @@
     (funcall (ioblock-write-char-without-translation-when-locked-function
               ioblock)
              ioblock
-             #\Return))    
+ #\Return)) 
   (funcall (ioblock-write-char-without-translation-when-locked-function
             ioblock)
            ioblock
@@ -2787,14 +2792,14 @@
                  (if (character-encoding-native-endianness encoding)
                    (progn
                     (setf (ioblock-read-char-when-locked-function ioblock)
-                          #'%ioblock-read-u32-encoded-char)
+ #'%ioblock-read-u32-encoded-char)
                     (case sharing
                       (:private #'%private-ioblock-read-u32-encoded-char)
                       (:lock #'%locked-ioblock-read-u32-encoded-char)
                       (t #'%ioblock-read-u32-encoded-char)))
                    (progn
                      (setf (ioblock-read-char-when-locked-function ioblock)
-                           #'%ioblock-read-swapped-u32-encoded-char)
+ #'%ioblock-read-swapped-u32-encoded-char)
                     (case sharing
                       (:private #'%private-ioblock-read-swapped-u32-encoded-char)
                       (:lock #'%locked-ioblock-read-swapped-u32-encoded-char)
@@ -2823,7 +2828,7 @@
       (setf (ioblock-read-byte-function ioblock)
             (cond ((= subtag target::subtag-u8-vector)
                    (if character-p
-                     ;; The bivalent case, at least for now
+ ;; The bivalent case, at least for now
                      (progn
                        (setf (ioblock-read-byte-when-locked-function ioblock)
                              '%bivalent-ioblock-read-u8-byte)
@@ -2873,7 +2878,7 @@
                      (:private '%private-ioblock-read-s32-byte)
                      (:lock '%locked-ioblock-read-s32-byte)
                      (t '%ioblock-read-s32-byte)))
-                  #+64-bit-target
+ #+64-bit-target
                   ((= subtag target::subtag-u64-vector)
                    (setf (ioblock-read-byte-when-locked-function ioblock)
                          '%ioblock-read-u64-byte)                   
@@ -2881,7 +2886,7 @@
                      (:private '%private-ioblock-read-u64-byte)
                      (:lock '%locked-ioblock-read-u64-byte)
                      (t '%ioblock-read-u64-byte)))
-                  #+64-bit-target
+ #+64-bit-target
                   ((= subtag target::subtag-s64-vector)
                    (setf (ioblock-read-byte-when-locked-function ioblock)
                          '%ioblock-read-s64-byte)
@@ -2889,7 +2894,7 @@
                      (:private '%private-ioblock-read-s64-byte)
                      (:lock '%locked-ioblock-read-s64-byte)
                      (t '%ioblock-read-s64-byte)))
-                  ;; Not sure what this means, currently.
+ ;; Not sure what this means, currently.
                   (t
                    (setf (ioblock-read-byte-when-locked-function ioblock)
                          '%general-ioblock-read-byte)
@@ -2974,14 +2979,14 @@
                  (if (character-encoding-native-endianness encoding)
                    (progn
                      (setf (ioblock-write-char-when-locked-function ioblock)
-                           #'%ioblock-write-u32-encoded-char) 
+ #'%ioblock-write-u32-encoded-char) 
                      (case sharing
                        (:private #'%private-ioblock-write-u32-encoded-char)
                        (:lock #'%locked-ioblock-write-u32-encoded-char)
                        (t #'%ioblock-write-u32-encoded-char)))
                    (progn
                      (setf (ioblock-write-char-when-locked-function ioblock)
-                           #'%ioblock-write-swapped-u32-encoded-char)
+ #'%ioblock-write-swapped-u32-encoded-char)
                      (case sharing
                        (:private #'%private-ioblock-write-swapped-u32-encoded-char)
                        (:lock #'%locked-ioblock-write-swapped-u32-encoded-char)
@@ -2995,8 +3000,8 @@
                    '%ioblock-write-swapped-u16-encoded-simple-string))
                 (32
                  (if (character-encoding-native-endianness encoding)
-                   #'%ioblock-write-u32-encoded-simple-string
-                   #'%ioblock-write-swapped-u32-encoded-simple-string))))
+ #'%ioblock-write-u32-encoded-simple-string
+ #'%ioblock-write-swapped-u32-encoded-simple-string))))
         (when (character-encoding-use-byte-order-mark encoding)
           (setf (ioblock-pending-byte-order-mark ioblock) t)))
       (progn
@@ -3059,7 +3064,7 @@
                      (:private '%private-ioblock-write-s32-byte)
                      (:lock '%locked-ioblock-write-s32-byte)
                      (t '%ioblock-write-s32-byte)))
-                  #+64-bit-target
+ #+64-bit-target
                   ((= subtag target::subtag-u64-vector)
                    (setf (ioblock-write-byte-when-locked-function ioblock)
                          '%ioblock-write-u64-byte)
@@ -3067,7 +3072,7 @@
                      (:private '%private-ioblock-write-u64-byte)
                      (:lock '%locked-ioblock-write-u64-byte)
                      (t '%ioblock-write-u64-byte)))
-                  #+64-bit-target
+ #+64-bit-target
                   ((= subtag target::subtag-s64-vector)
                    (setf (ioblock-write-byte-when-locked-function ioblock)
                          '%ioblock-write-u64-byte)
@@ -3123,7 +3128,7 @@
     (if (eq upgraded 'bit)
       '(unsigned-byte 8)
       (if (eq upgraded 'fixnum)
-        #+64-bit-target '(signed-byte 64) #+32-bit-target '(signed-byte 32)
+ #+64-bit-target '(signed-byte 64) #+32-bit-target '(signed-byte 32)
         (if (eq upgraded t)
           (error "Stream element-type ~s can't be reasonably supported." element-type)
           upgraded)))))
@@ -3131,11 +3136,11 @@
 (defun init-stream-ioblock (stream
                             &key
                             insize      ; integer to allocate inbuf here, nil
-                                        ; otherwise
+ ; otherwise
                             outsize     ; integer to allocate outbuf here, nil
-                                        ; otherwise
+ ; otherwise
                             share-buffers-p ; true if input and output
-                                        ; share a buffer
+ ; share a buffer
                             element-type
                             device
                             advance-function
@@ -3242,8 +3247,8 @@
       (setup-ioblock-output ioblock character-p element-type sharing encoding line-termination))
     (when element-type
       (setf (ioblock-element-type ioblock) (if character-p 'character element-type)))
-;    (when element-shift
-;      (setf (ioblock-element-shift ioblock) element-shift))
+; (when element-shift
+; (setf (ioblock-element-shift ioblock) element-shift))
     (when device
       (setf (ioblock-device ioblock) device))
     (when advance-function
@@ -3275,10 +3280,10 @@
     ioblock))
 
 ;;; If there's a byte-order-mark (or a reversed byte-order-mark) at
-;;; the beginning of the input stream, deal with it.  If there's any
-;;; input present, make sure that we don't write a BOM on output.  If
+;;; the beginning of the input stream, deal with it. If there's any
+;;; input present, make sure that we don't write a BOM on output. If
 ;;; this is a little-endian machine, input data was present, and there
-;;; was no BOM in that data, make things big-endian.  If there's a
+;;; was no BOM in that data, make things big-endian. If there's a
 ;;; leading BOM or swapped BOM, eat it (consume it so that it doesn't
 ;;; ordinarily appear as input.)
 ;;;
@@ -3391,26 +3396,26 @@
     (:unicode . :unicode)))
 
 (defun optimal-buffer-size (fd element-type)
-  #+windows-target (declare (ignore fd))
+ #+windows-target (declare (ignore fd))
   (flet ((scale-buffer-size (octets)
 	   (case (subtag-bytes (element-type-subtype element-type) 1)
 	     (1 octets)
 	     (2 (ash octets -1))
 	     (4 (ash octets -2))
 	     (8 (ash octets -3)))))
-    #+windows-target
+ #+windows-target
     (let ((octets 4096))
       (scale-buffer-size octets))
-    #-windows-target
+ #-windows-target
     (let* ((nominal (or (nth-value 6 (%fstat fd)) *elements-per-buffer*))
 	   (octets (case (%unix-fd-kind fd)
 		     (:pipe (#_fpathconf fd #$_PC_PIPE_BUF))
 		     (:socket
-		      #+linux-target nominal
-		      #-linux-target
+ #+linux-target nominal
+ #-linux-target
 		      (int-getsockopt fd #$SOL_SOCKET
-				      #+solaris-target #$SO_SNDBUF
-				      #-solaris-target #$SO_SNDLOWAT))
+ #+solaris-target #$SO_SNDBUF
+ #-solaris-target #$SO_SNDLOWAT))
 		     ((:character-special :tty)
 		      (#_fpathconf fd #$_PC_MAX_INPUT))
 		     (t nominal))))
@@ -3480,7 +3485,7 @@
       stream)))
 
   
-;;;  Fundamental streams.
+;;; Fundamental streams.
 
 (defclass fundamental-stream (stream)
     ())
@@ -3909,7 +3914,7 @@
            (synonym-method stream-read-list l c)
            (synonym-method stream-read-vector v start end)
            (synonym-method stream-write-char c)
-           ;(synonym-method stream-write-string str &optional (start 0) end)
+ ;(synonym-method stream-write-string str &optional (start 0) end)
            (synonym-method stream-write-byte b)
            (synonym-method stream-clear-output)
            (synonym-method stream-line-column)
@@ -4054,7 +4059,7 @@
   (make-instance 'two-way-stream :input-stream in :output-stream out))
 
 ;;; This is intended for use with things like *TERMINAL-IO*, where the
-;;; OS echoes interactive input.  Whenever we read a character from
+;;; OS echoes interactive input. Whenever we read a character from
 ;;; the underlying input-stream of such a stream, we need to update
 ;;; our notion of the underlying output-stream's STREAM-LINE-COLUMN.
 
@@ -4356,7 +4361,7 @@
   (let* ((pool %string-output-stream-ioblocks%))
     (when (and pool
                (eq (basic-stream.wrapper stream)
-                   *string-output-stream-class-wrapper*)
+ *string-output-stream-class-wrapper*)
                (eq (string-output-stream-ioblock-freelist ioblock) pool))
       (without-interrupts
        (setf (ioblock-stream ioblock) (pool.data pool)
@@ -4368,7 +4373,7 @@
 (defun %string-stream-ioblock-freelist (stream)
   (and stream
        (eq (basic-stream.wrapper stream)
-           *string-output-stream-class-wrapper*)
+ *string-output-stream-class-wrapper*)
        (let* ((loc (%tcr-binding-location (%current-tcr) '%string-output-stream-ioblocks%)))
          (and loc (%fixnum-ref loc)))))
 
@@ -4376,7 +4381,7 @@
 (defun create-string-output-stream-ioblock (stream string write-char-function write-string-function)
   (let* ((recycled (and stream
                         (eq (basic-stream.wrapper stream)
-                            *string-output-stream-class-wrapper*)
+ *string-output-stream-class-wrapper*)
                         (without-interrupts
                          (let* ((data (pool.data %string-output-stream-ioblocks%)))
                            (when data
@@ -4426,7 +4431,7 @@
               
 
 (defun fill-pointer-string-output-stream-ioblock-write-char (ioblock char)
-  ;; can do better (maybe much better) than VECTOR-PUSH-EXTEND here.
+ ;; can do better (maybe much better) than VECTOR-PUSH-EXTEND here.
   (if (eql char #\Newline)
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
@@ -4526,9 +4531,9 @@
         (setf (string-output-stream-ioblock-index ioblock) newpos)))))
 
 (defun make-simple-string-output-stream ()
-  ;; There's a good chance that we'll get a recycled ioblock
-  ;; that already has a string; if not, we defer actually
-  ;; creating a usable string until write-char
+ ;; There's a good chance that we'll get a recycled ioblock
+ ;; that already has a string; if not, we defer actually
+ ;; creating a usable string until write-char
   (%%make-string-output-stream *string-output-stream-class*
                                ""
                                'string-output-stream-ioblock-write-char
@@ -4616,7 +4621,7 @@
 
 (defun make-indenting-string-output-stream (prefixchar indent)
   (let* ((stream (%%make-string-output-stream
-                   *indenting-string-output-stream-class*
+ *indenting-string-output-stream-class*
                   (make-string 10)
                   'indenting-string-stream-ioblock-write-char
                   'indenting-string-stream-ioblock-write-simple-string)))
@@ -4821,7 +4826,7 @@
     (incf start offset)
     (incf end offset)
     (let* ((stream (make-basic-stream-instance
-                    *string-input-stream-class*
+ *string-input-stream-class*
                     :element-type 'character))
            (ioblock (make-string-input-stream-ioblock
                      :stream stream
@@ -4957,8 +4962,8 @@
       (stream-force-output stream))))
 
 (defmethod close-for-termination ((stream buffered-output-stream-mixin) abort)
-  ;; This method should only be invoked via the termination mechanism,
-  ;; so it can safely assume that there's no contention for the stream.
+ ;; This method should only be invoked via the termination mechanism,
+ ;; so it can safely assume that there's no contention for the stream.
   (let* ((ioblock (stream-ioblock stream nil)))
     (when ioblock (setf (ioblock-owner ioblock) nil)))
   (close stream :abort abort))
@@ -5285,9 +5290,9 @@
 
 ;;; bivalence: we don't actually have a "bivalent stream" class;
 ;;; all actual (potentially) bivalent streams (sockets) include binary streams
-;;; before character streams in their CPLs.  That effectively means that
+;;; before character streams in their CPLs. That effectively means that
 ;;; binary-stream methods for reading and writing sequences have to
-;;; handle character I/O in some cases.  That may slow some things down
+;;; handle character I/O in some cases. That may slow some things down
 ;;; (at least in theory), but the case where the stream's element-type
 ;;; matches the sequence's element-type isn't affected.
 (defun %ioblock-binary-stream-write-vector (ioblock vector start end)
@@ -5435,9 +5440,9 @@
                                  :unsigned-fullword)))))
 
 (defun process-input-would-block (fd)
-  #+windows-target (declare (ignore fd))
-  #+windows-target t
-  #-windows-target
+ #+windows-target (declare (ignore fd))
+ #+windows-target t
+ #-windows-target
   (if (logtest #$O_NONBLOCK (the fixnum (fd-get-flags fd)))
     (process-input-wait fd)
     (- #$ETIMEDOUT)))
@@ -5456,10 +5461,10 @@
             (return (values t nil nil)))
           (when (eql error 0)         ;timed out
             (return (values nil t nil)))
-          ;; If it returned and a timeout was specified, check
-          ;; to see if it's been exceeded.  If so, return NIL;
-          ;; otherwise, adjust the remaining timeout.
-          ;; If there was no timeout, continue to wait forever.
+ ;; If it returned and a timeout was specified, check
+ ;; to see if it's been exceeded. If so, return NIL;
+ ;; otherwise, adjust the remaining timeout.
+ ;; If there was no timeout, continue to wait forever.
           (unless (eql error (- #$EINTR))
             (return (values nil nil error)))
           (when timeout
@@ -5470,9 +5475,9 @@
 
 
 (defun process-output-would-block (fd)
-  #+windows-target (declare (ignore fd))
-  #+windows-target t
-  #-windows-target
+ #+windows-target (declare (ignore fd))
+ #+windows-target t
+ #-windows-target
   (if (logtest #$O_NONBLOCK (the fixnum (fd-get-flags fd)))
     (process-output-wait fd)
     (- #$ETIMEDOUT)))
@@ -5493,10 +5498,10 @@
             (return (values nil t nil)))
           (unless (eql error (- #$EINTR))
             (return (values nil nil error)))
-          ;; If it returned and a timeout was specified, check
-          ;; to see if it's been exceeded.  If so, return NIL;
-          ;; otherwise, adjust the remaining timeout.
-          ;; If there was no timeout, continue to wait forever.
+ ;; If it returned and a timeout was specified, check
+ ;; to see if it's been exceeded. If so, return NIL;
+ ;; otherwise, adjust the remaining timeout.
+ ;; If there was no timeout, continue to wait forever.
           (when timeout
             (gettimeofday now)
             (setq timeout (- wait-end (timeval->milliseconds now)))
@@ -5516,7 +5521,7 @@
   "Returns true or false depending on whether input is available.
    In some cases on windows, it may return a count of the number of unread bytes.
    This behavior should not be depended upon."
-  #+windows-target
+ #+windows-target
   (case (%unix-fd-kind fd)
     (:socket
      (rlet ((infds #>fd_set)
@@ -5542,10 +5547,10 @@
                             (#_GetFileSizeEx (%int-to-ptr fd) peofpos)
                             (%%get-unsigned-longlong peofpos 0))))
              (values (< curpos eofpos) 0)))
-    ;;(:character-special (windows-tty-input-available-p fd milliseconds))
+ ;;(:character-special (windows-tty-input-available-p fd milliseconds))
 
     (t (values nil 0)))
-  #-windows-target
+ #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLIN)
@@ -5555,7 +5560,7 @@
 
 
 (defun fd-ready-for-output-p (fd &optional milliseconds)
-  #+windows-target
+ #+windows-target
   (case (%unix-fd-kind fd)
     (:socket
      (rlet ((tv :timeval :tv_sec 0 :tv_usec 0)
@@ -5572,7 +5577,7 @@
                ((= res 0) (values nil 0))
                (t (values 0 (- (#_GetLastError))))))))
     (t (values t 0)))
-  #-windows-target
+ #-windows-target
   (rlet ((pollfds (:array (:struct :pollfd) 1)))
     (setf (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.fd) fd
           (pref (paref pollfds (:* (:struct :pollfd)) 0) :pollfd.events) #$POLLOUT)
@@ -5919,7 +5924,7 @@
 
 (defun file-length (stream)
   (typecase stream
-    ;; Don't use an OR type here
+ ;; Don't use an OR type here
     (file-stream (stream-length stream))
     (synonym-stream (file-length
 		     (symbol-value (synonym-stream-symbol stream))))
@@ -5957,7 +5962,7 @@
 (defun %%yield-terminal-to (&optional process)
   (let* ((stream (if (typep *terminal-io* 'synonym-stream)
                    (symbol-value (synonym-stream-symbol *terminal-io*))
-                   *terminal-io*))
+ *terminal-io*))
          (shared-resource
 	  (if (typep stream 'two-way-stream)
 	    (input-stream-shared-resource
@@ -5986,13 +5991,13 @@
 (defparameter *trace-output* nil "trace output stream")
 
 (proclaim '(stream 
-          *query-io* *debug-io* *error-output* *standard-input* 
-          *standard-output* *trace-output*))
+ *query-io* *debug-io* *error-output* *standard-input* 
+ *standard-output* *trace-output*))
 
-;;; Interaction with the REPL.  READ-TOPLEVEL-FORM should return 3
+;;; Interaction with the REPL. READ-TOPLEVEL-FORM should return 3
 ;;; values: a form, a (possibly null) pathname, and a boolean that
 ;;; indicates whether or not the result(s) of evaluating the form
-;;; should be printed.  (The last value has to do with how selections
+;;; should be printed. (The last value has to do with how selections
 ;;; that contain multiple forms are handled; see *VERBOSE-EVAL-SELECTION*
 ;;; and the SELECTION-INPUT-STREAM method below.)
 
@@ -6063,7 +6068,7 @@ are printed.")
     (when (eq encoding (get-character-encoding nil))
       (setq encoding nil))
     (setq line-termination (cdr (assoc line-termination
-                                       *canonical-line-termination-conventions*)))
+ *canonical-line-termination-conventions*)))
     (setf (ioblock-encoding ioblock) encoding)
     (when (ioblock-inbuf ioblock)
       (setup-ioblock-input ioblock t (ioblock-element-type ioblock) (ioblock-sharing ioblock) encoding line-termination))
@@ -6245,14 +6250,14 @@ are printed.")
                  (setf (io-buffer-limit outbuf) newlen
                        (io-buffer-size outbuf) newlen
                        (io-buffer-buffer outbuf) new)
-                 ;; Adjust the displaced vector.
+ ;; Adjust the displaced vector.
                  (setf (%svref displaced target::vectorH.data-vector-cell) new
                        (%svref displaced target::vectorH.displacement-cell) 0
                        (%svref displaced target::vectorH.physsize-cell) newlen
                        (%svref displaced target::vectorH.flags-cell) (bitclr $arh_exp_disp_bit flags)
                        (%svref displaced target::vectorH.logsize-cell) len)))))
           (t
-           ;; Simpler. Honest.
+ ;; Simpler. Honest.
            (let* ((old (io-buffer-buffer outbuf))
                   (len (length old))
                   (newlen (max (the fixnum (+ len len)) 16))
@@ -6266,7 +6271,7 @@ are printed.")
 
 (defun %vector-output-stream-close (s ioblock)
   (declare (ignore s))
-  ;; If there's a displaced vector, fix its fill pointer.
+ ;; If there's a displaced vector, fix its fill pointer.
   (let* ((displaced (vector-output-stream-ioblock-displaced ioblock)))
     (when displaced
       (setf (%svref displaced target::vectorH.logsize-cell)

@@ -4,7 +4,7 @@
 
 (defpackage "ARM64"
   (:use "CL" "CCL")
-  #+arm64-target
+ #+arm64-target
   (:nicknames "TARGET"))
 
 (require "ARCH")
@@ -68,7 +68,8 @@
 (defconstant fulltag-misc         #b1100) ;uvector/miscobj (see note below)
 (defconstant fulltag-immheader-2  #b1101)
 (defconstant fulltag-nodeheader-1 #b1110)
-(defconstant fulltag-function     #b1111)
+;; #b1111 free: fulltag-function removed -- a function is an ordinary
+;; miscobj (fulltag-misc + subtag-function); functionp checks the subtag.
 
 ;;; Note on fulltag-misc: the value (12) was selected deliberately.
 ;;; This allows us to branch directly to a tagged code-vector pointer:
@@ -118,10 +119,10 @@
 
 ;;; A few sanity tests
 (eval-when (:compile-toplevel)
-  ;; ivector header fulltags must be ordered according to element size
+ ;; ivector header fulltags must be ordered according to element size
   (assert (< ivector-class-other-bit ivector-class-32-bit
              ivector-class-64-bit))
-  ;; CL ivector subtags must be >= min-cl-ivector-subtag
+ ;; CL ivector subtags must be >= min-cl-ivector-subtag
   (assert (every #'(lambda (s) (>= s min-cl-ivector-subtag))
                (list subtag-complex-single-float-vector
                      subtag-fixnum-vector
@@ -138,7 +139,7 @@
                      subtag-s8-vector
                      subtag-u8-vector
                      subtag-bit-vector)))
-  ;; required ordering for CL gvector types
+ ;; required ordering for CL gvector types
   (assert (< subtag-arrayH subtag-vectorH subtag-simple-vector)))
 
 (define-subtag macptr ivector-class-64-bit 1)
@@ -185,10 +186,12 @@
 (defconstant no-thread-local-binding-marker subtag-no-thread-local-binding)
 (define-subtag lisp-frame-marker fulltag-imm-1 5)
 (defconstant lisp-frame-marker subtag-lisp-frame-marker)
+(define-subtag stack-alloc-marker fulltag-imm-1 6)
+(defconstant stack-alloc-marker subtag-stack-alloc-marker)
 
-;;; Extended type codes ("xtypes") for wrong-type UUOs.  The 8-bit
+;;; Extended type codes ("xtypes") for wrong-type UUOs. The 8-bit
 ;;; expected-type field of a wrong-type UUO holds either a lisptag, a
-;;; fulltag, a uvector subtag byte, or an xtype code.  These type
+;;; fulltag, a uvector subtag byte, or an xtype code. These type
 ;;; codes all go into a single 256-entry namespace, so they must not
 ;;; conflict.
 ;;;
@@ -198,13 +201,13 @@
 ;;;
 ;;; Two kinds of code already occupy that namespace:
 ;;;
-;;;  * The bare lisptag/fulltag bytes #x00-#x0f.
-;;;  * Real uvector subtags, of the form (fulltag | (index << ntagbits)).
+;;; * The bare lisptag/fulltag bytes #x00-#x0f.
+;;; * Real uvector subtags, of the form (fulltag | (index << ntagbits)).
 ;;;
 ;;; The xtype codes below avoid conflict with the above codes by using
 ;;; a high nibble of at least 1 (avoiding potential conflict with the
 ;;; entries for lisptag/fulltag values), and a low nibble of
-;;; fulltag-odd-fixnum (8) or fulltag-even-fixnum (0).  A subtag can
+;;; fulltag-odd-fixnum (8) or fulltag-even-fixnum (0). A subtag can
 ;;; never be fixnum-tagged, so these xtype codes cannot conflict with
 ;;; any defined subtags.
 
@@ -222,18 +225,26 @@
 (defconstant xtype-real #xc8)
 (defconstant xtype-number #xd8)
 (defconstant xtype-cons #xe8)   ;a real cons
-                                ;#xf8 free
+ ;#xf8 free
 (defconstant xtype-char-code #x10)
 (defconstant xtype-unsigned-byte-24 #x20)
 (defconstant xtype-array2d #x30)
 (defconstant xtype-array3d #x40)
 (defconstant xtype-null #x50)
 
+;;; Kernel error number for funcalling a macro/special-operator name
+;;; (the fcell simple-vector's %macro-code% UUO). Canonical homes:
+;;; compiler/arch.lisp + lisp-kernel/errors.s + lisp-kernel/lisp-errors.h
+;;; (all in this patch). Duplicated here because a frozen cross-host
+;;; image bakes arch.lisp, so a NEW arch.lisp constant is invisible to a
+;;; cross compile; this file is (re)loaded by every backend load.
+(defconstant error-apply-macro-or-special 20)
+
 ;;; A sanity check: no synthetic xtype may collide with a real subtag
 ;;; byte or with a bare tag code (#x00-#x0f).
 (eval-when (:compile-toplevel)
   (let ((non-fixnum-low-nibbles '(#| 0 |# 1 2 3 4 5 6 7
-                                  #| 8 |# 9 10 11 12 13 14 15)))
+ #| 8 |# 9 10 11 12 13 14 15)))
     (dolist (xt (list xtype-integer xtype-s64 xtype-u64 xtype-s32 xtype-u32
                       xtype-s16 xtype-u16 xtype-s8 xtype-u8 xtype-bit
                       xtype-rational xtype-real xtype-number xtype-cons
@@ -254,7 +265,7 @@
 (defconstant misc-dfloat-offset misc-data-offset)
 
 (defconstant misc-symbol-offset (- node-size fulltag-symbol))
-(defconstant misc-function-offset (- node-size fulltag-function))
+(defconstant misc-function-offset (- node-size fulltag-misc)) ; = misc-data-offset
 
 ;;; There is a pad word after the uvector header so that the
 ;;; complex-double-float elements are 16-byte aligned.
@@ -265,7 +276,7 @@
 ;;; unsigned offset scaled by the access size (so the byte offset must
 ;;; be non-negative and a multiple of that size).
 ;;;
-;;; fulltag-misc is 12, which makes misc-data-offset -4.  Therefore,
+;;; fulltag-misc is 12, which makes misc-data-offset -4. Therefore,
 ;;; although we have to use the unscaled form for index 0, index 1 and
 ;;; up sit at a non-negative multiple of the access size for 32-bit
 ;;; and lower access sizes, so we can use the scaled form for them.
@@ -284,12 +295,12 @@
 (defconstant max-16-bit-constant-index (ash (- (ash #xfff 1) misc-data-offset)
                                             -1))
 (defconstant max-8-bit-constant-index (- #xfff misc-data-offset))
-;; Assuming we index bit-vector  memory by bytes
+;; Assuming we index bit-vector memory by bytes
 (defconstant max-1-bit-constant-index (ash (- #xfff misc-data-offset) 3))
 ) ; eval-when
 
 
-;;; Kernel globals are allocated "below" nil.  This list (used to map
+;;; Kernel globals are allocated "below" nil. This list (used to map
 ;;; symbolic names to rnil-relative offsets) must (of course) exactly
 ;;; match the kernel's notion of where things are.
 ;;; The order here matches "ccl:lisp-kernel;lisp_globals.h" & the
@@ -313,7 +324,7 @@
     gc-inhibit-count             ;for gc locking
     refbits                      ;oldspace refbits
     oldspace-dnode-count         ;number of dnodes in dynamic space that are
-                                 ; older than youngest generation
+ ; older than youngest generation
     float-abi                    ;non-zero if using hard float abi
     fwdnum                       ;fixnum: GC "forwarder" call count.
     gc-count                     ;fixnum: GC call count.
@@ -362,7 +373,7 @@
     ccl::%defconstant
     ccl::%macro
     ccl::%kernel-restart
-    *package*
+ *package*
     ccl::*total-bytes-freed*
     :allow-other-keys
     ccl::%toplevel-catch%
@@ -386,7 +397,7 @@
     ))
 
 ;; The idea here is that the subprim address table will be referenced
-;; relative to rcontext.  The lisp kernel will make sure that every
+;; relative to rcontext. The lisp kernel will make sure that every
 ;; thread's TCR will contain the table.
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *subprims-shift* 3)
@@ -576,7 +587,7 @@
 
 ;;; It seems like by now we ought to be able to say
 ;;; (define-fixedsized-object double-float ()
-;;;   value)
+;;; value)
 ;;; But, cargo-cult this forward anyway...
 ;;;
 ;;; It's slightly easier (for bootstrapping reasons)
@@ -620,16 +631,22 @@
   flags
   link)
 
-;;; XXX no idea about this for ARM64 right now
-;;; Catch frames go on the cstack, below a lisp frame whose savelr
-;;; field references the catch exit point/unwind-protect cleanup code.
+;;; Kernel ground truth (lisp-kernel _structf catch_frame + mkcatch):
+;;; PPC64's layout with nsaveregs=4. Catch frames are misc-tagged
+;;; uvectors on the temp stack; the caller's continuation lives in a
+;;; control-stack lisp_frame referenced by the csp slot. regs[] holds
+;;; save0..save3 in ascending order (str save0 at regs+0).
 (define-fixedsized-object catch-frame ()
+  catch-tag            ;#<unbound> -> unwind-protect, else catch
   link                 ;tagged pointer to next older catch frame
   mvflag               ;0 if single-value, 1 if uwp or multiple-value
-  catch-tag            ;#<unbound> -> unwind-protect, else catch
+  csp                  ;saved control-stack lisp_frame pointer
   db-link              ;value of dynamic-binding link on thread entry.
+  save-save0           ;saved registers, save0 first
+  save-save1
+  save-save2
+  save-save3
   xframe               ;exception-frame link
-  last-lisp-frame
   nfp)
 
 (define-fixedsized-object lock ()
@@ -642,7 +659,7 @@
 
 
 ;;; Symbols have their own fulltag, but they're otherwise just like a
-;;; miscobj.  We can convert between the differently- tagged
+;;; miscobj. We can convert between the differently- tagged
 ;;; references with %symptr->symvector and %symvector->symptr.
 
 ;;; If we're referencing a miscobj, we can use this:
@@ -665,10 +682,10 @@
   plist
   binding-index)
 
-(define-fixedsized-object function (fulltag-function)
+(define-fixedsized-object function (fulltag-misc)
   code-vector
   constants
-  ;; constants and metadata follow
+ ;; constants and metadata follow
   )
 
 (define-fixedsized-object vectorH ()
@@ -677,7 +694,7 @@
   data-vector         ;object this header describes
   displacement        ;true displacement or 0
   flags               ;has-fill-pointer, displaced-to, adjustable bits;
-                      ; subtype of underlying simple vector.
+ ; subtype of underlying simple vector.
 )
 
 (define-lisp-object arrayH fulltag-misc
@@ -687,8 +704,8 @@
   data-vector         ;object this header describes
   displacement        ;true displacement or 0
   flags               ;has-fill-pointer, displaced-to, adjustable bits;
-                      ;  subtype of underlying simple vector.
-  ;; Dimensions follow
+ ; subtype of underlying simple vector.
+ ;; Dimensions follow
   )
 (defconstant arrayH.rank-cell 0)
 (defconstant arrayH.physsize-cell 1)
@@ -704,7 +721,7 @@
 
 ;;; The lisp kernel uses these (rather generically named) structures
 ;;; to keep track of various memory regions it (or the lisp) is
-;;; interested in.  This definition must match lisp-kernel/area.h.
+;;; interested in. This definition must match lisp-kernel/area.h.
 (define-storage-layout area 0
   pred                     ;pointer to preceding area in DLL
   succ                     ;pointer to next area in DLL
@@ -742,7 +759,7 @@
   (defconstant tcr-bias 0))
 
 (define-storage-layout tcr (- tcr-bias)
-  ;; this next/prev order is correct: other ports are wrong
+ ;; this next/prev order is correct: other ports are wrong
   next                            ;in doubly-linked list
   prev                            ;in doubly-linked list
   db-link                         ;special binding chain head
@@ -785,7 +802,7 @@
   safe-ref-address
   io-datum                        ;Darwin: Mach thread exception port
   nfp
-  ;; spare slots plus sptab follow
+ ;; spare slots plus sptab follow
   )
 
 (assert (= tcr.spare tcr.size))
@@ -826,7 +843,7 @@
   double-float.element-count subtag-double-float)
 
 ;;; We could possibly have a one-digit bignum header when dealing
-;;; with "small bignums" in some bignum code.  Like other cases of
+;;; with "small bignums" in some bignum code. Like other cases of
 ;;; non-normalized bignums, they should never escape from the lab.
 (define-header one-digit-bignum-header 1 subtag-bignum)
 (define-header two-digit-bignum-header 2 subtag-bignum)
@@ -859,7 +876,7 @@
 ;;; technology."
 
 (defun %kernel-global (sym)
-  ;; Returns byte offset relative to rnil
+ ;; Returns byte offset relative to rnil
   (let* ((pos (position sym *kernel-globals* :test #'string=)))
     (if pos
       (- (+ fulltag-nil (* (1+ pos) node-size)))
@@ -1126,8 +1143,8 @@
    :null-tag fulltag-nil
    :symbol-tag fulltag-symbol
    :symbol-tag-is-subtag nil
-   :function-tag fulltag-function
-   :function-tag-is-subtag nil
+   :function-tag subtag-function
+   :function-tag-is-subtag t
    :big-endian nil
    :misc-subtag-offset misc-subtag-offset
    :car-offset cons.car
@@ -1197,7 +1214,7 @@
     `(let* ((,typecode (ccl::typecode ,thing))
             (,fulltag (ccl::fulltag ,thing)))
        (declare (fixnum ,typecode))
-       ;; There must be an opportunity to be cleverer here.
+ ;; There must be an opportunity to be cleverer here.
        (or (= ,typecode arm64::tag-fixnum)
            (= ,typecode arm64::tag-imm)
            (= ,typecode arm64::tag-single-float)
@@ -1255,7 +1272,7 @@
   `(ccl::%function-vector-to-function ,v))
 
 (defarm64archmacro ccl::with-ffcall-results ((buf) &body body)
-  ;; Reserve space for x0--x7, d0--d7
+ ;; Reserve space for x0--x7, d0--d7
   (let* ((size (+ (* 8 8) (* 8 8))))
     `(ccl::%stack-block ((,buf ,size :clear t))
        ,@body)))
@@ -1268,6 +1285,8 @@
 (defconstant fasl-version #x1)
 (defconstant fasl-max-version #x1)
 (defconstant fasl-min-version #x1)
-(defparameter *image-abi-version* #x1)
+;; Next free after ARM32's 1045; the placeholder #x1 fails every
+;; kernel's "image too old" minimum check (image.h ABI_VERSION).
+(defparameter *image-abi-version* 1046)
 
 (provide "ARM64-ARCH")

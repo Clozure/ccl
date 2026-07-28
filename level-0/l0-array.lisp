@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -112,8 +112,8 @@
 #+x8664-target
 (progn
 (defconstant x8664::*immheader-0-array-types*
-  ;; ivector-class-other-bit
-  #(unused
+ ;; ivector-class-other-bit
+ #(unused
     unused
     unused
     unused
@@ -132,8 +132,8 @@
     ))
 
 (defconstant x8664::*immheader-1-array-types*
-    ;; ivector-class-32-bit
-  #(
+ ;; ivector-class-32-bit
+ #(
     unused
     unused
     unused
@@ -152,8 +152,82 @@
     single-float))
 
 (defconstant x8664::*immheader-2-array-types*
-  ;; ivector-class-64-bit
-  #(
+ ;; ivector-class-64-bit
+ #(
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex single-float)
+    fixnum
+    (signed-byte 64)
+    (unsigned-byte 64)
+    double-float))
+
+)
+
+;;; arm64's three ivector classes are slot-for-slot identical to x8664's
+;;; (verified against every define-subtag form in compiler/ARM64/arm64-arch.lisp:
+;;; 64-bit 11/12/13/14/15 = complex-single-float-vector/fixnum/s64/u64/
+;;; double-float-vector; 32-bit 12/13/14/15 = simple-base-string/s32/u32/
+;;; single-float-vector; other-bit 9/10/11/13/14/15 = complex-double-float-vector/
+;;; s16/u16/s8/u8/bit-vector), so these are x8664's tables unchanged.
+;;; Two slots are unreachable on arm64 and kept only for donor parity:
+;;; immheader-0 slot 12 (arm64 defines no other-bit subtag 12) and immheader-1
+;;; slot 6, which is arm64's code-vector -- not a CL array type, exactly as
+;;; x8664 treats its xcode-vector at 32-bit slot 3.
+#+arm64-target
+(progn
+(defconstant arm64::*immheader-0-array-types*
+ ;; ivector-class-other-bit
+ #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex double-float)
+    (signed-byte 16)
+    (unsigned-byte 16)
+    character
+    (signed-byte 8)
+    (unsigned-byte 8)
+    bit
+    ))
+
+(defconstant arm64::*immheader-1-array-types*
+ ;; ivector-class-32-bit
+ #(
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    character
+    (signed-byte 32)
+    (unsigned-byte 32)
+    single-float))
+
+(defconstant arm64::*immheader-2-array-types*
+ ;; ivector-class-64-bit
+ #(
     unused
     unused
     unused
@@ -198,17 +272,17 @@
     (declare (fixnum subtag))
     (if (= subtag target::subtag-simple-vector)
       t                                 ; only node CL array type
-      #+ppc-target
+ #+ppc-target
       (svref target::*immheader-array-types*
-             #+ppc32-target
+ #+ppc32-target
              (ash (the fixnum (- subtag ppc32::min-cl-ivector-subtag)) -3)
-             #+ppc64-target
+ #+ppc64-target
              (ash (the fixnum (logand subtag #x7f)) (- ppc64::nlowtagbits)))
-      #+x8632-target
+ #+x8632-target
       (svref x8632::*immheader-array-types*
 	     (ash (the fixnum (- subtag x8632::min-cl-ivector-subtag))
 		  (- x8632::ntagbits)))
-      #+x8664-target
+ #+x8664-target
       (let* ((class (logand subtag x8664::fulltagmask))
              (idx (ash subtag (- x8664::ntagbits))))
         (declare (fixnum class idx))
@@ -218,9 +292,19 @@
                (%svref x8664::*immheader-1-array-types* idx))
               (t
                (%svref x8664::*immheader-0-array-types* idx))))
-      #+arm-target
+ #+arm-target
       (svref arm::*immheader-array-types*
              (ash (the fixnum (- subtag arm::min-cl-ivector-subtag)) -3))
+ #+arm64-target
+      (let* ((class (logand subtag arm64::fulltagmask))
+             (idx (ash subtag (- arm64::ntagbits))))
+        (declare (fixnum class idx))
+        (cond ((= class arm64::ivector-class-64-bit)
+               (%svref arm64::*immheader-2-array-types* idx))
+              ((= class arm64::ivector-class-32-bit)
+               (%svref arm64::*immheader-1-array-types* idx))
+              (t
+               (%svref arm64::*immheader-0-array-types* idx))))
       )))
 
 
@@ -447,40 +531,40 @@
            (setf (sbit target target-start) (sbit source source-start))
            (incf target-start)
            (incf source-start))))
-      ;; All other cases can be handled with %COPY-IVECTOR-TO-IVECTOR,
-      ;; which knows how to handle overlap
+ ;; All other cases can be handled with %COPY-IVECTOR-TO-IVECTOR,
+ ;; which knows how to handle overlap
       ((#.target::subtag-s8-vector
-        #.target::subtag-u8-vector)
+ #.target::subtag-u8-vector)
        (%copy-ivector-to-ivector source
                                  source-start
                                  target
                                  target-start
                                  n))
       ((#.target::subtag-s16-vector
-        #.target::subtag-u16-vector)
+ #.target::subtag-u16-vector)
        (%copy-ivector-to-ivector source
                                  (the fixnum (* source-start 2))
                                  target
                                  (the fixnum (* target-start 2))
                                  (the fixnum (* n 2))))
       ((#.target::subtag-s32-vector
-        #.target::subtag-u32-vector
-        #.target::subtag-single-float-vector
-        #.target::subtag-simple-base-string
-        #.target::subtag-bignum
-        #.target::subtag-single-float
-        #.target::subtag-double-float
-        #+32-bit-target #.target::subtag-fixnum-vector)
+ #.target::subtag-u32-vector
+ #.target::subtag-single-float-vector
+ #.target::subtag-simple-base-string
+ #.target::subtag-bignum
+ #.target::subtag-single-float
+ #.target::subtag-double-float
+ #+32-bit-target #.target::subtag-fixnum-vector)
        (%copy-ivector-to-ivector source
                                  (the fixnum (* source-start 4))
                                  target
                                  (the fixnum (* target-start 4))
                                  (the fixnum (* n 4))))
       ((#.target::subtag-double-float-vector
-        #+64-bit-target #.target::subtag-s64-vector
-        #+64-bit-target #.target::subtag-u64-vector
-        #+64-bit-target #.target::subtag-fixnum-vector
-        #.target::subtag-complex-single-float-vector)
+ #+64-bit-target #.target::subtag-s64-vector
+ #+64-bit-target #.target::subtag-u64-vector
+ #+64-bit-target #.target::subtag-fixnum-vector
+ #.target::subtag-complex-single-float-vector)
        (%copy-ivector-to-ivector source
                                  (the fixnum
                                    (+ (the fixnum (- target::misc-dfloat-offset
@@ -610,7 +694,7 @@ minimum number of elements to add if it must be extended."
           (report-bad-arg v 'array))))))
 
 ;;; Validate the N indices in the lexpr L against the
-;;; array-dimensions of L.  If anything's out-of-bounds,
+;;; array-dimensions of L. If anything's out-of-bounds,
 ;;; error out (unless NO-ERROR is true, in which case
 ;;; return NIL.)
 ;;; If everything's OK, return the "row-major-index" of the array.
@@ -657,7 +741,7 @@ minimum number of elements to add if it must be extended."
               (%err-disp $XNDIMS a n)
               (if (/= typecode target::subtag-arrayH)
                 (report-bad-arg a 'array)
-                ;;  This typecode is Just Right ...
+ ;; This typecode is Just Right ...
                 (progn
                   (unless (= (the fixnum (%svref a target::arrayH.rank-cell)) n)
                     (%err-disp $XNDIMS a n))
@@ -693,7 +777,7 @@ minimum number of elements to add if it must be extended."
                   (%err-disp $XNDIMS a nsubs)
                   (if (/= typecode target::subtag-arrayH)
                     (report-bad-arg a 'array)
-                    ;;  This typecode is Just Right ...
+ ;; This typecode is Just Right ...
                     (progn
                       (unless (= (the fixnum (%svref a target::arrayH.rank-cell)) nsubs)
                         (%err-disp $XNDIMS a nsubs))
@@ -767,11 +851,11 @@ minimum number of elements to add if it must be extended."
                   6
                   (if (= subtag target::subtag-complex-double-float-vector)
                       (return-from subtag-bytes
-                        ;; There's a 32-bit pad at the beginning of the vector.
+ ;; There's a 32-bit pad at the beginning of the vector.
                         (+ 4 (ash element-count 4)))
                       (if (= subtag target::subtag-complex-single-float-vector)
                           (return-from subtag-bytes
-                            ;; There's a 32-bit pad at the beginning of the vector.
+ ;; There's a 32-bit pad at the beginning of the vector.
                             (+ 4 (ash element-count 3)))
                           0)))))))
          (total-bits (ash element-count element-bit-shift)))
@@ -813,11 +897,11 @@ minimum number of elements to add if it must be extended."
                   6
                   (if (= subtag x8632::subtag-complex-double-float-vector)
                       (return-from subtag-bytes
-                        ;; There's a 32-bit pad at the beginning of the vector.
+ ;; There's a 32-bit pad at the beginning of the vector.
                         (+ 4 (ash element-count 4)))
                       (if (= subtag x8632::subtag-complex-single-float-vector)
                           (return-from subtag-bytes
-                            ;; There's a 32-bit pad at the beginning of the vector.
+ ;; There's a 32-bit pad at the beginning of the vector.
                             (+ 4 (ash element-count 3)))
                           0)))))))
          (total-bits (ash element-count element-bit-shift)))
@@ -841,7 +925,7 @@ minimum number of elements to add if it must be extended."
                   0
                   (if (= subtag x8664::subtag-complex-double-float-vector)
                       (return-from subtag-bytes
-                        ;; There's a 64-bit pad at the beginning of the vector.
+ ;; There's a 64-bit pad at the beginning of the vector.
                         (+ 8 (ash element-count 4)))
                       (if (>= subtag x8664::min-8-bit-ivector-subtag)
                           3
@@ -849,6 +933,28 @@ minimum number of elements to add if it must be extended."
          (total-bits (ash element-count element-bit-shift)))
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
+
+#+arm64-target
+(defun subtag-bytes (subtag element-count)
+ ;; Must agree with misc-byte-count in compiler/ARM64/arm64-arch.lisp
+ ;; (the sizing the cross-dump used for every ivector in the image).
+  (declare (fixnum subtag element-count))
+  (unless (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                   (logior (ash 1 arm64::fulltag-immheader-0)
+                           (ash 1 arm64::fulltag-immheader-1)
+                           (ash 1 arm64::fulltag-immheader-2)))
+    (error "Not an ivector subtag: ~s" subtag))
+  (case (logand subtag arm64::fulltagmask)
+    (#.arm64::ivector-class-64-bit (ash element-count 3))
+    (#.arm64::ivector-class-32-bit (ash element-count 2))
+    (t
+     (if (= subtag arm64::subtag-bit-vector)
+       (ash (+ 7 element-count) -3)
+       (if (= subtag arm64::subtag-complex-double-float-vector)
+         (ash element-count 4)
+         (if (>= subtag arm64::min-8-bit-ivector-subtag)
+           element-count
+           (ash element-count 1)))))))
 
 (defun element-type-subtype (type)
   "Convert element type specifier to internal array subtype code"
@@ -882,20 +988,20 @@ minimum number of elements to add if it must be extended."
                    target::subtag-u32-vector)
 		  ((and (>= low -128) (<= high 127)) target::subtag-s8-vector)
 		  ((and (>= low -32768) (<= high 32767)) target::subtag-s16-vector)
-                  #+32-bit-target
+ #+32-bit-target
                   ((and (>= low target::target-most-negative-fixnum)
                         (<= high target::target-most-positive-fixnum))
                    target::subtag-fixnum-vector)
 		  ((and (>= low (ash -1 31)) (<= high (1- (ash 1 31))))
 		   target::subtag-s32-vector)
-                  #+64-bit-target
+ #+64-bit-target
                   ((and (>= low target::target-most-negative-fixnum)
                         (<= high target::target-most-positive-fixnum))
                    target::subtag-fixnum-vector)                  
-                  #+64-bit-target
+ #+64-bit-target
                   ((and (>= low 0) (<= high (1- (ash 1 64))))
                    target::subtag-u64-vector)
-                  #+64-bit-target
+ #+64-bit-target
                   ((and (>= low (ash -1 63)) (<= high (1- (ash 1 63))))
                    target::subtag-s64-vector)
 		  (t target::subtag-simple-vector))))

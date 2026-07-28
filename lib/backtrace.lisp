@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,7 @@
 #+ppc-target (require "PPC-BACKTRACE")
 #+x86-target (require "X86-BACKTRACE")
 #+arm-target (require "ARM-BACKTRACE")
+#+arm64-target (require "ARM64-BACKTRACE")
 
 
 (defparameter *backtrace-show-internal-frames* nil)
@@ -41,8 +42,8 @@
                         tcr
                         nil       ;; condition - not used
                         frame-ptr ;; current
-                        #+ppc-target *fake-stack-frames*
-                        #+(or x86-target arm-target) frame-ptr
+ #+ppc-target *fake-stack-frames*
+ #+(or x86-target arm-target arm64-target) frame-ptr
                         (%fixnum-ref tcr (- target::tcr.db-link
 					    target::tcr-bias))
                         0         ;; break level - not used
@@ -189,8 +190,8 @@ object."
                      (dolist (arg args)
                        (show-pair arg "       ")))
                    (when locals
-                     ;; This shows all bindings (including specials), but help on debugger
-                     ;; commands refers to "locals", so say both words...
+ ;; This shows all bindings (including specials), but help on debugger
+ ;; commands refers to "locals", so say both words...
                      (format t "~&     Local bindings:")
                      (dolist (loc locals)
                        (show-pair loc "       "))))
@@ -482,7 +483,7 @@ object."
 
 ;;; If we can tell reliably, return the function's minimum number of
 ;;; non-inherited arguments, the maximum number of such arguments (or NIL),
-;;; and the actual number of such arguments.  We "can't tell" if either
+;;; and the actual number of such arguments. We "can't tell" if either
 ;;; of the arguments to this function are null, and we can't tell reliably
 ;;; if any of the lfbits fields are full.
 (defun min-max-actual-args (fn nargs)
@@ -511,10 +512,10 @@ object."
 
 
 (defun variables-in-scope (lfun pc)
-  ;; Return a list of all symbol names "in scope" in the function lfun
-  ;; at relative program counter PC, using the function's symbol map.
-  ;; The list will be ordered so that least-recent bindings appear first.
-  ;; Return a list of the matching symbol map entries as a second value
+ ;; Return a list of all symbol names "in scope" in the function lfun
+ ;; at relative program counter PC, using the function's symbol map.
+ ;; The list will be ordered so that least-recent bindings appear first.
+ ;; Return a list of the matching symbol map entries as a second value
   (when pc
     (locally (declare (fixnum pc))
       (let* ((map (function-symbol-map lfun))
@@ -677,7 +678,7 @@ object."
 
       
 ;;; Find the oldest binding frame that binds the same symbol as
-;;; FRAME in context.  If found, return the saved value of that
+;;; FRAME in context. If found, return the saved value of that
 ;;; binding, else the value of the symbol in the context's thread.
 (defun oldest-binding-frame-value (context frame)
   (let* ((oldest nil)

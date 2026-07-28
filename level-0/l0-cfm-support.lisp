@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,29 +27,32 @@
 
 ;;; We have several different conventions for representing an
 ;;; "entry" (a foreign symbol address, possibly represented as
-;;; something cheaper than a MACPTR.)  Destructively modify
+;;; something cheaper than a MACPTR.) Destructively modify
 ;;; ADDR so that it points to where ENTRY points.
 (defun entry->addr (entry addr)
-  #+ppc32-target
-  ;; On PPC32, all function addresses have their low 2 bits clear;
-  ;; so do fixnums.
+ #+ppc32-target
+ ;; On PPC32, all function addresses have their low 2 bits clear;
+ ;; so do fixnums.
   (%setf-macptr-to-object addr entry)
-  #+ppc64-target
-  ;; On PPC64, some addresses can use the fixnum trick.  In other
-  ;; cases, an "entry" is just a MACPTR.
+ #+ppc64-target
+ ;; On PPC64, some addresses can use the fixnum trick. In other
+ ;; cases, an "entry" is just a MACPTR.
   (if (typep entry 'fixnum)
     (%setf-macptr-to-object addr entry)
     (%setf-macptr addr entry))
-  ;; On x86, an "entry" is just an integer.  There might elswehere be
-  ;; some advantage in treating those integers as signed (they might
-  ;; be more likely to be fixnums, for instance), so ensure that they
-  ;; aren't.
-  #+(or x86-target arm-target)
+ ;; On x86, an "entry" is just an integer. There might elswehere be
+ ;; some advantage in treating those integers as signed (they might
+ ;; be more likely to be fixnums, for instance), so ensure that they
+ ;; aren't.
+ #+(or x86-target arm-target)
   (%setf-macptr addr (%int-to-ptr
                       (if (< entry 0)
                         (logand entry (1- (ash 1 target::nbits-in-word)))
                         entry)))
-  #-(or ppc-target x86-target arm-target) (dbg "Fix entry->addr"))
+ ;; On ARM64, an "entry" is always a MACPTR (see foreign-symbol-entry).
+ #+arm64-target
+  (%setf-macptr addr entry)
+ #-(or ppc-target x86-target arm-target arm64-target) (dbg "Fix entry->addr"))
 
 
 
@@ -73,18 +76,18 @@
 
 ;;; On both Linux and FreeBSD, RTLD_NEXT and RTLD_DEFAULT behave
 ;;; the same way wrt symbols defined somewhere other than the lisp
-;;; kernel.  On Solaris, RTLD_DEFAULT will return the address of
+;;; kernel. On Solaris, RTLD_DEFAULT will return the address of
 ;;; an imported symbol's procedure linkage table entry if the symbol
 ;;; has a plt entry (e.g., if it happens to be referenced by the
-;;; lisp kernel.)  *RTLD-NEXT* is therefore a slightly better
-;;; default; we've traditionaly used *RTLD-DEFAULT*.  
+;;; lisp kernel.) *RTLD-NEXT* is therefore a slightly better
+;;; default; we've traditionaly used *RTLD-DEFAULT*. 
 (defvar *rtld-next*)
 (defvar *rtld-default*)
 (defvar *rtld-use*)
 (setq *rtld-next* (%incf-ptr (%null-ptr) -1)
-      *rtld-default* (%int-to-ptr #+(or linux-target darwin-target windows-target)  0
-				  #-(or linux-target darwin-target windows-target)  -2)
-      *rtld-use* #+solaris-target *rtld-next* #-solaris-target *rtld-default*)
+ *rtld-default* (%int-to-ptr #+(or linux-target darwin-target windows-target) 0
+ #-(or linux-target darwin-target windows-target) -2)
+ *rtld-use* #+solaris-target *rtld-next* #-solaris-target *rtld-default*)
 
 #+(or linux-target freebsd-target solaris-target)
 (progn
@@ -120,7 +123,7 @@
                fvs))))
 
 ;;; Walk over all registered entrypoints, invalidating any whose container
-;;; is the specified library.  Return true if any such entrypoints were
+;;; is the specified library. Return true if any such entrypoints were
 ;;; found.
 (defun unload-library-entrypoints (lib)
   (let* ((count 0))
@@ -192,54 +195,54 @@
           (if (%null-ptr-p dynamic-entries)
             (%null-ptr)
             (let* ((soname-offset nil))
-              ;; Walk over the entries in the file's dynamic segment; the
-              ;; last such entry will have a tag of #$DT_NULL.  Note the
-              ;; (loaded,on Linux; relative to link_map.l_addr on FreeBSD)
-              ;; address of the dynamic string table and the offset of the
-              ;; #$DT_SONAME string in that string table.
-              ;; Actually, the above isn't quite right; there seem to
-              ;; be cases (involving vDSO) where the address of a library's
-              ;; dynamic string table is expressed as an offset relative
-              ;; to link_map.l_addr as well.
+ ;; Walk over the entries in the file's dynamic segment; the
+ ;; last such entry will have a tag of #$DT_NULL. Note the
+ ;; (loaded,on Linux; relative to link_map.l_addr on FreeBSD)
+ ;; address of the dynamic string table and the offset of the
+ ;; #$DT_SONAME string in that string table.
+ ;; Actually, the above isn't quite right; there seem to
+ ;; be cases (involving vDSO) where the address of a library's
+ ;; dynamic string table is expressed as an offset relative
+ ;; to link_map.l_addr as well.
               (loop
                 (case #+32-bit-target (pref dynamic-entries :<E>lf32_<D>yn.d_tag)
-                      #+64-bit-target (pref dynamic-entries :<E>lf64_<D>yn.d_tag)
+ #+64-bit-target (pref dynamic-entries :<E>lf64_<D>yn.d_tag)
                       (#. #$DT_NULL (return))
                       (#. #$DT_SONAME
                           (setq soname-offset
-                                #+32-bit-target (pref dynamic-entries
+ #+32-bit-target (pref dynamic-entries
                                                       :<E>lf32_<D>yn.d_un.d_val)
-                                #+64-bit-target (pref dynamic-entries
+ #+64-bit-target (pref dynamic-entries
                                                       :<E>lf64_<D>yn.d_un.d_val)))
                       (#. #$DT_STRTAB
-                          ;; On some architectures, glibc mangles the DT_STRTAB
-                          ;; entry into an absolute address, and there appears
-                          ;; to be no portable way to detect when that happens.
-                          ;; We assume that no displacement can be larger than
-                          ;; the base address; this should hold unless a huge
-                          ;; object is loaded at an extremely low address.
+ ;; On some architectures, glibc mangles the DT_STRTAB
+ ;; entry into an absolute address, and there appears
+ ;; to be no portable way to detect when that happens.
+ ;; We assume that no displacement can be larger than
+ ;; the base address; this should hold unless a huge
+ ;; object is loaded at an extremely low address.
                           (%setf-macptr dyn-strings
                                         (let* ((disp (%get-natural
                                                       dynamic-entries
                                                       target::node-size))
                                                (addr (link_map.l_addr map)))
-                                          ;; Don't risk anything if we don't have to.
-                                          #+(or freebsd-target solaris-target android-target)
+ ;; Don't risk anything if we don't have to.
+ #+(or freebsd-target solaris-target android-target)
                                           (%inc-ptr addr disp)
-                                          #-(or freebsd-target solaris-target android-target)
+ #-(or freebsd-target solaris-target android-target)
                                           (if (> disp (%ptr-to-int addr))
                                               (%int-to-ptr disp)
                                               (%inc-ptr addr disp))))))
                 (%setf-macptr dynamic-entries
                               (%inc-ptr dynamic-entries
-                                        #+32-bit-target
+ #+32-bit-target
                                         (record-length :<E>lf32_<D>yn)
-                                        #+64-bit-target
+ #+64-bit-target
                                         (record-length :<E>lf64_<D>yn))))
               (if (and soname-offset
                        (not (%null-ptr-p dyn-strings)))
                 (%inc-ptr dyn-strings soname-offset)
-                ;; Use the full pathname of the library.
+ ;; Use the full pathname of the library.
                 (pref map :link_map.l_name)))))))))
 
 (defun shared-library-at (base)
@@ -251,12 +254,12 @@
 
 (defun shlib-from-map-entry (m)
   (let* ((base (link_map.l_addr m)))
-    ;; On relatively modern Linux systems, this is often NULL.
-    ;; I'm not sure what (SELinux ?  Pre-binding ?  Something else ?)
-    ;; counts as being "relatively modern" in this case.
-    ;; The link-map's l_ld field is a pointer to the .so's dynamic
-    ;; section, and #_dladdr seems to recognize that as being an
-    ;; address within the library and returns a reasonable "base address".
+ ;; On relatively modern Linux systems, this is often NULL.
+ ;; I'm not sure what (SELinux ? Pre-binding ? Something else ?)
+ ;; counts as being "relatively modern" in this case.
+ ;; The link-map's l_ld field is a pointer to the .so's dynamic
+ ;; section, and #_dladdr seems to recognize that as being an
+ ;; address within the library and returns a reasonable "base address".
     (when (%null-ptr-p base)
       (let* ((addr (%library-base-containing-address (link_map.l_ld m))))
         (if addr (setq base addr))))
@@ -277,7 +280,7 @@
                     (shlib.base shlib) base
                     (shlib.pathname shlib) pathname)
               (push (setq shlib (%cons-shlib soname pathname m base))
-                    *shared-libraries*))
+ *shared-libraries*))
             shlib)))))
 
 
@@ -314,18 +317,18 @@
   (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
   (when (null *shared-libraries*)
     (%walk-shared-libraries #'shlib-from-map-entry)
-      ;; On Linux, it seems to be necessary to open each of these
-      ;; libraries yet again, specifying the RTLD_GLOBAL flag.
-      ;; On FreeBSD, it seems desirable -not- to do that.
-    #+linux-target
+ ;; On Linux, it seems to be necessary to open each of these
+ ;; libraries yet again, specifying the RTLD_GLOBAL flag.
+ ;; On FreeBSD, it seems desirable -not- to do that.
+ #+linux-target
     (progn
-      ;; The "program interpreter" (aka the dynamic linker) is itself
-      ;; on *shared-libraries*; it seems to be the thing most recently
-      ;; pushed on that list.  Remove it: there's little reason for it
-      ;; to be there, and on some platforms (Linux ARM during the
-      ;; transition to hard float) the dynamic linker name/pathname
-      ;; depend on how the kernel was compiled and linked.  We -don't-
-      ;; want to later open the "other" dynamic linker.
+ ;; The "program interpreter" (aka the dynamic linker) is itself
+ ;; on *shared-libraries*; it seems to be the thing most recently
+ ;; pushed on that list. Remove it: there's little reason for it
+ ;; to be there, and on some platforms (Linux ARM during the
+ ;; transition to hard float) the dynamic linker name/pathname
+ ;; depend on how the kernel was compiled and linked. We -don't-
+ ;; want to later open the "other" dynamic linker.
       (setq *shared-libraries* (cdr *shared-libraries*)) ; find a better way.
       (dolist (l *shared-libraries*)
         (%dlopen-shlib l)))))
@@ -346,7 +349,7 @@
                     :unsigned-fullword *dlopen-flags*
                     :address)))
          (link-map #+(and linux-target (not android-target)) handle
-                   #+(or freebsd-target solaris-target)
+ #+(or freebsd-target solaris-target)
                    (if (%null-ptr-p handle)
                      handle
                      (rlet ((p :address))
@@ -358,7 +361,7 @@
                                    :int))
                          (pref p :address)
                          (%null-ptr))))
-                   #+android-target (if (%null-ptr-p handle)
+ #+android-target (if (%null-ptr-p handle)
                                       handle
                                       (pref handle :soinfo.linkmap))))
     (if (%null-ptr-p link-map)
@@ -368,7 +371,7 @@
                (setf (shlib.handle lib) handle)
 	       lib)
 	(%walk-shared-libraries
-	 #'(lambda (map)
+ #'(lambda (map)
              (let* ((addr (link_map.l_addr map)))
                (unless (or (%null-ptr-p addr)
                            (shared-library-at addr))
@@ -473,7 +476,7 @@
             (ff-call *enum-process-modules-addr*
                      :address *current-process-handle*
                      :address modules
-                     #>DWORD have
+ #>DWORD have
                      :address pneed)
             (let* ((need (pref pneed #>DWORD)))
               (if (> need have)
@@ -494,12 +497,12 @@
     (declare (ignore name))
     (rlet ((phmodule :address (%null-ptr)))
       (let* ((found (ff-call *get-module-handle-ex-addr*
-                             #>DWORD (logior
-                                      #$GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
-                                      #$GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT)
+ #>DWORD (logior
+ #$GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+ #$GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT)
                              :address addr
                              :address phmodule
-                             #>BOOL)))
+ #>BOOL)))
         (unless (eql 0 found)
           (let* ((hmodule (pref phmodule :address)))
             (dolist (lib *shared-libraries*)
@@ -568,25 +571,25 @@
 
 (defun ensure-open-shlib (c force)
   (if (or (shlib.handle c) (not force))
-    *rtld-use*
+ *rtld-use*
     (error "Shared library not open: ~s" (shlib.soname c))))
 
 (defun resolve-container (c force)
   (if c
     (ensure-open-shlib c force)
-    *rtld-use*
+ *rtld-use*
     ))
 
 
 
 
 ;;; An "entry" can be fixnum (the low 2 bits are clear) which represents
-;;; a (32-bit word)-aligned address.  That convention covers all
+;;; a (32-bit word)-aligned address. That convention covers all
 ;;; function addresses on ppc32 and works for addresses that are
 ;;; 0 mod 8 on PPC64, but can't work for things that're byte-aligned
 ;;; (x8664 and other non-RISC platforms.)
 ;;; For PPC64, we may have to cons up a macptr if people use broken
-;;; linkers.  (There are usually cache advantages to aligning ppc
+;;; linkers. (There are usually cache advantages to aligning ppc
 ;;; function addresses on at least a 16-byte boundary, but some
 ;;; linkers don't quite get the concept ...)
 
@@ -594,7 +597,7 @@
   "Try to resolve the address of the foreign symbol name. If successful,
 return a fixnum representation of that address, else return NIL."
   (with-cstrs ((n name))
-    #+ppc-target
+ #+ppc-target
     (with-macptrs (addr)      
       (%setf-macptr addr
 		    (ff-call (%kernel-import target::kernel-import-FindSymbol)
@@ -603,18 +606,30 @@ return a fixnum representation of that address, else return NIL."
 			     :address))
       (unless (%null-ptr-p addr)	; No function can have address 0
 	(or (macptr->fixnum addr) (%inc-ptr addr 0))))
-    #+(or x8632-target arm-target)
+ #+(or x8632-target arm-target)
     (let* ((addr (ff-call (%kernel-import target::kernel-import-FindSymbol)
 			  :address handle
 			  :address n
 			  :unsigned-fullword)))
       (unless (eql 0 addr) addr))
-    #+x8664-target
+ #+x8664-target
     (let* ((addr (ff-call (%kernel-import target::kernel-import-FindSymbol)
                           :address handle
                           :address n
                           :unsigned-doubleword)))
-      (unless (eql 0 addr) addr))))
+      (unless (eql 0 addr) addr))
+ #+arm64-target
+ ;; On ARM64, an "entry" is always a MACPTR; no PPC64-style
+ ;; fixnum-packing trick (MACPTR->FIXNUM has no arm64 lap), and
+ ;; .SPffcall dereferences macptr entries directly.
+    (with-macptrs (addr)
+      (%setf-macptr addr
+                    (ff-call (%kernel-import target::kernel-import-FindSymbol)
+                             :address handle
+                             :address n
+                             :address))
+      (unless (%null-ptr-p addr)
+        (%inc-ptr addr 0)))))
 
 (defvar *statically-linked* nil)
 
@@ -716,7 +731,7 @@ return a fixnum representation of that address, else return NIL."
           (when (%simple-string= name shlibname 0 0 namelen shlibnamelen)
             (unless (shlib.base lib)
               (setf (shlib.base lib) addr)
-              #+no; don't change soname of existing library
+ #+no; don't change soname of existing library
               (let* ((soname  (soname-from-mach-header addr)))
                 (when soname
                   (setf (shlib.soname lib) soname))))
@@ -731,13 +746,13 @@ return a fixnum representation of that address, else return NIL."
 
 (defun soname-from-mach-header (header)
   (do* ((p (%inc-ptr header
-                     #+64-bit-target (record-length :mach_header_64)
-                     #-64-bit-target (record-length :mach_header))
+ #+64-bit-target (record-length :mach_header_64)
+ #-64-bit-target (record-length :mach_header))
            (%inc-ptr p (pref p :load_command.cmdsize)))
         (i 0 (1+ i))
         (n (pref header
-                 #+64-bit-target :mach_header_64.ncmds
-                 #-64-bit-target :mach_header.ncmds)))
+ #+64-bit-target :mach_header_64.ncmds
+ #-64-bit-target :mach_header.ncmds)))
        ((= i n))
     (when (= #$LC_ID_DYLIB (pref p :load_command.cmd))
       (return (%get-cstring (%inc-ptr p (record-length :dylib_command)))))))
@@ -766,7 +781,7 @@ return a fixnum representation of that address, else return NIL."
 #-(or linux-target darwin-target freebsd-target solaris-target windows-target)
 (defun shlib-containing-entry (entry &optional name)
   (declare (ignore entry name))
-  *rtld-default*)
+ *rtld-default*)
 
 
 (defun resolve-eep (e &optional (require-resolution t))
@@ -827,7 +842,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 
 ;;; Return the position of the last dot character in name, if that
 ;;; character is followed by one or more decimal digits (e.g., the
-;;; start of a numeric suffix on a library name.)  Return NIL if
+;;; start of a numeric suffix on a library name.) Return NIL if
 ;;; there's no such suffix.
 (defun last-dot-pos (name)
   (do* ((i (1- (length name)) (1- i))
@@ -859,7 +874,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 	(with-cstrs ((soname soname))
 	  (let* ((map (block found
 			(%walk-shared-libraries
-			 #'(lambda (m)
+ #'(lambda (m)
 			     (with-macptrs (libname)
 			       (%setf-macptr libname
 					     (soname-ptr-from-link-map m))
@@ -869,11 +884,11 @@ return that address encapsulated in a MACPTR, else returns NIL."
                                                 (%cnstrcmp soname libname (1+ last-dot))))
 				   (return-from found  m)))))))))
 	    (when map
-	      ;;; Sigh.  We can't reliably lookup symbols in the library
-	      ;;; unless we open the library (which is, of course,
-	      ;;; already open ...)  ourselves, passing in the
-	      ;;; #$RTLD_GLOBAL flag.
-              #+linux-target
+ ;;; Sigh. We can't reliably lookup symbols in the library
+ ;;; unless we open the library (which is, of course,
+ ;;; already open ...) ourselves, passing in the
+ ;;; #$RTLD_GLOBAL flag.
+ #+linux-target
 	      (ff-call (%kernel-import target::kernel-import-GetSharedLibrary)
 		       :address soname
 		       :unsigned-fullword *dlopen-flags*
@@ -885,7 +900,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 		    (shlib.map lib) map))))))))
 
 ;;; Repeatedly iterate over shared libraries, trying to open those
-;;; that weren't already opened by the kernel.  Keep doing this until
+;;; that weren't already opened by the kernel. Keep doing this until
 ;;; we reach stasis (no failures or no successes.)
 
 (defun %reopen-user-libraries ()
@@ -903,12 +918,12 @@ return that address encapsulated in a MACPTR, else returns NIL."
                        :address soname
                        :unsigned-fullword *dlopen-flags*
                        :address))
-                #-(or freebsd-target solaris-target android-target) (setq map handle)
-                #+android-target (setq map
+ #-(or freebsd-target solaris-target android-target) (setq map handle)
+ #+android-target (setq map
                                        (if (%null-ptr-p handle)
                                          handle
                                          (pref handle :soinfo.linkmap)))
-                #+(or freebsd-target solaris-target)
+ #+(or freebsd-target solaris-target)
                 (setq map
                       (if (%null-ptr-p handle)
                         handle
@@ -935,20 +950,20 @@ return that address encapsulated in a MACPTR, else returns NIL."
 
 
 (defun refresh-external-entrypoints ()
-  #+linux-target
+ #+linux-target
   (setq *statically-linked* (not (eql 0 (%get-kernel-global 'statically-linked))))
   (%revive-macptr *rtld-next*)
   (%revive-macptr *rtld-default*)
-  #+(or linux-target freebsd-target solaris-target)
+ #+(or linux-target freebsd-target solaris-target)
   (unless *statically-linked*
     (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
     (revive-shared-libraries)
     (%reopen-user-libraries))
-  #+darwin-target
+ #+darwin-target
   (progn
     (setup-lookup-calls)
     (reopen-user-libraries))
-  #+windows-target
+ #+windows-target
   (progn
     (init-windows-ffi)
     (revive-shared-libraries)
@@ -959,17 +974,17 @@ return that address encapsulated in a MACPTR, else returns NIL."
                   (declare (ignore k)) 
                   (setf (eep.address v) nil) 
                   (resolve-eep v nil))
-              *eeps*)))
+ *eeps*)))
   (when *fvs*
     (without-interrupts
      (maphash #'(lambda (k v)
                   (declare (ignore k))
                   (setf (fv.addr v) nil)
                   (resolve-foreign-variable v nil))
-              *fvs*))))
+ *fvs*))))
 
 (defun open-shared-library (name &optional (process #+darwin-target :initial
-                                                    #-darwin-target :current))
+ #-darwin-target :current))
   "If the library denoted by name can be loaded by the operating system,
 return an object of type SHLIB that describes the library; if the library
 is already open, increment a reference count. If the library can't be
@@ -988,7 +1003,7 @@ the operating system."
                                                                      
                              
                            (if (eq process :initial)
-                             *initial-process*
+ *initial-process*
                              process)))
       (or lib
           (error "Error opening shared library ~a : ~a." name error-string))))

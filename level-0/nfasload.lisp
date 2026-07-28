@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -232,7 +232,7 @@
 (defun %fasl-dispatch (s op)
   (declare (fixnum op)) 
   (setf (faslstate.faslepush s) (logbitp $fasl-epush-bit op))
-  #+debug
+ #+debug
   (format t "~& dispatch: op = ~d at ~x" (logand op (lognot (ash 1 $fasl-epush-bit)))
           (1- (%fasl-get-file-pos s)))
   (funcall (svref (faslstate.fasldispatch s) (logand op (lognot (ash 1 $fasl-epush-bit)))) 
@@ -354,7 +354,7 @@
       (if (dolist (pkgname (pkg.names p))
             (when (and (= (the fixnum (length pkgname)) len)
                        (dotimes (i len t)
-                         ;; Aref: allow non-simple strings
+ ;; Aref: allow non-simple strings
                          (unless (eq (aref name i) (schar pkgname i))
                            (return))))
               (return t)))
@@ -441,7 +441,7 @@
     (declare (fixnum size-in-elements size-of-code))
     (%epushval s function)
     (%fasl-read-n-bytes s vector 0 (ash size-of-code target::word-shift))
-    #+x8632-target
+ #+x8632-target
     (%update-self-references vector)
     (do* ((numconst (- size-in-elements size-of-code))
           (i 0 (1+ i))
@@ -454,7 +454,7 @@
     
 (deffaslop $fasl-lfuncall (s)
   (let* ((fun (%fasl-expr-preserve-epush s)))
-    ;(break "fun = ~s" fun)
+ ;(break "fun = ~s" fun)
      (%epushval s (funcall fun))))
 
 (deffaslop $fasl-globals (s)
@@ -479,9 +479,9 @@
                        (%fasl-read-long s))))
 
 (deffaslop $fasl-dfloat (s)
-  ;; A double-float is a 3-element "misc" object.
-  ;; Element 0 is always 0 and exists solely to keep elements 1 and 2
-  ;; aligned on a 64-bit boundary.
+ ;; A double-float is a 3-element "misc" object.
+ ;; Element 0 is always 0 and exists solely to keep elements 1 and 2
+ ;; aligned on a 64-bit boundary.
   (%epushval s (double-float-from-bits (%fasl-read-long s) (%fasl-read-long s))))
 
 (deffaslop $fasl-sfloat (s)
@@ -533,25 +533,25 @@
 
 (deffaslop $fasl-vpkg-intern (s)
   (let* ((pkg (%fasl-expr-preserve-epush s)))
-    #+paranoia
+ #+paranoia
     (setq pkg (pkg-arg pkg))
     (%fasl-vintern s pkg)))
 
 (deffaslop $fasl-nvpkg-intern (s)
   (let* ((pkg (%fasl-expr-preserve-epush s)))
-    #+paranoia
+ #+paranoia
     (setq pkg (pkg-arg pkg))
     (%fasl-nvintern s pkg)))
 
 (deffaslop $fasl-vpkg-intern-special (s)
   (let* ((pkg (%fasl-expr-preserve-epush s)))
-    #+paranoia
+ #+paranoia
     (setq pkg (pkg-arg pkg))
     (%fasl-vintern s pkg t)))
 
 (deffaslop $fasl-nvpkg-intern-special (s)
   (let* ((pkg (%fasl-expr-preserve-epush s)))
-    #+paranoia
+ #+paranoia
     (setq pkg (pkg-arg pkg))
     (%fasl-nvintern s pkg t)))
 
@@ -666,9 +666,9 @@
   (fasl-read-ivector s target::subtag-single-float-vector))
 
 (deffaslop $fasl-double-float-vector (s)
-  #+64-bit-target
+ #+64-bit-target
   (fasl-read-ivector s target::subtag-double-float-vector)
-  #+32-bit-target
+ #+32-bit-target
   (let* ((element-count (%fasl-read-count s))
          (size-in-bytes (subtag-bytes target::subtag-double-float-vector
                                       element-count))
@@ -696,14 +696,22 @@
 
 (defun fasl-read-gvector (s subtype)
   (let* ((n (%fasl-read-count s))
-         (vector (%alloc-misc n subtype)))
+         (vector (%alloc-misc n subtype))
+         (result vector))
     (declare (fixnum n subtype))
-    (%epushval s vector)
+ ;; arm64 functions are fulltag-function POINTERS, distinct from the
+ ;; subtag-function VECTOR built here; the epushed value + faslval must
+ ;; be that pointer (funcall and self-reference need it), exactly as
+ ;; x86's $fasl-clfun does. function-vector-to-function is a pure retag
+ ;; of the same object, so the slots are still filled through VECTOR.
+ #+arm64-target (when (= subtype arm64::subtag-function)
+                     (setq result (function-vector-to-function vector)))
+    (%epushval s result)
     (dotimes (i n)
       (setf (%svref vector i) (%fasl-expr s)))
-    #+arm-target (when (= subtype arm::subtag-function)
+ #+arm-target (when (= subtype arm::subtag-function)
                    (%fix-fn-entrypoint vector))
-    (setf (faslstate.faslval s) vector)))
+    (setf (faslstate.faslval s) result)))
 
 (deffaslop $fasl-vgvec (s)
   (let* ((subtype (%fasl-read-byte s)))
@@ -782,7 +790,7 @@
 (deffaslop $fasl-src (s)
   (%cant-epush s)
   (let* ((source-file (%fasl-expr s)))
-    ; (format t "~& source-file = ~s" source-file)
+ ; (format t "~& source-file = ~s" source-file)
     (setq *loading-file-source-file* source-file)))
 
 (deffaslop $fasl-toplevel-location (s)
@@ -808,7 +816,7 @@
 (defvar *code-covered-functions* nil)
 
 (defun register-code-covered-functions (functions &optional external-format id)
-  ;; unpack the parent-note references - see comment at fcomp-digest-code-notes
+ ;; unpack the parent-note references - see comment at fcomp-digest-code-notes
   (labels ((reg (lfun refs)
 	     (unless (memq lfun refs)
 	       (let* ((lfv (function-to-function-vector lfun))
@@ -824,10 +832,10 @@
 			    (function (reg imm refs))))))))
     (loop for fn across functions do (reg fn nil)))
   (let ((a (assoc (pathname *loading-file-source-file*)
-                  *code-covered-functions*
+ *code-covered-functions*
                   :test #'(lambda (p q)
 			    (and (equalp (pathname-name p) (pathname-name q))
-				 ;; same name, so worth trying harder to match 'em up.
+ ;; same name, so worth trying harder to match 'em up.
 				 (or (equal p q)
 				     (let ((p (full-pathname p)) (q (full-pathname q)))
 				       (and p q (equalp p q)))
@@ -852,7 +860,7 @@
           (progn
             (setf (faslstate.bufcount s) posoffset)
             (incf #+32-bit-target (%get-long (faslstate.iobuffer s))
-                  #+64-bit-target (%%get-signed-longlong (faslstate.iobuffer s)
+ #+64-bit-target (%%get-signed-longlong (faslstate.iobuffer s)
                                                         0)
                   count)
             (return-from %simple-fasl-set-file-pos nil)))))
@@ -907,14 +915,14 @@
 
 (defvar *fasl-api* nil)
 (setf *fasl-api* (%istruct 'faslapi
-			   #'%simple-fasl-open
-			   #'%simple-fasl-close
-			   #'%simple-fasl-init-buffer
-			   #'%simple-fasl-set-file-pos
-			   #'%simple-fasl-get-file-pos
-			   #'%simple-fasl-read-buffer
-			   #'%simple-fasl-read-byte
-			   #'%simple-fasl-read-n-bytes))
+ #'%simple-fasl-open
+ #'%simple-fasl-close
+ #'%simple-fasl-init-buffer
+ #'%simple-fasl-set-file-pos
+ #'%simple-fasl-get-file-pos
+ #'%simple-fasl-read-buffer
+ #'%simple-fasl-read-byte
+ #'%simple-fasl-read-n-bytes))
 
 (defun %fasl-open (string s)
   (funcall (faslapi.fasl-open *fasl-api*) string s))
@@ -944,7 +952,7 @@
 (%fhave 'target-fasl-max-version #'bootstrapping-fasl-max-version)
 
 (defun %fasload (string &optional (table *fasl-dispatch-table*))
-  ;;(dbg string) 
+ ;;(dbg string) 
   (when (and *%fasload-verbose*
 	     (not *load-verbose*))
     (%string-to-stderr ";Loading ") (pdbg string))
@@ -1022,10 +1030,10 @@
 
 (defun %initialize-htab (htab size)
   (declare (fixnum size))
-  ;; Ensure that "size" is relatively prime to all secondary hash values.
-  ;; If it's small enough, pick the next highest known prime out of the
-  ;; "primsizes" array.  Otherwize, iterate through all all of "hprimes"
-  ;; until we find something relatively prime to all of them.
+ ;; Ensure that "size" is relatively prime to all secondary hash values.
+ ;; If it's small enough, pick the next highest known prime out of the
+ ;; "primsizes" array. Otherwize, iterate through all all of "hprimes"
+ ;; until we find something relatively prime to all of them.
   (setq size
         (if (> size 32749)
           (do* ((nextsize (logior 1 size) (+ nextsize 2)))
@@ -1168,7 +1176,7 @@
   (let* ((symvec (symptr->symvector (%symbol->symptr symbol)))
          (package-predicate (%svref symvec target::symbol.package-predicate-cell))
          (keyword-package (eq package *keyword-package*)))
-    ;; Set home package
+ ;; Set home package
     (if package-predicate
       (if (listp package-predicate)
         (unless (%car package-predicate) (%rplaca package-predicate package)))
@@ -1177,7 +1185,7 @@
       (progn
         (%htab-add-symbol symbol (pkg.etab package) external-idx)
         (if keyword-package
-          ;;(define-constant symbol symbol)
+ ;;(define-constant symbol symbol)
           (progn
             (%set-sym-global-value symbol symbol)
             (%symbol-bits symbol 
@@ -1203,15 +1211,15 @@
 
 
 (defvar %toplevel-function%
-  #'(lambda ()
+ #'(lambda ()
       (declare (special *xload-cold-load-functions*
-                        *xload-cold-load-documentation*
-                        *xload-startup-file*
-                        *early-class-cells*))
+ *xload-cold-load-documentation*
+ *xload-startup-file*
+ *early-class-cells*))
       (%set-tcr-toplevel-function (%current-tcr) nil) ; should get reset by l1-boot.
       (setq %system-locks% (%cons-population nil))
-      ;; Need to make %ALL-PACKAGES-LOCK% early, so that we can casually
-      ;; do SET-PACKAGE in cold load functions.
+ ;; Need to make %ALL-PACKAGES-LOCK% early, so that we can casually
+ ;; do SET-PACKAGE in cold load functions.
       (setq %all-packages-lock% (make-read-write-lock))
       (dolist (f (prog1 *xload-cold-load-functions* (setq *xload-cold-load-functions* nil)))
         (funcall f))
@@ -1222,7 +1230,7 @@
         (%resize-htab (pkg.etab p)))
       (dolist (f (prog1 *xload-cold-load-documentation* (setq *xload-cold-load-documentation* nil)))
         (apply 'set-documentation f))
-      ;; Can't bind any specials until this happens
+ ;; Can't bind any specials until this happens
       (let* ((max 0))
         (%map-areas #'(lambda (symvec)
                         (when (= (the fixnum (typecode symvec))

@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -120,8 +120,8 @@
   name)
 
 ;;;(defun %deftype-expander (name)
-;;;  (or (gethash name %deftype-expanders%)
-;;;      (and *compiling-file* (%cdr (assq name *compile-time-deftype-expanders*)))))
+;;; (or (gethash name %deftype-expanders%)
+;;; (and *compiling-file* (%cdr (assq name *compile-time-deftype-expanders*)))))
 (defun %deftype-expander (name)
   (gethash name %deftype-expanders%))
 
@@ -211,7 +211,7 @@
 (defun class-typep (form class)
   (memq class (%inited-class-cpl (class-of form))))
 
-;;; CLASS-FUNCTION-SLOT-OR-LOSE  --  Interface
+;;; CLASS-FUNCTION-SLOT-OR-LOSE -- Interface
 ;;;
 (defun class-function-slot-or-lose (name)
   (or (cdr (assoc name type-class-function-slots))
@@ -220,12 +220,12 @@
 
 (eval-when (:compile-toplevel :execute)
 
-;;; INVOKE-TYPE-METHOD  --  Interface
+;;; INVOKE-TYPE-METHOD -- Interface
 ;;;
-;;;    Invoke a type method on TYPE1 and TYPE2.  If the two types have the same
-;;; class, invoke the simple method.  Otherwise, invoke any complex method.  If
+;;; Invoke a type method on TYPE1 and TYPE2. If the two types have the same
+;;; class, invoke the simple method. Otherwise, invoke any complex method. If
 ;;; there isn't a distinct complex-arg1 method, then swap the arguments when
-;;; calling type1's method.  If no applicable method, return DEFAULT.
+;;; calling type1's method. If no applicable method, return DEFAULT.
 ;;;
 
 (defmacro invoke-type-method (simple complex-arg2 type1 type2 &key
@@ -252,9 +252,9 @@
 
 ;;;; Utilities:
 
-;;; ANY-TYPE-OP, EVERY-TYPE-OP  --  Interface
+;;; ANY-TYPE-OP, EVERY-TYPE-OP -- Interface
 ;;;
-;;;    Like ANY and EVERY, except that we handle two-arg uncertain predicates.
+;;; Like ANY and EVERY, except that we handle two-arg uncertain predicates.
 ;;; If the result is uncertain, then we return Default from the block PUNT.
 ;;; If LIST-FIRST is true, then the list element is the first arg, otherwise
 ;;; the second.
@@ -297,9 +297,9 @@
 )
 
   
-;;; VANILLA-INTERSECTION  --  Interface
+;;; VANILLA-INTERSECTION -- Interface
 ;;;
-;;;    Compute the intersection for types that intersect only when one is a
+;;; Compute the intersection for types that intersect only when one is a
 ;;; hierarchical subtype of the other.
 ;;;
 (defun vanilla-intersection (type1 type2)
@@ -314,7 +314,7 @@
 	       (values type1 nil))))))
 
 
-;;; VANILLA-UNION  --  Interface
+;;; VANILLA-UNION -- Interface
 ;;;
 (defun vanilla-union (type1 type2)
   (cond ((csubtypep type1 type2) type2)
@@ -334,12 +334,12 @@
 	((csubtypep type2 type1) type1)
 	(t nil)))
 
-;;; DELEGATE-COMPLEX-{SUBTYPEP-ARG2,INTERSECTION}  --  Interface
+;;; DELEGATE-COMPLEX-{SUBTYPEP-ARG2,INTERSECTION} -- Interface
 ;;;
-;;;    These functions are used as method for types which need a complex
+;;; These functions are used as method for types which need a complex
 ;;; subtypep method to handle some superclasses, but cover a subtree of the
 ;;; type graph (i.e. there is no simple way for any other type class to be a
-;;; subtype.)  There are always still complex ways, namely UNION and MEMBER
+;;; subtype.) There are always still complex ways, namely UNION and MEMBER
 ;;; types, so we must give TYPE1's method a chance to run, instead of
 ;;; immediately returning NIL, T.
 ;;;
@@ -357,10 +357,10 @@
 	(funcall method type2 type1)
 	(hierarchical-intersection2 type1 type2))))
 
-;;; HAS-SUPERCLASSES-COMPLEX-SUBTYPEP-ARG1  --  Internal
+;;; HAS-SUPERCLASSES-COMPLEX-SUBTYPEP-ARG1 -- Internal
 ;;;
-;;;    Used by DEFINE-SUPERCLASSES to define the SUBTYPE-ARG1 method.  Info is
-;;; a list of conses (SUPERCLASS-CLASS . {GUARD-TYPE-SPECIFIER | NIL}).  Will
+;;; Used by DEFINE-SUPERCLASSES to define the SUBTYPE-ARG1 method. Info is
+;;; a list of conses (SUPERCLASS-CLASS . {GUARD-TYPE-SPECIFIER | NIL}). Will
 ;;; never be called with a hairy type as type2, since the hairy type type2
 ;;; method gets first crack.
 ;;;
@@ -381,13 +381,13 @@
 |#
 
 (eval-when (:compile-toplevel :execute)
-;;; DEFINE-SUPERCLASSES  --  Interface
+;;; DEFINE-SUPERCLASSES -- Interface
 ;;;
-;;;    Takes a list of specs of the form (superclass &optional guard).
+;;; Takes a list of specs of the form (superclass &optional guard).
 ;;; Consider one spec (with no guard): any instance of type-class is also a
-;;; subtype of SUPERCLASS and of any of its superclasses.  If there are
-;;; multiple specs, then some will have guards.  We choose the first spec whose
-;;; guard is a supertype of TYPE1 and use its superclass.  In effect, a
+;;; subtype of SUPERCLASS and of any of its superclasses. If there are
+;;; multiple specs, then some will have guards. We choose the first spec whose
+;;; guard is a supertype of TYPE1 and use its superclass. In effect, a
 ;;; sequence of guards G0, G1, G2 is actually G0, (and G1 (not G0)),
 ;;; (and G2 (not (or G0 G1))).
 ;;;
@@ -402,16 +402,16 @@
     `(progn
       (setf (type-class-complex-subtypep-arg1
 	     (type-class-or-lose ',type-class))
-	    #'(lambda (type1 type2)
+ #'(lambda (type1 type2)
 		(has-superclasses-complex-subtypep-arg1 type1 type2 ',info)))
        
        (setf (type-class-complex-subtypep-arg2
 	      (type-class-or-lose ',type-class))
-	     #'delegate-complex-subtypep-arg2)
+ #'delegate-complex-subtypep-arg2)
        
        (setf (type-class-complex-intersection
 	      (type-class-or-lose ',type-class))
-	     #'delegate-complex-intersection))))
+ #'delegate-complex-intersection))))
 |#
 
 ); eval-when (compile eval)
@@ -423,7 +423,7 @@
     type))
 
 (defun swapped-args-fun (f)
-  #'(lambda (x y)
+ #'(lambda (x y)
       (funcall f y x)))
 
 (defun equal-but-no-car-recursion (x y)
@@ -507,16 +507,16 @@
 
 ;;;; Function and Values types.
 ;;;
-;;;    Pretty much all of the general type operations are illegal on VALUES
-;;; types, since we can't discriminate using them, do SUBTYPEP, etc.  FUNCTION
+;;; Pretty much all of the general type operations are illegal on VALUES
+;;; types, since we can't discriminate using them, do SUBTYPEP, etc. FUNCTION
 ;;; types are acceptable to the normal type operations, but are generally
-;;; considered to be equivalent to FUNCTION.  These really aren't true types in
+;;; considered to be equivalent to FUNCTION. These really aren't true types in
 ;;; any type theoretic sense, but we still parse them into CTYPE structures for
 ;;; two reasons:
 ;;; -- Parsing and unparsing work the same way, and indeed we can't tell
-;;;    whether a type is a function or values type without parsing it.
+;;; whether a type is a function or values type without parsing it.
 ;;; -- Many of the places that can be annotated with real types can also be
-;;;    annotated function or values types.
+;;; annotated function or values types.
 
 ;; Methods on the VALUES type class.
 
@@ -557,10 +557,10 @@
   (cons 'values (unparse-args-types type)))
 
 
-;;; TYPE=-LIST  --  Internal
+;;; TYPE=-LIST -- Internal
 ;;;
-;;;    Return true if List1 and List2 have the same elements in the same
-;;; positions according to TYPE=.  We return NIL, NIL if there is an uncertain
+;;; Return true if List1 and List2 have the same elements in the same
+;;; positions according to TYPE=. We return NIL, NIL if there is an uncertain
 ;;; comparison. 
 ;;;
 (defun type=-list (list1 list2)
@@ -627,7 +627,7 @@
 (setf (type-predicate 'function-ctype) 'function-ctype-p)
 
 ;;; A flag that we can bind to cause complex function types to be unparsed as
-;;; FUNCTION.  Useful when we want a type that we can pass to TYPEP.
+;;; FUNCTION. Useful when we want a type that we can pass to TYPEP.
 ;;;
 (defvar *unparse-function-type-simplify* nil)
 
@@ -697,7 +697,7 @@
 
 
                    
-;(define-superclasses function (function))       
+;(define-superclasses function (function)) 
 
 
 ;;; The union or intersection of two FUNCTION types is FUNCTION.
@@ -764,10 +764,10 @@
   (make-constant-ctype :type (specifier-type type env)))
 
 
-;;; Parse-Args-Types  --  Internal
+;;; Parse-Args-Types -- Internal
 ;;;
-;;;    Given a lambda-list like values type specification and a Args-Type
-;;; structure, fill in the slots in the structure accordingly.  This is used
+;;; Given a lambda-list like values type specification and a Args-Type
+;;; structure, fill in the slots in the structure accordingly. This is used
 ;;; for both FUNCTION and VALUES types.
 ;;;
 
@@ -793,9 +793,9 @@
         (setf (args-ctype-keywords result) (nreverse key-info)))
       (setf (args-ctype-allowp result) allowp))))
 
-;;; Unparse-Args-Types  --  Internal
+;;; Unparse-Args-Types -- Internal
 ;;;
-;;;    Return the lambda-list like type specification corresponding
+;;; Return the lambda-list like type specification corresponding
 ;;; to a Args-Type.
 ;;;
 (defun unparse-args-types (type)
@@ -840,9 +840,9 @@
 			    res))
     res))
 
-;;; Single-Value-Type  --  Interface
+;;; Single-Value-Type -- Interface
 ;;;
-;;;    Return the type of the first value indicated by Type.  This is used by
+;;; Return the type of the first value indicated by Type. This is used by
 ;;; people who don't want to have to deal with values types.
 ;;;
 (defun single-value-type (type)
@@ -855,15 +855,15 @@
 	     (args-ctype-rest type)
 	     (specifier-type 'null)))
 	((eq type *wild-type*)
-	 *universal-type*)
+ *universal-type*)
 	(t
 	 type)))
 
 
-;;; FUNCTION-TYPE-NARGS  --  Interface
+;;; FUNCTION-TYPE-NARGS -- Interface
 ;;;
-;;;    Return the minmum number of arguments that a function can be called
-;;; with, and the maximum number or NIL.  If not a function type, return
+;;; Return the minmum number of arguments that a function can be called
+;;; with, and the maximum number or NIL. If not a function type, return
 ;;; NIL, NIL.
 ;;;
 (defun function-type-nargs (type)
@@ -878,11 +878,11 @@
     (values nil nil)))
 
 
-;;; Values-Types  --  Interface
+;;; Values-Types -- Interface
 ;;;
-;;;    Determine if Type corresponds to a definite number of values.  The first
+;;; Determine if Type corresponds to a definite number of values. The first
 ;;; value is a list of the types for each value, and the second value is the
-;;; number of values.  If the number of values is not fixed, then return NIL
+;;; number of values. If the number of values is not fixed, then return NIL
 ;;; and :Unknown.
 ;;;
 (defun values-types (type)
@@ -901,12 +901,12 @@
 	     (values (mapcar #'single-value-type req) (length req))))))
 
 
-;;; Values-Type-Types  --  Internal
+;;; Values-Type-Types -- Internal
 ;;;
-;;;    Return two values:
+;;; Return two values:
 ;;; 1] A list of all the positional (fixed and optional) types.
-;;; 2] The rest type (if any).  If keywords allowed, *universal-type*.  If no
-;;;    keywords or rest, *empty-type*.
+;;; 2] The rest type (if any). If keywords allowed, *universal-type*. If no
+;;; keywords or rest, *empty-type*.
 ;;;
 (defun values-type-types (type &optional (default-type *empty-type*))
   (declare (type values-ctype type))
@@ -917,10 +917,10 @@
 		  (t default-type))))
 
 
-;;; Fixed-Values-Op  --  Internal
+;;; Fixed-Values-Op -- Internal
 ;;;
-;;;    Return a list of Operation applied to the types in Types1 and Types2,
-;;; padding with Rest2 as needed.  Types1 must not be shorter than Types2.  The
+;;; Return a list of Operation applied to the types in Types1 and Types2,
+;;; padding with Rest2 as needed. Types1 must not be shorter than Types2. The
 ;;; second value is T if Operation always returned a true second value.
 ;;;
 (defun fixed-values-op (types1 types2 rest2 operation)
@@ -937,10 +937,10 @@
 					   :initial-element rest2)))
 	      exact)))
 
-;;; Coerce-To-Values  --  Internal
+;;; Coerce-To-Values -- Internal
 ;;;
 ;;; If Type isn't a values type, then make it into one:
-;;;    <type>  ==>  (values type &rest t)
+;;; <type> ==> (values type &rest t)
 ;;;
 (defun coerce-to-values (type)
   (declare (type ctype type))
@@ -949,32 +949,32 @@
     (make-values-ctype :required (list type))))
 
 
-;;; Args-Type-Op  --  Internal
+;;; Args-Type-Op -- Internal
 ;;;
-;;;    Do the specified Operation on Type1 and Type2, which may be any type,
-;;; including Values types.  With values types such as:
-;;;    (values a0 a1)
-;;;    (values b0 b1)
+;;; Do the specified Operation on Type1 and Type2, which may be any type,
+;;; including Values types. With values types such as:
+;;; (values a0 a1)
+;;; (values b0 b1)
 ;;;
 ;;; We compute the more useful result:
-;;;    (values (<operation> a0 b0) (<operation> a1 b1))
+;;; (values (<operation> a0 b0) (<operation> a1 b1))
 ;;;
 ;;; Rather than the precise result:
-;;;    (<operation> (values a0 a1) (values b0 b1))
+;;; (<operation> (values a0 a1) (values b0 b1))
 ;;;
 ;;; This has the virtue of always keeping the values type specifier outermost,
 ;;; and retains all of the information that is really useful for static type
-;;; analysis.  We want to know what is always true of each value independently.
+;;; analysis. We want to know what is always true of each value independently.
 ;;; It is worthless to know that IF the first value is B0 then the second will
 ;;; be B1.
 ;;;
 ;;; If the values count signatures differ, then we produce result with the
 ;;; required value count chosen by Nreq when applied to the number of required
-;;; values in type1 and type2.  Any &key values become &rest T (anyone who uses
+;;; values in type1 and type2. Any &key values become &rest T (anyone who uses
 ;;; keyword values deserves to lose.)
 ;;;
 ;;; The second value is true if the result is definitely empty or if Operation
-;;; returned true as its second value each time we called it.  Since we
+;;; returned true as its second value each time we called it. Since we
 ;;; approximate the intersection of values types, the second value being true
 ;;; doesn't mean the result is exact.
 ;;;
@@ -1015,10 +1015,10 @@
 			    (and rest-exact res-exact)))))))))
       (funcall operation type1 type2))))
 
-;;; Values-Type-Union, Values-Type-Intersection  --  Interface
+;;; Values-Type-Union, Values-Type-Intersection -- Interface
 ;;;
-;;;    Do a union or intersection operation on types that might be values
-;;; types.  The result is optimized for utility rather than exactness, but it
+;;; Do a union or intersection operation on types that might be values
+;;; types. The result is optimized for utility rather than exactness, but it
 ;;; is guaranteed that it will be no smaller (more restrictive) than the
 ;;; precise result.
 ;;;
@@ -1040,9 +1040,9 @@
 		       (specifier-type 'null)))))
 
 
-;;; Values-Types-Intersect  --  Interface
+;;; Values-Types-Intersect -- Interface
 ;;;
-;;;    Like Types-Intersect, except that it sort of works on values types.
+;;; Like Types-Intersect, except that it sort of works on values types.
 ;;; Note that due to the semantics of Values-Type-Intersection, this might
 ;;; return {T, T} when there isn't really any intersection (?).
 ;;;
@@ -1057,9 +1057,9 @@
 	  (t
 	   (types-intersect type1 type2))))
 
-;;; Values-Subtypep  --  Interface
+;;; Values-Subtypep -- Interface
 ;;;
-;;;    A subtypep-like operation that can be used on any types, including
+;;; A subtypep-like operation that can be used on any types, including
 ;;; values types.
 ;;;
 
@@ -1103,9 +1103,9 @@
 
 ;;;; Type method interfaces:
 
-;;; Csubtypep  --  Interface
+;;; Csubtypep -- Interface
 ;;;
-;;;    Like subtypep, only works on Type structures.
+;;; Like subtypep, only works on Type structures.
 ;;;
 (defun csubtypep (type1 type2)
   (declare (type ctype type1 type2))
@@ -1143,10 +1143,10 @@
                               
 
 
-;;; Type=  --  Interface
+;;; Type= -- Interface
 ;;;
-;;;    If two types are definitely equivalent, return true.  The second value
-;;; indicates whether the first value is definitely correct.  This should only
+;;; If two types are definitely equivalent, return true. The second value
+;;; indicates whether the first value is definitely correct. This should only
 ;;; fail in the presence of Hairy types.
 ;;;
 
@@ -1156,10 +1156,10 @@
      (values t t)
      (invoke-type-method :simple-= :complex-= type1 type2)))
 
-;;; TYPE/=  --  Interface
+;;; TYPE/= -- Interface
 ;;;
-;;;    Not exactly the negation of TYPE=, since when the relationship is
-;;; uncertain, we still return NIL, NIL.  This is useful in cases where the
+;;; Not exactly the negation of TYPE=, since when the relationship is
+;;; uncertain, we still return NIL, NIL. This is useful in cases where the
 ;;; conservative assumption is =.
 ;;;
 (defun type/= (type1 type2)
@@ -1170,11 +1170,11 @@
 	(values (not res) t)
 	(values nil nil))))
 
-;;; Type-Union  --  Interface
+;;; Type-Union -- Interface
 ;;;
-;;;    Find a type which includes both types.  Any inexactness is represented
+;;; Find a type which includes both types. Any inexactness is represented
 ;;; by the fuzzy element types; we return a single value that is precise to the
-;;; best of our knowledge.  This result is simplified into the canonical form,
+;;; best of our knowledge. This result is simplified into the canonical form,
 ;;; thus is not a UNION type unless there is no other way to represent the
 ;;; result.
 ;;; 
@@ -1227,11 +1227,11 @@
 	(t type1)))
 
 
-;;; Type-Intersection  --  Interface
+;;; Type-Intersection -- Interface
 ;;;
-;;;    Return as restrictive a type as we can discover that is no more
-;;; restrictive than the intersection of Type1 and Type2.  The second value is
-;;; true if the result is exact.  At worst, we randomly return one of the
+;;; Return as restrictive a type as we can discover that is no more
+;;; restrictive than the intersection of Type1 and Type2. The second value is
+;;; true if the result is exact. At worst, we randomly return one of the
 ;;; arguments as the first value (trying not to return a hairy type).
 ;;;
 
@@ -1240,15 +1240,15 @@
 
 (defun %type-intersection (input-types)
   (let ((simplified (simplify-intersections input-types)))
-    ;;(declare (type (vector ctype) simplified))
-    ;; We want to have a canonical representation of types (or failing
-    ;; that, punt to HAIRY-TYPE). Canonical representation would have
-    ;; intersections inside unions but not vice versa, since you can
-    ;; always achieve that by the distributive rule. But we don't want
-    ;; to just apply the distributive rule, since it would be too easy
-    ;; to end up with unreasonably huge type expressions. So instead
-    ;; we try to generate a simple type by distributing the union; if
-    ;; the type can't be made simple, we punt to HAIRY-TYPE.
+ ;;(declare (type (vector ctype) simplified))
+ ;; We want to have a canonical representation of types (or failing
+ ;; that, punt to HAIRY-TYPE). Canonical representation would have
+ ;; intersections inside unions but not vice versa, since you can
+ ;; always achieve that by the distributive rule. But we don't want
+ ;; to just apply the distributive rule, since it would be too easy
+ ;; to end up with unreasonably huge type expressions. So instead
+ ;; we try to generate a simple type by distributing the union; if
+ ;; the type can't be made simple, we punt to HAIRY-TYPE.
     (if (and (cdr simplified) (some #'union-ctype-p simplified))
       (let* ((first-union (find-if #'union-ctype-p simplified))
              (other-types (remove first-union simplified))
@@ -1288,10 +1288,10 @@
 	 type1)
 	((or (intersection-ctype-p type1)
 	     (intersection-ctype-p type2))
-	 ;; Intersections of INTERSECTION-TYPE should have the
-	 ;; INTERSECTION-CTYPE-TYPES values broken out and intersected
-	 ;; separately. The full TYPE-INTERSECTION function knows how
-	 ;; to do that, so let it handle it.
+ ;; Intersections of INTERSECTION-TYPE should have the
+ ;; INTERSECTION-CTYPE-TYPES values broken out and intersected
+ ;; separately. The full TYPE-INTERSECTION function knows how
+ ;; to do that, so let it handle it.
 	 (type-intersection type1 type2))
 	;;
 	;; (AND (FUNCTION (T) T) GENERIC-FUNCTION) for instance, but
@@ -1320,7 +1320,7 @@
 		   (or (and (not (eql yx :no-type-method-found)) yx)
 		       (cond ((and (eql xy :no-type-method-found)
 				   (eql yx :no-type-method-found))
-			      *empty-type*)
+ *empty-type*)
 			     (t
 			      nil))))))))))
 
@@ -1337,12 +1337,12 @@
 	union
 	nil)))
 
-;;; Types-Intersect  --  Interface
+;;; Types-Intersect -- Interface
 ;;;
-;;;    The first value is true unless the types don't intersect.  The second
-;;; value is true if the first value is definitely correct.  NIL is considered
-;;; to intersect with any type.  If T is a subtype of either type, then we also
-;;; return T, T.  This way we consider hairy types to intersect with T.
+;;; The first value is true unless the types don't intersect. The second
+;;; value is true if the first value is definitely correct. NIL is considered
+;;; to intersect with any type. If T is a subtype of either type, then we also
+;;; return T, T. This way we consider hairy types to intersect with T.
 ;;;
 (defun types-intersect (type1 type2)
   (declare (type ctype type1 type2))
@@ -1357,9 +1357,9 @@
 	      ((eq intersection2 *empty-type*) (values nil t))
 	      (t (values t t))))))
 
-;;; Type-Specifier  --  Interface
+;;; Type-Specifier -- Interface
 ;;;
-;;;    Return a Common Lisp type specifier corresponding to this type.
+;;; Return a Common Lisp type specifier corresponding to this type.
 ;;;
 (defun type-specifier (type)
   (unless (ctype-p type)
@@ -1370,23 +1370,23 @@
 
 
 (defconstant compound-only-type-specifiers
-  ;; See CLHS Figure 4-4.
+ ;; See CLHS Figure 4-4.
   '(and mod satisfies eql not values member or))
 
 
-;;; VALUES-SPECIFIER-TYPE  --  Interface
+;;; VALUES-SPECIFIER-TYPE -- Interface
 ;;;
-;;;    Return the type structure corresponding to a type specifier.  We pick
+;;; Return the type structure corresponding to a type specifier. We pick
 ;;; off Structure types as a special case.
 ;;;
 
 (defun values-specifier-type-internal (orig env)
   (or (info-type-builtin orig) ; this table could contain bytes etal and ands ors nots of built-in types - no classes
       
-      ;; Now that we have our hands on the environment, we could pass it into type-expand,
-      ;; but we'd have no way of knowing whether the expansion depended on the env, so
-      ;; we wouldn't know if the result is safe to cache.   So for now don't let type
-      ;; expanders see the env, which just means they won't see compile-time types.
+ ;; Now that we have our hands on the environment, we could pass it into type-expand,
+ ;; but we'd have no way of knowing whether the expansion depended on the env, so
+ ;; we wouldn't know if the result is safe to cache. So for now don't let type
+ ;; expanders see the env, which just means they won't see compile-time types.
       (let ((spec (type-expand orig #+not-yet env)))
         (cond
          ((and (not (eq spec orig))
@@ -1416,8 +1416,8 @@
                        (symbolp spec))
                    (when *type-system-initialized*
                      (signal 'parse-unknown-type :specifier spec))
-                   ;;
-                   ;; Inhibit caching...
+ ;;
+ ;; Inhibit caching...
                    nil)
                   (t
                    (error 'invalid-type-specifier :typespec spec)))))))))
@@ -1467,7 +1467,7 @@
     (unknown-ctype nil)
     (class-ctype
      (not (typep (class-ctype-class ctype) 'compile-time-class)))
-    ;; Anything else ?  Simple things (numbers, classes) can't lose.
+ ;; Anything else ? Simple things (numbers, classes) can't lose.
     (t t)))
 		
       
@@ -1507,7 +1507,7 @@
                      (if (or (symbolp spec)
                              (and (consp spec)
                                   (symbolp (car spec))
-                                  ;; hashing scheme uses equal, so only use when equivalent to eql
+ ;; hashing scheme uses equal, so only use when equivalent to eql
                                   (not (and (eq (car spec) 'member)
                                             (some (lambda (x)
                                                     (typep x '(or cons string bit-vector pathname)))
@@ -1544,9 +1544,9 @@
 
   
 
-;;; SPECIFIER-TYPE  --  Interface
+;;; SPECIFIER-TYPE -- Interface
 ;;;
-;;;    Like VALUES-SPECIFIER-TYPE, except that we guarantee to never return a
+;;; Like VALUES-SPECIFIER-TYPE, except that we guarantee to never return a
 ;;; VALUES type.
 ;;; 
 (defun specifier-type (x &optional env)
@@ -1558,7 +1558,7 @@
 (defun single-value-specifier-type (x &optional env)
   (let ((res (specifier-type x env)))
     (if (eq res *wild-type*)
-        *universal-type*
+ *universal-type*
         res)))
 
 (defun standardized-type-specifier (spec &optional env)
@@ -1582,9 +1582,9 @@
 		     :high high
 		     :enumerable enumerable))
 
-;;; Precompute-Types  --  Interface
+;;; Precompute-Types -- Interface
 ;;;
-;;;    Take a list of type specifiers, compute the translation and define it as
+;;; Take a list of type specifiers, compute the translation and define it as
 ;;; a builtin type.
 ;;;
  
@@ -1600,7 +1600,7 @@
 
 ;;;; Builtin types.
 
-;;; The NAMED-TYPE is used to represent *, T and NIL.  These types must be
+;;; The NAMED-TYPE is used to represent *, T and NIL. These types must be
 ;;; super or sub types of all types, not just classes and * & NIL aren't
 ;;; classes anyway, so it wouldn't make much sense to make them built-in
 ;;; classes.
@@ -1631,14 +1631,14 @@
   (cond
     ((and (eq type2 *empty-type*)
 	  (intersection-ctype-p type1)
-	  ;; not allowed to be unsure on these... FIXME: keep the list
-	  ;; of CL types that are intersection types once and only
-	  ;; once.
+ ;; not allowed to be unsure on these... FIXME: keep the list
+ ;; of CL types that are intersection types once and only
+ ;; once.
 	  (not (or (type= type1 (specifier-type 'ratio))
 		   (type= type1 (specifier-type 'keyword)))))
-     ;; things like (AND (EQL 0) (SATISFIES ODDP)) or (AND FUNCTION
-     ;; STREAM) can get here.  In general, we can't really tell
-     ;; whether these are equal to NIL or not, so
+ ;; things like (AND (EQL 0) (SATISFIES ODDP)) or (AND FUNCTION
+ ;; STREAM) can get here. In general, we can't really tell
+ ;; whether these are equal to NIL or not, so
      (values nil nil))
     ((type-might-contain-other-types-p type1)
      (invoke-complex-=-other-method type1 type2))
@@ -1653,26 +1653,26 @@
 	 t)
 	(;; When TYPE2 might be the universal type in disguise
 	 (type-might-contain-other-types-p type2)
-	 ;; Now that the UNION and HAIRY COMPLEX-SUBTYPEP-ARG2 methods
-	 ;; can delegate to us (more or less as CALL-NEXT-METHOD) when
-	 ;; they're uncertain, we can't just barf on COMPOUND-TYPE and
-	 ;; HAIRY-TYPEs as we used to. Instead we deal with the
-	 ;; problem (where at least part of the problem is cases like
-	 ;;   (SUBTYPEP T '(SATISFIES FOO))
-	 ;; or
-	 ;;   (SUBTYPEP T '(AND (SATISFIES FOO) (SATISFIES BAR)))
-	 ;; where the second type is a hairy type like SATISFIES, or
-	 ;; is a compound type which might contain a hairy type) by
-	 ;; returning uncertainty.
+ ;; Now that the UNION and HAIRY COMPLEX-SUBTYPEP-ARG2 methods
+ ;; can delegate to us (more or less as CALL-NEXT-METHOD) when
+ ;; they're uncertain, we can't just barf on COMPOUND-TYPE and
+ ;; HAIRY-TYPEs as we used to. Instead we deal with the
+ ;; problem (where at least part of the problem is cases like
+ ;; (SUBTYPEP T '(SATISFIES FOO))
+ ;; or
+ ;; (SUBTYPEP T '(AND (SATISFIES FOO) (SATISFIES BAR)))
+ ;; where the second type is a hairy type like SATISFIES, or
+ ;; is a compound type which might contain a hairy type) by
+ ;; returning uncertainty.
 	 (values nil nil))
 	(t
-	 ;; By elimination, TYPE1 is the universal type.
+ ;; By elimination, TYPE1 is the universal type.
 	 (assert (or (eq type1 *wild-type*) (eq type1 *universal-type*)))
-	 ;; This case would have been picked off by the SIMPLE-SUBTYPEP
-	 ;; method, and so shouldn't appear here.
+ ;; This case would have been picked off by the SIMPLE-SUBTYPEP
+ ;; method, and so shouldn't appear here.
 	 (assert (not (eq type2 *universal-type*)))
-	 ;; Since TYPE2 is not EQ *UNIVERSAL-TYPE* and is not the
-	 ;; universal type in disguise, TYPE2 is not a superset of TYPE1.
+ ;; Since TYPE2 is not EQ *UNIVERSAL-TYPE* and is not the
+ ;; universal type in disguise, TYPE2 is not a superset of TYPE1.
 	 (values nil t))))
 
 
@@ -1681,14 +1681,14 @@
   (cond ((eq type2 *universal-type*)
 	 (values t t))
 	((type-might-contain-other-types-p type1)
-	 ;; those types can be *EMPTY-TYPE* or *UNIVERSAL-TYPE* in
-	 ;; disguise.  So we'd better delegate.
+ ;; those types can be *EMPTY-TYPE* or *UNIVERSAL-TYPE* in
+ ;; disguise. So we'd better delegate.
 	 (invoke-complex-subtypep-arg1-method type1 type2))
 	(t
-	 ;; FIXME: This seems to rely on there only being 2 or 3
-	 ;; NAMED-TYPE values, and the exclusion of various
-	 ;; possibilities above. It would be good to explain it and/or
-	 ;; rewrite it so that it's clearer.
+ ;; FIXME: This seems to rely on there only being 2 or 3
+ ;; NAMED-TYPE values, and the exclusion of various
+ ;; possibilities above. It would be good to explain it and/or
+ ;; rewrite it so that it's clearer.
 	 (values (not (eq type2 *empty-type*)) t))))
 
 
@@ -1702,7 +1702,7 @@
 ;;;; Hairy and unknown types:
 
 ;;; The Hairy-Type represents anything too wierd to be described
-;;; reasonably or to be useful, such as SATISFIES.  We just remember
+;;; reasonably or to be useful, such as SATISFIES. We just remember
 ;;; the original type spec.
 ;;;
 
@@ -1803,12 +1803,12 @@
 
 (define-type-method (negation :complex-subtypep-arg1) (type1 type2)
   (block nil
-    ;; (Several logical truths in this block are true as long as
-    ;; b/=T. As of sbcl-0.7.1.28, it seems impossible to construct a
-    ;; case with b=T where we actually reach this type method, but
-    ;; we'll test for and exclude this case anyway, since future
-    ;; maintenance might make it possible for it to end up in this
-    ;; code.)
+ ;; (Several logical truths in this block are true as long as
+ ;; b/=T. As of sbcl-0.7.1.28, it seems impossible to construct a
+ ;; case with b=T where we actually reach this type method, but
+ ;; we'll test for and exclude this case anyway, since future
+ ;; maintenance might make it possible for it to end up in this
+ ;; code.)
     (multiple-value-bind (equal certain)
 	(type= type2 *universal-type*)
       (unless certain
@@ -1816,8 +1816,8 @@
       (when equal
 	(return (values t t))))
     (let ((complement-type1 (negation-ctype-type type1)))
-      ;; Do the special cases first, in order to give us a chance if
-      ;; subtype/supertype relationships are hairy.
+ ;; Do the special cases first, in order to give us a chance if
+ ;; subtype/supertype relationships are hairy.
       (multiple-value-bind (equal certain) 
 	  (type= complement-type1 type2)
 	;; If a = b, ~a is not a subtype of b (unless b=T, which was
@@ -1826,17 +1826,17 @@
 	  (return (values nil nil)))
 	(when equal
 	  (return (values nil t))))
-      ;; KLUDGE: ANSI requires that the SUBTYPEP result between any
-      ;; two built-in atomic type specifiers never be uncertain. This
-      ;; is hard to do cleanly for the built-in types whose
-      ;; definitions include (NOT FOO), i.e. CONS and RATIO. However,
-      ;; we can do it with this hack, which uses our global knowledge
-      ;; that our implementation of the type system uses disjoint
-      ;; implementation types to represent disjoint sets (except when
-      ;; types are contained in other types).  (This is a KLUDGE
-      ;; because it's fragile. Various changes in internal
-      ;; representation in the type system could make it start
-      ;; confidently returning incorrect results.) -- WHN 2002-03-08
+ ;; KLUDGE: ANSI requires that the SUBTYPEP result between any
+ ;; two built-in atomic type specifiers never be uncertain. This
+ ;; is hard to do cleanly for the built-in types whose
+ ;; definitions include (NOT FOO), i.e. CONS and RATIO. However,
+ ;; we can do it with this hack, which uses our global knowledge
+ ;; that our implementation of the type system uses disjoint
+ ;; implementation types to represent disjoint sets (except when
+ ;; types are contained in other types). (This is a KLUDGE
+ ;; because it's fragile. Various changes in internal
+ ;; representation in the type system could make it start
+ ;; confidently returning incorrect results.) -- WHN 2002-03-08
       (unless (or (type-might-contain-other-types-p complement-type1)
 		  (type-might-contain-other-types-p type2))
 	;; Because of the way our types which don't contain other
@@ -1844,10 +1844,10 @@
 	;; (SUBTYPEP '(NOT AA) 'B)=NIL when AA and B are simple (and B
 	;; is not T, as checked above).
 	(return (values nil t)))
-      ;; The old (TYPE= TYPE1 TYPE2) branch would never be taken, as
-      ;; TYPE1 and TYPE2 will only be equal if they're both NOT types,
-      ;; and then the :SIMPLE-SUBTYPEP method would be used instead.
-      ;; But a CSUBTYPEP relationship might still hold:
+ ;; The old (TYPE= TYPE1 TYPE2) branch would never be taken, as
+ ;; TYPE1 and TYPE2 will only be equal if they're both NOT types,
+ ;; and then the :SIMPLE-SUBTYPEP method would be used instead.
+ ;; But a CSUBTYPEP relationship might still hold:
       (multiple-value-bind (equal certain)
 	  (csubtypep complement-type1 type2)
 	;; If a is a subtype of b, ~a is not a subtype of b (unless
@@ -1858,29 +1858,29 @@
 	  (return (values nil t))))
       (multiple-value-bind (equal certain)
 	  (csubtypep type2 complement-type1)
-	;; If b is a subtype of a, ~a is not a subtype of b.  (FIXME:
+	;; If b is a subtype of a, ~a is not a subtype of b. (FIXME:
 	;; That's not true if a=T. Do we know at this point that a is
 	;; not T?)
 	(unless certain
 	  (return (values nil nil)))
 	(when equal
 	  (return (values nil t))))
-      ;; old CSR comment ca. 0.7.2, now obsoleted by the SIMPLE-CTYPE?
-      ;; KLUDGE case above: Other cases here would rely on being able
-      ;; to catch all possible cases, which the fragility of this type
-      ;; system doesn't inspire me; for instance, if a is type= to ~b,
-      ;; then we want T, T; if this is not the case and the types are
-      ;; disjoint (have an intersection of *empty-type*) then we want
-      ;; NIL, T; else if the union of a and b is the *universal-type*
-      ;; then we want T, T. So currently we still claim to be unsure
-      ;; about e.g. (subtypep '(not fixnum) 'single-float).
-      ;;
-      ;; OTOH we might still get here:
+ ;; old CSR comment ca. 0.7.2, now obsoleted by the SIMPLE-CTYPE?
+ ;; KLUDGE case above: Other cases here would rely on being able
+ ;; to catch all possible cases, which the fragility of this type
+ ;; system doesn't inspire me; for instance, if a is type= to ~b,
+ ;; then we want T, T; if this is not the case and the types are
+ ;; disjoint (have an intersection of *empty-type*) then we want
+ ;; NIL, T; else if the union of a and b is the *universal-type*
+ ;; then we want T, T. So currently we still claim to be unsure
+ ;; about e.g. (subtypep '(not fixnum) 'single-float).
+ ;;
+ ;; OTOH we might still get here:
       (values nil nil))))
 
 (define-type-method (negation :complex-=) (type1 type2)
-  ;; (NOT FOO) isn't equivalent to anything that's not a negation
-  ;; type, except possibly a type that might contain it in disguise.
+ ;; (NOT FOO) isn't equivalent to anything that's not a negation
+ ;; type, except possibly a type that might contain it in disguise.
   (declare (ignore type2))
   (if (type-might-contain-other-types-p type1)
       (values nil nil)
@@ -1892,14 +1892,14 @@
     (cond
       ((csubtypep not1 not2) type2)
       ((csubtypep not2 not1) type1)
-      ;; Why no analagous clause to the disjoint in the SIMPLE-UNION2
-      ;; method, below?  The clause would read
-      ;;
-      ;; ((EQ (TYPE-UNION NOT1 NOT2) *UNIVERSAL-TYPE*) *EMPTY-TYPE*)
-      ;;
-      ;; but with proper canonicalization of negation types, there's
-      ;; no way of constructing two negation types with union of their
-      ;; negations being the universal type.
+ ;; Why no analagous clause to the disjoint in the SIMPLE-UNION2
+ ;; method, below? The clause would read
+ ;;
+ ;; ((EQ (TYPE-UNION NOT1 NOT2) *UNIVERSAL-TYPE*) *EMPTY-TYPE*)
+ ;;
+ ;; but with proper canonicalization of negation types, there's
+ ;; no way of constructing two negation types with union of their
+ ;; negations being the universal type.
       (t
        nil))))
 
@@ -1917,7 +1917,7 @@
       ((csubtypep not1 not2) type1)
       ((csubtypep not2 not1) type2)
       ((eq (type-intersection not1 not2) *empty-type*)
-       *universal-type*)
+ *universal-type*)
       (t nil))))
 
 (define-type-method (negation :complex-union) (type1 type2)
@@ -1934,10 +1934,10 @@
   (let* ((not-type (specifier-type typespec env))
 	 (spec (type-specifier not-type)))
     (cond
-      ;; canonicalize (NOT (NOT FOO))
+ ;; canonicalize (NOT (NOT FOO))
       ((and (listp spec) (eq (car spec) 'not))
        (specifier-type (cadr spec) env))
-      ;; canonicalize (NOT NIL) and (NOT T)
+ ;; canonicalize (NOT NIL) and (NOT T)
       ((eq not-type *empty-type*) *universal-type*)
       ((eq not-type *universal-type*) *empty-type*)
       ((and (numeric-ctype-p not-type)
@@ -1997,7 +1997,7 @@
 		 (setf members (remove (cdr pair) members))))
 	     (apply #'type-intersection
 		    (if (null members)
-		      *universal-type*
+ *universal-type*
 		      (make-negation-ctype
 		       :type (make-member-ctype :members members)))
 		    (mapcar
@@ -2028,19 +2028,19 @@
 	    (make-cons-ctype
 	     (specifier-type `(not ,(type-specifier
 				     (cons-ctype-car-ctype not-type))) env)
-	     *universal-type*)
+ *universal-type*)
 	    (make-cons-ctype
-	     *universal-type*
+ *universal-type*
 	     (specifier-type `(not ,(type-specifier
 				     (cons-ctype-cdr-ctype not-type))) env))))
 	  ((not (eq (cons-ctype-car-ctype not-type) *universal-type*))
 	   (make-cons-ctype
 	    (specifier-type `(not ,(type-specifier
 				    (cons-ctype-car-ctype not-type))) env)
-	    *universal-type*))
+ *universal-type*))
 	  ((not (eq (cons-ctype-cdr-ctype not-type) *universal-type*))
 	   (make-cons-ctype
-	    *universal-type*
+ *universal-type*
 	    (specifier-type `(not ,(type-specifier
 				    (cons-ctype-cdr-ctype not-type))) env)))
 	  (t (error "Weird CONS type ~S" not-type)))))
@@ -2071,18 +2071,18 @@
                                 high
                                 enumerable
                                 predicate)
-  ;; if interval is empty
+ ;; if interval is empty
   (if (and low
 	   high
 	   (if (or (consp low) (consp high)) ; if either bound is exclusive
 	     (>= (type-bound-number low) (type-bound-number high))
 	     (> low high)))
-    *empty-type*
+ *empty-type*
     (multiple-value-bind (canonical-low canonical-high)
 	(case class
 	  (integer
-	   ;; INTEGER types always have their LOW and HIGH bounds
-	   ;; represented as inclusive, not exclusive values.
+ ;; INTEGER types always have their LOW and HIGH bounds
+ ;; represented as inclusive, not exclusive values.
 	   (values (if (consp low)
 		     (1+ (type-bound-number low))
 		     low)
@@ -2090,7 +2090,7 @@
 		     (1- (type-bound-number high))
 		     high)))
 	  (t 
-	   ;; no canonicalization necessary
+ ;; no canonicalization necessary
 	   (values low high)))
       (when (and (eq class 'rational)
 		 (integerp canonical-low)
@@ -2117,7 +2117,7 @@
                lo
                (<= hi target::target-most-positive-fixnum)
                (>= lo target::target-most-negative-fixnum))      
-        #'(lambda (n)
+ #'(lambda (n)
             (and (fixnump n)
                  (locally (declare (fixnum n hi lo))
                    (and (%i>= n lo)
@@ -2184,16 +2184,16 @@
 	 (assert (eq base+bounds 'real))
 	 'number)))))
 
-;;; Numeric-Bound-Test  --  Internal
+;;; Numeric-Bound-Test -- Internal
 ;;;
-;;;    Return true if X is "less than or equal" to Y, taking open bounds into
-;;; consideration.  Closed is the predicate used to test the bound on a closed
+;;; Return true if X is "less than or equal" to Y, taking open bounds into
+;;; consideration. Closed is the predicate used to test the bound on a closed
 ;;; interval (e.g. <=), and Open is the predicate used on open bounds (e.g. <).
 ;;; Y is considered to be the outside bound, in the sense that if it is
 ;;; infinite (NIL), then the test suceeds, whereas if X is infinite, then the
 ;;; test fails (unless Y is also infinite).
 ;;;
-;;;    This is for comparing bounds of the same kind, e.g. upper and upper.
+;;; This is for comparing bounds of the same kind, e.g. upper and upper.
 ;;; Use Numeric-Bound-Test* for different kinds of bounds.
 ;;;
 (defmacro numeric-bound-test (x y closed open)
@@ -2208,14 +2208,14 @@
 	      (,open ,x (car ,y))
 	      (,closed ,x ,y)))))
 
-;;; Numeric-Bound-Test*  --  Internal
+;;; Numeric-Bound-Test* -- Internal
 ;;;
-;;;    Used to compare upper and lower bounds.  This is different from the
+;;; Used to compare upper and lower bounds. This is different from the
 ;;; same-bound case:
 ;;; -- Since X = NIL is -infinity, whereas y = NIL is +infinity, we return true
-;;;    if *either* arg is NIL.
+;;; if *either* arg is NIL.
 ;;; -- an open inner bound is "greater" and also squeezes the interval, causing
-;;;    us to use the Open test for those cases as well.
+;;; us to use the Open test for those cases as well.
 ;;;
 (defmacro numeric-bound-test* (x y closed open)
   `(cond ((not ,y) t)
@@ -2229,11 +2229,11 @@
 	      (,open ,x (car ,y))
 	      (,closed ,x ,y)))))
 
-;;; Numeric-Bound-Max  --  Internal
+;;; Numeric-Bound-Max -- Internal
 ;;;
-;;;    Return whichever of the numeric bounds X and Y is "maximal" according to
-;;; the predicates Closed (e.g. >=) and Open (e.g. >).  This is only meaningful
-;;; for maximizing like bounds, i.e. upper and upper.  If Max-P is true, then
+;;; Return whichever of the numeric bounds X and Y is "maximal" according to
+;;; the predicates Closed (e.g. >=) and Open (e.g. >). This is only meaningful
+;;; for maximizing like bounds, i.e. upper and upper. If Max-P is true, then
 ;;; we return NIL if X or Y is NIL, otherwise we return the other arg.
 ;;;
 (defmacro numeric-bound-max (x y closed open max-p)
@@ -2261,25 +2261,25 @@
 	  (high1 (numeric-ctype-high type1))
 	  (low2 (numeric-ctype-low type2))
 	  (high2 (numeric-ctype-high type2)))
-    ;;
-    ;; If one is complex and the other isn't, they are disjoint.
+ ;;
+ ;; If one is complex and the other isn't, they are disjoint.
     (cond ((not (or (eq (numeric-ctype-complexp type1) complexp2)
 		        (null complexp2)))
 	     (values nil t))
-	    ;;
-	    ;; If the classes are specified and different, the types are
-	    ;; disjoint unless type2 is rational and type1 is integer.
+ ;;
+ ;; If the classes are specified and different, the types are
+ ;; disjoint unless type2 is rational and type1 is integer.
 	    ((not (or (eq class1 class2) (null class2)
 		        (and (eq class1 'integer) (eq class2 'rational))))
 	     (values nil t))
-	    ;;
-	    ;; If the float formats are specified and different, the types
-	    ;; are disjoint.
+ ;;
+ ;; If the float formats are specified and different, the types
+ ;; are disjoint.
 	    ((not (or (eq (numeric-ctype-format type1) format2)
 		        (null format2)))
 	     (values nil t))
-	    ;;
-	    ;; Check the bounds.
+ ;;
+ ;; Check the bounds.
 	    ((and (numeric-bound-test low1 low2 >= >)
 		    (numeric-bound-test high1 high2 <= <))
 	     (values t t))
@@ -2288,9 +2288,9 @@
 
 ;(define-superclasses number (generic-number))
 
-;;; NUMERIC-TYPES-ADJACENT  --  Internal
+;;; NUMERIC-TYPES-ADJACENT -- Internal
 ;;;
-;;;    If the high bound of Low is adjacent to the low bound of High, then
+;;; If the high bound of Low is adjacent to the low bound of High, then
 ;;; return T, otherwise NIL.
 ;;;
 (defun numeric-types-adjacent (low high)
@@ -2338,8 +2338,8 @@
                :high (numeric-bound-max (numeric-ctype-high type1)
                                         (numeric-ctype-high type2)
                                         >= > t)))
-             ;; FIXME: These two clauses are almost identical, and the
-             ;; consequents are in fact identical in every respect.
+ ;; FIXME: These two clauses are almost identical, and the
+ ;; consequents are in fact identical in every respect.
              ((and (eq class1 'rational)
                    (eq class2 'integer)
                    (eq format1 format2)
@@ -2412,9 +2412,9 @@
                            (mapcar (lambda (x) (do-complex (ctype-of x)))
                                    (member-ctype-members ctype))))
                    ((and (intersection-ctype-p ctype)
-                         ;; just enough to handle simple types like RATIO.
+ ;; just enough to handle simple types like RATIO.
                          (let ((numbers (remove-if-not
-                                         #'numeric-ctype-p
+ #'numeric-ctype-p
                                          (intersection-ctype-types ctype))))
                            (and (car numbers)
                                 (null (cdr numbers))
@@ -2425,9 +2425,9 @@
         (let ((ctype (specifier-type spec env)))
           (do-complex ctype)))))
 
-;;; Check-Bound  --  Internal
+;;; Check-Bound -- Internal
 ;;;
-;;;    Check that X is a well-formed numeric bound of the specified Type.
+;;; Check that X is a well-formed numeric bound of the specified Type.
 ;;; If X is *, return NIL, otherwise return the bound.
 ;;;
 (defmacro check-bound (x type)
@@ -2444,7 +2444,7 @@
          (h (check-bound high integer))
          (hb (if (consp h) (1- (car h)) h)))
     (if (and hb lb (< hb lb))
-      *empty-type*
+ *empty-type*
       (make-numeric-ctype :class 'integer  :complexp :real
                           :enumerable (not (null (and l h)))
                           :low lb
@@ -2481,8 +2481,8 @@
     (rational (rationalize bound))
     (float (if (floatp bound)
 	       bound
-	       ;; Coerce to the widest float format available, to
-	       ;; avoid unnecessary loss of precision:
+ ;; Coerce to the widest float format available, to
+ ;; avoid unnecessary loss of precision:
 	       (coerce bound 'long-float)))))
 
 (defun coerced-real-bound (bound type)
@@ -2529,25 +2529,25 @@
 	 (high1 (numeric-ctype-high type1))
 	 (low2 (numeric-ctype-low type2))
 	 (high2 (numeric-ctype-high type2)))
-    ;;
-    ;; If one is complex and the other isn't, then they are disjoint.
+ ;;
+ ;; If one is complex and the other isn't, then they are disjoint.
     (cond ((not (or (eq complexp1 complexp2)
 		    (null complexp1) (null complexp2)))
 	   nil)
-	  ;;
-	  ;; If either type is a float, then the other must either be specified
-	  ;; to be a float or unspecified.  Otherwise, they are disjoint.
+ ;;
+ ;; If either type is a float, then the other must either be specified
+ ;; to be a float or unspecified. Otherwise, they are disjoint.
 	  ((and (eq class1 'float) (not (member class2 '(float nil)))) nil)
 	  ((and (eq class2 'float) (not (member class1 '(float nil)))) nil)
-	  ;;
-	  ;; If the float formats are specified and different, the types
-	  ;; are disjoint.
+ ;;
+ ;; If the float formats are specified and different, the types
+ ;; are disjoint.
 	  ((not (or (eq format1 format2) (null format1) (null format2)))
 	   nil)
 	  (t
-	   ;;
-	   ;; Check the bounds.  This is a bit odd because we must always have
-	   ;; the outer bound of the interval as the second arg.
+ ;;
+ ;; Check the bounds. This is a bit odd because we must always have
+ ;; the outer bound of the interval as the second arg.
 	   (if (numeric-bound-test high1 high2 <= <)
 	     (or (and (numeric-bound-test low1 low2 >= >)
 		      (numeric-bound-test* low1 high2 <= <))
@@ -2558,25 +2558,25 @@
 		 (and (numeric-bound-test high2 high1 <= <)
 		      (numeric-bound-test* high2 low1 >= >))))))))
 
-;;; Round-Numeric-Bound  --  Internal
+;;; Round-Numeric-Bound -- Internal
 ;;;
-;;;    Take the numeric bound X and convert it into something that can be used
-;;; as a bound in a numeric type with the specified Class and Format.  If up-p
-;;; is true, then we round up as needed, otherwise we round down.  Up-p true
+;;; Take the numeric bound X and convert it into something that can be used
+;;; as a bound in a numeric type with the specified Class and Format. If up-p
+;;; is true, then we round up as needed, otherwise we round down. Up-p true
 ;;; implies that X is a lower bound, i.e. (N) > N.
 ;;;
 ;;; This is used by Numeric-Type-Intersection to mash the bound into the
-;;; appropriate type number.  X may only be a float when Class is Float.
+;;; appropriate type number. X may only be a float when Class is Float.
 ;;;
 ;;; ### Note: it is possible for the coercion to a float to overflow or
-;;; underflow.  This happens when the bound doesn't fit in the specified
-;;; format.  In this case, we should really return the appropriate
+;;; underflow. This happens when the bound doesn't fit in the specified
+;;; format. In this case, we should really return the appropriate
 ;;; {Most | Least}-{Positive | Negative}-XXX-Float float of desired format.
 ;;; But these conditions aren't currently signalled in any useful way.
 ;;;
 ;;; Also, when converting an open rational bound into a float we should
 ;;; probably convert it to a closed bound of the closest float in the specified
-;;; format.  In general, open float bounds are fucked.
+;;; format. In general, open float bounds are fucked.
 ;;;
 (defun round-numeric-bound (x class format up-p)
   (if x
@@ -2592,21 +2592,21 @@
 	     (if (consp x) (list res) res)))))
     nil))
 
-;;; Number :Simple-Intersection type method  --  Internal
+;;; Number :Simple-Intersection type method -- Internal
 ;;;
-;;;    Handle the case of Type-Intersection on two numeric types.  We use
-;;; Types-Intersect to throw out the case of types with no intersection.  If an
+;;; Handle the case of Type-Intersection on two numeric types. We use
+;;; Types-Intersect to throw out the case of types with no intersection. If an
 ;;; attribute in Type1 is unspecified, then we use Type2's attribute, which
-;;; must be at least as restrictive.  If the types intersect, then the only
+;;; must be at least as restrictive. If the types intersect, then the only
 ;;; attributes that can be specified and different are the class and the
 ;;; bounds.
 ;;;
-;;;    When the class differs, we use the more restrictive class.  The only
+;;; When the class differs, we use the more restrictive class. The only
 ;;; interesting case is rational/integer, since rational includes integer.
 ;;;
-;;;    We make the result lower (upper) bound the maximum (minimum) of the
-;;; argument lower (upper) bounds.  We convert the bounds into the
-;;; appropriate numeric type before maximizing.  This avoids possible confusion
+;;; We make the result lower (upper) bound the maximum (minimum) of the
+;;; argument lower (upper) bounds. We convert the bounds into the
+;;; appropriate numeric type before maximizing. This avoids possible confusion
 ;;; due to mixed-type comparisons (but I think the result is the same).
 ;;;
 (define-type-method (number :simple-intersection) (type1 type2)
@@ -2637,11 +2637,11 @@
 	      (round-numeric-bound (numeric-ctype-high type2)
 				   class format nil)
 	      < <= nil)))
-    *empty-type*))
+ *empty-type*))
 
-;;; Float-Format-Max  --  Interface
+;;; Float-Format-Max -- Interface
 ;;;
-;;;    Given two float formats, return the one with more precision.  If either
+;;; Given two float formats, return the one with more precision. If either
 ;;; one is null, return NIL.
 ;;;
 (defun float-format-max (f1 f2)
@@ -2651,14 +2651,14 @@
 	  (return f)))))
 
 
-;;; Numeric-Contagion  --  Interface
+;;; Numeric-Contagion -- Interface
 ;;;
-;;;    Return the result of an operation on Type1 and Type2 according to the
-;;; rules of numeric contagion.  This is always NUMBER, some float format
-;;; (possibly complex) or RATIONAL.  Due to rational canonicalization, there
+;;; Return the result of an operation on Type1 and Type2 according to the
+;;; rules of numeric contagion. This is always NUMBER, some float format
+;;; (possibly complex) or RATIONAL. Due to rational canonicalization, there
 ;;; isn't much we can do here with integers or rational complex numbers.
 ;;;
-;;;    If either argument is not a Numeric-Type, then return NUMBER.  This is
+;;; If either argument is not a Numeric-Type, then return NUMBER. This is
 ;;; useful mainly for allowing types that are technically numbers, but not a
 ;;; Numeric-Type. 
 ;;;
@@ -2680,8 +2680,8 @@
 			      (float (float-format-max format1 format2))
 			      ((integer rational) format1)
 			      ((nil)
-			       ;; A double-float with any real number is a
-			       ;; double-float.
+ ;; A double-float with any real number is a
+ ;; double-float.
 			       (if (eq format1 'double-float)
 				 'double-float
 				 nil)))
@@ -2725,10 +2725,10 @@
 (defun array-ctype-p (x) (istruct-typep x 'array-ctype))
 (setf (type-predicate 'array-ctype) 'array-ctype-p)
 
-;;; Specialized-Element-Type-Maybe  --  Internal
+;;; Specialized-Element-Type-Maybe -- Internal
 ;;;
-;;;      What this does depends on the setting of the
-;;; *use-implementation-types* switch.  If true, return the specialized element
+;;; What this does depends on the setting of the
+;;; *use-implementation-types* switch. If true, return the specialized element
 ;;; type, otherwise return the original element type.
 ;;;
 (defun specialized-element-type-maybe (type)
@@ -2803,23 +2803,23 @@
 				(the list dims1)
 				(the list dims2)))))
 	   (values nil t))
-	  ;; not subtypep unless complexness is compatible
+ ;; not subtypep unless complexness is compatible
 	  ((not (or (eq complexp2 :maybe)
 		    (eq (array-ctype-complexp type1) complexp2)))
 	   (values nil t))
-	  ;; Since we didn't fail any of the tests above, we win
-	  ;; if the TYPE2 element type is wild.
+ ;; Since we didn't fail any of the tests above, we win
+ ;; if the TYPE2 element type is wild.
 	  ((eq (array-ctype-element-type type2) *wild-type*)
 	   (values t t))
 	  (;; Since we didn't match any of the special cases above, we
-	   ;; can't give a good answer unless both the element types
-	   ;; have been defined.
+ ;; can't give a good answer unless both the element types
+ ;; have been defined.
 	   (or (unknown-ctype-p (array-ctype-element-type type1))
 	       (unknown-ctype-p (array-ctype-element-type type2)))
 	   (values nil nil))
 	  (;; Otherwise, the subtype relationship holds iff the
-	   ;; types are equal, and they're equal iff the specialized
-	   ;; element types are identical.
+ ;; types are equal, and they're equal iff the specialized
+ ;; element types are identical.
 	   t
 	   (values (type= (specialized-element-type-maybe type1)
 			  (specialized-element-type-maybe type2))
@@ -2834,14 +2834,14 @@
 	(dims2 (array-ctype-dimensions type2))
 	(complexp1 (array-ctype-complexp type1))
 	(complexp2 (array-ctype-complexp type2)))
-    ;; See whether dimensions are compatible.
+ ;; See whether dimensions are compatible.
     (cond ((not (or (eq dims1 '*) (eq dims2 '*)
 		    (and (= (length dims1) (length dims2))
 			 (every (lambda (x y)
 				  (or (eq x '*) (eq y '*) (= x y)))
 				dims1 dims2))))
 	   (values nil t))
-	  ;; See whether complexpness is compatible.
+ ;; See whether complexpness is compatible.
 	  ((not (or (eq complexp1 :maybe)
 		    (eq complexp2 :maybe)
 		    (eq complexp1 complexp2)))
@@ -2875,11 +2875,11 @@
                         ((eq eltype1 *wild-type*) eltype2)
                         ((eq eltype2 *wild-type*) eltype1)
                         (t (type-intersection eltype1 eltype2))))))
-      *empty-type*))
+ *empty-type*))
 
-;;; Check-Array-Dimensions  --  Internal
+;;; Check-Array-Dimensions -- Internal
 ;;;
-;;;    Check a supplied dimension list to determine if it is legal.
+;;; Check a supplied dimension list to determine if it is legal.
 ;;;
 (defun check-array-dimensions (dims)
   (typecase dims
@@ -2919,18 +2919,18 @@
 (defparameter specialized-array-element-types
   '(nil bit (unsigned-byte 8) (signed-byte 8) (unsigned-byte 16)
     (signed-byte 16) (unsigned-byte 32) #+32-bit-target fixnum (signed-byte 32)
-    #+64-bit-target fixnum
-    #+64-bit-target (unsigned-byte 64)
-    #+64-bit-target (signed-byte 64)
+ #+64-bit-target fixnum
+ #+64-bit-target (unsigned-byte 64)
+ #+64-bit-target (signed-byte 64)
     character  short-float double-float
-    #||(complex short-float) (complex double-float)||#))
+ #||(complex short-float) (complex double-float)||#))
 
 (defun specialize-array-type (type)
   (let* ((eltype (array-ctype-element-type type))
          (specialized-type (if (eq eltype *wild-type*)
-                             *wild-type*
+ *wild-type*
                              (dolist (stype-name specialized-array-element-types
-                                      *universal-type*)
+ *universal-type*)
                                (let ((stype (specifier-type stype-name)))
                                  (when (csubtypep eltype stype)
                                    (return stype)))))))
@@ -2943,7 +2943,7 @@
 
 ;;;; Member types.
 
-;;; The Member-Type represents uses of the MEMBER type specifier.  We bother
+;;; The Member-Type represents uses of the MEMBER type specifier. We bother
 ;;; with this at this level because MEMBER types are fairly important and union
 ;;; and intersection are well defined.
 
@@ -3015,7 +3015,7 @@
 		   (let ((res (intersection mem1 mem2)))
 		     (if res
 		       (make-member-ctype :members res)
-		       *empty-type*))))
+ *empty-type*))))
 	    t)))
 
 (define-type-method (member :complex-intersection) (type1 type2)
@@ -3070,16 +3070,16 @@
       (apply #'type-union
 	     (if (non-numbers)
 	       (make-member-ctype :members (non-numbers))
-	       *empty-type*)
+ *empty-type*)
 	     (numbers)))
-    *empty-type*))
+ *empty-type*))
 
 
 
 ;;;; Union types:
 
 ;;; The Union-Type represents uses of the OR type specifier which can't be
-;;; canonicalized to something simpler.  Canonical form:
+;;; canonicalized to something simpler. Canonical form:
 ;;;
 ;;; 1] There is never more than one Member-Type component.
 ;;; 2] There are never any Union-Type components.
@@ -3096,7 +3096,7 @@
 (setf (type-predicate 'union-ctype) 'union-ctype-p)
 
 
-;;;    If List, then return that, otherwise the OR of the component types.
+;;; If List, then return that, otherwise the OR of the component types.
 ;;;
 (define-type-method (union :unparse) (type)
   (declare (type ctype type))
@@ -3295,13 +3295,13 @@
 ;;; cons-ctype
 (defun wild-ctype-to-universal-ctype (c)
   (if (type= c *wild-type*)
-    *universal-type*
+ *universal-type*
     c))
 
 (defun make-cons-ctype (car-ctype-value cdr-ctype-value)
   (if (or (eq car-ctype-value *empty-type*)
 	  (eq cdr-ctype-value *empty-type*))
-    *empty-type*
+ *empty-type*
     (%istruct 'cons-ctype
 	      (type-class-or-lose 'cons)
 	      nil
@@ -3370,7 +3370,7 @@
 	     (frob-car car-type1 car-type2 cdr-type1 cdr-type2))
 	    ((csubtypep car-type2 car-type1)
 	     (frob-car car-type2 car-type1 cdr-type2 cdr-type1))
-            ;; more general case of the above, but harder to compute
+ ;; more general case of the above, but harder to compute
             ((progn
                (setf car-not1 (specifier-type
                                `(not ,(type-specifier car-type1))))
@@ -3464,12 +3464,12 @@
 	(if lisp-rep-type
 	    (specifier-type lisp-rep-type)
 	    (%make-foreign-ctype foreign-type)))
-      *universal-type*))
+ *universal-type*))
 
 
 ;;; CLASS-CTYPES are supposed to help integrate CLOS and the CMU type system.
 ;;; They mostly just contain a backpointer to the CLOS class; the CPL is then
-;;;  used to resolve type relationships.
+;;; used to resolve type relationships.
 
 (defun class-ctype-p (x) (istruct-typep x 'class-ctype))
 (setf (type-predicate 'class-ctype) 'class-ctype-p)
@@ -3508,10 +3508,10 @@
             (if (memq class2 (%class.local-supers class1))
               (values t t)
               (if (eq (%class-of-instance class1)
-                      *forward-referenced-class-class*)
+ *forward-referenced-class-class*)
                 (values nil nil)
-                ;; %INITED-CLASS-CPL will return NIL if class1 can't
-                ;; be finalized; in that case, we don't know the answer.
+ ;; %INITED-CLASS-CPL will return NIL if class1 can't
+ ;; be finalized; in that case, we don't know the answer.
                 (let ((supers (%inited-class-cpl class1)))
                   (if (memq class2 supers)
                     (values t t)
@@ -3543,13 +3543,13 @@
              type1)
             ((subclassp class2 class1)
              type2)
-	    ;;; In the STANDARD-CLASS case where neither's
-	    ;;; a subclass of the other, there may be
-	    ;;; one or mor classes that're a subclass of both.  We
-	    ;;; -could- try to find all such classes, but
-	    ;;; punt instead.
+ ;;; In the STANDARD-CLASS case where neither's
+ ;;; a subclass of the other, there may be
+ ;;; one or mor classes that're a subclass of both. We
+ ;;; -could- try to find all such classes, but
+ ;;; punt instead.
             (t (or (find-class-intersection class1 class2)
-		 *empty-type*)))
+ *empty-type*)))
       nil)))
 
 (define-type-method (class :complex-subtypep-arg2) (type1 class2)
@@ -3572,23 +3572,23 @@
   (class-name (class-ctype-class type)))
 
 
-;;; TYPE-DIFFERENCE  --  Interface
+;;; TYPE-DIFFERENCE -- Interface
 ;;;
-;;;    Return the type that describes all objects that are in X but not in Y.
+;;; Return the type that describes all objects that are in X but not in Y.
 ;;; If we can't determine this type, then return NIL.
 ;;;
-;;;    For now, we only are clever dealing with union and member types.  If
+;;; For now, we only are clever dealing with union and member types. If
 ;;; either type is not a union type, then we pretend that it is a union of just
-;;; one type.  What we do is remove from X all the types that are a subtype any
-;;; type in Y.  If any type in X intersects with a type in Y but is not a
+;;; one type. What we do is remove from X all the types that are a subtype any
+;;; type in Y. If any type in X intersects with a type in Y but is not a
 ;;; subtype, then we give up.
 ;;;
-;;;    We must also special-case any member type that appears in the union.  We
-;;; remove from X's members all objects that are TYPEP to Y.  If Y has any
+;;; We must also special-case any member type that appears in the union. We
+;;; remove from X's members all objects that are TYPEP to Y. If Y has any
 ;;; members, we must be careful that none of those members are CTYPEP to any
-;;; of Y's non-member types.  We give up in this case, since to compute that
+;;; of Y's non-member types. We give up in this case, since to compute that
 ;;; difference we would have to break the type from X into some collection of
-;;; types that represents the type without that particular element.  This seems
+;;; types that represents the type without that particular element. This seems
 ;;; too hairy to be worthwhile, given its low utility.
 ;;;
 (defun type-difference (x y)
@@ -3622,13 +3622,13 @@
 		      (return-from type-difference nil)))))))))
       (apply #'type-union (res)))))
 
-;;; CTypep  --  Interface
+;;; CTypep -- Interface
 ;;;
-;;;    If Type is a type that we can do a compile-time test on, then return the
+;;; If Type is a type that we can do a compile-time test on, then return the
 ;;; whether the object is of that type as the first value and second value
-;;; true.  Otherwise return NIL, NIL.
+;;; true. Otherwise return NIL, NIL.
 ;;;
-;;; We give up on unknown types, pick off FUNCTION and UNION types.  For
+;;; We give up on unknown types, pick off FUNCTION and UNION types. For
 ;;; structure types, we require that the type be defined in both the current
 ;;; and compiler environments, and that the INCLUDES be the same.
 ;;;
@@ -3657,7 +3657,7 @@
 	   (values (not res) t)
 	   (values nil nil))))
     (hairy-ctype
-     ;; Now the tricky stuff.
+ ;; Now the tricky stuff.
      (let* ((hairy-spec (hairy-ctype-specifier type))
 	    (symbol (if (consp hairy-spec) (car hairy-spec) hairy-spec)))
        (ecase symbol
@@ -3679,9 +3679,9 @@
 	   (satisfies
 	    (let ((fun (second hairy-spec)))
 	      (cond ((and (symbolp fun) (fboundp fun))
-                     ;; Binding *BREAK-ON-SIGNALS* here is a modularity
-                     ;; violation intended to improve the signal-to-noise
-                     ;; ratio on a mailing list.
+ ;; Binding *BREAK-ON-SIGNALS* here is a modularity
+ ;; violation intended to improve the signal-to-noise
+ ;; ratio on a mailing list.
 		     (values (not (null (let* ((*break-on-signals* nil))
                                           (ignore-errors (funcall fun obj))))) t))
 		    (t
@@ -3689,7 +3689,7 @@
 
 ;;; %TYPEP -- internal.
 ;;;
-;;; The actual typep engine.  The compiler only generates calls to this
+;;; The actual typep engine. The compiler only generates calls to this
 ;;; function when it can't figure out anything more intelligent to do.
 ;;;
 ; lose 1 function call -MAYBE
@@ -3785,7 +3785,7 @@
 
 
 (defun %%typep (object type)
-  ;(if (not (typep type 'ctype))(setq type (specifier-type type)))
+ ;(if (not (typep type 'ctype))(setq type (specifier-type type)))
   (locally (declare (type ctype type))
     (etypecase type
       (named-ctype
@@ -3810,7 +3810,7 @@
       (cons-ctype
        (cons-%%typep object type))
       (unknown-ctype
-       ;; Parse it again to make sure it's really undefined.
+ ;; Parse it again to make sure it's really undefined.
        (let ((reparse (specifier-type (unknown-ctype-specifier type))))
          (if (typep reparse 'unknown-ctype)
            (error "Unknown type specifier: ~S"
@@ -3819,7 +3819,7 @@
       (negation-ctype
        (not (%%typep object (negation-ctype-type type))))
       (hairy-ctype
-       ;; Now the tricky stuff.
+ ;; Now the tricky stuff.
        (let* ((hairy-spec (hairy-ctype-specifier type))
               (symbol (if (consp hairy-spec) (car hairy-spec) hairy-spec)))
          (ecase symbol
@@ -3844,7 +3844,7 @@
                            object)
                 t
                 nil))))))
-      #|
+ #|
     (foreign-ctype
      (foreign-typep object (foreign-ctype-foreign-type type)))
 |#
@@ -3853,10 +3853,10 @@
               (type-specifier type))))))
 
 
-;;; Ctype-Of  --  Interface
+;;; Ctype-Of -- Interface
 ;;;
-;;;    Like Type-Of, only returns a Type structure instead of a type
-;;; specifier.  We try to return the type most useful for type checking, rather
+;;; Like Type-Of, only returns a Type structure instead of a type
+;;; specifier. We try to return the type most useful for type checking, rather
 ;;; than trying to come up with the one that the user might find most
 ;;; informative.
 ;;;
@@ -4123,7 +4123,7 @@
        
 
 (precompute-types '((mod 2) (mod 4) (mod 16) (mod #x100) (mod #x10000)
-                    #-cross-compiling
+ #-cross-compiling
 		    (mod #x100000000)
 		    (unsigned-byte 1) 
 		    (unsigned-byte 8) (unsigned-byte 16) (unsigned-byte 32)
@@ -4154,32 +4154,32 @@
                   (%class.ctype (find-class class-name))) spectype))))
   (mapc #'set-builtin-class-type-translation
         '(
-          ;; Root Of All Evil
+ ;; Root Of All Evil
           t
-          ;; Numbers:
+ ;; Numbers:
           number real ratio complex (complex-single-float (complex single-float))
           (complex-double-float (complex double-float))
           rational fixnum
-          ;;  Integers:
+ ;; Integers:
           signed-byte  unsigned-byte bit bignum integer
-          ;;  Floats
+ ;; Floats
            float  double-float single-float
-          ;; Arrays
+ ;; Arrays
           array
-          ;;  Simple Arrays
+ ;; Simple Arrays
           simple-array
-          ;;  Vectors
+ ;; Vectors
           vector string base-string bit-vector
           unsigned-byte-vector unsigned-word-vector unsigned-long-vector
           byte-vector word-vector long-vector
           single-float-vector double-float-vector
           general-vector
           fixnum-vector
-          #+64-bit-target
+ #+64-bit-target
           doubleword-vector
-          #+64-bit-target
+ #+64-bit-target
           unsigned-doubleword-vector
-          ;;   Simple 1-Dimensional Arrays
+ ;; Simple 1-Dimensional Arrays
           simple-1d-array  simple-string simple-base-string simple-bit-vector
           simple-unsigned-byte-vector
           simple-unsigned-long-vector
@@ -4191,11 +4191,11 @@
           simple-double-float-vector
           simple-vector
           simple-fixnum-vector
-          #+64-bit-target
+ #+64-bit-target
           simple-doubleword-vector
-          #+64-bit-target
+ #+64-bit-target
           simple-unsigned-doubleword-vector
-          ;; Sequence types
+ ;; Sequence types
           sequence list  cons null
           
            )
@@ -4214,7 +4214,7 @@
 
 ;;; Since Clozure CL's DEFTYPE tries to globally define the type
 ;;; at compile-time as well as load- and execute time, hide
-;;; the definition of these "built-in" types.  (It'd be cleaner
+;;; the definition of these "built-in" types. (It'd be cleaner
 ;;; to make DEFTYPE do something saner at compile-time.)
 (let* ()                                ; make the following be non-toplevel
 (deftype boolean () '(member t nil))
@@ -4224,7 +4224,7 @@
 ;;; A type specifier.
 (deftype type-specifier () '(or list symbol class))
 ;;;
-;;; An index into an array.   Also used for sequence index. 
+;;; An index into an array. Also used for sequence index. 
 (deftype index () `(integer 0 (,array-dimension-limit)))
 ;;;
 ;;; Array rank, total size...
@@ -4247,14 +4247,14 @@
 ;;; A legal arg to pathname functions.
 (deftype pathnamelike () '(or string pathname stream))
 ;;;
-;;; A thing returned by the irrational functions.  We assume that they never
+;;; A thing returned by the irrational functions. We assume that they never
 ;;; compute a rational result.
 (deftype irrational () '(or float (complex float)))
 ;;;
 ;;; Character components:
 (deftype char-code () `(integer 0 (,char-code-limit)))
 ;;;
-;;; A consed sequence result.  If a vector, is a simple array.
+;;; A consed sequence result. If a vector, is a simple array.
 (deftype consed-sequence () '(or list (simple-array * (*))))
 ;;;
 ;;; The :end arg to a sequence...
@@ -4296,18 +4296,27 @@
 
 
 (defvar *simple-predicate-function-prototype*
-  #'(lambda (thing)
+ #'(lambda (thing)
       (%%typep thing #.(specifier-type t))))
 
 (defun make-simple-type-predicate (function datum)
-  #+ppc-target
+ ;; arm64: ppc-shaped function vector, patch-0018/0020 model.
+ #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+            (uvref (function-to-function-vector *simple-predicate-function-prototype*) 0)
+            datum
+            function
+            nil
+            (dpb 1 $lfbits-numreq 0)))
+ #+ppc-target
   (gvector :function
            (uvref *simple-predicate-function-prototype* 0)
            datum
            function
            nil
            (dpb 1 $lfbits-numreq 0))
-  #+arm-target
+ #+arm-target
   (%fix-fn-entrypoint
    (gvector :function
            0
@@ -4316,9 +4325,9 @@
            function
            nil
            (dpb 1 $lfbits-numreq 0)))
-  #+x86-target
+ #+x86-target
   (%clone-x86-function
-   *simple-predicate-function-prototype*
+ *simple-predicate-function-prototype*
    datum
    function
    nil
@@ -4345,7 +4354,7 @@
     (cons-ctype
      (make-simple-type-predicate 'cons-%%typep ctype))
     (function-ctype
-     #'functionp)
+ #'functionp)
     (class-ctype
      (make-simple-type-predicate 'class-cell-typep (find-class-cell (class-name (class-ctype-class ctype)) t)))
     (t
@@ -4377,14 +4386,14 @@
                     (cerror "Allow the assignment or initialization."
                             "Can't determine whether or not the value ~s should be used to initialize or assign to the slot ~&named ~s in an instance of ~s, because the slot is declared ~&to be of the invalid type ~s."
                             v (slot-definition-name spec) (slot-definition-class spec) (slot-definition-type spec))
-                    ;; Suppress further checking, at least for things that use this effective slotd.
-                    ;; (It's hard to avoid this, and more trouble than it's worth to do better.)
+ ;; Suppress further checking, at least for things that use this effective slotd.
+ ;; (It's hard to avoid this, and more trouble than it's worth to do better.)
                     (setf (slot-value spec 'type-predicate) nil)
                     t))
                 (parse-unknown-type (c)
                    (declare (ignore c))
-                   #'(lambda (value)
-                       ;; If the type's now known, install a new predicate.
+ #'(lambda (value)
+ ;; If the type's now known, install a new predicate.
                        (let* ((nowctype (specifier-type type)))
                          (unless (typep nowctype 'unknown-ctype)
                            (setf (slot-value spec 'type-predicate)

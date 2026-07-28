@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,8 +46,8 @@
 ;;; Error numbers, as used in UU0s and such.
 ;;; These match constants defined in the kernel sources.
 (defconstant error-reg-regnum 0)        ; "real" error number is in RB field of UU0.
-                                        ; Currently only used for :errchk in emulated traps
-                                        ; The errchk macro should expand into a check-trap-error vinsn, too.
+ ; Currently only used for :errchk in emulated traps
+ ; The errchk macro should expand into a check-trap-error vinsn, too.
 (defconstant error-udf 1)               ; Undefined function (reported by symbol-function)
 (defconstant error-udf-call 2)          ; Attempt to call undefined function
 (defconstant error-throw-tag-missing 3)
@@ -67,6 +67,7 @@
 (defconstant error-cant-call 17)        ; Attempt to funcall something that is not a symbol or function.
 (defconstant error-allocate-list 18)
 (defconstant error-allocation-disabled 19)
+(defconstant error-apply-macro-or-special 20) ; funcalled a macro/special-operator name
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant error-type-error 128)
@@ -193,7 +194,7 @@
   simple-array-double-float-3d
   simple-array-char-3d
 
-  ;;
+ ;;
   vector-t
   bit-vector
   vector-s8
@@ -212,7 +213,7 @@
   simple-array-complex-double-float-2d
   simple-array-complex-double-float-3d
   
-  ;; Sentinel
+ ;; Sentinel
   unused-max-type-error
   )
 

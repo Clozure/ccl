@@ -11,7 +11,7 @@
 ;;; Brief syntax for arm64 LAP notation
 ;;;
 ;;; register
-;;;   * a symbol naming a register: x0, w0, s0, d0, sp/xzr/wsp/wzr or an alias
+;;; * a symbol naming a register: x0, w0, s0, d0, sp/xzr/wsp/wzr or an alias
 ;;;
 ;;; immediate
 ;;; (:$ val)
@@ -21,14 +21,14 @@
 ;;; memory
 ;;; (:@ base)
 ;;; (:@ base offset)
-;;; (:@! base offset)   ;pre-indexed
-;;; (:@+ base offset)   ;post-indexed
+;;; (:@! base offset) ;pre-indexed
+;;; (:@+ base offset) ;post-indexed
 ;;; base is a bare register operand; offset is either an immediate (:$ n)
 ;;; or a register, possibly modified, e.g. (:@ x0 (x1 :lsl 3)) or
 ;;; (:@ x0 (w1 :uxtw 2)).
 ;;;
 ;;; label
-;;;  * a symbol that doesn't name a register
+;;; * a symbol that doesn't name a register
 
 (defvar *arm64-lap-lfun-bits* 0)
 
@@ -67,10 +67,13 @@
   (terpri))
 
 (defun %define-arm64-lap-function (name body &optional (bits 0))
-  (declare (ignore bits))
   (with-dll-node-freelist (elements arm64::*instruction-freelist*)
     (let* ((arm64::*labels* ())
            (arm64::*constants* ())
+ ;; Per-function, from BITS, exactly as ppc-lap.lisp:92 does. Left
+ ;; global, an (:arglist ...) pseudo-op leaks its encoding into every
+ ;; LAP function assembled afterwards.
+           (*arm64-lap-lfun-bits* bits)
            (name-cell (list name))
            (section-size -1)
            (current elements))
@@ -79,8 +82,8 @@
       (rplacd name-cell (length arm64::*constants*))
       (push name-cell arm64::*constants*)
       (setq section-size (arm64::finalize current))
-      ;; (format t "~&section size: ~s" section-size)
-      ;; (arm64-show-dll-nodes current)
+ ;; (format t "~&section size: ~s" section-size)
+ ;; (arm64-show-dll-nodes current)
       (arm64-lap-generate-code current section-size *arm64-lap-lfun-bits*)
       )))
 
@@ -117,7 +120,15 @@
           (setf (uvref constants-vector (1+ k)) imm)))
       (setf (uvref constants-vector (1- constants-size)) lfbits
             (uvref constants-vector 0) code-vector)
-      constants-vector)))
+ ;; ARM64-DEVIATION (resident retag, ): %alloc-misc returns a
+ ;; misc-tagged vector; Matt's fulltag_function(15) is distinct from
+ ;; fulltag_misc(12), so the resident (non-cross) path must retag it
+ ;; to a real callable function (passes require-function checks, e.g.
+ ;; %defun). Cross-compile keeps the raw subtag-xfunction vector (the
+ ;; image writer tags it). Mirrors $fasl-clfun's retag.
+      (if cross-compiling
+        constants-vector
+        (function-vector-to-function constants-vector)))))
 
 (defun arm64-lap-pseudo-op (directive arg current)
   (ecase directive
@@ -153,8 +164,8 @@
             (progn
               (symbols symbol)
               (vals (eval value)))))))
-    ;; Keep registers separate from the progv bindings so the assembler
-    ;; can tell a register alias from a label without having to eval.
+ ;; Keep registers separate from the progv bindings so the assembler
+ ;; can tell a register alias from a label without having to eval.
     (let ((arm64::*lap-register-equates*
             (pairlis (rsymbols) (rvals) arm64::*lap-register-equates*)))
       (progv (symbols) (vals)
@@ -194,7 +205,7 @@
   `(progn
      (eval-when (:compile-toplevel)
        (note-function-info ',name t ,env))
-     #-arm64-target
+ #-arm64-target
      (progn
        (eval-when (:load-toplevel)
          (%defun (nfunction ,name
@@ -203,7 +214,7 @@
                  ,doc))
        (eval-when (:execute)
          (%define-arm64-lap-function ',name '((let ,arglist ,@body)))))
-     #+arm64-target	; just shorthand for defun
+ #+arm64-target	; just shorthand for defun
      (%defun (nfunction ,name
                         (lambda (&lap 0)
                           (arm64-lap-function ,name ,arglist ,@body)))

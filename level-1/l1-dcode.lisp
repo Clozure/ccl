@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,7 +41,7 @@
   (when declarations
     (unless (list-length declarations)
       (error "~s is not a proper list" declarations)))
-  ;; Fix APO, lambda-list
+ ;; Fix APO, lambda-list
   (if apo-p
     (if (not ll-p)
       (error "Cannot specify ~s without specifying ~s" :argument-precedence-order
@@ -93,7 +93,7 @@
       gf-ll)))
              
              
-;;; Borrowed from PCL, sort of.  We can encode required/optional/restp/keyp
+;;; Borrowed from PCL, sort of. We can encode required/optional/restp/keyp
 ;;; information in the gf's lfun-bits
 (defun set-gf-arg-info (gf &key new-method (lambda-list nil lambda-list-p)
                            (argument-precedence-order nil apo-p))
@@ -175,11 +175,11 @@
       self)))
 
 ;;; Bring the generic function to the smallest possible size by removing
-;;; any cached recomputable info.  Currently this means clearing out the
+;;; any cached recomputable info. Currently this means clearing out the
 ;;; combined methods from the dispatch table.
 
 (defun clear-gf-cache (gf)
-  #-bccl (unless t (typep gf 'standard-generic-function) 
+ #-bccl (unless t (typep gf 'standard-generic-function) 
                  (report-bad-arg gf 'standard-generic-function))
   (let ((dt (%gf-dispatch-table gf)))
     (unless (< (%gf-dispatch-table-argnum dt) 0) ;reader-method optimization
@@ -206,8 +206,8 @@
         (%store-node-conditional offset dt *gf-dispatch-bug* new))))
 
 (defun grow-gf-dispatch-table (gf-or-cm wrapper table-entry &optional obsolete-wrappers-p)
-  ;; Grow the table associated with gf and insert table-entry as the value for
-  ;; wrapper.  Wrapper is a class-wrapper.  Assumes that it is not obsolete.
+ ;; Grow the table associated with gf and insert table-entry as the value for
+ ;; wrapper. Wrapper is a class-wrapper. Assumes that it is not obsolete.
   (let* ((dt (if (generic-function-p gf-or-cm)
                (%gf-dispatch-table gf-or-cm)
                (%combined-method-methods gf-or-cm)))
@@ -219,7 +219,7 @@
     (if (> new-size *max-gf-dispatch-table-size*)
       (progn 
         (setq new-dt (clear-gf-dispatch-table dt)
-                   *gf-dt-ovf-cnt* (%i+ *gf-dt-ovf-cnt* 1)))
+ *gf-dt-ovf-cnt* (%i+ *gf-dt-ovf-cnt* 1)))
       (progn
         (setq new-dt (make-gf-dispatch-table new-size))
         (setf (%gf-dispatch-table-methods new-dt) (%gf-dispatch-table-methods dt)
@@ -402,50 +402,73 @@
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 0))
 #+arm-target
 (defvar *fi-trampoline-code* (uvref #'funcallable-trampoline 1))
+#+arm64-target
+(defvar *fi-trampoline-code*
+  (uvref (function-to-function-vector #'funcallable-trampoline) 0))
 
 
 #+ppc-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 0))
 #+arm-target
 (defvar *unset-fin-code* (uvref #'unset-fin-trampoline 1))
+#+arm64-target
+(defvar *unset-fin-code*
+  (uvref (function-to-function-vector #'unset-fin-trampoline) 0))
 
 
 #+ppc-target
 (defvar *gf-proto-code* (uvref *gf-proto* 0))
 #+arm-target
 (defvar *gf-proto-code* (uvref *gf-proto* 1))
+#+arm64-target
+(defvar *gf-proto-code*
+  (uvref (function-to-function-vector *gf-proto*) 0))
 
 ;;; The "early" version of %ALLOCATE-GF-INSTANCE.
 (setf (fdefinition '%allocate-gf-instance)
-      #'(lambda (class)
+ #'(lambda (class)
 	  (declare (ignorable class))
 	  (setq class *standard-generic-function-class*)
 	  (let* ((wrapper (%class.own-wrapper class))
 		 (len (length #.(%wrapper-instance-slots (class-own-wrapper
-							  *standard-generic-function-class*))))
+ *standard-generic-function-class*))))
 		 (dt (make-gf-dispatch-table))
 		 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
 		 (fn #+(or ppc-target arm-target)
                      (#+arm-target
                       %fix-fn-entrypoint
-                      #-arm-target
+ #-arm-target
                       progn
                       (gvector :function
-                            #+arm-target 0
-			      *gf-proto-code*
+ #+arm-target 0
+ *gf-proto-code*
 			      wrapper
 			      slots
 			      dt
-			      #'%%0-arg-dcode
+ #'%%0-arg-dcode
 			      0
 			      (%ilogior (%ilsl $lfbits-gfn-bit 1)
 					(%ilogand $lfbits-args-mask 0))))
-                   #+x86-target
+ ;; arm64: ppc-shaped function vector (code-vector =
+ ;; element 0), built misc-tagged then retagged to a
+ ;; callable fulltag-function pointer.
+ #+arm64-target
+                   (function-vector-to-function
+                    (gvector :function
+ *gf-proto-code*
+                             wrapper
+                             slots
+                             dt
+ #'%%0-arg-dcode
+                             0
+                             (%ilogior (%ilsl $lfbits-gfn-bit 1)
+                                       (%ilogand $lfbits-args-mask 0))))
+ #+x86-target
                    (%clone-x86-function *gf-proto*
                                         wrapper
                                         slots
                                         dt
-                                        #'%%0-arg-dcode
+ #'%%0-arg-dcode
                                         0
                                         (%ilogior (%ilsl $lfbits-gfn-bit 1)
                                                   (%ilogand $lfbits-args-mask 0)))))
@@ -474,23 +497,36 @@
 
 #+arm-target
 (defvar *cm-proto-code* (uvref *cm-proto* 1))
+#+arm64-target
+(defvar *cm-proto-code*
+  (uvref (function-to-function-vector *cm-proto*) 0))
 
 (defun %cons-combined-method (gf thing dcode)
-  ;; set bits and name = gf
-  #+(or ppc-target arm-target)
+ ;; set bits and name = gf
+ #+(or ppc-target arm-target)
   (#+arm-target
    %fix-fn-entrypoint
-   #-arm-target
+ #-arm-target
    progn
    (gvector :function          
-           #+arm-target 0
-           *cm-proto-code*
+ #+arm-target 0
+ *cm-proto-code*
            thing
            dcode
            gf
            (%ilogior (%ilsl $lfbits-cm-bit 1)
                             (%ilogand $lfbits-args-mask (lfun-bits gf)))))
-  #+x86-target
+ ;; arm64: same ppc-shaped build + retag as %allocate-gf-instance.
+ #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+ *cm-proto-code*
+            thing
+            dcode
+            gf
+            (%ilogior (%ilsl $lfbits-cm-bit 1)
+                      (%ilogand $lfbits-args-mask (lfun-bits gf)))))
+ #+x86-target
   (%clone-x86-function *cm-proto*
                        thing
                        dcode
@@ -499,29 +535,29 @@
                                  (%ilogand $lfbits-args-mask (lfun-bits gf)))))
 
 (defun %gf-dispatch-table (gf)
-  ;(require-type gf 'standard-generic-function)
+ ;(require-type gf 'standard-generic-function)
   (gf.dispatch-table gf))
 
 (defun %gf-dcode (gf)
-  ;(require-type gf 'standard-generic-function)
+ ;(require-type gf 'standard-generic-function)
   (gf.dcode gf))
 
 (defun %set-gf-dcode (gf dcode)
   (let ((gf (require-type gf 'funcallable-standard-object))
         (dcode (require-type dcode 'function)))
     (replace-function-code gf (or (cdr (assq dcode dcode-proto-alist))
-                                  #'funcallable-trampoline))
+ #'funcallable-trampoline))
     (setf (gf.dcode gf) dcode)))
 
 (defun %set-gf-dispatch-table (gf val)
   (setf (gf.dispatch-table gf) val))
 
 (defun %combined-method-methods  (cm)
-  ;(require-type cm 'combined-method)
+ ;(require-type cm 'combined-method)
   (combined-method.thing cm))
 
 (defun %combined-method-dcode (cm)
-  ;(require-type cm 'combined-method)
+ ;(require-type cm 'combined-method)
   (combined-method.dcode cm))
 
 (defun %set-combined-method-methods (cm val)
@@ -547,7 +583,7 @@
 (defun generic-function-p (thing)
   (and (typep thing 'funcallable-standard-object)
        (let* ((wrapper (gf.instance.class-wrapper thing)))
-         ;; In practice, many generic-functions are standard-generic-functions.
+ ;; In practice, many generic-functions are standard-generic-functions.
          (or (eq *standard-generic-function-class-wrapper* wrapper)
              (eq *generic-function-class-wrapper* wrapper)
              (let* ((bits (or (%wrapper-cpl-bits wrapper)
@@ -593,8 +629,8 @@
 
 ;;; A generic-function looks like:
 ;;; 
-;;; header | trampoline |  dispatch-table | dcode | name | bits
-;;; %svref :    0              1              2       3      4
+;;; header | trampoline | dispatch-table | dcode | name | bits
+;;; %svref : 0 1 2 3 4
 ;;;
 ;;; The trampoline is *gf-proto*'s code vector.
 ;;; The dispatch-table and dcode are sort of settable closed-over variables.
@@ -641,7 +677,7 @@
   (setq size (%imax (%ilsl (%i- (integer-length (%i+ size size -1))
                                 1)
                            1)           ; next power of 2
-                    *min-gf-dispatch-table-size*))
+ *min-gf-dispatch-table-size*))
   (let ((res (%cons-gf-dispatch-table size)))
     (declare (optimize (speed 3) (safety 0)))
     (setf (%gf-dispatch-table-mask res) (%i- (%ilsr 1 size) 1)
@@ -714,7 +750,7 @@
 
 (defvar *obsolete-wrapper* #(obsolete-wrapper 0))
 (defvar *gf-dispatch-bug*
-  #'(lambda (&rest rest)
+ #'(lambda (&rest rest)
       (declare (ignore rest))
       (error "Generic-function dispatch bug!")))
 
@@ -805,7 +841,7 @@
 
 
 (defun %%1st-arg-dcode (dt  args)
-  ;(declare (dynamic-extent args))
+ ;(declare (dynamic-extent args))
   (if (not (listp args))
     (let* ((args-len (%lexpr-count args)))
       (if (neq 0 args-len) 
@@ -830,7 +866,7 @@
 (register-dcode-proto #'%%1st-two-arg-dcode *gf-proto-two-arg*)
 
 
-;;;  arg is dispatch-table and argnum is in the dispatch table
+;;; arg is dispatch-table and argnum is in the dispatch table
 (defun %%nth-arg-dcode (dt args)
   (if (listp args)
     (let* ((args-len (list-length args))
@@ -865,8 +901,8 @@
     (make-no-applicable-method-function gf)))
 
 (defun 1st-arg-combined-method-trap (gf wrapper arg)
-  ;; Here when we can't find the method in the dispatch table.
-  ;; Compute it and add it to the table.  This code will remain in Lisp.
+ ;; Here when we can't find the method in the dispatch table.
+ ;; Compute it and add it to the table. This code will remain in Lisp.
   (let ((table (%gf-dispatch-table gf))
         (combined-method (compute-1st-arg-combined-method gf arg wrapper)))
     (multiple-value-bind (index obsolete-wrappers-p)
@@ -980,7 +1016,7 @@
     (%cons-combined-method 
      gf       
      (vector key-index keyvect combined-method)
-     #'%%check-keywords)))
+ #'%%check-keywords)))
 
 
 
@@ -1005,7 +1041,7 @@
                   (keyvect (%svref vector-arg 1))
                   (keyvect-len (length keyvect))
                   (key-index (%svref vector-arg 0)))
-					; vector arg is (vector key-index keyvect combined-method) ; the next combined method
+ ; vector arg is (vector key-index keyvect combined-method) ; the next combined method
              (declare (fixnum args-len key-index keyvect-len))
              (when (>= args-len key-index)
                (let* ((keys-in (- args-len key-index)))	; actually * 2
@@ -1024,7 +1060,7 @@
 			 (bad-key-error key vector-arg (collect-lexpr-args args key-index args-len))
 			 ))))))
              (let ((method (%svref vector-arg 2)))
-					; magic here ?? not needed
+ ; magic here ?? not needed
                (apply method args)))))
     (if (listp args)
       (do-it vector-arg args)
@@ -1041,8 +1077,8 @@
 ;;; dont invoke any methods - maybe use x%%check-keywords with last vector elt nil
 ; means dont call any methods - but need the gf or method for error message
 (defun x-%%check-keywords (vector-arg ARGS)
-  ;(declare (dynamic-extent args))
-    ; vector arg is (vector key-index keyvect unused)
+ ;(declare (dynamic-extent args))
+ ; vector arg is (vector key-index keyvect unused)
   (let* ((ARGS-LEN (length args))
          (keyvect (%svref vector-arg 1))
          (keyvect-len (length keyvect))
@@ -1064,7 +1100,7 @@
         (when (not (dotimes (i keyvect-len nil)
                      (if (eq key (%svref keyvect i))
                        (return t))))
-          ; not found - is :allow-other-keys t in rest of user args
+ ; not found - is :allow-other-keys t in rest of user args
           (when (not (do ((remargs kargs (cddr remargs)))
                          ((null remargs) nil)
                        (when (and (eq (car remargs) :allow-other-keys)
@@ -1156,7 +1192,7 @@
           (let* ((vect (vector gf methods key-or-init-arg key-or-init-fn method-list))
                  (self (%cons-combined-method
                         gf vect #'%%cnm-with-args-combined-method-dcode)))
-            ;(setf (svref vect 4) self)
+ ;(setf (svref vect 4) self)
             (puthash-combined-method ; if  testing 1 2 3 dont put in our real table
              key
              self))))))
@@ -1176,7 +1212,7 @@
                        (lfun-bits (%method.function method)))
             (return t)))))))
 
-;;; The METHODS arg is a sorted list of applicable methods.  Returns
+;;; The METHODS arg is a sorted list of applicable methods. Returns
 ;;; the method-list expected by
 ;;; %%before-and-after-combined-method-dcode or a single method, or
 ;;; NIL if there are no applicable primaries
@@ -1209,8 +1245,8 @@
         (when (and arounds
                    (not sub-dispatch?)
                    (not (next-method-bit-p (car (last arounds)))))
-          ;; Arounds don't call-next-method, can't get to befores,
-          ;; afters, or primaries
+ ;; Arounds don't call-next-method, can't get to befores,
+ ;; afters, or primaries
           (setq primaries arounds
                 arounds nil
                 befores nil
@@ -1258,8 +1294,8 @@
                                               (arg (nth-or-gf-error 
                                                     argnum args gf-or-cm))
                                               (wrapper (arg-wrapper arg)))
-  ;; Here when we can't find the method in the dispatch table.
-  ;; Compute it and add it to the table.  This code will remain in Lisp.
+ ;; Here when we can't find the method in the dispatch table.
+ ;; Compute it and add it to the table. This code will remain in Lisp.
   (multiple-value-bind (combined-method sub-dispatch?)
       (compute-nth-arg-combined-method
        gf-or-cm (%gf-dispatch-table-methods table) argnum args
@@ -1292,7 +1328,7 @@
          (standard-mc? (eq mc *standard-method-combination*))
          applicable-methods eql-methods specializers specializer sub-dispatch?)
     (dolist (method methods)
-      ;;(require-type method 'standard-method)   ; for debugging.
+ ;;(require-type method 'standard-method) ; for debugging.
       (setq specializers (nthcdr argnum (%method.specializers method))
             specializer (%car specializers))
       (when (if (typep specializer 'eql-specializer)
@@ -1441,8 +1477,8 @@
                                                         (member-anywhere tem el)
                                                         (member el tem))))))
                            (member-anywhere this-element-methods method-list))))
-            ; Do EQL comparison only if the EQL methods can run
-            ; (e.g. does not come after a primary method that does not call-next-method)
+ ; Do EQL comparison only if the EQL methods can run
+ ; (e.g. does not come after a primary method that does not call-next-method)
             (push (cons eql-element
                         (if sub-dispatch?
                           (make-n+1th-arg-combined-method
@@ -1452,8 +1488,8 @@
                             (compute-effective-method-function
                              real-gf method-combination sorted-methods))))
                   eql-method-alist)))))
-    ;;eql-method-alist has (element . combined-method) pairs.
-    ;;for now, we're going to use assq or assoc
+ ;;eql-method-alist has (element . combined-method) pairs.
+ ;;for now, we're going to use assq or assoc
     (let ((default-method (if sub-dispatch?
                             (make-n+1th-arg-combined-method
                              methods gf argnum)
@@ -1469,18 +1505,18 @@
             (assert-hash-table-readonly hash)
             (%cons-combined-method 
              gf (cons argnum (cons hash default-method))
-             #'%%hash-table-combined-method-dcode))
+ #'%%hash-table-combined-method-dcode))
           (%cons-combined-method
            gf (cons argnum (cons eql-method-alist default-method))
            (if can-use-eq? 
-               #'%%assq-combined-method-dcode
-               #'%%assoc-combined-method-dcode)))
+ #'%%assq-combined-method-dcode
+ #'%%assoc-combined-method-dcode)))
         default-method))))
 
 
 (defun %%assq-combined-method-dcode (stuff args)
-  ;; stuff is (argnum eql-method-list . default-method)
-  ;(declare (dynamic-extent args))
+ ;; stuff is (argnum eql-method-list . default-method)
+ ;(declare (dynamic-extent args))
   (if (listp args)
     (let* ((args-len (list-length args))
            (argnum (car stuff)))
@@ -1501,8 +1537,8 @@
   
 
 (DEFun %%assoc-combined-method-dcode (stuff args)
-  ;; stuff is (argnum eql-method-list . default-method)
-  ;(declare (dynamic-extent args))
+ ;; stuff is (argnum eql-method-list . default-method)
+ ;(declare (dynamic-extent args))
   (if (listp args)
     (let* ((args-len (list-length args))
            (argnum (car stuff)))
@@ -1524,8 +1560,8 @@
 
 
 (defun %%hash-table-combined-method-dcode (stuff args)
-  ;; stuff is (argnum eql-hash-table . default-method)
-  ;(declare (dynamic-extent args))
+ ;; stuff is (argnum eql-hash-table . default-method)
+ ;(declare (dynamic-extent args))
   (if (listp args)
     (let* ((args-len (list-length args))
            (argnum (car stuff)))
@@ -1601,11 +1637,11 @@
                     ((eq (setq q1 (car ql1)) (setq q2 (car ql2)))
                      (qualifier-list< (cdr ql1) (cdr ql2)))
                     ((string-lessp q1 q2) t)
-                    ; This isn't entirely correct.
-                    ; two qualifiers with the same pname in different packages
-                    ; are not comparable here.
-                    ; Unfortunately, users can change package names, hence,
-                    ; comparing the package names doesn't work either.
+ ; This isn't entirely correct.
+ ; two qualifiers with the same pname in different packages
+ ; are not comparable here.
+ ; Unfortunately, users can change package names, hence,
+ ; comparing the package names doesn't work either.
                     (t nil))))
     (qualifier-list< (%method.qualifiers method1) (%method.qualifiers method2))))
        
@@ -1640,8 +1676,8 @@
 
 
 (defun cpl-index (superclass cpl)
-  ;; This will be table lookup later.  Also we'll prelookup the tables
-  ;; in compute-1st-arg-combined-methods above.
+ ;; This will be table lookup later. Also we'll prelookup the tables
+ ;; in compute-1st-arg-combined-methods above.
   (locally (declare (optimize (speed 3)(safety 0)))
     (do ((i 0 (%i+ i 1))
          (cpl cpl (%cdr cpl)))
@@ -1668,12 +1704,12 @@
 
 
 (defun %%standard-combined-method-dcode (methods args)
-  ;; combined-methods as made by make-combined-method are in methods
-  ;; args are as put there by the caller of the gf.
+ ;; combined-methods as made by make-combined-method are in methods
+ ;; args are as put there by the caller of the gf.
   (let* ((car-meths (car methods))
          (cell-2 (cons methods args))
          (magic (cons nil cell-2)))
-    ;; i.e. magic is nil methods . args
+ ;; i.e. magic is nil methods . args
     (declare (dynamic-extent magic)
              (dynamic-extent cell-2))    
     (if (listp car-meths)
@@ -1682,7 +1718,7 @@
         (if (not (cdr methods))
           (%rplaca (cdr magic) car-meths)
           (%rplaca (cdr magic) (cdr methods)))
-        ; so maybe its a combined-method ?? - no
+ ; so maybe its a combined-method ?? - no
         (apply-with-method-context magic (%method.function car-meths) args)))))
 
 ;;; args is list, old-args may be lexpr
@@ -1703,25 +1739,25 @@
 
 ; called from call-next-method-with-args with magic supplied and 1st time around with not
 (defun %%cnm-with-args-combined-method-dcode (thing args &optional magic) ; was &rest args
-  ;(declare (dynamic-extent args))
-  ; now thing is vector of gf orig methods, arg for key or initarg check, key or initarg fnction
-  ; and our job is to do all the arg checking
+ ;(declare (dynamic-extent args))
+ ; now thing is vector of gf orig methods, arg for key or initarg check, key or initarg fnction
+ ; and our job is to do all the arg checking
   (let ()
-    ;; THING is nil in next-method calls for non-standard method combination.  To enable
-    ;; checking in that case, would need to change %%call-method* to store a vector in (car magic).
+ ;; THING is nil in next-method calls for non-standard method combination. To enable
+ ;; checking in that case, would need to change %%call-method* to store a vector in (car magic).
     (when (and magic thing)
       (flet ((do-it (thing args)
                (let* ((args-len (length args))
                       (gf (svref thing 0))  ; could get this from a method
                       (numreq (ldb $lfbits-numreq (inner-lfun-bits gf)))
                       (next-methods (cadr magic)))
-                 ;(when (null self)(error "Next method with args context error"))
+ ;(when (null self)(error "Next method with args context error"))
                  (when (neq 0 numreq)
-                   ; oh screw it - old-args may be lexpr too
+ ; oh screw it - old-args may be lexpr too
                    (let ((old-args (cddr magic)))
                      (when (< args-len numreq) (signal-program-error "Too few args to ~S" gf))
                      (when (null (cmp-args-old-args args old-args numreq))
-                       ; required args not eq - usually true, we expect
+ ; required args not eq - usually true, we expect
                        (let ((new-methods (%compute-applicable-methods* gf args))
                              (old-methods (svref thing 1)))
                          (when (not (equal new-methods old-methods))
@@ -1730,25 +1766,25 @@
                                   old-methods new-methods next-methods))))))
                  (let ((key-or-init-fn (svref thing 3)))
                    (when key-or-init-fn 
-                     ; was apply
+ ; was apply
                      (funcall key-or-init-fn (svref thing 2) args))))))
         (if (listp args)
           (do-it thing args)
           (with-list-from-lexpr (args-list args)
             (do-it thing args-list)))))
-    ; ok done checking - lets do it 
+ ; ok done checking - lets do it 
     (let* ((methods (if magic (cadr magic)(svref thing 4)))  ;<< was 5 this is nil unless cnm with args
-           ; was if magic
+ ; was if magic
            (car-meths (car methods))
            (cell-2 (cons methods args))
            (magic (cons thing cell-2)))
       (declare (dynamic-extent magic cell-2))
-      ; i.e. magic is thing methods . args
-      ;(%rplaca magic thing)
-      ;(setf (cadr magic) methods)
-      ;(%rplaca (cdr magic) methods)
-      ;(setf (cddr magic) args)
-      ;(%rplacd (cdr magic) args)
+ ; i.e. magic is thing methods . args
+ ;(%rplaca magic thing)
+ ;(setf (cadr magic) methods)
+ ;(%rplaca (cdr magic) methods)
+ ;(setf (cddr magic) args)
+ ;(%rplacd (cdr magic) args)
       (if (listp car-meths)
         (progn
           (%%before-and-after-combined-method-dcode magic))
@@ -1756,7 +1792,7 @@
           (if (not (cdr methods))
             (%rplaca (cdr magic) car-meths)
             (%rplaca (cdr magic) (cdr methods)))
-          ; so maybe its a combined-method ?? - no
+ ; so maybe its a combined-method ?? - no
           (apply-with-method-context magic (%method.function car-meths) args))))))
 
 
@@ -1802,11 +1838,11 @@
       (if (not (consp next-methods))
         ( %no-next-method  magic)            
         (let ((args (%cddr magic)))  ; get original args
-          ;The unwind-protect is needed in case some hacker in his/her wisdom decides to:
-          ; (defmethod foo (x) (catch 'foo (call-next-method)) (call-next-method))
-          ; where the next-method throws to 'foo.
-          ; The alternative is to make a new magic var with args
-          ; actually not that fancy (call-next-method)(call-next-method) is same problem
+ ;The unwind-protect is needed in case some hacker in his/her wisdom decides to:
+ ; (defmethod foo (x) (catch 'foo (call-next-method)) (call-next-method))
+ ; where the next-method throws to 'foo.
+ ; The alternative is to make a new magic var with args
+ ; actually not that fancy (call-next-method)(call-next-method) is same problem
           (let ()
             (unwind-protect
               (if (listp (car next-methods))
@@ -1844,9 +1880,9 @@
       (if (not (consp methods))
         (%no-next-method  magic)
         (let* ((cnm-cm (car magic)))
-          ; a combined method
+ ; a combined method
           (when (consp cnm-cm)(setq cnm-cm (car cnm-cm)))
-          ; could just put the vector in car magic & no self needed in vector?
+ ; could just put the vector in car magic & no self needed in vector?
           (let ((the-vect cnm-cm)) ;  <<
             (funcall #'%%cnm-with-args-combined-method-dcode ;(%combined-method-dcode cnm-cm)
                      the-vect
@@ -1857,8 +1893,8 @@
 
 ; called from x%%call-next-method-with-args - its the key-or-init-fn 
 (defun %%cnm-with-args-check-initargs (init-cell args)
-  ; here we forget the lexpr idea because it wants to cdr
-  ;(declare (dynamic-extent args))
+ ; here we forget the lexpr idea because it wants to cdr
+ ;(declare (dynamic-extent args))
   (let* ((rest (cdr args))
          (first-arg (car args)))
     (declare (list rest))
@@ -1883,7 +1919,7 @@
           (errorp bad-key)
           (if (eq (car functions) #'initialize-instance)
             (apply #'check-initargs instance class initargs nil
-                   #'initialize-instance #'allocate-instance #'shared-initialize
+ #'initialize-instance #'allocate-instance #'shared-initialize
                    nil)
             (apply #'check-initargs instance class initargs nil functions))
           (if errorp
@@ -1912,7 +1948,7 @@
 ;;; #'call-next-method))
 
 (defun %cons-magic-next-method-arg (magic)
-  ; car is a cons as a flag that its already heap-consed! - else cnm-cm or nil
+ ; car is a cons as a flag that its already heap-consed! - else cnm-cm or nil
   (if (consp (car magic))
     magic
     (list* (list (car magic))

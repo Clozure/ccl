@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,8 +29,8 @@
 
 (defun machine-instance ()
   "Return a string giving the name of the local machine."
-  #-windows-target (%uname 1)
-  #+windows-target
+ #-windows-target (%uname 1)
+ #+windows-target
   (rlet ((nsize #>DWORD 0))
     (if (eql 0 (#_GetComputerNameExW #$ComputerNameDnsFullyQualified
                                      (%null-ptr)
@@ -46,8 +46,8 @@
 
 (defun machine-type ()
   "Returns a string describing the type of the local machine."
-  #-windows-target (%uname 4)
-  #+windows-target
+ #-windows-target (%uname 4)
+ #+windows-target
   (rlet ((info #>SYSTEM_INFO))
     (#_GetSystemInfo info)
     (case (pref info #>SYSTEM_INFO.nil.nil.wProcessorArchitecture)
@@ -65,7 +65,7 @@
 are running on, or NIL if we can't find any useful information."
   (or *machine-version*
       (setq *machine-version*
-            #+darwin-target
+ #+darwin-target
             (block darwin-machine-version
               (%stack-block ((mib 8))
                 (setf (%get-long mib 0) #$CTL_HW
@@ -76,7 +76,7 @@ are running on, or NIL if we can't find any useful information."
                         (%get-natural reslen 0) 256)
                   (if (zerop (#_sysctl mib 2 res reslen (%null-ptr) 0))
                     (return-from darwin-machine-version (%get-cstring res))))))
-            #+linux-target
+ #+linux-target
             (with-open-file (f "/proc/cpuinfo" :if-does-not-exist nil)
               (when f
                 (flet ((cpu-info-match (target line)
@@ -92,45 +92,45 @@ are running on, or NIL if we can't find any useful information."
                   (do* ((line (read-line f nil nil)
                               (read-line f nil nil))
                         (target #+ppc-target "machine"
-                                #+x86-target "model name"
-                                #+arm-target "Hardware"))
+ #+x86-target "model name"
+ #+arm-target "Hardware"))
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
-            #+freebsd-target
+ #+freebsd-target
             (%stack-block ((ret 512)
                            (mib (* (record-length :uint))))
               (setf (%get-unsigned-long mib 0)
-                    #$CTL_HW
+ #$CTL_HW
                     (%get-unsigned-long mib (record-length :uint))
-                    #$HW_MODEL)
+ #$HW_MODEL)
               (rlet ((oldsize :uint 512))
                 (if (eql 0 (#_sysctl mib 2 ret oldsize (%null-ptr) 0))
                   (%get-cstring ret)
                   1)))
-            #+solaris-target
+ #+solaris-target
             (rlet ((info :processor_info_t))
               (do* ((i 0 (1+ i)))
                    ((and (= 0 (#_processor_info i info))
                          (= (pref info :processor_info_t.pi_state)
-                            #$P_ONLINE))
+ #$P_ONLINE))
                     (%get-cstring (pref info :processor_info_t.pi_processor_type)))))
-            #+windows-target
+ #+windows-target
             (getenv "PROCESSOR_IDENTIFIER")
             )))
 
 
 (defun software-type ()
   "Return a string describing the supporting software."
-  #-windows-target (%uname 0)
-  #+windows-target "Microsoft Windows")
+ #-windows-target (%uname 0)
+ #+windows-target "Microsoft Windows")
 
 
 (defun software-version ()
   "Return a string describing version of the supporting software, or NIL
    if not available."
-  #-windows-target (%uname 2)
-  #+windows-target
+ #-windows-target (%uname 2)
+ #+windows-target
   (rletZ ((info #>OSVERSIONINFOEX))
     (setf (pref info #>OSVERSIONINFOEX.dwOSVersionInfoSize)
           (record-length #>OSVERSIONINFOEX))
@@ -140,7 +140,7 @@ are running on, or NIL if we can't find any useful information."
             (pref info #>OSVERSIONINFOEX.dwMinorVersion)
             (pref info #>OSVERSIONINFOEX.dwBuildNumber)
             (if (eql (pref info #>OSVERSIONINFOEX.wProductType)
-                     #$VER_NT_WORKSTATION)
+ #$VER_NT_WORKSTATION)
               "Workstation"
               "Server")))
   )
@@ -415,14 +415,14 @@ are running on, or NIL if we can't find any useful information."
 
 
 (defun %page-fault-info ()
-  #-windows-target
+ #-windows-target
   (rlet ((usage :rusage))
     (%%rusage usage)
     (values (pref usage :rusage.ru_minflt)
             (pref usage :rusage.ru_majflt)
             (pref usage :rusage.ru_nswap)))
-  #+windows-target
-  ;; Um, don't know how to determine this, or anything like it.
+ #+windows-target
+ ;; Um, don't know how to determine this, or anything like it.
   (values 0 0 0))
 
 
@@ -522,7 +522,7 @@ are running on, or NIL if we can't find any useful information."
                        (elapsed-major (- major-end major-start))
                        (elapsed-swaps (- swaps-end swaps-start)))
                   (funcall (or *report-time-function*
-                               #'standard-report-time)
+ #'standard-report-time)
                            :form form
                            :results results
                            :elapsed-time elapsed-real-time
@@ -542,7 +542,7 @@ are running on, or NIL if we can't find any useful information."
   (when (typep thing 'symbol)
     (let* ((gvector-or-fixnum (%symptr-binding-address '*features*)))
       (if (typep gvector-or-fixnum 'fixnum)
-        ;; Thread-local binding of *FEATURES*.
+ ;; Thread-local binding of *FEATURES*.
         (if (not (member thing *features* :test #'eq))
           (setq *features* (cons thing *features*)))
         (loop
@@ -560,7 +560,7 @@ are running on, or NIL if we can't find any useful information."
 (defun remove-feature (thing)
   (let* ((gvector-or-fixnum (%symptr-binding-address '*features*)))
     (if (typep gvector-or-fixnum 'fixnum)
-      ;; Thread-local binding of *FEATURES*.
+ ;; Thread-local binding of *FEATURES*.
       (setq *features* (delete thing *features*))
       (loop
         (let* ((old (%svref gvector-or-fixnum target::symbol.vcell-cell)))
@@ -629,7 +629,7 @@ are running on, or NIL if we can't find any useful information."
       (when (boundp symbol)
             (set new-symbol (symbol-value symbol)))
       (when (setq def (fboundp symbol))
-            ;;;Shouldn't err out on macros/special forms.
+ ;;;Shouldn't err out on macros/special forms.
             (%fhave new-symbol def))
       (set-symbol-plist new-symbol (copy-list (symbol-plist symbol))))
   new-symbol)
@@ -771,8 +771,8 @@ are running on, or NIL if we can't find any useful information."
 ;;; There should ideally be some way to override the UI (such as
 ;;; it is ...) here.
 ;;; More generally, this either
-;;;   a) shouldn't exist, or
-;;;   b) should do more sanity-checking
+;;; a) shouldn't exist, or
+;;; b) should do more sanity-checking
 (defun choose-file-dialog (&key file-types (prompt "File name:"))
   (let* ((hook *choose-file-dialog-hook*))
     (if hook
@@ -815,7 +815,7 @@ are running on, or NIL if we can't find any useful information."
 
 ;;; Might want to have some other entry for, e.g., the inspector
 ;;; and to let it get its hands on the list header returned by 
-;;; disassemble-ppc-function.  Maybe disassemble-ppc-function
+;;; disassemble-ppc-function. Maybe disassemble-ppc-function
 ;;; should take care of "normalizing" the code-vector ?
 (defun disassemble (thing)
   "Disassemble the compiled code associated with OBJECT, which can be a
@@ -823,16 +823,17 @@ are running on, or NIL if we can't find any useful information."
   it is not already compiled, the compiler is called to produce something to
   disassemble."
   (#+ppc-target ppc-xdisassemble
-   #+x86-target x86-xdisassemble
-   #+arm-target arm-xdisassemble
+ #+x86-target x86-xdisassemble
+ #+arm-target arm-xdisassemble
+ #+arm64-target arm64-xdisassemble
    (require-type (function-for-disassembly thing) 'compiled-function)))
 
 (defun function-for-disassembly (thing)
   (let* ((fun thing))
-    ;; CLHS says that DISASSEMBLE should signal a type error if its
-    ;; argument isn't a function designator.  Hard to imagine any
-    ;; code depending on that ...
-    ;;(when (typep fun 'standard-method) (setq fun (%method-function fun)))
+ ;; CLHS says that DISASSEMBLE should signal a type error if its
+ ;; argument isn't a function designator. Hard to imagine any
+ ;; code depending on that ...
+ ;;(when (typep fun 'standard-method) (setq fun (%method-function fun)))
     (when (or (symbolp fun)
               (and (consp fun) (neq (%car fun) 'lambda)))
       (setq fun (fboundp thing))
@@ -865,8 +866,8 @@ are running on, or NIL if we can't find any useful information."
 (defparameter *svn-program* "svn")
 
 (defloadvar *use-cygwin-svn*
-    #+windows-target (not (null (getenv "CYGWIN")))
-    #-windows-target nil)
+ #+windows-target (not (null (getenv "CYGWIN")))
+ #-windows-target nil)
 
 (defun run-svn (args &key (output :string) (error :output) (if-fail :error ifp))
   (if (eq output :stream)
@@ -911,7 +912,7 @@ are running on, or NIL if we can't find any useful information."
        (let* ((repo-len (length repo)))
          (when (and (> (length url) repo-len)
                     (string= repo url :end2 repo-len))
-           ;; Cheat: do pathname parsing here.
+ ;; Cheat: do pathname parsing here.
            (let* ((path (pathname (ensure-directory-namestring (subseq url repo-len))))
                   (dir (cdr (pathname-directory path))))
              (when (string= "ccl" (car (last dir)))
@@ -980,7 +981,7 @@ are running on, or NIL if we can't find any useful information."
       (parse-svn-changes diff directory (if reverse svn-revision)))))
 
 (defun parse-svn-changes (string directory svn-revision)
-  ;; Parse svn diff output string into source-note's
+ ;; Parse svn diff output string into source-note's
   (unless (equal string "")
     (assert (string-equal "Index: " string :end2 7))
     (loop
@@ -996,7 +997,7 @@ are running on, or NIL if we can't find any useful information."
          (lines (loop for (start-line . line-count) in line-ranges
                   collect start-line
                   collect (+ start-line line-count)))
-         ;; Convert line ranges to character ranges.
+ ;; Convert line ranges to character ranges.
          (line-posns (flet ((posns (stream)
                               (flet ((skip-lines (stream count)
                                        (let ((chars 0))
@@ -1057,7 +1058,7 @@ are running on, or NIL if we can't find any useful information."
                     (multiple-value-bind (num-lines npos) (parse-integer string :start (1+ npos) :end end
                                                                          :junk-allowed t)
                       (assert (eql (char string npos) #\space))
-                      ;; adjust for context lines
+ ;; adjust for context lines
                       (loop with first = t
                         as ch = (and (< (setq npos (next-line string npos end)) end)
                                      (char string npos))
@@ -1077,7 +1078,7 @@ are running on, or NIL if we can't find any useful information."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;; Scan the heap, collecting infomation on the primitive object types
-;;; found.  Report that information.
+;;; found. Report that information.
 
 (defun heap-utilization (&key (stream *debug-io*)
                               (gc-first t)
@@ -1101,7 +1102,7 @@ are running on, or NIL if we can't find any useful information."
     (report-heap-utilization data :stream stream :unit unit :sort sort :threshold threshold)))
 
 (defun collect-heap-utilization (&key (gc-first t) start area classes)
-  ;; returns list of (type-name count logical-sizes-total physical-sizes-total)
+ ;; returns list of (type-name count logical-sizes-total physical-sizes-total)
   (when start
     (unless (or (null area)
                 (eq (heap-area-code area) area-dynamic)
@@ -1131,10 +1132,10 @@ are running on, or NIL if we can't find any useful information."
                  (let* ((typecode (typecode thing))
                         (logsize (funcall array-size-function typecode (uvsize thing)))
                         (physize (logandc2 (+ logsize
-                                              #+64-bit-target (+ 8 15)
-                                              #+32-bit-target (+ 4 7))
-                                           #+64-bit-target 15
-                                           #+32-bit-target 7)))
+ #+64-bit-target (+ 8 15)
+ #+32-bit-target (+ 4 7))
+ #+64-bit-target 15
+ #+32-bit-target 7)))
                    (incf (aref counts typecode))
                    (incf (aref sizes typecode) logsize)
                    (incf (aref physical-sizes typecode) physize))))))
@@ -1184,10 +1185,10 @@ are running on, or NIL if we can't find any useful information."
                    (let* ((typecode (typecode thing))
                           (logsize (funcall array-size-function typecode (uvsize thing)))
                           (physize (logandc2 (+ logsize
-                                                #+64-bit-target (+ 8 15)
-                                                #+32-bit-target (+ 4 7))
-                                             #+64-bit-target 15
-                                             #+32-bit-target 7))
+ #+64-bit-target (+ 8 15)
+ #+32-bit-target (+ 4 7))
+ #+64-bit-target 15
+ #+32-bit-target 7))
                           (class (class-of (if (eql typecode target::subtag-slot-vector)
                                              (uvref thing slot-vector.instance)
                                              (if (eql typecode target::subtag-function)
@@ -1221,8 +1222,8 @@ are running on, or NIL if we can't find any useful information."
                                 "All others"
                                 (or (%class-proper-name class) class))))
                    (declare (fixnum icount) (fixnum scount))
-                   ;; When printing class names, the package matters.  report-heap-utilization
-                   ;; uses ~a, so print here.
+ ;; When printing class names, the package matters. report-heap-utilization
+ ;; uses ~a, so print here.
                    (when (plusp icount)
                      (push (list (prin1-to-string name)
                                  icount (aref inst-sizes index) (aref inst-psizes index)) data))
@@ -1245,9 +1246,9 @@ are running on, or NIL if we can't find any useful information."
 	(let* ((typecode (typecode vector))
 	       (logsize (funcall array-size-function typecode (uvsize vector)))
 	       (physsize (+ logsize
-			    ;; header, delta, round up
-			    #+32-bit-target (+ 4 2 7)
-			    #+64-bit-target (+ 8 2 15))))
+ ;; header, delta, round up
+ #+32-bit-target (+ 4 2 7)
+ #+64-bit-target (+ 8 2 15))))
 	  (incf (aref counts typecode))
 	  (incf (aref sizes typecode) logsize)
 	  (incf (aref physical-sizes typecode) physsize))))
@@ -1267,29 +1268,29 @@ are running on, or NIL if we can't find any useful information."
   
 (defvar *heap-utilization-vector-type-names*
   (let* ((a (make-array 256)))
-    #+x8664-target
+ #+x8664-target
     (dotimes (i 256)
       (let* ((fulltag (logand i x8664::fulltagmask))
              (names-vector
               (cond ((= fulltag x8664::fulltag-nodeheader-0)
-                     *nodeheader-0-types*)
+ *nodeheader-0-types*)
                     ((= fulltag x8664::fulltag-nodeheader-1)
-                     *nodeheader-1-types*)
+ *nodeheader-1-types*)
                     ((= fulltag x8664::fulltag-immheader-0)
-                     *immheader-0-types*)
+ *immheader-0-types*)
                     ((= fulltag x8664::fulltag-immheader-1)
-                     *immheader-1-types*)
+ *immheader-1-types*)
                     ((= fulltag x8664::fulltag-immheader-2)
-                     *immheader-2-types*)))
+ *immheader-2-types*)))
              (name (if names-vector
                      (aref names-vector (ash i -4)))))
-        ;; Special-case a few things ...
+ ;; Special-case a few things ...
         (if (eq name 'symbol-vector)
           (setq name 'symbol)
           (if (eq name 'function-vector)
             (setq name 'function)))
         (setf (aref a i) name)))
-    #+ppc64-target
+ #+ppc64-target
     (dotimes (i 256)
       (let* ((lowtag (logand i ppc64::lowtagmask)))
         (setf (%svref a i)
@@ -1297,7 +1298,7 @@ are running on, or NIL if we can't find any useful information."
                      (%svref *immheader-types* (ash i -2)))
                     ((= lowtag ppc64::lowtag-nodeheader)
                      (%svref *nodeheader-types* (ash i -2)))))))
-    #+(or ppc32-target x8632-target arm-target)
+ #+(or ppc32-target x8632-target arm-target)
     (dotimes (i 256)
       (let* ((fulltag (logand i target::fulltagmask)))
         (setf (%svref a i)
@@ -1408,23 +1409,23 @@ are running on, or NIL if we can't find any useful information."
   "Returns the size of THING (in bytes), including any headers and
    alignment overhead.  Does not descend an object's components."
   (cond ((consp thing) #+64-bit-target 16 #+32-bit-target 8)
-        #+x8664-target ((symbolp thing)
+ #+x8664-target ((symbolp thing)
                         (object-direct-size (%symptr->symvector thing)))
-        #+x8664-target ((functionp thing)
+ #+x8664-target ((functionp thing)
                         (object-direct-size (function-to-function-vector thing)))
         ((uvectorp thing)
          (let* ((typecode (ccl::typecode thing))
                 (element-count (ccl::uvsize thing))
                 (sizeof-content-in-octets
-                 ;; Call the architecture-specific backend function.
+ ;; Call the architecture-specific backend function.
                  (funcall (arch::target-array-data-size-function
                            (backend-target-arch *host-backend*))
                           typecode element-count)))
            (logandc2 (+ sizeof-content-in-octets
-                           #+64-bit-target (+ 8 15)
-                           #+32-bit-target (+ 4 7))
-                     #+64-bit-target 15
-                     #+32-bit-target 7)))
+ #+64-bit-target (+ 8 15)
+ #+32-bit-target (+ 4 7))
+ #+64-bit-target 15
+ #+32-bit-target 7)))
         (t 0)))
 
 (defun kernel-global-address (global)
@@ -1469,7 +1470,7 @@ are running on, or NIL if we can't find any useful information."
 
 (defun weak-gc-method ()
   (or (car (rassoc (%get-kernel-global 'weak-gc-method)
-                   *weak-gc-method-names*))
+ *weak-gc-method-names*))
       :traditional))
 
 
@@ -1539,7 +1540,7 @@ are running on, or NIL if we can't find any useful information."
        ((or (< count #+64-bit-target 8 #+32-bit-target 4)
             (and (= count #+64-bit-target 8 #+32-bit-target 4)
                  (< msb #+64-bit-target 16 #+32-bit-target 32)))
-        ;; Result will be a fixnum.
+ ;; Result will be a fixnum.
         (do* ((result 0)
               (shift 0 (+ shift 8))
               (i (1- end) (1- i)))
@@ -1547,9 +1548,9 @@ are running on, or NIL if we can't find any useful information."
           (declare (fixnum result shift i))
           (setq result (logior result (the fixnum (%ilsl shift (aref vector i)))))))
        (t
-        ;; Result will be a bignum.  If COUNT is a multiple of 4
-        ;; and the most significant bit is set, need to add an
-        ;; extra word of zero-extension.
+ ;; Result will be a bignum. If COUNT is a multiple of 4
+ ;; and the most significant bit is set, need to add an
+ ;; extra word of zero-extension.
         (let* ((result (allocate-typed-vector :bignum
                                               (if (and (logbitp 7 msb)
                                                        (zerop (the fixnum (logand count 3))))
@@ -1559,8 +1560,8 @@ are running on, or NIL if we can't find any useful information."
           (dotimes (i count result)
             (decf end)
             (setf (aref result
-                        #+little-endian-target i
-                        #+big-endian-target (the fixnum (logxor i 3)))
+ #+little-endian-target i
+ #+big-endian-target (the fixnum (logxor i 3)))
                   (aref vector end)))))))))
 
   
@@ -1609,9 +1610,9 @@ are running on, or NIL if we can't find any useful information."
              (cond ((or (< count #+64-bit-target 8 #+32-bit-target 4)
                         (and (= count #+64-bit-target 8 #+32-bit-target 4)
                              (>= sign-byte
-                                 #+64-bit-target -16
-                                 #+32-bit-target -32)))
-                    ;; Result will be a fixnum
+ #+64-bit-target -16
+ #+32-bit-target -32)))
+ ;; Result will be a fixnum
                     (do* ((result 0)
                           (shift 0 (+ shift 8))
                           (i (1- end) (1- i)))
@@ -1626,12 +1627,12 @@ are running on, or NIL if we can't find any useful information."
                                   result)
                               (declare (fixnum i))
                               (setf (aref result
-                                          #+little-endian-target i
-                                          #+big-endian-target (the fixnum (logxor i 3))) #xff)))
+ #+little-endian-target i
+ #+big-endian-target (the fixnum (logxor i 3))) #xff)))
             (decf end)
             (setf (aref result
-                        #+little-endian-target i
-                        #+big-endian-target (the fixnum (logxor i 3)))
+ #+little-endian-target i
+ #+big-endian-target (the fixnum (logxor i 3)))
                   (aref vector end)))))))))))))
 
 (defun parse-signed-integer (vector &optional (start 0) end)
@@ -1650,20 +1651,20 @@ are running on, or NIL if we can't find any useful information."
 #+windows-target
 (defun open-null-device ()
   (rlet ((sa #>SECURITY_ATTRIBUTES
-           #>nLength (record-length #>SECURITY_ATTRIBUTES)
-           #>lpSecurityDescriptor +null-ptr+
-           #>bInheritHandle #$TRUE))
+ #>nLength (record-length #>SECURITY_ATTRIBUTES)
+ #>lpSecurityDescriptor +null-ptr+
+ #>bInheritHandle #$TRUE))
     (with-filename-cstrs ((name "\\Device\\Null"))
       (let* ((handle (#_CreateFileW name
                                     (logior #$GENERIC_READ #$GENERIC_WRITE)
                                     (logior #$FILE_SHARE_READ #$FILE_SHARE_WRITE)
                                     sa
-                                    #$OPEN_EXISTING
-                                    #$FILE_ATTRIBUTE_NORMAL
+ #$OPEN_EXISTING
+ #$FILE_ATTRIBUTE_NORMAL
                                     +null-ptr+)))
         (unless (eql handle #$INVALID_HANDLE_VALUE)
           handle)))))
-;;; call into the CCL kernel to execute a CPUID instruction,  Yes it's
+;;; call into the CCL kernel to execute a CPUID instruction, Yes it's
 ;;; a PITA to need to do this
 #+x86-target
 (defun x86-cpuid (selector)

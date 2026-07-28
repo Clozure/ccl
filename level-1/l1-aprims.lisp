@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -119,8 +119,8 @@
     (apply function (nconc butlast-args rest-args))))
 
 ;;; This is slow, and since %apply-lexpr isn't documented either,
-;;; nothing in the world should depend on it.  This is just being
-;;; anal retentive.  VERY anal retentive.
+;;; nothing in the world should depend on it. This is just being
+;;; anal retentive. VERY anal retentive.
 
 (defun %apply-lexpr (function arg &rest args)
   (cond ((null args) (%apply-lexpr function arg))
@@ -153,13 +153,13 @@
              (%rplacd splice x))
            result)
         (declare (fixnum i))
-        ;; If the argument is "moderately long", check to see if it's
-        ;; "very long"; if so, it may be much faster to replace the
-        ;; elements of a list allocated in a single operation than it
-        ;; is to repeatedly CONS (since the latter tends to fight with
-        ;; the EGC.)
-        ;; The definitions of "moderately long" and "very long" are
-        ;; both somewhat arbitrary.
+ ;; If the argument is "moderately long", check to see if it's
+ ;; "very long"; if so, it may be much faster to replace the
+ ;; elements of a list allocated in a single operation than it
+ ;; is to repeatedly CONS (since the latter tends to fight with
+ ;; the EGC.)
+ ;; The definitions of "moderately long" and "very long" are
+ ;; both somewhat arbitrary.
         (when (and (= i 1024)
                    (> (setq len (alt-list-length x)) (ash 1 16)))
           (do* ((tail (setf (%cdr splice) (%allocate-list 0 len)))
@@ -300,7 +300,7 @@ terminate the list"
     (values t name)
     (if (setf-function-name-p name)
       (values t (setf-function-name (%cadr name)))
-      ; What other kinds of function names do we care to support ?
+ ; What other kinds of function names do we care to support ?
       (values nil nil))))
 
 ;;; Why isn't this somewhere else ?
@@ -374,7 +374,7 @@ terminate the list"
       ((atom 2nd) 3rd)
     (rplacd 2nd 3rd)))
 
-;;; The two-arg case is maybe a bit faster.  We -don't- want to
+;;; The two-arg case is maybe a bit faster. We -don't- want to
 ;;; do the two-arg case repeatedly to implement the N-arg case.
 (defun append (&rest lists)
   (declare (dynamic-extent lists))
@@ -529,7 +529,7 @@ terminate the list"
 #+ppc32-target
 (progn
   (defparameter array-element-subtypes
-    #(single-float 
+ #(single-float 
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
@@ -543,7 +543,7 @@ terminate the list"
       (complex double-float)
       bit))
   
-  ;; given uvector subtype - what is the corresponding element-type
+ ;; given uvector subtype - what is the corresponding element-type
   (defun element-subtype-type (subtype)
     (declare (fixnum subtype))
     (if  (= subtype ppc32::subtag-simple-vector) t
@@ -554,7 +554,7 @@ terminate the list"
 #+x8632-target
 (progn
   (defparameter array-element-subtypes
-    #(single-float 
+ #(single-float 
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
@@ -568,7 +568,7 @@ terminate the list"
       (complex double-float)
       bit))
   
-  ;; given uvector subtype - what is the corresponding element-type
+ ;; given uvector subtype - what is the corresponding element-type
   (defun element-subtype-type (subtype)
     (declare (fixnum subtype))
     (if  (= subtype x8632::subtag-simple-vector) t
@@ -580,7 +580,7 @@ terminate the list"
 (progn
 
 (defparameter array-element-subtypes
-  #(bogus
+ #(bogus
     bogus
     bogus
     bogus
@@ -614,7 +614,7 @@ terminate the list"
     bogus))  
 
   
-  ;;; given uvector subtype - what is the corresponding element-type
+ ;;; given uvector subtype - what is the corresponding element-type
   (defun element-subtype-type (subtype)
     (declare (fixnum subtype))
     (if  (= subtype ppc64::subtag-simple-vector)
@@ -626,9 +626,9 @@ terminate the list"
 #+x8664-target
 (progn
 
-  ;;; other element types
+ ;;; other element types
   (defparameter *immheader-0-array-element-types*
-    #(bogus
+ #(bogus
       bogus
       bogus
       bogus
@@ -645,9 +645,9 @@ terminate the list"
       (unsigned-byte 8)
       bit))
 
-  ;;; 32-bit element types
+ ;;; 32-bit element types
   (defparameter *immheader-1-array-element-types*
-    #(bogus
+ #(bogus
       bogus
       bogus
       bogus
@@ -664,9 +664,9 @@ terminate the list"
       (unsigned-byte 32)
       single-float))
 
-  ;;; 64-bit element types
+ ;;; 64-bit element types
   (defparameter *immheader-2-array-element-types*
-    #(bogus
+ #(bogus
       bogus
       bogus
       bogus
@@ -700,10 +700,87 @@ terminate the list"
               (t 'bogus)))))
   )
 
+#+arm64-target
+(progn
+
+ ;;; other element types
+  (defparameter *immheader-0-array-element-types*
+ #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      (complex double-float)
+      (signed-byte 16)
+      (unsigned-byte 16)
+      bogus
+      (signed-byte 8)
+      (unsigned-byte 8)
+      bit))
+
+ ;;; 32-bit element types
+  (defparameter *immheader-1-array-element-types*
+ #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      base-char
+      (signed-byte 32)
+      (unsigned-byte 32)
+      single-float))
+
+ ;;; 64-bit element types
+  (defparameter *immheader-2-array-element-types*
+ #(bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      bogus
+      (complex single-float)
+      fixnum
+      (signed-byte 64)
+      (unsigned-byte 64)
+      double-float))
+
+
+  (defun element-subtype-type (subtype)
+    (declare (type (unsigned-byte 8) subtype))
+    (if (= subtype arm64::subtag-simple-vector)
+      t
+      (let* ((class (ash subtype (- arm64::ntagbits)))
+             (tag (logand subtype arm64::fulltagmask)))
+        (declare (type (unsigned-byte 4) class tag))
+        (cond ((= tag arm64::fulltag-immheader-0)
+               (%svref *immheader-0-array-element-types* class))
+              ((= tag arm64::fulltag-immheader-1)
+               (%svref *immheader-1-array-element-types* class))
+              ((= tag arm64::fulltag-immheader-2)
+               (%svref *immheader-2-array-element-types* class))
+              (t 'bogus)))))
+  )
+
 #+arm-target
 (progn
   (defparameter array-element-subtypes
-    #(single-float 
+ #(single-float 
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
@@ -717,7 +794,7 @@ terminate the list"
       (complex double-float)
       bit))
   
-  ;; given uvector subtype - what is the corresponding element-type
+ ;; given uvector subtype - what is the corresponding element-type
   (defun element-subtype-type (subtype)
     (declare (fixnum subtype))
     (if  (= subtype arm::subtag-simple-vector) t
@@ -760,7 +837,7 @@ terminate the list"
 	(setq flags (bitset $arh_exp_disp_bit flags)))
       (if (not (fixnump new-size))(error "Bad array dimensions ~s." dimensions)) 
       (locally (declare (fixnum new-size))
-        ; (when (> (+ offset new-size) disp-size) ...), but don't cons bignums
+ ; (when (> (+ offset new-size) disp-size) ...), but don't cons bignums
         (when (or (> new-size disp-size)
                   (let ((max-offset (- disp-size new-size)))
                     (declare (fixnum max-offset))
@@ -776,10 +853,10 @@ terminate the list"
                            (and (>= fill 0) (<= fill new-size))))
               (error "Bad fill pointer ~s" fill)))
           (setq flags (bitset $arh_fill_bit flags))))
-      ; If displaced-to is an array or vector header and is either
-      ; adjustable or its target is a header, then we need to set the
-      ; $arh_disp_bit. If displaced-to is not adjustable, then our
-      ; target can be its target instead of itself.
+ ; If displaced-to is an array or vector header and is either
+ ; adjustable or its target is a header, then we need to set the
+ ; $arh_disp_bit. If displaced-to is not adjustable, then our
+ ; target can be its target instead of itself.
       (when (or (eql vect-subtype target::subtag-arrayH)
                 (eql vect-subtype target::subtag-vectorH))
         (let ((dflags (%svref displaced-to target::arrayH.flags-cell)))
@@ -787,14 +864,14 @@ terminate the list"
           (when (or (logbitp $arh_adjp_bit dflags)
 		    t
                     (progn
-		      #+nope
+ #+nope
                       (setq target (%svref displaced-to target::arrayH.data-vector-cell)
                             real-offset (+ offset (%svref displaced-to target::arrayH.displacement-cell)))
                       (logbitp $arh_disp_bit dflags)
-		      #-nope t))
+ #-nope t))
             (setq flags (bitset $arh_disp_bit flags))))
         (setq vect-subtype (%array-header-subtype displaced-to)))
-      ; assumes flags is low byte
+ ; assumes flags is low byte
       (setq flags (dpb vect-subtype target::arrayH.flags-cell-subtag-byte flags))
       (if (eq rank 1)
         (%gvector target::subtag-vectorH 
@@ -927,7 +1004,7 @@ terminate the list"
   (setq *periodic-task-interval* n))
 
 (defun periodic-task-interval ()
-  *periodic-task-interval*)
+ *periodic-task-interval*)
 
 
 
@@ -1028,7 +1105,7 @@ terminate the list"
   to COMPILE otherwise, CLOSURE-P is non-NIL if the function's definition
   might have been enclosed in some non-null lexical environment, and
   NAME is some name (for debugging only) or NIL if there is no name."
-  ;(declare (values def env-p name))
+ ;(declare (values def env-p name))
   (let* ((bits (lfun-bits (setq fn (require-type fn 'function)))))
     (declare (fixnum bits))
     (if (logbitp $lfbits-trampoline-bit bits)
@@ -1065,7 +1142,7 @@ terminate the list"
 
 
 (defun %set-toplevel (&optional (fun nil fun-p))
-  ;(setq fun (require-type fun '(or symbol function)))
+ ;(setq fun (require-type fun '(or symbol function)))
   (let* ((tcr (%current-tcr)))
     (prog1 (%tcr-toplevel-function tcr)
       (when fun-p
@@ -1090,7 +1167,7 @@ terminate the list"
 
 
 (defstatic %pascal-functions%
-    #(NIL NIL NIL NIL NIL NIL NIL NIL
+ #(NIL NIL NIL NIL NIL NIL NIL NIL
       NIL NIL NIL NIL NIL NIL NIL NIL
       NIL NIL NIL NIL NIL NIL NIL NIL
       NIL NIL NIL NIL NIL NIL NIL NIL))
@@ -1213,7 +1290,7 @@ are rounded up to a multiple of 64Kbytes."
 
 ;;; "address" should be the address (as returned by FOREIGN-SYMBOL-ADDRESS)
 ;;; of a foreign function that accepts a pointer as an argument and does
-;;; whatever's needed to dispose of it.  That function can be called from
+;;; whatever's needed to dispose of it. That function can be called from
 ;;; the GC, so it shouldn't call back into lisp.
 (defun register-xmacptr-dispose-function (address)
   (ff-call (%kernel-import target::kernel-import-register-xmacptr-dispose-function)
@@ -2843,7 +2920,7 @@ are rounded up to a multiple of 64Kbytes."
       (setf (aref upper-to-lower upper) (- lower upper)
             (aref lower-to-upper lower) (- upper lower)))
     (setq *lower-to-upper* lower-to-upper
-          *upper-to-lower* upper-to-lower)
+ *upper-to-lower* upper-to-lower)
     nil))
 
 (eval-when (:compile-toplevel)
@@ -2897,108 +2974,108 @@ are rounded up to a multiple of 64Kbytes."
     (declare (optimize speed)) ;; make sure everything gets inlined that needs to be.
     (dolist (range '((#x0041 . #x005A)
                      (#x0061 . #x007A)
-                     #x00AA
-                     #x00B5
-                     #x00BA
+ #x00AA
+ #x00B5
+ #x00BA
                      (#x00C0 . #x00D6)
                      (#x00D8 . #x00F6)
                      (#x00F8 . #x01BA)
-                     #x01BB
+ #x01BB
                      (#x01BC . #x01BF)
                      (#x01C0 . #x01C3)
                      (#x01C4 . #x0293)
-                     #x0294
+ #x0294
                      (#x0295 . #x02AF)
                      (#x02B0 . #x02C1)
                      (#x02C6 . #x02D1)
                      (#x02E0 . #x02E4)
-                     #x02EC
-                     #x02EE
-                     #x0345
+ #x02EC
+ #x02EE
+ #x0345
                      (#x0370 . #x0373)
-                     #x0374
+ #x0374
                      (#x0376 . #x0377)
-                     #x037A
+ #x037A
                      (#x037B . #x037D)
-                     #x0386
+ #x0386
                      (#x0388 . #x038A)
-                     #x038C
+ #x038C
                      (#x038E . #x03A1)
                      (#x03A3 . #x03F5)
                      (#x03F7 . #x0481)
                      (#x048A . #x0523)
                      (#x0531 . #x0556)
-                     #x0559
+ #x0559
                      (#x0561 . #x0587)
                      (#x05B0 . #x05BD)
-                     #x05BF
+ #x05BF
                      (#x05C1 . #x05C2)
                      (#x05C4 . #x05C5)
-                     #x05C7
+ #x05C7
                      (#x05D0 . #x05EA)
                      (#x05F0 . #x05F2)
                      (#x0610 . #x061A)
                      (#x0621 . #x063F)
-                     #x0640
+ #x0640
                      (#x0641 . #x064A)
                      (#x064B . #x0657)
                      (#x0659 . #x065E)
                      (#x066E . #x066F)
-                     #x0670
+ #x0670
                      (#x0671 . #x06D3)
-                     #x06D5
+ #x06D5
                      (#x06D6 . #x06DC)
                      (#x06E1 . #x06E4)
                      (#x06E5 . #x06E6)
                      (#x06E7 . #x06E8)
-                     #x06ED
+ #x06ED
                      (#x06EE . #x06EF)
                      (#x06FA . #x06FC)
-                     #x06FF
-                     #x0710
-                     #x0711
+ #x06FF
+ #x0710
+ #x0711
                      (#x0712 . #x072F)
                      (#x0730 . #x073F)
                      (#x074D . #x07A5)
                      (#x07A6 . #x07B0)
-                     #x07B1
+ #x07B1
                      (#x07CA . #x07EA)
                      (#x07F4 . #x07F5)
-                     #x07FA
+ #x07FA
                      (#x0901 . #x0902)
-                     #x0903
+ #x0903
                      (#x0904 . #x0939)
-                     #x093D
+ #x093D
                      (#x093E . #x0940)
                      (#x0941 . #x0948)
                      (#x0949 . #x094C)
-                     #x0950
+ #x0950
                      (#x0958 . #x0961)
                      (#x0962 . #x0963)
-                     #x0971
-                     #x0972
+ #x0971
+ #x0972
                      (#x097B . #x097F)
-                     #x0981
+ #x0981
                      (#x0982 . #x0983)
                      (#x0985 . #x098C)
                      (#x098F . #x0990)
                      (#x0993 . #x09A8)
                      (#x09AA . #x09B0)
-                     #x09B2
+ #x09B2
                      (#x09B6 . #x09B9)
-                     #x09BD
+ #x09BD
                      (#x09BE . #x09C0)
                      (#x09C1 . #x09C4)
                      (#x09C7 . #x09C8)
                      (#x09CB . #x09CC)
-                     #x09CE
-                     #x09D7
+ #x09CE
+ #x09D7
                      (#x09DC . #x09DD)
                      (#x09DF . #x09E1)
                      (#x09E2 . #x09E3)
                      (#x09F0 . #x09F1)
                      (#x0A01 . #x0A02)
-                     #x0A03
+ #x0A03
                      (#x0A05 . #x0A0A)
                      (#x0A0F . #x0A10)
                      (#x0A13 . #x0A28)
@@ -3010,30 +3087,30 @@ are rounded up to a multiple of 64Kbytes."
                      (#x0A41 . #x0A42)
                      (#x0A47 . #x0A48)
                      (#x0A4B . #x0A4C)
-                     #x0A51
+ #x0A51
                      (#x0A59 . #x0A5C)
-                     #x0A5E
+ #x0A5E
                      (#x0A70 . #x0A71)
                      (#x0A72 . #x0A74)
-                     #x0A75
+ #x0A75
                      (#x0A81 . #x0A82)
-                     #x0A83
+ #x0A83
                      (#x0A85 . #x0A8D)
                      (#x0A8F . #x0A91)
                      (#x0A93 . #x0AA8)
                      (#x0AAA . #x0AB0)
                      (#x0AB2 . #x0AB3)
                      (#x0AB5 . #x0AB9)
-                     #x0ABD
+ #x0ABD
                      (#x0ABE . #x0AC0)
                      (#x0AC1 . #x0AC5)
                      (#x0AC7 . #x0AC8)
-                     #x0AC9
+ #x0AC9
                      (#x0ACB . #x0ACC)
-                     #x0AD0
+ #x0AD0
                      (#x0AE0 . #x0AE1)
                      (#x0AE2 . #x0AE3)
-                     #x0B01
+ #x0B01
                      (#x0B02 . #x0B03)
                      (#x0B05 . #x0B0C)
                      (#x0B0F . #x0B10)
@@ -3041,44 +3118,44 @@ are rounded up to a multiple of 64Kbytes."
                      (#x0B2A . #x0B30)
                      (#x0B32 . #x0B33)
                      (#x0B35 . #x0B39)
-                     #x0B3D
-                     #x0B3E
-                     #x0B3F
-                     #x0B40
+ #x0B3D
+ #x0B3E
+ #x0B3F
+ #x0B40
                      (#x0B41 . #x0B44)
                      (#x0B47 . #x0B48)
                      (#x0B4B . #x0B4C)
-                     #x0B56
-                     #x0B57
+ #x0B56
+ #x0B57
                      (#x0B5C . #x0B5D)
                      (#x0B5F . #x0B61)
                      (#x0B62 . #x0B63)
-                     #x0B71
-                     #x0B82
-                     #x0B83
+ #x0B71
+ #x0B82
+ #x0B83
                      (#x0B85 . #x0B8A)
                      (#x0B8E . #x0B90)
                      (#x0B92 . #x0B95)
                      (#x0B99 . #x0B9A)
-                     #x0B9C
+ #x0B9C
                      (#x0B9E . #x0B9F)
                      (#x0BA3 . #x0BA4)
                      (#x0BA8 . #x0BAA)
                      (#x0BAE . #x0BB9)
                      (#x0BBE . #x0BBF)
-                     #x0BC0
+ #x0BC0
                      (#x0BC1 . #x0BC2)
                      (#x0BC6 . #x0BC8)
                      (#x0BCA . #x0BCC)
-                     #x0BD0
-                     #x0BD7
+ #x0BD0
+ #x0BD7
                      (#x0C01 . #x0C03)
                      (#x0C05 . #x0C0C)
                      (#x0C0E . #x0C10)
                      (#x0C12 . #x0C28)
                      (#x0C2A . #x0C33)
                      (#x0C35 . #x0C39)
-                     #x0C3D
+ #x0C3D
                      (#x0C3E . #x0C40)
                      (#x0C41 . #x0C44)
                      (#x0C46 . #x0C48)
@@ -3093,16 +3170,16 @@ are rounded up to a multiple of 64Kbytes."
                      (#x0C92 . #x0CA8)
                      (#x0CAA . #x0CB3)
                      (#x0CB5 . #x0CB9)
-                     #x0CBD
-                     #x0CBE
-                     #x0CBF
+ #x0CBD
+ #x0CBE
+ #x0CBF
                      (#x0CC0 . #x0CC4)
-                     #x0CC6
+ #x0CC6
                      (#x0CC7 . #x0CC8)
                      (#x0CCA . #x0CCB)
-                     #x0CCC
+ #x0CCC
                      (#x0CD5 . #x0CD6)
-                     #x0CDE
+ #x0CDE
                      (#x0CE0 . #x0CE1)
                      (#x0CE2 . #x0CE3)
                      (#x0D02 . #x0D03)
@@ -3110,12 +3187,12 @@ are rounded up to a multiple of 64Kbytes."
                      (#x0D0E . #x0D10)
                      (#x0D12 . #x0D28)
                      (#x0D2A . #x0D39)
-                     #x0D3D
+ #x0D3D
                      (#x0D3E . #x0D40)
                      (#x0D41 . #x0D44)
                      (#x0D46 . #x0D48)
                      (#x0D4A . #x0D4C)
-                     #x0D57
+ #x0D57
                      (#x0D60 . #x0D61)
                      (#x0D62 . #x0D63)
                      (#x0D7A . #x0D7F)
@@ -3123,46 +3200,46 @@ are rounded up to a multiple of 64Kbytes."
                      (#x0D85 . #x0D96)
                      (#x0D9A . #x0DB1)
                      (#x0DB3 . #x0DBB)
-                     #x0DBD
+ #x0DBD
                      (#x0DC0 . #x0DC6)
                      (#x0DCF . #x0DD1)
                      (#x0DD2 . #x0DD4)
-                     #x0DD6
+ #x0DD6
                      (#x0DD8 . #x0DDF)
                      (#x0DF2 . #x0DF3)
                      (#x0E01 . #x0E30)
-                     #x0E31
+ #x0E31
                      (#x0E32 . #x0E33)
                      (#x0E34 . #x0E3A)
                      (#x0E40 . #x0E45)
-                     #x0E46
-                     #x0E4D
+ #x0E46
+ #x0E4D
                      (#x0E81 . #x0E82)
-                     #x0E84
+ #x0E84
                      (#x0E87 . #x0E88)
-                     #x0E8A
-                     #x0E8D
+ #x0E8A
+ #x0E8D
                      (#x0E94 . #x0E97)
                      (#x0E99 . #x0E9F)
                      (#x0EA1 . #x0EA3)
-                     #x0EA5
-                     #x0EA7
+ #x0EA5
+ #x0EA7
                      (#x0EAA . #x0EAB)
                      (#x0EAD . #x0EB0)
-                     #x0EB1
+ #x0EB1
                      (#x0EB2 . #x0EB3)
                      (#x0EB4 . #x0EB9)
                      (#x0EBB . #x0EBC)
-                     #x0EBD
+ #x0EBD
                      (#x0EC0 . #x0EC4)
-                     #x0EC6
-                     #x0ECD
+ #x0EC6
+ #x0ECD
                      (#x0EDC . #x0EDD)
-                     #x0F00
+ #x0F00
                      (#x0F40 . #x0F47)
                      (#x0F49 . #x0F6C)
                      (#x0F71 . #x0F7E)
-                     #x0F7F
+ #x0F7F
                      (#x0F80 . #x0F81)
                      (#x0F88 . #x0F8B)
                      (#x0F90 . #x0F97)
@@ -3170,51 +3247,51 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1000 . #x102A)
                      (#x102B . #x102C)
                      (#x102D . #x1030)
-                     #x1031
+ #x1031
                      (#x1032 . #x1036)
-                     #x1038
+ #x1038
                      (#x103B . #x103C)
                      (#x103D . #x103E)
-                     #x103F
+ #x103F
                      (#x1050 . #x1055)
                      (#x1056 . #x1057)
                      (#x1058 . #x1059)
                      (#x105A . #x105D)
                      (#x105E . #x1060)
-                     #x1061
-                     #x1062
+ #x1061
+ #x1062
                      (#x1065 . #x1066)
                      (#x1067 . #x1068)
                      (#x106E . #x1070)
                      (#x1071 . #x1074)
                      (#x1075 . #x1081)
-                     #x1082
+ #x1082
                      (#x1083 . #x1084)
                      (#x1085 . #x1086)
-                     #x108E
+ #x108E
                      (#x10A0 . #x10C5)
                      (#x10D0 . #x10FA)
-                     #x10FC
+ #x10FC
                      (#x1100 . #x1159)
                      (#x115F . #x11A2)
                      (#x11A8 . #x11F9)
                      (#x1200 . #x1248)
                      (#x124A . #x124D)
                      (#x1250 . #x1256)
-                     #x1258
+ #x1258
                      (#x125A . #x125D)
                      (#x1260 . #x1288)
                      (#x128A . #x128D)
                      (#x1290 . #x12B0)
                      (#x12B2 . #x12B5)
                      (#x12B8 . #x12BE)
-                     #x12C0
+ #x12C0
                      (#x12C2 . #x12C5)
                      (#x12C8 . #x12D6)
                      (#x12D8 . #x1310)
                      (#x1312 . #x1315)
                      (#x1318 . #x135A)
-                     #x135F
+ #x135F
                      (#x1380 . #x138F)
                      (#x13A0 . #x13F4)
                      (#x1401 . #x166C)
@@ -3233,26 +3310,26 @@ are rounded up to a multiple of 64Kbytes."
                      (#x176E . #x1770)
                      (#x1772 . #x1773)
                      (#x1780 . #x17B3)
-                     #x17B6
+ #x17B6
                      (#x17B7 . #x17BD)
                      (#x17BE . #x17C5)
-                     #x17C6
+ #x17C6
                      (#x17C7 . #x17C8)
-                     #x17D7
-                     #x17DC
+ #x17D7
+ #x17DC
                      (#x1820 . #x1842)
-                     #x1843
+ #x1843
                      (#x1844 . #x1877)
                      (#x1880 . #x18A8)
-                     #x18A9
-                     #x18AA
+ #x18A9
+ #x18AA
                      (#x1900 . #x191C)
                      (#x1920 . #x1922)
                      (#x1923 . #x1926)
                      (#x1927 . #x1928)
                      (#x1929 . #x192B)
                      (#x1930 . #x1931)
-                     #x1932
+ #x1932
                      (#x1933 . #x1938)
                      (#x1950 . #x196D)
                      (#x1970 . #x1974)
@@ -3264,20 +3341,20 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1A17 . #x1A18)
                      (#x1A19 . #x1A1B)
                      (#x1B00 . #x1B03)
-                     #x1B04
+ #x1B04
                      (#x1B05 . #x1B33)
-                     #x1B35
+ #x1B35
                      (#x1B36 . #x1B3A)
-                     #x1B3B
-                     #x1B3C
+ #x1B3B
+ #x1B3C
                      (#x1B3D . #x1B41)
-                     #x1B42
-                     #x1B43
+ #x1B42
+ #x1B43
                      (#x1B45 . #x1B4B)
                      (#x1B80 . #x1B81)
-                     #x1B82
+ #x1B82
                      (#x1B83 . #x1BA0)
-                     #x1BA1
+ #x1BA1
                      (#x1BA2 . #x1BA5)
                      (#x1BA6 . #x1BA7)
                      (#x1BA8 . #x1BA9)
@@ -3292,7 +3369,7 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1D00 . #x1D2B)
                      (#x1D2C . #x1D61)
                      (#x1D62 . #x1D77)
-                     #x1D78
+ #x1D78
                      (#x1D79 . #x1D9A)
                      (#x1D9B . #x1DBF)
                      (#x1E00 . #x1F15)
@@ -3300,13 +3377,13 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1F20 . #x1F45)
                      (#x1F48 . #x1F4D)
                      (#x1F50 . #x1F57)
-                     #x1F59
-                     #x1F5B
-                     #x1F5D
+ #x1F59
+ #x1F5B
+ #x1F5D
                      (#x1F5F . #x1F7D)
                      (#x1F80 . #x1FB4)
                      (#x1FB6 . #x1FBC)
-                     #x1FBE
+ #x1FBE
                      (#x1FC2 . #x1FC4)
                      (#x1FC6 . #x1FCC)
                      (#x1FD0 . #x1FD3)
@@ -3314,24 +3391,24 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1FE0 . #x1FEC)
                      (#x1FF2 . #x1FF4)
                      (#x1FF6 . #x1FFC)
-                     #x2071
-                     #x207F
+ #x2071
+ #x207F
                      (#x2090 . #x2094)
-                     #x2102
-                     #x2107
+ #x2102
+ #x2107
                      (#x210A . #x2113)
-                     #x2115
+ #x2115
                      (#x2119 . #x211D)
-                     #x2124
-                     #x2126
-                     #x2128
+ #x2124
+ #x2126
+ #x2128
                      (#x212A . #x212D)
                      (#x212F . #x2134)
                      (#x2135 . #x2138)
-                     #x2139
+ #x2139
                      (#x213C . #x213F)
                      (#x2145 . #x2149)
-                     #x214E
+ #x214E
                      (#x2160 . #x2182)
                      (#x2183 . #x2184)
                      (#x2185 . #x2188)
@@ -3340,11 +3417,11 @@ are rounded up to a multiple of 64Kbytes."
                      (#x2C30 . #x2C5E)
                      (#x2C60 . #x2C6F)
                      (#x2C71 . #x2C7C)
-                     #x2C7D
+ #x2C7D
                      (#x2C80 . #x2CE4)
                      (#x2D00 . #x2D25)
                      (#x2D30 . #x2D65)
-                     #x2D6F
+ #x2D6F
                      (#x2D80 . #x2D96)
                      (#x2DA0 . #x2DA6)
                      (#x2DA8 . #x2DAE)
@@ -3355,21 +3432,21 @@ are rounded up to a multiple of 64Kbytes."
                      (#x2DD0 . #x2DD6)
                      (#x2DD8 . #x2DDE)
                      (#x2DE0 . #x2DFF)
-                     #x2E2F
-                     #x3005
-                     #x3006
-                     #x3007
+ #x2E2F
+ #x3005
+ #x3006
+ #x3007
                      (#x3021 . #x3029)
                      (#x3031 . #x3035)
                      (#x3038 . #x303A)
-                     #x303B
-                     #x303C
+ #x303B
+ #x303C
                      (#x3041 . #x3096)
                      (#x309D . #x309E)
-                     #x309F
+ #x309F
                      (#x30A1 . #x30FA)
                      (#x30FC . #x30FE)
-                     #x30FF
+ #x30FF
                      (#x3105 . #x312D)
                      (#x3131 . #x318E)
                      (#x31A0 . #x31B7)
@@ -3377,22 +3454,22 @@ are rounded up to a multiple of 64Kbytes."
                      (#x3400 . #x4DB5)
                      (#x4E00 . #x9FC3)
                      (#xA000 . #xA014)
-                     #xA015
+ #xA015
                      (#xA016 . #xA48C)
                      (#xA500 . #xA60B)
-                     #xA60C
+ #xA60C
                      (#xA610 . #xA61F)
                      (#xA62A . #xA62B)
                      (#xA640 . #xA65F)
                      (#xA662 . #xA66D)
-                     #xA66E
-                     #xA67F
+ #xA66E
+ #xA67F
                      (#xA680 . #xA697)
                      (#xA717 . #xA71F)
                      (#xA722 . #xA76F)
-                     #xA770
+ #xA770
                      (#xA771 . #xA787)
-                     #xA788
+ #xA788
                      (#xA78B . #xA78C)
                      (#xA7FB . #xA801)
                      (#xA803 . #xA805)
@@ -3400,7 +3477,7 @@ are rounded up to a multiple of 64Kbytes."
                      (#xA80C . #xA822)
                      (#xA823 . #xA824)
                      (#xA825 . #xA826)
-                     #xA827
+ #xA827
                      (#xA840 . #xA873)
                      (#xA880 . #xA881)
                      (#xA882 . #xA8B3)
@@ -3409,7 +3486,7 @@ are rounded up to a multiple of 64Kbytes."
                      (#xA926 . #xA92A)
                      (#xA930 . #xA946)
                      (#xA947 . #xA951)
-                     #xA952
+ #xA952
                      (#xAA00 . #xAA28)
                      (#xAA29 . #xAA2E)
                      (#xAA2F . #xAA30)
@@ -3417,22 +3494,22 @@ are rounded up to a multiple of 64Kbytes."
                      (#xAA33 . #xAA34)
                      (#xAA35 . #xAA36)
                      (#xAA40 . #xAA42)
-                     #xAA43
+ #xAA43
                      (#xAA44 . #xAA4B)
-                     #xAA4C
-                     #xAA4D
+ #xAA4C
+ #xAA4D
                      (#xAC00 . #xD7A3)
                      (#xF900 . #xFA2D)
                      (#xFA30 . #xFA6A)
                      (#xFA70 . #xFAD9)
                      (#xFB00 . #xFB06)
                      (#xFB13 . #xFB17)
-                     #xFB1D
-                     #xFB1E
+ #xFB1D
+ #xFB1E
                      (#xFB1F . #xFB28)
                      (#xFB2A . #xFB36)
                      (#xFB38 . #xFB3C)
-                     #xFB3E
+ #xFB3E
                      (#xFB40 . #xFB41)
                      (#xFB43 . #xFB44)
                      (#xFB46 . #xFBB1)
@@ -3445,7 +3522,7 @@ are rounded up to a multiple of 64Kbytes."
                      (#xFF21 . #xFF3A)
                      (#xFF41 . #xFF5A)
                      (#xFF66 . #xFF6F)
-                     #xFF70
+ #xFF70
                      (#xFF71 . #xFF9D)
                      (#xFF9E . #xFF9F)
                      (#xFFA0 . #xFFBE)
@@ -3465,9 +3542,9 @@ are rounded up to a multiple of 64Kbytes."
                      (#x102A0 . #x102D0)
                      (#x10300 . #x1031E)
                      (#x10330 . #x10340)
-                     #x10341
+ #x10341
                      (#x10342 . #x10349)
-                     #x1034A
+ #x1034A
                      (#x10380 . #x1039D)
                      (#x103A0 . #x103C3)
                      (#x103C8 . #x103CF)
@@ -3475,14 +3552,14 @@ are rounded up to a multiple of 64Kbytes."
                      (#x10400 . #x1044F)
                      (#x10450 . #x1049D)
                      (#x10800 . #x10805)
-                     #x10808
+ #x10808
                      (#x1080A . #x10835)
                      (#x10837 . #x10838)
-                     #x1083C
-                     #x1083F
+ #x1083C
+ #x1083F
                      (#x10900 . #x10915)
                      (#x10920 . #x10939)
-                     #x10A00
+ #x10A00
                      (#x10A01 . #x10A03)
                      (#x10A05 . #x10A06)
                      (#x10A0C . #x10A0F)
@@ -3494,11 +3571,11 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1D400 . #x1D454)
                      (#x1D456 . #x1D49C)
                      (#x1D49E . #x1D49F)
-                     #x1D4A2
+ #x1D4A2
                      (#x1D4A5 . #x1D4A6)
                      (#x1D4A9 . #x1D4AC)
                      (#x1D4AE . #x1D4B9)
-                     #x1D4BB
+ #x1D4BB
                      (#x1D4BD . #x1D4C3)
                      (#x1D4C5 . #x1D505)
                      (#x1D507 . #x1D50A)
@@ -3507,7 +3584,7 @@ are rounded up to a multiple of 64Kbytes."
                      (#x1D51E . #x1D539)
                      (#x1D53B . #x1D53E)
                      (#x1D540 . #x1D544)
-                     #x1D546
+ #x1D546
                      (#x1D54A . #x1D550)
                      (#x1D552 . #x1D6A5)
                      (#x1D6A8 . #x1D6C0)
@@ -3542,7 +3619,7 @@ are rounded up to a multiple of 64Kbytes."
          (not (eql 0 (sbit bits code))))))
 
 
-;;; def-accessors type-tracking stuff.  Used by inspector
+;;; def-accessors type-tracking stuff. Used by inspector
 (defvar *def-accessor-types* nil)
 
 (defun add-accessor-types (types names)

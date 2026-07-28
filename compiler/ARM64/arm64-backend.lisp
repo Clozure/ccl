@@ -18,7 +18,7 @@
 (defvar *arm64-vinsn-templates* (make-hash-table :test #'eq))
 (defvar *known-arm64-backends* ())
 
-;;; This defines a template.  All expressions in the body must be
+;;; This defines a template. All expressions in the body must be
 ;;; evaluable at macroexpansion time.
 (defun %define-arm64-vinsn (backend vinsn-name results args temps body)
   (let* ((arch-name (backend-target-arch-name backend))
@@ -42,10 +42,10 @@
                           (eq (cadr x) :label)
                           (and (consp (cadr x))
                                (or (assoc (caadr x)
-                                          *vreg-specifier-constant-constraints*
+ *vreg-specifier-constant-constraints*
                                           :test #'eq)
                                    (assoc (caadr x)
-                                          *spec-class-storage-class-alist*
+ *spec-class-storage-class-alist*
                                           :test #'eq))))
                       (car x))
                  (error "Invalid vreg spec: ~s" x)))
@@ -63,9 +63,9 @@
       (dolist (n (append args temps))
         (add-spec-name (valid-spec-name n)))
       (setq name-list (nreverse name-list))
-      ;; We now know that "args" is an alist; we don't know if
-      ;; "results" is.  First, make sure that there are no duplicate
-      ;; result names (and validate "results".)
+ ;; We now know that "args" is an alist; we don't know if
+ ;; "results" is. First, make sure that there are no duplicate
+ ;; result names (and validate "results".)
       (do* ((res results tail)
             (tail (cdr res) (cdr tail)))
            ((null res))
@@ -91,11 +91,11 @@
         (declare (fixnum k))
         (let* ((name-alist (mapcar #'(lambda (n) (cons n (list (incf k))))
                                    name-list))
-               ;; Map each parameter name to its storage-class keyword, so
-               ;; VINSN-SIMPLIFY-INSTRUCTION can tell an X operand from a W,
-               ;; D, or S when selecting a template.  A wired spec is
-               ;; (class value) (e.g. (:u64 imm0) or (:crf 0)); we want just
-               ;; the class keyword, not the whole list.
+ ;; Map each parameter name to its storage-class keyword, so
+ ;; VINSN-SIMPLIFY-INSTRUCTION can tell an X operand from a W,
+ ;; D, or S when selecting a template. A wired spec is
+ ;; (class value) (e.g. (:u64 imm0) or (:crf 0)); we want just
+ ;; the class keyword, not the whole list.
                (param-types (mapcar #'(lambda (s)
                                         (let ((class (cadr s)))
                                           (cons (car s)
@@ -124,24 +124,24 @@
                          `(,(cadr op) ,@(mapcar #'simplify-operand (cddr op)))
                          (simplify-operand (eval op))))) ; Handler-case this?
                    (simplify-constraint (guard)
-                     ;; A constraint is one of
-                     ;;
-                     ;; (:eq|:lt|:gt vreg-name constant)
-                     ;;
-                     ;; value" of vreg relop constant
-                     ;;
-                     ;; (:pred <function-name> <operand>* ;
-                     ;; <function-name> unquoted, each <operand>
-                     ;; is a vreg-name or constant expression.
-                     ;;
-                     ;; (:type vreg-name typeval) ; vreg is of
-                     ;; "type" typeval
-                     ;;
-                     ;;(:not <constraint>) ; constraint is false
-                     ;; (:and <constraint> ...)        ;  conjuntion
-                     ;; (:or <constraint> ...)         ;  disjunction
-                     ;; There's no "else"; we'll see how ugly it
-                     ;; is without one.
+ ;; A constraint is one of
+ ;;
+ ;; (:eq|:lt|:gt vreg-name constant)
+ ;;
+ ;; value" of vreg relop constant
+ ;;
+ ;; (:pred <function-name> <operand>* ;
+ ;; <function-name> unquoted, each <operand>
+ ;; is a vreg-name or constant expression.
+ ;;
+ ;; (:type vreg-name typeval) ; vreg is of
+ ;; "type" typeval
+ ;;
+ ;;(:not <constraint>) ; constraint is false
+ ;; (:and <constraint> ...) ; conjuntion
+ ;; (:or <constraint> ...) ; disjunction
+ ;; There's no "else"; we'll see how ugly it
+ ;; is without one.
                      (destructuring-bind (guardname &rest others) guard
                        (ecase guardname
                          (:not
@@ -161,7 +161,7 @@
                           (unless others
                             (error "Missing constraint list in ~s ." guard))
                           `(,guardname ,(mapcar
-                                         #'simplify-constraint others))))))
+ #'simplify-constraint others))))))
                    (simplify-form (form)
                      (if (atom form)
                        (progn
@@ -176,8 +176,8 @@
                              (multiple-value-bind (simplified entry)
                                  (arm64::vinsn-simplify-instruction
                                   form name-list param-types)
-                               ;; Record (ordinal name . specs) so the
-                               ;; ordinal can be re-resolved at load time.
+ ;; Record (ordinal name . specs) so the
+ ;; ordinal can be re-resolved at load time.
                                (when entry
                                  (pushnew entry opcode-alist
                                           :key #'car :test #'eql))
@@ -234,6 +234,7 @@
                 :target-foreign-type-data nil
                 :target-arch arm64::*arm64-target-arch*))
 
+#+(or darwinarm64-target (not arm64-target))
 (pushnew *darwinarm64-backend* *known-arm64-backends*)
 
 (defvar *arm64-backend* (car *known-arm64-backends*))
@@ -250,11 +251,11 @@
 
 ;;; A vinsn template body bakes in, for each instruction, the ordinal of
 ;;; the assembler template it was matched against at vinsn-definition
-;;; time.  If the assembler's template vector is reordered after the
-;;; vinsns were compiled, those ordinals go stale.  Re-resolve them: for
+;;; time. If the assembler's template vector is reordered after the
+;;; vinsns were compiled, those ordinals go stale. Re-resolve them: for
 ;;; each recorded (ordinal name . operand-specs) entry, find the template
 ;;; of that name whose operand-specs match and read its current ordinal,
-;;; rewriting the body where the ordinal changed.  Mirrors the x86 port's
+;;; rewriting the body where the ordinal changed. Mirrors the x86 port's
 ;;; FIXUP-OPCODE-ORDINALS; the ARM64 assembler is name-indexed and
 ;;; templates carry their operand-specs, so we key on name + specs.
 (defun fixup-arm64-vinsn-ordinals (vinsn-template)
@@ -290,10 +291,10 @@
         (dolist (form (vinsn-template-body vinsn-template))
           (fixup-form form))))))
 
-;;; Re-resolve template ordinals in every defined vinsn.  Idempotent.
+;;; Re-resolve template ordinals in every defined vinsn. Idempotent.
 ;;; TEMPLATE-HASH maps vinsn names to (name . vinsn-template) cells.
 (defun fixup-arm64-vinsn-templates (&optional (template-hash
-                                               *arm64-vinsn-templates*))
+ *arm64-vinsn-templates*))
   (maphash #'(lambda (name cell)
                (declare (ignore name))
                (when (cdr cell)         ;defined (not merely referenced)
@@ -303,6 +304,19 @@
 #+arm64-target
 (setq *host-backend* *arm64-backend* *target-backend* *arm64-backend*)
 
+;;; PROPOSED replacement for setup-arm64-ftd (compiler/ARM64/arm64-backend.lisp).
+;;; His version has only a (:darwinarm64 ...) case. This superset keeps the
+;;; darwinarm64 case VERBATIM and adds (:linuxarm64 ...). Loaded after his
+;;; arm64-backend.lisp so this definition wins. Deltas from darwin in the
+;;; linux case:
+;;; :interface-db-directory "ccl:arm64-headers64;" (our populated linux
+;;; libc interface db; the G1 gate maps ccl:arm64-headers64; to the
+;;; on-box path via a logical-pathname translation)
+;;; :interface-package-name "ARM64-LINUX64"
+;;; :signed-char nil — `char' is UNSIGNED by ABI on aarch64-linux-gnu
+;;; (AAPCS64 leaves char signedness to the platform; the Linux/GNU
+;;; psABI makes it unsigned, opposite of Darwin's signed char).
+;;; the four ff-call/callback fns interned in "ARM64-LINUX64".
 (defun setup-arm64-ftd (backend)
   (or (backend-target-foreign-type-data backend)
       (let* ((name (backend-name backend))
@@ -311,7 +325,7 @@
                  (:darwinarm64
                   (make-ftd
                    :interface-db-directory "ccl:darwin-arm64-headers;"
-		   :interface-package-name "ARM64-DARWIN"
+                   :interface-package-name "ARM64-DARWIN"
                    :attributes '(:bits-per-word 64
                                  :signed-char t
                                  :struct-by-value t
@@ -319,19 +333,36 @@
                                  :prepend-underscore nil)
                    :ff-call-expand-function
                    (intern "EXPAND-FF-CALL" "ARM64-DARWIN")
-		   :ff-call-struct-return-by-implicit-arg-function
+                   :ff-call-struct-return-by-implicit-arg-function
                    (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
                            "ARM64-DARWIN")
                    :callback-bindings-function
                    (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-DARWIN")
                    :callback-return-value-function
                    (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-DARWIN")))
+                 (:linuxarm64
+                  (make-ftd
+                   :interface-db-directory "ccl:arm64-headers64;"
+                   :interface-package-name "ARM64-LINUX64"
+                   :attributes '(:bits-per-word 64
+                                 :signed-char nil
+                                 :struct-by-value t
+                                 :natural-alignment t
+                                 :prepend-underscore nil)
+                   :ff-call-expand-function
+                   (intern "EXPAND-FF-CALL" "ARM64-LINUX64")
+                   :ff-call-struct-return-by-implicit-arg-function
+                   (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                           "ARM64-LINUX64")
+                   :callback-bindings-function
+                   (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-LINUX64")
+                   :callback-return-value-function
+                   (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-LINUX64")))
                  )))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
         (setf (backend-target-foreign-type-data backend) ftd))))
 
-#-arm64-target
 (pushnew *darwinarm64-backend* *known-backends* :key #'backend-name)
 
 
@@ -339,7 +370,7 @@
 
 ;;; If the type, T, of the result of a function is such that
 ;;;
-;;;   void func(T arg)
+;;; void func(T arg)
 ;;;
 ;;; would require that arg be passed as a value in a register (or set
 ;;; of registers) according to the rules in Parameter passing, then
@@ -353,11 +384,11 @@
 ;;; any point during the execution of the subroutine (there is no
 ;;; requirement for the callee to preserve the value stored in x8).
 ;;;
-;;;                                - Procedure Call Standard, § 6.9
+;;; - Procedure Call Standard, § 6.9
 
 ;;; If a returned struct is more than 16 bytes long, the caller will
 ;;; reserve memory for the return value and pass a pointer to that
-;;; memory in register x8.  (Not as a hidden first argument, despite
+;;; memory in register x8. (Not as a hidden first argument, despite
 ;;; the name of this function.)
 (defun arm64::record-type-returns-structure-as-first-arg (rtype)
   (when (and rtype
@@ -376,3 +407,80 @@
   (declare (ignore callform args arg-coerce result-coerce)))
 
 (provide "ARM64-BACKEND")
+
+;;; ------------------------------------------------------------------
+;;; Merged from the linuxarm64 port's compiler overlay. Appended in the
+;;; order our build concatenated the fasls, so the definition that wins
+;;; is the one that won when the suite was measured.
+;;; ------------------------------------------------------------------
+
+(defvar *linuxarm64-backend*
+  (make-backend :lookup-opcode #'false
+                :lookup-macro #'false
+                :lap-opcodes #()
+                :define-vinsn '%define-arm64-vinsn
+                :platform-syscall-mask (logior platform-os-linux platform-cpu-arm64)
+                :p2-dispatch *arm642-specials*
+                :p2-vinsn-templates *arm64-vinsn-templates*
+                :p2-template-hash-name '*arm64-vinsn-templates*
+                :p2-compile 'arm642-compile
+                :target-specific-features
+                '(:arm64 :arm64-target :linux-target :linuxarm64-target
+                  :64-bit-target :little-endian-target)
+                :target-fasl-pathname (make-pathname :type "la64fsl")
+                :target-platform (logior platform-word-size-64
+                                         platform-cpu-arm64
+                                         platform-os-linux)
+                :target-os :linuxarm64
+                :name :linuxarm64
+                :target-arch-name :arm64
+                :target-foreign-type-data nil
+                :target-arch arm64::*arm64-target-arch*))
+
+
+(pushnew *linuxarm64-backend* *known-arm64-backends*)
+
+
+;;; His (fixup-arm64-backend) call runs at the end of HIS file, at which
+;;; point *known-arm64-backends* does not yet contain this backend (this
+;;; file loads after his), so the linux backend's lap-macros hash /
+;;; lap-opcodes / p2 wiring never happen — the first resident
+;;; defarm64lapmacro then dies (gethash on NIL) mid-cold-load. The
+;;; fixup is or-guarded, so re-running it is idempotent for darwin.
+(fixup-arm64-backend)
+
+
+(pushnew *linuxarm64-backend* *known-backends* :key #'backend-name)
+
+
+;;; Resident (arm64-target) registration, mirroring x8664-backend.lisp:
+;;; x8664:210 setqs *host-backend*/*target-backend* and x8664:662 requires
+;;; the vinsns module before the provide. His arm64-backend.lisp instead
+;;; sets *host-backend* to *arm64-backend* — the CAR of
+;;; *known-arm64-backends*, i.e. DARWINARM64 (this file's pushnew runs
+;;; after his defvar) — and never requires ARM64-VINSNS anywhere, so on a
+;;; linux resident the host backend would carry darwin OS features/FTD and
+;;; no vinsn templates would ever load. Both forms are reader-dropped on
+;;; the x86 gate host (features = x8664), so gate behavior is unchanged.
+#+linuxarm64-target
+(setq *arm64-backend* *linuxarm64-backend*
+ *host-backend* *linuxarm64-backend*
+ *target-backend* *linuxarm64-backend*)
+
+
+;;; PROPOSED addition to compiler/ARM64/arm64-backend.lisp: every other
+;;; backend requires NXENV (the nx compiler environment: nx-init-var,
+;;; nx-cons-var, nx-need-var, with-declarations, …) — ppc64-backend.lisp:22,
+;;; x8664-backend.lisp:22 both `(require "NXENV")`. Matt's arm64-backend.lisp
+;;; omits it. On a dumped-compiler host (ppc/x86) that omission is harmless
+;;; because nxenv is already in the image; on our DEMAND-LOADED resident
+;;; compiler nothing ever pulls nxenv, so nx1 funcalls an undefined
+;;; nx-init-var (: (defun ...) -> "Undefined function CCL::NX-INIT-VAR").
+;;; A load-time require pulls the fasl, mirroring the ARM64-VINSNS require
+;;; just below (the established resident module-pull idiom here).
+#+arm64-target
+(require "NXENV")
+
+#+arm64-target
+
+(require "ARM64-VINSNS")

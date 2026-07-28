@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,12 +15,12 @@
 ;;; limitations under the License.
 (in-package "CCL")
 
-;;; A "register spec" is a fixnum.  Bit 28 is clear; bits 24-26
-;;; (inclusive) define the type of register-spec in question.  Of
+;;; A "register spec" is a fixnum. Bit 28 is clear; bits 24-26
+;;; (inclusive) define the type of register-spec in question. Of
 ;;; course, a register spec can also be a "logical register" (lreg)
-;;; structure.  Someday soon, these might totally replace the fixnum
+;;; structure. Someday soon, these might totally replace the fixnum
 ;;; "hard regspecs" that're described in this file, and might be used
-;;; to refer to stack-based values as well as registers.  In the
+;;; to refer to stack-based values as well as registers. In the
 ;;; meantime, we have to bootstrap a bit.
 
 (defmacro register-spec-p (regspec)
@@ -54,7 +54,7 @@
 ; "imm" (unboxed) registers.
 ; A GPR whose "mode" is hard-reg-class-gpr-mode-node can have a "type"
 ; field which asserts that the register's contents map onto one or more
-; of the primitive non-node types.  This information can help some of 
+; of the primitive non-node types. This information can help some of 
 ; the functions that copy between GPRs of different "mode" elide some
 ; type-checking.
 (defconstant regspec-hard-reg-type-value-byte (byte 8 0))
@@ -159,9 +159,9 @@
       (error "bad regspec: ~s" regspec))))
 
 (defparameter *encoded-reg-value-byte*
-  #+x8664-target (byte 4 0)
-  #+x8632-target (byte 3 0)
-  #+(or arm-target ppc-target) (byte 5 0))
+ #+x8664-target (byte 4 0)
+ #+x8632-target (byte 3 0)
+ #+(or arm-target ppc-target arm64-target) (byte 5 0))
 
 ; Return physical regspec's value:
 (defmacro hard-regspec-value (regspec)
@@ -175,7 +175,7 @@
       (error "bad regspec: ~s" regspec))))
 
 ;;; Logical (as opposed to "physical") registers are represented by structures
-;;; of type LREG.  The structures let us track information about assignments
+;;; of type LREG. The structures let us track information about assignments
 ;;; and references to lregs, and the indirection lets us defer decisions about
 ;;; storage mapping (register assignment, etc.) until later.
 
@@ -189,7 +189,7 @@
 ;; or any non-lisp object.
 (defconstant regspec-any-gpr-reg-type (logior regspec-lisp-reg-type regspec-unboxed-reg-type))
 
-;; An FPR.  All FPRs are created equal; there's no reason to 
+;; An FPR. All FPRs are created equal; there's no reason to 
 ;; worry about whether an FPR's holding a 32 or 64-bit float.
 (defconstant regspec-fpr-reg-type 4)
 
@@ -207,7 +207,7 @@
         regspec-hard-reg-type-mode-byte 
         (dpb hard-reg-class-fpr regspec-hard-reg-type-class-byte (the fixnum ,regnum))))
   
-;;; "Memory specs" have bit 28 set.  Since bit 28 is the sign bit in 68K MCL,
+;;; "Memory specs" have bit 28 set. Since bit 28 is the sign bit in 68K MCL,
 ;;; we have to be a little careful when creating them to ensure that the result
 ;;; is a fixnum.
 
@@ -226,13 +226,13 @@
 (defmacro memspec-single-ref-p (memspec)
   `(logbitp  memspec-single-ref-bit ,memspec))
 
-;;; A slot in the value-stack frame.  This needs to get interpreted
-;;; relative to the top of the vsp.  The low 15 bits denote the
+;;; A slot in the value-stack frame. This needs to get interpreted
+;;; relative to the top of the vsp. The low 15 bits denote the
 ;;; offset in the frame; the low 2 bits are always clear, since the
 ;;; vstack is always aligned on a 32-bit boundary.
 (defconstant memspec-frame-address 0)
 
-;;; Something relative to the NFP.  NFP offsets are always (at least)
+;;; Something relative to the NFP. NFP offsets are always (at least)
 ;;; 8-byte aligned, so the low 3 bits encode the type of object stored
 ;;; at that address.
 (defconstant memspec-nfp-offset 1)
@@ -253,7 +253,7 @@
 
 
 ;;; Address-specs - whether memory- or register-based - might be used to indicate the
-;;; canonical address of a variable.  Sometimes, this address is actually the address
+;;; canonical address of a variable. Sometimes, this address is actually the address
 ;;; of a "value cell" object; if so, bit 27 will be set in the indicated address.
 
 (defun addrspec-vcell-p (x)

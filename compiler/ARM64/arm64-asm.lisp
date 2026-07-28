@@ -12,6 +12,22 @@
 (defvar *constants* ())
 (defvar *instructions* ())
 
+;;; Map a subprim name (a symbol or string, e.g. '.SPgvset) to its byte
+;;; offset in the per-thread subprim table, or NIL if there is no such
+;;; subprim. arm642.lisp already calls this at five sites -- e.g.
+;;; (! call-subprim-3 arg_z (arm64-subprimitive-offset '.SPgvset) ...) in
+;;; arm642-%gvset and the %rplaca/%rplacd pair -- so a cross-compile of
+;;; level-0 dies in l0-array with "Undefined function
+;;; ARM64::ARM64-SUBPRIMITIVE-OFFSET called with arguments (.SPGVSET)".
+;;; Same body and same home as ARM32's arm-subprimitive-offset
+;;; (compiler/ARM/arm-asm.lisp:52), over ARM64's own *subprims* vector.
+(defun arm64-subprimitive-offset (x)
+  (if (and x (or (symbolp x) (stringp x)))
+    (let* ((info (find x arm64::*subprims* :test #'string-equal
+                       :key #'ccl::subprimitive-info-name)))
+      (when info
+        (ccl::subprimitive-info-offset info)))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defstruct register
@@ -29,7 +45,7 @@
 (defconstant $rflag-sp 1)               ;r31 role is stack pointer
 
 ;;; Given a designator for a register name, figure out everything the
-;;; name implies.  Returns (values name number width family flags).
+;;; name implies. Returns (values name number width family flags).
 (defun %parse-register-name (designator)
   (let ((name (string-downcase designator)))
     (cond
@@ -62,43 +78,43 @@
 
 (defparameter *registers*
   (vector
-   ;; 64 bit
+ ;; 64 bit
    (reg x0) (reg x1) (reg x2) (reg x3) (reg x4) (reg x5) (reg x6)
    (reg x7) (reg x8) (reg x9) (reg x10) (reg x11) (reg x12) (reg x13)
    (reg x14) (reg x15) (reg x16) (reg x17) (reg x18) (reg x19) (reg x20)
    (reg x21) (reg x22) (reg x23) (reg x24) (reg x25) (reg x26) (reg x27)
    (reg x28) (reg x29) (reg x30) (reg xzr) (reg sp)
-   ;; 32 bit
+ ;; 32 bit
    (reg w0) (reg w1) (reg w2) (reg w3) (reg w4) (reg w5) (reg w6)
    (reg w7) (reg w8) (reg w9) (reg w10) (reg w11) (reg w12) (reg w13)
    (reg w14) (reg w15) (reg w16) (reg w17) (reg w18) (reg w19) (reg w20)
    (reg w21) (reg w22) (reg w23) (reg w24) (reg w25) (reg w26) (reg w27)
    (reg w28) (reg w29) (reg w30) (reg wzr) (reg wsp)
-   ;; scalar single-float
+ ;; scalar single-float
    (reg s0) (reg s1) (reg s2) (reg s3) (reg s4) (reg s5) (reg s6)
    (reg s7) (reg s8) (reg s9) (reg s10) (reg s11) (reg s12) (reg s13)
    (reg s14) (reg s15) (reg s16) (reg s17) (reg s18) (reg s19) (reg s20)
    (reg s21) (reg s22) (reg s23) (reg s24) (reg s25) (reg s26) (reg s27)
    (reg s28) (reg s29) (reg s30) (reg s31)
-   ;; scalar double-float
+ ;; scalar double-float
    (reg d0) (reg d1) (reg d2) (reg d3) (reg d4) (reg d5) (reg d6)
    (reg d7) (reg d8) (reg d9) (reg d10) (reg d11) (reg d12) (reg d13)
    (reg d14) (reg d15) (reg d16) (reg d17) (reg d18) (reg d19) (reg d20)
    (reg d21) (reg d22) (reg d23) (reg d24) (reg d25) (reg d26) (reg d27)
    (reg d28) (reg d29) (reg d30) (reg d31)
-   ;; 128-bit fprs
+ ;; 128-bit fprs
    (reg q0) (reg q1) (reg q2) (reg q3) (reg q4) (reg q5) (reg q6)
    (reg q7) (reg q8) (reg q9) (reg q10) (reg q11) (reg q12) (reg q13)
    (reg q14) (reg q15) (reg q16) (reg q17) (reg q18) (reg q19) (reg q20)
    (reg q21) (reg q22) (reg q23) (reg q24) (reg q25) (reg q26) (reg q27)
    (reg q28) (reg q29) (reg q30) (reg q31)
-   ;; byte view
+ ;; byte view
    (reg b0) (reg b1) (reg b2) (reg b3) (reg b4) (reg b5) (reg b6)
    (reg b7) (reg b8) (reg b9) (reg b10) (reg b11) (reg b12) (reg b13)
    (reg b14) (reg b15) (reg b16) (reg b17) (reg b18) (reg b19) (reg b20)
    (reg b21) (reg b22) (reg b23) (reg b24) (reg b25) (reg b26) (reg b27)
    (reg b28) (reg b29) (reg b30) (reg b31)
-   ;; halfword view
+ ;; halfword view
    (reg h0) (reg h1) (reg h2) (reg h3) (reg h4) (reg h5) (reg h6)
    (reg h7) (reg h8) (reg h9) (reg h10) (reg h11) (reg h12) (reg h13)
    (reg h14) (reg h15) (reg h16) (reg h17) (reg h18) (reg h19) (reg h20)
@@ -109,22 +125,22 @@
 (ccl::defenum ()
    x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  x10 x11 x12 x13 x14 x15
    x16 x17 x18 x19 x20 x21 x22 x23 x24 x25 x26 x27 x28 x29 x30 xzr sp
-   ;; 32-bit names
+ ;; 32-bit names
    w0  w1  w2  w3  w4  w5  w6  w7  w8  w9  w10 w11 w12 w13 w14 w15
    w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 wzr wsp
-   ;; single-float names
+ ;; single-float names
    s0  s1  s2  s3  s4  s5  s6  s7  s8  s9  s10 s11 s12 s13 s14 s15
    s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26 s27 s28 s29 s30 s31
-   ;; double-float names
+ ;; double-float names
    d0  d1  d2  d3  d4  d5  d6  d7  d8  d9  d10 d11 d12 d13 d14 d15
    d16 d17 d18 d19 d20 d21 d22 d23 d24 d25 d26 d27 d28 d29 d30 d31
-   ;; 128-bit names
+ ;; 128-bit names
    q0  q1  q2  q3  q4  q5  q6  q7  q8  q9  q10 q11 q12 q13 q14 q15
    q16 q17 q18 q19 q20 q21 q22 q23 q24 q25 q26 q27 q28 q29 q30 q31
-   ;; byte names
+ ;; byte names
    b0  b1  b2  b3  b4  b5  b6  b7  b8  b9  b10 b11 b12 b13 b14 b15
    b16 b17 b18 b19 b20 b21 b22 b23 b24 b25 b26 b27 b28 b29 b30 b31
-   ;; halfword names
+ ;; halfword names
    h0  h1  h2  h3  h4  h5  h6  h7  h8  h9  h10 h11 h12 h13 h14 h15
    h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31)
 
@@ -168,7 +184,7 @@
          (error "Register ~a not defined" ',known))
        (setf (gethash ,(string alias) *registers-by-name*) ,known-entry)
        (push (cons ,(string-downcase known) ,(string-downcase alias))
-             *register-alias-names*)
+ *register-alias-names*)
        (defconstant ,alias ,known))))
 
 (define-register-alias fp x29)          ;frame pointer
@@ -221,7 +237,7 @@
 ) ;eval-when
 
 ;; Temporary register aliases established via LAP notation
-;; (see arm64-lap-equate-form).  This is an alist mapping
+;; (see arm64-lap-equate-form). This is an alist mapping
 ;; symbols to register structs.
 (defvar *lap-register-equates* ())
 
@@ -312,20 +328,20 @@
 ;;; Here's the vocabulary:
 ;;;
 ;;; Bare keywords, such as :aimm or :limm-x represent a immediate
-;;; value of various sorts.  They have particular valid ranges, and
+;;; value of various sorts. They have particular valid ranges, and
 ;;; go into differeing bit-fields within the instruction word.
 ;;;
-;;; (:mem-* ...) represent a memory operand.  Generally speaking,
+;;; (:mem-* ...) represent a memory operand. Generally speaking,
 ;;; all memory operands include a base register and an offset.
 ;;; :mem-scaled represents an immediate offset that is scaled by the
 ;;; memory access size.
 ;;; :mem-unscaled is an immediate offset in the range -256--255.
-;;; There also need to be :mem-shifted  and :mem-extended, where
+;;; There also need to be :mem-shifted and :mem-extended, where
 ;;; the offset is a register that is shifted or extended in some way.
 ;;;
-;;; Otherwise, something like (:rd :x) represents a register.  In this
-;;; example, the first item, :rd, represents a role.  In this case,
-;;; the role is the Rd field in an instruction word.  The second item,
+;;; Otherwise, something like (:rd :x) represents a register. In this
+;;; example, the first item, :rd, represents a role. In this case,
+;;; the role is the Rd field in an instruction word. The second item,
 ;;; :x in this case, represents a class: the set of concrete registers
 ;;; that are eligible to fill the specified role.
 
@@ -342,14 +358,14 @@
 ;;; There are three kinds of operands: register, immediate, and memory.
 ;;;
 ;;; An operand class (e.g., :x, :w, :aimm, &c.) may be thought of as a
-;;; set of acceptable operands.  If we have an operand, we can ask
+;;; set of acceptable operands. If we have an operand, we can ask
 ;;; "does the operand belong to this class?"
 ;;;
 ;;; A role (:rd/:rn/:base) represents a field in the instruction word
 ;;; where the encoded operand will go.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; To be shorter in writing
+ ;; To be shorter in writing
   (defmacro def (&rest args)
     `(define-instruction-template ,@args)))
 
@@ -357,20 +373,20 @@
 ;;; for A-profile architecture ARM DDI 0487H.a
 
 (progn
-;;; LSE atomics (FEAT_LSE), C6.2.  These families are large but perfectly
+;;; LSE atomics (FEAT_LSE), C6.2. These families are large but perfectly
 ;;; regular -- size @ 31:30, the ordering bits, and an operation selector --
 ;;; so we generate them rather than spell out ~200 near-identical templates.
 ;;; They all share the (Rs, Rt, [Xn]) shape the :rs role and :mem-base form
-;;; already provide; ST<op> is the Rt=31 alias of LD<op>.  CASP (register-pair
+;;; already provide; ST<op> is the Rt=31 alias of LD<op>. CASP (register-pair
 ;;; compare-and-swap) is omitted: it needs consecutive even/odd register-pair
 ;;; validation we don't have yet.
 (defun lse-atomic-templates ()
   (let ((templates '())
-        ;; size code @ 31:30, mnemonic size suffix, operand width class
+ ;; size code @ 31:30, mnemonic size suffix, operand width class
         (sizes '((0 "b" :w) (1 "h" :w) (2 "" :w) (3 "" :x)))
-        ;; ordering suffix and (A R) for the load/swap variants
+ ;; ordering suffix and (A R) for the load/swap variants
         (ld-orders '(("" 0 0) ("a" 1 0) ("l" 0 1) ("al" 1 1)))
-        ;; o3=0 read-modify-write ops: mnemonic stem and opc @ 14:12
+ ;; o3=0 read-modify-write ops: mnemonic stem and opc @ 14:12
         (ld-ops '(("add" 0) ("clr" 1) ("eor" 2) ("set" 3)
                   ("smax" 4) ("smin" 5) ("umax" 6) ("umin" 7))))
     (flet ((emit (name specs base mask &optional alias)
@@ -381,11 +397,11 @@
                     :mask mask
                     :flags (%encode-instruction-flags (and alias :alias)))
                    templates))
-           ;; atomic memory op: size 111000 A R 1 Rs o3 opc 00 Rn Rt
+ ;; atomic memory op: size 111000 A R 1 Rs o3 opc 00 Rn Rt
            (atomic (size a r o3 opc)
              (logior (ash size 30) (ash #x38 24) (ash a 23) (ash r 22)
                      (ash 1 21) (ash o3 15) (ash opc 12)))
-           ;; compare-and-swap: size 001000 1 L 1 Rs o0 11111 Rn Rt
+ ;; compare-and-swap: size 001000 1 L 1 Rs o0 11111 Rn Rt
            (cas-base (size l o0)
              (logior (ash size 30) (ash #x08 24) (ash 1 23) (ash l 22)
                      (ash 1 21) (ash o0 15) (ash #x1f 10))))
@@ -396,25 +412,25 @@
                 (mem '(:mem-base (:base :x/sp))))
             (dolist (op ld-ops)
               (destructuring-bind (stem opc) op
-                ;; LD<op>: read-modify-write, prior value loaded into Rt
+ ;; LD<op>: read-modify-write, prior value loaded into Rt
                 (dolist (ord ld-orders)
                   (destructuring-bind (osuff a r) ord
                     (emit (format nil "ld~a~a~a" stem osuff suff)
                           (list rs rt mem)
                           (atomic size a r 0 opc) $lse-atomic-mask)))
-                ;; ST<op>/ST<op>L: alias of LD<op>{L} with Rt=31 (no result)
+ ;; ST<op>/ST<op>L: alias of LD<op>{L} with Rt=31 (no result)
                 (dolist (ord '(("" 0) ("l" 1)))
                   (destructuring-bind (osuff r) ord
                     (emit (format nil "st~a~a~a" stem osuff suff)
                           (list rs mem)
                           (logior (atomic size 0 r 0 opc) #x1f) 0 t)))))
-            ;; SWP: o3=1, opc=0; value in Rs swapped with memory into Rt
+ ;; SWP: o3=1, opc=0; value in Rs swapped with memory into Rt
             (dolist (ord ld-orders)
               (destructuring-bind (osuff a r) ord
                 (emit (format nil "swp~a~a" osuff suff)
                       (list rs rt mem)
                       (atomic size a r 1 0) $lse-atomic-mask)))
-            ;; CAS: compare value in Rs (read-write), new value in Rt
+ ;; CAS: compare value in Rs (read-write), new value in Rt
             (dolist (ord '(("" 0 0) ("a" 1 0) ("l" 0 1) ("al" 1 1)))
               (destructuring-bind (osuff l o0) ord
                 (emit (format nil "cas~a~a" osuff suff)
@@ -426,39 +442,83 @@
 (defparameter *augmented-templates*
   (concatenate 'vector *instruction-templates* (lse-atomic-templates))))
 
-;;; Note that order matters here: when searching for a  template,
-;;; we pick the first one that matches.  Therefore, keep the preferred
+;;; Note that order matters here: when searching for a template,
+;;; we pick the first one that matches. Therefore, keep the preferred
 ;;; forms first when needed.
 
 (defparameter *instruction-templates*
   (vector
-   ;; nullary UUOs (uuo format #b111)
-   (def uuo-alloc-trap () (logior (ash 0 3) #x7) #xffffffff)
-   (def uuo-error-wrong-nargs () (logior (ash 1 3) #x7)  #xffffffff)
-   (def uuo-gc-trap () (logior (ash 2 3) #x7) #xffffffff)
-   (def uuo-debug-trap () (logior (ash 3 3) #x7) #xffffffff)
+ ;; misc-format UUOs (arm64-uuo.s: udf #((info << 2) | uuo_format_misc))
+   (def uuo-alloc-trap () (ash 1 2) #xffffffff)
+   (def uuo-error-wrong-nargs () (ash 8 2) #xffffffff)
+   (def uuo-gc-trap () (ash 2 2) #xffffffff)
+   (def uuo-debug-trap () (ash 3 2) #xffffffff)
 
-   ;; unary UUOs (uuo format #b001)
-   (def uuo-error-too-few-args () (logior (ash 0 3) #x1)  #xffffffff)
-   (def uuo-error-too-many-args () (logior (ash 1 3) #x1)  #xffffffff)
-   (def uuo-error-wrong-number-of-args () (logior (ash 2 3) #x1) #xffffffff)
+ ;; nargs-check UUOs (misc infos 6/7/8, arm64-uuo.s renumber)
+   (def uuo-error-too-few-args () (ash 6 2) #xffffffff)
+   (def uuo-error-too-many-args () (ash 7 2) #xffffffff)
+   (def uuo-error-wrong-number-of-args () (ash 8 2) #xffffffff)
 
-   ;; binary UUOs (uuo format #b010)
+ ;; the last misc-format UUO with no template (arm64-uuo.s:82-84).
+ ;; The kernel synthesizes this same word for a deferred process interrupt
+ ;; (DEFERRED_INTERRUPT_INSTRUCTION), and lisp's trap dispatcher tests for
+ ;; it before anything else, so the interrupt-poll sites need to emit it.
+   (def uuo-interrupt-now () (ash 4 2) #xffffffff)
 
-   ;;; C4.1.1  Reserved
+ ;; binary UUOs (uuo format #b010)
+ ;; arm64-uuo.s:42-55. ra in 6:2, rb in 11:7, 4 bits of info in 15:12;
+ ;; the mask covers the info and the format but not the register fields.
+   (def uuo-error-vector-bounds ((:ruuo :x) (:ruuo2 :x)) (logior (ash 0 12) 2) #xfffff003)
+   (def uuo-error-array-bounds ((:ruuo :x) (:ruuo2 :x)) (logior (ash 1 12) 2) #xfffff003)
+   (def uuo-error-integer-divide-by-zero ((:ruuo :x) (:ruuo2 :x)) (logior (ash 2 12) 2) #xfffff003)
+   (def uuo-error-eep-unresolved ((:ruuo :x) (:ruuo2 :x)) (logior (ash 3 12) 2) #xfffff003)
+   (def uuo-error-fpu-exception ((:ruuo :x) (:ruuo2 :x)) (logior (ash 4 12) 2) #xfffff003)
+   (def uuo-error-array-rank ((:ruuo :x) (:ruuo2 :x)) (logior (ash 5 12) 2) #xfffff003)
+   (def uuo-error-array-flags ((:ruuo :x) (:ruuo2 :x)) (logior (ash 6 12) 2) #xfffff003)
+   (def uuo-extra-registers ((:ruuo :x) (:ruuo2 :x)) (logior (ash 7 12) 2) #xfffff003)
 
-   ;; 16-bit immediate in (byte 16 0)
+ ;; unary UUOs (uuo format #b001)
+ ;; arm64-uuo.s:29-40. reg in 6:2, 9 bits of info in 15:7.
+   (def uuo-error-reg-not-callable ((:ruuo :x)) (logior (ash 0 7) 1) #xffffff83)
+   (def uuo-error-no-throw-tag ((:ruuo :x)) (logior (ash 1 7) 1) #xffffff83)
+   (def uuo-error-unbound ((:ruuo :x)) (logior (ash 2 7) 1) #xffffff83)
+   (def uuo-error-udf ((:ruuo :x)) (logior (ash 3 7) 1) #xffffff83)
+   (def uuo-error-udf-call ((:ruuo :x)) (logior (ash 4 7) 1) #xffffff83)
+   (def uuo-error-tlb-too-small ((:ruuo :x)) (logior (ash 5 7) 1) #xffffff83)
+ ;; Three-register error (arm64-uuo.s, doc/porting/arm64.md "Errors that
+ ;; need three registers"). The register named here is the slot vector;
+ ;; the emit site MUST follow it with (uuo-extra-registers index dest),
+ ;; which the handler reads as data before resuming past both words.
+   (def uuo-error-slot-unbound ((:ruuo :x)) (logior (ash 6 7) 1) #xffffff83)
+ ;; Funcalled a macro/special-operator name (reg = fname); the kernel
+ ;; routes it to error_apply_macro_or_special -> $XNOTFUN.
+   (def uuo-error-apply-macro ((:ruuo :x)) (logior (ash 7 7) 1) #xffffff83)
+
+ ;; wrong_type UUOs (uuo format #b011)
+ ;; arm64-uuo.s:57-64. reg in 6:2, continuable flag in 7, expected type
+ ;; code in 15:8. uuo_error_reg_not_lisptag / _not_fulltag / _not_xtype
+ ;; are all this one encoding with a different kind of code, so the
+ ;; operand is just the code: pass a lisptag, a fulltag or an xtype as
+ ;; the situation requires. The cerror form asks the handler to make the
+ ;; error continuable by writing the user's value back into the trapping
+ ;; register.
+   (def uuo-error-reg-not-xtype ((:ruuo :x) :uuo-xtype) 3 #xffff0083)
+   (def uuo-cerror-reg-not-xtype ((:ruuo :x) :uuo-xtype) #x83 #xffff0083)
+
+ ;;; C4.1.1 Reserved
+
+ ;; 16-bit immediate in (byte 16 0)
    (def udf (:udf16) #x00000000 #xffff0000)
 
-   ;;; C4.1.64  Data Processing -- Immediate
+ ;;; C4.1.64 Data Processing -- Immediate
 
-   ;; PC-rel. addressing
-   ;; 21-bit immediate split into immlo in (byte 2 29) and immhi in
-   ;; (byte 19 5)
+ ;; PC-rel. addressing
+ ;; 21-bit immediate split into immlo in (byte 2 29) and immhi in
+ ;; (byte 19 5)
    (def adr ((:rd :x) :pcrel) #x10000000 $pcrel-mask)
    (def adrp ((:rd :x) :pcrel) #x90000000 $pcrel-mask)
 
-   ;; Add/subtract (immediate)
+ ;; Add/subtract (immediate)
    (def add ((:rd :w/sp) (:rn :w/sp) :aimm) #x11000000 #xff000000)
    (def add ((:rd :x/sp) (:rn :x/sp) :aimm) #x91000000 #xff000000)
    (def mov ((:rd :wsp) (:rn :w/sp)) #x11000000 0 :alias)
@@ -476,7 +536,7 @@
    (def cmp ((:rn :w/sp) :aimm) #x7100001f 0 :alias)
    (def cmp ((:rn :x/sp) :aimm) #xf100001f 0 :alias)
 
-   ;; Move (immediate) aliases.  Listed in order of preference.
+ ;; Move (immediate) aliases. Listed in order of preference.
    (def mov ((:rd :w) :movw-mov-w)  #x52800000 0 :alias)
    (def mov ((:rd :x) :movw-mov-x)  #xd2800000 0 :alias)
    (def mov ((:rd :w) :movw-movn-w) #x12800000 0 :alias)
@@ -484,7 +544,7 @@
    (def mov ((:rd :w/sp) :limm-w) #x320003e0 0 :alias)
    (def mov ((:rd :x/sp) :limm-x) #xb20003e0 0 :alias)
 
-   ;; Move wide (immediate)
+ ;; Move wide (immediate)
    (def movn ((:rd :w) :movw-w) #x12800000 $movewide-mask)
    (def movn ((:rd :x) :movw-x) #x92800000 $movewide-mask)
    (def movz ((:rd :w) :movw-w) #x52800000 $movewide-mask)
@@ -492,7 +552,7 @@
    (def movk ((:rd :w) :movw-w) #x72800000 $movewide-mask)
    (def movk ((:rd :x) :movw-x) #xf2800000 $movewide-mask)
 
-   ;; Logical (immediate)
+ ;; Logical (immediate)
    (def and ((:rd :w/sp) (:rn :w) :limm-w) #x12000000 #xff800000)
    (def and ((:rd :x/sp) (:rn :x) :limm-x) #x92000000 #xff800000)
    (def orr ((:rd :w/sp) (:rn :w) :limm-w) #x32000000 #xff800000)
@@ -503,14 +563,14 @@
    (def ands ((:rd :x) (:rn :x) :limm-x) #xf2000000 #xff800000)
    (def tst ((:rn :w) :limm-w) #x7200001f 0 :alias)
    (def tst ((:rn :x) :limm-x) #xf200001f 0 :alias)
-   ;; Non-official convenience alias (and/ands of the complemented
-   ;; bitmask).
+ ;; Non-official convenience alias (and/ands of the complemented
+ ;; bitmask).
    (def bic ((:rd :w/sp) (:rn :w) :limm-not-w) #x12000000 0 :alias)
    (def bic ((:rd :x/sp) (:rn :x) :limm-not-x) #x92000000 0 :alias)
    (def bics ((:rd :w) (:rn :w) :limm-not-w) #x72000000 0 :alias)
    (def bics ((:rd :x) (:rn :x) :limm-not-x) #xf2000000 0 :alias)
 
-   ;; Bitfield
+ ;; Bitfield
    (def sbfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x13000000 $bitfield-mask)
    (def sbfm ((:rd :x) (:rn :x) :immr-x :imms-x) #x93400000 $bitfield-mask)
    (def bfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x33000000 $bitfield-mask)
@@ -518,15 +578,15 @@
    (def ubfm ((:rd :w) (:rn :w) :immr-w :imms-w) #x53000000 $bitfield-mask)
    (def ubfm ((:rd :x) (:rn :x) :immr-x :imms-x) #xd3400000 $bitfield-mask)
 
-   ;; Extract
+ ;; Extract
    (def extr ((:rd :w) (:rn :w) (:rm :w) :imms-w) #x13800000 $extract-mask)
    (def extr ((:rd :x) (:rn :x) (:rm :x) :imms-x) #x93c00000 $extract-mask)
 
-   ;;; C4.1.65  Branches, Exception Generating, and System instructions
+ ;;; C4.1.65 Branches, Exception Generating, and System instructions
 
-   ;; Conditional branch (immediate)
-   ;; The 4-bit condition is pre-inserted into (byte 4 0) of the base opcode.
-   ;; A 19-bit word offset is inserted into (byte 19 5).
+ ;; Conditional branch (immediate)
+ ;; The 4-bit condition is pre-inserted into (byte 4 0) of the base opcode.
+ ;; A 19-bit word offset is inserted into (byte 19 5).
    (def b.eq ((:label :b19)) #x54000000 #xff00001f)
    (def b.ne ((:label :b19)) #x54000001 #xff00001f)
    (def b.cs ((:label :b19)) #x54000002 #xff00001f)
@@ -546,28 +606,28 @@
    (def b.al ((:label :b19)) #x5400000e #xff00001f)   ;pointless
    (def b.nv ((:label :b19)) #x5400000f #xff00001f)   ;also pointless
 
-   ;; This template provides a way to write a conditional branch whose
-   ;; condition is an operand, (:? cc) or (:~ cc), rather than baked
-   ;; into the mnemonic.  The condition fills (byte 4 0); the label
-   ;; fills (byte 19 5).
+ ;; This template provides a way to write a conditional branch whose
+ ;; condition is an operand, (:? cc) or (:~ cc), rather than baked
+ ;; into the mnemonic. The condition fills (byte 4 0); the label
+ ;; fills (byte 19 5).
    (def b.cond (:cond-b (:label :b19)) #x54000000 0 :alias)
 
-   ;; Exception generation
-   ;; 16-bit immediate in (byte 16 5)
+ ;; Exception generation
+ ;; 16-bit immediate in (byte 16 5)
    (def svc (:exc16) #xd4000001 #xffe0001f)
    (def brk (:exc16) #xd4200000 #xffe0001f)
    (def hlt (:exc16) #xd4400000 #xffe0001f)
 
-   ;; Hints
+ ;; Hints
    (def nop () #xd503201f #xffffffff)
    (def yield () #xd503203f #xffffffff)
    (def wfe () #xd503205f #xffffffff)
    (def sev () #xd503209f #xffffffff)
 
-   ;; Barriers and system register access
-   ;; The bare form defaults to SY; an explicit (:$ option) selects a
-   ;; domain (e.g. 11 = ish, 10 = ishst).  Named options aren't implemented.
-   ;; The bare forms bake in CRm=15; the (:baropt) forms accept any CRm.
+ ;; Barriers and system register access
+ ;; The bare form defaults to SY; an explicit (:$ option) selects a
+ ;; domain (e.g. 11 = ish, 10 = ishst). Named options aren't implemented.
+ ;; The bare forms bake in CRm=15; the (:baropt) forms accept any CRm.
    (def clrex () #xd5033f5f #xffffffff)
    (def clrex (:baropt) #xd503305f #xfffff0ff)
    (def dmb () #xd5033fbf #xffffffff)
@@ -577,42 +637,42 @@
    (def isb () #xd5033fdf #xffffffff)
    (def isb (:baropt) #xd50330df #xfffff0ff)
 
-   ;; Move to/from a system register (e.g. fpsr/fpcr for FP-exception
-   ;; polling).  The 15-bit op0:op1:CRn:CRm:op2 field @ 19:5 names the
-   ;; register; see *system-registers*.
+ ;; Move to/from a system register (e.g. fpsr/fpcr for FP-exception
+ ;; polling). The 15-bit op0:op1:CRn:CRm:op2 field @ 19:5 names the
+ ;; register; see *system-registers*.
    (def mrs ((:rt :x) :sysreg) #xd5300000 #xfff00000)
    (def msr (:sysreg (:rt :x)) #xd5100000 #xfff00000)
 
-   ;; Unconditional branch (register)
+ ;; Unconditional branch (register)
    (def br ((:rn :x)) #xd61f0000 #xfffffc1f)
    (def blr ((:rn :x)) #xd63f0000 #xfffffc1f)
-   ;; Plain ret defaults to x30 (lr) in (byte 5 5)
+ ;; Plain ret defaults to x30 (lr) in (byte 5 5)
    (def ret () #xd65f03c0 #xffffffff)
    (def ret ((:rn :x)) #xd65f0000 #xfffffc1f)
 
-   ;; Unconditional branch (immediate)
-   ;; 26-bit word displacement in (byte 26 0)
+ ;; Unconditional branch (immediate)
+ ;; 26-bit word displacement in (byte 26 0)
    (def b ((:label :b26)) #x14000000 $uncond-branch-imm-mask)
    (def bl ((:label :b26)) #x94000000 $uncond-branch-imm-mask)
 
-   ;; Compare and branch (immediate)
-   ;; Rt in (byte 4 0), 19-bit word displacement in (byte 19 5)
+ ;; Compare and branch (immediate)
+ ;; Rt in (byte 4 0), 19-bit word displacement in (byte 19 5)
    (def cbz ((:rt :w) (:label :b19)) #x34000000 $cmp-branch-mask)
    (def cbz ((:rt :x) (:label :b19)) #xb4000000 $cmp-branch-mask)
    (def cbnz ((:rt :w) (:label :b19)) #x35000000 $cmp-branch-mask)
    (def cbnz ((:rt :x) (:label :b19)) #xb5000000 $cmp-branch-mask)
 
-   ;; Test and branch (immediate)
-   ;; The bit number is in two parts: (byte 1 31) and (byte 4 19).
-   ;; 14-bit word displacement in (byte 14 5)
+ ;; Test and branch (immediate)
+ ;; The bit number is in two parts: (byte 1 31) and (byte 4 19).
+ ;; 14-bit word displacement in (byte 14 5)
    (def tbz ((:rt :w) :tbit-w (:label :b14)) #x36000000 $test-branch-mask)
    (def tbz ((:rt :x) :tbit-x (:label :b14)) #x36000000 $test-branch-mask)
    (def tbnz ((:rt :w) :tbit-w (:label :b14)) #x37000000 $test-branch-mask)
    (def tbnz ((:rt :x) :tbit-x (:label :b14)) #x37000000 $test-branch-mask)
 
-   ;;; C4.1.66  Loads and Stores
+ ;;; C4.1.66 Loads and Stores
 
-   ;; Load/store exclusive pair
+ ;; Load/store exclusive pair
    (def stxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88200000 $ldst-excl-stp-mask)
    (def stxp ((:rs :w) (:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc8200000 $ldst-excl-stp-mask)
    (def stlxp ((:rs :w) (:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x88208000 $ldst-excl-stp-mask)
@@ -622,7 +682,7 @@
    (def ldaxp ((:rt :w) (:rt2 :w) (:mem-base (:base :x/sp))) #x887f8000 $ldst-excl-ldp-mask)
    (def ldaxp ((:rt :x) (:rt2 :x) (:mem-base (:base :x/sp))) #xc87f8000 $ldst-excl-ldp-mask)
 
-   ;; Load/store exclusive register
+ ;; Load/store exclusive register
    (def stxrb ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x08007c00 $ldst-excl-st-mask)
    (def stxrh ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x48007c00 $ldst-excl-st-mask)
    (def stxr ((:rs :w) (:rt :w) (:mem-base (:base :x/sp))) #x88007c00 $ldst-excl-st-mask)
@@ -640,7 +700,7 @@
    (def ldaxr ((:rt :w) (:mem-base (:base :x/sp))) #x885ffc00 $ldst-excl-ld-mask)
    (def ldaxr ((:rt :x) (:mem-base (:base :x/sp))) #xc85ffc00 $ldst-excl-ld-mask)
 
-   ;; Load/store ordered
+ ;; Load/store ordered
    (def stlrb ((:rt :w) (:mem-base (:base :x/sp))) #x089ffc00 $ldst-excl-ld-mask)
    (def stlrh ((:rt :w) (:mem-base (:base :x/sp))) #x489ffc00 $ldst-excl-ld-mask)
    (def stlr ((:rt :w) (:mem-base (:base :x/sp))) #x889ffc00 $ldst-excl-ld-mask)
@@ -650,25 +710,25 @@
    (def ldar ((:rt :w) (:mem-base (:base :x/sp))) #x88dffc00 $ldst-excl-ld-mask)
    (def ldar ((:rt :x) (:mem-base (:base :x/sp))) #xc8dffc00 $ldst-excl-ld-mask)
 
-      ;; Load/store register pair (post-indexed)
+ ;; Load/store register pair (post-indexed)
    (def stp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28800000 $ldstpair-mask)
    (def stp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8800000 $ldstpair-mask)
    (def ldp ((:rt :w) (:rt2 :w) (:mem-post (:base :x/sp) (:imm :poff2))) #x28c00000 $ldstpair-mask)
    (def ldp ((:rt :x) (:rt2 :x) (:mem-post (:base :x/sp) (:imm :poff3))) #xa8c00000 $ldstpair-mask)
 
-   ;; Load/store register pair (offset)
+ ;; Load/store register pair (offset)
    (def stp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29000000 $ldstpair-mask)
    (def ldp ((:rt :w) (:rt2 :w) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x29400000 $ldstpair-mask)
    (def stp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9000000 $ldstpair-mask)
    (def ldp ((:rt :x) (:rt2 :x) (:mem-scaled (:base :x/sp) (:imm :poff3))) #xa9400000 $ldstpair-mask)
 
-   ;; Load/store register pair (pre-indexed)
+ ;; Load/store register pair (pre-indexed)
    (def stp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29800000 $ldstpair-mask)
    (def ldp ((:rt :w) (:rt2 :w) (:mem-pre (:base :x/sp) (:imm :poff2))) #x29c00000 $ldstpair-mask)
    (def stp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9800000 $ldstpair-mask)
    (def ldp ((:rt :x) (:rt2 :x) (:mem-pre (:base :x/sp) (:imm :poff3))) #xa9c00000 $ldstpair-mask)
 
-   ;; Load/store register (unscaled immediate)
+ ;; Load/store register (unscaled immediate)
    (def sturb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38000000 $ldst-unscaled-mask)
    (def ldurb ((:rt :w) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38400000 $ldst-unscaled-mask)
    (def ldursb ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x38800000 $ldst-unscaled-mask)
@@ -683,7 +743,7 @@
    (def stur ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8000000 $ldst-unscaled-mask)
    (def ldur ((:rt :x) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xf8400000 $ldst-unscaled-mask)
 
-   ;; Load/store register (immediate post-indexed)
+ ;; Load/store register (immediate post-indexed)
    (def strb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38000400 $ldst-unscaled-mask)
    (def ldrb ((:rt :w) (:mem-post (:base :x/sp) (:imm :simm9))) #x38400400 $ldst-unscaled-mask)
    (def ldrsb ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #x38800400 $ldst-unscaled-mask)
@@ -698,7 +758,7 @@
    (def str ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8000400 $ldst-unscaled-mask)
    (def ldr ((:rt :x) (:mem-post (:base :x/sp) (:imm :simm9))) #xf8400400 $ldst-unscaled-mask)
 
-   ;; Load/store register (immediate pre-indexed)
+ ;; Load/store register (immediate pre-indexed)
    (def strb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38000c00 $ldst-unscaled-mask)
    (def ldrb ((:rt :w) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38400c00 $ldst-unscaled-mask)
    (def ldrsb ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #x38800c00 $ldst-unscaled-mask)
@@ -713,7 +773,7 @@
    (def str ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8000c00 $ldst-unscaled-mask)
    (def ldr ((:rt :x) (:mem-pre (:base :x/sp) (:imm :simm9))) #xf8400c00 $ldst-unscaled-mask)
 
-   ;; Load/store register (register offset)
+ ;; Load/store register (register offset)
    (def strb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38200800 $ldst-regoff-mask)
    (def ldrb ((:rt :w) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38600800 $ldst-regoff-mask)
    (def ldrsb ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff0))) #x38a00800 $ldst-regoff-mask)
@@ -728,7 +788,7 @@
    (def str ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8200800 $ldst-regoff-mask)
    (def ldr ((:rt :x) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xf8600800 $ldst-regoff-mask)
 
-   ;; Load/store register (unsigned immediate)
+ ;; Load/store register (unsigned immediate)
    (def strb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39000000 $ldst-pos-mask)
    (def ldrb ((:rt :w) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39400000 $ldst-pos-mask)
    (def ldrsb ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff0))) #x39800000 $ldst-pos-mask)
@@ -743,12 +803,12 @@
    (def str ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9000000 $ldst-pos-mask)
    (def ldr ((:rt :x) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xf9400000 $ldst-pos-mask)
 
-   ;;; Scalar FP load/store.  These are the integer load/store encodings
-   ;;; with the SIMD&FP V bit (#x04000000) set and an S/D transfer register;
-   ;;; S uses the size=10 (scale 2) base, D the size=11 (scale 3) base.  All
-   ;;; the addressing forms, masks, and offset classes are reused unchanged.
+ ;;; Scalar FP load/store. These are the integer load/store encodings
+ ;;; with the SIMD&FP V bit (#x04000000) set and an S/D transfer register;
+ ;;; S uses the size=10 (scale 2) base, D the size=11 (scale 3) base. All
+ ;;; the addressing forms, masks, and offset classes are reused unchanged.
 
-   ;; FP load/store register (unsigned immediate)
+ ;; FP load/store register (unsigned immediate)
    (def str ((:rt :s) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xbd000000 $ldst-pos-mask)
    (def ldr ((:rt :s) (:mem-scaled (:base :x/sp) (:imm :uoff2))) #xbd400000 $ldst-pos-mask)
    (def str ((:rt :d) (:mem-scaled (:base :x/sp) (:imm :uoff3))) #xfd000000 $ldst-pos-mask)
@@ -756,7 +816,7 @@
    (def str ((:rt :q) (:mem-scaled (:base :x/sp) (:imm :uoff4))) #x3d800000 $ldst-pos-mask)
    (def ldr ((:rt :q) (:mem-scaled (:base :x/sp) (:imm :uoff4))) #x3dc00000 $ldst-pos-mask)
 
-   ;; FP load/store register (unscaled immediate)
+ ;; FP load/store register (unscaled immediate)
    (def stur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc000000 $ldst-unscaled-mask)
    (def ldur ((:rt :s) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xbc400000 $ldst-unscaled-mask)
    (def stur ((:rt :d) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #xfc000000 $ldst-unscaled-mask)
@@ -764,25 +824,25 @@
    (def stur ((:rt :q) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x3c800000 $ldst-unscaled-mask)
    (def ldur ((:rt :q) (:mem-unscaled (:base :x/sp) (:imm :simm9))) #x3cc00000 $ldst-unscaled-mask)
 
-   ;; FP load/store register (immediate post-indexed)
+ ;; FP load/store register (immediate post-indexed)
    (def str ((:rt :s) (:mem-post (:base :x/sp) (:imm :simm9))) #xbc000400 $ldst-unscaled-mask)
    (def ldr ((:rt :s) (:mem-post (:base :x/sp) (:imm :simm9))) #xbc400400 $ldst-unscaled-mask)
    (def str ((:rt :d) (:mem-post (:base :x/sp) (:imm :simm9))) #xfc000400 $ldst-unscaled-mask)
    (def ldr ((:rt :d) (:mem-post (:base :x/sp) (:imm :simm9))) #xfc400400 $ldst-unscaled-mask)
 
-   ;; FP load/store register (immediate pre-indexed)
+ ;; FP load/store register (immediate pre-indexed)
    (def str ((:rt :s) (:mem-pre (:base :x/sp) (:imm :simm9))) #xbc000c00 $ldst-unscaled-mask)
    (def ldr ((:rt :s) (:mem-pre (:base :x/sp) (:imm :simm9))) #xbc400c00 $ldst-unscaled-mask)
    (def str ((:rt :d) (:mem-pre (:base :x/sp) (:imm :simm9))) #xfc000c00 $ldst-unscaled-mask)
    (def ldr ((:rt :d) (:mem-pre (:base :x/sp) (:imm :simm9))) #xfc400c00 $ldst-unscaled-mask)
 
-   ;; FP load/store register (register offset)
+ ;; FP load/store register (register offset)
    (def str ((:rt :s) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xbc200800 $ldst-regoff-mask)
    (def ldr ((:rt :s) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xbc600800 $ldst-regoff-mask)
    (def str ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc200800 $ldst-regoff-mask)
    (def ldr ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc600800 $ldst-regoff-mask)
 
-   ;; FP load/store pair (offset, pre-indexed, post-indexed)
+ ;; FP load/store pair (offset, pre-indexed, post-indexed)
    (def stp ((:rt :s) (:rt2 :s) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x2d000000 $ldstpair-mask)
    (def ldp ((:rt :s) (:rt2 :s) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x2d400000 $ldstpair-mask)
    (def stp ((:rt :s) (:rt2 :s) (:mem-pre (:base :x/sp) (:imm :poff2))) #x2d800000 $ldstpair-mask)
@@ -796,9 +856,9 @@
    (def stp ((:rt :d) (:rt2 :d) (:mem-post (:base :x/sp) (:imm :poff3))) #x6c800000 $ldstpair-mask)
    (def ldp ((:rt :d) (:rt2 :d) (:mem-post (:base :x/sp) (:imm :poff3))) #x6cc00000 $ldstpair-mask)
 
-   ;;; Data Processing -- Register
+ ;;; Data Processing -- Register
 
-   ;; Data-processing (2 source)
+ ;; Data-processing (2 source)
    (def udiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00800 $dp-2src-mask)
    (def udiv ((:rd :x) (:rn :x) (:rm :x)) #x9ac00800 $dp-2src-mask)
    (def sdiv ((:rd :w) (:rn :w) (:rm :w)) #x1ac00c00 $dp-2src-mask)
@@ -812,9 +872,9 @@
    (def rorv ((:rd :w) (:rn :w) (:rm :w)) #x1ac02c00 $dp-2src-mask)
    (def rorv ((:rd :x) (:rn :x) (:rm :x)) #x9ac02c00 $dp-2src-mask)
 
-   ;; Shift aliases.  The register forms alias lslv/lsrv/asrv/rorv;
-   ;; the immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror),
-   ;; with immr/imms computed from the shift amount.
+ ;; Shift aliases. The register forms alias lslv/lsrv/asrv/rorv;
+ ;; the immediate forms alias ubfm/sbfm (lsl/lsr/asr) and extr (ror),
+ ;; with immr/imms computed from the shift amount.
    (def lsl ((:rd :w) (:rn :w) (:rm :w)) #x1ac02000 0 :alias)
    (def lsl ((:rd :x) (:rn :x) (:rm :x)) #x9ac02000 0 :alias)
    (def lsl ((:rd :w) (:rn :w) :lsl-imm-w) #x53000000 0 :alias)
@@ -832,9 +892,9 @@
    (def ror ((:rd :w) (:rn+rm :w) :imms-w) #x13800000 0 :alias)
    (def ror ((:rd :x) (:rn+rm :x) :imms-x) #x93c00000 0 :alias)
 
-   ;; Sign/zero-extend aliases of sbfm/ubfm: fixed immr=0,
-   ;; imms=7/15/31 baked into the base, so they take only Rd, Rn
-   ;; (source is always Wn).
+ ;; Sign/zero-extend aliases of sbfm/ubfm: fixed immr=0,
+ ;; imms=7/15/31 baked into the base, so they take only Rd, Rn
+ ;; (source is always Wn).
    (def sxtb ((:rd :w) (:rn :w)) #x13001c00 0 :alias)
    (def sxtb ((:rd :x) (:rn :w)) #x93401c00 0 :alias)
    (def sxth ((:rd :w) (:rn :w)) #x13003c00 0 :alias)
@@ -843,8 +903,8 @@
    (def uxtb ((:rd :w) (:rn :w)) #x53001c00 0 :alias)
    (def uxth ((:rd :w) (:rn :w)) #x53003c00 0 :alias)
 
-   ;; Bitfield insert aliases: immr=(-lsb) mod width, imms=width-1
-   ;; (separable, so #lsb and #width each drive one field).
+ ;; Bitfield insert aliases: immr=(-lsb) mod width, imms=width-1
+ ;; (separable, so #lsb and #width each drive one field).
    (def sbfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x13000000 0 :alias)
    (def sbfiz ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #x93400000 0 :alias)
    (def ubfiz ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x53000000 0 :alias)
@@ -852,14 +912,14 @@
    (def bfi ((:rd :w) (:rn :w) :bf-lsb-w :bf-width-w) #x33000000 0 :alias)
    (def bfi ((:rd :x) (:rn :x) :bf-lsb-x :bf-width-x) #xb3400000 0 :alias)
 
-   ;; bfc is bfi with Rn=zr
+ ;; bfc is bfi with Rn=zr
    (def bfc ((:rd :w) :bf-lsb-w :bf-width-w) #x330003e0 0 :alias)
    (def bfc ((:rd :x) :bf-lsb-x :bf-width-x) #xb34003e0 0 :alias)
 
-   ;; Bitfield extract aliases: immr=lsb, imms=lsb+width-1.  Unlike
-   ;; the insert forms, imms depends on *both* operands, so the width
-   ;; operand's encoder has to look back and read the lsb operand (see
-   ;; bfx-lsb-value).
+ ;; Bitfield extract aliases: immr=lsb, imms=lsb+width-1. Unlike
+ ;; the insert forms, imms depends on *both* operands, so the width
+ ;; operand's encoder has to look back and read the lsb operand (see
+ ;; bfx-lsb-value).
    (def sbfx ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x13000000 0 :alias)
    (def sbfx ((:rd :x) (:rn :x) :bfx-lsb-x :bfx-width-x) #x93400000 0 :alias)
    (def ubfx ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x53000000 0 :alias)
@@ -867,7 +927,7 @@
    (def bfxil ((:rd :w) (:rn :w) :bfx-lsb-w :bfx-width-w) #x33000000 0 :alias)
    (def bfxil ((:rd :x) (:rn :x) :bfx-lsb-x :bfx-width-x) #xb3400000 0 :alias)
 
-   ;; Data-processing (1 source)
+ ;; Data-processing (1 source)
    (def rbit ((:rd :w) (:rn :w)) #x5ac00000 $dp-1src-mask)
    (def rbit ((:rd :x) (:rn :x)) #xdac00000 $dp-1src-mask)
    (def rev16 ((:rd :w) (:rn :w)) #x5ac00400 $dp-1src-mask)
@@ -880,7 +940,7 @@
    (def cls ((:rd :w) (:rn :w)) #x5ac01400 $dp-1src-mask)
    (def cls ((:rd :x) (:rn :x)) #xdac01400 $dp-1src-mask)
 
-   ;; Logical (shifted register)
+ ;; Logical (shifted register)
    (def and ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a000000 $log-shift-mask)
    (def and ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #x8a000000 $log-shift-mask)
    (def bic ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x0a200000 $log-shift-mask)
@@ -904,7 +964,7 @@
    (def bics ((:rd :w) (:rn :w) (:rm :w-shift-ror)) #x6a200000 $log-shift-mask)
    (def bics ((:rd :x) (:rn :x) (:rm :x-shift-ror)) #xea200000 $log-shift-mask)
 
-   ;; Add/subtract (shifted register)
+ ;; Add/subtract (shifted register)
    (def add ((:rd :w) (:rn :w) (:rm :w-shift)) #x0b000000 $addsub-shift-mask)
    (def add ((:rd :x) (:rn :x) (:rm :x-shift)) #x8b000000 $addsub-shift-mask)
    (def adds ((:rd :w) (:rn :w) (:rm :w-shift)) #x2b000000 $addsub-shift-mask)
@@ -922,7 +982,7 @@
    (def negs ((:rd :w) (:rm :w-shift)) #x6b0003e0 0 :alias)
    (def negs ((:rd :x) (:rm :x-shift)) #xeb0003e0 0 :alias)
 
-   ;; Add/subtract (extended register)
+ ;; Add/subtract (extended register)
    (def add ((:rd :w/sp) (:rn :w/sp) (:rm :w-ext)) #x0b200000 $addsub-ext-mask)
    (def add ((:rd :x/sp) (:rn :x/sp) (:rm :x-ext)) #x8b200000 $addsub-ext-mask)
    (def adds ((:rd :w) (:rn :w/sp) (:rm :w-ext)) #x2b200000 $addsub-ext-mask)
@@ -936,7 +996,7 @@
    (def cmp ((:rn :w/sp) (:rm :w-ext)) #x6b20001f 0 :alias)
    (def cmp ((:rn :x/sp) (:rm :x-ext)) #xeb20001f 0 :alias)
 
-   ;; Add/subtract (with carry)
+ ;; Add/subtract (with carry)
    (def adc ((:rd :w) (:rn :w) (:rm :w)) #x1a000000 $rm/rn/rd-mask)
    (def adc ((:rd :x) (:rn :x) (:rm :x)) #x9a000000 $rm/rn/rd-mask)
    (def adcs ((:rd :w) (:rn :w) (:rm :w)) #x3a000000 $rm/rn/rd-mask)
@@ -950,19 +1010,19 @@
    (def ngcs ((:rd :w) (:rm :w)) #x7a0003e0 0 :alias)
    (def ngcs ((:rd :x) (:rm :x)) #xfa0003e0 0 :alias)
 
-   ;; Conditional compare (register)
+ ;; Conditional compare (register)
    (def ccmp ((:rn :w) (:rm :w) :nzcv :cond) #x7a400000 $condcmp-mask)
    (def ccmp ((:rn :x) (:rm :x) :nzcv :cond) #xfa400000 $condcmp-mask)
    (def ccmn ((:rn :w) (:rm :w) :nzcv :cond) #x3a400000 $condcmp-mask)
    (def ccmn ((:rn :x) (:rm :x) :nzcv :cond) #xba400000 $condcmp-mask)
 
-   ;; Conditional compare (immediate)
+ ;; Conditional compare (immediate)
    (def ccmp ((:rn :w) :imm5 :nzcv :cond) #x7a400800 $condcmp-mask)
    (def ccmp ((:rn :x) :imm5 :nzcv :cond) #xfa400800 $condcmp-mask)
    (def ccmn ((:rn :w) :imm5 :nzcv :cond) #x3a400800 $condcmp-mask)
    (def ccmn ((:rn :x) :imm5 :nzcv :cond) #xba400800 $condcmp-mask)
 
-   ;; Conditional select
+ ;; Conditional select
    (def csinc ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800400 $condsel-mask)
    (def csinc ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800400 $condsel-mask)
    (def csinv ((:rd :w) (:rn :w) (:rm :w) :cond) #x5a800000 $condsel-mask)
@@ -972,9 +1032,9 @@
    (def csel ((:rd :w) (:rn :w) (:rm :w) :cond) #x1a800000 $condsel-mask)
    (def csel ((:rd :x) (:rn :x) (:rm :x) :cond) #x9a800000 $condsel-mask)
 
-   ;; Conditional-select aliases.  Each encodes the inverse condition
-   ;; (:cond-inv).  cset/csetm set Rn=Rm=zr (31); cinc/cinv/cneg write
-   ;; their one source register into both Rn and Rm (the :rn+rm role).
+ ;; Conditional-select aliases. Each encodes the inverse condition
+ ;; (:cond-inv). cset/csetm set Rn=Rm=zr (31); cinc/cinv/cneg write
+ ;; their one source register into both Rn and Rm (the :rn+rm role).
    (def cset ((:rd :w) :cond-inv) #x1a9f07e0 0 :alias)
    (def cset ((:rd :x) :cond-inv) #x9a9f07e0 0 :alias)
    (def csetm ((:rd :w) :cond-inv) #x5a9f03e0 0 :alias)
@@ -986,7 +1046,7 @@
    (def cneg ((:rd :w) (:rn+rm :w) :cond-inv) #x5a800400 0 :alias)
    (def cneg ((:rd :x) (:rn+rm :x) :cond-inv) #xda800400 0 :alias)
 
-   ;; Data-processing (3-source)
+ ;; Data-processing (3-source)
    (def madd ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b000000 $dp-3src-mask)
    (def madd ((:rd :x) (:rn :x) (:rm :x) (:ra :x)) #x9b000000 $dp-3src-mask)
    (def msub ((:rd :w) (:rn :w) (:rm :w) (:ra :w)) #x1b008000 $dp-3src-mask)
@@ -995,10 +1055,10 @@
    (def smsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9b208000 $dp-3src-mask)
    (def umaddl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba00000 $dp-3src-mask)
    (def umsubl ((:rd :x) (:rn :w) (:rm :w) (:ra :x)) #x9ba08000 $dp-3src-mask)
-   ;; the high-multiplies have no Ra operand (it's fixed at 31)
+ ;; the high-multiplies have no Ra operand (it's fixed at 31)
    (def smulh ((:rd :x) (:rn :x) (:rm :x)) #x9b407c00 $dp-2src-mask)
    (def umulh ((:rd :x) (:rn :x) (:rm :x)) #x9bc07c00 $dp-2src-mask)
-   ;; multiply aliases: madd/msub/... with Ra = zr (31)
+ ;; multiply aliases: madd/msub/... with Ra = zr (31)
    (def mul ((:rd :w) (:rn :w) (:rm :w)) #x1b007c00 0 :alias)
    (def mul ((:rd :x) (:rn :x) (:rm :x)) #x9b007c00 0 :alias)
    (def mneg ((:rd :w) (:rn :w) (:rm :w)) #x1b00fc00 0 :alias)
@@ -1008,9 +1068,9 @@
    (def umull ((:rd :x) (:rn :w) (:rm :w)) #x9ba07c00 0 :alias)
    (def umnegl ((:rd :x) (:rn :w) (:rm :w)) #x9ba0fc00 0 :alias)
 
-   ;;; Data Processing -- Scalar Floating-Point
+ ;;; Data Processing -- Scalar Floating-Point
 
-   ;; FP data-processing (2 source)
+ ;; FP data-processing (2 source)
    (def fmul ((:rd :s) (:rn :s) (:rm :s)) #x1e200800 $fp-dp2src-mask)
    (def fmul ((:rd :d) (:rn :d) (:rm :d)) #x1e600800 $fp-dp2src-mask)
    (def fdiv ((:rd :s) (:rn :s) (:rm :s)) #x1e201800 $fp-dp2src-mask)
@@ -1030,7 +1090,7 @@
    (def fnmul ((:rd :s) (:rn :s) (:rm :s)) #x1e208800 $fp-dp2src-mask)
    (def fnmul ((:rd :d) (:rn :d) (:rm :d)) #x1e608800 $fp-dp2src-mask)
 
-   ;; FP data-processing (1 source)
+ ;; FP data-processing (1 source)
    (def fmov ((:rd :s) (:rn :s)) #x1e204000 $fp-dp1src-mask)
    (def fmov ((:rd :d) (:rn :d)) #x1e604000 $fp-dp1src-mask)
    (def fabs ((:rd :s) (:rn :s)) #x1e20c000 $fp-dp1src-mask)
@@ -1039,37 +1099,37 @@
    (def fneg ((:rd :d) (:rn :d)) #x1e614000 $fp-dp1src-mask)
    (def fsqrt ((:rd :s) (:rn :s)) #x1e21c000 $fp-dp1src-mask)
    (def fsqrt ((:rd :d) (:rn :d)) #x1e61c000 $fp-dp1src-mask)
-   ;; fcvt between single and double
+ ;; fcvt between single and double
    (def fcvt ((:rd :d) (:rn :s)) #x1e22c000 $fp-dp1src-mask)
    (def fcvt ((:rd :s) (:rn :d)) #x1e624000 $fp-dp1src-mask)
 
-   ;; Advanced SIMD lane insert/extract (element copy).
+ ;; Advanced SIMD lane insert/extract (element copy).
    (def ins ((:rd :elt5) (:rn :elt4)) #x6e000400 #xffe08400)
    (def mov ((:rd :elt5) (:rn :elt4)) #x6e000400 0 :alias)
-   ;; dup (scalar destination)
+ ;; dup (scalar destination)
    (def dup ((:rd :s) (:rn :elt5)) #x5e040400 #xffe7fc00)
    (def dup ((:rd :d) (:rn :elt5)) #x5e080400 #xffeffc00)
 
-   ;; Advanced SIMD whole-vector ops (arrangement operands).  C7 CNT/ADDV.
-   ;; CNT: per-byte population count, Vd.<T> <- popcount(Vn.<T>), byte
-   ;; arrangements only (size fixed 00, Q free for 8b vs 16b).
+ ;; Advanced SIMD whole-vector ops (arrangement operands). C7 CNT/ADDV.
+ ;; CNT: per-byte population count, Vd.<T> <- popcount(Vn.<T>), byte
+ ;; arrangements only (size fixed 00, Q free for 8b vs 16b).
    (def cnt ((:rd :varr) (:rn :varr)) #x0e205800 #xbffffc00)
-   ;; ADDV: horizontal add across the vector into a scalar Bd/Hd/Sd (the
-   ;; "Advanced SIMD across lanes" group).  Only the byte form is provided
-   ;; here -- size pinned to 00 in the mask, dest a byte scalar :b -- which
-   ;; is all %ilogcount/popcount needs.
-   ;;
-   ;; To generalize (e.g. addv over 4h/8h/4s, or the siblings saddlv/uaddlv/
-   ;; smaxv/sminv/umaxv/uminv, all same shape at #x?e30?800): widen the mask
-   ;; to #xbf3ffc00 so size (bits 23:22) is operand-determined, and size the
-   ;; scalar dest from the arrangement -- Bd/Hd/Sd for the same-size
-   ;; reductions, one step wider (Hd/Sd/Dd) for the *LV widening variants.
-   ;; That needs a dest class that reads its width from the source
-   ;; arrangement's size field (the :b dest here is a fixed byte); today
-   ;; each size would otherwise be a separate template.
+ ;; ADDV: horizontal add across the vector into a scalar Bd/Hd/Sd (the
+ ;; "Advanced SIMD across lanes" group). Only the byte form is provided
+ ;; here -- size pinned to 00 in the mask, dest a byte scalar :b -- which
+ ;; is all %ilogcount/popcount needs.
+ ;;
+ ;; To generalize (e.g. addv over 4h/8h/4s, or the siblings saddlv/uaddlv/
+ ;; smaxv/sminv/umaxv/uminv, all same shape at #x?e30?800): widen the mask
+ ;; to #xbf3ffc00 so size (bits 23:22) is operand-determined, and size the
+ ;; scalar dest from the arrangement -- Bd/Hd/Sd for the same-size
+ ;; reductions, one step wider (Hd/Sd/Dd) for the *LV widening variants.
+ ;; That needs a dest class that reads its width from the source
+ ;; arrangement's size field (the :b dest here is a fixed byte); today
+ ;; each size would otherwise be a separate template.
    (def addv ((:rd :b) (:rn :varr)) #x0e31b800 #xbffffc00)
 
-   ;; round to integral value (frintN/P/M/Z/A/X/I)
+ ;; round to integral value (frintN/P/M/Z/A/X/I)
    (def frintn ((:rd :s) (:rn :s)) #x1e244000 $fp-dp1src-mask)
    (def frintn ((:rd :d) (:rn :d)) #x1e644000 $fp-dp1src-mask)
    (def frintp ((:rd :s) (:rn :s)) #x1e24c000 $fp-dp1src-mask)
@@ -1085,7 +1145,7 @@
    (def frinti ((:rd :s) (:rn :s)) #x1e27c000 $fp-dp1src-mask)
    (def frinti ((:rd :d) (:rn :d)) #x1e67c000 $fp-dp1src-mask)
 
-   ;; FP data-processing (3 source)
+ ;; FP data-processing (3 source)
    (def fmadd ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f000000 $fp-dp3src-mask)
    (def fmadd ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f400000 $fp-dp3src-mask)
    (def fmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f008000 $fp-dp3src-mask)
@@ -1095,7 +1155,7 @@
    (def fnmsub ((:rd :s) (:rn :s) (:rm :s) (:ra :s)) #x1f208000 $fp-dp3src-mask)
    (def fnmsub ((:rd :d) (:rn :d) (:rm :d) (:ra :d)) #x1f608000 $fp-dp3src-mask)
 
-   ;; FP compare
+ ;; FP compare
    (def fcmp ((:rn :s) (:rm :s)) #x1e202000 $fp-cmp-mask)
    (def fcmp ((:rn :d) (:rm :d)) #x1e602000 $fp-cmp-mask)
    (def fcmp ((:rn :s) :fpzero) #x1e202008 $fp-cmp-zero-mask)
@@ -1105,18 +1165,18 @@
    (def fcmpe ((:rn :s) :fpzero) #x1e202018 $fp-cmp-zero-mask)
    (def fcmpe ((:rn :d) :fpzero) #x1e602018 $fp-cmp-zero-mask)
 
-   ;; FP conditional compare
+ ;; FP conditional compare
     (def fccmp ((:rn :s) (:rm :s) :nzcv :cond) #x1e200400 $condcmp-mask)
    (def fccmp ((:rn :d) (:rm :d) :nzcv :cond) #x1e600400 $condcmp-mask)
    (def fccmpe ((:rn :s) (:rm :s) :nzcv :cond) #x1e200410 $condcmp-mask)
    (def fccmpe ((:rn :d) (:rm :d) :nzcv :cond) #x1e600410 $condcmp-mask)
 
-   ;; FP conditional select
+ ;; FP conditional select
    (def fcsel ((:rd :s) (:rn :s) (:rm :s) :cond) #x1e200c00 $condsel-mask)
    (def fcsel ((:rd :d) (:rn :d) (:rm :d) :cond) #x1e600c00 $condsel-mask)
 
-   ;; Conversion between FP and integer
-   ;; Every GPR-width by FP-type combination gets its own template.
+ ;; Conversion between FP and integer
+ ;; Every GPR-width by FP-type combination gets its own template.
    (def scvtf ((:rd :s) (:rn :w)) #x1e220000 $fp-cvt-mask)
    (def scvtf ((:rd :s) (:rn :x)) #x9e220000 $fp-cvt-mask)
    (def scvtf ((:rd :d) (:rn :w)) #x1e620000 $fp-cvt-mask)
@@ -1125,7 +1185,7 @@
    (def ucvtf ((:rd :s) (:rn :x)) #x9e230000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :w)) #x1e630000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :x)) #x9e630000 $fp-cvt-mask)
-   ;; truncate (round toward zero)
+ ;; truncate (round toward zero)
    (def fcvtzs ((:rd :w) (:rn :s)) #x1e380000 $fp-cvt-mask)
    (def fcvtzs ((:rd :x) (:rn :s)) #x9e380000 $fp-cvt-mask)
    (def fcvtzs ((:rd :w) (:rn :d)) #x1e780000 $fp-cvt-mask)
@@ -1134,7 +1194,7 @@
    (def fcvtzu ((:rd :x) (:rn :s)) #x9e390000 $fp-cvt-mask)
    (def fcvtzu ((:rd :w) (:rn :d)) #x1e790000 $fp-cvt-mask)
    (def fcvtzu ((:rd :x) (:rn :d)) #x9e790000 $fp-cvt-mask)
-   ;; round to nearest, ties to even
+ ;; round to nearest, ties to even
    (def fcvtns ((:rd :w) (:rn :s)) #x1e200000 $fp-cvt-mask)
    (def fcvtns ((:rd :x) (:rn :s)) #x9e200000 $fp-cvt-mask)
    (def fcvtns ((:rd :w) (:rn :d)) #x1e600000 $fp-cvt-mask)
@@ -1144,13 +1204,13 @@
    (def fcvtnu ((:rd :w) (:rn :d)) #x1e610000 $fp-cvt-mask)
    (def fcvtnu ((:rd :x) (:rn :d)) #x9e610000 $fp-cvt-mask)
 
-   ;; fmov between a GPR and an FP register (without conversion)
+ ;; fmov between a GPR and an FP register (without conversion)
    (def fmov ((:rd :w) (:rn :s)) #x1e260000 $fp-cvt-mask)
    (def fmov ((:rd :s) (:rn :w)) #x1e270000 $fp-cvt-mask)
    (def fmov ((:rd :x) (:rn :d)) #x9e660000 $fp-cvt-mask)
    (def fmov ((:rd :d) (:rn :x)) #x9e670000 $fp-cvt-mask)
 
-   ;; fmov scalar immediate: see encode-fp-imm8, decode-fp-imm8.
+ ;; fmov scalar immediate: see encode-fp-imm8, decode-fp-imm8.
    (def fmov ((:rd :s) :fpimm8) #x1e201000 $fp-imm-mask)
    (def fmov ((:rd :d) :fpimm8) #x1e601000 $fp-imm-mask)
    ))
@@ -1164,15 +1224,15 @@
            (name (instruction-template-name template)))
       (setf (instruction-template-ordinal template) i)
       (push template (gethash name *instruction-template-lists*))))
-  ;; template order can be significant, so put them in original order
+ ;; template order can be significant, so put them in original order
   (maphash #'(lambda (k v)
                (setf (gethash k *instruction-template-lists*)
                      (nreverse v)))
-           *instruction-template-lists*)
-  ;; If vinsn templates have already been loaded, their baked-in template
-  ;; ordinals may now be stale (the vector may have been reordered since
-  ;; they were compiled): re-resolve them against the current table.  On
-  ;; the first load neither the function nor the templates exist yet.
+ *instruction-template-lists*)
+ ;; If vinsn templates have already been loaded, their baked-in template
+ ;; ordinals may now be stale (the vector may have been reordered since
+ ;; they were compiled): re-resolve them against the current table. On
+ ;; the first load neither the function nor the templates exist yet.
   (when (and (fboundp 'ccl::fixup-arm64-vinsn-templates)
              (boundp 'ccl::*arm64-vinsn-templates*))
     (funcall 'ccl::fixup-arm64-vinsn-templates
@@ -1190,15 +1250,15 @@
       (let ((templates (gethash (string name) *instruction-template-lists*)))
         (unless templates
           (error "Unknown instruction ~s" lap-form))
-        ;; 1. Parse LAP-format operands into operand structs
+ ;; 1. Parse LAP-format operands into operand structs
         (let ((operands (mapcar #'parse-operand lap-operands)))
           (setf (instruction-parsed-operands insn) operands)
-          ;; 2. find a template whose operands match ours
+ ;; 2. find a template whose operands match ours
           (dolist (template templates
                             (explain-no-match name lap-operands operands
                                               templates))
             (when (match-template template operands)
-              ;; 3. encode the operands into the instruction word
+ ;; 3. encode the operands into the instruction word
               (setf (instruction-template insn) template)
               (encode-operands insn)
               (when seg
@@ -1240,10 +1300,12 @@
     :tbit-w        ;tbz/tbnz bit number 0..31 (W); b5 is always 0
     :exc16         ;16-bit exception immediate @ 20:5 (brk/hlt/svc)
     :udf16         ;16-bit undefined immediate @ 15:0 (udf)
+    :uuo-xtype     ;wrong_type UUO expected-type code @ 15:8: a lisptag, a
+ ; fulltag or an xtype (arm64-uuo.s:57-60)
     :baropt        ;4-bit barrier option (CRm) @ 11:8 (dmb/dsb)
-                   ;  15 = full system
+ ; 15 = full system
     :sysreg        ;named system register, 15-bit op0:op1:CRn:CRm:op2 @ 19:5
-                   ; (mrs/msr)
+ ; (mrs/msr)
     :imm5          ;5-bit unsigned immediate @ 20:16 (ccmp/ccmn immediate form)
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
     :fpzero        ;the literal #0.0 (fcmp/fcmpe zero form); encodes nothing
@@ -1263,7 +1325,7 @@
     :bfx-width-x   ;sbfx/ubfx/bfxil #width (X): imms = lsb+width-1 (reads lsb)
     :bfx-width-w   ; and the W form
     :cond          ;4-bit condition @ 15:12 (csel/csinc/ccmp ...),
-                   ; written (:? cc)
+ ; written (:? cc)
     :cond-inv      ;like :cond but encodes the inverse (cset/cinc ... aliases)
     :cond-b        ;4-bit condition @ 3:0 (b.cond), written (:? cc) or (:~ cc)
     :pcrel         ;signed 21-bit value, split into immlo/immhi (adr/adrp)
@@ -1314,8 +1376,8 @@
   index)                                ;lane number
 
 ;;; A whole-vector operand with an arrangement specifier, e.g. Vn.8B -- the
-;;; register viewed as N lanes of a given element size.  ARRANGEMENT is one
-;;; of :8b :16b :4h :8h :2s :4s :1d :2d.  Used by the SIMD data-processing
+;;; register viewed as N lanes of a given element size. ARRANGEMENT is one
+;;; of :8b :16b :4h :8h :2s :4s :1d :2d. Used by the SIMD data-processing
 ;;; instructions (cnt, addv, ...) that operate on a whole vector at once.
 (defstruct vector-arrangement-operand
   register
@@ -1324,7 +1386,7 @@
 (defstruct memory-operand
   base                              ;a register operand
   offset                            ;nil or the offset, specified as
-                                    ; an immediate or register operand
+ ; an immediate or register operand
   pre-indexed                       ;one or the other;
   post-indexed)                     ; having both set makes no sense
 
@@ -1339,8 +1401,8 @@
   value)                              ;its 4-bit encoding
 
 (defun parse-register-operand (form)
-  ;; Recognize a plain register name like x0 or a shifted or extended
-  ;; register of the form (x0 modifier [amount]).
+ ;; Recognize a plain register name like x0 or a shifted or extended
+ ;; register of the form (x0 modifier [amount]).
   (flet ((parse-shift/extend (form)
            (destructuring-bind (name modifier &optional (amount 0)) form
              (unless (or (member modifier *shift-operators* :test #'eq)
@@ -1356,8 +1418,8 @@
       (make-register-operand :register (need-register form)))))
 
 (defun parse-immediate-operand (form)
-  ;; Regcognize (:$ value) or (:$ value :lsl amount).  Legal values
-  ;; and shift amounts are not checked here.
+ ;; Regcognize (:$ value) or (:$ value :lsl amount). Legal values
+ ;; and shift amounts are not checked here.
   (unless (and (consp form)
                (eq (car form) :$)
                (let ((l (length form)))
@@ -1366,9 +1428,9 @@
   (destructuring-bind (marker value &optional op (shift 0)) form
     (declare (ignore marker))
     (when op
-      ;; There are a few Advanced SIMD modified-immediate instructions
-      ;; that use the shift operator MSL.  If we ever support those,
-      ;; this will need to change.
+ ;; There are a few Advanced SIMD modified-immediate instructions
+ ;; that use the shift operator MSL. If we ever support those,
+ ;; this will need to change.
       (unless (eq op :lsl)
         (error "Only :lsl is valid for an immediate: ~s" form)))
     (setf value (eval-immediate-expression value)
@@ -1399,7 +1461,7 @@
            value)))))
 
 (defun parse-memory-operand (form)
-  ;; Recognize (:@ base), (:@ base offset), (:@! ...), (:@+ ...)
+ ;; Recognize (:@ base), (:@ base offset), (:@! ...), (:@+ ...)
   (destructuring-bind (marker base &optional offset) form
     (make-memory-operand
      :base (parse-register-operand base)
@@ -1408,7 +1470,7 @@
      :post-indexed (eq marker :@+))))
 
 (defun parse-label-operand (form)
-  ;; A branch target written as a bare symbol naming a label.
+ ;; A branch target written as a bare symbol naming a label.
   (make-label-operand :name form))
 
 (ccl::defenum (:prefix "COND-")
@@ -1460,9 +1522,9 @@
       (error "Unknown arm64 condition name ~s." name)))
 
 (defun parse-condition-operand (form &optional invert)
-  ;; A condition written (:? cc), e.g. (:? eq), or its inverse (:~ cc).
-  ;; The name is validated here so a bogus condition is caught at parse
-  ;; time.  Inversion is XOR 1 on the 4-bit code; al/nv have no inverse.
+ ;; A condition written (:? cc), e.g. (:? eq), or its inverse (:~ cc).
+ ;; The name is validated here so a bogus condition is caught at parse
+ ;; time. Inversion is XOR 1 on the 4-bit code; al/nv have no inverse.
   (destructuring-bind (marker name) form
     (declare (ignore marker))
     (let ((value (need-arm64-condition-name name)))
@@ -1476,7 +1538,7 @@
         (make-condition-operand :name name :value value)))))
 
 (defparameter *system-registers*
-  ;; name -> the 15-bit op0:op1:CRn:CRm:op2 encoding for msr/mrs
+ ;; name -> the 15-bit op0:op1:CRn:CRm:op2 encoding for msr/mrs
   '(("fpsr" . #x5a21)                 ;FP status (sticky exception bits)
     ("fpcr" . #x5a20)                 ;FP control
     ("nzcv" . #x5a10)                 ;condition flags
@@ -1489,9 +1551,9 @@
   (car (rassoc value *system-registers* :test #'eql)))
 
 (defun parse-vector-element-operand (form)
-  ;; (:s|:d|:b|:h reg index) names one lane of a SIMD register, e.g.
-  ;; (:d q1 0) for V1.D[0].  REG is any FP/SIMD register name -- only its
-  ;; number matters, the element size comes from the leading keyword.
+ ;; (:s|:d|:b|:h reg index) names one lane of a SIMD register, e.g.
+ ;; (:d q1 0) for V1.D[0]. REG is any FP/SIMD register name -- only its
+ ;; number matters, the element size comes from the leading keyword.
   (destructuring-bind (esize reg index) form
     (let ((r (need-register reg)))
       (unless (eq (register-family r) :fpr)
@@ -1499,8 +1561,8 @@
       (make-vector-element-operand :register r :esize esize :index index))))
 
 (defun parse-vector-arrangement-operand (form)
-  ;; (:8b|:16b|:4h|... reg) names a whole SIMD register with an arrangement,
-  ;; e.g. (:8b q0) for V0.8B.  REG is any FP/SIMD register name.
+ ;; (:8b|:16b|:4h|... reg) names a whole SIMD register with an arrangement,
+ ;; e.g. (:8b q0) for V0.8B. REG is any FP/SIMD register name.
   (destructuring-bind (arrangement reg) form
     (let ((r (need-register reg)))
       (unless (eq (register-family r) :fpr)
@@ -1508,11 +1570,11 @@
       (make-vector-arrangement-operand :register r :arrangement arrangement))))
 
 (defun parse-register-view-operand (form)
-  ;; (:s|:d|:w|:x reg) names a non-default view of REG's register number:
-  ;; the S/D scalar-FP view or the W/X GPR-width view.  Mirrors the
-  ;; register-view override used in vinsn bodies, so LAP can write e.g.
-  ;; (:s d0) for the S view (= s0) or (:w imm0) for the W view.  The view
-  ;; keyword picks the family, so only the register number is taken from REG.
+ ;; (:s|:d|:w|:x reg) names a non-default view of REG's register number:
+ ;; the S/D scalar-FP view or the W/X GPR-width view. Mirrors the
+ ;; register-view override used in vinsn bodies, so LAP can write e.g.
+ ;; (:s d0) for the S view (= s0) or (:w imm0) for the W view. The view
+ ;; keyword picks the family, so only the register number is taken from REG.
   (destructuring-bind (view reg) form
     (let ((number (register-number (need-register reg))))
       (make-register-operand
@@ -1526,14 +1588,14 @@
                    (:x (gpr-ref number 64)))))))
 
 (defun parse-operand (form)
-  ;; Recognize an operand written in LAP notation.
+ ;; Recognize an operand written in LAP notation.
   (cond
     ((and form (symbolp form))
-     ;; A bare symbol is a register, a known system register, or a label.
+ ;; A bare symbol is a register, a known system register, or a label.
      (cond
        ((lookup-register form) (parse-register-operand form))
-       ;; A named system register is just an immediate: its value is the
-       ;; 15-bit op0:op1:CRn:CRm:op2 encoding the :sysreg field carries.
+ ;; A named system register is just an immediate: its value is the
+ ;; 15-bit op0:op1:CRn:CRm:op2 encoding the :sysreg field carries.
        ((lookup-system-register form)
         (make-immediate-operand :value (lookup-system-register form) :shift 0))
        (t (parse-label-operand form))))
@@ -1543,15 +1605,15 @@
        (:? (parse-condition-operand form))
        (:~ (parse-condition-operand form t))
        ((:@ :@! :@+) (parse-memory-operand form))
-       ;; (:s x)/(:d x)/(:w x)/(:x x) are register-view overrides; the S/D
-       ;; forms grow a third element to become a vector lane (:d x i).
+ ;; (:s x)/(:d x)/(:w x)/(:x x) are register-view overrides; the S/D
+ ;; forms grow a third element to become a vector lane (:d x i).
        ((:b :h :s :d) (if (cddr form)
                         (parse-vector-element-operand form)
                         (parse-register-view-operand form)))
        ((:w :x) (parse-register-view-operand form))
        ((:8b :16b :4h :8h :2s :4s :1d :2d) (parse-vector-arrangement-operand form))
        (t (if (symbolp (car form))
-            ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
+ ;; a scaled/extended register like (x0 :lsl 3) or (count :lsl 3)
             (parse-register-operand form)
             (error "Unrecognized operand ~s" form)))))
     (t (error "Unrecognized operand ~s" form))))
@@ -1582,20 +1644,20 @@
                   (or (null r31-role)
                       (eq required-r31-role r31-role))))
            (sp-p (required-width)
-             ;; the stack pointer specifically: register 31 in its SP role
+ ;; the stack pointer specifically: register 31 in its SP role
              (and (eq family :gpr)
                   (= required-width width)
                   (null modifier)
                   (eq r31-role :stack-pointer)))
            (fpr-p (required-width)
-             ;; a scalar FP/SIMD register at the given access width (Sn/Dn);
-             ;; no r31 special case -- v31 is an ordinary register
+ ;; a scalar FP/SIMD register at the given access width (Sn/Dn);
+ ;; no r31 special case -- v31 is an ordinary register
              (and (eq family :fpr)
                   (= required-width width)
                   (null modifier)))
            (shifted-p (required-width allow-ror)
-             ;; Rm shifted by lsl/lsr/asr (+ror for logical), or a bare
-             ;; register (lsl #0); never SP.
+ ;; Rm shifted by lsl/lsr/asr (+ror for logical), or a bare
+ ;; register (lsl #0); never SP.
              (and (eq family :gpr)
                   (= required-width width)
                   (not (eq r31-role :stack-pointer))
@@ -1603,10 +1665,10 @@
                     (or (null modifier) (member modifier ops :test #'eq)))
                   (<= 0 amount (1- required-width))))
            (extended-p (inst-width)
-             ;; Rm extended (uxtb..sxtx), the lsl alias, or a bare register.
-             ;; The Rm width follows the extend option (W for the b/h/w extends,
-             ;; X for the x extends), and the x extends need a 64-bit insn.
-             ;; Amount is 0..4; never SP.
+ ;; Rm extended (uxtb..sxtx), the lsl alias, or a bare register.
+ ;; The Rm width follows the extend option (W for the b/h/w extends,
+ ;; X for the x extends), and the x extends need a 64-bit insn.
+ ;; Amount is 0..4; never SP.
              (and (eq family :gpr)
                   (not (eq r31-role :stack-pointer))
                   (cond
@@ -1639,12 +1701,12 @@
         (:w-ext (extended-p 32))))))
 
 ;;; See if the floating-point value can be encoded as a special
-;;; floating-point immediate.  Section C2.2.3 in the manual discusses
+;;; floating-point immediate. Section C2.2.3 in the manual discusses
 ;;; the format.
 ;;;
 ;;; The format is a little obscure, but the key is to note that every
 ;;; encodable value is +/-(1 + m/16) * 2^e with m in [0, 15] and e in
-;;; the range -3 to 4.  Thus, an encodable significand uses only its
+;;; the range -3 to 4. Thus, an encodable significand uses only its
 ;;; top 4 fraction bits and the exponent is in a narrow range around
 ;;; zero.
 ;;;
@@ -1654,14 +1716,14 @@
     (multiple-value-bind (significand exponent sign)
         (integer-decode-float value)
       (let ((nbits (float-digits value)))
-        ;; The significand we get from integer-decode-float is scaled
-        ;; such that the high bit is the now-explicit hidden bit, and
-        ;; the remaining bits are the fraction.  The imm8 float
-        ;; immediate can encode a fraction of 4 bits, so if the lower
-        ;; part of the significand is clear, then maybe the provided
-        ;; value is encodable.
+ ;; The significand we get from integer-decode-float is scaled
+ ;; such that the high bit is the now-explicit hidden bit, and
+ ;; the remaining bits are the fraction. The imm8 float
+ ;; immediate can encode a fraction of 4 bits, so if the lower
+ ;; part of the significand is clear, then maybe the provided
+ ;; value is encodable.
         (when (zerop (ldb (byte (- nbits 5) 0) significand))
-          ;; Now check exponent range.
+ ;; Now check exponent range.
           (let ((m (ldb (byte 4 (- nbits 5)) significand))
                 (e (+ exponent (1- nbits))));unbiased exponent of the MSB
             (when (<= -3 e 4)               ;exponent in range
@@ -1682,9 +1744,9 @@
          (k    (logior (ash (logxor 1 b) 2) cd))   ;k = e+3
          (e    (- k 3)))                           ;unbiased exponent
     (ccl::make-short-float-from-fixnums
-     ;; insert into top 4 bits of mantissa
+ ;; insert into top 4 bits of mantissa
      (dpb m (byte 4 19) 0)
-     ;; CCL misdefines ieee-single-float-bias: it's 126, not 127 as expected
+ ;; CCL misdefines ieee-single-float-bias: it's 126, not 127 as expected
      (+ (1+ ccl::ieee-single-float-bias) e)
      (if (= sign 1) -1 1))))
 
@@ -1702,14 +1764,14 @@
         (return (values imm16 hw))))))
 
 ;;; Some immediate operands are written already scaled by the memory
-;;; access size.  We encode the scale in the operand class (e.g.,
+;;; access size. We encode the scale in the operand class (e.g.,
 ;;; :uoff2 means that the written value is shifted left 2 bits).
 (defun match-immediate-operand (imm-op class)
   (let ((value (immediate-operand-value imm-op))
         (shift (immediate-operand-shift imm-op)))
     (flet ((uoff-p (scale)
              (and (eql shift 0)
-                  ;; multiple of access size?
+ ;; multiple of access size?
                   (zerop (logand value (1- (ash 1 scale))))
                   (typep (ash value (- scale)) '(unsigned-byte 12))))
            (poff-p (scale)      ;signed scaled 7-bit (load/store pair)
@@ -1739,6 +1801,9 @@
         ((:immr-w :imms-w :tbit-w) (and (eql shift 0)
                                         (typep value '(integer 0 31))))
         ((:exc16 :udf16) (and (eql shift 0) (typep value '(unsigned-byte 16))))
+ ;; wrong_type UUO expected-type code: a lisptag, a fulltag or an
+ ;; xtype, all of which fit 8 bits (arm64-uuo.s:57-60).
+        (:uuo-xtype (and (eql shift 0) (typep value '(unsigned-byte 8))))
         (:baropt (and (eql shift 0) (typep value '(unsigned-byte 4))))
         (:imm5 (and (eql shift 0) (typep value '(unsigned-byte 5))))
         (:nzcv (and (eql shift 0) (typep value '(unsigned-byte 4))))
@@ -1755,8 +1820,8 @@
         (:bf-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:bfx-lsb-x (and (eql shift 0) (typep value '(integer 0 63))))
         (:bfx-lsb-w (and (eql shift 0) (typep value '(integer 0 31))))
-        ;; The correct bound is 1..(regsize-lsb), but in vinsns we may not
-        ;; know the lsb until expand time.  The encoder will check.
+ ;; The correct bound is 1..(regsize-lsb), but in vinsns we may not
+ ;; know the lsb until expand time. The encoder will check.
         (:bfx-width-x (and (eql shift 0) (typep value '(integer 1 64))))
         (:bfx-width-w (and (eql shift 0) (typep value '(integer 1 32))))
         (:pcrel (and (eql shift 0) (typep value '(signed-byte 21))))
@@ -1772,13 +1837,13 @@
                             (ldb (byte 64 0) (lognot value)) 64)))))))
 
 (defun regoff-scale (class)
-  ;; The natural scale (log2 access size) baked into a :regoffN class.
+ ;; The natural scale (log2 access size) baked into a :regoffN class.
   (ecase class (:regoff0 0) (:regoff1 1) (:regoff2 2) (:regoff3 3)))
 
 (defun index-option (width modifier)
-  ;; The 3-bit option field for a register-offset index, or NIL if the
-  ;; width/modifier pairing is illegal.  A bare register or lsl means a
-  ;; 64-bit index (UXTX); the w-extends take a 32-bit index.
+ ;; The 3-bit option field for a register-offset index, or NIL if the
+ ;; width/modifier pairing is illegal. A bare register or lsl means a
+ ;; 64-bit index (UXTX); the w-extends take a 32-bit index.
   (case modifier
     ((nil :lsl) (and (eql width 64) 3))
     (:uxtw (and (eql width 32) 2))
@@ -1786,8 +1851,8 @@
     (:sxtx (and (eql width 64) 7))))
 
 (defun match-index-operand (r-op scale)
-  ;; A register-offset index: a non-SP GPR with a legal extend for its
-  ;; width and an amount of either 0 (S=0) or the natural scale (S=1).
+ ;; A register-offset index: a non-SP GPR with a legal extend for its
+ ;; width and an amount of either 0 (S=0) or the natural scale (S=1).
   (and (register-operand-p r-op)
        (let* ((reg (register-operand-register r-op))
               (modifier (register-operand-modifier r-op))
@@ -1798,17 +1863,17 @@
               (member amount (list 0 scale))))))
 
 (defun match-memory-operand (mem-operand spec)
-  ;; SPEC is (:mem-FORM (:base base-class) ...) and the base must satisfy
-  ;; base-class.  The index mode is part of the form: :mem-scaled /
-  ;; :mem-unscaled / :mem-regoff are plain (no writeback); :mem-pre /
-  ;; :mem-post are the writeback forms.  The immediate forms carry (:imm
-  ;; imm-class); :mem-regoff carries (:index index-class).
+ ;; SPEC is (:mem-FORM (:base base-class) ...) and the base must satisfy
+ ;; base-class. The index mode is part of the form: :mem-scaled /
+ ;; :mem-unscaled / :mem-regoff are plain (no writeback); :mem-pre /
+ ;; :mem-post are the writeback forms. The immediate forms carry (:imm
+ ;; imm-class); :mem-regoff carries (:index index-class).
   (let ((base   (memory-operand-base mem-operand))
         (offset (memory-operand-offset mem-operand))
         (pre    (memory-operand-pre-indexed mem-operand))
         (post   (memory-operand-post-indexed mem-operand)))
     (flet ((imm-offset-p ()
-             ;; an immediate offset of the spec's :imm class, required here
+ ;; an immediate offset of the spec's :imm class, required here
              (and offset (immediate-operand-p offset)
                   (match-immediate-operand offset (cadr (assoc :imm (cdr spec)))))))
       (and (register-operand-p base)
@@ -1828,9 +1893,9 @@
                     offset (regoff-scale (cadr (assoc :index (cdr spec)))))))
              (:mem-pre  (and pre (imm-offset-p)))
              (:mem-post (and post (imm-offset-p)))
-             ;; bare [Xn]: base only, no offset, no writeback (load/store
-             ;; exclusive).  A stray offset must not match -- there is no
-             ;; immediate field to put it in.
+ ;; bare [Xn]: base only, no offset, no writeback (load/store
+ ;; exclusive). A stray offset must not match -- there is no
+ ;; immediate field to put it in.
              (:mem-base (and (not pre) (not post) (null offset))))))))
 
 (defun match-operand (operand spec)
@@ -1866,9 +1931,9 @@
 
 ;;; Encoding works similarly to the way matching does: walk the same
 ;;; (spec . operand) pairs and fold each operand's bits into the word
-;;; at the field according to the spec names.  A matched template means every
+;;; at the field according to the spec names. A matched template means every
 ;;; operand's range was already checked, so the encoders insert
-;;; operand bits with no further ado.  Register field positions live in
+;;; operand bits with no further ado. Register field positions live in
 ;;; *register-fields*; the field for an immediate is determined by its
 ;;; class.
 
@@ -1879,7 +1944,10 @@
  `((:rd . ,(byte 5 0)) (:rt . ,(byte 5 0))
    (:rn . ,(byte 5 5)) (:base . ,(byte 5 5))
    (:ra . ,(byte 5 10)) (:rt2 . ,(byte 5 10))
-   (:rm . ,(byte 5 16)) (:rs . ,(byte 5 16))))
+   (:rm . ,(byte 5 16)) (:rs . ,(byte 5 16))
+ ;; UUO operand registers (arm64-uuo.s): the unary and wrong_type formats
+ ;; put a register in 6:2, and the binary format puts a second one in 11:7.
+   (:ruuo . ,(byte 5 2)) (:ruuo2 . ,(byte 5 7))))
 
 (defun register-field (role)
   (or (cdr (assoc role *register-fields*))
@@ -1893,14 +1961,14 @@
   (ldb (register-field role) word))
 
 (defparameter *shift-types*
-  #(:lsl :lsr :asr :ror))
+ #(:lsl :lsr :asr :ror))
 
 (defun encode-shift-type (name)
   (or (position name *shift-types* :test #'eq)
       (error "Unknown shift type name ~s" name)))
 
 (defparameter *extend-options*
-  #(:uxtb :uxth :uxtw :uxtx :sxtb :sxth :sxtw :sxtx))
+ #(:uxtb :uxth :uxtw :uxtx :sxtb :sxth :sxtw :sxtx))
 
 (defun encode-extend-option (name)
   (or (position name *extend-options* :test #'eq)
@@ -1911,7 +1979,7 @@
 ;;; is what distinguishes the two forms).
 (defun encode-register-operand (insn operand role class)
   (ecase role
-    ((:rd :rt :rn :base :rm :rs :ra :rt2)
+    ((:rd :rt :rn :base :rm :rs :ra :rt2 :ruuo :ruuo2)
      (insert-register insn role operand))
     (:rn+rm
      (insert-register insn :rn operand)
@@ -1920,13 +1988,13 @@
         (amount (register-operand-amount operand)))
     (case class
       ((:x-shift :w-shift :x-shift-ror :w-shift-ror)
-       ;; shift type @ 23:22, imm6 amount @ 15:10; a bare register is lsl #0
+ ;; shift type @ 23:22, imm6 amount @ 15:10; a bare register is lsl #0
        (set-field-value insn (byte 2 22) (encode-shift-type (or modifier
                                                                 :lsl)))
        (set-field-value insn (byte 6 10) amount))
       ((:x-ext :w-ext)
-       ;; option @ 15:13, imm3 amount @ 12:10; a bare register or lsl encodes
-       ;; as uxtx (64-bit) / uxtw (32-bit)
+ ;; option @ 15:13, imm3 amount @ 12:10; a bare register or lsl encodes
+ ;; as uxtx (64-bit) / uxtw (32-bit)
        (let ((option (if (or (null modifier) (eq modifier :lsl))
                        (if (eq class :x-ext)
                          (encode-extend-option :uxtx)
@@ -1949,7 +2017,7 @@
       (:q    (make-register-operand :register (fpr-ref number 128)))
       (:b    (make-register-operand :register (fpr-ref number 8)))
       (:h    (make-register-operand :register (fpr-ref number 16)))
-      ;; shifted
+ ;; shifted
       ((:x-shift :w-shift :x-shift-ror :w-shift-ror)
        (let ((type (svref *shift-types* (ldb (byte 2 22) word)))
              (amount (ldb (byte 6 10) word))
@@ -1958,7 +2026,7 @@
            (make-register-operand :register (gpr-ref number width))
            (make-register-operand :register (gpr-ref number width)
                                   :modifier type :amount amount))))
-      ;; extended
+ ;; extended
       ((:x-ext :w-ext)
        (let* ((option (svref *extend-options* (ldb (byte 3 13) word)))
               (amount (ldb (byte 3 10) word))
@@ -1966,10 +2034,10 @@
          (make-register-operand :register (gpr-ref number width)
                                 :modifier option :amount amount))))))
 
-;;; Advanced SIMD lane operands (INS/DUP/MOV element).  The imm5 field
+;;; Advanced SIMD lane operands (INS/DUP/MOV element). The imm5 field
 ;;; (bits 20:16) fuses element size and one lane index: the least-significant
 ;;; set bit marks the size (B/H/S/D at bit 0/1/2/3), and the bits above it
-;;; hold the index.  The imm4 field (bits 14:11) holds a second lane index
+;;; hold the index. The imm4 field (bits 14:11) holds a second lane index
 ;;; (the INS source), positioned by the same size shift.
 
 (defparameter *element-size-shifts* '((:b . 0) (:h . 1) (:s . 2) (:d . 3)))
@@ -1986,7 +2054,7 @@
   (ash index (element-size-shift esize)))
 
 (defun decode-vector-imm5 (bits)
-  ;; The bits argument is the raw imm5 field.  Returns (values esize index).
+ ;; The bits argument is the raw imm5 field. Returns (values esize index).
   (cond ((logbitp 0 bits) (values :b (ash bits -1)))
         ((logbitp 1 bits) (values :h (ash bits -2)))
         ((logbitp 2 bits) (values :s (ash bits -3)))
@@ -1994,14 +2062,14 @@
         (t (error "Invalid vector element imm5 #b~5,'0b" bits))))
 
 ;;; The element operand classes, in the (role class) spec form: :elt5 puts
-;;; its lane (and the size) in imm5; :elt4 puts its lane in imm4.  Both name
+;;; its lane (and the size) in imm5; :elt4 puts its lane in imm4. Both name
 ;;; a vector-element-operand; the role says which register field (Rd/Rn)
 ;;; takes the vector number.
 (defun vector-element-class-p (class)
   (or (eq class :elt5) (eq class :elt4)))
 
 (defun operand-register (operand)
-  ;; The register struct of a plain register or a vector element operand.
+ ;; The register struct of a plain register or a vector element operand.
   (etypecase operand
     (register-operand (register-operand-register operand))
     (vector-element-operand (vector-element-operand-register operand))))
@@ -2024,8 +2092,8 @@
       (make-vector-element-operand
        :register (fpr-ref number 128)   ;the width doesn't really matter
        :esize esize
-       ;; :elt5 carries its own index in imm5; :elt4 takes the size from
-       ;; imm5 (the paired :elt5 operand) but its index from imm4.
+ ;; :elt5 carries its own index in imm5; :elt4 takes the size from
+ ;; imm5 (the paired :elt5 operand) but its index from imm4.
        :index (ecase class
                 (:elt5 imm5-index)
                 (:elt4 (ash (ldb (byte 4 11) word)
@@ -2033,10 +2101,10 @@
 
 ;;; A vector arrangement (Vn.<T>) encodes as a Q bit (bit 30, the "wide"
 ;;; half of each pair) and a 2-bit element size (bits 23:22): B/H/S/D =
-;;; 0/1/2/3.  These positions are shared across the SIMD data-processing
+;;; 0/1/2/3. These positions are shared across the SIMD data-processing
 ;;; formats (two-register misc, across-lanes, ...), so one class serves all.
 (defparameter *arrangements*
-  ;; arrangement -> (Q . size)
+ ;; arrangement -> (Q . size)
   '((:8b 0 . 0) (:16b 1 . 0)
     (:4h 0 . 1) (:8h 1 . 1)
     (:2s 0 . 2) (:4s 1 . 2)
@@ -2084,6 +2152,7 @@
     (:imms-w ,(byte 6 10))
     (:exc16 ,(byte 16 5))
     (:udf16 ,(byte 16 0))
+    (:uuo-xtype ,(byte 8 8))
     (:baropt ,(byte 4 8))
     (:imm5 ,(byte 5 16))
     (:nzcv ,(byte 4 0))
@@ -2114,16 +2183,16 @@
       (ash unscaled scale))))
 
 ;;; ubfx/sbfx/bfxil are written with #lsb, #width operands but they
-;;; are aliases for u/s/bfm, whose imms field is lsb+width-1.  This is
+;;; are aliases for u/s/bfm, whose imms field is lsb+width-1. This is
 ;;; a function of *both* operands, and we'd prefer it if we could deal
 ;;; with operands as a single unit.
 ;;;
-;;; However, it is much easier to use ubfx than it is to use ubfm.  We
+;;; However, it is much easier to use ubfx than it is to use ubfm. We
 ;;; therefore make an exception to that preference here.
 ;;;
 ;;; The ldb operand stands on its own, so it needs no special
-;;; treatment.  But the width operand needs to know what the lsb
-;;; operand is.  So, we look back at it.
+;;; treatment. But the width operand needs to know what the lsb
+;;; operand is. So, we look back at it.
 (defun bfx-lsb-value (insn)
   (do ((ops (instruction-parsed-operands insn) (cdr ops))
        (specs (instruction-template-operand-specs (instruction-template insn))
@@ -2136,8 +2205,8 @@
   (let ((value (immediate-operand-value operand))
         (shift (immediate-operand-shift operand)))
     (case class
-      ;; Some classes are encoded in special ways (via custom encode
-      ;; functions, or into multiple fields in the instruction).
+ ;; Some classes are encoded in special ways (via custom encode
+ ;; functions, or into multiple fields in the instruction).
       (:aimm
        (set-field-value insn (byte 12 10) value)
        (set-field-value insn (byte 1 22) (if (= shift 12) 1 0)))
@@ -2160,8 +2229,8 @@
        (set-field-value insn (byte 2 29) (ldb (byte 2 0) value))
        (set-field-value insn (byte 19 5) (ash value -2)))
       (:fpzero)  ;encode nothing: 0.0 literal included in base opcode
-      ;; These classes only occur in alias templates.  The disassembler
-      ;; never sees them.
+ ;; These classes only occur in alias templates. The disassembler
+ ;; never sees them.
       (:lsl-imm-x
        (set-field-value insn (byte 6 16) (logand (- value) 63))
        (set-field-value insn (byte 6 10) (- 63 value)))
@@ -2179,8 +2248,8 @@
       ((:bf-width-x :bf-width-w) (set-field-value insn (byte 6 10) (1- value)))
       ((:bfx-lsb-x :bfx-lsb-w) (set-field-value insn (byte 6 16) value))
       ((:bfx-width-x :bfx-width-w)
-       ;; In order to be able to encode this, we have to reach back to
-       ;; the already-encoded :bfx-lsb-x/w operand.
+ ;; In order to be able to encode this, we have to reach back to
+ ;; the already-encoded :bfx-lsb-x/w operand.
        (let* ((lsb (bfx-lsb-value insn))
               (regsize (if (eq class :bfx-width-x) 64 32)))
          (unless (<= (+ lsb value) regsize)
@@ -2199,7 +2268,7 @@
                                     width)
            (set-field-value insn (byte 16 5) imm16)
            (set-field-value insn (byte 2 21) hw))))
-      ;; Remaining classes are regular.
+ ;; Remaining classes are regular.
       (t (insert-immediate-field insn class value)))))
 
 ;; Return an immediate-operand struct with value and shift filled in.
@@ -2219,8 +2288,8 @@
       (t (imm (extract-immediate-field word class))))))
 
 (defun encode-index-operand (insn register-operand)
-  ;; A register-offset index: Rm @ 20:16, the extend option @ 15:13, and
-  ;; S @ 12 (set iff the index is scaled, i.e. the amount is nonzero).
+ ;; A register-offset index: Rm @ 20:16, the extend option @ 15:13, and
+ ;; S @ 12 (set iff the index is scaled, i.e. the amount is nonzero).
   (let* ((r (register-operand-register register-operand))
          (modifier (register-operand-modifier register-operand))
          (amount (register-operand-amount register-operand)))
@@ -2230,10 +2299,10 @@
     (set-field-value insn (byte 1 12) (if (zerop amount) 0 1))))
 
 (defun decode-index-operand (word scale)
-  ;; Inverse of encode-index-operand: rebuild the register-offset index as
-  ;; a register-operand.  The extend option @ 15:13 gives both the modifier
-  ;; and the index width; S @ 12 says whether the index is scaled, in which
-  ;; case the amount is the addressing SCALE.  The index is never SP.
+ ;; Inverse of encode-index-operand: rebuild the register-offset index as
+ ;; a register-operand. The extend option @ 15:13 gives both the modifier
+ ;; and the index width; S @ 12 says whether the index is scaled, in which
+ ;; case the amount is the addressing SCALE. The index is never SP.
   (let ((number (extract-register word :rm))
         (scaled (logbitp 12 word)))
     (multiple-value-bind (width modifier)
@@ -2254,28 +2323,28 @@
 
 
 (defun encode-memory-operand (insn operand spec)
-  ;; Base → Rn; the offset is encoded per the addressing form: an
-  ;; immediate (reusing encode-immediate-operand; a missing offset is #0,
-  ;; already in the base-opcode) or a register index.
+ ;; Base → Rn; the offset is encoded per the addressing form: an
+ ;; immediate (reusing encode-immediate-operand; a missing offset is #0,
+ ;; already in the base-opcode) or a register index.
   (insert-register insn :base (memory-operand-base operand))
   (let ((offset (memory-operand-offset operand)))
     (ecase (car spec)
-      ;; the pre/post writeback bits @ 11:10 are baked into the base
-      ;; opcode, so these encode just like the plain immediate forms.
+ ;; the pre/post writeback bits @ 11:10 are baked into the base
+ ;; opcode, so these encode just like the plain immediate forms.
       ((:mem-scaled :mem-unscaled :mem-pre :mem-post)
        (when offset
          (encode-immediate-operand insn offset
                                    (cadr (assoc :imm (cdr spec))))))
       (:mem-regoff
        (encode-index-operand insn offset))
-      ;; bare [Xn]: Rn is already inserted above; nothing more to encode.
+ ;; bare [Xn]: Rn is already inserted above; nothing more to encode.
       (:mem-base))))
 
 (defun decode-memory-operand (word spec)
-  ;; Inverse of encode-memory-operand.  SPEC is (:mem-FORM (:base class)
-  ;; ...).  The base is Rn; the offset's form follows the addressing mode:
-  ;; an immediate (scaled/unscaled/pre/post) or a register index (regoff);
-  ;; the bare [Xn] form has no offset.
+ ;; Inverse of encode-memory-operand. SPEC is (:mem-FORM (:base class)
+ ;; ...). The base is Rn; the offset's form follows the addressing mode:
+ ;; an immediate (scaled/unscaled/pre/post) or a register index (regoff);
+ ;; the bare [Xn] form has no offset.
   (let* ((mem-spec (pop spec))
          (base (decode-register-operand word :base (cadr (assoc :base spec)))))
     (flet ((imm-offset ()
@@ -2296,28 +2365,28 @@
          (make-memory-operand :base base))))))
 
 (defun encode-label-operand (insn operand class)
-  ;; Record a reference from INSN to the named label; finalize patches
-  ;; the displacement field once all addresses are known.  CLASS
-  ;; (:b26/:b19/:b14) is the reftype that selects the field.  The field
-  ;; is left zero (its base-opcode value) until then.
+ ;; Record a reference from INSN to the named label; finalize patches
+ ;; the displacement field once all addresses are known. CLASS
+ ;; (:b26/:b19/:b14) is the reftype that selects the field. The field
+ ;; is left zero (its base-opcode value) until then.
   (note-label-reference (label-operand-name operand) insn class))
 
 (defun decode-label-operand (word class)
-  ;; The branch field holds a signed instruction-count displacement from
-  ;; this instruction.  Lacking the instruction's address, we record it as a
-  ;; signed byte offset; resolve-labels turns it into a target di-vector
-  ;; index in the whole-code-vector pass (see the LABELED slot).  CLASS is
-  ;; the reftype (:b26/:b19/:b14) that selects the field, as in
-  ;; *branch-fields*.
+ ;; The branch field holds a signed instruction-count displacement from
+ ;; this instruction. Lacking the instruction's address, we record it as a
+ ;; signed byte offset; resolve-labels turns it into a target di-vector
+ ;; index in the whole-code-vector pass (see the LABELED slot). CLASS is
+ ;; the reftype (:b26/:b19/:b14) that selects the field, as in
+ ;; *branch-fields*.
   (destructuring-bind (bytespec . width) (cdr (assoc class *branch-fields*))
     (make-label-operand :offset (* 4 (sign-extend (ldb bytespec word)
                                                   width)))))
 
 (defun encode-condition-operand (insn operand &optional invert)
-  ;; The condition is a 4-bit field @ 15:12 in the conditional-select and
-  ;; conditional-compare instructions (not the 3:0 spot b.cond uses).  The
-  ;; cset/cinc/... aliases encode the inverse condition; al/nv have no
-  ;; inverse (their low bit isn't a negation), so inverting them is an error.
+ ;; The condition is a 4-bit field @ 15:12 in the conditional-select and
+ ;; conditional-compare instructions (not the 3:0 spot b.cond uses). The
+ ;; cset/cinc/... aliases encode the inverse condition; al/nv have no
+ ;; inverse (their low bit isn't a negation), so inverting them is an error.
   (let ((value (condition-operand-value operand)))
     (when invert
       (if (< value 14)
@@ -2327,26 +2396,26 @@
     (set-field-value insn (byte 4 12) value)))
 
 (defun decode-condition-operand (word &optional invert)
-  ;; The 4-bit condition @ 15:12 (csel/ccmp family), the inverse of
-  ;; encode-condition-operand.  An :cond-inv operand was encoded as the
-  ;; inverse, so re-invert to recover the source name -- though :cond-inv
-  ;; occurs only in alias templates, which the disassembler skips, so in
-  ;; practice only the plain path runs.
+ ;; The 4-bit condition @ 15:12 (csel/ccmp family), the inverse of
+ ;; encode-condition-operand. An :cond-inv operand was encoded as the
+ ;; inverse, so re-invert to recover the source name -- though :cond-inv
+ ;; occurs only in alias templates, which the disassembler skips, so in
+ ;; practice only the plain path runs.
   (let ((value (ldb (byte 4 12) word)))
     (when invert (setq value (logxor value 1)))
     (make-condition-operand :name (lookup-arm64-condition-value value)
                             :value value)))
 
 (defun encode-condition-branch-operand (insn operand)
-  ;; b.cond: the 4-bit condition lives at 3:0 (not the 15:12 spot csel/ccmp
-  ;; use).  Any inversion (the (:~ cc) form) was already folded into the
-  ;; operand's value at parse or expand time, so we just write it.
+ ;; b.cond: the 4-bit condition lives at 3:0 (not the 15:12 spot csel/ccmp
+ ;; use). Any inversion (the (:~ cc) form) was already folded into the
+ ;; operand's value at parse or expand time, so we just write it.
   (set-field-value insn (byte 4 0) (condition-operand-value operand)))
 
 (defun decode-condition-branch-operand (word)
-  ;; The 4-bit condition @ 3:0 (b.cond).  Only reached if a :cond-b template
-  ;; ever participates in disassembly; b.c is an alias, so in practice the
-  ;; specific b.<cond> forms decode these instead.
+ ;; The 4-bit condition @ 3:0 (b.cond). Only reached if a :cond-b template
+ ;; ever participates in disassembly; b.c is an alias, so in practice the
+ ;; specific b.<cond> forms decode these instead.
   (let ((value (ldb (byte 4 0) word)))
     (make-condition-operand :name (lookup-arm64-condition-value value)
                             :value value)))
@@ -2387,7 +2456,7 @@
           for operand in (instruction-parsed-operands insn)
           do (encode-operand insn operand spec))))
 
-;;; Rendering operand specs in human-readable, GAS-ish form.  Used now for
+;;; Rendering operand specs in human-readable, GAS-ish form. Used now for
 ;;; "no match" diagnostics; reusable later for disassembly/documentation.
 
 (defparameter *memory-specs*
@@ -2398,7 +2467,7 @@
        (member (car spec) *memory-specs* :test #'eq)))
 
 (defun label-spec-p (spec)
-  ;; (:label class), where class is one of :b26/:b19/:b14.
+ ;; (:label class), where class is one of :b26/:b19/:b14.
   (and (consp spec)
        (eq (car spec) :label)))
 
@@ -2421,8 +2490,8 @@
     (t (format nil "~(~a~)" class))))
 
 (defun render-register-spec (spec)
-  ;; SPEC is (role class), e.g. (:rd :x).  The role's trailing letter
-  ;; (d/n/m/t) becomes the operand suffix.
+ ;; SPEC is (role class), e.g. (:rd :x). The role's trailing letter
+ ;; (d/n/m/t) becomes the operand suffix.
   (render-gpr-token (cadr spec)
                     (subseq (string-downcase (string (car spec))) 1)))
 
@@ -2436,6 +2505,7 @@
     ((:imms-x :imms-w) "#imms")
     ((:tbit-x :tbit-w) "#bit")
     ((:exc16 :udf16) "#imm16")
+    (:uuo-xtype "#type")
     (:baropt "#option")
     (:sysreg "sysreg")
     (:imm5 "#imm5")
@@ -2451,7 +2521,7 @@
     (t (format nil "#~(~a~)" class))))
 
 (defun render-mem-spec (spec)
-  ;; SPEC is (:mem-FORM (:base qual) (:imm qual) ...).
+ ;; SPEC is (:mem-FORM (:base qual) (:imm qual) ...).
   (let (base off)
     (dolist (component (cdr spec))
       (case (car component)
@@ -2483,7 +2553,7 @@
   (length (instruction-template-operand-specs template)))
 
 (defun no-match-forms (lname templates)
-  ;; The mnemonic's accepted forms, rendered and deduplicated, one per line.
+ ;; The mnemonic's accepted forms, rendered and deduplicated, one per line.
   (mapcar (lambda (form)
             (if (string= form "") lname (format nil "~a ~a" lname form)))
           (remove-duplicates (mapcar #'render-template-operand-specs templates)
@@ -2503,7 +2573,7 @@
         ((label-operand-p operand)     :label)
         ((condition-operand-p operand) :condition)))
 
-;;; Invoked only when no template matched.  Always signals an error, sharpest
+;;; Invoked only when no template matched. Always signals an error, sharpest
 ;;; diagnosis first: an arity mismatch, then an operand whose KIND fits no
 ;;; candidate at its position (this stays correct even while the detail
 ;;; predicates are stubs, since it only compares register/immediate/memory),
@@ -2560,9 +2630,9 @@
               (instruction-word insn) 0
               (instruction-parsed-operands insn) nil
               (instruction-address insn) nil
-              ;; Every A64 instruction is one 4-byte word.  (%make-instruction
-              ;; and the struct default agree; a recycled node must too, or
-              ;; addressing/branch displacements come out wrong.)
+ ;; Every A64 instruction is one 4-byte word. (%make-instruction
+ ;; and the struct default agree; a recycled node must too, or
+ ;; addressing/branch displacements come out wrong.)
               (instruction-size insn) 4)
         insn)
       (%make-instruction form))))
@@ -2571,7 +2641,7 @@
 ;;;
 ;;; Labels are zero-size elements spliced into the same doubly-linked
 ;;; section as instructions; a label therefore inherits the address of
-;;; whatever instruction follows it.  Assembly is two-pass: pass one
+;;; whatever instruction follows it. Assembly is two-pass: pass one
 ;;; emits elements and, for each branch, records a (insn . reftype)
 ;;; reference on the target label without resolving it; FINALIZE is pass
 ;;; two, computing label addresses and patching branch displacements.
@@ -2607,15 +2677,15 @@
          (instruction-element-size last)))))
 
 (defun set-element-addresses (seg)
-  ;; One non-iterative pass: lay out elements at successive addresses.
-  ;; Labels have size 0, so each takes the address of the next real
-  ;; instruction.
+ ;; One non-iterative pass: lay out elements at successive addresses.
+ ;; Labels have size 0, so each takes the address of the next real
+ ;; instruction.
   (let ((address 0))
     (ccl::do-dll-nodes (element seg)
       (setf (instruction-element-address element) address)
       (incf address (instruction-element-size element)))))
 
-;;; A label can only be emitted once.  Until it is, its pred slot is nil.
+;;; A label can only be emitted once. Until it is, its pred slot is nil.
 (defun label-emitted-p (lab)
   (not (null (label-pred lab))))
 
@@ -2660,7 +2730,7 @@
          (maphash (lambda (,k ,xlab)
                     (declare (ignore ,k))
                     (,thunk ,xlab))
-                  *labels*)
+ *labels*)
          (dolist (,xlab *labels*)
            (,thunk ,xlab)))
        ,result)))
@@ -2672,7 +2742,7 @@
     (:b14 . #.(cons (byte 14 5) 14))))
 
 (defun set-branch-displacement (insn reftype words)
-  ;; WORDS is the target displacement in instructions (bytes / 4).
+ ;; WORDS is the target displacement in instructions (bytes / 4).
   (destructuring-bind (bytespec . width)
       (or (cdr (assoc reftype *branch-fields*))
           (error "Unknown branch reftype ~s." reftype))
@@ -2682,8 +2752,8 @@
     (set-field-value insn bytespec words)))
 
 (defun finalize (seg)
-  ;; Assign addresses, then patch every branch's displacement field.
-  ;; One shot: no outliers, no re-addressing, no iteration.
+ ;; Assign addresses, then patch every branch's displacement field.
+ ;; One shot: no outliers, no re-addressing, no iteration.
   (set-element-addresses seg)
   (do-lap-labels (lab)
     (if (label-emitted-p lab)
@@ -2707,13 +2777,13 @@
     (dolist (form forms)
       (if (symbolp form)
         (emit-label seg form)
-        ;; ASSEMBLE-INSTRUCTION already emits into SEG when given one.
+ ;; ASSEMBLE-INSTRUCTION already emits into SEG when given one.
         (assemble-instruction seg form)))
     (finalize seg)
     seg))
 
 (defun section-words (seg)
-  ;; The encoded 32-bit words of SEG's instructions, in order.
+ ;; The encoded 32-bit words of SEG's instructions, in order.
   (let ((words '()))
     (ccl::do-dll-nodes (element seg)
       (when (instruction-p element)
@@ -2722,20 +2792,20 @@
 
 
 (progn
-  ;; Sanity-check the hand-entered template table.  These checks need
-  ;; only base-opcode + mask + the operand classes — NOT operand bit
-  ;; positions — so they cost nothing to maintain as the table grows.
-  ;; Round-trip encode/decode tests (once the disassembler exists)
-  ;; cover the rest.
+ ;; Sanity-check the hand-entered template table. These checks need
+ ;; only base-opcode + mask + the operand classes — NOT operand bit
+ ;; positions — so they cost nothing to maintain as the table grows.
+ ;; Round-trip encode/decode tests (once the disassembler exists)
+ ;; cover the rest.
 
   (defun template-alias-p (template)
     (logtest (instruction-template-flags template)
              (%encode-instruction-flags :alias)))
 
   (defun operand-spec-classes (spec)
-    ;; The class keyword(s) a spec refers to: a bare immediate is
-    ;; itself a class; a register spec's class is its cadr; a memory
-    ;; group's components each carry one.
+ ;; The class keyword(s) a spec refers to: a bare immediate is
+ ;; itself a class; a register spec's class is its cadr; a memory
+ ;; group's components each carry one.
     (cond ((keywordp spec) (list spec))
           ((mem-spec-p spec)
            (loop for component in (cdr spec)
@@ -2756,9 +2826,9 @@
           (problem "base-opcode ~x is not a 32-bit value" base))
         (unless (typep mask '(unsigned-byte 32))
           (problem "mask ~x is not a 32-bit value" mask))
-        ;; Mask checks apply only to real instructions; aliases are
-        ;; encoder-only and excluded from disassembly, so their
-        ;; (conventionally 0) mask is of no interest.
+ ;; Mask checks apply only to real instructions; aliases are
+ ;; encoder-only and excluded from disassembly, so their
+ ;; (conventionally 0) mask is of no interest.
         (when (and (typep base '(unsigned-byte 32))
                    (typep mask '(unsigned-byte 32))
                    (not (template-alias-p template)))
@@ -2768,7 +2838,7 @@
               (unless (zerop stray)
                 (problem "base-opcode ~x sets bits ~x outside its mask ~x ~
                         (i.e. inside an operand field)" base stray mask)))))
-        ;; Every operand class must be one we know how to encode.
+ ;; Every operand class must be one we know how to encode.
         (dolist (spec specs)
           (dolist (class (operand-spec-classes spec))
             (unless (member class *operand-classes*)
@@ -2829,69 +2899,69 @@
 ;;; Adapted from https://dougallj.wordpress.com/2021/10/30/bit-twiddling-optimising-aarch64-logical-immediate-encoding-and-decoding/
 
 (defun %encode-logical-immediate (u64)
-  ;; Consider an ARM64 logical immediate as a pattern of "o" ones preceded
-  ;; by "z" more-significant zeroes, repeated to fill a 64-bit integer.
-  ;; o > 0, z > 0, and the size (o + z) is a power of two in [2,64]. This
-  ;; part of the pattern is encoded in the fields "imms" and "N".
-  ;;
-  ;; "immr" encodes a further right rotate of the repeated pattern, allowing
-  ;; a wide range of useful bitwise constants to be represented.
-  ;;
-  ;; (The spec describes the "immr" rotate as rotating the "o + z" bit
-  ;; pattern before repeating it to fill 64-bits, but, as it's a repeating
-  ;; pattern, rotating afterwards is equivalent.)
-  ;;
-  ;; This encoding is not allowed to represent all-zero or all-one values,
-  ;; which must have been excluded prior to calling this function,
-  ;;
-  ;; To detect an immediate that may be encoded in this scheme, we first
-  ;; remove the right-rotate, by rotating such that the least significant
-  ;; bit is a one and the most significant bit is a zero.
-  ;;
-  ;; We do this by clearing any trailing one bits, then counting the
-  ;; trailing zeroes. This finds an "edge", where zero goes to one.
-  ;; We then rotate the original value right by that amount, moving
-  ;; the first one to the least significant bit.
+ ;; Consider an ARM64 logical immediate as a pattern of "o" ones preceded
+ ;; by "z" more-significant zeroes, repeated to fill a 64-bit integer.
+ ;; o > 0, z > 0, and the size (o + z) is a power of two in [2,64]. This
+ ;; part of the pattern is encoded in the fields "imms" and "N".
+ ;;
+ ;; "immr" encodes a further right rotate of the repeated pattern, allowing
+ ;; a wide range of useful bitwise constants to be represented.
+ ;;
+ ;; (The spec describes the "immr" rotate as rotating the "o + z" bit
+ ;; pattern before repeating it to fill 64-bits, but, as it's a repeating
+ ;; pattern, rotating afterwards is equivalent.)
+ ;;
+ ;; This encoding is not allowed to represent all-zero or all-one values,
+ ;; which must have been excluded prior to calling this function,
+ ;;
+ ;; To detect an immediate that may be encoded in this scheme, we first
+ ;; remove the right-rotate, by rotating such that the least significant
+ ;; bit is a one and the most significant bit is a zero.
+ ;;
+ ;; We do this by clearing any trailing one bits, then counting the
+ ;; trailing zeroes. This finds an "edge", where zero goes to one.
+ ;; We then rotate the original value right by that amount, moving
+ ;; the first one to the least significant bit.
   (let* ((rotation (count-trailing-zeros-64 (clear-trailing-ones-64 u64)))
          (normalized (rotate-right-64 u64 (logand rotation 63)))
-         ;; Now we have normalized the value, and determined the
-         ;; rotation, we can determine "z" by counting the leading
-         ;; zeroes, and "o" by counting the trailing ones. (These will
-         ;; both be positive, as we already rejected 0 and ~0, and
-         ;; rotated the value to start with a zero and end with a
-         ;; one.)
+ ;; Now we have normalized the value, and determined the
+ ;; rotation, we can determine "z" by counting the leading
+ ;; zeroes, and "o" by counting the trailing ones. (These will
+ ;; both be positive, as we already rejected 0 and ~0, and
+ ;; rotated the value to start with a zero and end with a
+ ;; one.)
          (zeros (count-leading-zeros-64 normalized))
          (ones (count-trailing-zeros-64 (ldb (byte 64 0) (lognot normalized))))
          (size (+ zeros ones)))
-    ;; Detect the repeating pattern (by comparing every repetition to the
-    ;; one next to it, using rotate).
+ ;; Detect the repeating pattern (by comparing every repetition to the
+ ;; one next to it, using rotate).
     (if (/= (rotate-right-64 u64 (logand size 63)) u64)
       nil
-      ;; We do not need to further validate size to ensure it is a
-      ;; power of two between 2 and 64. The only "minimal" patterns
-      ;; that can repeat to fill a 64-bit value must have a length
-      ;; that is a factor of 64 (i.e. it is a power of two in the
-      ;; range [1,64]). And our pattern cannot be of length one (as we
-      ;; already rejected 0 and ~0).
-      ;;
-      ;; By "minimal" patterns I refer to patterns which do not
-      ;; themselves contain repetitions. For example, '010101' is a
-      ;; non-minimal pattern of a non-power-of-two length that can
-      ;; pass the above rotational test. It consists of the minimal
-      ;; pattern '01'. All our patterns are minimal, as they contain
-      ;; only one contiguous run of ones separated by at least one
-      ;; zero.
-      ;;
-      ;; Finally, we encode the values. "rotation" is the amount we
-      ;; rotated right by to "undo" the right-rotate encoded in immr,
-      ;; so must be negated.
-      ;;
-      ;; size 2:  N=0 immr=00000r imms=11110s
-      ;; size 4:  N=0 immr=0000rr imms=1110ss
-      ;; size 8:  N=0 immr=000rrr imms=110sss
-      ;; size 16: N=0 immr=00rrrr imms=10ssss
-      ;; size 32: N=0 immr=0rrrrr imms=0sssss
-      ;; size 64: N=1 immr=rrrrrr imms=ssssss
+ ;; We do not need to further validate size to ensure it is a
+ ;; power of two between 2 and 64. The only "minimal" patterns
+ ;; that can repeat to fill a 64-bit value must have a length
+ ;; that is a factor of 64 (i.e. it is a power of two in the
+ ;; range [1,64]). And our pattern cannot be of length one (as we
+ ;; already rejected 0 and ~0).
+ ;;
+ ;; By "minimal" patterns I refer to patterns which do not
+ ;; themselves contain repetitions. For example, '010101' is a
+ ;; non-minimal pattern of a non-power-of-two length that can
+ ;; pass the above rotational test. It consists of the minimal
+ ;; pattern '01'. All our patterns are minimal, as they contain
+ ;; only one contiguous run of ones separated by at least one
+ ;; zero.
+ ;;
+ ;; Finally, we encode the values. "rotation" is the amount we
+ ;; rotated right by to "undo" the right-rotate encoded in immr,
+ ;; so must be negated.
+ ;;
+ ;; size 2: N=0 immr=00000r imms=11110s
+ ;; size 4: N=0 immr=0000rr imms=1110ss
+ ;; size 8: N=0 immr=000rrr imms=110sss
+ ;; size 16: N=0 immr=00rrrr imms=10ssss
+ ;; size 32: N=0 immr=0rrrrr imms=0sssss
+ ;; size 64: N=1 immr=rrrrrr imms=ssssss
       (let* ((immr (logand (- rotation) (1- size)))
              (imms (logior (- (ash size 1))
                            (1- ones)))
@@ -2914,8 +2984,8 @@
    be encoded."
   (when (typep n '(or (signed-byte 32) (unsigned-byte 32)))
     (let ((u32 (ldb (byte 32 0) n)))
-      ;; Replicate the provided 32-bit bitmask into 64 bits so that
-      ;; the pattern width is guaranteed to be <= 32.
+ ;; Replicate the provided 32-bit bitmask into 64 bits so that
+ ;; the pattern width is guaranteed to be <= 32.
       (encode-logical-immediate (logior u32 (ash u32 32))))))
 
 (defun encode-logical-immediate-not (n)
@@ -2932,20 +3002,20 @@
 
 ;;; Form of an encoded logical immediate:
 ;;;
-;;;      1
-;;;  2 1 0 9 8 7 6 5 4 3 2 1 0
+;;; 1
+;;; 2 1 0 9 8 7 6 5 4 3 2 1 0
 ;;; +-+-+-+-+-+-+-+-+-+-+-+-+-+
-;;; |N|   immr    |    imms   |
+;;; |N| immr | imms |
 ;;; +-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 
 (defconstant mask-lookup
-  #(#xffffffffffffffff                  ;size = 64
-    #x00000000ffffffff                  ;size = 32
-    #x0000ffff0000ffff                  ;size = 16
-    #x00ff00ff00ff00ff                  ;size = 8
-    #x0f0f0f0f0f0f0f0f                  ;size = 4
-    #x3333333333333333))                ;size = 2
+ #(#xffffffffffffffff ;size = 64
+ #x00000000ffffffff ;size = 32
+ #x0000ffff0000ffff ;size = 16
+ #x00ff00ff00ff00ff ;size = 8
+ #x0f0f0f0f0f0f0f0f ;size = 4
+ #x3333333333333333)) ;size = 2
 
 (defun decode-logical-immediate (imm)
   (let* ((n (ldb (byte 1 12) imm))
@@ -2975,33 +3045,33 @@
 
 ;;; A "simplified" vinsn instruction looks like
 ;;;
-;;;    (ordinal . operand-descriptors)
+;;; (ordinal . operand-descriptors)
 ;;;
 ;;; where ordinal is the index of the matched instruction template in
 ;;; *instruction-templates*, and each operand-descriptor says how to
 ;;; build one operand at expand time by filling in the holes with data
-;;; provided in the variable-parts (vp) vector.  At vinsn expand time
+;;; provided in the variable-parts (vp) vector. At vinsn expand time
 ;;; we have only to fill the holes and encode, reusing the assembler's
 ;;; encode-operands function.
 ;;;
 ;;; Operand descriptors look like this:
 ;;;
-;;;   register    (:opnd index)   parameter register, or a label parameter
-;;;               (:reg number)   literal register (vsp, sp, fn, ...)
-;;;   label       (:local-label kw)   template-local branch target (:ok)
-;;;   immediate   (:imm value shift) | (:imm-opnd index shift)
-;;;               (:imm-apply shift fn arg...)   arg is (:opnd i), a constant,
-;;;                                              or a nested (:apply fn arg...)
-;;;   memory      (:mem marker base-desc off-desc)   off-desc nil / imm / reg
-;;;   condition   (:cond value) | (:cond-opnd index [:invert])
-;;;   shifted/ext (:shifted-reg reg-desc modifier amount)
+;;; register (:opnd index) parameter register, or a label parameter
+;;; (:reg number) literal register (vsp, sp, fn, ...)
+;;; label (:local-label kw) template-local branch target (:ok)
+;;; immediate (:imm value shift) | (:imm-opnd index shift)
+;;; (:imm-apply shift fn arg...) arg is (:opnd i), a constant,
+;;; or a nested (:apply fn arg...)
+;;; memory (:mem marker base-desc off-desc) off-desc nil / imm / reg
+;;; condition (:cond value) | (:cond-opnd index [:invert])
+;;; shifted/ext (:shifted-reg reg-desc modifier amount)
 ;;;
-;;; Template selection is first-match, exactly as the assembler does.  A
+;;; Template selection is first-match, exactly as the assembler does. A
 ;;; hole whose value isn't known until expand time is treated as a wild
 ;;; immediate or wild condition that matches any operand spec of the right
 ;;; class; because such a hole can't disambiguate value-multiplexed aliases
 ;;; (mov's movz/movn/orr), a wild match must be unique or we signal an error
-;;; asking the vinsn to name a concrete instruction.  Value-dependent checks
+;;; asking the vinsn to name a concrete instruction. Value-dependent checks
 ;;; (an immediate's range) are deferred to expand time.
 ;;;
 ;;; VINSN-SIMPLIFY-INSTRUCTION returns a second value as well: an
@@ -3015,18 +3085,18 @@
 ;;;
 ;;; We derive an operand's width from its vreg's storage class: node and
 ;;; 64-bit unboxed values (:lisp/:u64/:s64/:address/:imm) use X; the
-;;; 32-bit unboxed modes (:u32/:s32) use W.  arm64 GPRs have no B/H view,
+;;; 32-bit unboxed modes (:u32/:s32) use W. arm64 GPRs have no B/H view,
 ;;; so 8/16-bit values are handled with W-form ops plus explicit
 ;;; extend/mask instructions, not a narrower register -- hence the width
 ;;; axis is strictly binary (W or X).
 ;;;
 ;;; This default keeps vinsn bodies clean (bare register names, no width
 ;;; tags) and is correct for essentially everything during bring-up,
-;;; where all operands are node or 64-bit.  When a vinsn eventually wants
+;;; where all operands are node or 64-bit. When a vinsn eventually wants
 ;;; a non-default view of a register (e.g. the W view of a node register,
 ;;; or forcing X on a :u32), add a per-operand override to the body
 ;;; syntax -- e.g. (:w reg) / (:x reg) resolved here -- rather than
-;;; changing register identity.  Deferred until a concrete 32-bit vinsn
+;;; changing register identity. Deferred until a concrete 32-bit vinsn
 ;;; needs it.
 ;;;
 ;;; Returns (values family width) or NIL.
@@ -3047,7 +3117,7 @@
 (defparameter *wild-immediate* '#:wild-immediate)
 
 ;;; Match-time stand-in for a condition (:? cc) whose value comes from a
-;;; parameter.  Matches a :cond / :cond-inv operand spec.
+;;; parameter. Matches a :cond / :cond-inv operand spec.
 (defparameter *wild-condition* '#:wild-condition)
 
 ;;; Resolve one argument of an immediate (:apply fn ...) form to a
@@ -3063,7 +3133,7 @@
      (list :opnd (position arg name-list :test #'eq)))
     (t (eval-immediate-expression arg))))
 
-;;; Parse (:$ value) or (:$ value :lsl amount).  Returns two values: a
+;;; Parse (:$ value) or (:$ value :lsl amount). Returns two values: a
 ;;; dumpable descriptor and the literal value, or :UNKNOWN if the value
 ;;; isn't known until expand time (a const-parameter hole or (:apply ...)).
 (defun vinsn-parse-immediate (op name-list)
@@ -3094,13 +3164,13 @@
       (when (and base-mop (register-operand-p base-mop))
         (cond
           ((null offset)
-           ;; plain register
+ ;; plain register
            (values (make-memory-operand :base base-mop :offset nil
                                         :pre-indexed (eq marker :@!)
                                         :post-indexed (eq marker :@+))
                    (list :mem marker base-desc nil)))
           ((and (consp offset) (eq (car offset) :$))
-           ;; immediate offset
+ ;; immediate offset
            (multiple-value-bind (off-desc value)
                (vinsn-parse-immediate offset name-list)
              (values (make-memory-operand
@@ -3112,7 +3182,7 @@
                       :post-indexed (eq marker :@+))
                      (list :mem marker base-desc off-desc))))
           (t
-           ;; register offset
+ ;; register offset
            (multiple-value-bind (off-mop off-desc)
                (vinsn-parse-operand offset name-list param-types)
              (when (and off-mop (register-operand-p off-mop))
@@ -3122,33 +3192,33 @@
                         :post-indexed (eq marker :@+))
                        (list :mem marker base-desc off-desc))))))))))
 
-;;; Try to parse a single vinsn instruction operand.  If we win,
+;;; Try to parse a single vinsn instruction operand. If we win,
 ;;; return two values: an operand struct (or wildcard marker) to be
 ;;; used in template matching, and an operand descriptor to
 ;;; save. Otherwise return nil.
 (defun vinsn-parse-operand (op name-list param-types)
   (cond
-    ;; A bare keyword names a template-local label (e.g. :ok): defined
-    ;; elsewhere in this body and referenced here by a branch.
+ ;; A bare keyword names a template-local label (e.g. :ok): defined
+ ;; elsewhere in this body and referenced here by a branch.
     ((keywordp op)
      (values (make-label-operand :name op) ;name is a placeholder for matching
              (list :local-label op)))
-    ;; An immediate: (:$ value) or (:$ value :lsl amount).  A literal value
-    ;; is matched by value (so e.g. (mov reg (:$ const)) picks the right
-    ;; movz/movn/orr); an unknown value uses the wild marker.
+ ;; An immediate: (:$ value) or (:$ value :lsl amount). A literal value
+ ;; is matched by value (so e.g. (mov reg (:$ const)) picks the right
+ ;; movz/movn/orr); an unknown value uses the wild marker.
     ((and (consp op) (eq (car op) :$))
      (multiple-value-bind (desc value) (vinsn-parse-immediate op name-list)
        (if (eq value :unknown)
          (values *wild-immediate* desc)
          (values (make-immediate-operand :value value :shift (caddr desc))
                  desc))))
-    ;; A memory operand: (:@ base [offset]) and the writeback variants.
+ ;; A memory operand: (:@ base [offset]) and the writeback variants.
     ((and (consp op) (member (car op) '(:@ :@! :@+) :test #'eq))
      (vinsn-parse-memory-operand op name-list param-types))
-    ;; A condition: (:? cc) or its inverse (:~ cc).  A parameter cc is
-    ;; treated as a wild condition (value supplied at expand time; the
-    ;; inversion, if any, is applied then); a literal condition name is
-    ;; resolved and inverted now.
+ ;; A condition: (:? cc) or its inverse (:~ cc). A parameter cc is
+ ;; treated as a wild condition (value supplied at expand time; the
+ ;; inversion, if any, is applied then); a literal condition name is
+ ;; resolved and inverted now.
     ((and (consp op) (member (car op) '(:? :~) :test #'eq))
      (let* ((invert (eq (car op) :~))
             (cc (cadr op))
@@ -3169,9 +3239,9 @@
                        (list :cond value)))
              (values (make-condition-operand :name cc :value value)
                      (list :cond value)))))))
-    ;; A vector arrangement operand: (:8b x) / (:16b x) / ... names Vx.<T>,
-    ;; a whole SIMD register with an element arrangement (for cnt/addv/...).
-    ;; x is a parameter hole or a literal FP register name.
+ ;; A vector arrangement operand: (:8b x) / (:16b x) / ... names Vx.<T>,
+ ;; a whole SIMD register with an element arrangement (for cnt/addv/...).
+ ;; x is a parameter hole or a literal FP register name.
     ((and (consp op) (consp (cdr op)) (null (cddr op))
           (member (car op) '(:8b :16b :4h :8h :2s :4s :1d :2d) :test #'eq)
           (symbolp (cadr op)))
@@ -3188,11 +3258,11 @@
                       :register (fpr-ref (register-number reg) 128)
                       :arrangement arrangement)
                      (list :varr-reg (register-number reg) arrangement)))))))
-    ;; A vector lane operand: (:s x i) / (:d x i) names Vx.<S|D>[i], one
-    ;; lane of a SIMD register (for ins/dup/mov element).  x is a parameter
-    ;; hole or a literal FP register name; i is a constant lane index.  It's
-    ;; the extra index element that tells this apart from the scalar view
-    ;; below.  Only :s/:d are needed so far.
+ ;; A vector lane operand: (:s x i) / (:d x i) names Vx.<S|D>[i], one
+ ;; lane of a SIMD register (for ins/dup/mov element). x is a parameter
+ ;; hole or a literal FP register name; i is a constant lane index. It's
+ ;; the extra index element that tells this apart from the scalar view
+ ;; below. Only :s/:d are needed so far.
     ((and (consp op) (consp (cdr op)) (consp (cddr op)) (null (cdddr op))
           (member (car op) '(:s :d) :test #'eq)
           (symbolp (cadr op)))
@@ -3210,9 +3280,9 @@
                       :register (fpr-ref (register-number reg) 128)
                       :esize esize :index index)
                      (list :velt-reg (register-number reg) esize index)))))))
-    ;; A register-view override: (:b r) / (:h r) / (:s r) / (:d r) / (:w r)
-    ;; / (:x r) forces the Bn/Hn/Sn/Dn scalar-FP view or the Wn/Xn GPR-width
-    ;; view of the register r, ignoring its declared operand class.
+ ;; A register-view override: (:b r) / (:h r) / (:s r) / (:d r) / (:w r)
+ ;; / (:x r) forces the Bn/Hn/Sn/Dn scalar-FP view or the Wn/Xn GPR-width
+ ;; view of the register r, ignoring its declared operand class.
     ((and (consp op) (consp (cdr op)) (null (cddr op))
           (member (car op) '(:b :h :s :d :w :x) :test #'eq)
           (symbolp (cadr op)))
@@ -3231,17 +3301,17 @@
          (let* ((inner (cadr op))
                 (index (position inner name-list :test #'eq)))
            (if index
-             ;; a parameter
+ ;; a parameter
              (values (make-register-operand :register (ref 0))
                      (list :opnd index))
-             ;; a literal register name (e.g. (:x fn))
+ ;; a literal register name (e.g. (:x fn))
              (let ((reg (lookup-register inner)))
                (when reg
                  (values (make-register-operand :register
                                                 (ref (register-number reg)))
                          (list :reg (register-number reg))))))))))
-    ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
-    ;; base register may be a hole or literal; the amount must be constant.
+ ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc. The
+ ;; base register may be a hole or literal; the amount must be constant.
     ((and (consp op) (symbolp (car op))
           (or (member (cadr op) *shift-operators* :test #'eq)
               (member (cadr op) *extend-operators* :test #'eq)))
@@ -3249,7 +3319,7 @@
        (multiple-value-bind (reg-mop reg-desc)
            (vinsn-parse-operand reg name-list param-types)
          (when (and reg-mop (register-operand-p reg-mop)
-                    ;; a hole shift amount isn't supported yet -> fall back
+ ;; a hole shift amount isn't supported yet -> fall back
                     (not (and (symbolp amount-form)
                               (position amount-form name-list :test #'eq))))
            (let ((amount (eval-immediate-expression amount-form)))
@@ -3260,13 +3330,13 @@
     ((symbolp op)
      (let ((index (position op name-list :test #'eq)))
        (if index
-         ;; a vinsn parameter
+ ;; a vinsn parameter
          (let ((class (cdr (assoc op param-types :test #'eq))))
            (if (eq class :label)
-             ;; a branch target passed in as a backend (vinsn) label
+ ;; a branch target passed in as a backend (vinsn) label
              (values (make-label-operand :name op)
                      (list :opnd index))
-             ;; a register parameter
+ ;; a register parameter
              (multiple-value-bind (family width)
                  (vinsn-gpr-class->family+width class)
                (when family
@@ -3275,7 +3345,7 @@
                                       (gpr-ref 0 width)
                                       (fpr-ref 0 width)))
                          (list :opnd index))))))
-         ;; a literal register name (e.g. vsp, sp, fn)
+ ;; a literal register name (e.g. vsp, sp, fn)
          (let ((reg (lookup-register op)))
            (when reg
              (values (make-register-operand :register reg)
@@ -3298,10 +3368,10 @@
 
 ;;; Returns two values: the simplified body form, and (unless we fell
 ;;; back) an opcode-alist entry (ordinal name . operand-specs) recording
-;;; enough to re-resolve the template's ordinal at load time.  See
+;;; enough to re-resolve the template's ordinal at load time. See
 ;;; FIXUP-ARM64-VINSN-TEMPLATES.
 (defun vinsn-simplify-instruction (form name-list &optional param-types)
-  ;; This is like assemble-instruction.
+ ;; This is like assemble-instruction.
   (destructuring-bind (name . opvals) form
     (let ((candidates (gethash (string name) *instruction-template-lists*)))
       (when candidates
@@ -3310,23 +3380,23 @@
           (dolist (op opvals)
             (multiple-value-bind (mop desc)
                 (vinsn-parse-operand op name-list param-types)
-              ;; If we don't understand an operand (like a
-              ;; parameterized shift amount), return the instruction
-              ;; form unsimplified, and the expander will choke on it
-              ;; later.
+ ;; If we don't understand an operand (like a
+ ;; parameterized shift amount), return the instruction
+ ;; form unsimplified, and the expander will choke on it
+ ;; later.
               (unless mop
                 (error "don't understand ~s" form))
               (push mop match-operands)
               (push desc descriptors)))
           (setq match-operands (nreverse match-operands)
                 descriptors (nreverse descriptors))
-          ;; Select the template.  With all-concrete operands the first
-          ;; matching template wins, exactly as the assembler does, so we
-          ;; stop at the first match.  A wild immediate/condition hole,
-          ;; though, can't disambiguate value-multiplexed aliases (e.g.
-          ;; mov's movz/movn/orr forms): there we must prove the match is
-          ;; unique -- scanning all candidates -- and otherwise complain
-          ;; that the vinsn should use a specific (non-alias) instruction.
+ ;; Select the template. With all-concrete operands the first
+ ;; matching template wins, exactly as the assembler does, so we
+ ;; stop at the first match. A wild immediate/condition hole,
+ ;; though, can't disambiguate value-multiplexed aliases (e.g.
+ ;; mov's movz/movn/orr forms): there we must prove the match is
+ ;; unique -- scanning all candidates -- and otherwise complain
+ ;; that the vinsn should use a specific (non-alias) instruction.
           (flet ((simplified (template)
                    (let ((ordinal (instruction-template-ordinal template)))
                      (return-from vinsn-simplify-instruction
@@ -3338,7 +3408,7 @@
             (if (or (member *wild-immediate* match-operands :test #'eq)
                     (member *wild-condition* match-operands :test #'eq))
               (let ((matches (remove-if-not
-                              #'(lambda (tp)
+ #'(lambda (tp)
                                   (vinsn-match-template tp match-operands))
                               candidates)))
                 (when matches
@@ -3351,10 +3421,10 @@
               (dolist (tp candidates)
                 (when (vinsn-match-template tp match-operands)
                   (simplified tp)))))))))
-  ;; Unknown instruction, or no template matched: leave form as-is so the
-  ;; rest of the file still compiles.  During bring-up this is expected for
-  ;; not-yet-implemented vinsns; warn (don't halt) so the unmatched forms
-  ;; stay visible, and let the expander choke only if one is actually used.
+ ;; Unknown instruction, or no template matched: leave form as-is so the
+ ;; rest of the file still compiles. During bring-up this is expected for
+ ;; not-yet-implemented vinsns; warn (don't halt) so the unmatched forms
+ ;; stay visible, and let the expander choke only if one is actually used.
   (warn "arm64 vinsn: no template matched ~s" form)
   form)
 

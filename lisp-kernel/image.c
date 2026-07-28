@@ -46,8 +46,8 @@ void
 relocate_area_contents(area *a, LispObj bias)
 {
   LispObj 
-    *start = (LispObj *)(a->low), 
-    *end = (LispObj *)(a->active),
+ *start = (LispObj *)(a->low), 
+ *end = (LispObj *)(a->active),
     low = (LispObj)image_base - bias,
     high = ptr_to_lispobj(active_dynamic_area->active) - bias,
     w0, w1;
@@ -332,7 +332,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     static_cons_area = a;
     /* not yet 
     lower_heap_start(a->low,tenured_area);
-    */
+ */
     break;
 
   default:
@@ -369,6 +369,19 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
       if (a == NULL) {
 	return 0;
       }
+#ifdef ARM64
+      /* lisp_nil is a runtime value on ARM64 (lisp_globals.h); establish
+         it as soon as the static section is mapped, BEFORE any later
+         section's loader touches lisp_global() -- allocate_dynamic_area()
+         writes lisp_global(HEAP_START).  Geometry matches the xload
+         writer: static space maps at STATIC_BASE_ADDRESS (0x12000), a
+         4KB filler ivector precedes NIL, so NIL = low + 4K + fulltag_nil
+         = canonical-nil-value (#x1300b, arm64-arch.lisp:245). */
+      if (sect->code == AREA_STATIC) {
+        image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+        set_nil(image_nil);
+      }
+#endif
     }
 
     for (i = 0, sect = sections; i < nsections; i++, sect++) {
@@ -438,7 +451,7 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	}
         /* not yet
  lower_heap_start(static_cons_area->low,tenured_area);
-        */
+ */
         break;
       case AREA_DYNAMIC:
         if (bias) {
@@ -457,8 +470,8 @@ void
 prepare_to_write_dynamic_space(area *a)
 {
   LispObj 
-    *start = (LispObj *)(a->low),
-    *end = (LispObj *) (a->active),
+ *start = (LispObj *)(a->low),
+ *end = (LispObj *) (a->active),
     x1;
   int tag, subtag, element_count;
 
@@ -470,7 +483,7 @@ prepare_to_write_dynamic_space(area *a)
       if (subtag == subtag_macptr) {
         if ((start[1] >= (natural)0x10000) && (start[1] < (natural)-0x10000)) {
           /* Leave small pointers alone */
-          *start = make_header(subtag_dead_macptr,header_element_count(x1));
+ *start = make_header(subtag_dead_macptr,header_element_count(x1));
         }
       }
       start = (LispObj *)skip_over_ivector((natural)start, x1);
@@ -492,7 +505,7 @@ write_file_and_section_headers(int fd,
                                int nsections,
                                off_t *header_pos)
 {
-  *header_pos = seek_to_next_page(fd);
+ *header_pos = seek_to_next_page(fd);
 
   if (LSEEK (fd, *header_pos, SEEK_SET) < 0) {
     return errno;
@@ -548,7 +561,7 @@ prepare_to_write_static_space(Boolean egc_was_enabled)
     Nothing else is even meaningful at this point.
     Except for those things that've become meaningful since that
     comment was written.
-  */
+ */
   for (i = MIN_KERNEL_GLOBAL; i < 0; i++) {
     switch (i) {
     case FREE_STATIC_CONSES:
@@ -588,7 +601,7 @@ save_application_internal(unsigned fd, Boolean egc_was_enabled)
 
   /*
     Coerce macptrs to dead_macptrs.
-  */
+ */
   
   prepare_to_write_dynamic_space(active_dynamic_area);
   prepare_to_write_dynamic_space(managed_static_area);

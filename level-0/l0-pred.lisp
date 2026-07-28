@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,7 +34,7 @@
 
 (defun class-cell-find-class (class-cell errorp)
   (declare (ignore errorp)) ; AARGH can't be right
-  ;(dbg-paws #x100)
+ ;(dbg-paws #x100)
   (let ((class (and class-cell (class-cell-class class-cell))))
     (or class 
         (if  (fboundp 'find-class)
@@ -197,18 +197,18 @@
 ;;; Note that this is true of symbols and functions and many other
 ;;; things that it wasn't true of on the 68K.
 (defun gvectorp (x)
-  #+(or ppc32-target x8632-target arm-target)
+ #+(or ppc32-target x8632-target arm-target)
   (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask)) target::fulltag-nodeheader)
-  #+ppc64-target
+ #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-nodeheader)
-  #+x8664-target
+ #+x8664-target
   (let* ((fulltag (fulltag x)))
     (declare (fixnum fulltag))
     (when (= fulltag x8664::fulltag-misc)
       (setq fulltag (logand (the (unsigned-byte 8) (typecode x)) x8664::fulltagmask))
       (or (= fulltag x8664::fulltag-nodeheader-0)
           (= fulltag x8664::fulltag-nodeheader-1))))
-  #+arm64-target
+ #+arm64-target
   (= (the fixnum (logand (the fixnum (typecode x)) arm64::tagmask))
      arm64::tag-nodeheader)
   )
@@ -217,12 +217,12 @@
 (setf (type-predicate 'gvector) 'gvectorp)
 
 (defun ivectorp (x)
-  #+(or ppc32-target x8632-target arm-target)
+ #+(or ppc32-target x8632-target arm-target)
   (= (the fixnum (logand (the fixnum (typecode x)) target::fulltagmask))
      target::fulltag-immheader)
-  #+ppc64-target
+ #+ppc64-target
   (= (the fixnum (logand (the fixnum (typecode x)) ppc64::lowtagmask)) ppc64::lowtag-immheader)
-  #+(or x8664-target arm64-target)
+ #+(or x8664-target arm64-target)
   (let* ((fulltag (logand (the fixnum (typecode x)) target::fulltagmask)))
     (declare (fixnum fulltag))
     (or (= fulltag target::fulltag-immheader-0)
@@ -233,9 +233,9 @@
 (setf (type-predicate 'ivector) 'ivectorp)
 
 (defun miscobjp (x)
-  #+(or ppc32-target x8632-target x8664-target arm-target)
+ #+(or ppc32-target x8632-target x8664-target arm-target)
   (= (the fixnum (lisptag x)) target::tag-misc)
-  #+(or ppc64-target arm64-target)
+ #+(or ppc64-target arm64-target)
   (= (the fixnum (fulltag x)) target::fulltag-misc)
   )
 
@@ -311,7 +311,7 @@
            
 (defun hairy-equal (x y)
   (declare (optimize (speed 3)))
-  ;; X and Y are not EQL, and are both of tag target::fulltag-misc.
+ ;; X and Y are not EQL, and are both of tag target::fulltag-misc.
   (let* ((x-type (typecode x))
 	 (y-type (typecode y)))
     (declare (fixnum x-type y-type))
@@ -354,7 +354,7 @@
                 (when (= y-type target::subtag-vectorH)
                   (multiple-value-setq (y y-pos) (array-data-and-offset y)))
                 (%simple-string= x y x-pos y-pos (the fixnum (+ x-pos x-len)) (the fixnum (+ y-pos y-len))))))
-          ;;Bit-vector case or fail.
+ ;;Bit-vector case or fail.
           (and (= x-simple target::subtag-bit-vector)
                (= y-simple target::subtag-bit-vector)
                (locally
@@ -392,7 +392,7 @@
 #+(or ppc32-target arm-target)
 (progn
 (defparameter *nodeheader-types*
-  #(#+arm-target pseudofunction #+ppc32-target bogus ; 0
+ #(#+arm-target pseudofunction #+ppc32-target bogus ; 0
     ratio                               ; 1
     bogus                               ; 2
     complex                             ; 3
@@ -428,14 +428,14 @@
 
 
 (defparameter *immheader-types*
-  #(bignum                              ; 0
+ #(bignum ; 0
     short-float                         ; 1
     double-float                        ; 2
     macptr                              ; 3
     dead-macptr                         ; 4
     code-vector                         ; 5
     creole-object                       ; 6
-    ;; some are unused
+ ;; some are unused
     xcode-vector                        ; 7
     (complex single-float)              ; 8
     (complex double-float)              ; 9
@@ -512,7 +512,7 @@
 #+ppc64-target
 (progn
 (defparameter *immheader-types*
-  #(bogus
+ #(bogus
     bogus
     code-vector
     bogus
@@ -578,7 +578,7 @@
     bogus))
 
 (defparameter *nodeheader-types*
-    #(function
+ #(function
       catch-frame
       slot-vector
       ratio
@@ -691,7 +691,7 @@
 #+x8632-target
 (progn
 (defparameter *nodeheader-types*
-  #(bogus                               ; 0
+ #(bogus ; 0
     ratio                               ; 1
     bogus                               ; 2
     complex                             ; 3
@@ -727,7 +727,7 @@
 
 
 (defparameter *immheader-types*
-  #(bignum                              ; 0
+ #(bignum ; 0
     short-float                         ; 1
     double-float                        ; 2
     macptr                              ; 3
@@ -812,7 +812,7 @@
 #+x8664-target
 (progn
 (defparameter *nodeheader-0-types*
-  #(bogus
+ #(bogus
     symbol-vector
     catch-frame
     hash-vector
@@ -831,7 +831,7 @@
     ))
 
 (defparameter *nodeheader-1-types*
-  #(bogus
+ #(bogus
     ratio
     complex
     structure
@@ -850,7 +850,7 @@
     ))
 
 (defparameter *immheader-0-types*
-  #(bogus
+ #(bogus
     bogus
     bogus
     bogus
@@ -868,7 +868,7 @@
     bit-vector))
 
 (defparameter *immheader-1-types*
-  #(bogus
+ #(bogus
     bignum
     double-float
     xcode-vector
@@ -886,7 +886,7 @@
     single-float-vector))
 
 (defparameter *immheader-2-types*
-  #(bogus
+ #(bogus
     macptr
     dead-macptr
     bogus
@@ -975,6 +975,174 @@
         
 
 );#+x8664-target
+
+#+arm64-target
+(progn
+;;; Names per the x8664 tables (l0-pred.lisp #+x8664-target block); slot
+;;; assignments verified against compiler/ARM64/arm64-arch.lisp
+;;; define-subtag forms. Sole deviation: immheader-1 slot 6 is
+;;; code-vector (arm64 keeps PPC-style code vectors; x8664 has bogus).
+(defparameter *nodeheader-0-types*
+ #(bogus
+    symbol-vector
+    catch-frame
+    hash-vector
+    pool
+    population
+    package
+    slot-vector
+    basic-stream
+    function-vector                                        ;9
+    array-header
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    ))
+
+(defparameter *nodeheader-1-types*
+ #(bogus
+    ratio
+    complex
+    structure
+    internal-structure
+    value-cell
+    xfunction
+    lock
+    instance
+    bogus
+    vector-header
+    simple-vector
+    bogus
+    bogus
+    bogus
+    bogus
+    ))
+
+(defparameter *immheader-0-types*
+ #(bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-complex-double-float-vector
+    simple-signed-word-vector
+    simple-unsigned-word-vector
+    bogus
+    simple-signed-byte-vector
+    simple-unsigned-byte-vector
+    bit-vector))
+
+(defparameter *immheader-1-types*
+ #(bogus
+    bignum
+    double-float
+    xcode-vector
+    complex-single-float
+    complex-double-float
+    code-vector
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-base-string
+    simple-signed-long-vector
+    simple-unsigned-long-vector
+    single-float-vector))
+
+(defparameter *immheader-2-types*
+ #(bogus
+    macptr
+    dead-macptr
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    bogus
+    simple-complex-single-float-vector
+    simple-fixnum-vector
+    simple-signed-doubleword-vector
+    simple-unsigned-doubleword-vector
+    double-float-vector))
+
+(defparameter *arm64-%type-of-functions* nil)
+
+(let* ((fixnum (lambda (x) (declare (ignore x)) 'fixnum))
+       (imm (lambda (x) (if (characterp x) 'character 'immediate)))
+       (bogus (lambda (x) (declare (ignore x)) 'bogus))
+       (function-type-of
+        (lambda (thing)
+          (let ((bits (lfun-bits thing)))
+            (declare (fixnum bits))
+            (if (logbitp $lfbits-trampoline-bit bits)
+              (let ((inner-fn (closure-function thing)))
+                (if (neq inner-fn thing)
+                  (let ((inner-bits (lfun-bits inner-fn)))
+                    (if (logbitp $lfbits-method-bit inner-bits)
+                      'compiled-lexical-closure
+                      (if (logbitp $lfbits-gfn-bit inner-bits)
+                        'standard-generic-function ; not precisely - see class-of
+                        (if (logbitp  $lfbits-cm-bit inner-bits)
+                          'combined-method
+                          'compiled-lexical-closure))))
+                  'compiled-lexical-closure))
+              (if (logbitp  $lfbits-method-bit bits)
+                'method-function
+                'compiled-function))))))
+  (setq *arm64-%type-of-functions*
+        (vector
+         fixnum                         ;0 fulltag-even-fixnum
+         (lambda (x) (declare (ignore x)) 'short-float) ;1 fulltag-single-float
+         imm                            ;2 fulltag-imm-0 (characters)
+         (lambda (x) (declare (ignore x)) 'cons) ;3 fulltag-cons
+         bogus                          ;4 fulltag-immheader-0
+         bogus                          ;5 fulltag-immheader-1
+         bogus                          ;6 fulltag-nodeheader-0
+         (lambda (x) (declare (ignore x)) 'symbol) ;7 fulltag-symbol
+         fixnum                         ;8 fulltag-odd-fixnum
+         bogus                          ;9 fulltag-reserved
+         imm                            ;10 fulltag-imm-1 (markers)
+         (lambda (x) (declare (ignore x)) 'null) ;11 fulltag-nil
+         (lambda (x) (let* ((typecode (typecode x))
+                            (low4 (logand typecode arm64::fulltagmask))
+                            (high4 (ash typecode (- arm64::ntagbits))))
+                       (declare (type (unsigned-byte 8) typecode)
+                                (type (unsigned-byte 4) low4 high4))
+                       (if (= typecode arm64::subtag-function)
+                         (funcall function-type-of x)
+                       (let* ((name
+                               (cond ((= low4 arm64::fulltag-immheader-0)
+                                      (%svref *immheader-0-types* high4))
+                                     ((= low4 arm64::fulltag-immheader-1)
+                                      (%svref *immheader-1-types* high4))
+                                     ((= low4 arm64::fulltag-immheader-2)
+                                      (%svref *immheader-2-types* high4))
+                                     ((= low4 arm64::fulltag-nodeheader-0)
+                                      (%svref *nodeheader-0-types* high4))
+                                     ((= low4 arm64::fulltag-nodeheader-1)
+                                      (%svref *nodeheader-1-types* high4))
+                                     (t 'bogus))))
+                         (or (and (eq name 'lock)
+                                  (uvref x arm64::lock.kind-cell))
+                             name))))) ;12 fulltag-misc
+         bogus                          ;13 fulltag-immheader-2
+         bogus                          ;14 fulltag-nodeheader-1
+         bogus)))                       ;15 (was fulltag-function; removed)
+
+(defun %type-of (thing)
+  (let* ((f (fulltag thing)))
+    (funcall (%svref *arm64-%type-of-functions* f) thing)))
+
+);#+arm64-target
       
 
 ;;; real machine specific huh
@@ -1044,15 +1212,19 @@
 
 (defun symbolp (thing)
   "Return true if OBJECT is a SYMBOL, and NIL otherwise."
-  #+(or ppc32-target x8632-target arm-target)
+ #+(or ppc32-target x8632-target arm-target)
   (if thing
     (= (the fixnum (typecode thing)) target::subtag-symbol)
     t)
-  #+ppc64-target
+ #+ppc64-target
   (= (the fixnum (typecode thing)) ppc64::subtag-symbol)
-  #+x8664-target
+ #+x8664-target
   (if thing
     (= (the fixnum (lisptag thing)) x8664::tag-symbol)
+    t)
+ #+arm64-target
+  (if thing
+    (= (the fixnum (fulltag thing)) arm64::fulltag-symbol)
     t)
   )
       

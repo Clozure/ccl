@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,7 @@
                                   "./l1-fasls/"
 				  (string name)
                                   (namestring (backend-target-fasl-pathname
-                                               *target-backend*)))))
+ *target-backend*)))))
 	       `(%fasload ,namestring)))
 	   (bin-load (name)
 	     (let* ((namestring
@@ -32,7 +32,7 @@
                                   "./bin/"
 				  (string name)
                                   (namestring (backend-target-fasl-pathname
-                                               *target-backend*)))))
+ *target-backend*)))))
 	       `(%fasload ,namestring))))
 
   (l1-load "l1-cl-package")
@@ -41,12 +41,14 @@
   (l1-load "l1-symhash")
   (l1-load "l1-numbers")
   (l1-load "l1-aprims")
-  #+ppc-target
+ #+ppc-target
   (l1-load "ppc-callback-support")
-  #+x86-target
+ #+x86-target
   (l1-load "x86-callback-support")
-  #+arm-target
+ #+arm-target
   (l1-load "arm-callback-support")
+ #+arm64-target
+  (l1-load "arm64-callback-support")
   (l1-load "l1-callbacks")
   (l1-load "l1-sort")
   (bin-load "lists")
@@ -69,12 +71,14 @@
   (provide "DLL-NODE")
   (l1-load "l1-typesys")
   (l1-load "sysutils")
-  #+ppc-target
+ #+ppc-target
   (l1-load "ppc-threads-utils")
-  #+x86-target
+ #+x86-target
   (l1-load "x86-threads-utils")
-  #+arm-target
+ #+arm-target
   (l1-load "arm-threads-utils")
+ #+arm64-target
+  (l1-load "arm64-threads-utils")
   (l1-load "l1-lisp-threads")
   (l1-load "l1-application")
   (l1-load "l1-processes")
@@ -85,12 +89,14 @@
   (l1-load "l1-error-system")
 
   (l1-load "l1-events")
-  #+ppc-target
+ #+ppc-target
   (l1-load "ppc-trap-support")
-  #+x86-target
+ #+x86-target
   (l1-load "x86-trap-support")
-  #+arm-target
+ #+arm-target
   (l1-load "arm-trap-support")
+ #+arm64-target
+  (l1-load "arm64-trap-support")
   (l1-load "l1-format")
   (l1-load "l1-sysio")
   (l1-load "l1-pathnames")
@@ -106,7 +112,7 @@
 (progn
   (%set-toplevel #'(lambda ()
                      (setq *loading-file-source-file* nil
-                           *loading-toplevel-location* nil)
+ *loading-toplevel-location* nil)
                      (toplevel-loop)))
   (set-user-environment t)
   (toplevel))

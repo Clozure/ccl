@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,14 +21,14 @@
 
 
 (defparameter *saved-register-count*
-  #+(or x8632-target arm-target) 0
-  #+x8664-target 4
-  #+ppc-target 8)
+ #+(or x8632-target arm-target arm64-target) 0
+ #+x8664-target 4
+ #+ppc-target 8)
 
 (defparameter *saved-register-names*
-  #+(or x8632-target arm-target) nil
-  #+x8664-target #(save3 save2 save1 save0)
-  #+ppc-target #(save7 save6 save5 save4 save3 save2 save1 save0))
+ #+(or x8632-target arm-target arm64-target) nil
+ #+x8664-target #(save3 save2 save1 save0)
+ #+ppc-target #(save7 save6 save5 save4 save3 save2 save1 save0))
 
 (defun frame-function (frame context)
   "Returns the function using the frame, and pc offset within the function, if known"
@@ -63,10 +63,10 @@
 ;;; of the FRAME-ARGUMENTS function in SLIME's swank-openmcl.lisp.
 ;;; ARG-VALUES is a list of the values of the args supplied to the function
 ;;; TYPES is a list of (for bad historical reasons) strings .describing
-;;;   whether they're "required", "optional", etc.  SLIME only really
-;;;   cares about whether this is equal to "keyword" or not.
+;;; whether they're "required", "optional", etc. SLIME only really
+;;; cares about whether this is equal to "keyword" or not.
 ;;; NAMES is a list of symbols which name the args.
-;; 7/13/2009: This is now deprecated.  Use frame-supplied-arguments.
+;; 7/13/2009: This is now deprecated. Use frame-supplied-arguments.
 (defun frame-supplied-args (frame lfun pc child context)
   (declare (ignore child))
   (if (null pc)

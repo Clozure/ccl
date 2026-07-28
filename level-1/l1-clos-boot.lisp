@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,7 +36,7 @@
     (pessimize-clos)
     t))
 
-;;; Early accessors.  These functions eventually all get replaced with
+;;; Early accessors. These functions eventually all get replaced with
 ;;; generic functions with "real", official names.
 
 
@@ -526,7 +526,7 @@
                 auxtail
                 safecopy
                 whole
-                *structured-lambda-list*))
+ *structured-lambda-list*))
        LOSE
        (return (values nil nil nil nil nil nil nil nil nil nil)))))
 
@@ -546,7 +546,7 @@
             (setq y (%cdr y)))))
        (setq y (%cdr y))))
     (when env-p
-      ;; Trapped in a world it never made ... 
+ ;; Trapped in a world it never made ... 
       (when (setq y (memq '&environment x))
         (setq envtail (%cddr y)
               env (%cadr y))
@@ -610,7 +610,7 @@
        (class-wrapper-random-state-lock (make-lock)))
 
   (defun  new-class-wrapper-hash-index ()
-    ;; mustn't be 0
+ ;; mustn't be 0
     (with-lock-grabbed (class-wrapper-random-state-lock)
       (the fixnum (1+ (the fixnum (random target::target-most-positive-fixnum class-wrapper-random-state)))))))
 
@@ -695,7 +695,7 @@
   (when declarations
     (unless (list-length declarations)
       (error "~s is not a proper list" declarations)))
-  ;; Fix APO, lambda-list
+ ;; Fix APO, lambda-list
   (if apo-p
     (if (not ll-p)
       (error "Cannot specify ~s without specifying ~s" :argument-precedence-order
@@ -775,7 +775,7 @@
     (unless (memq *standard-method-class* (or (%class.cpl method-class)
                                               (%class.cpl (update-class  method-class t))))
       (%badarg method-class 'standard-method))
-    #|
+ #|
     (unless (member qualifiers '(() (:before) (:after) (:around)) :test #'equal)
     (report-bad-arg qualifiers))
     ||#
@@ -1035,7 +1035,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 ;;; Return two values:
 ;;; 1) the index of the first non-T specializer of method, or NIL if
-;;;    all the specializers are T or only the first one is T
+;;; all the specializers are T or only the first one is T
 ;;; 2) the index of the first non-T specializer
 (defun multi-method-index (method &aux (i 0) index)
   (dolist (s (%method.specializers method) (values nil index))
@@ -1061,18 +1061,18 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 	(when (sgf.dependents gf)
 	  (map-dependents
 	   gf
-	   #'(lambda (d)
+ #'(lambda (d)
 	       (update-dependent gf d 'remove-method method)))))))
   method)
 
 
 (defvar *reader-method-function-proto*
-  #'(lambda (instance)
+ #'(lambda (instance)
       (slot-value instance 'x)))
 
 
 (defvar *writer-method-function-proto*
-  #'(lambda (new instance)
+ #'(lambda (new instance)
       (set-slot-value instance 'x new)))
 
 (defun dcode-for-gf (gf dcode)
@@ -1116,16 +1116,16 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
       (let* ((non-dt (non-dt-dcode-function gf))
              (dcode (or non-dt
                         (if 0-args?
-                          #'%%0-arg-dcode
+ #'%%0-arg-dcode
                           (or (if multi-method-index
-                                #'%%nth-arg-dcode)
+ #'%%nth-arg-dcode)
                               (if (null other-args?)
                                 (if (eql nreq 1)
-                                  #'%%one-arg-dcode
+ #'%%one-arg-dcode
                                   (if (eql nreq 2)
-                                    #'%%1st-two-arg-dcode
-                                    #'%%1st-arg-dcode))
-                                #'%%1st-arg-dcode))))))
+ #'%%1st-two-arg-dcode
+ #'%%1st-arg-dcode))
+ #'%%1st-arg-dcode))))))
         (setq multi-method-index
               (if multi-method-index
                 (if min-index
@@ -1150,22 +1150,22 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 ;;;;;;;;;;; The type system needs to get wedged into CLOS fairly early ;;;;;;;
 
 
-;;; Could check for duplicates, but not really worth it.  They're all
+;;; Could check for duplicates, but not really worth it. They're all
 ;;; allocated here
 (defun new-type-class (name)
   (let* ((class (%istruct 
                  'type-class 
                  name
-                 #'missing-type-method
+ #'missing-type-method
                  nil
                  nil
-                 #'(lambda (x y) (hierarchical-union2 x y))
+ #'(lambda (x y) (hierarchical-union2 x y))
                  nil
-                 #'(lambda (x y) (hierarchical-intersection2 x y))
+ #'(lambda (x y) (hierarchical-intersection2 x y))
                  nil
-                 #'missing-type-method
+ #'missing-type-method
                  nil
-                 #'missing-type-method)))
+ #'missing-type-method)))
     (push (cons name class) *type-classes*)
     class))
 
@@ -1207,7 +1207,7 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 
 
                         
-;;;;;;;;;;;;;;;;;;;;;;;;  Instances and classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;; Instances and classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (declaim (inline non-standard-instance-class-wrapper))
 
@@ -1347,8 +1347,8 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
 (defun check-setf-find-class-protected-class (old-class new-class name)
   (when (and (standard-instance-p old-class)
 	     (%class-kernel-p old-class)
-	     *warn-if-redefine-kernel*
-	     ;; EQL might be necessary on foreign classes
+ *warn-if-redefine-kernel*
+ ;; EQL might be necessary on foreign classes
 	     (not (eq new-class old-class)))
     (cerror "Setf (FIND-CLASS ~s) to the new class."
 	    "The class name ~s currently denotes the class ~s that
@@ -1398,8 +1398,8 @@ to replace that class with ~s" name old-class new-class)
   (let ((index *class-wrapper-hash-index*))
     (setq *class-wrapper-hash-index*
         (if (< index (- most-positive-fixnum 2))
-          ; Increment by two longwords.  This is important!
-          ; The dispatch code will break if you change this.
+ ; Increment by two longwords. This is important!
+ ; The dispatch code will break if you change this.
           (%i+ index 3)                 ; '3 = 24 bytes = 6 longwords in lap.
           1))))
 ||#
@@ -1459,7 +1459,7 @@ to replace that class with ~s" name old-class new-class)
       (labels ((compute-predecessors (class table)
                  (dolist (sup (%class-direct-superclasses class) table)
                    (compute-predecessors sup table)
-                   ;(push class (cdr (assq sup table)))
+ ;(push class (cdr (assq sup table)))
                    (let ((a (assq sup table))) (%rplacd a (cons class (%cdr a))))
                    (setq class sup))))
         (compute-predecessors class predecessors))
@@ -1508,7 +1508,7 @@ to replace that class with ~s" name old-class new-class)
   (let ((class (find-class name nil)))
     (if class
       (progn
-        ;Must be debugging.  Give a try at redefinition...
+ ;Must be debugging. Give a try at redefinition...
         (dolist (sup (%class.local-supers class))
           (setf (%class.subclasses sup) (nremove class (%class.subclasses sup)))))
       (progn
@@ -1527,7 +1527,7 @@ to replace that class with ~s" name old-class new-class)
     (setf (%class.ctype class)  (make-class-ctype class))
     (setf (find-class name) class)
     (dolist (sub (%class.subclasses class))   ; Only non-nil if redefining
-      ;Recompute the cpl.
+ ;Recompute the cpl.
       (apply #'make-built-in-class (%class.name sub) (%class.local-supers sub)))
     class))
 
@@ -1537,7 +1537,7 @@ to replace that class with ~s" name old-class new-class)
     (setf (istruct-cell-info cell) (%class.own-wrapper class))
     class))
 
-;;; This will be filled in below.  Need it defined now as it goes in
+;;; This will be filled in below. Need it defined now as it goes in
 ;;; the instance.class-wrapper of all the classes that STANDARD-CLASS
 ;;; inherits from.
 (defstatic *standard-class-wrapper* 
@@ -1558,7 +1558,7 @@ to replace that class with ~s" name old-class new-class)
           ((null supers))
         (setq sup (%car supers))
         (if (symbolp sup) (setf (%car supers) (setq sup (find-class (%car supers)))))
-        #+nil (unless (or (eq sup *t-class*) (std-class-p sup))
+ #+nil (unless (or (eq sup *t-class*) (std-class-p sup))
           (error "~a is not of type ~a" sup 'std-class))))
     (setf (%class.local-supers class) supers)
     (let ((cpl (compute-cpl class))
@@ -1586,7 +1586,7 @@ to replace that class with ~s" name old-class new-class)
 
 
 (defun standard-object-p (thing)
-  ;; returns thing's class-wrapper or nil if it isn't a standard-object
+ ;; returns thing's class-wrapper or nil if it isn't a standard-object
   (if (standard-instance-p thing)
     (instance.class-wrapper thing)
     (if (typep thing 'macptr)
@@ -1594,8 +1594,8 @@ to replace that class with ~s" name old-class new-class)
 
 
 (defun std-class-p (class)
-  ;; (typep class 'std-class)
-  ;; but works at bootstrapping time as well
+ ;; (typep class 'std-class)
+ ;; but works at bootstrapping time as well
   (let ((wrapper (standard-object-p class)))
     (and wrapper
          (or (eq wrapper *standard-class-wrapper*)
@@ -1725,23 +1725,23 @@ to replace that class with ~s" name old-class new-class)
 
 (defstatic *slot-definition-class* (make-standard-class 'slot-definition *metaobject-class*))
 (defstatic direct-slot-definition-class (make-standard-class 'direct-slot-definition
-                                                           *slot-definition-class*))
+ *slot-definition-class*))
 (defstatic effective-slot-definition-class (make-standard-class 'effective-slot-definition
-                                                              *slot-definition-class*))
+ *slot-definition-class*))
 (defstatic *standard-slot-definition-class* (make-standard-class 'standard-slot-definition
-                                                                 *slot-definition-class*))
+ *slot-definition-class*))
 (defstatic *standard-direct-slot-definition-class* (make-class
                                                     'standard-direct-slot-definition
-                                                    *standard-class-wrapper*
+ *standard-class-wrapper*
                                                     (list
-                                                     *standard-slot-definition-class*
+ *standard-slot-definition-class*
                                                      direct-slot-definition-class)))
 
 (defstatic *standard-effective-slot-definition-class* (make-class
                                                     'standard-effective-slot-definition
-                                                    *standard-class-wrapper*
+ *standard-class-wrapper*
                                                     (list
-                                                     *standard-slot-definition-class*
+ *standard-slot-definition-class*
                                                      effective-slot-definition-class)
 ))
 
@@ -1775,8 +1775,8 @@ to replace that class with ~s" name old-class new-class)
   (make-built-in-class 'sequence)
   (defstatic *symbol-class* (make-built-in-class 'symbol))
   (defstatic *immediate-class* (make-built-in-class 'immediate)) ; Random immediate
-  ;; Random uvectors - these are NOT class of all things represented by a uvector
-  ;;type. Just random uvectors which don't fit anywhere else.
+ ;; Random uvectors - these are NOT class of all things represented by a uvector
+ ;;type. Just random uvectors which don't fit anywhere else.
   (make-built-in-class 'ivector)        ; unknown ivector
   (make-built-in-class 'gvector)        ; unknown gvector
   (defstatic *istruct-class* (make-built-in-class 'internal-structure)) ; unknown istruct
@@ -1786,7 +1786,7 @@ to replace that class with ~s" name old-class new-class)
   (defstatic *macptr-class* (make-built-in-class 'macptr))
   (defstatic *foreign-standard-object-class*
     (make-standard-class 'foreign-standard-object
-                         *standard-object-class* *macptr-class*))
+ *standard-object-class* *macptr-class*))
 
   (defstatic *foreign-class-class*
     (make-standard-class 'foreign-class *foreign-standard-object-class* *slots-class*))
@@ -1801,7 +1801,7 @@ to replace that class with ~s" name old-class new-class)
   (make-istruct-class 'lock-acquisition *istruct-class*)
   (make-istruct-class 'semaphore-notification *istruct-class*)
   (make-istruct-class 'class-wrapper *istruct-class*)
-  ;; Compiler stuff, mostly
+ ;; Compiler stuff, mostly
   (make-istruct-class 'faslapi *istruct-class*)
   (make-istruct-class 'faslstate *istruct-class*)
   (make-istruct-class 'var *istruct-class*)
@@ -1872,7 +1872,7 @@ to replace that class with ~s" name old-class new-class)
   (make-built-in-class 'integer (find-class 'rational))
   (defstatic *fixnum-class* (make-built-in-class 'fixnum (find-class 'integer)))
 
-  #+x86-target
+ #+x86-target
   (defstatic *tagged-return-address-class* (make-built-in-class 'tagged-return-address))
   (make-built-in-class 'bignum (find-class 'integer))
   
@@ -1896,8 +1896,8 @@ to replace that class with ~s" name old-class new-class)
   (defstatic *simple-array-class* (make-built-in-class 'simple-array *array-class*))
   (make-built-in-class 'simple-1d-array *vector-class* *simple-array-class*)
   
-  ;;Maybe should do *float-array-class* etc?
-  ;;Also, should straighten out the simple-n-dim-array mess...
+ ;;Maybe should do *float-array-class* etc?
+ ;;Also, should straighten out the simple-n-dim-array mess...
   (make-built-in-class 'unsigned-byte-vector *vector-class*)
   (make-built-in-class 'simple-unsigned-byte-vector (find-class 'unsigned-byte-vector) (find-class 'simple-1d-array))
   (make-built-in-class 'unsigned-word-vector *vector-class*)
@@ -1919,12 +1919,15 @@ to replace that class with ~s" name old-class new-class)
     (make-built-in-class 'complex-double-float-vector *vector-class*)
     )
 
-  #+(or x8664-target arm64-target)
+ ;; arm64 follows the x8664 model: symbols and functions are
+ ;; uvectors (subtag-symbol/subtag-function) reached through
+ ;; differently-tagged pointers.
+ #+(or x8664-target arm64-target)
   (progn
     (make-built-in-class 'symbol-vector (find-class 'gvector))
     (make-built-in-class 'function-vector (find-class 'gvector)))
 
-  #+64-bit-target
+ #+64-bit-target
   (progn
     (make-built-in-class 'doubleword-vector *vector-class*)
     (make-built-in-class 'simple-doubleword-vector (find-class 'doubleword-vector) (find-class 'simple-1d-array))
@@ -1954,7 +1957,7 @@ to replace that class with ~s" name old-class new-class)
   (make-built-in-class 'hash-table-vector)
   (make-built-in-class 'catch-frame)
   (make-built-in-class 'code-vector)
-  #+ppc32-target
+ #+ppc32-target
   (make-built-in-class 'creole-object)
 
   (make-built-in-class 'xfunction)
@@ -1979,7 +1982,7 @@ to replace that class with ~s" name old-class new-class)
 
   (defstatic *general-vector-class* (find-class 'general-vector))
 
-  #+ppc32-target
+ #+ppc32-target
   (defparameter *ivector-vector-classes*
     (vector (find-class 'short-float-vector)
             (find-class 'unsigned-long-vector)
@@ -1995,12 +1998,12 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'complex-double-float-vector)
             (find-class 'bit-vector)))
 
-  #+ppc64-target
+ #+ppc64-target
   (defparameter *ivector-vector-classes*
     (vector *t-class*
-            *t-class*
-            *t-class*
-            *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
             (find-class 'byte-vector)
             (find-class 'word-vector)
             (find-class 'long-vector)
@@ -2009,28 +2012,28 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'unsigned-word-vector)
             (find-class 'unsigned-long-vector)
             (find-class 'unsigned-doubleword-vector)
-            *t-class*
-            *t-class*
+ *t-class*
+ *t-class*
             (find-class 'short-float-vector)
             (find-class 'fixnum-vector)
-            *t-class*
-            *t-class*
-            *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
             (find-class 'double-float-vector)
             (find-class 'base-string)
-            *t-class*
+ *t-class*
             (find-class 'base-string)
-            *t-class*
-            *t-class*
-            *t-class*
-            *t-class*
-            *t-class*
-            *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
             (find-class 'bit-vector)
-            *t-class*
-            *t-class*))
+ *t-class*
+ *t-class*))
 
-  #+x8632-target
+ #+x8632-target
   (defparameter *ivector-vector-classes*
     (vector (find-class 'short-float-vector)
             (find-class 'unsigned-long-vector)
@@ -2046,19 +2049,19 @@ to replace that class with ~s" name old-class new-class)
             (find-class 'complex-double-float-vector)
             (find-class 'bit-vector)))
 
-  #+x8664-target
+ #+x8664-target
   (progn
     (defparameter *immheader-0-classes*
       (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
               (find-class 'word-vector)
               (find-class 'unsigned-word-vector)
               (find-class 'base-string) ;old
@@ -2068,17 +2071,17 @@ to replace that class with ~s" name old-class new-class)
 
     (defparameter *immheader-1-classes*
       (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
               (find-class 'base-string)
               (find-class 'long-vector)
               (find-class 'unsigned-long-vector)
@@ -2086,79 +2089,85 @@ to replace that class with ~s" name old-class new-class)
 
     (defparameter *immheader-2-classes*
       (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
+ *t-class*
               (find-class 'fixnum-vector)
               (find-class 'doubleword-vector)
               (find-class 'unsigned-doubleword-vector)
               (find-class 'double-float-vector))))
 
-  #+arm64-target
+ ;; arm64: the three ivector header fulltags each get a 16-entry
+ ;; class vector indexed by the subtag's value field (subtag >>
+ ;; ntagbits), mirroring the x8664 scheme above. Positions come from
+ ;; the define-subtag forms in compiler/ARM64/arm64-arch.lisp.
+ ;; Non-CL-vector subtags (macptr, bignum, code-vector, ...) can never
+ ;; reach the vectorH dispatch and map to *t-class*.
+ #+arm64-target
   (progn
     (defparameter *immheader-0-classes*   ;ivector-class-other-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'complex-double-float-vector)
-              (find-class 'word-vector)
-              (find-class 'unsigned-word-vector)
-              *t-class*
-              (find-class 'byte-vector)
-              (find-class 'unsigned-byte-vector)
-              (find-class 'bit-vector)))
+      (vector *t-class*                   ;0
+ *t-class* ;1
+ *t-class* ;2
+ *t-class* ;3
+ *t-class* ;4
+ *t-class* ;5
+ *t-class* ;6
+ *t-class* ;7
+ *t-class* ;8
+              (find-class 'complex-double-float-vector) ;9
+              (find-class 'word-vector)                 ;10 s16
+              (find-class 'unsigned-word-vector)        ;11 u16
+ *t-class* ;12
+              (find-class 'byte-vector)                 ;13 s8
+              (find-class 'unsigned-byte-vector)        ;14 u8
+              (find-class 'bit-vector)))                ;15
 
     (defparameter *immheader-1-classes*   ;ivector-class-32-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'base-string)
-              (find-class 'long-vector)
-              (find-class 'unsigned-long-vector)
-              (find-class 'short-float-vector)))
+      (vector *t-class*                   ;0
+ *t-class* ;1 bignum
+ *t-class* ;2 double-float
+ *t-class* ;3 xcode-vector
+ *t-class* ;4 complex-single-float
+ *t-class* ;5 complex-double-float
+ *t-class* ;6 code-vector
+ *t-class* ;7
+ *t-class* ;8
+ *t-class* ;9
+ *t-class* ;10
+ *t-class* ;11
+              (find-class 'base-string)                 ;12
+              (find-class 'long-vector)                 ;13 s32
+              (find-class 'unsigned-long-vector)        ;14 u32
+              (find-class 'short-float-vector)))        ;15
 
     (defparameter *immheader-2-classes*   ;ivector-class-64-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'complex-single-float-vector)
-              (find-class 'fixnum-vector)
-              (find-class 'doubleword-vector)
-              (find-class 'unsigned-doubleword-vector)
-              (find-class 'double-float-vector))))
+      (vector *t-class*                   ;0
+ *t-class* ;1 macptr
+ *t-class* ;2 dead-macptr
+ *t-class* ;3
+ *t-class* ;4
+ *t-class* ;5
+ *t-class* ;6
+ *t-class* ;7
+ *t-class* ;8
+ *t-class* ;9
+ *t-class* ;10
+              (find-class 'complex-single-float-vector) ;11
+              (find-class 'fixnum-vector)               ;12
+              (find-class 'doubleword-vector)           ;13 s64
+              (find-class 'unsigned-doubleword-vector)  ;14 u64
+              (find-class 'double-float-vector))))      ;15
 
-  #+arm-target
+ #+arm-target
   (defparameter *ivector-vector-classes*
     (vector (find-class 'short-float-vector)
             (find-class 'unsigned-long-vector)
@@ -2258,7 +2267,7 @@ to replace that class with ~s" name old-class new-class)
 
 
   (defun %register-type-ordinal-class (foreign-type class-name)
-    ;; ordinal-type-class shouldn't already exist
+ ;; ordinal-type-class shouldn't already exist
     (with-lock-grabbed (ordinal-type-class-alist-lock)
       (or (let* ((class (cdr (assq foreign-type ordinal-type-class-alist))))
             (if (and class (eq class-name (class-name class)))
@@ -2271,7 +2280,7 @@ to replace that class with ~s" name old-class new-class)
     (with-lock-grabbed (ordinal-type-class-alist-lock)
       (or (unless (%null-ptr-p p)
             (cdr (assoc (%macptr-type p) ordinal-type-class-alist :key #'foreign-type-ordinal)))
-          *macptr-class*)))
+ *macptr-class*)))
                   
 
   (register-foreign-object-domain :unclassified
@@ -2285,15 +2294,15 @@ to replace that class with ~s" name old-class new-class)
                                               (foreign-classp
                                                (classify-foreign-pointer p)))
                                   :instance-class-wrapper
-                                  #'(lambda (p)
+ #'(lambda (p)
                                       (foreign-instance-class-wrapper
                                        (classify-foreign-pointer p)))
                                   :class-own-wrapper
-                                  #'(lambda (p)
+ #'(lambda (p)
                                       (foreign-class-own-wrapper 
                                        (classify-foreign-pointer p)))
                                   :slots-vector
-                                  #'(lambda (p)
+ #'(lambda (p)
                                       (foreign-slots-vector
                                        (classify-foreign-pointer p))))
 
@@ -2314,33 +2323,33 @@ to replace that class with ~s" name old-class new-class)
   (defstatic *class-table*
       (let* ((v (make-array 256 :initial-element nil))
              (class-of-function-function
-              #'(lambda (thing)
+ #'(lambda (thing)
                   (let ((bits (lfun-bits-known-function thing)))
                     (declare (fixnum bits))
                     (if (logbitp $lfbits-trampoline-bit bits)
-                      ;; closure
+ ;; closure
                       (let ((inner-fn (closure-function thing)))
                         (if (neq inner-fn thing)
                           (let ((inner-bits (lfun-bits inner-fn)))
                             (if (logbitp $lfbits-method-bit inner-bits)
-                              *compiled-lexical-closure-class*
+ *compiled-lexical-closure-class*
                               (if (logbitp $lfbits-gfn-bit inner-bits)
                                 (%wrapper-class (gf.instance.class-wrapper thing))
                                 (if (logbitp $lfbits-cm-bit inner-bits)
-                                  *combined-method-class*
-                                  *compiled-lexical-closure-class*))))
-                          *compiled-lexical-closure-class*))
+ *combined-method-class*
+ *compiled-lexical-closure-class*))))
+ *compiled-lexical-closure-class*))
                       (if (logbitp  $lfbits-method-bit bits)
-                        *method-function-class* 
+ *method-function-class* 
                         (if (logbitp $lfbits-gfn-bit bits)
                           (%wrapper-class (gf.instance.class-wrapper thing))
                           (if (logbitp $lfbits-cm-bit bits)
-                            *combined-method-class*
-                            *compiled-function-class*))))))))
-        ;; Make one loop through the vector, initializing fixnum & list
-        ;; cells.  Set all immediates to *immediate-class*, then
-        ;; special-case characters later.
-        #+ppc32-target
+ *combined-method-class*
+ *compiled-function-class*))))))))
+ ;; Make one loop through the vector, initializing fixnum & list
+ ;; cells. Set all immediates to *immediate-class*, then
+ ;; special-case characters later.
+ #+ppc32-target
         (do* ((slice 0 (+ 8 slice)))
              ((= slice 256))
           (declare (type (unsigned-byte 8) slice))
@@ -2349,7 +2358,7 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice ppc32::fulltag-cons)) *cons-class*
                 (%svref v (+ slice ppc32::fulltag-nil)) *null-class*
                 (%svref v (+ slice ppc32::fulltag-imm)) *immediate-class*))
-        #+ppc64-target
+ #+ppc64-target
         (do* ((slice 0 (+ 16 slice)))
              ((= slice 256))
           (declare (type (unsigned-byte 8) slice))
@@ -2360,7 +2369,7 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice ppc64::fulltag-imm-1)) *immediate-class*
                 (%svref v (+ slice ppc64::fulltag-imm-2)) *immediate-class*
                 (%svref v (+ slice ppc64::fulltag-imm-3)) *immediate-class*))
-        #+x8632-target
+ #+x8632-target
         (do* ((slice 0 (+ 8 slice))
 	      (cons-fn #'(lambda (x) (if (null x) *null-class* *cons-class*))))
              ((= slice 256))
@@ -2370,7 +2379,7 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice x8632::fulltag-cons)) cons-fn
                 (%svref v (+ slice x8632::fulltag-tra)) *tagged-return-address-class*
                 (%svref v (+ slice x8632::fulltag-imm)) *immediate-class*))
-        #+x8664-target
+ #+x8664-target
         (do* ((slice 0 (+ 16 slice)))
              ((= slice 256))
           (declare (type (unsigned-byte 8) slice))
@@ -2382,7 +2391,7 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice x8664::fulltag-tra-0)) *tagged-return-address-class*
                 (%svref v (+ slice x8664::fulltag-tra-1)) *tagged-return-address-class*
                 (%svref v (+ slice x8664::fulltag-nil)) *null-class*))
-        #+arm-target
+ #+arm-target
         (do* ((slice 0 (+ 8 slice)))
              ((= slice 256))
           (declare (type (unsigned-byte 8) slice))
@@ -2391,7 +2400,15 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm::fulltag-nil)) *null-class*
                 (%svref v (+ slice arm::fulltag-imm)) *immediate-class*))
-        #+arm64-target
+ ;; arm64 U-RATIFY (class-of contract): the table is indexed by
+ ;; canonical TYPECODE — subtag byte for fulltag-misc, else the
+ ;; 4-bit fulltag. The per-slice fills below additionally cover
+ ;; a raw-low-byte dispatch for the tags whose payload reaches
+ ;; the low byte (fixnums); the future arm64 class-of
+ ;; lapfunction must canonicalize anything else. Immediates
+ ;; (characters, markers) and single-floats keep their payload
+ ;; above bit 7, so their low byte IS the canonical typecode.
+ #+arm64-target
         (do* ((slice 0 (+ 16 slice)))
              ((= slice 256))
           (declare (type (unsigned-byte 8) slice))
@@ -2399,36 +2416,35 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm64::fulltag-odd-fixnum))  *fixnum-class*
                 (%svref v (+ slice arm64::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm64::fulltag-nil)) *null-class*
-                (%svref v (+ slice arm64::fulltag-single-float)) (find-class
-                                                                  'short-float)
+                (%svref v (+ slice arm64::fulltag-single-float)) (find-class 'short-float)
                 (%svref v (+ slice arm64::fulltag-imm-0)) *immediate-class*
                 (%svref v (+ slice arm64::fulltag-imm-1)) *immediate-class*))
 
         (macrolet ((map-subtag (subtag class-name)
                      `(setf (%svref v ,subtag) (find-class ',class-name))))
-          ;; immheader types map to built-in classes.
+ ;; immheader types map to built-in classes.
           (map-subtag target::subtag-bignum bignum)
           (map-subtag target::subtag-double-float double-float)
           (map-subtag target::subtag-single-float short-float)
           (map-subtag target::subtag-dead-macptr ivector)
-          #+ppc32-target
+ #+ppc32-target
           (map-subtag ppc32::subtag-code-vector code-vector)
-          #+ppc64-target
+ #+ppc64-target
           (map-subtag ppc64::subtag-code-vector code-vector)
-          #+arm-target
+ #+arm-target
           (map-subtag arm::subtag-code-vector code-vector)
-          #+arm64-target
+ #+arm64-target
           (map-subtag arm64::subtag-code-vector code-vector)
-          #+ppc32-target
+ #+ppc32-target
           (map-subtag ppc32::subtag-creole-object creole-object)
           (map-subtag target::subtag-xcode-vector xcode-vector)
           (map-subtag target::subtag-xfunction xfunction)
-          #+arm-target
+ #+arm-target
           (map-subtag arm::subtag-pseudofunction pseudofunction)
           (map-subtag target::subtag-single-float-vector simple-short-float-vector)
-          #+64-bit-target
+ #+64-bit-target
           (map-subtag target::subtag-u64-vector simple-unsigned-doubleword-vector)
-          #+64-bit-target
+ #+64-bit-target
           (map-subtag target::subtag-s64-vector simple-doubleword-vector)
           (map-subtag target::subtag-fixnum-vector simple-fixnum-vector)
           (map-subtag target::subtag-u32-vector simple-unsigned-long-vector)
@@ -2440,8 +2456,8 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-s16-vector simple-word-vector)
           (map-subtag target::subtag-double-float-vector simple-double-float-vector)
           (map-subtag target::subtag-bit-vector simple-bit-vector)
-          ;; Some nodeheader types map to built-in-classes; others require
-          ;; further dispatching.
+ ;; Some nodeheader types map to built-in-classes; others require
+ ;; further dispatching.
           (map-subtag target::subtag-ratio ratio)
           (map-subtag target::subtag-complex complex)
           (map-subtag target::subtag-complex-single-float complex-single-float)
@@ -2456,83 +2472,86 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-package package)
           (map-subtag target::subtag-simple-vector simple-vector)
           (map-subtag target::subtag-slot-vector slot-vector)
-          #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
-          #+x8664-target (map-subtag x8664::subtag-function function-vector)
-          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector)
-          #+arm64-target (map-subtag arm64::subtag-function function-vector))
+ #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
+ #+x8664-target (map-subtag x8664::subtag-function function-vector)
+ ;; arm64: the raw uvectors, reached via %symptr->symvector etc.
+ #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector))
         (setf (%svref v target::subtag-arrayH)
-              #'(lambda (x)
+ #'(lambda (x)
                   (if (logbitp $arh_simple_bit
                                (the fixnum (%svref x target::arrayH.flags-cell)))
-                    *simple-array-class*
-                    *array-class*)))
-        ;; These need to be special-cased:
+ *simple-array-class*
+ *array-class*)))
+ ;; These need to be special-cased:
         (setf (%svref v target::subtag-macptr) #'foreign-class-of)
         (setf (%svref v target::subtag-character)
-              #'(lambda (c) (let* ((code (%char-code c)))
+ #'(lambda (c) (let* ((code (%char-code c)))
                               (if (or (eq c #\NewLine)
                                       (and (>= code (char-code #\space))
                                            (< code (char-code #\rubout))))
-                                *standard-char-class*
-                                *base-char-class*))))
+ *standard-char-class*
+ *base-char-class*))))
         (setf (%svref v target::subtag-struct)
-              #'(lambda (s) (%structure-class-of s))) ; need DEFSTRUCT
+ #'(lambda (s) (%structure-class-of s))) ; need DEFSTRUCT
         (setf (%svref v target::subtag-istruct)
-              #'(lambda (i)
+ #'(lambda (i)
                   (let* ((cell (%svref i 0))
                          (wrapper (istruct-cell-info  cell)))
                     (if wrapper
                       (%wrapper-class wrapper)
                       (or (find-class (istruct-cell-name cell) nil)
-                          *istruct-class*)))))
+ *istruct-class*)))))
         (setf (%svref v target::subtag-basic-stream)
-              #'(lambda (b) (%wrapper-class (basic-stream.wrapper b))))
+ #'(lambda (b) (%wrapper-class (basic-stream.wrapper b))))
         (setf (%svref v target::subtag-instance)
-              #'%class-of-instance)
+ #'%class-of-instance)
         (setf (%svref v #+ppc-target target::subtag-symbol
-                      #+arm-target target::subtag-symbol
-		      #+x8632-target target::subtag-symbol
-		      #+x8664-target target::tag-symbol
-                      #+arm64-target arm64::fulltag-symbol)
-              #-ppc64-target
-              #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
-                              *keyword-class*
-                              *symbol-class*))
-              #+ppc64-target
-              #'(lambda (s)
+ #+arm-target target::subtag-symbol
+ #+x8632-target target::subtag-symbol
+ #+x8664-target target::tag-symbol
+ ;; arm64: symbol POINTERS have their own fulltag;
+ ;; typecode canonicalizes to it (cf. x8664
+ ;; tag-symbol).
+ #+arm64-target arm64::fulltag-symbol)
+ #-ppc64-target
+ #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
+ *keyword-class*
+ *symbol-class*))
+ #+ppc64-target
+ #'(lambda (s)
                   (if s
                     (if (eq (symbol-package s) *keyword-package*)
-                      *keyword-class*
-                      *symbol-class*)
-                    *null-class*)))
+ *keyword-class*
+ *symbol-class*)
+ *null-class*)))
         
         (setf (%svref v
-                      #+ppc-target target::subtag-function
-                      #+arm-target target::subtag-function
-                      #+x8632-target target::subtag-function
-                      #+x8664-target target::tag-function
-                      #+arm64-target arm64::fulltag-function)
+ #+ppc-target target::subtag-function
+ #+arm-target target::subtag-function
+ #+x8632-target target::subtag-function
+ #+x8664-target target::tag-function
+ #+arm64-target arm64::subtag-function)
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
-              #'(lambda (v)
+ #'(lambda (v)
                   (let* ((subtype (%array-header-subtype v)))
                     (declare (fixnum subtype))
                     (if (eql subtype target::subtag-simple-vector)
-                      *general-vector-class*
-                      #-(or x8664-target arm64-target)
+ *general-vector-class*
+ #-(or x8664-target arm64-target)
                       (%svref *ivector-vector-classes*
-                              #+ppc32-target
+ #+ppc32-target
                               (ash (the fixnum (- subtype ppc32::min-cl-ivector-subtag))
                                    (- ppc32::ntagbits))
-                              #+arm-target
+ #+arm-target
                               (ash (the fixnum (- subtype arm::min-cl-ivector-subtag))
                                    (- arm::ntagbits))
-                              #+ppc64-target
+ #+ppc64-target
                               (ash (the fixnum (logand subtype #x7f)) (- ppc64::nlowtagbits))
-			      #+x8632-target
+ #+x8632-target
 			      (ash (the fixnum (- subtype x8632::min-cl-ivector-subtag))
 				   (- x8632::ntagbits)))
-                      #+x8664-target
+ #+x8664-target
                       (let* ((class (logand x8664::fulltagmask subtype))
                              (idx (ash subtype (- x8664::ntagbits))))
                         (cond ((= class x8664::fulltag-immheader-0)
@@ -2542,7 +2561,8 @@ to replace that class with ~s" name old-class new-class)
                               ((= class x8664::fulltag-immheader-2)
                                (%svref *immheader-2-classes* idx))
                               (t *t-class*)))
-                      #+arm64-target
+
+ #+arm64-target
                       (let* ((class (logand arm64::fulltagmask subtype))
                              (idx (ash subtype (- arm64::ntagbits))))
                         (cond ((= class arm64::fulltag-immheader-0)
@@ -2554,7 +2574,7 @@ to replace that class with ~s" name old-class new-class)
                               (t *t-class*)))
                       ))))
         (setf (%svref v target::subtag-lock)
-              #'(lambda (thing)
+ #'(lambda (thing)
                   (case (%svref thing target::lock.kind-cell)
                     (recursive-lock *recursive-lock-class*)
                     (read-write-lock *read-write-lock-class*)
@@ -2569,7 +2589,7 @@ to replace that class with ~s" name old-class new-class)
     (error "Bug (probably): can't determine class of ~s" x))
   
 
-                                        ; return frob from table
+ ; return frob from table
 
 
 
@@ -2691,21 +2711,21 @@ to replace that class with ~s" name old-class new-class)
 (defmethod create-reader-method-function ((class slots-class)
 					  (reader-method-class standard-reader-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+ #+ppc-target
   (gvector :function
            (uvref *reader-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))
            'slot-id-value
            nil				;method-function name
            (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit)))
-  #+x86-target
+ #+x86-target
   (%clone-x86-function
-   *reader-method-function-proto*
+ *reader-method-function-proto*
    (ensure-slot-id (%slot-definition-name dslotd))
    'slot-id-value
    nil				;method-function name
    (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit)))
-  #+arm-target
+ #+arm-target
   (%fix-fn-entrypoint
    (gvector :function
            0
@@ -2714,26 +2734,37 @@ to replace that class with ~s" name old-class new-class)
            'slot-id-value
            nil				;method-function name
            (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit))))
+ ;; arm64: ppc-shaped function vector (code-vector = element 0),
+ ;; built misc-tagged then retagged to a callable fulltag-function
+ ;; pointer (patch-0018 model).
+ #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+            (uvref (function-to-function-vector *reader-method-function-proto*) 0)
+            (ensure-slot-id (%slot-definition-name dslotd))
+            'slot-id-value
+            nil                         ;method-function name
+            (dpb 1 $lfbits-numreq (ash 1 $lfbits-method-bit))))
   )
 
 (defmethod create-writer-method-function ((class slots-class)
 					  (writer-method-class standard-writer-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+ #+ppc-target
   (gvector :function
            (uvref *writer-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))
            'set-slot-id-value
            nil
            (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit)))
-  #+x86-target
+ #+x86-target
     (%clone-x86-function
-     *writer-method-function-proto*
+ *writer-method-function-proto*
      (ensure-slot-id (%slot-definition-name dslotd))
      'set-slot-id-value
      nil
      (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit)))
-    #+arm-target
+ #+arm-target
     (%fix-fn-entrypoint
      (gvector :function
              0
@@ -2742,6 +2773,15 @@ to replace that class with ~s" name old-class new-class)
              'set-slot-id-value
              nil
              (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit))))
+ ;; arm64: see create-reader-method-function.
+ #+arm64-target
+  (function-vector-to-function
+   (gvector :function
+            (uvref (function-to-function-vector *writer-method-function-proto*) 0)
+            (ensure-slot-id (%slot-definition-name dslotd))
+            'set-slot-id-value
+            nil
+            (dpb 2 $lfbits-numreq (ash 1 $lfbits-method-bit))))
   )
 
 
@@ -2776,7 +2816,7 @@ to replace that class with ~s" name old-class new-class)
   (when initargs
     (apply #'check-initargs
            nil class initargs t
-           #'initialize-instance #'allocate-instance #'shared-initialize
+ #'initialize-instance #'allocate-instance #'shared-initialize
            nil))
   (let ((instance (apply #'allocate-instance class initargs)))
     (apply #'initialize-instance instance initargs)
@@ -2924,9 +2964,9 @@ to replace that class with ~s" name old-class new-class)
 	   (eq *standard-class-wrapper* (instance.class-wrapper class))
            (let* ((allocation (standard-effective-slot-definition.allocation slotd)))
              (or (eq allocation :instance) (eq allocation :class))))
-    ;; Not safe to use instance.slots here, since the instance is not
-    ;; definitely of type SUBTAG-INSTANCE.  (Anyway, INSTANCE-SLOTS
-    ;; should be inlined here.)
+ ;; Not safe to use instance.slots here, since the instance is not
+ ;; definitely of type SUBTAG-INSTANCE. (Anyway, INSTANCE-SLOTS
+ ;; should be inlined here.)
     (%set-std-slot-vector-value (instance-slots instance) slotd new)
     (if (structurep instance)
       (setf (struct-ref instance (standard-effective-slot-definition.location slotd))
@@ -3159,8 +3199,8 @@ to replace that class with ~s" name old-class new-class)
   class)
 
 (defmethod make-instances-obsolete ((class structure-class))
-  ;; could maybe warn that instances are obsolete, but there's not
-  ;; much that we can do about that.
+ ;; could maybe warn that instances are obsolete, but there's not
+ ;; much that we can do about that.
   class)
 
 
@@ -3171,7 +3211,7 @@ to replace that class with ~s" name old-class new-class)
 ;;; Method dispatch looks at the hash-index.
 ;;; slot-value & set-slot-value look at the instance-slots.
 ;;; Each wrapper may have an associated forwarding wrapper, which must
-;;; also be made obsolete.  The forwarding-wrapper is stored in the
+;;; also be made obsolete. The forwarding-wrapper is stored in the
 ;;; hash table below keyed on the wrapper-hash-index of the two
 ;;; wrappers.
 (defvar *forwarding-wrapper-hash-table* (make-hash-table :test 'eq))  
@@ -3266,17 +3306,17 @@ to replace that class with ~s" name old-class new-class)
 
 ;;; How slot values transfer (from PCL):
 ;;;
-;;; local  --> local        transfer 
-;;; local  --> shared       discard
-;;; local  -->  --          discard
-;;; shared --> local        transfer
-;;; shared --> shared       discard
-;;; shared -->  --          discard
-;;;  --    --> local        added
-;;;  --    --> shared        --
+;;; local --> local transfer 
+;;; local --> shared discard
+;;; local --> -- discard
+;;; shared --> local transfer
+;;; shared --> shared discard
+;;; shared --> -- discard
+;;; -- --> local added
+;;; -- --> shared --
 ;;;
 ;;; See make-wrapper-obsolete to see how we got here.
-;;; A word about forwarding.  When a class is made obsolete, the
+;;; A word about forwarding. When a class is made obsolete, the
 ;;; %wrapper-instance-slots slot of its wrapper is set to 0.
 ;;; %wrapper-class-slots = (instance-slots . class-slots)
 ;;; Note: this should stack-cons the new-instance if we can reuse the
@@ -3306,7 +3346,7 @@ to replace that class with ~s" name old-class new-class)
 		(new-instance (allocate-instance class))
 		(old-slot-vector (instance-slots instance))
 		(new-slot-vector (instance-slots new-instance)))
-           ;; Lots to do.  Hold onto your hat.
+ ;; Lots to do. Hold onto your hat.
            (let* ((old-size (uvsize old-instance-slots))
                   (new-size (uvsize new-instance-slots)))
              (declare (fixnum old-size new-size))
@@ -3321,7 +3361,7 @@ to replace that class with ~s" name old-class new-class)
                      (push slot-name discarded)
                      (unless (eq val (%slot-unbound-marker))
                        (setf (getf plist slot-name) val))))))
-             ;; Go through old class slots
+ ;; Go through old class slots
              (dolist (pair old-class-slots)
                (let* ((slot-name (%car pair))
                       (val (%cdr pair))
@@ -3332,21 +3372,21 @@ to replace that class with ~s" name old-class new-class)
                      (push slot-name discarded)
                      (unless (eq val (%slot-unbound-marker))
                        (setf (getf plist slot-name) val))))))
-                                        ; Go through new instance slots
+ ; Go through new instance slots
              (dotimes (i new-size)
                (declare (fixnum i))
                (let* ((slot-name (%svref new-instance-slots i)))
                  (unless (or (%vector-member slot-name old-instance-slots)
                              (assoc slot-name old-class-slots))
                    (push slot-name added))))
-             ;; Go through new class slots
+ ;; Go through new class slots
              (dolist (pair new-class-slots)
                (let ((slot-name (%car pair)))
                  (unless (or (%vector-member slot-name old-instance-slots)
                              (assoc slot-name old-class-slots))
                    (push slot-name added))))
              (exchange-slot-vectors-and-wrappers new-instance instance))))))
-    ;; run user code with interrupts enabled.
+ ;; run user code with interrupts enabled.
     (update-instance-for-redefined-class instance added discarded plist))
   instance)
             
@@ -3360,7 +3400,7 @@ to replace that class with ~s" name old-class new-class)
   (when initargs
     (check-initargs
      instance nil initargs t
-     #'update-instance-for-redefined-class #'shared-initialize))
+ #'update-instance-for-redefined-class #'shared-initialize))
   (apply #'shared-initialize instance added-slots initargs))
 
 (defmethod update-instance-for-redefined-class ((instance standard-generic-function)
@@ -3372,7 +3412,7 @@ to replace that class with ~s" name old-class new-class)
   (when initargs
     (check-initargs
      instance nil initargs t
-     #'update-instance-for-redefined-class #'shared-initialize))
+ #'update-instance-for-redefined-class #'shared-initialize))
   (apply #'shared-initialize instance added-slots initargs))
 
 (defun check-initargs (instance class initargs errorp &rest functions)
@@ -3418,7 +3458,7 @@ to replace that class with ~s" name old-class new-class)
   (let* ((class (if (typep class-arg 'class) class-arg (find-class class-arg nil)))
 	 (meta-arg (getf initargs :metaclass (if (and class (not (typep class 'forward-referenced-class)))
 					       (class-of class)
-					       *standard-class-class*)))
+ *standard-class-class*)))
 	 (meta-spec (if (quoted-form-p meta-arg) (%cadr meta-arg) meta-arg))
 	 (meta (if (typep meta-spec 'class) meta-spec (find-class meta-spec nil))))
     (if (and meta (not (typep meta 'forward-referenced-class)))
@@ -3429,7 +3469,7 @@ to replace that class with ~s" name old-class new-class)
   (let ((initargs (class-slot-initargs class))
         (cpl (%inited-class-cpl class)))
     (dolist (f functions)         ; for all the functions passed
-      #+no
+ #+no
       (if (logbitp $lfbits-aok-bit (lfun-bits f))
 	(return-from compute-initargs-vector t))
       (dolist (method (%gf-methods f))   ; for each applicable method
@@ -3458,7 +3498,7 @@ to replace that class with ~s" name old-class new-class)
            (initargs-vector (class-prototype class) class functions)))
     (let ((initvect (apply #'iv
                            class
-                           #'initialize-instance #'allocate-instance #'shared-initialize
+ #'initialize-instance #'allocate-instance #'shared-initialize
                            nil)))
       (if (eq initvect 't)
         t
@@ -3522,7 +3562,7 @@ to replace that class with ~s" name old-class new-class)
 	 (new-object (allocate-instance new-class)))
     (declare (fixnum num-new-instance-slots)
 	     (simple-vector new-instance-slots-vector old-instance-slots-vector))
-    ;; Retain local slots shared between the new class and the old.
+ ;; Retain local slots shared between the new class and the old.
     (do* ((new-pos 0 (1+ new-pos))
 	  (new-slot-location 1 (1+ new-slot-location)))
 	 ((= new-pos num-new-instance-slots))
@@ -3536,9 +3576,9 @@ to replace that class with ~s" name old-class new-class)
 		(%standard-instance-instance-location-access
 		 object
 		 (the fixnum (1+ (the fixnum old-pos))))))))
-    ;; If the new class defines a local slot whos name matches
-    ;; that of a shared slot in the old class, the shared slot's
-    ;; value is used to initialize the new instance's local slot.
+ ;; If the new class defines a local slot whos name matches
+ ;; that of a shared slot in the old class, the shared slot's
+ ;; value is used to initialize the new instance's local slot.
     (dolist (shared-slot (%wrapper-class-slots old-wrapper))
       (destructuring-bind (name . value) shared-slot
 	(let* ((new-slot-pos (position name new-instance-slots-vector
@@ -3562,7 +3602,7 @@ to replace that class with ~s" name old-class new-class)
   (when initargs
     (check-initargs
      current nil initargs t
-     #'update-instance-for-different-class #'shared-initialize))
+ #'update-instance-for-different-class #'shared-initialize))
   (let* ((previous-slots (class-slots (class-of previous)))
 	 (current-slots (class-slots (class-of current)))
 	 (added-slot-names ()))
@@ -3625,8 +3665,8 @@ to replace that class with ~s" name old-class new-class)
 (unless *clos-initialization-functions*
   (setq *clos-initialization-functions*
         (list #'initialize-instance #'allocate-instance #'shared-initialize
-              #'reinitialize-instance
-              #'update-instance-for-different-class #'update-instance-for-redefined-class)))
+ #'reinitialize-instance
+ #'update-instance-for-different-class #'update-instance-for-redefined-class)))
 
 (defun compute-initialization-functions-alist ()
   (let ((res nil)
@@ -3748,7 +3788,7 @@ to replace that class with ~s" name old-class new-class)
             ((null cpls-tail))
           (setf (car cpls-tail)
                 (%class-precedence-list (if using-classes-p
-                                          ;; extension for use in source location support
+ ;; extension for use in source location support
                                           (if (typep (car args-tail) 'eql-specializer)
                                             (class-of (eql-specializer-object (car args-tail)))
                                             (car args-tail))
@@ -3775,8 +3815,8 @@ to replace that class with ~s" name old-class new-class)
             (unless (eql (eql-specializer-object arg) (eql-specializer-object spec))
               (return nil))
             (if (typep (eql-specializer-object spec) arg)
-              ;; Can't tell if going to be applicable or not based on class alone
-              ;; Except for the special case of NULL which is a singleton
+ ;; Can't tell if going to be applicable or not based on class alone
+ ;; Except for the special case of NULL which is a singleton
               (unless (eq arg *null-class*)
                 (return :undecidable))
               (return nil)))
@@ -3787,7 +3827,7 @@ to replace that class with ~s" name old-class new-class)
 
 
 ;;; Need this so that (compute-applicable-methods
-;;; #'class-precedence-list ...)  will not recurse.
+;;; #'class-precedence-list ...) will not recurse.
 (defun %class-precedence-list (class)
   (if (eq (class-of class) *standard-class-class*)
     (%inited-class-cpl class)
@@ -3890,7 +3930,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod find-method-combination ((gf standard-generic-function) type options)
   (unless (and (eq type 'standard) (null options))
     (error "non-standard method-combination not supported yet."))
-  *standard-method-combination*)
+ *standard-method-combination*)
 
 
 
@@ -3947,7 +3987,7 @@ to replace that class with ~s" name old-class new-class)
                 form)
            (setf (gethash class-name *make-load-form-saving-slots-hash*)
                  `(allocate-instance (find-class ',class-name)))))
-     ;; initform is NIL when there are no slots
+ ;; initform is NIL when there are no slots
      (when slot-names
        `(%set-slot-values
          ',object

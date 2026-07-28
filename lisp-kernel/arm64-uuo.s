@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /*
- * On arm64, we implement UUOs with the udf instruction.  The upper 16
+ * On arm64, we implement UUOs with the udf instruction. The upper 16
  * bits of a udf instruction are 0; the lower 16 are an immediate.
  *
- * The udf instruction is architecturally undefined.  It will always
+ * The udf instruction is architecturally undefined. It will always
  * generate an undefined instruction exception (which will appear as
  * SIGILL).
  *
@@ -38,6 +38,14 @@ uuo_format_unary = 1
   unary_info_udf = 3
   unary_info_udf_call = 4
   unary_info_tlb_too_small = 5
+ // Must be FOLLOWED by a uuo_extra_registers companion carrying
+ // (index, dest); see "Errors that need three registers" in
+ // doc/porting/arm64.md. reg here is the slot vector.
+  unary_info_slot_unbound = 6
+ // Funcalled a symbol naming a macro or special operator: the fcell
+ // holds the 2-element simple-vector whose slot 0 is %macro-code%,
+ // whose single instruction is this UUO. reg = fname.
+  unary_info_apply_macro = 7
 
 /*
  * Two-register errors
@@ -64,7 +72,7 @@ uuo_format_binary = 2
  */
 uuo_format_wrong_type = 3
 
-        // misc format
+ // misc format
         .macro uuo_misc info
         .if \info == 0
         .error "uuo_misc bits cannot be all 0"
@@ -104,7 +112,7 @@ uuo_format_wrong_type = 3
         uuo_misc 8
         .endm
 
-        // unary format
+ // unary format
         .macro uuo_unary reg, info
         udf # ((\info) << 7 | R\reg << 2 | uuo_format_unary)
         .endm
@@ -133,7 +141,19 @@ uuo_format_wrong_type = 3
         uuo_unary \reg, unary_info_tlb_too_small
         .endm
 
-        // binary format
+ // Three-register error: emit this, then uuo_extra_registers
+ // index, dest. The handler reads the companion as data and
+ // resumes past BOTH instructions, storing slot-unbound's value
+ // into dest. A lone one is an internal error.
+        .macro uuo_error_slot_unbound slotv
+        uuo_unary \slotv, unary_info_slot_unbound
+        .endm
+
+        .macro uuo_error_apply_macro reg
+        uuo_unary \reg, unary_info_apply_macro
+        .endm
+
+ // binary format
         .macro uuo_binary ra, rb, info=0
         udf # ((\info) << 12 | (R\rb) << 7 | (R\ra) << 2 | uuo_format_binary)
         .endm
@@ -150,12 +170,12 @@ uuo_format_wrong_type = 3
         uuo_binary \ra, \rb, binary_info_two_registers
         .endm
 
-        // wrong_type format
+ // wrong_type format
         .macro uuo_wrong_type reg, code, cflag=0
         udf # (\code << 8 | \cflag << 7 | R\reg << 2 | uuo_format_wrong_type)
         .endm
 
-        // Keep these in sync with the values in arm64-arch.lisp.
+ // Keep these in sync with the values in arm64-arch.lisp.
         xtype_integer  = 0x18
         xtype_s64 = 0x28
         xtype_u64 = 0x38

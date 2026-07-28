@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -52,9 +52,9 @@
 (defun %early-shared-initialize (instance slot-names initargs)
   (unless (or (listp slot-names) (eq slot-names t))
     (report-bad-arg slot-names '(or list (eql t))))
-  ;; Check that initargs contains valid key/value pairs,
-  ;; signal a PROGRAM-ERROR otherwise.  (Yes, this is
-  ;; an obscure way to do so.)
+ ;; Check that initargs contains valid key/value pairs,
+ ;; signal a PROGRAM-ERROR otherwise. (Yes, this is
+ ;; an obscure way to do so.)
   (destructuring-bind (&key &allow-other-keys) initargs)
   (let* ((wrapper (instance-class-wrapper instance))
          (class (%wrapper-class wrapper)))
@@ -109,7 +109,7 @@
 
 ;;; This is redefined (to call MAKE-INSTANCE) below.
 (setf (fdefinition '%make-direct-slotd)
-      #'(lambda (slotd-class &key
+ #'(lambda (slotd-class &key
 			     name
 			     initfunction
 			     initform
@@ -128,7 +128,7 @@
 
 ;;; Also redefined below, after MAKE-INSTANCE is possible.
 (setf (fdefinition '%make-effective-slotd)
-      #'(lambda (slotd-class &key
+ #'(lambda (slotd-class &key
 			     name
 			     initfunction
 			     initform
@@ -147,10 +147,10 @@
 (defmethod compile-time-class-p ((class class)) nil)
 
 (defmethod direct-slot-definition-class ((class std-class) &key  &allow-other-keys)
-  *standard-direct-slot-definition-class*)
+ *standard-direct-slot-definition-class*)
 
 (defmethod effective-slot-definition-class ((class std-class) &key  &allow-other-keys)
-  *standard-effective-slot-definition-class*)
+ *standard-effective-slot-definition-class*)
 
 (defun make-direct-slot-definition (class initargs)
   (apply #'%make-direct-slotd
@@ -267,7 +267,7 @@
 
 ;;; Should eventually do something here.
 ;(defmethod compute-slots ((s structure-class))
-;  (call-next-method))
+; (call-next-method))
 
 (defmethod direct-slot-definition-class ((class structure-class) &rest initargs)
   (declare (ignore initargs))
@@ -369,110 +369,149 @@
                          (standard-effective-slot-definition.slot-id slotd)))
                   i))))
       (let* ((lookup-f
-              #+ppc-target
+ #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+ #'%small-map-slot-id-lookup
+ #'%large-map-slot-id-lookup)) 0)
+                        map
+                        table
+                        (dpb 1 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
+ #+ppc-target
               (gvector :function
 				(%svref (if small
-					  #'%small-map-slot-id-lookup
-					  #'%large-map-slot-id-lookup) 0)
+ #'%small-map-slot-id-lookup
+ #'%large-map-slot-id-lookup) 0)
 				map
 				table
 				(dpb 1 $lfbits-numreq
 				     (ash -1 $lfbits-noname-bit)))
-              #+arm-target
+ #+arm-target
               (%fix-fn-entrypoint
                (gvector :function
                        0
                        (%svref (if small
-                                 #'%small-map-slot-id-lookup
-                                 #'%large-map-slot-id-lookup) 1)
+ #'%small-map-slot-id-lookup
+ #'%large-map-slot-id-lookup) 1)
                        map
                        table
                        (dpb 1 $lfbits-numreq
                             (ash -1 $lfbits-noname-bit))))
-              #+x86-target
+ #+x86-target
               (%clone-x86-function (if small
-					  #'%small-map-slot-id-lookup
-					  #'%large-map-slot-id-lookup)
+ #'%small-map-slot-id-lookup
+ #'%large-map-slot-id-lookup)
                                    map
                                    table
                                    (dpb 1 $lfbits-numreq
 				     (ash -1 $lfbits-noname-bit))))
 	     (class (%wrapper-class wrapper))
 	     (get-f
-              #+ppc-target
+ #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+ #'%small-slot-id-value
+ #'%large-slot-id-value)) 0)
+                        map
+                        table
+                        class
+ #'%maybe-std-slot-value-using-class
+ #'%slot-id-ref-missing
+                        (dpb 2 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
+ #+ppc-target
               (gvector :function
                        (%svref (if small
-                                 #'%small-slot-id-value
-                                 #'%large-slot-id-value) 0)
+ #'%small-slot-id-value
+ #'%large-slot-id-value) 0)
                        map
                        table
                        class
-                       #'%maybe-std-slot-value-using-class
-                       #'%slot-id-ref-missing
+ #'%maybe-std-slot-value-using-class
+ #'%slot-id-ref-missing
                        (dpb 2 $lfbits-numreq
                             (ash -1 $lfbits-noname-bit)))
-              #+arm-target
+ #+arm-target
               (%fix-fn-entrypoint
                (gvector :function
                         0
                        (%svref (if small
-                                 #'%small-slot-id-value
-                                 #'%large-slot-id-value) 1)
+ #'%small-slot-id-value
+ #'%large-slot-id-value) 1)
                        map
                        table
                        class
-                       #'%maybe-std-slot-value-using-class
-                       #'%slot-id-ref-missing
+ #'%maybe-std-slot-value-using-class
+ #'%slot-id-ref-missing
                        (dpb 2 $lfbits-numreq
                             (ash -1 $lfbits-noname-bit))))
-              #+x86-target
+ #+x86-target
               (%clone-x86-function (if small
-                                     #'%small-slot-id-value
-                                     #'%large-slot-id-value)
+ #'%small-slot-id-value
+ #'%large-slot-id-value)
                                    map
                                    table
                                    class
-                                   #'%maybe-std-slot-value-using-class
-                                   #'%slot-id-ref-missing
+ #'%maybe-std-slot-value-using-class
+ #'%slot-id-ref-missing
                                    (dpb 2 $lfbits-numreq
                                         (ash -1 $lfbits-noname-bit))))
 	     (set-f
-              #+ppc-target
+ #+arm64-target
+              (function-vector-to-function
+               (gvector :function
+                        (uvref (function-to-function-vector
+                                (if small
+ #'%small-set-slot-id-value
+ #'%large-set-slot-id-value)) 0)
+                        map
+                        table
+                        class
+ #'%maybe-std-setf-slot-value-using-class
+ #'%slot-id-set-missing
+                        (dpb 3 $lfbits-numreq
+                             (ash -1 $lfbits-noname-bit))))
+ #+ppc-target
               (gvector :function
                        (%svref (if small
-                                 #'%small-set-slot-id-value
-                                 #'%large-set-slot-id-value) 0)
+ #'%small-set-slot-id-value
+ #'%large-set-slot-id-value) 0)
                        map
                        table
                        class
-                       #'%maybe-std-setf-slot-value-using-class
-                       #'%slot-id-set-missing
+ #'%maybe-std-setf-slot-value-using-class
+ #'%slot-id-set-missing
                        (dpb 3 $lfbits-numreq
                             (ash -1 $lfbits-noname-bit)))
-              #+arm-target
+ #+arm-target
               (%fix-fn-entrypoint
                (gvector :function
                         0
                        (%svref (if small
-                                 #'%small-set-slot-id-value
-                                 #'%large-set-slot-id-value) 1)
+ #'%small-set-slot-id-value
+ #'%large-set-slot-id-value) 1)
                        map
                        table
                        class
-                       #'%maybe-std-setf-slot-value-using-class
-                       #'%slot-id-set-missing
+ #'%maybe-std-setf-slot-value-using-class
+ #'%slot-id-set-missing
                        (dpb 3 $lfbits-numreq
                             (ash -1 $lfbits-noname-bit))))
-              #+x86-target
+ #+x86-target
               (%clone-x86-function
                (if small
-                 #'%small-set-slot-id-value
-                 #'%large-set-slot-id-value)
+ #'%small-set-slot-id-value
+ #'%large-set-slot-id-value)
                map
                table
                class
-               #'%maybe-std-setf-slot-value-using-class
-               #'%slot-id-set-missing
+ #'%maybe-std-setf-slot-value-using-class
+ #'%slot-id-set-missing
                (dpb 3 $lfbits-numreq
                     (ash -1 $lfbits-noname-bit)))))
 	(setf (%wrapper-slot-id->slotd wrapper) lookup-f
@@ -607,7 +646,7 @@
   (if (class-finalized-p class)
     (unless (equal (%class.cpl class) cpl)
       (setf (%class.cpl class) cpl)
-      #|(force-cache-flushes class)|#)
+ #|(force-cache-flushes class)|#)
     (setf (%class.cpl class) cpl))
   cpl)
 
@@ -666,20 +705,20 @@
 	(%class.changed-initargs class) nil))
 
 (defun update-class (class finalizep)
-  ;;
-  ;; Calling UPDATE-SLOTS below sets the class wrapper of CLASS, which
-  ;; makes the class finalized.  When UPDATE-CLASS isn't called from
-  ;; FINALIZE-INHERITANCE, make sure that this finalization invokes
-  ;; FINALIZE-INHERITANCE as per AMOP.  Note, that we can't simply
-  ;; delay the finalization when CLASS has no forward referenced
-  ;; superclasses because that causes bootstrap problems.
+ ;;
+ ;; Calling UPDATE-SLOTS below sets the class wrapper of CLASS, which
+ ;; makes the class finalized. When UPDATE-CLASS isn't called from
+ ;; FINALIZE-INHERITANCE, make sure that this finalization invokes
+ ;; FINALIZE-INHERITANCE as per AMOP. Note, that we can't simply
+ ;; delay the finalization when CLASS has no forward referenced
+ ;; superclasses because that causes bootstrap problems.
   (when (and (not (or finalizep (class-finalized-p class)))
 	     (not (class-has-a-forward-referenced-superclass-p class)))
     (finalize-inheritance class)
     (return-from update-class))
   (when (or finalizep (class-finalized-p class))
     (let* ((cpl (update-cpl class (compute-class-precedence-list  class))))
-      ;; This -should- be made to work for structure classes
+ ;; This -should- be made to work for structure classes
       (update-slots class (compute-slots class))
       (setf (%class-default-initargs class) (compute-default-initargs class))
       (%flush-initargs-caches class)
@@ -725,8 +764,8 @@
       (setq direct-superclasses
             (or direct-superclasses
                 (list (if (typep class 'funcallable-standard-class)
-                        *funcallable-standard-object-class*
-                        *standard-object-class*))))
+ *funcallable-standard-object-class*
+ *standard-object-class*))))
       (dolist (superclass direct-superclasses)
         (unless (validate-superclass class superclass)
           (error "The class ~S was specified as a~%super-class of the class ~S;~%~
@@ -750,8 +789,8 @@
       (when (eq (%slot-definition-allocation slot) :class)
         (let* ((slot-name (%slot-definition-name slot))
                (pair (assq slot-name old-class-slot-cells)))
-          ;;; If the slot existed as a class slot in the old
-          ;;; class, retain the definition (even if it's unbound.)
+ ;;; If the slot existed as a class slot in the old
+ ;;; class, retain the definition (even if it's unbound.)
           (unless pair
             (let* ((initfunction (%slot-definition-initfunction slot)))
               (setq pair (cons slot-name
@@ -808,7 +847,7 @@
 			     (find-class supplied-meta)))
                           ((or (null class)
                                (typep class 'forward-referenced-class))
-                           *standard-class-class*)
+ *standard-class-class*)
                           (t (class-of class)))))
     (declare (dynamic-extent missing))
     (flet ((fix-super (s)
@@ -888,7 +927,7 @@ governs whether DEFCLASS makes that distinction or not.")
     (when (and *defclass-redefines-improperly-named-classes-pedantically* 
 	       existing-class 
 	       (not (eq (class-name existing-class) name)))
-      ;; Class isn't properly named; act like it didn't exist
+ ;; Class isn't properly named; act like it didn't exist
       (setq existing-class nil))
     (apply #'ensure-class-using-class existing-class name keys)))
 
@@ -966,13 +1005,13 @@ governs whether DEFCLASS makes that distinction or not.")
 				(dslotd standard-direct-slot-definition)
 				&rest initargs)
   (declare (ignore initargs))
-  *standard-reader-method-class*)
+ *standard-reader-method-class*)
 
 (defmethod reader-method-class ((class funcallable-standard-class)
 				(dslotd standard-direct-slot-definition)
 				&rest initargs)
   (declare (ignore  initargs))
-  *standard-reader-method-class*)
+ *standard-reader-method-class*)
 
 (defmethod add-reader-method ((class slots-class) gf dslotd)
   (let* ((initargs
@@ -1000,13 +1039,13 @@ governs whether DEFCLASS makes that distinction or not.")
 				(dslotd standard-direct-slot-definition)
 				&rest initargs)
   (declare (ignore initargs))
-  *standard-writer-method-class*)
+ *standard-writer-method-class*)
 
 (defmethod writer-method-class ((class funcallable-standard-class)
 				(dslotd standard-direct-slot-definition)
 				&rest initargs)
   (declare (ignore initargs))
-  *standard-writer-method-class*)
+ *standard-writer-method-class*)
 
 
 (defmethod add-writer-method ((class slots-class) gf dslotd)
@@ -1033,13 +1072,13 @@ governs whether DEFCLASS makes that distinction or not.")
   (let* ((method (find-method gf () (list *t-class* class) nil)))
     (when method (remove-method gf method))))
 
-;;; We can now define accessors.  Fix up the slots in the classes defined
+;;; We can now define accessors. Fix up the slots in the classes defined
 ;;; thus far.
 
 (%add-slot-readers 'standard-method '((qualifiers method-qualifiers)
 				      (specializers method-specializers)
 				      (name method-name)
-				      ;(function method-function)
+ ;(function method-function)
 				      (generic-function method-generic-function)
 				      (lambda-list method-lambda-list)))
 
@@ -1304,8 +1343,8 @@ governs whether DEFCLASS makes that distinction or not.")
   (declare (ignore slot-names))
   (labels ((obsolete (class)
              (dolist (sub (%class-direct-subclasses class)) (obsolete sub))
-             ;;Need to save old class info in wrapper for obsolete
-             ;;instance access...
+ ;;Need to save old class info in wrapper for obsolete
+ ;;instance access...
              (setf (%class.cpl class) nil)))
     (obsolete class)
     (when direct-superclasses-p
@@ -1388,20 +1427,20 @@ governs whether DEFCLASS makes that distinction or not.")
       (fdefinition '%class-default-initargs) #'class-default-initargs
       (fdefinition '%class-direct-default-initargs) #'class-direct-default-initargs
       (fdefinition '(setf %class-direct-default-initargs))
-      #'(lambda (new class)
+ #'(lambda (new class)
 	  (if (typep class 'slots-class)
 	    (setf (slot-value class 'direct-default-initargs) new)
 	    new))
       (fdefinition '%class-direct-slots) #'class-direct-slots
       (fdefinition '(setf %class-direct-slots))
-		   #'(setf class-direct-slots)
+ #'(setf class-direct-slots)
       (fdefinition '%class-slots) #'class-slots
       (fdefinition '%class-direct-superclasses) #'class-direct-superclasses
       (fdefinition '(setf %class-direct-superclasses))
-      #'(lambda (new class)
+ #'(lambda (new class)
 	  (setf (slot-value class 'direct-superclasses) new))
       (fdefinition '%class-direct-subclasses) #'class-direct-subclasses
-      ;(fdefinition '%class-own-wrapper) #'class-own-wrapper
+ ;(fdefinition '%class-own-wrapper) #'class-own-wrapper
       (fdefinition '(setf %class-own-wrapper)) #'(setf class-own-wrapper)
 )
 
@@ -1629,7 +1668,7 @@ governs whether DEFCLASS makes that distinction or not.")
     (nconc required tail)))
 
 (setf (fdefinition '%ensure-generic-function-using-class)
-      #'ensure-generic-function-using-class)
+ #'ensure-generic-function-using-class)
 
 
 (defmethod shared-initialize :after ((gf generic-function) slot-names
@@ -1689,34 +1728,47 @@ governs whether DEFCLASS makes that distinction or not.")
 	 (dt (if gf-p (make-gf-dispatch-table)))
 	 (slots (allocate-typed-vector :slot-vector (1+ len) (%slot-unbound-marker)))
 	 (fn
-          #+ppc-target
+ ;; arm64: ppc shape + retag (patch-0018 model); *unset-fin-code*
+ ;; has an arm64 defvar in l1-dcode (patch 0018).
+ #+arm64-target
+           (function-vector-to-function
+            (gvector :function
+ *unset-fin-code*
+                     wrapper
+                     slots
+                     dt
+ #'false
+                     0
+                     (logior (ash 1 $lfbits-gfn-bit)
+                             (ash 1 $lfbits-aok-bit))))
+ #+ppc-target
            (gvector :function
-                    *unset-fin-code*
+ *unset-fin-code*
                     wrapper
                     slots
                     dt
-                    #'false
+ #'false
                     0
                     (logior (ash 1 $lfbits-gfn-bit)
                             (ash 1 $lfbits-aok-bit)))
-           #+x86-target
+ #+x86-target
            (%clone-x86-function #'unset-fin-trampoline
                                 wrapper
                                 slots
                                 dt
-                                #'false
+ #'false
                                 0
                                 (logior (ash 1 $lfbits-gfn-bit)
                                         (ash 1 $lfbits-aok-bit)))
-           #+arm-target
+ #+arm-target
            (%fix-fn-entrypoint
             (gvector :function
                      0
-                    *unset-fin-code*
+ *unset-fin-code*
                     wrapper
                     slots
                     dt
-                    #'false
+ #'false
                     0
                     (logior (ash 1 $lfbits-gfn-bit)
                             (ash 1 $lfbits-aok-bit))))))
@@ -1780,7 +1832,7 @@ governs whether DEFCLASS makes that distinction or not.")
   (when (and (standard-instance-p class)
              (%class-kernel-p class)
              (not (eq new (%class.name class)))
-             *warn-if-redefine-kernel*)
+ *warn-if-redefine-kernel*)
     (cerror "Change the name of ~s to ~s."
             "The class ~s may be a critical part of the system;
 changing its name to ~s may have serious consequences." class new))
@@ -1835,36 +1887,36 @@ changing its name to ~s may have serious consequences." class new))
 (defun %shared-initialize (instance slot-names initargs)
   (unless (or (listp slot-names) (eq slot-names t))
     (report-bad-arg slot-names '(or list (eql t))))
-  ;; Check that initargs contains valid key/value pairs,
-  ;; signal a PROGRAM-ERROR otherwise.  (Yes, this is
-  ;; an obscure way to do so.)
+ ;; Check that initargs contains valid key/value pairs,
+ ;; signal a PROGRAM-ERROR otherwise. (Yes, this is
+ ;; an obscure way to do so.)
   (destructuring-bind (&key &allow-other-keys) initargs)
-  ;; I'm not sure if there's a more portable way of detecting
-  ;; obsolete instances.  This'll eventually call
-  ;; UPDATE-INSTANCE-FOR-REDEFINED-CLASS if it needs to.
+ ;; I'm not sure if there's a more portable way of detecting
+ ;; obsolete instances. This'll eventually call
+ ;; UPDATE-INSTANCE-FOR-REDEFINED-CLASS if it needs to.
   (let* ((wrapper (if (eq (typecode instance) target::subtag-instance)
                     (instance.class-wrapper instance)
                     (instance-class-wrapper instance)))
          (class (%wrapper-class wrapper)))
     (when (eql 0 (%wrapper-hash-index wrapper)) ; obsolete
       (update-obsolete-instance instance))
-    ;; Now loop over all of the class's effective slot definitions.
+ ;; Now loop over all of the class's effective slot definitions.
     (dolist (slotd (class-slots class))
-      ;; Anything that inherits from STANDARD-EFFECTIVE-SLOT-DEFINITION
-      ;; in Clozure CL will have a CCL::TYPE-PREDICATE slot.  It's not
-      ;; well-defined to inherit from EFFECTIVE-SLOT-DEFINITION without
-      ;; also inheriting from STANDARD-EFFECTIVE-SLOT-DEFINITION,
-      ;; and I'd rather not check here.  If you really want to
-      ;; create that kind of slot definition, write your own SHARED-INITIALIZE
-      ;; method for classes that use such slot definitions ...
+ ;; Anything that inherits from STANDARD-EFFECTIVE-SLOT-DEFINITION
+ ;; in Clozure CL will have a CCL::TYPE-PREDICATE slot. It's not
+ ;; well-defined to inherit from EFFECTIVE-SLOT-DEFINITION without
+ ;; also inheriting from STANDARD-EFFECTIVE-SLOT-DEFINITION,
+ ;; and I'd rather not check here. If you really want to
+ ;; create that kind of slot definition, write your own SHARED-INITIALIZE
+ ;; method for classes that use such slot definitions ...
       (let* ((predicate (slot-definition-predicate slotd)))
         (multiple-value-bind (ignore new-value foundp)
             (get-properties initargs (slot-definition-initargs slotd))
           (declare (ignore ignore))
           (cond (foundp
-                 ;; an initarg for the slot was passed to this function
-                 ;; Typecheck the new-value, then call
-                 ;; (SETF SLOT-VALUE-USING-CLASS)
+ ;; an initarg for the slot was passed to this function
+ ;; Typecheck the new-value, then call
+ ;; (SETF SLOT-VALUE-USING-CLASS)
                  (unless (or (null predicate)
                              (funcall predicate new-value))
                    (error 'bad-slot-type-from-initarg
@@ -1879,10 +1931,10 @@ changing its name to ~s may have serious consequences." class new))
                                   slot-names
                                   :test #'eq))
                       (not (slot-boundp-using-class class instance slotd)))
-                 ;; If the slot name is among the specified slot names, or
-                 ;; we're reinitializing all slots, and the slot is currently
-                 ;; unbound in the instance, set the slot's value based
-                 ;; on the initfunction (which captures the :INITFORM).
+ ;; If the slot name is among the specified slot names, or
+ ;; we're reinitializing all slots, and the slot is currently
+ ;; unbound in the instance, set the slot's value based
+ ;; on the initfunction (which captures the :INITFORM).
                  (let* ((initfunction (slot-definition-initfunction slotd)))
                    (if initfunction
                      (let* ((newval (funcall initfunction)))
@@ -1908,9 +1960,9 @@ changing its name to ~s may have serious consequences." class new))
           (get-properties initargs (slot-definition-initargs slotd))
         (declare (ignore ignore))
         (cond (foundp
-               ;; an initarg for the slot was passed to this function
-               ;; Typecheck the new-value, then call
-               ;; (SETF SLOT-VALUE-USING-CLASS)
+ ;; an initarg for the slot was passed to this function
+ ;; Typecheck the new-value, then call
+ ;; (SETF SLOT-VALUE-USING-CLASS)
                (unless (or (null predicate)
                            (funcall predicate new-value))
                  (error 'bad-slot-type-from-initarg
@@ -1921,10 +1973,10 @@ changing its name to ~s may have serious consequences." class new))
                           :initarg-name (car foundp)))
                  (setf (struct-ref struct location) new-value))
                 (t
-                 ;; If the slot name is among the specified slot names, or
-                 ;; we're reinitializing all slots, and the slot is currently
-                 ;; unbound in the instance, set the slot's value based
-                 ;; on the initfunction (which captures the :INITFORM).
+ ;; If the slot name is among the specified slot names, or
+ ;; we're reinitializing all slots, and the slot is currently
+ ;; unbound in the instance, set the slot's value based
+ ;; on the initfunction (which captures the :INITFORM).
                  (let* ((initfunction (slot-definition-initfunction slotd)))
                    (if initfunction
                      (let* ((newval (funcall initfunction)))
@@ -2032,7 +2084,7 @@ changing its name to ~s may have serious consequences." class new))
 
 ;;; It may be faster to make individual functions that take their
 ;;; "parameters" (defining class ordinal, slot location) as constants.
-;;; It may not be.  Use *unique-reader-dcode-functions* to decide
+;;; It may not be. Use *unique-reader-dcode-functions* to decide
 ;;; whether or not to do so.
 (defun make-reader-constant-location-inherited-from-single-class-dcode
     (defining-class-ordinal location gf)
@@ -2055,7 +2107,7 @@ changing its name to ~s may have serious consequences." class new))
                 (%slot-ref (instance.slots instance) ,location)
                 (no-applicable-method (function ,gf-name) instance)))))
         nil)
-       #'funcallable-trampoline))
+ #'funcallable-trampoline))
     (let* ((dt (gf.dispatch-table gf)))
       (setf (%svref dt %gf-dispatch-table-first-data)
             defining-class-ordinal
@@ -2115,9 +2167,9 @@ changing its name to ~s may have serious consequences." class new))
                  (dolist (sub (class-direct-subclasses c))
                    (add-class sub)))))
       (dolist (class classes) (add-class class))
-      ;; Building the alist the way that we have should often approximate
-      ;; this ordering; the idea is that leaf classes are more likely to
-      ;; be instantiated than non-leaves.
+ ;; Building the alist the way that we have should often approximate
+ ;; this ordering; the idea is that leaf classes are more likely to
+ ;; be instantiated than non-leaves.
       (sort alist (lambda (c1 c2)
                     (< (length (class-direct-subclasses c1))
                        (length (class-direct-subclasses c2))))
@@ -2149,19 +2201,19 @@ changing its name to ~s may have serious consequences." class new))
           (when (every (lambda (m)
                          (eq name (slot-definition-name (accessor-method-slot-definition m))))
                        (cdr methods))
-            ;; All methods are *STANDARD-READER-METHODS* that
-            ;; access the same slot name.  Build an alist of
-            ;; mapping all subclasses of all classes on which those
-            ;; methods are specialized to the effective slot's
-            ;; location in that subclass.
+ ;; All methods are *STANDARD-READER-METHODS* that
+ ;; access the same slot name. Build an alist of
+ ;; mapping all subclasses of all classes on which those
+ ;; methods are specialized to the effective slot's
+ ;; location in that subclass.
             (let* ((classes (mapcar #'(lambda (m) (car (method-specializers m)))
                                     methods))
                    (alist (class-and-slot-location-alist classes name))
                    (loc (cdar alist))
                    (dt (gf.dispatch-table f)))
-              ;; Only try to handle the case where all slots have
-              ;; :allocation :instance (and all locations - the CDRs
-              ;; of the alist pairs - are small, positive fixnums.
+ ;; Only try to handle the case where all slots have
+ ;; :allocation :instance (and all locations - the CDRs
+ ;; of the alist pairs - are small, positive fixnums.
               (when (every (lambda (pair) (typep (cdr pair) 'fixnum)) alist)
                 (when redefinable
                   (loop for (c . nil) in alist
@@ -2173,7 +2225,7 @@ changing its name to ~s may have serious consequences." class new))
                           (%gf-dispatch-table-gf dt) (%gf-dcode f))))
                     
                 (cond ((null (cdr alist))
-                       ;; Method is only applicable to a single class.
+ ;; Method is only applicable to a single class.
                        (destructuring-bind (class . location) (car alist)
                          (setf (%svref dt %gf-dispatch-table-first-data) (%class.own-wrapper class)
                                (%svref dt (1+ %gf-dispatch-table-first-data)) location
@@ -2181,25 +2233,25 @@ changing its name to ~s may have serious consequences." class new))
                       ((dolist (other (cdr alist) t)
                          (unless (eq (cdr other) loc)
                            (return)))
-                       ;; All classes have the slot in the same location,
-                       ;; by luck or design.
+ ;; All classes have the slot in the same location,
+ ;; by luck or design.
                        (cond
                          ((< (length alist) 10)
-                          ;; Only a small number of classes, just do MEMQ
+ ;; Only a small number of classes, just do MEMQ
                           (setf (%svref dt %gf-dispatch-table-first-data)
                                 (mapcar #'car alist)
                                 (%svref dt (1+ %gf-dispatch-table-first-data))
                                 loc
                                 (gf.dcode f) (dcode-for-gf f #'reader-constant-location-dcode)))
                          ((null (cdr (setq classes (remove-subclasses-from-class-list classes))))
-                          ;; Lots of classes, all subclasses of a single class
+ ;; Lots of classes, all subclasses of a single class
                           (multiple-value-bind (dcode trampoline)
                               (make-reader-constant-location-inherited-from-single-class-dcode (%class-ordinal (car classes)) loc f)
                             (setf (gf.dcode f) dcode)
                             (replace-function-code f trampoline)))
                          (t
-                          ;; Multple classes.  We should probably check
-                          ;; to see they're disjoint
+ ;; Multple classes. We should probably check
+ ;; to see they're disjoint
                           (setf (%svref dt %gf-dispatch-table-first-data)
                                 (mapcar #'%class-ordinal classes)
                                 (%svref dt (1+ %gf-dispatch-table-first-data))
@@ -2207,7 +2259,7 @@ changing its name to ~s may have serious consequences." class new))
                                 (gf.dcode f)
                                 (dcode-for-gf f #'reader-constant-location-inherited-from-multiple-classes-dcode)))))
                       (t
-                       ;; Multiple classes; the slot's location varies.
+ ;; Multiple classes; the slot's location varies.
                        (setf (%svref dt %gf-dispatch-table-first-data)
                              alist
                              
@@ -2225,7 +2277,7 @@ changing its name to ~s may have serious consequences." class new))
       (if (listp args)
         (apply mf args)
         (%apply-lexpr-tail-wise mf args))
-      ;;; Let %%1st-arg-dcode deal with it.
+ ;;; Let %%1st-arg-dcode deal with it.
       (%%1st-arg-dcode dt args))))
 (register-dcode-proto #'%%1st-arg-eql-method-hack-dcode *gf-proto*)
 
@@ -2253,11 +2305,11 @@ changing its name to ~s may have serious consequences." class new))
     (setf (%gf-dcode gf)
           (dcode-for-gf gf
                         (cond ((and (eql nreq 1) (null other-args?))
-                               #'%%one-arg-eql-method-hack-dcode)
+ #'%%one-arg-eql-method-hack-dcode)
                               ((and (eql nreq 2) (null other-args?))
-                               #'%%1st-two-arg-eql-method-hack-dcode)
+ #'%%1st-two-arg-eql-method-hack-dcode)
                               (t
-                               #'%%1st-arg-eql-method-hack-dcode))))))
+ #'%%1st-arg-eql-method-hack-dcode))))))
 
 (defun maybe-hack-eql-methods (gf)
   (let* ((methods (generic-function-methods gf)))
@@ -2295,7 +2347,7 @@ changing its name to ~s may have serious consequences." class new))
       (if (and (null (car method-list))
 	       (null (cdddr method-list)))
         (values (cadr method-list) t)
-        ;; :around or :before methods, or more than one primary method, give up
+ ;; :around or :before methods, or more than one primary method, give up
         (values nil nil)))))
 
 (defparameter *typecheck-slots-in-optimized-make-instance* t)
@@ -2318,7 +2370,7 @@ changing its name to ~s may have serious consequences." class new))
                           t))
                       (null (cdr (compute-applicable-methods #'shared-initialize (list proto t)))))))
       (let* ((slotds (sort (copy-list (class-slots class))
-                           #'(lambda (x y)
+ #'(lambda (x y)
                                (if (consp x) x (if (consp y) y (< x y))))
                            :key #'slot-definition-location))
              (default-initargs (class-default-initargs class)))
@@ -2554,12 +2606,12 @@ changing its name to ~s may have serious consequences." class new))
       f)))
 
 (defun pessimize-clos ()
-  ;; Undo MAKE-INSTANCE optimization
+ ;; Undo MAKE-INSTANCE optimization
   (maphash (lambda (class-name class-cell)
 	     (declare (ignore class-name))
 	     (init-class-cell-instantiator class-cell))
 	   %find-classes%)
-  ;; Un-snap reader methods, undo other GF optimizations.
+ ;; Un-snap reader methods, undo other GF optimizations.
   (dolist (f (population-data %all-gfs%))
     (let* ((dt (%gf-dispatch-table f))
            (argnum (%gf-dispatch-table-argnum dt)))
@@ -2577,7 +2629,7 @@ changing its name to ~s may have serious consequences." class new))
 ;;; the method-function
 (defun dcode-for-universally-applicable-singleton (gf)
   (when (eq (generic-function-method-combination gf)
-            *standard-method-combination*)
+ *standard-method-combination*)
     (let* ((methods (generic-function-methods gf))
            (method (car methods)))
       (when (and method

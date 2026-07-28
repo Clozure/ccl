@@ -355,9 +355,9 @@ sprint_ivector(LispObj o)
 
   case subtag_bignum:
     /*
-     * Although bignum digits are 32 bits wide, the underlying
-     * uvector is always allocated as a number of dnodes.
-     */
+ * Although bignum digits are 32 bits wide, the underlying
+ * uvector is always allocated as a number of dnodes.
+ */
     if (elements == 1) {
       sprint_signed_decimal((signed_natural)(deref(o, 1)));
       return;
@@ -457,9 +457,10 @@ sprint_lisp_object(LispObj o, int depth)  /* arm_print.c:415-491 */
     case fulltag_symbol:
       sprint_symbol(o);
       break;
-    case fulltag_function:
-      sprint_function(o, depth);
-      break;
+    /* fulltag_function removed: functions are ordinary miscobjs and
+       reach sprint_function via the fulltag_misc case's subtag dispatch;
+       tag 15 joins fulltag_reserved so the dispatch stays total. */
+    case 15:                    /* was fulltag_function */
     case fulltag_reserved:
       add_c_string("#<reserved-tag ");
       sprint_unsigned_hex(o);

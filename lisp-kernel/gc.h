@@ -25,7 +25,7 @@
 
 
 #ifdef PPC
-#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)|(1<<fulltag_misc)))
+#define is_node_fulltag(f) ((1<<(f))&((1<<fulltag_cons)|(1<<fulltag_misc)))
 #ifdef PPC64
 #define PPC64_CODE_VECTOR_PREFIX (('C'<< 24) | ('O' << 16) | ('D' << 8) | 'E')
 #else
@@ -42,28 +42,27 @@
 
 #ifdef X86
 #ifdef X8664
-#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)    | \
+#define is_node_fulltag(f) ((1<<(f))&((1<<fulltag_cons) | \
 				       (1<<fulltag_tra_0)   | \
 				       (1<<fulltag_tra_1)   | \
 				       (1<<fulltag_misc)    | \
 				       (1<<fulltag_symbol)  | \
 				       (1<<fulltag_function)))
 #else
-#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons) | \
+#define is_node_fulltag(f) ((1<<(f))&((1<<fulltag_cons) | \
 				       (1<<fulltag_misc) | \
 				       (1<<fulltag_tra)))
 #endif
 #endif
 
 #ifdef ARM
-#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)|(1<<fulltag_misc)))
+#define is_node_fulltag(f) ((1<<(f))&((1<<fulltag_cons)|(1<<fulltag_misc)))
 #endif
 
 #ifdef ARM64
-#define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)    | \
+#define is_node_fulltag(f) ((1<<(f))&((1<<fulltag_cons) | \
 				       (1<<fulltag_misc)    | \
-				       (1<<fulltag_symbol)  | \
-				       (1<<fulltag_function)))
+				       (1<<fulltag_symbol)))
 #endif
 
 extern LispObj GCarealow, GCareadynamiclow;
@@ -107,7 +106,7 @@ typedef unsigned char qnode;
 #endif
 
 #define area_dnode(w,low) ((natural)(((ptr_to_lispobj(w)) - ptr_to_lispobj(low))>>dnode_shift))
-#define gc_area_dnode(w)  area_dnode(w,GCarealow)
+#define gc_area_dnode(w) area_dnode(w,GCarealow)
 #define gc_dynamic_area_dnode(w) area_dnode(w,GCareadynamiclow)
 
 #if defined(PPC64) || defined(X8632)
@@ -259,4 +258,4 @@ did_gc_notification_since_last_full_gc;
 
 extern BytePtr heap_dirty_limit;
 
-#endif                          /* __GC_H__ */
+#endif /* __GC_H__ */

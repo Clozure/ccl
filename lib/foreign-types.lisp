@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,15 +39,15 @@
 
 ;;; We can't reference foreign types early in the cold load,
 ;;; but we want things like RLET to be able to set a pointer's
-;;; type based on the foreign-type's "ordinal".  We therefore
+;;; type based on the foreign-type's "ordinal". We therefore
 ;;; seem to have to arrange that certain types have fixed,
-;;; "canonical" ordinals.  I doubt if we need more than a handful
+;;; "canonical" ordinals. I doubt if we need more than a handful
 ;;; of these, but let's burn 100
 
 (defconstant max-canonical-foreign-type-ordinal 100)
 
 ;;; Some foreign types are "common" (POSIXy things that're available
-;;; on most platforms; some are very platform-specific.  It's getting
+;;; on most platforms; some are very platform-specific. It's getting
 ;;; to be a mess to keep those separate by reader conditionalization,
 ;;; so use the first 50 ordinals for "common" foreign types and the
 ;;; next 50 for platform-specific stuff.
@@ -64,7 +64,7 @@
   (definitions (make-hash-table :test #'eq))
   (struct-definitions (make-hash-table :test #'eq))
   (union-definitions (make-hash-table :test #'eq))
-  ;; Do we even use this ?
+ ;; Do we even use this ?
   (enum-definitions (make-hash-table :test #'eq))
   (interface-db-directory ())
   (interface-package-name ())
@@ -87,7 +87,7 @@
 
 (defvar *host-ftd* (make-ftd
                     :interface-db-directory
-                    #.(ecase (backend-name *target-backend*)
+ #.(ecase (backend-name *target-backend*)
                         (:linuxppc32 "ccl:headers;")
                         (:darwinppc32 "ccl:darwin-headers;")
                         (:darwinppc64 "ccl:darwin-headers64;")
@@ -104,12 +104,14 @@
                         (:freebsdx8632 "ccl:freebsd-headers;")
                         (:linuxarm "ccl:arm-headers;")
                         (:darwinarm "ccl:darwin-arm-headers;")
-                       (:androidarm "ccl:android-headers;"))
+                       (:androidarm "ccl:android-headers;")
+                        (:linuxarm64 "ccl:arm64-headers64;")
+                        (:darwinarm64 "ccl:darwin-arm64-headers;"))
                     :interface-package-name
-                    #.(ftd-interface-package-name *target-ftd*)
+ #.(ftd-interface-package-name *target-ftd*)
                     :attributes
                     '(:bits-per-word #+64-bit-target 64 #+32-bit-target 32
-                      #+win64-target :bits-per-long #+win64-target 32
+ #+win64-target :bits-per-long #+win64-target 32
                       :signed-char #+darwinppc-target t #-darwinppc-target nil
                       :struct-by-value #+darwinppc-target t #-darwinppc-target nil
                       :struct-return-in-registers #+(or (and darwinppc-target 64-bit-target)) t #-(or (and darwinppc-target 64-bit-target)) nil
@@ -138,7 +140,7 @@
                     
 (defvar *target-ftd* *host-ftd*)
 (setf (backend-target-foreign-type-data *host-backend*)
-      *host-ftd*)
+ *host-ftd*)
 
 (defun next-foreign-type-ordinal (&optional (ftd *target-ftd*))
   (with-lock-grabbed ((ftd-ordinal-lock ftd))
@@ -231,7 +233,7 @@ list, NIL otherwise."
     (deposit-gen nil :type (or null function))
     (naturalize-gen nil :type (or null function))
     (deport-gen nil :type (or null function))
-    ;; Cast?
+ ;; Cast?
     (arg-tn nil :type (or null function))
     (result-tn nil :type (or null function))
     (subtypep nil :type (or null function)))
@@ -317,7 +319,7 @@ list, NIL otherwise."
       (:deposit-gen . foreign-type-class-deposit-gen)
       (:naturalize-gen . foreign-type-class-naturalize-gen)
       (:deport-gen . foreign-type-class-deport-gen)
-      ;; Cast?
+ ;; Cast?
       (:arg-tn . foreign-type-class-arg-tn)
       (:result-tn . foreign-type-class-result-tn)))
 
@@ -381,7 +383,7 @@ list, NIL otherwise."
        (defun ,defun-name ,lambda-list
 	 ,@body)
        (setf (,(method-slot method) (require-foreign-type-class ',class))
-	     #',defun-name))))
+ #',defun-name))))
 
 (defmacro invoke-foreign-type-method (method type &rest args)
   (let ((slot (method-slot method)))
@@ -437,7 +439,7 @@ list, NIL otherwise."
   `(let ((*auxiliary-type-definitions*
 	  (if (boundp '*new-auxiliary-types*)
 	      (append *new-auxiliary-types* *auxiliary-type-definitions*)
-	      *auxiliary-type-definitions*))
+ *auxiliary-type-definitions*))
 	 (*new-auxiliary-types* nil))
      ,@body))
 
@@ -504,7 +506,7 @@ list, NIL otherwise."
 
 ;;; *record-type-already-unparsed* -- internal
 ;;;
-;;; Holds the list of record types that have already been unparsed.  This is
+;;; Holds the list of record types that have already been unparsed. This is
 ;;; used to keep from outputing the slots again if the same structure shows
 ;;; up twice.
 ;;; 
@@ -521,7 +523,7 @@ list, NIL otherwise."
 
 ;;; %UNPARSE-FOREIGN-TYPE -- internal.
 ;;;
-;;; Does all the work of UNPARSE-FOREIGN-TYPE.  It's seperate because we need
+;;; Does all the work of UNPARSE-FOREIGN-TYPE. It's seperate because we need
 ;;; to recurse inside the binding of *record-types-already-unparsed*.
 ;;; 
 (defun %unparse-foreign-type (type)
@@ -540,7 +542,7 @@ list, NIL otherwise."
   (declare (ignore docs))
   (setf (info-foreign-type-translator name) translator)
   (clear-info-foreign-type-definition name)
-  #+nil
+ #+nil
   (setf (documentation name 'foreign-type) docs)
   name)
 
@@ -654,11 +656,11 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
 	      (ignore ignore))
      (let ((value (deport value ',type)))
        ,(invoke-foreign-type-method :deposit-gen type 'sap 'offset 'value)
-       ;; Note: the reason we don't just return the pre-deported value
-       ;; is because that would inhibit any (deport (naturalize ...))
-       ;; optimizations that might have otherwise happen.  Re-naturalizing
-       ;; the value might cause extra consing, but is flushable, so probably
-       ;; results in better code.
+ ;; Note: the reason we don't just return the pre-deported value
+ ;; is because that would inhibit any (deport (naturalize ...))
+ ;; optimizations that might have otherwise happen. Re-naturalizing
+ ;; the value might cause extra consing, but is flushable, so probably
+ ;; results in better code.
        (naturalize value ',type))))
 
 (defun compute-lisp-rep-type (type)
@@ -1038,9 +1040,9 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
   (kind :struct :type (member :struct :union :transparent-union))
   (name nil :type (or symbol null))
   (fields nil :type list)
-  ;; For, e.g., records defined with #pragma options align=mac68k
-  ;; in effect.  When non-nil, this specifies the maximum alignment
-  ;; of record fields and the overall alignment of the record.
+ ;; For, e.g., records defined with #pragma options align=mac68k
+ ;; in effect. When non-nil, this specifies the maximum alignment
+ ;; of record fields and the overall alignment of the record.
   (alt-align nil :type (or unsigned-byte null)))
 
 (defmethod make-load-form ((r foreign-record-type) &optional environment)
@@ -1080,7 +1082,7 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
 ;;; PARSE-FOREIGN-RECORD-FIELDS -- internal
 ;;;
 ;;; Used by parse-foreign-type to parse the fields of struct and union
-;;; types.  RESULT holds the record type we are paring the fields of,
+;;; types. RESULT holds the record type we are paring the fields of,
 ;;; and FIELDS is the list of field specifications.
 ;;;
 (defun parse-field-list (fields kind &optional alt-alignment)
@@ -1448,17 +1450,17 @@ result-type-specifer is :VOID or NIL"
     (let* ((addr (eep.address eep))
 	   (container (eep.container eep)))
       (if addr
-        #+ppc-target
+ #+ppc-target
         (progn
-          #+32-bit-target
+ #+32-bit-target
           (format out " (#x~8,'0x) " (logand #xffffffff (ash addr 2)))
-          #+64-bit-target
+ #+64-bit-target
           (format out " (#x~16,'0x) " (if (typep addr 'integer)
                                         (logand #xffffffffffffffff (ash addr 2))
                                         (%ptr-to-int addr))))
 	#+(or x8632-target arm-target)
 	(format out " (#x~8,'0x) " addr)
-        #+x8664-target
+ #+x8664-target
         (format out " (#x~16,'0x) " addr)
 	(format out " {unresolved} "))
       (when (and container (or (not (typep container 'macptr))
@@ -1480,9 +1482,9 @@ result-type-specifer is :VOID or NIL"
     (let* ((addr (fv.addr fv))
 	   (container (fv.container fv)))
       (if addr
-        #+32-bit-target
+ #+32-bit-target
 	(format out " (#x~8,'0x) " (logand #xffffffff (%ptr-to-int addr)))
-        #+64-bit-target
+ #+64-bit-target
         	(format out " (#x~16,'0x) " (logand #xfffffffffffffffff (%ptr-to-int addr)))
 	(format out " {unresolved} "))
       (when (and container (or (not (typep container 'macptr))
@@ -1518,7 +1520,7 @@ result-type-specifer is :VOID or NIL"
   (destructuring-bind (name &rest args) whole
     (collect ((call))
       (let* ((info (or (gethash name (ftd-external-function-definitions
-                                      *target-ftd*))
+ *target-ftd*))
                        (error "Unknown external-function: ~s" name)))
              (external-name (efd-entry-name info))
              (arg-specs (efd-arg-specs info))
@@ -1539,8 +1541,8 @@ result-type-specifer is :VOID or NIL"
                 `(external-call ,external-name ,@(call))))
           (let* ((spec (car specs)))
             (cond ((eq spec :void)
-                   ;; must be last arg-spec; remaining args should be
-                   ;; keyword/value pairs
+ ;; must be last arg-spec; remaining args should be
+ ;; keyword/value pairs
                    (unless (evenp (length args))
                      (error "Remaining arguments should be keyword/value pairs: ~s"
                             args))
@@ -1611,7 +1613,7 @@ result-type-specifer is :VOID or NIL"
 (defun open-dylib (name)
   (with-cstrs ((name name))
     (#_NSAddImage name (logior #$NSADDIMAGE_OPTION_RETURN_ON_ERROR 
-			       #$NSADDIMAGE_OPTION_WITH_SEARCHING))))
+ #$NSADDIMAGE_OPTION_WITH_SEARCHING))))
 
 (defparameter *foreign-representation-type-keywords*
   `(:signed-doubleword :signed-fullword :signed-halfword :signed-byte
@@ -1716,22 +1718,22 @@ result-type-specifer is :VOID or NIL"
   '((:struct :timespec)
     (:struct :stat)
     (:struct :passwd)
-    #>Dl_info
+ #>Dl_info
     (:array (:struct :pollfd) 1)) )
 
 #+windows-target
 (defparameter *canonical-os-foreign-types*
   `(#>FILETIME
-    #>SYSTEM_INFO
-    #>HANDLE
-    #>PROCESS_INFORMATION
-    #>STARTUPINFO
+ #>SYSTEM_INFO
+ #>HANDLE
+ #>PROCESS_INFORMATION
+ #>STARTUPINFO
     (:array #>HANDLE 2)
-    #>DWORD
+ #>DWORD
     (:array #>wchar_t #.#$MAX_PATH)
-    #>fd_set
-    #>DWORD_PTR
-    #>SYSTEMTIME))
+ #>fd_set
+ #>DWORD_PTR
+ #>SYSTEMTIME))
     
     
 (defun canonicalize-foreign-type-ordinals (ftd)
@@ -1893,7 +1895,7 @@ result-type-specifer is :VOID or NIL"
     (%def-foreign-type :signed-int (parse-foreign-type '(:signed 32) ftd))
     (%def-foreign-type :signed-doubleword (parse-foreign-type '(:signed 64) ftd))
     (%def-foreign-type :char (parse-foreign-type #-darwin-target '(:unsigned 8)
-                      #+darwin-target '(:signed 8) ftd))
+ #+darwin-target '(:signed 8) ftd))
     (%def-foreign-type :unsigned-char (parse-foreign-type '(:unsigned 8) ftd))
     (%def-foreign-type :unsigned-byte (parse-foreign-type '(:unsigned 8) ftd))
     (%def-foreign-type :unsigned-short (parse-foreign-type '(:unsigned 16) ftd))
@@ -1915,14 +1917,14 @@ result-type-specifer is :VOID or NIL"
       (%def-foreign-type :long signed-long-type ftd)
       (%def-foreign-type :signed-long signed-long-type ftd)
       (%def-foreign-type :unsigned-long unsigned-long-type ftd))
-    ;;
-    ;; Defining the handful of foreign structures that are used
-    ;; to build Clozure CL here ensures that all backends see appropriate
-    ;; definitions of them.
-    ;;
-    ;; Don't use DEF-FOREIGN-TYPE here; this often runs too
-    ;; early in the cold load for that to work.
-    ;;
+ ;;
+ ;; Defining the handful of foreign structures that are used
+ ;; to build Clozure CL here ensures that all backends see appropriate
+ ;; definitions of them.
+ ;;
+ ;; Don't use DEF-FOREIGN-TYPE here; this often runs too
+ ;; early in the cold load for that to work.
+ ;;
     (parse-foreign-type
      '(:struct :cdb-datum
        (:data (* t))
@@ -1939,8 +1941,8 @@ result-type-specifer is :VOID or NIL"
          (:single-float :float)
          (:double-float :double))))
      ftd)
-    ;; This matches the xframe-list struct definition in
-    ;; "ccl:lisp-kernel;constants.h"
+ ;; This matches the xframe-list struct definition in
+ ;; "ccl:lisp-kernel;constants.h"
     (parse-foreign-type
      '(:struct :xframe-list
        (:this (:* t #|(struct :ucontext)|#))

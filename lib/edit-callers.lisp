@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,7 +26,7 @@
              (let ((fn  (fboundp name)))
                (and fn
                     (progn
-		; maybe this is enough for both cases?
+ ; maybe this is enough for both cases?
                       (or (eq thing fn)
                           (and (symbolp name)(eq thing (macro-function name))))))))
          name)))
@@ -56,7 +56,7 @@
 
 
 (defun callers (function &aux cfun callers gccount retry)
-  ;(declare (special cfun function callers))
+ ;(declare (special cfun function callers))
   (declare (optimize (speed 3)(safety 0)))
 
   (let ((*function-parent-table* nil))
@@ -102,7 +102,7 @@
              (let* ((pool *function-parent-pool*)
                     (tbl (pool.data pool)))
                (setf (pool.data pool) nil
-                     *function-parent-table*
+ *function-parent-table*
                      (if tbl
                        (clrhash tbl)
                        (make-hash-table :size 700 :test 'eq :weak :value))))
@@ -121,7 +121,7 @@
                                                  (memq thing (%gf-methods gf))))))))
                         (delete-duplicates (mapcar 'top-level-caller callers))))
         (setf (pool.data *function-parent-pool*) *function-parent-table*
-              *function-parent-table* nil)))))
+ *function-parent-table* nil)))))
 
 
 (defun top-level-caller (function &optional the-list)
@@ -181,13 +181,13 @@
              (let* ((lfv (function-to-function-vector fun))
                     (end (%i- (uvsize lfv) 1))
                     (bits (%svref lfv end)))
-               ;; Don't count the function name slot as a reference.
+ ;; Don't count the function name slot as a reference.
                (unless (logbitp $lfbits-noname-bit bits)
                  (decf end))
-               ;; Don't count lfun-info  either
+ ;; Don't count lfun-info either
                (when (logbitp $lfbits-info-bit bits)
                  (decf end))
-               (loop for i from #+ppc-target 1 #+x86-target (%function-code-words fun) #+arm-target 2 below end
+               (loop for i from #+(or ppc-target arm64-target) 1 #+x86-target (%function-code-words fun) #+arm-target 2 below end
                      as im = (%svref lfv i)
                      when (or (eq function im)
                               (and cfun (eq cfun im)))
@@ -226,15 +226,15 @@
   (let* ((lfv (function-to-function-vector function-object))
          (n (- (uvsize lfv) 2)))
     (declare (fixnum n))
-    #+ppc-target
+ #+(or ppc-target arm64-target)
     (dotimes (i n)
       (funcall f (%svref lfv (%i+ 1 i))))
-    #+x86-target
+ #+x86-target
     (do* ((i (1- (the fixnum (%function-code-words function-object))) (1+ i)))
          ((= i n))
       (declare (fixnum i))
       (funcall f (%svref lfv (%i+ 1 i))))
-    #+arm-target
+ #+arm-target
     (do* ((i 2 (1+ i)))
          ((>= i n))
       (declare (fixnum i))

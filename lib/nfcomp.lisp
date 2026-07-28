@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,10 +42,12 @@
 (require "X8632-ARCH")
 #+x8664-target
 (require "X8664-ARCH")
+#+arm64-target
+(require "ARM64-ARCH")
 ) ;eval-when (:compile-toplevel :execute)
 
 
-;File compiler options.  Not all of these need to be exported/documented, but
+;File compiler options. Not all of these need to be exported/documented, but
 ;they should be in the product just in case we need them for patches....
 (defvar *fasl-save-local-symbols* t)
 (defvar *fasl-save-doc-strings*  t)
@@ -117,7 +119,7 @@ Will differ from *compiling-file* during an INCLUDE")
   (setq pathname (merge-pathnames pathname))
   (merge-pathnames (if output-file
                      (merge-pathnames output-file *.fasl-pathname*)
-                     *.fasl-pathname*) 
+ *.fasl-pathname*) 
                    pathname))
 
 (defun compile-file (src &key output-file
@@ -132,13 +134,13 @@ Will differ from *compiling-file* during an INCLUDE")
                          (save-source-locations *save-source-locations*)
                          (external-format :default)
                          force
-                         ;; src may be a temp file with a section of the real source,
-                         ;; then this is the real source file name.
+ ;; src may be a temp file with a section of the real source,
+ ;; then this is the real source file name.
                          compile-file-original-truename
                          (compile-file-original-buffer-offset 0)
                          (break-on-program-errors (if compile-file-original-truename
                                                     t  ;; really SLIME being interactive...
-                                                    *fasl-break-on-program-errors*))
+ *fasl-break-on-program-errors*))
                          (load-preserves-optimization-settings *load-preserves-optimization-settings*))
   "Compile SRC, producing a corresponding fasl file and returning its filename."
   (let* ((backend *target-backend*)
@@ -197,7 +199,7 @@ Will differ from *compiling-file* during an INCLUDE")
 			 (full-pathname (merge-pathnames output-file output-default-type) :no-error nil) 
 			 output-default-type)
 		       orig-src))
-    ;; This should not be necessary, but it is.
+ ;; This should not be necessary, but it is.
     (setq output-file (namestring output-file))
     (when (physical-pathname-p orig-src) ; only back-translate to things likely to exist at load time
       (setq orig-src (back-translate-pathname orig-src '("home" "ccl"))))
@@ -208,7 +210,7 @@ Will differ from *compiling-file* during an INCLUDE")
               "Compile destination ~S is not a ~A file!"
               output-file (pathname-type
                            (backend-target-fasl-pathname
-                            *target-backend*))))
+ *target-backend*))))
     (let* ((*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
            (*fasl-save-local-symbols* save-local-symbols)
            (*save-source-locations* save-source-locations)
@@ -239,9 +241,9 @@ Will differ from *compiling-file* during an INCLUDE")
         (when (and current
                    (setq last (deferred-warnings.last-file current))
                    (equalp *compile-file-pathname* (cdr last)))
-          ;; Discard previous deferred warnings when recompiling exactly the same file again,
-          ;; since most likely this is due to an interactive "retry compilation" request and
-          ;; we want to avoid duplicate warnings.
+ ;; Discard previous deferred warnings when recompiling exactly the same file again,
+ ;; since most likely this is due to an interactive "retry compilation" request and
+ ;; we want to avoid duplicate warnings.
           (setf (deferred-warnings.last-file current) nil)))
 
       (let* ((*outstanding-deferred-warnings* (%defer-warnings nil)))
@@ -258,7 +260,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (when *compile-verbose* (fresh-line))
         (multiple-value-bind (any harsh) (report-deferred-warnings *compile-file-pathname*)
           (setq *fasl-warnings-signalled-p* (or *fasl-warnings-signalled-p* any)
-                *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
+ *fasl-non-style-warnings-signalled-p* (if (eq harsh :very) :very
                                                         (or *fasl-non-style-warnings-signalled-p* harsh)))))
       (when (and *fasl-break-on-program-errors* (eq *fasl-non-style-warnings-signalled-p* :very))
         (cerror "create the output file despite the errors"
@@ -267,7 +269,7 @@ Will differ from *compiling-file* during an INCLUDE")
       (fasl-scan-forms-and-dump-file forms output-file lexenv)
       (values output-file
               (truename (pathname output-file)) 
-              *fasl-warnings-signalled-p* 
+ *fasl-warnings-signalled-p* 
               (and *fasl-non-style-warnings-signalled-p* t)))))
 
 (defvar *fcomp-locked-hash-tables*)
@@ -293,7 +295,7 @@ Will differ from *compiling-file* during an INCLUDE")
 (defparameter *default-file-compilation-policy* (new-compiler-policy))
 
 (defun current-file-compiler-policy ()
-  *default-file-compilation-policy*)
+ *default-file-compilation-policy*)
 
 (defun set-current-file-compiler-policy (&optional new-policy)
   (setq *default-file-compilation-policy* 
@@ -306,16 +308,16 @@ Will differ from *compiling-file* during an INCLUDE")
   (declare (ignore env))
   (let* ((*target-backend* *host-backend*)
          (*loading-toplevel-location* (or (fcomp-source-note form)
-                                          *loading-toplevel-location*))
+ *loading-toplevel-location*))
          (lambda `(lambda () ,form)))
     (fcomp-note-source-transformation form lambda)
-    ;; The HANDLER-BIND here is supposed to note WARNINGs that're
-    ;; signaled during (eval-when (:compile-toplevel) processing; this
-    ;; in turn is supposed to satisfy a pedantic interpretation of the
-    ;; spec's requirement that COMPILE-FILE's second and third return
-    ;; values reflect (all) conditions "detected by the compiler."
-    ;; (It's kind of sad that CL language design is influenced so
-    ;; strongly by the views of pedants these days.)
+ ;; The HANDLER-BIND here is supposed to note WARNINGs that're
+ ;; signaled during (eval-when (:compile-toplevel) processing; this
+ ;; in turn is supposed to satisfy a pedantic interpretation of the
+ ;; spec's requirement that COMPILE-FILE's second and third return
+ ;; values reflect (all) conditions "detected by the compiler."
+ ;; (It's kind of sad that CL language design is influenced so
+ ;; strongly by the views of pedants these days.)
     (handler-bind ((warning (lambda (c)
                               (setq *fasl-warnings-signalled-p* t)
                               (unless (typep c 'style-warning)
@@ -329,10 +331,10 @@ Will differ from *compiling-file* during an INCLUDE")
                 :policy *compile-time-evaluation-policy*)))))
 
 
-;;; No methods by default, not even for structures.  This really sux.
+;;; No methods by default, not even for structures. This really sux.
 (defgeneric make-load-form (object &optional environment))
 
-;;; Well, no usable methods by default.  How this is better than
+;;; Well, no usable methods by default. How this is better than
 ;;; getting a NO-APPLICABLE-METHOD error frankly escapes me,
 ;;; [Hint: this is called even when there is an applicable method]
 (defun no-make-load-form-for (object)
@@ -358,15 +360,15 @@ Will differ from *compiling-file* during an INCLUDE")
       (error "Class ~s does not have a proper name." c))))
 
 
-;;;;          FCOMP-FILE - read & compile file
-;;;;          Produces a list of (opcode . args) to run on loading, intermixed
-;;;;          with read packages.
+;;;; FCOMP-FILE - read & compile file
+;;;; Produces a list of (opcode . args) to run on loading, intermixed
+;;;; with read packages.
 
 (defparameter *fasl-eof-forms* nil)
 
 (defparameter cfasl-load-time-eval-sym (make-symbol "LOAD-TIME-EVAL"))
 (%macro-have cfasl-load-time-eval-sym
-    #'(lambda (call env) (declare (ignore env)) (list 'eval (list 'quote call))))
+ #'(lambda (call env) (declare (ignore env)) (list 'eval (list 'quote call))))
 ;Make it a constant so compiler will barf if try to bind it, e.g. (LET #,foo ...)
 (define-constant cfasl-load-time-eval-sym cfasl-load-time-eval-sym)
 
@@ -376,19 +378,19 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
 (declaim (special *nx-compile-time-types*
-;The following are the global proclaimed values.  Since compile-file binds
+;The following are the global proclaimed values. Since compile-file binds
 ;them, this means you can't ever globally proclaim these things from within a
 ;file compile (e.g. from within eval-when compile, or loading a file) - the
-;proclamations get lost when compile-file exits.  This is sort of intentional
+;proclamations get lost when compile-file exits. This is sort of intentional
 ;(or at least the set of things which fall in this category as opposed to
 ;having a separate compile-time variable is sort of intentional).
-                    *nx-proclaimed-inline*    ; inline and notinline
-                    *nx-proclaimed-ignore*    ; ignore and unignore
-                    *nx-known-declarations*   ; declaration
-                    *nx-speed*                ; optimize speed
-                    *nx-space*                ; optimize space
-                    *nx-safety*               ; optimize safety
-                    *nx-cspeed*))             ; optimize compiler-speed
+ *nx-proclaimed-inline* ; inline and notinline
+ *nx-proclaimed-ignore* ; ignore and unignore
+ *nx-known-declarations* ; declaration
+ *nx-speed* ; optimize speed
+ *nx-space* ; optimize space
+ *nx-safety* ; optimize safety
+ *nx-cspeed*)) ; optimize compiler-speed
 
 (defvar *fcomp-load-time*)
 (defvar *fcomp-inside-eval-always* nil)
@@ -540,8 +542,8 @@ Will differ from *compiling-file* during an INCLUDE")
 (declaim (type (simple-array (unsigned-byte 32) (256)) *crc32-table*))
 
 (defun fcomp-stream-checksum (stream)
-  ;; Could consider crc16 for 32-bit targets, but this is only used with code
-  ;; coverage so don't worry about efficiency anyway.
+ ;; Could consider crc16 for 32-bit targets, but this is only used with code
+ ;; coverage so don't worry about efficiency anyway.
   (file-position stream 0)
   (let ((crc 0))
     (declare (type (unsigned-byte 32) crc))
@@ -562,8 +564,8 @@ Will differ from *compiling-file* during an INCLUDE")
   (loop for op in *fcomp-output-list*
         when (consp op)
           nconc (if (eq (car op) $fasl-lfuncall)
-                  ;; Don't collect the toplevel lfun itself, it leads to spurious markings.
-                  ;; Instead, descend one level and collect any referenced fns.
+ ;; Don't collect the toplevel lfun itself, it leads to spurious markings.
+ ;; Instead, descend one level and collect any referenced fns.
                   (destructuring-bind (fn) (cdr op)
                     (lfunloop for imm in fn when (functionp imm) collect imm))
                   (loop for arg in (cdr op) when (functionp arg) collect arg))))
@@ -600,7 +602,7 @@ Will differ from *compiling-file* during an INCLUDE")
                  (rplaca *fcomp-last-compile-print* load-time)
                  (rplaca (rplacd (cdr *fcomp-last-compile-print*) compile-time-too) *fcomp-indentation*)
                  (format t "~&~vTToplevel Forms...~A~%"
-                         *fcomp-indentation*
+ *fcomp-indentation*
                          (if load-time
                            (if compile-time-too
                              "  (Compiletime, Loadtime)"
@@ -621,10 +623,10 @@ Will differ from *compiling-file* during an INCLUDE")
     (symbol-macrolet (fcomp-symbol-macrolet form env processing-mode))
     ((%include include) (fcomp-include form env processing-mode))
     (t
-     ;;Need to macroexpand to see if get more progn's/eval-when's and so should
-     ;;stay at toplevel.  But don't expand if either the evaluator or the
-     ;;compiler might not - better safe than sorry... 
-     ;; Good advice, but the hard part is knowing which is which.
+ ;;Need to macroexpand to see if get more progn's/eval-when's and so should
+ ;;stay at toplevel. But don't expand if either the evaluator or the
+ ;;compiler might not - better safe than sorry... 
+ ;; Good advice, but the hard part is knowing which is which.
      (cond 
        ((and (non-nil-symbol-p sym)
              (macro-function sym env)
@@ -652,8 +654,8 @@ Will differ from *compiling-file* during an INCLUDE")
              (fcomp-random-toplevel-form form env)
              (fcomp-compile-toplevel-forms env))
             ((%macro) (fcomp-load-%macro form env))
-            ;; ((%deftype) (fcomp-load-%deftype form))
-            ;; ((define-setf-method) (fcomp-load-define-setf-method form))
+ ;; ((%deftype) (fcomp-load-%deftype form))
+ ;; ((define-setf-method) (fcomp-load-define-setf-method form))
             (t (fcomp-random-toplevel-form form env)))))))))
 
 (defun fcomp-form-list (forms env processing-mode)
@@ -702,7 +704,7 @@ Will differ from *compiling-file* during an INCLUDE")
                      :declare decl-specs))
                (*fasl-compile-time-env* (augment-environment
                                          (augment-with-macros
-                                          *fasl-compile-time-env*
+ *fasl-compile-time-env*
                                           macros)
                                          :declare decl-specs)))
           (fcomp-form-list body env processing-mode)
@@ -803,7 +805,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 ; Both the simple %DEFVAR and the initial-value case (%DEFVAR-INIT) come here.
 ; Only try to dump this as a special fasl operator if the initform is missing
-;  or is "harmless" to evaluate whether needed or not (constant or function.)
+; or is "harmless" to evaluate whether needed or not (constant or function.)
 ; Hairier initforms could be handled by another fasl operator that takes a thunk
 ; and conditionally calls it.
 (defun fcomp-load-defvar (form env)
@@ -911,7 +913,7 @@ Will differ from *compiling-file* during an INCLUDE")
                (fnames (cdr spec)))
            (if (every (lambda (v) (or (symbolp v) (setf-function-name-p v))) fnames)
              (when (specifier-type-if-known ftype env :whine t)
-               ;; ----- this part may be redundant, now that the lexenv.fdecls part is being done
+ ;; ----- this part may be redundant, now that the lexenv.fdecls part is being done
                (if (and (consp ftype)
                         (consp fnames)
                         (eq (%car ftype) 'function))
@@ -922,7 +924,7 @@ Will differ from *compiling-file* during an INCLUDE")
              (nx-bad-decls `(ftype ,@spec)))))
         (otherwise
 	 (unless (memq sym *nx-known-declarations*)
-	   ;; Any type name is now (ANSI CL) a valid declaration.
+ ;; Any type name is now (ANSI CL) a valid declaration.
 	   (if (specifier-type-if-known sym env)
 	     (fcomp-proclaim-type sym spec env)
 	     (nx-bad-decls `(,sym ,@spec)))))))))
@@ -971,7 +973,7 @@ Will differ from *compiling-file* during an INCLUDE")
 	     (when refnames (pop refnames)))
 	    (t
 	     (setq structrefs
-		   ;; structrefs isn't a proper alist
+ ;; structrefs isn't a proper alist
 		   (alist-adjoin (if refnames (pop refnames) (ssd-name slot))
 				 (cons (ssd-type-and-refinfo slot) class-name)
 				 structrefs)))))
@@ -1017,11 +1019,11 @@ Will differ from *compiling-file* during an INCLUDE")
   (unless (constantp form)
     (unless (or (atom form)
                 (compiler-special-form-p (%car form)))
-      ;;Pre-compile any lfun args.  This is an efficiency hack, since compiler
-      ;;reentering itself for inner lambdas tends to be more expensive than
-      ;;top-level compiles.
-      ;;This assumes the form has been macroexpanded, or at least none of the
-      ;;non-evaluated macro arguments could look like functions.
+ ;;Pre-compile any lfun args. This is an efficiency hack, since compiler
+ ;;reentering itself for inner lambdas tends to be more expensive than
+ ;;top-level compiles.
+ ;;This assumes the form has been macroexpanded, or at least none of the
+ ;;non-evaluated macro arguments could look like functions.
       (let ((new-form (make-list (length form))))
         (declare (dynamic-extent new-form))
         (loop for arg in (%cdr form) for newptr on (%cdr new-form)
@@ -1035,9 +1037,9 @@ Will differ from *compiling-file* during an INCLUDE")
         (unless (every #'eq (%cdr form) (%cdr new-form))
           (setf (%car new-form) (%car form))
           (fcomp-note-source-transformation form (setq form (copy-list new-form))))))
-    ;; At some point we will dump the toplevel forms, make sure that when that happens,
-    ;;; the loading location for this form is stored in *fcomp-loading-toplevel-location*,
-    ;; because *loading-toplevel-location* will be long gone by then.
+ ;; At some point we will dump the toplevel forms, make sure that when that happens,
+ ;;; the loading location for this form is stored in *fcomp-loading-toplevel-location*,
+ ;; because *loading-toplevel-location* will be long gone by then.
     (fcomp-ensure-source env)
     (push form *fcomp-toplevel-forms*)))
 
@@ -1054,7 +1056,7 @@ Will differ from *compiling-file* during an INCLUDE")
         (fcomp-named-function lambda-expr name env
                               (or (fcomp-source-note expr)
                                   (fcomp-source-note lambda-expr)
-                                  *loading-toplevel-location*))))))
+ *loading-toplevel-location*))))))
 
 (defun fcomp-compile-toplevel-forms (env)
   (when *fcomp-toplevel-forms*
@@ -1068,11 +1070,11 @@ Will differ from *compiling-file* during an INCLUDE")
                                  (compiler-function-overflow)))
                       ,@forms)))
            (lambda `(lambda () ,body)))
-      ;; Don't assign a location to the lambda so it doesn't confuse acode printing, but
-      ;; arrange to assign it to any inner lambdas.
+ ;; Don't assign a location to the lambda so it doesn't confuse acode printing, but
+ ;; arrange to assign it to any inner lambdas.
       (setf (fcomp-source-note body) *loading-toplevel-location*)
       (setq *fcomp-toplevel-forms* nil)
-      ;(format t "~& Random toplevel form: ~s" lambda)
+ ;(format t "~& Random toplevel form: ~s" lambda)
       (handler-case (fcomp-output-form
                      $fasl-lfuncall
                      env
@@ -1081,7 +1083,7 @@ Will differ from *compiling-file* during an INCLUDE")
           (if (null (cdr forms))
             (error "Form ~s cannot be compiled - size exceeds compiler limitation"
                    (%car forms))
-            ; else compile each half :
+ ; else compile each half :
             (progn
               (dotimes (i (floor (length forms) 2))
                 (declare (fixnum i))
@@ -1091,8 +1093,8 @@ Will differ from *compiling-file* during an INCLUDE")
               (fcomp-compile-toplevel-forms env))))))))
 
 (defun fcomp-ensure-source (env)
-  ;; if source location saving is off, both values are NIL, so this will do nothing,
-  ;; don't need to check explicitly.
+ ;; if source location saving is off, both values are NIL, so this will do nothing,
+ ;; don't need to check explicitly.
   (unless (eq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
     (fcomp-compile-toplevel-forms env)
     (setq *fcomp-loading-toplevel-location* *loading-toplevel-location*)
@@ -1105,7 +1107,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
 ;;; Compile a lambda expression for the sole purpose of putting it in a fasl
-;;; file.  The result will not be funcalled.  This really shouldn't bother
+;;; file. The result will not be funcalled. This really shouldn't bother
 ;;; making an lfun, but it's simpler this way...
 (defun fcomp-named-function (def name env &optional source-note)
   (let* ((env (new-lexical-environment env))
@@ -1125,17 +1127,17 @@ Will differ from *compiling-file* during an INCLUDE")
       lfun)))
 
 
-;; Convert parent-notes to immediate indices.  The reason this is necessary is to avoid hitting
-;; the fasdumper's 64K limit on multiply-referenced objects.  This removes the reference
+;; Convert parent-notes to immediate indices. The reason this is necessary is to avoid hitting
+;; the fasdumper's 64K limit on multiply-referenced objects. This removes the reference
 ;; from parent slots, making notes less likely to be multiply-referenced.
 (defun fcomp-digest-code-notes (lfun &optional refs)
   (unless (memq lfun refs)
     (let ((source (function-source-note lfun)))
       (when (and (source-note-p source)
                  (not (equalp (source-note-filename source) *loading-file-source-file*)))
-        ;; Function is from a different file than being compiled, so don't digest it.
-        ;; This can happen when #. is used to create arbitrary literal constants.
-        #+no (warn "Reference to non-externalizable literal ~s" lfun)
+ ;; Function is from a different file than being compiled, so don't digest it.
+ ;; This can happen when #. is used to create arbitrary literal constants.
+ #+no (warn "Reference to non-externalizable literal ~s" lfun)
         (return-from fcomp-digest-code-notes)))
     (let* ((lfv (function-to-function-vector lfun))
 	   (start #-x86-target 0 #+x86-target (%function-code-words lfun))
@@ -1174,7 +1176,7 @@ Will differ from *compiling-file* during an INCLUDE")
                                (signal-compiler-warning w init *fcomp-warnings-header* harsh some))
           (setq init nil))))
     (setq *fasl-warnings-signalled-p* some
-          *fasl-non-style-warnings-signalled-p* harsh)))
+ *fasl-non-style-warnings-signalled-p* harsh)))
 
 ; If W is an UNDEFINED-FUNCTION-REFERENCE which refers to a macro (either at compile-time in ENV
 ; or globally), cons up a MACRO-USED-BEFORE-DEFINITION warning and return it; else return W.
@@ -1198,7 +1200,7 @@ Will differ from *compiling-file* during an INCLUDE")
 
 
               
-;;;;          fasl-scan - dumping reference counting
+;;;; fasl-scan - dumping reference counting
 ;;;;
 ;;;;
 ;These should be constants, but it's too much trouble when need to change 'em.
@@ -1224,30 +1226,30 @@ Will differ from *compiling-file* during an INCLUDE")
         (setq *fasdump-read-package* op)
         (dolist (arg (cdr op)) (fasl-scan-form arg))))
 
-    #-bccl (when (eq *compile-verbose* :debug)
+ #-bccl (when (eq *compile-verbose* :debug)
              (format t "~&~S forms, ~S entries -> "
                      (length forms)
                      (hash-table-count *fasdump-hash*)))
     (maphash #'(lambda (key val)
                  (when (%izerop val) (remhash key *fasdump-hash*)))
-             *fasdump-hash*)
-    #-bccl (when (eq *compile-verbose* :debug)
+ *fasdump-hash*)
+ #-bccl (when (eq *compile-verbose* :debug)
              (format t "~S." (hash-table-count *fasdump-hash*)))
     (values *fasdump-hash*
             gsymbols
-            *fasdump-global-offsets*)))
+ *fasdump-global-offsets*)))
 
 ;;; During scanning, *fasdump-hash* values are one of the following:
-;;;  nil - form hasn't been referenced yet.
-;;;   0 - form has been referenced exactly once
-;;;   T - form has been referenced more than once
-;;;  (load-form scanning-p referenced-p initform)
-;;;     form should be replaced by load-form
-;;;     scanning-p is true while we're scanning load-form
-;;;     referenced-p is nil if unreferenced,
-;;;                     T if referenced but not dumped yet,
-;;;                     0 if dumped already (fasl-dump-form uses this)
-;;;     initform is a compiled version of the user's initform
+;;; nil - form hasn't been referenced yet.
+;;; 0 - form has been referenced exactly once
+;;; T - form has been referenced more than once
+;;; (load-form scanning-p referenced-p initform)
+;;; form should be replaced by load-form
+;;; scanning-p is true while we're scanning load-form
+;;; referenced-p is nil if unreferenced,
+;;; T if referenced but not dumped yet,
+;;; 0 if dumped already (fasl-dump-form uses this)
+;;; initform is a compiled version of the user's initform
 (defun fasl-scan-form (form)
   (when form
     (let ((info (gethash form *fasdump-hash*)))
@@ -1273,57 +1275,72 @@ Will differ from *compiling-file* during an INCLUDE")
         (#.target::tag-fixnum
          (fasl-scan-fixnum exp))
         (#+ppc64-target #.target::fulltag-cons
-         #-ppc64-target #.target::tag-list (fasl-scan-list exp))
-        #+ppc32-target
+ #-ppc64-target #.target::tag-list (fasl-scan-list exp))
+ #+ppc32-target
         (#.ppc32::tag-imm)
-        #+ppc64-target
+ #+ppc64-target
         ((#.ppc64::fulltag-imm-0
-          #.ppc64::fulltag-imm-1
-          #.ppc64::fulltag-imm-2
-          #.ppc64::fulltag-imm-3))
+ #.ppc64::fulltag-imm-1
+ #.ppc64::fulltag-imm-2
+ #.ppc64::fulltag-imm-3))
 	#+x8632-target
 	(#.x8632::tag-imm)
-        #+x8664-target
+ #+x8664-target
         ((#.x8664::fulltag-imm-0
-          #.x8664::fulltag-imm-1))
-        #+arm-target
+ #.x8664::fulltag-imm-1))
+ #+arm-target
         (#.arm::tag-imm)
+ #+arm64-target
+        ((#.arm64::tag-single-float
+ #.arm64::tag-imm))
         (t
          (if
-           #+ppc32-target
+ #+ppc32-target
            (= (the fixnum (logand type-code ppc32::full-tag-mask)) ppc32::fulltag-immheader)
-           #+ppc64-target
+ #+ppc64-target
            (= (the fixnum (logand type-code ppc64::lowtagmask)) ppc64::lowtag-immheader)
-	   #+x8632-target
+ #+x8632-target
 	   (= (the fixnum (logand type-code x8632::fulltagmask)) x8632::fulltag-immheader)
-           #+x8664-target
+ #+x8664-target
            (and (= (the fixnum (lisptag exp)) x8664::tag-misc)
                 (logbitp (the (unsigned-byte 16) (logand type-code x8664::fulltagmask))
                          (logior (ash 1 x8664::fulltag-immheader-0)
                                  (ash 1 x8664::fulltag-immheader-1)
                                  (ash 1 x8664::fulltag-immheader-2))))
-           #+arm-target
+ #+arm-target
            (= (the fixnum (logand type-code arm::fulltagmask)) arm::fulltag-immheader)
+ #+arm64-target
+           (logbitp (the fixnum (logand type-code arm64::fulltagmask))
+                    (logior (ash 1 arm64::fulltag-immheader-0)
+                            (ash 1 arm64::fulltag-immheader-1)
+                            (ash 1 arm64::fulltag-immheader-2)))
            (case type-code
              (#.target::subtag-dead-macptr (fasl-unknown exp))
              (#.target::subtag-macptr
-              ;; Treat untyped pointers to the high/low 64K of the address
-              ;; space as constants.  Refuse to dump other pointers.
+ ;; Treat untyped pointers to the high/low 64K of the address
+ ;; space as constants. Refuse to dump other pointers.
               (unless (and (zerop (%macptr-type exp))
                            (<= (%macptr-domain exp) 1))
                 (error "Can't dump typed pointer ~s" exp))
               (let* ((addr (%ptr-to-int exp)))
                 (unless (or (< addr #x10000)
                             (>= addr (- (ash 1 target::nbits-in-word)
-                                        #x10000)))
+ #x10000)))
                   (error "Can't dump pointer ~s : address is not in the low or high 64K of the address space." exp))))
              (t (fasl-scan-ref exp)))
            (case type-code
              ((#.target::subtag-pool #.target::subtag-weak #.target::subtag-lock) (fasl-unknown exp))
              (#+ppc-target #.target::subtag-symbol
-              #+x8632-target #.target::subtag-symbol
-              #+x8664-target #.target::tag-symbol
-              #+arm-target #.target::subtag-symbol (fasl-scan-symbol exp))
+ #+x8632-target #.target::subtag-symbol
+ #+x8664-target #.target::tag-symbol
+ #+arm-target #.target::subtag-symbol (fasl-scan-symbol exp))
+ ;; Symbols and functions share lisptag 7 (TYPECODE returns it
+ ;; for both); only the fulltag (7 vs 15) distinguishes them.
+ #+arm64-target
+             (#.arm64::tag-7
+              (if (symbolp exp)
+                (fasl-scan-symbol exp)
+                (fasl-scan-clfun exp)))
              ((#.target::subtag-instance #.target::subtag-struct)
               (fasl-scan-user-form exp))
              (#.target::subtag-package (fasl-scan-ref exp))
@@ -1334,9 +1351,9 @@ Will differ from *compiling-file* during an INCLUDE")
                     (fasl-lock-hash-table exp))
                   (fasl-scan-user-form exp))
                 (fasl-scan-gvector exp)))
-	     #+x8632-target
+ #+x8632-target
 	     (#.target::subtag-function (fasl-scan-clfun exp))
-             #+x8664-target
+ #+x8664-target
              (#.target::tag-function (fasl-scan-clfun exp))
              (t (fasl-scan-gvector exp)))))))))
               
@@ -1373,6 +1390,17 @@ Will differ from *compiling-file* during an INCLUDE")
          ((= k size))
       (fasl-scan-form (uvref fv k)))))
 
+;;; The code vector is a separate object in slot 0 (so there are no
+;;; inline code words to skip), but the function itself is
+;;; fulltag-function, which UVSIZE/%SVREF can't take directly.
+#+arm64-target
+(defun fasl-scan-clfun (f)
+  (let* ((fv (function-to-function-vector f)))
+    (fasl-scan-ref f)
+    (dotimes (i (uvsize fv))
+      (declare (fixnum i))
+      (fasl-scan-form (%svref fv i)))))
+
 (defun funcall-lfun-p (form)
   (and (listp form)
        (eq (%car form) 'funcall)
@@ -1381,10 +1409,10 @@ Will differ from *compiling-file* during an INCLUDE")
            (eql (typecode (%cadr form)) target::subtag-xfunction))
        (null (%cddr form))))
 
-;;; We currently represent istruct-cells as conses.  That's not
+;;; We currently represent istruct-cells as conses. That's not
 ;;; incredibly efficient (among other things, we have to do this
 ;;; check when scanning/dumping any list), but it's probably not
-;;; worth burning a tag on them.  There are currently about 50
+;;; worth burning a tag on them. There are currently about 50
 ;;; entries on the *istruct-cells* list.
 (defun istruct-cell-p (x)
   (and (consp x)
@@ -1415,11 +1443,11 @@ Will differ from *compiling-file* during an INCLUDE")
                    (let ((function (car form)))
                      (or (eq function 'quote)
                          (and (symbolp function)
-                              ;; using fboundp instead of symbol-function
-                              ;; see comments in symbol-function
+ ;; using fboundp instead of symbol-function
+ ;; see comments in symbol-function
                               (or (functionp (fboundp function))
                                   (eq function 'progn))
-                              ;; (every #'simple-load-form (cdr form))
+ ;; (every #'simple-load-form (cdr form))
                               (dolist (arg (cdr form) t)
                                 (unless (simple-load-form arg)
                                   (return nil))))))))
@@ -1477,7 +1505,7 @@ Will differ from *compiling-file* during an INCLUDE")
   
 
 
-;;;;          Pass 3 - dumping
+;;;; Pass 3 - dumping
 ;;;;
 ;;;;
 (defvar *fasdump-epush*)
@@ -1554,10 +1582,10 @@ Will differ from *compiling-file* during an INCLUDE")
           (dolist (arg (cdr op)) (fasl-dump-form arg)))))))
 
 ;;;During dumping, *fasdump-hash* values are one of the following:
-;;;   nil - form has no load form, is referenced at most once.
-;;;   fixnum - form has already been dumped, fixnum is the etab index.
-;;;   T - form hasn't been dumped yet, is referenced more than once.
-;;;  (load-form . nil) - form should be replaced by load-form.
+;;; nil - form has no load form, is referenced at most once.
+;;; fixnum - form has already been dumped, fixnum is the etab index.
+;;; T - form hasn't been dumped yet, is referenced more than once.
+;;; (load-form . nil) - form should be replaced by load-form.
 (defun fasl-dump-form (form)
   (let ((info (gethash form *fasdump-hash*)))
     (cond ((fixnump info)
@@ -1593,7 +1621,7 @@ Will differ from *compiling-file* during an INCLUDE")
     (fasl-out-byte opcode)))
 
 (defun fasl-dump-epush (form)
-  #-bccl (when (fixnump (gethash form *fasdump-hash*))
+ #-bccl (when (fixnump (gethash form *fasdump-hash*))
            (error "Bug! Duplicate epush for ~S" form))
   (puthash form *fasdump-hash* (setq *fasdump-eref* (1+ *fasdump-eref*))))
 
@@ -1642,10 +1670,10 @@ Will differ from *compiling-file* during an INCLUDE")
     (simple-vector (fasl-dump-gvector exp $fasl-t-vector))
     (ratio (fasl-dump-ratio exp))
     (complex (fasl-dump-complex exp))
-    #+(and 64-bit-target (not cross-compiling))
+ #+(and 64-bit-target (not cross-compiling))
     ((simple-array (unsigned-byte 64) (*))
      (fasl-dump-64-bit-ivector exp $fasl-u64-vector))
-    #+(and 64-bit-target (not cross-compiling))
+ #+(and 64-bit-target (not cross-compiling))
     ((simple-array (signed-byte 64) (*))
      (fasl-dump-64-bit-ivector exp $fasl-s64-vector))
     (ivector
@@ -1770,15 +1798,16 @@ Will differ from *compiling-file* during an INCLUDE")
   (if (and (= (typecode f) target::subtag-xfunction)
            (= (typecode (uvref f 0)) target::subtag-u8-vector))
     (fasl-xdump-clfun f)
-    (let* ((n (uvsize f)))
+    (let* ((fv (if (functionp f) (function-to-function-vector f) f))
+           (n (uvsize fv)))
       (fasl-out-opcode $fasl-function f)
       (fasl-out-count n)
       (dotimes (i n)
         (if (= i 0)
           (target-arch-case
            (:arm (fasl-dump-form 0))
-           (t (fasl-dump-form (%svref f i))))
-          (fasl-dump-form (%svref f i)))))))
+           (t (fasl-dump-form (%svref fv i))))
+          (fasl-dump-form (%svref fv i)))))))
 
 #+x86-target
 (defun fasl-dump-function (f)
@@ -2088,31 +2117,31 @@ Will differ from *compiling-file* during an INCLUDE")
 
 (defun fasl-set-filepos (pos)
   (file-position *fasdump-stream* pos)
-  #-bccl (unless (eq (file-position *fasdump-stream*) pos)
+ #-bccl (unless (eq (file-position *fasdump-stream*) pos)
            (error "Unable to set file position to ~S" pos)))
 
 ;;; Concatenate fasl files.
 
 ;;; Format of a fasl file as expected by the fasloader.
 ;;;
-;;; #xFF00         2 bytes - File version
-;;; Block Count    2 bytes - Number of blocks in the file
-;;; addr[0]        4 bytes - address of 0th block
-;;; length[0]      4 bytes - length of 0th block
-;;; addr[1]        4 bytes - address of 1st block
-;;; length[1]      4 bytes - length of 1st block
+;;; #xFF00 2 bytes - File version
+;;; Block Count 2 bytes - Number of blocks in the file
+;;; addr[0] 4 bytes - address of 0th block
+;;; length[0] 4 bytes - length of 0th block
+;;; addr[1] 4 bytes - address of 1st block
+;;; length[1] 4 bytes - length of 1st block
 ;;; ...
-;;; addr[n-1]      4 bytes
-;;; length[n-1]    4 bytes
+;;; addr[n-1] 4 bytes
+;;; length[n-1] 4 bytes
 ;;; length[0] + length[1] + ... + length [n-1] bytes of data
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; (fasl-concatenate out-file fasl-files &key :if-exists)
 ;;
-;; out-file     name of file in which to store the concatenation
-;; fasl-files   list of names of fasl files to concatenate
-;; if-exists    as for OPEN, defaults to :error
+;; out-file name of file in which to store the concatenation
+;; fasl-files list of names of fasl files to concatenate
+;; if-exists as for OPEN, defaults to :error
 ;;
 ;; function result: pathname to the output file.
 ;; It works to use the output of one invocation of fasl-concatenate
@@ -2197,7 +2226,7 @@ Will differ from *compiling-file* during an INCLUDE")
 	    (delete-file out-file))))
       out-file)))
 
-;;; Cross-compilation environment stuff.  Some of this involves
+;;; Cross-compilation environment stuff. Some of this involves
 ;;; setting up the TARGET and OS packages.
 (defun ensure-package-nickname (name package)
   (let* ((old (find-package name)))

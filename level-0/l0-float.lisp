@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,12 +32,12 @@
 
 ;;; used by float reader
 (defun make-float-from-fixnums (hi lo exp sign &optional result)
-  ;;(require-null-or-double-float-sym result)
-  ;; maybe nuke all these require-types?
-  ;;(setq hi (require-type hi 'fixnum))
-  ;;(setq lo (require-type lo 'fixnum))
-  ;;(setq exp (require-type exp 'fixnum))
-  ;;(setq sign (require-type sign 'fixnum))
+ ;;(require-null-or-double-float-sym result)
+ ;; maybe nuke all these require-types?
+ ;;(setq hi (require-type hi 'fixnum))
+ ;;(setq lo (require-type lo 'fixnum))
+ ;;(setq exp (require-type exp 'fixnum))
+ ;;(setq sign (require-type sign 'fixnum))
   (let ((the-float (or result (%make-dfloat))))
     (%make-float-from-fixnums the-float hi lo exp sign)
     the-float))
@@ -118,13 +118,13 @@
                          (eq #x1000000 hi)
                          (eq 0 lo))))
     (short-float
-     #+32-bit-target
+ #+32-bit-target
      (multiple-value-bind (high low)(%sfloat-hwords n)
                   (let*  ((mantissa (%ilogior2 low (%ilsl 16 (%ilogand2 high #x007F))))
                           (exp (%ilsr 7 (%ilogand2 high #x7F80))))
                     (and (eq exp 255)
                          (eq 0 mantissa))))
-     #+64-bit-target
+ #+64-bit-target
      (let* ((bits (single-float-bits n))
             (exp (ldb (byte IEEE-single-float-exponent-width
                             IEEE-single-float-exponent-offset)
@@ -165,15 +165,15 @@
 #+32-bit-target
 (defun integer-decode-double-float (n)
   (multiple-value-bind (hi lo exp sign)(%integer-decode-double-float n)
-    ; is only 53 bits and positive so should be easy
-    ;(values (logior (ash hi 28) lo) exp sign)))
-    ; if denormalized, may fit in a fixnum
+ ; is only 53 bits and positive so should be easy
+ ;(values (logior (ash hi 28) lo) exp sign)))
+ ; if denormalized, may fit in a fixnum
     (setq exp (- exp (if (< hi #x1000000) 
                        (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)
                        (+ IEEE-double-float-mantissa-width (1+ IEEE-double-float-bias)))))
     (if (< hi (ash 1 (1- target::fixnumshift))) ; aka 2
       (values (logior (ash hi 28) lo) exp sign)
-      ; might fit in 1 word?
+ ; might fit in 1 word?
       (let ((big (%alloc-misc 2 target::subtag-bignum)))
         (make-big-53 hi lo big)
         (if (< hi #x1000000) (%normalize-bignum big))
@@ -251,14 +251,14 @@
        (if (eq 0 old-exp)
          (if (%short-float-zerop n)
            (values 0.0s0 0 sign)
-           #+32-bit-target
+ #+32-bit-target
            (let* ((val (%make-sfloat))
                   (zeros (sfloat-significand-zeros n)))
 	     (%%short-float-abs! n val)
              (%%scale-sfloat! val (+ 2 IEEE-single-float-bias zeros) val) ; get it normalized
              (set-%short-float-exp val IEEE-single-float-bias)      ; then bash exponent
              (values val (- old-exp zeros IEEE-single-float-bias) sign))
-           #+64-bit-target
+ #+64-bit-target
            (let* ((zeros (sfloat-significand-zeros n))
                   (val (%%scale-sfloat (%short-float-abs n)
 				       (+ 2 IEEE-single-float-bias zeros))))
@@ -266,12 +266,12 @@
                      (- old-exp zeros IEEE-single-float-bias) sign)))
          (if (> old-exp IEEE-single-float-normal-exponent-max)
            (error "Can't decode NAN or infinity ~s" n)
-           #+32-bit-target
+ #+32-bit-target
            (let ((val (%make-sfloat)))
              (%%short-float-abs! n val)
              (set-%short-float-exp val IEEE-single-float-bias)
              (values val (- old-exp IEEE-single-float-bias) sign))
-           #+64-bit-target
+ #+64-bit-target
 	   (values (set-%short-float-exp (%short-float-abs n)
 					 IEEE-single-float-bias)
 		   (- old-exp IEEE-single-float-bias) sign)))))))
@@ -293,7 +293,7 @@
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-double-float-digits))
              0.0d0 ; should this be underflow? - should just be normal and result is fn of current fpu-mode
-             ;(error "Can't scale ~s by ~s." float int) ; should signal something                      
+ ;(error "Can't scale ~s by ~s." float int) ; should signal something 
              (let ((result (%make-dfloat)))
                (%copy-double-float float result)
                (set-%double-float-exp result 1) ; scale by float-exp -1
@@ -313,40 +313,40 @@
        (if (eq 0 float-exp) ; already denormalized?
          (if (%short-float-zerop float)
            float
-           #+32-bit-target
+ #+32-bit-target
            (let ((result (%make-sfloat)))
              (%%scale-sfloat! float (+ (1+ IEEE-single-float-bias) int) result))
-           #+64-bit-target
+ #+64-bit-target
            (%%scale-sfloat float (+ (1+ IEEE-single-float-bias) int)))
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-single-float-digits))
-             ;; should this be underflow? - should just be normal and
-             ;; result is fn of current fpu-mode (error "Can't scale
-             ;; ~s by ~s." float int) ; should signal something
+ ;; should this be underflow? - should just be normal and
+ ;; result is fn of current fpu-mode (error "Can't scale
+ ;; ~s by ~s." float int) ; should signal something
              0.0s0
-             #+32-bit-target
+ #+32-bit-target
              (let ((result (%make-sfloat)))
                (%copy-short-float float result)
                (set-%short-float-exp result 1) ; scale by float-exp -1
                (%%scale-sfloat! result (+ IEEE-single-float-bias (+ float-exp int)) result)              
                result)
-             #+64-bit-target
+ #+64-bit-target
              (%%scale-sfloat (set-%short-float-exp float 1)
                              (+ IEEE-single-float-bias (+ float-exp int))))
            (if (> new-exp IEEE-single-float-normal-exponent-max) 
              (error (make-condition 'floating-point-overflow
                                     :operation 'scale-float
                                     :operands (list float int)))
-             #+32-bit-target
+ #+32-bit-target
              (let ((new-float (%make-sfloat)))
                (%copy-short-float float new-float)
                (set-%short-float-exp new-float new-exp)
                new-float)
-             #+64-bit-target
+ #+64-bit-target
              (set-%short-float-exp float new-exp))))))))
 
 (defun %copy-float (f)
-  ;Returns a freshly consed float.  float can also be a macptr.
+ ;Returns a freshly consed float. float can also be a macptr.
   (cond ((double-float-p f) (%copy-double-float f (%make-dfloat)))
         ((macptrp f)
          (let ((float (%make-dfloat)))
@@ -361,22 +361,22 @@
      (double-float
       (if (eq 0 (%double-float-exp float))
         (if (not (%double-float-zerop float))
-        ; denormalized
+ ; denormalized
           (- IEEE-double-float-mantissa-width (dfloat-significand-zeros float))
           0)
         IEEE-double-float-digits))
      (short-float 
       (if (eq 0 (%short-float-exp float))
         (if (not (%short-float-zerop float))
-        ; denormalized
+ ; denormalized
           (- IEEE-single-float-mantissa-width (sfloat-significand-zeros float))
           0)
         IEEE-single-float-digits))))
 
 
 (defun %double-float (number &optional result)
-  ;(require-null-or-double-float-sym result)
-  ; use number-case when macro is common
+ ;(require-null-or-double-float-sym result)
+ ; use number-case when macro is common
   (number-case number
     (double-float
      (if result 
@@ -391,8 +391,8 @@
      (if (not result)(setq result (%make-dfloat)))
      (let* ((num (%numerator number))
             (den (%denominator number)))
-       ; dont error if result is floatable when either top or bottom is not.
-       ; maybe do usual first, catching error
+ ; dont error if result is floatable when either top or bottom is not.
+ ; maybe do usual first, catching error
        (if (not (or (bignump num)(bignump den)))
          (with-stack-double-floats ((fnum num)
                                         (fden den))       
@@ -403,7 +403,7 @@
                 (minusp (minusp num)))
            (if (and (<= numlen IEEE-double-float-bias)
                     (<= denlen IEEE-double-float-bias)
-                    #|(not (minusp exp))|# 
+ #|(not (minusp exp))|# 
                     (<= (abs exp) IEEE-double-float-mantissa-width))
              (with-stack-double-floats ((fnum num)
                                             (fden den))
@@ -412,7 +412,7 @@
              (if (> exp IEEE-double-float-mantissa-width)
                (progn  (%double-float (round num den) result))               
                (if (>= exp 0)
-                 ; exp between 0 and 53 and nums big
+ ; exp between 0 and 53 and nums big
                  (let* ((shift (- IEEE-double-float-digits exp))
                         (num (if minusp (- num) num))
                         (int (round (ash num shift) den)) ; gaak
@@ -433,7 +433,7 @@
 					    new-exp ;(+ intlen (- IEEE-double-float-bias 53))
 					    (if minusp -1 1)
 					    result))
-                 ; den > num - exp negative
+ ; den > num - exp negative
                  (progn  
                    (float-rat-neg-exp num den (if minusp -1 1) result)))))))))))
 
@@ -443,8 +443,8 @@
   (if (not result)(setq result (%make-sfloat)))
   (let* ((num (%numerator number))
          (den (%denominator number)))
-    ;; dont error if result is floatable when either top or bottom is
-    ;; not.  maybe do usual first, catching error
+ ;; dont error if result is floatable when either top or bottom is
+ ;; not. maybe do usual first, catching error
     (if (not (or (bignump num)(bignump den)))
       (target::with-stack-short-floats ((fnum num)
 				       (fden den))       
@@ -455,7 +455,7 @@
              (minusp (minusp num)))
         (if (and (<= numlen IEEE-single-float-bias)
                  (<= denlen IEEE-single-float-bias)
-                 #|(not (minusp exp))|# 
+ #|(not (minusp exp))|# 
                  (<= (abs exp) IEEE-single-float-mantissa-width))
           (target::with-stack-short-floats ((fnum num)
 					   (fden den))
@@ -463,7 +463,7 @@
           (if (> exp IEEE-single-float-mantissa-width)
             (progn  (%short-float (round num den) result))               
             (if (>= exp 0)
-              ; exp between 0 and 23 and nums big
+ ; exp between 0 and 23 and nums big
               (let* ((shift (- IEEE-single-float-digits exp))
                      (num (if minusp (- num) num))
                      (int (round (ash num shift) den)) ; gaak
@@ -483,7 +483,7 @@
                    new-exp
                    (if minusp -1 1)
                    result))
-              ; den > num - exp negative
+ ; den > num - exp negative
               (progn  
                 (float-rat-neg-exp num den (if minusp -1 1) result t)))))))))
 
@@ -491,8 +491,8 @@
 (defun %short-float-ratio (number)
   (let* ((num (%numerator number))
          (den (%denominator number)))
-    ;; dont error if result is floatable when either top or bottom is
-    ;; not.  maybe do usual first, catching error
+ ;; dont error if result is floatable when either top or bottom is
+ ;; not. maybe do usual first, catching error
     (if (not (or (bignump num)(bignump den)))
       (/ (the short-float (%short-float num))
          (the short-float (%short-float den)))
@@ -502,14 +502,14 @@
              (minusp (minusp num)))
         (if (and (<= numlen IEEE-single-float-bias)
                  (<= denlen IEEE-single-float-bias)
-                 #|(not (minusp exp))|# 
+ #|(not (minusp exp))|# 
                  (<= (abs exp) IEEE-single-float-mantissa-width))
           (/ (the short-float (%short-float num))
              (the short-float (%short-float den)))
           (if (> exp IEEE-single-float-mantissa-width)
             (progn  (%short-float (round num den)))
             (if (>= exp 0)
-              ; exp between 0 and 23 and nums big
+ ; exp between 0 and 23 and nums big
               (let* ((shift (- IEEE-single-float-digits exp))
                      (num (if minusp (- num) num))
                      (int (round (ash num shift) den)) ; gaak
@@ -528,7 +528,7 @@
                    (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
                    new-exp
                    (if minusp -1 1)))
-              ; den > num - exp negative
+ ; den > num - exp negative
               (progn  
                 (float-rat-neg-exp num den (if minusp -1 1) nil t)))))))))
 
@@ -560,19 +560,19 @@
 (defun float-rat-neg-exp (integer divisor sign &optional result short)
   (if (minusp sign)(setq integer (- integer)))       
   (let* ((integer-length (integer-length integer))
-         ;; make sure we will have enough bits in the quotient
-         ;; (and a couple extra for rounding)
+ ;; make sure we will have enough bits in the quotient
+ ;; (and a couple extra for rounding)
          (shift-factor (+ (- (integer-length divisor) integer-length) (if short 28 60))) ; fix
          (scaled-integer integer))
     (if (plusp shift-factor)
       (setq scaled-integer (ash integer shift-factor))
       (setq divisor (ash divisor (- shift-factor)))  ; assume div > num
       )
-    ;(pprint (list shift-factor scaled-integer divisor))
+ ;(pprint (list shift-factor scaled-integer divisor))
     (multiple-value-bind (quotient remainder)(floor scaled-integer divisor)
       (unless (zerop remainder) ; whats this - tells us there's junk below
         (setq quotient (logior quotient 1)))
-      ;; why do it return 2 values?
+ ;; why do it return 2 values?
       (values (float-and-scale-and-round sign quotient (- shift-factor)  short result)))))
 
 
@@ -593,10 +593,10 @@
            (if (> int-len 53)
              (let* ((hi (ldb (byte 25  (- int-len  25)) new-big))
                     (lo (ldb (byte 28 (- int-len 53)) new-big)))
-               ;(print (list new-big hi lo))
+ ;(print (list new-big hi lo))
                (when (and (logbitp (- int-len 54) new-big)  ; round bit
                           (or (%ilogbitp 0 lo)    ; oddp
-                              ;; or more bits below round
+ ;; or more bits below round
                               (%i< (one-bignum-factor-of-two new-big) (- int-len 54))))
                  (if (eq lo #xfffffff)
                    (setq hi (1+ hi) lo 0)
@@ -629,7 +629,7 @@
              (let* ((lo (ldb (byte IEEE-single-float-digits  (- int-len  IEEE-single-float-digits)) new-big)))
                (when (and (logbitp (- int-len 25) new-big)  ; round bit
                           (or (%ilogbitp 0 lo)    ; oddp
-                              ; or more bits below round
+ ; or more bits below round
                               (%i< (one-bignum-factor-of-two new-big) (- int-len 25))))
                  (setq lo (1+ lo))
                  (when (%ilogbitp 24 lo) ; got bigger
@@ -654,7 +654,7 @@
              (let* ((lo (ldb (byte IEEE-single-float-digits  (- int-len  IEEE-single-float-digits)) new-big)))
                (when (and (logbitp (- int-len 25) new-big)  ; round bit
                           (or (%ilogbitp 0 lo)    ; oddp
-                              ; or more bits below round
+ ; or more bits below round
                               (%i< (one-bignum-factor-of-two new-big) (- int-len 25))))
                  (setq lo (1+ lo))
                  (when (%ilogbitp 24 lo) ; got bigger
@@ -673,7 +673,7 @@
     (if result (%copy-double-float 0.0d0 result) 0.0d0)
     (progn
       (when (not result)(setq result (%make-dfloat)))
-      ; it better return result
+ ; it better return result
       (%int-to-dfloat fix result))))
 
 
@@ -705,10 +705,10 @@
         ((typep x 'double-float)
          (%double-float-sin! x (%make-dfloat)))
         (t
-         #+32-bit-target
+ #+32-bit-target
          (target::with-stack-short-floats ((sx x))
            (%single-float-sin! sx (%make-sfloat)))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-sin (%short-float x)))))
 
 (defun cos (x)
@@ -726,10 +726,10 @@
         ((typep x 'double-float)
          (%double-float-cos! x (%make-dfloat)))
         (t
-         #+32-bit-target
+ #+32-bit-target
          (target::with-stack-short-floats ((sx x))
            (%single-float-cos! sx (%make-sfloat)))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-cos (%short-float x)))))
 
 (defun tan (x)
@@ -757,10 +757,10 @@
         ((typep x 'double-float)
          (%double-float-tan! x (%make-dfloat)))
         (t
-         #+32-bit-target
+ #+32-bit-target
          (target::with-stack-short-floats ((sx x))
            (%single-float-tan! sx (%make-sfloat)))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-tan (%short-float x))
          )))
 
@@ -772,23 +772,23 @@
 
 ;;; hexdecimal representations of pi at various precisions
 (defconstant pi-vector
-  #(#x3243F6A8885A308D313198A2E0
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D008
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B5470
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310B
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D9
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD588215
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3E
-    #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3ED71577C1BD314B2778AF2FDA5
+ #(#x3243F6A8885A308D313198A2E0
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D008
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B5470
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310B
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D9
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD588215
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3E
+ #x3243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3F84D5B5B54709179216D5D98979FB1BD1310BA698DFB5AC2FFD72DBD01ADFB7B8E1AFED6A267E96BA7C9045F12C7F9924A19947B3916CF70801F2E2858EFC16636920D871574E69A458FEA3F4933D7E0D95748F728EB658718BCD5882154AEE7B54A41DC25A59B59C30D5392AF26013C5D1B023286085F0CA417918B8DB38EF8E79DCB0603A180E6C9E0E8BB01E8A3ED71577C1BD314B2778AF2FDA5
     ))
 
 (defun %extended-cis (x)
@@ -830,12 +830,12 @@
          (y ix)
          (y1 (abs y))
          ra ia)
-    ;; following code requires non-negative x
+ ;; following code requires non-negative x
     (when sign
       (setf x (- x))
       (setf y (- y)))
     (cond ((> (max x y1) 1.8014399e+16)
-           ;; large value escape
+ ;; large value escape
            (setq ra (if (> x y1)
                       (let ((r (/ y x)))
                         (/ (/ x) (1+ (* r r))))
@@ -865,7 +865,7 @@
            (let ((r2 (+ (* x x) (* y y))))
              (setq ra (/ (log1+ (/ (* -4 x) (1+ (+ (* 2 x) r2)))) -4))
              (setq ia (/ (atan (* 2 y) (- 1 r2)) 2)))))
-    ;; fixup signs, with special case for real arguments
+ ;; fixup signs, with special case for real arguments
     (cond (sign
            (setq ra (- ra))
            (when (typep z 'complex)
@@ -885,7 +885,7 @@
                   (%df-atan2 dy dx)))
                (t
                 (when (and (rationalp x) (rationalp y))
-                  ;; rescale arguments so that the maximum absolute value is 1
+ ;; rescale arguments so that the maximum absolute value is 1
                   (let ((x1 (abs x)) (y1 (abs y)))
                     (cond ((> y1 x1)
                            (setf x (/ x y1))
@@ -893,28 +893,28 @@
                           ((not (zerop x))
                            (setf y (/ y x1))
                            (setf x (signum x))))))
-                #+32-bit-target
+ #+32-bit-target
                 (target::with-stack-short-floats ((sy y)
                                                   (sx x))
                   (%sf-atan2! sy sx))
-                #+64-bit-target
+ #+64-bit-target
                 (%sf-atan2 (%short-float y) (%short-float x)))))
         ((typep y 'double-float)
          (%double-float-atan! y (%make-dfloat)))
         ((typep y 'single-float)
-         #+32-bit-target
+ #+32-bit-target
          (%single-float-atan! y (%make-sfloat))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-atan y))
         ((typep y 'rational)
          (cond ((<= (abs y) most-positive-short-float)
-                #+32-bit-target
+ #+32-bit-target
                 (target::with-stack-short-floats ((sy y))
                   (%single-float-atan! sy (%make-sfloat)))
-                #+64-bit-target
+ #+64-bit-target
                 (%single-float-atan (%short-float y)))
                ((minusp y)
-                #.(- single-float-half-pi))
+ #.(- single-float-half-pi))
                (t
                 single-float-half-pi)))
         (t
@@ -932,10 +932,10 @@
     (if (zerop b)
       (if (zerop x)
         (report-bad-arg x '(not (satisfies zerop) ))
-        ;; ** CORRECT THE CONTAGION for complex args **
+ ;; ** CORRECT THE CONTAGION for complex args **
         (+ 0 (* x b)))
-      ;; do the float/rational contagion before the division
-      ;; but take care with negative zeroes
+ ;; do the float/rational contagion before the division
+ ;; but take care with negative zeroes
       (let ((x1 (realpart x))
             (b1 (realpart b)))
         (if (and (typep x1 'float)
@@ -974,13 +974,13 @@
           (complex (%double-float-log! (%%double-float-abs! dx dx) (%make-dfloat)) pi))
         (%double-float-log! x (%make-dfloat))))
     ((typep x 'short-float)
-     #+32-bit-target
+ #+32-bit-target
      (if (%short-float-sign x)
        (target::with-stack-short-floats ((sx x))
          (complex (%single-float-log! (%%short-float-abs! sx sx) (%make-sfloat))
                   single-float-pi))
        (%single-float-log! x (%make-sfloat)))
-     #+64-bit-target
+ #+64-bit-target
      (if (%short-float-sign x)
        (complex (%single-float-log (%short-float-abs (%short-float x)))
                 single-float-pi)
@@ -988,11 +988,11 @@
     ((typep x 'complex)
      (if (typep (realpart x) 'rational)
        (%rational-complex-log x 1.0s0)
-       ;; take care that intermediate results do not overflow/underflow:
-       ;; pre-scale argument by an appropriate power of two;
-       ;; we only need to scale for very large and very small values -
-       ;;  hence the various 'magic' numbers (values may not be too
-       ;;  critical but do depend on the sqrt update to fix abs's operation)
+ ;; take care that intermediate results do not overflow/underflow:
+ ;; pre-scale argument by an appropriate power of two;
+ ;; we only need to scale for very large and very small values -
+ ;; hence the various 'magic' numbers (values may not be too
+ ;; critical but do depend on the sqrt update to fix abs's operation)
        (let ((m (max (abs (realpart x))
                      (abs (imagpart x))))
              (log-s 0)
@@ -1027,24 +1027,24 @@
                     single-float-pi
                     pi)))
         ((bignump x)
-         ;(let* ((base1 3)
-         ;       (guess (floor (1- (integer-length x))
-         ;                     (log base1 2)))
-         ;       (guess1 (* guess (log-e base1))))
-         ;  (+ guess1 (log-e (/ x (expt base1 guess)))))
-         ; Using base1 = 2 is *much* faster. Was there a reason for 3?
+ ;(let* ((base1 3)
+ ; (guess (floor (1- (integer-length x))
+ ; (log base1 2)))
+ ; (guess1 (* guess (log-e base1))))
+ ; (+ guess1 (log-e (/ x (expt base1 guess)))))
+ ; Using base1 = 2 is *much* faster. Was there a reason for 3?
          (let* ((guess (1- (integer-length x)))
                 (guess1 (* guess double-float-log2)))
            (float (+ guess1 (log-e (float (/ x (ash 1 guess)) 1.0d0))) prototype)))
         ((and (ratiop x)
-              ;; Rational arguments near +1 can be specified with great precision: don't lose it
+ ;; Rational arguments near +1 can be specified with great precision: don't lose it
               (cond ((< 0.5 x 3)
                      (log1+ (float (- x 1) prototype)))
                     (
-                     ;; Escape out small values as well as large
+ ;; Escape out small values as well as large
                      (or (> x most-positive-short-float)
                          (< x least-positive-normalized-short-float))
-                     ;; avoid loss of precision due to subtracting logs of numerator and denominator
+ ;; avoid loss of precision due to subtracting logs of numerator and denominator
                      (let* ((n (%numerator x))
                             (d (%denominator x))
                             (sn (1- (integer-length n)))
@@ -1054,10 +1054,10 @@
                                     (log1+ (float (1- (/ d (ash 1 sd))) 1.0d0))))
                               prototype))))))
         ((typep prototype 'short-float)
-         #+32-bit-target
+ #+32-bit-target
          (target::with-stack-short-floats ((sx x))
            (%single-float-log! sx (%make-sfloat)))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-log (%short-float x)))
         (t
          (with-stack-double-floats ((dx x))
@@ -1066,16 +1066,16 @@
 ;;; (log1+ x) = (log (1+ x))
 ;;; but is much more precise near x = 0
 (defun log1+ (x)
-  ;;(cond ((typep x 'complex)
-  ;;      (let ((r (realpart x))
-  ;;            (i (imagpart x)))
-  ;;        (if (and (< (abs r) 0.5)
-  ;;                 (< (abs i) 3))
-  ;;          (let* ((n (+ (* r (+ 2 r)) (* i i)))
-  ;;                 (d (1+ (sqrt (1+ n)))))
-  ;;            (complex (log1+ (/ n d)) (atan i (1+ r))))
-  ;;         (log (1+ x)))))
-  ;;     (t
+ ;;(cond ((typep x 'complex)
+ ;; (let ((r (realpart x))
+ ;; (i (imagpart x)))
+ ;; (if (and (< (abs r) 0.5)
+ ;; (< (abs i) 3))
+ ;; (let* ((n (+ (* r (+ 2 r)) (* i i)))
+ ;; (d (1+ (sqrt (1+ n)))))
+ ;; (complex (log1+ (/ n d)) (atan i (1+ r))))
+ ;; (log (1+ x)))))
+ ;; (t
   (if (and (typep x 'ratio)
            (< -0.5 x 2))
     (setq x (%short-float x)))
@@ -1127,10 +1127,10 @@
      (if (and (typep x 'rational)
               (< x -104))
        0.0s0
-       #+32-bit-target
+ #+32-bit-target
        (target::with-stack-short-floats ((sx x))
          (%single-float-exp! sx (%make-sfloat)))
-       #+64-bit-target
+ #+64-bit-target
        (%single-float-exp (%short-float x))))))
 
 
@@ -1138,22 +1138,49 @@
   (> (realpart n) 0))
 
 ;;; (It may be possible to do something with rational exponents, e.g. so that
-;;;       (expt x 1/2) == (sqrt x)
-;;;       (expt x 3/2) == (expt (sqrt x) 3)      ** NOT (sqrt (expt x 3)) !! **
-;;;                      or (* x (sqrt x))
-;;;       (expt x 1/8) == (sqrt (sqrt (sqrt x)))
-;;;    even, in the case of rational x, returning a rational result if possible.)
+;;; (expt x 1/2) == (sqrt x)
+;;; (expt x 3/2) == (expt (sqrt x) 3) ** NOT (sqrt (expt x 3)) !! **
+;;; or (* x (sqrt x))
+;;; (expt x 1/8) == (sqrt (sqrt (sqrt x)))
+;;; even, in the case of rational x, returning a rational result if possible.)
 ;;;
 (defun expt (b e)
   "Return BASE raised to the POWER."
   (cond ((zerop e) (1+ (* b e)))
 	((integerp e)
-         (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e)))
+ #-arm64-target
+         (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e))
+ ;; arm64: an overflow in %INTEGER-POWER's repeated multiplication is
+ ;; invisible without a poll, so (expt x 2) quietly returns infinity
+ ;; where PPC and x86 signal. Those two catch it with a HARDWARE trap
+ ;; -- PPC's %set-fpscr-control does `mtfsf #xff', putting the enable
+ ;; bits in the real FPSCR, and ppc-exceptions.c:1297 fields the
+ ;; SIGFPE. AArch64 defines the same enables (FPCR.IOE/DZE/OFE/UFE/
+ ;; IXE) but implementing them is OPTIONAL, and they are RAZ/WI on the
+ ;; part this was measured on, so there is no trap to take. Poll the
+ ;; cumulative FPSR flags instead -- the same checkpoint architecture
+ ;; the #_pow path already uses via %FFI-EXCEPTION-STATUS.
+ ;;
+ ;; Float bases only: integer and rational exponentiation cannot raise
+ ;; an fp exception and must not pay for the check.
+ #+arm64-target
+         (if (not (floatp b))
+           (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e))
+           (progn
+             (%fp-begin-inline-check)
+             (let* ((result (if (minusp e)
+                              (/ 1 (%integer-power b (- e)))
+                              (%integer-power b e)))
+                    (status (%fp-inline-exception-status)))
+ ;; poll BEFORE signalling anything: an unwind is the one thing
+ ;; measured to lose the cumulative flags.
+               (%fp-check-inline-exception 'expt (list b e) status)
+               result))))
         ((zerop b)
          (if (plusp (realpart e)) (* b e) (report-bad-arg e '(satisfies plusp))))
         ((and (realp b) (plusp b) (realp e)
-              ; escape out very small or very large rationals
-              ; - avoid problems converting to float
+ ; escape out very small or very large rationals
+ ; - avoid problems converting to float
               (typecase b
                 (bignum (<= b most-positive-short-float))
                 (ratio (cond ((< b 0.5)
@@ -1161,18 +1188,18 @@
                              ((> b 3)
                               (<= b most-positive-short-float))))
                 (t t)))
-         ;; assumes that the library routines are accurate
-         ;; (if not, just excise this whole clause)
+ ;; assumes that the library routines are accurate
+ ;; (if not, just excise this whole clause)
          (if (or (typep b 'double-float)
                  (typep e 'double-float))
            (with-stack-double-floats ((b1 b)
                                       (e1 e))
              (%double-float-expt! b1 e1 (%make-dfloat)))
-           #+32-bit-target
+ #+32-bit-target
            (target::with-stack-short-floats ((b1 b)
                                              (e1 e))
              (%single-float-expt! b1 e1 (%make-sfloat)))
-           #+64-bit-target
+ #+64-bit-target
            (%single-float-expt (%short-float b) (%short-float e))
            ))
         ((typep b 'rational)
@@ -1189,7 +1216,7 @@
              r
              (complex (%short-float (realpart r)) (%short-float (imagpart r))))))
         (t
-         ;; type upgrade b without losing -0.0 ...
+ ;; type upgrade b without losing -0.0 ...
          (let ((r (exp (* e (log-e (* b 1.0d0))))))
            (cond ((or (typep (realpart b) 'double-float)
                       (typep (realpart e) 'double-float))
@@ -1281,9 +1308,9 @@
               (locally (declare (type single-float x))
                 (and (<= -1.0s0 x)
                      (<= x 1.0s0))))
-         #+32-bit-target
+ #+32-bit-target
          (%single-float-asin! x (%make-sfloat))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-asin x))
         ((and (typep x 'rational)
               (<= (abs x) 1))
@@ -1309,9 +1336,9 @@
               (locally (declare (type short-float x))
                 (and (<= -1.0s0 x)
                      (<= x 1.0s0))))
-         #+32-bit-target
+ #+32-bit-target
          (%single-float-acos! x (%make-sfloat))
-         #+64-bit-target
+ #+64-bit-target
          (%single-float-acos x))
         ((and (typep x 'rational)
               (<= (abs x) 1))
@@ -1336,7 +1363,7 @@
          (y (abs ix))
          (m (max x y)))
     (if (> m 1.8014399E+16)
-      ;; Large argument escape
+ ;; Large argument escape
       (let ((log-s 0))
         (if (typep m 'double-float)
           (if (> m #.(/ most-positive-double-float 2))
@@ -1399,7 +1426,7 @@
                                     (+ a-1 (sqrt (* a-1 (1+ a))))))))
                        (log1+ ll))
                      (log (+ a (sqrt (1- (* a a))))))))
-          ;; final fixup of signs
+ ;; final fixup of signs
           (if acos
             (if (complexp z)
               (if (typep ix 'float)
@@ -1422,9 +1449,9 @@
   (etypecase x
     (double-float (%double-float-sqrt! x (%make-dfloat)))
     (single-float
-     #+32-bit-target
+ #+32-bit-target
      (%single-float-sqrt! x (%make-sfloat))
-     #+64-bit-target
+ #+64-bit-target
      (%single-float-sqrt x))))
 
 
@@ -1445,8 +1472,8 @@
   (if (zerop x)
     (if (zerop y)
       (if (plusp (float-sign x))
-        ;; Don't return Y (which may be stack-consed) here.
-        ;; We know that (ZEROP Y) is true, so:
+ ;; Don't return Y (which may be stack-consed) here.
+ ;; We know that (ZEROP Y) is true, so:
         (if (eql y -0.0s0)
           -0.0s0
           0.0s0)

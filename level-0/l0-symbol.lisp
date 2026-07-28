@@ -6,7 +6,7 @@
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
 ;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
+;;; http://www.apache.org/licenses/LICENSE-2.0
 ;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@
 (in-package "CCL")
 
 ;;; No error checking, no interrupts, no protect_caller, no nuthin.
-;;; No error, no cons.  No problem.
+;;; No error, no cons. No problem.
 (defun %progvrestore (saved)
   (declare (optimize (speed 3) (safety 0)))
   (dolist (pair saved)
@@ -204,9 +204,9 @@
 
 (defun symbol-name (sym)
   "Return SYMBOL's name as a string."
-  #+(or ppc32-target x8632-target x8664-target arm-target)
+ #+(or ppc32-target x8632-target x8664-target arm-target arm64-target)
   (%svref (symptr->symvector (%symbol->symptr sym)) target::symbol.pname-cell)
-  #+ppc64-target
+ #+ppc64-target
   (if sym                               ;NIL's pname is implicit
     (%svref (%symbol->symptr sym) ppc64::symbol.pname-cell)
     "NIL")
@@ -218,7 +218,7 @@
 (defun %global-macro-function (symbol)
   (let* ((fbinding (fboundp symbol)))
     (if (and #-arm-target (typep fbinding 'simple-vector)
-             #+arm-target (= (typecode fbinding) arm::subtag-pseudofunction)
+ #+arm-target (= (typecode fbinding) arm::subtag-pseudofunction)
              (= (the fixnum (uvsize fbinding)) #-arm-target 2 #+arm-target 3))
       (let* ((fun (%svref fbinding #-arm-target 1 #+arm-target 2)))
         (if (functionp fun) fun)))))
@@ -258,8 +258,8 @@
     (with-lock-grabbed (binding-index-lock)
       (gethash idx binding-index-reverse-map)))
   (defun cold-load-binding-index (sym)
-    ;; Index may have been assigned via xloader.  Update
-    ;; reverse map
+ ;; Index may have been assigned via xloader. Update
+ ;; reverse map
     (with-lock-grabbed (binding-index-lock)
       (let* ((idx (%svref (symptr->symvector (%symbol->symptr sym))
                           target::symbol.binding-index-cell)))
