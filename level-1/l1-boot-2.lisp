@@ -48,6 +48,8 @@
     (l1-load "x86-error-signal")
     #+arm-target
     (l1-load "arm-error-signal")
+    #+arm64-target
+    (l1-load "arm64-error-signal")
     (l1-load "l1-error-signal")
     (l1-load "l1-sockets")
     (setq *LEVEL-1-LOADED* t))
@@ -242,13 +244,17 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "X8664-ARCH" "x8664-arch")
       #+arm-target
       (bin-load-provide "ARM-ARCH" "arm-arch")
+      #+arm64-target
+      (bin-load-provide "ARM64-ARCH" "arm64-arch")
       (bin-load-provide "VREG" "vreg")
       
       #+ppc-target
       (bin-load-provide "PPC-ASM" "ppc-asm")
       #+arm-target
       (bin-load-provide "ARM-ASM" "arm-asm")
-      
+      #+arm64-target
+      (bin-load-provide "ARM64-ASM" "arm64-asm")
+
       (bin-load-provide "VINSN" "vinsn")
       (bin-load-provide "REG" "reg")
       
@@ -256,6 +262,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "PPC-LAP" "ppc-lap")
       #+arm-target
       (bin-load-provide "ARM-LAP" "arm-lap")
+      #+arm64-target
+      (bin-load-provide "ARM64-LAP" "arm64-lap")
       (bin-load-provide "BACKEND" "backend")
       (bin-load-provide "NX2" "nx2")
      
@@ -267,6 +275,8 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
       #+arm-target
       (provide "ARM2") 
+      #+arm64-target
+      (provide "ARM642") 
       (bin-load-provide "ACODE-REWRITE" "acode-rewrite")
      
       (l1-load-provide "NX" "nx")
@@ -279,7 +289,10 @@ present and false otherwise. This variable shouldn't be set by user code.")
 
       #+arm-target
       (bin-load "arm2")
-      
+
+      #+arm64-target
+      (bin-load "arm642")
+
       (bin-load-provide "LEVEL-2" "level-2")
       (bin-load-provide "MACROS" "macros")
       (bin-load-provide "SETF" "setf")
@@ -313,6 +326,11 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (progn
 	(bin-load-provide "ARM-DISASSEMBLE" "arm-disassemble")
 	(bin-load-provide "ARM-LAPMACROS" "arm-lapmacros"))
+
+      #+arm64-target
+      (progn
+	(bin-load-provide "ARM64-DISASSEMBLE" "arm64-disassemble")
+	(bin-load-provide "ARM64-LAPMACROS" "arm64-lapmacros"))
 
       (bin-load-provide "FOREIGN-TYPES" "foreign-types")
       (install-standard-foreign-types *host-ftd*)
@@ -351,6 +369,10 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-ANDROIDARM" "ffi-androidarm")
       #+(and arm-target darwin-target)
       (bin-load-provide "FFI-DARWINARM" "ffi-darwinarm")
+      #+(and arm64-target linux-target)
+      (bin-load-provide "FFI-LINUXARM64" "ffi-linuxarm64")
+      #+(and arm64-target darwin-target)
+      (bin-load-provide "FFI-DARWINARM64" "ffi-darwinarm64")
 
 
       ;; Knock wood: all standard reader macros and no non-standard
