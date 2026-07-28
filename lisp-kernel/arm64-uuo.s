@@ -38,6 +38,8 @@ uuo_format_unary = 1
   unary_info_udf = 3
   unary_info_udf_call = 4
   unary_info_tlb_too_small = 5
+  unary_info_slot_unbound = 6
+  unary_info_apply_macro = 7
 
 /*
  * Two-register errors
@@ -131,6 +133,17 @@ uuo_format_wrong_type = 3
 
         .macro uuo_error_tlb_too_small reg
         uuo_unary \reg, unary_info_tlb_too_small
+        .endm
+
+        // This is a three-register error. Two extra registers must be
+        // encoded in a companion uuo_extra_registers directly following
+        // this one.
+        .macro uuo_error_slot_unbound slotv
+        uuo_unary \slotv, unary_info_slot_unbound
+        .endm
+
+        .macro uuo_error_apply_macro reg
+        uuo_unary \reg, unary_info_apply_macro
         .endm
 
         // binary format
