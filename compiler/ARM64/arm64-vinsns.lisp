@@ -531,6 +531,63 @@
    (fmov (:d dest) r))
   (ins (:d dest 1) (:d i 0)))
 
+;;; FPR-to-FPR copies, for arm642-copy-register and arm642-copy-fpr.
+;;; PPC64 (ppc64-vinsns.lisp:2047) covers the same ground with three
+;;; vinsns, and its dest-eq-src guard is kept verbatim here: the emit
+;;; sites do not all promise distinct registers.
+;;;
+;;; PPC64 needs no single<->double copy because a PPC FPR holds a single
+;;; in double format, so its copy-fpr serves both modes; AArch64 keeps
+;;; the two in genuinely different formats, hence the fcvt pair below.
+(define-arm64-vinsn copy-single-float (((dest :single-float))
+                                       ((src :single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmov dest src)))
+
+(define-arm64-vinsn copy-double-float (((dest :double-float))
+                                       ((src :double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmov dest src)))
+
+;;; Not guarded: an in-place precision conversion is not a no-op, so
+;;; dest eq src still has to emit the fcvt.
+(define-arm64-vinsn copy-double-to-single (((dest :single-float))
+                                           ((src :double-float)))
+  (fcvt dest src))
+
+(define-arm64-vinsn copy-single-to-double (((dest :double-float))
+                                           ((src :single-float)))
+  (fcvt dest src))
+
+;;; A complex-single-float is one D register (two S lanes), so a single
+;;; D-view fmov copies both parts.  PPC64 and ARM32 both need two moves
+;;; here because they hold a complex float in a register PAIR; doing that
+;;; on AArch64 would clobber an unrelated register.
+(define-arm64-vinsn copy-complex-single-float (((dest :complex-single-float))
+                                               ((src :complex-single-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmov (:d dest) (:d src))))
+
+;;; A complex-double-float is a full 128-bit vector register.  There is
+;;; no register-to-register move for one: :q appears only in the
+;;; str/ldr/stur/ldur templates, and no template takes a vector
+;;; arrangement pair.  Copy it the same way %make-complex-double-float
+;;; builds it -- fmov of lane 0 (which zeroes bits 127:64), then ins of
+;;; lane 1.
+(define-arm64-vinsn copy-complex-double-float (((dest :complex-double-float))
+                                               ((src :complex-double-float)))
+  ((:not (:pred =
+                (:apply %hard-regspec-value dest)
+                (:apply %hard-regspec-value src)))
+   (fmov (:d dest) (:d src))
+   (ins (:d dest 1) (:d src 1))))
+
 ;;; There's no popcount for a GPR, but there is on SIMD registers.
 (define-arm64-vinsn u64-popcount (((dest :u64))
                                   ((src :u64))
