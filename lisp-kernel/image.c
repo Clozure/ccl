@@ -369,6 +369,17 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
       if (a == NULL) {
 	return 0;
       }
+#ifdef ARM64
+      /*
+       * Establish lisp_nil as soon as possible. On Linux, this is not
+       * so hard in principle.  On Darwin, it's going to take more work.
+       * Note that low + 4K + fulltag_nil = #x1300b
+       */
+      if (sect->code == AREA_STATIC) {
+        image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+        set_nil(image_nil);
+      }
+#endif
     }
 
     for (i = 0, sect = sections; i < nsections; i++, sect++) {
