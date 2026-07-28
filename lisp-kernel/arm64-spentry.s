@@ -64,7 +64,7 @@ endsp makeu64
  */
 
 // Obviously this is not complete. It's just for playing with the uuos.
-spentry misc_ref
+spentry misc_ref_upstream_sketch
         and imm0, arg_y, #fulltagmask
         cmp imm0, #fulltag_misc
         bne 0f
@@ -79,7 +79,7 @@ spentry misc_ref
 0:      uuo_error_reg_not_fulltag arg_y, fulltag_misc
 1:      uuo_error_reg_not_lisptag arg_z, tag_fixnum
 2:      uuo_error_vector_bounds arg_z, arg_y
-endsp misc_ref
+endsp misc_ref_upstream_sketch
 
 C(misc_ref_common):
         ret
