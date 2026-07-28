@@ -158,6 +158,6 @@ plbt_sp(LispObj currentSP)
 void
 plbt(ExceptionInformation *xp)
 {
-  plbt_sp(xpGPR(xp, Rsp));
+  plbt_sp(xpSP(xp)); /* PROPOSED: sp not in regs[] on arm64 */
 }
     

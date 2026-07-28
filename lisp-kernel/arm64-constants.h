@@ -634,3 +634,7 @@ static_assert(sizeof(TCR) == 2544,
 #define ABI_VERSION_MAX 1
 
 #endif
+
+#ifndef __ASSEMBLER__
+#define fulltag_symbol fulltag_symbol /* PROPOSED: gc.h + plsym.c probe this with #ifdef */
+#endif
