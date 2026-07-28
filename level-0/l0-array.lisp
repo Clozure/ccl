@@ -919,6 +919,38 @@ minimum number of elements to add if it must be extended."
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
 
+#+arm64-target
+(defun subtag-bytes (subtag element-count)
+  (declare (fixnum subtag element-count))
+  (unless (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                   (logior (ash 1 arm64::fulltag-immheader-0)
+                           (ash 1 arm64::fulltag-immheader-1)
+                           (ash 1 arm64::fulltag-immheader-2)))
+    (error "Not an ivector subtag: ~s" subtag))
+  (let* ((ivector-class (logand subtag arm64::fulltagmask))
+         (element-bit-shift
+           (if (= ivector-class arm64::ivector-class-32-bit)
+             5
+             (if (= ivector-class arm64::ivector-class-64-bit)
+               6
+               (if (= subtag arm64::subtag-bit-vector)
+                 0
+                 (if (= subtag arm64::subtag-complex-double-float-vector)
+                   (return-from subtag-bytes
+                     ;; There's a 64-bit pad at the beginning of the
+                     ;; vector.  Although it is true that
+                     ;; misc-byte-count leaves out the pad word,
+                     ;; %alloc-misc's dnode rounding will account for
+                     ;; it.  The fasl dumper/loader doesn't do any
+                     ;; such rounding.
+                     (+ 8 (ash element-count 4)))
+                   (if (>= subtag arm64::min-8-bit-ivector-subtag)
+                     3
+                     4))))))
+         (total-bits (ash element-count element-bit-shift)))
+    (declare (fixnum ivector-class element-bit-shift total-bits))
+    (ash (the fixnum (+ 7 total-bits)) -3)))
+
 (defun element-type-subtype (type)
   "Convert element type specifier to internal array subtype code"
   (ctype-subtype (specifier-type type)))
