@@ -50,7 +50,7 @@
 (defconstant tag-4            #b100) ;miscobj and immheader-0
 (defconstant tag-5            #b101) ;immheader-1 and immheader-2
 (defconstant tag-nodeheader   #b110) ;nodeheader-0 and nodeheader-1
-(defconstant tag-7            #b111) ;fulltag-{symbol,function}
+(defconstant tag-7            #b111) ;fulltag-{symbol,15}
 
 ;;; 4-bit "fulltag" values
 (defconstant fulltag-even-fixnum  #b0000)
@@ -68,7 +68,7 @@
 (defconstant fulltag-misc         #b1100) ;uvector/miscobj (see note below)
 (defconstant fulltag-immheader-2  #b1101)
 (defconstant fulltag-nodeheader-1 #b1110)
-(defconstant fulltag-function     #b1111)
+(defconstant fulltag-15           #b1111)
 
 ;;; Note on fulltag-misc: the value (12) was selected deliberately.
 ;;; This allows us to branch directly to a tagged code-vector pointer:
@@ -254,7 +254,7 @@
 (defconstant misc-dfloat-offset misc-data-offset)
 
 (defconstant misc-symbol-offset (- node-size fulltag-symbol))
-(defconstant misc-function-offset (- node-size fulltag-function))
+(defconstant misc-function-offset (- node-size fulltag-misc))
 
 ;;; There is a pad word after the uvector header so that the
 ;;; complex-double-float elements are 16-byte aligned.
@@ -620,16 +620,21 @@
   flags
   link)
 
-;;; XXX no idea about this for ARM64 right now
-;;; Catch frames go on the cstack, below a lisp frame whose savelr
-;;; field references the catch exit point/unwind-protect cleanup code.
+;;; Catch frames are misc-tagged uvectors on the temp stack; the
+;;; caller's continuation lives in a control-stack lisp_frame
+;;; referenced by the csp slot.  regs[] holds save0..save3 in
+;;; ascending order (str save0 at regs+0)
 (define-fixedsized-object catch-frame ()
+  catch-tag            ;#<unbound> -> unwind-protect, else catch
   link                 ;tagged pointer to next older catch frame
   mvflag               ;0 if single-value, 1 if uwp or multiple-value
-  catch-tag            ;#<unbound> -> unwind-protect, else catch
+  csp                  ;saved control-stack lisp_frame pointer
   db-link              ;value of dynamic-binding link on thread entry.
+  save-save0           ;saved registers, save0 first
+  save-save1
+  save-save2
+  save-save3
   xframe               ;exception-frame link
-  last-lisp-frame
   nfp)
 
 (define-fixedsized-object lock ()
@@ -665,7 +670,7 @@
   plist
   binding-index)
 
-(define-fixedsized-object function (fulltag-function)
+(define-fixedsized-object function ()
   code-vector
   constants
   ;; constants and metadata follow
@@ -1126,8 +1131,8 @@
    :null-tag fulltag-nil
    :symbol-tag fulltag-symbol
    :symbol-tag-is-subtag nil
-   :function-tag fulltag-function
-   :function-tag-is-subtag nil
+   :function-tag subtag-function
+   :function-tag-is-subtag t
    :big-endian nil
    :misc-subtag-offset misc-subtag-offset
    :car-offset cons.car
@@ -1268,6 +1273,6 @@
 (defconstant fasl-version #x1)
 (defconstant fasl-max-version #x1)
 (defconstant fasl-min-version #x1)
-(defparameter *image-abi-version* #x1)
+(defparameter *image-abi-version* 1046)
 
 (provide "ARM64-ARCH")
