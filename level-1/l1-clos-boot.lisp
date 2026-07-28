@@ -1919,10 +1919,16 @@ to replace that class with ~s" name old-class new-class)
     (make-built-in-class 'complex-double-float-vector *vector-class*)
     )
 
-  #+(or x8664-target arm64-target)
+  #+x8664-target
   (progn
     (make-built-in-class 'symbol-vector (find-class 'gvector))
     (make-built-in-class 'function-vector (find-class 'gvector)))
+
+  #+arm64-target
+  (progn
+    ;; A symbol is a uvector with subtag-symbol reached through
+    ;; a pointer tagged with fulltag-symol.
+    (make-built-in-class 'symbol-vector (find-class 'gvector)))
 
   #+64-bit-target
   (progn
@@ -2458,8 +2464,7 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-slot-vector slot-vector)
           #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
           #+x8664-target (map-subtag x8664::subtag-function function-vector)
-          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector)
-          #+arm64-target (map-subtag arm64::subtag-function function-vector))
+          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector))
         (setf (%svref v target::subtag-arrayH)
               #'(lambda (x)
                   (if (logbitp $arh_simple_bit
@@ -2511,7 +2516,7 @@ to replace that class with ~s" name old-class new-class)
                       #+arm-target target::subtag-function
                       #+x8632-target target::subtag-function
                       #+x8664-target target::tag-function
-                      #+arm64-target arm64::fulltag-function)
+                      #+arm64-target arm64::subtag-function)
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
               #'(lambda (v)
@@ -2691,7 +2696,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod create-reader-method-function ((class slots-class)
 					  (reader-method-class standard-reader-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+  #+(or ppc-target arm64-target)
   (gvector :function
            (uvref *reader-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))
@@ -2719,7 +2724,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod create-writer-method-function ((class slots-class)
 					  (writer-method-class standard-writer-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+  #+(or ppc-target arm64-target)
   (gvector :function
            (uvref *writer-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))
