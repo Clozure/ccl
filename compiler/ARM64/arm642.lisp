@@ -573,9 +573,9 @@
            *arm642-recorded-symbols*
            (*arm642-emitted-source-notes* '())
            (*arm642-gpr-locations-valid-mask* 0)
-           (*arm642-gpr-locations* (make-array 16 :initial-element nil))
+           (*arm642-gpr-locations* (make-array 32 :initial-element nil))
            (*arm642-gpr-constants-valid-mask* 0)
-           (*arm642-gpr-constants* (make-array 16 :initial-element nil))
+           (*arm642-gpr-constants* (make-array 32 :initial-element nil))
            (*arm642-nfp-depth* 0)
            (*arm642-max-nfp-depth* ())
            (*arm642-all-nfp-pushes* ())
