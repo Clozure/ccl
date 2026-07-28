@@ -234,6 +234,7 @@
                 :target-foreign-type-data nil
                 :target-arch arm64::*arm64-target-arch*))
 
+#+(or darwinarm64-target (not arm64-target))
 (pushnew *darwinarm64-backend* *known-arm64-backends*)
 
 (defvar *arm64-backend* (car *known-arm64-backends*))
