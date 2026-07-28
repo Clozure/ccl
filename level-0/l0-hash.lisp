@@ -1932,6 +1932,14 @@ before doing so.")
                      (ash 1 x8664::tag-imm-0)
                      (ash 1 x8664::tag-imm-1)))))
 
+#+arm64-target
+(defun immediate-p (thing)
+  (let* ((tag (lisptag thing)))
+    (declare (type (unsigned-byte 3) tag))
+    (logbitp tag
+             (logior (ash 1 arm64::tag-fixnum)
+                     (ash 1 arm64::tag-single-float)
+                     (ash 1 arm64::tag-imm)))))
 
 
 (defun %cons-nhash-vector (size &optional (flags 0))
