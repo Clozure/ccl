@@ -457,9 +457,7 @@ sprint_lisp_object(LispObj o, int depth)  /* arm_print.c:415-491 */
     case fulltag_symbol:
       sprint_symbol(o);
       break;
-    case fulltag_function:
-      sprint_function(o, depth);
-      break;
+    case 15:
     case fulltag_reserved:
       add_c_string("#<reserved-tag ");
       sprint_unsigned_hex(o);

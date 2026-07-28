@@ -62,8 +62,7 @@
 #ifdef ARM64
 #define is_node_fulltag(f)  ((1<<(f))&((1<<fulltag_cons)    | \
 				       (1<<fulltag_misc)    | \
-				       (1<<fulltag_symbol)  | \
-				       (1<<fulltag_function)))
+				       (1<<fulltag_symbol)))
 #endif
 
 extern LispObj GCarealow, GCareadynamiclow;
