@@ -437,7 +437,7 @@
        (unless (listp l) (go LOSE))
        (multiple-value-setq (safecopy whole)
          (normalize-lambda-list l whole-p env-p))
-       (unless (or destructure-p (eq l safecopy) (go LOSE)))
+       (unless (or whole-p (eq l safecopy) (go LOSE)))
        (setq l safecopy)
        (unless (dolist (key the-keys t)
                  (when (setq m (cdr (memq key l)))

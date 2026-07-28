@@ -41,41 +41,54 @@
                (cons form (read-file-to-list-aux stream))))))
 |#
 
-(set-dispatch-macro-character #\# #\*
- (qlfun |#*-reader| (input-stream sub-char int 
-   &aux list list-length array array-length last-bit)
-  (declare (ignore sub-char))
-  (do* ((char (read-char input-stream nil nil t)
-              (read-char input-stream nil nil t))
-        (attr 0))
-       ((or (null char)
-            (= $cht_tmac (setq attr (%character-attribute char (rdtab.ttab *readtable*))))
-            (= $cht_wsp attr))
-        (if char (unread-char char input-stream)))
-    (declare (type (unsigned-byte 8) attr))
-    (let ((number (- (char-code char) 48)))
-      (if (or (<= 0 number 1) *read-suppress*)
-          (setq list (cons number list))
-          (signal-reader-error input-stream "reader macro #* got illegal character ~S" char))))
-  (setq last-bit (car list))
-  (setq list (nreverse list))
-  (setq list-length (list-length list))
-  (if (not (integerp int))
-      (setq int list-length))
-  (cond (*read-suppress* nil)
-        ((and (= 0 list-length) (> int 0))
-         (signal-reader-error input-stream "reader macro #~S* needs something" int))
-        ((> list-length int)
-         (signal-reader-error input-stream "reader macro #~S* can't fit ~S" int list))
-        (t (setq array-length (if int int list-length))
-           (setq array (make-array array-length :element-type 'bit))
-           (do ((i 0 (1+ i))
-                (bit-list list (cdr bit-list)))
-               ((>= i array-length))
-             (aset array i (if bit-list
-                               (car bit-list)
-                               last-bit)))
-           array))))
+(set-dispatch-macro-character
+ #\# #\*
+ (qlfun |#*-reader| (input-stream sub-char int)
+   (declare (ignore sub-char))
+   (with-token-buffer (tb)
+     (multiple-value-bind (escapes package)
+         (let ((char (read-char input-stream nil nil t)))
+           (if char
+             (%collect-xtoken tb input-stream char)
+             (values nil nil)))
+       (unless *read-suppress*
+         (when escapes
+           (signal-reader-error input-stream
+                                "reader macro #* got escaped characters"))
+         (when package
+           (signal-reader-error input-stream
+                                "reader macro #* got a package prefix"))
+         (let* ((nbits-present (- (token.opos tb) (token.ipos tb)))
+                (vector-length (or int nbits-present)))
+           (when (and int (> nbits-present int))
+             (signal-reader-error input-stream
+                                  "reader macro #~D* got too many bits" int))
+           (when (and int (> int 0) (zerop nbits-present))
+             (signal-reader-error input-stream
+                                  "reader macro #~D* needs at least one bit"
+                                  int))
+           (let ((res (make-array vector-length :element-type 'bit))
+                 (last-bit 0)
+                 (token-string (token.string tb)))
+             (declare (type bit last-bit)
+                      (type (simple-array bit (*)) res))
+             (do ((i 0 (1+ i))
+                  (j (token.ipos tb) (1+ j)))
+                 ((= i nbits-present)
+                  (do ((i i (1+ i)))
+                      ((= i vector-length))
+                    (setf (sbit res i) last-bit)))
+               (setf (sbit res i)
+                     (setf last-bit
+                           (case (%schar token-string j)
+                             (#\0 0)
+                             (#\1 1)
+                             (otherwise
+                              (signal-reader-error
+                               input-stream "reader macro #* got ~S which ~
+                                             is not a binary digit"
+                               (%schar token-string j)))))))
+             res)))))))
 
 (set-dispatch-macro-character #\# #\A
  (qlfun |#A-reader| (stream ignore dimensions)

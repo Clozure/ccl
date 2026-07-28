@@ -279,5 +279,11 @@ _exportfn(C(ensure_safe_for_string_operations))
 _endfn                                       
         __endif
 
-        _endfile
+        __ifndef(`WIN_32')
+_exportfn(C(ensure_safe_for_string_operations))
+        __(cld)
+	__(ret)
+_endfn
+        __endif
 
+        _endfile
