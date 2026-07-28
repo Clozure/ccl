@@ -1746,15 +1746,25 @@
                 (<- temp)))))
           (is-128-bit
               (with-fp-target () (fp-val :complex-double-float)
-                (if (and (eql vreg-class hard-reg-class-fpr)
-                         (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
-                  (setq fp-val vreg)
+                ;; ppc2.lisp:1434 -- picking VREG as the destination is a
+                ;; one-armed IF, not the alternative to loading.  Making the
+                ;; load the ELSE of this test skipped it entirely whenever VREG
+                ;; was already a complex-double-float FPR.
+                (when (and (eql vreg-class hard-reg-class-fpr)
+                           (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
+                  (setq fp-val vreg))
+                (if (and index-known-fixnum
+                         (<= index-known-fixnum
+                             (- (ash arm64::max-64-bit-constant-index -1) 4)))
+                  (! misc-ref-c-complex-double-float fp-val src index-known-fixnum)
                   (with-imm-target () idx-reg
                     (if index-known-fixnum
-                      (unless unscaled-idx
-                        (setq unscaled-idx idx-reg)
-                        (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
-                    (! misc-ref-complex-double-float fp-val src unscaled-idx)))
+                      (arm642-absolute-natural
+                       seg idx-reg nil
+                       (+ arm64::complex-double-float.realpart
+                          (ash index-known-fixnum 4)))
+                      (! scale-128bit-misc-index idx-reg unscaled-idx))
+                    (! misc-ref-complex-double-float fp-val src idx-reg)))
                 (if (and (eql vreg-class hard-reg-class-fpr)
                          (eql vreg-mode hard-reg-class-fpr-mode-complex-double-float))
                   (<- fp-val)
@@ -2413,12 +2423,24 @@
             (t
              (cond
                (is-128-bit
-                (with-imm-target () scaled-idx
-                  (if index-known-fixnum
-                    (unless unscaled-idx
-                      (setq unscaled-idx scaled-idx)
-                      (arm642-absolute-natural seg unscaled-idx nil (ash index-known-fixnum arm64::fixnumshift))))
-                  (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx)))
+                ;; ppc2.lisp:2046.  NB ppc2 emits `scale-misc-128-bit-index'
+                ;; here, which PPC defines nowhere -- only the vref spelling
+                ;; scale-128bit-misc-index exists (ppc64-vinsns.lisp:68).  Use
+                ;; the defined name.
+                (if (and index-known-fixnum
+                         (<= index-known-fixnum
+                             (- (ash arm64::max-64-bit-constant-index -1) 4)))
+                  (! misc-set-c-complex-double-float unboxed-val-reg src
+                     index-known-fixnum)
+                  (with-imm-target () scaled-idx
+                    (if index-known-fixnum
+                      (arm642-absolute-natural
+                       seg scaled-idx nil
+                       (+ arm64::complex-double-float.realpart
+                          (ash index-known-fixnum 4)))
+                      (! scale-128bit-misc-index scaled-idx unscaled-idx))
+                    (! misc-set-complex-double-float unboxed-val-reg src
+                       scaled-idx))))
                (is-64-bit
                 ;; Dispatch on the element type.  This used to emit
                 ;; misc-set-{c-,}double-float unconditionally, so every INTEGER
