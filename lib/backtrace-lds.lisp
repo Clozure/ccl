@@ -21,12 +21,12 @@
 
 
 (defparameter *saved-register-count*
-  #+(or x8632-target arm-target) 0
+  #+(or x8632-target arm-target arm64-target) 0
   #+x8664-target 4
   #+ppc-target 8)
 
 (defparameter *saved-register-names*
-  #+(or x8632-target arm-target) nil
+  #+(or x8632-target arm-target arm64-target) nil
   #+x8664-target #(save3 save2 save1 save0)
   #+ppc-target #(save7 save6 save5 save4 save3 save2 save1 save0))
 
