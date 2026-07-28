@@ -49,7 +49,9 @@
                       (if (< entry 0)
                         (logand entry (1- (ash 1 target::nbits-in-word)))
                         entry)))
-  #-(or ppc-target x86-target arm-target) (dbg "Fix entry->addr"))
+  #+arm64-target
+  (%setf-macptr addr entry)
+  #-(or ppc-target x86-target arm-target arm64-target) (dbg "Fix entry->addr"))
 
 
 
@@ -614,7 +616,19 @@ return a fixnum representation of that address, else return NIL."
                           :address handle
                           :address n
                           :unsigned-doubleword)))
-      (unless (eql 0 addr) addr))))
+      (unless (eql 0 addr) addr))
+    #+arm64-target
+    ;; On ARM64, an "entry" is always a MACPTR; no PPC64-style
+    ;; fixnum-packing trick (MACPTR->FIXNUM has no arm64 lap), and
+    ;; .SPffcall dereferences macptr entries directly.
+    (with-macptrs (addr)
+      (%setf-macptr addr
+                    (ff-call (%kernel-import target::kernel-import-FindSymbol)
+                             :address handle
+                             :address n
+                             :address))
+      (unless (%null-ptr-p addr)
+        (%inc-ptr addr 0)))))
 
 (defvar *statically-linked* nil)
 
