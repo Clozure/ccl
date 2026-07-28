@@ -351,7 +351,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
       (with-output-to-string (s stream)
 	(apply #'format s control-string format-arguments))
       (let ((*format-top-level* t))
-	(when (xp-structure-p stream)
+	(when (and (fboundp 'xp-structure-p) (xp-structure-p stream))
 	  (setq stream (xp-stream-stream stream))) ; for xp tests only! They call format on a structure
 	(setq stream (if (eq stream t)
 		       *standard-output*
