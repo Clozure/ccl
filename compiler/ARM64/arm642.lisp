@@ -3101,6 +3101,9 @@
                                     pushed-reg-is-set
                                     (vinsn-sequence-sets-reg-p
                                      push-vinsn pop-vinsn popped-reg)))
+               (popped-reg-is-reffed (unless same-reg
+                                       (vinsn-sequence-refs-reg-p
+                                        push-vinsn pop-vinsn popped-reg)))
                (offset (svref operands 1))
                (nested ())
                (conflicts ())
@@ -3118,7 +3121,18 @@
                       (push element nested)))))))
           (cond
             (conflicts nil)
-            ((not (and pushed-reg-is-set popped-reg-is-set))
+            ((and (not (and pushed-reg-is-set popped-reg-is-set))
+                  ;; When PUSHED-REG is reassigned in the sequence the copy
+                  ;; has to be emitted before that assignment, and it must
+                  ;; still come after POPPED-REG's last reference -- we are
+                  ;; about to overwrite POPPED-REG.  Require such a point to
+                  ;; exist; the vsp leg below makes the identical test.
+                  ;; Falling through costs an elision, never correctness.
+                  (or (null popped-reg-is-reffed)
+                      (null pushed-reg-is-set)
+                      (vinsn-in-sequence-p pushed-reg-is-set
+                                           popped-reg-is-reffed
+                                           pop-vinsn)))
              (unless same-reg
                (let* ((copy (if (eq (hard-regspec-class pushed-reg)
                                     hard-reg-class-fpr)
@@ -3126,7 +3140,8 @@
                               (! copy-gpr popped-reg pushed-reg))))
                  (remove-dll-node copy)
                  (if pushed-reg-is-set
-                   (insert-dll-node-after copy push-vinsn)
+                   (insert-dll-node-after copy
+                                          (or popped-reg-is-reffed push-vinsn))
                    (insert-dll-node-before copy pop-vinsn))))
              (setq win t))
             ((eql (hard-regspec-class pushed-reg) hard-reg-class-fpr)
