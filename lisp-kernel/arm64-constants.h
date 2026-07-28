@@ -607,7 +607,7 @@ static_assert(sizeof(TCR) == 2544,
                "sizeof(TCR) changed; update arm64-arch.lisp");
 
 #define ABI_VERSION_MIN 1
-#define ABI_VERSION_CURRENT 1
-#define ABI_VERSION_MAX 1
+#define ABI_VERSION_CURRENT 1046
+#define ABI_VERSION_MAX 1046
 
 #endif
