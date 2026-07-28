@@ -51,7 +51,7 @@
                              (%err-disp-internal errnum nil frame-ptr))
                             ((logtest errnum arch::error-type-error)
                              (funcall err-fn
- #.(car (rassoc 'type-error *kernel-simple-error-classes*))
+                                      #.(car (rassoc 'type-error *kernel-simple-error-classes*))
                                       (list rb-value (logandc2 errnum arch::error-type-error))
                                       frame-ptr))
                             ((eql errnum arch::error-udf)

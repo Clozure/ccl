@@ -36,7 +36,7 @@
   (declare (ignorable info))
   (let* ((p (%allocate-callback-pointer 32))
          (addr (%lookup-subprim-address
- #.(arm64::subprimitive-offset ".SPcallback"))))
+                #.(arm64::subprimitive-offset ".SPcallback"))))
     (setf (%get-unsigned-long p 0)          ; movz x8,#lo16(index)
           (logior #xd2800008 (ash (ldb (byte 16 0) index) 5))
           (%get-unsigned-long p 4)          ; movk x8,#hi16(index),lsl #16

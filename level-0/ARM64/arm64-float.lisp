@@ -330,10 +330,28 @@
 
 ;;; The FPSR flag byte captured by the ffcall spentry, consumed and cleared
 ;;; on read — x86-64's %get-post-ffi-mxcsr shape (x86-float.lisp:201).
-;;; The spentry does `msr fpsr, xzr' immediately after capturing, so the slot
-;;; carries THIS call's flags only and cannot accumulate across calls. (A
-;;; sticky source here would make every transcendental after the first
-;;; overflow report an overflow.)
+;;;
+;;; ⚠ CORRECTED . This comment used to say: "the spentry does
+;;; `msr fpsr, xzr' immediately AFTER capturing, so the slot carries THIS
+;;; call's flags only and cannot accumulate across calls." That does not
+;;; follow, and it was the bug. FPSR is CUMULATIVE: zeroing it after the
+;;; capture makes the slot carry everything raised since the PREVIOUS
+;;; ff-call, which includes all the inline lisp float arithmetic in between.
+;;; The parenthetical the old comment added — "a sticky source here would
+;;; make every transcendental after the first overflow report an overflow" —
+;;; was an accurate description of the behaviour the code actually had.
+;;; Measured: clear FPSR, do `(* most-positive-single-float
+;;; most-positive-single-float)' inline (FPSR := #x14), then `(log 2.0d0)'
+;;; signalled FLOATING-POINT-OVERFLOW on (2.0D0); the next identical call
+;;; returned 0.693.... log/exp/sin/atan all reproduced it.
+;;;
+;;; The spentry now clears FPSR immediately BEFORE the `blr' as well, so the
+;;; window really is the callee's (arm64-spentry.s `spentry ffcall',
+;;; spentry-E-ffi.s `spentry ffcall_return_registers'). That is the arm64
+;;; equivalent of ARM32's per-call-site `#+arm-target (%set-fpscr-status 0)'
+;;; (33 sites in level-1/l1-numbers.lisp) — ARM32 needs it at every site
+;;; because it has no tcr.foreign_fpsr and reads the live FPSCR after the
+;;; call; we own the slot, so we clear at the one seam that owns it.
 (defarm64lapfunction %get-post-ffi-fpsr ()
   (ldr imm0 (:@ rcontext (:$ arm64::tcr.foreign-fpsr)))
   (mov imm1 (:$ 0))

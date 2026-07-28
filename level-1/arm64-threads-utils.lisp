@@ -114,10 +114,10 @@
     (declare (fixnum fulltag))
     (case fulltag
       ((#.arm64::fulltag-even-fixnum
- #.arm64::fulltag-odd-fixnum
- #.arm64::fulltag-single-float
- #.arm64::fulltag-imm-0
- #.arm64::fulltag-imm-1)
+        #.arm64::fulltag-odd-fixnum
+        #.arm64::fulltag-single-float
+        #.arm64::fulltag-imm-0
+        #.arm64::fulltag-imm-1)
        t)
  ;; (fulltag-function removed, patch 0055: functions are ordinary
  ;; miscobjs and take the fulltag-misc clause below.)
