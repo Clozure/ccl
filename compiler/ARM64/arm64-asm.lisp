@@ -451,6 +451,9 @@
    (def uuo-error-udf ((:ruuo :x)) (logior (ash 3 7) 1) #xffffff83)
    (def uuo-error-udf-call ((:ruuo :x)) (logior (ash 4 7) 1) #xffffff83)
    (def uuo-error-tlb-too-small ((:ruuo :x)) (logior (ash 5 7) 1) #xffffff83)
+   ;; reg is slot-vector; must be followed by uuo-extra-registers index dest
+   (def uuo-error-slot-unbound ((:ruuo :x)) (logior (ash 6 7) 1) #xffffff83)
+   (def uuo-error-apply-macro ((:ruuo :x)) (logior (ash 7 7) 1) #xffffff83)
 
    ;; binary UUOs (uuo format #b010)
    ;; ra in 6:2, rb in 11:7, 4 bits of info in 15:12;
