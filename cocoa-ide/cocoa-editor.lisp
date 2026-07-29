@@ -3612,9 +3612,9 @@
          (when arg
            (unless (probe-file arg)
              (let ((lpath (merge-pathnames arg *.lisp-pathname*)))
-               (when (probe-file lpath) (setq arg lpath)))))
-         ;; Avoid taking the error inside gui.
-         (truename arg)
+               (when (probe-file lpath) (setq arg lpath))))
+           ;; Avoid taking the error inside gui.
+           (truename arg))
          (execute-in-gui #'(lambda () (find-or-make-hemlock-view arg))))
         ((ccl::valid-function-name-p arg)
          (hemlock:edit-definition arg)
