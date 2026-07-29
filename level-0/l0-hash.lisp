@@ -152,16 +152,23 @@
     (when (logbitp $nhash_track_keys_bit flags)
       (setf (nhash.vector.flags vector) (logior (ash 1 $nhash_key_moved_bit) flags)))))
 
-#-cross-compiling
 ;;;
 ;;; This is a fairly straightforward translation of the "one-at-a-time"
 ;;; hash function described at:
 ;;; http://www.burtleburtle.net/bob/hash/doobs.html
 ;;;
+;;; The mask has to be the TARGET's fixnum limit.  Every arch package inherits
+;;; MOST-POSITIVE-FIXNUM from CL and nicknames itself TARGET, so under
+;;; cross-compilation target::most-positive-fixnum silently reads the HOST's
+;;; limit; target-most-positive-fixnum is the real per-target constant.  (That
+;;; was the reason for the #+cross-compiling arm this replaces -- but that arm
+;;; had no mixing at all, and setup-target-features pushes :cross-compiling for
+;;; every foreign-target compile, so every cross-built image hashed pnames with
+;;; the raw %pname-hash value.)
 (defun mixup-hash-code (fixnum)
   (declare (fixnum fixnum)
            (optimize (speed 3) (safety 0)))
-  (setq fixnum (logand fixnum target::most-positive-fixnum))
+  (setq fixnum (logand fixnum target::target-most-positive-fixnum))
   (do* ((hash 0))
        ((zerop fixnum)
         (setq hash (+ hash (the fixnum (ash hash 3)))
@@ -172,10 +179,6 @@
           fixnum (ash fixnum -8)
           hash (+ hash (the fixnum (ash hash 10)))
           hash (logxor hash (the fixnum (ash hash -6))))))
-
-#+cross-compiling
-(defun mixup-hash-code (code)
-  (logand code target::target-most-positive-fixnum))
 
 (defun rotate-hash-code (fixnum)
   (declare (fixnum fixnum))
