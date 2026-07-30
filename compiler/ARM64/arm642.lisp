@@ -2870,8 +2870,7 @@
                   (arm642-store-immediate seg func call-reg)))
               (if symp
                 (! pass-multiple-values-symbol)
-                (! pass-multiple-values))
-              (! reload-self))
+                (! pass-multiple-values)))
             (progn
               (if label-p
                 (progn
@@ -2883,8 +2882,7 @@
                     (arm642-store-immediate seg func destreg))
                   (if symp
                     (arm642-call-symbol seg nil)
-                    (! call-known-function))))
-              (! reload-self)))
+                    (! call-known-function))))))
           (progn
             (arm642-unwind-stack seg xfer 0 0 #x7fffff)
             (if (and (not spread-p) nargs (%i<= nargs $numarm64argregs))
@@ -2926,11 +2924,9 @@
           (unless (or (fixnump fn) (typep fn 'lreg))
             (arm642-one-targeted-reg-form seg fn destreg))
           (if (not tail-p)
-            (progn
-              (if (arm642-mvpass-p xfer)
-                (! pass-multiple-values)
-                (! funcall))
-              (! reload-self))
+            (if (arm642-mvpass-p xfer)
+              (! pass-multiple-values)
+              (! funcall))
             (cond ((or (null nargs) spread-p)
                    (! tail-funcall-gen))
                   ((%i> nargs $numarm64argregs)
