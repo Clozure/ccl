@@ -4449,6 +4449,92 @@
   (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
                                      (:apply lognot arm64::fulltagmask)))))
 
+;;; ============ %arm64-gvector ============
+;;; Donor: PPC64 ppc64-vinsns.lisp:2389 %ppc-gvector (LINE-PORT).  The
+;;; donor is literally %alloc-misc-fixed (ppc64-vinsns.lisp:2414)
+;;; followed by a store loop, and the handler that emits it --
+;;; arm642-allocate-initialized-gvector's inline leg (arm642.lisp:4975,
+;;; from ppc2.lisp:4484 ppc2-allocate-initialized-gvector) -- is a
+;;; faithful port already; only this vinsn was missing (defined NOWHERE
+;;; at our pin 9c61574 OR at Matt's tip 9fb47830: an upstream defect).
+;;;
+;;; Semantics preserved exactly from the donor: bump allocptr down by the
+;;; 16-aligned (header + data) size less fulltag-misc, trap against
+;;; allocbase, store the header at misc-header-offset, set dest, clear
+;;; allocptr's tag bits, then -- unless nbytes is 0 -- pop n node words
+;;; off vsp and store them into dest from the LAST index down to the
+;;; first.
+;;;
+;;; Alloc/trap protocol taken verbatim from OUR double->heap
+;;; (arm64-vinsns.lisp:1125-1138) and macptr->heap (:5088-5100), which
+;;; are the sites whose b.hs matches the donor's tdlt (see below).
+;;; STORE-LOOP KEY.  misc-data-offset is -4 on this LOW-TAG target
+;;; (arm64-arch.lisp:262-263: misc-header-offset = -fulltag-misc = -12,
+;;; misc-data-offset = -12 + 8).  Offsets are relative to the TAGGED
+;;; dest, so element i lands at dest + (-4 + 8i) = base + 8 + 8i, i.e.
+;;; correctly 8-aligned; the register-offset STR form adds a full 64-bit
+;;; two's-complement Xm, so the final (negative) -4 offset is fine.
+(define-arm64-vinsn %arm64-gvector (((dest :lisp))
+                                    ((Rheader :u64)
+                                     (nbytes :u32const))
+                                    ((immtemp0 :u64)
+                                     (nodetemp :lisp)))
+  (sub allocptr allocptr (:$ (:apply - (:apply logand (lognot 15)
+                                               (:apply + (+ 15 8) nbytes))
+                                     arm64::fulltag-misc)))
+  (cmp allocptr allocbase)
+  ;;; ARM64-DEVIATION: PPC's single `tdlt allocptr allocbase' has no
+  ;;; ARM64 analog (no trap-on-condition instruction), so it becomes
+  ;;; cmp + skip-branch + trap.  tdlt traps on STRICTLY less-than, so
+  ;;; equality must NOT trap => the skip is b.hs, not b.hi.
+  (b.hs :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (stur Rheader (:@ allocptr (:$ arm64::misc-header-offset)))
+  (mov dest allocptr)
+  ;;; ARM64-DEVIATION: PPC's `rldicr allocptr allocptr 0 (- 63 ntagbits)'
+  ;;; (clear the low ntagbits) becomes AND with the UNSIGNED complement
+  ;;; of fulltagmask -- ARM64 logical immediates are unsigned.
+  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
+                                     (:apply lognot arm64::fulltagmask))))
+  ((:not (:pred = nbytes 0))
+   ;;; ARM64-DEVIATION: PPC's `li immtemp0 <imm>' has no single-instruction
+   ;;; ARM64 spelling.  `mov Xd,#imm' is an ALIAS (movz/movn/orr), so the
+   ;;; assembler refuses it -- "Ambiguous immediate or condition ...: 3
+   ;;; templates match; use a specific (non-alias) instruction", which fails
+   ;;; the LOAD of this whole file.  movz+movk is the idiom, spelled exactly as
+   ;;; the pin's own constant loader spells it -- `lri :constant-ref'
+   ;;; (arm64-vinsns.lisp:596-607).  NB the shift lives INSIDE the (:$ ...)
+   ;;; form: `(movk d (:$ <expr> :lsl 16))', never `(movk d (:$ <expr>) :lsl
+   ;;; 16)' -- the latter loads as "don't understand (MOVK ...)".
+   ;;; Both halves unconditionally, rather than movz alone: nbytes is
+   ;;; 8*(length initforms), so a literal of more than 8192 elements
+   ;;; overflows movz's 16-bit field, and this must not depend on the
+   ;;; assembler happening to reject rather than truncate it.
+   (movz immtemp0 (:$ (:apply logand #xffff
+                              (:apply + arm64::misc-data-offset nbytes))))
+   (movk immtemp0 (:$ (:apply logand #xffff
+                              (:apply ash (:apply + arm64::misc-data-offset nbytes) -16))
+                      :lsl 16))
+   :loop
+   (sub immtemp0 immtemp0 (:$ arm64::node-size))
+   ;;; ARM64-DEVIATION: the donor's `cmpdi crf immtemp0 misc-data-offset'
+   ;;; compares against -4.  ARM64 cmp takes an UNSIGNED 12-bit
+   ;;; immediate, so the negative compare is expressed as CMN against
+   ;;; +4 (cmn Xn,#4 sets Z iff Xn = -4).  No :crf temp is declared --
+   ;;; ARM64 has one NZCV, so the donor's crf operand drops out.
+   ;;; Neither LDR nor STR writes flags, so keeping the donor's
+   ;;; compare-before-load order is still correct here.
+   (cmn immtemp0 (:$ (:apply - arm64::misc-data-offset)))
+   ;;; ARM64-DEVIATION: the donor's `ld nodetemp 0 vsp' + `la vsp 8 vsp'
+   ;;; fuse into one post-indexed load -- this repo's established vpop
+   ;;; idiom (vpop-register, arm64-vinsns.lisp:658).
+   (ldr nodetemp (:@+ vsp (:$ arm64::node-size)))
+   ;;; register-offset store, as misc-set-node (arm64-vinsns.lisp:2000)
+   ;;; does for PPC64's stdx.
+   (str nodetemp (:@ dest immtemp0))
+   (b.ne :loop)))
+
 ;;; ============ make-stack-gvector ============
 ;;; PPC64 ppc64-vinsns.lisp:3995: subprim call .SPstkgvector (kernel
 ;;; body: spentry-B-vectors-misc.s:769; registered in the PROPOSED
