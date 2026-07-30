@@ -834,6 +834,22 @@
   savefn
   savelr)
 
+;;; The frame the callback trampoline (.SPeabi-callback) builds for a
+;;; foreign caller, described relative to CBF = &x0save (16-aligned).
+;;; Frame layouts belong here -- ppc64-arch.lisp:588/595 and
+;;; arm-arch.lisp:921 keep lisp-frame/c-frame savelr in the arch file --
+;;; and they must be defined before the lib/ modules compile, because the
+;;; callback generators in lib/ffi-{linux,darwin}arm64.lisp splice them at
+;;; macroexpansion time (the DEFCALLBACK path in l1-lisp-threads.lisp).
+;;;   x0..x7 saves at   +0..+56   (CBF = sp after the arg-reg push)
+;;;   C caller's stack args, contiguous, at +64
+;;;   d0..d7 saves at   -64..-8
+;;;   callee-saved GPR pairs below that, x29/LR last at -160,
+;;;   so the saved LR (the foreign caller's return address) is at -152.
+(defconstant callback-frame.fp-save-offset -64)
+(defconstant callback-frame.savelr-offset -152)
+(defconstant callback-frame.stack-args-offset 64)
+
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
 
