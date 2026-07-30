@@ -4776,12 +4776,28 @@
                    (if signed
                      (! gets64)
                      (! getu64))
-                   (if (eq size 4)
-                     (if signed
-                       (! gets32)
-                       (! getu32))
-                     (! fixnum->signed-natural arm64::imm0 arm64::arg_z)))))
-          (and offval (%i> (integer-length offval) 11) (setq offval nil))
+                   ;; Sizes 1/2/4 unbox with fixnum->signed-natural.  The
+                   ;; donor's gets32/getu32 leg is PPC32-ONLY -- ppc2.lisp's
+                   ;; own guard is (and (eq size 4) (target-arch-case (:ppc32 t)
+                   ;; (:ppc64 nil))), and PPC64 accordingly defines no gets32/
+                   ;; getu32 vinsn (only PPC32/ppc32-vinsns.lisp does).  On any
+                   ;; 64-bit target a (signed|unsigned)-byte 32 value is already
+                   ;; a fixnum, so there is nothing to unbox with a subprim.
+                   ;; ARM64 dropped the target-arch-case when the function was
+                   ;; adapted, leaving two emits of vinsns that are defined
+                   ;; nowhere in the port: compiles clean, raises "Unknown
+                   ;; vinsn: GETS32" from need-vinsn-template only when a form
+                   ;; actually takes this codegen path.
+                   (! fixnum->signed-natural arm64::imm0 arm64::arg_z))))
+          ;; Constant-displacement window is (signed-byte 9), not the donor's
+          ;; 16-bit D-form: mem-set-c-{address,fullword,halfword,byte} emit
+          ;; STUR/STURH/STURB (unscaled simm9, alignment-free), so a
+          ;; displacement wider than that cannot be encoded.  integer-length
+          ;; > 8 is the simm9 gate; larger constant offsets fall to the
+          ;; register-indexed path below, as donor offsets outside the D-form
+          ;; window already did.  (PPC64's extra (logtest 3) resets are
+          ;; unnecessary with an unscaled encoding.)
+          (and offval (%i> (integer-length offval) 8) (setq offval nil))
           (if offval
             ;; Easier: need one less register than in the general case.
             (with-imm-target () (ptr-reg :address)
