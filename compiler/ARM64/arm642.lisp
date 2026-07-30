@@ -5657,6 +5657,7 @@
   (let* ((template (vinsn-template vinsn))
          (vp (vinsn-variable-parts vinsn))
          (nvp (vinsn-template-nvp template))
+         (notes (vinsn-notes vinsn))
          (unique-labels '()))
     (declare (fixnum nvp))
     ;; Replace lregs in the variable-parts vector with their assigned
@@ -5705,8 +5706,33 @@
                   ;; live in the function's constants vector, reached
                   ;; fn-relative.  A form landing here is a bug.
                   (compiler-bug "arm642-expand-vinsn: unhandled form ~s"                          form)))))
+      ;; >>> NOTE FIX (from arm2-expand-vinsn, arm2.lisp:5663-5673):
+      ;; open notes get one shared zero-size label at the carrier vinsn's
+      ;; first instruction, stored in (vinsn-note-address note).  The note
+      ;; object is the label's (unique) name, as arm642-expand-vinsns does
+      ;; for vinsn-labels; ARM64::FINALIZE assigns its address before
+      ;; arm642-digest-symbols / -generate-pc-source-map read it.
+      (when notes
+        (let* ((lab nil))
+          (dolist (note notes)
+            (unless (eq :close (vinsn-note-class note))
+              (when (eq :source-location-begin (vinsn-note-class note))
+                (push note *arm642-emitted-source-notes*))
+              (when (null lab)
+                (setq lab (arm64::emit-label current note)))
+              (setf (vinsn-note-address note) lab)))))
       (dolist (form (vinsn-template-body template))
-        (expand-form form)))))
+        (expand-form form))
+      ;; >>> NOTE FIX (from arm2-expand-vinsn, arm2.lisp:5676-5683):
+      ;; :close notes get a label AFTER the carrier's last instruction
+      ;; (a zero-size label inherits the address of whatever follows).
+      (when notes
+        (let* ((lab nil))
+          (dolist (note notes)
+            (when (eq :close (vinsn-note-class note))
+              (when (null lab)
+                (setq lab (arm64::emit-label current note)))
+              (setf (vinsn-note-address note) lab))))))))
 
 (defun arm642-builtin-index-subprim (idx)
   (let* ((arch (backend-target-arch *target-backend*))
