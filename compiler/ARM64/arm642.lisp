@@ -5068,7 +5068,28 @@
                            (progn
                              (decf pushed-cell *arm642-target-node-size*)
                              (arm642-stack-to-register seg (arm642-vloc-ea pushed-cell) nodetemp)))
-                         (! misc-set-c-node reg target index)))))
+                         ;; ARM64-DEVIATION: the donor stores every element with
+                         ;; a CONSTANT-index misc-set-c-node (ppc2.lisp:4484),
+                         ;; safe on PPC64 because its `std' displacement is
+                         ;; simm16.  ARM64's misc-set-c-node is a STUR, whose
+                         ;; simm9 reaches misc-data-offset + 8*32 only, so a
+                         ;; literal with more than max-64-bit-constant-index
+                         ;; elements made the ASSEMBLER refuse the vinsn:
+                         ;;   vinsn immediate 444 (shift 0) out of range for
+                         ;;   operand class :SIMM9      (index 56, compiling
+                         ;;   arm64-asm.lisp)
+                         ;; Gate it and fall back to the register-index setter,
+                         ;; exactly as arm642-vset1's own node leg does.
+                         ;; Upstream's 1db0ab68 fixed this class in vref1/vset1
+                         ;; but not here.
+                         (if (<= index (arch::target-max-64-bit-constant-index arch))
+                           (! misc-set-c-node reg target index)
+                           (with-imm-target () scaled-idx
+                             (arm642-absolute-natural
+                              seg scaled-idx nil
+                              (+ (arch::target-misc-data-offset arch)
+                                 (ash index *arm642-target-node-shift*)))
+                             (! misc-set-node reg target scaled-idx)))))))
                  (! vstack-discard nntriv))))))
     (^)))
 
