@@ -79,6 +79,9 @@
     #+x8664-target :x8664-host
     #+arm-target :arm
     #+arm-target :arm-target
+    #+arm64-target :arm64
+    #+arm64-target :arm64-target
+    #+arm64-target :arm64-host
     #+linux-target :linux-host
     #+linux-target :linux-target
     #+linuxppc-target :linuxppc-target
@@ -90,8 +93,12 @@
     #+linuxx8632-target :linuxx8632-host
     #+linuxarm-target :linuxarm-target
     #+linuxarm-target :linuxarm-host
+    #+linuxarm64-target :linuxarm64-target
+    #+linuxarm64-target :linuxarm64-host
     #+darwinarm-target :darwinarm-target
     #+darwinarm-target :darwinarm-host
+    #+darwinarm64-target :darwinarm64-target
+    #+darwinarm64-target :darwinarm64-host
     #+darwinppc-target :darwinppc-target
     #+darwinppc-target :darwinppc-host
     #+darwinppc-target :darwin-target
