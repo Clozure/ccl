@@ -6028,10 +6028,26 @@
                 (declare (cons constant))
                 (rplacd constant reg)
                 (let* ((idx (backend-immediate-index (car constant))))
-                  (if (< (+ arm64::misc-data-offset (ash (+ idx 2) 2)) 4096)
+                  ;; 16m52 lane ILSR: this leg carried three PPC/32-bit
+                  ;; leftovers.  (1) The reach gate was PPC64's `ld'
+                  ;; displacement budget (< ... 4096, i.e. idx < 1023); on
+                  ;; ARM64 ref-constant is an LDUR whose simm9 reaches +255,
+                  ;; so with function.constants = 4 and an 8-byte stride the
+                  ;; reachable range is idx <= 31 -- the bound the sibling
+                  ;; arm642-store-immediate already uses, with its comment.
+                  ;; (2) The offset was misc-data-offset + 4*(idx+2), the
+                  ;; PPC32 spelling (ppc2.lisp:1143, whose :ppc64 sibling at
+                  ;; :1150 shifts by 3): on a 64-bit node that loads the wrong
+                  ;; word of the function object for every idx >= 1.  The
+                  ;; offset ref-indexed-constant wants is exactly what
+                  ;; ref-constant computes, function.constants + (ash idx 3).
+                  ;; (3) idxreg was :s32 where ref-indexed-constant declares
+                  ;; ((idxreg :s64)) and does (ldr dest (:@ fn idxreg)).
+                  ;; This is now the same three lines as :1391-1396.
+                  (if (<= idx 31)
                     (! ref-constant temp idx)
-                    (with-imm-target () (idxreg :s32)
-                      (arm642-lri seg idxreg (+ arm64::misc-data-offset (ash (+ idx 2) 2)))
+                    (with-imm-target () (idxreg :s64)
+                      (arm642-lri seg idxreg (+ arm64::function.constants (ash idx 3)))
                       (! ref-indexed-constant temp idxreg))))
                 (arm642-copy-register seg reg temp))))
           (when method-var
