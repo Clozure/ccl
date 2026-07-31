@@ -823,7 +823,7 @@
   (labels ((reg (lfun refs)
 	     (unless (memq lfun refs)
 	       (let* ((lfv (function-to-function-vector lfun))
-		      (start #+ppc-target 0 #+x86-target (%function-code-words lfun))
+		      (start #+ppc-target 0 #+x86-target (%function-code-words lfun) #+arm64-target 0)
 		      (refs (cons lfun refs)))
 		 (declare (dynamic-extent refs))
 		 (loop for i from start below (uvsize lfv) as imm = (uvref lfv i)
