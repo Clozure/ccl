@@ -1311,6 +1311,28 @@ are running on, or NIL if we can't find any useful information."
                      (%svref *immheader-types* (ash i -2)))
                     ((= lowtag ppc64::lowtag-nodeheader)
                      (%svref *nodeheader-types* (ash i -2)))))))
+    #+arm64-target
+    (dotimes (i 256)
+      (let* ((fulltag (logand i arm64::fulltagmask))
+             (names-vector
+              (cond ((= fulltag arm64::fulltag-nodeheader-0)
+                     *nodeheader-0-types*)
+                    ((= fulltag arm64::fulltag-nodeheader-1)
+                     *nodeheader-1-types*)
+                    ((= fulltag arm64::fulltag-immheader-0)
+                     *immheader-0-types*)
+                    ((= fulltag arm64::fulltag-immheader-1)
+                     *immheader-1-types*)
+                    ((= fulltag arm64::fulltag-immheader-2)
+                     *immheader-2-types*)))
+             (name (if names-vector
+                     (aref names-vector
+                           (ash i (- arm64::ntagbits))))))
+        (if (eq name 'symbol-vector)
+          (setq name 'symbol)
+          (if (eq name 'function-vector)
+            (setq name 'function)))
+        (setf (aref a i) name)))
     #+(or ppc32-target x8632-target arm-target)
     (dotimes (i 256)
       (let* ((fulltag (logand i target::fulltagmask)))
