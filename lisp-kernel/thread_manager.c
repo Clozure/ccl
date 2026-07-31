@@ -1551,7 +1551,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
   TCR_AUX(tcr)->cs_area = a;
   a->owner = tcr;
-#ifdef ARM
+#if defined(ARM) || defined(ARM64)
   tcr->last_lisp_frame = (natural)(a->high);
 #endif
   TCR_AUX(tcr)->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
