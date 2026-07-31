@@ -6712,18 +6712,8 @@
             (arm642-branch seg (arm642-cd-true xfer) nil))
           (progn
             (ensuring-node-target (target vreg)
-              (let* ((boxed (ash value *arm642-target-fixnum-shift*))
-                     (regval (hard-regspec-value target))
-                     (regs (arm642-gprs-containing-constant value)))
-                (unless (logbitp regval regs)
-                  (if (eql 0 regs)
-                    (arm642-absolute-natural seg target nil boxed)
-                    (let* ((r (1- (integer-length regs))))
-                      (! copy-node-gpr target r)))
-                  (setf *arm642-gpr-constants-valid-mask*
-                        (logior *arm642-gpr-constants-valid-mask*
-                                (ash 1 regval))
-                        (svref *arm642-gpr-constants* regval) value))))
+              (arm642-absolute-natural
+               seg target nil (ash value *arm642-target-fixnum-shift*)))
             (^)))))))
 
 (defarm642 arm642-%ilogbitp %ilogbitp (seg vreg xfer cc bitnum form)
