@@ -18,11 +18,15 @@ define(`PTR',`
         __ifdef(`PPC64')
         .quad $1
         __else
+         __ifdef(`ARM64')
+         .quad $1
+         __else
 	 __ifdef(`X8664')
 	 .quad $1
 	 __else
 	  .long $1
 	 __endif
+         __endif
         __endif
 ')
 	_beginfile
