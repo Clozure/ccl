@@ -7086,6 +7086,647 @@
   (str val (:@ base idx)))
 
 
+;;; ---------------------------------------------------------------
+;;; arm64: define the vinsns 41400d3c emits but never defined
+;;; ---------------------------------------------------------------
+
+
+;;; ==================================================================
+;;; 16m60: definitions for the call sites upstream 41400d3c added to
+;;; compiler/ARM64/arm642.lisp ("Add a lot of stuff to arm642.lisp,
+;;; adapting from other ports") plus the ones that were already emitted
+;;; at 9c61574 on codegen paths the green build never reached.
+;;;
+;;; tools/arm64-vinsn-callsite-coverage.py measured the set: 478 vinsns
+;;; emitted, 472 defined, 44 missing.  `!' resolves the name at EMIT
+;;; time, so every one of these compiles clean and walls the CROSS
+;;; BUILD mid-level-0 with "Unknown vinsn: CCL::<name>", one per ~4
+;;; minute cycle.  Six of the 44 are deliberately NOT here; see the
+;;; note at the end of this block.
+;;;
+;;; PPC64 is the logic reference throughout.  Where PPC64 has no
+;;; analog at all -- it has no GENERATE-CASEJUMP and no vector-header
+;;; 1d-vref path -- the reference is X8664 (this is a low-tag port
+;;; modelled on x86-64) with ARM32 consulted only for AArch-ISA shape,
+;;; tagged ARM64-DEVIATION where that happens.
+;;; ==================================================================
+
+;;; ---- 16m60 FULL-SWEEP lane, batch CASEJUMP (9 definitions) ----
+;;; The arm642-generate-casejump path and the non-simple 1-d array
+;;; (vector-header) path.  Reference used is stated per vinsn.
+;;; Lane: FULL-SWEEP (all 44 assessed).  Per-vinsn reference, confidence
+;;; and the six left-open are recorded inline below and in the lane report.
+
+;;; ============ nop ============
+;;; Emitted by arm642-generate-casejump (arm642.lisp:6883) as the
+;;; terminator of the branch table it lays down after IJMP.  ARM32
+;;; arm-vinsns.lisp:2210 is the only port that defines one (x86 has no
+;;; use for it); the instruction itself is AArch64's own HINT #0.
+;;; ARM64-DEVIATION: no PPC64 analog -- PPC64 has no casejump.
+(define-arm64-vinsn nop (()
+                         ())
+  (nop))
+
+;;; ============ set-eq-bit ============
+;;; PPC64 ppc64-vinsns.lisp:2361:
+;;;   (creqv (+ ppc-eq-bit dest) (+ ppc-eq-bit dest) (+ ppc-eq-bit dest))
+;;; creqv of a bit with itself is an unconditional SET, so the contract
+;;; is "make this CR field say EQ", nothing more.  Emit site:
+;;; arm642-copy-register (arm642.lisp:4118) -- copying a NULL source
+;;; into a CRF destination, i.e. "the value is NIL".
+;;;
+;;; AArch64 has ONE condition-code register, so the vinsn takes no
+;;; operand (PPC64 passes the CR field; his emit site passes nothing)
+;;; and "set the EQ bit" is "set Z".  Comparing rnil with itself sets
+;;; Z=1 unconditionally and is the flags-only counterpart of
+;;; compare-to-nil above, which is the vinsn whose CRF convention this
+;;; one has to agree with (EQ <=> the value was NIL).
+;;;
+;;; NOT x8664's body: x8664-vinsns.lisp:4894 is (testb arg_z arg_z),
+;;; which sets ZF from arg_z rather than unconditionally -- it is not
+;;; the PPC64 semantics the name promises, and his emit site passes no
+;;; register for it to test.
+(define-arm64-vinsn set-eq-bit (()
+                                ())
+  (cmp rnil rnil))
+
+;;; ============================================================
+;;; set-carry-if-fixnum-in-range / ijmp -- the casejump pair.
+;;;
+;;; NO PPC64 ANALOG: PPC64 has no generate-casejump and neither vinsn
+;;; exists in ppc64-vinsns.lisp.  Reference is X8664
+;;; (x8664-vinsns.lisp:5222/5239) for the SCHEME and ARM32
+;;; (arm-vinsns.lisp:2156/2205) for the OPERAND SHAPE, because Matt
+;;; copied the ARM32 emit site verbatim -- arm642.lisp:6878 passes five
+;;; operands `(! set-carry-if-fixnum-in-range idx flags reg min span)',
+;;; which is arm2.lisp:6845, not x862's four.
+;;;
+;;; CONTRACT, from the two instructions that follow the emit
+;;; (arm642.lisp:6878-6881):
+;;;     (! set-carry-if-fixnum-in-range idx flags reg min span)
+;;;     (! cbranch-false <default> flags arm64::cond-lo)
+;;;     (! ijmp idx)
+;;;   IDX  <- (unbox reg) - min          (the table index)
+;;;   FLAGS<- a compare of that against SPAN such that condition LO
+;;;           holds exactly when the value is IN range.
+;;; On both ARM32 and AArch64, CMP sets C as NOT-borrow, so LO (C==0)
+;;; means unsigned-lower, i.e. idx < span, i.e. in range -- and
+;;; cbranch-false on LO sends the OUT-of-range case to the default
+;;; label.  (The vinsn's NAME comes from x86, where CF is a borrow and
+;;; therefore SET on in-range.  The name is x86's; the flag polarity
+;;; that matters is the emit site's cond-lo, which is what this body
+;;; implements.)
+;;;
+;;; Immediate handling: AArch64 add/sub/cmp immediates are u12
+;;; (optionally <<12), so MIN and SPAN outside that window must be
+;;; materialized -- the compare-signed-s16const / lri idiom in this
+;;; file.  MIN is :s32const and can be either sign; the movz+movk pair
+;;; covers the full 32-bit magnitude rather than movz's 16 bits,
+;;; because case keys are arbitrary fixnums and a silently truncated
+;;; immediate is exactly the class this port has been bitten by.
+(define-arm64-vinsn set-carry-if-fixnum-in-range
+    (((idx :u64)
+      (flags :crf))
+     ((reg :imm)
+      (minval :s32const)
+      (maxval :u32const))
+     ((temp :u64)))
+  (asr idx reg (:$ arm64::fixnumshift))
+  ((:pred > minval 0)
+   ((:pred < minval 4096)
+    (sub idx idx (:$ minval)))
+   ((:pred >= minval 4096)
+    (movz temp (:$ (:apply logand #xffff minval)))
+    ((:pred /= (:apply logand #xffff (:apply ash minval -16)) 0)
+     (movk temp (:$ (:apply logand #xffff (:apply ash minval -16)) :lsl 16)))
+    (sub idx idx temp)))
+  ((:pred < minval 0)
+   ((:pred > minval -4096)
+    (add idx idx (:$ (:apply - minval))))
+   ((:pred <= minval -4096)
+    (movz temp (:$ (:apply logand #xffff (:apply - minval))))
+    ((:pred /= (:apply logand #xffff (:apply ash (:apply - minval) -16)) 0)
+     (movk temp (:$ (:apply logand #xffff (:apply ash (:apply - minval) -16))
+                 :lsl 16)))
+    (add idx idx temp)))
+  ((:pred < maxval 4096)
+   (cmp idx (:$ maxval)))
+  ((:pred >= maxval 4096)
+   (movz temp (:$ (:apply logand #xffff maxval)))
+   ((:pred /= (:apply logand #xffff (:apply ash maxval -16)) 0)
+    (movk temp (:$ (:apply logand #xffff (:apply ash maxval -16)) :lsl 16)))
+   (cmp idx temp)))
+
+;;; ============ ijmp ============
+;;; The computed branch into the table of `b <label>' instructions that
+;;; arm642-generate-casejump lays down immediately after it
+;;; (arm642.lisp:6881-6884: (! ijmp idx), then one non-barrier-jump per
+;;; case value, then (! nop)).
+;;;
+;;; ARM64-DEVIATION -- ARM32's body cannot be ported: it is
+;;; (add pc pc (:lsl idx (:$ 2))) + (nop), and AArch64 has no PC as a
+;;; general register.  The AArch64 rendering is the same three ideas in
+;;; four instructions: scale the index, take the table's address
+;;; PC-relatively with ADR, add, and BR.  ADR's operand is the byte
+;;; distance from the ADR itself to the first table entry; this body is
+;;; unpredicated and therefore fixed-length, so that distance is a
+;;; compile-time constant 12 (ADR at +0, ADD at +4, BR at +8, table at
+;;; +12).  The identical structural assumption -- nothing may be
+;;; inserted between the vinsn and the table -- is what ARM32's +8 and
+;;; x8664's :jtab both already rely on.
+;;;
+;;; ATTRIBUTES: none, following X8664 (x8664-vinsns.lisp:5239 is
+;;; `(ijmp )', attribute list empty).  NOT ARM32's `:branch'.  Two
+;;; reasons, and they agree: (a) in this dialect :branch/:jump promise
+;;; the optimizer "there is a LABEL at variable-part 0"
+;;; (vinsn.lisp:993 branch-target-node reads exactly that slot), and
+;;; ijmp's variable-part 0 is IDX, a register -- ARM32's :branch is a
+;;; latent bug there; (b) normalize-vinsns (vinsn.lisp:770-780) splices
+;;; a fresh label + JUMP after any :branch whose successor is not a
+;;; :jump, and non-barrier-jump carries no attributes, so tagging this
+;;; :branch would insert an instruction between the BR and the table
+;;; and shift every entry by one slot.  With no attributes that
+;;; insertion provably cannot happen.
+(define-arm64-vinsn ijmp (()
+                          ((idx :u64))
+                          ((entry :u64)
+                           (base :u64)))
+  (lsl entry idx (:$ 2))
+  (adr base (:$ 12))
+  (add entry entry base)
+  (br entry))
+
+;;; Z set iff SRC is a vector header.  ARM32 arm-vinsns.lisp:1520 uses
+;;; a conditional load (ldrbeq) for the "only look at the subtag byte
+;;; if it is misc-tagged" step; AArch64 has no conditional loads, so
+;;; this is the landed trap-unless-typecode= idiom instead -- compute
+;;; the low-tag fallback BEFORE the branch, overwrite it with the
+;;; subtag byte only on the misc path, compare once at the join.
+(define-arm64-vinsn set-z-if-vector-header (((crf :crf))
+                                            ((src :lisp))
+                                            ((tag :u64)))
+  (and tag src (:$ arm64::fulltagmask))
+  (cmp tag (:$ arm64::fulltag-misc))
+  (and tag src (:$ arm64::tagmask))
+  (b.ne :have-typecode)
+  (ldurb (:w tag) (:@ src (:$ arm64::misc-subtag-offset)))
+  :have-typecode
+  (cmp tag (:$ arm64::subtag-vectorH)))
+
+;;; ARM32 arm-vinsns.lisp:1528 / x8664-vinsns.lisp:901 -- unsigned
+;;; compare of the BOXED index against the BOXED physsize slot, trap on
+;;; not-lower.  Same shape as the landed check-misc-bound, which reads
+;;; the length out of the uvector header instead of out of a vectorH
+;;; slot; b.lo/uuo-error-vector-bounds are that vinsn's, verbatim.
+(define-arm64-vinsn check-vector-header-bound (()
+                                               ((header :lisp)
+                                                (index :imm))
+                                               ((limit :u64)))
+  (ldur limit (:@ header (:$ arm64::vectorH.physsize)))
+  (cmp index limit)
+  (b.lo :ok)
+  (uuo-error-vector-bounds index header)
+  :ok)
+
+;;; ARM32 arm-vinsns.lisp:1538 LINE-PORT.  Walk the displacement chain:
+;;; add this header's displacement to the index, step to its
+;;; data-vector, and repeat while the "displaced to another array
+;;; header" flag was set.  Both operands are in-place (declared as both
+;;; result and argument, as x8664 does).  The flag test happens BEFORE
+;;; the two loads that follow it because neither LDUR nor ADD... note
+;;; ADD DOES NOT set flags (ADDS would), and LDUR never does, so the
+;;; TST's NZCV survives to the B.NE exactly as ARM32's does.
+;;; $arh_disp_bit is library/lispequ.lisp:158; the flags slot holds a
+;;; BOXED fixnum, hence the extra fixnumshift in the bit position.
+(define-arm64-vinsn deref-vector-header (((vector :lisp)
+                                          (index :lisp))
+                                         ((vector :lisp)
+                                          (index :lisp))
+                                         ((flags :u64)))
+  :again
+  (ldur flags (:@ vector (:$ arm64::vectorH.flags)))
+  (tst flags (:$ (ash 1 (+ arm64::fixnumshift $arh_disp_bit))))
+  (ldur flags (:@ vector (:$ arm64::vectorH.displacement)))
+  (add index index flags)
+  (ldur vector (:@ vector (:$ arm64::vectorH.data-vector)))
+  (b.ne :again))
+
+;;; ARM32 arm-vinsns.lisp:1551 LINE-PORT.  The underlying simple
+;;; vector's subtag lives in the vectorH flags slot at
+;;; arrayH.flags-cell-subtag-byte = (byte 8 8) of the UNBOXED value
+;;; (arm64-arch.lisp:715), so at bit 8+fixnumshift of the boxed one.
+;;; ARM64-DEVIATION vs ARM32's literal (cmp flags (:$ <type << 11>)):
+;;; that quantity reaches 255<<11 = #x7F800, which is neither an
+;;; AArch64 add/sub 12-bit immediate nor a single MOVZ; build it as
+;;; MOVZ of the subtag (always <= 255) followed by LSL, which is exact
+;;; for every subtag and needs no predicates.  expected-flags is then
+;;; already loaded for the trap, as in ARM32.
+(define-arm64-vinsn trap-unless-vector-type (()
+                                             ((header :lisp)
+                                              (expected-type :u8const))
+                                             ((flags :u64)
+                                              (expected-flags :u64)))
+  (ldur flags (:@ header (:$ arm64::vectorH.flags)))
+  (and flags flags (:$ (ash #xff (+ 8 arm64::fixnumshift))))
+  (movz expected-flags (:$ expected-type))
+  (lsl expected-flags expected-flags (:$ (+ 8 arm64::fixnumshift)))
+  (cmp flags expected-flags)
+  (b.eq :ok)
+  (uuo-error-array-flags expected-flags header)
+  :ok)
+
+;;; ARM32 arm-vinsns.lisp:1564 LINE-PORT: the SIMPLE side of the same
+;;; test -- the object's own subtag must equal expected-type.  Same
+;;; conditional-load deviation as set-z-if-vector-header, and the same
+;;; MOVZ+LSL construction of the flags word the trap reports.
+(define-arm64-vinsn trap-unless-simple-1d-array (()
+                                                 ((vector :lisp)
+                                                  (expected-type :u8const))
+                                                 ((flags :u64)))
+  (and flags vector (:$ arm64::fulltagmask))
+  (cmp flags (:$ arm64::fulltag-misc))
+  (and flags vector (:$ arm64::tagmask))
+  (b.ne :have-typecode)
+  (ldurb (:w flags) (:@ vector (:$ arm64::misc-subtag-offset)))
+  :have-typecode
+  (cmp flags (:$ expected-type))
+  (b.eq :ok)
+  (movz flags (:$ expected-type))
+  (lsl flags flags (:$ (+ 8 arm64::fixnumshift)))
+  (uuo-error-array-flags flags vector)
+  :ok)
+
+
+;;; ==================================================================
+;;; 16m60: definitions for the call sites upstream 41400d3c added to
+;;; compiler/ARM64/arm642.lisp ("Add a lot of stuff to arm642.lisp,
+;;; adapting from other ports") plus the ones that were already emitted
+;;; at 9c61574 on codegen paths the green build never reached.
+;;;
+;;; tools/arm64-vinsn-callsite-coverage.py measured the set: 478 vinsns
+;;; emitted, 472 defined, 44 missing.  `!' resolves the name at EMIT
+;;; time, so every one of these compiles clean and walls the CROSS
+;;; BUILD mid-level-0 with "Unknown vinsn: CCL::<name>", one per ~4
+;;; minute cycle.  Six of the 44 are deliberately NOT here; see the
+;;; note at the end of this block.
+;;;
+;;; PPC64 is the logic reference throughout.  Where PPC64 has no
+;;; analog at all -- it has no GENERATE-CASEJUMP and no vector-header
+;;; 1d-vref path -- the reference is X8664 (this is a low-tag port
+;;; modelled on x86-64) with ARM32 consulted only for AArch-ISA shape,
+;;; tagged ARM64-DEVIATION where that happens.
+;;; ==================================================================
+
+;;; ---- 16m60 FULL-SWEEP lane, batch CONVERT (15 definitions) ----
+;;; The narrow-integer extension family; every member is an arm of
+;;; arm642-copy-register.  PPC64 is the reference for all 15.
+;;; Lane: FULL-SWEEP (all 44 assessed).  Per-vinsn reference, confidence
+;;; and the six left-open are recorded inline below and in the lane report.
+
+(define-arm64-vinsn u8->u16 (((dest :u16))
+                             ((src :u8)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn u8->s16 (((dest :s16))
+                             ((src :u8)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn u8->u32 (((dest :u32))
+                             ((src :u8)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn u8->s32 (((dest :s32))
+                             ((src :u8)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn u8->u64 (((dest :u64))
+                             ((src :u8)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn u16->u32 (((dest :u32))
+                              ((src :u16)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+
+(define-arm64-vinsn u16->s32 (((dest :s32))
+                              ((src :u16)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+
+(define-arm64-vinsn u16->u64 (((dest :u64))
+                              ((src :u16)))
+  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+
+(define-arm64-vinsn s8->s16 (((dest :s16))
+                             ((src :s8)))
+  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn s8->s32 (((dest :s32))
+                             ((src :s8)))
+  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn s8->s64 (((dest :s64))
+                             ((src :s8)))
+  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+
+(define-arm64-vinsn s16->s32 (((dest :s32))
+                              ((src :s16)))
+  (sbfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+
+(define-arm64-vinsn s16->s64 (((dest :s64))
+                              ((src :s16)))
+  (sbfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+
+;;; The two boxing members: SBFIZ (SBFM with immr = -lsb mod 64,
+;;; imms = width-1) sign-extends the low N bits AND shifts left by
+;;; fixnumshift in one instruction -- PPC64's sldi/sradi pair, and the
+;;; exact encoding shape of the landed u8->fixnum / u32->fixnum above.
+(define-arm64-vinsn s8->fixnum (((result :imm))
+                                ((val :s8)))
+  (sbfm (:x result) (:x val)
+        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
+        (:$ (1- 8))))
+
+(define-arm64-vinsn s16->fixnum (((result :imm))
+                                 ((val :s16)))
+  (sbfm (:x result) (:x val)
+        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
+        (:$ (1- 16))))
+
+
+;;; ==================================================================
+;;; 16m60: definitions for the call sites upstream 41400d3c added to
+;;; compiler/ARM64/arm642.lisp ("Add a lot of stuff to arm642.lisp,
+;;; adapting from other ports") plus the ones that were already emitted
+;;; at 9c61574 on codegen paths the green build never reached.
+;;;
+;;; tools/arm64-vinsn-callsite-coverage.py measured the set: 478 vinsns
+;;; emitted, 472 defined, 44 missing.  `!' resolves the name at EMIT
+;;; time, so every one of these compiles clean and walls the CROSS
+;;; BUILD mid-level-0 with "Unknown vinsn: CCL::<name>", one per ~4
+;;; minute cycle.  Six of the 44 are deliberately NOT here; see the
+;;; note at the end of this block.
+;;;
+;;; PPC64 is the logic reference throughout.  Where PPC64 has no
+;;; analog at all -- it has no GENERATE-CASEJUMP and no vector-header
+;;; 1d-vref path -- the reference is X8664 (this is a low-tag port
+;;; modelled on x86-64) with ARM32 consulted only for AArch-ISA shape,
+;;; tagged ARM64-DEVIATION where that happens.
+;;; ==================================================================
+
+;;; ---- 16m60 FULL-SWEEP lane, batch WAVE2 (14 definitions) ----
+;;; String character access, the complex-float arithmetic family,
+;;; complex-single-float->node, and the three subprim-call vinsns.
+;;; Lane: FULL-SWEEP (all 44 assessed).  Per-vinsn reference, confidence
+;;; and the six left-open are recorded inline below and in the lane report.
+
+(define-arm64-vinsn %schar8 (((char :lisp))
+                             ((str :lisp)
+                              (idx :imm))
+                             ((imm :u64)))
+  (lsr imm idx (:$ arm64::fixnumshift))
+  (sub imm imm (:$ (:apply - arm64::misc-data-offset)))
+  (ldrb (:w imm) (:@ str imm))
+  (lsl char imm (:$ arm64::charcode-shift))
+  (orr char char (:$ arm64::subtag-character)))
+
+(define-arm64-vinsn %schar32 (((char :lisp))
+                              ((str :lisp)
+                               (idx :imm))
+                              ((imm :u64)))
+  (lsr imm idx (:$ 1))
+  (sub imm imm (:$ (:apply - arm64::misc-data-offset)))
+  (ldr (:w imm) (:@ str imm))
+  (lsl char imm (:$ arm64::charcode-shift))
+  (orr char char (:$ arm64::subtag-character)))
+
+(define-arm64-vinsn %set-schar8 (()
+                                 ((str :lisp)
+                                  (idx :imm)
+                                  (char :lisp))
+                                 ((imm :u64)
+                                  (imm1 :u64)))
+  (lsr imm idx (:$ arm64::fixnumshift))
+  (sub imm imm (:$ (:apply - arm64::misc-data-offset)))
+  (lsr imm1 char (:$ arm64::charcode-shift))
+  (strb (:w imm1) (:@ str imm)))
+
+(define-arm64-vinsn %set-schar32 (()
+                                  ((str :lisp)
+                                   (idx :imm)
+                                   (char :lisp))
+                                  ((imm :u64)
+                                   (imm1 :u64)))
+  (lsr imm idx (:$ 1))
+  (sub imm imm (:$ (:apply - arm64::misc-data-offset)))
+  (lsr imm1 char (:$ arm64::charcode-shift))
+  (str (:w imm1) (:@ str imm)))
+
+(define-arm64-vinsn (setqsym :call :subprim)
+    (()
+     ()
+     ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPsetqsym")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+(define-arm64-vinsn (subtag-misc-ref :call :subprim)
+    (()
+     ()
+     ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPsubtag-misc-ref")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+(define-arm64-vinsn (subtag-misc-set :call :subprim)
+    (()
+     ()
+     ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPsubtag-misc-set")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+;;; ============ complex-single-float->node ============
+;;; ARM32 arm-vinsns.lisp:2686 (no PPC64 analog: PPC64 has no
+;;; complex-float register class).  Emit site arm642.lisp:1691 -- the
+;;; AREF of a (complex single-float) vector into a BOXED target.
+;;;
+;;; Body is the landed double->heap allocation sequence, which is this
+;;; file's own canonical inline-alloc shape (header into a temp,
+;;; allocptr -= size-fulltag, compare against allocbase, uuo-alloc-trap
+;;; on underflow, store header, take the tagged pointer, re-mask
+;;; allocptr, store the payload).  ARM32's variant of the same
+;;; sequence differs only in reading save-allocbase out of the TCR and
+;;; in borrowing LR as an address temp; neither is needed here.
+;;;
+;;; complex-single-float is (define-fixedsized-object complex-single-float
+;;; () value) at arm64-arch.lisp:609, so .realpart = .value = -4 and
+;;; .imagpart = 0: the two singles are ADJACENT, realpart at the lower
+;;; address.  Matt keeps a complex-single-float in ONE 64-bit FPR (S
+;;; lanes 0 and 1 of the D view -- copy-complex-single-float,
+;;; %make-complex-single-float above), so one D-form STUR at .realpart
+;;; writes both lanes, exactly as the landed
+;;; misc-set-c-complex-single-float does.  There is no
+;;; complex-single-float-header constant in his arm64-arch.lisp, so the
+;;; header is built the way define-header would:
+;;; (element-count << num-subtag-bits) | subtag.
+(define-arm64-vinsn complex-single-float->node (((result :lisp))
+                                                ((fpreg :complex-single-float))
+                                                ((header-temp :u64)))
+  (mov header-temp (:$ (logior (ash arm64::complex-single-float.element-count
+                                    arm64::num-subtag-bits)
+                               arm64::subtag-complex-single-float)))
+  (sub allocptr allocptr (:$ (- arm64::complex-single-float.size
+                                arm64::fulltag-misc)))
+  (cmp allocptr allocbase)
+  (b.hs :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (stur header-temp (:@ allocptr (:$ arm64::misc-header-offset)))
+  (mov result allocptr)
+  (and allocptr allocptr (:$ (logand #xffffffffffffffff
+                                     (lognot arm64::fulltagmask))))
+  (stur (:d fpreg) (:@ result (:$ arm64::complex-single-float.realpart))))
+
+(define-arm64-vinsn complex-double-float+-2 (((result :complex-double-float))
+                                             ((x :complex-double-float)
+                                              (y :complex-double-float))
+                                             ((rr :double-float)
+                                              (ri :double-float)
+                                              (t0 :double-float)))
+  (fadd rr (:d x) (:d y))
+  (dup ri (:d x 1))
+  (dup t0 (:d y 1))
+  (fadd ri ri t0)
+  (fmov (:d result) rr)
+  (ins (:d result 1) (:d ri 0)))
+
+(define-arm64-vinsn complex-double-float--2 (((result :complex-double-float))
+                                             ((x :complex-double-float)
+                                              (y :complex-double-float))
+                                             ((rr :double-float)
+                                              (ri :double-float)
+                                              (t0 :double-float)))
+  (fsub rr (:d x) (:d y))
+  (dup ri (:d x 1))
+  (dup t0 (:d y 1))
+  (fsub ri ri t0)
+  (fmov (:d result) rr)
+  (ins (:d result 1) (:d ri 0)))
+
+(define-arm64-vinsn complex-double-float*-2 (((result :complex-double-float))
+                                             ((x :complex-double-float)
+                                              (y :complex-double-float))
+                                             ((rr :double-float)
+                                              (ri :double-float)
+                                              (xi :double-float)
+                                              (yi :double-float)))
+  (dup xi (:d x 1))
+  (dup yi (:d y 1))
+  (fmul rr (:d x) (:d y))               ;xr*yr
+  (fmul ri xi yi)                       ;xi*yi
+  (fsub rr rr ri)                       ;realpart
+  (fmul xi xi (:d y))                   ;xi*yr
+  (fmul yi yi (:d x))                   ;yi*xr
+  (fadd ri xi yi)                       ;imagpart
+  (fmov (:d result) rr)
+  (ins (:d result 1) (:d ri 0)))
+
+(define-arm64-vinsn complex-single-float+-2 (((result :complex-single-float))
+                                             ((x :complex-single-float)
+                                              (y :complex-single-float))
+                                             ((rr :single-float)
+                                              (ri :single-float)
+                                              (t0 :single-float)))
+  (fadd rr (:s x) (:s y))
+  (dup ri (:s x 1))
+  (dup t0 (:s y 1))
+  (fadd ri ri t0)
+  (fmov (:s result) rr)
+  (ins (:s result 1) (:s ri 0)))
+
+(define-arm64-vinsn complex-single-float--2 (((result :complex-single-float))
+                                             ((x :complex-single-float)
+                                              (y :complex-single-float))
+                                             ((rr :single-float)
+                                              (ri :single-float)
+                                              (t0 :single-float)))
+  (fsub rr (:s x) (:s y))
+  (dup ri (:s x 1))
+  (dup t0 (:s y 1))
+  (fsub ri ri t0)
+  (fmov (:s result) rr)
+  (ins (:s result 1) (:s ri 0)))
+
+(define-arm64-vinsn complex-single-float*-2 (((result :complex-single-float))
+                                             ((x :complex-single-float)
+                                              (y :complex-single-float))
+                                             ((rr :single-float)
+                                              (ri :single-float)
+                                              (xi :single-float)
+                                              (yi :single-float)))
+  (dup xi (:s x 1))
+  (dup yi (:s y 1))
+  (fmul rr (:s x) (:s y))               ;xr*yr
+  (fmul ri xi yi)                       ;xi*yi
+  (fsub rr rr ri)                       ;realpart
+  (fmul xi xi (:s y))                   ;xi*yr
+  (fmul yi yi (:s x))                   ;yi*xr
+  (fadd ri xi yi)                       ;imagpart
+  (fmov (:s result) rr)
+  (ins (:s result 1) (:s ri 0)))
+
+;;; ==================================================================
+;;; DELIBERATELY NOT DEFINED HERE -- six emitted-but-undefined names,
+;;; every one on a statically UNREACHABLE path, each left out for a
+;;; stated reason rather than overlooked.  A missing definition fails
+;;; LOUDLY ("Unknown vinsn") the first time codegen reaches it; a
+;;; guessed one compiles clean and corrupts silently, which is the
+;;; worse failure and the reason these are absent.
+;;;
+;;;   save-nvrs / restore-nvrs (arm642.lisp:890, :903, :920)
+;;;     (defparameter *arm642-nvrs* nil) at arm642.lisp:206 and NOTHING
+;;;     assigns it, so nx2-afunc-allocate-global-registers (nx2.lisp:104)
+;;;     returns 0 and the (unless (= 0 pregs) ...) guard in
+;;;     arm642-lambda never
+;;;     fires.  Beyond that, the operand convention cannot be settled
+;;;     from PPC64: ppc64-vinsns.lisp:3327 takes FIRST, a REGISTER
+;;;     NUMBER, while his emit site passes N, a COUNT.  Question that
+;;;     would settle it: is (! save-nvrs n) a count of the first N of
+;;;     save0..save3, pushed save0-first (so restore-nvrs's basereg
+;;;     addresses save[n-1] at offset 0)?  Confirm with Matt or by
+;;;     populating *arm642-nvrs* and reading the generated code.
+;;;
+;;;   call-known-symbol-ool / jump-known-symbol-ool (arm642.lisp:2774-2775)
+;;;     Emitted only under *arm642-optimize-for-space*, which is NIL by
+;;;     defvar (:162) and re-bound to NIL at :518.  These two names
+;;;     exist in NO other port -- not PPC64, PPC32, X8664, X8632 or
+;;;     ARM32 -- so there is nothing to line-port.  Question that would
+;;;     settle them: which subprim do they call?  The in-line siblings
+;;;     call-known-symbol / jump-known-symbol load fname's fcell and
+;;;     branch (ppc64-vinsns.lisp:3701/3708); an "ool" variant is
+;;;     presumably .SPjmpsym plus a call counterpart, but that is a
+;;;     guess and there is no kernel entry named for it.
+;;;
+;;;   clear-pending-fpu-exceptions / trap-if-fpu-exception
+;;;     (arm642.lisp:7680, :7702)
+;;;     Emitted only under *arm642-float-safety*, which is NIL by
+;;;     default, re-bound to NIL at :565, and set only from a
+;;;     $decl_float_safety declaration (:858); no source under level-0/,
+;;;     level-1/ or lib/ carries one.  ARM32 (arm-vinsns.lisp:1339,
+;;;     :1346) reads and writes FPSCR and takes the ENABLE mask from
+;;;     tcr.lisp-fpscr -- and Matt's arm64 TCR has no lisp-fpscr field.
+;;;     AArch64 also splits FPSCR into FPCR (enables, bits 8-12 and 15)
+;;;     and FPSR (cumulative status, bits 0-4 and 7), reachable only
+;;;     through MRS/MSR whose :sysreg operand in this assembler is a
+;;;     RAW 15-bit number (arm64-asm.lisp:1296) -- there are no
+;;;     symbolic names.  Questions that would settle them: (a) should
+;;;     the enable mask come from a new tcr.lisp-fpscr field or straight
+;;;     from FPCR, and (b) does arm64-exceptions.c decode
+;;;     uuo-error-fpu-exception (the template exists at
+;;;     arm64-asm.lisp:481)?  Both are needed before the pair can be
+;;;     written; either alone is useless, since the emit site always
+;;;     emits both.
+;;; ==================================================================
+
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
 ;;; compiled against a differently-ordered table.
