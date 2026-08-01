@@ -2845,7 +2845,7 @@
           (if (arm642-mvpass-p xfer)
             (let* ((call-reg (if symp ($ arm64::fname) ($ arm64::nfn))))
               (if label-p
-                (arm642-copy-register seg call-reg ($ arm64::nfn))
+                (arm642-copy-register seg call-reg ($ arm64::fn))
                 (if a-reg
                   (arm642-copy-register seg call-reg a-reg)
                   (arm642-store-immediate seg func call-reg)))
@@ -2855,7 +2855,7 @@
             (progn
               (if label-p
                 (progn
-                  (arm642-copy-register seg ($ arm64::nfn) ($ arm64::nfn))
+                  (arm642-copy-register seg ($ arm64::nfn) ($ arm64::fn))
                   (! call-label (aref *backend-labels* label)))
                 (progn
                   (if a-reg
@@ -2870,8 +2870,7 @@
               (progn
                 (if label-p
                   (unless known-fixed-nargs
-                    ;; ARM64: no fn register, nfn→nfn is identity
-                    (arm642-copy-register seg arm64::nfn arm64::nfn)))
+                    (arm642-copy-register seg arm64::nfn arm64::fn)))
                 (unless (or label-p a-reg) (arm642-store-immediate seg func destreg))
                 (unless known-fixed-nargs
                   (arm642-restore-full-lisp-context seg))
@@ -2883,7 +2882,7 @@
                       (! jump-known-function)))))
               (progn
                 (if label-p
-                  (arm642-copy-register seg arm64::nfn arm64::nfn)
+                  (arm642-copy-register seg arm64::nfn arm64::fn)
                   (unless a-reg (arm642-store-immediate seg func destreg)))
                 (cond ((or spread-p (null nargs))
                        (if symp
