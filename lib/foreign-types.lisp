@@ -1462,6 +1462,8 @@ result-type-specifer is :VOID or NIL"
 	(format out " (#x~8,'0x) " addr)
         #+x8664-target
         (format out " (#x~16,'0x) " addr)
+        #+arm64-target
+        (format out " (#x~16,'0x) " (%ptr-to-int addr))
 	(format out " {unresolved} "))
       (when (and container (or (not (typep container 'macptr))
 				    (not (%null-ptr-p container))))
