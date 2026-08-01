@@ -2221,6 +2221,50 @@ xMakeDataExecutable(BytePtr start, natural nbytes)
   extern void flush_cache_lines(void *, size_t);
   flush_cache_lines(start,nbytes);
 #endif
+#ifdef ARM64
+  /* Without this arm the whole function is an empty body on arm64:
+     lisp-kernel/linuxarm64/Makefile defines ARM64 and neither ARM nor
+     PPC, so no I-cache maintenance ran after compact_dynamic_heap()
+     relocated a code vector, after purify() copied one into the
+     read-only area, or after the fasl loader built one
+     (level-0/nfasload.lisp $fasl-code-vector -> %make-code-executable
+     -> ff-call kernel-import-MakeDataExecutable).  Harmless on cores
+     that advertise CTR_EL0.IDC/DIC; a correctness bug on cores that do
+     not.
+
+     This is the `#ifdef PPC' arm above, unchanged in structure: round
+     the range down/up to a cache-line boundary and make the same
+     3-argument flush_cache_lines(base, nlines, line_size) call.  The
+     `#ifdef ARM' arm is deliberately NOT the model -- its 2-argument
+     flush_cache_lines is an __ARM_NR_cacheflush svc, and AArch64 has no
+     such private syscall (it exposes EL0 cache maintenance directly).
+
+     ARM64-DEVIATION: only the SOURCE of line_size differs from the PPC
+     arm.  PPC reads AT_DCACHEBSIZE out of the ELF auxv into the global
+     cache_block_size (see main(), above); the AArch64 platform datum for
+     the same quantity is CTR_EL0, whose IminLine (bits 3:0) and DminLine
+     (bits 19:16) hold log2 of the smallest I- and D-cache line in WORDS,
+     hence 4 << field bytes.  Linux sanitises CTR_EL0 to the system-wide
+     minimum, so the smaller of the two fields is a safe step for both
+     the `dc cvau' and the `ic ivau' loop inside flush_cache_lines.
+     cache_block_size is deliberately neither read nor written here:
+     nothing initialises it on this target, so it would keep its 32
+     default, and thread_manager.c uses it as a lock *padding* granule,
+     which is not the same quantity as a maintenance granule.  */
+  {
+    extern void flush_cache_lines(natural, natural, natural);
+    natural ustart = (natural) start, base, end, ctr, dline, iline, linesize;
+
+    __asm__ __volatile__ ("mrs %0, ctr_el0" : "=r" (ctr));
+    dline = ((natural)4) << ((ctr >> 16) & 0xf);
+    iline = ((natural)4) << (ctr & 0xf);
+    linesize = (dline < iline) ? dline : iline;
+
+    base = (ustart) & ~(linesize-1);
+    end = (ustart + nbytes + linesize - 1) & ~(linesize-1);
+    flush_cache_lines(base, (end-base)/linesize, linesize);
+  }
+#endif
 }
 
 natural
