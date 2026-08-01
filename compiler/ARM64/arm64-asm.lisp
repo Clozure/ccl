@@ -2273,6 +2273,16 @@
       ((:tbit-x :tbit-w)
        (imm (dpb (ldb (byte 1 31) word) (byte 1 5) (ldb (byte 5 19) word))))
       (:fpimm8 (imm (decode-fp-imm8 (ldb (byte 8 13) word))))
+      ;; A split field: immlo @ 30:29, immhi @ 23:5.  This is the inverse of
+      ;; encode-immediate-operand's :pcrel arm; it cannot go through
+      ;; extract-immediate-field, which handles one contiguous bytespec.
+      (:pcrel
+       (imm (sign-extend (logior (ash (ldb (byte 19 5) word) 2)
+                                 (ldb (byte 2 29) word))
+                         21)))
+      ;; Encodes no bits -- the 0.0 is part of the base opcode -- so there is
+      ;; nothing to extract and the value is the literal the encoder accepts.
+      (:fpzero (imm 0))
       (t (imm (extract-immediate-field word class))))))
 
 (defun encode-index-operand (insn register-operand)
