@@ -2068,7 +2068,7 @@
                     (! array-data-vector-ref v src)
                     (progn
                       (arm642-copy-register seg v src)
-                      (! deref-vector-header v idx-reg v idx-reg)))
+                      (! deref-vector-header v idx-reg)))
                   (arm642-vset1 seg vreg xfer type-keyword v idx-reg constidx val-reg (arm642-unboxed-reg-for-aset seg type-keyword val-reg safe constval) constval needs-memoization))))))))))
 
 (defun arm642-aref3 (seg vreg xfer array i j k safe typekeyword dim0 dim1 dim2 &optional (simple t))
