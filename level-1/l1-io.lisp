@@ -1715,7 +1715,7 @@ printed using \"#:\" syntax.  NIL means no prefix is printed.")
         (%lfun-name-string f stream)
         (format stream " (+~d)" offset)))))
 
-#+x8664-target
+#+(or x8664-target arm64-target)
 (defmethod print-object ((sv symbol-vector) stream)
   (print-unreadable-object (sv stream :identity t :type t)
     (format stream "for ~s" (%symptr->symbol (%symvector->symptr sv)))))
