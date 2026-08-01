@@ -6869,7 +6869,9 @@
                             (incf count))
                     (return nil))))
             (let* ((span (1+ (- max min))))
-              (when (and (> count 4)
+              (when (and (typep min '(signed-byte 32))
+                         (typep span '(unsigned-byte 31)) ;sic
+                         (> count 4)
                          (>= count (the fixnum (- span (the fixnum (ash span -2))))))
                 (let* ((defaultlabel (backend-get-next-label))
                        (endlabel (backend-get-next-label))
