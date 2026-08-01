@@ -10,16 +10,20 @@
  *
  * ARM64 accessor macros in lisp_globals.h:
  *
- *   nrs_symbol(s) = ((lispsymbol *)(nil_value - fulltag_nil + dnode_size))[s]
- *   lisp_global(g)= ((LispObj  *)(nil_value - fulltag_nil - dnode_size))[g]
+ *   nrs_symbol(s) = ((lispsymbol *)(nil_value - fulltag_nil + 2*dnode_size))[s]
+ *   lisp_global(g)= ((LispObj  *)(nil_value - fulltag_nil))[g]
  *
  * In these macros, nil_value is the runtime value of where nil ended
  * up in memory: in other words, it's the same as the contents of
  * rnil.
  *
  * Because rnil points to a weird cons cell that straddles two dnodes,
- * the nil-relative symbols begin dnode_size above nil's untagged
- * base, and the lisp globas begin one dnode_size below it.
+ * NIL's structure occupies both of them: the nil-relative symbols
+ * begin 2*dnode_size above nil's untagged base (T's symbol is the
+ * first thing after NIL, at canonical-nil + #x20 -- see
+ * canonical-nil-value/canonical-t-value in arm64-arch.lisp), and the
+ * lisp globals grow downward from the untagged base itself (the g'th
+ * global, g negative, is at untagged nil + g*node_size).
  *
  * The order of both records must match lisp_globals.h and the
  * *kernel-globals* / *nilreg-relative-symbols* lists in
@@ -28,9 +32,9 @@
 
 #include "arm64-constants.h"
 
-nrs_origin = dnode_size - fulltag_nil
+nrs_origin = 2*dnode_size - fulltag_nil
 nrs_symbol_fulltag = fulltag_symbol
-lisp_globals_limit = -(fulltag_nil + dnode_size)
+lisp_globals_limit = -fulltag_nil
 
 /* Each nrs entry is a whole symbol; the label points at the tagged
    symbol, i.e. fulltag_symbol into the object, with the rest following. */
@@ -231,3 +235,26 @@ _ends
 
 /* Traditional name, differs from C */
         .set lisp_globals.ret1val_addr, lisp_globals.ret1valn
+
+/* T is nrs_symbol(0) (lisp_globals.h), so the traditional t_offset --
+   tagged T relative to rnil -- is nrs.tsym by identity. */
+t_offset = nrs.tsym
+
+/* Geometry guards.  The compiler pins NIL and T at canonical addresses:
+   canonical-nil-value = #x13000 + fulltag_nil and canonical-t-value =
+   #x13020 + fulltag_symbol (compiler/ARM64/arm64-arch.lisp), i.e. T's
+   symbol begins two dnodes above NIL's untagged base, and images are
+   built with that geometry.  lisp_globals.h agrees: nrs_symbol(s) reads
+   at nil_value - fulltag_nil + 2*dnode_size, lisp_global(g) at
+   nil_value - fulltag_nil (g negative).  If either record above drifts,
+   every rnil-relative reference assembled from it silently addresses
+   the wrong object; fail the build instead. */
+.if (nrs.tsym != ((0x13020 + fulltag_symbol) - (0x13000 + fulltag_nil)))
+.error "nrs geometry drifted: nrs.tsym != canonical-t-value - canonical-nil-value (arm64-arch.lisp)"
+.endif
+.if (nrs.nilsym != (nrs.tsym + symbol.size))
+.error "nrs spacing drifted: static symbols must be symbol.size apart"
+.endif
+.if (lisp_globals.get_tcr != (-node_size - fulltag_nil))
+.error "lisp_globals geometry drifted: get_tcr != GET_TCR*node_size - fulltag_nil (lisp_globals.h)"
+.endif
