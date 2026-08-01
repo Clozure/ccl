@@ -19,7 +19,7 @@
                                        ((n :u16const)))
   (cmp nargs (:$ (:apply ash n 3)))
   (b.eq :ok)
-  (uuo-error-wrong-nargs)
+  (uuo-error-wrong-number-of-args)
   :ok)
                                                   
 (define-arm64-vinsn save-lisp-context-no-stack-args (()
