@@ -7727,6 +7727,84 @@
 ;;;     emits both.
 ;;; ==================================================================
 
+;;; ---------------------------------------------------------------
+;;; arm64: define call-known-symbol-ool and jump-known-symbol-ool
+;;; ---------------------------------------------------------------
+
+;;; ============================================================
+;;; call-known-symbol-ool / jump-known-symbol-ool
+;;; ============================================================
+;;;
+;;; Two of the six vinsns patches/0099 left OPEN.  Its stated reason was
+;;; "neither name exists in ANY port, so there is nothing to line-port".
+;;; That is wrong, and wrong twice over: both are defined in PPC64 -- our
+;;; primary doctrine reference -- at ppc64-vinsns.lisp:3943 and :3945, and
+;;; also in PPC32 (:3975/:3977) and ARM32 (:4072/:4074).  NOT in x86: neither
+;;; x8664-vinsns.lisp nor x8632-vinsns.lisp defines either name -- 0099 was
+;;; RIGHT about x86 and wrong only about PPC64/PPC32/ARM32.  They were
+;;; missed because they are written with the SUBPRIM macro spelling,
+;;;
+;;;     (define-ppc64-subprim-jump-vinsn (jump-known-symbol-ool) .SPjmpsym)
+;;;     (define-ppc64-subprim-call-vinsn (call-known-symbol-ool)  .SPjmpsym)
+;;;
+;;; not `define-<arch>-vinsn`.  (The same blind spot in our own tooling
+;;; falsely reported five vinsns as having no reference in any port; both
+;;; scanners now match all four spellings and carry that case as a planted
+;;; control.)  So these need no invention -- PPC64 is the reference.
+;;;
+;;; REFERENCE: PPC64.  The expanding macro is ppc64-vinsns.lisp:3927/:3931 --
+;;;   call form:  (NAME :call :subprim) (() ()) (bla  spno)
+;;;   jump form:  (NAME :jumpLR)        (() ()) (ba   spno)
+;;;
+;;; WHY ONE SUBPRIM SERVES BOTH.  .SPjmpsym is a JUMP subprim: our body
+;;; (lisp-kernel/spentry-D-call-builtins.s:128) is
+;;;     ldr nfn, [fname, #symbol.fcell]
+;;;     ldr temp0, [nfn, #_function.codevector]
+;;;     br  temp0
+;;; -- it tail-jumps into the callee and never returns.  The CALL variant
+;;; therefore works by LINKING to it: `bla` on PPC / `blr` here sets LR to the
+;;; instruction after the call, .SPjmpsym's `br` leaves that LR untouched, and
+;;; the CALLEE returns straight to us.  The JUMP variant uses `ba` / `br`,
+;;; leaving our caller's LR in place so the callee returns past us.  That is
+;;; the whole difference between the pair, and it is why the same subprim
+;;; number appears in both.  Getting it backwards would silently return one
+;;; frame too far.
+;;;
+;;; OPERANDS: none, exactly as PPC64.  `fname` already holds the symbol -- the
+;;; same contract the non-OOL pair relies on (arm64-vinsns.lisp:799/:812 read
+;;; `fname` implicitly), and these are simply the out-of-line arm of the same
+;;; emitter, arm642-call-symbol under *arm642-optimize-for-space*.  Note
+;;; PPC64's call-known-symbol declares a result but call-known-symbol-ool does
+;;; NOT; we follow PPC64 and declare none.
+;;;
+;;; BODY SHAPE: the settled in-tree arm64 subprim idiom -- materialise the
+;;; sptab offset, load the entry through rcontext, branch.  `blr` for the call
+;;; form (arm64-vinsns.lisp:1947, misc-ref), `br` for the jump form (:1422,
+;;; nvalret).  arm64 has no `bla`/`ba` equivalent and no absolute-address
+;;; branch, so the two-instruction materialisation is not a deviation from
+;;; PPC64's logic, only from its ISA.
+;;;
+;;; ⚠️ UNREACHED TODAY.  Both sit behind *arm642-optimize-for-space*, which is
+;;; NIL everywhere in the tree, so a green build does not exercise them.  They
+;;; are landed because the definitions are determined, not because they were
+;;; run -- do not record them as verified until something sets that variable.
+
+(define-arm64-vinsn (call-known-symbol-ool :call :subprim)
+    (()
+     ()
+     ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPjmpsym")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+(define-arm64-vinsn (jump-known-symbol-ool :jumpLR)
+    (()
+     ()
+     ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPjmpsym")))
+  (ldr temp (:@ rcontext temp))
+  (br temp))
+
 ;;; Reconcile the template ordinals baked into the vinsns just defined
 ;;; with the assembler's current template table, in case this file was
 ;;; compiled against a differently-ordered table.
