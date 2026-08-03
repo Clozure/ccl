@@ -2189,25 +2189,19 @@
 ;;; ============ misc-ref-c-complex-double-float ============
 ;;; PPC64 ppc64-vinsns.lisp:271: two lfd loads (realpart @
 ;;; complex-double-float.realpart + 16k, imagpart +8) into an FPR pair.
-;;; Matt: ONE 128-bit vector register, D lanes 0/1 -- but his template
-;;; table has NO Q-form load/store, so the transfer is composed exactly
-;;; like his %make-complex-double-float: load lane 0 via the D view
-;;; (zeroing the upper lane -- hence low lane FIRST), load the imag word
-;;; into a D temp, INS it into lane 1.  (:d dest) is load-bearing: the
-;;; :complex-double-float class is (:fpr 128) and matches no load
-;;; template bare.  Data start .realpart = +4 = misc-complex-dfloat-
-;;; offset (pad word => absolute 16-alignment, arch @199-202, U6a);
-;;; disps 16k+4 / 16k+12, k <= 11 handler-gated (conservative) => both in simm9.
+;;; A complex-double-float lives in ONE 128-bit vector register here, so this
+;;; is a single Q-form LDUR.  A bare :complex-double-float operand resolves to
+;;; the Q view through vinsn-gpr-class->family+width.
+;;; Data start .realpart = +4 from the fulltag-misc pointer = base+16, and base
+;;; is dnode-aligned, so the 128-bit access is naturally aligned.  That is what
+;;; the arch pad cell is for.  disp 16k+4, k <= 11 handler-gated
+;;; (conservative) => in simm9.
 (define-arm64-vinsn misc-ref-c-complex-double-float
     (((dest :complex-double-float))
      ((v :lisp)
-      (idx :u32const))
-     ((dtemp :double-float)))
-  (ldur (:d dest) (:@ v (:$ (:apply + arm64::complex-double-float.realpart
-                                    (:apply ash idx 4)))))
-  (ldur dtemp (:@ v (:$ (:apply + (+ arm64::complex-double-float.realpart 8)
-                                (:apply ash idx 4)))))
-  (ins (:d dest 1) (:d dtemp 0)))
+      (idx :u32const)))
+  (ldur dest (:@ v (:$ (:apply + arm64::complex-double-float.realpart
+                               (:apply ash idx 4))))))
 
 ;;; ============================================================
 ;;; Variable-index misc-ref (12) -- scaled-idx = byte offset INCLUDING
@@ -2319,20 +2313,22 @@
 
 ;;; ============ misc-ref-complex-double-float ============
 ;;; PPC64 ppc64-vinsns.lisp:262: (addi idx2 scaled-idx 8) then two lfdx
-;;; into an FPR pair.  Composed 128-bit load (U6a): PPC's idx2-temp
-;;; structure carried for the second lane's address; low lane loaded
-;;; FIRST via the D view (zeroing lane 1), then ins.  scaled-idx
-;;; already includes misc-complex-dfloat-offset (scale-128bit contract).
+;;; into an FPR pair.  One 128-bit load here, as in the constant-index
+;;; sibling.  There is no Q-form REG-OFFSET template -- arm64-asm.lisp
+;;; defines :q loads/stores only for :mem-scaled/:uoff4 and
+;;; :mem-unscaled/:simm9 -- so fold the index into the address
+;;; with the plain add + [reg,#0] shape this file already uses for
+;;; mem-ref-double-float.  idx2 is imm-class (x0-x5), which the GC does
+;;; not scan as a node, and no allocation point separates the add from
+;;; the load.  scaled-idx already includes misc-complex-dfloat-offset
+;;; (scale-128bit contract).
 (define-arm64-vinsn misc-ref-complex-double-float
     (((dest :complex-double-float))
      ((v :lisp)
       (scaled-idx :u64))
-     ((idx2 :u64)
-      (dtemp :double-float)))
-  (add idx2 scaled-idx (:$ 8))
-  (ldr (:d dest) (:@ v scaled-idx))
-  (ldr dtemp (:@ v idx2))
-  (ins (:d dest 1) (:d dtemp 0)))
+     ((idx2 :u64)))
+  (add idx2 v scaled-idx)
+  (ldur dest (:@ idx2 (:$ 0))))
 
 ;;; ============================================================
 ;;; Constant-index misc-set (12).  Same displacement arithmetic as the
@@ -2480,21 +2476,15 @@
 
 ;;; ============ misc-set-c-complex-double-float ============
 ;;; PPC64 ppc64-vinsns.lisp:279: two stfd (realpart @ .realpart + 16k,
-;;; imagpart +8) from an FPR pair.  Composed 128-bit store (U6a): STUR
-;;; the D view (lane 0), DUP lane 1 into a D temp (his
-;;; %complex-double-float-imagpart idiom), STUR the temp.  (:d val)
-;;; load-bearing ((:fpr 128) matches no store template bare).
-;;; disps 16k+4 / 16k+12, k <= 11 handler-gated (conservative).
+;;; imagpart +8) from an FPR pair.  One 128-bit store here: a Q-form STUR.  A
+;;; bare :complex-double-float operand is the Q view.
+;;; disp 16k+4, k <= 11 handler-gated (conservative).
 (define-arm64-vinsn misc-set-c-complex-double-float
     (((val :complex-double-float))
      ((v :lisp)
-      (idx :u32const))
-     ((dtemp :double-float)))
-  (stur (:d val) (:@ v (:$ (:apply + arm64::complex-double-float.realpart
-                                   (:apply ash idx 4)))))
-  (dup dtemp (:d val 1))
-  (stur dtemp (:@ v (:$ (:apply + (+ arm64::complex-double-float.realpart 8)
-                                (:apply ash idx 4))))))
+      (idx :u32const)))
+  (stur val (:@ v (:$ (:apply + arm64::complex-double-float.realpart
+                              (:apply ash idx 4))))))
 
 ;;; ============================================================
 ;;; Variable-index misc-set (12) -- scaled-idx contract as misc-ref-*.
@@ -2601,19 +2591,16 @@
 
 ;;; ============ misc-set-complex-double-float ============
 ;;; PPC64 ppc64-vinsns.lisp:287: (addi idx2 scaled-idx 8), two stfdx.
-;;; Composed store (U6a): str (:d val) lane 0 at scaled-idx, dup lane 1
-;;; into dtemp, str dtemp at idx2.
+;;; One 128-bit store; no Q-form reg-offset template exists, so plain add
+;;; into the GPR temp then [reg,#0] -- the mem-set-double-float shape.
 (define-arm64-vinsn misc-set-complex-double-float
     (()
      ((val :complex-double-float)
       (v :lisp)
       (scaled-idx :u64))
-     ((idx2 :u64)
-      (dtemp :double-float)))
-  (add idx2 scaled-idx (:$ 8))
-  (str (:d val) (:@ v scaled-idx))
-  (dup dtemp (:d val 1))
-  (str dtemp (:@ v idx2)))
+     ((idx2 :u64)))
+  (add idx2 v scaled-idx)
+  (stur val (:@ idx2 (:$ 0))))
 
 ;;; ============ misc-ref-c-bit-fixnum ============
 ;;; The one member of the MISC-REF family this file deferred (see the header:
@@ -3379,21 +3366,19 @@
   (ldur (:d target) (:@ source (:$ arm64::complex-single-float.realpart))))
 
 ;;; ============ get-complex-double ============
-;;; Emit site: w3 complex-double aset leg (arm642-additions-w3.lisp:422).
 ;;; PPC64 ppc64-vinsns.lisp:2651 (lfd realpart / lfd imagpart into a
-;;; pair); Matt: ONE 128-bit vector register, lanes 0/1 of the D view
-;;; (his %make-complex-double-float).  His assembler has NO Q-form
-;;; load/store template (verified @115b7aa), so the load is two D-form
-;;; LDURs + INS -- exactly his %make-complex-double-float lane idiom.
-;;; Offsets symbolic: complex-double-float has a PAD slot (his arch
-;;; @449-452: pad @+4, realpart @+12, imagpart @+20; both simm9,
-;;; unaligned => LDUR).
+;;; pair).  A complex-double-float is ONE 128-bit vector register here,
+;;; so this is one Q-form LDUR.  Offsets are symbolic: complex-double-float
+;;; carries a pad cell so that .realpart (+4 from the fulltag-misc pointer) is
+;;; 16-aligned in absolute terms.  The earlier two-D-LDUR-plus-INS form here
+;;; recorded that no Q template existed; "Support :q sized loads and stores"
+;;; added them.
+;;; No emit site refers to this vinsn today; get-complex-double-float below is
+;;; what arm642.lisp uses.  Converted rather than deleted so the family stays
+;;; uniform.
 (define-arm64-vinsn get-complex-double (((target :complex-double-float))
-                                        ((source :lisp))
-                                        ((temp :double-float)))
-  (ldur (:d target) (:@ source (:$ arm64::complex-double-float.realpart)))
-  (ldur temp (:@ source (:$ arm64::complex-double-float.imagpart)))
-  (ins (:d target 1) (:d temp 0)))
+                                        ((source :lisp)))
+  (ldur target (:@ source (:$ arm64::complex-double-float.realpart))))
 
 ;;; ============================================================
 ;;; (f) singletons
@@ -3928,14 +3913,21 @@
 
 ;;; complex-double-float->heap -- box a cdf (both double lanes live in
 ;;; one 128-bit Q reg, :fpr 128 per arm64-asm.lisp:2934) into a fresh
-;;; 32-byte miscobj.  The pad word 16-aligns realpart.  The payload
-;;; store is composed as two D STURs + DUP (the misc-set-c-complex-
-;;; double-float idiom): the template table has no Q-form stur, and a
-;;; bare 128-bit val matches nothing.
+;;; 32-byte miscobj.  The pad word 16-aligns realpart.  The payload is
+;;; ONE Q-form STUR.  The comment that used to stand here said the template
+;;; table has no Q-form stur and that a bare 128-bit val matches nothing.
+;;; That was true when it was written and is now stale: "Support :q sized
+;;; loads and stores" added the :q templates, and a bare
+;;; :complex-double-float operand resolves to the Q view through
+;;; vinsn-gpr-class->family+width.
+;;;
+;;; The composed form also declared an FPR scratch, which this vinsn
+;;; family must not do -- see the note on get-complex-double-float
+;;; below for why a vinsn-local FPR temp lands on the caller's other
+;;; live operand.
 (define-arm64-vinsn complex-double-float->heap (((dest :lisp))
                                                 ((val :complex-double-float))
-                                                ((header :u64)
-                                                 (dtemp :double-float)))
+                                                ((header :u64)))
   (mov header (:$ arm64::complex-double-float-header))
   (sub allocptr allocptr (:$ (- arm64::complex-double-float.size
                                 arm64::fulltag-misc)))
@@ -3946,9 +3938,7 @@
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm64::fulltagmask))
-  (stur (:d val) (:@ dest (:$ arm64::complex-double-float.realpart)))
-  (dup dtemp (:d val 1))
-  (stur dtemp (:@ dest (:$ (+ arm64::complex-double-float.realpart 8)))))
+  (stur val (:@ dest (:$ arm64::complex-double-float.realpart))))
 
 ;;; ============ demand-scan CUT-8: the last vinsn ============
 ;;; trap-unless-single-float -- singles are IMMEDIATES in his scheme
@@ -4002,16 +3992,25 @@
   (uuo-error-cstack-overflow)
   :ok)
 
-;;; get-complex-double-float -- x8664's 128-bit load; his template
-;;; table has no Q-form load, so composed exactly like w3a's
-;;; misc-ref-c-complex-double-float: D-lane 0 (zeroing upper), imag
-;;; word into a D temp, INS to lane 1.  realpart = +4 (see w3a KEY).
+;;; get-complex-double-float -- a single 128-bit Q-form LDUR.  A bare
+;;; :complex-double-float operand is the Q view.  realpart = +4 from the
+;;; fulltag-misc pointer = base+16, naturally aligned.
+;;;
+;;; This vinsn MUST NOT declare an FPR temp.  with-fp-target and
+;;; available-fp-temp CHOOSE an FPR without reserving it, as the comment
+;;; above with-imm-target in compiler/backend.lisp says in as many words,
+;;; while a vinsn temp is allocated by select-fp-temp from
+;;; *available-backend-fp-temps* minus only that vinsn's own result and
+;;; args, in match-template-vregs.  So a scratch FPR here lands on the
+;;; caller's OTHER live complex-double-float operand: in
+;;; arm642-%complex-double-float+-2 the operands are r1 = target = v0 and
+;;; r2 = v1, the argument forms are unboxed b-first, and the second
+;;; unbox gets scratch = v1 -- whose D-form load also zeroes the upper
+;;; lane, so y became #C(<a.imagpart> 0d0) and
+;;; (+ #C(1d0 2d0) #C(3d0 4d0)) returned #C(3d0 2d0).
 (define-arm64-vinsn get-complex-double-float (((result :complex-double-float))
-                                              ((source :lisp))
-                                              ((dtemp :double-float)))
-  (ldur (:d result) (:@ source (:$ arm64::complex-double-float.realpart)))
-  (ldur dtemp (:@ source (:$ (+ arm64::complex-double-float.realpart 8))))
-  (ins (:d result 1) (:d dtemp 0)))
+                                              ((source :lisp)))
+  (ldur result (:@ source (:$ arm64::complex-double-float.realpart))))
 
 ;;; ============ demand-scan CUT-5 wave: 3 vinsns ============
 
