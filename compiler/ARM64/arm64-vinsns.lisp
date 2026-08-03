@@ -7674,57 +7674,121 @@
   (fmov (:s result) rr)
   (ins (:s result 1) (:s ri 0)))
 
+;;; ============ save-nvrs / restore-nvrs ============
+;;; PPC64 canon: ppc64-vinsns.lisp:3327 (save-nvrs) pushes save0 FIRST
+;;; (stdu -8 vsp), so the LAST-pushed register ends at [vsp+0]; :3348
+;;; (restore-nvrs) loads that last-saved register from offset 0 and
+;;; walks back toward save0 at increasing 8-byte offsets, touching VSP
+;;; in NEITHER body.  Operand convention (the question patches/0099
+;;; left open, settled by P2.4 -- comms/VINSN-UNRESOLVED-16m63.md):
+;;; PPC passes FIRST, an encoded register number (save0=r31 counting
+;;; DOWN); his arm64 emitters pass N, a COUNT of the first N pool
+;;; registers (arm642-save-nvrs emits `(! save-nvrs n)`;
+;;; arm642-restore-nvrs emits `(! restore-nvrs n basereg)` after
+;;; folding PPC's separate byte-offset operand into BASEREG -- vsp
+;;; itself, or a computed node/imm temp, so that operand is class T
+;;; with an explicit (:x) view, the fixnum-add convention).  The pool
+;;; is save0..save3 ONLY: x18 is the AAPCS64 platform register and
+;;; x23..x28 are dedicated (rnil/tsp/vsp/allocptr/allocbase/rcontext),
+;;; so N <= 4 by construction.  For N=4 the vstack reads, from VSP up:
+;;; save3 save2 save1 save0.  Attributes are PPC64's on both.
+;;; Both are INERT until *arm642-nvrs* (arm642.lisp:206) is populated;
+;;; the pool and these definitions must land in that order, not the
+;;; reverse, or the first NVR allocation dies with "Unknown vinsn".
+
+(define-arm64-vinsn (save-nvrs :push :node :vsp :multiple)
+    (()
+     ((n :u8const)))
+  (str save0 (:@! vsp (:$ (- arm64::node-size))))
+  ((:pred >= n 2)
+   (str save1 (:@! vsp (:$ (- arm64::node-size)))))
+  ((:pred >= n 3)
+   (str save2 (:@! vsp (:$ (- arm64::node-size)))))
+  ((:pred >= n 4)
+   (str save3 (:@! vsp (:$ (- arm64::node-size))))))
+
+(define-arm64-vinsn (restore-nvrs :pop :node :vsp :multiple)
+    (()
+     ((n :u8const)
+      (basereg t)))
+  ((:pred = n 1)
+   (ldr save0 (:@ (:x basereg) (:$ 0))))
+  ((:pred = n 2)
+   (ldr save1 (:@ (:x basereg) (:$ 0)))
+   (ldr save0 (:@ (:x basereg) (:$ 8))))
+  ((:pred = n 3)
+   (ldr save2 (:@ (:x basereg) (:$ 0)))
+   (ldr save1 (:@ (:x basereg) (:$ 8)))
+   (ldr save0 (:@ (:x basereg) (:$ 16))))
+  ((:pred = n 4)
+   (ldr save3 (:@ (:x basereg) (:$ 0)))
+   (ldr save2 (:@ (:x basereg) (:$ 8)))
+   (ldr save1 (:@ (:x basereg) (:$ 16)))
+   (ldr save0 (:@ (:x basereg) (:$ 24)))))
+
+;;; ============ clear-pending-fpu-exceptions ============
+;;; No PPC64 analog EXISTS (checked before consulting ARM32): PPC
+;;; enables FP exceptions in its one combined FPSCR
+;;; (ppc-float.lisp:384-390, mtfsf) and takes them synchronously as
+;;; SIGFPE (ppc-exceptions.c), so it needs no per-operation polling
+;;; prelude.  The compiler analog is ARM32's read-modify-write
+;;; (arm-vinsns.lisp:1339-1344: fmrx / bic #xff / fmxr).  Decision
+;;; (P2.4, ledger 8f340ab3): clear ONLY the cumulative status byte --
+;;; IOC/DZC/OFC/UFC/IXC (bits 0-4) and IDC (bit 7) -- and PRESERVE all
+;;; high FPSR state (QC bit 27, AArch32-compat NZCV bits 28-31); this
+;;; is the same contract as %set-fpscr-status (arm64-float.lisp).  A
+;;; bare `msr fpsr, xzr` would erase that unrelated state: refused.
+;;; FPCR is not touched.
+;;; The sysreg is written as its raw 15-bit op0:op1:CRn:CRm:op2
+;;; encoding #x5a21 (= "fpsr" in *system-registers*, arm64-asm.lisp):
+;;; LAP's parse-operand resolves sysreg NAMES, but the vinsn body
+;;; parser (vinsn-parse-operand) has no sysreg arm, so a name here
+;;; fails at definition time.
+;;; Emit path today: DEAD.  Emitted only under *arm642-float-safety*
+;;; (defarm642-df-op/-sf-op), which no live code sets: safety 3 emits
+;;; $decl_full_safety without $decl_float_safety (nx0.lisp:944-948),
+;;; and the alternate policy lookup key is misspelled singular vs the
+;;; constructor's plural (nx-basic.lisp:208,235).  Defined now so the
+;;; settled semantics need not be re-derived when float-safety
+;;; plumbing lands.
+
+(define-arm64-vinsn clear-pending-fpu-exceptions (()
+                                                  ()
+                                                  ((imm :u64)))
+  (mrs imm (:$ #x5a21))
+  (and imm imm (:$ (ldb (byte 64 0) (lognot #xff)))) ; ldb-wrap: encoder rejects negative logimms
+  (msr (:$ #x5a21) imm))
+
 ;;; ==================================================================
-;;; DELIBERATELY NOT DEFINED HERE -- six emitted-but-undefined names,
-;;; every one on a statically UNREACHABLE path, each left out for a
-;;; stated reason rather than overlooked.  A missing definition fails
-;;; LOUDLY ("Unknown vinsn") the first time codegen reaches it; a
-;;; guessed one compiles clean and corrupts silently, which is the
-;;; worse failure and the reason these are absent.
+;;; DELIBERATELY NOT DEFINED -- one emitted-but-undefined name remains.
+;;; A missing definition fails LOUDLY ("Unknown vinsn") the first time
+;;; codegen reaches it; a guessed one compiles clean and corrupts
+;;; silently, which is the worse failure and the reason it is absent.
 ;;;
-;;;   save-nvrs / restore-nvrs (arm642.lisp:890, :903, :920)
-;;;     (defparameter *arm642-nvrs* nil) at arm642.lisp:206 and NOTHING
-;;;     assigns it, so nx2-afunc-allocate-global-registers (nx2.lisp:104)
-;;;     returns 0 and the (unless (= 0 pregs) ...) guard in
-;;;     arm642-lambda never
-;;;     fires.  Beyond that, the operand convention cannot be settled
-;;;     from PPC64: ppc64-vinsns.lisp:3327 takes FIRST, a REGISTER
-;;;     NUMBER, while his emit site passes N, a COUNT.  Question that
-;;;     would settle it: is (! save-nvrs n) a count of the first N of
-;;;     save0..save3, pushed save0-first (so restore-nvrs's basereg
-;;;     addresses save[n-1] at offset 0)?  Confirm with Matt or by
-;;;     populating *arm642-nvrs* and reading the generated code.
-;;;
-;;;   call-known-symbol-ool / jump-known-symbol-ool (arm642.lisp:2774-2775)
-;;;     Emitted only under *arm642-optimize-for-space*, which is NIL by
-;;;     defvar (:162) and re-bound to NIL at :518.  These two names
-;;;     exist in NO other port -- not PPC64, PPC32, X8664, X8632 or
-;;;     ARM32 -- so there is nothing to line-port.  Question that would
-;;;     settle them: which subprim do they call?  The in-line siblings
-;;;     call-known-symbol / jump-known-symbol load fname's fcell and
-;;;     branch (ppc64-vinsns.lisp:3701/3708); an "ool" variant is
-;;;     presumably .SPjmpsym plus a call counterpart, but that is a
-;;;     guess and there is no kernel entry named for it.
-;;;
-;;;   clear-pending-fpu-exceptions / trap-if-fpu-exception
-;;;     (arm642.lisp:7680, :7702)
-;;;     Emitted only under *arm642-float-safety*, which is NIL by
-;;;     default, re-bound to NIL at :565, and set only from a
-;;;     $decl_float_safety declaration (:858); no source under level-0/,
-;;;     level-1/ or lib/ carries one.  ARM32 (arm-vinsns.lisp:1339,
-;;;     :1346) reads and writes FPSCR and takes the ENABLE mask from
-;;;     tcr.lisp-fpscr -- and Matt's arm64 TCR has no lisp-fpscr field.
-;;;     AArch64 also splits FPSCR into FPCR (enables, bits 8-12 and 15)
-;;;     and FPSR (cumulative status, bits 0-4 and 7), reachable only
-;;;     through MRS/MSR whose :sysreg operand in this assembler is a
-;;;     RAW 15-bit number (arm64-asm.lisp:1296) -- there are no
-;;;     symbolic names.  Questions that would settle them: (a) should
-;;;     the enable mask come from a new tcr.lisp-fpscr field or straight
-;;;     from FPCR, and (b) does arm64-exceptions.c decode
-;;;     uuo-error-fpu-exception (the template exists at
-;;;     arm64-asm.lisp:481)?  Both are needed before the pair can be
-;;;     written; either alone is useless, since the emit site always
-;;;     emits both.
+;;;   trap-if-fpu-exception (defarm642-df-op/-sf-op, the same dead
+;;;     float-safety path as clear-pending-fpu-exceptions above)
+;;;     Stays undefined per P2.4 (ledger 2a180688) until THREE pieces
+;;;     land together as one reviewed unit:
+;;;     (a) a per-thread software enable mask (a raw TCR field, init
+;;;         #x0700 = invalid/div0/overflow).  It cannot come from
+;;;         FPCR: hardware trap enables are RAZ/WI on the supported
+;;;         Graviton target (measured: writing #x1f00 reads back 0,
+;;;         arm64-float.lisp), so an FPCR-sourced mask is always 0 and
+;;;         silently suppresses every inline FP condition; and the
+;;;         current *fp-logical-enables* special is process-global,
+;;;         not per-thread.  ARM32 reads its mask from tcr.lisp-fpscr
+;;;         (arm-vinsns.lisp:1346-1355); Matt's arm64 TCR has no such
+;;;         field yet.
+;;;     (b) live float-safety plumbing ($decl_float_safety is emitted
+;;;         by no current declaration path -- see the clear-pending
+;;;         notes above), positive-controlled so the pair provably
+;;;         appears around a typed FP operation.
+;;;     (c) specific condition decode: binary-info case 4
+;;;         (arm64-exceptions.c -> arm64-trap-support.lisp) today
+;;;         signals only a generic "FPU exception" and must first
+;;;         decode the faulting A64 FP instruction and operands, as
+;;;         ppc-error-signal.lisp does.
+;;;     Full analysis: comms/VINSN-UNRESOLVED-16m63.md item 4.
 ;;; ==================================================================
 
 ;;; ---------------------------------------------------------------
