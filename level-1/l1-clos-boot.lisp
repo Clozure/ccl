@@ -2108,61 +2108,67 @@ to replace that class with ~s" name old-class new-class)
               (find-class 'unsigned-doubleword-vector)
               (find-class 'double-float-vector))))
 
+  ;; arm64: the three ivector header fulltags each get a 16-entry
+  ;; class vector indexed by the subtag's value field (subtag >>
+  ;; ntagbits), mirroring the x8664 scheme above.  Positions come from
+  ;; the define-subtag forms in compiler/ARM64/arm64-arch.lisp.
+  ;; Non-CL-vector subtags (macptr, bignum, code-vector, ...) can never
+  ;; reach the vectorH dispatch and map to *t-class*.
   #+arm64-target
   (progn
     (defparameter *immheader-0-classes*   ;ivector-class-other-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'complex-double-float-vector)
-              (find-class 'word-vector)
-              (find-class 'unsigned-word-vector)
-              *t-class*
-              (find-class 'byte-vector)
-              (find-class 'unsigned-byte-vector)
-              (find-class 'bit-vector)))
+      (vector *t-class*                   ;0
+              *t-class*                   ;1
+              *t-class*                   ;2
+              *t-class*                   ;3
+              *t-class*                   ;4
+              *t-class*                   ;5
+              *t-class*                   ;6
+              *t-class*                   ;7
+              *t-class*                   ;8
+              (find-class 'complex-double-float-vector) ;9
+              (find-class 'word-vector)                 ;10 s16
+              (find-class 'unsigned-word-vector)        ;11 u16
+              *t-class*                   ;12
+              (find-class 'byte-vector)                 ;13 s8
+              (find-class 'unsigned-byte-vector)        ;14 u8
+              (find-class 'bit-vector)))                ;15
 
     (defparameter *immheader-1-classes*   ;ivector-class-32-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'base-string)
-              (find-class 'long-vector)
-              (find-class 'unsigned-long-vector)
-              (find-class 'short-float-vector)))
+      (vector *t-class*                   ;0
+              *t-class*                   ;1 bignum
+              *t-class*                   ;2 double-float
+              *t-class*                   ;3 xcode-vector
+              *t-class*                   ;4 complex-single-float
+              *t-class*                   ;5 complex-double-float
+              *t-class*                   ;6 code-vector
+              *t-class*                   ;7
+              *t-class*                   ;8
+              *t-class*                   ;9
+              *t-class*                   ;10
+              *t-class*                   ;11
+              (find-class 'base-string)                 ;12
+              (find-class 'long-vector)                 ;13 s32
+              (find-class 'unsigned-long-vector)        ;14 u32
+              (find-class 'short-float-vector)))        ;15
 
     (defparameter *immheader-2-classes*   ;ivector-class-64-bit
-      (vector *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              *t-class*
-              (find-class 'complex-single-float-vector)
-              (find-class 'fixnum-vector)
-              (find-class 'doubleword-vector)
-              (find-class 'unsigned-doubleword-vector)
-              (find-class 'double-float-vector))))
+      (vector *t-class*                   ;0
+              *t-class*                   ;1 macptr
+              *t-class*                   ;2 dead-macptr
+              *t-class*                   ;3
+              *t-class*                   ;4
+              *t-class*                   ;5
+              *t-class*                   ;6
+              *t-class*                   ;7
+              *t-class*                   ;8
+              *t-class*                   ;9
+              *t-class*                   ;10
+              (find-class 'complex-single-float-vector) ;11
+              (find-class 'fixnum-vector)               ;12
+              (find-class 'doubleword-vector)           ;13 s64
+              (find-class 'unsigned-doubleword-vector)  ;14 u64
+              (find-class 'double-float-vector))))      ;15
 
   #+arm-target
   (defparameter *ivector-vector-classes*
@@ -2397,6 +2403,14 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm::fulltag-nil)) *null-class*
                 (%svref v (+ slice arm::fulltag-imm)) *immediate-class*))
+        ;; arm64 U-RATIFY (class-of contract): the table is indexed by
+        ;; canonical TYPECODE — subtag byte for fulltag-misc, else the
+        ;; 4-bit fulltag.  The per-slice fills below additionally cover
+        ;; a raw-low-byte dispatch for the tags whose payload reaches
+        ;; the low byte (fixnums); the future arm64 class-of
+        ;; lapfunction must canonicalize anything else.  Immediates
+        ;; (characters, markers) and single-floats keep their payload
+        ;; above bit 7, so their low byte IS the canonical typecode.
         #+arm64-target
         (do* ((slice 0 (+ 16 slice)))
              ((= slice 256))
@@ -2405,8 +2419,7 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm64::fulltag-odd-fixnum))  *fixnum-class*
                 (%svref v (+ slice arm64::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm64::fulltag-nil)) *null-class*
-                (%svref v (+ slice arm64::fulltag-single-float)) (find-class
-                                                                  'short-float)
+                (%svref v (+ slice arm64::fulltag-single-float)) (find-class 'short-float)
                 (%svref v (+ slice arm64::fulltag-imm-0)) *immediate-class*
                 (%svref v (+ slice arm64::fulltag-imm-1)) *immediate-class*))
 
@@ -2498,6 +2511,9 @@ to replace that class with ~s" name old-class new-class)
                       #+arm-target target::subtag-symbol
 		      #+x8632-target target::subtag-symbol
 		      #+x8664-target target::tag-symbol
+                      ;; arm64: symbol POINTERS have their own fulltag;
+                      ;; typecode canonicalizes to it (cf. x8664
+                      ;; tag-symbol).
                       #+arm64-target arm64::fulltag-symbol)
               #-ppc64-target
               #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
@@ -2547,6 +2563,7 @@ to replace that class with ~s" name old-class new-class)
                               ((= class x8664::fulltag-immheader-2)
                                (%svref *immheader-2-classes* idx))
                               (t *t-class*)))
+
                       #+arm64-target
                       (let* ((class (logand arm64::fulltagmask subtype))
                              (idx (ash subtype (- arm64::ntagbits))))

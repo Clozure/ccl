@@ -104,8 +104,8 @@
                         (:freebsdx8632 "ccl:freebsd-headers;")
                         (:linuxarm "ccl:arm-headers;")
                         (:darwinarm "ccl:darwin-arm-headers;")
-                        (:androidarm "ccl:android-headers;")
-                        (:linuxarm64 "ccl:arm64-headers;")
+                       (:androidarm "ccl:android-headers;")
+                        (:linuxarm64 "ccl:arm64-headers64;")
                         (:darwinarm64 "ccl:darwin-arm64-headers;"))
                     :interface-package-name
                     #.(ftd-interface-package-name *target-ftd*)
@@ -1462,6 +1462,8 @@ result-type-specifer is :VOID or NIL"
 	(format out " (#x~8,'0x) " addr)
         #+x8664-target
         (format out " (#x~16,'0x) " addr)
+        #+arm64-target
+        (format out " (#x~16,'0x) " (%ptr-to-int addr))
 	(format out " {unresolved} "))
       (when (and container (or (not (typep container 'macptr))
 				    (not (%null-ptr-p container))))

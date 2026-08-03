@@ -185,6 +185,8 @@
 (defconstant no-thread-local-binding-marker subtag-no-thread-local-binding)
 (define-subtag lisp-frame-marker fulltag-imm-1 5)
 (defconstant lisp-frame-marker subtag-lisp-frame-marker)
+(define-subtag stack-alloc-marker fulltag-imm-1 6)
+(defconstant stack-alloc-marker subtag-stack-alloc-marker)
 
 ;;; Extended type codes ("xtypes") for wrong-type UUOs.  The 8-bit
 ;;; expected-type field of a wrong-type UUO holds either a lisptag, a
@@ -228,6 +230,14 @@
 (defconstant xtype-array2d #x30)
 (defconstant xtype-array3d #x40)
 (defconstant xtype-null #x50)
+
+;;; Kernel error number for funcalling a macro/special-operator name
+;;; (the fcell simple-vector's %macro-code% UUO).  Canonical homes:
+;;; compiler/arch.lisp + lisp-kernel/errors.s + lisp-kernel/lisp-errors.h
+;;; (all in this patch).  Duplicated here because a frozen cross-host
+;;; image bakes arch.lisp, so a NEW arch.lisp constant is invisible to a
+;;; cross compile; this file is (re)loaded by every backend load.
+(defconstant error-apply-macro-or-special 20)
 
 ;;; A sanity check: no synthetic xtype may collide with a real subtag
 ;;; byte or with a bare tag code (#x00-#x0f).
@@ -824,6 +834,22 @@
   savefn
   savelr)
 
+;;; The frame the callback trampoline (.SPeabi-callback) builds for a
+;;; foreign caller, described relative to CBF = &x0save (16-aligned).
+;;; Frame layouts belong here -- ppc64-arch.lisp:588/595 and
+;;; arm-arch.lisp:921 keep lisp-frame/c-frame savelr in the arch file --
+;;; and they must be defined before the lib/ modules compile, because the
+;;; callback generators in lib/ffi-{linux,darwin}arm64.lisp splice them at
+;;; macroexpansion time (the DEFCALLBACK path in l1-lisp-threads.lisp).
+;;;   x0..x7 saves at   +0..+56   (CBF = sp after the arg-reg push)
+;;;   C caller's stack args, contiguous, at +64
+;;;   d0..d7 saves at   -64..-8
+;;;   callee-saved GPR pairs below that, x29/LR last at -160,
+;;;   so the saved LR (the foreign caller's return address) is at -152.
+(defconstant callback-frame.fp-save-offset -64)
+(defconstant callback-frame.savelr-offset -152)
+(defconstant callback-frame.stack-args-offset 64)
+
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
 
@@ -1276,3 +1302,102 @@
 (defparameter *image-abi-version* 1046)
 
 (provide "ARM64-ARCH")
+
+;;; ------------------------------------------------------------------
+;;; Subprimitives the linuxarm64 port adds to the table above.  This must
+;;; sit AFTER *arm64-target-arch*, because it refreshes the arch struct's
+;;; captured table as well as the variable: subprim-name->offset resolves
+;;; through the struct (compiler/subprims.lisp:53), so extending only the
+;;; variable gives ".SPRPLACD not found" while the variable plainly holds it.
+;;; ------------------------------------------------------------------
+;;; SPDX-License-Identifier: Apache-2.0
+;;;
+;;; PROPOSED (ratify with Matt): extend arm64-arch.lisp's *subprims*
+;;; vector (his :359-377 ends with ";; ..." -- knowingly incomplete)
+;;; with the subprimitives the level-0 drafts and our kernel spentry
+;;; drafts reference.  Offsets continue his vector's numbering (same
+;;; *subprims-base* / *subprims-shift* arithmetic); the ORDER below is
+;;; the proposal.  Kernel-side bodies for every entry exist in
+;;; upstream-port/lisp-kernel/spentry-{A..E}.s.
+;;;
+;;; Loaded by tools/upstream-assemble-test.lisp after Matt's LAP layer.
+
+
+(let ((offset (+ *subprims-base* (* (length *subprims*) (ash 1 *subprims-shift*))))
+      (step (ash 1 *subprims-shift*)))
+  (flet ((define-subprim (name)
+           (ccl::make-subprimitive-info :name (string name)
+                                        :offset (prog1 offset (incf offset step)))))
+    (macrolet ((defsubprim (name)
+                 `(define-subprim ',name)))
+      (setq *subprims*
+            (concatenate 'vector
+                         *subprims*
+                         (vector
+                          ;; multiple values (spentry-C)
+                          ;; boxing/unboxing (spentry-A)
+                          ;; special variables (spentry-A/C)
+                          ;; EGC-barrier stores (spentry-B)
+                          ;; arrays (spentry-B)
+                          ;; lexpr / rest args (spentry-D/E)
+                          ;; error signalling / dispatch (spentry-D)
+                          ;; FFI (spentry-E)
+                          (defsubprim .SPffcall-return-registers)
+                          ;; vinsn wave V1 demands (U4 in
+                          ;; arm64-vinsns-additions-w1-report.md);
+                          ;; lambda-binding subprims (spentry-D bodies)
+                          ;; call dispatch (spentry-D: funcall@145,
+                          ;; tfuncallgen@662, tfuncallslide@689) —
+                          ;; gate-26 funcall demand (w4 call cluster)
+                          (defsubprim .SPtfuncallvsp)
+                          ;; generic uvector element access (spentry-B:
+                          ;; misc_ref@588, misc_set@819) — w3a misc-ref/
+                          ;; misc-set vinsns resolve these by name (U2a)
+                          ;; gate-27 definitive referenced-vs-registered
+                          ;; scan: barrier'd cons/gvector mutation
+                          ;; (rplaca@D:181, rplacd@D:228, gvset@B:81)
+                          ;; and builtin tail (logior@D:1270, ash@D:1298)
+                          ;; make-closure cluster (gate-33): stack
+                          ;; gvector builder (spentry-B stkgvector@769)
+                          ;; %gvector handler (w5): heap gvector builder
+                          ;; (spentry-B gvector@564-584, verified body)
+                          ;; MV-pass + known-tail-call family (gate-34
+                          ;; sibling sweep; PPC64 vinsns 3947-3957;
+                          ;; spentry-D bodies 279/1581/720/751/772/780)
+                          ;; builtin-call dispatch (gate-35; spentry-D
+                          ;; bodies 1160/1174/1186/1198/1210)
+                          (defsubprim .SPcallbuiltin)
+                          (defsubprim .SPcallbuiltin0)
+                          (defsubprim .SPcallbuiltin1)
+                          (defsubprim .SPcallbuiltin2)
+                          (defsubprim .SPcallbuiltin3)
+                          ;; variable-size uvector alloc (gate-36;
+                          ;; spentry-A misc_alloc@450 / _init@679)
+                          ;; MV fit (gate-37; spentry-D fitvals@300)
+                          ;; checked special-ref (demand-scan wave;
+                          ;; spentry-A specrefcheck@372)
+                          ;; &optional defaulting (cut-3 wave;
+                          ;; spentry-D default_optional_args@357)
+                          ;; lexpr entry + MV slide (cut-5 wave;
+                          ;; spentry-E lexpr_entry@604, spentry-D
+                          ;; mvslide@1532)
+                          (defsubprim .SPlexpr-entry)
+                          ;; stack/list allocation family (gate-39
+                          ;; sibling sweep; PPC64 vinsns 3983-3999;
+                          ;; spentry-A 504/579/619/705/736,
+                          ;; spentry-B 371/386/449)
+                          ;; nth-value (w9; spentry-D nthvalue@317)
+                          ;; integer-sign (w9; spentry-A integer_sign@399)
+                          ;; catch/throw/unwind-protect/progv cluster (w10;
+                          ;; spentry-C-bind-catch-throw.s:319/326/334/1663/
+                          ;; 343/440/550, spentry-B:478/1044)
+                          (defsubprim .SPnmkunwind)))))))
+
+;;; The extension above rebinds the arm64::*subprims* VARIABLE, but
+;;; ccl::subprim-name->offset resolves through the arch STRUCT's
+;;; captured table (compiler/subprims.lisp:53 -> arch::target-subprims-
+;;; table of backend-target-arch), which *arm64-target-arch* filled at
+;;; its own load time (arm64-arch.lisp:987 :subprims-table) — gate-28:
+;;; ".SPRPLACD not found" while the variable held it.  Refresh the
+;;; struct so both lookup paths see the extended vector.
+(setf (arch::target-subprims-table *arm64-target-arch*) *subprims*)

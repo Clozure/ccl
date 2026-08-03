@@ -210,6 +210,30 @@
                  (record-source-file ',vinsn-name ',source-indicator)
                  ',vinsn-name))))))))
 
+#+(or linuxarm64-target (not arm64-target))
+(defvar *linuxarm64-backend*
+  (make-backend :lookup-opcode #'false
+                :lookup-macro #'false
+                :lap-opcodes #()
+                :define-vinsn '%define-arm64-vinsn
+                :platform-syscall-mask (logior platform-os-linux platform-cpu-arm64)
+                :p2-dispatch *arm642-specials*
+                :p2-vinsn-templates *arm64-vinsn-templates*
+                :p2-template-hash-name '*arm64-vinsn-templates*
+                :p2-compile 'arm642-compile
+                :target-specific-features
+                '(:arm64 :arm64-target :linux-target :linuxarm64-target
+                  :64-bit-target :little-endian-target)
+                :target-fasl-pathname (make-pathname :type "la64fsl")
+                :target-platform (logior platform-word-size-64
+                                         platform-cpu-arm64
+                                         platform-os-linux)
+                :target-os :linuxarm64
+                :name :linuxarm64
+                :target-arch-name :arm64
+                :target-foreign-type-data nil
+                :target-arch arm64::*arm64-target-arch*))
+
 #+(or darwinarm64-target (not arm64-target))
 (defvar *darwinarm64-backend*
   (make-backend :lookup-opcode #'false
@@ -233,6 +257,9 @@
                 :target-arch-name :arm64
                 :target-foreign-type-data nil
                 :target-arch arm64::*arm64-target-arch*))
+
+#+(or linuxarm64-target (not arm64-target))
+(pushnew *linuxarm64-backend* *known-arm64-backends*)
 
 #+(or darwinarm64-target (not arm64-target))
 (pushnew *darwinarm64-backend* *known-arm64-backends*)
@@ -327,13 +354,43 @@
                    (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-DARWIN")
                    :callback-return-value-function
                    (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-DARWIN")))
+                 (:linuxarm64
+                  (make-ftd
+                   :interface-db-directory "ccl:arm64-headers64;"
+                   :interface-package-name "ARM64-LINUX64"
+                   :attributes '(:bits-per-word 64
+                                 ;; `char' is UNSIGNED by the
+                                 ;; aarch64-linux-gnu psABI; AAPCS64 leaves
+                                 ;; the signedness to the platform and Darwin
+                                 ;; chose the other way.
+                                 :signed-char nil
+                                 :struct-by-value t
+                                 :natural-alignment t
+                                 :prepend-underscore nil)
+                   :ff-call-expand-function
+                   (intern "EXPAND-FF-CALL" "ARM64-LINUX64")
+                   :ff-call-struct-return-by-implicit-arg-function
+                   (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                           "ARM64-LINUX64")
+                   :callback-bindings-function
+                   (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-LINUX64")
+                   :callback-return-value-function
+                   (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-LINUX64")))
                  )))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
         (setf (backend-target-foreign-type-data backend) ftd))))
 
+;;; ARM32 shape (compiler/ARM/arm-backend.lisp:361-366): the resident
+;;; backend goes on *known-backends* UNCONDITIONALLY -- otherwise
+;;; find-backend of the running target's own name returns NIL on a native
+;;; lisp, and every (target-*-modules) call fails -- and the per-OS
+;;; backends are added only on a cross host, where all of them exist.
+(pushnew *arm64-backend* *known-backends* :key #'backend-name)
 #-arm64-target
-(pushnew *darwinarm64-backend* *known-backends* :key #'backend-name)
+(progn
+  (pushnew *darwinarm64-backend* *known-backends* :key #'backend-name)
+  (pushnew *linuxarm64-backend* *known-backends* :key #'backend-name))
 
 
 ;;; FFI stuff
@@ -375,5 +432,19 @@
                                 (arg-coerce #'null-coerce-foreign-arg)
                                 (result-coerce #'null-coerce-foreign-result))
   (declare (ignore callform args arg-coerce result-coerce)))
+
+;;; A resident (native) arm64 compiler is DEMAND-LOADED module by module,
+;;; not dumped into the image the way the ppc/x86 ones are, so nothing pulls
+;;; NXENV before nx1 needs it and the first (defun ...) dies on an undefined
+;;; CCL::NX-INIT-VAR.  ppc64-backend.lisp:21 and x8664-backend.lisp:21 have
+;;; the same require, but inside (eval-when (:compile-toplevel :execute)) --
+;;; compile-time only, which suffices for them and not for us.  Same reason
+;;; the vinsns are required here rather than assumed present; compare
+;;; ppc64-backend.lisp:305 (require "PPC64-VINSNS").
+#+arm64-target
+(require "NXENV")
+
+#+arm64-target
+(require "ARM64-VINSNS")
 
 (provide "ARM64-BACKEND")

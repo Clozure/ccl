@@ -158,6 +158,10 @@ plbt_sp(LispObj currentSP)
 void
 plbt(ExceptionInformation *xp)
 {
+#ifdef ARM64
+  plbt_sp(xpSP(xp));
+#else
   plbt_sp(xpGPR(xp, Rsp));
+#endif
 }
     

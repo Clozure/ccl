@@ -1409,7 +1409,7 @@ are running on, or NIL if we can't find any useful information."
   "Returns the size of THING (in bytes), including any headers and
    alignment overhead.  Does not descend an object's components."
   (cond ((consp thing) #+64-bit-target 16 #+32-bit-target 8)
-        #+x8664-target ((symbolp thing)
+        #+(or x8664-target arm64-target) ((symbolp thing)
                         (object-direct-size (%symptr->symvector thing)))
         #+x8664-target ((functionp thing)
                         (object-direct-size (function-to-function-vector thing)))

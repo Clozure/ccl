@@ -57,9 +57,25 @@
              arm64::imm4
              arm64::imm5))
 
-(defconstant arm64-temp-fp-regs (1- (ash 1 32)))
+;;; The FP temp pool is the set of ABI-VOLATILE FP registers: PPC64 uses
+;;; (1- (ash 1 ppc::fp14)) = f0-f13, exactly its volatile set (ppcenv.lisp:80).
+;;; Under AAPCS64 the volatile d-registers are d0-d7 and d16-d31; the LOW 64
+;;; bits of d8-d15 are callee-saved.  d0-d7 is the conservative volatile
+;;; subset, and is what the linuxarm64 port's measured images were compiled
+;;; under.  Widening to d0-d7 + d16-d31 (#xffff00ff) is the strict PPC64
+;;; analog; widening to all 32 is only safe if a callback trampoline saves
+;;; d8-d15 (ours does, but that contract is not yet upstream-specified).
+(defconstant arm64-temp-fp-regs (1- (ash 1 8)))
 
-(defconstant arm64-cr-fields 0)
+;;; ARM64 has ONE flags register, NZCV, and the backend models it as CR
+;;; field 0: WITH-CRF-TARGET wires (make-wired-lreg 0 :class
+;;; hard-reg-class-crf) (compiler/backend.lisp) and the vinsns wire (:crf 0).
+;;; So the analog of ppc-cr-fields (all 8 real CR fields, ppcenv.lisp:82) is
+;;; the single field 0.  It must not be 0/empty: AVAILABLE-CRF-TEMP and
+;;; SELECT-CRF-TEMP scan the mask and signal "Bug: ran out of CR fields" when
+;;; it is empty, and ARM642-OR reaches AVAILABLE-CRF-TEMP for any (OR ...) in
+;;; statement position (the ppc2.lisp ARM642-OR analog does the same).
+(defconstant arm64-cr-fields (make-mask 0))
 
 (defconstant $undo-arm64-c-frame 16)
 

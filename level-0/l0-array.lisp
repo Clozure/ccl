@@ -1024,7 +1024,7 @@ minimum number of elements to add if it must be extended."
 (defun %misc-set (v i new)
   (%misc-set v i new))
 
-#-ppc-target
+#-(or ppc-target arm64-target)
 (defun %extend-vector (start oldv newsize)
   (declare (fixnum start))
   (let* ((typecode (typecode oldv))

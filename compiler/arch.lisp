@@ -67,6 +67,7 @@
 (defconstant error-cant-call 17)        ; Attempt to funcall something that is not a symbol or function.
 (defconstant error-allocate-list 18)
 (defconstant error-allocation-disabled 19)
+(defconstant error-apply-macro-or-special 20) ; funcalled a macro/special-operator name
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant error-type-error 128)

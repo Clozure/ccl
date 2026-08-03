@@ -131,7 +131,7 @@ current_stack_pointer(void)
   natural _sp;
   __asm__("movl %%esp,%0" : "=r" (_sp));
 #endif
-#ifdef ARM
+#if defined(ARM) || defined(ARM64)
   register natural _sp __asm__("sp");
 #endif
   return _sp;

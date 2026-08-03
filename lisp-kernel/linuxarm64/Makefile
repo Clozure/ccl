@@ -24,7 +24,7 @@ CC = ${CROSS}gcc
 M4 = m4
 ASFLAGS = 
 M4FLAGS = -DLINUX -DARM64
-CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DUSE_FUTEX -DVC_REVISION=$(VC_REVISION)
+CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
@@ -46,20 +46,20 @@ endif
 
 
 .s.o:
-	$(M4) $(M4FLAGS) -I../ $< | $(AS)  $(ASFLAGS) -o $@
+	$(CC) -c -x assembler-with-cpp -I../ $< $(CDEFINES) -o $@
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT)  -o $@
 
-SPOBJ = pad.o  arm64-spentry.o
+SPOBJ = pad.o  arm64-spentry.o spentry-A-alloc-numbers.o spentry-B-vectors-misc.o spentry-C-bind-catch-throw.o spentry-D-call-builtins.o spentry-E-ffi.o
 ASMOBJ = arm64-asmutils.o imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm64-gc.o bits.o  arm64-exceptions.o \
 	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
 
-DEBUGOBJ = lispdcmd.o plprint.o plsym.o albt.o arm_print.o
+DEBUGOBJ = lispdcmd.o plprint.o plsym.o albt.o arm64-print.o
 KERNELOBJ= $(COBJ) arm64-asmutils.o  imports.o
 
-SPINC =	lisp.s m4macros.m4 arm64-constants.s arm64-macros.s errors.s arm64-uuo.s \
+SPINC =	lisp.s m4macros.m4 arm64-constants.h arm64-macros.s errors.s arm64-uuo.s \
 	lisp_globals.s
 
 CHEADERS = area.h bits.h arm64-constants.h lisp-errors.h gc.h lisp.h \
@@ -82,7 +82,7 @@ OSLIBS = -ldl -lm -lpthread -lrt
 
 
 ../../armcl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
-	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE) -mfloat-abi=$(FLOAT_ABI) -o $@ -T ./armlinux.x $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
+	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE)  -o $@ $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
 $(SPOBJ): $(SPINC)
@@ -99,3 +99,6 @@ clean:	cclean
 
 strip:	../../armcl
 	strip -g ../../armcl
+
+imports.o: ../imports.s ../m4macros.m4
+	$(M4) $(M4FLAGS) -I../ ../imports.s | $(AS) $(ASFLAGS) -o $@

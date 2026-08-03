@@ -1148,7 +1148,34 @@
   "Return BASE raised to the POWER."
   (cond ((zerop e) (1+ (* b e)))
 	((integerp e)
-         (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e)))
+         #-arm64-target
+         (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e))
+         ;; arm64: an overflow in %INTEGER-POWER's repeated multiplication is
+         ;; invisible without a poll, so (expt x 2) quietly returns infinity
+         ;; where PPC and x86 signal.  Those two catch it with a HARDWARE trap
+         ;; -- PPC's %set-fpscr-control does `mtfsf #xff', putting the enable
+         ;; bits in the real FPSCR, and ppc-exceptions.c:1297 fields the
+         ;; SIGFPE.  AArch64 defines the same enables (FPCR.IOE/DZE/OFE/UFE/
+         ;; IXE) but implementing them is OPTIONAL, and they are RAZ/WI on the
+         ;; part this was measured on, so there is no trap to take.  Poll the
+         ;; cumulative FPSR flags instead -- the same checkpoint architecture
+         ;; the #_pow path already uses via %FFI-EXCEPTION-STATUS.
+         ;;
+         ;; Float bases only: integer and rational exponentiation cannot raise
+         ;; an fp exception and must not pay for the check.
+         #+arm64-target
+         (if (not (floatp b))
+           (if (minusp e) (/ 1 (%integer-power b (- e))) (%integer-power b e))
+           (progn
+             (%fp-begin-inline-check)
+             (let* ((result (if (minusp e)
+                              (/ 1 (%integer-power b (- e)))
+                              (%integer-power b e)))
+                    (status (%fp-inline-exception-status)))
+               ;; poll BEFORE signalling anything: an unwind is the one thing
+               ;; measured to lose the cumulative flags.
+               (%fp-check-inline-exception 'expt (list b e) status)
+               result))))
         ((zerop b)
          (if (plusp (realpart e)) (* b e) (report-bad-arg e '(satisfies plusp))))
         ((and (realp b) (plusp b) (realp e)
