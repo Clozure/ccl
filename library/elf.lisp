@@ -262,12 +262,23 @@
             #+x86-target (%address-of f)
             #+ppc-target (- (%address-of (uvref f 0)) (- ppc::fulltag-misc ppc::node-size))
             #+arm-target (- (%address-of (uvref f 1)) (- arm::fulltag-misc arm::node-size))
+            ;; arm64: element 0 is the code-vector (arm64-arch.lisp:673); this
+            ;; is its DATA start, i.e. tagged address + misc-data-offset (-4).
+            ;; The first executable instruction is 4 bytes later: data word 0
+            ;; is the `udf #0' sentinel (arm64-arch.lisp:73-76).
+            #+arm64-target (+ (%address-of (uvref f 0)) target::misc-data-offset)
             (pref p
                   #+64-bit-target :<E>lf64_<S>ym.st_size
                   #+32-bit-target :<E>lf32_<S>ym.st_size)
             #+x86-target (1+ (ash (1- (%function-code-words f)) target::word-shift))
             #+ppc-target (ash (uvsize (uvref f 0)) ppc::word-shift)
             #+arm-target (ash (uvsize (uvref f 1)) arm::word-shift)
+            ;; NOT (ash (uvsize cv) word-shift): an arm64 code-vector is an
+            ;; ivector-class-32-bit (arm64-arch.lisp:153) but word-shift is 3
+            ;; (:31), so that spelling doubles the size.  subtag-bytes knows
+            ;; the element width (level-0/l0-array.lisp:922-951).
+            #+arm64-target (subtag-bytes target::subtag-code-vector
+                                         (uvsize (uvref f 0)))
             ))))
 
 (defun elf-section-index (section)
@@ -374,6 +385,7 @@
                                            #+ppc32-target #$EM_PPC
                                            #+ppc64-target #$EM_PPC64
                                            #+arm-target #$EM_ARM
+                                           #+arm64-target #$EM_AARCH64
                                            ))
          (program-header (new-elf-program-header object))
          (lisp-section (new-elf-section object))
