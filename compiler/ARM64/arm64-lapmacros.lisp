@@ -533,13 +533,53 @@
 
 
 ;;; from ppc-lapmacros.lisp:682 (clear-fpu-exceptions)
-;;; PPC: mtfsf.  On arm64: write 0 to FPSR (FP status register) to clear
-;;; exception flags.
+;;; RESOLVED (was two DECIDEs: is the bare zeroing right, and how is the
+;;; system register spelled).  Both are settled here, because the vinsn
+;;; clear-pending-fpu-exceptions (arm64-vinsns.lisp) narrows its write and
+;;; the two must not state opposite contracts.
+;;;
+;;; (1) THE WIDTH.  PPC's donor is `mtfsf #xfc fp-zero'.  #xfc is an 8-bit
+;;; FIELD MASK, so it zeroes FPSCR fields 0-5 = bits 0-23 -- the whole
+;;; STATUS half (FX/FEX/VX, accrued OX/UX/ZX/XX, the VX* detail bits, FR,
+;;; FI, FPRF) -- and preserves fields 6-7 = bits 24-31 = VE OE UE ZE XE NI
+;;; RN, the exception ENABLES and the rounding mode.  The PPC contract is
+;;; "zero the status half, keep the control half".  AArch64 splits that one
+;;; register in two: everything PPC preserves lives in FPCR, and FPSR is
+;;; status only.  `msr fpsr, xzr' therefore writes no control bit at all --
+;;; it IS the PPC64 contract line-for-line, not a wider one.
+;;;
+;;; (2) WHY THE RESIDUE IS SAFE.  FPSR bits 8-31 are unobservable on
+;;; linuxarm64:
+;;;   * QC (bit 27) is "cumulative saturation ... Advanced SIMD only", set
+;;;     only by a SIMD integer saturating operation (ARM ARM, FPSR).
+;;;     compiler/ARM64/arm64-asm.lisp defines 540 instructions and not one
+;;;     sq*/uq*/suqadd/usqadd form, so nothing this compiler emits can set
+;;;     it.  Foreign code can; nothing here reads it.
+;;;   * NZCV (bits 28-31) are the "condition flags for AArch32
+;;;     floating-point comparison operations" (ARM ARM, FPSR).  A64 FCMP
+;;;     writes PSTATE.{N,Z,C,V} instead, so in an AArch64 process these are
+;;;     never written.
+;;;   * Nothing reads either one: %get-fpscr-status and %get-post-ffi-fpsr
+;;;     both mask (:$ #xff) (level-0/ARM64/arm64-float.lisp).
+;;; Four live sites already do exactly this bare write -- C(zero_fpscr) in
+;;; arm64-asmutils.s, the ffcall window in arm64-spentry.s (open and close),
+;;; and spentry-E-ffi.s -- so this macro is the consistent one.  Contrast
+;;; %set-fpscr-status (arm64-float.lisp), which is read-modify-write for a
+;;; DIFFERENT reason: it stores a caller-supplied byte rather than clearing,
+;;; and must not widen that store into bits it was not given.  ARM32's RMW
+;;; (arm-vinsns.lisp:1339-1344) is likewise not a precedent for narrowing
+;;; here: ARM32 has PPC's problem, one FPSCR holding the enables and the
+;;; rounding mode, so for ARM32 the RMW is mandatory.
+;;;
+;;; (3) THE SPELLING: a BARE symbol, not a keyword.  parse-operand
+;;; (arm64-asm.lisp) sends any symbol through lookup-system-register, which
+;;; is (assoc (string name) *system-registers* :test #'string-equal), so
+;;; `fpsr' and `:fpsr' both resolve to the same 15-bit op0:op1:CRn:CRm:op2
+;;; encoding #x5a21 and both assemble.  Bare is canonical: it is what
+;;; compiler/ARM64/tests.lisp writes and what level-0/ARM64/arm64-float.lisp
+;;; already writes at its own mrs/msr sites.
 (defarm64lapmacro clear-fpu-exceptions ()
-  ;; DECIDE(ledger-ref): verify system register name for FPSR in Matt's
-  ;; assembler.  ARM64 FPSR is system register S3_3_C4_C4_1.
-  ;; His mrs/msr templates take :sysreg operands.
-  `(msr :fpsr xzr))
+  `(msr fpsr xzr))
 
 
 ;;; ===================================================================

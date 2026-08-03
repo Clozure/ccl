@@ -7732,13 +7732,35 @@
 ;;; (ppc-float.lisp:384-390, mtfsf) and takes them synchronously as
 ;;; SIGFPE (ppc-exceptions.c), so it needs no per-operation polling
 ;;; prelude.  The compiler analog is ARM32's read-modify-write
-;;; (arm-vinsns.lisp:1339-1344: fmrx / bic #xff / fmxr).  Decision
-;;; (P2.4, ledger 8f340ab3): clear ONLY the cumulative status byte --
-;;; IOC/DZC/OFC/UFC/IXC (bits 0-4) and IDC (bit 7) -- and PRESERVE all
-;;; high FPSR state (QC bit 27, AArch32-compat NZCV bits 28-31); this
-;;; is the same contract as %set-fpscr-status (arm64-float.lisp).  A
-;;; bare `msr fpsr, xzr` would erase that unrelated state: refused.
-;;; FPCR is not touched.
+;;; (arm-vinsns.lisp:1339-1344: fmrx / bic #xff / fmxr), kept here: the
+;;; body below clears only the cumulative status byte -- IOC/DZC/OFC/UFC/IXC
+;;; (bits 0-4) and IDC (bit 7) -- and leaves FPSR bits 8-31 alone.
+;;;
+;;; CORRECTED (this comment previously said a bare `msr fpsr, xzr` "would
+;;; erase unrelated state: refused").  That was wrong and it contradicted
+;;; live code.  The narrowing here is a strict SUPERSET of what is required,
+;;; not a correction of the bare write:
+;;;   * PPC's own clear-fpu-exceptions (ppc-lapmacros.lisp:682) is
+;;;     `mtfsf #xfc fp-zero', an 8-bit field mask that zeroes FPSCR fields
+;;;     0-5 = bits 0-23, its ENTIRE status half, preserving only fields 6-7
+;;;     = the enables and the rounding mode.  On AArch64 those live in FPCR,
+;;;     which `msr fpsr' cannot reach, so a bare FPSR zeroing is the exact
+;;;     PPC64 contract -- the LAPMACRO clear-fpu-exceptions
+;;;     (arm64-lapmacros.lisp) and four kernel sites (C(zero_fpscr) in
+;;;     arm64-asmutils.s, arm64-spentry.s ffcall open+close,
+;;;     spentry-E-ffi.s) are correct as written.
+;;;   * FPSR bits 8-31 are unobservable here anyway: QC (27) is set only by
+;;;     Advanced SIMD integer saturating operations and this assembler
+;;;     defines none of them; NZCV (28-31) are AArch32 comparison flags
+;;;     (A64 FCMP writes PSTATE.{N,Z,C,V}); and %get-fpscr-status /
+;;;     %get-post-ffi-fpsr both mask (:$ #xff).
+;;;   * %set-fpscr-status (arm64-float.lisp) is RMW for a different reason:
+;;;     it STORES a caller byte rather than clearing.  ARM32's RMW is
+;;;     MANDATORY for ARM32, whose single FPSCR holds the enables and the
+;;;     rounding mode -- that constraint does not exist here.
+;;; The RMW is kept because this vinsn already declares its own :u64 temp,
+;;; so narrowing costs one instruction pair and no hidden clobber, and it
+;;; keeps the ARM32 line-port shape.  FPCR is not touched.
 ;;; The sysreg is written as its raw 15-bit op0:op1:CRn:CRm:op2
 ;;; encoding #x5a21 (= "fpsr" in *system-registers*, arm64-asm.lisp):
 ;;; LAP's parse-operand resolves sysreg NAMES, but the vinsn body
