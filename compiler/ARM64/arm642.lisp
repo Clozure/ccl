@@ -904,7 +904,25 @@
           (if (and (eql 0 diff)
                    (not multiple-values-on-stack))
             (! restore-nvrs n arm64::vsp)
-            (let* ((reg (make-unwired-lreg
+            ;; ARM64-DEVIATION: rebind the temp-register masks around the
+            ;; scratch selection.  The ARM32 original (arm2.lisp, same
+            ;; function) calls SELECT-IMM-TEMP/SELECT-NODE-TEMP here with the
+            ;; masks unbound, so every return leg that takes this path
+            ;; permanently removes one GPR from the function's temp pools:
+            ;; a function with enough such legs (l0-array.lisp CTYPE-SUBTYPE
+            ;; has 15+ once NVRs are allocated) drains all 6 imm + 8 node
+            ;; temps and the next template temp request dies with "ran out
+            ;; of node temp registers".  PPC64 needs no scratch here at all
+            ;; (its restore-nvrs vinsn takes a from-fp register plus an
+            ;; offset, ppc2.lisp restore-nvrs) and scopes the one scratch it
+            ;; does use for the nvalret case with WITH-IMM-TEMPS
+            ;; (ppc2-do-return).  Rebinding gives the same discipline: the
+            ;; register stays reserved across the address computation and
+            ;; the restore-nvrs vinsn that consume it, then returns to the
+            ;; pool.  Nothing reads it after this form.
+            (let* ((*available-backend-imm-temps* *available-backend-imm-temps*)
+                   (*available-backend-node-temps* *available-backend-node-temps*)
+                   (reg (make-unwired-lreg
                          (if (= *available-backend-imm-temps* 0)
                            (select-node-temp)
                            (select-imm-temp))
