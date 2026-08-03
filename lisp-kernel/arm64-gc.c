@@ -2256,12 +2256,37 @@ purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
            found; copy the code vector to to-space, then treat it as if
            it hadn't already been copied.  (ppc-gc.c:1786-1798, 'CODE'
            prefix â†’ sentinel.) */
-        p = (opcode *)headerP;
-        do {
+        /* ARM64-DEVIATION vs ppc-gc.c:1790-1796, and a FIX to it (P2.9/F7):
+           start at (loc & ~7) and TEST BEFORE STEPPING BACK, exactly as
+           mark_pc_root:634-637 already does.  The vendor do/while
+           decrements first, so its first read is at untag(loc)-8; for a
+           locative in the code vector's FIRST dnode that is BELOW the
+           header, and the scan then adopts the first 8-aligned zero word
+           of the preceding object as a fake sentinel.
+           This is not a corner case.  fulltag_misc was chosen = 12
+           precisely so that a branch to a TAGGED code-vector pointer lands
+           on the first real instruction (arm64-arch.lisp:73-76, "word 0 is
+           the udf #0 sentinel prefix"), so base+12 IS every code vector's
+           entry point: it is the permanent content of a function's
+           code_vector slot (cf. copy_ivector_reference below) and reaches
+           here from purify_cstack_area's subtag_function arm, and it is
+           xpPC for any thread suspended at a function's first instruction.
+           PPC64 has the identical geometry -- fulltag_misc 12, a 4-byte
+           'CODE' prefix at base+8 (ppc64-arch.lisp:869) -- and the identical
+           predecrement, so this is an upstream defect there too, not a port
+           divergence.
+           TAG invariant is unchanged: tag == loc - p at every step, the
+           loop ends with p at the sentinel (base+8), and the += node_size
+           below makes it (loc - header).  Verified for loc-base in
+           {12,16,20,24,28}. */
+        p = (opcode *)ptr_from_lispobj(loc & ~7);
+        tag = loc & 7;
+        insn = *p;
+        while (insn != ARM64_CODE_VECTOR_SENTINEL) {
           p -= 2;
           tag += 8;
           insn = *p;
-        } while (insn != ARM64_CODE_VECTOR_SENTINEL);
+        }
         /* VENDOR BUG FIXED (see file header note 6 / report Â§5.11):
            the header word sits node_size below the sentinel, so the
            displacement from the header is (loc - sentinel) + node_size;
