@@ -175,7 +175,7 @@
 	(subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space str)) 1)))))
 
 
-#+x86-target
+#+(or x86-target arm64-target)
 (defun collect-elf-static-functions ()
   (collect ((functions))
     (purify)
