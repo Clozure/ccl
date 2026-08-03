@@ -6096,9 +6096,23 @@
           ;; can handle arbitrary expression evaluation (special
           ;; binding, value-cell consing, etc.) without clobbering the
           ;; argument registers.
+          ;; ARM64-DEVIATION: the step below is (1- arg-reg-num), where the
+          ;; ARM32 original this loop came from (arm2.lisp:5964) has
+          ;; (1+ arg-reg-num).  Both are right for their own port; the two
+          ;; register maps run in opposite directions:
+          ;;   ARM32  arg_z=r4  arg_y=r5  arg_x=r6   (arm-arch.lisp:97-99)
+          ;;   ARM64  arg_x=x9  arg_y=x10 arg_z=x11  (arm64-asm.lisp:206-208)
+          ;;   PPC64  arg_x < arg_y < arg_z          (ppc-arch.lisp:62-64)
+          ;; ARM64 has PPC64's ordering, so PPC64's step is the model
+          ;; (ppc2.lisp:5408); x86-64 avoids the question with an explicit
+          ;; list of register numbers (x862.lisp:7496-7499).  Incrementing
+          ;; from arg_z=x11 leaves the argument block and reads temp0=x12
+          ;; and temp1=x13, which never held an argument, so every lexical
+          ;; assigned an NVR after the first was loaded from garbage.
+          ;; Latent while *arm642-nvrs* is nil (arg-regs needs pregs>0).
           (when arg-regs
             (do* ((vars arg-regs (cdr vars))
-                  (arg-reg-num arm64::arg_z (1+ arg-reg-num)))
+                  (arg-reg-num arm64::arg_z (1- arg-reg-num)))
                  ((null vars))
               (declare (list vars) (fixnum arg-reg-num))
               (let* ((var (car vars)))
