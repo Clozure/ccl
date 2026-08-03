@@ -2990,18 +2990,16 @@
             (t
 	     (cond
                (is-128-bit
-                (when  index-known-fixnum
-                  (unless unscaled-idx
-                    (setq unscaled-idx ($ *x862-arg-y*)))
+                (when index-known-fixnum
                   (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3)))))
                 (! misc-set-complex-double-float unboxed-val-reg src unscaled-idx))
                (is-64-bit
                 (if (eq type-keyword :complex-single-float-vector)
                   ;; don't bother to special-case constant indices
                   (progn
-		    (if index-known-fixnum
-		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3))))
-                      (! misc-set-complex-single-float unboxed-val-reg src unscaled-idx)))
+		    (when index-known-fixnum
+		      (x862-absolute-natural seg unscaled-idx nil (ash index-known-fixnum (target-word-size-case (32 2) (64 3)))))
+                    (! misc-set-complex-single-float unboxed-val-reg src unscaled-idx))
                   (if (and index-known-fixnum
                            (<= index-known-fixnum
                                (arch::target-max-64-bit-constant-index arch)))
