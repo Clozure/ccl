@@ -2866,7 +2866,21 @@
           (if (eq spread-p 0)
             (! spread-lexpr)
             (! spread-list))
-          (arm642-restore-nvrs seg nil)
+          ;; ARM64-DEVIATION: guarded with tail-p, following PPC64
+          ;; (ppc2.lisp:2383-2391, `(when (and tail-p
+          ;; *ppc2-register-restore-count*) ...)') and x86-64
+          ;; (x862.lisp:3512).  ARM32 (arm2.lisp:2832) leaves it
+          ;; unguarded and ARM64 inherited that form.  Unguarded, every
+          ;; NON-tail (apply f list) reloads the caller's saved NVRs over
+          ;; this frame's live NVR-homed lexicals just before the call.
+          ;; The restore lives in this branch because the tail-p block
+          ;; above defers to it ((unless spread-p ...)) -- but that branch
+          ;; runs for non-tail calls too.  Invisible while *arm642-nvrs*
+          ;; is nil.  STILL WRONG for a tail spread of >4 args: PPC64
+          ;; restores relative to a PRE-spread vsp snapshot in temp1,
+          ;; because pushed spread args move vsp below the save area.
+          (when tail-p
+            (arm642-restore-nvrs seg nil))
           (arm642-restore-non-volatile-fprs seg)
           (! restore-nfp))
         (if nargs
