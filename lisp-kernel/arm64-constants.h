@@ -564,7 +564,7 @@ typedef struct tcr {
   struct tcr *prev;
   special_binding* db_link;     /* special binding chain head */
   LispObj catch_top;            /* top catch frame */
-  LispObj *last_lisp_frame; /* top frame on cstack when in foreign code */
+  natural last_lisp_frame; /* top frame on cstack when in foreign code */
   LispObj *save_vsp;  /* VSP when in foreign code */
   LispObj *save_tsp;  /* TSP when in foreign code */
   struct area *cs_area; /* cstack area pointer */
