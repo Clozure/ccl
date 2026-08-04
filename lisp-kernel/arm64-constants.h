@@ -615,6 +615,12 @@ typedef struct lisp_frame {
 
 #include <stddef.h>
 #include <assert.h>
+
+static_assert(sizeof(struct lisp_frame) == 32,
+              "sizeof(struct lisp_frame) expected to be 32");
+
+#define lisp_frame_size (sizeof(struct lisp_frame))
+
 /*
  * Try to detect struct tcr layout changes that require corresponding
  * udpates in arm64-arch.lisp.
