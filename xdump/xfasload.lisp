@@ -857,96 +857,35 @@
     (declare (fixnum n))
     (values (xload-save-string str n) str n new-p)))
 
-;;; The cloned packages that go into the image are FRESH packages: they start
-;;; out empty and are populated by XLOAD-INTERN as the cold-load fasls are read.
-;;; They used to be created with their symbol tables sized from the CROSS-COMPILE
-;;; HOST's corresponding package -- (length (car (uvref p 0))), i.e. the length of
-;;; the host's PKG.ITAB vector -- which has two consequences, both measured on a
-;;; linuxarm64 boot image.
+;;; Size cloned packages like new packages, not like their host
+;;; counterparts.
 ;;;
-;;; 1. The tables are enormously oversized, because the host has compiled all of
-;;;    CCL while the image holds only what level-0 interns.  Dumped slot counts
-;;;    vs symbols actually in them:
-;;;
-;;;      CCL      itab 24989 slots / 1870 symbols     etab  1153 /  78
-;;;      CL       itab    41 /    0                   etab  1153 / 345
-;;;      KEYWORD  itab    41 /    0                   etab  2609 / 105
-;;;      TARGET   itab  2609 /   25                   etab    41 /   0
-;;;      OS       itab    61 /    0                   etab    41 /   0
-;;;
-;;;    32738 slots for 2423 symbols.  At 8 bytes a slot that is 261904 of the
-;;;    749232 bytes of dumped dynamic space: 34.96% of that space is table, and
-;;;    the EMPTY part of it is (32738 - 2423) * 8 = 242520 bytes, 32.37%.  The
-;;;    defect is in this shared xloader, so it reaches every cross-built target;
-;;;    the byte figures above are this 64-bit image's, and a 32-bit target has
-;;;    4-byte slots and a different package population.
-;;;
-;;; 2. Worse, it makes the boot image a function of the host session rather than
-;;;    of the sources.  TARGET-XCOMPILE-LEVEL-0 runs in the same process as
-;;;    XFASLOAD, so whether level-0 needed recompiling changes how many symbols
-;;;    the host has interned.  ONE %RESIZE-HTAB in the host's KEYWORD package --
-;;;    etab 2609 -> 3917 slots, being a request of nsyms + nsyms/4 + 2 = 2855
-;;;    (about 1.25x the symbol count) which $PRIMSIZES then rounds up to 3917, so
-;;;    the vector itself grows 1.50x -- moved the dumped image by exactly
-;;;    1308*8 = 10464 bytes, and the file by 12288 = three 4096-byte pages,
-;;;    because WRITE-IMAGE-FILE page-aligns each section.  (The page granularity
-;;;    is forced by the writer; it says nothing about the underlying 10464.)  The
-;;;    dumped symbol SET and COUNT are identical across those two builds -- 2423
-;;;    both times -- so what moved was only the host-derived table SIZE; but a
-;;;    different length is a different modulus, so entries are repositioned and
-;;;    the allocations after them shift.  Two builds of identical sources then
-;;;    differ, which costs a build system the ability to treat "the artifact
-;;;    changed" as evidence that a source change reached it.
-;;;
-;;; So size them the way MAKE-PACKAGE sizes a new package and let
-;;; %HTAB-ADD-SYMBOL grow them: the dumped tables then reflect what the TARGET
-;;; interned and nothing else.  The empty-slot representation is unchanged --
-;;; %INITIALIZE-HTAB's (make-array size) is 0-filled, which is exactly what
-;;; %GET-HASHED-HTAB-SYMBOL tests for ((eql elt 0), nfasload.lisp) and what
-;;; XLOAD-SAVE-HTAB already dumps for a non-symbol slot.
-;;;
-;;; What makes this safe rather than merely smaller is that the dumped sizes are
-;;; not load-bearing past the first instant of cold load.  The image's initial
-;;; %TOPLEVEL-FUNCTION% (level-0/nfasload.lisp) does
-;;;
-;;;      (dolist (p %all-packages%)
-;;;        (%resize-htab (pkg.itab p))
-;;;        (%resize-htab (pkg.etab p)))
-;;;
-;;; UNCONDITIONALLY, before anything else interns; and %RESIZE-HTAB sizes from
-;;; actual occupancy -- it counts the symbols in the old vector and asks for
-;;; nsyms + nsyms/4 + 2 -- so it shrinks as readily as it grows.  It therefore
-;;; already converted the old host-sized tables into very nearly what this patch
-;;; now dumps directly: CCL's itab at 1870 symbols asks for 2339, which
-;;; $PRIMSIZES rounds to 2609, the size the patched cloner produces; KEYWORD's
-;;; etab at 105 asks for 133 -> 149; CL's at 345 asks for 433 -> 509.  The target
-;;; has always rehashed every dumped table with its OWN HASH-PNAME on every boot,
-;;; before this change and after it, so no lookup path becomes newly live here.
+;;; Previously, we sized packages based on their size in the host
+;;; lisp.  This bloats the bootstrapping image (which doesn't much
+;;; matter), but it also causes the image to depend on the state of
+;;; the host lisp: if a package in the host lisp grows, an image built
+;;; from otherwise identical sources will differ from one built
+;;; earlier (because the size of the cloned package would differ).
 
-(defparameter *xload-package-internal-size* 60
-  "INTERNAL-SIZE estimate for the packages cloned into the boot image.
-Only an initial size: %HTAB-ADD-SYMBOL grows the table as the cold-load
-fasls intern into it.  MAKE-PACKAGE's default.")
-
-(defparameter *xload-package-external-size* 10
-  "EXTERNAL-SIZE estimate for the packages cloned into the boot image.
-See *XLOAD-PACKAGE-INTERNAL-SIZE*.")
+;;; These match make-package's defaults.
+(defparameter *xload-package-internal-size* 60)
+(defparameter *xload-package-external-size* 10)
 
 (defun xload-clone-packages (packages)
   (let* ((alist (mapcar #'(lambda (p)
                             (cons p
                                   (gvector :package
-                                            (%new-package-hashtable
-                                             *xload-package-internal-size*)
-                                            (%new-package-hashtable
-                                             *xload-package-external-size*)
-                                            nil                         ; used
-                                            nil                         ; used-by
-                                            (copy-list (pkg.names p))     ; names
-                                            nil ;shadowed
-                                            nil ;lock
-                                            nil ;intern-hook
-                                            )))
+                                           (%new-package-hashtable
+                                            *xload-package-internal-size*)
+                                           (%new-package-hashtable
+                                            *xload-package-external-size*)
+                                           nil  ;used
+                                           nil  ;used-by
+                                           (copy-list (pkg.names p)) ;names
+                                           nil  ;shadowed
+                                           nil  ;lock
+                                           nil  ;intern-hook
+                                           )))
                         packages)))
     (flet ((lookup-clone (p) (let* ((clone (cdr (assq p alist))))
                                (when clone (list clone)))))
@@ -954,7 +893,8 @@ See *XLOAD-PACKAGE-INTERNAL-SIZE*.")
         (let* ((orig (car pair))
                (dup (cdr pair)))
           (setf (pkg.used dup) (mapcan #'lookup-clone (pkg.used orig))
-                (pkg.used-by dup) (mapcan #'lookup-clone (pkg.used-by orig))))))))
+                (pkg.used-by dup) (mapcan #'lookup-clone
+                                          (pkg.used-by orig))))))))
 
 ;;; Dump each cloned package into dynamic-space; return an alist
 (defun xload-assign-aliased-package-addresses (alist)
