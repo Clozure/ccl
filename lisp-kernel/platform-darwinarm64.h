@@ -31,7 +31,10 @@ extern void darwin_sigreturn(ExceptionInformation *, unsigned);
 #define xpGPRvector(x) ((natural *)(&(UC_MCONTEXT(x)->__ss.__x)))
 #define xpGPR(x,gprno) (xpGPRvector(x)[gprno])
 #define xpSP(x) (UC_MCONTEXT(x)->__ss.__sp)
+#define xpLR(x) (UC_MCONTEXT(x)->__ss.__lr)
 #define xpPC(x) (*(pc *)&(UC_MCONTEXT(x)->__ss.__pc))
+#define set_xpPC(x, new) (xpPC(x) = (pc)(new))
+#define xpFaultAddress(x) (UC_MCONTEXT(x)->__es.__far)
 
 #include <mach/mach.h>
 #include <mach/mach_error.h>
