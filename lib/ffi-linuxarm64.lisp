@@ -54,19 +54,16 @@
 
 (in-package "CCL")
 
-;;; The ARM64-LINUX64 package holds the four FTD callback entrypoints
+;;; The ARM64-LINUX package holds the four FTD callback entrypoints
 ;;; consumed by foreign-types.lisp / nfcomp.lisp's
 ;;; %with-cross-compilation-target.  Created here (not via defpackage in
 ;;; level-0) because lib/ffi-*.lisp files are the canonical home for
 ;;; per-OS FFI interface packages in vendor/ccl/.
 ;;;
-;;; ARM64-DEVIATION: Clozure precedent for 64-bit OS interface packages
-;;; is arch-OS (X86-LINUX64, X86-DARWIN64, ARM-LINUX).  Following that
-;;; pattern we use ARM64-LINUX64 rather than the PPC64 odd-one-out name
-;;; LINUX64 (which doesn't include an arch prefix).
+;;; The name of the architecture is arm64.  The 64-bit nature is implied.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (find-package "ARM64-LINUX64")
-    (make-package "ARM64-LINUX64" :use '("CL" "CCL"))))
+  (unless (find-package "ARM64-LINUX")
+    (make-package "ARM64-LINUX" :use '("CL" "CCL"))))
 
 
 ;;;-----------------------------------------------------------------------
@@ -80,7 +77,7 @@
 ;;; bits) in X0/X1 directly; only larger composites use the X8 indirect
 ;;; result-area pointer.  We encode the size threshold explicitly.
 
-(defun arm64-linux64::record-type-returns-structure-as-first-arg (rtype)
+(defun arm64-linux::record-type-returns-structure-as-first-arg (rtype)
   (when (and rtype
              (not (typep rtype 'unsigned-byte))
              (not (member rtype *foreign-representation-type-keywords*
@@ -125,7 +122,7 @@
 ;;; record-type-returns-structure-as-first-arg said, so this code path
 ;;; is only entered for > 128-bit return values (consistent).
 
-(defun arm64-linux64::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
+(defun arm64-linux::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
   (let* ((result-type-spec (or (car (last args)) :void)))
     (multiple-value-bind (result-type error)
         (ignore-errors (parse-foreign-type result-type-spec))
@@ -137,7 +134,7 @@
           (argforms (pop args)))
         (when (typep result-type 'foreign-record-type)
           ;;; Reached only for > 128-bit returns (per AAPCS64 §6.9, gated
-          ;;; by arm64-linux64::record-type-returns-structure-as-first-arg).
+          ;;; by arm64-linux::record-type-returns-structure-as-first-arg).
           ;;; Caller-allocated result buffer is passed as the first :address
           ;;; arg; AAPCS64 wiring puts it in X8 at the call boundary.
           (setq result-type *void-foreign-type*
@@ -219,7 +216,7 @@
 ;;;    one slot early.  No boot-path callback has such a signature.
 ;;;  - fp-regs-form is frame arithmetic (%inc-ptr CBF -64), not PPC's
 ;;;    deref of a pointer the trampoline stored into its frame.
-(defun arm64-linux64::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
+(defun arm64-linux::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
   (collect ((lets)
             (rlets)
             (inits)
@@ -332,7 +329,7 @@
 ;;; caller reads s0.  PPC coerced to double ((float result 0.0d0)) and
 ;;; wrote a double because PowerOpen returns singles double-extended in
 ;;; f1; AAPCS64 does not.
-(defun arm64-linux64::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
+(defun arm64-linux::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore struct-return-arg))
   (unless (eq return-type *void-foreign-type*)
     (let* ((return-type-keyword (foreign-type-to-representation-type return-type)))

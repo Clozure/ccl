@@ -356,8 +356,8 @@
                    (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-DARWIN")))
                  (:linuxarm64
                   (make-ftd
-                   :interface-db-directory "ccl:arm64-headers64;"
-                   :interface-package-name "ARM64-LINUX64"
+                   :interface-db-directory "ccl:arm64-headers;"
+                   :interface-package-name "ARM64-LINUX"
                    :attributes '(:bits-per-word 64
                                  ;; `char' is UNSIGNED by the
                                  ;; aarch64-linux-gnu psABI; AAPCS64 leaves
@@ -368,14 +368,14 @@
                                  :natural-alignment t
                                  :prepend-underscore nil)
                    :ff-call-expand-function
-                   (intern "EXPAND-FF-CALL" "ARM64-LINUX64")
+                   (intern "EXPAND-FF-CALL" "ARM64-LINUX")
                    :ff-call-struct-return-by-implicit-arg-function
                    (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
-                           "ARM64-LINUX64")
+                           "ARM64-LINUX")
                    :callback-bindings-function
-                   (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-LINUX64")
+                   (intern "GENERATE-CALLBACK-BINDINGS" "ARM64-LINUX")
                    :callback-return-value-function
-                   (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-LINUX64")))
+                   (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM64-LINUX")))
                  )))
         (install-standard-foreign-types ftd)
         (use-interface-dir :libc ftd)
