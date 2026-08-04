@@ -157,7 +157,7 @@
    :macro-apply-code-function 'arm64-fixup-macro-apply-code
    :closure-trampoline-code *arm64-closure-trampoline-code*
    :udf-code *arm64-udf-code*
-   :default-image-name "ccl:ccl;arm64-boot.image"
+   :default-image-name "ccl:ccl;arm64-boot"
    :default-startup-file-name "level-1.la64fsl"
    :subdirs '("ccl:level-0;ARM64;")
    :compiler-target-name :linuxarm64
