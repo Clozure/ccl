@@ -131,6 +131,23 @@ detail that you can worry about later.
 Use the interface translator (see ffigen5) and build appropriate `.cdb`
 files for the target.  Note that these files are in native byte order.
 
+The translator produces `.ffi` files.  These are an s-expression-based
+representation of the C header files.
+
+These files go in the directory as named in the backend struct (e.g.,
+`ccl:arm64-headers;` for linuxarm64).
+
+To turn them into the `.cdb` files that the `#_` and `#$` reader
+macros use, evaluate the following forms.  Note that you need the
+appropriate target backend to be defined in your host lisp.
+
+```
+(require 'parse-ffi)
+(load "lib/ffi-linuxarm64.lisp") ;or whatever
+(setup-arm64-ftd (find-backend :linuxarm64))
+(parse-standard-ffi-files :libc :linuxarm64)
+```
+
 ## Cross-compiling
 
 Define the target backend in the host.  This may involve evaluating
@@ -165,6 +182,39 @@ Once those functions were (re-)defined natively, it's generally
 possible to compile natively.  Once that's possible, things
 generally get much much simpler.
 
+A sample file that loads a backend:
+```
+;;;; -*- Mode: Lisp; Package: CCL -*-
+;;;;
+;;;; SPDX-License-Identifier: Apache-2.0
+
+;;; Load the linuxarm64 backend into a host lisp, so that
+;;;
+;;;     (cross-compile-ccl :linuxarm64 t)
+;;;     (cross-xload-level-0 :linuxarm64 :force)
+;;;
+;;; work.
+;;;
+;;; You also need the interface database in ccl:arm64-headers; (sold
+;;; separately)
+
+(in-package "CCL")
+
+(defpackage "ARM64-LINUX" (:use))
+
+(defun load-linuxarm64-backend ()
+  (in-development-mode
+    (load "ccl:lib;systems.lisp")
+    (load "ccl:lib;compile-ccl"))
+  (update-modules '(arm64-arch arm64-asm arm64-lap arm64-backend
+                    arm64-vinsns arm642)
+                  t)
+  (setup-arm64-ftd *linuxarm64-backend*)
+  (update-modules '(arm64-lapmacros arm64-disassemble ffi-linuxarm64) t)
+  (update-modules *arm64-xload-modules* t))
+
+(load-linuxarm64-backend)
+```
 
 ## Memory Layout
 
