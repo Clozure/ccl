@@ -2174,17 +2174,29 @@
 (define-compiler-macro realp (&whole call x)
   (if (not (eq *host-backend* *target-backend*))
     call
-    (let* ((typecode (gensym)))
+    ;; Look the target's typecodes up when this compiler macro is EXPANDED,
+    ;; not when this file is READ.  Reading them through the TARGET package
+    ;; nickname bakes whichever architecture was current at read time into the
+    ;; expansion, and DEFINE-COMPILER-MACRO takes effect at compile time: a
+    ;; cross-compilation of this file therefore reinstalls this compiler macro
+    ;; in the compiling HOST with the cross-target's subtags.  The host then
+    ;; open-codes REALP with foreign typecodes, so (TYPEP <host bignum> 'REAL)
+    ;; answers NIL and SPECIFIER-TYPE fails on any bignum-bounded REAL type.
+    ;; The other typecode-testing compiler macros here (INTEGERP, STRUCTUREP,
+    ;; LOCKP, BASE-STRING-P ...) already consult *TARGET-BACKEND* this way.
+    (let* ((typecode (gensym))
+           (arch (backend-target-arch *target-backend*))
+           (limit (- (arch::target-nbits-in-word arch)
+                     (arch::target-fixnum-shift arch)))
+           (mask (logior (ash 1 (arch::target-fixnum-tag arch))
+                         (ash 1 (nx-lookup-target-uvector-subtag :single-float))
+                         (ash 1 (nx-lookup-target-uvector-subtag :double-float))
+                         (ash 1 (nx-lookup-target-uvector-subtag :bignum))
+                         (ash 1 (nx-lookup-target-uvector-subtag :ratio)))))
       `(let* ((,typecode (typecode ,x)))
         (declare (type (unsigned-byte 8) ,typecode))
-        (and (< ,typecode (- target::nbits-in-word target::fixnumshift))
-         (logbitp (the (integer 0 (#.(- target::nbits-in-word target::fixnumshift)))
-                    ,typecode)
-                  (logior (ash 1 target::tag-fixnum)
-                          (ash 1 target::subtag-single-float)
-                          (ash 1 target::subtag-double-float)
-                          (ash 1 target::subtag-bignum)
-                          (ash 1 target::subtag-ratio))))))))
+        (and (< ,typecode ,limit)
+             (logbitp (the (integer 0 (,limit)) ,typecode) ,mask))))))
 
 (define-compiler-macro %composite-pointer-ref (size pointer offset)
   (if (constantp size)
