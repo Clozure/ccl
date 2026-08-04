@@ -1610,7 +1610,7 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
           /* If we are not in soft overflow mode yet, assume that the
              user has set the soft overflow size very small and try to
              continue on another thread before throwing to toplevel */
-          if ((tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT)) {
+          if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) {
             reset_lisp_process(xp);
           }
         } else {
