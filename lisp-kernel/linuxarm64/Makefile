@@ -1,17 +1,5 @@
-#
-# Copyright 2010 Clozure Associates
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
+# This Makefile needs GNU Make
 
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
@@ -21,9 +9,7 @@ VPATH = ../
 RM = /bin/rm
 AS = ${CROSS}as
 CC = ${CROSS}gcc
-M4 = m4
-ASFLAGS = 
-M4FLAGS = -DLINUX -DARM64
+ASFLAGS =
 CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
@@ -44,44 +30,35 @@ HASH_STYLE="-Wl,--hash-style=sysv"
 endif
 
 
-
 .s.o:
 	$(CC) -c -x assembler-with-cpp -I../ $< $(CDEFINES) -o $@
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT)  -o $@
 
 SPOBJ = pad.o  arm64-spentry.o spentry-A-alloc-numbers.o spentry-B-vectors-misc.o spentry-C-bind-catch-throw.o spentry-D-call-builtins.o spentry-E-ffi.o
-ASMOBJ = arm64-asmutils.o imports.o
+ASMOBJ = arm64-asmutils.o arm64-imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm64-gc.o bits.o  arm64-exceptions.o \
 	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
 
 DEBUGOBJ = lispdcmd.o plprint.o plsym.o albt.o arm64-print.o
-KERNELOBJ= $(COBJ) arm64-asmutils.o  imports.o
+KERNELOBJ= $(COBJ) arm64-asmutils.o  arm64-imports.o
 
-SPINC =	lisp.s m4macros.m4 arm64-constants.h arm64-macros.s errors.s arm64-uuo.s \
+SPINC =	lisp.s arm64-constants.h arm64-macros.s errors.s arm64-uuo.s \
 	lisp_globals.s
 
 CHEADERS = area.h bits.h arm64-constants.h lisp-errors.h gc.h lisp.h \
 	lisp-exceptions.h lisp_globals.h macros.h memprotect.h image.h \
 	threads.h arm64-exceptions.h $(PLATFORM_H)
 
-# Subprims linked into the kernel ?
-# Yes:
-
 KSPOBJ = $(SPOBJ)
-all:	../../armcl64
 
-
-# No:
-
-# KSPOBJ=
-# all:	../../armcl64 ../../subprims.so
+all:	../../arm64cl
 
 OSLIBS = -ldl -lm -lpthread -lrt
 
 
-../../armcl64:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
+../../arm64cl:	$(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 	$(CC)  $(CDEBUG)  -Wl,--export-dynamic $(HASH_STYLE)  -o $@ $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) -Wl,--no-as-needed $(OSLIBS)
 
 
@@ -92,13 +69,9 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 
 cclean:
-	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../armcl
+	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../arm64cl
 
 clean:	cclean
 	$(RM) -f $(SPOBJ)
 
-strip:	../../armcl
-	strip -g ../../armcl
-
-imports.o: ../imports.s ../m4macros.m4
-	$(M4) $(M4FLAGS) -I../ ../imports.s | $(AS) $(ASFLAGS) -o $@
+arm64-imports.o: ../arm64-imports.s ../arm64-asm.h

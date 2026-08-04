@@ -529,7 +529,7 @@
     (:darwinarm "darmcl")
     (:androidarm "aarmcl")
     (:darwinarm64 "darm64cl")
-    (:linuxarm64 "larm64cl")))
+    (:linuxarm64 "arm64cl")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (concatenate 'string (pathname-name (standard-kernel-name target)) ".image"))
