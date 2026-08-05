@@ -1758,6 +1758,20 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     alloc_instruction_id state = classify_alloc_instruction(xp);
     if (state != ID_unrecognized_alloc_instruction) {
 
+      if ((state == ID_alloc_trap_instruction) && (alloc_disp == NULL)) {
+        signed_natural disp = allocptr_displacement(xp);
+
+        /* A synchronous allocation trap may already be waiting for the
+           exception lock while another thread normalizes this context for
+           GC.  Keep the PC at the trap so that the pending handler can
+           process it. */
+        update_bytes_allocated(tcr,
+                               (void *)ptr_from_lispobj(cur_allocptr-disp));
+        xpGPR(xp,allocbase) = VOID_ALLOCPTR;
+        xpGPR(xp,allocptr) = VOID_ALLOCPTR+disp;
+        return;
+      }
+
       if (state == ID_finish_allocation) {
         if (allocptr_tag == fulltag_cons) {
           finish_allocating_cons(xp);
