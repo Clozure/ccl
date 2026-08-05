@@ -59,18 +59,21 @@ void
 sprint_signed_decimal(int64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "%" PRId64, n);
+  add_c_string(numbuf);
 }
 
 void
 sprint_unsigned_decimal(uint64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "%" PRIu64, n);
+  add_c_string(numbuf);
 }
 
 void
 sprint_unsigned_hex(uint64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "#x%016" PRIx64, n);
+  add_c_string(numbuf);
 }
 
 void
