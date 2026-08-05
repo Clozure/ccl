@@ -857,27 +857,35 @@
     (declare (fixnum n))
     (values (xload-save-string str n) str n new-p)))
 
+;;; Size cloned packages like new packages, not like their host
+;;; counterparts.
+;;;
+;;; Previously, we sized packages based on their size in the host
+;;; lisp.  This bloats the bootstrapping image (which doesn't much
+;;; matter), but it also causes the image to depend on the state of
+;;; the host lisp: if a package in the host lisp grows, an image built
+;;; from otherwise identical sources will differ from one built
+;;; earlier (because the size of the cloned package would differ).
+
+;;; These match make-package's defaults.
+(defparameter *xload-package-internal-size* 60)
+(defparameter *xload-package-external-size* 10)
+
 (defun xload-clone-packages (packages)
   (let* ((alist (mapcar #'(lambda (p)
                             (cons p
                                   (gvector :package
-                                            (cons (make-array (the fixnum (length (car (uvref p 0))))
-                                                              :initial-element 0)
-                                                  (cons 0 (cddr (pkg.itab p))))
-                                            (cons (make-array
-                                                   (the fixnum
-                                                     (length
-                                                      (car
-                                                       (pkg.etab p))))
-                                                   :initial-element 0)
-                                                  (cons 0 (cddr (pkg.etab p))))
-                                            nil                         ; used
-                                            nil                         ; used-by
-                                            (copy-list (pkg.names p))     ; names
-                                            nil ;shadowed
-                                            nil ;lock
-                                            nil ;intern-hook
-                                            )))
+                                           (%new-package-hashtable
+                                            *xload-package-internal-size*)
+                                           (%new-package-hashtable
+                                            *xload-package-external-size*)
+                                           nil  ;used
+                                           nil  ;used-by
+                                           (copy-list (pkg.names p)) ;names
+                                           nil  ;shadowed
+                                           nil  ;lock
+                                           nil  ;intern-hook
+                                           )))
                         packages)))
     (flet ((lookup-clone (p) (let* ((clone (cdr (assq p alist))))
                                (when clone (list clone)))))
@@ -885,7 +893,8 @@
         (let* ((orig (car pair))
                (dup (cdr pair)))
           (setf (pkg.used dup) (mapcan #'lookup-clone (pkg.used orig))
-                (pkg.used-by dup) (mapcan #'lookup-clone (pkg.used-by orig))))))))
+                (pkg.used-by dup) (mapcan #'lookup-clone
+                                          (pkg.used-by orig))))))))
 
 ;;; Dump each cloned package into dynamic-space; return an alist
 (defun xload-assign-aliased-package-addresses (alist)
