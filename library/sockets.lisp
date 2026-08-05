@@ -679,8 +679,8 @@ the socket is not connected."))
 		      (deadline
 		       (max (round (- deadline (get-internal-real-time))
 				   (/ #+64-bit-target 1000000
-                                      #-64-bit-target 1000
-                                      1000))
+				      #-64-bit-target 1000
+				      1000))
 			    0))
 		      (connect-timeout
 		       (check-io-timeout connect-timeout)

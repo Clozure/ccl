@@ -340,8 +340,8 @@ $ ./dx86cl64 --image-name x86-boot64.image --no-init")
               (logical-pathname-translations \"ccl\"))")
 
       "Load the shared definitions, the ARM compiler and cross-dumper,
-       and the target foreign interface before building the target files
-       and image:"
+       the target foreign interface, and the current LOOP macros before
+       building the target files and image:"
 
       (code-block "? (ccl::update-modules ccl::*sysdef-modules* t)
 ? (ccl::update-modules '(ccl::backend ccl::nx) t)
@@ -351,6 +351,7 @@ $ ./dx86cl64 --image-name x86-boot64.image --no-init")
 ? (ccl::require-update-modules ccl::*arm-xload-modules* t)
 ? (ccl::setup-arm-ftd (ccl::find-backend :netbsdarm))
 ? (ccl::require-update-modules 'ccl::ffi-netbsdarm t)
+? (ccl::require-update-modules 'ccl::loop t)
 ? (ccl::cross-compile-ccl :netbsdarm t)
 ? (ccl::cross-xload-level-0 :netbsdarm :force)")
 

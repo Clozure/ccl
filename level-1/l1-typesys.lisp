@@ -2898,9 +2898,9 @@
      (dolist (dim dims)
        (unless (eq dim '*)
 	   (unless (and (integerp dim)
-		          (>= dim 0)
-                          (< dim #.(expt 2 (- target::nbits-in-word
-                                              target::num-subtag-bits))))
+		        (>= dim 0)
+		        (< dim #.(expt 2 (- target::nbits-in-word
+		                            target::num-subtag-bits))))
 	     (signal-program-error "Bad dimension in array type: ~S." dim))))
      dims)
     (t
