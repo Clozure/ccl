@@ -551,7 +551,10 @@ non-swink process PROCESS."
     (loop for thread in  (connection-threads conn)
        do (process-interrupt (thread-process thread) #'exit-repl)))
   (let* ((timeout 0.05)
-         (end (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
+         (units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000)
+         (end (+ (get-internal-real-time)
+                 (* timeout units-per-second))))
     (process-wait "closing connection"
       (lambda ()
         (or (null (%connection-threads conn)) (> (get-internal-real-time) end)))))

@@ -32,9 +32,8 @@
     (%stack-block ((copy (* timeval-size 5)))
       (#_memmove copy *total-gc-microseconds* (* timeval-size 5))
       (macrolet ((funk (arg)
-                   (ecase internal-time-units-per-second 
-                    (1000000 `(timeval->microseconds ,arg))
-                    (1000 `(timeval->milliseconds ,arg)))))
+                   #+64-bit-target `(timeval->microseconds ,arg)
+                   #-64-bit-target `(timeval->milliseconds ,arg)))
         (values
          (funk copy)
          (funk (%incf-ptr copy timeval-size))
@@ -243,14 +242,16 @@
 
 #+windows-target
 (defun %windows-sleep (millis)
-  (do* ((start (floor (get-internal-real-time)
-                      (floor internal-time-units-per-second 1000))
-               (floor (get-internal-real-time)
-                      (floor internal-time-units-per-second 1000)))
-        (millis millis (- stop start))
-        (stop (+ start millis)))
-       ((or (<= millis 0)
-            (not (eql (#_SleepEx millis #$TRUE) #$WAIT_IO_COMPLETION))))))
+  (let* ((units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000))
+    (do* ((start (floor (get-internal-real-time)
+                        (floor units-per-second 1000))
+                 (floor (get-internal-real-time)
+                        (floor units-per-second 1000)))
+          (millis millis (- stop start))
+          (stop (+ start millis)))
+         ((or (<= millis 0)
+              (not (eql (#_SleepEx millis #$TRUE) #$WAIT_IO_COMPLETION)))))))
 
 (defun sleep (seconds)
   "This function causes execution to be suspended for N seconds. N may
@@ -269,27 +270,33 @@
   #-windows-target
   (rlet ((usage :rusage))
     (%%rusage usage)
-    (let* ((user-seconds (pref usage :rusage.ru_utime.tv_sec))
+    (let* ((units-per-second #+64-bit-target 1000000
+                             #-64-bit-target 1000)
+           (user-seconds (pref usage :rusage.ru_utime.tv_sec))
            (system-seconds (pref usage :rusage.ru_stime.tv_sec))
            (user-micros (pref usage :rusage.ru_utime.tv_usec))
            (system-micros (pref usage :rusage.ru_stime.tv_usec)))
-      (values (+ (* user-seconds internal-time-units-per-second)
-                 (round user-micros (floor 1000000 internal-time-units-per-second)))
-              (+ (* system-seconds internal-time-units-per-second)
-                 (round system-micros (floor 1000000 internal-time-units-per-second))))))
+      (values (+ (* user-seconds units-per-second)
+                 (round user-micros
+                        (floor 1000000 units-per-second)))
+              (+ (* system-seconds units-per-second)
+                 (round system-micros
+                        (floor 1000000 units-per-second))))))
   #+windows-target
   (rlet ((start #>FILETIME)
          (end #>FILETIME)
          (kernel #>FILETIME)
          (user #>FILETIME))
     (#_GetProcessTimes (#_GetCurrentProcess) start end kernel user)
-    (let* ((user-100ns (dpb (pref user #>FILETIME.dwHighDateTime)
+    (let* ((units-per-second #+64-bit-target 1000000
+                             #-64-bit-target 1000)
+           (user-100ns (dpb (pref user #>FILETIME.dwHighDateTime)
                             (byte 32 32)
                             (pref user #>FILETIME.dwLowDateTime)))
            (kernel-100ns (dpb (pref kernel #>FILETIME.dwHighDateTime)
                             (byte 32 32)
                             (pref kernel #>FILETIME.dwLowDateTime)))
-           (convert (floor 10000000 internal-time-units-per-second)))
+           (convert (floor 10000000 units-per-second)))
       (values (floor user-100ns convert) (floor kernel-100ns convert)))))
 
 (defun get-internal-run-time ()

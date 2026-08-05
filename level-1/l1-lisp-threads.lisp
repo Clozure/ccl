@@ -91,12 +91,17 @@
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
   (rlet ((tv :timeval))
     (gettimeofday tv)
-    (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
+    ;; Select from the target backend so cross-compilation cannot fold the
+    ;; host image's value of INTERNAL-TIME-UNITS-PER-SECOND.
+    (let* ((units-per-second #+64-bit-target 1000000
+                             #-64-bit-target 1000)
+           (units (truncate (the fixnum (pref tv :timeval.tv_usec))
+                            (/ 1000000 units-per-second)))
            (initial *internal-real-time-session-seconds*))
       (if initial
         (locally
             (declare (type (unsigned-byte 32) initial))
-          (+ (* internal-time-units-per-second
+          (+ (* units-per-second
                 (the (unsigned-byte 32)
                   (- (the (unsigned-byte 32) (pref tv :timeval.tv_sec))
                      initial)))
@@ -107,9 +112,10 @@
           units)))))
 
 (defun get-tick-count ()
-  (values (floor (get-internal-real-time)
-                 (floor internal-time-units-per-second
-                        *ticks-per-second*))))
+  (let* ((units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000))
+    (values (floor (get-internal-real-time)
+                   (floor units-per-second *ticks-per-second*)))))
 
 
 
