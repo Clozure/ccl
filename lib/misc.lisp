@@ -99,15 +99,15 @@ are running on, or NIL if we can't find any useful information."
                       (when matched (return matched)))))))
             #+freebsd-target
             (%stack-block ((ret 512)
-                           (mib (* (record-length :uint))))
+                           (mib (* (record-length :uint) 2)))
               (setf (%get-unsigned-long mib 0)
                     #$CTL_HW
                     (%get-unsigned-long mib (record-length :uint))
                     #$HW_MODEL)
-              (rlet ((oldsize :uint 512))
+              (rlet ((oldsize :size_t 512))
                 (if (eql 0 (#_sysctl mib 2 ret oldsize (%null-ptr) 0))
                   (%get-cstring ret)
-                  1)))
+                  nil)))
             #+solaris-target
             (rlet ((info :processor_info_t))
               (do* ((i 0 (1+ i)))
