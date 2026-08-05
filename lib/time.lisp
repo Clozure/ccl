@@ -295,6 +295,17 @@
 (defun get-internal-run-time ()
   "Return the run time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding CPU usage."
+  #+netbsdarm-target
+  ;; The process CPU clock supplies the monotonic aggregate required here.
+  ;; %INTERNAL-RUN-TIME still uses getrusage for its user/system split.
+  (rlet ((ts :timespec))
+    (let* ((units-per-second #+64-bit-target 1000000
+                             #-64-bit-target 1000))
+      (when (zerop (#_clock_gettime #$CLOCK_PROCESS_CPUTIME_ID ts))
+        (return-from get-internal-run-time
+          (+ (* (pref ts :timespec.tv_sec) units-per-second)
+             (round (pref ts :timespec.tv_nsec)
+                    (floor 1000000000 units-per-second)))))))
   (multiple-value-bind (user sys) (%internal-run-time)
     (+ user sys)))
 
