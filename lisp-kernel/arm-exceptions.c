@@ -24,12 +24,17 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
-#ifdef LINUX
+#if defined(LINUX) || defined(NETBSD)
 #include <strings.h>
 #include <sys/mman.h>
+#endif
+#ifdef LINUX
 #ifndef ANDROID
 #include <linux/prctl.h>
 #endif
+#endif
+#ifdef NETBSD
+#include <machine/armreg.h>
 #endif
 
 #ifdef DARWIN
@@ -51,7 +56,7 @@ extern void pseudo_sigreturn(ExceptionInformation *);
 #define pthread_sigmask(how,in,out) rt_sigprocmask(how,in,out,8)
 #endif
 
-#ifdef LINUX
+#if defined(LINUX) || defined(NETBSD)
 
 void
 enable_fp_exceptions()
@@ -61,6 +66,14 @@ enable_fp_exceptions()
 void
 disable_fp_exceptions()
 {
+}
+#endif
+
+#ifdef NETBSD
+void
+netbsd_clear_cache(char *start, char *end)
+{
+  __builtin___clear_cache(start, end);
 }
 #endif
 
@@ -864,7 +877,12 @@ protection_handler
 Boolean
 is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {
+#ifdef NETBSD
+  /* NetBSD reports the ARM fault-status bits in siginfo_t.si_trap. */
+  return ((info != NULL) && ((info->si_trap & FAULT_WRITE) != 0));
+#else
   return ((xpFaultStatus(xp) & 0x800) != 0);
+#endif
 }
 
 Boolean
@@ -878,6 +896,8 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
 
 #ifdef LINUX
   addr = (BytePtr) ((natural) (xpFaultAddress(xp)));
+#elif defined(NETBSD)
+  addr = info ? (BytePtr)(info->si_addr) : NULL;
 #else
   if (info) {
     addr = (BytePtr)(info->si_addr);
@@ -1557,7 +1577,11 @@ altstack_signal_handler(int signo, siginfo_t *info, ExceptionInformation *xp)
   TCR *tcr=get_tcr(true);
   
   if (signo == SIGBUS) {
+#ifdef NETBSD
+    BytePtr addr = (BytePtr)(info->si_addr);
+#else
     BytePtr addr = (BytePtr)(xp->uc_mcontext.fault_address); 
+#endif
     area *a = tcr->cs_area;
     if (((BytePtr)truncate_to_power_of_2(addr,log2_page_size))== a->softlimit) 
 {
@@ -1571,7 +1595,11 @@ altstack_signal_handler(int signo, siginfo_t *info, ExceptionInformation *xp)
       }
     }
   } else if (signo == SIGSEGV) {
+#ifdef NETBSD
+    BytePtr addr = (BytePtr)(info->si_addr);
+#else
     BytePtr addr = (BytePtr)(xp->uc_mcontext.fault_address);
+#endif
     area *a = tcr->cs_area;
     
     if ((addr >= a->low) &&

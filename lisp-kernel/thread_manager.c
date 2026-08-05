@@ -646,6 +646,25 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
   pthread_attr_destroy(&attr);
   *(natural *)base += *size;
 #endif
+#ifdef NETBSD
+  pthread_attr_t attr;
+  void *stack_base;
+  size_t stack_size;
+  int error;
+
+  error = pthread_getattr_np(p, &attr);
+  if (error != 0) {
+    fatal_oserr("Can't get current thread attributes.", error);
+  }
+  error = pthread_attr_getstack(&attr, &stack_base, &stack_size);
+  if (error != 0) {
+    pthread_attr_destroy(&attr);
+    fatal_oserr("Can't get current thread stack bounds.", error);
+  }
+  pthread_attr_destroy(&attr);
+  *base = (BytePtr)stack_base + stack_size;
+  *size = (natural)stack_size;
+#endif
 #ifdef FREEBSD
   pthread_attr_t attr;
   void * temp_base;
@@ -1519,6 +1538,9 @@ current_native_thread_id()
           pthread_mach_thread_np(pthread_self())
 #endif
 #ifdef FREEBSD
+	  pthread_self()
+#endif
+#ifdef NETBSD
 	  pthread_self()
 #endif
 #ifdef SOLARIS
