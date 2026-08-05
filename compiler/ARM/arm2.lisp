@@ -9592,8 +9592,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 (defarm2 arm2-with-c-frame with-c-frame (seg vreg xfer body &aux
                                              (old-stack (arm2-encode-stack)))
   (ecase (backend-name *target-backend*)
-    (:linuxarm32 (! alloc-eabi-c-frame 0))
-    ((:darwinarm32 :darwinarm64 :linuxarm64) (! alloc-c-frame 0)))
+    ((:linuxarm :darwinarm :androidarm) (! alloc-eabi-c-frame 0)))
   (arm2-open-undo $undo-arm-c-frame)
   (arm2-undo-body seg vreg xfer body old-stack))
 
