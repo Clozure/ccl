@@ -6541,6 +6541,22 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
+;;; ============ ff-call-return-registers ============
+;;; ff-call variant for record-by-value returns: same frame and entry
+;;; contract as ff-call, plus a regbuf macptr in arg_y into which the
+;;; subprim stores every AAPCS64 result register on return
+;;; ({x0-x7 @ 0..56, d0-d7 @ 64..120}; `spentry ffcall_return_registers',
+;;; spentry-E-ffi.s).  x86-64 pairs the same way:
+;;; (define-x8664-subprim-call-vinsn (ff-call-return-registers)
+;;; .SPffcall-return-registers), x8664-vinsns.lisp; PPC64's donor is
+;;; .SPpoweropen-ffcall-return-registers (ppc64-vinsns.lisp).
+(define-arm64-vinsn (ff-call-return-registers :call :subprim) (()
+                                                               ()
+                                                               ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPffcall-return-registers")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
 ;;; ============ eep.address ============
 ;;; PPC64 ppc64-vinsns.lisp:3829: load slot 1 (the address) of an
 ;;; external-entry-point gvector, trap if NIL (unresolved eep -- PPC's

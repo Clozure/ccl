@@ -34,23 +34,35 @@
 ;;;   - SP       : stack pointer (16-byte aligned at public boundaries)
 ;;;
 ;;; Composite (struct) argument rules (AAPCS64 §6.8):
-;;;   - HFAs/HVAs of 1-4 fundamental SIMD&FP elements: passed in V0..V7
-;;;     (not yet detected here; conservatively treated as general composite).
-;;;   - Composite size <= 16 bytes (128 bits): passed in GPRs (split across
-;;;     X0..X7 as 1-2 doublewords, left-justified — NOT right-justified
+;;;   - HFA/HVA (homogeneous aggregate of 1-4 members with the same
+;;;     fundamental SIMD&FP type; B.3 exempts these from the >16-byte
+;;;     copy): one V register per member when NSRN + members <= 8 (C.2);
+;;;     otherwise the WHOLE aggregate goes to the stack (C.3/C.4) —
+;;;     never to GPRs, never by reference.  Detected by hfa-type-info
+;;;     below and passed by decomposing into scalar member argforms
+;;;     (the darwinppc64 model, lib/ffi-darwinppc64.lisp); the C.3
+;;;     stack case is refused loudly, exactly as >8 scalar FP args are
+;;;     (no stack args until the stack-arg frame layout is ratified).
+;;;   - Composite size <= 16 bytes (128 bits), not HFA: passed in GPRs
+;;;     (X0..X7 as 1-2 doublewords, left-justified — NOT right-justified
 ;;;     like PowerOpen).
-;;;   - Composite size > 16 bytes: passed by reference to a caller-allocated
-;;;     copy (single :address slot pointing to the copy).
+;;;   - Composite size > 16 bytes, not HFA: passed by reference to a
+;;;     caller-allocated copy (single :address slot pointing to the copy).
 ;;;
 ;;; Composite return rules (AAPCS64 §6.9):
-;;;   - Size <= 16 bytes (and not HFA): returned in X0/X1.
-;;;   - Size > 16 bytes (or HFA): caller allocates buffer, passes pointer
-;;;     in X8; function writes through X8 and returns void.
-;;;
-;;; HFA detection is a TODO; we conservatively use the size threshold only.
-;;; This is slightly pessimistic for HFA-eligible aggregates (which AAPCS64
-;;; allows in V-registers regardless of total size up to 4 elements) but is
-;;; never incorrect — pessimistic-but-correct over optimistic-but-wrong.
+;;;   - HFA/HVA (1-4 members, any size): returned in V0..V3, one register
+;;;     per member.  Captured via :registers/.SPffcall-return-registers
+;;;     (regbuf {x0-x7 @ 0..56, d0-d7 @ 64..120}, spentry-E-ffi.s) and
+;;;     copied out by struct-from-regbuf-values below — the same protocol
+;;;     x86-64 uses (x8664-backend.lisp) and PPC64-Darwin pioneered
+;;;     (.SPpoweropen-ffcall-return-registers).
+;;;   - Size <= 16 bytes, not HFA: returned in X0/X1; captured via the
+;;;     same regbuf, copied from the GPR half.
+;;;   - Size > 16 bytes, not HFA: caller allocates buffer, passes pointer
+;;;     in X8; function writes through X8 and returns void.  KNOWN GAP:
+;;;     the c-frame/.SPffcall protocol has no X8 slot yet, so the buffer
+;;;     pointer currently lands in X0 (unchanged pre-existing behavior;
+;;;     see comms/HFA-DETECTION-16m71.md §10).
 
 (in-package "CCL")
 
@@ -67,6 +79,75 @@
 
 
 ;;;-----------------------------------------------------------------------
+;;; (0) HFA/HVA classification — AAPCS64 §4.3.5 "Homogeneous Aggregates"
+;;;-----------------------------------------------------------------------
+;;; A Homogeneous Floating-point Aggregate is a composite type where all
+;;; fundamental data members have the same floating-point type and there
+;;; are AT MOST FOUR uniquely addressable members (§4.3.5.1-2).  Members
+;;; may be scalars, arrays of members, or nested homogeneous records
+;;; (SBCL's arm64 c-call.lisp hfa-member-info implements the same
+;;; flattening).  For a union the member count is the MAX over its
+;;; alternatives, not the sum (each alternative aliases the same
+;;; storage; GCC aarch64_vfp_is_call_or_return_candidate does the same).
+;;;
+;;; The base types recognized are :single-float and :double-float — the
+;;; only fundamental SIMD&FP types CCL's foreign-type system models.
+;;; Half- and quad-precision floats and short vector types (the HVA
+;;; case) have no CCL foreign-type representation, so aggregates of
+;;; them cannot be expressed and need no arm here.
+;;;
+;;; The top-level size cross-check (bits = count * member-bits) rejects
+;;; aggregates whose layout is not densely packed (e.g. over-aligned
+;;; types via aligned attributes): GCC applies the same size test, and
+;;; such a type is passed as a general composite, not an HFA.
+
+(defun arm64-linux::hfa-element-info (ftype)
+  ;; Flatten one potential HFA member.  Returns (values base count)
+  ;; with base in {:single-float :double-float}, or NIL if the type
+  ;; cannot be part of an HFA.
+  (typecase ftype
+    (foreign-single-float-type (values :single-float 1))
+    (foreign-double-float-type (values :double-float 1))
+    (foreign-array-type
+     (let* ((dims (foreign-array-type-dimensions ftype)))
+       (when (and dims (every #'(lambda (d) (typep d 'unsigned-byte)) dims))
+         (let* ((n (reduce #'* dims)))
+           (when (> n 0)
+             (multiple-value-bind (base count)
+                 (arm64-linux::hfa-element-info
+                  (foreign-array-type-element-type ftype))
+               (when base
+                 (values base (* n count)))))))))
+    (foreign-record-type
+     (let* ((base nil)
+            (count 0)
+            (union-p (eq (foreign-record-type-kind ftype) :union)))
+       (dolist (field (foreign-record-type-fields ftype)
+                      (when base (values base count)))
+         (multiple-value-bind (fbase fcount)
+             (arm64-linux::hfa-element-info (foreign-record-field-type field))
+           (when (or (null fbase)
+                     (and base (not (eq base fbase))))
+             (return nil))
+           (setq base fbase)
+           (if union-p
+             (setq count (max count fcount))
+             (incf count fcount))))))
+    (t nil)))
+
+(defun arm64-linux::hfa-type-info (ftype)
+  ;; If FTYPE is an HFA, return (values base count); else NIL.
+  (when (typep ftype 'foreign-record-type)
+    (let* ((bits (ensure-foreign-type-bits ftype)))
+      (multiple-value-bind (base count)
+          (arm64-linux::hfa-element-info ftype)
+        (when (and base
+                   (<= 1 count 4)
+                   (= bits (* count (if (eq base :single-float) 32 64))))
+          (values base count))))))
+
+
+;;;-----------------------------------------------------------------------
 ;;; (1) record-type-returns-structure-as-first-arg
 ;;;-----------------------------------------------------------------------
 ;;; PPC64 source (lines 28-36): always returns T for foreign-record-type
@@ -74,8 +155,9 @@
 ;;;  pointer in the first argument").
 ;;;
 ;;; ARM64-DEVIATION: AAPCS64 §6.9 returns composites <= 16 bytes (128
-;;; bits) in X0/X1 directly; only larger composites use the X8 indirect
-;;; result-area pointer.  We encode the size threshold explicitly.
+;;; bits) in X0/X1 directly, and HFAs/HVAs of 1-4 members in V0..V3
+;;; REGARDLESS of size; only other composites use the X8 indirect
+;;; result-area pointer.
 
 (defun arm64-linux::record-type-returns-structure-as-first-arg (rtype)
   (when (and rtype
@@ -88,8 +170,11 @@
       (when (typep ftype 'foreign-record-type)
         (ensure-foreign-type-bits ftype)
         ;;; ARM64-DEVIATION: > 128 bits (16 bytes) triggers X8 indirect
-        ;;; return per AAPCS64 §6.9.  PPC64 source returns T unconditionally.
-        (> (foreign-type-bits ftype) 128)))))
+        ;;; return per AAPCS64 §6.9 — unless the type is an HFA/HVA,
+        ;;; which is returned in v0..v3 whatever its size.  PPC64 source
+        ;;; returns T unconditionally.
+        (and (> (foreign-type-bits ftype) 128)
+             (not (arm64-linux::hfa-type-info ftype)))))))
 
 
 ;;;-----------------------------------------------------------------------
@@ -114,16 +199,58 @@
 ;;;
 ;;; The result-side foreign-record-type handling (lines 48-52 in PPC64
 ;;; source) — "implicit first arg = result-form, return-type becomes
-;;; :void" — applies identically to AAPCS64 ONLY when the struct is
-;;; > 128 bits (size threshold from record-type-returns-structure-as-first-arg
-;;; above).  For smaller structs, AAPCS64 returns them in X0/X1 and the
-;;; coercion machinery handles the unpack — but expand-ff-call's contract
-;;; with the higher-level macro is shaped by what
-;;; record-type-returns-structure-as-first-arg said, so this code path
-;;; is only entered for > 128-bit return values (consistent).
+;;; :void" — applies to AAPCS64 ONLY when the struct is > 128 bits AND
+;;; not an HFA (the record-type-returns-structure-as-first-arg answer).
+;;; HFAs (returned in v0..v3) and <= 128-bit composites (returned in
+;;; x0/x1) are captured with the :registers regbuf protocol instead:
+;;; .SPffcall-return-registers saves {x0-x7 @ 0..56, d0-d7 @ 64..120}
+;;; into the buffer, and struct-from-regbuf-values copies the right
+;;; slots into the caller's result structure.  Model:
+;;; x8664::expand-ff-call (x8664-backend.lisp) and PPC64-Darwin's
+;;; darwin64::struct-from-regbuf-values (lib/ffi-darwinppc64.lisp).
+
+;;; Generate code to set the fields of a structure R of record type
+;;; RTYPE from the register values captured in REGBUF by
+;;; .SPffcall-return-registers ({x0..x7 @ 0..56, d0..d7 @ 64..120},
+;;; spentry-E-ffi.s).
+(defun arm64-linux::struct-from-regbuf-values (r rtype regbuf)
+  (let* ((bits (ensure-foreign-type-bits rtype))
+         (fp-area 64))                  ;d0 save slot; d<i> at 64 + 8i
+    (multiple-value-bind (hfa-base hfa-count)
+        (arm64-linux::hfa-type-info rtype)
+      (collect ((forms))
+        (cond
+          ;; HFA: member i came back in v<i> (AAPCS64 §6.9).  Each
+          ;; d-save slot holds the full 64-bit register; on
+          ;; little-endian the single-float payload sits at the slot
+          ;; base (same LE reasoning as the callback generator below).
+          ((eq hfa-base :double-float)
+           (dotimes (i hfa-count)
+             (forms `(setf (%get-double-float ,r ,(* 8 i))
+                      (%get-double-float ,regbuf ,(+ fp-area (* 8 i)))))))
+          ((eq hfa-base :single-float)
+           (dotimes (i hfa-count)
+             (forms `(setf (%get-single-float ,r ,(* 4 i))
+                      (%get-single-float ,regbuf ,(+ fp-area (* 8 i)))))))
+          ;; Non-HFA <= 16 bytes: returned in x0/x1 (§6.9 via C.12);
+          ;; copy 32 bits at a time to avoid consing (the darwinppc64/
+          ;; x8664 struct-from-regbuf-values idiom).
+          (t
+           (do* ((b 0 (+ b 32))
+                 (w 0 (+ w 4)))
+                ((>= b bits))
+             (declare (fixnum b w))
+             (forms `(setf (%get-unsigned-long ,r ,w)
+                      (%get-unsigned-long ,regbuf ,w))))))
+        `(progn ,@(forms))))))
 
 (defun arm64-linux::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
-  (let* ((result-type-spec (or (car (last args)) :void)))
+  (let* ((result-type-spec (or (car (last args)) :void))
+         (regbuf nil)
+         (result-temp nil)
+         (result-form nil)
+         (struct-result-type nil)
+         (structure-arg-temp nil))
     (multiple-value-bind (result-type error)
         (ignore-errors (parse-foreign-type result-type-spec))
       (if error
@@ -133,56 +260,129 @@
         (when (eq (car args) :monitor-exception-ports)
           (argforms (pop args)))
         (when (typep result-type 'foreign-record-type)
-          ;;; Reached only for > 128-bit returns (per AAPCS64 §6.9, gated
-          ;;; by arm64-linux::record-type-returns-structure-as-first-arg).
-          ;;; Caller-allocated result buffer is passed as the first :address
-          ;;; arg; AAPCS64 wiring puts it in X8 at the call boundary.
-          (setq result-type *void-foreign-type*
+          (setq result-form (pop args)
+                struct-result-type result-type
+                result-type *void-foreign-type*
                 result-type-spec :void)
-          (argforms :address)
-          (argforms (pop args)))
+          (if (arm64-linux::record-type-returns-structure-as-first-arg
+               struct-result-type)
+            ;;; > 16 bytes and not an HFA: caller-allocated result
+            ;;; buffer, passed by reference.  KNOWN GAP: AAPCS64 §6.9
+            ;;; wants this pointer in X8; the c-frame/.SPffcall protocol
+            ;;; has no X8 slot yet, so it is passed as the first :address
+            ;;; arg and lands in X0 (pre-existing behavior, unchanged;
+            ;;; comms/HFA-DETECTION-16m71.md §10).
+            (progn
+              (argforms :address)
+              (argforms result-form))
+            ;;; HFA (any size) or non-HFA <= 16 bytes: returned in
+            ;;; registers (v0..v3 / x0-x1); capture them via
+            ;;; .SPffcall-return-registers into a 128-byte regbuf.
+            (progn
+              (setq regbuf (gensym)
+                    result-temp (gensym))
+              (argforms :registers)
+              (argforms regbuf))))
         (unless (evenp (length args))
           (error "~s should be an even-length list of alternating foreign types and values" args))
-        (do* ((args args (cddr args)))
-             ((null args))
-          (let* ((arg-type-spec (car args))
-                 (arg-value-form (cadr args)))
-            (if (or (member arg-type-spec *foreign-representation-type-keywords*
-                            :test #'eq)
-                    (typep arg-type-spec 'unsigned-byte))
-              (progn
-                (argforms arg-type-spec)
-                (argforms arg-value-form))
-              (let* ((ftype (parse-foreign-type arg-type-spec)))
-                (if (typep ftype 'foreign-record-type)
-                  (let* ((bits (ensure-foreign-type-bits ftype)))
-                    (cond
-                      ;;; ARM64-DEVIATION: <=64 bit struct passed
-                      ;;; left-justified (raw value, no ash).  PPC64
-                      ;;; source right-justified via (ash _ (- bits 64)).
-                      ((<= bits 64)
-                       (argforms :unsigned-doubleword)
-                       (argforms `(%%get-unsigned-longlong ,arg-value-form 0)))
-                      ;;; ARM64-DEVIATION: 65-128 bit struct passed as
-                      ;;; 2 doublewords in GPRs (X<n>..X<n+1>).  Matches
-                      ;;; the PPC64 source for the same size range but
-                      ;;; only applies up to 128 bits on AAPCS64.
-                      ((<= bits 128)
-                       (argforms (ceiling bits 64))
-                       (argforms arg-value-form))
-                      ;;; ARM64-DEVIATION: > 128 bit struct passed by
-                      ;;; reference (caller allocates copy, callee reads
-                      ;;; through pointer).  PPC64 source would emit
-                      ;;; (ceiling bits 64) doublewords here — AAPCS64
-                      ;;; never does that.
-                      (t
-                       (argforms :address)
-                       (argforms arg-value-form))))
-                  (progn
-                    (argforms (foreign-type-to-representation-type ftype))
-                    (argforms (funcall arg-coerce arg-type-spec arg-value-form))))))))
+        (flet ((struct-arg-temp ()
+                 (or structure-arg-temp
+                     (setq structure-arg-temp (gensym)))))
+          (do* ((args args (cddr args)))
+               ((null args))
+            (let* ((arg-type-spec (car args))
+                   (arg-value-form (cadr args)))
+              (if (or (member arg-type-spec *foreign-representation-type-keywords*
+                              :test #'eq)
+                      (typep arg-type-spec 'unsigned-byte))
+                (progn
+                  (argforms arg-type-spec)
+                  (argforms arg-value-form))
+                (let* ((ftype (parse-foreign-type arg-type-spec)))
+                  (if (typep ftype 'foreign-record-type)
+                    (let* ((bits (ensure-foreign-type-bits ftype)))
+                      (multiple-value-bind (hfa-base hfa-count)
+                          (arm64-linux::hfa-type-info ftype)
+                        (cond
+                          ;;; ARM64-DEVIATION: HFA/HVA passed in one V
+                          ;;; register per member (AAPCS64 C.2), by
+                          ;;; decomposing into scalar float argforms —
+                          ;;; the darwinppc64 "constituent elements as
+                          ;;; scalars" model.  The arg-value-form is
+                          ;;; evaluated ONCE into a dynamic-extent temp;
+                          ;;; member i is read at its natural offset.
+                          ;;; If the members would overflow v0-v7, C.3
+                          ;;; sends the WHOLE aggregate to the stack —
+                          ;;; unratified, and refused loudly by the
+                          ;;; backend/%ff-call exactly as >8 scalar FP
+                          ;;; args are.
+                          (hfa-base
+                           (let* ((temp (struct-arg-temp))
+                                  (single-p (eq hfa-base :single-float))
+                                  (accessor (if single-p
+                                              '%get-single-float
+                                              '%get-double-float))
+                                  (memsize (if single-p 4 8)))
+                             (dotimes (i hfa-count)
+                               (argforms hfa-base)
+                               (argforms
+                                `(,accessor
+                                  ,(if (eql i 0)
+                                     `(%setf-macptr ,temp ,arg-value-form)
+                                     temp)
+                                  ,(* i memsize))))))
+                          ;;; ARM64-DEVIATION: <=64 bit non-HFA struct
+                          ;;; passed left-justified (raw value, no ash).
+                          ;;; PPC64 source right-justified via
+                          ;;; (ash _ (- bits 64)).
+                          ((<= bits 64)
+                           (argforms :unsigned-doubleword)
+                           (argforms `(%%get-unsigned-longlong ,arg-value-form 0)))
+                          ;;; ARM64-DEVIATION: 65-128 bit non-HFA struct
+                          ;;; passed as 2 doublewords in consecutive GPRs
+                          ;;; (AAPCS64 C.12), decomposed here into two
+                          ;;; :unsigned-doubleword argforms through the
+                          ;;; same evaluate-once temp.  (An integer
+                          ;;; word-count argspec would say the same
+                          ;;; thing, but the arm642 codegen has no case
+                          ;;; for integer argspecs, so the decomposed
+                          ;;; form is the one that compiles everywhere.)
+                          ((<= bits 128)
+                           (let* ((temp (struct-arg-temp)))
+                             (argforms :unsigned-doubleword)
+                             (argforms `(%%get-unsigned-longlong
+                                         (%setf-macptr ,temp ,arg-value-form) 0))
+                             (argforms :unsigned-doubleword)
+                             (argforms `(%%get-unsigned-longlong ,temp 8))))
+                          ;;; ARM64-DEVIATION: > 128 bit non-HFA struct
+                          ;;; passed by reference (caller allocates copy,
+                          ;;; callee reads through pointer; AAPCS64 B.4).
+                          ;;; PPC64 source would emit (ceiling bits 64)
+                          ;;; doublewords here — AAPCS64 never does that.
+                          (t
+                           (argforms :address)
+                           (argforms arg-value-form)))))
+                    (progn
+                      (argforms (foreign-type-to-representation-type ftype))
+                      (argforms (funcall arg-coerce arg-type-spec arg-value-form)))))))))
         (argforms (foreign-type-to-representation-type result-type))
-        (funcall result-coerce result-type-spec `(,@callform ,@(argforms)))))))
+        (let* ((call (funcall result-coerce result-type-spec
+                              `(,@callform ,@(argforms)))))
+          (when structure-arg-temp
+            (setq call `(let* ((,structure-arg-temp (%null-ptr)))
+                          (declare (dynamic-extent ,structure-arg-temp)
+                                   (type macptr ,structure-arg-temp))
+                          ,call)))
+          (if regbuf
+            `(let* ((,result-temp (%null-ptr)))
+               (declare (dynamic-extent ,result-temp)
+                        (type macptr ,result-temp))
+               (%setf-macptr ,result-temp ,result-form)
+               (with-ffcall-results (,regbuf)
+                 ,call
+                 ,(arm64-linux::struct-from-regbuf-values
+                   result-temp struct-result-type regbuf)))
+            call))))))
 
 
 ;;;-----------------------------------------------------------------------
