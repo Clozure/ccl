@@ -111,6 +111,25 @@
 
 (add-xload-backend *linuxarm-xload-backend*)
 
+(defparameter *netbsdarm-xload-backend*
+  (make-backend-xload-info
+   :name :netbsdarm
+   :macro-apply-code-function 'arm-fixup-macro-apply-code
+   :closure-trampoline-code *arm-closure-trampoline-code*
+   :udf-code *arm-udf-code*
+   :default-image-name "ccl:ccl;narm-boot"
+   :default-startup-file-name "level-1.nafsl"
+   :subdirs '("ccl:level-0;ARM;")
+   :compiler-target-name :netbsdarm
+   :image-base-address #x10000000
+   :nil-relative-symbols arm::*arm-nil-relative-symbols*
+   :static-space-init-function 'arm-initialize-static-space
+   :purespace-reserve (ash 64 20)
+   :static-space-address (- (- arm::nil-value arm::fulltag-nil) (ash 1 12))
+))
+
+(add-xload-backend *netbsdarm-xload-backend*)
+
 (defparameter *darwinarm-xload-backend*
   (make-backend-xload-info
    :name :darwinarm
@@ -153,6 +172,11 @@
 #+linuxarm-target
 (progn
 (setq *xload-default-backend* *linuxarm-xload-backend*)
+)
+
+#+netbsdarm-target
+(progn
+(setq *xload-default-backend* *netbsdarm-xload-backend*)
 )
 
 

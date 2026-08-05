@@ -178,6 +178,7 @@
              (:solarisx8632 'ffi-solarisx8632)
              (:freebsdx8632 'ffi-freebsdx8632)
              (:linuxarm 'ffi-linuxarm)
+             (:netbsdarm 'ffi-netbsdarm)
              (:androidarm 'ffi-androidarm)
              (:darwinarm 'ffi-darwinarm)))))
 
@@ -278,7 +279,7 @@
                           :freebsdx8632)
              '(x86-error-signal x86-trap-support
                x86-threads-utils x86-callback-support))
-            ((:linuxarm :darwinarm :androidarm)
+            ((:linuxarm :netbsdarm :darwinarm :androidarm)
              '(arm-error-signal arm-trap-support
                arm-threads-utils arm-callback-support)))))
 
@@ -487,6 +488,7 @@
     (:solarisx8632 "sx86-boot32")
     (:freebsdx8632 "fx86-boot32")
     (:linuxarm "arm-boot")
+    (:netbsdarm "narm-boot")
     (:androidarm "aarm-boot")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
@@ -506,6 +508,7 @@
     (:solarisx8632 "sx86cl")
     (:freebsdx8632 "fx86cl")
     (:linuxarm "armcl")
+    (:netbsdarm "narmcl")
     (:darwinarm "darmcl")
     (:androidarm "aarmcl")))
 
@@ -529,6 +532,7 @@
     (:solarisx8632 "solarisx86")
     (:freebsdx8632 "freebsdx8632")
     (:linuxarm "linuxarm")
+    (:netbsdarm "netbsdarm")
     (:darwinarm "darwinarm")
     (:androidarm "androidarm")))
 

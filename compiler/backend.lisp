@@ -35,6 +35,7 @@
 (defconstant platform-os-freebsd 4)
 (defconstant platform-os-windows 5)
 (defconstant platform-os-android 6)
+(defconstant platform-os-netbsd 7)
 
 (defun backend-real-lowmem-bias (backend)
   (let* ((b (backend-lowmem-bias backend)))
