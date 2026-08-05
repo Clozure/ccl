@@ -9075,7 +9075,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
         (case argspec
           ((:signed-doubleword :unsigned-doubleword)
            (arm2-one-targeted-reg-form seg argval arm::arg_z)
-           (if (eq argspec :singed-doubleword)
+           (if (eq argspec :signed-doubleword)
              (! gets64)
              (! getu64)))
           (:address
