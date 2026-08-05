@@ -59,6 +59,15 @@ struct timespec {
 #endif
 #endif
 
+#if defined(NETBSD) && defined(ARM)
+/*
+ * NetBSD unnamed POSIX semaphores consume a process file descriptor.
+ * CCL creates a semaphore for each lock, so use process-private futexes.
+ */
+#define USE_NETBSD_FUTEX_SEMAPHORES 1
+#undef USE_POSIX_SEMAPHORES
+#endif
+
 #ifdef USE_POSIX_SEMAPHORES
 #include <semaphore.h>
 #endif
@@ -125,6 +134,15 @@ typedef void * SEMAPHORE;
 #define SEM_TIMEDWAIT(s,t) WaitOnSingleObject(s,t)
 
 #endif
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+typedef struct netbsd_futex_semaphore *SEMAPHORE;
+int netbsd_futex_semaphore_wait(SEMAPHORE, const struct timespec *);
+int netbsd_futex_semaphore_post(SEMAPHORE);
+#define SEM_WAIT(s) netbsd_futex_semaphore_wait((SEMAPHORE)s, NULL)
+#define SEM_RAISE(s) netbsd_futex_semaphore_post((SEMAPHORE)s)
+#define SEM_BROADCAST(s, count) do {while(count) {SEM_RAISE(s);(count)--;}}while(0)
+#define SEM_TIMEDWAIT(s,t) netbsd_futex_semaphore_wait((SEMAPHORE)s, t)
+#endif
 #ifdef USE_POSIX_SEMAPHORES
 typedef sem_t * SEMAPHORE;
 #define SEM_WAIT(s) sem_wait((SEMAPHORE)s)
@@ -154,6 +172,10 @@ void sem_wait_forever(SEMAPHORE s);
 #endif
 
 #ifdef USE_WINDOWS_SEMAPHORES
+#define SEM_WAIT_FOREVER(s) sem_wait_forever((SEMAPHORE)s)
+#endif
+
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
 #define SEM_WAIT_FOREVER(s) sem_wait_forever((SEMAPHORE)s)
 #endif
 
