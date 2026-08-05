@@ -2464,7 +2464,7 @@ rwlock_new()
       } else {
         destroy_semaphore(&(rw->writer_signal));
       }
-      free(rw);
+      free(p);
       rw = NULL;
     }
 #endif
