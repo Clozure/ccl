@@ -333,7 +333,6 @@
   (blx lr))
 
 (defun %ff-call (entry &rest specs-and-vals)
-  (declare (dynamic-extent specs-and-vals))
   (let* ((len (length specs-and-vals))
          (total-words 0)
          (fp-words 16))
