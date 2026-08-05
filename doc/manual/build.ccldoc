@@ -364,6 +364,22 @@ $ ./narmcl --image-name narm-boot --no-init")
       "Cross-compilation and creation of {system narm-boot} have been
        exercised on an x86-64 host.  Cold-loading it with {system
        narmcl}, saving a complete image, and restarting that image have
-       been exercised on NetBSD 11.0/earmv7hf.")
+       been exercised on NetBSD 11.0/earmv7hf, as has a subsequent full
+       native {function rebuild-ccl} with that image.
+
+       The kernel build runs the C compiler, which writes its
+       temporary files to {system /tmp}.  NetBSD systems often mount
+       {system /tmp} as a small tmpfs; if the kernel build fails with
+       {system No space left on device}, set {system TMPDIR} to a
+       directory on disk before starting the lisp.
+
+       The resulting lisp passes the {system ccl-tests} suite on
+       NetBSD 11.0/earmv7hf except for EXPT.ERROR.4 through
+       EXPT.ERROR.7, which expect {code (expt x 2)} to signal {code
+       floating-point-overflow} for the most positive floats.  ARM VFP
+       has no trapping floating-point exceptions and the {code (expt
+       float integer)} path does not consult the accumulated FPSCR
+       exception flags, so the failure is shared with the Linux ARM32
+       port rather than specific to NetBSD.")
 
   ) ;chapter
