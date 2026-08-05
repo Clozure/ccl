@@ -34,7 +34,13 @@ image name for {system armcl} would be {system armcl.image}."
     (row (item "Solaris x86, x86-64") (item "sx86cl, sx86cl64"))
     (row (item "Windows x86, x86-64") (item "wx86cl, wx86cl64"))
     (row (item "Linux PowerPC 32-bit, 64-bit") (item "ppccl, ppccl64"))
-    (row (item "Linux ARM 32-bit (armv6)") (item "armcl")))
+    (row (item "Linux ARM 32-bit (armv6)") (item "armcl"))
+    (row (item "NetBSD ARM 32-bit (earmv7hf, experimental)")
+         (item "narmcl")))
+
+  "The NetBSD/earmv7hf port is experimental.  The {system narmcl}
+kernel has been built on NetBSD 11.0, cold-loaded from {system
+narm-boot}, and used to save and restart a complete Lisp image."
 
   "By default, the lisp kernel will look for a heap image with an
 appropriate name in the same directory that the lisp kernel itself is

@@ -692,6 +692,8 @@ macptr to the block.")
         (row (item "Linux x86") (item "{code x86-headers}"))
         (row (item "Linux x86-64") (item "{code x86-headers64}"))
         (row (item "Linux ARM") (item "{code arm-headers}"))
+        (row (item "NetBSD ARM (earmv7hf, experimental)")
+             (item "{code netbsd-arm-headers}"))
         (row (item "Darwin (macOS) x86-64")
              (item "{code darwin-x86-headers64}"))
         (row (item "FreeBSD x86") (item "{code freebsd-headers}"))
@@ -700,6 +702,14 @@ macptr to the block.")
         (row (item "Windows x86-64") (item "{code win64-headers}"))
         (row (item "Solaris x86") (item "{code solarisx86-headers}"))
         (row (item "Solaris x86-64") (item "{code solarisx64-headers}")))
+
+      (para "The experimental NetBSD/earmv7hf port expects interfaces generated
+             from the target NetBSD headers in {code netbsd-arm-headers}.  The
+             Linux {code arm-headers} database is not a substitute:
+             operating-system constants and C record layouts can differ even
+             when both targets use the ARM EABI.  Install the generated
+             directory at the top level of the CCL tree, as with the interface
+             databases for other targets.")
 
        "CCL defines reader macros that consult these databases:"
 
@@ -822,6 +832,33 @@ x86-headers64/libc/types.cdb")
      sufficient.  Use the functions {function use-interface-dir} and
      {function unuse-interface-dir} to manage the list of interface
      directories that will be searched."
+
+    (defsection "Generating NetBSD/ARM interfaces"
+      "The {system ccl-ffigen} source tree contains
+       {system netbsd-arm-headers/libc/C/translate.sh}.  To translate
+       headers on another system, provide a host {system ffigen5}, a
+       NetBSD sysroot, and the target triple:"
+
+      (code-block "$ cd ccl-ffigen/netbsd-arm-headers/libc/C
+$ FFIGEN=/path/to/ffigen5 \\
+    SYSROOT=/path/to/netbsd-sysroot \\
+    TARGET=armv7-unknown-netbsd-eabihf \\
+    sh translate.sh")
+
+      "When {system ffigen5} runs natively on NetBSD/earmv7hf, omit
+       {code SYSROOT} and {code TARGET}.  After loading the {code
+       :netbsdarm} compiler backend into the host CCL, parse the
+       generated files twice:"
+
+      (code-block "? (require 'parse-ffi)
+? (ccl::parse-standard-ffi-files :libc :netbsdarm)
+? (ccl::parse-standard-ffi-files :libc :netbsdarm)")
+
+      "The second pass resolves constants which may have been forward
+       references during the first pass.  The resulting database files
+       belong directly in {system netbsd-arm-headers/libc/} in the CCL
+       tree.  Interface databases are binary-distribution artifacts and
+       are not stored in the CCL source repository.")
 
     (defsection "Creating new interface directories"
       "This example refers to {code ccl:freebsd-headers64;}, which is the
