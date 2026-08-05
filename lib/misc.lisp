@@ -97,7 +97,7 @@ are running on, or NIL if we can't find any useful information."
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
-            #+freebsd-target
+            #+(or freebsd-target netbsd-target)
             (%stack-block ((ret 512)
                            (mib (* (record-length :uint) 2)))
               (setf (%get-unsigned-long mib 0)

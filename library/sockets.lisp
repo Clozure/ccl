@@ -1072,7 +1072,7 @@ unsigned IP address."
           (pref sin
                 #+(or windows-target solaris-target) #>sockaddr_in.sin_addr.S_un.S_addr
                 #-(or windows-target solaris-target) #>sockaddr_in.sin_addr.s_addr) addr-in-net-byte-order)
-    #+(or darwin-target freebsd-target)
+    #+(or darwin-target freebsd-target netbsd-target)
     (setf (pref sin :sockaddr_in.sin_len) (record-length :sockaddr_in))
     (%stack-block ((namep #$NI_MAXHOST))
       (let* ((err (#_getnameinfo sin (record-length #>sockaddr_in) namep #$NI_MAXHOST (%null-ptr) 0 #$NI_NAMEREQD)))
@@ -1626,7 +1626,7 @@ unsigned IP address."
   (setf (pref (sockaddr socket-address) :sockaddr_un.sun_family) #$AF_UNIX
         (slot-value socket-address 'sockaddr-length) (copy-string-to-sockaddr_un path
                                                                                  (sockaddr socket-address)))
-  #+(or darwin-target freebsd-target)
+  #+(or darwin-target freebsd-target netbsd-target)
   (setf (pref (sockaddr socket-address) :sockaddr_un.sun_len) (sockaddr-length socket-address)))
 
 
@@ -1673,7 +1673,7 @@ the resulting sockaddr."
 (defmethod upgrade-socket-address-from-sockaddr ((address-family (eql #$AF_UNIX)) socket-address)
   (let ((sockaddr (sockaddr socket-address)))
     (change-class socket-address 'unix-socket-address
-                  :path (when (and #+(or darwin-target freebsd-target) (plusp (pref sockaddr :sockaddr_un.sun_len))
+                  :path (when (and #+(or darwin-target freebsd-target netbsd-target) (plusp (pref sockaddr :sockaddr_un.sun_len))
                                    (not (zerop (paref (pref sockaddr :sockaddr_un.sun_path) :uint8_t 0))))
                           #+darwin-target
                           (%str-from-ptr (pref sockaddr :sockaddr_un.sun_path)

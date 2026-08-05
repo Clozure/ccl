@@ -387,17 +387,17 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_mode)
        (pref stat :stat.st_size)
        #+android-target (pref stat :stat.st_mtime)
-       #+(or freebsd-target (and linux-target (not android-target)) solaris-target)
+       #+(or freebsd-target netbsd-target (and linux-target (not android-target)) solaris-target)
        (pref stat :stat.st_mtim.tv_sec)
-       #-(or freebsd-target linux-target solaris-target)
+       #-(or freebsd-target netbsd-target linux-target solaris-target)
        (pref stat :stat.st_mtimespec.tv_sec)
        (pref stat :stat.st_ino)
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
-       #+(or freebsd-target linux-target solaris-target)
+       #+(or freebsd-target netbsd-target linux-target solaris-target)
        (round (pref stat #-android-target :stat.st_mtim.tv_nsec
                          #+android-target :stat.st_mtime_nsec) 1000)
-       #-(or freebsd-target linux-target solaris-target)
+       #-(or freebsd-target netbsd-target linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
        (pref stat :stat.st_dev)
@@ -540,7 +540,7 @@ given is that of a group to which the current user belongs."
     (%get-cstring (%inc-ptr buf (* #+(and linux-target (not android-target)) #$_UTSNAME_LENGTH
                                    #+android-target (1+ #$__NEW_UTS_LEN)
 				   #+darwin-target #$_SYS_NAMELEN
-                                   #+(or freebsd-target solaris-target) #$SYS_NMLN
+                                   #+(or freebsd-target netbsd-target solaris-target) #$SYS_NMLN
                                    idx)))
     "unknown"))
 
@@ -600,7 +600,7 @@ given is that of a group to which the current user belongs."
   (%stack-block ((buf (* #$SYS_NMLN 5)))
     (%uts-string (#___xuname #$SYS_NMLN buf) idx buf)))
 
-#+solaris-target
+#+(or netbsd-target solaris-target)
 (defun %uname (idx)
   (%stack-block ((buf (* #$SYS_NMLN 5)))
     (%uts-string (#_uname buf) idx buf)))
@@ -2192,7 +2192,7 @@ not, why not; and what its result code was if it completed."
                                                    count))
                 (pref info :host_basic_info.max_cpus)
                 1))
-            #+(or linux-target solaris-target)
+            #+(or linux-target netbsd-target solaris-target)
             (or
              (let* ((n (#_sysconf #$_SC_NPROCESSORS_CONF)))
                (declare (fixnum n))
