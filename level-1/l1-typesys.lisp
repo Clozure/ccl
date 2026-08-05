@@ -2882,21 +2882,25 @@
 ;;;    Check a supplied dimension list to determine if it is legal.
 ;;;
 (defun check-array-dimensions (dims)
+  ;; Derive these from the target layout so cross-compilation does not fold
+  ;; the host image's values.
   (typecase dims
     ((member *) dims)
     (integer
      (when (minusp dims)
        (signal-program-error "Arrays can't have a negative number of dimensions: ~D." dims))
-     (when (>= dims array-rank-limit)
+     (when (>= dims #.(floor #x8000 target::node-size))
        (signal-program-error "Array type has too many dimensions: ~S." dims))
      (make-list dims :initial-element '*))
     (list
-     (when (>= (length dims) array-rank-limit)
+     (when (>= (length dims) #.(floor #x8000 target::node-size))
        (signal-program-error "Array type has too many dimensions: ~S." dims))
      (dolist (dim dims)
        (unless (eq dim '*)
 	   (unless (and (integerp dim)
-		          (>= dim 0) (< dim array-dimension-limit))
+		          (>= dim 0)
+                          (< dim #.(expt 2 (- target::nbits-in-word
+                                              target::num-subtag-bits))))
 	     (signal-program-error "Bad dimension in array type: ~S." dim))))
      dims)
     (t
@@ -4225,11 +4229,16 @@
 (deftype type-specifier () '(or list symbol class))
 ;;;
 ;;; An index into an array.   Also used for sequence index. 
-(deftype index () `(integer 0 (,array-dimension-limit)))
+(deftype index ()
+  '(integer 0 (#.(expt 2 (- target::nbits-in-word
+                            target::num-subtag-bits)))))
 ;;;
 ;;; Array rank, total size...
-(deftype array-rank () `(integer 0 (,array-rank-limit)))
-(deftype array-total-size () `(integer 0 (,array-total-size-limit)))
+(deftype array-rank ()
+  '(integer 0 (#.(floor #x8000 target::node-size))))
+(deftype array-total-size ()
+  '(integer 0 (#.(expt 2 (- target::nbits-in-word
+                            target::num-subtag-bits)))))
 ;;;
 ;;; Some thing legal in an evaluated context.
 (deftype form () t)

@@ -152,7 +152,8 @@
                      *cl-types*))
 |#
 
-(defconstant array-dimension-limit array-total-size-limit
+(defconstant array-dimension-limit
+  #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))
   "the exclusive upper bound on any given dimension of an array")
 
 (defconstant most-positive-fixnum target::target-most-positive-fixnum

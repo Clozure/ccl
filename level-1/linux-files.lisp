@@ -2319,9 +2319,11 @@ not, why not; and what its result code was if it completed."
                  (8 -3)
                  (16 -4)
                  (32 -5)
-                 (64 -6)))))
+                 (64 -6))))
+         (total-size-limit
+          #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))))
     (if (>= (+ ndata-elements nalignment-elements)
-            array-total-size-limit)
+            total-size-limit)
       (progn
         (fd-close fd)
         (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
@@ -2385,9 +2387,11 @@ not, why not; and what its result code was if it completed."
                  (8 -3)
                  (16 -4)
                  (32 -5)
-                 (64 -6)))))
+                 (64 -6))))
+         (total-size-limit
+          #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))))
     (if (>= (+ ndata-elements nalignment-elements)
-            array-total-size-limit)
+            total-size-limit)
       (progn
         (fd-close fd)
         (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))

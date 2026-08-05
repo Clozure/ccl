@@ -539,7 +539,10 @@
   (multiple-value-bind (body decls) (parse-body body env)
     (if (nx-form-typep (setq n (nx-transform n env)) 'fixnum env)
         (let* ((limit (gensym))
-               (upper (if (nx-form-constant-p n env) (nx-form-constant-value n env) most-positive-fixnum))
+               (upper (if (nx-form-constant-p n env)
+                        (nx-form-constant-value n env)
+                        (arch::target-most-positive-fixnum
+                         (backend-target-arch *target-backend*))))
                (top (gensym))
                (test (gensym)))
           `(let* ((,limit ,n) (,i 0))

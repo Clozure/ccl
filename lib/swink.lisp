@@ -171,7 +171,8 @@ corresponding values in the CDR of VALUE."
    (buffer :initform (make-string 1024) :accessor connection-buffer)
    (lock :initform (make-lock) :reader connection-lock)
    (threads :initform nil :accessor %connection-threads)
-   (object-counter :initform most-negative-fixnum :accessor connection-object-counter)
+   (object-counter :initform target::target-most-negative-fixnum
+                   :accessor connection-object-counter)
    (objects :initform nil :accessor connection-objects)))
 
 (defmacro with-connection-lock ((conn &rest lock-args) &body body)

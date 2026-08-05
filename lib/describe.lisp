@@ -1009,8 +1009,10 @@
       (10 (values (or (ignore-errors (universal-time-string num)) "#<error>")
                   "As time:     " type "~a"))
       (11 (if (< num 0)
-            (values most-negative-fixnum 'most-negative-fixnum type '("~d." t))
-            (values most-positive-fixnum 'most-positive-fixnum type '("~d." t)))))))
+            (values target::target-most-negative-fixnum
+                    'most-negative-fixnum type '("~d." t))
+            (values target::target-most-positive-fixnum
+                    'most-positive-fixnum type '("~d." t)))))))
 
 (defun format-abbreviated-string (stream string)
   (setq string (require-type string 'simple-string))
