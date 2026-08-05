@@ -365,6 +365,11 @@ show_lisp_register(ExceptionInformation *xp, char *label, int r)
 #ifdef ARM
   fprintf(dbgout, "r%02d (%s) = %s\n", r, label, print_lisp_object(val));
 #endif
+#ifdef ARM64
+  char buf[8];
+  snprintf(buf, sizeof buf, "x%d", r);
+  fprintf(dbgout, "%3s (%s) = %s\n", buf, label, print_lisp_object(val));
+#endif
 }
 
 void
@@ -735,7 +740,7 @@ debug_memory_areas(ExceptionInformation *xp, siginfo_t *info, int arg)
   for (a = header->succ; a != header; a = a->succ) {
     snprintf(label, sizeof(label), "%p %s (%d)", a, area_code_name(a->code),
 	     a->code >> fixnumshift);
-    fprintf(dbgout, "%21s %19p %19p %17#x\n", label, a->low, a->high,
+    fprintf(dbgout, "%21s %19p %19p %#17x\n", label, a->low, a->high,
       a->high - a->low);
   }
   return debug_continue;
@@ -824,6 +829,29 @@ debug_lisp_registers(ExceptionInformation *xp, siginfo_t *info, int arg)
       show_lisp_register(xp, "temp1/fname/next_method_context", temp1);
       show_lisp_register(xp, "temp2/nfn", temp2);
     }
+#endif
+
+#ifdef ARM64
+    TCR *xpcontext = (TCR *)ptr_from_lispobj(xpGPR(xp, Rrcontext));
+
+    int raw_nargs = xpGPR(xp, Rnargs);
+    fprintf(dbgout, " x6 (nargs) = fixnum %d (%d) \n",
+            raw_nargs>>fixnumshift, raw_nargs);
+    show_lisp_register(xp, "fn", Rfn);
+    show_lisp_register(xp, "arg_z", Rarg_z);
+    show_lisp_register(xp, "arg_y", Rarg_y);
+    show_lisp_register(xp, "arg_x", Rarg_x);
+    show_lisp_register(xp, "temp0", Rtemp0);
+    show_lisp_register(xp, "temp1/next_method_context", Rtemp1);
+    show_lisp_register(xp, "temp2/nfn", Rtemp2);
+    show_lisp_register(xp, "temp3/fname", Rtemp3);
+    show_lisp_register(xp, "temp4", Rtemp4);
+    show_lisp_register(xp, "temp5", Rtemp5);
+
+    show_lisp_register(xp, "save0", Rsave0);
+    show_lisp_register(xp, "save1", Rsave1);
+    show_lisp_register(xp, "save2", Rsave2);
+    show_lisp_register(xp, "save3", Rsave3);
 #endif
   }
   
