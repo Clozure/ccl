@@ -148,6 +148,283 @@
 
 ;;; =====================================================================
 
+;;; =====================================================================
+;;; FF-call family — ppc:941-1119 (the #+ppc64-target block)
+;;; =====================================================================
+;;; The COMPILED %ff-call is a special form (nx1.lisp nx1-ff-call ->
+;;; arm642-aapcs64-ff-call), so compiled EXTERNAL-CALL never needs a
+;;; function binding.  The INTERPRETER (cheap-eval-in-environment)
+;;; funcalls the symbol, so every port also defines %FF-CALL as an
+;;; ordinary function: ppc-def.lisp:1011, x86-def.lisp:635,
+;;; arm-def.lisp:335.  Without these three, any toplevel
+;;; (external-call ...) dies with "Undefined function %FF-CALL" while
+;;; the same form works inside a compiled defun.
+
+;;; %%ff-result — ppc:954
+;;; Boxes a C result left in imm0(x0) or d0 (AAPCS64; PPC fp1 -> d0) AND
+;;; rebalances the control stack: %FF-CALL allocates its c-frame with
+;;; WITH-VARIABLE-C-FRAME, whose exit pops the frame DYNAMICALLY
+;;; (discard-c-frame: sp <- [sp,#8]), but .SPffcall already popped it
+;;; (SUBPRIM-POPS; `spentry ffcall', arm64-spentry.s).  The 16-byte frame
+;;; pushed here is what that exit pops instead (ppc:955 stdu -160).  Its
+;;; shape MUST be the alloc-c-frame contract {u64-vector header @0,
+;;; saved sp @8}: discard-c-frame reads the saved sp at +8, and the
+;;; @address/@double-float arms below can GC at uuo-alloc-trap, whose
+;;; linear cstack walk strides by the header at +0.  (This settles the
+;;; draft's W4-D12 question: a real header IS required; the draft's
+;;; {savedsp@0} scratch shape would have fed a stack address to the
+;;; walker as a frame header.)  The push is one pre-indexed stp, atomic
+;;; w.r.t. suspension.  Must NOT be called multiple-value-returning
+;;; (imm0 would be clobbered) — the caller wraps it in (values ...),
+;;; exactly as on PPC (ppc:943-953 comment).
+(defarm64lapfunction %%ff-result ((spec arg_z))
+  ;; ppc:955 (stdu sp -160 sp) — the rebalance frame, pushed atomically.
+  (mov imm2 sp)
+  (mov imm1 (:$ (logior (ash 1 arm64::num-subtag-bits) arm64::subtag-u64-vector)))
+  (stp imm1 imm2 (:@! sp (:$ -16)))
+  ;; ppc:956-973: six pool-constant compares held on cr0-cr5 ->
+  ;; sequential cmp/b.eq pairs (single NZCV), plus six sub-word specs
+  ;; (ARM64-DEVIATION below).  Pool-ref idiom as in arm64-clos.lisp.
+  (ldur arg_y (:@ nfn (:$ ':void)))           ; ppc:956
+  (cmp spec arg_y)                      ; ppc:957
+  (b.eq @void)                          ; ppc:968
+  (ldur arg_x (:@ nfn (:$ ':address)))        ; ppc:958
+  (cmp spec arg_x)                      ; ppc:959
+  (b.eq @address)                       ; ppc:969
+  (ldur temp3 (:@ nfn (:$ ':single-float)))   ; ppc:960
+  (cmp spec temp3)                      ; ppc:961
+  (b.eq @single-float)                  ; ppc:970
+  (ldur arg_y (:@ nfn (:$ ':double-float)))   ; ppc:962
+  (cmp spec arg_y)                      ; ppc:963
+  (b.eq @double-float)                  ; ppc:971
+  (ldur arg_x (:@ nfn (:$ ':unsigned-doubleword))) ; ppc:964
+  (cmp spec arg_x)                      ; ppc:965
+  (b.eq @unsigned-doubleword)           ; ppc:972
+  (ldur temp3 (:@ nfn (:$ ':signed-doubleword))) ; ppc:966
+  (cmp spec temp3)                      ; ppc:967
+  (b.eq @signed-doubleword)             ; ppc:973
+  ;; ARM64-DEVIATION (vs ppc:974's bare box-fixnum default): AAPCS64
+  ;; leaves x0's bits above the result width UNSPECIFIED (PowerOpen
+  ;; returns fullword results extended to 64 bits), so each sub-word
+  ;; spec extends explicitly before boxing — the same
+  ;; :s8/:u8/:s16/:u16/:s32/:u32 modes the compiled path applies in
+  ;; arm642-aapcs64-ff-call's result dispatch (arm642.lisp).
+  (ldur arg_y (:@ nfn (:$ ':signed-fullword)))
+  (cmp spec arg_y)
+  (b.eq @signed-fullword)
+  (ldur arg_x (:@ nfn (:$ ':unsigned-fullword)))
+  (cmp spec arg_x)
+  (b.eq @unsigned-fullword)
+  (ldur temp3 (:@ nfn (:$ ':signed-halfword)))
+  (cmp spec temp3)
+  (b.eq @signed-halfword)
+  (ldur arg_y (:@ nfn (:$ ':unsigned-halfword)))
+  (cmp spec arg_y)
+  (b.eq @unsigned-halfword)
+  (ldur arg_x (:@ nfn (:$ ':signed-byte)))
+  (cmp spec arg_x)
+  (b.eq @signed-byte)
+  (ldur temp3 (:@ nfn (:$ ':unsigned-byte)))
+  (cmp spec temp3)
+  (b.eq @unsigned-byte)
+  (box-fixnum arg_z imm0)               ; ppc:974
+  (ret)                                 ; ppc:975
+  @void
+  (mov arg_z rnil)                      ; ppc:977
+  (ret)                                 ; ppc:978
+  @address
+  ;; ppc:980-987: cons a macptr around imm0.  Canonical Misc_Alloc_Fixed
+  ;; shape (arm64-macros.s:65-74): b.hi over the trap, header stored at
+  ;; misc-header-offset off the TAGGED allocptr, then untag — as in the
+  ;; live consers (arm64-numbers.lisp:126-133).
+  (sub allocptr allocptr (:$ (- arm64::macptr.size arm64::fulltag-misc))) ; ppc:981
+  (cmp allocptr allocbase)              ; ppc:982 (tdlt allocptr allocbase)
+  (b.hi @macptr-ok)
+  (uuo-alloc-trap)
+  @macptr-ok
+  (mov imm1 (:$ arm64::macptr-header))  ; ppc:980 (li) — movz-able
+  (stur imm1 (:@ allocptr (:$ arm64::misc-header-offset))) ; ppc:983
+  (mov arg_z allocptr)                  ; ppc:984
+  ;; ppc:985 (clrrdi allocptr 4) — untag; ~fulltagmask via ldb wrap
+  (and allocptr allocptr (:$ (ldb (byte 64 0) (lognot arm64::fulltagmask))))
+  (stur imm0 (:@ arg_z (:$ arm64::macptr.address))) ; ppc:986
+  (ret)                                 ; ppc:987
+  @single-float
+  ;; ppc:988-990 (put-single-float fp1 arg_z): singles are IMMEDIATE
+  ;; (bits [63:32] | tag); AAPCS64 float result register = s0 (PPC fp1).
+  (put-single-float s0 arg_z)           ; ppc:989
+  (ret)                                 ; ppc:990
+  @double-float
+  ;; ppc:991-999: cons a double-float around d0.
+  (sub allocptr allocptr (:$ (- arm64::double-float.size arm64::fulltag-misc))) ; ppc:993
+  (cmp allocptr allocbase)              ; ppc:994
+  (b.hi @dfloat-ok)
+  (uuo-alloc-trap)
+  @dfloat-ok
+  (mov imm1 (:$ arm64::double-float-header)) ; ppc:992
+  (stur imm1 (:@ allocptr (:$ arm64::misc-header-offset))) ; ppc:995
+  (mov arg_z allocptr)                  ; ppc:996
+  (and allocptr allocptr (:$ (ldb (byte 64 0) (lognot arm64::fulltagmask)))) ; ppc:997
+  (put-double-float d0 arg_z)           ; ppc:998 (stfd fp1 ...)
+  (ret)                                 ; ppc:999
+  @unsigned-doubleword
+  ;; ppc:1001 (ba .SPmakeu64) — TAIL: lr must stay our caller's.
+  (jump-subprim .SPmakeu64)
+  @signed-doubleword
+  (jump-subprim .SPmakes64)             ; ppc:1003 (ba)
+  ;; ARM64-DEVIATION: sub-word extensions, lsl/asr and logical-immediate
+  ;; masks (all three masks are encodable bitmask immediates).
+  @signed-fullword
+  (lsl imm0 imm0 (:$ 32))
+  (asr imm0 imm0 (:$ 32))
+  (box-fixnum arg_z imm0)
+  (ret)
+  @unsigned-fullword
+  (and imm0 imm0 (:$ #xffffffff))
+  (box-fixnum arg_z imm0)
+  (ret)
+  @signed-halfword
+  (lsl imm0 imm0 (:$ 48))
+  (asr imm0 imm0 (:$ 48))
+  (box-fixnum arg_z imm0)
+  (ret)
+  @unsigned-halfword
+  (and imm0 imm0 (:$ #xffff))
+  (box-fixnum arg_z imm0)
+  (ret)
+  @signed-byte
+  (lsl imm0 imm0 (:$ 56))
+  (asr imm0 imm0 (:$ 56))
+  (box-fixnum arg_z imm0)
+  (ret)
+  @unsigned-byte
+  (and imm0 imm0 (:$ #xff))
+  (box-fixnum arg_z imm0)
+  (ret))
+
+;;; %do-ff-call — ppc:1006 ("just here so that we can jump to a subprim
+;;; from lisp").  regbuf nil => plain ffcall; else regbuf is a MACPTR to
+;;; the result-register buffer {x0-x7 @0..56, d0-d7 @64..120} that
+;;; `spentry ffcall_return_registers' (spentry-E-ffi.s) reads from arg_y.
+;;; BOTH exits are TAIL JUMPS (ppc ba/bnea — NO link): lr still holds our
+;;; caller's return address, which .SPffcall parks in the boundary lisp
+;;; frame; a linked call would clobber it.
+(defarm64lapfunction %do-ff-call ((regbuf arg_y) (entry arg_z))
+  (cmp regbuf rnil)                     ; ppc:1007 (cmpdi regbuf nil)
+  (b.eq @plain)
+  (jump-subprim .SPffcall-return-registers) ; ppc:1008 (bnea)
+  @plain
+  (jump-subprim .SPffcall))             ; ppc:1009 (ba)
+
+;;; %ff-call defun — ppc:1011-1119, re-shaped for AAPCS64 the way the
+;;; compiled path is (arm642-aapcs64-ff-call): integer/address args go
+;;; to the c-frame's 8 GPR param words (`spentry ffcall' loads x0-x7
+;;; from c-frame.param0 unconditionally), FP args go to a separate
+;;; 8-slot block loaded into d0-d7 by %load-fp-arg-regs (W4-D13(b),
+;;; arm64-float.lisp) immediately before %do-ff-call — .SPffcall is
+;;; FP-clean between entry and the blr.  x86-64's defun
+;;; (x86-def.lisp:635) is the closest analog (separate GPR/FPR
+;;; sequences); PPC64's PowerOpen defun reserves a param word per FP
+;;; arg, which AAPCS64 does not.
+;;; ARM64-DEVIATION: .SPffcall carries no stack args yet (refused loud
+;;; in the w13 codegen until the stack-arg frame layout is ratified,
+;;; arm642.lisp), so >8 GPR-class or >8 FP-class args error here the
+;;; same way the compiled path does.
+;;; A :single-float arg is stored at its fp slot's BASE: %load-fp-arg-regs
+;;; does 64-bit loads, and on little-endian the float bits land in the
+;;; d-register's low half, which is exactly s<n> — the callee reads only
+;;; that (same reasoning as the callback generator's LE deviation,
+;;; lib/ffi-linuxarm64.lisp).
+(defun %ff-call (entry &rest specs-and-vals)
+  (declare (dynamic-extent specs-and-vals))
+  (let* ((len (length specs-and-vals))
+         (regbuf nil))
+    (declare (fixnum len))
+    (let* ((result-spec (or (car (last specs-and-vals)) :void))
+           (nargs (ash (the fixnum (1- len)) -1))
+           (n-gpr-words 0)
+           (n-fp-args 0))
+      (declare (fixnum nargs n-gpr-words n-fp-args))
+      (ecase result-spec
+        ((:address :unsigned-doubleword :signed-doubleword
+                   :single-float :double-float
+                   :signed-fullword :unsigned-fullword
+                   :signed-halfword :unsigned-halfword
+                   :signed-byte :unsigned-byte
+                   :void)
+         (do* ((i 0 (1+ i))
+               (specs specs-and-vals (cddr specs))
+               (spec (car specs) (car specs)))
+              ((= i nargs))
+           (declare (fixnum i))
+           (case spec
+             (:registers nil)
+             ((:double-float :single-float)
+              (incf n-fp-args))
+             ((:address :unsigned-doubleword :signed-doubleword
+                        :signed-fullword :unsigned-fullword
+                        :signed-halfword :unsigned-halfword
+                        :signed-byte :unsigned-byte)
+              (incf n-gpr-words))
+             (t (if (typep spec 'unsigned-byte)
+                  (incf n-gpr-words spec)
+                  (error "unknown arg spec ~s" spec)))))
+         (when (> n-gpr-words 8)
+           (error "~d integer/address argument words in foreign call; ~
+                   .SPffcall passes at most 8 (no stack args yet)"
+                  n-gpr-words))
+         (when (> n-fp-args 8)
+           (error "~d floating-point arguments in foreign call; ~
+                   .SPffcall passes at most 8 (d0-d7, no stack args yet)"
+                  n-fp-args))
+         (%stack-block ((fp-args (* 8 8)))
+           (with-macptrs ((argptr))
+             (with-variable-c-frame
+                 8 frame
+                 (%setf-macptr-to-object argptr frame)
+                 (let* ((gpr-offset arm64::c-frame.param0)
+                        (fp-offset 0))
+                   (declare (fixnum gpr-offset fp-offset))
+                   (do* ((i 0 (1+ i))
+                         (specs specs-and-vals (cddr specs))
+                         (spec (car specs) (car specs))
+                         (val (cadr specs) (cadr specs)))
+                        ((= i nargs))
+                     (declare (fixnum i))
+                     (case spec
+                       (:registers (setq regbuf val))
+                       (:address
+                        (setf (%get-ptr argptr gpr-offset) val)
+                        (incf gpr-offset 8))
+                       ((:signed-doubleword :signed-fullword
+                                            :signed-halfword :signed-byte)
+                        (setf (%%get-signed-longlong argptr gpr-offset) val)
+                        (incf gpr-offset 8))
+                       ((:unsigned-doubleword :unsigned-fullword
+                                              :unsigned-halfword :unsigned-byte)
+                        (setf (%%get-unsigned-longlong argptr gpr-offset) val)
+                        (incf gpr-offset 8))
+                       (:double-float
+                        (setf (%get-double-float fp-args fp-offset) val)
+                        (incf fp-offset 8))
+                       (:single-float
+                        (setf (%get-single-float fp-args fp-offset) val)
+                        (incf fp-offset 8))
+                       (t
+                        ;; struct by value: spec = word count (<= 2 from
+                        ;; expand-ff-call), val = pointer to the bytes.
+                        (let* ((p 0))
+                          (declare (fixnum p))
+                          (dotimes (k (the fixnum spec))
+                            (setf (%get-ptr argptr gpr-offset) (%get-ptr val p))
+                            (incf p 8)
+                            (incf gpr-offset 8))))))
+                   (%load-fp-arg-regs n-fp-args fp-args)
+                   (%do-ff-call regbuf entry)
+                   (values (%%ff-result result-spec)))))))))))
+
+;;; =====================================================================
+
 (defarm64lapfunction %get-object ((macptr arg_y) (offset arg_z))
   (check-nargs 2)                       ; ppc:1127
   (trap-unless-typecode= arg_y arm64::subtag-macptr) ; ppc:1128 (W4-D16 brk)
