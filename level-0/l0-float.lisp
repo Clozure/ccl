@@ -1452,6 +1452,12 @@
           0.0s0)
         (float-sign y single-float-pi))
       (float-sign y single-float-half-pi))
+    #+netbsdarm-target
+    ;; NetBSD 11/earmv7hf atan2f returns pi one ulp low on this boundary.
+    (if (and (zerop y) (minusp x))
+      (float-sign y single-float-pi)
+      (%single-float-atan2! y x (%make-sfloat)))
+    #-netbsdarm-target
     (%single-float-atan2! y x (%make-sfloat))))
 
 #+64-bit-target
