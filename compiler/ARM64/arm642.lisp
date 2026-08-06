@@ -9103,6 +9103,7 @@
          (nother-words 0)
          (nfpr-args 0)
          (ngpr-args 0)
+         (return-registers nil)
          (fp-loads ()))
     (declare (fixnum nsingle-floats ndouble-floats nfpr-args ngpr-args
                      nother-words gpr-offset other-offset
@@ -9122,6 +9123,10 @@
            ;; stop until the AAPCS64 packing is ratified (header note).
            (compiler-bug "aapcs64-ff-call: more than 8 floating-point ~
                           args (~s) not yet supported" argspecs)))
+        ;; Return-registers buffer (record-by-value returns): a macptr
+        ;; handed to .SPffcall-return-registers in arg_y; consumes no
+        ;; C argument slot (x862.lisp is the donor shape).
+        (:registers (setq return-registers t))
         (t (incf ngpr-args)
            (if (> ngpr-args 8)
              (incf nother-words)))))
@@ -9161,6 +9166,16 @@
              (spec (car specs))
              (absptr (acode-absolute-ptr-p valform)))
         (case spec
+          ;; Return-registers buffer: evaluate the regbuf macptr and
+          ;; park it on the vstack; it is popped into arg_y just before
+          ;; the call (LIFO with the address pushed above).  Donor:
+          ;; x862.lisp's (:registers ...) arm.
+          (:registers
+           (let* ((reg (arm642-one-untargeted-reg-form
+                        seg valform arm64::arg_z)))
+             (unless *arm642-reckless*
+               (! trap-unless-macptr reg))
+             (arm642-vpush-register seg reg)))
           ;; FPR regspecs are raw FPR numbers under :class :fpr (his
           ;; arm642-immediate idiom); no dN name constants in his arch.
           ;; Staging register d1 mirrors the v2 donor's fp1 choice.
@@ -9235,8 +9250,16 @@
     (when (> ngpr-args 8)
       (compiler-bug "aapcs64-ff-call: more than 8 GPR args (~d) -- stack-arg ~
                      frame layout not ratified (16m5c)" ngpr-args))
+    ;; LIFO: the regbuf (if any) was pushed after the address, so it
+    ;; pops first.  .SPffcall-return-registers reads the buffer macptr
+    ;; from arg_y (spentry-E-ffi.s) and stores {x0-x7 @ 0..56,
+    ;; d0-d7 @ 64..120} into it on return.
+    (when return-registers
+      (arm642-vpop-register seg ($ arm64::arg_y)))
     (arm642-vpop-register seg ($ arm64::arg_z))
-    (! ff-call)
+    (if return-registers
+      (! ff-call-return-registers)
+      (! ff-call))
     ;; .SPffcall popped the c-frame at runtime; restore the static
     ;; accounting NOW, not via the let*-shadow.  The shadow only
     ;; unwinds after this handler returns -- but (^) below emits the
