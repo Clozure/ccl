@@ -59,10 +59,10 @@
 ;;;   - Size <= 16 bytes, not HFA: returned in X0/X1; captured via the
 ;;;     same regbuf, copied from the GPR half.
 ;;;   - Size > 16 bytes, not HFA: caller allocates buffer, passes pointer
-;;;     in X8; function writes through X8 and returns void.  KNOWN GAP:
-;;;     the c-frame/.SPffcall protocol has no X8 slot yet, so the buffer
-;;;     pointer currently lands in X0 (unchanged pre-existing behavior;
-;;;     see comms/HFA-DETECTION-16m71.md §10).
+;;;     in X8; function writes through X8 and returns void.  Passed under
+;;;     the :indirect-result argspec (consumes no argument slot);
+;;;     .SPffcall-indirect-result (spentry-E-ffi.s) loads the buffer
+;;;     address into x8 immediately before the call.
 
 (in-package "CCL")
 
@@ -76,6 +76,18 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "ARM64-LINUX")
     (make-package "ARM64-LINUX" :use '("CL" "CCL"))))
+
+;;; :indirect-result is the argspec under which expand-ff-call below hands
+;;; the >16-byte non-HFA record-return buffer to the backend (AAPCS64 6.9
+;;; wants its ADDRESS in x8 at the call).  nx1-ff-call-internal has its own
+;;; arm for it, but a CROSS-COMPILATION HOST runs whatever nx1 is baked
+;;; into ITS image -- possibly a released CCL that predates the keyword.
+;;; This file IS loaded into any host that targets linuxarm64 (it defines
+;;; the target FTD), so extending the whitelist here makes the old host's
+;;; GENERIC argspec arm pass the keyword through to the arm64 backend,
+;;; with no host rebuild required.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (pushnew :indirect-result *arg-spec-keywords*))
 
 
 ;;;-----------------------------------------------------------------------
@@ -267,13 +279,13 @@
           (if (arm64-linux::record-type-returns-structure-as-first-arg
                struct-result-type)
             ;;; > 16 bytes and not an HFA: caller-allocated result
-            ;;; buffer, passed by reference.  KNOWN GAP: AAPCS64 §6.9
-            ;;; wants this pointer in X8; the c-frame/.SPffcall protocol
-            ;;; has no X8 slot yet, so it is passed as the first :address
-            ;;; arg and lands in X0 (pre-existing behavior, unchanged;
-            ;;; comms/HFA-DETECTION-16m71.md §10).
+            ;;; buffer whose address AAPCS64 §6.9 wants in X8, not in an
+            ;;; argument register.  :indirect-result consumes no C slot;
+            ;;; the codegen/interpreted paths route the call through
+            ;;; .SPffcall-indirect-result, which loads the macptr's
+            ;;; address into x8 just before the call (spentry-E-ffi.s).
             (progn
-              (argforms :address)
+              (argforms :indirect-result)
               (argforms result-form))
             ;;; HFA (any size) or non-HFA <= 16 bytes: returned in
             ;;; registers (v0..v3 / x0-x1); capture them via
