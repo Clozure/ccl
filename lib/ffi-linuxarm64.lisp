@@ -439,9 +439,22 @@
                (unless fp-regs-form
                  (setq fp-regs-form `(%inc-ptr ,stack-ptr ,arm64::callback-frame.fp-save-offset)))))
         (when (typep rtype 'foreign-record-type)
-          (setq argvars (cons struct-result-name argvars)
-                argspecs (cons :address argspecs)
-                rtype *void-foreign-type*))
+          (if (arm64-linux::record-type-returns-structure-as-first-arg rtype)
+            ;; >16 B non-HFA: caller-allocated result area, written
+            ;; through a pointer.  (PowerOpen line-port shape: pointer as
+            ;; implicit first arg.)
+            (setq argvars (cons struct-result-name argvars)
+                  argspecs (cons :address argspecs)
+                  rtype *void-foreign-type*)
+            ;; HFA (any size) or non-HFA <= 16 B: returned in REGISTERS
+            ;; (v0..v3 / x0-x1) -- no pointer exists.  RLET a local
+            ;; struct as the body's STRUCT-RETURN-ARG;
+            ;; generate-callback-return-value below copies it into the
+            ;; trampoline's register reload slots on exit.  Model:
+            ;; x8664::generate-callback-bindings (x8664-backend.lisp).
+            ;; rtype stays the record type so the return-value generator
+            ;; can dispatch on it.
+            (rlets (list struct-result-name (foreign-record-type-name rtype)))))
         (when (typep rtype 'foreign-float-type)
           (set-fp-regs-form))
         (do* ((argvars argvars (cdr argvars))
@@ -457,16 +470,53 @@
           (let* ((name (car argvars))
                  (spec (car argspecs))
                  (argtype (parse-foreign-type spec))
-                 (bits (ensure-foreign-type-bits argtype)))
-            (if (and (typep argtype 'foreign-record-type)
-                     (<= bits 64))
-              (progn
-                (when name (rlets (list name (foreign-record-type-name argtype))))
-                ;; ARM64-DEVIATION (LE): copy the slot verbatim — the value
-                ;; is low-justified in its doubleword.
-                (when name (inits `(setf (%%get-unsigned-longlong ,name 0)
-                                    (%%get-unsigned-longlong ,stack-ptr ,offset)))))
-              (let* ((access-form
+                 (bits (ensure-foreign-type-bits argtype))
+                 (hfa-base nil)
+                 (hfa-count nil))
+            (when (typep argtype 'foreign-record-type)
+              (multiple-value-setq (hfa-base hfa-count)
+                (arm64-linux::hfa-type-info argtype)))
+            (cond
+              ;; HFA/HVA argument: it arrived in one V register per
+              ;; member (AAPCS64 C.2), NOT in the GPR save area the
+              ;; size-dispatched record cases below read.  The trampoline
+              ;; saved d0-d7 at CBF-64..-8, so member i of an HFA whose
+              ;; first member landed at NSRN n reads from the fp save
+              ;; area at 8*(n+i); the arg consumes NO gpr/stack slot
+              ;; (delta 0).  LE: a single-float member's payload sits at
+              ;; its d-save slot's BASE (same reasoning as the scalar
+              ;; single-float case below).  An HFA that would overflow
+              ;; v0-v7 goes WHOLLY to the stack (C.3) -- stack-passed
+              ;; args are not ratified on this port, so refuse loudly at
+              ;; definition time, the same policy as the call-out
+              ;; direction's refusals.
+              (hfa-base
+               (unless (<= (+ fp-arg-num hfa-count) 8)
+                 (error "HFA argument ~s would overflow v0-v7 (AAPCS64 ~
+                         C.3 stack case); stack-passed callback ~
+                         arguments are not yet supported"
+                        (unparse-foreign-type argtype)))
+               (let* ((nsrn fp-arg-num)
+                      (single-p (eq hfa-base :single-float))
+                      (accessor (if single-p '%get-single-float '%get-double-float))
+                      (memsize (if single-p 4 8)))
+                 (incf fp-arg-num hfa-count)
+                 (setq delta 0)
+                 (set-fp-regs-form)
+                 (when name
+                   (rlets (list name (foreign-record-type-name argtype)))
+                   (dotimes (i hfa-count)
+                     (inits `(setf (,accessor ,name ,(* i memsize))
+                              (,accessor ,fp-args-ptr ,(* 8 (+ nsrn i)))))))))
+              ((and (typep argtype 'foreign-record-type)
+                    (<= bits 64))
+               (when name (rlets (list name (foreign-record-type-name argtype))))
+               ;; ARM64-DEVIATION (LE): copy the slot verbatim — the value
+               ;; is low-justified in its doubleword.
+               (when name (inits `(setf (%%get-unsigned-longlong ,name 0)
+                                   (%%get-unsigned-longlong ,stack-ptr ,offset)))))
+              (t
+               (let* ((access-form
                       `(,(cond
                           ((typep argtype 'foreign-single-float-type)
                            (when (< (incf fp-arg-num) 9)
@@ -522,19 +572,23 @@
                         ,(if use-fp-args fp-args-ptr stack-ptr)
                         ,(if use-fp-args (* 8 (1- fp-arg-num))
                              `(+ ,offset ,bias)))))
-                (when name (lets (list name access-form)))
-                (when use-fp-args (set-fp-regs-form))))))))))
+                 (when name (lets (list name access-form)))
+                 (when use-fp-args (set-fp-regs-form)))))))))))
 
 
 ;;;-----------------------------------------------------------------------
 ;;; (4) generate-callback-return-value
 ;;;-----------------------------------------------------------------------
 ;;; PPC64 LINE-PORT (vendor/ccl/lib/ffi-linuxppc64.lisp:180-199).
-;;; All structures are "returned" via the implicit first argument; the
-;;; binding generator already translated the return type to :void then.
-;;; The kernel trampoline reloads x0/x1 from CBF+0/+8 and d0 from CBF-64
-;;; on exit, so the value is written into the argument save area
-;;; (exactly PPC's gp_save reuse).
+;;; >16-byte non-HFA structures are "returned" via a result-area pointer;
+;;; the binding generator already translated the return type to :void
+;;; then.  The kernel trampoline reloads x0/x1 from CBF+0/+8 and d0-d3
+;;; from CBF-64..-40 on exit, so scalar values are written into the
+;;; argument save area (exactly PPC's gp_save reuse), and register-
+;;; returned records (HFA / non-HFA <= 16 B -- return-type is then the
+;;; RECORD type and STRUCT-RETURN-ARG the rlet'd local the body filled)
+;;; are copied member-by-member into the same reload slots.  Model:
+;;; x8664::generate-callback-return-value (x8664-backend.lisp).
 ;;;
 ;;; ARM64-DEVIATION: a :single-float result is written as FLOAT BITS
 ;;; (%get-single-float setf, low 32 bits of the d0 reload slot) — the C
@@ -542,19 +596,49 @@
 ;;; wrote a double because PowerOpen returns singles double-extended in
 ;;; f1; AAPCS64 does not.
 (defun arm64-linux::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
-  (declare (ignore struct-return-arg))
   (unless (eq return-type *void-foreign-type*)
-    (let* ((return-type-keyword (foreign-type-to-representation-type return-type)))
-      (case return-type-keyword
-        (:single-float
-         `(setf (%get-single-float ,fp-args-ptr 0) ,result))
-        (:double-float
-         `(setf (%get-double-float ,fp-args-ptr 0) ,result))
-        (:address
-         `(setf (%get-ptr ,stack-ptr 0) ,result))
-        (:signed-doubleword
-         `(setf (%%get-signed-longlong ,stack-ptr 0) ,result))
-        (:unsigned-doubleword
-         `(setf (%%get-unsigned-longlong ,stack-ptr 0) ,result))
-        (t
-         `(setf (%%get-signed-longlong ,stack-ptr 0) ,result))))))
+    (if (typep return-type 'foreign-record-type)
+      ;; Reached only for HFA or non-HFA <= 16 B records (>16 B non-HFA
+      ;; was mapped to :void by generate-callback-bindings).  The body's
+      ;; value is meaningless (x8664 ignores it too); the record is in
+      ;; STRUCT-RETURN-ARG.
+      ;;   HFA: member i -> the d<i> save slot at CBF-64+8i (AAPCS64 6.9
+      ;;   returns HFAs in v0..v3, one register per member; LE: a
+      ;;   single-float member's payload sits at the slot base).
+      ;;   non-HFA <= 16 B: the x0/x1 reload slots at CBF+0/+8.
+      (let* ((bits (ensure-foreign-type-bits return-type)))
+        (multiple-value-bind (hfa-base hfa-count)
+            (arm64-linux::hfa-type-info return-type)
+          (collect ((forms))
+            (cond
+              ((eq hfa-base :double-float)
+               (dotimes (i hfa-count)
+                 (forms `(setf (%get-double-float ,stack-ptr
+                                ,(+ arm64::callback-frame.fp-save-offset (* 8 i)))
+                          (%get-double-float ,struct-return-arg ,(* 8 i))))))
+              ((eq hfa-base :single-float)
+               (dotimes (i hfa-count)
+                 (forms `(setf (%get-single-float ,stack-ptr
+                                ,(+ arm64::callback-frame.fp-save-offset (* 8 i)))
+                          (%get-single-float ,struct-return-arg ,(* 4 i))))))
+              (t
+               (forms `(setf (%%get-unsigned-longlong ,stack-ptr 0)
+                        (%%get-unsigned-longlong ,struct-return-arg 0)))
+               (when (> bits 64)
+                 (forms `(setf (%%get-unsigned-longlong ,stack-ptr 8)
+                          (%%get-unsigned-longlong ,struct-return-arg 8))))))
+            `(progn ,@(forms)))))
+      (let* ((return-type-keyword (foreign-type-to-representation-type return-type)))
+        (case return-type-keyword
+          (:single-float
+           `(setf (%get-single-float ,fp-args-ptr 0) ,result))
+          (:double-float
+           `(setf (%get-double-float ,fp-args-ptr 0) ,result))
+          (:address
+           `(setf (%get-ptr ,stack-ptr 0) ,result))
+          (:signed-doubleword
+           `(setf (%%get-signed-longlong ,stack-ptr 0) ,result))
+          (:unsigned-doubleword
+           `(setf (%%get-unsigned-longlong ,stack-ptr 0) ,result))
+          (t
+           `(setf (%%get-signed-longlong ,stack-ptr 0) ,result)))))))
