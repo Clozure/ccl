@@ -20,6 +20,10 @@ COPT = -O2 -fno-strict-aliasing
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+# -Wswitch reports an enum switch that has silently lost a case.  Kept
+# separate from WFORMAT so that overriding WFORMAT on the command line to
+# audit warnings does not also discard this.
+WARN = -Wswitch
 PLATFORM_H = platform-linuxarm64.h
 
 
@@ -37,7 +41,7 @@ endif
 .s.o:
 	$(CC) -c -x assembler-with-cpp -I../ $< $(CDEFINES) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT) $(WARN)  -o $@
 
 SPOBJ = pad.o  arm64-spentry.o
 ASMOBJ = arm64-asmutils.o arm64-imports.o

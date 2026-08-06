@@ -444,6 +444,9 @@ check_all_areas(TCR *tcr)                            /* ppc-gc.c:156-204 */
         }
       }
       break;
+
+    default:
+      break;
     }
     a = a->succ;
     code = (a->code);
