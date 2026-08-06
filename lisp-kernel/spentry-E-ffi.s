@@ -379,6 +379,113 @@ spentry ffcall_return_registers
         ret
 endsp ffcall_return_registers
 
+/* Just like ffcall, but the record-by-value result is >16 bytes and not
+ * an HFA, so AAPCS64 (6.9) wants the caller-allocated result buffer's
+ * address in x8 (the indirect result-area register) at the call.  The
+ * buffer's MACPTR rides in arg_y (exactly as ffcall_return_registers'
+ * regbuf does); its address is loaded into x8 alongside the x0-x7
+ * argument loads.  x8 needs no channel through the c_frame: the plain
+ * ffcall body never touches arg_w=x8 between entry and the blr, and the
+ * common return path re-nils it.  No PPC analog: PowerOpen (and SysV)
+ * pass the hidden result pointer as the FIRST integer argument; AAPCS64
+ * alone dedicates x8. */
+spentry ffcall_indirect_result
+        str fn, [vsp, #-node_size]!
+        str save3, [vsp, #-node_size]!
+        mov save3, sp
+        /* Boundary lisp_frame park + header shrink -- byte-identical to
+         * `spentry ffcall' (arm64-spentry.s), whose comments are the
+         * canonical note. */
+        ldr imm0, [sp, #c_frame.header]
+        lsr imm1, imm0, #num_subtag_bits        /* element count = words-1 */
+        sub imm1, imm1, #3
+        mov imm2, sp                            /* add-shifted with Rn=sp is */
+        add imm2, imm2, imm1, lsl #node_shift   /* an encoding trap */
+        mov imm1, #lisp_frame_marker
+        str imm1, [imm2, #lisp_frame.marker]
+        str vsp, [imm2, #lisp_frame.savevsp]
+        str fn,  [imm2, #lisp_frame.savefn]
+        str lr,  [imm2, #lisp_frame.savelr]
+        sub imm0, imm0, #(4 << num_subtag_bits)
+        str imm0, [sp, #c_frame.header]
+        /* Unbox the entry point into temp4 (canonical note: `spentry
+           ffcall', arm64-spentry.s; the bare-tst trap is 16m5l). */
+        and imm2, arg_z, #fulltagmask
+        cmp imm2, #fulltag_misc
+        b.ne 8f
+        ldurb w2, [arg_z, #misc_subtag_offset]
+        cmp imm2, #subtag_macptr
+        b.ne 8f
+        ldur temp4, [arg_z, #macptr.address]
+        b 9f
+8:      mov temp4, arg_z        // fixnum-locative / raw code address
+9:
+        /* Publish lisp state to the TCR for the GC, then go foreign. */
+        str vsp, [rcontext, #tcr.save_vsp]
+        str tsp, [rcontext, #tcr.save_tsp]
+        str allocptr, [rcontext, #tcr.save_allocptr]
+        str allocbase, [rcontext, #tcr.save_allocbase]
+        /* Load the outgoing GPR args; keep SP at the frame head (stack
+         * args refused loud in the codegen -- see `spentry ffcall'). */
+        ldp x0, x1, [sp, #c_frame.params]
+        ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
+        ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
+        ldp x6, x7, [sp, #(c_frame.params + 6*node_size)]
+        /* THE VARIANT'S ONE ADDITION: indirect result-area pointer.
+         * arg_y is still live (nothing above touches it) and x8 is dead
+         * from here to the blr; the callee writes the record through x8
+         * and returns void. */
+        ldur x8, [arg_y, #macptr.address]
+        /* Boundary bookkeeping + valence, identical to `spentry ffcall'
+         * (arm64-spentry.s) -- see the protocol note at the top of this
+         * file.  temp0, not imm0: imm0 is x0, now an outgoing argument. */
+        ldr temp0, [rcontext, #tcr.last_lisp_frame]
+        str temp0, [sp, #c_frame.params]
+        mov temp0, sp
+        str temp0, [rcontext, #tcr.last_lisp_frame]
+        mov temp0, #TCR_STATE_FOREIGN
+        str temp0, [rcontext, #tcr.valence]
+        /* FPSR capture window -- canonical note: `spentry ffcall'. */
+        msr fpsr, xzr
+        blr temp4
+        /* ---- common return path (= `spentry ffcall') ---- */
+        mrs imm1, fpsr
+        str imm1, [rcontext, #tcr.foreign_fpsr]
+        msr fpsr, xzr
+        /* A GC may have run while we were foreign. */
+        ldr allocptr, [rcontext, #tcr.save_allocptr]
+        ldr allocbase, [rcontext, #tcr.save_allocbase]
+        /* lr from the boundary lisp_frame; sp from the SAVED SP word, not
+         * the header at offset 0 (16m30).  Count already shrunk by 4, so
+         * reserved_base = save3 + node_size*(count+1).  imm1/imm2 only. */
+        ldr imm1, [save3, #c_frame.header]
+        lsr imm1, imm1, #num_subtag_bits
+        add imm1, imm1, #1
+        add imm2, save3, imm1, lsl #node_shift
+        ldr lr, [imm2, #lisp_frame.savelr]
+        ldr imm1, [save3, #c_frame.savedsp]
+        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
+        ldr imm2, [save3, #c_frame.params]
+        str imm2, [rcontext, #tcr.last_lisp_frame]
+        mov sp, imm1
+        ldr save3, [vsp], #node_size
+        ldr fn, [vsp], #node_size
+        mov arg_w, rnil
+        mov arg_x, rnil
+        mov arg_y, rnil
+        mov arg_z, rnil
+        mov temp0, rnil
+        mov temp1, rnil
+        mov temp2, rnil
+        mov temp3, rnil
+        mov temp4, rnil
+        mov temp5, rnil
+        mov nargs, xzr
+        str xzr, [rcontext, #tcr.valence]   // TCR_STATE_LISP
+        check_pending_interrupt
+        ret
+endsp ffcall_indirect_result
+
 /* Deprecated "swap exception handling info" variant.  TRAP-ONLY ON PPC64
  * TOO: ppc-spentry.s:3526-3527 is just `.long 0x7c800008` (debug trap). */
 spentry ffcallX

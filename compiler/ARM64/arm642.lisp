@@ -9104,6 +9104,7 @@
          (nfpr-args 0)
          (ngpr-args 0)
          (return-registers nil)
+         (indirect-result nil)
          (fp-loads ()))
     (declare (fixnum nsingle-floats ndouble-floats nfpr-args ngpr-args
                      nother-words gpr-offset other-offset
@@ -9127,6 +9128,19 @@
         ;; handed to .SPffcall-return-registers in arg_y; consumes no
         ;; C argument slot (x862.lisp is the donor shape).
         (:registers (setq return-registers t))
+        ;; Indirect-result buffer (>16-byte non-HFA record returns): a
+        ;; macptr handed to .SPffcall-indirect-result in arg_y, whose
+        ;; ADDRESS the subprim loads into x8 before the call (AAPCS64
+        ;; 6.9 indirect result-area register); consumes no C slot.
+        ;; Duplicate check HERE, not only in nx1: on a cross host whose
+        ;; nx1 predates the keyword it arrives through the generic
+        ;; *arg-spec-keywords* arm (see lib/ffi-linuxarm64.lisp), which
+        ;; has no duplicate check -- and a second one would vpush a
+        ;; second buffer that the single vpop below never pops.
+        (:indirect-result
+         (when indirect-result
+           (compiler-bug "aapcs64-ff-call: duplicate :indirect-result"))
+         (setq indirect-result t))
         (t (incf ngpr-args)
            (if (> ngpr-args 8)
              (incf nother-words)))))
@@ -9166,11 +9180,11 @@
              (spec (car specs))
              (absptr (acode-absolute-ptr-p valform)))
         (case spec
-          ;; Return-registers buffer: evaluate the regbuf macptr and
-          ;; park it on the vstack; it is popped into arg_y just before
-          ;; the call (LIFO with the address pushed above).  Donor:
-          ;; x862.lisp's (:registers ...) arm.
-          (:registers
+          ;; Return-registers / indirect-result buffer: evaluate the
+          ;; macptr and park it on the vstack; it is popped into arg_y
+          ;; just before the call (LIFO with the address pushed above).
+          ;; Donor: x862.lisp's (:registers ...) arm.
+          ((:registers :indirect-result)
            (let* ((reg (arm642-one-untargeted-reg-form
                         seg valform arm64::arg_z)))
              (unless *arm642-reckless*
@@ -9250,16 +9264,18 @@
     (when (> ngpr-args 8)
       (compiler-bug "aapcs64-ff-call: more than 8 GPR args (~d) -- stack-arg ~
                      frame layout not ratified (16m5c)" ngpr-args))
-    ;; LIFO: the regbuf (if any) was pushed after the address, so it
-    ;; pops first.  .SPffcall-return-registers reads the buffer macptr
-    ;; from arg_y (spentry-E-ffi.s) and stores {x0-x7 @ 0..56,
-    ;; d0-d7 @ 64..120} into it on return.
-    (when return-registers
+    ;; LIFO: the regbuf/indirect buffer (if any) was pushed after the
+    ;; address, so it pops first.  Both subprim variants read the buffer
+    ;; macptr from arg_y (spentry-E-ffi.s): .SPffcall-return-registers
+    ;; stores {x0-x7 @ 0..56, d0-d7 @ 64..120} into it on return;
+    ;; .SPffcall-indirect-result loads its address into x8 before the
+    ;; call (AAPCS64 6.9).
+    (when (or return-registers indirect-result)
       (arm642-vpop-register seg ($ arm64::arg_y)))
     (arm642-vpop-register seg ($ arm64::arg_z))
-    (if return-registers
-      (! ff-call-return-registers)
-      (! ff-call))
+    (cond (return-registers (! ff-call-return-registers))
+          (indirect-result (! ff-call-indirect-result))
+          (t (! ff-call)))
     ;; .SPffcall popped the c-frame at runtime; restore the static
     ;; accounting NOW, not via the let*-shadow.  The shadow only
     ;; unwinds after this handler returns -- but (^) below emits the

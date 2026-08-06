@@ -316,6 +316,15 @@
   @plain
   (jump-subprim .SPffcall))             ; ppc:1009 (ba)
 
+;;; Sibling of %do-ff-call for the AAPCS64 indirect-result case (>16-byte
+;;; non-HFA record-by-value returns): BUF is a MACPTR to the caller-
+;;; allocated result area; `spentry ffcall_indirect_result'
+;;; (spentry-E-ffi.s) reads it from arg_y and loads its address into x8
+;;; (the 6.9 indirect result-area register) just before the call.  TAIL
+;;; JUMP (no link), same reasoning as %do-ff-call above.
+(defarm64lapfunction %do-ff-call-indirect ((buf arg_y) (entry arg_z))
+  (jump-subprim .SPffcall-indirect-result))
+
 ;;; %ff-call defun — ppc:1011-1119, re-shaped for AAPCS64 the way the
 ;;; compiled path is (arm642-aapcs64-ff-call): integer/address args go
 ;;; to the c-frame's 8 GPR param words (`spentry ffcall' loads x0-x7
@@ -338,7 +347,8 @@
 (defun %ff-call (entry &rest specs-and-vals)
   (declare (dynamic-extent specs-and-vals))
   (let* ((len (length specs-and-vals))
-         (regbuf nil))
+         (regbuf nil)
+         (indirect-buf nil))
     (declare (fixnum len))
     (let* ((result-spec (or (car (last specs-and-vals)) :void))
            (nargs (ash (the fixnum (1- len)) -1))
@@ -358,7 +368,7 @@
               ((= i nargs))
            (declare (fixnum i))
            (case spec
-             (:registers nil)
+             ((:registers :indirect-result) nil)
              ((:double-float :single-float)
               (incf n-fp-args))
              ((:address :unsigned-doubleword :signed-doubleword
@@ -393,6 +403,7 @@
                      (declare (fixnum i))
                      (case spec
                        (:registers (setq regbuf val))
+                       (:indirect-result (setq indirect-buf val))
                        (:address
                         (setf (%get-ptr argptr gpr-offset) val)
                         (incf gpr-offset 8))
@@ -420,7 +431,9 @@
                             (incf p 8)
                             (incf gpr-offset 8))))))
                    (%load-fp-arg-regs n-fp-args fp-args)
-                   (%do-ff-call regbuf entry)
+                   (if indirect-buf
+                     (%do-ff-call-indirect indirect-buf entry)
+                     (%do-ff-call regbuf entry))
                    (values (%%ff-result result-spec)))))))))))
 
 ;;; =====================================================================

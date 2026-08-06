@@ -518,4 +518,5 @@ C(sptab):
         .quad _SPcallbuiltin3 // 129 SPcallbuiltin3 (PROPOSED extension, 16m5f)
         .quad _SPlexpr_entry // 130 SPlexpr_entry (PROPOSED extension, 16m5f)
         .quad _SPnmkunwind // 131 SPnmkunwind (PROPOSED extension, 16m5f)
+        .quad _SPffcall_indirect_result // 132 SPffcall_indirect_result (PROPOSED extension, 16m71)
 C(sptab_end):

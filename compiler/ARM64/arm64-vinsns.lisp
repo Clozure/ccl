@@ -6606,6 +6606,21 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
+;;; ============ ff-call-indirect-result ============
+;;; ff-call variant for >16-byte non-HFA record-by-value RETURNS: same
+;;; frame and entry contract as ff-call, plus the caller-allocated result
+;;; buffer's macptr in arg_y; the subprim loads its ADDRESS into x8 (the
+;;; AAPCS64 6.9 indirect result-area register) immediately before the
+;;; call (`spentry ffcall_indirect_result', spentry-E-ffi.s).  No other
+;;; port needs this: SysV/PowerOpen pass the hidden result pointer as the
+;;; first integer argument, AAPCS64 alone dedicates x8 to it.
+(define-arm64-vinsn (ff-call-indirect-result :call :subprim) (()
+                                                              ()
+                                                              ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPffcall-indirect-result")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
 ;;; ============ eep.address ============
 ;;; PPC64 ppc64-vinsns.lisp:3829: load slot 1 (the address) of an
 ;;; external-entry-point gvector, trap if NIL (unresolved eep -- PPC's

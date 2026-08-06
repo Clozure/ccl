@@ -1432,9 +1432,14 @@
           (progn 
             (push arg-keyword specs)
             (push value vals))
-          (if (eq arg-keyword :registers)
+          (if (memq arg-keyword '(:registers :indirect-result))
+            ;; :registers names a result-register capture buffer (the
+            ;; x8664/darwinppc64 regbuf protocol); :indirect-result names
+            ;; the AAPCS64 (arm64) indirect result-area pointer, loaded
+            ;; into x8 at the call.  Both describe THE record result, so
+            ;; at most one of either may appear.
             (if register-spec-seen
-              (error "duplicate :registers in ~s" arg-specs-and-result-spec)
+              (error "duplicate ~s in ~s" arg-keyword arg-specs-and-result-spec)
               (progn
                 (setq register-spec-seen t)
                 (push arg-keyword specs)
