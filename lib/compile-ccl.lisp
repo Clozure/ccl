@@ -665,7 +665,7 @@ the lisp and run REBUILD-CCL again.")
              (when kernel
                (when (or clean force)
                  ;; Do a "make clean".
-                 (run-program "make"
+                 (run-program (make-program)
                               (list "-C"
                                     (format nil "lisp-kernel/~a"
                                             (kernel-build-directory))
