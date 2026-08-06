@@ -3535,8 +3535,10 @@
 ;;; verbatim -- his kernel's tstack walker doesn't exist yet and must
 ;;; match this layout when it lands.
 (define-arm64-vinsn make-stack-cons (((dest :lisp))
-                                     ((car :lisp) (cdr :lisp)))
-  (str tsp (:@! tsp (:$ -32)))
+                                     ((car :lisp) (cdr :lisp))
+                                     ((link :u64)))
+  (mov link tsp)
+  (str link (:@! tsp (:$ -32)))
   (str xzr (:@ tsp (:$ 8)))
   (str xzr (:@ tsp (:$ 16)))
   (str xzr (:@ tsp (:$ 24)))
@@ -4137,9 +4139,10 @@
 ;;; macptr-header = his define-header (arch:709), fits movz.
 (define-arm64-vinsn macptr->stack (((dest :lisp))
                                    ((address :u64))
-                                   ((header :u64)))
+                                   ((header :u64) (link :u64)))
   (movz header (:$ arm64::macptr-header))
-  (str tsp (:@! tsp (:$ -48)))
+  (mov link tsp)
+  (str link (:@! tsp (:$ -48)))
   (str xzr (:@ tsp (:$ 8)))
   (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.header))))
   (str address (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.address))))
@@ -4363,7 +4366,8 @@
 ;;;     (() ()) (ld tsp 0 tsp))
 ;;; -- pop the temp-stack frame by loading the BACKLINK, which every
 ;;; tstack frame stores at [tsp, #0] (our V3b make-stack-cons writes it
-;;; with (str tsp (:@! tsp (:$ -32))); same PPC64 stdu protocol --
+;;; with (mov link tsp) + (str link (:@! tsp (:$ -32))); same PPC64 stdu
+;;; protocol, but NOT PPC64's single stdu -- see make-stack-cons --
 ;;; RATIFY item "tstack frame shape" already queued with Matt).
 ;;; tsp = his x24 (arm64-asm.lisp:215); frames are 16-aligned so the
 ;;; offset-0 scaled LDR encodes.
@@ -4613,9 +4617,10 @@
 ;;; dest+misc-data-offset (=tsp+24) under the 8b1ed24 -12/-4 layout.
 (define-arm64-vinsn make-stack-vcell (((dest :lisp))
                                       ((closed :lisp))
-                                      ((header :u64)))
+                                      ((header :u64) (link :u64)))
   (movz header (:$ arm64::value-cell-header))
-  (str tsp (:@! tsp (:$ -32)))
+  (mov link tsp)
+  (str link (:@! tsp (:$ -32)))
   (str xzr (:@ tsp (:$ 8)))
   (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-header-offset))))
   (str closed (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-data-offset))))
