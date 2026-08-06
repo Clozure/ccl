@@ -12,7 +12,11 @@ CC = ${CROSS}gcc
 ASFLAGS =
 CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
-COPT = -O2
+# The xp accessor macros in platform-linuxarm64.h type-pun the signal
+# context's __u64 fields through natural * and uint32_t **.  -O2 turns on
+# -fstrict-aliasing, which licenses the compiler to assume that does not
+# happen, so this is a correctness flag and not a warning suppression.
+COPT = -O2 -fno-strict-aliasing
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
