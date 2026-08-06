@@ -6939,6 +6939,49 @@
                                       (y :u64)))
   (eor dest x y))
 
+;;; ============ natural (unboxed u64) arithmetic and shifts ============
+;;; Demand: acode-rewrite.lisp:241-246 rewrites + and - to %natural+ and
+;;; %natural- whenever BOTH operand types are subtypes of target-natural-type,
+;;; with no reader conditional -- so ordinary portable source that declares
+;;; (unsigned-byte 64) operands at speed 3 produces these operators on arm64,
+;;; and without a handler the compile fails.  natural-shift-left/right arrive
+;;; the same way for constant shift counts.  ANSI cannot reach any of it (a
+;;; declared-type open-coded path), which is why 21679/0 never saw it.
+;;;
+;;; PPC64 ppc64-vinsns.lisp:3834-3849 (%natural+ add / %natural- sub) and
+;;; :2960-2966 (natural-shift-left/right).  PPC64 expresses the shifts with
+;;; rldicr because it has no dedicated 64-bit shift-immediate;
+;;; ;;; ARM64-DEVIATION: AArch64 has lsl/lsr with an immediate (UBFM aliases),
+;;; so the rotate-and-mask encoding has no analogue and is not imitated.  The
+;;; count is :u8const on both ports, matching PPC64's assumption that nx1 has
+;;; already established a constant amount in range.
+;;;
+;;; The -c (constant-operand) variants PPC64 carries are deliberately NOT
+;;; ported: the arm64 natural family established by %natural-logand/-logior/
+;;; -logxor above has no -c forms either, and their handlers always materialise
+;;; both operands into imm registers.  Matching the neighbouring arm64
+;;; convention keeps one spelling of the family and avoids an imm12-range
+;;; question that buys only one movz.
+(define-arm64-vinsn %natural+ (((dest :u64))
+                               ((x :u64)
+                                (y :u64)))
+  (add dest x y))
+
+(define-arm64-vinsn %natural- (((dest :u64))
+                               ((x :u64)
+                                (y :u64)))
+  (sub dest x y))
+
+(define-arm64-vinsn natural-shift-left (((dest :u64))
+                                        ((src :u64)
+                                         (count :u8const)))
+  (lsl dest src (:$ count)))
+
+(define-arm64-vinsn natural-shift-right (((dest :u64))
+                                         ((src :u64)
+                                          (count :u8const)))
+  (lsr dest src (:$ count)))
+
 ;;; ============ ivector-typecode-p / gvector-typecode-p ============
 ;;; Demand (16m28, pin advance to 33e61e6): his arm642-ivector-typecode-p
 ;;; and arm642-gvector-typecode-p (arm642.lisp:6188/6195) emit them, and

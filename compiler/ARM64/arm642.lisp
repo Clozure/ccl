@@ -9866,3 +9866,48 @@
   (def-natural-logical arm642-%natural-logand %natural-logand logand)
   (def-natural-logical arm642-%natural-logior %natural-logior logior)
   (def-natural-logical arm642-%natural-logxor %natural-logxor logxor))
+
+;;; Natural arithmetic, the same shape as the logical ops above.  PPC64
+;;; ppc2.lisp:8711 (%natural+) and :8735 (%natural-) additionally special-case a
+;;; u15 constant operand via %natural+-c/%natural--c; that leg is omitted here
+;;; for the reason given at the vinsns -- the arm64 natural family has no -c
+;;; forms.  Constant folding is kept: PPC64 folds both-constant operands through
+;;; ppc2-natural-constant, and arm642-absolute-natural is the arm64 equivalent
+;;; already used by def-natural-logical.
+(macrolet ((def-natural-arith (handler-name op-name folder)
+             `(defarm642 ,handler-name ,op-name (seg vreg xfer x y)
+                (if (null vreg)
+                  (progn
+                    (arm642-form seg nil nil x)
+                    (arm642-form seg nil xfer y))
+                  (let* ((naturalx (nx-natural-constant-p x))
+                         (naturaly (nx-natural-constant-p y)))
+                    (if (and naturalx naturaly)
+                      (arm642-absolute-natural seg vreg xfer
+                                               (logand (,folder naturalx naturaly)
+                                                       #xffffffffffffffff))
+                      (progn
+                        (with-imm-target () (xreg :natural)
+                          (with-imm-target (xreg) (yreg :natural)
+                            (arm642-two-targeted-reg-forms seg x xreg y yreg)
+                            (! ,op-name xreg xreg yreg))
+                          (<- xreg))
+                        (^))))))))
+  (def-natural-arith arm642-%natural+ %natural+ +)
+  (def-natural-arith arm642-%natural- %natural- -))
+
+;;; Natural shifts by a CONSTANT amount.  PPC64 ppc2.lisp:8852/8859 -- the count
+;;; is read straight out of the acode with acode-fixnum-form-p, which is also how
+;;; PPC64 relies on nx1 having established a constant; a variable amount would
+;;; hand the vinsn NIL for a :u8const operand and fail at definition time on both
+;;; ports.  Mirrored rather than "improved", per the no-workarounds rule: if a
+;;; variable-count path is ever needed it belongs upstream in both backends.
+(macrolet ((def-natural-shift (handler-name op-name)
+             `(defarm642 ,handler-name ,op-name (seg vreg xfer num amt)
+                (with-imm-target () (dest :natural)
+                  (arm642-one-targeted-reg-form seg num dest)
+                  (! ,op-name dest dest (acode-fixnum-form-p amt))
+                  (<- dest)
+                  (^)))))
+  (def-natural-shift arm642-natural-shift-left natural-shift-left)
+  (def-natural-shift arm642-natural-shift-right natural-shift-right))
