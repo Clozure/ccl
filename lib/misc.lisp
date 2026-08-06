@@ -93,7 +93,20 @@ are running on, or NIL if we can't find any useful information."
                               (read-line f nil nil))
                         (target #+ppc-target "machine"
                                 #+x86-target "model name"
-                                #+arm-target "Hardware"))
+                                #+arm-target "Hardware"
+                                ;; ARM64-DEVIATION: an aarch64 kernel emits
+                                ;; neither "model name" nor ARM32's
+                                ;; "Hardware" line -- arch/arm64/kernel/
+                                ;; cpuinfo.c's c_show() writes only
+                                ;; processor / BogoMIPS / Features / CPU
+                                ;; implementer / CPU architecture / CPU
+                                ;; variant / CPU part / CPU revision, and
+                                ;; "Hardware" is emitted by arch/arm/ only.
+                                ;; "CPU part" is the MIDR_EL1 part number,
+                                ;; i.e. the model of the core, and is the
+                                ;; most specific hardware identifier that is
+                                ;; always present.
+                                #+arm64-target "CPU part"))
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
