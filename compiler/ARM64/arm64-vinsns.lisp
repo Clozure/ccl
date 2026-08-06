@@ -3538,10 +3538,16 @@
                                      ((car :lisp) (cdr :lisp))
                                      ((link :u64)))
   (mov link tsp)
-  (str link (:@! tsp (:$ -32)))
-  (str xzr (:@ tsp (:$ 8)))
+  ;; backlink AND a non-zero tsp_frame.type in one instruction, so the frame
+  ;; is born marked "raw" and no GC can scan it while the data slots still
+  ;; hold garbage.  PPC64 needs two (stdu; std tsp,8(tsp)) and covers the
+  ;; window with pc_luser_xp's MARK_TSP_FRAME_INSTRUCTION; stp closes it
+  ;; outright.  Old tsp is the value stored, and is never 0.
+  (stp link link (:@! tsp (:$ -32)))
   (str xzr (:@ tsp (:$ 16)))
   (str xzr (:@ tsp (:$ 24)))
+  ;; only now is the data valid: mark the frame as containing nodes.
+  (str xzr (:@ tsp (:$ 8)))
   (str car (:@ tsp (:$ (+ 16 arm64::fulltag-cons arm64::cons.car))))
   (str cdr (:@ tsp (:$ (+ 16 arm64::fulltag-cons arm64::cons.cdr))))
   (add dest tsp (:$ (+ 16 arm64::fulltag-cons))))
@@ -4142,8 +4148,11 @@
                                    ((header :u64) (link :u64)))
   (movz header (:$ arm64::macptr-header))
   (mov link tsp)
-  (str link (:@! tsp (:$ -48)))
-  (str xzr (:@ tsp (:$ 8)))
+  ;; backlink + non-zero tsp_frame.type atomically.  This frame stays "raw"
+  ;; for its whole life -- a macptr holds a foreign address, not a node --
+  ;; exactly as PPC64's macptr->stack does (it never stores 0 to the type
+  ;; word).  Ours used to mark it as containing nodes.
+  (stp link link (:@! tsp (:$ -48)))
   (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.header))))
   (str address (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.address))))
   (str xzr (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.domain))))
@@ -4620,7 +4629,11 @@
                                       ((header :u64) (link :u64)))
   (movz header (:$ arm64::value-cell-header))
   (mov link tsp)
-  (str link (:@! tsp (:$ -32)))
+  ;; backlink + non-zero tsp_frame.type atomically; see make-stack-cons.
+  (stp link link (:@! tsp (:$ -32)))
+  (str xzr (:@ tsp (:$ 16)))
+  (str xzr (:@ tsp (:$ 24)))
+  ;; data valid: mark the frame as containing nodes.
   (str xzr (:@ tsp (:$ 8)))
   (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-header-offset))))
   (str closed (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-data-offset))))
