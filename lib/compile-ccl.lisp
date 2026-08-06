@@ -600,6 +600,37 @@ not runtime errors reported by a successfully created process."
       (when string
         (format nil "Error executing ~a: ~a~&~a" procname string reminder)))))
 
+(defun kernel-build-program-usable-p (program)
+  "True if PROGRAM can be executed at all.
+Only exec is being tested.  A program that runs and then complains about
+--version has still answered the question being asked, so any :exited status
+counts as success; only a failure to create the process counts as absence."
+  (handler-case
+      (let* ((proc (run-program program '("--version")
+                                :input nil :output nil :error nil :wait t)))
+        (and proc (eq (external-process-status proc) :exited)))
+    (error () nil)))
+
+(defun check-kernel-build-tools ()
+  "Signal a useful error BEFORE REBUILD-CCL spends its Lisp time, not after.
+A missing make is the one toolchain failure with no usable diagnosis.  The
+kernel build is the LAST thing REBUILD-CCL does, so COMPILE-CCL and
+XLOAD-LEVEL-0 have already run by the time it is discovered; RUN-PROGRAM cannot
+exec make, so nothing reaches the output stream and the reported error is the
+bare \"generic OS error in fork/exec\".  Every other tool the kernel needs is
+invoked BY make and names itself when absent (\"m4: command not found\"), which
+is why make is the only one worth pre-checking here."
+  (let* ((make (make-program)))
+    (unless (kernel-build-program-usable-p make)
+      (error "Cannot execute ~a, so the lisp kernel cannot be built.~2%~
+              Install a C toolchain and run REBUILD-CCL again.  The kernel needs ~a,~%~
+              a C compiler invoked as cc, and -- on targets whose~%~
+              lisp-kernel/*/Makefile uses it -- m4, which is not installed by~%~
+              default on many systems and is not a dependency of gcc.  See the~%~
+              \"Kernel Build Prerequisites\" section of the manual.~2%~
+              Pass :kernel nil to REBUILD-CCL to skip the kernel build."
+             make make))))
+
 (defparameter *known-optional-features* '(:count-gf-calls :monitor-futex-wait :unique-dcode :qres-ccl :eq-hash-monitor))
 (defvar *build-time-optional-features* nil)
 (defvar *ccl-save-source-locations* :no-text)
@@ -629,6 +660,10 @@ not runtime errors reported by a successfully created process."
 	  (format t "~&There are new bootstrapping binaries.  Please restart
 the lisp and run REBUILD-CCL again.")
 	  (return-from rebuild-ccl nil))))
+    ;; Before COMPILE-CCL and XLOAD-LEVEL-0, not after: see
+    ;; CHECK-KERNEL-BUILD-TOOLS.
+    (when kernel
+      (check-kernel-build-tools))
     (when (or clean force)
       ;; for better bug reports...
       (report-build-environment t)
