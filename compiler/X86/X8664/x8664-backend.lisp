@@ -370,7 +370,8 @@
           ((<= nbits 64) (values (x8664::classify-8byte fields 64) nil))
           (t (values (x8664::classify-8byte fields 64)
                (do* ()
-                    ((>= (foreign-record-field-offset (car fields)) 64)
+                    ((or (null fields)
+                         (>= (foreign-record-field-offset (car fields)) 64))
                      (x8664::classify-8byte fields 128))
                  (setq fields (cdr fields))))))))
 
