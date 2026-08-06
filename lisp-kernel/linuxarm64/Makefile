@@ -23,7 +23,7 @@ WFORMAT = -Wno-format
 # -Wswitch reports an enum switch that has silently lost a case.  Kept
 # separate from WFORMAT so that overriding WFORMAT on the command line to
 # audit warnings does not also discard this.
-WARN = -Wswitch
+WARN = -Wswitch -Wno-unused-parameter
 PLATFORM_H = platform-linuxarm64.h
 
 
