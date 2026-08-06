@@ -504,19 +504,27 @@ endsp callbackX
  * and into which it writes the C result.
  *
  * PROPOSED-CONVENTION CALLBACK-IDX (RATIFY): the make-callback trampoline
- * stub enters here with the UNBOXED callback index in arg_w=x8 (16m14:
- * fixed a =x9 typo here — the code below reads arg_w, which is x8; the
- * level-1/arm64-callback-support.lisp generator stamps x8) (PPC uses
- * r11; any AAPCS64 caller-saved scratch works - the trampoline generator
- * is a lisp-side deliverable that must match).
+ * stub enters here with the UNBOXED callback index in arg_y=x10 (PPC uses
+ * r11; any AAPCS64 caller-saved scratch works - the trampoline generator,
+ * level-1/arm64-callback-support.lisp, is a lisp-side deliverable that
+ * must match).  x8 is NOT usable for the index: AAPCS64 6.9 delivers the
+ * indirect result-area pointer there when the callback returns a >16-byte
+ * non-HFA record, so the incoming x8 is live argument material -- it is
+ * captured below (via save2, which survives the get_tcr C call) into the
+ * padding word of the foreign-sp stash, at CBF-248
+ * (arm64-arch.lisp callback-frame.x8-save-offset), where the lisp glue
+ * reads it as the struct-return pointer.  (The index lived in x8 until
+ * 16m71 and silently clobbered that pointer.)
  *
  * PROPOSED frame contract (RATIFY - lisp-side callback glue must match;
  * boot-validated shape from our v2 tree): x0..x7 are pushed so the x0 slot
  * abuts the incoming sp; CBF = &x0save.  The C caller's stack args then
  * sit contiguously at CBF+64 (the PowerOpen single-linear-offset property,
- * reproduced).  d0..d7 saves at CBF-64..-8.  The GPR result is reloaded
- * from CBF+0/+8, the FPR result from CBF-64.  CBF is 16-aligned, so it is
- * its own fixnum boxing.
+ * reproduced).  d0..d7 saves at CBF-64..-8; incoming x8 at CBF-248.  The
+ * GPR result is reloaded from CBF+0/+8, the FPR result from CBF-64..-40
+ * (d0-d3: an HFA return of up to 4 members, AAPCS64 6.9; a scalar FP
+ * result only populates d0's slot).  CBF is 16-aligned, so it is its own
+ * fixnum boxing.
  *
  * ARM64-DEVIATION (vs PPC64 poweropen_callback):
  *   - callee-saved set = x19-x28 + fp/lr and d8-d15 (+FPCR/FPSR pair), NOT
@@ -558,18 +566,24 @@ spentry callback
         mrs imm0, fpcr
         mrs imm1, fpsr
         stp imm0, imm1, [sp, #-16]!
-        /* Stash index + CBF in just-saved callee-saved regs: they must
-           survive the get_tcr C call (x9-x17 are caller-saved, and a
-           linker veneer may clobber x16/x17). */
-        mov save0, arg_w
-        mov save1, arg_x
+        /* Stash index + CBF + incoming x8 in just-saved callee-saved
+           regs: they must survive the get_tcr C call (x9-x17 are
+           caller-saved, and a linker veneer may clobber x16/x17).  x8 is
+           the AAPCS64 indirect result-area pointer when the callback
+           returns a >16-byte non-HFA record -- garbage otherwise, and
+           harmless to carry. */
+        mov save0, arg_y                        /* callback index (x10)  */
+        mov save1, arg_x                        /* CBF                   */
+        mov save2, arg_w                        /* incoming x8           */
         /* Recover the thread context (ppc:5114-5124 get_tcr(1)). */
         mov x0, #1
         bl get_tcr
         mov rcontext, x0
-        /* Stash the exact foreign sp for the return path. */
+        /* Stash the exact foreign sp for the return path, pairing it
+           with the incoming x8 (slot CBF-248 =
+           callback-frame.x8-save-offset; was an xzr padding word). */
         mov imm0, sp
-        stp imm0, xzr, [sp, #-16]!
+        stp imm0, save2, [sp, #-16]!
         /* Restore lisp context (ppc:5127-5147). */
         ldr vsp, [rcontext, #tcr.save_vsp]
         ldr tsp, [rcontext, #tcr.save_tsp]
@@ -629,9 +643,11 @@ spentry callback
         ldr nfn, [fname, #symbol.fcell]
         ldr temp4, [nfn, #_function.codevector]
         blr temp4
-        /* Lisp wrote the result into CBF+0/+8 / CBF-64 (glue contract).
-           CBF is recomputed below from the restored sp (fixed layout);
-           first publish lisp state back to the tcr (ppc:5159-5169). */
+        /* Lisp wrote the result into CBF+0/+8 / CBF-64..-40 (glue
+           contract; a >16-byte non-HFA record went through the pointer
+           captured at CBF-248 instead).  CBF is recomputed below from
+           the restored sp (fixed layout); first publish lisp state back
+           to the tcr (ppc:5159-5169). */
         str allocptr,  [rcontext, #tcr.save_allocptr]   /* ppc:5166-5169     */
         str allocbase, [rcontext, #tcr.save_allocbase]
         str vsp,       [rcontext, #tcr.save_vsp]
@@ -659,7 +675,12 @@ spentry callback
         add imm2, sp, #(6*16 + 4*16)            /* imm2 = CBF                */
         ldr x0, [imm2]                          /* GPR result (ppc:5213-5214)*/
         ldr x1, [imm2, #8]
-        ldur d0, [imm2, #-64]                   /* FPR result                */
+        /* FPR result: d0-d3 from the fp save slots -- an HFA return
+           occupies up to four V registers, one member each (AAPCS64
+           6.9); a scalar FP result only means d0, and for any non-FP
+           return all four are dead scratch the C caller ignores. */
+        ldp d0, d1, [imm2, #-64]
+        ldp d2, d3, [imm2, #-48]
         /* Restore callee-saved GPRs (ppc:5179-5197) and pop the arg-save
            areas (ppc:5212); x0/x1/d0 carry the result (ppc:5225 blr). */
         ldp x29, lr,  [sp], #16

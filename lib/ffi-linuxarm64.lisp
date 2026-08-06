@@ -404,7 +404,8 @@
 ;;; the A1 callback-frame contract (arm64-arch.lisp callback-frame.*;
 ;;; built by _spentry(eabi_callback), lisp-kernel/arm64-spentry.s).
 ;;; stack-ptr = CBF: x0..x7 saves at +0..56, the C caller's stack args
-;;; CONTIGUOUS at +64, d0..d7 saves at -64..-8, saved LR at -152.
+;;; CONTIGUOUS at +64, d0..d7 saves at -64..-8, saved LR at -152,
+;;; incoming x8 (indirect result-area pointer, AAPCS64 6.9) at -248.
 ;;;
 ;;; ARM64-DEVIATIONs from the PPC64 source:
 ;;;  - 8 FP arg regs (d0..d7), not PowerOpen's 13 (f1..f13).
@@ -418,14 +419,17 @@
 ;;;    base: plain %get-single-float (PPC read a double and rounded via
 ;;;    %get-single-float-from-double-ptr — PowerOpen carries singles
 ;;;    double-extended; AAPCS64 does not).
-;;;  - records: <=64 bits arrive in one GPR slot, read low-justified
-;;;    (no BE (ash _ (- 64 bits)) re-justify); 65..128 bits inline in
-;;;    two slots (%inc-ptr, delta 16); >128 bits arrive BY REFERENCE in
-;;;    one GPR (AAPCS64 B.4) — read the pointer.  (PowerOpen passed any
-;;;    record inline at full size.)  KNOWN GAP, documented: a 9..16-byte
-;;;    record with exactly one GPR left goes wholly to the stack under
-;;;    AAPCS64 (no register/stack split); this generator would read it
-;;;    one slot early.  No boot-path callback has such a signature.
+;;;  - records: HFAs/HVAs (any size, 1-4 members) arrive in V registers,
+;;;    one per member, read from the fp save area (C.2 -- see the
+;;;    HFA-BASE case below); other records: <=64 bits arrive in one GPR
+;;;    slot, read low-justified (no BE (ash _ (- 64 bits)) re-justify);
+;;;    65..128 bits inline in two slots (%inc-ptr, delta 16); >128 bits
+;;;    arrive BY REFERENCE in one GPR (AAPCS64 B.4) — read the pointer.
+;;;    (PowerOpen passed any record inline at full size.)  KNOWN GAP,
+;;;    documented: a 9..16-byte record with exactly one GPR left goes
+;;;    wholly to the stack under AAPCS64 (no register/stack split); this
+;;;    generator would read it one slot early.  No boot-path callback
+;;;    has such a signature.
 ;;;  - fp-regs-form is frame arithmetic (%inc-ptr CBF -64), not PPC's
 ;;;    deref of a pointer the trampoline stored into its frame.
 (defun arm64-linux::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
@@ -441,11 +445,16 @@
         (when (typep rtype 'foreign-record-type)
           (if (arm64-linux::record-type-returns-structure-as-first-arg rtype)
             ;; >16 B non-HFA: caller-allocated result area, written
-            ;; through a pointer.  (PowerOpen line-port shape: pointer as
-            ;; implicit first arg.)
-            (setq argvars (cons struct-result-name argvars)
-                  argspecs (cons :address argspecs)
-                  rtype *void-foreign-type*)
+            ;; through the pointer the C caller passed in X8 (AAPCS64
+            ;; 6.9) -- NOT as an implicit first argument (the PowerOpen
+            ;; shape this file line-ported).  The trampoline captured
+            ;; the incoming x8 at CBF-248; bind the struct-return name
+            ;; to it WITHOUT shifting the real arguments.
+            (progn
+              (lets (list struct-result-name
+                          `(%get-ptr ,stack-ptr
+                            ,arm64::callback-frame.x8-save-offset)))
+              (setq rtype *void-foreign-type*))
             ;; HFA (any size) or non-HFA <= 16 B: returned in REGISTERS
             ;; (v0..v3 / x0-x1) -- no pointer exists.  RLET a local
             ;; struct as the body's STRUCT-RETURN-ARG;

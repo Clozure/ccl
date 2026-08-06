@@ -849,6 +849,11 @@
 (defconstant callback-frame.fp-save-offset -64)
 (defconstant callback-frame.savelr-offset -152)
 (defconstant callback-frame.stack-args-offset 64)
+;;; Incoming x8 (the AAPCS64 6.9 indirect result-area pointer, live when
+;;; the callback returns a >16-byte non-HFA record), captured by
+;;; _SPcallback into the padding word of its foreign-sp stash pair
+;;; (spentry-E-ffi.s `stp imm0, save2').
+(defconstant callback-frame.x8-save-offset -248)
 
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
