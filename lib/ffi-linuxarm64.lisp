@@ -90,7 +90,14 @@
 ;;; GENERIC argspec arm pass the keyword through to the arm64 backend,
 ;;; with no host rebuild required.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (pushnew :indirect-result *arg-spec-keywords*))
+  (pushnew :indirect-result *arg-spec-keywords*)
+  ;; :stack-doubleword = one raw 8-byte slot in the NSAA stack-arg
+  ;; block, never a register: one word of an AAPCS64 C.13 memory copy
+  ;; of a composite the ABI sends WHOLLY to the stack (an HFA that
+  ;; cannot fit v0-v7, C.3; a 2-doubleword record with one GPR left,
+  ;; C.10/C.11).  Emitted only by expand-ff-call below; the same
+  ;; old-host rationale as :indirect-result applies.
+  (pushnew :stack-doubleword *arg-spec-keywords*))
 
 
 ;;;-----------------------------------------------------------------------
@@ -348,38 +355,73 @@
                           ;;; scalars" model.  The arg-value-form is
                           ;;; evaluated ONCE into a dynamic-extent temp;
                           ;;; member i is read at its natural offset.
-                          ;;; If the members would overflow v0-v7, C.3
-                          ;;; sends the WHOLE aggregate to the stack
-                          ;;; with natural member packing — a shape the
-                          ;;; member-wise decomposition cannot express
-                          ;;; (and must never SPLIT), so it is refused
-                          ;;; here with the running counts.  Scalar FP
-                          ;;; overflow, by contrast, is supported (NSAA
-                          ;;; stack block).
+                          ;;; If the members would NOT all fit in v0-v7,
+                          ;;; C.3 sends the WHOLE aggregate to the stack
+                          ;;; (never a register/stack split) AND sets
+                          ;;; NSRN := 8 — see the stack branch below.
                           (hfa-base
-                           (unless (<= (+ nfpr-args hfa-count) 8)
-                             (error "HFA argument ~s needs ~d SIMD register~:p ~
-                                     but only ~d remain: AAPCS64 C.3 sends the ~
-                                     whole aggregate to the stack with natural ~
-                                     member packing, which this port does not ~
-                                     yet support"
-                                    arg-type-spec hfa-count
-                                    (max 0 (- 8 nfpr-args))))
-                           (incf nfpr-args hfa-count)
-                           (let* ((temp (struct-arg-temp))
-                                  (single-p (eq hfa-base :single-float))
-                                  (accessor (if single-p
-                                              '%get-single-float
-                                              '%get-double-float))
-                                  (memsize (if single-p 4 8)))
-                             (dotimes (i hfa-count)
-                               (argforms hfa-base)
-                               (argforms
-                                `(,accessor
-                                  ,(if (eql i 0)
-                                     `(%setf-macptr ,temp ,arg-value-form)
-                                     temp)
-                                  ,(* i memsize))))))
+                           (if (> (+ nfpr-args hfa-count) 8)
+                             ;; C.3: NSRN := 8; size rounded up to a
+                             ;; multiple of 8; the aggregate is copied to
+                             ;; the NSAA with NATURAL member packing (a
+                             ;; float member is 4 bytes here — which is
+                             ;; why this cannot be expressed as scalar
+                             ;; :single-float argforms; C.5 widens those
+                             ;; to 8-byte slots).
+                             ;; The dummy :double-float argforms below ARE
+                             ;; C.3's register waste: v-registers the
+                             ;; callee's prototype ignores.  They also
+                             ;; keep the BACKEND's FP counter in lockstep
+                             ;; with this one, so later scalar FP args
+                             ;; flow through its existing NSAA overflow
+                             ;; arm (C.1 can never fire again).
+                             ;; ARM64-DEVIATION vs the x86-64 donor
+                             ;; (x8664-backend.lisp expand-ff-call):
+                             ;; SysV's MEMORY class burns nothing; C.3's
+                             ;; burn is AAPCS64-specific.  PPC64 has no
+                             ;; analog (PowerOpen always has a memory
+                             ;; slot per parameter).
+                             (progn
+                               (dotimes (i (- 8 nfpr-args))
+                                 (declare (ignorable i))
+                                 (argforms :double-float)
+                                 (argforms 0.0d0))
+                               (setq nfpr-args 8)
+                               ;; C.13 memory copy: ceil(size/8) raw NSAA
+                               ;; words through the evaluate-once temp.
+                               ;; A <=4-byte tail is read narrow so we
+                               ;; never read more than 3 bytes past the
+                               ;; object; the slot's high bytes are C.3
+                               ;; round-up padding, unspecified.
+                               (let* ((temp (struct-arg-temp))
+                                      (nbytes (ceiling bits 8)))
+                                 (do* ((off 0 (+ off 8)))
+                                      ((>= off nbytes))
+                                   (argforms :stack-doubleword)
+                                   (argforms
+                                    (let* ((base (if (eql off 0)
+                                                   `(%setf-macptr ,temp ,arg-value-form)
+                                                   temp)))
+                                      (if (<= (- nbytes off) 4)
+                                        `(%get-unsigned-long ,base ,off)
+                                        `(%%get-unsigned-longlong ,base ,off)))))))
+                             ;; C.2: enough SIMD registers — one member
+                             ;; per v-register, as before.
+                             (let* ((temp (struct-arg-temp))
+                                    (single-p (eq hfa-base :single-float))
+                                    (accessor (if single-p
+                                                '%get-single-float
+                                                '%get-double-float))
+                                    (memsize (if single-p 4 8)))
+                               (incf nfpr-args hfa-count)
+                               (dotimes (i hfa-count)
+                                 (argforms hfa-base)
+                                 (argforms
+                                  `(,accessor
+                                    ,(if (eql i 0)
+                                       `(%setf-macptr ,temp ,arg-value-form)
+                                       temp)
+                                    ,(* i memsize)))))))
                           ;;; ARM64-DEVIATION: <=64 bit non-HFA struct
                           ;;; passed left-justified (raw value, no ash).
                           ;;; PPC64 source right-justified via
@@ -397,29 +439,49 @@
                           ;;; thing, but the arm642 codegen has no case
                           ;;; for integer argspecs, so the decomposed
                           ;;; form is the one that compiles everywhere.)
-                          ;;; With EXACTLY one GPR left the decomposition
-                          ;;; would SPLIT the record across x7 and the
-                          ;;; stack; AAPCS64 C.10/C.11 send it wholly to
-                          ;;; the stack instead, so that one shape is
-                          ;;; refused.  With 0 GPRs left both words land
-                          ;;; in consecutive NSAA slots, which IS the
-                          ;;; C.15 whole-record stack copy — fine.
+                          ;;; C.10 when both doublewords fit the remaining
+                          ;;; GPRs; otherwise C.11: NGRN := 8 — with one
+                          ;;; register left it is WASTED (never a
+                          ;;; register/stack split) — then C.12/C.13 copy
+                          ;;; the whole record to the stack.  The dummy
+                          ;;; argform below IS C.11's wasted x7 (dead
+                          ;;; content per the callee's prototype) and
+                          ;;; keeps the backend's GPR counter in lockstep,
+                          ;;; so later scalar int args flow through its
+                          ;;; existing NSAA overflow arm.
+                          ;;; ARM64-DEVIATION vs the x86-64 donor: SysV's
+                          ;;; MEMORY class burns nothing (x8664-backend
+                          ;;; expand-ff-call); the burn is AAPCS64 C.11.
                           ((<= bits 128)
-                           (when (eql ngpr-words 7)
-                             (error "16-byte record argument ~s with exactly ~
-                                     one integer register remaining: AAPCS64 ~
-                                     C.10/C.11 send the whole record to the ~
-                                     stack rather than splitting it, which ~
-                                     this port does not yet support at that ~
-                                     position; reorder the argument or pad"
+                           (when (> (foreign-type-alignment ftype) 64)
+                             (error "record argument ~s has 16-byte ~
+                                     alignment; AAPCS64 C.8/C.12 16-byte ~
+                                     register/NSAA alignment is not ~
+                                     modeled by this port yet"
                                     arg-type-spec))
-                           (incf ngpr-words 2)
-                           (let* ((temp (struct-arg-temp)))
-                             (argforms :unsigned-doubleword)
-                             (argforms `(%%get-unsigned-longlong
-                                         (%setf-macptr ,temp ,arg-value-form) 0))
-                             (argforms :unsigned-doubleword)
-                             (argforms `(%%get-unsigned-longlong ,temp 8))))
+                           (if (<= (+ ngpr-words 2) 8)
+                             (progn        ; C.10: two consecutive GPRs
+                               (incf ngpr-words 2)
+                               (let* ((temp (struct-arg-temp)))
+                                 (argforms :unsigned-doubleword)
+                                 (argforms `(%%get-unsigned-longlong
+                                             (%setf-macptr ,temp ,arg-value-form) 0))
+                                 (argforms :unsigned-doubleword)
+                                 (argforms `(%%get-unsigned-longlong ,temp 8))))
+                             (progn        ; C.11 + C.13
+                               (when (< ngpr-words 8)
+                                 (argforms :unsigned-doubleword)
+                                 (argforms 0))
+                               (setq ngpr-words 8)
+                               (let* ((temp (struct-arg-temp))
+                                      (nbytes (ceiling bits 8)))
+                                 (argforms :stack-doubleword)
+                                 (argforms `(%%get-unsigned-longlong
+                                             (%setf-macptr ,temp ,arg-value-form) 0))
+                                 (argforms :stack-doubleword)
+                                 (argforms (if (<= (- nbytes 8) 4)
+                                             `(%get-unsigned-long ,temp 8)
+                                             `(%%get-unsigned-longlong ,temp 8)))))))
                           ;;; ARM64-DEVIATION: > 128 bit non-HFA struct
                           ;;; passed by reference (caller allocates copy,
                           ;;; callee reads through pointer; AAPCS64 B.4).

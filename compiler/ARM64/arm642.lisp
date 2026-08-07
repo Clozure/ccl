@@ -9161,6 +9161,12 @@
          (when indirect-result
            (compiler-bug "aapcs64-ff-call: duplicate :indirect-result"))
          (setq indirect-result t))
+        ;; One raw 8-byte NSAA word -- one slot of a C.13 memory copy of
+        ;; a composite the ABI sends WHOLLY to the stack (emitted by
+        ;; expand-ff-call, which also burns the corresponding register
+        ;; class per C.3/C.11).  Always a stack slot; consumes no
+        ;; register of either class.
+        (:stack-doubleword (incf nother-words))
         (t (incf ngpr-args)
            (if (> ngpr-args 8)
              (incf nother-words)))))
@@ -9263,6 +9269,15 @@
                  (t
                   (! set-c-arg ($ arm64::imm0) other-offset)
                   (incf other-offset))))
+          ;; Raw NSAA word (C.13 whole-composite stack copy; see the
+          ;; pass-1 arm and expand-ff-call).  Same u64 value path as
+          ;; :unsigned-doubleword, but the slot is unconditionally a
+          ;; stack slot and no register-class counter moves.
+          (:stack-doubleword
+           (arm642-one-targeted-reg-form seg valform ($ arm64::arg_z))
+           (! getu64)
+           (! set-c-arg ($ arm64::imm0) other-offset)
+           (incf other-offset))
           (:address
            (with-imm-target () (ptr :address)
              (if absptr

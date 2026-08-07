@@ -300,8 +300,32 @@
 (define-arm64-vinsn (alloc-variable-c-frame) (()
                                               ((n-c-args :lisp))
                                               ((header (:u64 #.arm64::imm0))
-                                               (size :u64)
-                                               (prevsp (:imm #.arm64::imm1))))
+                                               ;; ALL THREE temps are WIRED
+                                               ;; (:u64 mode, not the :imm
+                                               ;; CLASS -- a wired temp is
+                                               ;; allocated by MODE and
+                                               ;; allocate-temporary-vreg has
+                                               ;; no :imm entry; the original
+                                               ;; (:imm imm1) type-errored the
+                                               ;; FIRST time this vinsn was
+                                               ;; ever emitted, since the old
+                                               ;; %ff-call passed a constant
+                                               ;; frame size and only
+                                               ;; ALLOC-C-FRAME was live).
+                                               ;; size is wired too because
+                                               ;; the temp allocator handed
+                                               ;; an UNWIRED size the same x1
+                                               ;; the wired prevsp claims --
+                                               ;; mov prevsp,sp then clobbered
+                                               ;; size and `sub sp,sp,size'
+                                               ;; zeroed SP (observed in a
+                                               ;; boot core, sp=0 at the stp).
+                                               ;; imm0/imm1 must keep their
+                                               ;; wiring: pc_luser_xp
+                                               ;; recognizes the stp below by
+                                               ;; its exact encoding.
+                                               (size (:u64 #.arm64::imm2))
+                                               (prevsp (:u64 #.arm64::imm1))))
   (add size n-c-args (:$ '6))        ;+ header + prevsp + 4-word frame
   (add size size (:$ (:apply 1- arm64::dnode-size))) ;round byte size up...
   (and size size (:$ (:apply - arm64::dnode-size)))  ; ...to a dnode boundary
