@@ -157,10 +157,8 @@
 ;;;
 ;;; Like walk-static-area but objects may be consed while walking:
 ;;; terminate at a freshly-allocated sentinel cons.  The sentinel is
-;;; allocated by FORCING the allocation trap (allocbase set to a huge
-;;; value so the no-trap branch is never taken) — the kernel completes
-;;; the allocation exactly as PPC's tdlt-always-traps idiom did; the
-;;; allocation request is conveyed by allocptr's fulltag (cons).
+;;; allocated by forcing the allocation trap (allocbase set to all ones
+;;; so the no-trap branch cannot be taken).
 ;;; PPC's cr0 (tenured-area zero test, ppc:381) stays live across the
 ;;; sentinel allocation; our alloc protocol contains a cmp, so the
 ;;; selection is resolved FIRST with csel — same value, earlier point.
@@ -182,20 +180,18 @@
     (ref-global imm0 tenured-area)      ; ppc:380
     (cmp imm0 (:$ 0))                   ; ppc:381 (cmpdi cr0)
     (csel a imm0 a (:? ne))             ; ppc:390-391 (if :ne (mr a imm0)) — moved up
-    ;; allocbase := #x8000_0000_0000 - 16 so the trap below always fires.
-    (movz allocbase (:$ #x8000 :lsl 32)) ; ppc:382-383 (lwi #x8000; sldi 32)
-    (sub allocbase allocbase (:$ 16))   ; ppc:384 (subi allocbase allocbase 16)
-    ;; tagged-cons allocptr, then the canonical alloc-trap protocol.
-    (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons))) ; ppc:385 (la)
-    (cmp allocptr allocbase)            ; ppc:386 (tdlt allocptr allocbase) …
-    (b.hi @no-trap)                     ; … canonical Misc_Alloc shape: skip iff
-                                        ; allocptr strictly above allocbase (the
-                                        ; b.hi pc_luser_xp recognizes; here the
-                                        ; forced-high allocbase makes it always trap)
+    ;; Force the uuo-alloc-trap by setting allocbase to all ones so
+    ;; that the b.hi will never be taken (nothing is unsigned-higher
+    ;; than all ones).  This gets us a fresh segment, and the cons
+    ;; cell will be guaranteed freshly-allocated.
+    (movn allocbase (:$ 0))             ;all ones
+    (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons)))
+    (cmp allocptr allocbase)
+    (b.hi @no-trap)
     (uuo-alloc-trap)
     @no-trap
-    (mov sentinel allocptr)             ; ppc:387 (mr)
-    (bic allocptr allocptr (:$ arm64::fulltagmask)) ; ppc:388 (clrrdi ntagbits)
+    (mov sentinel allocptr)
+    (bic allocptr allocptr (:$ arm64::fulltagmask))
     (mov fun f)                         ; ppc:389 (mr)
     (ldr imm5 (:@ a (:$ arm64::area.low))) ; ppc:392 (ld imm5 …)
     @loop
