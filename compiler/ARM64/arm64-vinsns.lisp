@@ -1119,8 +1119,9 @@
 ;;; a SMALL constant (count<<8|subtag -- the v2 Layout-T movz/movk wide-
 ;;; header ladder drops out), and the sub bakes fulltag-misc into
 ;;; allocptr so result needs no separate tagging (the v2 top-byte orr
-;;; drops out).  tdlt -> cmp/b.hs/uuo-alloc-trap (his uuo canon:
-;;; arm64-uuo.s alloc trap; the mnemonic is in his template table).
+;;; drops out).  tdlt -> cmp/b.hi/uuo-alloc-trap: the stylized alloc
+;;; sequence pc_luser_xp recognizes (kernel arm64-macros.s Cons/
+;;; Misc_Alloc use b.hi; skip iff allocptr strictly above allocbase).
 ;;; Header store at -4, value store at +4: both unaligned => STUR.
 ;;; clrrdi ntagbits -> AND with the UNSIGNED complement of fulltagmask
 ;;; (logical immediates are unsigned -- his msg-18/19 rule).
@@ -1130,13 +1131,12 @@
   (mov header-temp (:$ arm64::double-float-header))
   (sub allocptr allocptr (:$ (- arm64::double-float.size arm64::fulltag-misc)))
   (cmp allocptr allocbase)
-  (b.hs :no-trap)
+  (b.hi :no-trap)
   (uuo-alloc-trap)
   :no-trap
   (stur header-temp (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov result allocptr)
-  (and allocptr allocptr (:$ (logand #xffffffffffffffff
-                                     (lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur fpreg (:@ result (:$ arm64::double-float.value))))
 
 ;;; ============ fixnum-ash ============
@@ -1230,13 +1230,12 @@
   (mov header (:$ arm64::two-digit-bignum-header))
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
-  (b.hs :no-trap)
+  (b.hi :no-trap)
   (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (logand #xffffffffffffffff
-                                     (lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur bigits (:@ dest (:$ arm64::misc-data-offset))))
 
 ;;; ============ heap-cons-rest-arg ============
@@ -1370,12 +1369,11 @@
   (sub allocptr allocptr (:$ (- arm64::value-cell.size arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc (uuo_misc 1)
+  (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur closed (:@ dest (:$ arm64::misc-data-offset))))
 
 ;;; ============ misc-set-c-node ============
@@ -3626,13 +3624,12 @@
   (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc (uuo_misc 1)
+  (uuo-alloc-trap)
   :no-trap
   (stur newcdr (:@ allocptr (:$ arm64::cons.cdr)))
   (stur newcar (:@ allocptr (:$ arm64::cons.car)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask)))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask)))
 
 ;;; ============ funcall / tail-funcall-gen / tail-funcall-slide ============
 ;;; Gate-26 demand (funcall, 1 hit; emit sites arm642-additions.lisp
@@ -3905,12 +3902,11 @@
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc (uuo_misc 1)
+  (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur val (:@ dest (:$ arm64::complex-single-float.realpart))))
 
 ;;; complex-double-float->heap -- box a cdf (both double lanes live in
@@ -3928,12 +3924,11 @@
                                 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc (uuo_misc 1)
+  (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur (:d val) (:@ dest (:$ arm64::complex-double-float.realpart)))
   (dup dtemp (:d val 1))
   (stur dtemp (:@ dest (:$ (+ arm64::complex-double-float.realpart 8)))))
@@ -4439,12 +4434,11 @@
                                      arm64::fulltag-misc)))))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc (uuo_misc 1)
+  (uuo-alloc-trap)
   :no-trap
   (stur Rheader (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask)))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask)))
 
 ;;; ============ %arm64-gvector ============
 ;;; Donor: PPC64 ppc64-vinsns.lisp:2389 %ppc-gvector (LINE-PORT).  The
@@ -4463,8 +4457,9 @@
 ;;; first.
 ;;;
 ;;; Alloc/trap protocol taken verbatim from OUR double->heap
-;;; (arm64-vinsns.lisp:1125-1138) and macptr->heap (:5088-5100), which
-;;; are the sites whose b.hs matches the donor's tdlt (see below).
+;;; (arm64-vinsns.lisp:1125-1138) and macptr->heap (:5088-5100): the
+;;; stylized cmp/b.hi/uuo-alloc-trap that pc_luser_xp recognizes (see
+;;; below).
 ;;; STORE-LOOP KEY.  misc-data-offset is -4 on this LOW-TAG target
 ;;; (arm64-arch.lisp:262-263: misc-header-offset = -fulltag-misc = -12,
 ;;; misc-data-offset = -12 + 8).  Offsets are relative to the TAGGED
@@ -4503,9 +4498,14 @@
   (cmp allocptr allocbase)
   ;;; ARM64-DEVIATION: PPC's single `tdlt allocptr allocbase' has no
   ;;; ARM64 analog (no trap-on-condition instruction), so it becomes
-  ;;; cmp + skip-branch + trap.  tdlt traps on STRICTLY less-than, so
-  ;;; equality must NOT trap => the skip is b.hs, not b.hi.
-  (b.hs :no-trap)
+  ;;; cmp + skip-branch + trap.  The skip MUST be b.hi (skip only when
+  ;;; allocptr is strictly above allocbase): this is the exact stylized
+  ;;; sequence pc_luser_xp recognizes -- the kernel hardcodes the
+  ;;; branch-around instruction as b.hi .+8 (0x54000048,
+  ;;; arm64-exceptions.c IS_BRANCH_AROUND_ALLOC_TRAP), matching x86's
+  ;;; `ja' and ARM32's `bhi'.  Trapping at allocptr==allocbase too is
+  ;;; harmless (the trap handler completes/refills).
+  (b.hi :no-trap)
   (uuo-alloc-trap)
   :no-trap
   (stur Rheader (:@ allocptr (:$ arm64::misc-header-offset)))
@@ -4513,8 +4513,7 @@
   ;;; ARM64-DEVIATION: PPC's `rldicr allocptr allocptr 0 (- 63 ntagbits)'
   ;;; (clear the low ntagbits) becomes AND with the UNSIGNED complement
   ;;; of fulltagmask -- ARM64 logical immediates are unsigned.
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   ((:not (:pred = nbytes 0))
    ;;; ARM64-DEVIATION: PPC's `li immtemp0 <imm>' has no single-instruction
    ;;; ARM64 spelling.  `mov Xd,#imm' is an ALIAS (movz/movn/orr), so the
@@ -5181,13 +5180,12 @@
   (mov header (:$ arm64::macptr-header))
   (sub allocptr allocptr (:$ (- arm64::macptr.size arm64::fulltag-misc)))
   (cmp allocptr allocbase)
-  (b.hs :no-trap)
+  (b.hi :no-trap)
   (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov dest allocptr)
-  (and allocptr allocptr (:$ (logand #xffffffffffffffff
-                                     (lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur address (:@ dest (:$ arm64::macptr.address))))
 
 ;;; ============ character cluster ============
@@ -6375,24 +6373,22 @@
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap2)
-  (udf (:$ 4))                          ;uuo_alloc
+  (uuo-alloc-trap)
   :no-trap2
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov result allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (b :store)
   :three
   (movz header (:$ arm64::three-digit-bignum-header)) ;kernel ppc-spentry.s:6551, NOT the donor's stale two-digit
   (sub allocptr allocptr (:$ (- 32 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap3)
-  (udf (:$ 4))                          ;uuo_alloc
+  (uuo-alloc-trap)
   :no-trap3
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov result allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   :store
   (stur src (:@ result (:$ arm64::misc-data-offset)))
   :done)
@@ -6416,12 +6412,11 @@
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
-  (udf (:$ 4))                          ;uuo_alloc
+  (uuo-alloc-trap)
   :no-trap
   (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov result allocptr)
-  (and allocptr allocptr (:$ (:apply ldb (byte 64 0)
-                                     (:apply lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur src (:@ result (:$ arm64::misc-data-offset)))
   :done)
 
@@ -7526,13 +7521,12 @@
   (sub allocptr allocptr (:$ (- arm64::complex-single-float.size
                                 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
-  (b.hs :no-trap)
+  (b.hi :no-trap)
   (uuo-alloc-trap)
   :no-trap
   (stur header-temp (:@ allocptr (:$ arm64::misc-header-offset)))
   (mov result allocptr)
-  (and allocptr allocptr (:$ (logand #xffffffffffffffff
-                                     (lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur (:d fpreg) (:@ result (:$ arm64::complex-single-float.realpart))))
 
 (define-arm64-vinsn complex-double-float+-2 (((result :complex-double-float))

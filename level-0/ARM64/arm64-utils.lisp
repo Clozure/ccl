@@ -150,8 +150,9 @@
 ;;; promotion fixes: (1) ppc:376 (:regsave sentinel 0) dropped — his lap
 ;;; DSL has no :regsave (DECIDE-7, 16m5q precedent arm64-array.lisp:287);
 ;;; (2) draft's stray temp1 at the loop-head load unified to the imm5
-;;; scan pointer (x5 free — nargs is x6); (3) alloc-trap branch b.hi →
-;;; b.hs, the canonical Misc_Alloc shape (w1:340).)
+;;; scan pointer (x5 free — nargs is x6); (3) alloc-trap branch is
+;;; b.hi, the canonical Misc_Alloc shape (kernel arm64-macros.s; the
+;;; exact branch-around instruction pc_luser_xp recognizes).)
 ;;; =====================================================================
 ;;;
 ;;; Like walk-static-area but objects may be consed while walking:
@@ -187,11 +188,14 @@
     ;; tagged-cons allocptr, then the canonical alloc-trap protocol.
     (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons))) ; ppc:385 (la)
     (cmp allocptr allocbase)            ; ppc:386 (tdlt allocptr allocbase) …
-    (b.hs @no-trap)                     ; … canonical Misc_Alloc shape (w1:340)
+    (b.hi @no-trap)                     ; … canonical Misc_Alloc shape: skip iff
+                                        ; allocptr strictly above allocbase (the
+                                        ; b.hi pc_luser_xp recognizes; here the
+                                        ; forced-high allocbase makes it always trap)
     (uuo-alloc-trap)
     @no-trap
     (mov sentinel allocptr)             ; ppc:387 (mr)
-    (and allocptr allocptr (:$ (ldb (byte 64 0) (lognot arm64::fulltagmask)))) ; ppc:388 (clrrdi ntagbits)
+    (bic allocptr allocptr (:$ arm64::fulltagmask)) ; ppc:388 (clrrdi ntagbits)
     (mov fun f)                         ; ppc:389 (mr)
     (ldr imm5 (:@ a (:$ arm64::area.low))) ; ppc:392 (ld imm5 …)
     @loop

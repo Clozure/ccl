@@ -129,7 +129,7 @@
   (stur imm0 (:@ allocptr (:$ arm64::misc-header-offset))) ; ppc:509
   (mov arg_z allocptr)                     ; ppc:510
   ;; ppc:511 (clrrri allocptr allocptr ntagbits) = clear_allocptr_tag
-  (and allocptr allocptr (:$ (ldb (byte 64 0) (lognot arm64::fulltagmask))))
+  (bic allocptr allocptr (:$ arm64::fulltagmask))
   ;; ppc:512-513 (stfd).  Both displacements are positive but not 8-scaled
   ;; multiples of 8 from the TAGGED pointer, so unscaled stur.
   (stur d0 (:@ arg_z (:$ arm64::complex-double-float.realpart)))
@@ -154,7 +154,7 @@
   @no-trap
   (stur imm0 (:@ allocptr (:$ arm64::misc-header-offset))) ; ppc:522
   (mov arg_z allocptr)                     ; ppc:523
-  (and allocptr allocptr (:$ (ldb (byte 64 0) (lognot arm64::fulltagmask)))) ; ppc:524
+  (bic allocptr allocptr (:$ arm64::fulltagmask)) ; ppc:524
   ;; ppc:525 (stfs fp0 complex-single-float.realpart arg_z).  realpart is -4,
   ;; and str's 32-bit scaled form takes an UNSIGNED offset (:uoff2,
   ;; arm64-asm.lisp:740), so this must be the unscaled stur (:680) -- the draft
