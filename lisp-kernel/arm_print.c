@@ -318,9 +318,8 @@ void
 sprint_gvector(LispObj o, int depth)
 {
   LispObj header = header_of(o);
-  unsigned 
-    elements = header_element_count(header),
-    subtag = header_subtag(header);
+  natural elements = header_element_count(header);
+  unsigned subtag = header_subtag(header);
     
   switch(subtag) {
   case subtag_function:
@@ -342,7 +341,7 @@ sprint_gvector(LispObj o, int depth)
    
   case subtag_simple_vector:
     {
-      int i;
+      natural i;
       add_c_string("#(");
       for(i = 1; i <= elements; i++) {
         if (i > 1) {
@@ -364,9 +363,8 @@ void
 sprint_ivector(LispObj o)
 {
   LispObj header = header_of(o);
-  unsigned 
-    elements = header_element_count(header),
-    subtag = header_subtag(header);
+  natural elements = header_element_count(header);
+  unsigned subtag = header_subtag(header);
     
   switch(subtag) {
   case subtag_simple_base_string:
