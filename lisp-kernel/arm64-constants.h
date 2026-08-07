@@ -437,6 +437,7 @@ _structf catch_frame
  _node catch_tag                /* #<unbound> -> unwind-protect, else catch */
  _node link                     /* backpointer to previous catch frame */
  _node mvflag                   /* 0 if single-valued catch, else fixnum 1 */
+ _node csp                      /* saved control-stack lisp_frame pointer */
  _node db_link                  /* head of special-binding chain */
  _field regs, 4*node_size       /* save0 through save3 */
  _node xframe                   /* exception frame chain */

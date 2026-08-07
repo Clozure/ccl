@@ -159,19 +159,10 @@ _ends
 .set tsp_frame.fixed_overhead, tsp_frame.size
 .set tsp_frame.data_offset, tsp_frame.size
 
-/* catch_frame: PPC64 layout (ppc-constants64.s _structf(catch_frame);
-   ppc-constants64.h:213), but with regs sized to this design's nsaveregs=4
-   (save0..save3) instead of PPC's 8. */
-_structf catch_frame
-  _node catch_tag           /* unbound_marker => unwind-protect, else catch */
-  _node link                /* previous catch frame                         */
-  _node mvflag              /* 0 => single value, fixnum 1 => multiple       */
-  _node csp                 /* saved control-stack lisp_frame pointer        */
-  _node db_link             /* special-binding chain head                    */
-  _field regs, (nsaveregs*node_size)  /* save0..save3                        */
-  _node xframe              /* exception-frame chain                         */
-  _node nfp                 /* numeric/foreign frame pointer                 */
-_endstructf
+/* catch_frame comes from arm64-constants.h: PPC64's layout
+   (ppc-constants64.s _structf(catch_frame); ppc-constants64.h:213), with
+   regs sized to this design's nsaveregs=4 (save0..save3) instead of
+   PPC's 8.  This file used to redefine it locally; keep one copy. */
 
 /*
  * ---------------------------------------------------------------------------
@@ -240,7 +231,7 @@ _endstructf
 .endm
 
 /* save/restore the boxed NVRs into/from a catch frame's regs[] (save0..save3).
-   catch_frame is a fulltag_misc-biased _structf, so .regs = 44 is only
+   catch_frame is a fulltag_misc-biased _structf, so .regs = 36 is only
    4-aligned -- stp/ldp (which need an 8-scaled imm7) cannot be used; single
    str/ldr take any byte offset. */
 .macro save_catch_regs cf
