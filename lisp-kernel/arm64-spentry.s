@@ -314,9 +314,9 @@ spentry ffcall
         /* Record the lisp<->foreign boundary for the GC (16m41 protocol,
          * re-pointed for stack args): the boundary is now the PUBLISHED
          * boundary lisp_frame itself -- mark_cstack_area classifies a walk
-         * that STARTS on lisp_frame_marker, exactly as it already does for
-         * the syscall sibling's post-pop boundary -- because the old start
-         * point, the c_frame base, dies once SP steps over it at the blr.
+         * that STARTS on lisp_frame_marker, which is what the syscall
+         * sibling also hands it -- because the old start point, the c_frame
+         * base, dies once SP steps over it at the blr.
          * Everything below the boundary is foreign to the GC while the
          * callee runs, which was already the status of the raw, never-
          * scanned param/stack-arg words when the ivector cover held them.
@@ -344,8 +344,10 @@ spentry ffcall
         msr fpsr, xzr
         /* ARM64-DEVIATION: step SP over header+savedsp+params[0..7] so the
          * callee sees its stack arguments AT [SP], per AAPCS64 5.4.2 (the
-         * single NSAA area the codegen marshals at param words 8..; +80 is
-         * the same c_frame.size + 8 words the syscall sibling steps by).
+         * single NSAA area the codegen marshals at param words 8..; +80 =
+         * c_frame.size + the 8 GPR param words).  The syscall sibling does
+         * NOT do this: `svc' takes no stack arguments, so it leaves SP at
+         * the frame head and its c_frame stays live above SP throughout.
          * PPC64 never moves SP here -- PowerOpen stack params live in the
          * CALLER's frame at positive offsets from the caller's SP; x86-64
          * is the shape donor (_SPffcall's ffcall_setup pops the frame head
