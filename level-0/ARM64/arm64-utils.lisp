@@ -157,8 +157,8 @@
 ;;;
 ;;; Like walk-static-area but objects may be consed while walking:
 ;;; terminate at a freshly-allocated sentinel cons.  The sentinel is
-;;; allocated by FORCING the allocation trap (allocbase set to a huge
-;;; value so the no-trap branch is never taken) — the kernel completes
+;;; allocated by FORCING the allocation trap (allocbase set to all ones
+;;; so the no-trap branch cannot be taken) — the kernel completes
 ;;; the allocation exactly as PPC's tdlt-always-traps idiom did; the
 ;;; allocation request is conveyed by allocptr's fulltag (cons).
 ;;; PPC's cr0 (tenured-area zero test, ppc:381) stays live across the
@@ -182,9 +182,21 @@
     (ref-global imm0 tenured-area)      ; ppc:380
     (cmp imm0 (:$ 0))                   ; ppc:381 (cmpdi cr0)
     (csel a imm0 a (:? ne))             ; ppc:390-391 (if :ne (mr a imm0)) — moved up
-    ;; allocbase := #x8000_0000_0000 - 16 so the trap below always fires.
-    (movz allocbase (:$ #x8000 :lsl 32)) ; ppc:382-383 (lwi #x8000; sldi 32)
-    (sub allocbase allocbase (:$ 16))   ; ppc:384 (subi allocbase allocbase 16)
+    ;;; ARM64-DEVIATION: allocbase := all ones, not ppc:382-384's constant
+    ;;; #x8000_0000_0000 - 16.  The intent is the same -- put allocbase out
+    ;;; of reach so the skip branch below cannot be taken and the trap
+    ;;; always fires -- but ppc:386 is `tdlt', trap-if-SIGNED-less-than,
+    ;;; while the arm64 sequence skips on an UNSIGNED compare.  allocptr
+    ;;; here is very often VOID_ALLOCPTR (lisp-kernel/gc.h:125,
+    ;;; (LispObj)(-dnode_size) = #xfffffffffffffff0): a gc leaves every tcr
+    ;;; in that state (lisp-kernel/arm64-exceptions.c:897) and
+    ;;; heap-utilization gcs immediately before it walks.  Unsigned,
+    ;;; #xffffffffffffffe3 IS above #x00007ffffffffff0, so the branch is
+    ;;; taken, no sentinel cons is allocated, and the walk -- whose only
+    ;;; terminator is that sentinel -- runs off the end of the heap and
+    ;;; faults.  Nothing is unsigned-above all ones, so this traps for any
+    ;;; allocptr and the canonical alloc sequence below needs no change.
+    (movn allocbase (:$ 0))             ; allocbase := #xffffffffffffffff
     ;; tagged-cons allocptr, then the canonical alloc-trap protocol.
     (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons))) ; ppc:385 (la)
     (cmp allocptr allocbase)            ; ppc:386 (tdlt allocptr allocbase) …
