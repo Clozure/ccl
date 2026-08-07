@@ -9743,6 +9743,72 @@
              (! %current-frame-ptr target)))
          (^))))
 
+;;; The C stack IS the control stack, so the "foreign stack pointer" is
+;;; SP — after WITH-VARIABLE-C-FRAME allocates, this is the new c-frame's
+;;; base, which is how the frame variable gets bound (nx1.lisp binds it
+;;; to (%foreign-stack-pointer) as the body's first act).  PPC
+;;; (ppc2.lisp ppc2-%foreign-stack-pointer) and ARM32 (arm2.lisp) define
+;;; this identically for their unified stacks; x86-64 reads
+;;; tcr.foreign-sp instead (separate foreign stack).
+(defarm642 arm642-%foreign-stack-pointer %foreign-stack-pointer (seg vreg xfer)
+  (when vreg
+    (ensuring-node-target (target vreg)
+      (! %current-frame-ptr target)))
+  (^))
+
+;;; WITH-C-FRAME: allocate a c-frame of the default size around BODY.
+;;; The fixed-size half of the pair below; every other back end defines
+;;; both (ppc2.lisp ppc2-with-c-frame / arm2.lisp arm2-with-c-frame /
+;;; x862.lisp x862-with-c-frame), and this one is byte-for-byte the
+;;; x86-64 shape because arm64, like x86-64, has a single c-frame vinsn
+;;; and no EABI variant to ecase over.
+;;;
+;;; The only in-tree caller is the objc-bridge (objc-runtime.lisp:3207,
+;;; 3223), which is Darwin-only -- so this is latent on linuxarm64.  It
+;;; is NOT latent on darwinarm64: arm642.lisp is the back end for both
+;;; arm64 targets, so without this handler the bridge has no locative
+;;; for the operator and simply cannot compile there.
+(defarm642 arm642-with-c-frame with-c-frame (seg vreg xfer body &aux
+                                                 (old-stack (arm642-encode-stack)))
+  (! alloc-c-frame 0)
+  (arm642-open-undo $undo-arm64-c-frame)
+  (arm642-undo-body seg vreg xfer body old-stack))
+
+;;; WITH-VARIABLE-C-FRAME: allocate a c-frame of SIZE param words around
+;;; BODY.  Model: x862-with-variable-c-frame (x862.lisp); the
+;;; interpreter-side %ff-call (arm64-def.lisp) is the only in-tree
+;;; linuxarm64 user.  The undo machinery already knew how to pop it —
+;;; $undo-arm64-c-frame => (! discard-c-frame) in the nlexit walker
+;;; below (previously dead: nothing opened that undo) — and the pop is
+;;; DYNAMIC (sp <- the frame's savedsp word at [sp,#8]), which is
+;;; correct both while the frame is live and after .SPffcall
+;;; (SUBPRIM-POPS) has replaced it with %%ff-result's fixed rebalance
+;;; frame.  All exits reach it: opening the undo bumps the same counter
+;;; arm642-unwind-stack treats as the catch diff, so normal falls into
+;;; arm642-nlexit, and arm642-do-return drains open undos the same way.
+;;;
+;;; ARM64-DEVIATION (vinsn choice, not operator semantics): a
+;;; compile-time-constant SIZE uses the constant alloc-c-frame vinsn,
+;;; whose single pre-indexed stp is ATOMIC w.r.t. suspension.  The
+;;; runtime-size alloc-variable-c-frame vinsn has a sub-sp/stp window
+;;; that pc_luser_xp does not finish yet (the vinsn pins header/prevsp
+;;; to imm0/imm1 for that recognizer; arm64-exceptions.c never grew the
+;;; case).  %ff-call always passes a constant; the runtime-size path has
+;;; no linuxarm64 caller today (objc-bridge is Darwin-only).  RATIFY:
+;;; implement the pc_luser_xp case before a runtime-size caller lands.
+(defarm642 arm642-with-variable-c-frame with-variable-c-frame (seg vreg xfer size body &aux
+                                                                   (old-stack (arm642-encode-stack)))
+  (let* ((fix (acode-fixnum-form-p size)))
+    (if (and fix
+             (typep fix 'fixnum)
+             (>= fix 0)
+             (<= (arm642-c-frame-words fix) 63)) ;stp scaled-imm7 reach
+      (! alloc-c-frame fix)
+      (let* ((reg (arm642-one-untargeted-reg-form seg size arm64::arg_z)))
+        (! alloc-variable-c-frame reg))))
+  (arm642-open-undo $undo-arm64-c-frame)
+  (arm642-undo-body seg vreg xfer body old-stack))
+
 (defun arm642-swap-unsigned-cond-bit (cr-bit)
   (cond ((eql cr-bit arm64::cond-hi) arm64::cond-lo)
         ((eql cr-bit arm64::cond-lo) arm64::cond-hi)
