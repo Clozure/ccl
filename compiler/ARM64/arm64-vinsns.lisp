@@ -3524,33 +3524,53 @@
                                          arm64::word-size-in-bytes)
                                  frame-offset)))))
 
-;;; make-stack-cons -- cons a cell on the TEMP STACK (tsp=x24 in his map).
-;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:2106-2116 make-tsp-cons): 32-byte
-;;; tstack frame; stdu -> str-preindex-writeback is the exact ARM64
-;;; equivalent; payload zeroed before the tagged stores (GC-safe walk
-;;; order); car/cdr offsets symbolic off HIS cons layout so the
-;;; expression is correct for any tagged-relative cons.car/cons.cdr.
-;;; RATIFY (proceed-unless-objection): the tstack FRAME SHAPE
-;;; ([backlink][0][payload x2], dest = tsp+16+fulltag-cons) adopts PPC64
-;;; verbatim -- his kernel's tstack walker doesn't exist yet and must
-;;; match this layout when it lands.
+;;; Make a cons cell on the temp stack: [backlink][type][cdr][car]
 (define-arm64-vinsn make-stack-cons (((dest :lisp))
                                      ((car :lisp) (cdr :lisp))
                                      ((link :u64)))
-  (mov link tsp)
-  ;; backlink AND a non-zero tsp_frame.type in one instruction, so the frame
-  ;; is born marked "raw" and no GC can scan it while the data slots still
-  ;; hold garbage.  PPC64 needs two (stdu; std tsp,8(tsp)) and covers the
-  ;; window with pc_luser_xp's MARK_TSP_FRAME_INSTRUCTION; stp closes it
-  ;; outright.  Old tsp is the value stored, and is never 0.
-  (stp link link (:@! tsp (:$ -32)))
-  (str xzr (:@ tsp (:$ 16)))
-  (str xzr (:@ tsp (:$ 24)))
-  ;; only now is the data valid: mark the frame as containing nodes.
-  (str xzr (:@ tsp (:$ 8)))
-  (str car (:@ tsp (:$ (+ 16 arm64::fulltag-cons arm64::cons.car))))
-  (str cdr (:@ tsp (:$ (+ 16 arm64::fulltag-cons arm64::cons.cdr))))
+  (mov link tsp)                        ;save old tsp
+  ;; When the frame type word is non-zero, the gc treats the frame as
+  ;; raw data and just skips over it.  If the frame type word is 0,
+  ;; then the gc treats the frame contents as nodes.  It is therefore
+  ;; important that the frame start out as raw, because tstack memory
+  ;; will almost certainly be full of arbitrary junk.
+  (stp link link (:@! tsp (:$ -32)))    ;atomically push raw tsp frame
+                                        ;There's nothing special about
+                                        ;writing link into tsp-frame.type:
+                                        ;it's just a handy non-zero value.
+  (stp xzr xzr (:@ tsp (:$ 16)))        ;clear memory for gc safety
+  (str xzr (:@ tsp (:$ arm64::tsp-frame.type)))
+  (stp cdr car (:@ tsp (:$ 16)))        ;cdr comes first in a ccl cons cell
   (add dest tsp (:$ (+ 16 arm64::fulltag-cons))))
+
+;;; Make a value cell on the tstack: [backlink][type][header][value]
+(define-arm64-vinsn make-stack-vcell (((dest :lisp))
+                                      ((closed :lisp))
+                                      ((temp :u64)))
+  (mov temp tsp)
+  (stp temp temp (:@! tsp (:$ -32)))    ;atomically push raw tsp frame
+  (stp xzr xzr (:@ tsp (:$ 16)))
+  (str xzr (:@ tsp (:$ arm64::tsp-frame.type)))
+  (movz temp (:$ arm64::value-cell-header))
+  (stp temp closed (:@ tsp (:$ 16)))    ;header, value
+  (add dest tsp (:$ (+ 16 arm64::fulltag-misc))))
+
+;;; Make a macptr on the temp stack
+;;; [backlink][type][header][address][domain][type]
+(define-arm64-vinsn macptr->stack (((dest :lisp))
+                                   ((address :address))
+                                   ((temp :u64)))
+  (mov temp tsp)
+  (stp temp temp (:@! tsp (:$ -48)))    ;atomically push raw tsp frame
+  (movz temp (:$ arm64::macptr-header))
+  (stp temp address (:@ tsp (:$ 16)))   ;header, address
+  (stp xzr xzr (:@ tsp (:$ 32)))        ;domain, type
+  (add dest tsp (:$ (+ 16 arm64::fulltag-misc))))
+
+;;; Pop a frame off the temp stack
+(define-arm64-vinsn (discard-temp-frame :tsp :pop :discard) (()
+                                                             ())
+  (ldr tsp (:@ tsp (:$ arm64::tsp-frame.backlink))))
 
 ;;; ============ symbol-function ============
 ;;; Emit site: w4 %function handler (arm642-additions-w4.lisp:48).
@@ -4135,30 +4155,6 @@
                                            ())
   (sub dest idx (:$ (:apply - arm64::misc-data-offset))))
 
-;;; macptr->stack -- PPC64 ppc64-vinsns.lisp:2773: build a stack-consed
-;;; MACPTR on the temp stack (48-byte frame: backlink + zero word +
-;;; header/address/domain/type; domain/type MUST be zeroed -- tstack
-;;; memory isn't 0-filled).  Frame protocol = our V3b make-stack-cons
-;;; canon (str-preindex backlink, RATIFY tstack-frame-shape item).
-;;; Displacements land 8-aligned (16 + fulltag-misc + slot offsets =>
-;;; 16/24/32/40) so scaled STRs encode; dest = tsp + 16 + fulltag-misc.
-;;; macptr-header = his define-header (arch:709), fits movz.
-(define-arm64-vinsn macptr->stack (((dest :lisp))
-                                   ((address :u64))
-                                   ((header :u64) (link :u64)))
-  (movz header (:$ arm64::macptr-header))
-  (mov link tsp)
-  ;; backlink + non-zero tsp_frame.type atomically.  This frame stays "raw"
-  ;; for its whole life -- a macptr holds a foreign address, not a node --
-  ;; exactly as PPC64's macptr->stack does (it never stores 0 to the type
-  ;; word).  Ours used to mark it as containing nodes.
-  (stp link link (:@! tsp (:$ -48)))
-  (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.header))))
-  (str address (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.address))))
-  (str xzr (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.domain))))
-  (str xzr (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::macptr.type))))
-  (add dest tsp (:$ (+ 16 arm64::fulltag-misc))))
-
 ;;; default-optionals -- PPC64 ppc64-vinsns.lisp:3695: imm0 = the boxed
 ;;; total-arg-count, then .SPdefault-optional-args (kernel body
 ;;; spentry-D default_optional_args@357; registered).  imm1 scratch.
@@ -4368,21 +4364,6 @@
      (sub vsp vsp (:$ (:apply ldb (byte 12 12) (:apply - amount)) :lsl 12))))
    ((:pred = 0 (:apply ldb (byte 12 0) (:apply - amount)))
     (sub vsp vsp (:$ (:apply ldb (byte 12 12) (:apply - amount)) :lsl 12)))))
-
-;;; ============ discard-temp-frame ============
-;;; Gate-30 demand.  PPC64 ppc64-vinsns.lisp:2258:
-;;;   (define-ppc64-vinsn (discard-temp-frame :tsp :pop :discard)
-;;;     (() ()) (ld tsp 0 tsp))
-;;; -- pop the temp-stack frame by loading the BACKLINK, which every
-;;; tstack frame stores at [tsp, #0] (our V3b make-stack-cons writes it
-;;; with (mov link tsp) + (str link (:@! tsp (:$ -32))); same PPC64 stdu
-;;; protocol, but NOT PPC64's single stdu -- see make-stack-cons --
-;;; RATIFY item "tstack frame shape" already queued with Matt).
-;;; tsp = his x24 (arm64-asm.lisp:215); frames are 16-aligned so the
-;;; offset-0 scaled LDR encodes.
-(define-arm64-vinsn (discard-temp-frame :tsp :pop :discard) (()
-                                                             ())
-  (ldr tsp (:@ tsp (:$ 0))))
 
 ;;; ============ lisp-word-ref / lisp-word-ref-c ============
 ;;; Gate-31 demand (%lisp-word-ref handler, arm642-additions-w4.lisp).
@@ -4613,31 +4594,6 @@
 (define-arm64-vinsn tag-as-function (((dest :lisp))
                                      ((src :lisp)))
   (mov dest src))
-
-;;; ============ make-stack-vcell ============
-;;; Demand: l0-hash (gate 2026-07-15); emit site = w2 arm642-bind-var
-;;; (arm642-additions-w2.lisp:464).  PPC64 LINE-PORT (ppc64-vinsns.lisp
-;;; make-stack-vcell, the 2072-2096 vcell cluster): a value-cell
-;;; uvector stack-consed on the TEMP STACK.  Frame protocol = our V3b
-;;; make-stack-cons canon (32-byte frame: backlink str-preindex, zero
-;;; word, then header/value at the tagged-relative offsets; RATIFY
-;;; tstack-frame-shape item already queued).  dest = tsp+16+fulltag-misc;
-;;; header lands at dest+misc-header-offset (=tsp+16), value at
-;;; dest+misc-data-offset (=tsp+24) under the 8b1ed24 -12/-4 layout.
-(define-arm64-vinsn make-stack-vcell (((dest :lisp))
-                                      ((closed :lisp))
-                                      ((header :u64) (link :u64)))
-  (movz header (:$ arm64::value-cell-header))
-  (mov link tsp)
-  ;; backlink + non-zero tsp_frame.type atomically; see make-stack-cons.
-  (stp link link (:@! tsp (:$ -32)))
-  (str xzr (:@ tsp (:$ 16)))
-  (str xzr (:@ tsp (:$ 24)))
-  ;; data valid: mark the frame as containing nodes.
-  (str xzr (:@ tsp (:$ 8)))
-  (str header (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-header-offset))))
-  (str closed (:@ tsp (:$ (+ 16 arm64::fulltag-misc arm64::misc-data-offset))))
-  (add dest tsp (:$ (+ 16 arm64::fulltag-misc))))
 
 ;;; ============ uvsize support (demand 82, gates 5+ files) ============
 

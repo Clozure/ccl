@@ -834,6 +834,10 @@
   savefn
   savelr)
 
+(define-storage-layout tsp-frame 0
+  backlink
+  type)
+
 ;;; The frame the callback trampoline (.SPeabi-callback) builds for a
 ;;; foreign caller, described relative to CBF = &x0save (16-aligned).
 ;;; Frame layouts belong here -- ppc64-arch.lisp:588/595 and
