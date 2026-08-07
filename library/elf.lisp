@@ -175,7 +175,7 @@
 	(subseq (nsubstitute #\0 #\# (nsubstitute #\. #\Space str)) 1)))))
 
 
-#+(or x86-target arm64-target)
+#+x86-target
 (defun collect-elf-static-functions ()
   (collect ((functions))
     (purify)
@@ -189,7 +189,12 @@
                   ))
     (functions)))
 
-#+(or arm-target ppc-target)
+;; arm64 uses this definition and not the #+x86-target one above.  PURIFY
+;; moves a function's CODE VECTOR to the readonly area on arm64 and leaves
+;; the function object itself in dynamic space, so a scan of :readonly for
+;; objects of type FUNCTION finds none.  This arm walks %map-lfuns instead
+;; and keeps the lfuns whose code vector landed in the readonly range.
+#+(or arm-target ppc-target arm64-target)
 (defun collect-elf-static-functions ()
   (ccl::purify)
   (multiple-value-bind (pure-low pure-high)
@@ -200,7 +205,7 @@
             (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
                     (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift)))))
     (let* ((hash (make-hash-table :test #'eq))
-           (code-vector-index #+ppc-target 0 #+arm-target 1))
+           (code-vector-index #+ppc-target 0 #+arm-target 1 #+arm64-target 0))
       (ccl::%map-lfuns #'(lambda (f)
                            (let* ((code-vector  (ccl:uvref f code-vector-index))
                                   (startaddr (+ (ccl::%address-of code-vector)
