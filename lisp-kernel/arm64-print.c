@@ -310,7 +310,7 @@ sprint_gvector(LispObj o, int depth)
     break;
   case subtag_simple_vector:
     {
-      int i;
+      natural i;
       add_c_string("#(");
       for (i = 1; i <= elements; i++) {
         if (i > 1) {
