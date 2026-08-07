@@ -119,8 +119,7 @@
   (get-double-float d0 r)                  ; ppc:504
   (get-double-float d1 i)                  ; ppc:505 -- before arg_z is clobbered
   ;; ppc:506 (li imm0 (logior (ash 6 8) subtag-complex-double-float))
-  (mov imm0 (:$ (logior (ash 6 arm64::num-subtag-bits)
-                        arm64::subtag-complex-double-float)))
+  (mov imm0 (:$ arm64::complex-double-float-header))
   ;; ppc:507-508 (subi/twllt) -> Misc_Alloc_Fixed, arm64-macros.s:64-70
   (sub allocptr allocptr (:$ (- 32 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
@@ -146,8 +145,7 @@
   (get-single-float-bits imm1 r)           ; ppc:517 (get-single-float fp0 r)
   (get-single-float-bits imm2 i)           ; ppc:518 -- before arg_z is clobbered
   ;; ppc:519 (li imm0 (logior (ash 2 8) subtag-complex-single-float))
-  (mov imm0 (:$ (logior (ash 2 arm64::num-subtag-bits)
-                        arm64::subtag-complex-single-float)))
+  (mov imm0 (:$ arm64::complex-single-float-header))
   ;; ppc:520-521 (subi/twllt) -> Misc_Alloc_Fixed
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)

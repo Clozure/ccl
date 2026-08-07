@@ -3895,23 +3895,13 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; ============ demand-scan CUT-9: heap-box csf ============
 ;;; complex-single-float->heap -- box a csf (one 64-bit payload word)
 ;;; into a fresh 16-byte miscobj: the cons/%alloc-misc-fixed alloc
-;;; canon + a D-form STUR of both lanes to realpart (-4).  His arch
-;;; defines no csf header constant (define-header list ends at macptr)
-;;; -- computed inline as make-vheader's expansion
-;;; (logior subtag (ash element-count 8)); make-vheader is a MACRO in
-;;; his arch.lisp (not a defun), so it cannot be (:apply)'d -- use the
-;;; underlying logior/ash functions, which the assembler CAN apply.
+;;; canon + a D-form STUR of both lanes to realpart (-4).
 (define-arm64-vinsn complex-single-float->heap (((dest :lisp))
                                                 ((val :complex-single-float))
                                                 ((header :u64)))
-  ;; element-count 2: csf sits in ivector-class-32-bit (2 x 4 = 8 data
-  ;; bytes) -- x8664 setup-complex-single-float-allocation canon
-  ;; (make-vheader 2 subtag-complex-single-float), x8664-vinsns:2527.
-  (movz header (:$ (:apply logior arm64::subtag-complex-single-float
-                           (:apply ash 2 8))))
+  (mov header (:$ arm64::complex-single-float-header))
   (sub allocptr allocptr (:$ (- 16 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
@@ -3923,25 +3913,17 @@
                                      (:apply lognot arm64::fulltagmask))))
   (stur val (:@ dest (:$ arm64::complex-single-float.realpart))))
 
-;;; complex-double-float->heap -- cut-9's sibling: box a cdf (both
-;;; double lanes live in one 128-bit Q reg, :fpr 128 per his
-;;; arm64-asm.lisp:2934) into a fresh 32-byte miscobj.  Layout is his
-;;; define-fixedsized-object complex-double-float (pad realpart
-;;; imagpart) -- the pad word 16-aligns realpart (arch comment @261).
-;;; element-count 6: cdf is ivector-class-32-bit (6 x 4 = 24 data
-;;; bytes) -- x8664 setup-complex-double-float-allocation canon
-;;; (make-vheader 6 subtag-complex-double-float), x8664-vinsns:2522.
-;;; Store composed as two D STURs + DUP (the w3a
-;;; misc-set-c-complex-double-float idiom): his template table has no
-;;; Q-form stur, and a bare 128-bit val matches nothing -- the original
-;;; single (stur val ...) here was an arm642-expand-vinsn "unhandled
-;;; form" (instruction silently DROPPED; caught in realgate-w10a).
+;;; complex-double-float->heap -- box a cdf (both double lanes live in
+;;; one 128-bit Q reg, :fpr 128 per arm64-asm.lisp:2934) into a fresh
+;;; 32-byte miscobj.  The pad word 16-aligns realpart.  The payload
+;;; store is composed as two D STURs + DUP (the misc-set-c-complex-
+;;; double-float idiom): the template table has no Q-form stur, and a
+;;; bare 128-bit val matches nothing.
 (define-arm64-vinsn complex-double-float->heap (((dest :lisp))
                                                 ((val :complex-double-float))
                                                 ((header :u64)
                                                  (dtemp :double-float)))
-  (movz header (:$ (:apply logior arm64::subtag-complex-double-float
-                           (:apply ash 6 8))))
+  (mov header (:$ arm64::complex-double-float-header))
   (sub allocptr allocptr (:$ (- arm64::complex-double-float.size
                                 arm64::fulltag-misc)))
   (cmp allocptr allocbase)
@@ -7531,23 +7513,16 @@
 ;;; sequence differs only in reading save-allocbase out of the TCR and
 ;;; in borrowing LR as an address temp; neither is needed here.
 ;;;
-;;; complex-single-float is (define-fixedsized-object complex-single-float
-;;; () value) at arm64-arch.lisp:609, so .realpart = .value = -4 and
-;;; .imagpart = 0: the two singles are ADJACENT, realpart at the lower
-;;; address.  Matt keeps a complex-single-float in ONE 64-bit FPR (S
-;;; lanes 0 and 1 of the D view -- copy-complex-single-float,
-;;; %make-complex-single-float above), so one D-form STUR at .realpart
-;;; writes both lanes, exactly as the landed
-;;; misc-set-c-complex-single-float does.  There is no
-;;; complex-single-float-header constant in his arm64-arch.lisp, so the
-;;; header is built the way define-header would:
-;;; (element-count << num-subtag-bits) | subtag.
+;;; complex-single-float is a 2-element 32-bit ivector (arm64-arch.lisp),
+;;; so .realpart = .value = -4 and .imagpart = 0: the two singles are
+;;; ADJACENT, realpart at the lower address.  A complex-single-float
+;;; lives in ONE 64-bit FPR (S lanes 0 and 1 of the D view -- see
+;;; copy-complex-single-float, %make-complex-single-float), so one
+;;; D-form STUR at .realpart writes both lanes.
 (define-arm64-vinsn complex-single-float->node (((result :lisp))
                                                 ((fpreg :complex-single-float))
                                                 ((header-temp :u64)))
-  (mov header-temp (:$ (logior (ash arm64::complex-single-float.element-count
-                                    arm64::num-subtag-bits)
-                               arm64::subtag-complex-single-float)))
+  (mov header-temp (:$ arm64::complex-single-float-header))
   (sub allocptr allocptr (:$ (- arm64::complex-single-float.size
                                 arm64::fulltag-misc)))
   (cmp allocptr allocbase)

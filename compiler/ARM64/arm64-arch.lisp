@@ -606,15 +606,22 @@
   realpart
   imagpart)
 
-(define-fixedsized-object complex-single-float ()
-  value)
+;;; We define a complex-single-float as a uvector of two 32-bit
+;;; elements, and it's easier to hand-roll this rather than trying to
+;;; convince one of the storage layout macros to do what we want.
+(defconstant complex-single-float.value misc-data-offset)
 (defconstant complex-single-float.realpart complex-single-float.value)
 (defconstant complex-single-float.imagpart (+ complex-single-float.value 4))
+(defconstant complex-single-float.element-count 2) ;32-bit elements
+(defconstant complex-single-float.size 16)
 
-(define-fixedsized-object complex-double-float ()
-  pad                                   ;for natural alignment
-  realpart
-  imagpart)
+;;; We also define a complex-double-float as a uvector with 32-bit
+;;; elements.  So, hand-roll the constants here, too.
+(defconstant complex-double-float.pad misc-data-offset)
+(defconstant complex-double-float.realpart (+ misc-data-offset 8))
+(defconstant complex-double-float.imagpart (+ misc-data-offset 16))
+(defconstant complex-double-float.element-count 6) ;32-bit elements
+(defconstant complex-double-float.size 32)
 
 ;;; There are two kinds of macptr; use the length field of the header if you
 ;;; need to distinguish between them
@@ -859,6 +866,10 @@
 
 (define-header double-float-header
   double-float.element-count subtag-double-float)
+(define-header complex-single-float-header
+  complex-single-float.element-count subtag-complex-single-float)
+(define-header complex-double-float-header
+  complex-double-float.element-count subtag-complex-double-float)
 
 ;;; We could possibly have a one-digit bignum header when dealing
 ;;; with "small bignums" in some bignum code.  Like other cases of
