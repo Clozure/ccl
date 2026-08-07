@@ -173,8 +173,9 @@ C(misc_ref_common):
  *   lr    = return address in the compiled caller.
  *
  * Exit: C integer result in x0 (= imm0), FP result in d0; the c_frame
- * is popped (sp restored from its backlink); no node register holds
- * C garbage.
+ * is popped (sp lands on the saved previous SP by dropping the
+ * boundary lisp_frame reserved at the frame top); no node register
+ * holds C garbage.
  *
  * Register notes: x19-x28 (save0-3, rnil, tsp, vsp, allocptr,
  * allocbase, rcontext) are AAPCS64 callee-saved, so the pinned lisp
@@ -204,10 +205,23 @@ C(misc_ref_common):
  * this spentry owns is the right seam.
  */
 spentry ffcall
+        /* Spill fn AND all four boxed NVRs to the vstack (the protocol the
+         * spentry-E-ffi.s header always prescribed: "save0-3 are still
+         * vpushed so the GC can SEE them while the thread is foreign").
+         * tcr.save_vsp is published below this spill, so a foreign-era GC
+         * keeps and RELOCATES these five values; they are reloaded -- with
+         * any relocation applied -- after the call.  A conforming callee
+         * preserves x19-x22, but preservation is not FORWARDING: a lisp
+         * value that stays only in an NVR register across the call misses
+         * any GC relocation.  save0/save1 (and, in the siblings, save2/
+         * save3) also carry raw kernel state across the call from here on:
+         * 8/16-aligned stack addresses, which mark_xp/forward_xp read as
+         * fixnums (no-op roots) whenever we are suspended in lisp valence. */
         str fn, [vsp, #-node_size]!
-        /* save3 carries the frame base across the call (callee-saved);
-         * its lisp value is parked next to fn. */
         str save3, [vsp, #-node_size]!
+        str save2, [vsp, #-node_size]!
+        str save1, [vsp, #-node_size]!
+        str save0, [vsp, #-node_size]!
         mov save3, sp
         /* ---- THE BOUNDARY LISP FRAME (16m30; canonical note, the two
          * siblings in spentry-E-ffi.s point here) ----
@@ -242,10 +256,34 @@ spentry ffcall
         mov imm1, #lisp_frame_marker
         str imm1, [imm2, #lisp_frame.marker]
         str vsp, [imm2, #lisp_frame.savevsp]
-        str fn,  [imm2, #lisp_frame.savefn]
-        str lr,  [imm2, #lisp_frame.savelr]
+        /* Build order is the alloc-c-frame contract (the design note at
+         * arm64-vinsns.lisp ALLOC-C-FRAME spells it out): a slot that is
+         * still COVERED by the u64-vector header is invisible to the GC,
+         * so a real fn/lr stored here before the count shrink goes STALE
+         * if a GC moves the caller in that window -- the register and
+         * vstack copies are forwarded, the covered slot is not, and the
+         * return path reads savelr back from this frame.  So: harmless
+         * zeros while covered, publish, THEN stp the real fn/lr into the
+         * frame the GC now walks and forwards.  marker/savevsp may be
+         * prestored: a constant and a never-relocated stack address. */
+        stp xzr, xzr, [imm2, #lisp_frame.savefn]
         sub imm0, imm0, #(4 << num_subtag_bits) /* publish the 4 words */
         str imm0, [sp, #c_frame.header]
+        stp fn, lr, [imm2, #lisp_frame.savefn]
+        /* Hoist everything the return path will need out of the frame head
+         * [sp, sp+80) into callee-saved registers: at the blr, SP steps
+         * over header+savedsp+params, putting that region below the
+         * callee's incoming SP, where the callee's own frame (or any
+         * signal frame) clobbers it.
+         *   save1 = the boundary lisp_frame published above (sp is
+         *           restored to it after the call; the previous SP is
+         *           save1 + lisp_frame.size by construction --
+         *           arm642-c-frame-words reserves the 4 boundary words
+         *           directly below the saved previous SP)
+         *   save0 = the enclosing foreign boundary (previously parked in
+         *           param word 0; that park dies with the region) */
+        mov save1, imm2
+        ldr save0, [rcontext, #tcr.last_lisp_frame]
         /* Unbox the entry point into temp4 (x16 = IP0). */
         /* PPC-faithful discrimination (ppc:1802-1814 extract_typecode):
          * macptr iff fulltag_misc AND header subtag == subtag_macptr;
@@ -273,30 +311,29 @@ spentry ffcall
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
         ldp x6, x7, [sp, #(c_frame.params + 6*node_size)]
-        /* AAPCS64, no stack args (<=8 GPR/<=8 FP, enforced loud in the
-         * w13 codegen): keep SP at the frame head -- the callee's stack
-         * grows BELOW its incoming SP, so popping the frame here hands
-         * the saved lr/backlink to the callee as scratch (16m5c crash:
-         * return jumped into the c_frame).  Stack-arg layout = ratify
-         * item (frame head must move above the param area). */
-        /* Record the lisp<->foreign boundary for the GC (16m41; protocol note
-         * in spentry-E-ffi.s).  The walk must start at the c_frame base: word
-         * 0 there is the frame's own ivector header, whose (already shrunk)
-         * count strides exactly onto the boundary lisp_frame built above.
-         * Park the enclosing boundary in param word 0 -- dead now that the
-         * args are loaded, INSIDE the c_frame ivector so the GC never scans
-         * it, and above SP so the callee cannot touch it.
+        /* Record the lisp<->foreign boundary for the GC (16m41 protocol,
+         * re-pointed for stack args): the boundary is now the PUBLISHED
+         * boundary lisp_frame itself -- mark_cstack_area classifies a walk
+         * that STARTS on lisp_frame_marker, exactly as it already does for
+         * the syscall sibling's post-pop boundary -- because the old start
+         * point, the c_frame base, dies once SP steps over it at the blr.
+         * Everything below the boundary is foreign to the GC while the
+         * callee runs, which was already the status of the raw, never-
+         * scanned param/stack-arg words when the ivector cover held them.
          *
-         * ORDER MATTERS, and it is why the arg loads moved above the valence
-         * store: the boundary must be in place BEFORE this thread advertises
-         * foreign valence, or a GC in the window reads a stale boundary and
-         * walks the wrong region (ARM-family ff-call stores it first for the
-         * same reason).  temp0 is scratch: the return path re-nils every temp,
-         * and it is not an AAPCS64 argument register the way imm0 is. */
-        ldr temp0, [rcontext, #tcr.last_lisp_frame]
-        str temp0, [sp, #c_frame.params]
-        mov temp0, sp
-        str temp0, [rcontext, #tcr.last_lisp_frame]
+         * ORDER (one store per step; auditable per instruction boundary):
+         *   1. boundary store BEFORE the valence store (16m41): a GC that
+         *      suspends us FOREIGN must find the new boundary; while we
+         *      are still LISP the walk starts at context SP and this word
+         *      is ignored, so storing it early is inert.
+         *   2. valence store BEFORE the SP step: while LISP the walk
+         *      starts at SP, which must still name the self-describing
+         *      frame head (ivector header striding onto the boundary
+         *      frame); once FOREIGN the walk starts at the boundary and
+         *      SP is free to move.
+         * temp0 is scratch: the return path re-nils every temp, and it is
+         * not an AAPCS64 argument register the way imm0 is. */
+        str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
         /* Open the capture window: discard lisp-side cumulative flags so
@@ -305,37 +342,52 @@ spentry ffcall
          * PSTATE.NZCV is a separate register in AArch64, so this cannot
          * disturb the condition flags. */
         msr fpsr, xzr
+        /* ARM64-DEVIATION: step SP over header+savedsp+params[0..7] so the
+         * callee sees its stack arguments AT [SP], per AAPCS64 5.4.2 (the
+         * single NSAA area the codegen marshals at param words 8..; +80 is
+         * the same c_frame.size + 8 words the syscall sibling steps by).
+         * PPC64 never moves SP here -- PowerOpen stack params live in the
+         * CALLER's frame at positive offsets from the caller's SP; x86-64
+         * is the shape donor (_SPffcall's ffcall_setup pops the frame head
+         * plus 6 GPR words so rsp == &param[6] at the call).  The frame
+         * base is 16-aligned and 80 = 5*16, so SP is 16-byte aligned at
+         * the blr as AAPCS64 requires.  From this instruction on, the
+         * region [old SP, old SP+80) belongs to the callee/signals; every
+         * value the return path needs was hoisted to save0/save1 above. */
+        add sp, sp, #(c_frame.size + 8*node_size)
         blr temp4
-        /* Back.  x0/d0 hold the results; imm1/imm2 are scratch. */
+        /* Back.  x0/d0 hold the results.  [save3, save3+80) is DEAD -- it
+         * sat below the callee's incoming SP -- so nothing on this path may
+         * read the c_frame head: the return runs entirely from the save0/
+         * save1 hoist.  x0/d0 are never touched: imm1/imm2 scratch only. */
         mrs imm1, fpsr
         str imm1, [rcontext, #tcr.foreign_fpsr]
         msr fpsr, xzr
-        /* A GC may have run while we were foreign. */
-        ldr allocptr, [rcontext, #tcr.save_allocptr]
-        ldr allocbase, [rcontext, #tcr.save_allocbase]
-        /* Recover lr from the boundary lisp_frame and sp from the SAVED SP
-         * word -- not from offset 0, which is the header (16m30, see the
-         * entry note).  The count has already been shrunk by 4, so
-         * reserved_base = save3 + node_size*(count + 1).  x0/d0 hold the
-         * results: imm1/imm2 only, never imm0.
-         * SUBPRIM-POPS is the w13 contract: the caller's epilogue runs with
-         * sp back at its own lisp frame (confirmed against the emitted
-         * MAKE-GCABLE-MACPTR epilogue, which pops a 32-byte frame at sp). */
-        ldr imm1, [save3, #c_frame.header]
-        lsr imm1, imm1, #num_subtag_bits
-        add imm1, imm1, #1
-        add imm2, save3, imm1, lsl #node_shift
-        ldr lr, [imm2, #lisp_frame.savelr]
-        ldr imm1, [save3, #c_frame.savedsp]
-        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
-        ldr imm2, [save3, #c_frame.params]
-        str imm2, [rcontext, #tcr.last_lisp_frame]
-        mov sp, imm1
-        ldr save3, [vsp], #node_size
-        ldr fn, [vsp], #node_size
-        /* Clear C garbage out of the volatile node registers, then --
-         * and only then -- declare lisp valence: the GC must never see
-         * a stale pointer in a node register of a lisp-valence thread. */
+        /* Retreat SP onto the boundary lisp_frame (it sat at/above the
+         * callee's incoming SP, so it is intact, and the foreign-era GC has
+         * been walking AND FORWARDING its slots).  This is PPC64's shape:
+         * poweropen_ffcall likewise returns onto the boundary frame, reads
+         * savelr/savefn from it after the valence flip, then discards it.
+         * The saved previous SP is not needed: the frame top IS the
+         * previous SP (arm642-c-frame-words reserves these 4 words directly
+         * below it), so the discard below lands sp exactly there --
+         * SUBPRIM-POPS, the w13 contract. */
+        mov sp, save1
+        /* Make EVERY node register GC-valid, then -- and only then -- flip
+         * to lisp valence; every reload moves BELOW the flip (donor order:
+         * ppc-spentry.s poweropen_ffcall tail and the x86-64 ffcall tail
+         * both zero/nil the node set, flip, then pop).  Popping an NVR
+         * while still FOREIGN was a stale-register window: a GC after the
+         * pop forwards the vstack slot but never the register.  After the
+         * flip the suspended context IS this thread's GC image --
+         * mark_xp/forward_xp cover the registers, and the still-unpopped
+         * slots stay inside the context-vsp scan -- so each pop reads a
+         * forwarded slot into a forwarded register file.  save0 (a raw
+         * cstack address) stays live across the flip: it reads as a fixnum,
+         * so it is GC-valid without being nil'd.  allocptr/allocbase cross
+         * the flip as VOID_ALLOCPTR (PPC's li allocptr,-dnode_size idiom):
+         * their pre-call register values are stale if a foreign-era GC ran,
+         * and normalize_tcr treats VOID as "no allocation in flight". */
         mov arg_w, rnil
         mov arg_x, rnil
         mov arg_y, rnil
@@ -347,7 +399,41 @@ spentry ffcall
         mov temp4, rnil
         mov temp5, rnil
         mov nargs, xzr
+        mov fn, rnil
+        mov save1, xzr
+        mov save2, xzr
+        mov save3, xzr
+        mov allocptr, #-dnode_size          // VOID_ALLOCPTR
+        mov allocbase, #-dnode_size
         str xzr, [rcontext, #tcr.valence]   // TCR_STATE_LISP
+        /* Hand the enclosing foreign boundary back.  Post-flip on purpose:
+         * while we were foreign the boundary had to keep naming OUR
+         * lisp_frame (handing it back early would have cut the caller's
+         * frames out of the foreign walk); now that valence is LISP the
+         * walk starts at context SP and this word is dormant until the
+         * next foreign transition.  A signal/uuo in the window saves and
+         * re-points it itself (exit_signal_handler restores), so lisp run
+         * under an interrupt here still nests correctly. */
+        str save0, [rcontext, #tcr.last_lisp_frame]
+        /* lr from the frame AT [sp], AFTER the flip: from the flip onward
+         * the GC forwards the context's LR/PC, and until the flip it
+         * forwarded the frame slot we read from -- no instruction boundary
+         * where a relocated caller leaves a stale return pc.  (The old
+         * pre-flip read had exactly that hole, foreign-GC-after-read.) */
+        ldr lr, [sp, #lisp_frame.savelr]
+        /* Reload the NVRs from their (possibly forwarded) vstack slots and
+         * the allocation pointers from the TCR -- a foreign-era GC leaves
+         * VOID_ALLOCPTR there, which forces a fresh segment at the next
+         * allocation, as intended. */
+        ldr save0, [vsp], #node_size
+        ldr save1, [vsp], #node_size
+        ldr save2, [vsp], #node_size
+        ldr save3, [vsp], #node_size
+        ldr fn, [vsp], #node_size
+        ldr allocptr, [rcontext, #tcr.save_allocptr]
+        ldr allocbase, [rcontext, #tcr.save_allocbase]
+        /* Drop the 32-byte boundary frame: sp = the saved previous SP. */
+        add sp, sp, #lisp_frame.size
         /* Take any interrupt that was DEFERRED while we held foreign valence
          * (ppc:1691 check_pending_interrupt(cr1), at the same seam: after the
          * valence store, immediately before returning to lisp).  16m57 ROOT:
@@ -518,4 +604,5 @@ C(sptab):
         .quad _SPcallbuiltin3 // 129 SPcallbuiltin3 (PROPOSED extension, 16m5f)
         .quad _SPlexpr_entry // 130 SPlexpr_entry (PROPOSED extension, 16m5f)
         .quad _SPnmkunwind // 131 SPnmkunwind (PROPOSED extension, 16m5f)
+        .quad _SPffcall_indirect_result // 132 SPffcall_indirect_result (PROPOSED extension, 16m71)
 C(sptab_end):
