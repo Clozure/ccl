@@ -157,10 +157,8 @@
 ;;;
 ;;; Like walk-static-area but objects may be consed while walking:
 ;;; terminate at a freshly-allocated sentinel cons.  The sentinel is
-;;; allocated by FORCING the allocation trap (allocbase set to all ones
-;;; so the no-trap branch cannot be taken) — the kernel completes
-;;; the allocation exactly as PPC's tdlt-always-traps idiom did; the
-;;; allocation request is conveyed by allocptr's fulltag (cons).
+;;; allocated by forcing the allocation trap (allocbase set to all ones
+;;; so the no-trap branch cannot be taken).
 ;;; PPC's cr0 (tenured-area zero test, ppc:381) stays live across the
 ;;; sentinel allocation; our alloc protocol contains a cmp, so the
 ;;; selection is resolved FIRST with csel — same value, earlier point.
@@ -182,32 +180,18 @@
     (ref-global imm0 tenured-area)      ; ppc:380
     (cmp imm0 (:$ 0))                   ; ppc:381 (cmpdi cr0)
     (csel a imm0 a (:? ne))             ; ppc:390-391 (if :ne (mr a imm0)) — moved up
-    ;;; ARM64-DEVIATION: allocbase := all ones, not ppc:382-384's constant
-    ;;; #x8000_0000_0000 - 16.  The intent is the same -- put allocbase out
-    ;;; of reach so the skip branch below cannot be taken and the trap
-    ;;; always fires -- but ppc:386 is `tdlt', trap-if-SIGNED-less-than,
-    ;;; while the arm64 sequence skips on an UNSIGNED compare.  allocptr
-    ;;; here is very often VOID_ALLOCPTR (lisp-kernel/gc.h:125,
-    ;;; (LispObj)(-dnode_size) = #xfffffffffffffff0): a gc leaves every tcr
-    ;;; in that state (lisp-kernel/arm64-exceptions.c:897) and
-    ;;; heap-utilization gcs immediately before it walks.  Unsigned,
-    ;;; #xffffffffffffffe3 IS above #x00007ffffffffff0, so the branch is
-    ;;; taken, no sentinel cons is allocated, and the walk -- whose only
-    ;;; terminator is that sentinel -- runs off the end of the heap and
-    ;;; faults.  Nothing is unsigned-above all ones, so this traps for any
-    ;;; allocptr and the canonical alloc sequence below needs no change.
-    (movn allocbase (:$ 0))             ; allocbase := #xffffffffffffffff
-    ;; tagged-cons allocptr, then the canonical alloc-trap protocol.
-    (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons))) ; ppc:385 (la)
-    (cmp allocptr allocbase)            ; ppc:386 (tdlt allocptr allocbase) …
-    (b.hi @no-trap)                     ; … canonical Misc_Alloc shape: skip iff
-                                        ; allocptr strictly above allocbase (the
-                                        ; b.hi pc_luser_xp recognizes; here the
-                                        ; forced-high allocbase makes it always trap)
+    ;; Force the uuo-alloc-trap by setting allocbase to all ones so
+    ;; that the b.hi will never be taken (nothing is unsigned-higher
+    ;; than all ones).  This gets us a fresh segment, and the cons
+    ;; cell will be guaranteed freshly-allocated.
+    (movn allocbase (:$ 0))             ;all ones
+    (sub allocptr allocptr (:$ (- arm64::cons.size arm64::fulltag-cons)))
+    (cmp allocptr allocbase)
+    (b.hi @no-trap)
     (uuo-alloc-trap)
     @no-trap
-    (mov sentinel allocptr)             ; ppc:387 (mr)
-    (bic allocptr allocptr (:$ arm64::fulltagmask)) ; ppc:388 (clrrdi ntagbits)
+    (mov sentinel allocptr)
+    (bic allocptr allocptr (:$ arm64::fulltagmask))
     (mov fun f)                         ; ppc:389 (mr)
     (ldr imm5 (:@ a (:$ arm64::area.low))) ; ppc:392 (ld imm5 …)
     @loop
