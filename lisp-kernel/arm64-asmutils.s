@@ -276,4 +276,16 @@ C(isb):
         isb
         ret
 
+#if defined(__APPLE__)
+/* Darwin sigreturn: SYS_sigreturn = 184 (0xb8), UNIX class in x16 high nibble.
+ * Same shape as x86-asmutils64.s darwin_sigreturn (args ignored; ucontext
+ * already on the signal stack). */
+        .globl C(darwin_sigreturn)
+C(darwin_sigreturn):
+        movz    x16, #0xb8
+        movk    x16, #0x200, lsl #16
+        svc     #0x80
+        ret
+#endif
+
         .end

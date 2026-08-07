@@ -766,7 +766,7 @@ endsp tcallsymslide
 spentry tcallnfngen
         /* Tail call nfn - general */
         cmp nargs, #(nargregs << fixnumshift)
-        b.le _SPtcallnfnvsp
+        bcond_ext le, _SPtcallnfnvsp
         b _SPtcallnfnslide
 endsp tcallnfngen
 
@@ -1415,7 +1415,7 @@ ash_shift64:
          * PPC branches on cr0.eq from cntlzd. -- this reflects whether
          * original value was negative. */
         cmp imm0, #0
-        b.lt _SPmakes128
+        bcond_ext lt, _SPmakes128
         b _SPmakeu128
 9:
         /* ppc:5990 */
@@ -1481,7 +1481,7 @@ spentry builtin_aref1
         cmp imm0, #subtag_simple_vector
         /* ppc:3216 box_fixnum(arg_x,imm0) -- save typecode for subtag_misc_ref */
         lsl arg_x, imm0, #fixnumshift
-        b.eq _SPsubtag_misc_ref         /* ppc:3217 */
+        bcond_ext eq, _SPsubtag_misc_ref         /* ppc:3217 */
         /* ppc:3218 ivector_typecode_p(imm1,imm0,imm2) (ppc-macros.s:747):
            ONLY immediate-header subtags are CL ivectors; the macro zeroes a
            node-header subtag so the following compare fails.  We must do the
@@ -1495,7 +1495,7 @@ spentry builtin_aref1
         cmp imm1, #tag_nodeheader
         b.eq 1f
         cmp imm0, #min_cl_ivector_subtag  /* ppc:3219-3220 */
-        b.ge _SPsubtag_misc_ref
+        bcond_ext ge, _SPsubtag_misc_ref
 1:      jump_builtin _builtin_aref1, 2  /* ppc:3221 */
 endsp builtin_aref1
 
@@ -1512,7 +1512,7 @@ spentry builtin_aset1
         cmp imm0, #subtag_simple_vector
         /* ppc:6033 box_fixnum(temp0,imm0) -- subtag_misc_set wants boxed typecode */
         lsl temp0, imm0, #fixnumshift
-        b.eq _SPsubtag_misc_set         /* ppc:6034 */
+        bcond_ext eq, _SPsubtag_misc_set         /* ppc:6034 */
         /* ppc:6035-6037 ivector_typecode_p + compare.  Exclude node-headers
            (vectorH/arrayH) before the >= test — see builtin_aref1 for the
            tag-scheme rationale (raw compare would treat a complex array as an
@@ -1521,7 +1521,7 @@ spentry builtin_aset1
         cmp imm1, #tag_nodeheader
         b.eq 1f
         cmp imm0, #min_cl_ivector_subtag
-        b.ge _SPsubtag_misc_set
+        bcond_ext ge, _SPsubtag_misc_set
 1:      jump_builtin _builtin_aset1, 3  /* ppc:6038 */
 endsp builtin_aset1
 

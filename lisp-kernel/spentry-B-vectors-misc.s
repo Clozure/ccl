@@ -1006,7 +1006,7 @@ misc_set_common:
            slot-vector/lock/instance/istruct/… (boot-16m5b). */
         and imm2, imm1, #7
         cmp imm2, #6                    /* fulltag_nodeheader_{0,1} & 7 */
-        b.eq _SPgvset
+        bcond_ext eq, _SPgvset
         /* Integer vectors */
         cmp imm1, #subtag_u8_vector
         b.eq misc_set_u8
@@ -1293,7 +1293,7 @@ spentry progvrestore
         ldr imm0, [imm0, #tsp_frame.data_offset]  /* ppc:6954 (data_offset=16, was mis-guessed 8) */
         cmp imm0, #0
         asr imm0, imm0, #fixnumshift
-        b.ne _SPunbind_n
+        bcond_ext ne, _SPunbind_n
         ret
 endsp progvrestore
 

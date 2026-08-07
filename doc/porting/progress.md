@@ -1,5 +1,23 @@
 # Progress notes on an arm64 port
 
+## August 2026 — Darwin/arm64 kernel scaffold (egao1980)
+
+Started Apple Silicon kernel bring-up on top of the `arm64` branch
+(Linux/arm64 already boots + ANSI green).
+
+Added:
+
+* `lisp-kernel/darwinarm64/Makefile` → builds `darm64cl` (ASLR, no pagezero)
+* Expanded `platform-darwinarm64.h` (xp accessors, ABI shims)
+* `lisp-kernel/arm64-darwin-mach.c` — stub Darwin TCR/Mach hooks; Unix
+  signals for UUOs until Mach exception server is ported
+* `darwin_sigreturn` in `arm64-asmutils.s`
+* `tools/xdarwinarm64.lisp` (alias of the darwinarm64 cross-setup)
+
+Still open for Darwin: MAP_JIT / separate code area, rnil-relative
+statics (no fixed low memory), Mach exception ports, Apple AAPCS64
+divergences in FFI, interface `.cdb` databases.
+
 ## May 21 – June 23
 I looked a bit at Manfred Bergmann’s code at
 https://github.com/mdbergmann/ccl/tree/arm64-arch-foundation. This code is

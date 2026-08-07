@@ -458,7 +458,7 @@ spentry callback
         mov save1, arg_x
         /* Recover the thread context (ppc:5114-5124 get_tcr(1)). */
         mov x0, #1
-        bl get_tcr
+        bl C(get_tcr)
         mov rcontext, x0
         /* Stash the exact foreign sp for the return path. */
         mov imm0, sp
@@ -499,7 +499,7 @@ spentry callback
            must reload it.  Use the SAME idiom as start_lisp below: nil_value
            is patched into the C global lisp_nil at initial heap mapping (Matt
            2026-07-11), so it is NOT a compile-time immediate. */
-        ldr rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr rnil, [rnil]
         /* Cover the foreign region below the enclosing lisp boundary -- the C
            caller's frames plus every register block this spentry just pushed --
@@ -565,22 +565,16 @@ spentry callback
         ret
 endsp callback
 
-/* Do a LINUX system call (ppc:5402 poweropen_syscall; the Darwin
- * carry-flag/return-twice protocol is NOT ported).  Same c_frame contract
- * and lisp<->foreign transition as ffcall; the middle is the AArch64
- * Linux syscall sequence instead of a call:
- *   x8 = syscall number (unboxed from arg_z), x0-x5 = args, `svc #0'
- * (analog of x86-spentry64.s:4619 syscall; AArch64 Linux takes <=6
- * integer args).
- * ARM64-DEVIATION: Linux/AArch64 returns -errno directly in x0, so PPC's
- * error-path negation (ppc:5441-5454) has no analog - imm0 carries the
- * raw result.  No FP args => the FPCR dance is skipped (as on PPC, which
- * doesn't touch the FPSCR in syscall). */
-#ifdef DARWIN
-#error "Darwin syscall convention not ported (svc #0x80 + carry-flag error protocol)"
-#endif
+/* Do a system call (ppc:5402 poweropen_syscall).  Same c_frame contract
+ * and lisp<->foreign transition as ffcall; the middle is the platform
+ * AArch64 syscall sequence:
+ *   Linux:  x8 = number, x0-x5 = args, `svc #0'; result/-errno in x0
+ *   Darwin: x16 = number, x0-x5 = args, `svc #0x80`; C set on error with
+ *           errno in x0 — negate to match Linux-style -errno for Lisp.
+ * (analog of x86-spentry64.s:4619 syscall + SYSCALL_SETS_CARRY_ON_ERROR).
+ * No FP args => the FPCR dance is skipped. */
 /* Body = patch-0003 _SPffcall shape (same c_frame contract and
- * lisp<->foreign transition) with the AArch64 Linux syscall sequence
+ * lisp<->foreign transition) with the AArch64 syscall sequence
  * in the middle instead of a call. */
 spentry syscall
         str fn, [vsp, #-node_size]!             /* ppc:5404 vpush_saveregs   */
@@ -613,7 +607,11 @@ spentry syscall
                            exceptions; publish a clean slate (PPC zeroes
                            ffi_exception here, ppc:5415-5419) */
         /* Syscall number + up to 6 args (ppc:5424-5432 loads r3-r10 + r0). */
-        asr x8, arg_z, #fixnumshift             /* ppc:5432 unbox_fixnum     */
+#ifdef DARWIN
+        asr x16, arg_z, #fixnumshift            /* Darwin: number in x16 */
+#else
+        asr x8, arg_z, #fixnumshift             /* Linux: number in x8 */
+#endif
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
@@ -632,7 +630,14 @@ spentry syscall
         str temp0, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        svc #0                                  /* ppc:5433 sc               */
+#ifdef DARWIN
+        svc #0x80                               /* Darwin AArch64 syscall */
+        b.cc 1f                                 /* C clear => success */
+        neg x0, x0                              /* errno -> -errno */
+1:
+#else
+        svc #0                                  /* Linux AArch64 syscall */
+#endif
         /* ---- return path (x0 = raw result / -errno) (ppc:5455-5489) ---- */
         ldr allocptr,  [rcontext, #tcr.save_allocptr]   /* ppc:5470-5472     */
         ldr allocbase, [rcontext, #tcr.save_allocbase]
@@ -855,7 +860,7 @@ C(start_lisp):
         mov     save2, xzr
         mov     save3, xzr
         /* rnil: from the C global (image loader patches nil_value). */
-        ldr     rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr     rnil, [rnil]
         /* Lisp stack/alloc state from the TCR (ppc:162-165). */
         ldr     vsp, [rcontext, #tcr.save_vsp]

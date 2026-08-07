@@ -18,6 +18,8 @@ tags
 /*boot*
 
 /armcl
+/arm64cl
+/darm64cl
 /?x86cl
 /?x86cl64
 /wx86cl.exe
