@@ -9811,6 +9811,24 @@
       (! %current-frame-ptr target)))
   (^))
 
+;;; WITH-C-FRAME: allocate a c-frame of the default size around BODY.
+;;; The fixed-size half of the pair below; every other back end defines
+;;; both (ppc2.lisp ppc2-with-c-frame / arm2.lisp arm2-with-c-frame /
+;;; x862.lisp x862-with-c-frame), and this one is byte-for-byte the
+;;; x86-64 shape because arm64, like x86-64, has a single c-frame vinsn
+;;; and no EABI variant to ecase over.
+;;;
+;;; The only in-tree caller is the objc-bridge (objc-runtime.lisp:3207,
+;;; 3223), which is Darwin-only -- so this is latent on linuxarm64.  It
+;;; is NOT latent on darwinarm64: arm642.lisp is the back end for both
+;;; arm64 targets, so without this handler the bridge has no locative
+;;; for the operator and simply cannot compile there.
+(defarm642 arm642-with-c-frame with-c-frame (seg vreg xfer body &aux
+                                                 (old-stack (arm642-encode-stack)))
+  (! alloc-c-frame 0)
+  (arm642-open-undo $undo-arm64-c-frame)
+  (arm642-undo-body seg vreg xfer body old-stack))
+
 ;;; WITH-VARIABLE-C-FRAME: allocate a c-frame of SIZE param words around
 ;;; BODY.  Model: x862-with-variable-c-frame (x862.lisp); the
 ;;; interpreter-side %ff-call (arm64-def.lisp) is the only in-tree
