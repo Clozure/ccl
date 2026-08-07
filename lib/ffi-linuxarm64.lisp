@@ -343,6 +343,26 @@
                   (argforms arg-type-spec)
                   (argforms arg-value-form))
                 (let* ((ftype (parse-foreign-type arg-type-spec)))
+                  ;; GCC transparent_union: the argument is passed with
+                  ;; the calling convention of the union's FIRST MEMBER,
+                  ;; never as the composite itself (GCC manual, Common
+                  ;; Type Attributes; GCC enforces that all members have
+                  ;; the same machine representation, which is what makes
+                  ;; first-member resolution ABI-sound).  Same arm as
+                  ;; x8664::expand-ff-call (x8664-backend.lisp) and
+                  ;; x8632.  Without it a glibc-style union of pointers
+                  ;; (e.g. __SOCKADDR_ARG) falls into the <=64-bit
+                  ;; composite case below, which DEREFERENCES the macptr
+                  ;; and passes 8 bytes of the pointee where the callee
+                  ;; expects the pointer.
+                  (when (and (typep ftype 'foreign-record-type)
+                             (eq (foreign-record-type-kind ftype)
+                                 :transparent-union))
+                    (ensure-foreign-type-bits ftype)
+                    (setq ftype (foreign-record-field-type
+                                 (car (foreign-record-type-fields ftype)))
+                          arg-type-spec (foreign-type-to-representation-type
+                                         ftype)))
                   (if (typep ftype 'foreign-record-type)
                     (let* ((bits (ensure-foreign-type-bits ftype)))
                       (multiple-value-bind (hfa-base hfa-count)
