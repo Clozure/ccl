@@ -578,7 +578,13 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
 		      (setf (,accessor name) defn))))
 	(ecase kind
 	  (:struct (frob info-foreign-type-struct))
-	  (:union (frob info-foreign-type-union))
+	  ;; A transparent union lives in the union namespace, exactly
+	  ;; where PARSE-FOREIGN-RECORD-TYPE looks it up and where the
+	  ;; interface-database reader files it (db-io.lisp); the record
+	  ;; type's KIND slot keeps the distinction.  Without this arm,
+	  ;; DEF-FOREIGN-TYPE of any named transparent union fails the
+	  ;; ECASE, on every platform.
+	  ((:union :transparent-union) (frob info-foreign-type-union))
 	  (:enum (frob info-foreign-type-enum)))))))
 
 (defun %def-foreign-type (name new &optional (ftd *target-ftd*))
