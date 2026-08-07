@@ -256,8 +256,16 @@ _ends
  * at the return; save2 carries the buffer address across the call
  * (callee-saved), parked on the vstack like save3/fn. */
 spentry ffcall_return_registers
+        /* fn + all four boxed NVRs, exactly as `spentry ffcall'
+         * (arm64-spentry.s -- the CANONICAL NOTE for this whole body): the
+         * vstack copies are what the GC forwards while we are foreign; the
+         * registers carry raw kernel state (and the result buffer) across
+         * the call and are reloaded, relocations applied, after it. */
         str fn, [vsp, #-node_size]!             /* ppc:1799 vpush_saveregs   */
         str save3, [vsp, #-node_size]!
+        str save2, [vsp, #-node_size]!
+        str save1, [vsp, #-node_size]!
+        str save0, [vsp, #-node_size]!
         mov save3, sp
         /* Park lr in the boundary lisp_frame his alloc-c-frame RESERVED at the
          * frame top, and publish it by shrinking the header count by 4.  The
@@ -272,12 +280,18 @@ spentry ffcall_return_registers
         mov imm1, #lisp_frame_marker
         str imm1, [imm2, #lisp_frame.marker]
         str vsp, [imm2, #lisp_frame.savevsp]
-        str fn,  [imm2, #lisp_frame.savefn]
-        str lr,  [imm2, #lisp_frame.savelr]
+        /* Zeros while covered, publish, THEN the real fn/lr -- the
+         * alloc-c-frame build contract; rationale at the canonical note. */
+        stp xzr, xzr, [imm2, #lisp_frame.savefn]
         sub imm0, imm0, #(4 << num_subtag_bits)
         str imm0, [sp, #c_frame.header]
-        /* Buffer address -> save2 (PPC uses save7, ppc:1800). */
-        str save2, [vsp, #-node_size]!
+        stp fn, lr, [imm2, #lisp_frame.savefn]
+        /* Cross-call hoist (canonical note): the frame head [sp, sp+80)
+         * dies once SP steps over it at the blr. */
+        mov save1, imm2                         /* boundary lisp_frame       */
+        ldr save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary    */
+        /* Buffer address -> save2 (PPC uses save7, ppc:1800); its lisp
+         * value is already in the 5-slot vstack spill above. */
         ldur save2, [arg_y, #macptr.address]
         /* Unbox the entry point into temp4 (ppc:1802-1814
            extract_typecode): macptr iff fulltag_misc AND header subtag
@@ -300,35 +314,28 @@ spentry ffcall_return_registers
         str tsp, [rcontext, #tcr.save_tsp]
         str allocptr, [rcontext, #tcr.save_allocptr]
         str allocbase, [rcontext, #tcr.save_allocbase]
-        /* Load the outgoing GPR args and pop the frame head + param
-           words so stack args sit exactly at SP (ppc:1836-1843).
-           Above the valence store since 16m41: see the ordering note in
-           `spentry ffcall' (arm64-spentry.s) -- the boundary has to be
-           recorded before this thread advertises foreign valence, and the
-           park slot is only dead once the args are loaded. */
+        /* Load the outgoing GPR args (ppc:1836-1843); the SP step that
+           puts the NSAA stack args at [SP] comes after the valence flip,
+           per the ordering note in `spentry ffcall' (arm64-spentry.s). */
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
         ldp x6, x7, [sp, #(c_frame.params + 6*node_size)]
-        /* AAPCS64, no stack args (<=8 GPR/<=8 FP, enforced loud in the
-         * w13 codegen): keep SP at the frame head -- the callee's stack
-         * grows BELOW its incoming SP, so popping the frame here hands
-         * the saved lr/backlink to the callee as scratch (16m5c crash in
-         * the _SPffcall twin: return jumped into the c_frame).  Stack-arg
-         * layout = ratify item (frame head must move above params). */
-        /* Boundary bookkeeping + valence, identical to `spentry ffcall' in
-         * arm64-spentry.s -- see the protocol note at the top of this file.
+        /* Boundary bookkeeping + valence + SP step, identical to `spentry
+         * ffcall' in arm64-spentry.s (the ordering rationale lives there):
+         * boundary = the published lisp_frame, stored before the valence
+         * flip; after the flip SP steps over the doomed frame head, putting
+         * the NSAA stack args at [SP] for the callee.
          * temp0, not imm0: imm0 is x0, now an outgoing argument. */
-        ldr temp0, [rcontext, #tcr.last_lisp_frame]
-        str temp0, [sp, #c_frame.params]
-        mov temp0, sp
-        str temp0, [rcontext, #tcr.last_lisp_frame]
+        str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
         /* Open the FPSR capture window -- FPSR is cumulative, so clearing it
            only on the way back publishes every flag raised since the PREVIOUS
            ff-call.  Canonical note: `spentry ffcall' in arm64-spentry.s. */
         msr fpsr, xzr
+        add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
+                          stack args at [SP]; canonical note in ffcall */
         blr temp4                               /* ppc:1849 bctrl            */
         /* Store every AAPCS64 result register into the buffer
            (ppc:1851-1871 stores r3-r10/f1-f13). */
@@ -340,29 +347,13 @@ spentry ffcall_return_registers
         stp d2, d3, [save2, #((8*node_size) + 2*8)]
         stp d4, d5, [save2, #((8*node_size) + 4*8)]
         stp d6, d7, [save2, #((8*node_size) + 6*8)]
-        /* ---- common return path (= patch-0003 ffcall) ---- */
+        /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
+         * the per-boundary GC audit lives there).  The frame head
+         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
         mrs imm1, fpsr
         str imm1, [rcontext, #tcr.foreign_fpsr]
         msr fpsr, xzr
-        /* A GC may have run while we were foreign. */
-        ldr allocptr, [rcontext, #tcr.save_allocptr]
-        ldr allocbase, [rcontext, #tcr.save_allocbase]
-        /* lr from the boundary lisp_frame; sp from the SAVED SP word, not the
-         * header at offset 0 (16m30).  Count is already shrunk by 4, so
-         * reserved_base = save3 + node_size*(count+1).  imm1/imm2 only. */
-        ldr imm1, [save3, #c_frame.header]
-        lsr imm1, imm1, #num_subtag_bits
-        add imm1, imm1, #1
-        add imm2, save3, imm1, lsl #node_shift
-        ldr lr, [imm2, #lisp_frame.savelr]
-        ldr imm1, [save3, #c_frame.savedsp]
-        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
-        ldr imm2, [save3, #c_frame.params]
-        str imm2, [rcontext, #tcr.last_lisp_frame]
-        mov sp, imm1
-        ldr save2, [vsp], #node_size
-        ldr save3, [vsp], #node_size
-        ldr fn, [vsp], #node_size
+        mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
         mov arg_y, rnil
@@ -374,7 +365,23 @@ spentry ffcall_return_registers
         mov temp4, rnil
         mov temp5, rnil
         mov nargs, xzr
+        mov fn, rnil
+        mov save1, xzr
+        mov save2, xzr
+        mov save3, xzr
+        mov allocptr, #-dnode_size          // VOID_ALLOCPTR (ppc idiom)
+        mov allocbase, #-dnode_size
         str xzr, [rcontext, #tcr.valence]   // TCR_STATE_LISP
+        str save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary back */
+        ldr lr, [sp, #lisp_frame.savelr]    /* post-flip: GC-forwarded */
+        ldr save0, [vsp], #node_size
+        ldr save1, [vsp], #node_size
+        ldr save2, [vsp], #node_size
+        ldr save3, [vsp], #node_size
+        ldr fn, [vsp], #node_size
+        ldr allocptr, [rcontext, #tcr.save_allocptr]
+        ldr allocbase, [rcontext, #tcr.save_allocbase]
+        add sp, sp, #lisp_frame.size        /* drop the frame: sp = prev SP */
         check_pending_interrupt
         ret
 endsp ffcall_return_registers
@@ -390,12 +397,18 @@ endsp ffcall_return_registers
  * pass the hidden result pointer as the FIRST integer argument; AAPCS64
  * alone dedicates x8. */
 spentry ffcall_indirect_result
+        /* fn + all four boxed NVRs -- byte-identical to `spentry ffcall'
+         * (arm64-spentry.s), whose comments are the canonical note. */
         str fn, [vsp, #-node_size]!
         str save3, [vsp, #-node_size]!
+        str save2, [vsp, #-node_size]!
+        str save1, [vsp, #-node_size]!
+        str save0, [vsp, #-node_size]!
         mov save3, sp
-        /* Boundary lisp_frame park + header shrink -- byte-identical to
-         * `spentry ffcall' (arm64-spentry.s), whose comments are the
-         * canonical note. */
+        /* Boundary lisp_frame build (zeros while covered, publish, then
+         * the real fn/lr) + cross-call hoist -- byte-identical to `spentry
+         * ffcall' (arm64-spentry.s), whose comments are the canonical
+         * note. */
         ldr imm0, [sp, #c_frame.header]
         lsr imm1, imm0, #num_subtag_bits        /* element count = words-1 */
         sub imm1, imm1, #3
@@ -404,10 +417,12 @@ spentry ffcall_indirect_result
         mov imm1, #lisp_frame_marker
         str imm1, [imm2, #lisp_frame.marker]
         str vsp, [imm2, #lisp_frame.savevsp]
-        str fn,  [imm2, #lisp_frame.savefn]
-        str lr,  [imm2, #lisp_frame.savelr]
+        stp xzr, xzr, [imm2, #lisp_frame.savefn]
         sub imm0, imm0, #(4 << num_subtag_bits)
         str imm0, [sp, #c_frame.header]
+        stp fn, lr, [imm2, #lisp_frame.savefn]
+        mov save1, imm2                         /* boundary lisp_frame       */
+        ldr save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary    */
         /* Unbox the entry point into temp4 (canonical note: `spentry
            ffcall', arm64-spentry.s; the bare-tst trap is 16m5l). */
         and imm2, arg_z, #fulltagmask
@@ -425,8 +440,9 @@ spentry ffcall_indirect_result
         str tsp, [rcontext, #tcr.save_tsp]
         str allocptr, [rcontext, #tcr.save_allocptr]
         str allocbase, [rcontext, #tcr.save_allocbase]
-        /* Load the outgoing GPR args; keep SP at the frame head (stack
-         * args refused loud in the codegen -- see `spentry ffcall'). */
+        /* Load the outgoing GPR args; the SP step that exposes the NSAA
+         * stack args at [SP] comes after the valence flip, per the
+         * ordering note in `spentry ffcall' (arm64-spentry.s). */
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
@@ -436,40 +452,24 @@ spentry ffcall_indirect_result
          * from here to the blr; the callee writes the record through x8
          * and returns void. */
         ldur x8, [arg_y, #macptr.address]
-        /* Boundary bookkeeping + valence, identical to `spentry ffcall'
-         * (arm64-spentry.s) -- see the protocol note at the top of this
-         * file.  temp0, not imm0: imm0 is x0, now an outgoing argument. */
-        ldr temp0, [rcontext, #tcr.last_lisp_frame]
-        str temp0, [sp, #c_frame.params]
-        mov temp0, sp
-        str temp0, [rcontext, #tcr.last_lisp_frame]
+        /* Boundary bookkeeping + valence + SP step, identical to `spentry
+         * ffcall' (arm64-spentry.s) -- the ordering rationale lives there.
+         * temp0, not imm0: imm0 is x0, now an outgoing argument. */
+        str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
         /* FPSR capture window -- canonical note: `spentry ffcall'. */
         msr fpsr, xzr
+        add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
+                          stack args at [SP]; canonical note in ffcall */
         blr temp4
-        /* ---- common return path (= `spentry ffcall') ---- */
+        /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
+         * the per-boundary GC audit lives there).  The frame head
+         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
         mrs imm1, fpsr
         str imm1, [rcontext, #tcr.foreign_fpsr]
         msr fpsr, xzr
-        /* A GC may have run while we were foreign. */
-        ldr allocptr, [rcontext, #tcr.save_allocptr]
-        ldr allocbase, [rcontext, #tcr.save_allocbase]
-        /* lr from the boundary lisp_frame; sp from the SAVED SP word, not
-         * the header at offset 0 (16m30).  Count already shrunk by 4, so
-         * reserved_base = save3 + node_size*(count+1).  imm1/imm2 only. */
-        ldr imm1, [save3, #c_frame.header]
-        lsr imm1, imm1, #num_subtag_bits
-        add imm1, imm1, #1
-        add imm2, save3, imm1, lsl #node_shift
-        ldr lr, [imm2, #lisp_frame.savelr]
-        ldr imm1, [save3, #c_frame.savedsp]
-        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
-        ldr imm2, [save3, #c_frame.params]
-        str imm2, [rcontext, #tcr.last_lisp_frame]
-        mov sp, imm1
-        ldr save3, [vsp], #node_size
-        ldr fn, [vsp], #node_size
+        mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
         mov arg_y, rnil
@@ -481,7 +481,23 @@ spentry ffcall_indirect_result
         mov temp4, rnil
         mov temp5, rnil
         mov nargs, xzr
+        mov fn, rnil
+        mov save1, xzr
+        mov save2, xzr
+        mov save3, xzr
+        mov allocptr, #-dnode_size          // VOID_ALLOCPTR (ppc idiom)
+        mov allocbase, #-dnode_size
         str xzr, [rcontext, #tcr.valence]   // TCR_STATE_LISP
+        str save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary back */
+        ldr lr, [sp, #lisp_frame.savelr]    /* post-flip: GC-forwarded */
+        ldr save0, [vsp], #node_size
+        ldr save1, [vsp], #node_size
+        ldr save2, [vsp], #node_size
+        ldr save3, [vsp], #node_size
+        ldr fn, [vsp], #node_size
+        ldr allocptr, [rcontext, #tcr.save_allocptr]
+        ldr allocbase, [rcontext, #tcr.save_allocbase]
+        add sp, sp, #lisp_frame.size        /* drop the frame: sp = prev SP */
         check_pending_interrupt
         ret
 endsp ffcall_indirect_result
@@ -727,10 +743,16 @@ spentry syscall
         mov imm1, #lisp_frame_marker
         str imm1, [imm2, #lisp_frame.marker]
         str vsp, [imm2, #lisp_frame.savevsp]
-        str fn,  [imm2, #lisp_frame.savefn]
-        str lr,  [imm2, #lisp_frame.savelr]
+        /* Zeros while covered, publish, THEN the real fn/lr (the
+         * alloc-c-frame build contract; rationale at the canonical note in
+         * `spentry ffcall', arm64-spentry.s): a covered slot is invisible
+         * to the GC, so a real fn/lr stored pre-publish goes stale if a GC
+         * moves the caller in the window -- and this path reads savelr
+         * back after the svc. */
+        stp xzr, xzr, [imm2, #lisp_frame.savefn]
         sub imm0, imm0, #(4 << num_subtag_bits)
         str imm0, [sp, #c_frame.header]
+        stp fn, lr, [imm2, #lisp_frame.savefn]
         /* Publish lisp state to the TCR for the GC, then go foreign
            (ppc:5405-5422). */
         str vsp, [rcontext, #tcr.save_vsp]
