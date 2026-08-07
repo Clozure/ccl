@@ -2048,7 +2048,7 @@ purify(TCR *tcr, signed_natural param)
 }
 
 void
-impurify_locref(LispObj *p, LispObj low, LispObj high, int delta)
+impurify_locref(LispObj *p, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj q = *p;
   
@@ -2067,7 +2067,7 @@ impurify_locref(LispObj *p, LispObj low, LispObj high, int delta)
 
   
 void
-impurify_noderef(LispObj *p, LispObj low, LispObj high, int delta)
+impurify_noderef(LispObj *p, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj q = *p;
   
@@ -2081,7 +2081,7 @@ impurify_noderef(LispObj *p, LispObj low, LispObj high, int delta)
 
 #ifdef PPC
 void
-impurify_cstack_area(area *a, LispObj low, LispObj high, int delta)
+impurify_cstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
 {
   BytePtr
     current,
@@ -2104,7 +2104,7 @@ impurify_cstack_area(area *a, LispObj low, LispObj high, int delta)
 #endif
 
 void
-impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, int delta)
+impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, signed_natural delta)
 {
   natural *regs = (natural *) xpGPRvector(xp);
 
@@ -2129,7 +2129,7 @@ impurify_xp(ExceptionInformation *xp, LispObj low, LispObj high, int delta)
 
 
 void
-impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delta)
+impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj header;
   unsigned tag;
@@ -2154,7 +2154,7 @@ impurify_range(LispObj *start, LispObj *end, LispObj low, LispObj high, int delt
 
 
 void
-impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, int delta)
+impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, signed_natural delta)
 {
   unsigned n = tcr->tlb_limit;
   LispObj *start = tcr->tlb_pointer, *end = (LispObj *) ((BytePtr)start+n);
@@ -2163,7 +2163,7 @@ impurify_tcr_tlb(TCR *tcr,  LispObj low, LispObj high, int delta)
 }
 
 void
-impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, int delta)
+impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, signed_natural delta)
 {
   xframe_list *xframes;
   ExceptionInformation *xp;
@@ -2179,7 +2179,7 @@ impurify_tcr_xframes(TCR *tcr, LispObj low, LispObj high, int delta)
 }
 
 void
-impurify_tstack_area(area *a, LispObj low, LispObj high, int delta)
+impurify_tstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj
     *current,
@@ -2199,7 +2199,7 @@ impurify_tstack_area(area *a, LispObj low, LispObj high, int delta)
   }
 }
 void
-impurify_vstack_area(area *a, LispObj low, LispObj high, int delta)
+impurify_vstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
 {
   LispObj
     *p = (LispObj *) a->active,
@@ -2214,7 +2214,7 @@ impurify_vstack_area(area *a, LispObj low, LispObj high, int delta)
 
 
 void
-impurify_areas(LispObj low, LispObj high, int delta)
+impurify_areas(LispObj low, LispObj high, signed_natural delta)
 {
   area *next_area;
   area_code code;
@@ -2267,8 +2267,8 @@ impurify(TCR *tcr, signed_natural param)
     area *a = active_dynamic_area;
     BytePtr ro_base = r->low, ro_limit = r->active, oldfree = a->active,
       oldhigh = a->high, newhigh; 
-    unsigned n = ro_limit - ro_base;
-    int delta = oldfree-ro_base;
+    natural n = ro_limit - ro_base;
+    signed_natural delta = oldfree-ro_base;
     TCR *other_tcr;
 
     if (n) {
