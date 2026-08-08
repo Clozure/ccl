@@ -70,6 +70,24 @@
                arm64::num-subtag-bits)
           arm64::subtag-u64-vector))
 
+(defun arm642-cstack-overflow-uuo ()
+  ;; The udf immediate for a failed control-stack overflow check, i.e. the
+  ;; emit side of uuo_interr(error_stack_overflow, sp).  Encoding cited from
+  ;; the decoder, not inferred -- lisp-kernel/arm64-exceptions.c:189-196:
+  ;;   UUO_MISC_INFO(imm16)   = (imm16 >> 2) & 0x3fff   (format_misc = bits 1:0 = 0)
+  ;;   UUO_MISC_IS_INTERR(mi) = (mi >> 13) & 1
+  ;;   UUO_INTERR_ERRNUM(mi)  = (mi >> 5) & 0xff
+  ;;   UUO_INTERR_GPR(mi)     = mi & 0x1f
+  ;; The GPR field is 31 (Rsp): AArch64 SP is not one of regs[0..30], so 31 is
+  ;; the stack-register selector (arm64-exceptions.c:108-112), it is what
+  ;; handle_uuo tests (`gpr == Rsp'), and it is the value
+  ;; level-1/arm64-error-signal.lisp:145 already spells as a literal 31 for
+  ;; want of an arm64:: constant.
+  (ash (logior (ash 1 13)
+               (ash arch::error-stack-overflow 5)
+               31)
+       2))
+
 (defmacro with-arm64-p2-declarations (declsform &body body)
   `(let* ((*arm642-tail-allow* *arm642-tail-allow*)
           (*arm642-reckless* *arm642-reckless*)

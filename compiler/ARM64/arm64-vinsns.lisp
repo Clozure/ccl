@@ -33,7 +33,25 @@
   ;; situation and ensure that the stack slots in question contain
   ;; gc-safe content.
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; Control-stack overflow probe -- PPC64 ppc64-vinsns.lisp:3471-3472
+  ;;   (ld imm ppc64::tcr.cs-limit ppc64::rcontext)
+  ;;   (tdllt ppc::sp imm)
+  ;; ARM64-DEVIATION: A64 has no trap-on-condition instruction, so the trap
+  ;; is a conditional branch around a udf.  That is the shape
+  ;; .SPsavecontextvsp already uses (spentry-C-bind-catch-throw.s:1669-1671),
+  ;; and b.hs (unsigned higher-or-same) is exactly tdllt's complement.
+  ;; marker-reg is dead once the frame is stored, so no extra temp is needed.
+  ;; The kernel side is already present: arm64-exceptions.c:1596-1637 decodes
+  ;; uuo_interr(error_stack_overflow, Rsp) and runs the PPC yellow-zone logic,
+  ;; restore_soft_stack_limit has its `case Rsp:', and
+  ;; level-1/arm64-error-signal.lisp:145 already reports rb=31 as the control
+  ;; stack.  Until this probe existed, all of that was unreachable.
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (udf (:$ (:apply arm642-cstack-overflow-uuo)))
+  :ok)
   
 (define-arm64-vinsn (vpush-register :push :node :vsp) (()
                                                        ((reg :lisp)))
@@ -3988,7 +4006,25 @@
   ;; (lib/arm64env.lisp:33), so copy-lexpr-argument's temp is WIRED to
   ;; temp0 (w1).
   (stp xzr temp4 (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; Control-stack overflow probe -- PPC64 ppc64-vinsns.lisp:3471-3472
+  ;;   (ld imm ppc64::tcr.cs-limit ppc64::rcontext)
+  ;;   (tdllt ppc::sp imm)
+  ;; ARM64-DEVIATION: A64 has no trap-on-condition instruction, so the trap
+  ;; is a conditional branch around a udf.  That is the shape
+  ;; .SPsavecontextvsp already uses (spentry-C-bind-catch-throw.s:1669-1671),
+  ;; and b.hs (unsigned higher-or-same) is exactly tdllt's complement.
+  ;; marker-reg is dead once the frame is stored, so no extra temp is needed.
+  ;; The kernel side is already present: arm64-exceptions.c:1596-1637 decodes
+  ;; uuo_interr(error_stack_overflow, Rsp) and runs the PPC yellow-zone logic,
+  ;; restore_soft_stack_limit has its `case Rsp:', and
+  ;; level-1/arm64-error-signal.lisp:145 already reports rb=31 as the control
+  ;; stack.  Until this probe existed, all of that was unreachable.
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (udf (:$ (:apply arm642-cstack-overflow-uuo)))
+  :ok)
 
 ;;; get-complex-double-float -- x8664's 128-bit load; his template
 ;;; table has no Q-form load, so composed exactly like w3a's
@@ -4204,7 +4240,25 @@
   (mov marker-reg (:$ arm64::lisp-frame-marker))
   (stp marker-reg vsp-reg (:@! sp (:$ -32)))
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; Control-stack overflow probe -- PPC64 ppc64-vinsns.lisp:3471-3472
+  ;;   (ld imm ppc64::tcr.cs-limit ppc64::rcontext)
+  ;;   (tdllt ppc::sp imm)
+  ;; ARM64-DEVIATION: A64 has no trap-on-condition instruction, so the trap
+  ;; is a conditional branch around a udf.  That is the shape
+  ;; .SPsavecontextvsp already uses (spentry-C-bind-catch-throw.s:1669-1671),
+  ;; and b.hs (unsigned higher-or-same) is exactly tdllt's complement.
+  ;; marker-reg is dead once the frame is stored, so no extra temp is needed.
+  ;; The kernel side is already present: arm64-exceptions.c:1596-1637 decodes
+  ;; uuo_interr(error_stack_overflow, Rsp) and runs the PPC yellow-zone logic,
+  ;; restore_soft_stack_limit has its `case Rsp:', and
+  ;; level-1/arm64-error-signal.lisp:145 already reports rb=31 as the control
+  ;; stack.  Until this probe existed, all of that was unreachable.
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (udf (:$ (:apply arm642-cstack-overflow-uuo)))
+  :ok)
 
 ;;; call-label -- PPC64 ppc64-vinsns.lisp:2184 verbatim (bl label).
 (define-arm64-vinsn (call-label :call) (()
@@ -4305,7 +4359,25 @@
   (mov marker-reg (:$ arm64::lisp-frame-marker))
   (stp marker-reg vsp-reg (:@! sp (:$ -32)))
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; Control-stack overflow probe -- PPC64 ppc64-vinsns.lisp:3471-3472
+  ;;   (ld imm ppc64::tcr.cs-limit ppc64::rcontext)
+  ;;   (tdllt ppc::sp imm)
+  ;; ARM64-DEVIATION: A64 has no trap-on-condition instruction, so the trap
+  ;; is a conditional branch around a udf.  That is the shape
+  ;; .SPsavecontextvsp already uses (spentry-C-bind-catch-throw.s:1669-1671),
+  ;; and b.hs (unsigned higher-or-same) is exactly tdllt's complement.
+  ;; marker-reg is dead once the frame is stored, so no extra temp is needed.
+  ;; The kernel side is already present: arm64-exceptions.c:1596-1637 decodes
+  ;; uuo_interr(error_stack_overflow, Rsp) and runs the PPC yellow-zone logic,
+  ;; restore_soft_stack_limit has its `case Rsp:', and
+  ;; level-1/arm64-error-signal.lisp:145 already reports rb=31 as the control
+  ;; stack.  Until this probe existed, all of that was unreachable.
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (udf (:$ (:apply arm642-cstack-overflow-uuo)))
+  :ok)
 
 ;;; ============ fitvals ============
 ;;; Gate-37 multiple-value-bind cluster.  PPC64 ppc64-vinsns.lisp:4049
