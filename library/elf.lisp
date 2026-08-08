@@ -189,7 +189,12 @@
                   ))
     (functions)))
 
-#+(or arm-target ppc-target)
+;; arm64 uses this definition and not the #+x86-target one above.  PURIFY
+;; moves a function's CODE VECTOR to the readonly area on arm64 and leaves
+;; the function object itself in dynamic space, so a scan of :readonly for
+;; objects of type FUNCTION finds none.  This arm walks %map-lfuns instead
+;; and keeps the lfuns whose code vector landed in the readonly range.
+#+(or arm-target ppc-target arm64-target)
 (defun collect-elf-static-functions ()
   (ccl::purify)
   (multiple-value-bind (pure-low pure-high)
@@ -200,7 +205,7 @@
             (values (ash (ccl::%fixnum-ref a target::area.low) target::fixnumshift)
                     (ash (ccl::%fixnum-ref a target::area.active) target::fixnumshift)))))
     (let* ((hash (make-hash-table :test #'eq))
-           (code-vector-index #+ppc-target 0 #+arm-target 1))
+           (code-vector-index #+ppc-target 0 #+arm-target 1 #+arm64-target 0))
       (ccl::%map-lfuns #'(lambda (f)
                            (let* ((code-vector  (ccl:uvref f code-vector-index))
                                   (startaddr (+ (ccl::%address-of code-vector)
@@ -260,14 +265,39 @@
                   #+64-bit-target :<E>lf64_<S>ym.st_value
                   #+32-bit-target :<E>lf32_<S>ym.st_value)
             #+x86-target (%address-of f)
-            #+ppc-target (- (%address-of (uvref f 0)) (- ppc::fulltag-misc ppc::node-size))
+            #+ppc-target (- (%address-of (uvref f 0)) (- target::fulltag-misc target::node-size))
             #+arm-target (- (%address-of (uvref f 1)) (- arm::fulltag-misc arm::node-size))
+            ;; arm64: element 0 is the code-vector (arm64-arch.lisp:673); this
+            ;; is its DATA start, i.e. tagged address + misc-data-offset (-4).
+            ;; The first executable instruction is 4 bytes later: data word 0
+            ;; is the `udf #0' sentinel (arm64-arch.lisp:73-76).
+            #+arm64-target (+ (%address-of (uvref f 0)) target::misc-data-offset)
             (pref p
                   #+64-bit-target :<E>lf64_<S>ym.st_size
                   #+32-bit-target :<E>lf32_<S>ym.st_size)
             #+x86-target (1+ (ash (1- (%function-code-words f)) target::word-shift))
-            #+ppc-target (ash (uvsize (uvref f 0)) ppc::word-shift)
-            #+arm-target (ash (uvsize (uvref f 1)) arm::word-shift)
+            ;; uvsize counts ELEMENTS, and a code-vector's elements are 32
+            ;; bits wide (ppc64-arch.lisp declares code-vector
+            ;; ivector-class-32-bit, and says so in the comment above it),
+            ;; while word-shift is the NODE shift: 3 on ppc64, 2 on ppc32.
+            ;; (ash n word-shift) was therefore 8n bytes for a 4n-byte
+            ;; code-vector on ppc64, and right on ppc32 only by coincidence.
+            ;; ppc64-misc-byte-count in ppc64-arch.lisp gives the intended
+            ;; answer for this ivector class: (ash element-count 2).
+            #+ppc-target (subtag-bytes target::subtag-code-vector
+                                       (uvsize (uvref f 0)))
+            ;; 4n either way on arm32 (word-shift is 2 there), but written the
+            ;; same way so that it states the element width rather than
+            ;; depending on a coincidence -- the same coincidence that stopped
+            ;; holding for #+ppc-target when ppc64 joined ppc32 under it.
+            #+arm-target (subtag-bytes target::subtag-code-vector
+                                       (uvsize (uvref f 1)))
+            ;; NOT (ash (uvsize cv) word-shift): an arm64 code-vector is an
+            ;; ivector-class-32-bit (arm64-arch.lisp:153) but word-shift is 3
+            ;; (:31), so that spelling doubles the size.  subtag-bytes knows
+            ;; the element width (level-0/l0-array.lisp:922-951).
+            #+arm64-target (subtag-bytes target::subtag-code-vector
+                                         (uvsize (uvref f 0)))
             ))))
 
 (defun elf-section-index (section)
@@ -374,6 +404,7 @@
                                            #+ppc32-target #$EM_PPC
                                            #+ppc64-target #$EM_PPC64
                                            #+arm-target #$EM_ARM
+                                           #+arm64-target #$EM_AARCH64
                                            ))
          (program-header (new-elf-program-header object))
          (lisp-section (new-elf-section object))
