@@ -12,10 +12,18 @@ CC = ${CROSS}gcc
 ASFLAGS =
 CDEFINES = -DLINUX -DARM64 -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
-COPT = -O2
+# The xp accessor macros in platform-linuxarm64.h type-pun the signal
+# context's __u64 fields through natural * and uint32_t **.  -O2 turns on
+# -fstrict-aliasing, which licenses the compiler to assume that does not
+# happen, so this is a correctness flag and not a warning suppression.
+COPT = -O2 -fno-strict-aliasing
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format
+# -Wswitch reports an enum switch that has silently lost a case.  Kept
+# separate from WFORMAT so that overriding WFORMAT on the command line to
+# audit warnings does not also discard this.
+WARN = -Wswitch -Wno-unused-parameter
 PLATFORM_H = platform-linuxarm64.h
 
 
@@ -33,7 +41,7 @@ endif
 .s.o:
 	$(CC) -c -x assembler-with-cpp -I../ $< $(CDEFINES) -o $@
 .c.o:
-	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT)  -o $@
+	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT) $(WARN)  -o $@
 
 SPOBJ = pad.o  arm64-spentry.o spentry-A-alloc-numbers.o spentry-B-vectors-misc.o spentry-C-bind-catch-throw.o spentry-D-call-builtins.o spentry-E-ffi.o
 ASMOBJ = arm64-asmutils.o arm64-imports.o
