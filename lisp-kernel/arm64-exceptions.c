@@ -274,9 +274,13 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 #define IS_ALLOC_TRAP(i) ((i) == ALLOC_TRAP_INSTRUCTION)
 
 /* STUR (64-bit): 1111 1000 000 imm9 00 Rn Rt
-   header store: stur Xt, [x26, #misc_header_offset(-4)]
+   header store: stur Xt, [x26, #-fulltag_misc] = [x26, #-12] (16m78:
+     this mask tested -4, which is misc_data_offset, NOT the header
+     offset; the compiler stores the header at P-12, so the old mask
+     could never match and every suspension landing on the header store
+     Bug()d out of finish_allocating_uvector.)
      imm9 = -4 & 0x1ff = 0x1fc → 0xf8000000|0x1fc<<12|26<<5 = 0xf81fc340 */
-#define IS_SET_ALLOCPTR_HEADER_RD(i) (((i) & 0xffffffe0) == 0xf81fc340)
+#define IS_SET_ALLOCPTR_HEADER_RD(i) (((i) & 0xffffffe0) == 0xf81f4340)
 /* cons.cdr = -cons_bias = -3 (arm64-constants.h cons struct):
      stur Xt, [x26, #-3] → imm9 = 0x1fd → 0xf81fd340 */
 #define IS_SET_ALLOCPTR_CDR_RD(i)    (((i) & 0xffffffe0) == 0xf81fd340)
@@ -2210,17 +2214,56 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         xpGPR(xp, allocptr) = VOID_ALLOCPTR - disp;
       }
     } else {
-      /* Already past the alloc trap: finish allocating the object. */
-      if (allocptr_tag == fulltag_cons) {
-        finish_allocating_cons(xp);
-      } else {
-        if (allocptr_tag == fulltag_misc) {
-          finish_allocating_uvector(xp);
-        } else {
-          Bug(xp, "what's being allocated here ?");
+      opcode cur = *program_counter;
+
+      if (IS_SUB_IMM_FROM_ALLOCPTR(cur) ||
+          IS_SUB_RM_FROM_ALLOCPTR(cur) ||
+          IS_COMPARE_ALLOCPTR_TO_ALLOCBASE(cur) ||
+          IS_BRANCH_AROUND_ALLOC_TRAP(cur)) {
+        /* Interrupted at an interior point BEFORE the trap commits.  The
+           arm64 sub/cmp/b.hi/udf expansion has pre-trap points that PPC's
+           single trap instruction never had; ARM32 backs the PC up to the
+           sub and restarts the allocation (arm-exceptions.c
+           restart_allocation).  Do the same: re-run from the sub with a
+           voided allocptr/allocbase so the b.hi falls through and the trap
+           re-fires cleanly. */
+        pc q = program_counter;
+        int back;
+        signed_natural sub_disp = 0;
+
+        for (back = 0;
+             !(IS_SUB_IMM_FROM_ALLOCPTR(*q) || IS_SUB_RM_FROM_ALLOCPTR(*q));
+             back++) {
+          if (back > 16) {
+            Bug(xp, "Can't find the sub-from-allocptr behind an alloc-sequence interior point at " LISP ":", (LispObj)program_counter);
+          }
+          --q;
         }
+        if (q != program_counter) {   /* the sub has executed: undo its accounting */
+          if (IS_SUB_IMM_FROM_ALLOCPTR(*q)) {
+            sub_disp = (signed_natural) SUB_IMM_FIELD(*q);
+          } else {
+            sub_disp = (signed_natural) xpGPR(xp, RM_field(*q));
+          }
+          update_bytes_allocated(tcr,
+                                 (void *)ptr_from_lispobj(cur_allocptr + sub_disp));
+        }
+        xpPC(xp) = q;
+        xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+        xpGPR(xp, allocptr) = VOID_ALLOCPTR;
+      } else {
+        /* Already past the alloc trap: finish allocating the object. */
+        if (allocptr_tag == fulltag_cons) {
+          finish_allocating_cons(xp);
+        } else {
+          if (allocptr_tag == fulltag_misc) {
+            finish_allocating_uvector(xp);
+          } else {
+            Bug(xp, "what's being allocated here ?");
+          }
+        }
+        xpGPR(xp, allocptr) = xpGPR(xp, allocbase) = VOID_ALLOCPTR;
       }
-      xpGPR(xp, allocptr) = xpGPR(xp, allocbase) = VOID_ALLOCPTR;
     }
     return;
   }
