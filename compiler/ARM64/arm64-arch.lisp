@@ -860,6 +860,11 @@
 (defconstant callback-frame.fp-save-offset -64)
 (defconstant callback-frame.savelr-offset -152)
 (defconstant callback-frame.stack-args-offset 64)
+;;; Incoming x8 (the AAPCS64 6.9 indirect result-area pointer, live when
+;;; the callback returns a >16-byte non-HFA record), captured by
+;;; _SPcallback into the padding word of its foreign-sp stash pair
+;;; (spentry-E-ffi.s `stp imm0, save2').
+(defconstant callback-frame.x8-save-offset -248)
 
 (defmacro define-header (name element-count subtag)
   `(defconstant ,name (logior (ash ,element-count num-subtag-bits) ,subtag)))
@@ -1406,7 +1411,12 @@
                           ;; catch/throw/unwind-protect/progv cluster (w10;
                           ;; spentry-C-bind-catch-throw.s:319/326/334/1663/
                           ;; 343/440/550, spentry-B:478/1044)
-                          (defsubprim .SPnmkunwind)))))))
+                          (defsubprim .SPnmkunwind)
+                          ;; AAPCS64 6.9 indirect-result (x8) ff-call
+                          ;; variant, for >16-byte non-HFA record-by-value
+                          ;; returns (16m71 HFA lane); body in
+                          ;; spentry-E-ffi.s, sptab index 132
+                          (defsubprim .SPffcall-indirect-result)))))))
 
 ;;; The extension above rebinds the arm64::*subprims* VARIABLE, but
 ;;; ccl::subprim-name->offset resolves through the arch STRUCT's

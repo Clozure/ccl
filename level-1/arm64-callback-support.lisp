@@ -15,11 +15,14 @@
 ;;; jump; neither encoding exists on AArch64, hence the x16 literal jump.
 ;;;
 ;;; Trampoline layout (32 bytes, entered by FOREIGN code under AAPCS64;
-;;; x8 (indirect-result reg, caller-saved for our purposes — _SPcallback
-;;; consumes it immediately) and x16 (IP0 scratch) are safe to clobber):
+;;; x10 and x16 (IP0) are caller-saved scratch, safe to clobber.  x8 is
+;;; NOT: AAPCS64 6.9 delivers the indirect result-area pointer there
+;;; when the callback returns a >16-byte non-HFA record, and _SPcallback
+;;; captures it into the callback frame -- the index lived in x8 until
+;;; 16m71 and silently destroyed that pointer):
 ;;;
-;;;    0: movz x8, #lo16(index)         ; unboxed callback index
-;;;    4: movk x8, #hi16(index), lsl 16
+;;;    0: movz x10, #lo16(index)        ; unboxed callback index
+;;;    4: movk x10, #hi16(index), lsl 16
 ;;;    8: ldr  x16, .+16                ; load _SPcallback address
 ;;;   12: br   x16                      ;   from the literal at +24
 ;;;   16: nop                           ; pad literal to 8-byte alignment
@@ -27,7 +30,7 @@
 ;;;   24: .quad <_SPcallback kernel address>
 ;;;
 ;;; MATCHED PAIR: _SPcallback (upstream-port/lisp-kernel/spentry-E-ffi.s)
-;;; reads the index from arg_w = x8 (`mov save0, arg_w`).  Change this
+;;; reads the index from arg_y = x10 (`mov save0, arg_y`).  Change this
 ;;; generator and that entry together.
 
 (in-package "CCL")
@@ -37,10 +40,10 @@
   (let* ((p (%allocate-callback-pointer 32))
          (addr (%lookup-subprim-address
                 #.(arm64::subprimitive-offset ".SPcallback"))))
-    (setf (%get-unsigned-long p 0)          ; movz x8,#lo16(index)
-          (logior #xd2800008 (ash (ldb (byte 16 0) index) 5))
-          (%get-unsigned-long p 4)          ; movk x8,#hi16(index),lsl #16
-          (logior #xf2a00008 (ash (ldb (byte 16 16) index) 5))
+    (setf (%get-unsigned-long p 0)          ; movz x10,#lo16(index)
+          (logior #xd280000a (ash (ldb (byte 16 0) index) 5))
+          (%get-unsigned-long p 4)          ; movk x10,#hi16(index),lsl #16
+          (logior #xf2a0000a (ash (ldb (byte 16 16) index) 5))
           (%get-unsigned-long p 8)  #x58000090   ; ldr x16,.+16
           (%get-unsigned-long p 12) #xd61f0200   ; br x16
           (%get-unsigned-long p 16) #xd503201f   ; nop

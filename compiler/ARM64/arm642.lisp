@@ -9071,16 +9071,31 @@
 ;;;   [header]                     u64-vector header (frame base = SP)
 ;;;   [prevsp]                     element 0 (saved previous SP)
 ;;;   [GP save: 8 words, X0..X7]   <- .SPffcall loads all 8 unconditionally
-;;;   [FP save: 8 words, D0..D7]   <- p2 reloads V0..V(nfpr-1) inline
-;;;   [stack args: M words]        <- SP points here at the blr; arg0 lowest
-;;;   [reserved lisp frame: 4]     tcr.last_lisp_frame; above the call-time SP
+;;;   [stack args: M words]        <- the AAPCS64 NSAA area; SP points here
+;;;                                   at the blr (frame base + 80).  One
+;;;                                   8-byte slot per overflow arg of EITHER
+;;;                                   class, assigned in SOURCE ORDER (one
+;;;                                   NSAA, 5.4.2 stage C -- integer and FP
+;;;                                   overflow interleave; C.5 widens a
+;;;                                   single-float to a full slot, value in
+;;;                                   the low 4 bytes).  Arg 9 lowest.
+;;;   [FP staging: variable]       <- singles, then even-word-aligned
+;;;                                   doubles; p2 reloads d0..d(n-1) from
+;;;                                   here just before the call.  A private
+;;;                                   scratch area the callee never sees;
+;;;                                   it sits ABOVE the stack args.
+;;;   [reserved lisp frame: 4]     the boundary lisp_frame, directly below
+;;;                                   the saved previous SP
 ;;;
-;;; The arg area (GP save, FP save, stack args) begins at SP+dnode-size
-;;; (after header+prevsp); set-aapcs64-c-arg indexes it in words from there.
-;;; The GP and FP save areas are a fixed 8 words each, so every region has a
-;;; constant offset and .SPffcall is branch-free.  A value stored into an
-;;; unused save slot is harmless: the callee reads only the registers its
-;;; prototype names, and the p2 never reloads unused FP slots.
+;;; The arg area (GP save, stack args, FP staging) begins at SP+dnode-size
+;;; (after header+prevsp); set-c-arg and friends index it in 8-byte words
+;;; from there.  The GP save area is a fixed 8 words and the NSAA block
+;;; starts at arg-area word 8 = frame byte 80 = c_frame.size + 8*node_size,
+;;; which is exactly the constant .SPffcall steps SP by at the blr, so
+;;; .SPffcall stays branch-free.  A value stored into an unused save slot
+;;; is harmless: the callee reads only the registers its prototype names
+;;; and the stack slots its prototype implies, and the p2 never reloads
+;;; unused FP slots.
 ;;;
 ;;; .SPffcall must be FP-clean between entry and the blr, so the FP args the
 ;;; p2 loaded into V0..V(nfpr-1) survive the stack switch.
@@ -9103,6 +9118,8 @@
          (nother-words 0)
          (nfpr-args 0)
          (ngpr-args 0)
+         (return-registers nil)
+         (indirect-result nil)
          (fp-loads ()))
     (declare (fixnum nsingle-floats ndouble-floats nfpr-args ngpr-args
                      nother-words gpr-offset other-offset
@@ -9118,10 +9135,38 @@
            (if (eq argspec :double-float)
              (incf ndouble-floats)
              (incf nsingle-floats))
-           ;; Overflow FP: v2's legs carry PPC32-EABI slotting; loud
-           ;; stop until the AAPCS64 packing is ratified (header note).
-           (compiler-bug "aapcs64-ff-call: more than 8 floating-point ~
-                          args (~s) not yet supported" argspecs)))
+           ;; AAPCS64 5.4.2 stage C: once v0-v7 are exhausted (C.1
+           ;; fails), an FP arg is copied to the stack at the NSAA --
+           ;; the SAME next-stacked-argument address integer overflow
+           ;; uses, advancing in source order; C.5 widens half/single
+           ;; precision to one full 8-byte slot.  ONE NSAA, not a
+           ;; per-class block, so this shares nother-words with the
+           ;; integer arm below, and pass 2 reproduces the identical
+           ;; decision (same counter, same threshold, same order).
+           (incf nother-words)))
+        ;; Return-registers buffer (record-by-value returns): a macptr
+        ;; handed to .SPffcall-return-registers in arg_y; consumes no
+        ;; C argument slot (x862.lisp is the donor shape).
+        (:registers (setq return-registers t))
+        ;; Indirect-result buffer (>16-byte non-HFA record returns): a
+        ;; macptr handed to .SPffcall-indirect-result in arg_y, whose
+        ;; ADDRESS the subprim loads into x8 before the call (AAPCS64
+        ;; 6.9 indirect result-area register); consumes no C slot.
+        ;; Duplicate check HERE, not only in nx1: on a cross host whose
+        ;; nx1 predates the keyword it arrives through the generic
+        ;; *arg-spec-keywords* arm (see lib/ffi-linuxarm64.lisp), which
+        ;; has no duplicate check -- and a second one would vpush a
+        ;; second buffer that the single vpop below never pops.
+        (:indirect-result
+         (when indirect-result
+           (compiler-bug "aapcs64-ff-call: duplicate :indirect-result"))
+         (setq indirect-result t))
+        ;; One raw 8-byte NSAA word -- one slot of a C.13 memory copy of
+        ;; a composite the ABI sends WHOLLY to the stack (emitted by
+        ;; expand-ff-call, which also burns the corresponding register
+        ;; class per C.3/C.11).  Always a stack slot; consumes no
+        ;; register of either class.
+        (:stack-doubleword (incf nother-words))
         (t (incf ngpr-args)
            (if (> ngpr-args 8)
              (incf nother-words)))))
@@ -9161,23 +9206,55 @@
              (spec (car specs))
              (absptr (acode-absolute-ptr-p valform)))
         (case spec
+          ;; Return-registers / indirect-result buffer: evaluate the
+          ;; macptr and park it on the vstack; it is popped into arg_y
+          ;; just before the call (LIFO with the address pushed above).
+          ;; Donor: x862.lisp's (:registers ...) arm.
+          ((:registers :indirect-result)
+           (let* ((reg (arm642-one-untargeted-reg-form
+                        seg valform arm64::arg_z)))
+             (unless *arm642-reckless*
+               (! trap-unless-macptr reg))
+             (arm642-vpush-register seg reg)))
           ;; FPR regspecs are raw FPR numbers under :class :fpr (his
           ;; arm642-immediate idiom); no dN name constants in his arch.
           ;; Staging register d1 mirrors the v2 donor's fp1 choice.
+          ;;
+          ;; FP args 1-8 go to staging slots and are reloaded into d0-d7
+          ;; after the last form (arbitrary lisp code in a later form
+          ;; would clobber them).  FP args 9+ go straight into their NSAA
+          ;; stack slot NOW: the callee reads them from MEMORY, so there
+          ;; is no register load to defer, and the shared other-offset
+          ;; counter is what interleaves them with overflowing integer
+          ;; args in source order (AAPCS64 5.4.2: one NSAA for both
+          ;; classes -- pass 1 counted these same slots into
+          ;; nother-words).
           (:double-float
            (let* ((df ($ 1 :class :fpr :mode :double-float)))
              (incf nfpr-args)
              (arm642-one-targeted-reg-form seg valform df)
-             (! set-double-c-arg df double-float-offset)
-             (push (cons :double-float double-float-offset) fp-loads)
-             (incf double-float-offset 2)))
+             (cond ((<= nfpr-args 8)
+                    (! set-double-c-arg df double-float-offset)
+                    (push (cons :double-float double-float-offset) fp-loads)
+                    (incf double-float-offset 2))
+                   (t
+                    (! set-double-c-arg df other-offset)
+                    (incf other-offset)))))
           (:single-float
            (let* ((sf ($ 1 :class :fpr :mode :single-float)))
              (incf nfpr-args)
              (arm642-one-targeted-reg-form seg valform sf)
-             (! set-single-c-arg sf single-float-offset)
-             (push (cons :single-float single-float-offset) fp-loads)
-             (incf single-float-offset)))
+             (cond ((<= nfpr-args 8)
+                    (! set-single-c-arg sf single-float-offset)
+                    (push (cons :single-float single-float-offset) fp-loads)
+                    (incf single-float-offset))
+                   (t
+                    ;; C.5: a stacked single occupies a full 8-byte
+                    ;; slot with the value in its low 4 bytes; a
+                    ;; little-endian 32-bit str at the slot base does
+                    ;; exactly that.
+                    (! set-single-c-arg sf other-offset)
+                    (incf other-offset)))))
           ;; 64-bit integer: full value in imm0 via gets64/getu64
           ;; (w10), ONE GPR slot (v2 s86 AAPCS64 deviation kept).
           ((:signed-doubleword :unsigned-doubleword)
@@ -9192,6 +9269,15 @@
                  (t
                   (! set-c-arg ($ arm64::imm0) other-offset)
                   (incf other-offset))))
+          ;; Raw NSAA word (C.13 whole-composite stack copy; see the
+          ;; pass-1 arm and expand-ff-call).  Same u64 value path as
+          ;; :unsigned-doubleword, but the slot is unconditionally a
+          ;; stack slot and no register-class counter moves.
+          (:stack-doubleword
+           (arm642-one-targeted-reg-form seg valform ($ arm64::arg_z))
+           (! getu64)
+           (! set-c-arg ($ arm64::imm0) other-offset)
+           (incf other-offset))
           (:address
            (with-imm-target () (ptr :address)
              (if absptr
@@ -9228,15 +9314,23 @@
         (if (eq size :double-float)
           (! reload-double-c-arg ($ fpreg :class :fpr :mode :double-float) from)
           (! reload-single-c-arg ($ fpreg :class :fpr :mode :single-float) from))))
-    ;; No stack args reach the callee: _SPffcall keeps SP at the frame
-    ;; head during the call (16m5c -- popping freed the saved lr/backlink
-    ;; under the callee).  Args 9+ would sit in never-read stack slots,
-    ;; so refuse loudly until the stack-arg frame layout is ratified.
-    (when (> ngpr-args 8)
-      (compiler-bug "aapcs64-ff-call: more than 8 GPR args (~d) -- stack-arg ~
-                     frame layout not ratified (16m5c)" ngpr-args))
+    ;; Args 9+ of either class are already sitting in the NSAA block
+    ;; (arg-area words 8..): .SPffcall steps SP over header+prevsp+params
+    ;; at the blr, so the callee finds them AT [SP], per AAPCS64.  The
+    ;; 16m5c "not ratified" refusal that lived here is gone; the SP step
+    ;; in the three ffcall spentries is the kernel half of that change.
+    ;; LIFO: the regbuf/indirect buffer (if any) was pushed after the
+    ;; address, so it pops first.  Both subprim variants read the buffer
+    ;; macptr from arg_y (spentry-E-ffi.s): .SPffcall-return-registers
+    ;; stores {x0-x7 @ 0..56, d0-d7 @ 64..120} into it on return;
+    ;; .SPffcall-indirect-result loads its address into x8 before the
+    ;; call (AAPCS64 6.9).
+    (when (or return-registers indirect-result)
+      (arm642-vpop-register seg ($ arm64::arg_y)))
     (arm642-vpop-register seg ($ arm64::arg_z))
-    (! ff-call)
+    (cond (return-registers (! ff-call-return-registers))
+          (indirect-result (! ff-call-indirect-result))
+          (t (! ff-call)))
     ;; .SPffcall popped the c-frame at runtime; restore the static
     ;; accounting NOW, not via the let*-shadow.  The shadow only
     ;; unwinds after this handler returns -- but (^) below emits the
@@ -9743,6 +9837,54 @@
              (! %current-frame-ptr target)))
          (^))))
 
+;;; The C stack IS the control stack, so the "foreign stack pointer" is
+;;; SP — after WITH-VARIABLE-C-FRAME allocates, this is the new c-frame's
+;;; base, which is how the frame variable gets bound (nx1.lisp binds it
+;;; to (%foreign-stack-pointer) as the body's first act).  PPC
+;;; (ppc2.lisp ppc2-%foreign-stack-pointer) and ARM32 (arm2.lisp) define
+;;; this identically for their unified stacks; x86-64 reads
+;;; tcr.foreign-sp instead (separate foreign stack).
+(defarm642 arm642-%foreign-stack-pointer %foreign-stack-pointer (seg vreg xfer)
+  (when vreg
+    (ensuring-node-target (target vreg)
+      (! %current-frame-ptr target)))
+  (^))
+
+;;; WITH-VARIABLE-C-FRAME: allocate a c-frame of SIZE param words around
+;;; BODY.  Model: x862-with-variable-c-frame (x862.lisp); the
+;;; interpreter-side %ff-call (arm64-def.lisp) is the only in-tree
+;;; linuxarm64 user.  The undo machinery already knew how to pop it —
+;;; $undo-arm64-c-frame => (! discard-c-frame) in the nlexit walker
+;;; below (previously dead: nothing opened that undo) — and the pop is
+;;; DYNAMIC (sp <- the frame's savedsp word at [sp,#8]), which is
+;;; correct both while the frame is live and after .SPffcall
+;;; (SUBPRIM-POPS) has replaced it with %%ff-result's fixed rebalance
+;;; frame.  All exits reach it: opening the undo bumps the same counter
+;;; arm642-unwind-stack treats as the catch diff, so normal falls into
+;;; arm642-nlexit, and arm642-do-return drains open undos the same way.
+;;;
+;;; ARM64-DEVIATION (vinsn choice, not operator semantics): a
+;;; compile-time-constant SIZE uses the constant alloc-c-frame vinsn,
+;;; whose single pre-indexed stp is ATOMIC w.r.t. suspension.  The
+;;; runtime-size alloc-variable-c-frame vinsn has a sub-sp/stp window
+;;; that pc_luser_xp does not finish yet (the vinsn pins header/prevsp
+;;; to imm0/imm1 for that recognizer; arm64-exceptions.c never grew the
+;;; case).  %ff-call always passes a constant; the runtime-size path has
+;;; no linuxarm64 caller today (objc-bridge is Darwin-only).  RATIFY:
+;;; implement the pc_luser_xp case before a runtime-size caller lands.
+(defarm642 arm642-with-variable-c-frame with-variable-c-frame (seg vreg xfer size body &aux
+                                                                   (old-stack (arm642-encode-stack)))
+  (let* ((fix (acode-fixnum-form-p size)))
+    (if (and fix
+             (typep fix 'fixnum)
+             (>= fix 0)
+             (<= (arm642-c-frame-words fix) 63)) ;stp scaled-imm7 reach
+      (! alloc-c-frame fix)
+      (let* ((reg (arm642-one-untargeted-reg-form seg size arm64::arg_z)))
+        (! alloc-variable-c-frame reg))))
+  (arm642-open-undo $undo-arm64-c-frame)
+  (arm642-undo-body seg vreg xfer body old-stack))
+
 (defun arm642-swap-unsigned-cond-bit (cr-bit)
   (cond ((eql cr-bit arm64::cond-hi) arm64::cond-lo)
         ((eql cr-bit arm64::cond-lo) arm64::cond-hi)
@@ -9779,3 +9921,48 @@
   (def-natural-logical arm642-%natural-logand %natural-logand logand)
   (def-natural-logical arm642-%natural-logior %natural-logior logior)
   (def-natural-logical arm642-%natural-logxor %natural-logxor logxor))
+
+;;; Natural arithmetic, the same shape as the logical ops above.  PPC64
+;;; ppc2.lisp:8711 (%natural+) and :8735 (%natural-) additionally special-case a
+;;; u15 constant operand via %natural+-c/%natural--c; that leg is omitted here
+;;; for the reason given at the vinsns -- the arm64 natural family has no -c
+;;; forms.  Constant folding is kept: PPC64 folds both-constant operands through
+;;; ppc2-natural-constant, and arm642-absolute-natural is the arm64 equivalent
+;;; already used by def-natural-logical.
+(macrolet ((def-natural-arith (handler-name op-name folder)
+             `(defarm642 ,handler-name ,op-name (seg vreg xfer x y)
+                (if (null vreg)
+                  (progn
+                    (arm642-form seg nil nil x)
+                    (arm642-form seg nil xfer y))
+                  (let* ((naturalx (nx-natural-constant-p x))
+                         (naturaly (nx-natural-constant-p y)))
+                    (if (and naturalx naturaly)
+                      (arm642-absolute-natural seg vreg xfer
+                                               (logand (,folder naturalx naturaly)
+                                                       #xffffffffffffffff))
+                      (progn
+                        (with-imm-target () (xreg :natural)
+                          (with-imm-target (xreg) (yreg :natural)
+                            (arm642-two-targeted-reg-forms seg x xreg y yreg)
+                            (! ,op-name xreg xreg yreg))
+                          (<- xreg))
+                        (^))))))))
+  (def-natural-arith arm642-%natural+ %natural+ +)
+  (def-natural-arith arm642-%natural- %natural- -))
+
+;;; Natural shifts by a CONSTANT amount.  PPC64 ppc2.lisp:8852/8859 -- the count
+;;; is read straight out of the acode with acode-fixnum-form-p, which is also how
+;;; PPC64 relies on nx1 having established a constant; a variable amount would
+;;; hand the vinsn NIL for a :u8const operand and fail at definition time on both
+;;; ports.  Mirrored rather than "improved", per the no-workarounds rule: if a
+;;; variable-count path is ever needed it belongs upstream in both backends.
+(macrolet ((def-natural-shift (handler-name op-name)
+             `(defarm642 ,handler-name ,op-name (seg vreg xfer num amt)
+                (with-imm-target () (dest :natural)
+                  (arm642-one-targeted-reg-form seg num dest)
+                  (! ,op-name dest dest (acode-fixnum-form-p amt))
+                  (<- dest)
+                  (^)))))
+  (def-natural-shift arm642-natural-shift-left natural-shift-left)
+  (def-natural-shift arm642-natural-shift-right natural-shift-right))
