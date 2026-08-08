@@ -45,13 +45,17 @@
   (definition (:variable *command-line-argument-list*) "*command-line-argument-list*" nil
     "A list of strings decoded from the argument vector passed to the lisp
 process (as {code argv[]}) by the operating system.  The foreign C strings are
-assumed to be UTF-8 encoded.")
+assumed to be UTF-8 encoded. By default, the kernel removes runtime options
+before this variable is initialized. A saved image made with
+{code :process-runtime-options nil} retains every application argument.")
 
   (definition (:variable *unprocessed-command-line-arguments*)
     "*unprocessed-command-line-arguments*" nil
     "A list of strings that denotes the command-line arguments that
 remain after the lisp has processed and removed arguments that it
-interprets itself.")
+interprets itself. An explicit toplevel function sees the arguments after
+{code --}, or every application argument when the image was saved with
+{code :process-runtime-options nil}.")
 
 
   ) ;chapter
