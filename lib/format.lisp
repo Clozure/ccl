@@ -611,7 +611,7 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
                     (real
                      (<= p1 p2 p3))
                     (character
-                     (char< p1 p2 p3))))
+                     (char<= p1 p2 p3))))
               (p2 (equal p1 p2))
               (p1 (eql p1 0))
               (t (null (if colon *format-colon-rest* *format-arguments*))))
@@ -2442,9 +2442,9 @@ and (nthcdr *format-arguments-variance* *format-arguments*)")
 				       (if (every (lambda (p) (nx-could-be-type p 'real)) parms)
 					 ;; If the params could also be chars, don't know enough to constant fold
 					 ;; anyway, so this test will do.
-					 `(< ,p1 ,p2 ,p3)
+					 `(<= ,p1 ,p2 ,p3)
 					 (if (every (lambda (p) (nx-could-be-type p 'character)) parms)
-					   `(char< ,p1 ,p2 ,p3)
+					   `(char<= ,p1 ,p2 ,p3)
 					   ;; At least one can't be real, at least one can't be char.
 					   (format-error "Wrong type of parameters for three-way comparison"))))
 				      (p2 `(equal ,p1 ,p2))
