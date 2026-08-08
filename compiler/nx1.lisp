@@ -642,7 +642,7 @@
 ;;; not present in the current environment (and which does -not- generally
 ;;; contain whatever randomness is floating around at the point of
 ;;; application.)
-(defun nx1-destructure (context lambda-list bindform cdr-p &whole-allowed-p forms &optional (body-env *nx-lexical-environment*))
+(defun nx1-destructure (context lambda-list bindform cdr-p &whole-allowed-p forms &optional (body-env *nx-lexical-environment*) inline-token)
   (declare (ignore cdr-p))
   (let* ((old-env body-env)
          (*nx-bound-vars* *nx-bound-vars*)
@@ -662,11 +662,14 @@
             (let* ((acode (make-acode (%nx1-operator let*)
                                       (list temp-var)
                                       (list bindform)
-                                      (nx1-env-body context
-                                                    `((destructuring-bind ,lambda-list ,temp-name
-                                                      ,@decls
-                                                      ,@body))
-                                                    old-env)
+                                      (let ((*nx-inline-expansions* (if inline-token
+                                                                        (cons inline-token *nx-inline-expansions*)
+                                                                        *nx-inline-expansions*)))
+                                        (nx1-env-body context
+                                                      `((destructuring-bind ,lambda-list ,temp-name
+                                                          ,@decls
+                                                          ,@body))
+                                                      old-env))
                                       *nx-new-p2decls*)))
               (nx1-check-var-bindings var-bound-vars)
               (nx1-punt-bindings vars vals)
@@ -1923,10 +1926,13 @@
 
 
 ;((lambda (lambda-list) . body) . args)
-(defun nx1-lambda-bind (context lambda-list args body &optional (body-environment *nx-lexical-environment*))
+(defun nx1-lambda-bind (context lambda-list args body &optional (body-environment *nx-lexical-environment*) inline-token)
   (let* ((old-env body-environment)
          (arg-env *nx-lexical-environment*)
          (arglist nil)
+         (new-inline-expansions (if inline-token
+                                    (cons inline-token *nx-inline-expansions*)
+                                    *nx-inline-expansions*))
          var-bound-vars
          vars vals vars* vals*)
     ;; If the lambda list contains &LEXPR, we can't do it.  Yet.
@@ -1935,14 +1941,19 @@
       (when (and ok (or (eq (%car resttail) '&lexpr)
                         ;*backend-use-linear-scan*
                         (eq (%car keytail) '&key)))
-        (return-from nx1-lambda-bind (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args))))
+        (let ((*nx-inline-expansions* new-inline-expansions))
+          (return-from nx1-lambda-bind
+            (nx1-call context (nx1-form context `(lambda ,lambda-list ,@body)) args)))))
     (let* ((*nx-lexical-environment* body-environment)
            (*nx-bound-vars* *nx-bound-vars*))
       (with-nx-declarations (pending)
         (multiple-value-bind (body decls) (parse-body body *nx-lexical-environment*)
           (nx-process-declarations pending decls)
           (multiple-value-bind (req opt rest keys auxen)
-              (nx-parse-simple-lambda-list pending lambda-list)
+              ;; This generates the default initforms for optional/key/aux
+              ;; arguments, which are part of the function's expansion.
+              (let ((*nx-inline-expansions* new-inline-expansions))
+                (nx-parse-simple-lambda-list pending lambda-list))
             (let* ((*nx-lexical-environment* arg-env))
               (setq arglist (nx1-formlist context args)))
             (nx-effect-other-decls pending *nx-lexical-environment*)
@@ -1955,7 +1966,8 @@
                 (push var vars)
                 (push val vals)
                 (when binding (push binding var-bound-vars))))
-            (setq body (nx1-env-body context body old-env))
+            (let ((*nx-inline-expansions* new-inline-expansions))
+              (setq body (nx1-env-body context body old-env)))
             (nx1-check-var-bindings var-bound-vars)
             (nx1-punt-bindings vars vals)
             (destructuring-bind (&optional optvars inits spvars) opt
