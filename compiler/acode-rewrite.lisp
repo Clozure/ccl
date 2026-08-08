@@ -638,7 +638,7 @@
   (rewrite-acode-form form type))
 
 (def-acode-rewrite rewrite-typed-form typed-form asserted-type (&whole w type form &optional check)
-  (rewrite-acode-form form (if (or check *acode-rewrite-trust-declarations*) type t)))
+  (rewrite-acode-form form (if (and (not check) *acode-rewrite-trust-declarations*) type t)))
 
 (def-acode-rewrite rewrite-trivial-unary (fixnum immediate simple-function closed-function lexical-reference bound-special-ref special-ref local-go %function global-ref free-reference inherited-arg) asserted-type (&whole w val)
   (declare (ignore val)))
