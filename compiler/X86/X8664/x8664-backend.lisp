@@ -335,17 +335,43 @@
 ;;; Note that this means that a chunk consisting of two SINGLE-FLOATs would
 ;;; be passed in the low 64 bit of an SSE (xmm) register.
 
+(defun x8664::type-is-of-class-integer (ftype)
+  ;; Return true if FTYPE is of "class" integer, or is an aggregate any
+  ;; of whose members is.  (See the System V AMD64 ABI document for a
+  ;; convoluted definition of "classes".)
+  ;;
+  ;; 3.2.3 "Aggregates and Unions" classifies an ARRAY by its ELEMENT
+  ;; type, which the field walk below cannot express: it recurses field
+  ;; to field, and an array has no fields.  Without an arm here an
+  ;; array-of-integer member reached the OTHERWISE arm and came back
+  ;; NIL, so `struct { int v[2]; }' classified as :FLOAT while the
+  ;; identically laid out `struct { int a; int b; }' correctly gave
+  ;; :INTEGER -- the aggregate was then passed and returned in an SSE
+  ;; register instead of a GPR.
+  ;;
+  ;; Degenerate dimensions are excluded the way arm64's
+  ;; ARM64-LINUX::HFA-ELEMENT-INFO already excludes them, so the two
+  ;; back ends agree about what an array member contributes.
+  (typecase ftype
+    ((or foreign-integer-type foreign-pointer-type) t)
+    (foreign-array-type
+     (let* ((dims (foreign-array-type-dimensions ftype)))
+       (when (and dims
+                  (every #'(lambda (d) (typep d 'unsigned-byte)) dims)
+                  (> (reduce #'* dims) 0))
+         (x8664::type-is-of-class-integer
+          (foreign-array-type-element-type ftype)))))
+    (foreign-record-type (dolist (f (foreign-record-type-fields ftype))
+                           (when (x8664::type-is-of-class-integer
+                                  (foreign-record-field-type f))
+                             (return t))))
+    (otherwise nil)))
+
 (defun x8664::field-is-of-class-integer (field)
   ;; Return true if field is of "class" integer or if it's a record
   ;; type of class integer.  (See the System V AMD64 ABI document for
   ;; a convoluted definition of field "classes".)
-  (let* ((ftype (foreign-record-field-type field)))
-    (typecase ftype
-      ((or foreign-integer-type foreign-pointer-type) t)
-      (foreign-record-type (dolist (f (foreign-record-type-fields ftype))
-                             (when (x8664::field-is-of-class-integer f)
-                               (return t))))
-      (otherwise nil))))
+  (x8664::type-is-of-class-integer (foreign-record-field-type field)))
 
 (defun x8664::classify-8byte (field-list bit-limit)
   ;; CDR down the fields in FIELD-LIST until we find a field of class integer,
@@ -366,13 +392,33 @@
 (defun x8664::classify-record-type (rtype)
   (let* ((nbits (ensure-foreign-type-bits rtype))
          (fields (foreign-record-type-fields rtype)))
-    (cond ((> nbits 128) (values :memory nil))
-          ((<= nbits 64) (values (x8664::classify-8byte fields 64) nil))
-          (t (values (x8664::classify-8byte fields 64)
-               (do* ()
-                    ((>= (foreign-record-field-offset (car fields)) 64)
-                     (x8664::classify-8byte fields 128))
-                 (setq fields (cdr fields))))))))
+    ;; The second-eightbyte walk CDRs down the FIELD list looking for the
+    ;; first field that starts at bit 64 or later.  That assumes no field
+    ;; spans the eightbyte boundary -- true of scalars, false of arrays,
+    ;; which are ONE field covering both halves.  For `int v[3]' the walk
+    ;; consumed the only field and handed CLASSIFY-8BYTE an empty list,
+    ;; whose DOLIST result form is :FLOAT: the record classified
+    ;; (:INTEGER :FLOAT) even once the element type was understood.
+    ;;
+    ;; So stop when the current field EXTENDS past bit 64, not only when
+    ;; it STARTS there, leaving a spanning field in the list for the
+    ;; second eightbyte.  Records without a spanning field are
+    ;; unaffected: each of their fields either ends at or before bit 64
+    ;; (walk on, as before) or starts at or after it (walk stops, as
+    ;; before).
+    (flet ((spans-64 (f)
+             (> (+ (foreign-record-field-offset f)
+                   (ensure-foreign-type-bits (foreign-record-field-type f)))
+                64)))
+      (cond ((> nbits 128) (values :memory nil))
+            ((<= nbits 64) (values (x8664::classify-8byte fields 64) nil))
+            (t (values (x8664::classify-8byte fields 64)
+                 (do* ()
+                      ((or (null fields)
+                           (>= (foreign-record-field-offset (car fields)) 64)
+                           (spans-64 (car fields)))
+                       (x8664::classify-8byte fields 128))
+                   (setq fields (cdr fields)))))))))
 
 (defun x8664::struct-from-regbuf-values (r rtype regbuf)
   (multiple-value-bind (first second)
