@@ -265,7 +265,7 @@
                   #+64-bit-target :<E>lf64_<S>ym.st_value
                   #+32-bit-target :<E>lf32_<S>ym.st_value)
             #+x86-target (%address-of f)
-            #+ppc-target (- (%address-of (uvref f 0)) (- ppc::fulltag-misc ppc::node-size))
+            #+ppc-target (- (%address-of (uvref f 0)) (- target::fulltag-misc target::node-size))
             #+arm-target (- (%address-of (uvref f 1)) (- arm::fulltag-misc arm::node-size))
             ;; arm64: element 0 is the code-vector (arm64-arch.lisp:673); this
             ;; is its DATA start, i.e. tagged address + misc-data-offset (-4).
@@ -276,8 +276,22 @@
                   #+64-bit-target :<E>lf64_<S>ym.st_size
                   #+32-bit-target :<E>lf32_<S>ym.st_size)
             #+x86-target (1+ (ash (1- (%function-code-words f)) target::word-shift))
-            #+ppc-target (ash (uvsize (uvref f 0)) ppc::word-shift)
-            #+arm-target (ash (uvsize (uvref f 1)) arm::word-shift)
+            ;; uvsize counts ELEMENTS, and a code-vector's elements are 32
+            ;; bits wide (ppc64-arch.lisp declares code-vector
+            ;; ivector-class-32-bit, and says so in the comment above it),
+            ;; while word-shift is the NODE shift: 3 on ppc64, 2 on ppc32.
+            ;; (ash n word-shift) was therefore 8n bytes for a 4n-byte
+            ;; code-vector on ppc64, and right on ppc32 only by coincidence.
+            ;; ppc64-misc-byte-count in ppc64-arch.lisp gives the intended
+            ;; answer for this ivector class: (ash element-count 2).
+            #+ppc-target (subtag-bytes target::subtag-code-vector
+                                       (uvsize (uvref f 0)))
+            ;; 4n either way on arm32 (word-shift is 2 there), but written the
+            ;; same way so that it states the element width rather than
+            ;; depending on a coincidence -- the same coincidence that stopped
+            ;; holding for #+ppc-target when ppc64 joined ppc32 under it.
+            #+arm-target (subtag-bytes target::subtag-code-vector
+                                       (uvsize (uvref f 1)))
             ;; NOT (ash (uvsize cv) word-shift): an arm64 code-vector is an
             ;; ivector-class-32-bit (arm64-arch.lisp:153) but word-shift is 3
             ;; (:31), so that spelling doubles the size.  subtag-bytes knows
