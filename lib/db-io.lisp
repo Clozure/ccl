@@ -578,6 +578,9 @@ satisfy the optional predicate PREDICATE."
   (or (ffi-transparent-union-name u) (ffi-transparent-union-anon-global-id u)))
 
 (defstruct (ffi-function (:include ffi-type))
+  ;; The source name is inherited as STRING.  ENTRY-NAME records an
+  ;; explicitly different linker name when the platform ABI requires one.
+  entry-name
   arglist
   return-value)
     
@@ -1454,9 +1457,10 @@ satisfy the optional predicate PREDICATE."
 (defun encode-ffi-function (f)
   (let* ((args (ffi-function-arglist f))
 	 (string (ffi-function-string f))
-	 (name (if *prepend-underscores-to-ffi-function-names*
-		 (concatenate 'string "_" string)
-		 string))
+	 (name (or (ffi-function-entry-name f)
+	           (if *prepend-underscores-to-ffi-function-names*
+	             (concatenate 'string "_" string)
+	             string)))
          (min-args (length args))
          (result (ffi-function-return-value f)))
     `(,min-args

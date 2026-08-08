@@ -99,12 +99,12 @@ Boolean use_mach_exception_handling =
 #include <libgen.h>
 #endif
 
-#ifdef FREEBSD
+#if defined(FREEBSD) || defined(NETBSD)
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #endif
 
-#if defined(FREEBSD) || defined(SOLARIS)
+#if defined(FREEBSD) || defined(SOLARIS) || defined(NETBSD)
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
@@ -1096,6 +1096,16 @@ determine_executable_name(char *argv0)
   }
   return ensure_real_path(argv0);
 #endif
+#ifdef NETBSD
+  int mib[4] = {CTL_KERN, KERN_PROC_ARGS, getpid(), KERN_PROC_PATHNAME};
+  char exepath[PATH_MAX];
+  size_t len = sizeof(exepath);
+
+  if (sysctl(mib, 4, exepath, &len, NULL, 0) == 0) {
+    return strndup(exepath, len);
+  }
+  return ensure_real_path(argv0);
+#endif
 #ifdef SOLARIS
   char exepath[PATH_MAX], proc_path[PATH_MAX], *p;
   int n;
@@ -1474,6 +1484,9 @@ terminate_lisp()
 #ifdef FREEBSD
 #define min_os_version "6.0"
 #endif
+#ifdef NETBSD
+#define min_os_version "11.0"
+#endif
 #ifdef SOLARIS
 #define min_os_version "5.10"
 #endif
@@ -1684,7 +1697,7 @@ Boolean
 check_arm_cpu()
 {
   Boolean win = false;
-#ifdef LINUX
+#if defined(LINUX) || defined(NETBSD)
   extern void feature_check(), early_signal_handler();
 
   install_signal_handler(SIGILL, (void *)early_signal_handler,0);
@@ -2428,7 +2441,7 @@ jvm_init(jvm_initfunc f,void*arg0,void*arg1,void*arg2)
 void *
 xFindSymbol(void* handle, char *name)
 {
-#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
+#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS) || defined(NETBSD)
 #ifdef ANDROID
   if (handle == NULL) {
     handle = RTLD_DEFAULT;
@@ -2453,7 +2466,7 @@ xFindSymbol(void* handle, char *name)
   return windows_find_symbol(handle, name);
 #endif
 }
-#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS)
+#if defined(LINUX) || defined(FREEBSD) || defined(SOLARIS) || defined(NETBSD)
 #if WORD_SIZE == 64
 typedef Elf64_Dyn Elf_Dyn_thing;
 typedef Elf64_Ehdr Elf_Ehdr_thing;

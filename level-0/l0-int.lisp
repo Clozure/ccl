@@ -41,8 +41,8 @@
      (locally
 	 (declare (fixnum n))
        (if (minusp n)
-         (if (eql n most-negative-fixnum)
-           (- most-negative-fixnum)
+         (if (eql n target::target-most-negative-fixnum)
+           (- target::target-most-negative-fixnum)
            (the fixnum (- n)))
          n)))
     (bignum

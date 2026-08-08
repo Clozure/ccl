@@ -132,7 +132,10 @@ atomically decremented."
   (or (%wait-on-semaphore-ptr semptr 0 0 notification)
       (with-process-whostate ("Semaphore timed wait")
         (let* ((now (get-internal-real-time))
-               (stop (+ now (floor (* duration internal-time-units-per-second)))))
+               (units-per-second #+64-bit-target 1000000
+                                 #-64-bit-target 1000)
+               (stop (+ now (floor (* duration
+                                      units-per-second)))))
           (multiple-value-bind (secs millis) (milliseconds duration)
             (loop
               (multiple-value-bind (success err)
@@ -146,9 +149,10 @@ atomically decremented."
                 (unless (zerop duration)
                   (let* ((diff (- stop now)))
                     (multiple-value-bind (remaining-seconds remaining-itus)
-                        (floor diff internal-time-units-per-second)
+                        (floor diff units-per-second)
                       (setq secs remaining-seconds
-                            millis (floor remaining-itus (/ internal-time-units-per-second 1000)))))))))))))
+                            millis (floor remaining-itus
+                                          (/ units-per-second 1000)))))))))))))
 
 (defun timed-wait-on-semaphore (s duration &optional notification)
   "Wait until the given semaphore has a positive count which can be
@@ -188,7 +192,10 @@ atomically decremented, or until a timeout expires."
               (error "Error waiting for signal ~d: ~a." s (%strerror err)))))
       (with-process-whostate ("signal wait")
         (let* ((now (get-internal-real-time))
-               (stop (+ now (floor (* duration internal-time-units-per-second)))))
+               (units-per-second #+64-bit-target 1000000
+                                 #-64-bit-target 1000)
+               (stop (+ now (floor (* duration
+                                      units-per-second)))))
           (multiple-value-bind (secs millis) (milliseconds duration)
             (loop
               (multiple-value-bind (success err)
@@ -204,9 +211,10 @@ atomically decremented, or until a timeout expires."
                 (unless (zerop duration)
                   (let* ((diff (- stop now)))
                     (multiple-value-bind (remaining-seconds remaining-itus)
-                        (floor diff internal-time-units-per-second)
+                        (floor diff units-per-second)
                       (setq secs remaining-seconds
-                            millis (floor remaining-itus (/ internal-time-units-per-second 1000)))))))))))))
+                            millis (floor remaining-itus
+                                          (/ units-per-second 1000)))))))))))))
   
 (defun %os-getcwd (buf noctets)
   ;; Return N < 0, if error
@@ -387,17 +395,17 @@ given is that of a group to which the current user belongs."
        (pref stat :stat.st_mode)
        (pref stat :stat.st_size)
        #+android-target (pref stat :stat.st_mtime)
-       #+(or freebsd-target (and linux-target (not android-target)) solaris-target)
+       #+(or freebsd-target netbsd-target (and linux-target (not android-target)) solaris-target)
        (pref stat :stat.st_mtim.tv_sec)
-       #-(or freebsd-target linux-target solaris-target)
+       #-(or freebsd-target netbsd-target linux-target solaris-target)
        (pref stat :stat.st_mtimespec.tv_sec)
        (pref stat :stat.st_ino)
        (pref stat :stat.st_uid)
        (pref stat :stat.st_blksize)
-       #+(or freebsd-target linux-target solaris-target)
+       #+(or freebsd-target netbsd-target linux-target solaris-target)
        (round (pref stat #-android-target :stat.st_mtim.tv_nsec
                          #+android-target :stat.st_mtime_nsec) 1000)
-       #-(or freebsd-target linux-target solaris-target)
+       #-(or freebsd-target netbsd-target linux-target solaris-target)
        (round (pref stat :stat.st_mtimespec.tv_nsec) 1000)
        (pref stat :stat.st_gid)
        (pref stat :stat.st_dev)
@@ -540,7 +548,7 @@ given is that of a group to which the current user belongs."
     (%get-cstring (%inc-ptr buf (* #+(and linux-target (not android-target)) #$_UTSNAME_LENGTH
                                    #+android-target (1+ #$__NEW_UTS_LEN)
 				   #+darwin-target #$_SYS_NAMELEN
-                                   #+(or freebsd-target solaris-target) #$SYS_NMLN
+                                   #+(or freebsd-target netbsd-target solaris-target) #$SYS_NMLN
                                    idx)))
     "unknown"))
 
@@ -600,7 +608,7 @@ given is that of a group to which the current user belongs."
   (%stack-block ((buf (* #$SYS_NMLN 5)))
     (%uts-string (#___xuname #$SYS_NMLN buf) idx buf)))
 
-#+solaris-target
+#+(or netbsd-target solaris-target)
 (defun %uname (idx)
   (%stack-block ((buf (* #$SYS_NMLN 5)))
     (%uts-string (#_uname buf) idx buf)))
@@ -2192,7 +2200,7 @@ not, why not; and what its result code was if it completed."
                                                    count))
                 (pref info :host_basic_info.max_cpus)
                 1))
-            #+(or linux-target solaris-target)
+            #+(or linux-target netbsd-target solaris-target)
             (or
              (let* ((n (#_sysconf #$_SC_NPROCESSORS_CONF)))
                (declare (fixnum n))
@@ -2311,9 +2319,11 @@ not, why not; and what its result code was if it completed."
                  (8 -3)
                  (16 -4)
                  (32 -5)
-                 (64 -6)))))
+                 (64 -6))))
+         (total-size-limit
+          #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))))
     (if (>= (+ ndata-elements nalignment-elements)
-            array-total-size-limit)
+            total-size-limit)
       (progn
         (fd-close fd)
         (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))
@@ -2377,9 +2387,11 @@ not, why not; and what its result code was if it completed."
                  (8 -3)
                  (16 -4)
                  (32 -5)
-                 (64 -6)))))
+                 (64 -6))))
+         (total-size-limit
+          #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))))
     (if (>= (+ ndata-elements nalignment-elements)
-            array-total-size-limit)
+            total-size-limit)
       (progn
         (fd-close fd)
         (error "Can't make a vector with ~s elements in this implementation." (+ ndata-elements nalignment-elements)))

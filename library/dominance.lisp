@@ -29,7 +29,8 @@
 (idom-heap-utilization :unit nil :sort :size)
 |#
 
-(defconstant half-fixnum-shift (ash (integer-length most-positive-fixnum) -1))
+(defconstant half-fixnum-shift
+  #.(ash (integer-length target::target-most-positive-fixnum) -1))
 
 (defconstant half-fixnum-mask (1- (ash 1 half-fixnum-shift)))
 

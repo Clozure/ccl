@@ -66,6 +66,14 @@ ifdef(`FREEBSD',`define(`SYSstabs',`NOstabs')
                 define(`SYSCALL_SETS_CARRY_ON_ERROR',`')')
 )
 
+ifdef(`NETBSD',`define(`SYSstabs',`ELFstabs')
+	       define(`HaveWeakSymbols',`')
+	       define(`LocalLabelPrefix',`.L')
+	       define(`MacroLabelPrefix',`.L__')
+	       define(`StartTextLabel',`.Ltext0')
+	       define(`EndTextLabel',`.Letext')
+	       define(`EABI',`')')
+
 ifdef(`SOLARIS',`define(`SYSstabs',`ELFstabs')
 	       define(`HaveWeakSymbols',`')
 	       define(`LocalLabelPrefix',`.L')
@@ -339,6 +347,7 @@ define(`equate_if_defined',`ifdef($1,`
 equate_if_defined(`DARWIN')
 equate_if_defined(`LINUX')
 equate_if_defined(`FREEBSD')
+equate_if_defined(`NETBSD')
 equate_if_defined(`SOLARIS')
 equate_if_defined(`WIN_64')
 equate_if_defined(`PPC64')
@@ -366,6 +375,11 @@ ifdef(`PPC64',`',`
 define(`USE_EABI_C_FRAME',`')
 undefine(`USE_POWEROPEN_C_FRAME')
 ')')
+
+ifdef(`NETBSD',`
+define(`USE_EABI_C_FRAME',`')
+undefine(`USE_POWEROPEN_C_FRAME')
+')
 
 
 

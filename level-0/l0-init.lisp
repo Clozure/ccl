@@ -90,6 +90,8 @@
     #+linuxx8632-target :linuxx8632-host
     #+linuxarm-target :linuxarm-target
     #+linuxarm-target :linuxarm-host
+    #+netbsdarm-target :netbsdarm-target
+    #+netbsdarm-target :netbsdarm-host
     #+darwinarm-target :darwinarm-target
     #+darwinarm-target :darwinarm-host
     #+darwinppc-target :darwinppc-target
@@ -97,6 +99,8 @@
     #+darwinppc-target :darwin-target
     #+freebsd-target :freebsd-host
     #+freebsd-target :freebsd-target
+    #+netbsd-target :netbsd-host
+    #+netbsd-target :netbsd-target
     #+freebsdx86-target :freebsdx86-target
     #+freebsdx8664-target :freebsdx8664-target
     #+freebsdx8664-target :freebsdx8664-host
@@ -134,6 +138,7 @@
     #+darwin-target :darwin
     #+linux-target :linux
     #+freebsd-target :freebsd
+    #+netbsd-target :netbsd
     #+solaris-target :solaris
     #+windows-target :windows
     #+android-target :android

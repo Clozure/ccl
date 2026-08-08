@@ -941,7 +941,9 @@
                 #.prefix-stack-entry-size)))
   (let* ((width  *print-miser-width*)
          (linel (xp-linel xp))
-         (left  (if width (- linel width) most-positive-fixnum)))
+         (left  (if width
+                  (- linel width)
+                  target::target-most-positive-fixnum)))
     (declare (fixnum linel left))
   (do ((qleft (xp-qleft xp))
        (queue (xp-queue xp)(xp-queue xp)))
@@ -1175,7 +1177,7 @@
               (t (write-not-pretty xp object
                                    (if *print-level*
                                      (- *print-level* *current-level*)
-                                     most-positive-fixnum)
+                                     target::target-most-positive-fixnum)
                                    interior-cdr circle)))))))
 
 ;It is vital that this function be called EXACTLY once for each occurrence of 

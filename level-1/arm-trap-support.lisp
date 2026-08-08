@@ -83,6 +83,23 @@
 (defconstant xp-cpsr-regno 16)
 )
 
+#+netbsdarm-target
+(progn
+(defmacro with-xp-registers-and-gpr-offset ((xp register-number)
+                                            (registers offset) &body body)
+  (let* ((regform `(pref ,xp :ucontext_t.uc_mcontext.__gregs)))
+    `(with-macptrs ((,registers ,regform))
+      (let ((,offset (xp-gpr-offset ,register-number)))
+        ,@body))))
+(defun xp-gpr-offset (register-number)
+  (unless (and (fixnump register-number)
+               (<= 0 (the fixnum register-number))
+               (< (the fixnum register-number) 17))
+    (setq register-number (require-type register-number '(integer 0 (17)))))
+  (the fixnum (* (the fixnum register-number) arm::node-size)))
+(defconstant xp-cpsr-regno 16)
+)
+
 #+darwinarm-target
 (progn
 (defmacro with-xp-registers-and-gpr-offset ((xp register-number)
@@ -127,6 +144,7 @@
 
 (defun return-address-offset (xp fn machine-state-offset)
   (with-macptrs ((regs (pref xp #+linuxarm-target :ucontext_t.uc_mcontext
+                                #+netbsdarm-target :ucontext_t.uc_mcontext.__gregs
                                 #+darwinarm-target :ucontext_t.uc_mcontext.__ss)))
     (if (functionp fn)
       (or (%code-vector-pc (uvref fn 1) (%inc-ptr regs machine-state-offset))
@@ -135,10 +153,12 @@
 
 (defconstant lr-offset-in-register-context
   #+linuxarm-target (get-field-offset :sigcontext.arm_lr)
+  #+netbsdarm-target (* 14 arm::node-size)
   #+darwinarm-target (get-field-offset :__darwin_arm_thread_state.__lr))
 
 (defconstant pc-offset-in-register-context
   #+linuxarm-target (get-field-offset :sigcontext.arm_pc)
+  #+netbsdarm-target (* 15 arm::node-size)
   #+darwinarm-target (get-field-offset :__darwin_arm_thread_state.__pc))
 
 (defun funcall-with-xp-stack-frames (xp trap-function thunk)
