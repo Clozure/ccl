@@ -76,3 +76,37 @@ _SP\name:
 .macro extract_header dest, miscobj
         ldur \dest, [\miscobj, #misc_header_offset]
 .endm
+
+/*
+ * Check for interrupts.  Clobbers nargs: should use a passed-in scratch reg.
+ */
+.macro check_pending_interrupt
+        ldr nargs, [rcontext, #tcr.tlb_pointer]
+        ldr nargs, [nargs, #INTERRUPT_LEVEL_BINDING_INDEX]
+        cmp nargs, #0
+        b.lt .Ldone\@           // interrupts are disabled
+        b.gt .Ltrap\@           // a deferred interrupt is waiting: take it
+        ldr nargs, [rcontext, #tcr.interrupt_pending]
+        cbz nargs, .Ldone\@     // skip if no interrupt pending
+.Ltrap\@:
+        uuo_interrupt_now
+.Ldone\@:
+.endm
+
+/* value stack push/pop  */
+.macro vpush1 reg
+        str \reg, [vsp, #-node_size]!
+.endm
+.macro vpop1 reg
+        ldr \reg, [vsp], #node_size
+.endm
+
+/* n is a plain constant; the macro boxes it as a fixnum into nargs */
+.macro set_nargs n
+        mov nargs, #((\n)<<fixnumshift)
+.endm
+
+/* pop a lisp frame off the control stack */
+.macro discard_lisp_frame
+        add sp, sp, #lisp_frame.size
+.endm

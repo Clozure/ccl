@@ -35,7 +35,7 @@ endif
 .c.o:
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT)   $(WFORMAT)  -o $@
 
-SPOBJ = pad.o  arm64-spentry.o spentry-A-alloc-numbers.o spentry-B-vectors-misc.o spentry-C-bind-catch-throw.o spentry-D-call-builtins.o spentry-E-ffi.o
+SPOBJ = pad.o  arm64-spentry.o
 ASMOBJ = arm64-asmutils.o arm64-imports.o
 
 COBJ  = pmcl-kernel.o gc-common.o arm64-gc.o bits.o  arm64-exceptions.o \
