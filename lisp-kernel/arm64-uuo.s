@@ -66,147 +66,150 @@ uuo_format_binary = 2
  */
 uuo_format_wrong_type = 3
 
-        // misc format
-        .macro uuo_misc info
+// misc format
+.macro uuo_misc info
         .if \info == 0
         .error "uuo_misc bits cannot be all 0"
         .endif
         udf #((\info) << 2 | uuo_format_misc)
-        .endm
+.endm
 
-        .macro uuo_alloc
+.macro uuo_alloc
         uuo_misc 1
-        .endm
+.endm
 
-        .macro uuo_gc_trap
+.macro uuo_gc_trap
         uuo_misc 2
-        .endm
+.endm
 
-        .macro uuo_debug_trap
+.macro uuo_debug_trap
         uuo_misc 3
-        .endm
+.endm
 
-        .macro uuo_interrupt_now
+.macro uuo_interrupt_now
         uuo_misc 4
-        .endm
+.endm
 
-        .macro uuo_suspend_now
+.macro uuo_suspend_now
         uuo_misc 5
-        .endm
+.endm
 
-        .macro uuo_too_few_args
+.macro uuo_too_few_args
         uuo_misc 6
-        .endm
+.endm
 
-        .macro uuo_too_many_args
+.macro uuo_too_many_args
         uuo_misc 7
-        .endm
+.endm
 
-        .macro uuo_wrong_number_of_args
+.macro uuo_wrong_number_of_args
         uuo_misc 8
-        .endm
+.endm
 
-        // unary format
-        .macro uuo_unary reg, info
+// unary format
+.macro uuo_unary reg, info
         udf # ((\info) << 7 | R\reg << 2 | uuo_format_unary)
-        .endm
+.endm
 
-        .macro uuo_error_reg_not_callable reg
+.macro uuo_error_reg_not_callable reg
         uuo_unary \reg, unary_info_not_callable
-        .endm
+.endm
 
-        .macro uuo_error_no_throw_tag reg
+.macro uuo_error_no_throw_tag reg
         uuo_unary \reg, unary_info_no_throw_tag
-        .endm
+.endm
 
-        .macro uuo_error_unbound reg
+.macro uuo_error_unbound reg
         uuo_unary \reg, unary_info_unbound
-        .endm
+.endm
 
-        .macro uuo_error_udf reg
+.macro uuo_error_udf reg
         uuo_unary \reg, unary_info_udf
-        .endm
+.endm
 
-        .macro uuo_error_udf_call reg
+.macro uuo_error_udf_call reg
         uuo_unary \reg, unary_info_udf_call
-        .endm
+.endm
 
-        .macro uuo_error_tlb_too_small reg
+.macro uuo_error_tlb_too_small reg
         uuo_unary \reg, unary_info_tlb_too_small
-        .endm
+.endm
 
-        // This is a three-register error. Two extra registers must be
-        // encoded in a companion uuo_extra_registers directly following
-        // this one.
-        .macro uuo_error_slot_unbound slotv
+// This is a three-register error. Two extra registers must be
+// encoded in a companion uuo_extra_registers directly following
+// this one.
+.macro uuo_error_slot_unbound slotv
         uuo_unary \slotv, unary_info_slot_unbound
-        .endm
+.endm
 
-        .macro uuo_error_apply_macro reg
+.macro uuo_error_apply_macro reg
         uuo_unary \reg, unary_info_apply_macro
-        .endm
+.endm
 
-        // binary format
-        .macro uuo_binary ra, rb, info=0
+// binary format
+.macro uuo_binary ra, rb, info=0
         udf # ((\info) << 12 | (R\rb) << 7 | (R\ra) << 2 | uuo_format_binary)
-        .endm
+.endm
 
-        .macro uuo_error_vector_bounds ra, rb
+.macro uuo_error_vector_bounds ra, rb
         uuo_binary \ra, \rb, binary_info_vector_bounds
-        .endm
+.endm
 
-        .macro uuo_error_array_bounds ra, rb
+.macro uuo_error_array_bounds ra, rb
         uuo_binary \ra, \rb, binary_info_array_bounds
-        .endm
+.endm
 
-        .macro uuo_extra_registers ra, rb
+.macro uuo_extra_registers ra, rb
         uuo_binary \ra, \rb, binary_info_two_registers
-        .endm
+.endm
 
-        // wrong_type format
-        .macro uuo_wrong_type reg, code, cflag=0
+// wrong_type format
+.macro uuo_wrong_type reg, code, cflag=0
         udf # (\code << 8 | \cflag << 7 | R\reg << 2 | uuo_format_wrong_type)
-        .endm
+.endm
 
-        // Keep these in sync with the values in arm64-arch.lisp.
-        xtype_integer  = 0x18
-        xtype_s64 = 0x28
-        xtype_u64 = 0x38
-        xtype_s32 = 0x48
-        xtype_u32 = 0x58
-        xtype_s16 = 0x68
-        xtype_u16 = 0x78
-        xtype_s8 = 0x88
-        xtype_u8 = 0x98
-        xtype_bit = 0xa8
-        xtype_rational = 0xb8
-        xtype_real = 0xc8
-        xtype_number = 0xd8
-        xtype_cons = 0xe8
+// Keep these in sync with the values in arm64-arch.lisp.
+xtype_integer  = 0x18
+xtype_s64 = 0x28
+xtype_u64 = 0x38
+xtype_s32 = 0x48
+xtype_u32 = 0x58
+xtype_s16 = 0x68
+xtype_u16 = 0x78
+xtype_s8 = 0x88
+xtype_u8 = 0x98
+xtype_bit = 0xa8
+xtype_rational = 0xb8
+xtype_real = 0xc8
+xtype_number = 0xd8
+xtype_cons = 0xe8
 
-        xtype_char_code = 0x10
-        xtype_unsigned_byte_24 = 0x20
-        xtype_array2d = 0x30
-        xtype_array3d = 0x40
-        xtype_null = 0x50
+xtype_char_code = 0x10
+xtype_unsigned_byte_24 = 0x20
+xtype_array2d = 0x30
+xtype_array3d = 0x40
+xtype_null = 0x50
 
-        .macro uuo_error_reg_not_lisptag reg, lisptag
+.macro uuo_error_reg_not_lisptag reg, lisptag
         uuo_wrong_type \reg, \lisptag, 0
-        .endm
-        .macro uuo_cerror_reg_not_lisptag reg, lisptag
+.endm
+
+.macro uuo_cerror_reg_not_lisptag reg, lisptag
         uuo_wrong_type \reg, \lisptag, 1
-        .endm
+.endm
 
-        .macro uuo_error_reg_not_fulltag reg, fulltag
+.macro uuo_error_reg_not_fulltag reg, fulltag
         uuo_wrong_type \reg, \fulltag, 0
-        .endm
-        .macro uuo_cerror_reg_not_fulltag reg, fulltag
-        uuo_wrong_type \reg, \fulltag, 1
-        .endm
+.endm
 
-        .macro uuo_error_reg_not_xtype reg, xtype
+.macro uuo_cerror_reg_not_fulltag reg, fulltag
+        uuo_wrong_type \reg, \fulltag, 1
+.endm
+
+.macro uuo_error_reg_not_xtype reg, xtype
         uuo_wrong_type \reg, \xtype, 0
-        .endm
-        .macro uuo_cerror_reg_not_xtype reg, xtype
+.endm
+
+.macro uuo_cerror_reg_not_xtype reg, xtype
         uuo_wrong_type \reg, \xtype, 1
-        .endm
+.endm
