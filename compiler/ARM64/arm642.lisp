@@ -3589,75 +3589,36 @@
                       (or (arm64-side-effect-free-form-p cform)
                           (let ((cvar (arm642-lexical-reference-p cform)))
                             (and cvar
-                                 (nx2-var-not-set-by-form-p cvar dform)))))))
-    (cond (atriv
-           (arm642-one-targeted-reg-form seg bform breg)
-           (arm642-one-targeted-reg-form seg cform creg)
-           (arm642-one-targeted-reg-form seg dform dreg)
-           (arm642-one-targeted-reg-form seg aform areg))
-          (aconst
-           (cond (btriv
-                  (arm642-one-targeted-reg-form seg cform creg)
-                  (arm642-one-targeted-reg-form seg dform dreg)
-                  (arm642-one-targeted-reg-form seg bform breg))
-                 (bconst
-                  (cond (ctriv
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (cconst
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (t
-                         (arm642-push-register seg (arm642-one-untargeted-reg-form seg cform creg))
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-pop-register seg creg)))
-                  (arm642-one-targeted-reg-form seg bform breg))
-                 (t
-                  (arm642-push-register seg (arm642-one-untargeted-reg-form seg bform breg))
-                  (cond (ctriv
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (cconst
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (t
-                         (arm642-push-register seg (arm642-one-untargeted-reg-form seg cform creg))
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-pop-register seg creg)))
-                  (arm642-pop-register seg breg)))
-           (arm642-one-targeted-reg-form seg aform areg))
-          (t
-           (arm642-push-register seg (arm642-one-untargeted-reg-form seg aform areg))
-           (cond (btriv
-                  (arm642-one-targeted-reg-form seg cform creg)
-                  (arm642-one-targeted-reg-form seg dform dreg)
-                  (arm642-one-targeted-reg-form seg bform breg))
-                 (bconst
-                  (cond (ctriv
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (cconst
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (t
-                         (arm642-push-register seg (arm642-one-untargeted-reg-form seg cform creg))
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-pop-register seg creg)))
-                  (arm642-one-targeted-reg-form seg bform breg))
-                 (t
-                  (arm642-push-register seg (arm642-one-untargeted-reg-form seg bform breg))
-                  (cond (ctriv
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (cconst
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-one-targeted-reg-form seg cform creg))
-                        (t
-                         (arm642-push-register seg (arm642-one-untargeted-reg-form seg cform creg))
-                         (arm642-one-targeted-reg-form seg dform dreg)
-                         (arm642-pop-register seg creg)))
-                  (arm642-pop-register seg breg)))
-           (arm642-pop-register seg areg)))))
+                                 (nx2-var-not-set-by-form-p cvar dform))))))
+         (apushed nil)
+         (bpushed nil)
+         (cpushed nil))
+    (if (and aform (not aconst))
+      (if atriv
+        (arm642-one-targeted-reg-form seg aform areg)
+        (setq apushed (arm642-push-reg-for-form seg aform areg t))))
+    (if (and bform (not bconst))
+      (if btriv
+        (arm642-one-targeted-reg-form seg bform breg)
+        (setq bpushed (arm642-push-reg-for-form seg bform breg t))))
+    (if (and cform (not cconst))
+      (if ctriv
+        (arm642-one-targeted-reg-form seg cform creg)
+        (setq cpushed (arm642-push-reg-for-form seg cform creg t))))
+    (arm642-one-targeted-reg-form seg dform dreg)
+    (unless ctriv
+      (if cconst
+        (arm642-one-targeted-reg-form seg cform creg)
+        (arm642-elide-pushes seg cpushed (arm642-pop-register seg creg))))
+    (unless btriv
+      (if bconst
+        (arm642-one-targeted-reg-form seg bform breg)
+        (arm642-elide-pushes seg bpushed (arm642-pop-register seg breg))))
+    (unless atriv
+      (if aconst
+        (arm642-one-targeted-reg-form seg aform areg)
+        (arm642-elide-pushes seg apushed (arm642-pop-register seg areg))))
+    (values areg breg creg dreg)))
 
 (defun arm642-three-targeted-reg-forms (seg aform areg bform breg cform creg)
   (let* ((*arm642-nfp-depth* *arm642-nfp-depth*)
