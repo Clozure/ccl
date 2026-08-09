@@ -40,9 +40,12 @@
 ;;;     otherwise the WHOLE aggregate goes to the stack (C.3/C.4) —
 ;;;     never to GPRs, never by reference.  Detected by hfa-type-info
 ;;;     below and passed by decomposing into scalar member argforms
-;;;     (the darwinppc64 model, lib/ffi-darwinppc64.lisp); the C.3
-;;;     stack case is refused loudly, exactly as >8 scalar FP args are
-;;;     (no stack args until the stack-arg frame layout is ratified).
+;;;     (the darwinppc64 model, lib/ffi-darwinppc64.lisp).  Scalar args
+;;;     of either class beyond the 8 registers go to the NSAA stack
+;;;     block in source order (implemented; see arm642-aapcs64-ff-call
+;;;     and the SP step in the ffcall spentries), but the C.3
+;;;     WHOLE-AGGREGATE stack case cannot be expressed by member-wise
+;;;     decomposition and is refused loudly in expand-ff-call.
 ;;;   - Composite size <= 16 bytes (128 bits), not HFA: passed in GPRs
 ;;;     (X0..X7 as 1-2 doublewords, left-justified — NOT right-justified
 ;;;     like PowerOpen).
@@ -262,7 +265,23 @@
          (result-temp nil)
          (result-form nil)
          (struct-result-type nil)
-         (structure-arg-temp nil))
+         (structure-arg-temp nil)
+         ;; Running AAPCS64 register-class counts, advanced in source
+         ;; order by the arg loop below, so the DECOMPOSED composite
+         ;; cases can refuse the register/stack STRADDLE shapes at
+         ;; macroexpansion time.  Scalar overflow is supported (args 9+
+         ;; of either class go to the NSAA stack block), but AAPCS64
+         ;; never splits ONE composite across registers and stack: an
+         ;; HFA whose members do not all fit in v0-v7 goes wholly to the
+         ;; stack (C.3, with natural member packing the member-wise
+         ;; decomposition cannot express), and a 2-doubleword record
+         ;; with exactly one GPR left goes wholly to the stack (C.11).
+         ;; Both shapes used to be masked by the backend's blanket >8
+         ;; refusals; with stack args implemented they are refused HERE,
+         ;; precisely, and everything else flows.
+         (ngpr-words 0)
+         (nfpr-args 0))
+    (declare (fixnum ngpr-words nfpr-args))
     (multiple-value-bind (result-type error)
         (ignore-errors (parse-foreign-type result-type-spec))
       (if error
@@ -308,6 +327,12 @@
                               :test #'eq)
                       (typep arg-type-spec 'unsigned-byte))
                 (progn
+                  (case arg-type-spec
+                    ((:single-float :double-float) (incf nfpr-args))
+                    ((:registers :indirect-result :void))
+                    (t (incf ngpr-words (if (typep arg-type-spec 'unsigned-byte)
+                                          arg-type-spec
+                                          1))))
                   (argforms arg-type-spec)
                   (argforms arg-value-form))
                 (let* ((ftype (parse-foreign-type arg-type-spec)))
@@ -324,11 +349,23 @@
                           ;;; evaluated ONCE into a dynamic-extent temp;
                           ;;; member i is read at its natural offset.
                           ;;; If the members would overflow v0-v7, C.3
-                          ;;; sends the WHOLE aggregate to the stack —
-                          ;;; unratified, and refused loudly by the
-                          ;;; backend/%ff-call exactly as >8 scalar FP
-                          ;;; args are.
+                          ;;; sends the WHOLE aggregate to the stack
+                          ;;; with natural member packing — a shape the
+                          ;;; member-wise decomposition cannot express
+                          ;;; (and must never SPLIT), so it is refused
+                          ;;; here with the running counts.  Scalar FP
+                          ;;; overflow, by contrast, is supported (NSAA
+                          ;;; stack block).
                           (hfa-base
+                           (unless (<= (+ nfpr-args hfa-count) 8)
+                             (error "HFA argument ~s needs ~d SIMD register~:p ~
+                                     but only ~d remain: AAPCS64 C.3 sends the ~
+                                     whole aggregate to the stack with natural ~
+                                     member packing, which this port does not ~
+                                     yet support"
+                                    arg-type-spec hfa-count
+                                    (max 0 (- 8 nfpr-args))))
+                           (incf nfpr-args hfa-count)
                            (let* ((temp (struct-arg-temp))
                                   (single-p (eq hfa-base :single-float))
                                   (accessor (if single-p
@@ -348,6 +385,7 @@
                           ;;; PPC64 source right-justified via
                           ;;; (ash _ (- bits 64)).
                           ((<= bits 64)
+                           (incf ngpr-words)
                            (argforms :unsigned-doubleword)
                            (argforms `(%%get-unsigned-longlong ,arg-value-form 0)))
                           ;;; ARM64-DEVIATION: 65-128 bit non-HFA struct
@@ -359,7 +397,23 @@
                           ;;; thing, but the arm642 codegen has no case
                           ;;; for integer argspecs, so the decomposed
                           ;;; form is the one that compiles everywhere.)
+                          ;;; With EXACTLY one GPR left the decomposition
+                          ;;; would SPLIT the record across x7 and the
+                          ;;; stack; AAPCS64 C.10/C.11 send it wholly to
+                          ;;; the stack instead, so that one shape is
+                          ;;; refused.  With 0 GPRs left both words land
+                          ;;; in consecutive NSAA slots, which IS the
+                          ;;; C.15 whole-record stack copy — fine.
                           ((<= bits 128)
+                           (when (eql ngpr-words 7)
+                             (error "16-byte record argument ~s with exactly ~
+                                     one integer register remaining: AAPCS64 ~
+                                     C.10/C.11 send the whole record to the ~
+                                     stack rather than splitting it, which ~
+                                     this port does not yet support at that ~
+                                     position; reorder the argument or pad"
+                                    arg-type-spec))
+                           (incf ngpr-words 2)
                            (let* ((temp (struct-arg-temp)))
                              (argforms :unsigned-doubleword)
                              (argforms `(%%get-unsigned-longlong
@@ -372,10 +426,14 @@
                           ;;; PPC64 source would emit (ceiling bits 64)
                           ;;; doublewords here — AAPCS64 never does that.
                           (t
+                           (incf ngpr-words)
                            (argforms :address)
                            (argforms arg-value-form)))))
-                    (progn
-                      (argforms (foreign-type-to-representation-type ftype))
+                    (let* ((rep (foreign-type-to-representation-type ftype)))
+                      (case rep
+                        ((:single-float :double-float) (incf nfpr-args))
+                        (t (incf ngpr-words)))
+                      (argforms rep)
                       (argforms (funcall arg-coerce arg-type-spec arg-value-form)))))))))
         (argforms (foreign-type-to-representation-type result-type))
         (let* ((call (funcall result-coerce result-type-spec

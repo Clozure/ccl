@@ -6489,8 +6489,9 @@
 
 ;;; ============ set-c-arg / set-single-c-arg / set-double-c-arg ============
 ;;; argnum is a WORD index into the param area (param0 = word 0); the
-;;; handler assigns words 0-7 to GPR args, 8.. to overflow, then FP
-;;; staging.  Byte offsets are 16+8k: 8-aligned, scaled-STR encodable
+;;; handler assigns words 0-7 to GPR args, 8.. to the NSAA stack-arg
+;;; block (overflow args of BOTH register classes, in source order --
+;;; AAPCS64 has ONE next-stacked-argument address), then FP staging.  Byte offsets are 16+8k: 8-aligned, scaled-STR encodable
 ;;; through the whole u16const range.  Little-endian: singles store/
 ;;; load at offset+0 (PPC's +4 was big-endian) -- v2 donor deviation
 ;;; kept.  Register width (X/S/D form) follows the operand class, as

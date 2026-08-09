@@ -335,10 +335,13 @@
 ;;; (x86-def.lisp:635) is the closest analog (separate GPR/FPR
 ;;; sequences); PPC64's PowerOpen defun reserves a param word per FP
 ;;; arg, which AAPCS64 does not.
-;;; ARM64-DEVIATION: .SPffcall carries no stack args yet (refused loud
-;;; in the w13 codegen until the stack-arg frame layout is ratified,
-;;; arm642.lisp), so >8 GPR-class or >8 FP-class args error here the
-;;; same way the compiled path does.
+;;; ARM64-DEVIATION: the COMPILED path now passes stack args (the NSAA
+;;; block at c-frame words 8.., exposed at [SP] by the SP step in the
+;;; ffcall spentries), but THIS interpreted defun still marshals only
+;;; the 8 GPR words and 8 FP regs -- extending it needs the interleaved
+;;; source-order NSAA bookkeeping and a variable frame size here, a
+;;; separate change -- so >8 of either class still errors below, now as
+;;; this defun's own limitation.
 ;;; A :single-float arg is stored at its fp slot's BASE: %load-fp-arg-regs
 ;;; does 64-bit loads, and on little-endian the float bits land in the
 ;;; d-register's low half, which is exactly s<n> — the callee reads only
@@ -381,11 +384,15 @@
                   (error "unknown arg spec ~s" spec)))))
          (when (> n-gpr-words 8)
            (error "~d integer/address argument words in foreign call; ~
-                   .SPffcall passes at most 8 (no stack args yet)"
+                   the interpreted %FF-CALL marshals at most 8 (the ~
+                   compiled ff-call path passes stack args; this defun ~
+                   does not yet)"
                   n-gpr-words))
          (when (> n-fp-args 8)
-           (error "~d floating-point arguments in foreign call; ~
-                   .SPffcall passes at most 8 (d0-d7, no stack args yet)"
+           (error "~d floating-point arguments in foreign call; the ~
+                   interpreted %FF-CALL marshals at most 8 (d0-d7; the ~
+                   compiled ff-call path passes stack args, this defun ~
+                   does not yet)"
                   n-fp-args))
          (%stack-block ((fp-args (* 8 8)))
            (with-macptrs ((argptr))
