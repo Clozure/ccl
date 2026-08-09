@@ -565,6 +565,19 @@
       (%atomic-incf-node 1 '*spin-lock-timeouts* target::symbol.vcell)
       (yield))))
 
+;;; Freeing a spinlock publishes every store made while it was held, so
+;;; it needs RELEASE ordering on weakly-ordered targets.  ARM64 defines
+;;; this as a lap function (dmb ish + str, level-0/ARM64/arm64-misc.lisp);
+;;; a plain store is correct on TSO targets.  The declaim stays inside
+;;; eval-when (this file's idiom) so no load-time proclaim call reaches
+;;; the boot image, where proclaim (level-1) is not yet defined.
+#-arm64-target
+(progn
+  (eval-when (:compile-toplevel :execute)
+    (declaim (inline %release-spin-lock)))
+  (defun %release-spin-lock (p)
+    (setf (%get-natural p 0) 0)))
+
 (eval-when (:compile-toplevel :execute)
   (declaim (inline note-lock-wait note-lock-held note-lock-released)))
 
@@ -595,11 +608,11 @@
        (when (eql 1 (incf (%get-natural ptr target::lockptr.avail)))
          (setf (%get-ptr ptr target::lockptr.owner) p
                (%get-natural ptr target::lockptr.count) 1)
-         (setf (%get-natural spin 0) 0)
+         (%release-spin-lock spin)
          (if flag
            (setf (lock-acquisition.status flag) t))
          (return t))
-       (setf (%get-natural spin 0) 0))
+       (%release-spin-lock spin))
       (%process-wait-on-semaphore-ptr signal 1 0 (recursive-lock-whostate lock)))))
 
 #+futex
@@ -710,7 +723,7 @@
                   (setf (%get-ptr ptr target::lockptr.owner) p
                         (%get-natural ptr target::lockptr.count) 1)
                   (if flag (setf (lock-acquisition.status flag) t)))
-                (setf (%get-ptr spin) (%null-ptr))
+                (%release-spin-lock spin)
                 win)))))))
 
 
@@ -757,7 +770,7 @@
          (declare (fixnum pending))
          (setf (%get-natural ptr target::lockptr.avail) 0
                (%get-natural ptr target::lockptr.waiting) 0)
-         (setf (%get-ptr spin) (%null-ptr))
+         (%release-spin-lock spin)
          (dotimes (i pending)
            (%signal-semaphore-ptr signal)))))
     nil))
@@ -869,21 +882,21 @@
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
            (incf (%get-signed-natural ptr target::rwlock.state))
-           (setf (%get-natural ptr target::rwlock.spin) 0)
+           (%release-spin-lock ptr)
            (if flag
              (setf (lock-acquisition.status flag) t))
            t)
          (do* ()
               ((eql 0 (%get-signed-natural ptr target::rwlock.state))
                ;; That wasn't so bad, was it ?  We have the spinlock now.
-               (setf (%get-signed-natural ptr target::rwlock.state) 1
-                     (%get-natural ptr target::rwlock.spin) 0)
+               (setf (%get-signed-natural ptr target::rwlock.state) 1)
+               (%release-spin-lock ptr)
                (%set-object ptr target::rwlock.writer tcr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (incf (%get-natural ptr target::rwlock.blocked-writers))
-           (setf (%get-natural ptr target::rwlock.spin) 0)
+           (%release-spin-lock ptr)
            (let* ((*interrupt-level* level))
                   (%process-wait-on-semaphore-ptr write-signal 1 0 (rwlock-write-whostate lock)))
            (%get-spin-lock ptr)))))))
@@ -942,7 +955,7 @@
        (%get-spin-lock ptr)             ;(%get-spin-lock (%inc-ptr ptr target::rwlock.spin))
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
-           (setf (%get-natural ptr target::rwlock.spin) 0)
+           (%release-spin-lock ptr)
            (error 'deadlock :lock lock))
          (do* ((state
                 (%get-signed-natural ptr target::rwlock.state)
@@ -950,14 +963,14 @@
               ((<= state 0)
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state)
-                     (the fixnum (1- state))
-                     (%get-natural ptr target::rwlock.spin) 0)
+                     (the fixnum (1- state)))
+               (%release-spin-lock ptr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (declare (fixnum state))
            (incf (%get-natural ptr target::rwlock.blocked-readers))
-           (setf (%get-natural ptr target::rwlock.spin) 0)
+           (%release-spin-lock ptr)
            (let* ((*interrupt-level* level))
              (%process-wait-on-semaphore-ptr read-signal 1 0 (rwlock-read-whostate lock)))
            (%get-spin-lock ptr)))))))
@@ -1016,11 +1029,11 @@
        (declare (fixnum state tcr))
        (cond ((> state 0)
               (unless (eql tcr (%get-object ptr target::rwlock.writer))
-                (setf (%get-natural ptr target::rwlock.spin) 0)
+                (%release-spin-lock ptr)
                 (error 'not-lock-owner :lock lock))
               (decf state))
              ((< state 0) (incf state))
-             (t (setf (%get-natural ptr target::rwlock.spin) 0)
+             (t (%release-spin-lock ptr)
                 (error 'not-locked :lock lock)))
        (setf (%get-signed-natural ptr target::rwlock.state) state)
        (when (zerop state)
@@ -1056,7 +1069,7 @@
              (setf (%get-natural ptr target::rwlock.blocked-readers) 0)
              (dotimes (i nreaders)
                (%signal-semaphore-ptr reader-signal)))))
-       (setf (%get-natural ptr target::rwlock.spin) 0)
+       (%release-spin-lock ptr)
        t))))
 
 #+futex
@@ -1126,11 +1139,11 @@
                   #+futex
                   (%unlock-futex ptr)
                   #-futex
-                  (setf (%get-natural ptr target::rwlock.spin) 0)
+                  (%release-spin-lock ptr)
                   (error :not-lock-owner :lock lock)))
                ((= state 0)
                 #+futex (%unlock-futex ptr)
-                #-futex (setf (%get-natural ptr target::rwlock.spin) 0)
+                #-futex (%release-spin-lock ptr)
                 (error :not-locked :lock lock))
                (t
                 (if (= state -1)
@@ -1140,7 +1153,7 @@
                     #+futex
                     (%unlock-futex ptr)
                     #-futex
-                    (setf (%get-natural ptr target::rwlock.spin) 0)
+                    (%release-spin-lock ptr)
                     (if flag
                       (setf (lock-acquisition.status flag) t))
                     t)
@@ -1148,7 +1161,7 @@
                     #+futex
                     (%unlock-futex ptr)
                     #-futex
-                    (setf (%get-natural ptr target::rwlock.spin) 0)
+                    (%release-spin-lock ptr)
                     (%unlock-rwlock-ptr ptr lock)
                     (let* ((*interrupt-level* level))
                       (%write-lock-rwlock-ptr ptr lock flag)))))))))))

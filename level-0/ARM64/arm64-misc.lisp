@@ -319,6 +319,28 @@
   (ret))                                           ; ppc:668
 
 ;;; =====================================================================
+;;; %release-spin-lock
+;;; =====================================================================
+;;; Free a spinlock word with RELEASE ordering.  The #-futex lock
+;;; protocols (l0-misc.lisp) publish their critical-section stores by
+;;; freeing the lockptr spinlock; on ARMv8 that hand-off requires a
+;;; release barrier on the freeing store.  With a plain str the next
+;;; spinlock owner can observe pre-critical-section values of
+;;; avail/owner/count -- measured on Graviton4 as a boot deadlock
+;;; (both threads in wait_on_semaphore on the lock's semaphore, frozen
+;;; state avail=nwaiters+1 owner=0 count=0) and as spurious
+;;; not-lock-owner errors.  dmb ish + str is the shape that was
+;;; A/B-confirmed against the reproducer (red 4/4 without, green 10/10
+;;; with, 900k contended ops per run); it also orders the failed-acquire
+;;; waiter path's avail increment before the release.
+(defarm64lapfunction %release-spin-lock ((p arg_z))
+  (macptr-ptr imm0 p)
+  (dmb (:$ 11))                                    ; DMB ISH: release fence
+  (str xzr (:@ imm0))
+  (mov arg_z rnil)
+  (ret))
+
+;;; =====================================================================
 ;;; %fixnum-truncate — ppc-numbers.lisp:251 (#+ppc64-target arm; placed
 ;;; here like called-for-mv-p below, pending the numbers-file story vs
 ;;; Matt's own arm64-numbers.lisp).  Promoted 16m14 from the wave-2

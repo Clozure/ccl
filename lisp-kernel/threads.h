@@ -106,7 +106,18 @@ Boolean extern threads_initialized;
 Boolean extern log_tcr_info;
 
 #define LOCK_SPINLOCK(x,tcr) get_spin_lock(&(x),tcr)
+#ifdef ARM64
+/* Freeing a spinlock publishes every store made while it was held, so it
+   needs RELEASE ordering on a weakly-ordered target; a plain store lets
+   the next owner read pre-critical-section values (and lets the compiler
+   sink protected stores past the release -- gcc was observed sinking
+   m->waiting past it in unlock_recursive_lock).  release_spin_lock
+   (arm64-asmutils.s, stlr) has been present but unused. */
+extern void release_spin_lock(signed_natural *);
+#define RELEASE_SPINLOCK(x) release_spin_lock((signed_natural *)&(x))
+#else
 #define RELEASE_SPINLOCK(x) (x)=0
+#endif
 
 #ifdef WIN_32
 #define TCR_TO_TSD(tcr) ((void *)((natural)(tcr)))
