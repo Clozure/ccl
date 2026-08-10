@@ -730,6 +730,7 @@
   (strex imm0 ptr (:@ imm1))
   (cmp imm0 (:$ 0))
   (bne @again)
+  (dmb)
   (bx lr))
 
 ;;; Atomically increment or decrement the gc-inhibit-count kernel-global
@@ -783,6 +784,7 @@
   (strex imm2 imm0 (:@ imm1))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm0)
   (bx lr))
 
@@ -793,19 +795,21 @@
   (ldrex imm0 (:@ imm1))
   (add imm0 imm0 (:asr by (:$ arm::fixnumshift)))
   (strex imm2 imm0 (:@ imm1))
+  (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm0)
   (bx lr))
 
 (defarmlapfunction %atomic-decf-ptr ((ptr arg_z))
   (macptr-ptr imm1 ptr)
-  (dmb)
   @again
   (ldrex imm0 (:@ imm1))
   (sub imm0 imm0 (:$ 1))
   (strex imm2 imm0 (:@ imm1))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm0)
   (bx lr))
 
@@ -819,6 +823,7 @@
   (strex imm2 imm0 (:@ imm1))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm0)
   (bx lr)
   @done
@@ -829,12 +834,14 @@
 
 (defarmlapfunction %atomic-swap-ptr ((ptr arg_y) (newval arg_z))
   (macptr-ptr imm1 ptr)
+  (dmb)
   @again
   (unbox-fixnum imm2 arg_z)
   (ldrex imm0 (:@ imm1))
   (strex imm2 imm2 (:@ imm1))
   (cmp imm2 (:$ 0))
   (bne @again)
+  (dmb)
   (box-fixnum arg_z imm0)
   (bx lr))
 
@@ -869,15 +876,13 @@
     (strex imm0 newval (:@ address))
     (cmp imm0 (:$ 0))
     (bne @again)
+    (dmb)
     (mov arg_z actual-oldval)
     (bx lr)
     @done
     (clrex)
     (mov arg_z actual-oldval)
     (bx lr)))
-
-
-
 
 (defarmlapfunction %macptr->dead-macptr ((macptr arg_z))
   (check-nargs 1)

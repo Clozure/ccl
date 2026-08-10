@@ -31,16 +31,6 @@ define(`movc16',`
         __(orr $1,$1,#$2&0xff00)
         ')
 
-define(`_clrex',`
-       	new_macro_labels()
-        __(ldr $1,[rcontext,#tcr.architecture_version])
-        __(cmp $1,#0)
-        __(blt macro_label(skip))
-        __(.long 0xf57ff01f)
-macro_label(skip):      
-        ')        
-
-        
 define(`test_fixnum',`
         __(tst $1,#fixnummask)
         ')

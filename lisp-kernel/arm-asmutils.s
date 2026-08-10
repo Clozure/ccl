@@ -66,6 +66,7 @@ _endfn
 /* Atomically store new value (r2) in *r0, if old value == expected (r1). */
 /* Return actual old value. */
 _exportfn(C(store_conditional))
+        __(dmb ish)
 0:      __(ldrex r3,[r0])
         __(cmp r3,r1)
         __(bne 1f)
@@ -83,6 +84,7 @@ _endfn
 /* of *r0. */
 _exportfn(C(atomic_swap))
         __(mov r2,r0)
+        __(dmb ish)
 0:      __(ldrex r0,[r2])
         __(strex r3,r1,[r2])
         __(cmp r3,#0)

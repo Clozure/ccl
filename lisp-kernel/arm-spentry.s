@@ -794,6 +794,7 @@ C(egc_rplaca_did_store):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 0b)
+        __(dmb ish)
         __(sub imm0,arg_y,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
         __(and imm2,imm0,#31)
@@ -807,6 +808,7 @@ C(egc_rplaca_did_store):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 1b)
+        __(dmb ish)
         __(bx lr)
 
 
@@ -837,7 +839,8 @@ C(egc_rplacd_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 0b)        
+        __(bne 0b)
+        __(dmb ish)
         __(sub imm0,arg_y,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
         __(and imm2,imm0,#31)
@@ -851,6 +854,7 @@ C(egc_rplacd_did_store):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 1b)
+        __(dmb ish)
         __(bx lr)
 	
 
@@ -886,6 +890,7 @@ C(egc_gvset_did_store):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 0b)
+        __(dmb ish)
         __(add imm0,arg_y,#misc_data_offset)
         __(add imm0,imm0,arg_x)
         __(sub imm0,imm0,temp0)
@@ -900,7 +905,8 @@ C(egc_gvset_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 1b)   
+        __(bne 1b)
+        __(dmb ish)
         __(bx lr)
 
         
@@ -937,6 +943,7 @@ C(egc_set_hash_key_did_store):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 0b)
+        __(dmb ish)
         __(add imm0,arg_y,#misc_data_offset)
         __(add imm0,imm0,arg_x)
         __(sub imm0,imm0,temp0)
@@ -951,7 +958,8 @@ C(egc_set_hash_key_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 1b)   
+        __(bne 1b)
+        __(dmb ish)
         
 /* Now need to ensure that the hash table itself is in the refmap; we
    know that it's in bounds, etc. */
@@ -971,7 +979,8 @@ C(egc_set_hash_key_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 2b)        
+        __(bne 2b)
+        __(dmb ish)
         __(sub imm0,arg_x,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
         __(and imm2,imm0,#31)
@@ -984,7 +993,8 @@ C(egc_set_hash_key_did_store):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 3b)        
+        __(bne 3b)
+        __(dmb ish)
         __(bx lr)
         
 
@@ -1022,6 +1032,7 @@ C(egc_store_node_conditional):
 C(egc_store_node_conditional_test): 
         __(cmp imm0,#0)
         __(bne 1b)
+        __(dmb ish)
         __(cmp arg_z,arg_x)
         __(blo 8f)
 
@@ -1045,6 +1056,7 @@ C(egc_store_node_conditional_test):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 2b)
+        __(dmb ish)
         __(add imm0,arg_x,temp2,asr #fixnumshift)
         __(sub imm0,imm0,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
@@ -1059,6 +1071,7 @@ C(egc_store_node_conditional_test):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 3b)
+        __(dmb ish)
         __(b 8f)
  
 /* arg_z = new value, arg_y = expected old value, arg_x = hash-vector,
@@ -1079,6 +1092,7 @@ C(egc_set_hash_key_conditional):
 C(egc_set_hash_key_conditional_test): 
         __(cmp imm0,#0)
         __(bne 0b)
+        __(dmb ish)
         __(cmp arg_z,arg_x)
         __(blo 8f)
         __(ref_global(temp0,ref_base))
@@ -1101,6 +1115,7 @@ C(egc_set_hash_key_conditional_test):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 1b)
+        __(dmb ish)
         __(add imm0,arg_x,temp2,asr #fixnumshift)
         __(sub imm0,imm0,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
@@ -1114,7 +1129,8 @@ C(egc_set_hash_key_conditional_test):
         __(orr imm2,imm2,imm1)
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
-        __(bne 2b)   
+        __(bne 2b)
+        __(dmb ish)
 /* Now need to ensure that the hash table itself is in the refmap; we
    know that it's in bounds, etc. */
         __(sub imm0,arg_x,temp0)
@@ -1133,6 +1149,7 @@ C(egc_set_hash_key_conditional_test):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 3b)
+        __(dmb ish)
         __(sub imm0,arg_x,temp0)
         __(mov imm0,imm0,lsr #dnode_shift+8)
         __(and imm2,imm0,#31)
@@ -1146,12 +1163,13 @@ C(egc_set_hash_key_conditional_test):
         __(strex imm0,imm2,[temp1])
         __(cmp imm0,#0)
         __(bne 4b)
+        __(dmb ish)
         
 C(egc_write_barrier_end):
 8:      __(mov arg_z,#nil_value)
         __(add arg_z,arg_z,#t_offset)
         __(bx lr)
-9:      __(_clrex(arg_z))
+9:      __(clrex)
         __(mov arg_z,#nil_value)
         __(bx lr)
 
@@ -2043,6 +2061,7 @@ _spentry(atomic_incf_node)
         __(strex imm0,arg_z,[lr])
         __(cmp imm0,#0)
         __(bne 0b)
+        __(dmb ish)
        /* Return this way, to get something else in the lr */
         __(restore_lisp_frame(imm0))
         __(bx lr)
