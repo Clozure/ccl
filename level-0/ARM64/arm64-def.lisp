@@ -335,13 +335,17 @@
 ;;; (x86-def.lisp:635) is the closest analog (separate GPR/FPR
 ;;; sequences); PPC64's PowerOpen defun reserves a param word per FP
 ;;; arg, which AAPCS64 does not.
-;;; ARM64-DEVIATION: the COMPILED path now passes stack args (the NSAA
-;;; block at c-frame words 8.., exposed at [SP] by the SP step in the
-;;; ffcall spentries), but THIS interpreted defun still marshals only
-;;; the 8 GPR words and 8 FP regs -- extending it needs the interleaved
-;;; source-order NSAA bookkeeping and a variable frame size here, a
-;;; separate change -- so >8 of either class still errors below, now as
-;;; this defun's own limitation.
+;;; Stack (NSAA) arguments: both register classes overflow into the
+;;; c-frame's param words 8.. (one shared counter, source order --
+;;; AAPCS64 5.4.2 has ONE next-stacked-argument address), which the
+;;; ffcall spentries expose AT [SP] for the callee.  The x86-64 defun
+;;; is the line donor here too: its shared other-offset past the 6 GPR
+;;; words (x86-def.lisp:635-745) is the same shape.  A word-count spec
+;;; (by-value composite payload) follows C.10/C.11: consecutive GPRs
+;;; when ALL its words fit, otherwise NGRN := 8 (the odd register is
+;;; wasted -- never a register/stack split) and the words go to the
+;;; stack.  :stack-doubleword (see lib/ffi-linuxarm64.lisp) is a raw
+;;; always-stacked word of a C.13 whole-composite copy.
 ;;; A :single-float arg is stored at its fp slot's BASE: %load-fp-arg-regs
 ;;; does 64-bit loads, and on little-endian the float bits land in the
 ;;; d-register's low half, which is exactly s<n> — the callee reads only
@@ -356,8 +360,9 @@
     (let* ((result-spec (or (car (last specs-and-vals)) :void))
            (nargs (ash (the fixnum (1- len)) -1))
            (n-gpr-words 0)
-           (n-fp-args 0))
-      (declare (fixnum nargs n-gpr-words n-fp-args))
+           (n-fp-args 0)
+           (n-stack-words 0))
+      (declare (fixnum nargs n-gpr-words n-fp-args n-stack-words))
       (ecase result-spec
         ((:address :unsigned-doubleword :signed-doubleword
                    :single-float :double-float
@@ -373,35 +378,38 @@
            (case spec
              ((:registers :indirect-result) nil)
              ((:double-float :single-float)
-              (incf n-fp-args))
+              (incf n-fp-args)
+              (when (> n-fp-args 8) (incf n-stack-words)))
              ((:address :unsigned-doubleword :signed-doubleword
                         :signed-fullword :unsigned-fullword
                         :signed-halfword :unsigned-halfword
                         :signed-byte :unsigned-byte)
-              (incf n-gpr-words))
+              (incf n-gpr-words)
+              (when (> n-gpr-words 8) (incf n-stack-words)))
+             (:stack-doubleword (incf n-stack-words))
              (t (if (typep spec 'unsigned-byte)
-                  (incf n-gpr-words spec)
+                  ;; by-value composite payload of SPEC words: C.10 when
+                  ;; they ALL fit the remaining GPRs, else C.11 -- NGRN
+                  ;; := 8 (odd register wasted, never split) and every
+                  ;; word stacks.  Mirrored EXACTLY in the marshal loop.
+                  (if (<= (+ n-gpr-words spec) 8)
+                    (incf n-gpr-words spec)
+                    (progn
+                      (setq n-gpr-words 8)
+                      (incf n-stack-words spec)))
                   (error "unknown arg spec ~s" spec)))))
-         (when (> n-gpr-words 8)
-           (error "~d integer/address argument words in foreign call; ~
-                   the interpreted %FF-CALL marshals at most 8 (the ~
-                   compiled ff-call path passes stack args; this defun ~
-                   does not yet)"
-                  n-gpr-words))
-         (when (> n-fp-args 8)
-           (error "~d floating-point arguments in foreign call; the ~
-                   interpreted %FF-CALL marshals at most 8 (d0-d7; the ~
-                   compiled ff-call path passes stack args, this defun ~
-                   does not yet)"
-                  n-fp-args))
          (%stack-block ((fp-args (* 8 8)))
            (with-macptrs ((argptr))
              (with-variable-c-frame
-                 8 frame
+                 (the fixnum (+ 8 n-stack-words)) frame
                  (%setf-macptr-to-object argptr frame)
                  (let* ((gpr-offset arm64::c-frame.param0)
-                        (fp-offset 0))
-                   (declare (fixnum gpr-offset fp-offset))
+                        (stack-offset (+ arm64::c-frame.param0 (* 8 8)))
+                        (fp-offset 0)
+                        (ngpr 0)
+                        (nfpr 0))
+                   (declare (fixnum gpr-offset stack-offset fp-offset
+                                    ngpr nfpr))
                    (do* ((i 0 (1+ i))
                          (specs specs-and-vals (cddr specs))
                          (spec (car specs) (car specs))
@@ -412,32 +420,76 @@
                        (:registers (setq regbuf val))
                        (:indirect-result (setq indirect-buf val))
                        (:address
-                        (setf (%get-ptr argptr gpr-offset) val)
-                        (incf gpr-offset 8))
+                        (incf ngpr)
+                        (cond ((<= ngpr 8)
+                               (setf (%get-ptr argptr gpr-offset) val)
+                               (incf gpr-offset 8))
+                              (t
+                               (setf (%get-ptr argptr stack-offset) val)
+                               (incf stack-offset 8))))
                        ((:signed-doubleword :signed-fullword
                                             :signed-halfword :signed-byte)
-                        (setf (%%get-signed-longlong argptr gpr-offset) val)
-                        (incf gpr-offset 8))
+                        (incf ngpr)
+                        (cond ((<= ngpr 8)
+                               (setf (%%get-signed-longlong argptr gpr-offset) val)
+                               (incf gpr-offset 8))
+                              (t
+                               (setf (%%get-signed-longlong argptr stack-offset) val)
+                               (incf stack-offset 8))))
                        ((:unsigned-doubleword :unsigned-fullword
                                               :unsigned-halfword :unsigned-byte)
-                        (setf (%%get-unsigned-longlong argptr gpr-offset) val)
-                        (incf gpr-offset 8))
+                        (incf ngpr)
+                        (cond ((<= ngpr 8)
+                               (setf (%%get-unsigned-longlong argptr gpr-offset) val)
+                               (incf gpr-offset 8))
+                              (t
+                               (setf (%%get-unsigned-longlong argptr stack-offset) val)
+                               (incf stack-offset 8))))
                        (:double-float
-                        (setf (%get-double-float fp-args fp-offset) val)
-                        (incf fp-offset 8))
+                        (incf nfpr)
+                        (cond ((<= nfpr 8)
+                               (setf (%get-double-float fp-args fp-offset) val)
+                               (incf fp-offset 8))
+                              (t
+                               (setf (%get-double-float argptr stack-offset) val)
+                               (incf stack-offset 8))))
                        (:single-float
-                        (setf (%get-single-float fp-args fp-offset) val)
-                        (incf fp-offset 8))
+                        (incf nfpr)
+                        (cond ((<= nfpr 8)
+                               (setf (%get-single-float fp-args fp-offset) val)
+                               (incf fp-offset 8))
+                              (t
+                               ;; C.5: a stacked single takes a full
+                               ;; 8-byte slot, value in the low 4 bytes
+                               ;; (LE store at the slot base).
+                               (setf (%get-single-float argptr stack-offset) val)
+                               (incf stack-offset 8))))
+                       (:stack-doubleword
+                        ;; raw always-stacked word (C.13 composite copy)
+                        (setf (%%get-unsigned-longlong argptr stack-offset) val)
+                        (incf stack-offset 8))
                        (t
                         ;; struct by value: spec = word count (<= 2 from
                         ;; expand-ff-call), val = pointer to the bytes.
+                        ;; C.10/C.11 -- all words in GPRs or all on the
+                        ;; stack, never split; mirrors the count pass.
                         (let* ((p 0))
                           (declare (fixnum p))
-                          (dotimes (k (the fixnum spec))
-                            (setf (%get-ptr argptr gpr-offset) (%get-ptr val p))
-                            (incf p 8)
-                            (incf gpr-offset 8))))))
-                   (%load-fp-arg-regs n-fp-args fp-args)
+                          (cond ((<= (+ ngpr (the fixnum spec)) 8)
+                                 (incf ngpr (the fixnum spec))
+                                 (dotimes (k (the fixnum spec))
+                                   (setf (%get-ptr argptr gpr-offset)
+                                         (%get-ptr val p))
+                                   (incf p 8)
+                                   (incf gpr-offset 8)))
+                                (t
+                                 (setq ngpr 8)
+                                 (dotimes (k (the fixnum spec))
+                                   (setf (%get-ptr argptr stack-offset)
+                                         (%get-ptr val p))
+                                   (incf p 8)
+                                   (incf stack-offset 8))))))))
+                   (%load-fp-arg-regs (min n-fp-args 8) fp-args)
                    (if indirect-buf
                      (%do-ff-call-indirect indirect-buf entry)
                      (%do-ff-call regbuf entry))
