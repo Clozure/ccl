@@ -99,19 +99,20 @@ _exportfn(C(release_spin_lock))
 _endfn
         
 
-/* Logior the value in *r0 with the value in r1 (presumably a bitmask with exactly 1 */
-/* bit set.)  Return non-zero if any of the bits in that bitmask were already set. */
-        
+/*
+ * Logior the value in *r0 with the value in r1 (presumably a bitmask
+ * with exactly 1 bit set.)  Return non-zero if any of the bits in
+ * that bitmask were already set.
+ */
 _exportfn(C(atomic_ior))
-        __(stmdb sp!,{r4,lr})
 0:      __(ldrex r2,[r0])
         __(orr r3,r2,r1)
-        __(strex r4,r3,[r0])
-        __(cmp r4,#0)
+        __(strex ip,r3,[r0])
+        __(cmp ip,#0)
         __(bne 0b)
         __(dmb ish)
-        __(mov r0,r2)
-        __(ldmia sp!,{r4,pc})
+        __(and r0,r1,r2) /* return mask & old */
+        __(bx lr)
 _endfn
 
 
