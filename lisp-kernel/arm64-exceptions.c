@@ -242,9 +242,9 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
  *     sub  allocptr, allocptr, {#imm | Xm}
  *     cmp  allocptr, allocbase
  *     b.hi 1f
- *     udf  #3   (uuo_alloc = misc 0; assembler-validated 2026-07-11)
- * 1:  str  <header|cdr>, [allocptr, #misc_header_offset|#cons.cdr]
- *    (str  <car>, [allocptr, #cons.car])
+ *     uuo_alloc
+ * 1:  stur  <header|cdr>, [allocptr, #misc_header_offset|#cons.cdr]
+ *    (stur  <car>, [allocptr, #cons.car])
  *     mov  <dest>, allocptr
  *     bic  allocptr, allocptr, #fulltagmask
  *
@@ -274,9 +274,9 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 #define IS_ALLOC_TRAP(i) ((i) == ALLOC_TRAP_INSTRUCTION)
 
 /* STUR (64-bit): 1111 1000 000 imm9 00 Rn Rt
-   header store: stur Xt, [x26, #misc_header_offset(-4)]
-     imm9 = -4 & 0x1ff = 0x1fc → 0xf8000000|0x1fc<<12|26<<5 = 0xf81fc340 */
-#define IS_SET_ALLOCPTR_HEADER_RD(i) (((i) & 0xffffffe0) == 0xf81fc340)
+   header store: stur Xt, [x26, #misc_header_offset]
+     imm9 = -12 & 0x1ff = 0x1f4 → 0xf8000000|0x1f4<<12|26<<5 = 0xf81f4340 */
+#define IS_SET_ALLOCPTR_HEADER_RD(i) (((i) & 0xffffffe0) == 0xf81f4340)
 /* cons.cdr = -cons_bias = -3 (arm64-constants.h cons struct):
      stur Xt, [x26, #-3] → imm9 = 0x1fd → 0xf81fd340 */
 #define IS_SET_ALLOCPTR_CDR_RD(i)    (((i) & 0xffffffe0) == 0xf81fd340)
@@ -2054,6 +2054,87 @@ extern opcode
 #define IS_STR_TO_SP(i) (((i) & 0xFFC003E0) == 0xF90003E0)
 #define STR_TO_SP_DISP(i) ((((i) >> 10) & 0xfff) << 3)
 
+/*
+ * Identify where we are in the consing sequence according to the
+ * instruction the PC points to.
+ */
+alloc_instruction_id
+classify_alloc_instruction(ExceptionInformation *xp)
+{
+  opcode instr = *xpPC(xp);
+
+  if (IS_SUB_IMM_FROM_ALLOCPTR(instr) ||
+      IS_SUB_RM_FROM_ALLOCPTR(instr)) {
+    return ID_adjust_allocptr_instruction;
+  }
+  if (IS_COMPARE_ALLOCPTR_TO_ALLOCBASE(instr)) {
+    return ID_compare_allocptr_to_allocbase_instruction;
+  }
+  if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
+    return ID_branch_around_alloc_trap_instruction;
+  }
+  if (IS_ALLOC_TRAP(instr)) {
+    return ID_alloc_trap_instruction;
+  }
+  if (IS_SET_ALLOCPTR_CDR_RD(instr) || IS_SET_ALLOCPTR_CAR_RD(instr) ||
+      IS_SET_ALLOCPTR_HEADER_RD(instr) ||
+      IS_SET_ALLOCPTR_RESULT_RD(instr) ||
+      IS_CLR_ALLOCPTR_TAG(instr)) {
+    return ID_finish_allocation;
+  }
+  return ID_unrecognized_alloc_instruction;
+}
+
+/*
+ * A thread was suspended during the consing sequence at some point before
+ * the trap instruction.  Rewind back to the sub allocptr, and ensure that
+ * we trap cleanly when we restart by resetting allocbase and allocptr.
+ */
+void
+restart_allocation(ExceptionInformation *xp, TCR *tcr)
+{
+  pc program_counter = xpPC(xp), sub_pc;
+  opcode instr = *program_counter;
+  signed_natural sub_disp;
+
+  /*
+   * We get here when the pc is at the cmp or the b.hi (the classify
+   * switch in pc_luser_xp).  The sequence is sub/cmp/b.hi/udf, so the
+   * sub is one instruction back from the cmp and two back from the
+   * b.hi.
+   */
+  if (IS_COMPARE_ALLOCPTR_TO_ALLOCBASE(instr)) {
+    sub_pc = program_counter - 1;
+  } else if (IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
+    sub_pc = program_counter - 2;
+  } else {
+    Bug(xp, "restart_allocation: unexpected instruction %x at %p",
+        *program_counter, program_counter);
+    return;
+  }
+
+  opcode sub = *sub_pc;
+
+  if (IS_SUB_IMM_FROM_ALLOCPTR(sub)) {
+    sub_disp = SUB_IMM_FIELD(sub);
+  } else if (IS_SUB_RM_FROM_ALLOCPTR(sub)) {
+    sub_disp = xpGPR(xp, RM_field(sub));
+  } else {
+    Bug(xp, "restart_allocation: expected sub from allocptr at %p, got %x",
+        sub_pc, sub);
+    return;
+  }
+
+  /* derive allocptr position before this allocation */
+  uint64_t orig_allocptr = xpGPR(xp, allocptr) + sub_disp;
+  /* record this segment's bytes allocated before we reset allocptr */
+  update_bytes_allocated(tcr, (void *)orig_allocptr);
+
+  xpPC(xp) = sub_pc;
+  xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+  xpGPR(xp, allocptr)  = VOID_ALLOCPTR;
+}
+
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 {                                 /* ppc-exceptions.c:1900-2130 */
@@ -2189,38 +2270,90 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     }
   }
 
-  /* (c) consing / uvector allocation.  ppc:2034-2094 verbatim (the
-     alloc-sequence decode lives in allocptr_displacement /
-     finish_allocating_* above). */
-  if (allocptr_tag != tag_fixnum) {
-    signed_natural disp = allocptr_displacement(xp);
+  /* (c) consing / uvector allocation */
 
-    if (disp) {
-      /* Being architecturally "at" the alloc trap doesn't tell us
-         whether the thread has committed to taking the trap.  Make the
-         allocptr valid; the interrupt handler undoes this (interrupt
-         case) or the trap is re-taken (GC case).  ppc:2036-2076 */
+  /*
+   * When allocptr is tagged, that indicates that we've entered the
+   * consing sequence (sub/cmp/b.hi/uuo_alloc/stur.../mov/bic).  In
+   * other words, we've already done:
+   *   sub allocptr, allocptr, Xn|#imm
+   */
+  if (allocptr_tag != tag_fixnum) {
+    /* What allocation state are we in? */
+    switch (classify_alloc_instruction(xp)) {
+    case ID_compare_allocptr_to_allocbase_instruction:
+    case ID_branch_around_alloc_trap_instruction:
+      /*
+       * We were interrupted before taking the uuo_alloc.  Rewind so
+       * that we will restart the allocation from the top.
+       */
+      restart_allocation(xp, tcr);
+      break;
+    case ID_alloc_trap_instruction: {
+      /*
+       * We're at the uuo_alloc.  We decremented allocptr, and it is
+       * <= allocbase (otherwise, the b.hi would have been taken).
+       */
+      signed_natural disp = allocptr_displacement(xp);
+
       if (alloc_disp) {
+        /*
+         * interrupt:
+         *
+         * Restore allocptr to what it was before the sub, thereby
+         * making it valid/gc-safe.  After interrupt_handler has
+         * finished its work (maybe running arbitrary Lisp code or
+         * even a gc), it will re-subtract the disp that we pass back
+         * to it here.  This thread will then resume on the uuo_alloc
+         * with the correctly-decremented allocptr.
+         */
         *alloc_disp = disp;
         xpGPR(xp, allocptr) += disp;
       } else {
-        update_bytes_allocated(tcr,
-                               (void *)ptr_from_lispobj(cur_allocptr + disp));
+        /*
+         * gc:
+         *
+         * We are going to take the trap when we resume.  Account for
+         * the bytes allocated up to the original allocptr (before we
+         * decremented it).  Setting allocptr to VOID_ALLOCPTR - disp
+         * leaves allocptr tagged, so that when we take the trap,
+         * handle_alloc_trap knows whether to make a cons cell or a
+         * uvector.
+         */
+        uint64_t orig_allocptr = cur_allocptr + disp;
+        update_bytes_allocated(tcr, (void *)orig_allocptr);
         xpGPR(xp, allocbase) = VOID_ALLOCPTR;
         xpGPR(xp, allocptr) = VOID_ALLOCPTR - disp;
       }
-    } else {
-      /* Already past the alloc trap: finish allocating the object. */
+      break;
+    }
+
+    case ID_finish_allocation:
+      /*
+       * We are past the trap, so we have a valid allocation now,
+       * whether we took the trap or not.  Emulate the rest of the consing
+       * sequence.
+       */
       if (allocptr_tag == fulltag_cons) {
         finish_allocating_cons(xp);
+      } else if (allocptr_tag == fulltag_misc) {
+        finish_allocating_uvector(xp);
       } else {
-        if (allocptr_tag == fulltag_misc) {
-          finish_allocating_uvector(xp);
-        } else {
-          Bug(xp, "what's being allocated here ?");
-        }
+        Bug(xp, "what's being allocated here ?");
       }
       xpGPR(xp, allocptr) = xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+      break;
+
+    case ID_adjust_allocptr_instruction:
+    case ID_unrecognized_alloc_instruction:
+    default:
+      /*
+       * We are confused.  To get here means that allocptr has a
+       * non-fixnum tag before executing the sub instruction that is
+       * supposed to add the tag, or something even odder.
+       */
+      Bug(xp, "unexpected allocation state at " LISP ":",
+          (LispObj)xpPC(xp));
     }
     return;
   }
