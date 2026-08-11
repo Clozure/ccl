@@ -63,108 +63,58 @@ _exportfn(C(noop))
 	__(bx lr)
 _endfn
 
-
-
-
-
 /* Atomically store new value (r2) in *r0, if old value == expected (r1). */
 /* Return actual old value. */
-        .globl C(arm_architecture_version)
 _exportfn(C(store_conditional))
+        __(dmb ish)
 0:      __(ldrex r3,[r0])
         __(cmp r3,r1)
         __(bne 1f)
         __(strex ip,r2,[r0])
         __(cmp ip,#0)
         __(bne 0b)
+        __(dmb ish)
         __(b 2f)
-1:    
-        __(ldr r2,.L555)
-.LPIC0:
-        __(add r2,pc,r2)
-        __(ldr ip,.L555+4)
-        __(ldr ip,[r2,ip])
-        __(ldr ip,[ip])
-        __(cmp ip,#7)
-        __(blt 2f)
-        .long 0xf57ff01f
+1:      __(clrex)
 2:      __(mov r0,r3)
-        __(bx lr)   
-.L555:
-        .word _GLOBAL_OFFSET_TABLE_-(.LPIC0+8)
-        .word  C(arm_architecture_version)(GOT)
-
-                                                                                                                            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        __(bx lr)
 _endfn
 
 /* Atomically store new_value(r1) in *r0 ;  return previous contents */
 /* of *r0. */
-
 _exportfn(C(atomic_swap))
         __(mov r2,r0)
+        __(dmb ish)
 0:      __(ldrex r0,[r2])
         __(strex r3,r1,[r2])
         __(cmp r3,#0)
-        __(bne 0b)        
-        __(bx lr)
-_endfn
-
-_exportfn(C(atomic_swap_acquire))
-        __(mov r2,r0)
-0:      __(ldrex r0,[r2])
-        __(strex r3,r1,[r2])
-        __(cmp r3,#0)
-        __(wfene)
         __(bne 0b)
-        __(dmb)        
+        __(dmb ish)
         __(bx lr)
 _endfn
 
 _exportfn(C(release_spin_lock))
         __(mov r1,#0)
-        __(dmb)
+        __(dmb ish)
         __(str r1,[r0])
-        __(dsb)
-        __(sev)
         __(bx lr)
 _endfn
         
 
-/* Logior the value in *r0 with the value in r1 (presumably a bitmask with exactly 1 */
-/* bit set.)  Return non-zero if any of the bits in that bitmask were already set. */
-        
+/*
+ * Logior the value in *r0 with the value in r1 (presumably a bitmask
+ * with exactly 1 bit set.)  Return non-zero if any of the bits in
+ * that bitmask were already set.
+ */
 _exportfn(C(atomic_ior))
-        __(stmdb sp!,{r4,lr})
 0:      __(ldrex r2,[r0])
         __(orr r3,r2,r1)
-        __(strex r4,r3,[r0])
-        __(cmp r4,#0)
+        __(strex ip,r3,[r0])
+        __(cmp ip,#0)
         __(bne 0b)
-        __(mov r0,r2)
-        __(ldmia sp!,{r4,pc})
+        __(dmb ish)
+        __(and r0,r1,r2) /* return mask & old */
+        __(bx lr)
 _endfn
 
 
@@ -177,6 +127,7 @@ _exportfn(C(atomic_and))
         __(strex r3,r2,[r0])
         __(cmp r3,#0)
         __(bne 0b)
+        __(dmb ish)
         __(mov r0,r2)
         __(bx lr)
 _endfn
