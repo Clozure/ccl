@@ -1567,7 +1567,9 @@ result-type-specifer is :VOID or NIL"
 (defun translate-foreign-arg-type (foreign-type-spec)
   (let* ((foreign-type (parse-foreign-type foreign-type-spec)))
     (etypecase foreign-type
-      (foreign-pointer-type :address)
+      ;; An array-typed parameter decays to a pointer (C11 6.7.6.3p7),
+      ;; mirroring FOREIGN-TYPE-TO-REPRESENTATION-TYPE.
+      ((or foreign-pointer-type foreign-array-type) :address)
       (foreign-integer-type
        (let* ((bits (foreign-integer-type-bits foreign-type))
               (signed (foreign-integer-type-signed foreign-type)))
