@@ -884,6 +884,13 @@
     (mov arg_z actual-oldval)
     (bx lr)))
 
+(defarmlapfunction %release-spin-lock ((p arg_z))
+  (macptr-ptr imm0 p)
+  (mov imm1 (:$ 0))
+  (dmb)
+  (str imm1 (:@ imm0))
+  (bx lr))
+
 (defarmlapfunction %macptr->dead-macptr ((macptr arg_z))
   (check-nargs 1)
   (mov imm0 (:$ arm::subtag-dead-macptr))
