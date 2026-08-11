@@ -155,7 +155,7 @@ certain forms that have been conditionalized out.
 
 `(find-backend :my-target)` (where `:my-target` is `:darwinarm64`,
 `:linuxriscv64`, or whatever) should find your backend structure.
-
+ 
 
 Once you have the infrastructure set up, it's not that bad; it is
 indeed a case of:
@@ -451,7 +451,8 @@ Register availability is tracked with bitmasks.
 
 ## Stacks
 Depending on the platform, CCL uses up to three stacks: a control stack,
-a value stack, and a temp stack.
+a value stack, and a temp stack.  The number of available registers influences
+which stacks are available and how they are used.
 
 Except on the x86 ports, there is a separate value stack and control stack.
 The value stack is always unambiguously nodes, from top to bottom.
@@ -462,6 +463,18 @@ function doesn't clobber its return address or reference any constants.
 Building a frame is a multi-instruction sequence, and `pc_luser_xp()`
 needs to recognize the case of building a frame on the control stack
 and make it look like an atomic operation.
+
+The temp stack (if present) also contains frames.  On PPC and arm64, it
+contains basically all dynamic-extent data.  On x86, there are not enough
+registers to dedicate one as a tsp (temp stack pointer), so its tsp is
+kept in memory (in a TCR slot).  The x86 temp stack contains only nodes;
+dx ivectors, %stack-block, and C frames go onto a separate foreign stack
+that the gc ignores.
+
+On 32-bit ARM there is no temp stack at all: everything is put onto the
+control stack, and numerous tricks are employed to enable the gc to walk
+the control stack.
+
 
 ## Memory allocation
 Historically, CCL has managed a single dynamic area, which is where allocation takes place.
