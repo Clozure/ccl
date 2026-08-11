@@ -17,6 +17,8 @@ tags
 /*.image
 /*boot*
 
+/arm64cl
+/darm64cl
 /armcl
 /?x86cl
 /?x86cl64
