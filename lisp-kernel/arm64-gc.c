@@ -2006,8 +2006,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
           }
           set_bitidx_vars(markbits,dnode,bitsp,bits,bitidx);
         } else if (immheader_tag_p(tag)) {           /* ppc-gc.c:1534-1587 */
-          LispObj *xiv_dest = dest;
-          Boolean xiv_is_code = false;
           *dest++ = node;
           *dest++ = *src++;
           elements = header_element_count(node);
@@ -2023,7 +2021,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
           case ivector_class_32_bit:
             if (tag == subtag_code_vector) {
               GCrelocated_code_vector = true;
-              xiv_is_code = true;
             }
             imm_dnodes = (((elements+2)+3)>>2);
             break;
@@ -2049,21 +2046,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
             *dest++ = *src++;
             *dest++ = *src++;
           }
-          if (xiv_is_code) {
-            /* ARM64-DEVIATION (perf, measured 16m62): flush the relocated
-               code vector's new extent NOW instead of one whole-region
-               flush after compaction.  I-cache maintenance is only needed
-               for bytes that will be FETCHED AS INSTRUCTIONS: every such
-               byte is inside some code vector, each relocated code vector
-               is flushed here, and code vectors born after this GC are
-               flushed at creation (%make-code-executable).  The PPC-shaped
-               whole-region flush (ppc-gc.c:1599-1604) ic-ivau'd every line
-               of the compacted region -- data included -- which on
-               Neoverse-N1 (DIC=0, broadcast ic ivau) costs tens of suite
-               seconds. */
-            xMakeDataExecutable((BytePtr)xiv_dest,
-                                (natural)((char *)dest - (char *)xiv_dest));
-          }
           set_bitidx_vars(markbits,dnode,bitsp,bits,bitidx);
         } else {                                     /* ppc-gc.c:1588-1594 */
           *dest++ = node_forwarding_address(node);
@@ -2079,13 +2061,13 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
     {
       natural nbytes = (natural)ptr_to_lispobj(dest) - (natural)GCfirstunmarked;
       if ((nbytes != 0) && GCrelocated_code_vector) {
-        /* ARM64-DEVIATION (perf, measured 16m62): the PPC-shaped
-           whole-region flush that lived here moved INTO the compaction
-           copy loop above -- each relocated code vector is flushed at its
-           new extent as it lands, so by this point every relocated code
-           vector is already synced and flushing the data between them
-           buys nothing.  (nbytes computation kept: it documents the
-           region the PPC form covered.) */
+        /*
+         * An earlier change flushed icache lines for code vectors
+         * incrementally, but for some reason, that still leaves some
+         * stale lines.  Reinstate the whole-region flush for
+         * correctness.
+         */
+        xMakeDataExecutable((BytePtr)ptr_from_lispobj(GCfirstunmarked), nbytes);
       }
     }
   }
