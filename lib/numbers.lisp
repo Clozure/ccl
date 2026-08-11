@@ -304,7 +304,8 @@
       (cond
        ((<= biased-exponent 0)
         ;; denormalize the number
-        (setf sticky-residue (not (zerop (ldb integer (byte (- 1 biased-exponent) 0)))))
+        (setf sticky-residue
+              (not (zerop (ldb (byte (- 1 biased-exponent) 0) integer))))
         (setf integer (ash integer (- biased-exponent 1)))
         (setf biased-exponent 0)))
       (let ((lowest (min ep length)))
