@@ -1222,9 +1222,24 @@ handle_unimplemented_instruction(ExceptionInformation *xp,
                                  opcode instruction,
                                  TCR *tcr)
 {
-  /* ppc-exceptions.c:1242-1272 emulated the optional PPC fsqrt/fsqrts
-     instructions.  ARM64-DEVIATION (arm-exceptions.c:1024-1031): no
-     analogous optional instructions to emulate; fsqrt is base A64. */
+  /*
+   * We only get here on SIGILL for a non-udf instruction.
+   *
+   * One possible reason is a genuinely illegal or architecturally
+   * constrained unpredictable instruction.  This situation is likely
+   * a code generation bug.
+   *
+   * We actually ran into this situation with str x24,[x24,#-48]!.
+   * This is a load/store with writeback where Rt == Rn, and it's
+   * constrained unpredictable: while it works on AWS Graviton,
+   * Apple hardware signals on it.
+   *
+   * Another possibility is that the instruction looks OK.  In that case,
+   * we suspect I-cache incoherency: an i-cache flush may have been
+   * left out after a code vector was generated or relocated.
+   *
+   * There are probably other possibilities.  To the debugger we go.
+   */
   return -1;
 }
 
