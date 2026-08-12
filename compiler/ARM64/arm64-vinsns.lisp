@@ -300,8 +300,32 @@
 (define-arm64-vinsn (alloc-variable-c-frame) (()
                                               ((n-c-args :lisp))
                                               ((header (:u64 #.arm64::imm0))
-                                               (size :u64)
-                                               (prevsp (:imm #.arm64::imm1))))
+                                               ;; ALL THREE temps are WIRED
+                                               ;; (:u64 mode, not the :imm
+                                               ;; CLASS -- a wired temp is
+                                               ;; allocated by MODE and
+                                               ;; allocate-temporary-vreg has
+                                               ;; no :imm entry; the original
+                                               ;; (:imm imm1) type-errored the
+                                               ;; FIRST time this vinsn was
+                                               ;; ever emitted, since the old
+                                               ;; %ff-call passed a constant
+                                               ;; frame size and only
+                                               ;; ALLOC-C-FRAME was live).
+                                               ;; size is wired too because
+                                               ;; the temp allocator handed
+                                               ;; an UNWIRED size the same x1
+                                               ;; the wired prevsp claims --
+                                               ;; mov prevsp,sp then clobbered
+                                               ;; size and `sub sp,sp,size'
+                                               ;; zeroed SP (observed in a
+                                               ;; boot core, sp=0 at the stp).
+                                               ;; imm0/imm1 must keep their
+                                               ;; wiring: pc_luser_xp
+                                               ;; recognizes the stp below by
+                                               ;; its exact encoding.
+                                               (size (:u64 #.arm64::imm2))
+                                               (prevsp (:u64 #.arm64::imm1))))
   (add size n-c-args (:$ '6))        ;+ header + prevsp + 4-word frame
   (add size size (:$ (:apply 1- arm64::dnode-size))) ;round byte size up...
   (and size size (:$ (:apply - arm64::dnode-size)))  ; ...to a dnode boundary
@@ -6489,8 +6513,9 @@
 
 ;;; ============ set-c-arg / set-single-c-arg / set-double-c-arg ============
 ;;; argnum is a WORD index into the param area (param0 = word 0); the
-;;; handler assigns words 0-7 to GPR args, 8.. to overflow, then FP
-;;; staging.  Byte offsets are 16+8k: 8-aligned, scaled-STR encodable
+;;; handler assigns words 0-7 to GPR args, 8.. to the NSAA stack-arg
+;;; block (overflow args of BOTH register classes, in source order --
+;;; AAPCS64 has ONE next-stacked-argument address), then FP staging.  Byte offsets are 16+8k: 8-aligned, scaled-STR encodable
 ;;; through the whole u16const range.  Little-endian: singles store/
 ;;; load at offset+0 (PPC's +4 was big-endian) -- v2 donor deviation
 ;;; kept.  Register width (X/S/D form) follows the operand class, as
@@ -6538,6 +6563,37 @@
                                               ()
                                               ((temp (:u64 #.arm64::imm1))))
   (movz temp (:$ (:apply arm64::subprimitive-offset ".SPffcall")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+;;; ============ ff-call-return-registers ============
+;;; ff-call variant for record-by-value returns: same frame and entry
+;;; contract as ff-call, plus a regbuf macptr in arg_y into which the
+;;; subprim stores every AAPCS64 result register on return
+;;; ({x0-x7 @ 0..56, d0-d7 @ 64..120}; `spentry ffcall_return_registers',
+;;; spentry-E-ffi.s).  x86-64 pairs the same way:
+;;; (define-x8664-subprim-call-vinsn (ff-call-return-registers)
+;;; .SPffcall-return-registers), x8664-vinsns.lisp; PPC64's donor is
+;;; .SPpoweropen-ffcall-return-registers (ppc64-vinsns.lisp).
+(define-arm64-vinsn (ff-call-return-registers :call :subprim) (()
+                                                               ()
+                                                               ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPffcall-return-registers")))
+  (ldr temp (:@ rcontext temp))
+  (blr temp))
+
+;;; ============ ff-call-indirect-result ============
+;;; ff-call variant for >16-byte non-HFA record-by-value RETURNS: same
+;;; frame and entry contract as ff-call, plus the caller-allocated result
+;;; buffer's macptr in arg_y; the subprim loads its ADDRESS into x8 (the
+;;; AAPCS64 6.9 indirect result-area register) immediately before the
+;;; call (`spentry ffcall_indirect_result', spentry-E-ffi.s).  No other
+;;; port needs this: SysV/PowerOpen pass the hidden result pointer as the
+;;; first integer argument, AAPCS64 alone dedicates x8 to it.
+(define-arm64-vinsn (ff-call-indirect-result :call :subprim) (()
+                                                              ()
+                                                              ((temp (:u64 #.arm64::imm1))))
+  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPffcall-indirect-result")))
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
@@ -6858,6 +6914,49 @@
                                      ((x :u64)
                                       (y :u64)))
   (eor dest x y))
+
+;;; ============ natural (unboxed u64) arithmetic and shifts ============
+;;; Demand: acode-rewrite.lisp:241-246 rewrites + and - to %natural+ and
+;;; %natural- whenever BOTH operand types are subtypes of target-natural-type,
+;;; with no reader conditional -- so ordinary portable source that declares
+;;; (unsigned-byte 64) operands at speed 3 produces these operators on arm64,
+;;; and without a handler the compile fails.  natural-shift-left/right arrive
+;;; the same way for constant shift counts.  ANSI cannot reach any of it (a
+;;; declared-type open-coded path), which is why 21679/0 never saw it.
+;;;
+;;; PPC64 ppc64-vinsns.lisp:3834-3849 (%natural+ add / %natural- sub) and
+;;; :2960-2966 (natural-shift-left/right).  PPC64 expresses the shifts with
+;;; rldicr because it has no dedicated 64-bit shift-immediate;
+;;; ;;; ARM64-DEVIATION: AArch64 has lsl/lsr with an immediate (UBFM aliases),
+;;; so the rotate-and-mask encoding has no analogue and is not imitated.  The
+;;; count is :u8const on both ports, matching PPC64's assumption that nx1 has
+;;; already established a constant amount in range.
+;;;
+;;; The -c (constant-operand) variants PPC64 carries are deliberately NOT
+;;; ported: the arm64 natural family established by %natural-logand/-logior/
+;;; -logxor above has no -c forms either, and their handlers always materialise
+;;; both operands into imm registers.  Matching the neighbouring arm64
+;;; convention keeps one spelling of the family and avoids an imm12-range
+;;; question that buys only one movz.
+(define-arm64-vinsn %natural+ (((dest :u64))
+                               ((x :u64)
+                                (y :u64)))
+  (add dest x y))
+
+(define-arm64-vinsn %natural- (((dest :u64))
+                               ((x :u64)
+                                (y :u64)))
+  (sub dest x y))
+
+(define-arm64-vinsn natural-shift-left (((dest :u64))
+                                        ((src :u64)
+                                         (count :u8const)))
+  (lsl dest src (:$ count)))
+
+(define-arm64-vinsn natural-shift-right (((dest :u64))
+                                         ((src :u64)
+                                          (count :u8const)))
+  (lsr dest src (:$ count)))
 
 ;;; ============ ivector-typecode-p / gvector-typecode-p ============
 ;;; Demand (16m28, pin advance to 33e61e6): his arm642-ivector-typecode-p
