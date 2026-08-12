@@ -127,7 +127,9 @@
       ;; writer tags it).
       (if cross-compiling
         constants-vector
-        (function-vector-to-function constants-vector)))))
+        (progn
+          (%make-code-executable code-vector)
+          (function-vector-to-function constants-vector))))))
 
 (defun arm64-lap-pseudo-op (directive arg current)
   (ecase directive
