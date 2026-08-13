@@ -1422,7 +1422,6 @@
   (let* ((specs ())         
          (vals ())
          (register-spec-seen nil)
-         (structure-return-seen nil)
          (arg-specs (butlast arg-specs-and-result-spec))
          (result-spec (car (last arg-specs-and-result-spec))))
     (unless (evenp (length arg-specs))
