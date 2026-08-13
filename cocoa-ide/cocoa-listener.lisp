@@ -428,7 +428,7 @@
   (let* ((event (#/currentEvent *nsapp*))
          (modifiers (#/modifierFlags event))
          (original-window (#/window event)))
-    (when (logtest #$NSAlternateKeyMask modifiers) ; check for option key pressed
+    (when (logtest $event-modifier-flag-option modifiers) ; check for option key pressed
       (unless (%null-ptr-p original-window)
         ;(format t "~%About to call map-windows for sender ~S" sender)
         (map-windows #'(lambda (w) (when (and (eq (window-type w)

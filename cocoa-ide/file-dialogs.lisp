@@ -54,9 +54,9 @@
     (when button-string
       (#/setPrompt: open-panel (#/autorelease (%make-nsstring button-string))))
     (let ((result (#/runModal open-panel)))
-      (cond ((= result #$NSOKButton)
+      (cond ((= result $modal-response-ok)
              (%panel-path-string (#/URL open-panel)))
-            ((= result #$NSCancelButton)
+            ((= result $modal-response-cancel)
              nil)
             (t
              (error "couldn't run the open panel: error code ~d" result))))))
@@ -91,9 +91,9 @@
       (#/autorelease types-array))
     #-cocotron (#/setAllowedFileTypes: save-panel types-array)
     (let ((result (#/runModal save-panel)))
-      (cond ((= result #$NSOKButton)
+      (cond ((= result $modal-response-ok)
              (%panel-path-string (#/URL save-panel)))
-            ((= result #$NSCancelButton)
+            ((= result $modal-response-cancel)
              nil)
             (t
              (error "couldn't run the save panel: error code ~d" result))))))
@@ -129,7 +129,7 @@
     (when directory
       (#/setDirectoryURL: open-panel (%ns-file-url directory)))
     (let ((result (#/runModal open-panel)))
-      (cond ((= result #$NSOKButton)
+      (cond ((= result $modal-response-ok)
              ;; Selected directory URL — not the deprecated #/directory
              ;; (panel's shown folder), which was easy to confuse with
              ;; the selection when browsing for a folder.
@@ -139,7 +139,7 @@
                                     (char/= (char path (1- (length path))) #\/))
                              (concatenate 'string path "/")
                              path)))))
-            ((= result #$NSCancelButton)
+            ((= result $modal-response-cancel)
              nil)
             (t
              (error "couldn't run the open panel: error code ~d" result))))))

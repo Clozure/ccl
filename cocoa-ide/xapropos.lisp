@@ -74,7 +74,7 @@
     (let* ((button (make-instance 'ns:ns-pop-up-button :with-frame r :pulls-down t))
            (item (#/itemAtIndex: menu 0))
            (image-name (if (post-tiger-p) #@"NSActionTemplate" #@"gear")))
-      (#/setBezelStyle: button #$NSTexturedRoundedBezelStyle)
+      (#/setBezelStyle: button $bezel-style-textured-rounded)
       ;; This looks bad on Tiger: the arrow is in the bottom corner of the button.
       #-cocotron                        ; no setArrowPosition
       (#/setArrowPosition: (#/cell button) #$NSPopUpArrowAtBottom)
@@ -182,18 +182,18 @@ symbols; running that inside an ObjC IMP on darwinarm64 has crashed in freeGCptr
     (when pair
       (let* ((items (#/itemArray (#/menu sender))))
         (dotimes (i (#/count items))
-          (#/setState: (#/objectAtIndex: items i) #$NSOffState)))
-      (#/setState: sender #$NSOnState)
+          (#/setState: (#/objectAtIndex: items i) $control-state-value-off)))
+      (#/setState: sender $control-state-value-on)
       (#/setLabel: (search-field-toolbar-item wc) label)
       (setf (search-category wc) (cdr pair))
       (#/search: wc (search-field wc)))))
 
 (objc:defmethod (#/toggleExternalOnly: :void) ((wc xapropos-window-controller) sender)
   (cond ((eql sender (all-symbols-button wc))
-         (#/setState: (external-symbols-button wc) #$NSOffState)
+         (#/setState: (external-symbols-button wc) $control-state-value-off)
          (setf (external-only-p wc) nil))
         ((eql sender (external-symbols-button wc))
-         (#/setState: (all-symbols-button wc) #$NSOffState)
+         (#/setState: (all-symbols-button wc) $control-state-value-off)
          (setf (external-only-p wc) t)))
   (#/search: wc (search-field wc)))
   
@@ -203,7 +203,9 @@ symbols; running that inside an ObjC IMP on darwinarm64 has crashed in freeGCptr
          (clicked-row (#/clickedRow (table-view wc))))
     (when (/= clicked-row -1)
       (setq row clicked-row))
-    (inspect (aref (matched-symbols wc) row))))
+    ;; A double-click on empty space (or a stale action) reports row -1.
+    (when (and (>= row 0) (< row (length (matched-symbols wc))))
+      (inspect (aref (matched-symbols wc) row)))))
 
 (objc:defmethod (#/source: :void) ((wc xapropos-window-controller) sender)
   (declare (ignore sender))
@@ -211,7 +213,8 @@ symbols; running that inside an ObjC IMP on darwinarm64 has crashed in freeGCptr
          (clicked-row (#/clickedRow (table-view wc))))
     (when (/= clicked-row -1)
       (setq row clicked-row))
-    (hemlock::edit-definition (aref (matched-symbols wc) row))))
+    (when (and (>= row 0) (< row (length (matched-symbols wc))))
+      (hemlock::edit-definition (aref (matched-symbols wc) row)))))
 
 (objc:defmethod (#/validateMenuItem: #>BOOL) ((wc xapropos-window-controller) menu-item)
   (cond ((or (eql (action-menu wc) (#/menu menu-item))

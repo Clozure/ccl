@@ -403,15 +403,28 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
                                  #xaa0103fe      ; mov lr, x1
                                  #xd61f0200))    ; br x16
                    (nbytes (* 4 (length code-words)))
-                   (ptr (%allocate-callback-pointer 16)))
-              #+(and darwin-target arm64-target)
-              (%darwin-jit-write-protect nil)
-              (do* ((i 0 (+ i 4))
-                    (words code-words (cdr words)))
-                   ((null words))
-                (setf (%get-unsigned-long ptr i) (car words)))
-              #+(and darwin-target arm64-target)
-              (%darwin-jit-write-protect t)
+                   (ptr (%allocate-callback-pointer 16))
+                   ;; On Darwin the callback page is MAP_JIT: assemble
+                   ;; into a heap scratch and let kernel C blit it into
+                   ;; place (same pattern as make-callback-trampoline).
+                   (scratch (make-array 16 :element-type '(unsigned-byte 8)
+                                        :initial-element 0)))
+              (with-macptrs ((s))
+                (%vect-data-to-macptr scratch s)
+                (do* ((i 0 (+ i 4))
+                      (words code-words (cdr words)))
+                     ((null words))
+                  (setf (%get-unsigned-long s i) (car words)))
+                #+(and darwin-target arm64-target)
+                (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+                         :address ptr
+                         :address s
+                         :unsigned-fullword nbytes
+                         :void)
+                #-(and darwin-target arm64-target)
+                (dotimes (i nbytes)
+                  (setf (%get-unsigned-byte ptr i) (%get-unsigned-byte s i))))
+              #-(and darwin-target arm64-target)
               (ff-call (%kernel-import #.arm64::kernel-import-makedataexecutable)
                        :address ptr
                        :unsigned-fullword nbytes

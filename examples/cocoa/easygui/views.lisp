@@ -262,7 +262,7 @@ To avoid deallocation, use RETAINING-OBJECTS"))
 
 (defmethod selection ((view one-selection-mixin))
   (let ((range (dcc (#/selectedRange (cocoa-ref view)))))
-    (if (= (ns:ns-range-location range) #$NSNotFound)
+    (if (= (ns:ns-range-location range) +ns-not-found+)
         nil
         (range (ns:ns-range-location range)
                (ns:ns-range-length range)))))
@@ -383,7 +383,7 @@ To avoid deallocation, use RETAINING-OBJECTS"))
       (hidden :initarg :hidden :reader window-hidden :initform nil)
       (window-needs-display-on-show :initform t)
       (optimized :initarg :optimized :initform t) ; Set to NIL if you anticipate overlapping views in this window
-      (style :initarg :window-style :initform #$NSTitledWindowMask))
+      (style :initarg :window-style :initform +window-style-mask-titled+))
   (:default-initargs :specifically 'cocoa-contained-view))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -714,7 +714,7 @@ Also attaches contextual menu if there is one."
                          (flag-mask :minimizable-p (window-minimizable-p win))
                          (flag-mask :closable-p    (window-closable-p win))
                          (if (or (window-resizable-p win) (window-minimizable-p win) (window-closable-p win))
-                           #$NSTitledWindowMask
+                           +window-style-mask-titled+
                            0)
                          style))
             (c-win
@@ -748,22 +748,24 @@ Also attaches contextual menu if there is one."
   (dcc (#/setBezeled: (cocoa-ref view) nil))
   (setf (slot-value (cocoa-ref view) 'easygui-view) view))
 
+;; NSBezelStyle values (NSButtonCell.h); the pre-10.12 names are
+;; `static const' aliases invisible to interface translation.
 (defparameter *bezelstyle-alist*
-  `((:round                    . #.#$NSRoundedBezelStyle)
-    (:square                   . #.#$NSRegularSquareBezelStyle)
-    (:regular-square           . #.#$NSRegularSquareBezelStyle)
-    (:thick-square             . #.#$NSThickSquareBezelStyle)
-    (:thicker-square           . #.#$NSThickerSquareBezelStyle)
-    (:disclosure               . #.#$NSDisclosureBezelStyle)
-    (:Shadowless-square        . #.#$NSShadowlessSquareBezelStyle)
-    (:circular                 . #.#$NSCircularBezelStyle)
-    (:textured-square          . #.#$NSTexturedSquareBezelStyle)
-    (:help-button              . #.#$NSHelpButtonBezelStyle)
-    (:small-square             . #.#$NSSmallSquareBezelStyle)
-    (:textured-rounded         . #.#$NSTexturedRoundedBezelStyle)
-    (:round-rect               . #.#$NSRoundRectBezelStyle)
-    (:recessed                 . #.#$NSRecessedBezelStyle)
-    (:rounded-disclosure       . #.#$NSRoundedDisclosureBezelStyle)))
+  `((:round                    . 1)     ; NSBezelStyleRounded
+    (:square                   . 2)     ; NSBezelStyleRegularSquare
+    (:regular-square           . 2)
+    (:thick-square             . 3)     ; deprecated NSThickSquareBezelStyle
+    (:thicker-square           . 4)     ; deprecated NSThickerSquareBezelStyle
+    (:disclosure               . 5)     ; NSBezelStyleDisclosure
+    (:Shadowless-square        . 6)     ; NSBezelStyleShadowlessSquare
+    (:circular                 . 7)     ; NSBezelStyleCircular
+    (:textured-square          . 8)     ; NSBezelStyleTexturedSquare
+    (:help-button              . 9)     ; NSBezelStyleHelpButton
+    (:small-square             . 10)    ; NSBezelStyleSmallSquare
+    (:textured-rounded         . 11)    ; NSBezelStyleTexturedRounded
+    (:round-rect               . 12)    ; NSBezelStyleRoundRect
+    (:recessed                 . 13)    ; NSBezelStyleRecessed
+    (:rounded-disclosure       . 14)))  ; NSBezelStyleRoundedDisclosure
 
 (defun bezel-style-lookup (key)
   (rest (or (assoc key *bezelstyle-alist*) (first *bezelstyle-alist*))))
@@ -1226,28 +1228,28 @@ and the second value will always be NIL."
 
 (defmethod check-box-check ((self check-box-view) &optional perform)
   (running-on-this-thread ()
-    (unless (eql (dcc (#/state (cocoa-ref self))) #$NSOnState)
+    (unless (eql (dcc (#/state (cocoa-ref self))) +control-state-value-on+)
       (if perform
         (dcc (#/performClick: (cocoa-ref self) nil))
-        (dcc (#/setState: (cocoa-ref self) #$NSOnState)))
+        (dcc (#/setState: (cocoa-ref self) +control-state-value-on+)))
       t)))
 
 (defmethod initialize-view :after ((view check-box-view))
   (when (cocoa-ref view)
-    (dcc (#/setButtonType: (cocoa-ref view) #$NSSwitchButton))
+    (dcc (#/setButtonType: (cocoa-ref view) +button-type-switch+))
     (when (slot-value view 'checked) (check-box-check view))
     (setf (slot-value (cocoa-ref view) 'easygui-view) view)))
 
 (defmethod check-box-uncheck ((self check-box-view) &optional perform)
   (running-on-this-thread ()
-    (unless (eql (dcc (#/state (cocoa-ref self))) #$NSOffState)
+    (unless (eql (dcc (#/state (cocoa-ref self))) +control-state-value-off+)
       (if perform
         (dcc (#/performClick: (cocoa-ref self) nil))
-        (dcc (#/setState: (cocoa-ref self) #$NSOffState)))
+        (dcc (#/setState: (cocoa-ref self) +control-state-value-off+)))
       t)))
 
 (defmethod check-box-checked-p ((self check-box-view))
-  (eql (dcc (#/state (cocoa-ref self))) #$NSOnState))
+  (eql (dcc (#/state (cocoa-ref self))) +control-state-value-on+))
 
 (defmethod (setf check-box-checked-p) (new (self check-box-view))
   (if new
@@ -1267,9 +1269,9 @@ and the second value will always be NIL."
       (when (and (not (eq sibling radio-button-view))
                  (typep sibling 'radio-button-view)
                  (eq (slot-value radio-button-view 'cluster) (slot-value sibling 'cluster))
-                 (eql (dcc (#/state (cocoa-ref sibling))) #$NSOnState))
+                 (eql (dcc (#/state (cocoa-ref sibling))) +control-state-value-on+))
         (setf (slot-value sibling 'selected) nil)
-        (dcc (#/setState: (cocoa-ref sibling) #$NSOffState))))))
+        (dcc (#/setState: (cocoa-ref sibling) +control-state-value-off+))))))
   
 (defmethod radio-button-select ((self radio-button-view) &optional perform)
   (running-on-this-thread ()
@@ -1278,17 +1280,17 @@ and the second value will always be NIL."
       (progn
         (deselect-radio-button-cohorts self)
         (setf (slot-value self 'selected) t)
-        (dcc (#/setState: (cocoa-ref self) #$NSOnState))))))
+        (dcc (#/setState: (cocoa-ref self) +control-state-value-on+))))))
 
 (defmethod initialize-view :after ((self radio-button-view))
   (when (cocoa-ref self)
-    (dcc (#/setButtonType: (cocoa-ref self) #$NSRadioButton))
+    (dcc (#/setButtonType: (cocoa-ref self) +button-type-radio+))
     (when (slot-value self 'selected) (radio-button-select self))
     (setf (slot-value (cocoa-ref self) 'easygui-view) self)))
 
 (defmethod radio-button-deselect ((self radio-button-view))
   (running-on-this-thread ()
-    (dcc (#/setState: (cocoa-ref self) #$NSOffState))
+    (dcc (#/setState: (cocoa-ref self) +control-state-value-off+))
     (prog1
       (radio-button-selected-p self)
       (setf (slot-value self 'selected) nil))))

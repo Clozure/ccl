@@ -368,11 +368,11 @@
                                initargs))))
   (unless (and style-mask-p (typep style-mask 'fixnum))
     (setq initargs (cons :style-mask
-                         (cons (logior #$NSTitledWindowMask
-                                       (if closable #$NSClosableWindowMask 0)
-                                       (if iconifyable #$NSMiniaturizableWindowMask 0)
-                                       (if expandable #$NSResizableWindowMask 0)
-                                       (if metal #$NSTexturedBackgroundWindowMask 0))
+                         (cons (logior $window-style-mask-titled
+                                       (if closable $window-style-mask-closable 0)
+                                       (if iconifyable $window-style-mask-miniaturizable 0)
+                                       (if expandable $window-style-mask-resizable 0)
+                                       (if metal $window-style-mask-textured-background 0))
                                initargs))))
   (unless (typep (getf initargs :backing) 'fixnum)
     (setq initargs

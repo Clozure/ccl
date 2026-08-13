@@ -254,7 +254,7 @@
     (logtest modifier-mask modifiers)))
 
 (defun current-event-command-key-p ()
-  (current-event-modifier-p #$NSCommandKeyMask))
+  (current-event-modifier-p $event-modifier-flag-command))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -324,10 +324,10 @@ was clicked."
     (unless (eql ns-other-button +null-ptr+)
       (#/release ns-other-button))
     (ecase result
-      (#.#$NSAlertDefaultReturn :default)
-      (#.#$NSAlertAlternateReturn :alternate)
-      (#.#$NSAlertOtherReturn :other)
-      (#.#$NSAlertErrorReturn (error "Error running alert panel")))))
+      (#.$alert-default-return :default)
+      (#.$alert-alternate-return :alternate)
+      (#.$alert-other-return :other)
+      (#.$alert-error-return (error "Error running alert panel")))))
 
 ;;; -----------------------------------------------------------------
 ;;; utility to display a Cocoa progress window

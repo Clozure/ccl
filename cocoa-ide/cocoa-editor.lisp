@@ -193,10 +193,10 @@
 
 ;;; Define some key event modifiers and keysym codes
 
-(hi:define-modifier-bit #$NSShiftKeyMask "Shift")
-(hi:define-modifier-bit #$NSControlKeyMask "Control")
-(hi:define-modifier-bit #$NSAlternateKeyMask "Meta")
-(hi:define-modifier-bit #$NSAlphaShiftKeyMask "Lock")
+(hi:define-modifier-bit $event-modifier-flag-shift "Shift")
+(hi:define-modifier-bit $event-modifier-flag-control "Control")
+(hi:define-modifier-bit $event-modifier-flag-option "Meta")
+(hi:define-modifier-bit $event-modifier-flag-caps-lock "Lock")
 
 (hi:define-keysym-code :F1 #$NSF1FunctionKey)
 (hi:define-keysym-code :F2 #$NSF2FunctionKey)
@@ -1069,14 +1069,14 @@
 ;;; Translate a keyDown NSEvent to a Hemlock key-event.
 (defun nsevent-to-key-event (event quote-p)
   (let* ((modifiers (#/modifierFlags event)))
-    (unless (logtest #$NSCommandKeyMask modifiers)
+    (unless (logtest $event-modifier-flag-command modifiers)
       (let* ((native-chars (#/characters event))
 	     (native-len (if (%null-ptr-p native-chars)
 			   0
 			   (#/length native-chars)))
 	     (native-c (and (eql 1 native-len)
 			    (#/characterAtIndex: native-chars 0)))
-	     (option-p (logtest #$NSAlternateKeyMask modifiers)))
+	     (option-p (logtest $event-modifier-flag-option modifiers)))
 	;; If a standalone dead key (e.g. ^'` on a French keyboard,) was pressed,
 	;; reverse the meaning of quote-p, i.e. use the system meaning if NOT quoted.
 	;; (I have no idea what makes standalone dead keys somehow different from
@@ -1100,8 +1100,8 @@
 	    (let ((bits 0)
 		  (useful-modifiers (logandc2 modifiers
 					      (logior
-					       ;;#$NSShiftKeyMask
-					       #$NSAlphaShiftKeyMask))))
+					       ;;$event-modifier-flag-shift
+					       $event-modifier-flag-caps-lock))))
 	      (unless quote-p
 		(dolist (map hi:*modifier-translations*)
 		  (when (logtest useful-modifiers (car map))
@@ -1110,7 +1110,7 @@
 	      (let* ((char (code-char c)))
 		(when (and char (alpha-char-p char))
 		  (setq bits (logandc2 bits +shift-event-mask+)))
-		(when (logtest #$NSAlphaShiftKeyMask modifiers)
+		(when (logtest $event-modifier-flag-caps-lock modifiers)
 		  (setf c (char-code (char-upcase char)))))
 	      (hi:make-key-event c bits))))))))
 
@@ -1467,7 +1467,7 @@
         ;; Workaround for bug #150
         (when (and (eql g #$NSSelectByCharacter)
                    (eql index (#/length textstorage))
-                   (or (eql event-type #$NSLeftMouseDown) (eql event-type #$NSLeftMouseUp)))
+                   (or (eql event-type $event-type-left-mouse-down) (eql event-type $event-type-left-mouse-up)))
           (setq g (case (#/clickCount event)
                     ((0 1) #$NSSelectByCharacter)
                     (2 #$NSSelectByWord)
@@ -1496,7 +1496,7 @@
                         ;; Act as if we started the selection at the other end, so the heuristic
                         ;; in #/setSelectedRange does the right thing.  ref bug #565.
                         ;; However, only do so at the end, so don't keep toggling during selection, ref bug #851.
-                        (when (and (eql event-type #$NSLeftMouseUp) (< start-pos end-pos))
+                        (when (and (eql event-type $event-type-left-mouse-up) (< start-pos end-pos))
                           (let ((point-pos (hi:mark-absolute-position point)))
                             (cond ((eql point-pos start-pos)
                                    (hi:move-to-absolute-position point end-pos))
@@ -2185,7 +2185,7 @@
 (objc:defmethod (#/miniaturize: :void) ((w hemlock-frame) sender)
   (let* ((event (#/currentEvent w))
          (flags (#/modifierFlags event)))
-    (if (logtest #$NSControlKeyMask flags)
+    (if (logtest $event-modifier-flag-control flags)
       (progn
         (#/orderOut: w nil)
         (#/changeWindowsItem:title:filename: *nsapp* w (#/title w) nil))
@@ -3365,7 +3365,7 @@
   (let* (#-cocotron (popup (build-encodings-popup self #|preferred|#)))
     #-cocotron (#/setAccessoryView: panel popup)
     (let* ((result (call-next-method panel types)))
-      (when (= result #$NSOKButton)
+      (when (= result $modal-response-ok)
         #-cocotron
         (with-slots (last-encoding) self
           (setq last-encoding

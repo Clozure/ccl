@@ -1718,33 +1718,32 @@ argument lisp string."
 ;;; (Apple AAPCS64).  Always park &rest in the argbuf overflow/stack
 ;;; region — never consume remaining GPR/FPR slots.
 #+(and apple-objc-2.0 arm64-target)
-(defun %process-varargs-list (argbuf gpr-offset other-offset n-gpr-args
-                              fp-args n-fp-args rest-arg)
-  (declare (ignore gpr-offset n-gpr-args fp-args n-fp-args))
-  (dolist (arg-temp rest-arg)
-    (typecase arg-temp
-      (double-float
-       (setf (%get-double-float argbuf other-offset) arg-temp)
-       (incf other-offset 8))
-      (single-float
-       (setf (%get-single-float argbuf other-offset) arg-temp)
-       (incf other-offset 8))
-      (macptr
-       (setf (%get-ptr argbuf other-offset) arg-temp)
-       (incf other-offset 8))
-      ((unsigned-byte 64)
-       (setf (%%get-unsigned-longlong argbuf other-offset) arg-temp)
-       (incf other-offset 8))
-      ((signed-byte 64)
-       (setf (%%get-signed-longlong argbuf other-offset) arg-temp)
-       (incf other-offset 8))
-      (t
-       (setf (%%get-signed-longlong argbuf other-offset) arg-temp)
-       (incf other-offset 8))))
-  other-offset)
+(defun %objc-varargs-specs-and-vals (arglist tail)
+  ;; Build %ff-call spec/value pairs for a method's `...' args.  The
+  ;; caller has already emitted the :variadic marker, so these all go
+  ;; to the stack (Darwin C variadic convention); apply the C default
+  ;; argument promotions (float -> double, integers -> full words).
+  (let ((acc ()))
+    (dolist (arg arglist)
+      (typecase arg
+        (double-float
+         (push :double-float acc) (push arg acc))
+        (single-float
+         (push :double-float acc) (push (float arg 0.0d0) acc))
+        (macptr
+         (push :address acc) (push arg acc))
+        ((unsigned-byte 64)
+         (push :unsigned-doubleword acc) (push arg acc))
+        (t
+         (push :signed-doubleword acc) (push arg acc))))
+    (nreconc acc tail)))
 
 #+(and apple-objc-2.0 arm64-target)
 (defun %compile-varargs-send-function-for-signature (sig)
+  ;; A varargs message send lowers onto the interpreted %ff-call: the
+  ;; method's fixed args use their CDB reps (registers first), then the
+  ;; :variadic marker puts every &rest arg on the stack per the Darwin
+  ;; C variadic convention.
   (let* ((return-type-spec (car sig))
          (result-rep (foreign-type-to-representation-type return-type-spec))
          (arg-type-specs (butlast (cdr sig)))
@@ -1753,14 +1752,8 @@ argument lisp string."
          (selector (gensym))
          (rest-arg (gensym))
          (selptr (gensym))
-         (fp-args (gensym))
-         (result-buf (gensym))
-         (argbuf (gensym))
-         (entry (gensym))
-         (n-static-gprs 2)              ; receiver + sel
-         (n-static-fprs 0)
-         (n-static-overflow 0))
-    (collect ((static-stores))
+         (entry (gensym)))
+    (collect ((static-pairs))
       (do* ((args args (cdr args))
             (arg-type-specs arg-type-specs (cdr arg-type-specs)))
            ((null args))
@@ -1771,137 +1764,43 @@ argument lisp string."
             (foreign-integer-type
              (when (eq spec :<BOOL>)
                (setq arg `(%coerce-to-bool ,arg)))
-             (incf n-static-gprs)
-             (let ((use-gpr (<= n-static-gprs 8)))
-               (static-stores
-                `(progn
-                   (incf n-gpr-args)
-                   ,(if use-gpr
-                      `(progn
-                         (setf (%%get-signed-longlong ,argbuf gpr-offset) ,arg)
-                         (incf gpr-offset 8))
-                      `(progn
-                         (setf (%%get-signed-longlong ,argbuf other-offset) ,arg)
-                         (incf other-offset 8)
-                         (incf n-overflow)))))
-               (unless use-gpr (incf n-static-overflow))))
+             (static-pairs (foreign-type-to-representation-type
+                            static-arg-type))
+             (static-pairs arg))
             (foreign-single-float-type
-             (let ((use-fpr (< n-static-fprs 8)))
-               (incf n-static-fprs)
-               (static-stores
-                (if use-fpr
-                  `(progn
-                     (setf (%get-single-float ,fp-args (* n-fp-args 8)) ,arg)
-                     (incf n-fp-args))
-                  `(progn
-                     (setf (%get-single-float ,argbuf other-offset) ,arg)
-                     (incf other-offset 8)
-                     (incf n-fp-args)
-                     (incf n-overflow))))
-               (unless use-fpr (incf n-static-overflow))))
+             (static-pairs :single-float)
+             (static-pairs arg))
             (foreign-double-float-type
-             (let ((use-fpr (< n-static-fprs 8)))
-               (incf n-static-fprs)
-               (static-stores
-                (if use-fpr
-                  `(progn
-                     (setf (%get-double-float ,fp-args (* n-fp-args 8)) ,arg)
-                     (incf n-fp-args))
-                  `(progn
-                     (setf (%get-double-float ,argbuf other-offset) ,arg)
-                     (incf other-offset 8)
-                     (incf n-fp-args)
-                     (incf n-overflow))))
-               (unless use-fpr (incf n-static-overflow))))
+             (static-pairs :double-float)
+             (static-pairs arg))
             (foreign-pointer-type
              (when (eq spec :id)
                (setq arg `(%coerce-to-address ,arg)))
-             (incf n-static-gprs)
-             (let ((use-gpr (<= n-static-gprs 8)))
-               (static-stores
-                `(progn
-                   (incf n-gpr-args)
-                   ,(if use-gpr
-                      `(progn
-                         (setf (%get-ptr ,argbuf gpr-offset) ,arg)
-                         (incf gpr-offset 8))
-                      `(progn
-                         (setf (%get-ptr ,argbuf other-offset) ,arg)
-                         (incf other-offset 8)
-                         (incf n-overflow)))))
-               (unless use-gpr (incf n-static-overflow))))
+             (static-pairs :address)
+             (static-pairs arg))
             (foreign-record-type
-             ;; ≤16-byte records arrive as macptrs; pack N words.
-             (let* ((bits (ensure-foreign-type-bits static-arg-type))
-                    (nwords (ceiling bits 64)))
-               (static-stores
-                `(let ((p 0))
-                   (declare (fixnum p))
-                   (dotimes (i ,nwords)
-                     (incf n-gpr-args)
-                     (cond ((<= n-gpr-args 8)
-                            (setf (%get-ptr ,argbuf gpr-offset)
-                                  (%get-ptr ,arg p))
-                            (incf gpr-offset 8))
-                           (t
-                            (setf (%get-ptr ,argbuf other-offset)
-                                  (%get-ptr ,arg p))
-                            (incf other-offset 8)
-                            (incf n-overflow)))
-                     (incf p 8))))
-               (dotimes (i nwords)
-                 (incf n-static-gprs)
-                 (when (> n-static-gprs 8)
-                   (incf n-static-overflow))))))))
+             ;; <=16-byte records arrive as macptrs and pass by value
+             ;; (%ff-call word-count spec, C.10/C.11); larger records
+             ;; pass by reference (AAPCS64 B.4).
+             (let* ((bits (ensure-foreign-type-bits static-arg-type)))
+               (if (<= bits 128)
+                 (static-pairs (ceiling bits 64))
+                 (static-pairs :address))
+               (static-pairs arg))))))
       (compile
        nil
        `(lambda (,receiver ,selector ,@args &rest ,rest-arg)
-         (declare (dynamic-extent ,rest-arg))
-         (let* ((,selptr (%get-selector ,selector))
-                (,entry (%reference-external-entry-point
-                         (load-time-value (external "objc_msgSend"))))
-                (n-gpr-args 0)
-                (n-fp-args 0)
-                (n-overflow 0)
-                ;; Method `...` args are stack-only on Darwin/arm64.
-                (extra-overflow (length ,rest-arg)))
-           (let* ((total-overflow (+ ,n-static-overflow extra-overflow))
-                  (total-words (+ 8 total-overflow)))
-             (%stack-block ((,fp-args (* 8 8))
-                            (,result-buf 16)
-                            (,argbuf (* 8 (1+ total-words))))
-               (dotimes (i 64) (setf (%get-unsigned-byte ,fp-args i) 0))
-               (dotimes (i (* 8 (1+ total-words)))
-                 (setf (%get-unsigned-byte ,argbuf i) 0))
-               (%set-object ,argbuf 0 total-words)
-               (let* ((gpr-offset 8)
-                      (other-offset (+ 8 (* 8 8))))
-                 ;; receiver, selector
-                 (setf (%get-ptr ,argbuf gpr-offset) ,receiver)
-                 (incf gpr-offset 8)
-                 (incf n-gpr-args)
-                 (setf (%get-ptr ,argbuf gpr-offset) ,selptr)
-                 (incf gpr-offset 8)
-                 (incf n-gpr-args)
-                 ,@(static-stores)
-                 (%process-varargs-list ,argbuf gpr-offset other-offset
-                                        n-gpr-args ,fp-args n-fp-args
-                                        ,rest-arg)
-                 (%do-ff-call ,result-buf ,argbuf ,fp-args ,entry)
-                 ,(case result-rep
-                    (:void `nil)
-                    (:address `(%get-ptr ,result-buf 0))
-                    (:unsigned-byte `(%get-unsigned-byte ,result-buf 0))
-                    (:signed-byte `(%get-signed-byte ,result-buf 0))
-                    (:unsigned-halfword `(%get-unsigned-word ,result-buf 0))
-                    (:signed-halfword `(%get-signed-word ,result-buf 0))
-                    (:unsigned-fullword `(%get-unsigned-long ,result-buf 0))
-                    (:signed-fullword `(%get-signed-long ,result-buf 0))
-                    (:unsigned-doubleword `(%get-natural ,result-buf 0))
-                    (:signed-doubleword `(%get-signed-natural ,result-buf 0))
-                    (:single-float `(%get-single-float ,result-buf 8))
-                    (:double-float `(%get-double-float ,result-buf 8))
-                    (t `(%get-ptr ,result-buf 0))))))))))))
+          (declare (dynamic-extent ,rest-arg))
+          (let* ((,selptr (%get-selector ,selector))
+                 (,entry (%reference-external-entry-point
+                          (load-time-value (external "objc_msgSend")))))
+            (apply (function %ff-call) ,entry
+                   :address ,receiver
+                   :address ,selptr
+                   ,@(static-pairs)
+                   :variadic nil
+                   (%objc-varargs-specs-and-vals
+                    ,rest-arg (list ,result-rep)))))))))
 
 #+(and apple-objc-2.0 x8664-target)
 (defun %compile-varargs-send-function-for-signature (sig)

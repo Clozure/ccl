@@ -30,7 +30,7 @@
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Hide Clozure CL" (objc:@selector #/hide:) #@"h")
     (setq item (#/addItemWithTitle:action:keyEquivalent: menu #@"Hide Others" (objc:@selector #/hideOtherApplications:) #@"h"))
-    (#/setKeyEquivalentModifierMask: item (logior #$NSCommandKeyMask #$NSAlternateKeyMask))
+    (#/setKeyEquivalentModifierMask: item (logior $event-modifier-flag-command $event-modifier-flag-option))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Show All" (objc:@selector #/unhideAllApplications:) #@"")
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Quit Clozure CL" (objc:@selector #/terminate:) #@"q")
@@ -50,7 +50,7 @@
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Close" (objc:@selector #/performClose:) #@"w")
     (let ((closesimilar
            (#/addItemWithTitle:action:keyEquivalent: menu #@"Close Similar" (objc:@selector #/performClose:) #@"w")))
-      (#/setKeyEquivalentModifierMask: closesimilar (logior #$NSCommandKeyMask #$NSAlternateKeyMask)))
+      (#/setKeyEquivalentModifierMask: closesimilar (logior $event-modifier-flag-command $event-modifier-flag-option)))
     
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Save" (objc:@selector #/saveDocument:) #@"s")
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Save As..." (objc:@selector #/saveDocumentAs:) #@"S")
@@ -132,8 +132,8 @@
     (let ((menu-item
            (#/addItemWithTitle:action:keyEquivalent: menu #@"Wrap Lines to Window" (objc:@selector #/toggleWindowLineWrapping:) #@"")))
       (if *wrap-lines-to-window*
-          (#/setState: menu-item #$NSOnState)
-          (#/setState: menu-item #$NSOffState)))
+          (#/setState: menu-item $control-state-value-on)
+          (#/setState: menu-item $control-state-value-off)))
     (#/addItem: menu (#/separatorItem ns:ns-menu-item))
     (#/addItemWithTitle:action:keyEquivalent: menu #@"Bring All to Front" (objc:@selector #/arrangeInFront:) #@"")
     menu))
