@@ -1630,37 +1630,43 @@
 ;;; Draw a string in the modeline view.  The font and other attributes
 ;;; are initialized lazily; apparently, calling the Font Manager too
 ;;; early in the loading sequence confuses some Carbon libraries that're
-;;; used in the event dispatch mechanism,
+;;; used in the event dispatch mechanism.
+;;;
 (defun draw-modeline-string (the-modeline-view)
-  (with-slots (text-attributes) the-modeline-view
-    (let* ((buffer (buffer-for-modeline-view the-modeline-view)))
-      (when buffer
-	(let* ((string
-                (apply #'concatenate 'string
-                       (mapcar
-                        #'(lambda (field)
-                            (or (ignore-errors 
-                                  (funcall (hi::modeline-field-function field) buffer))
-                                ""))
-                        (hi::buffer-modeline-fields buffer)))))
-	  (#/drawAtPoint:withAttributes: (#/autorelease (%make-nsstring string))
-                                         (ns:make-ns-point 5 1)
+  (let* ((text-attributes (modeline-text-attributes the-modeline-view))
+         (buffer (buffer-for-modeline-view the-modeline-view)))
+    (when (and buffer
+               (typep text-attributes 'macptr)
+               (not (%null-ptr-p text-attributes)))
+      (let* ((string
+              (with-output-to-string (out)
+                (dolist (field (hi::buffer-modeline-fields buffer))
+                  (write-string
+                   (or (ignore-errors
+                         (let ((s (funcall (hi::modeline-field-function field)
+                                           buffer)))
+                           (and (stringp s) s)))
+                       "")
+                   out)))))
+        (when (plusp (length string))
+          (#/drawAtPoint:withAttributes: (#/autorelease (%make-nsstring string))
+                                         (ns:make-ns-point 5.0d0 1.0d0)
                                          text-attributes))))))
 
 (objc:defmethod (#/drawRect: :void) ((self modeline-view) (rect :<NSR>ect))
   (declare (ignorable rect))
   (let* ((bounds (#/bounds self))
-	 (context (#/currentContext ns:ns-graphics-context)))
+         (context (#/currentContext ns:ns-graphics-context))
+         (w (float (ns:ns-rect-width bounds) 1.0d0))
+         (h (float (ns:ns-rect-height bounds) 1.0d0)))
     (#/saveGraphicsState context)
-    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.9 1.0))
+    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.9d0 1.0d0))
     (#_NSRectFill bounds)
-    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.3333 1.0))
-    ;; Draw borders on top and bottom.
-    (ns:with-ns-rect (r 0 0 (ns:ns-rect-width bounds) 0.5)
-      (#_NSRectFill r))
-    (ns:with-ns-rect (r 0 (- (ns:ns-rect-height bounds) 0.5)
-                        (ns:ns-rect-width bounds) 0.5)
-      (#_NSRectFill r))
+    (let ((top (ns:make-ns-rect 0.0d0 0.0d0 w 0.5d0))
+          (bot (ns:make-ns-rect 0.0d0 (- h 0.5d0) w 0.5d0)))
+      (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.3333d0 1.0d0))
+      (#_NSRectFill top)
+      (#_NSRectFill bot))
     (draw-modeline-string self)
     (#/restoreGraphicsState context)))
 
@@ -1797,13 +1803,31 @@
         (t (ignore-errors (read-from-string string)))))
 
 (defun find-symbol-in-buffer-packages (string buffer)
-  (let ((package-name (hi::variable-value 'hemlock::current-package :buffer buffer))
+  (let ((package-name (ignore-errors
+                        (hi::variable-value 'hemlock::current-package :buffer buffer)))
         (packages nil))
     (unless (find #\: string) ; don't bother looking in other packages if the string itself contains a package designator
-      (setf packages (append ; all packages in order, starting with the ones of this buffer
-                      #1=(cons package-name (package-use-list package-name))
-                      (set-difference (list-all-packages) #1#))))
+      ;; NIL/bogus buffer package must not call PACKAGE-USE-LIST (errors and can
+      ;; wedge the Cocoa event thread when Trace/Inspect run from a menu).
+      (let* ((pkg (and package-name (find-package package-name)))
+             (preferred (and pkg (cons package-name (package-use-list pkg)))))
+        (setf packages (if preferred
+                         (append preferred
+                                 (set-difference (list-all-packages) preferred))
+                         (list-all-packages)))))
     (find-symbol-in-packages string packages)))
+
+(defun selection-function-name (raw)
+  "Turn a contextual-menu selection into a function name.
+   Selecting a form like (+ 1 2) used to pass the list through to TRACE/ED,
+   which errors (and on darwinarm64 can wedge the event thread)."
+  (cond ((and (symbolp raw) (not (null raw))) raw)
+        ((and (consp raw) (symbolp (car raw))) (car raw))
+        (t nil)))
+
+;; Older name from the Trace-only fix.
+(defun traceable-selection (raw)
+  (selection-function-name raw))
 
 (defun choose-listener ()
   (ui-object-choose-listener-for-selection *NSApp* nil))
@@ -1825,21 +1849,36 @@
 (objc:defmethod (#/traceSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (with-string-under-cursor (self symbol-name buffer)
-    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
-      (eval-in-listener (format nil "(trace ~S)" sym)))))
+    (let* ((raw (find-symbol-in-buffer-packages symbol-name buffer))
+           (sym (selection-function-name raw)))
+      (if sym
+        (eval-in-listener (format nil "(trace ~S)" sym))
+        (#_NSBeep)))))
 
 (objc:defmethod (#/inspectSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (with-string-under-cursor (self symbol-name buffer)
-    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
-      (inspect sym))))
+    (let* ((raw (find-symbol-in-buffer-packages symbol-name buffer)))
+      ;; Lists/forms are valid INSPECT targets; symbols preferred when present.
+      (if (or (symbolp raw) (consp raw) (streamp raw) (typep raw 'structure-object))
+        (inspect raw)
+        (#_NSBeep)))))
 
 (objc:defmethod (#/sourceForSelection: :void) ((self hemlock-text-view) sender)
   (declare (ignore sender))
   (with-string-under-cursor (self symbol-name buffer)
-    (let* ((sym (find-symbol-in-buffer-packages symbol-name buffer)))
-      ;(execute-in-gui (lambda () (ed sym))) ; NO! If this errors, it throws to the console. Same with execute-in-buffer.
-      (eval-in-listener (format nil "(ed '~S)" sym)))))
+    (let* ((raw (find-symbol-in-buffer-packages symbol-name buffer))
+           (sym (selection-function-name raw)))
+      (cond
+        ((null sym) (#_NSBeep))
+        ;; Already on the Cocoa event thread (menu action). Call edit-definition
+        ;; here — do NOT eval-in-listener (ed …): that waits on execute-in-gui from
+        ;; the Listener and can semaphore-deadlock on darwinarm64.
+        (t
+         (handler-case (hemlock:edit-definition sym)
+           (error (c)
+             (log-debug "Source of ~s failed: ~a" sym c)
+             (#_NSBeep))))))))
 
 (hi:defcommand "Inspect Symbol" (p)
   "Inspects current symbol."
@@ -1847,7 +1886,10 @@
   (let* ((buffer (hi:current-buffer))
          (fun-name (hemlock::symbol-at-point buffer)))
     (if fun-name
-      (inspect (find-symbol-in-buffer-packages fun-name buffer))
+      (let ((raw (find-symbol-in-buffer-packages fun-name buffer)))
+        (if (or (symbolp raw) (consp raw))
+          (inspect raw)
+          (hi:beep)))
       (hi:beep))))
 
 ;;; If we don't override this, NSTextView will start adding Google/
@@ -2183,7 +2225,6 @@
   (let ((pane (hi::hemlock-view-pane view)))
     (when (and pane (not (%null-ptr-p pane)))
       (report-condition-in-hemlock-frame condition (#/window pane)))))
-
 (defun window-menubar-height ()
   #+cocotron (objc:objc-message-send (ccl::@class "NSMainMenuView") "menuHeight" #>CGFloat)
   #-cocotron 0.0f0)
@@ -3398,9 +3439,16 @@
 ;; user what happened...  This ensures the Cocoa selection is made visible, so it
 ;; assumes the Cocoa selection has already been synchronized with the hemlock one.
 (defmethod hemlock-ext:ensure-selection-visible ((view hi:hemlock-view))
-  (let ((tv (text-pane-text-view (hi::hemlock-view-pane view))))
-    (#/scrollRangeToVisible: tv (#/selectedRange tv))))
-
+  ;; Darwin/arm64: #/selectedRange (NSRange GPR return) or scroll during
+  ;; greeting flush has produced BOGUS objects / Hemlock sheets.  Never
+  ;; throw into the command handler-bind from display housekeeping.
+  (ignore-errors
+    (let* ((pane (hi::hemlock-view-pane view))
+           (tv (and pane (not (%null-ptr-p pane)) (text-pane-text-view pane))))
+      (when (and tv (typep tv 'macptr) (not (%null-ptr-p tv)))
+        (let ((r (#/selectedRange tv)))
+          (when (typep r 'ns:ns-range)
+            (#/scrollRangeToVisible: tv r)))))))
 (defun hemlock-ext:string-to-clipboard (string)
   (when (> (length string) 0)
     (with-cfstring (s string)

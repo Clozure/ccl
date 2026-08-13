@@ -355,6 +355,17 @@
      (backtrace-contexts :initform nil
                          :accessor cocoa-listener-process-backtrace-contexts)
      (window :initarg :listener-window :initform nil :reader cocoa-listener-process-window)))
+
+;;; Cocoa Listener input EOFs are transient (typed selections / empty reads).
+;;; Never treat them as "exit this interactive process" — that process-kills the
+;;; Listener and the cleanup closes the window (File → New Listener appears to
+;;; open then immediately vanish).  Especially important under --batch smokes
+;;; where *batch-flag* would otherwise force exit-interactive-process.
+(defmethod ccl::exit-interactive-process ((p cocoa-listener-process))
+  (let ((in (ignore-errors (cocoa-listener-process-input-stream p))))
+    (when in
+      (ignore-errors (stream-clear-input in))))
+  nil)
   
 (defloadvar *first-listener* t)
 
@@ -385,14 +396,19 @@
                     (prog1 *first-listener* (setq *first-listener* nil)))
            (ccl::startup-ccl (ccl::application-init-file ccl::*application*))
            (ui-object-note-package *nsapp* *package*))
-         (funcall initial-function))
+         ;; Cocoa Listeners are interactive windows even when the host image
+         ;; was started with --batch (IDE smokes).  Keep EOF transient.
+         ;; *BATCH-FLAG* is not exported from CCL; an unqualified binding in
+         ;; GUI would intern a useless GUI::*BATCH-FLAG* and leave CCL's T.
+         (let ((ccl::*batch-flag* nil)
+               (ccl::*quit-on-eof* nil))
+           (funcall initial-function)))
      :echoing nil
      :class class
      :initargs `(:listener-input-stream ,input-stream
                  :listener-output-stream ,output-stream
                  :listener-window ,window
-                 ,@initargs))))
-  
+                 ,@initargs))))  
 (defclass hemlock-listener-frame (hemlock-frame)
     ()
   (:metaclass ns:+ns-object))
@@ -846,12 +862,14 @@
 
 (defmethod ui-object-note-package ((app ns:ns-application) package)
   (let ((proc *current-process*))
-    (execute-in-gui #'(lambda ()
-                        (dolist (buf hi::*buffer-list*)
-                          (when (eq proc (buffer-process buf))
-                            (let ((hi::*current-buffer* buf))
-                              (hemlock:update-current-package package))))))))
-
+    ;; Async: waitUntilDone during Listener create (menu / CIP on the event
+    ;; thread) nests performSelectorOnMainThread and corrupts/deadlocks on
+    ;; darwinarm64.  Package modeline update can lag one event-loop turn.
+    (queue-for-gui #'(lambda ()
+                       (dolist (buf hi::*buffer-list*)
+                         (when (eq proc (buffer-process buf))
+                           (let ((hi::*current-buffer* buf))
+                             (hemlock:update-current-package package))))))))
 
 (defmethod eval-in-listener-process ((process cocoa-listener-process)
                                      string &key path package offset)
@@ -870,11 +888,14 @@
 (defmethod ui-object-choose-listener-for-selection ((app ns:ns-application)
 						    selection)
   (declare (ignore selection))
-  (#/performSelectorOnMainThread:withObject:waitUntilDone:
-   (#/delegate *NSApp*)
-   (@selector #/ensureListener:)
-   +null-ptr+
-   #$YES)
+  ;; Never waitUntilDone from the event thread — nested
+  ;; performSelectorOnMainThread corrupts/deadlocks on darwinarm64
+  ;; (BOGUS macptr / STRUCTURE-OBJECT).  execute-in-gui funcalls when
+  ;; already on Initial, otherwise synchronous interrupt.
+  (let ((delegate (#/delegate *NSApp*)))
+    (execute-in-gui
+     (lambda ()
+       (#/ensureListener: delegate +null-ptr+))))
   (top-listener-process))
 
 (defmethod ui-object-eval-selection ((app ns:ns-application)

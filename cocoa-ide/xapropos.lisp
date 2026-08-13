@@ -21,6 +21,8 @@
    (matched-symbols :initform (make-array 100 :fill-pointer 0 :adjustable t)
                     :accessor matched-symbols)
    (external-only-p :initform nil :accessor external-only-p)
+   ;; Bumped on every search request; async workers drop stale results.
+   (search-generation :initform 0 :accessor search-generation)
    ;; outlets
    (action-menu :foreign-type :id :accessor action-menu)
    (action-popup-button :foreign-type :id :accessor action-popup-button)
@@ -130,31 +132,46 @@
     (apropos-search wc (lisp-string-from-nsstring substring))))
 
 (defun apropos-search (wc substring)
-  (with-accessors ((v matched-symbols)
-                   (category search-category)
-                   (array row-objects)) wc
-    (setf (fill-pointer v) 0)
-    (flet ((maybe-include-symbol (sym)
-             (when (case category
-                     (:function (fboundp sym))
-                     (:variable (boundp sym))
-                     (:macro (macro-function sym))
-                     (:class (find-class sym nil))
-                     (t t))
-               (when (ccl::%apropos-substring-p substring (symbol-name sym))
-                 (vector-push-extend sym v)))))
-      (if (external-only-p wc)
-        (dolist (p (list-all-packages))
-          (do-external-symbols (sym p)
-            (maybe-include-symbol sym)))
-        (do-all-symbols (sym)
-          (maybe-include-symbol sym))))
-    (setf v (sort v #'string-lessp))
-    (#/removeAllObjects array)
-    (let ((n (#/null ns:ns-null)))
-      (dotimes (i (length v))
-        (#/addObject: array n))))
-  (#/reloadData (table-view wc)))
+  "Collect matching symbols off the event thread, then reload the table on the GUI.
+Empty SUBSTRING (All symbols) does DO-ALL-SYMBOLS + SORT of tens of thousands of
+symbols; running that inside an ObjC IMP on darwinarm64 has crashed in freeGCptrs
+(GC while TCR valence=foreign)."
+  (let* ((substring (copy-seq (or substring "")))
+         (category (search-category wc))
+         (external-only-p (external-only-p wc))
+         (generation (incf (search-generation wc))))
+    (process-run-function
+     (list :name (format nil "xapropos-search-~d" generation)
+           :priority 0)
+     (lambda ()
+       (let ((v (make-array 100 :fill-pointer 0 :adjustable t)))
+         (flet ((maybe-include-symbol (sym)
+                  (when (case category
+                          (:function (fboundp sym))
+                          (:variable (boundp sym))
+                          (:macro (macro-function sym))
+                          (:class (find-class sym nil))
+                          (t t))
+                    (when (ccl::%apropos-substring-p substring (symbol-name sym))
+                      (vector-push-extend sym v)))))
+           (if external-only-p
+             (dolist (p (list-all-packages))
+               (do-external-symbols (sym p)
+                 (maybe-include-symbol sym)))
+             (do-all-symbols (sym)
+               (maybe-include-symbol sym))))
+         (setq v (sort v #'string-lessp))
+         (gui::queue-for-gui
+          (lambda ()
+            (when (and (eql generation (search-generation wc))
+                       (not (%null-ptr-p (table-view wc))))
+              (setf (matched-symbols wc) v)
+              (let ((array (row-objects wc))
+                    (n (#/null ns:ns-null)))
+                (#/removeAllObjects array)
+                (dotimes (i (length v))
+                  (#/addObject: array n)))
+              (#/reloadData (table-view wc))))))))))
 
 (objc:defmethod (#/setSearchCategory: :void) ((wc xapropos-window-controller) sender)
   (let* ((tag (#/tag sender))
