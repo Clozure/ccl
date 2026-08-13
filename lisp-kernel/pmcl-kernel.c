@@ -18,6 +18,7 @@
 #include "lisp_globals.h"
 #include "gc.h"
 #include "area.h"
+#include "memprotect.h"
 #include <stdlib.h>
 #include <string.h>
 #include "lisp-exceptions.h"
@@ -32,6 +33,10 @@
 #ifndef WINDOWS
 #include <sys/utsname.h>
 #include <unistd.h>
+#endif
+
+#if defined(DARWIN) && defined(ARM64)
+#include <libkern/OSCacheControl.h>
 #endif
 
 #ifdef LINUX
@@ -75,8 +80,8 @@
 #endif
 #endif
 
-Boolean use_mach_exception_handling = 
-#ifdef DARWIN
+Boolean use_mach_exception_handling =
+#if defined(DARWIN)
   true
 #else
   false
@@ -235,10 +240,15 @@ allocate_lisp_stack(natural useable,
 {
   void *allocate_stack(natural);
   void free_stack(void *);
+  /* Guard sizes in area.h are historically 4KiB-oriented (e.g.
+     VSTACK_HARDPROT=4096, CSTACK_SOFTPROT=100<<10).  Round up to the
+     OS page size so mprotect cannot EINVAL on 16KiB Darwin arm64. */
+  softsize = (unsigned)align_to_power_of_2(softsize, log2_page_size);
+  hardsize = (unsigned)align_to_power_of_2(hardsize, log2_page_size);
   natural size = useable+softsize+hardsize;
   natural overhead;
   BytePtr base, softlimit, hardlimit;
-  Ptr h = allocate_stack(size+4095);
+  Ptr h = allocate_stack(size+page_size-1);
   protected_area_ptr hprotp = NULL, sprotp;
 
   if (h == NULL) {
@@ -1937,6 +1947,18 @@ main
   real_executable_name = determine_executable_name(argv[0]);
   page_size = sysconf(_SC_PAGESIZE);
 #endif
+  /* Exceptions .c files default log2_page_size=12 (4KiB).  Apple Silicon
+     Darwin is 16KiB; mprotect/mmap require OS page alignment (EINVAL
+     otherwise).  Always derive log2 from the live page_size. */
+  {
+    int l2 = 0;
+    natural ps = (natural)page_size;
+    while (ps > 1) {
+      ps >>= 1;
+      l2++;
+    }
+    log2_page_size = l2;
+  }
 
 
   check_bogus_fp_exceptions();
@@ -2251,6 +2273,13 @@ xMakeDataExecutable(BytePtr start, natural nbytes)
      nothing initialises it on this target, so it would keep its 32
      default, and thread_manager.c uses it as a lock *padding* granule,
      which is not the same quantity as a maintenance granule.  */
+#if defined(DARWIN)
+  /* Apple Silicon: CTR_EL0 is not readable at EL0 (SIGILL). Use the
+     Darwin libkern helper instead of mrs + flush_cache_lines. */
+  if (nbytes) {
+    sys_icache_invalidate(start, nbytes);
+  }
+#else
   {
     extern void flush_cache_lines(natural, natural, natural);
     natural ustart = (natural) start, base, end, ctr, dline, iline, linesize;
@@ -2264,6 +2293,7 @@ xMakeDataExecutable(BytePtr start, natural nbytes)
     end = (ustart + nbytes + linesize - 1) & ~(linesize-1);
     flush_cache_lines(base, (end-base)/linesize, linesize);
   }
+#endif
 #endif
 }
 
