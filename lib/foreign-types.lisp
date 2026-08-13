@@ -1295,12 +1295,34 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
       (error "Unknown size for foreign type ~S."
              (unparse-foreign-type foreign-type)))))
 
+(defun %adopt-typedef-record-layout (type name)
+  "Fill an incomplete named record from a same-named typedef.
+Apple headers often expose `typedef struct _NSRange {…} NSRange;` while
+ObjC encodings / bridge code still mention `(:struct :<NSR>ange)`.  The
+CDB records key is `_NSRange`; the empty `NSRange` stub never loads.
+Install the typedef's underlying record under NAME so make-gcable-record
+and typed classes (ns:ns-range) share one ordinal."
+  (let ((td (handler-case (parse-foreign-type name)
+              (error () nil))))
+    (when (and (typep td 'foreign-record-type)
+               (not (eq td type))
+               (ensure-foreign-type-bits td))
+      (setf (info-foreign-type-struct name) td)
+      (setf (foreign-record-type-fields type) (foreign-record-type-fields td)
+            (foreign-record-type-alignment type) (foreign-record-type-alignment td)
+            (foreign-record-type-alt-align type) (foreign-record-type-alt-align td)
+            (foreign-type-bits type) (foreign-type-bits td)
+            (foreign-type-ordinal type) (foreign-type-ordinal td))
+      (note-foreign-type-ordinal type *target-ftd*)
+      t)))
+
 (defun ensure-foreign-type-bits (type)
   (or (foreign-type-bits type)
       (and (typep type 'foreign-record-type)
            (let* ((name (foreign-record-type-name type)))
              (and name
-                  (load-record name)
+                  (or (load-record name)
+                      (%adopt-typedef-record-layout type name))
                   (foreign-type-bits type))))
       (and (typep type 'foreign-array-type)
 	   (let* ((element-type (foreign-array-type-element-type type))
@@ -1323,14 +1345,49 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
       (info-foreign-type-union name)
       (load-record name)))
 
+(defun %foreign-record-via-typedef (parsed)
+  "If PARSED is a named record, prefer a same-named typedef's target.
+Keeps ns:ns-range / ns:ns-rect ordinals aligned with make-gcable-record."
+  (if (and (typep parsed 'foreign-record-type)
+           (foreign-record-type-name parsed))
+    (let ((td (handler-case (parse-foreign-type (foreign-record-type-name parsed))
+                (error () nil))))
+      (if (and (typep td 'foreign-record-type)
+               (ensure-foreign-type-bits td))
+        td
+        (progn (ensure-foreign-type-bits parsed) parsed)))
+    (progn (ensure-foreign-type-bits parsed) parsed)))
 
 (defun %foreign-type-or-record (type)
   (if (typep type 'foreign-type)
     type
     (if (consp type)
-      (parse-foreign-type type)
-      (or (%find-foreign-record type)
-	  (parse-foreign-type type)))))
+      ;; Explicit (:struct NAME) may be an empty stub; prefer typedef target.
+      (%foreign-record-via-typedef (parse-foreign-type type))
+      ;; Prefer a non-record typedef (e.g. ObjC `id` → :* objc_object) over
+      ;; a same-named record installed for `(struct-ref "id")`.  Also prefer
+      ;; a *complete* typedef that aliases another record (NSRange→_NSRange)
+      ;; over an empty same-named struct stub.
+      (let* ((parsed (handler-case (parse-foreign-type type)
+                       (error () nil)))
+             (rec (%find-foreign-record type)))
+        (cond ((and parsed (not (typep parsed 'foreign-record-type)))
+               parsed)
+              ((and parsed
+                    (typep parsed 'foreign-record-type)
+                    (ensure-foreign-type-bits parsed)
+                    (or (null rec)
+                        (eq parsed rec)
+                        (null (foreign-type-bits rec))
+                        (/= (foreign-type-ordinal parsed)
+                            (foreign-type-ordinal rec))))
+               parsed)
+              (rec
+               (ensure-foreign-type-bits rec)
+               ;; After adopt, info-struct may now be the typedef target.
+               (or (info-foreign-type-struct type) rec))
+              (parsed parsed)
+              (t (parse-foreign-type type)))))))
 
 (defun %foreign-type-or-record-size (type &optional (units :bits))
   (let* ((info (%foreign-type-or-record type))
@@ -1522,6 +1579,15 @@ result-type-specifer is :VOID or NIL"
   (result-spec nil :type (or symbol list))
   (min-args 0 :type fixnum))
 
+(defun objc-messaging-entry-name-p (name)
+  "Entry points that look variadic in headers but use the method register ABI."
+  (member name
+          '("objc_msgSend" "objc_msgSendSuper"
+            "objc_msgSend_stret" "objc_msgSendSuper_stret"
+            "objc_msgSend_fpret" "objc_msgSend_fp2ret"
+            "method_invoke" "method_invoke_stret"
+            "_objc_msgForward" "_objc_msgForward_stret")
+          :test #'string=))
 
 (defun %external-call-expander (whole env)
   (declare (ignore env))
@@ -1550,10 +1616,29 @@ result-type-specifer is :VOID or NIL"
           (let* ((spec (car specs)))
             (cond ((eq spec :void)
                    ;; must be last arg-spec; remaining args should be
-                   ;; keyword/value pairs
+                   ;; keyword/value pairs.
+                   ;;
+                   ;; Darwin/arm64 C variadic (printf, …): emit :variadic so
+                   ;; aapcs64-ff-call forces following args onto the stack
+                   ;; (Apple ABI: all `...` args are stack-only).  Linux
+                   ;; ignores the marker.
+                   ;;
+                   ;; ObjC messaging (objc_msgSend*) is *not* C-variadic on
+                   ;; arm64 despite the `...` prototype: method args use the
+                   ;; normal register ABI (self/SEL in x0/x1, then x2…).
+                   ;; Emitting :variadic here put those args on the stack and
+                   ;; faulted.  Skip the marker for the messaging entry points.
                    (unless (evenp (length args))
                      (error "Remaining arguments should be keyword/value pairs: ~s"
                             args))
+                   ;; Only the Darwin arm64 ABI distinguishes variadic
+                   ;; args (stack-only).  Other targets must not see the
+                   ;; marker: their backends would treat it as a normal
+                   ;; argument spec and consume a bogus slot.
+                   (when (and (eq (backend-name *target-backend*) :darwinarm64)
+                              (not (objc-messaging-entry-name-p external-name)))
+                     (call :variadic)
+                     (call nil))
                    (do* ()
                         ((null args))
                      (call (pop args))
@@ -1628,7 +1713,8 @@ result-type-specifer is :VOID or NIL"
     :unsigned-doubleword :unsigned-fullword :unsigned-halfword :unsigned-byte
     :address
     :single-float :double-float
-    :void))
+    :void
+    :variadic))
 
 (defun null-coerce-foreign-arg (arg-type-keyword argform)
   (declare (ignore arg-type-keyword))

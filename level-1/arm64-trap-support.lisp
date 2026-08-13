@@ -4,7 +4,7 @@
 ;;;
 ;;; arm64-trap-support.lisp — XCMAIN (the nrs_CMAIN callback) and the
 ;;; exception-context (xp) accessors for Matt Emerson's upstream ARM64
-;;; (low-tag) design, linuxarm64 only.
+;;; (low-tag) design.
 ;;;
 ;;; Structural deviations from the PPC64 donor (each cited in place):
 ;;;  - PPC conditional traps under-encode, so PPC's xcmain back-scans the
@@ -20,9 +20,14 @@
 ;;;    (upstream-port/lisp-kernel/arm64-exceptions.c handle_uuo,
 ;;;    callback_for_trap).  Everything errnum-shaped goes to
 ;;;    nrs_ERRDISP instead (see arm64-error-signal.lisp), as on PPC.
-;;;  - ucontext geometry is linux-aarch64 (arm64-headers64 interface db,
-;;;    ucontext.ffi: uc_mcontext at 176; mcontext = {fault_address@0,
-;;;    regs[31]@8, sp@256, pc@264, pstate@272}).
+;;;  - Linux ucontext geometry (arm64-headers): uc_mcontext.regs[31]@8,
+;;;    sp@256, pc@264, pstate@272 — accessors use a base at regs[0].
+;;;  - Darwin ucontext geometry (measured on arm64 macOS): uc_mcontext
+;;;    is a pointer at offset 48; mcontext.__ss (thread state) at +16;
+;;;    within __ss, __x[0..28] / __fp / __lr / __sp / __pc / __cpsr sit
+;;;    at the same relative offsets as Linux's regs[0]/sp/pc/pstate
+;;;    once the base is &__ss.__x[0].  Raw offsets avoid depending on a
+;;;    fully regenerated darwin-arm64-headers CDB for this file.
 ;;;
 ;;; Register-number convention: every register field here (uuo operand
 ;;; fields, the kernel's fn-reg argument, handle-stack-overflow's rb)
@@ -35,20 +40,46 @@
 
 (in-package "CCL")
 
-;; regs[0] within uc_mcontext (ucontext.ffi: mcontext regs @8); sp/pc/
-;; pstate follow the regs array contiguously, so they are reachable
-;; from the same base: sp = 256-8, pc = 264-8, pstate = 272-8.
+;; Relative to regs[0] / &__ss.__x[0]: sp/pc/pstate follow contiguously.
 (defconstant xp-sp-offset-in-regs 248)
 (defconstant xp-pc-offset-in-regs 256)
 (defconstant xp-pstate-offset-in-regs 264)
 
+#+darwinarm64-target
+(progn
+  (defconstant xp-darwin-uc-mcontext-offset 48)
+  (defconstant xp-darwin-mcontext-ss-offset 16))
+
 (eval-when (:compile-toplevel :execute)
-  ;; ppc:223-236.  registers = macptr to mcontext.regs[0].
+  ;; ppc:223-236.  registers = macptr to mcontext.regs[0] (Linux) or
+  ;; &__darwin_arm_thread_state64.__x[0] (Darwin).
+  #+linuxarm64-target
   (defmacro with-xp-registers-and-gpr-offset ((xp register-number)
                                               (registers offset) &body body)
     `(with-macptrs ((,registers (pref ,xp :ucontext_t.uc_mcontext.regs)))
        (let ((,offset (xp-gpr-offset ,register-number)))
          ,@body)))
+
+  #+darwinarm64-target
+  (defmacro with-xp-registers-and-gpr-offset ((xp register-number)
+                                              (registers offset) &body body)
+    `(with-macptrs ((,registers
+                     (%inc-ptr (%get-ptr ,xp xp-darwin-uc-mcontext-offset)
+                               xp-darwin-mcontext-ss-offset)))
+       (let ((,offset (xp-gpr-offset ,register-number)))
+         ,@body)))
+
+  #+darwinarm64-target
+  (defmacro with-xp-register-base ((xp registers) &body body)
+    `(with-macptrs ((,registers
+                     (%inc-ptr (%get-ptr ,xp xp-darwin-uc-mcontext-offset)
+                               xp-darwin-mcontext-ss-offset)))
+       ,@body))
+
+  #+linuxarm64-target
+  (defmacro with-xp-register-base ((xp registers) &body body)
+    `(with-macptrs ((,registers (pref ,xp :ucontext_t.uc_mcontext.regs)))
+       ,@body))
 
   ;; uuo field extractors, arm64-uuo.s:16-65 (mirrored by the C decode
   ;; macros, arm64-exceptions.c:184-197).
@@ -63,8 +94,7 @@
   (defmacro uuo-wt-continuable (the-trap) `(ldb (byte 1 7) ,the-trap))
   (defmacro uuo-wt-xtype (the-trap) `(ldb (byte 8 8) ,the-trap)))
 
-;;; ppc:268-276.  0-30 = x0-x30 in mcontext.regs; 31 = SP (kernel Rsp
-;;; selector), stored contiguously after the regs array.
+;;; ppc:268-276.  0-30 = x0-x30; 31 = SP (kernel Rsp selector).
 (defun xp-gpr-offset (register-number)
   (unless (and (fixnump register-number)
                (<= 0 (the fixnum register-number))
@@ -95,23 +125,20 @@
   (with-xp-registers-and-gpr-offset (xp register-number) (registers offset)
     (values (%get-ptr registers offset))))
 
-;;; The saved PC is not a GPR on AArch64 (mcontext.pc, past the regs
-;;; array); PPC read/wrote it as regs[PT_NIP] (ppc:391-398).
+;;; The saved PC is not a GPR on AArch64 (mcontext.pc / __ss.__pc);
+;;; PPC read/wrote it as regs[PT_NIP] (ppc:391-398).
 (defun xp-pc-lisp (xp)
-  (with-macptrs ((registers (pref xp :ucontext_t.uc_mcontext.regs)))
+  (with-xp-register-base (xp registers)
     (values (%get-object registers xp-pc-offset-in-regs))))
 
 (defun (setf xp-pc-lisp) (value xp)
-  (with-macptrs ((registers (pref xp :ucontext_t.uc_mcontext.regs)))
+  (with-xp-register-base (xp registers)
     (%set-object registers xp-pc-offset-in-regs value)))
 
-;;; NZCV lives in mcontext.pstate bits 31-28 (C = bit 29).  The ARM32
-;;; port reads CPSR the same way to sign a failed nargs compare
-;;; (arm-error-signal.lisp:216-220).
+;;; NZCV lives in mcontext.pstate / __ss.__cpsr bits 31-28 (C = bit 29).
 (defun xp-pstate (xp)
-  (with-macptrs ((registers (pref xp :ucontext_t.uc_mcontext.regs)))
+  (with-xp-register-base (xp registers)
     (values (%%get-unsigned-longlong registers xp-pstate-offset-in-regs))))
-
 ;;; ppc:301-315, register names remapped (nargs is fixnum-tagged here
 ;;; too — arm64-asm.lisp:185).
 (defun xp-argument-list (xp)
@@ -137,7 +164,7 @@
 (defconstant pc-offset-in-register-context xp-pc-offset-in-regs)
 
 (defun return-address-offset (xp fn machine-state-offset)
-  (with-macptrs ((regs (pref xp :ucontext_t.uc_mcontext.regs)))
+  (with-xp-register-base (xp regs)
     (if (functionp fn)
       ;; Since the fulltag-function removal (patch 0055) a function IS
       ;; its misc-tagged uvector (PPC64 shape); the

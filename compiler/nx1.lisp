@@ -1414,11 +1414,15 @@
     :signed-halfword :unsigned-halfword :signed-byte :unsigned-byte
     :hybrid-int-float :hybrid-float-int :hybrid-float-float))
 
+(defun target-arm64-backend-p ()
+  (memq (backend-name *target-backend*) '(:darwinarm64 :linuxarm64)))
+
 (defun nx1-ff-call-internal (context address-expression arg-specs-and-result-spec operator )
   (declare (ignorable context))
   (let* ((specs ())         
          (vals ())
          (register-spec-seen nil)
+         (structure-return-seen nil)
          (arg-specs (butlast arg-specs-and-result-spec))
          (result-spec (car (last arg-specs-and-result-spec))))
     (unless (evenp (length arg-specs))
@@ -1427,24 +1431,45 @@
       (when (null arg-specs) (return))
       (let* ((arg-keyword (pop arg-specs))
 	     (value (pop arg-specs)))
+        ;; arm64 HFA composite specs arrive as '(:single-float|:double-float
+        ;; . count) — quoted so nx-transform doesn't walk the dotted pair.
+        (when (and (consp arg-keyword)
+                   (eq (car arg-keyword) 'quote)
+                   (consp (cadr arg-keyword)))
+          (setq arg-keyword (cadr arg-keyword)))
         (if (or (memq arg-keyword *arg-spec-keywords*)
-		(typep arg-keyword 'unsigned-byte))
+		(typep arg-keyword 'unsigned-byte)
+                (and (consp arg-keyword)
+                     (target-arm64-backend-p)
+                     (memq (car arg-keyword) '(:single-float :double-float))
+                     (typep (cdr arg-keyword) '(integer 1 4))))
           (progn 
             (push arg-keyword specs)
             (push value vals))
-          (if (memq arg-keyword '(:registers :indirect-result))
-            ;; :registers names a result-register capture buffer (the
-            ;; x8664/darwinppc64 regbuf protocol); :indirect-result names
-            ;; the AAPCS64 (arm64) indirect result-area pointer, loaded
-            ;; into x8 at the call.  Both describe THE record result, so
-            ;; at most one of either may appear.
-            (if register-spec-seen
-              (error "duplicate ~s in ~s" arg-keyword arg-specs-and-result-spec)
-              (progn
-                (setq register-spec-seen t)
-                (push arg-keyword specs)
-                (push value vals)))
-            (error "Unknown argument spec: ~s" arg-keyword)))))
+          (cond ((memq arg-keyword '(:registers :indirect-result))
+                 ;; :registers names a result-register capture buffer (the
+                 ;; x8664/darwinppc64 regbuf protocol); :indirect-result names
+                 ;; the AAPCS64 (arm64) indirect result-area pointer, loaded
+                 ;; into x8 at the call.  Both describe THE record result, so
+                 ;; at most one of either may appear.
+                 (if register-spec-seen
+                   (error "duplicate ~s in ~s" arg-keyword arg-specs-and-result-spec)
+                   (progn
+                     (setq register-spec-seen t)
+                     (push arg-keyword specs)
+                     (push value vals))))
+                ((eq arg-keyword :variadic)
+                 ;; Zero-width marker: following args use the Darwin/arm64
+                 ;; C-variadic (stack) convention.  Only meaningful to the
+                 ;; AAPCS64 backends; reject elsewhere so it can't silently
+                 ;; consume an argument slot.
+                 (unless (target-arm64-backend-p)
+                   (error "~s argument spec is only supported on arm64 targets"
+                          arg-keyword))
+                 (push arg-keyword specs)
+                 (push value vals))
+                (t
+                 (error "Unknown argument spec: ~s" arg-keyword))))))
     (unless (or (eq result-spec :void)
 		(memq result-spec *arg-spec-keywords*))
       (error "Unknown result spec: ~s" result-spec))

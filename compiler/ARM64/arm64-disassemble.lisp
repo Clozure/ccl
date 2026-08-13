@@ -573,3 +573,42 @@
 (defun ccl::arm64-xdisassemble (function)
   (ccl::arm64-disassemble-xfunction (ccl::function-to-function-vector function)
                                     *standard-output*))
+
+;;; Inspector expects a simple-vector of either comment strings or
+;;; (object label instr) where label is a PC fixnum or (:label PC) and
+;;; instr is the printed instruction string.  OBJECT is an inspectable
+;;; constant referenced by the insn when we can recover one (nil for now —
+;;; arm64 immediates rarely embed lisp pointers the way x86 does).
+(defun ccl::disassemble-lines (function)
+  (let ((source-note (function-source-note function)))
+    (when source-note
+      (ccl::ensure-source-note-text source-note)))
+  (let* ((xfunction (ccl::function-to-function-vector function))
+         (code-vector (uvref xfunction 0))
+         (di-vector (make-di-vector code-vector))
+         (previous-source-note nil)
+         (lines (make-array 20 :adjustable t :fill-pointer 0)))
+    (resolve-labels di-vector)
+    (dotimes (i (length di-vector))
+      (let* ((pc (* i 4))
+             (di (svref di-vector i))
+             (source-note (find-source-note-at-pc function pc)))
+        (unless (eql (ccl::source-note-file-range source-note)
+                     (ccl::source-note-file-range previous-source-note))
+          (setf previous-source-note source-note)
+          (let* ((source-text (source-note-text source-note))
+                 (text (if source-text
+                         (ccl::string-sans-most-whitespace source-text 100)
+                         "#<no source text>")))
+            (vector-push-extend (format nil ";;; ~A" text) lines)))
+        (vector-push-extend
+         (list nil
+               (if (di-label di) (list :label pc) pc)
+               (with-output-to-string (s)
+                 (format s "(~a" (di-mnemonic di))
+                 (dolist (op (di-operands di))
+                   (write-char #\space s)
+                   (print-operand op s))
+                 (write-char #\) s)))
+         lines)))
+    (coerce lines 'simple-vector)))
