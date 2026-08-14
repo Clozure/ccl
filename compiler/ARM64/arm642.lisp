@@ -1161,9 +1161,23 @@
 (defun arm642-lexpr-entry (seg num-fixed)
   (with-arm64-local-vinsn-macros (seg)
     (! save-lexpr-argregs num-fixed)
+    ;; ARM64-DEVIATION: build the frame BEFORE the fixed-arg copies --
+    ;; x86-64's order (x862-lexpr-entry), not PPC64's.
+    ;; save-lisp-context-lexpr stores the CURRENT vsp as the frame's
+    ;; savevsp, and the backtrace decoder (map-entry-value ->
+    ;; %raw-frame-ref) uses that savevsp as the symbol map's vloc-0
+    ;; origin.  The origin is the lexpr count cell; each
+    ;; copy-lexpr-argument push moves vsp one word below it, so the
+    ;; copies-then-frame order records a savevsp 8*num-fixed bytes low
+    ;; and every symbol-map entry of a lexpr function reads one slot
+    ;; below its variable (Clozure/ccl#600: MORE decodes to the fixnum
+    ;; count, and %lexpr-count then reads machine address 8).  The
+    ;; savevsp slot is dead on the return path -- popj / nvalret
+    ;; restore vsp from the frames .SPlexpr-entry built -- so only the
+    ;; decoder sees the difference.
+    (! save-lisp-context-lexpr)
     (dotimes (i num-fixed)
-      (! copy-lexpr-argument))
-    (! save-lisp-context-lexpr)))
+      (! copy-lexpr-argument))))
 
 (defun arm642-load-lexpr-address (seg dest)
   (with-arm64-local-vinsn-macros (seg)
