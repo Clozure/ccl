@@ -133,26 +133,30 @@ endsp makeu64
  * register: park it on the value stack (GC-visible via
  * tcr.save_vsp) before the argument load clobbers it.  We don't
  * save/restore FPCR: lisp runs with the process-default FPCR and a
- * conforming callee doesn't dirty it.  Cumulative FPSR exception
- * flags from the callee are published to tcr.foreign_fpsr.
+ * conforming callee doesn't dirty it.
  *
- * FPSR IS CUMULATIVE, SO THE WINDOW MUST BE OPENED AS WELL AS CLOSED.
- * Zeroing FPSR only on the way back makes tcr.foreign_fpsr carry every
- * flag raised since the PREVIOUS ff-call -- all the inline lisp float
- * arithmetic in between -- and %ffi-exception-status then charges it to
- * this callee.  Measured 16m48b: clear FPSR, `(* most-positive-single-float
- * most-positive-single-float)' inline (no FFI at all, FPSR := 0x14
- * OFC|IXC), then `(log 2.0d0)' => FLOATING-POINT-OVERFLOW on (2.0D0);
- * the immediately following identical call returns 0.693...  Every FFI
- * transcendental was affected (log/exp/sin/atan all reproduced); the ANSI
- * suite caught it as PRINT.SHORT-FLOAT.RANDOM / PRINT.SINGLE-FLOAT.RANDOM,
- * whose deftest bodies constant-fold (expt 10.0f0 100) -- an overflow in
- * SINGLE range but not in double, which is exactly why the double and long
- * variants of the same test passed.  ARM32 has no tcr.foreign_fpsr and so
- * must clear at each of its 33 lisp call sites
- * (`#+arm-target (%set-fpscr-status 0)', level-1/l1-numbers.lisp); arm64 is
- * not `arm-target', gets no such clear, and does not need one -- the slot
- * this spentry owns is the right seam.
+ * NO FPSR ACCESS ON THIS PATH.  This spentry used to own an FPSR capture
+ * window -- `msr fpsr, xzr' before the blr, `mrs' + publish to
+ * tcr.foreign_fpsr + `msr' after, opened as well as closed because FPSR
+ * is cumulative (16m48b: a window only closed charges every flag raised
+ * since the PREVIOUS ff-call, including inline lisp float arithmetic, to
+ * this callee; log/exp/sin/atan all reproduced, ANSI caught it as
+ * PRINT.SHORT-FLOAT.RANDOM).  MEASURED on Neoverse-N1 (16m82,
+ * tools/perf/ffcall-replica.c): those three FPSR accesses cost 13.3 ns
+ * of an 18 ns per-call transition excess over x86-64 -- FPSR is not
+ * renamed, and each access synchronizes the FP pipeline.  x86-64 pays
+ * nothing on its common path (the SIGFPE handler captures MXCSR lazily);
+ * AArch64 without trapped-FP support cannot take that path, but it can
+ * take ARM32's, which is where the flag window now lives: the float
+ * transcendental wrappers -- the ONLY consumers of the captured flags --
+ * clear the cumulative flags at the call site (`%set-fpscr-status 0',
+ * level-1/l1-numbers.lisp, the idiom ARM32 has always used there) and
+ * read the LIVE FPSR afterwards (%get-fpscr-status, which
+ * %ffi-exception-status now wraps).  A plain ff-call touches no FP
+ * state at all, and lisp's accrued FPSR flags survive foreign calls
+ * instead of being discarded per call.  The 16m48b attribution
+ * guarantee is preserved: the call-site clear immediately before the
+ * foreign call is exactly what prevents it.
  */
 spentry ffcall
         /* Spill fn AND all four boxed NVRs to the vstack (the protocol the
@@ -286,12 +290,6 @@ spentry ffcall
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* Open the capture window: discard lisp-side cumulative flags so
-         * tcr.foreign_fpsr below is the CALLEE's, not "everything since the
-         * last ff-call".  See the header note.  msr writes FPSR only --
-         * PSTATE.NZCV is a separate register in AArch64, so this cannot
-         * disturb the condition flags. */
-        msr fpsr, xzr
         /* ARM64-DEVIATION: step SP over header+savedsp+params[0..7] so the
          * callee sees its stack arguments AT [SP], per AAPCS64 5.4.2 (the
          * single NSAA area the codegen marshals at param words 8..; +80 is
@@ -309,10 +307,8 @@ spentry ffcall
         /* Back.  x0/d0 hold the results.  [save3, save3+80) is DEAD -- it
          * sat below the callee's incoming SP -- so nothing on this path may
          * read the c_frame head: the return runs entirely from the save0/
-         * save1 hoist.  x0/d0 are never touched: imm1/imm2 scratch only. */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * save1 hoist.  x0/d0 are never touched.  No FPSR access here --
+         * the float wrappers own the flag window (header note). */
         /* Retreat SP onto the boundary lisp_frame (it sat at/above the
          * callee's incoming SP, so it is intact, and the foreign-era GC has
          * been walking AND FORWARDING its slots).  This is PPC64's shape:
@@ -6480,9 +6476,9 @@ _ends
  * re-ported there against the w13 aapcs64-ff-call codegen unit's
  * c_frame protocol ([backlink,savelr,params...]; entry point unboxed
  * from a macptr OR a fixnum-locative; no FPCR switching -- lisp runs
- * with the process-default FPCR; FPSR exception flags published to
- * tcr.foreign_fpsr per Matt's f067047 TCR).  The earlier draft that
- * lived here used the pre-w13 frame layout and the removed
+ * with the process-default FPCR; no FPSR access either -- the float
+ * wrappers own the flag window, see `spentry ffcall').  The earlier
+ * draft that lived here used the pre-w13 frame layout and the removed
  * tcr.lisp_mxcsr/ffi_exception slots. */
 
 /* Just like ffcall, but saves all AAPCS64 result registers into a buffer
@@ -6572,10 +6568,6 @@ spentry ffcall_return_registers
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* Open the FPSR capture window -- FPSR is cumulative, so clearing it
-           only on the way back publishes every flag raised since the PREVIOUS
-           ff-call.  Canonical note: `spentry ffcall' in arm64-spentry.s. */
-        msr fpsr, xzr
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
         blr temp4                               /* ppc:1849 bctrl            */
@@ -6591,10 +6583,8 @@ spentry ffcall_return_registers
         stp d6, d7, [save2, #((8*node_size) + 6*8)]
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
-         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * [save3, save3+80) is DEAD; run entirely from the hoist.
+         * No FPSR access -- the float wrappers own the flag window. ---- */
         mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
@@ -6700,17 +6690,13 @@ spentry ffcall_indirect_result
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* FPSR capture window -- canonical note: `spentry ffcall'. */
-        msr fpsr, xzr
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
         blr temp4
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
-         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * [save3, save3+80) is DEAD; run entirely from the hoist.
+         * No FPSR access -- the float wrappers own the flag window. ---- */
         mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
@@ -7001,9 +6987,8 @@ spentry syscall
         str tsp, [rcontext, #tcr.save_tsp]
         str allocptr, [rcontext, #tcr.save_allocptr]
         str allocbase, [rcontext, #tcr.save_allocbase]
-        str xzr, [rcontext, #tcr.foreign_fpsr]  /* syscalls raise no FP
-                           exceptions; publish a clean slate (PPC zeroes
-                           ffi_exception here, ppc:5415-5419) */
+        /* (No tcr.foreign_fpsr store: the slot is no longer consumed --
+           the float wrappers read the live FPSR; see `spentry ffcall'.) */
         /* Syscall number + up to 6 args (ppc:5424-5432 loads r3-r10 + r0). */
         asr x8, arg_z, #fixnumshift             /* ppc:5432 unbox_fixnum     */
         ldp x0, x1, [sp, #c_frame.params]
