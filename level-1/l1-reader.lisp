@@ -2792,7 +2792,7 @@ initially NIL.")
   (if *read-eval*
     (let* ((exp (%read-list-expression stream nil)))
       (unless *read-suppress*
-        (eval exp)))
+        (values (eval exp))))
     (signal-reader-error stream "#. reader macro invoked when ~S is false ."
                          '*read-eval*)))
 
