@@ -20,3 +20,14 @@
 (enum-ident ("" 0) "NSHelpKeyMask" 4194304)
 (enum-ident ("" 0) "NSFunctionKeyMask" 8388608)
 (enum-ident ("" 0) "NSDeviceIndependentModifierFlagsMask" 4294901760)
+
+;; NSControlStateValue (NSCell.h).  Modern SDK uses `static const`
+;; (including deprecated NSOffState / NSOnState / NSMixedState aliases).
+;; ffigen records them as unlinkable `(static)` vars — no initializer —
+;; so #$NSOffState dies in resolve-foreign-variable.  Fixed ABI values.
+(enum-ident ("" 0) "NSControlStateValueMixed" -1)
+(enum-ident ("" 0) "NSControlStateValueOff" 0)
+(enum-ident ("" 0) "NSControlStateValueOn" 1)
+(enum-ident ("" 0) "NSMixedState" -1)
+(enum-ident ("" 0) "NSOffState" 0)
+(enum-ident ("" 0) "NSOnState" 1)

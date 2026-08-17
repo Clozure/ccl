@@ -59,6 +59,7 @@ cd $CCL
 ```
 
 Smoke: `tools/darwin-cocoa-smoke.lisp` (~600+ classes / ~10k+ methods).
+`#$NSOffState` / `NSControlStateValue*`: `tools/darwin-nsoffstate-smoke.lisp`.
 Full IDE: `tools/darwin-require-cocoa-smoke.lisp` (after shims below).
 
 ### Cocoa constant shims
@@ -72,8 +73,9 @@ Full IDE: `tools/darwin-require-cocoa-smoke.lisp` (after shims below).
 ```
 
 Adds: `YES`/`NO`, deprecated `NS*KeyMask` → `NSEventModifierFlag*`
-values, and `FLT_MAX`/`FLT_MIN`/`DBL_MAX` (modern SDK leaves these as
-unlinkable statics / macros).
+values, `NSControlStateValue*` / `NSOffState` / `NSOnState` /
+`NSMixedState`, and `FLT_MAX`/`FLT_MIN`/`DBL_MAX` (modern SDK leaves
+these as unlinkable statics / macros).
 
 ### libc computed-macro shims
 

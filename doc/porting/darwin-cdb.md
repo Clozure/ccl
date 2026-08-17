@@ -52,6 +52,8 @@ Smoke: `tools/darwin-cocoa-smoke.lisp` (CDB keys; no objc-bridge load).
 `cocoa-populate.sh` `zzz-*.ffi`):
 
 * `YES`/`NO` constants (FILTER_FFI_MACROS drops them)
+* `NSControlStateValue*` / `NSOffState` / `NSOnState` / `NSMixedState`
+  (`static const` aliases; ffigen records unlinkable `(static)` vars)
 * `objc_msgSend*` prototypes (`OBJC_OLD_DISPATCH_PROTOTYPES=0`)
 * `instancetype` + generics → `id`; `va_list`; `NSConstantString` layout
 * complete `struct id` (= `objc_object`) — ffigen emits `(struct-ref "id")`

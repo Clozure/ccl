@@ -1,10 +1,11 @@
-;;;; Inject YES/NO + deprecated NS*KeyMask aliases into cocoa constants.cdb.
+;;;; Inject YES/NO + deprecated NS*KeyMask / NS*State aliases into cocoa
+;;;; constants.cdb.
 ;;;;
 ;;;; Modern objc.h maps YES/NO to __objc_yes/__objc_no (not numeric), so
 ;;;; regenerated CDBs lack the historical YES=1 NO=0 entries objc-bridge
-;;;; needs.  Deprecated NS*KeyMask names are recorded as unlinkable
-;;;; `(static)` foreign vars — inject numeric enum-idents matching
-;;;; NSEventModifierFlag*.
+;;;; needs.  Deprecated NS*KeyMask and NSControlStateValue / NSOffState
+;;;; names are recorded as unlinkable `(static)` foreign vars — inject
+;;;; numeric enum-idents matching NSEventModifierFlag* / NSCell.h.
 ;;;;
 ;;;;   ./darm64cl --no-init --batch < tools/darwin-arm64-cdb/inject-objc-bool-constants.lisp
 (in-package :ccl)
@@ -21,6 +22,13 @@
     ("NSHelpKeyMask" . 4194304)
     ("NSFunctionKeyMask" . 8388608)
     ("NSDeviceIndependentModifierFlagsMask" . 4294901760)
+    ;; NSCell.h `static const` — ffigen emits (var … (static)), no value
+    ("NSControlStateValueMixed" . -1)
+    ("NSControlStateValueOff" . 0)
+    ("NSControlStateValueOn" . 1)
+    ("NSMixedState" . -1)
+    ("NSOffState" . 0)
+    ("NSOnState" . 1)
     ;; float.h macros — ffigen records as unlinkable statics / omits them
     ("FLT_MAX" . ,most-positive-single-float)
     ("FLT_MIN" . ,least-positive-normalized-single-float)
