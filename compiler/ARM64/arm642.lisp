@@ -203,7 +203,8 @@
 (defvar *arm642-emitted-source-notes* nil)
 
 (defvar *arm642-result-reg* arm64::arg_z)
-(defparameter *arm642-nvrs* nil)
+(defparameter *arm642-nvrs* (list arm64::save0 arm64::save1
+                                  arm64::save2 arm64::save3))
 (defparameter *arm642-first-nvr* -1)
 
 (defvar *arm642-gpr-locations* nil)
