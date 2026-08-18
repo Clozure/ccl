@@ -896,7 +896,11 @@
     (setq *arm642-register-restore-ea* *arm642-vstack*
           *arm642-register-restore-count* n)))
 
-(defun arm642-restore-nvrs (seg multiple-values-on-stack)
+;;; ARM64-DEVIATION: base-reg follows PPC64's ppc2-restore-nvrs base
+;;; parameter (default vsp).  A tail spread call passes a PRE-spread
+;;; vsp snapshot, because the spread subprim moves vsp at run time.
+(defun arm642-restore-nvrs (seg multiple-values-on-stack
+                            &optional (base-reg arm64::vsp))
   (let* ((ea *arm642-register-restore-ea*)
          (n *arm642-register-restore-count*))
     (when (and ea n)
@@ -904,7 +908,7 @@
         (let* ((diff (- *arm642-vstack* ea)))
           (if (and (eql 0 diff)
                    (not multiple-values-on-stack))
-            (! restore-nvrs n arm64::vsp)
+            (! restore-nvrs n base-reg)
             ;; ARM64-DEVIATION: rebind the temp-register masks around the
             ;; scratch selection.  The ARM32 original (arm2.lisp, same
             ;; function) calls SELECT-IMM-TEMP/SELECT-NODE-TEMP here with the
@@ -930,13 +934,13 @@
                          :class hard-reg-class-gpr
                          :mode hard-reg-class-gpr-mode-node)))
               (if (eql 0 diff)
-                (! fixnum-add reg arm64::vsp arm64::nargs)
+                (! fixnum-add reg base-reg arm64::nargs)
                 (progn
                   (if (< diff 4096)
-                    (! add-immediate reg arm64::vsp diff)
+                    (! add-immediate reg base-reg diff)
                     (progn
                       (arm642-lri seg reg diff)
-                      (! fixnum-add reg arm64::vsp reg)))
+                      (! fixnum-add reg base-reg reg)))
                   (when multiple-values-on-stack
                     (! fixnum-add reg reg arm64::nargs))))
               (! restore-nvrs n reg))))))))
@@ -2864,6 +2868,14 @@
       (if spread-p
         (progn
           (arm642-set-nargs seg (%i- nargs 1))
+          ;; ARM64-DEVIATION: snapshot the pre-spread vsp, following
+          ;; PPC64 (ppc2.lisp:2385-2386).  spreadargz/spread_lexprz
+          ;; preserve temp1 (x13): arm64-spentry.s shows both touch
+          ;; only imm0/imm1/arg_x/arg_y/arg_z/nargs/vsp.  The spread
+          ;; vinsns' own scratch is imm1, so temp1 survives into the
+          ;; restore below.
+          (when (and tail-p *arm642-register-restore-count*)
+            (! copy-gpr ($ arm64::temp1) ($ arm64::vsp)))
           (if (eq spread-p 0)
             (! spread-lexpr)
             (! spread-list))
@@ -2877,11 +2889,12 @@
           ;; The restore lives in this branch because the tail-p block
           ;; above defers to it ((unless spread-p ...)) -- but that branch
           ;; runs for non-tail calls too.  Invisible while *arm642-nvrs*
-          ;; is nil.  STILL WRONG for a tail spread of >4 args: PPC64
-          ;; restores relative to a PRE-spread vsp snapshot in temp1,
-          ;; because pushed spread args move vsp below the save area.
+          ;; is nil.  A tail spread of more than $numarm64argregs
+          ;; arguments pushes value-stack words and moves vsp below
+          ;; the save area, so the restore reads relative to the
+          ;; PRE-spread snapshot in temp1, as PPC64 does.
           (when tail-p
-            (arm642-restore-nvrs seg nil))
+            (arm642-restore-nvrs seg nil arm64::temp1))
           (arm642-restore-non-volatile-fprs seg)
           (! restore-nfp))
         (if nargs
