@@ -20,6 +20,7 @@
 #include "image.h"
 #include "gc.h"
 #include <errno.h>
+#include <string.h>
 #include <unistd.h>
 #ifndef WINDOWS
 #include <sys/mman.h>
@@ -218,6 +219,21 @@ find_openmcl_image_file_header(int fd, openmcl_image_file_header *header)
   return true;
 }
 
+/* Failure context for "Couldn't load lisp heap image": say which
+   section and target VA, preserving errno for the caller's report. */
+static void
+note_section_map_failure(int code, void *addr, off_t pos, natural nbytes)
+{
+  int err = errno;
+
+  fprintf(dbgout,
+          "load_image_section: section code %d: couldn't map 0x" LISP
+          " bytes at 0x" LISP " (image offset 0x" LISP ")%s%s\n",
+          code, nbytes, (natural)addr, (natural)pos,
+          err ? ": " : "", err ? strerror(err) : "");
+  errno = err;
+}
+
 void
 load_image_section(int fd, openmcl_image_section_header *sect)
 {
@@ -238,6 +254,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RX,
                    fd)) {
+        note_section_map_failure(sect->code, pure_space_active, pos, mem_size);
         return;
       }
     }
@@ -253,6 +270,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 		 IMAGE_MAPFILE_NBYTES(mem_size),
 		 MEMPROTECT_RWX,
 		 fd)) {
+      note_section_map_failure(sect->code, static_space_active, pos, mem_size);
       return;
     }
     a = new_area(static_space_active, static_space_limit, AREA_STATIC);
@@ -268,6 +286,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
 		 IMAGE_MAPFILE_NBYTES(mem_size),
 		 MEMPROTECT_RWX,
 		 fd)) {
+      note_section_map_failure(sect->code, a->low, pos, mem_size);
       return;
     }
 
@@ -287,9 +306,12 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RWX,
                    fd)) {
+        note_section_map_failure(sect->code, a->low, pos, mem_size);
         return;
       }
       if (!CommitMemory(global_mark_ref_bits,refbits_size)) {
+        note_section_map_failure(sect->code, global_mark_ref_bits, pos,
+                                 refbits_size);
         return;
       }
       /* Need to save/restore persistent refbits. */
@@ -298,6 +320,8 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    refbits_size,
                    MEMPROTECT_RW,
                    fd)) {
+        note_section_map_failure(sect->code, managed_static_refbits, pos,
+                                 refbits_size);
         return;
       }
       /* Should change image format and store this in the image */
@@ -338,6 +362,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                    IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RWX,
                    fd)) {
+        note_section_map_failure(sect->code, a->low, pos, mem_size);
         return;
       }
     }
