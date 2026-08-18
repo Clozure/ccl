@@ -220,6 +220,15 @@ CommitMemory (LogicalAddress start, natural len)
 #endif
     if (addr == start) {
       return true;
+    } else if (addr == MAP_FAILED) {
+      /* Nothing to unmap; report and retry (diagnose e.g. a macOS
+         update rejecting MAP_FIXED over this range). */
+      int err = errno;
+      fprintf(dbgout,
+              "CommitMemory: mmap MAP_FIXED at 0x" LISP " len 0x" LISP
+              " failed: %s (errno %d)\n",
+              (natural)start, (natural)len, strerror(err), err);
+      errno = err;
     } else {
       mmap(addr, len, MEMPROTECT_NONE, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
     }
@@ -441,18 +450,35 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
     size_t total = 0;
     off_t opos;
     natural map_bytes = align_to_power_of_2(nbytes, log2_page_size);
+    int err;
 
     (void)permissions;
     opos = LSEEK(fd, 0, SEEK_CUR);
     if (!CommitMemory(addr, map_bytes)) {
+      err = errno;
+      fprintf(dbgout,
+              "MapFile: CommitMemory failed at 0x" LISP " len 0x" LISP "\n",
+              (natural)addr, map_bytes);
+      errno = err;
       return false;
     }
     if (LSEEK(fd, pos, SEEK_SET) < 0) {
+      err = errno;
+      fprintf(dbgout,
+              "MapFile: lseek to image offset 0x" LISP " failed: %s (errno %d)\n",
+              (natural)pos, strerror(err), err);
+      errno = err;
       return false;
     }
     while (total < nbytes) {
       count = read(fd, ((char *)addr) + total, nbytes - total);
       if (count < 0) {
+        err = errno;
+        fprintf(dbgout,
+                "MapFile: read of image section failed at 0x" LISP
+                " after 0x" LISP " of 0x" LISP " bytes: %s (errno %d)\n",
+                (natural)addr, (natural)total, nbytes, strerror(err), err);
+        errno = err;
         return false;
       }
       if (count == 0) {
