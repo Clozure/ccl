@@ -5924,6 +5924,22 @@
       (with-arm64-p2-declarations p2decls
         (setq *arm642-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
+        ;; ARM64-DEVIATION: x86-64's guard (x862.lisp:7297-7305), ported
+        ;; verbatim.  A float-typed lexical must never win a GPR NVR:
+        ;; homing one there boxes the value on every setq, which turns an
+        ;; unboxed accumulator loop into an allocation loop (measured
+        ;; Measured under the pool: float-sum-unboxed 2.4 -> 4.3 ns/it,
+        ;; aref-df-declared 9955 -> 11830).  PPC64 has no such guard;
+        ;; the donor here is the port that added one.
+        (unless no-regs
+          (dolist (v (afunc-all-vars afunc))
+            (let* ((type (acode-var-type v *arm642-trust-declarations*)))
+              (when (or (subtypep type 'single-float)
+                        (subtypep type 'double-float)
+                        (subtypep type '(complex single-float))
+                        (subtypep type '(complex double-float)))
+                (nx-set-var-bits v (logior (ash 1 $vbitnoreg)
+                                           (nx-var-bits v)))))))
         (multiple-value-setq (pregs reglocatives)
 
           (nx2-afunc-allocate-global-registers afunc (unless no-regs *arm642-nvrs*)))
