@@ -84,7 +84,13 @@
       (arm64-lap-generate-code current section-size *arm64-lap-lfun-bits*)
       )))
 
-(defun arm64-lap-generate-code (seg code-vector-size &optional (lfbits 0))
+;;; TRAILER-WORD, when non-nil, is appended as one extra data word at
+;;; the very end of the code vector (the register-save trailer --
+;;; format and rationale at arm642.lisp arm642-encode-regsave-trailer).
+;;; Hand-written lap functions never pass it: they manage save0-3
+;;; explicitly and record nothing.
+(defun arm64-lap-generate-code (seg code-vector-size &optional (lfbits 0)
+                                    trailer-word)
   (declare (fixnum code-vector-size))
   (let* ((target-backend *target-backend*)
          (cross-compiling (target-arch-case
@@ -101,7 +107,8 @@
          (i prefix-size))
     (declare (fixnum i constants-size))
     (let* ((code-vector (%alloc-misc
-                         (+ code-vector-size prefix-size)
+                         (+ code-vector-size prefix-size
+                            (if trailer-word 1 0))
                          (if cross-compiling
                            target::subtag-xcode-vector
                            arm64::subtag-code-vector))))
@@ -111,6 +118,9 @@
         (unless (eql (arm64::instruction-element-size insn) 0)
           (setf (uvref code-vector i) (arm64::instruction-word insn))
           (incf i)))
+      (when trailer-word
+        (setf (uvref code-vector i) trailer-word)
+        (incf i))
       (dolist (pair arm64::*constants*)
         (let ((imm (car pair))
               (k (cdr pair)))

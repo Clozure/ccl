@@ -633,7 +633,10 @@
                            (arm642-xmake-function
                             code
                             *backend-immediates*
-                            bits))
+                            bits
+                            *arm642-compiler-register-save-note*
+                            *arm642-register-restore-ea*
+                            *arm642-register-restore-count*))
                      (when (getf debug-info 'pc-source-map)
                        (setf (getf debug-info 'pc-source-map)
                              (arm642-generate-pc-source-map debug-info)))
@@ -642,12 +645,64 @@
                              (arm642-digest-symbols)))))))))
     afunc))
 
-(defun arm642-xmake-function (code imms bits)
+(defun arm642-xmake-function (code imms bits &optional regsave-note
+                                   restore-ea nregs)
   (collect ((lap-imms))
     (dotimes (i (length imms))
       (lap-imms (cons (aref imms i) i)))
-    (let* ((arm64::*constants* (lap-imms)))
-      (arm64-lap-generate-code code (arm64::finalize code) bits))))
+    (let* ((arm64::*constants* (lap-imms))
+           ;; FINALIZE assigns every lap label's address; the regsave
+           ;; note's label is only readable after it runs.
+           (code-vector-size (arm64::finalize code))
+           (trailer (arm642-encode-regsave-trailer regsave-note
+                                                   restore-ea nregs)))
+      (arm64-lap-generate-code code code-vector-size bits trailer))))
+
+;;; Register-save trailer: one DATA word appended as the last word of
+;;; the code vector, never executed, recording where the function
+;;; saved save0..save(nregs-1).  This is PPC's scheme (the LWZ trailer:
+;;; emitted at ppc-lap.lisp:68 ppc-lap-encode-regsave-info, decoded at
+;;; lib/ppc-backtrace.lisp:101-134); lib/arm64-backtrace.lisp's
+;;; REGISTERS-USED-BY decodes ours via %CODE-VECTOR-LAST-INSTRUCTION,
+;;; which arm64 already carries (level-0/ARM64/arm64-misc.lisp:1249).
+;;; ARM64-DEVIATION (format only): PPC hides its trailer in a load
+;;; opcode that cannot end a PPC function.  Ours lives in the RESERVED
+;;; encoding space: bits[31:25]=0 with bits[24:22]/=0 is permanently
+;;; unallocated -- it is NOT UDF (imm16 form, bits[31:16]=0), which
+;;; matters because UUOs are UDF-space words (arm64-asm.lisp:453-494)
+;;; and a function can END with a uuo-error-*, so the marker must be
+;;; disjoint from that space as well as from every allocated
+;;; instruction and from the zero words the last-instruction scan
+;;; terminates on.
+;;;   bits[31:25] = 0      marker (reserved space)
+;;;   bits[24:22] = nregs  1..4; nonzero by construction
+;;;   bits[21:14] = pc     save-COMPLETION pc in words, %cfp-lfun
+;;;                        origin (label bytes/4 + 1 prefix word
+;;;                        + nregs instructions)
+;;;   bits[13:0]  = ea     *arm642-register-restore-ea* in 8-byte cells
+;;; No trailer is emitted when nothing was saved, when the save-nvrs
+;;; vinsn was optimized away (its note then never got a label), or
+;;; when a field overflows (pc >= #x100 words -- PPC gives up at #x80
+;;; -- or ea >= #x4000 cells).  REGISTERS-USED-BY then answers (nil
+;;; nil) as it did when the pool was empty, and the register walk
+;;; degrades to the xp/catch-frame fallback instead of decoding
+;;; garbage.
+(defun arm642-encode-regsave-trailer (note restore-ea nregs)
+  (when (and (typep note 'vinsn-note)
+             nregs
+             (> nregs 0)
+             restore-ea)
+    (let* ((lap-label (vinsn-note-address note))
+           (addr (and lap-label (arm64::label-address lap-label))))
+      (when addr
+        (let* ((pc-words (+ (ash addr -2) 1 nregs))
+               (ea-cells (ash restore-ea (- arm64::word-shift))))
+          (declare (fixnum pc-words ea-cells))
+          (when (and (< pc-words #x100)
+                     (< ea-cells #x4000))
+            (logior (ash nregs 22)
+                    (ash pc-words 14)
+                    ea-cells)))))))
 
 (defun arm642-make-stack (size &optional (subtype target::subtag-s16-vector))
   (make-uarray-1 subtype size t 0 nil nil nil nil t nil))
