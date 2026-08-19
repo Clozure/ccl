@@ -5267,6 +5267,18 @@
       (with-ppc-p2-declarations p2decls
         (setq *ppc2-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
+        ;; A float-typed lexical must never win one of *ppc2-nvrs*: those
+        ;; are general purpose registers, so the value would be boxed on
+        ;; every setq.  Donor: x862.lisp:7297-7305.
+        (unless no-regs
+          (dolist (v (afunc-all-vars afunc))
+            (let* ((type (acode-var-type v *ppc2-trust-declarations*)))
+              (when (or (subtypep type 'single-float)
+                        (subtypep type 'double-float)
+                        (subtypep type '(complex single-float))
+                        (subtypep type '(complex double-float)))
+                (nx-set-var-bits v (logior (ash 1 $vbitnoreg)
+                                           (nx-var-bits v)))))))
         (multiple-value-setq (pregs reglocatives) 
           (nx2-afunc-allocate-global-registers afunc (unless no-regs *ppc2-nvrs*)))
         (@ (backend-get-next-label)) ; generic self-reference label, should be label #1
