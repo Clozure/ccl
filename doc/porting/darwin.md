@@ -239,3 +239,43 @@ not):
 
 Nil = static + 4 KiB + `fulltag_nil` (`#x20000100b`).  Longer term this
 should move to rnil-relative addressing without fixed static VA.
+
+## Enhanced Security / MIE readiness (macOS 26)
+
+Memory Integrity Enforcement (EMTE tagging, kernel + ~70 system
+processes) is always-on **hardware** on A19/M5+ and opt-in per app via
+`com.apple.security.hardened-process.*` entitlements; there is no user
+toggle.  Measured on macOS 26.6.2 / M4 by re-signing `darm64cl` with
+those entitlements (`tools/darwin-fixed-mmap-probe.c` bisects VA
+policy per entitlement):
+
+| Entitlement | Effect on this port |
+|---|---|
+| `hardened-process` + `enhanced-security-version` 2 | boots; no VA change |
+| `+ hardened-heap` (guard objects, xzone) | boots; GC stress clean |
+| `+ dyld-ro` | **breaks**: `MAP_FIXED` RW at `#x200000000` → EPERM; image load fails at `AREA_STATIC` |
+| `+ platform-restrictions` 2 | **killed at exec** (ad-hoc signature; Mach IPC hardening unprobed) |
+
+Consequences:
+
+* The fixed `STATIC_BASE_ADDRESS` is the single point of failure —
+  dyld's read-only state region owns that VA in hardened processes.
+  `#x400000000` still maps, but address whack-a-mole is fragile
+  (`#x1000000000` is denied even unhardened).  The durable fix is
+  relocatable statics: bias `AREA_STATIC` references like the dynamic
+  area's `image_base` bias (nil already derives from the mapped
+  section's actual `a->low` in `load_openmcl_image`).
+* EMTE tag checks apply to secure-allocator (`malloc`) memory, not raw
+  anonymous `mmap`; the lisp heap is untagged either way.  FFI keeps
+  full 64-bit pointers (tag byte intact).  Audit deliberate
+  out-of-bounds reads in FFI/string paths before enabling
+  `checked-allocations` on M5 hardware (`…soft-mode` gives simulated
+  crashes for auditing).
+* Mach exception ports may conflict with platform-restrictions Mach
+  IPC hardening; the Unix-signal fallback path
+  (`DARWIN_USE_PSEUDO_SIGRETURN`) is the escape hatch to validate on
+  MIE hardware.
+* `load_image_section` / `CommitMemory` / `MapFile` failures now name
+  the syscall, VA, length, and errno — a bare
+  "Couldn't load lisp heap image: Invalid argument" on a newer
+  machine is this policy family until proven otherwise.
