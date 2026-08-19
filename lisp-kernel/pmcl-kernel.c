@@ -588,8 +588,54 @@ create_reserved_area(natural totalsize)
   base = (natural) start;
   image_base = base;
   lastbyte = (BytePtr) (start+totalsize);
+#if defined(DARWIN) && defined(ARM64)
+  /* Hardened VM policy (dyld-ro, MIE) can reject MAP_FIXED at the
+     canonical static base: dyld's read-only state region starts one
+     page above it.  Probe the canonical base; on failure let the OS
+     choose and relocate static-space references at image load
+     (static_space_bias in image.c). */
+  {
+    natural static_rsv = align_to_power_of_2(STATIC_RESERVE, log2_page_size);
+    BytePtr sbase;
+
+    if (getenv("CCL_FORCE_STATIC_RELOC")) {
+      /* Testing: exercise the relocated-statics path without a
+         hardened-VM process. */
+      sbase = MAP_FAILED;
+      errno = EPERM;
+    } else {
+      sbase = (BytePtr)mmap((void *)STATIC_BASE_ADDRESS,
+                            static_rsv,
+                            MEMPROTECT_RW,
+                            MAP_PRIVATE|MAP_ANON|MAP_FIXED,
+                            -1,
+                            0);
+    }
+    if (sbase == MAP_FAILED) {
+      int err = errno;
+
+      sbase = (BytePtr)mmap(NULL,
+                            static_rsv,
+                            MEMPROTECT_RW,
+                            MAP_PRIVATE|MAP_ANON,
+                            -1,
+                            0);
+      if (sbase == MAP_FAILED) {
+        perror("reserve static space");
+        exit(1);
+      }
+      fprintf(dbgout,
+              "note: static space at %p (canonical 0x%llx unavailable: %s)\n",
+              sbase, (unsigned long long)STATIC_BASE_ADDRESS,
+              strerror(err));
+    }
+    static_space_start = static_space_active = sbase;
+    static_space_limit = sbase + STATIC_RESERVE;
+  }
+#else
   static_space_start = static_space_active = (BytePtr)STATIC_BASE_ADDRESS;
   static_space_limit = static_space_start + STATIC_RESERVE;
+#endif
   pure_space_start = pure_space_active = start;
   pure_space_limit = start + PURESPACE_SIZE;
   start += PURESPACE_RESERVE;

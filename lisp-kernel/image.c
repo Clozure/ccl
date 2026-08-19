@@ -49,9 +49,57 @@
 #define RELOCATABLE_FULLTAG_MASK \
   ((1<<fulltag_cons)|(1<<fulltag_misc)|(1<<fulltag_symbol)|(1<<fulltag_function))
 #else
+#ifdef ARM64
+/* arm64 tags symbols separately (fulltag_symbol 0b0111); without it in
+   the mask, symbol references would never relocate. */
+#define RELOCATABLE_FULLTAG_MASK \
+  ((1<<fulltag_cons)|(1<<fulltag_nil)|(1<<fulltag_misc)|(1<<fulltag_symbol))
+#else
 #define RELOCATABLE_FULLTAG_MASK \
   ((1<<fulltag_cons)|(1<<fulltag_nil)|(1<<fulltag_misc))
 #endif
+#endif
+#endif
+
+/* Relocatable static space (Darwin/arm64 W^X / hardened-VM fallback):
+   when the canonical STATIC_BASE_ADDRESS is unavailable, the static
+   (nilreg) section maps wherever the OS allowed
+   (pmcl-kernel.c create_reserved_area) and every reference into the
+   *saved* static range must be rebased by static_space_bias.  The
+   saved base comes from the AREA_STATIC section header's static_dnodes
+   slot (stashed at save time); images from before that stash were
+   always saved at STATIC_BASE_ADDRESS. */
+signed_natural static_space_bias = 0;
+static LispObj saved_static_low = 0, saved_static_high = 0;
+
+#define MAYBE_REBASE_STATIC(w) \
+  (static_space_bias && ((w) >= saved_static_low) && ((w) < saved_static_high))
+
+#ifdef ARM64
+/* The static (nilreg) area is not a well-formed object stream: the
+   globals page below nil is raw LispObj slots and nil itself is a
+   layout pun, so the object walker can misparse a slot as an ivector
+   header and skip real pointers.  Every word there is node-sized, so
+   rebase static references word-wise. */
+static void
+relocate_static_area_words(area *a, LispObj bias)
+{
+  LispObj *p = (LispObj *)(a->low), *limit = (LispObj *)(a->active), w;
+  LispObj low = (LispObj)image_base - bias,
+    high = ptr_to_lispobj(active_dynamic_area->active) - bias;
+
+  while (p < limit) {
+    w = *p;
+    if ((1<<fulltag_of(w)) & RELOCATABLE_FULLTAG_MASK) {
+      if (bias && (w >= low) && (w < high)) {
+        *p = w + bias;
+      } else if (MAYBE_REBASE_STATIC(w)) {
+        *p = w + static_space_bias;
+      }
+    }
+    p++;
+  }
+}
 #endif
 
 void
@@ -116,16 +164,22 @@ relocate_area_contents(area *a, LispObj bias)
         fixnum_after_header_is_link = true;
       }
 
-      if ((w0 >= low) && (w0 < high) &&
-	  ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK)) {
-	*start = (w0+bias);
+      if ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK) {
+        if (bias && (w0 >= low) && (w0 < high)) {
+          *start = (w0+bias);
+        } else if (MAYBE_REBASE_STATIC(w0)) {
+          *start = (w0+static_space_bias);
+        }
       }
       w1 = *++start;
       fulltag = fulltag_of(w1);
-      if ((w1 >= low) && (w1 < high) &&
+      if (bias && (w1 >= low) && (w1 < high) &&
 	  (fixnum_after_header_is_link ||
            ((1<<fulltag) & RELOCATABLE_FULLTAG_MASK))) {
 	*start = (w1+bias);
+      } else if (((1<<fulltag) & RELOCATABLE_FULLTAG_MASK) &&
+                 MAYBE_REBASE_STATIC(w1)) {
+        *start = (w1+static_space_bias);
       }
       fixnum_after_header_is_link = false;
       ++start;
@@ -415,6 +469,14 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
        * Note that low + 4K + fulltag_nil = #x1300b
        */
       if (sect->code == AREA_STATIC) {
+        natural saved_base = sect->static_dnodes ? (natural)sect->static_dnodes
+                                                 : (natural)STATIC_BASE_ADDRESS;
+
+        static_space_bias = (signed_natural)((natural)(a->low) - saved_base);
+        if (static_space_bias) {
+          saved_static_low = (LispObj)saved_base;
+          saved_static_high = (LispObj)(saved_base + (a->active - a->low));
+        }
         image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
         set_nil(image_nil);
       }
@@ -444,6 +506,14 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
 #endif
 	set_nil(image_nil);
+#ifdef ARM64
+        /* nilreg is raw slots (globals page + nil pun + nrs symbols),
+           not an object stream; relocate word-wise.  This also covers
+           WEAKVLL and the other globals. */
+        if (bias || static_space_bias) {
+          relocate_static_area_words(a, bias);
+        }
+#else
 	if (bias) {
           LispObj weakvll = lisp_global(WEAKVLL);
 
@@ -453,13 +523,15 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
           }
 	  relocate_area_contents(a, bias);
 	}
+#endif
 	make_dynamic_heap_executable(a->low, a->active);
         add_area_holding_area_lock(a);
         break;
         
       case AREA_READONLY:
-        if (bias && 
-            (managed_static_area->active != managed_static_area->low)) {
+        if ((bias &&
+             (managed_static_area->active != managed_static_area->low))
+            || static_space_bias) {
           UnProtectMemory(a->low, a->active-a->low);
           relocate_area_contents(a, bias);
           ProtectMemory(a->low, a->active-a->low);
@@ -483,7 +555,7 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
       a = sect->area;
       switch(sect->code) {
       case AREA_MANAGED_STATIC:
-        if (bias) {
+        if (bias || static_space_bias) {
           relocate_area_contents(a, bias);
         }
         add_area_holding_area_lock(a);
@@ -495,13 +567,17 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	    lisp_global(STATIC_CONSES) += bias;
 	    relocate_area_contents(a, bias);
 	  }
-	}
+	} else if (static_space_bias && (a->active > a->low)) {
+          /* cars/cdrs of static conses can reference nil / static
+             symbols even when STATIC_CONSES itself is empty. */
+          relocate_area_contents(a, 0);
+        }
         /* not yet
  lower_heap_start(static_cons_area->low,tenured_area);
         */
         break;
       case AREA_DYNAMIC:
-        if (bias) {
+        if (bias || static_space_bias) {
           relocate_area_contents(a, bias);
         }
 	resize_dynamic_heap(a->active, lisp_heap_gc_threshold);
@@ -519,6 +595,36 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	break;
       }
     }
+#ifdef ARM64
+    /* Audit: report surviving references into the saved static range
+       after all relocation passes (missed containers). */
+    if (static_space_bias && getenv("CCL_STATIC_RELOC_AUDIT")) {
+      for (i = 0, sect = sections; i < nsections; i++, sect++) {
+        LispObj *p, *limit, w;
+        natural nleft = 0, shown = 0;
+
+        a = sect->area;
+        for (p = (LispObj *)(a->low), limit = (LispObj *)(a->active);
+             p < limit; p++) {
+          w = *p;
+          if (((1<<fulltag_of(w)) & RELOCATABLE_FULLTAG_MASK) &&
+              (w >= saved_static_low) && (w < saved_static_high)) {
+            nleft++;
+            if (shown < 5) {
+              fprintf(dbgout, ";; audit sect %d: leftover 0x" LISP
+                      " at 0x" LISP "\n",
+                      (int)sect->code, w, (natural)p);
+              shown++;
+            }
+          }
+        }
+        fprintf(dbgout, ";; audit sect %d (0x" LISP "..0x" LISP
+                "): " DECIMAL " leftover\n",
+                (int)sect->code, (natural)a->low, (natural)a->active,
+                nleft);
+      }
+    }
+#endif
   }
   return image_nil;
 }
@@ -684,6 +790,13 @@ save_application_internal(unsigned fd, Boolean egc_was_enabled)
     sections[i].memory_size  = a->active - a->low;
     if (a == active_dynamic_area) {
       sections[i].static_dnodes = tenured_area->static_dnodes;
+#ifdef ARM64
+    } else if (a == nilreg_area) {
+      /* Record where static space actually lived so the loader can
+         compute static_space_bias; loaders that don't relocate statics
+         ignore this slot for AREA_STATIC. */
+      sections[i].static_dnodes = (natural)(a->low);
+#endif
     } else {
       sections[i].static_dnodes = 0;
     }

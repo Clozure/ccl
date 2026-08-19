@@ -5,9 +5,11 @@
  *
  * Low-tag scheme matches linuxarm64 / compiler/ARM64.  Unlike
  * darwinx8664 we cannot reserve low memory with -pagezero_size (see
- * darwin.md).  STATIC_BASE_ADDRESS below is a provisional FIXED high VA
- * for bring-up; code uses rnil for nil-relative *access*, but statics
- * are not yet ASLR-relocatable (see doc/porting/darwin.md).
+ * darwin.md).  STATIC_BASE_ADDRESS below is the canonical static base;
+ * when the OS rejects it (hardened VM policy: dyld-ro owns that range)
+ * the loader maps statics wherever allowed and rebases references
+ * (static_space_bias, image.c).  All access is rnil-relative; nil has
+ * no fixed VA.  Test knob: CCL_FORCE_STATIC_RELOC=1.
  */
 
 #define WORD_SIZE 64
@@ -49,6 +51,8 @@ typedef ucontext_t ExceptionInformation;
  * Must match xdump/xarm64fasload.lisp *darwinarm64-xload-backend*
  * :static-space-address and the arch nil-value patched in
  * tools/xdarwinarm64.lisp (nil = STATIC_BASE + 4K + fulltag_nil).
+ * This is the *canonical* (image/save) base only: the loader relocates
+ * statics when the OS refuses this VA (see create_reserved_area).
  */
 #undef STATIC_BASE_ADDRESS
 #define STATIC_BASE_ADDRESS 0x0000000200000000ULL

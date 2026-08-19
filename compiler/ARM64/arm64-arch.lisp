@@ -1255,22 +1255,31 @@
            (= ,fulltag arm64::fulltag-symbol)
            (= ,typecode arm64::subtag-instance)))))
 
-;;; xxx --- these references will need to be relative to rnil
+;;; Kernel globals must be accessed rnil-relative: statics have no
+;;; fixed VA on Darwin (hardened VM policy can reject the canonical
+;;; base, relocating the static section at image load), so baking
+;;; (target-nil-value) into compiled code reads garbage there.  The
+;;; *-from-offset primitives (level-0/ARM64/arm64-def.lisp) add rnil at
+;;; run time.
 (defarm64archmacro ccl::%get-kernel-global (name)
-  `(ccl::%fixnum-ref 0 (+ ,(ccl::target-nil-value)
-                        ,(%kernel-global
-                         (if (ccl::quoted-form-p name)
-                           (cadr name)
-                           name)))))
-;;; xxx
+  `(ccl::%get-kernel-global-from-offset
+    ,(%kernel-global
+      (if (ccl::quoted-form-p name)
+        (cadr name)
+        name))))
+
+;;; (setf (%get-kernel-global ...)) expands through the -from-offset
+;;; accessor; store via the rnil-relative setter.
+(defsetf ccl::%get-kernel-global-from-offset
+    ccl::%set-kernel-global-from-offset)
+
 (defarm64archmacro ccl::%get-kernel-global-ptr (name dest)
-  `(ccl::%setf-macptr
-    ,dest
-    (ccl::%int-to-ptr (ccl::%fixnum-ref-natural 0 (+ ,(ccl::target-nil-value)
-                                 ,(%kernel-global
-                                   (if (ccl::quoted-form-p name)
-                                     (cadr name)
-                                     name)))))))
+  `(ccl::%get-kernel-global-ptr-from-offset
+    ,(%kernel-global
+      (if (ccl::quoted-form-p name)
+        (cadr name)
+        name))
+    ,dest))
 
 (defarm64archmacro ccl::%target-kernel-global (name)
   `(arm64::%kernel-global ,name))

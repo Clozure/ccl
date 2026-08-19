@@ -451,6 +451,11 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
                     (unsigned long)((natural)ts->__pc - (natural)di.dli_saddr),
                     di.dli_fname);
           }
+          if (dladdr((void *)(natural)ts->__lr, &di) && di.dli_sname) {
+            fprintf(dbgout, "  lr_sym=%s+%lu\n",
+                    di.dli_sname,
+                    (unsigned long)((natural)ts->__lr - (natural)di.dli_saddr));
+          }
           fprintf(dbgout,
                   "\n[darwinarm64] EXC_BAD_ACCESS #%d code0=%lld "
                   "pc=0x%llx lr=0x%llx sp=0x%llx far=0x%llx "
@@ -462,6 +467,27 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
                   (unsigned long long)(code_count > 1 ? code[1] : 0),
                   (unsigned long long)(natural)tcr,
                   (int)tcr->valence);
+          {
+            /* Faulting instruction (pc may be unreadable) + GPRs, to
+               identify the base register of a wild access. */
+            natural pcval = (natural)ts->__pc;
+            int j;
+
+            if (readonly_area == NULL ||
+                pcval < (natural)readonly_area->low ||
+                pcval >= (natural)readonly_area->active) {
+              fprintf(dbgout, "  pc outside readonly area\n");
+            } else {
+              fprintf(dbgout, "  insn=0x%08x\n", *(unsigned *)pcval);
+            }
+            for (j = 0; j < 29; j++) {
+              fprintf(dbgout, "  x%-2d=0x%016llx%s", j,
+                      (unsigned long long)ts->__x[j],
+                      ((j % 3) == 2) ? "\n" : "");
+            }
+            fprintf(dbgout, "\n  fp=0x%llx\n",
+                    (unsigned long long)ts->__fp);
+          }
           fflush(dbgout);
         }
       }

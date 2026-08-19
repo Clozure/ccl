@@ -13,6 +13,7 @@ echo ";; darwinarm64 CI smokes (timeout=${TIMEOUT}s)"
 ./tools/run-darwin-purify-smoke.sh
 "$SMOKE" "$TIMEOUT" tools/darwin-cocoa-smoke.lisp
 "$SMOKE" "$TIMEOUT" tools/darwin-nsoffstate-smoke.lisp
+CCL_FORCE_STATIC_RELOC=1 "$SMOKE" "$TIMEOUT" tools/darwin-static-reloc-smoke.lisp
 "$SMOKE" "$TIMEOUT" tools/darwin-interp-ff-call-smoke.lisp
 "$SMOKE" "$TIMEOUT" tools/darwin-clean-build-smoke.lisp
 "$SMOKE" "${CCL_COCOA_REQUIRE_TIMEOUT:-300}" tools/darwin-require-cocoa-smoke.lisp

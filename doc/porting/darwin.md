@@ -258,13 +258,22 @@ policy per entitlement):
 
 Consequences:
 
-* The fixed `STATIC_BASE_ADDRESS` is the single point of failure —
-  dyld's read-only state region owns that VA in hardened processes.
-  `#x400000000` still maps, but address whack-a-mole is fragile
-  (`#x1000000000` is denied even unhardened).  The durable fix is
-  relocatable statics: bias `AREA_STATIC` references like the dynamic
-  area's `image_base` bias (nil already derives from the mapped
-  section's actual `a->low` in `load_openmcl_image`).
+* ~~The fixed `STATIC_BASE_ADDRESS` is the single point of failure~~
+  **Fixed: statics are relocatable.**  The loader probes the canonical
+  base; when the OS refuses (dyld-ro owns `#x200000000`) it maps the
+  static section wherever allowed and rebases references
+  (`static_space_bias`, saved base stashed in the `AREA_STATIC` section
+  header's `static_dnodes` slot; older images imply the canonical
+  base).  The nilreg area is rebased word-wise (raw globals page + nil
+  pun would misparse the object walker).  Kernel-global access compiles
+  rnil-relative (`%get-kernel-global*` archmacros → `*-from-offset`
+  primitives); `(target-nil-value)` must never be baked into arm64
+  code.  Test: `CCL_FORCE_STATIC_RELOC=1`
+  (`tools/darwin-static-reloc-smoke.lisp`, in the CI gate); audit knob
+  `CCL_STATIC_RELOC_AUDIT=1` reports leftover unrebased references.
+  Verified: full smoke gate under forced relocation, hardened
+  (dyld-ro and full Enhanced Security set) boots, save/reload
+  round-trips both directions.
 * EMTE tag checks apply to secure-allocator (`malloc`) memory, not raw
   anonymous `mmap`; the lisp heap is untagged either way.  FFI keeps
   full 64-bit pointers (tag byte intact).  Audit deliberate
