@@ -279,3 +279,11 @@ Consequences:
   the syscall, VA, length, and errno — a bare
   "Couldn't load lisp heap image: Invalid argument" on a newer
   machine is this policy family until proven otherwise.
+* One-shot sanitized report (hardware, VM policy at the CCL bases,
+  kernel entitlements, loader diagnostics — no usernames/paths, safe
+  to paste into a GitHub thread):
+
+  ```sh
+  ./tools/darwin-image-load-diag.sh          # checks darm64cl.image
+  ./tools/darwin-image-load-diag.sh arm64-boot.image
+  ```
