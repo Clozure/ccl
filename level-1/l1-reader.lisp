@@ -2576,8 +2576,8 @@
                (list vals))
       (if (null vals)
         (values nil nil)
-        (destructuring-bind (form &optional nested-source-notes)
-                            vals
+        (let* ((form (car vals))
+               (nested-source-notes (cadr vals)))
           ;; Can't really trust random reader macros to return source notes...
           (unless (and (consp nested-source-notes)
                        (source-note-p (car nested-source-notes)))
