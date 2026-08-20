@@ -1888,6 +1888,9 @@
     (let* ((index-known-fixnum (acode-fixnum-form-p index))
            (unscaled-idx nil)
            (src nil))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (if (or safe (not index-known-fixnum))
         (multiple-value-setq (src unscaled-idx)
           (arm642-two-untargeted-reg-forms seg vector
@@ -2656,6 +2659,9 @@
            (constval (arm642-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm642-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm64::arg_x))
              (unscaled-idx ($ arm64::arg_y))
              (result-reg ($ arm64::arg_z)))
@@ -2698,6 +2704,9 @@
            (constval (arm642-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm642-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm64::arg_x))
              (unscaled-idx ($ arm64::arg_y))
              (result-reg ($ arm64::arg_z)))
