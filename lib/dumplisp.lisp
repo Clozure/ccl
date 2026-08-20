@@ -73,6 +73,7 @@
                          impurify
 			 (mode #o644)
 			 prepend-kernel
+			 (process-runtime-options t)
 			 #+windows-target (application-type :console)
                          native)
   (declare (ignore toplevel-function error-handler application-class
@@ -94,6 +95,9 @@
       (mapc #'unwatch watched)))
   (when (and native prepend-kernel)
     (error "~S and ~S can't both be specified (yet)." :native :prepend-kernel))
+  (when (and native (not process-runtime-options))
+    (error "~S can't be false when ~S is true."
+           :process-runtime-options :native))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
@@ -130,6 +134,7 @@
                                       (init-file nil init-file-p)
                                       (clear-clos-caches t)
                                       prepend-kernel
+				      (process-runtime-options t)
                                       #+windows-target application-type
                                       native)
   (declare (ignore mode prepend-kernel #+windows-target application-type native))
@@ -154,6 +159,13 @@
                 *stdout*
                  #'false
                :initial-function (lambda ()
+                                   (setq *unprocessed-command-line-arguments*
+                                         (if process-runtime-options
+                                           (cdr (member
+                                                 "--"
+                                                 (cdr *command-line-argument-list*)
+                                                 :test #'string=))
+                                           (cdr *command-line-argument-list*)))
                                    (catch :toplevel
                                      (funcall user-toplevel-function)
                                      (quit)))
@@ -167,7 +179,10 @@
   (if clear-clos-caches (clear-clos-caches))
   (save-image #'(lambda () (%save-application fd
                                               (logior (if impurify 2 0)
-                                                      (if purify 1 0))))
+                                                      (if purify 1 0)
+                                                      (if process-runtime-options
+                                                        0
+                                                        arch::gc-trap-function-inhibit-runtime-options))))
               toplevel-function))
 
 (defun save-image (save-function toplevel-function)
