@@ -2168,7 +2168,10 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
      Conditional-store "did it store?" test: PPC reads CR0.EQ
      (xpCCR & 0x20000000); the drafts' ll/sc loops leave the stxr status
      in w17 (= temp5 after the 01d73c3 renumber; the uniform status register):
-     status != 0 means not-stored/will-retry. */
+     status != 0 means not-stored/will-retry.
+     ⛔ DISPATCH ORDER IS THIS FILE'S ADDRESS ORDER, NOT PPC's: rplaca/
+     rplacd sit ABOVE the whole spentry-B half here, so they must be
+     tested FIRST or they fall into the conditional leg (lost stores). */
   if (((program_counter >= &egc_rplaca) &&
        (program_counter < &egc_rplacd_end)) ||
       ((program_counter >= &egc_gvset) &&
@@ -2177,7 +2180,19 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_check_memo = true, need_memoize_root = false;
 
-    if (program_counter >= &egc_set_hash_key_conditional) {
+    if (program_counter >= &egc_rplacd) {
+      if (program_counter < &egc_rplacd_did_store) {
+        return;
+      }
+      ea = (LispObj *)untag(xpGPR(xp, arg_y));       /* cdr @ untag+0 */
+      val = xpGPR(xp, arg_z);
+    } else if (program_counter >= &egc_rplaca) {
+      if (program_counter < &egc_rplaca_did_store) {
+        return;
+      }
+      ea = ((LispObj *)untag(xpGPR(xp, arg_y))) + 1; /* car @ untag+8 */
+      val = xpGPR(xp, arg_z);
+    } else if (program_counter >= &egc_set_hash_key_conditional) {
       if ((program_counter < &egc_set_hash_key_conditional_test) ||
           ((program_counter == &egc_set_hash_key_conditional_test) &&
            ((xpGPR(xp, temp5) & 0xffffffff) != 0))) {
@@ -2204,23 +2219,12 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       val = xpGPR(xp, arg_z);
       ea = (LispObj *)(root + xpGPR(xp, arg_y) + misc_data_offset);
       need_memoize_root = true;
-    } else if (program_counter >= &egc_gvset) {
+    } else {                      /* egc_gvset (lowest label; the outer
+                                     window test guarantees membership) */
       if (program_counter < &egc_gvset_did_store) {
         return;
       }
       ea = (LispObj *)(xpGPR(xp, arg_x) + xpGPR(xp, arg_y) + misc_data_offset);
-      val = xpGPR(xp, arg_z);
-    } else if (program_counter >= &egc_rplacd) {
-      if (program_counter < &egc_rplacd_did_store) {
-        return;
-      }
-      ea = (LispObj *)untag(xpGPR(xp, arg_y));       /* cdr @ untag+0 */
-      val = xpGPR(xp, arg_z);
-    } else {                      /* egc_rplaca */
-      if (program_counter < &egc_rplaca_did_store) {
-        return;
-      }
-      ea = ((LispObj *)untag(xpGPR(xp, arg_y))) + 1; /* car @ untag+8 */
       val = xpGPR(xp, arg_z);
     }
     if (need_check_memo) {        /* ppc:1964-1976 verbatim */
