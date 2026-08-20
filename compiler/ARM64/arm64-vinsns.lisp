@@ -33,7 +33,13 @@
   ;; situation and ensure that the stack slots in question contain
   ;; gc-safe content.
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; cstack overflow probe (note marker-reg is free here)
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (uuo-error-cstack-overflow)
+  :ok)
   
 (define-arm64-vinsn (vpush-register :push :node :vsp) (()
                                                        ((reg :lisp)))
@@ -4012,7 +4018,13 @@
   ;; (lib/arm64env.lisp:33), so copy-lexpr-argument's temp is WIRED to
   ;; temp0 (w1).
   (stp xzr temp4 (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; cstack overflow probe
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (uuo-error-cstack-overflow)
+  :ok)
 
 ;;; get-complex-double-float -- x8664's 128-bit load; his template
 ;;; table has no Q-form load, so composed exactly like w3a's
@@ -4228,7 +4240,13 @@
   (mov marker-reg (:$ arm64::lisp-frame-marker))
   (stp marker-reg vsp-reg (:@! sp (:$ -32)))
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; cstack overflow probe
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (uuo-error-cstack-overflow)
+  :ok)
 
 ;;; call-label -- PPC64 ppc64-vinsns.lisp:2184 verbatim (bl label).
 (define-arm64-vinsn (call-label :call) (()
@@ -4296,24 +4314,10 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; save-lisp-context-offset -- PPC64 ppc64-vinsns.lisp:3482 (frame push
-;;; with saved-vsp = vsp + nbytes-vpushed, for functions that vpushed
-;;; register args before building the frame).  Body mirrors HIS
-;;; save-lisp-context-no-stack-args canon (arm64-vinsns.lisp:25-30)
-;;; INSTRUCTION-FOR-INSTRUCTION, with the vsp+nbytes computed into an
-;;; imm temp for the savevsp slot.  Deviations from PPC64 follow his
-;;; canon: no cs-limit stack probe (his canon has none yet).
-;;; (mov fn nfn) per PPC64:3490 -- the "his lambda path does it
-;;; separately" claim (msg-18) was refuted for the canon variant
-;;; (patch 0010, e4440cb) and holds nowhere for -offset either:
-;;; arm642-argregs-entry emits this vinsn bare for >3-arg functions,
-;;; so without it fn stays the CALLER's fn (or 0 via _SPmvpass) and
-;;; the first fn-relative constant ref reads the wrong function --
-;;; 16m5r frontier fault (fn=0 at lr=ret1val_addr).
-;;; Sign RESOLVED (msg-26 + his canon now -32): stack-down pre-index.
-;;; The old +32 mirror survived here past the canon sweep and cost the
-;;; 16m5i toplevel-vsp wall (unwind-protect cleanup frame built UP,
-;;; clobbering caller frames) -- 2026-07-17 boot-validated.
+;;; Build a frame when a function is called with stack arguments
+;;; (i.e., it has more than $numarm64argregs args).  Record the vsp
+;;; before the args were pushed in the savevsp slot of the frame so
+;;; that unwinding reclaims them.
 (define-arm64-vinsn save-lisp-context-offset (()
                                               ((nbytes-vpushed :u16const))
                                               ((marker-reg :imm)
@@ -4329,7 +4333,13 @@
   (mov marker-reg (:$ arm64::lisp-frame-marker))
   (stp marker-reg vsp-reg (:@! sp (:$ -32)))
   (stp fn lr (:@ sp (:$ 16)))
-  (mov fn nfn))
+  (mov fn nfn)
+  ;; cstack overflow probe
+  (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
+  (cmp sp marker-reg)
+  (b.hs :ok)
+  (uuo-error-cstack-overflow)
+  :ok)
 
 ;;; ============ fitvals ============
 ;;; Gate-37 multiple-value-bind cluster.  PPC64 ppc64-vinsns.lisp:4049

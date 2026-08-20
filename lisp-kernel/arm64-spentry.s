@@ -4439,28 +4439,6 @@ spentry add_values
         ret                                         /* ppc:5026 blr               */
 endsp add_values
 
-/* ported from ppc-spentry.s:5330-5334 (PPC64 branch) */
-/* Save context and vsp */
-spentry savecontextvsp
-        /* ppc-spentry.s:5330-5334.  Save fn, return-pc, vsp into a control-stack
-           lisp_frame, install nfn as the current fn, trap on stack overflow.
-           No generic build_lisp_frame macro here; inline it (mirrors
-           build_catch_lisp_frame but stores lr as savelr).  loc_pc == lr == x30.
-           temp0 is a free scratch (not a live input; mkcatch uses it likewise). */
-        ldr imm0, [rcontext, #tcr.cs_limit]     /* ppc:5331 cs_limit            */
-        sub sp, sp, #lisp_frame.size            /* ppc:5332 build_lisp_frame:   */
-        mov temp0, #lisp_frame_marker           /*   MARKER frame               */
-        str temp0, [sp, #lisp_frame.marker]
-        str vsp, [sp, #lisp_frame.savevsp]
-        str fn, [sp, #lisp_frame.savefn]
-        str lr, [sp, #lisp_frame.savelr]        /* loc_pc == return pc          */
-        mov fn, nfn                             /* ppc:5333 mr fn,nfn           */
-        cmp sp, imm0                            /* ppc:5334 trllt(sp,imm0)      */
-        b.hs 1f                                 /* sp>=cs_limit: no overflow    */
-        uuo_interr error_stack_overflow, sp /* ppc:5334 trllt (PROPOSED ext) */
-1:      ret                                     /* ppc:5335 blr                 */
-endsp savecontextvsp
-
 /* ported from ppc-spentry.s:7200-7230 (PPC64 branch) */
 /* Make an unwind marker (for %unwind-protect) */
 spentry nmkunwind
@@ -4487,27 +4465,6 @@ spentry nmkunwind
         mov arg_z, arg_y                /* ppc:7214 mr arg_z,arg_y (old level)  */
         b _SPbind_interrupt_level       /* ppc:7215 b _SPbind_interrupt_level   */
 endsp nmkunwind
-
-/* ported from ppc-spentry.s:5337-5343 (PPC64 branch) */
-/* Save context with vsp+imm0 as the stored vsp (callee-save setup variant). */
-spentry savecontext0
-        /* ppc-spentry.s:5337-5343.  Like savecontextvsp, but the stored vsp is
-           (vsp + imm0), and cs_limit is loaded AFTER building the frame (the PPC
-           ordering differs from savecontextvsp).  imm0 is an unboxed byte delta. */
-        add imm0, vsp, imm0             /* ppc:5338 add imm0,vsp,imm0           */
-        sub sp, sp, #lisp_frame.size    /* ppc:5339 build_lisp_frame: MARKER    */
-        mov temp0, #lisp_frame_marker
-        str temp0, [sp, #lisp_frame.marker]
-        str imm0, [sp, #lisp_frame.savevsp] /* stored vsp = vsp+delta           */
-        str fn, [sp, #lisp_frame.savefn]
-        str lr, [sp, #lisp_frame.savelr]
-        ldr imm0, [rcontext, #tcr.cs_limit] /* ppc:5340 ldr(imm0,tcr.cs_limit)  */
-        mov fn, nfn                     /* ppc:5341 mr fn,nfn                   */
-        cmp sp, imm0                    /* ppc:5342 trllt(sp,imm0)              */
-        b.hs 1f                         /* sp>=cs_limit: no overflow            */
-        uuo_interr error_stack_overflow, sp /* ppc:5342 trllt (PROPOSED ext) */
-1:      ret                             /* ppc:5343 blr                         */
-endsp savecontext0
 
 /* ported from ppc-spentry.s:5348-5353 (PPC64 branch) */
 /* Like restorefullcontext, only the saved return address winds up in
@@ -4634,8 +4591,6 @@ endsp stkvcell0
  *   - error_too_many_values uuo_interr trap convention (values, ppc:1235)
  *   - nrs.kallowotherkeys rnil-relative ref (keyword_bind ppc:1507,
  *     destructuring_bind_inner ppc:3753)
- *   - stack-overflow (trllt) trap convention (savecontextvsp ppc:5333;
- *     savecontext0 ppc:5342)
  *   - deferred-interrupt trap trgti (restoreintlevel ppc:6751)
  * PROPOSED (ratify): mask_initopt/keyp/aok/restp adopt the ARM32 bit layout
  * (arm-constants.s:561-567), NOT the PPC big-endian bit indices; must match
@@ -7152,7 +7107,7 @@ spentry lexpr_entry
         ldr imm0, [rcontext, #tcr.cs_limit]
         cmp sp, imm0
         b.hi 2f
-        uuo_interr error_stack_overflow, sp /* ppc:5371 trllt (PROPOSED ext) */
+        uuo_error_cstack_overflow
 2:      mov fn, #0                              /* ppc:5372                  */
         ret                                     /* ppc:5373 blr (to prologue)*/
         /* Single-value case: return to something that pops the variable-
@@ -7162,7 +7117,7 @@ spentry lexpr_entry
         ldr imm0, [rcontext, #tcr.cs_limit]     /* ppc:5379-5380             */
         cmp sp, imm0
         b.hi 3f
-        uuo_interr error_stack_overflow, sp /* ppc:5380 trllt (PROPOSED ext) */
+        uuo_error_cstack_overflow
 3:      mov fn, #0                              /* ppc:5381                  */
         ret                                     /* ppc:5382 blr              */
 endsp lexpr_entry
