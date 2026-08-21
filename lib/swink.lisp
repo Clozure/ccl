@@ -171,7 +171,8 @@ corresponding values in the CDR of VALUE."
    (buffer :initform (make-string 1024) :accessor connection-buffer)
    (lock :initform (make-lock) :reader connection-lock)
    (threads :initform nil :accessor %connection-threads)
-   (object-counter :initform most-negative-fixnum :accessor connection-object-counter)
+   (object-counter :initform target::target-most-negative-fixnum
+                   :accessor connection-object-counter)
    (objects :initform nil :accessor connection-objects)))
 
 (defmacro with-connection-lock ((conn &rest lock-args) &body body)
@@ -551,7 +552,10 @@ non-swink process PROCESS."
     (loop for thread in  (connection-threads conn)
        do (process-interrupt (thread-process thread) #'exit-repl)))
   (let* ((timeout 0.05)
-         (end (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
+         (units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000)
+         (end (+ (get-internal-real-time)
+                 (* timeout units-per-second))))
     (process-wait "closing connection"
       (lambda ()
         (or (null (%connection-threads conn)) (> (get-internal-real-time) end)))))

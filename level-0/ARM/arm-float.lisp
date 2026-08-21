@@ -129,7 +129,7 @@
 
 
 (defarmlapfunction dfloat-significand-zeros ((dfloat arg_z))
-  (ldr imm1 (:@ dfloat (:$ arm::double-float.value)))
+  (ldr imm1 (:@ dfloat (:$ arm::double-float.val-high)))
   (movs imm1 (:lsl imm1 (:$ 12)))
   (clz imm1 imm1)
   (movne arg_z (:lsl imm1 (:$ arm::fixnumshift)))

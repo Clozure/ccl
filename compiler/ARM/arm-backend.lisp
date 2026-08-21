@@ -226,6 +226,31 @@
                 :target-arch arm::*arm-target-arch*))
 
 
+#+(or netbsdarm-target (not arm-target))
+(defvar *netbsdarm-backend*
+  (make-backend :lookup-opcode #'arm::lookup-arm-instruction
+		:lookup-macro #'false
+		:lap-opcodes arm::*arm-instruction-table*
+                :define-vinsn '%define-arm-vinsn
+                :platform-syscall-mask (logior platform-os-netbsd platform-cpu-arm)
+		:p2-dispatch *arm2-specials*
+		:p2-vinsn-templates *arm-vinsn-templates*
+		:p2-template-hash-name '*arm-vinsn-templates*
+		:p2-compile 'arm2-compile
+		:target-specific-features
+		'(:arm :arm-target :eabi-target :netbsd-target :netbsdarm-target
+                  :32-bit-target :little-endian-target)
+		:target-fasl-pathname (make-pathname :type "nafsl")
+		:target-platform (logior platform-word-size-32
+                                         platform-cpu-arm
+                                         platform-os-netbsd)
+		:target-os :netbsdarm
+		:name :netbsdarm
+		:target-arch-name :arm
+		:target-foreign-type-data nil
+                :target-arch arm::*arm-target-arch*))
+
+
 #+(or darwinarm-target (not arm-target))
 (defvar *darwinarm-backend*
   (make-backend :lookup-opcode #'arm::lookup-arm-instruction
@@ -274,6 +299,10 @@
 
 #+(or linuxarm-target (not arm-target))
 (pushnew *linuxarm-backend* *known-arm-backends* :key #'backend-name)
+
+
+#+(or netbsdarm-target (not arm-target))
+(pushnew *netbsdarm-backend* *known-arm-backends* :key #'backend-name)
 
 
 #+(or darwinarm-target (not arm-target))
@@ -337,6 +366,26 @@
                            (intern "GENERATE-CALLBACK-BINDINGS" "ARM-LINUX")
                            :callback-return-value-function
                            (intern "GENERATE-CALLBACK-RETURN-VALUE" "ARM-LINUX")))
+                (:netbsdarm
+                 (let* ((package-name "ARM-NETBSD"))
+                   (or (find-package package-name)
+                       (make-package package-name :use '("COMMON-LISP")))
+                   (make-ftd :interface-db-directory "ccl:netbsd-arm-headers;"
+		             :interface-package-name package-name
+                             :attributes '(:bits-per-word 32
+                                           :signed-char nil
+                                           :natural-alignment t
+                                           :struct-by-value t)
+                             :ff-call-expand-function
+                             (intern "EXPAND-FF-CALL" package-name)
+		             :ff-call-struct-return-by-implicit-arg-function
+                             (intern "RECORD-TYPE-RETURNS-STRUCTURE-AS-FIRST-ARG"
+                                     package-name)
+                             :callback-bindings-function
+                             (intern "GENERATE-CALLBACK-BINDINGS" package-name)
+                             :callback-return-value-function
+                             (intern "GENERATE-CALLBACK-RETURN-VALUE"
+                                     package-name))))
                 (:androidarm
                  (make-ftd :interface-db-directory "ccl:android-headers;"
 			   :interface-package-name "ARM-ANDROID"
@@ -361,6 +410,7 @@
 #-arm-target
 (progn
   (pushnew *linuxarm-backend* *known-backends* :key #'backend-name)
+  (pushnew *netbsdarm-backend* *known-backends* :key #'backend-name)
   (pushnew *darwinarm-backend* *known-backends* :key #'backend-name)  
   (pushnew *androidarm-backend* *known-backends* :key #'backend-name))
 

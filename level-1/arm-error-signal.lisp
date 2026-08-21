@@ -88,6 +88,14 @@
 ;;; Return a pointer to the saved VFP info a ucontext's mcontext,
 ;;; and the FPSCR values in that info as an unsigned 32-bit integer.
 ;;; Return a null pointer an 0 if this info can't be found.
+#+netbsdarm-target
+(defun xp-vfp-info (xp)
+  (if (logtest #$_UC_ARM_VFP (pref xp :ucontext_t.uc_flags))
+    (values (pref xp :ucontext_t.uc_mcontext.__fpu.__vfpregs.__vfp_fstmx)
+            (pref xp :ucontext_t.uc_mcontext.__fpu.__vfpregs.__vfp_fpscr))
+    (values #-cross-compiling +null-ptr+ #+cross-compiling (%null-ptr) 0)))
+
+#-netbsdarm-target
 (defun xp-vfp-info (xp)
   (let* ((p (pref xp :ucontext_t.uc_regspace)))
     (loop

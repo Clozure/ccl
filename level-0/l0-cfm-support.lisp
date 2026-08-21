@@ -71,7 +71,7 @@
 (defun external-entry-point-p (x)
   (istruct-typep x 'external-entry-point))
 
-;;; On both Linux and FreeBSD, RTLD_NEXT and RTLD_DEFAULT behave
+;;; On Linux, FreeBSD, and NetBSD, RTLD_NEXT and RTLD_DEFAULT behave
 ;;; the same way wrt symbols defined somewhere other than the lisp
 ;;; kernel.  On Solaris, RTLD_DEFAULT will return the address of
 ;;; an imported symbol's procedure linkage table entry if the symbol
@@ -86,7 +86,7 @@
 				  #-(or linux-target darwin-target windows-target)  -2)
       *rtld-use* #+solaris-target *rtld-next* #-solaris-target *rtld-default*)
 
-#+(or linux-target freebsd-target solaris-target)
+#+(or linux-target freebsd-target netbsd-target solaris-target)
 (progn
 
 (defvar *dladdr-entry*)
@@ -161,10 +161,11 @@
     
 (defvar *shared-libraries* nil)
 
-#+(or linux-target freebsd-target solaris-target)
+#+(or linux-target freebsd-target netbsd-target solaris-target)
 (progn
 
-;; (pref ptr :link_map.l_addr) is an integer on Linux and a Pointer on FreeBSD
+;; (pref ptr :link_map.l_addr) is an integer on Linux and a pointer on
+;; FreeBSD, NetBSD, and Solaris.
 ;; This macro returns a pointer on all platforms
 (defmacro link_map.l_addr (ptr)
   (let* ((record (%find-foreign-record :link_map))
@@ -224,9 +225,9 @@
                                                       target::node-size))
                                                (addr (link_map.l_addr map)))
                                           ;; Don't risk anything if we don't have to.
-                                          #+(or freebsd-target solaris-target android-target)
+                                          #+(or freebsd-target netbsd-target solaris-target android-target)
                                           (%inc-ptr addr disp)
-                                          #-(or freebsd-target solaris-target android-target)
+                                          #-(or freebsd-target netbsd-target solaris-target android-target)
                                           (if (> disp (%ptr-to-int addr))
                                               (%int-to-ptr disp)
                                               (%inc-ptr addr disp))))))
@@ -316,7 +317,7 @@
     (%walk-shared-libraries #'shlib-from-map-entry)
       ;; On Linux, it seems to be necessary to open each of these
       ;; libraries yet again, specifying the RTLD_GLOBAL flag.
-      ;; On FreeBSD, it seems desirable -not- to do that.
+      ;; On the other supported ELF targets, it seems desirable not to do that.
     #+linux-target
     (progn
       ;; The "program interpreter" (aka the dynamic linker) is itself
@@ -346,7 +347,7 @@
                     :unsigned-fullword *dlopen-flags*
                     :address)))
          (link-map #+(and linux-target (not android-target)) handle
-                   #+(or freebsd-target solaris-target)
+                   #+(or freebsd-target netbsd-target solaris-target)
                    (if (%null-ptr-p handle)
                      handle
                      (rlet ((p :address))
@@ -618,7 +619,7 @@ return a fixnum representation of that address, else return NIL."
 
 (defvar *statically-linked* nil)
 
-#+(or linux-target freebsd-target solaris-target)
+#+(or linux-target freebsd-target netbsd-target solaris-target)
 (progn
 
 (defun %library-base-containing-address (address)
@@ -763,7 +764,7 @@ return a fixnum representation of that address, else return NIL."
 ;; end Darwin progn
 )
 
-#-(or linux-target darwin-target freebsd-target solaris-target windows-target)
+#-(or linux-target darwin-target freebsd-target netbsd-target solaris-target windows-target)
 (defun shlib-containing-entry (entry &optional name)
   (declare (ignore entry name))
   *rtld-default*)
@@ -822,7 +823,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
 
 
 
-#+(or linux-target freebsd-target solaris-target)
+#+(or linux-target freebsd-target netbsd-target solaris-target)
 (progn
 
 ;;; Return the position of the last dot character in name, if that
@@ -903,12 +904,12 @@ return that address encapsulated in a MACPTR, else returns NIL."
                        :address soname
                        :unsigned-fullword *dlopen-flags*
                        :address))
-                #-(or freebsd-target solaris-target android-target) (setq map handle)
+                #-(or freebsd-target netbsd-target solaris-target android-target) (setq map handle)
                 #+android-target (setq map
                                        (if (%null-ptr-p handle)
                                          handle
                                          (pref handle :soinfo.linkmap)))
-                #+(or freebsd-target solaris-target)
+                #+(or freebsd-target netbsd-target solaris-target)
                 (setq map
                       (if (%null-ptr-p handle)
                         handle
@@ -939,7 +940,7 @@ return that address encapsulated in a MACPTR, else returns NIL."
   (setq *statically-linked* (not (eql 0 (%get-kernel-global 'statically-linked))))
   (%revive-macptr *rtld-next*)
   (%revive-macptr *rtld-default*)
-  #+(or linux-target freebsd-target solaris-target)
+  #+(or linux-target freebsd-target netbsd-target solaris-target)
   (unless *statically-linked*
     (setq *dladdr-entry* (foreign-symbol-entry "dladdr"))
     (revive-shared-libraries)

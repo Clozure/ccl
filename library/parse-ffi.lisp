@@ -559,9 +559,14 @@
 
 
 (defun process-ffi-function (form)
-  (let* ((name (caddr form))
+  ;; New generators can pair the source spelling with a distinct linker
+  ;; spelling.  A string remains the backward-compatible common case.
+  (let* ((name-form (caddr form))
+         (name (if (consp name-form) (car name-form) name-form))
+         (entry-name (and (consp name-form) (cadr name-form)))
          (ftype (cadddr form)))
     (make-ffi-function :string name
+                       :entry-name entry-name
                        :arglist (mapcar #'reference-ffi-type (cadr ftype))
                        :return-value (reference-ffi-type (caddr ftype)))))
 

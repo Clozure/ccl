@@ -75,6 +75,11 @@
 	(item ".lafsl")
 	(item "linuxarm"))
       (row
+	(item "NetBSD (earmv7hf, experimental)")
+	(item "narmcl")
+	(item ".nafsl")
+	(item "netbsdarm"))
+      (row
 	(item "OS X (x8664)")
 	(item "dx86cl64")
 	(item ".dx64fsl")
@@ -137,6 +142,11 @@ build process uses {system m4};  this program is often not installed by default,
 make sure you have it.  The lisp kernel makefiles generally assume that you are using
 GNU make.
 
+    The experimental NetBSD/earmv7hf kernel is an exception: its Makefile requires
+BSD make.  On NetBSD, invoke the base system's {system /usr/bin/make}; on systems where
+BSD make is installed separately, invoke it as {system bmake}.  The build also requires
+{system /usr/sbin/paxctl}, which the Makefile runs on the resulting kernel.
+
     On a recent Mac OS X system, typing {system xcode-select --install} should download
 and install everything needed to build {CCL}.")
 
@@ -194,7 +204,17 @@ see {system m4: command not found}, then you should install m4.
 On Mac OS X, make sure that you have installed the command-line developer tools
 with {system xcode-select --install}.  If you get an error message saying that
 the file {system sys/signal.h} cannot be found, this is a sign that you need to do this.
-You need to do this even if you have Xcode already installed.")
+You need to do this even if you have Xcode already installed.
+
+The experimental NetBSD/earmv7hf kernel is built natively as follows:"
+
+    (code-block "$ cd ccl/lisp-kernel/netbsdarm
+$ /usr/bin/make clean
+$ /usr/bin/make")
+
+    "This writes {system ccl/narmcl}.  The final build step runs {system
+/usr/sbin/paxctl +m +a ../../narmcl}; do not omit that step when copying
+the link command into another build system.")
 
   (defsection "Building the Heap Image"
     "Typically, {function rebuild-ccl} is used to rebuild all of {CCL}.
@@ -299,5 +319,68 @@ $ ./dx86cl64 --image-name x86-boot64.image --no-init")
         occur during these early stages (“the cold load”) sometimes
         cause the lisp kernel debugger to be invoked; it's
         primitive, but can sometimes help one to get oriented.")))
+
+    (defsection "Experimental NetBSD/ARM bootstrap"
+      "The NetBSD/earmv7hf cross-compilation backend is named {code
+       :netbsdarm}.  It writes {code .nafsl} files and names its
+       bootstrapping image {system narm-boot}.  A cross-build host needs
+       a working CCL 1.13 image, its matching host interface database,
+       and the generated {system netbsd-arm-headers/libc} database in the
+       checkout.  Start the host CCL with {system --no-init}, then direct
+       it at the checkout:"
+
+      (code-block "? (ccl::set-ccl-directory #p\"/path/to/ccl/\")")
+
+      "If the matching host interface database is outside the checkout,
+       add a logical-pathname translation for it.  For example, an
+       x86-64 host whose database is under {system /usr/lib/ccl} uses:"
+
+      (code-block "? (push (list #p\"ccl:x86-headers64;**;*.*\"
+                    #p\"/usr/lib/ccl/x86-headers64/**/*.*\")
+              (logical-pathname-translations \"ccl\"))")
+
+      "Load the shared definitions, the ARM compiler and cross-dumper,
+       the target foreign interface, and the current LOOP macros before
+       building the target files and image:"
+
+      (code-block "? (ccl::update-modules ccl::*sysdef-modules* t)
+? (ccl::update-modules '(ccl::backend ccl::nx) t)
+? (ccl::require-update-modules ccl::*arm-compiler-modules* t)
+? (ccl::require-update-modules ccl::*arm-compiler-backend-modules* t)
+? (ccl::require-update-modules ccl::*arm-xdev-modules* t)
+? (ccl::require-update-modules ccl::*arm-xload-modules* t)
+? (ccl::setup-arm-ftd (ccl::find-backend :netbsdarm))
+? (ccl::require-update-modules 'ccl::ffi-netbsdarm t)
+? (ccl::require-update-modules 'ccl::loop t)
+? (ccl::cross-compile-ccl :netbsdarm t)
+? (ccl::cross-xload-level-0 :netbsdarm :force)")
+
+      "This writes {system narm-boot} in the repository root.  Place it
+       next to the native {system narmcl} kernel and start the cold load
+       with:"
+
+      (code-block "$ cd ccl
+$ ./narmcl --image-name narm-boot --no-init")
+
+      "Cross-compilation and creation of {system narm-boot} have been
+       exercised on an x86-64 host.  Cold-loading it with {system
+       narmcl}, saving a complete image, and restarting that image have
+       been exercised on NetBSD 11.0/earmv7hf, as has a subsequent full
+       native {function rebuild-ccl} with that image.
+
+       The kernel build runs the C compiler, which writes its
+       temporary files to {system /tmp}.  NetBSD systems often mount
+       {system /tmp} as a small tmpfs; if the kernel build fails with
+       {system No space left on device}, set {system TMPDIR} to a
+       directory on disk before starting the lisp.
+
+       The resulting lisp passes the {system ccl-tests} suite on
+       NetBSD 11.0/earmv7hf except for EXPT.ERROR.4 through
+       EXPT.ERROR.7, which expect {code (expt x 2)} to signal {code
+       floating-point-overflow} for the most positive floats.  ARM VFP
+       has no trapping floating-point exceptions and the {code (expt
+       float integer)} path does not consult the accumulated FPSCR
+       exception flags, so the failure is shared with the Linux ARM32
+       port rather than specific to NetBSD.")
 
   ) ;chapter
