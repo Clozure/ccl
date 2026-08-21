@@ -431,52 +431,8 @@ endsp ffcall
  * definitions using the SAME _struct/_structf macro conventions already
  * present in arm64-constants.h; NOT invented.  Cited per-field below. */
 
-/* tsp_frame: ppc-constants64.s:228-233 (backlink, type, then fixed_overhead
- * and data_offset alias the SAME offset -- Matt's _struct macro block in
- * arm64-constants.h has no _struct_label primitive, so these are plain .set
- * equates rather than routed through the struct-generator macros). */
-.set tsp_frame.backlink, 0
-.set tsp_frame.type, 8
-.set tsp_frame.fixed_overhead, 16
-.set tsp_frame.data_offset, 16
-.set tsp_frame.size, 16
 /* ppc-constants.s:171 "(UNSIGNED-BYTE 16), one less than TSTACK_SOFTPROT" */
 .set tstack_alloc_limit, 0xffff
-
-/* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame.
- * Ground truth: his popj vinsn (compiler/ARM64/arm64-vinsns.lisp:61-67)
- * does ldp fn,lr,[sp,#16] / ldr vsp,[sp,#8] ("ignore marker") / add sp,#32,
- * and arm64-constants.h:177-178 defines subtag_lisp_frame_marker.  Layout
- * matches ARM32 (arm-constants.s:374-379): marker,savevsp,savefn,savelr. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* symbol: field order ppc-constants64.s:237-245, but biased by
- * -fulltag_symbol: Matt's design gives symbols their OWN pointer tag
- * (arm64-constants.h:90 fulltag_symbol=0b0111; arm64-arch.lisp:196
- * misc-symbol-offset = node_size - fulltag_symbol), so slot n of a
- * symbol-tagged pointer is at (n+1)*node_size - fulltag_symbol.
- * (Was wrongly -misc_bias=-4; caught in the D-repair sibling sweep.
- * These odd offsets are the ledger's "symbol.vcell=9" item.) */
-.set symbol.header, (0*node_size - fulltag_symbol)
-.set symbol.pname, (1*node_size - fulltag_symbol)
-.set symbol.vcell, (2*node_size - fulltag_symbol)
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set symbol.package_predicate, (4*node_size - fulltag_symbol)
-.set symbol.flags, (5*node_size - fulltag_symbol)
-.set symbol.plist, (6*node_size - fulltag_symbol)
-.set symbol.binding_index, (7*node_size - fulltag_symbol)
-.set symbol.size, 64
-
-/* _function: slot order ppc-constants64.s:223-226 (codevector = slot 0),
- * biased by -fulltag_misc: a function is an ordinary miscobj
- * (fulltag_function removed, patch 0055; codevector offset -7 -> -4). */
-.set _function.header, misc_header_offset
-.set _function.codevector, misc_data_offset
-.set _function.size, 16
 
 /* bignum headers not already in arm64-constants.h (two/three/four_digit_
  * bignum_header ARE already defined there).  Derived via the same
@@ -821,7 +777,7 @@ spentry builtin_div
         mov     nargs, #(2 << fixnumshift)      /* ppc-spentry.s:39 set_nargs(2) */
         ldr     fname, [fname, #(misc_data_offset + _builtin_div * node_size)] /* ppc:40 vrefr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:41 jump_fname            */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp builtin_div
 
@@ -995,7 +951,7 @@ spentry makestackblock
         mov     nargs, #(1 << fixnumshift)      /* ppc:3319 set_nargs(1)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3320 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3321 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp makestackblock
 
@@ -1096,7 +1052,7 @@ spentry misc_alloc_init
         mov     nargs, #(2 << fixnumshift)      /* ppc:5245 set_nargs(2)          */
         ref_nrs_symbol fname, init_misc         /* ppc:5244 li fname,nrs.init_misc */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:5247 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp misc_alloc_init
 
@@ -1132,7 +1088,7 @@ spentry stack_misc_alloc_init
         mov     nargs, #(2 << fixnumshift)      /* ppc:5265 set_nargs(2)          */
         ref_nrs_symbol fname, init_misc         /* ppc:5264 li fname,nrs.init_misc */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:5267 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp stack_misc_alloc_init
 
@@ -1189,7 +1145,7 @@ makestackblock0_too_big:
         mov     nargs, #(2 << fixnumshift)      /* ppc:3345 set_nargs(2)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3346 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3347 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp makestackblock0
 
@@ -1219,25 +1175,12 @@ endsp makestackblock0
 .set dnode_shift, 4
 .set bitmap_shift, 6
 
-/* tsp_frame: ppc-constants64.s:228-233 {backlink@0, type@8}; fixed_overhead
-   and data_offset alias offset 16 (same equates as spentry-A:42-46).
-   dnode_size itself is already real in Matt's arm64-constants.h. */
-.set tsp_frame.backlink, 0
-.set tsp_frame.type, 8
-.set tsp_frame.fixed_overhead, 16
-.set tsp_frame.data_offset, 16
-.set tsp_frame.size, 16
-
 /* Lisp error selectors: errors.s deferr(NAME,N) = boxed fixnum N. */
 .set XBADVEC,    (2<<fixnumshift)       /* errors.s:177 */
 .set XSETBADVEC, (7<<fixnumshift)       /* errors.s:182 */
 .set XNOTELT,    (174<<fixnumshift)     /* errors.s:227 */
 .set XIMPROPERLIST, (170<<fixnumshift)  /* errors.s:223 */
 .set tstack_alloc_limit, 0xffff         /* ppc-constants.s:171 (as spentry-A) */
-
-/* symbol.binding_index: slot 7 via the dedicated symbol fulltag
-   (ppc-constants64.s:237-245 order; arm64 bias = -fulltag_symbol). */
-.set symbol.binding_index, (7*node_size - fulltag_symbol)
 
 /* misc_complex_dfloat_offset (16m48) — Matt's arm64-arch.lisp:259-261:
      ;;; There is a pad word after the uvector header so that the
@@ -2493,25 +2436,6 @@ endsp progvrestore
  * misc_ref_common with: arg_y=underlying-vector, arg_z=row-major-index(boxed),
  * imm1=subtag. */
 
-/* PROPOSED-CONSTANTS: arrayH struct offsets (not yet in arm64-constants.h).
- * define-lisp-object arrayH fulltag-misc (arm64-arch.lisp:683): slots
- * header, rank, physsize, data-vector, displacement, flags, then dims --
- * slot k sits at (k*node_size - fulltag_misc) from the tagged pointer
- * (fulltag_misc = 12, arm64-constants.h:144; misc-data-offset = -4).
- * 16m41: this block used to hand-number the offsets with PPC64's bias
- * (-4, i.e. rank@4 ... dim0@44), +8 off for every slot, so the rank
- * check read physsize and aset2/aref2/aset3/aref3 trapped on EVERY
- * valid array.  Symbolic now: correct by construction.  */
-#ifndef ARRAYH_STRUCT_DEFINED
-.set arrayH.rank,         (1*node_size - fulltag_misc)
-.set arrayH.physsize,     (2*node_size - fulltag_misc)
-.set arrayH.data_vector,  (3*node_size - fulltag_misc)
-.set arrayH.displacement, (4*node_size - fulltag_misc)
-.set arrayH.flags,        (5*node_size - fulltag_misc)
-.set arrayH.dim0,         (6*node_size - fulltag_misc)
-#define ARRAYH_STRUCT_DEFINED
-#endif
-
 spentry aref2
         /* extract_typecode(imm2, arg_x): get fulltag, then if misc load subtag */
         and     imm2, arg_x, #fulltagmask
@@ -2931,63 +2855,11 @@ endsp aset3
 /* log2(dnode_size=16): ppc-constants64.s:37 dnode_shift = dnode_align_bits. */
 .set dnode_shift, 4
 
-/* Function codevector lives in slot 0 (CLAUDE.md "codevector @ slot 0"; PPC
-   _function.entrypoint).  Referenced through a fulltag_misc function pointer. */
-.set function.codevector, misc_data_offset
-
 /* symbol.flags bits (x86-constants64.s:707-710; low-tag => +fixnum_shift). */
 .set sym_vbit_bound,      (0+fixnumshift)
 .set sym_vbit_bound_mask, (1<<sym_vbit_bound)
 .set sym_vbit_const,      (1+fixnumshift)
 .set sym_vbit_const_mask, (1<<sym_vbit_const)
-
-/*
- * ---------------------------------------------------------------------------
- * PROPOSED struct layouts (ratify with Matt; C side must match)
- * Defined with the _struct/_node/_field/_ends macros from arm64-constants.h.
- * ---------------------------------------------------------------------------
- */
-
-/* symbol: referenced through a fulltag_symbol pointer (see spentry-D funcall,
-   x86-constants64.s:616 `_structf(symbol,-fulltag_symbol)`).  Field order is
-   the CCL-universal pname,vcell,fcell,...,binding_index. */
-_structf symbol, -fulltag_symbol
-  _node pname
-  _node vcell
-  _node fcell
-  _node package_predicate
-  _node flags
-  _node plist
-  _node binding_index
-_endstructf
-
-/* binding frame (vstack-consed): ppc-constants64.s _struct(binding,0). */
-_struct binding, 0
-  _node link
-  _node sym
-  _node val
-_ends
-
-/* lisp_frame on the control stack: Matt's ARM-family MARKER frame, NOT
-   PPC's backlink frame (ground truth: his popj vinsn, compiler/ARM64/
-   arm64-vinsns.lisp:61-67, + subtag_lisp_frame_marker).  Same layout as
-   spentry-A/-D/-E.  Frame builds store #lisp_frame_marker at slot 0; no
-   backlink word.  fn is VOLATILE (x7) in this design, so it is saved
-   here across catch. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* temp-stack frame header: ppc-constants64.s _struct(tsp_frame,0).
-   backlink+type = 2 nodes of fixed overhead; data follows. */
-_struct tsp_frame, 0
-  _node backlink
-  _node type
-_ends
-.set tsp_frame.fixed_overhead, tsp_frame.size
-.set tsp_frame.data_offset, tsp_frame.size
 
 /* catch_frame comes from arm64-constants.h: PPC64's layout
    (ppc-constants64.s _structf(catch_frame); ppc-constants64.h:213), with
@@ -4646,28 +4518,6 @@ endsp stkvcell0
 
 /* ========== LOCAL HELPER MACROS ========== */
 
-/* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame
- * (ground truth: his popj vinsn, compiler/ARM64/arm64-vinsns.lisp:61-67,
- * + subtag_lisp_frame_marker, arm64-constants.h:177).  Same equates as
- * spentry-A:55-59 / spentry-E.  Frame builds store #lisp_frame_marker at
- * slot 0; there is NO backlink word. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* symbol.fcell / function codevector: slot order from ppc-constants64.s
- * :237-245/:223-226.  Symbols keep their dedicated pointer tag; a function
- * is an ordinary miscobj (fulltag_function removed, patch 0055), so its
- * codevector slot sits at misc_data_offset (-4). */
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set _function.codevector, misc_data_offset
-
-/* vectorH.logsize: slot 0 of a (misc-tagged) vector header,
- * ppc-constants64.s:259-265 _structf(vectorH). */
-.set vectorH.logsize, misc_data_offset
-
 /* Lisp error selectors: errors.s deferr(NAME,N) = boxed fixnum N. */
 .set XSTKOVER,  (75<<fixnumshift)       /* errors.s:196  */
 .set XNOSPREAD, (120<<fixnumshift)      /* errors.s:202  */
@@ -4696,7 +4546,7 @@ endsp stkvcell0
         set_nargs \nargs_count
         ldr fname, [fname, #(misc_data_offset + (\idx) * node_size)]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 .endm
 
@@ -4705,13 +4555,13 @@ endsp stkvcell0
 /* ported from ppc-spentry.s:44-45 (PPC64 branch: jump_fname macro) */
 spentry jmpsym
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp jmpsym
 
 /* ported from ppc-spentry.s:47-48 (PPC64 branch: jump_nfn macro) */
 spentry jmpnfn
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp jmpnfn
 
@@ -4735,12 +4585,12 @@ spentry funcall
         cmp imm1, #subtag_function
         b.ne 3f
         mov nfn, temp0
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 2:      /* symbol: call its function cell (unchecked slot-0 jump) */
         mov fname, temp0
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 3:      /* ppc-macros.s do_funcall: uuo_interr(error_cant_call, temp0) */
         uuo_error_reg_not_callable temp0 /* his macro name */
@@ -5073,7 +4923,7 @@ endsp keyword_args
 spentry ksignalerr
         ref_nrs_symbol fname, errdisp   /* ppc:2021 li fname,nrs.errdisp   */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp ksignalerr
 
@@ -5174,7 +5024,7 @@ spentry call_closure
         b.ne .Lcc_set_arg_y                 /* ppc:2160                    */
 .Lcc_go:
         ldr nfn, [nfn, #(misc_data_offset + node_size)] /* ppc:2163 slot 1 */
-        ldr temp0, [nfn, #_function.codevector]         /* ppc:2164        */
+        ldr temp0, [nfn, #_function.code_vector]         /* ppc:2164        */
         br temp0                            /* ppc:2165-2166 mtctr+bctr    */
 endsp call_closure
 
@@ -5301,13 +5151,13 @@ spentry tcallsymgen
         mov vsp, imm0
         /* Jump to fname */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 
 2:      ldr vsp, [sp, #lisp_frame.savevsp]
         add sp, sp, #lisp_frame.size
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallsymgen
 
@@ -5328,7 +5178,7 @@ spentry tcallsymslide
         b.ne 1b
         mov vsp, imm0
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallsymslide
 
@@ -5355,7 +5205,7 @@ spentry tcallnfnslide
         str fname, [imm0, #-node_size]!
         b.ne 1b
         mov vsp, imm0
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallnfnslide
 
@@ -5751,7 +5601,7 @@ spentry callbuiltin
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin
 
@@ -5763,7 +5613,7 @@ spentry callbuiltin0
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin0
 
@@ -5775,7 +5625,7 @@ spentry callbuiltin1
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin1
 
@@ -5787,7 +5637,7 @@ spentry callbuiltin2
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin2
 
@@ -5799,7 +5649,7 @@ spentry callbuiltin3
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin3
 
@@ -6212,7 +6062,7 @@ spentry mvpasssym
         mov fn, xzr                     /* ppc:6896 li fn,0 */
         /* ppc:6898 jump_fname() */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp mvpasssym
 
@@ -6227,7 +6077,7 @@ endsp mvpasssym
  * trap encodings (canonical arm64-uuo.s scheme + PROPOSED extensions; see
  * the trap block above and spentry-A's namespace doc).  All other former
  * MISSING-CONSTANT holes are derived locally in the header block above
- * (symbol.fcell, _function.codevector, t_offset, lisp_frame marker layout,
+ * (symbol.fcell, _function.code_vector, t_offset, lisp_frame marker layout,
  * vectorH.logsize, XSTKOVER, XNOSPREAD, error_object_not_list). */
 
 /* PORT-TODO items requiring design decisions or missing mechanisms:
@@ -6333,41 +6183,6 @@ endsp mvpasssym
    Matt's tree; a C header, so re-equated here for the assembler). */
 .set TCR_STATE_LISP,    0
 .set TCR_STATE_FOREIGN, 1
-
-/* lisp_frame: Matt's ARM-family MARKER frame (ground truth: his popj vinsn,
-   compiler/ARM64/arm64-vinsns.lisp:61-67, + subtag_lisp_frame_marker,
-   arm64-constants.h:177).  Same equates as spentry-A:55-59. */
-.set lisp_frame.marker,  0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn,  16
-.set lisp_frame.savelr,  24
-.set lisp_frame.size,    32
-
-/* symbol.fcell / function codevector: slot order from ppc-constants64.s
-   :237-245/:223-226.  Symbols keep their dedicated pointer tag; a function
-   is an ordinary miscobj (fulltag_function removed, patch 0055), so its
-   codevector slot is misc_data_offset.  Same equates as spentry-A. */
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set _function.codevector, misc_data_offset
-
-/* area: ppc-constants64.s:382-401 _struct(area,0).
-   16m41 CORRECTION: the note here said "Matt's tcr has NO
-   tcr.last_lisp_frame, so [writing area.active from asm] is the line-port".
-   STALE -- arm64-constants.h:470 (asm) / :531 (C) both carry
-   last_lisp_frame at this pin, and nothing in this file ever wrote
-   area.active either, so the boundary went unrecorded entirely.  The
-   protocol now lives in tcr.last_lisp_frame (see the macros above); the C
-   side does the area lookup in normalize_tcr, which also keeps the
-   cs_area->older chain consistent, something a raw asm store could not. */
-_struct area, 0
-  _node pred
-  _node succ
-  _node low
-  _node high
-  _node active
-  _node softlimit
-  _node hardlimit
-_ends
 
 /* c_frame (the outgoing-argument staging frame built by the compiler's
    alloc-c-frame vinsn) is defined in arm64-constants.h since upstream
@@ -6884,7 +6699,7 @@ spentry callback
         set_nargs 2
         ref_nrs_symbol fname, callbacks         /* ppc:5157 li fname,nrs.callbacks */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp4, [nfn, #_function.codevector]
+        ldr temp4, [nfn, #_function.code_vector]
         blr temp4
         /* Lisp wrote the result into CBF+0/+8 / CBF-64..-40 (glue
            contract; a >16-byte non-HFA record went through the pointer
