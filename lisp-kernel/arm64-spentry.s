@@ -3706,34 +3706,49 @@ endsp unbind_interrupt_level
 
    ORDERING (16m5t root cause): in PPC this is a STANDALONE _exportfn
    defined BEFORE _spentry(values) (ppc:1171), and `values' falls
-   straight through `mflr loc_pc' into local_label(return_values)
-   (ppc:1214-1216).  A prior port mis-inserted this block BETWEEN
-   `values' `mov temp4,lr' and `return_values', so `values' fell into
-   ret1valn and ALWAYS delivered 1 value (set_nargs 1) -- the mv-return
-   branch logic at return_values was only reachable via nvalret's
-   explicit `b'.  Kept here, ABOVE `spentry values', so the fall-through
-   values -> return_values is intact. */
+   straight through into local_label(return_values) (ppc:1214-1216).  A
+   prior port mis-inserted this block BETWEEN `values' and
+   `return_values', so `values' fell into ret1valn and ALWAYS delivered 1
+   value (set_nargs 1) -- the mv-return branch logic at return_values was
+   only reachable via nvalret's explicit `b'.  Kept here, ABOVE `spentry
+   values', so the fall-through values -> return_values is intact. */
         .globl C(ret1valn)
 C(ret1valn):
-        ldr lr, [sp, #lisp_frame.savelr]        /* ppc:1172 ldr loc_pc  */
-        ldr vsp, [sp, #lisp_frame.savevsp]      /* ppc:1173             */
-        ldr fn, [sp, #lisp_frame.savefn]        /* ppc:1175             */
+        ldr vsp, [sp, #lisp_frame.savevsp]      /* ppc:1173 savevsp@8 (unpaired)     */
+        ldp fn, lr, [sp, #lisp_frame.savefn]    /* ppc:1175,1172 savefn@16 + savelr@24 */
         add sp, sp, #lisp_frame.size            /* ppc:1176 discard     */
         vpush1 arg_z                            /* ppc:1177             */
         set_nargs 1                             /* ppc:1178             */
         ret                                     /* ppc:1179 blr         */
+
+/* nvalret (ppc-spentry.s:1270-1276): come here with saved context on top
+ * of the stack.  Its return pc lives in savelr, so load it straight into
+ * lr to match the `values' entry, then FALL THROUGH into the shared body
+ * below.  PPC/ARM32 keep nvalret past `values' and branch back up to a
+ * global `return_values'; falling through instead drops that branch and
+ * the exported label (the two spentries are contiguous now that spentry-C
+ * and spentry-D are one file).  pmcl-kernel.c:2110 takes &nvalret for
+ * lisp_global(LEXPR_RETURN) (PPC exports it the same way, ppc:1267-1271). */
+        .globl C(nvalret)
+spentry nvalret
+C(nvalret):
+        ldr temp0, [sp, #lisp_frame.savevsp]    /* ppc:1273 savevsp@8 (unpaired)     */
+        ldp fn, lr, [sp, #lisp_frame.savefn]    /* ppc:1274,1272 savefn@16 + savelr@24 (->lr) */
+        discard_lisp_frame                      /* ppc:1275                */
+        /* FALL THROUGH into `values'/the shared body (ppc:1276 was a branch). */
+endsp nvalret
 
 /* ported from ppc-spentry.s:1214-1248 (PPC64 branch) */
 /* Return multiple values. nargs = count (fixnum), values on stack */
 spentry values
         /* ppc-spentry.s:1214-1265 (PPC64 branch).  temp0 = entry vsp (VERIFIED
            cont-71); nargs = boxed value count.  No loc_pc register in this
-           design -- lr(x30) carries the return pc, stashed in temp4. */
-        mov temp4, lr                   /* ppc:1215 mflr loc_pc (->temp4)        */
-        /* FALL THROUGH to return_values (ppc:1216 local_label). */
-
-        .globl return_values
-return_values:                          /* ppc:1216 shared entry; spentry-D nvalret must `b return_values' */
+           design -- lr(x30) carries the return pc and STAYS there through the
+           whole body (ARM32 arm-spentry.s:596-635 does the same): PPC's `mflr
+           loc_pc' has no analog because we never move it out of lr.  Reached
+           two ways: called at `values' (pc already in lr), or fallen into from
+           `nvalret' just above (which loaded the pc from savelr into lr) -- so
+           the body is single-channel on lr and needs no shared label. */
         /* ppc:1217 ref_global(imm0,ret1val_addr): load the ret1val_addr global.
            No ref_global / lisp_globals idiom exists for ARM64 in this file or
            its includes (see spentry-A-alloc-numbers.s:25-26 and the open
@@ -3742,9 +3757,9 @@ return_values:                          /* ppc:1216 shared entry; spentry-D nval
         mov arg_z, rnil                 /* ppc:1218 li arg_z,nil_value           */
         cmp nargs, #(4096-(dnode_size+dnode_size))  /* ppc:1221 cmpri cr2        */
         b.ge 2f                         /* ppc:1224 bge cr2 -> too many values   */
-        cmp imm0, temp4                 /* ppc:1222 cmpr cr1 (imm0==ret1val_addr?)*/
+        cmp imm0, lr                    /* ppc:1222 cmpr cr1 (imm0==ret1val_addr?)*/
         b.eq 3f                         /* ppc:1225 beq cr1 -> return to real caller*/
-        mov lr, temp4                   /* ppc:1226 mtlr loc_pc                   */
+        /* ppc:1226 mtlr loc_pc: no-op here -- the return pc is already in lr.   */
         add imm0, vsp, nargs            /* ppc:1227 add imm0,nargs,vsp            */
         cmp nargs, #fixnum_one          /* ppc:1223 cmpri cr0, recomputed here    */
         b.lt 1f                         /* ppc:1228 blt cr0 -> no values, keep nil*/
@@ -3758,11 +3773,11 @@ return_values:                          /* ppc:1216 shared entry; spentry-D nval
         uuo_interr error_too_many_values, nargs /* PROPOSED ext (globals-proposed.s) */
         b 2b                            /* ppc:1236 */
 3:      /* ppc:1239 return multiple values to real caller */
-        ldr temp4, [sp, #lisp_frame.savelr]   /* ppc:1240 ldr loc_pc            */
+        ldr lr, [sp, #lisp_frame.savelr]      /* ppc:1240 ldr loc_pc (straight to lr) */
         add imm1, vsp, nargs            /* ppc:1241 add imm1,nargs,vsp            */
         ldr imm0, [sp, #lisp_frame.savevsp]   /* ppc:1242                        */
         ldr fn, [sp, #lisp_frame.savefn]      /* ppc:1243                        */
-        mov lr, temp4                   /* ppc:1245 mtlr loc_pc                   */
+        /* ppc:1245 mtlr loc_pc: no-op -- savelr was loaded straight into lr.    */
         discard_lisp_frame              /* ppc:1247                              */
         cmp imm1, imm0                  /* ppc:1244 cmpr cr0, recomputed post-discard*/
         b.eq 7f                         /* ppc:1248 beqlr cr0 -> already in place */
@@ -4899,22 +4914,6 @@ spentry nthvalue
 1:      add vsp, imm0, #node_size       /* ppc:1206                        */
         ret
 endsp nthvalue
-
-/* ported from ppc-spentry.s:1270-1276 (PPC64 branch).
- * Come here with saved context on top of stack.  Tail into the shared
- * return_values entry exported by spentry-C (_spentry(values):
- * contract there is temp4 = return pc, temp0 = entry vsp). */
-/* pmcl-kernel.c:2110 takes &nvalret for lisp_global(LEXPR_RETURN)
-   (PPC exports it the same way, ppc-spentry.s:1267-1271). */
-        .globl C(nvalret)
-spentry nvalret
-C(nvalret):
-        ldr temp4, [sp, #lisp_frame.savelr]     /* ppc:1272 ldr loc_pc     */
-        ldr temp0, [sp, #lisp_frame.savevsp]    /* ppc:1273                */
-        ldr fn, [sp, #lisp_frame.savefn]        /* ppc:1274                */
-        discard_lisp_frame                      /* ppc:1275                */
-        b return_values                         /* ppc:1276 (.globl in C)  */
-endsp nvalret
 
 /* ========== OPTIONAL/REST/KEYWORD ARGUMENTS ========== */
 
