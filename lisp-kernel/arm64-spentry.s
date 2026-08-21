@@ -877,7 +877,7 @@ spentry stack_misc_alloc
         dnode_align imm1, imm1, (tsp_frame.fixed_overhead + node_size)
         mov     imm3, #tstack_alloc_limit
         cmp     imm1, imm3
-        b.ge    9f
+        b.hs    9f                    /* cmplri (ppc:1093) is UNSIGNED; b.ge accepted a bit-63 size */
         /* Push a boxed frame of imm1 bytes (built below the live tsp and
          * published atomically).  "_nz": imm1 always includes the frame
          * overhead + object header, so the data area is never empty. */
@@ -913,7 +913,7 @@ spentry makestackblock
         dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
-        b.ge    1f
+        b.hs    1f                    /* cmplri (ppc:3300) is UNSIGNED; b.ge accepted a bit-63 size */
         /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
          * and published atomically -- see arm64-macros.s). */
         TSP_Alloc_Var_Unboxed imm0, temp4
@@ -946,7 +946,7 @@ spentry makestacklist
         mov     imm3, #((tstack_alloc_limit + 1) - cons.size)
         cmp     imm0, imm3
         add     imm0, imm0, #tsp_frame.fixed_overhead
-        b.ge    3f
+        b.hs    3f                    /* cmplri (ppc:3353) is UNSIGNED; b.ge accepted a bit-63 size */
         /* Push a boxed frame of imm0 bytes (built below the live tsp and
          * published atomically).  imm0 == fixed_overhead when arg_y=0, so the
          * data area may be empty -- the leading-test TSP_Alloc_Var_Boxed (not
@@ -1072,7 +1072,7 @@ spentry makestackblock0
         dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
-        b.ge    makestackblock0_too_big
+        b.hs    makestackblock0_too_big  /* cmplri (ppc:3327) is UNSIGNED; b.ge accepted a bit-63 size */
         /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
          * and published atomically).  The frame stays raw, so the GC skips
          * it -- the data-zeroing below is for the block's contents (clear-p),
