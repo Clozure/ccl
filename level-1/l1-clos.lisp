@@ -1822,6 +1822,9 @@ changing its name to ~s may have serious consequences." class new))
     (error "~S is not a funcallable instance" funcallable-instance))
   (unless (functionp function)
     (error "~S is not a function" function))
+  (lfun-bits funcallable-instance
+             (logior (lfun-bits funcallable-instance)
+                     (logand (lfun-bits function) (1- (expt 2 16)))))
   (setf (%gf-dcode funcallable-instance) function))
 
 (defmethod reinitialize-instance ((slotd slot-definition) &key &allow-other-keys)
