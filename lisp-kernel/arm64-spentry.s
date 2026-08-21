@@ -1715,7 +1715,7 @@ spentry misc_ref
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_z, imm1
-        b.ge misc_ref_invalid
+        b.hs misc_ref_invalid           /* trlge (ppc:2409) is UNSIGNED; b.ge accepted a negative index */
         /* Extract subtag */
         and imm1, imm0, #subtagmask
 misc_ref_common:
@@ -1973,7 +1973,7 @@ spentry subtag_misc_ref
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_z, imm1
-        b.ge 1f
+        b.hs 1f                         /* trlge (ppc:3209) is UNSIGNED; b.ge accepted a negative index */
         asr imm1, arg_x, #fixnumshift         /* unbox_fixnum(imm1,arg_x) = subtag override */
         b misc_ref_common
 1:      mov arg_x, #XBADVEC             /* errors.s:177 deferr           */
@@ -2044,7 +2044,7 @@ spentry subtag_misc_set
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_y, imm1
-        b.ge 1f
+        b.hs 1f                         /* trlge (ppc:3911) is UNSIGNED; b.ge accepted a negative index */
         asr imm1, temp0, #fixnumshift         /* unbox subtag override from temp0 */
         b misc_set_common
 1:      mov arg_w, #XBADVEC             /* errors.s:177 deferr           */
@@ -2064,7 +2064,7 @@ spentry misc_set
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_y, imm1
-        b.ge misc_set_invalid
+        b.hs misc_set_invalid           /* trlge (ppc:4877) is UNSIGNED; b.ge accepted a negative index */
         and imm1, imm0, #subtagmask
 misc_set_common:
         /* Node vectors -> delegate to gvset for write barrier.  Class
