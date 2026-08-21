@@ -1726,9 +1726,15 @@
 ;;; s61-truncation class).  Lane order low-then-high; the first emitted
 ;;; insn reads src, any second insn reads dest -- dest=src safe.
 ;;; const=0 degenerates to (add dest src #0) -- a copy, correct.
+;;; The class is :s24const because AArch64 ADD (immediate) holds imm12 with an
+;;; optional LSL #12, so the two lanes below reach 24 bits of magnitude and no
+;;; more.  A :s32const declaration admits a constant the body then drops: at
+;;; 2^24 both ldb fields are 0 and the vinsn emits `add dest,src,#0,lsl #12',
+;;; which adds ZERO with no diagnostic.  (signed-byte 24) is the conservative
+;;; fit, and every emit site already gates at (signed-byte 24) or tighter.
 (define-arm64-vinsn add-immediate (((dest :imm))
                                    ((src :imm)
-                                    (const :s32const)))
+                                    (const :s24const)))
   ((:pred >= const 0)
    ((:not (:pred = 0 (:apply ldb (byte 12 0) const)))
     (add dest src (:$ (:apply ldb (byte 12 0) const)))
