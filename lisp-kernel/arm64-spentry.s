@@ -4669,13 +4669,15 @@ spentry mvpass
         sub imm0, imm0, #(nargregs<<fixnumshift) /* ppc:1158               */
         add imm0, imm0, nargs                   /* ppc:1159                */
 1:
-        /* ppc:1161 build_lisp_frame(fn,loc_pc,imm0) - MARKER frame */
-        sub sp, sp, #lisp_frame.size
+        /* ppc:1161 build_lisp_frame(fn,loc_pc,imm0) - MARKER frame.
+           stp form: the first stp creates the frame and publishes
+           marker+savevsp in one insn; a thread suspended before the
+           second stp shows garbage savefn/savelr, which pc_luser_xp's
+           stp-pair case zeroes (16m87 W5; same shape as
+           build_catch_lisp_frame and the save-lisp-context vinsns). */
         mov temp1, #lisp_frame_marker
-        str temp1, [sp, #lisp_frame.marker]
-        str imm0,  [sp, #lisp_frame.savevsp]
-        str fn,    [sp, #lisp_frame.savefn]
-        str lr,    [sp, #lisp_frame.savelr]
+        stp temp1, imm0, [sp, #-lisp_frame.size]!
+        stp fn, lr, [sp, #lisp_frame.savefn]
         /* ppc:1162 ref_global(loc_pc,ret1val_addr); ppc:1164 mtlr */
         ref_global lr, ret1val_addr             /* ppc:1162+1164           */
         mov fn, xzr                             /* ppc:1163 li fn,0        */
@@ -6000,13 +6002,12 @@ spentry mvpasssym
         add imm0, imm0, nargs          /* ppc:6892 */
 1:
         /* ppc:6894 build_lisp_frame(fn,loc_pc,imm0) -- MARKER frame
-         * (Matt's popj layout; no backlink word). */
-        sub sp, sp, #lisp_frame.size
+         * (Matt's popj layout; no backlink word).  stp form: no
+         * garbage-slot window; pc_luser_xp's stp-pair case covers a
+         * suspension between the two stps (16m87 W5). */
         mov temp0, #lisp_frame_marker
-        str temp0, [sp, #lisp_frame.marker]
-        str imm0, [sp, #lisp_frame.savevsp]
-        str fn, [sp, #lisp_frame.savefn]
-        str x30, [sp, #lisp_frame.savelr]
+        stp temp0, imm0, [sp, #-lisp_frame.size]!
+        stp fn, lr, [sp, #lisp_frame.savefn]
         /* ppc:6895 ref_global(loc_pc,ret1val_addr); ppc:6897 mtlr */
         ref_global lr, ret1val_addr     /* ppc:6895+6897 */
         mov fn, xzr                     /* ppc:6896 li fn,0 */
@@ -6867,25 +6868,27 @@ spentry lexpr_entry
         ref_global imm1, ret1val_addr           /* ppc:5363 (idiom: arm64-globals-proposed.s) */
         cmp imm1, temp4                         /* ppc:5364 cmpr w/ loc_pc   */
         /* FRAME-A (ppc:5365 build_lisp_frame(fn,loc_pc,imm0)): marker
-           frame; savevsp=entry-vsp, savelr=caller return pc. */
-        sub sp, sp, #lisp_frame.size
+           frame; savevsp=entry-vsp, savelr=caller return pc.  stp
+           form: no garbage-slot window (16m87 W5).  NB temp4 itself
+           is still not a pc-locative home across the prologue's bl
+           and this window -- that is W6, open, and needs a
+           compiler+spentry co-design.  The stps do not touch NZCV,
+           so the cmp above still governs the b.ne below. */
         mov imm2, #lisp_frame_marker
-        str imm2,  [sp, #lisp_frame.marker]
-        str imm0,  [sp, #lisp_frame.savevsp]
-        str fn,    [sp, #lisp_frame.savefn]
-        str temp4, [sp, #lisp_frame.savelr]
+        stp imm2, imm0, [sp, #-lisp_frame.size]!
+        stp fn, temp4, [sp, #lisp_frame.savefn]
         b.ne 1f                                 /* ppc:5366                  */
         /* Multiple-value case (caller's caller expects MVs).  FRAME-B
            (ppc:5367-5368 build_lisp_frame(rzero,lexpr_return,vsp)):
            savevsp=vsp (the count cell), savefn=0 (frame owns no fn),
            savelr=lexpr_return. */
         ref_global imm2, lexpr_return           /* ppc:5367 */
-        sub sp, sp, #lisp_frame.size
+        /* stp form: no garbage-slot window (16m87 W5).  savelr =
+           lexpr_return, a kernel static, so the value itself is
+           immovable. */
         mov imm3, #lisp_frame_marker
-        str imm3, [sp, #lisp_frame.marker]
-        str vsp,  [sp, #lisp_frame.savevsp]
-        str xzr,  [sp, #lisp_frame.savefn]
-        str imm2, [sp, #lisp_frame.savelr]
+        stp imm3, vsp, [sp, #-lisp_frame.size]!
+        stp xzr, imm2, [sp, #lisp_frame.savefn]
         mov temp4, imm1                         /* ppc:5369 loc_pc=ret1val   */
         /* Control-stack limit check (ppc:5370-5371 trllt(sp,cs_limit)). */
         ldr imm0, [rcontext, #tcr.cs_limit]

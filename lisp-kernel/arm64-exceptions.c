@@ -2111,19 +2111,27 @@ extern opcode
 #define IS_STR_TO_SP(i) (((i) & 0xFFC003E0) == 0xF90003E0)
 #define STR_TO_SP_DISP(i) ((((i) >> 10) & 0xfff) << 3)
 
-/* The stp-pair marker-frame build (compiler save-lisp-context vinsns and
-   spentry build_catch_lisp_frame):
+/* The stp-pair marker-frame build (compiler save-lisp-context vinsns,
+   spentry build_catch_lisp_frame, mvpass, mvpasssym and lexpr_entry
+   FRAME-A/FRAME-B):
        mov Xm, #lisp_frame_marker
-       stp Xm, vsp, [sp, #-32]!     <- frame created; marker+savevsp stored
+       stp Xm, Xv,  [sp, #-32]!     <- frame created; marker+savevsp stored
        stp Xa, Xb,  [sp, #16]       <- savefn, savelr
    STP (64-bit, signed offset) Xa,Xb,[sp,#16]:
      0xA9000000 | (16>>3)<<15 | Rt2<<10 | 31<<5 | Rt; Rt/Rt2 masked out
      (fn/lr in most builds, xzr/temp4 in the lexpr prologue).
-   STP (64-bit, pre-index) Xm,vsp,[sp,#-32]!:
-     0xA9800000 | ((-32>>3)&0x7f)<<15 | 25<<10 | 31<<5 | Rt; Rt masked out
-     (the marker register is any :imm temp). */
+   STP (64-bit, pre-index) Xm,Xv,[sp,#-32]!:
+     0xA9800000 | ((-32>>3)&0x7f)<<15 | Rt2<<10 | 31<<5 | Rt; Rt/Rt2
+     masked out (the marker register is any :imm temp; Xv is vsp in the
+     vinsn and catch builds, a computed entry-vsp in imm0 at mvpass,
+     mvpasssym and lexpr_entry FRAME-A). */
 #define IS_STP_PAIR_TO_SP16(i) (((i) & 0xFFFF83E0) == 0xA90103E0)
-#define IS_STP_MARKER_VSP_PUSH(i) (((i) & 0xFFFFFFE0) == 0xA9BE67E0)
+/* stp Xt, Xt2, [sp, #-32]! -- the marker-frame push.  Rt2 is free:
+   the compiler vinsns and build_catch_lisp_frame push vsp, but
+   mvpass, mvpasssym and lexpr_entry FRAME-A push a computed
+   entry-vsp from imm0 (16m87 W5).  The stored marker word is
+   confirmed at run time instead (case (a2) below). */
+#define IS_STP_MARKER_PUSH(i) (((i) & 0xFFFF83E0) == 0xA9BE03E0)
 
 /*
  * Identify where we are in the consing sequence according to the
@@ -2335,14 +2343,19 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          stp Xm, vsp, [sp, #-32]!    <- frame created + marker,savevsp stored
      --> stp fn, lr,  [sp, #16]      <- interrupted HERE
      (compiler save-lisp-context-no-stack-args / save-lisp-context-lexpr
-     (stp xzr,temp4) and spentry build_catch_lisp_frame).  The frame shows
+     (stp xzr,temp4), spentry build_catch_lisp_frame, and -- 16m87 W5 --
+     mvpass, mvpasssym and lexpr_entry FRAME-A/FRAME-B).  The frame shows
      a valid marker with GARBAGE savefn (node-scanned) and savelr
      (locative-scanned); zero both -- the interrupted stp re-executes on
      resume.  The save-lisp-context vinsn comment has claimed since its
      port that pc_luser_xp recognizes this build; case (a) above only ever
-     matched single-str builds, so until 16m86 nothing did. */
+     matched single-str builds, so until 16m86 nothing did.
+     The push recognizer no longer pins Rt2 to vsp, so the marker word
+     the completed push stored is checked instead: at this PC the push
+     HAS executed, so a real frame build always passes. */
   if (IS_STP_PAIR_TO_SP16(instr) &&
-      IS_STP_MARKER_VSP_PUSH(program_counter[-1])) {
+      IS_STP_MARKER_PUSH(program_counter[-1]) &&
+      (frame->marker == lisp_frame_marker)) {
     frame->savefn = 0;
     frame->savelr = 0;
     return;
