@@ -6856,27 +6856,29 @@ endsp syscall
  * caller, hiding the variable-length arglist; if the caller's caller
  * expects one value, take the simpler path.
  *
- * PROPOSED-CONVENTION LEXPR-RA (RATIFY): PPC compares/keeps the CALLER's
+ * LEXPR-RA (the W6/KI-026 co-design): PPC compares/keeps the CALLER's
  * return pc in loc_pc, while lr holds the return-to-prologue from the
- * `bla' - two live return addresses.  Matt's map has no loc_pc (x24=tsp),
- * so the lexpr function's prologue must pass the caller's return pc in
- * temp4=x16 before `bl _SPlexpr_entry`; lr = return-to-prologue.  On the
- * multiple-value path temp4 comes back = ret1val_addr for the prologue's
+ * `bla' - two live return addresses.  Matt's map has no loc_pc, and a
+ * node-scanned register (the old temp4 channel) is not a GC-safe home
+ * for a code pc, so the CALLER builds FRAME-A itself (marker frame:
+ * savevsp=entry-vsp, savefn=caller fn, savelr=caller return pc, stored
+ * from lr in the 0221 stp-pair shape BEFORE the call).  This subprim
+ * reads the caller's return pc from the walked savelr slot.  Builders:
+ * save-lexpr-argregs (arm64-vinsns.lisp) and the *gf-proto* /
+ * *cm-proto* LAP prototypes (arm64-clos.lisp).  On the multiple-value
+ * path temp4 goes back = ret1val_addr for the prologue's
  * save-lisp-context-lexpr to store; on the single-value path temp4 =
- * lexpr_return1v (both as on PPC, which returns them in loc_pc). */
+ * lexpr_return1v (both as on PPC, which returns them in loc_pc; both
+ * are kernel statics, so the RETURN leg is GC-safe in temp4). */
 spentry lexpr_entry
         ref_global imm1, ret1val_addr           /* ppc:5363 (idiom: arm64-globals-proposed.s) */
-        cmp imm1, temp4                         /* ppc:5364 cmpr w/ loc_pc   */
-        /* FRAME-A (ppc:5365 build_lisp_frame(fn,loc_pc,imm0)): marker
-           frame; savevsp=entry-vsp, savelr=caller return pc.  stp
-           form: no garbage-slot window (16m87 W5).  NB temp4 itself
-           is still not a pc-locative home across the prologue's bl
-           and this window -- that is W6, open, and needs a
-           compiler+spentry co-design.  The stps do not touch NZCV,
-           so the cmp above still governs the b.ne below. */
-        mov imm2, #lisp_frame_marker
-        stp imm2, imm0, [sp, #-lisp_frame.size]!
-        stp fn, temp4, [sp, #lisp_frame.savefn]
+        /* ARM64-DEVIATION: PPC builds FRAME-A here (ppc:5365) and
+           compares loc_pc (ppc:5364).  The caller already built
+           FRAME-A (see the header comment), so load the caller's
+           return pc from the walked slot and compare that.  Nothing
+           sits between the cmp and the b.ne. */
+        ldr imm2, [sp, #lisp_frame.savelr]
+        cmp imm1, imm2                          /* ppc:5364 cmpr w/ loc_pc   */
         b.ne 1f                                 /* ppc:5366                  */
         /* Multiple-value case (caller's caller expects MVs).  FRAME-B
            (ppc:5367-5368 build_lisp_frame(rzero,lexpr_return,vsp)):
