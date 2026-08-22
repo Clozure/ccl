@@ -242,11 +242,17 @@
      (arm64-lap-function
       gag
       ()
-      (mov temp4 lr)                        ; ppc:205 (mflr loc-pc) — LEXPR-RA
       (vpush-argregs)                       ; ppc:206
       (vpush nargs)                         ; ppc:207
       (add imm0 vsp nargs)                  ; ppc:208
       (add imm0 imm0 (:$ arm64::node-size)) ; ppc:209 caller's vsp
+      ;; W6/KI-026 co-design (was ppc:205 mflr loc-pc): the caller's
+      ;; return pc never rides in temp4 (node-scanned).  Build FRAME-A
+      ;; here, 0221 stp-pair shape; lr still holds the caller's pc and
+      ;; imm1 is call-subprim's scratch, free here.
+      (mov imm1 (:$ arm64::lisp-frame-marker))
+      (stp imm1 imm0 (:@! sp (:$ -32)))
+      (stp fn lr (:@ sp (:$ 16)))
       (call-subprim .SPlexpr-entry)         ; ppc:210 (bla) — DECIDE-10
       (mov lr temp4)                        ; ppc:211 (mtlr loc-pc) — lexpr cleanup continuation
       (mov arg_z vsp)                       ; ppc:212 lexpr
@@ -335,11 +341,15 @@
      (arm64-lap-function
       gag
       ()
-      (mov temp4 lr)                        ; ppc:317 (mflr loc-pc) — LEXPR-RA
       (vpush-argregs)                       ; ppc:318
       (vpush nargs)                         ; ppc:319
       (add imm0 vsp nargs)                  ; ppc:320
       (add imm0 imm0 (:$ arm64::node-size)) ; ppc:321 caller's vsp
+      ;; W6/KI-026 co-design (was ppc:317 mflr loc-pc): FRAME-A built
+      ;; here, 0221 stp-pair shape -- see *gf-proto* above.
+      (mov imm1 (:$ arm64::lisp-frame-marker))
+      (stp imm1 imm0 (:@! sp (:$ -32)))
+      (stp fn lr (:@ sp (:$ 16)))
       (call-subprim .SPlexpr-entry)         ; ppc:322 (bla) — DECIDE-10
       (mov lr temp4)                        ; ppc:323 (mtlr loc-pc) — lexpr cleanup continuation
       (mov arg_z vsp)                       ; ppc:324 lexpr
