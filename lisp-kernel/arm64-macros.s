@@ -73,117 +73,135 @@ _SP\name:
         clear_allocptr_tag
 .endm
 
-// Round a RUNTIME byte count up to a dnode (16-byte) boundary: \dest :=
-// (\src + \delta + dnode_size-1) & ~(dnode_size-1).  \delta is a bare
-// immediate expression (any fixed overhead to fold in before rounding);
-// pass 0 for a plain round-up.  \dest and \src may be the same register.
-// ppc-macros.s dnode_align.  For a count known at assembly time, fold it
-// into the immediate directly, or use aligned_bignum_size() (arm64-
-// constants.h) for bignums -- both do the same rounding at cpp time.
-.macro dnode_align dest, src, delta
-        add \dest, \src, #((\delta) + (dnode_size - 1))
+/*
+ * Round src (a register) + extra (a constant expression) up to the
+ * nearest dnode boundary.
+ *
+ * dest = (src + add + dnode_size - 1) & ~(dnode_size - 1)
+ */
+.macro dnode_align dest, src, extra=0
+        add \dest, \src, #((\extra) + (dnode_size - 1))
         and \dest, \dest, #~(dnode_size - 1)
 .endm
 
 /*
- * Temp-stack (tsp) frame allocation.  Canonical home for every TSP
- * allocator; call sites should use these rather than open-coding a frame.
+ * Temp-stack (tsp) frame allocation.  Always use these macros to
+ * create tsp frames.
  *
- * A tsp frame is [backlink][type][data...]; the tstack grows DOWN, so tsp
- * points at the backlink (lowest address of the frame) and the data area
- * begins at tsp+tsp_frame.fixed_overhead.
+ * A tsp frame is [backlink][type][data...]; the tstack grows down, so
+ * tsp points at the backlink (lowest address of the frame) and the
+ * data area begins at tsp+tsp_frame.fixed_overhead.
  *
- * GC SAFETY.  The collector walks the tstack from the live tsp register
- * upward (arm64-gc.c mark_tstack_area): at each frame it follows *tsp as
- * the backlink and, iff tsp[1] (type) == 0, scans the data area as boxed
- * nodes.  So at EVERY instruction boundary the frame that tsp points at
- * must already have (a) a valid backlink and (b) a non-zero type, UNLESS
- * its data area is fully node-clean.  tstack memory is otherwise full of
- * arbitrary junk, so a frame must never become visible half-built.
+ * When the type field is non-zero, that means that the frame contains
+ * raw, unboxed data.  The gc will skip over that data.  When the type
+ * field is 0, the contents of the frame are treated as nodes that the
+ * gc will scan.
  *
- * We keep that invariant WITHOUT pc_luser_xp help, two ways:
+ * Because the gc walks the temp stack (see mark_tstack_area), it's
+ * essential for the tsp to point to a valid frame at all times: it
+ * can't ever appear half-built.
  *
- *   Fixed size (immediate): a single pre-index stp writes the backlink and
- *   a non-zero type AND decrements tsp in one instruction -- there is no
- *   instant where tsp points at an un-formed frame.  (The transfer reg and
- *   the base+writeback reg must differ -- stp tsp,tsp,[tsp,...]! is
- *   CONSTRAINED UNPREDICTABLE -- hence old tsp is parked in \tmp first.)
+ * We maintain that invariant in two ways.
  *
- *   Variable size (register): build the whole frame BELOW the still-live
- *   tsp (invisible to the collector), then publish it with a single
- *   `mov tsp, scratch'.  A GC on either side of that mov sees a complete
+ *   For a fixed-size frame, where the size is specified with an
+ *   immediate value, a single pre-indexed stp writes the backlink and
+ *   a non-zero type and decrements tsp in one instruction -- there is
+ *   no instant where tsp points at an un-formed frame.  (In case you
+ *   were wondering, the transfer register and the base+writeback
+ *   register must differ: stp tsp,tsp,[tsp,...]! is CONSTRAINED
+ *   UNPREDICTABLE.  This is why the old tsp is saved in \tmp first.)
+ *
+ *   For a variable-size frame, where the size is specified with a
+ *   register, we build the whole frame below the still-live tsp
+ *   (invisible to the gc), then make it visible with a single `mov
+ *   tsp, scratch'.  A GC on either side of that mov sees a complete
  *   frame; nothing is ever half-published.
  *
- * A non-zero type marks the frame "raw" (GC skips it).  We use the saved
- * old tsp as a handy non-zero value; there's nothing else special about it.
+ * When initializing the type field of a tsp frame, we will sometimes
+ * use the old tsp as a handy non-zero value to mark it as a raw
+ * frame.  There's nothing otherwise special about it.
  */
 
-// Fixed unboxed frame.  \nbytes is an immediate data size; the whole frame
-// (\nbytes + fixed_overhead) must fit the pre-index imm range (<= 504, i.e.
-// \nbytes <= 488) -- larger fixed frames must use the variable form.
+/*
+ * Allocate a fixed-size tsp frame.  nbytes is a constant specifying
+ * how large the data area in the frame should be, and tmp is a
+ * register to hold a copy of the tsp.  Note that the whole frame
+ * (nbytes + fixed_overhead) has to fit into the pre-index imm range
+ * (<= 504; in other words, nbytes must be <= 488).
+ */
 .macro TSP_Alloc_Fixed_Unboxed nbytes, tmp
         mov \tmp, tsp
         stp \tmp, \tmp, [tsp, #-(\nbytes + tsp_frame.fixed_overhead)]!
 .endm
 
-// Fixed boxed frame: push raw, zero the data area while still raw (a GC
-// there skips the frame), then flip the type to boxed LAST.
-.macro TSP_Alloc_Fixed_Boxed nbytes, tmp
-        TSP_Alloc_Fixed_Unboxed \nbytes, \tmp
-        .set _tspab_off, tsp_frame.fixed_overhead
-        .rept (\nbytes) / node_size
-        str xzr, [tsp, #_tspab_off]
-        .set _tspab_off, _tspab_off + node_size
-        .endr
-        str xzr, [tsp, #tsp_frame.type]
-.endm
-
-// Mark the current (topmost) tsp frame boxed / unboxed.
+/*
+ * Mark the current (topmost) tsp frame boxed or unboxed.
+ */
 .macro Set_TSP_Frame_Boxed
-        str xzr, [tsp, #tsp_frame.type]         // zero => GC scans data as nodes
+        str xzr, [tsp, #tsp_frame.type] // zero => contains nodes
 .endm
 .macro Set_TSP_Frame_Unboxed
-        str tsp, [tsp, #tsp_frame.type]         // non-zero => GC skips the frame
+        str tsp, [tsp, #tsp_frame.type] // non-zero => raw data
 .endm
 
-// Variable unboxed frame.  \size is a register: 16-aligned total byte count
-// INCLUDING tsp_frame.fixed_overhead.  \scratch is clobbered.
+/*
+ * Allocate a small frame for nodes.  nbytes must be a multiple of
+ * node_size, and tmp is a register that will hold a copy of tsp.
+ *
+ * This works by allocating a raw frame, zeroing it, and then setting
+ * the type field of the frame to 0 (nodes).
+ */
+#define TSP_FIXED_BOXED_MAX_NODES 8
+.macro TSP_Alloc_Fixed_Boxed nbytes, tmp
+        .if ((\nbytes) % node_size) != 0
+        .error "nbytes must be a multiple of node_size"
+        .endif
+        .if ((\nbytes) / node_size) > TSP_FIXED_BOXED_MAX_NODES
+        .error "frame too large: use TSP_Alloc_Var_Boxed"
+        .endif
+        TSP_Alloc_Fixed_Unboxed \nbytes, \tmp
+        .set _tspab_off\@, tsp_frame.fixed_overhead
+        .rept (\nbytes) / node_size
+        str xzr, [tsp, #_tspab_off\@]
+        .set _tspab_off\@, _tspab_off\@ + node_size
+        .endr
+        Set_TSP_Frame_Boxed
+.endm
+
+/*
+ * Variable-size unboxed frame.  size is a register, which must be dnode
+ * aligned and already include tsp_frame.fixed_overhead.  scratch is a
+ * register which will be clobbered.
+ */
 .macro TSP_Alloc_Var_Unboxed size, scratch
-        sub \scratch, tsp, \size
-        stp tsp, tsp, [\scratch]                // backlink + raw type, below live tsp
-        mov tsp, \scratch                       // publish the finished frame
+        sub \scratch, tsp, \size // space for frame
+        stp tsp, tsp, [\scratch] // backlink + raw type, below live tsp
+        mov tsp, \scratch        // publish the finished frame
 .endm
 
-// Variable boxed frame.  \size (register, 16-aligned, includes fixed
-// overhead) is CLOBBERED (reused as the zeroing cursor); \scratch too.  The
-// leading test lets the data area be empty (\size == fixed_overhead).
+/*
+ * Variable-size boxed frame.  size is a register, which must be dnode
+ * aligned and already include tsp_frame.fixed_overhead; SIZE WILL BE
+ * CLOBBERED.  scratch is another register which will be clobbered too.
+ *
+ * The zeroing is a guarded do-while: a leading test lets the data area
+ * be empty (size == fixed_overhead), and the loop body itself carries
+ * only one branch per word.
+ */
 .macro TSP_Alloc_Var_Boxed size, scratch
-        sub \scratch, tsp, \size
+        sub \scratch, tsp, \size // make room
         str tsp, [\scratch, #tsp_frame.backlink]
-        add \size, \scratch, #tsp_frame.fixed_overhead  // cursor := first data word
-.Ltspvb\@:
-        cmp \size, tsp                          // end := old tsp (== base + size)
-        b.hs .Ltspvbdone\@
-        str xzr, [\size], #node_size
-        b .Ltspvb\@
-.Ltspvbdone\@:
-        str xzr, [\scratch, #tsp_frame.type]    // boxed, still unpublished
-        mov tsp, \scratch                       // publish zeroed boxed frame
-.endm
-
-// As TSP_Alloc_Var_Boxed, but the caller guarantees a non-empty data area
-// (\size > fixed_overhead), so the zeroing runs at least once: drop the
-// leading test for a do-while.
-.macro TSP_Alloc_Var_Boxed_nz size, scratch
-        sub \scratch, tsp, \size
-        str tsp, [\scratch, #tsp_frame.backlink]
-        add \size, \scratch, #tsp_frame.fixed_overhead
-.Ltspvbnz\@:
+        // size is now a cursor
+        add \size, \scratch, #tsp_frame.fixed_overhead  // first data word
+        cmp \size, tsp          // empty? (size == fixed_overhead)
+        b.hs .Ldone\@
+.Lloop\@:
         str xzr, [\size], #node_size
         cmp \size, tsp
-        b.lo .Ltspvbnz\@
-        str xzr, [\scratch, #tsp_frame.type]
-        mov tsp, \scratch
+        b.lo .Lloop\@
+.Ldone\@:
+        str xzr, [\scratch, #tsp_frame.type]  // set boxed, still not visible
+        mov tsp, \scratch                     // make boxed frame visible
 .endm
 
 // Pop the topmost tsp frame.

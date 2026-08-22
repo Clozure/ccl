@@ -845,7 +845,7 @@ endsp misc_alloc
  * object via misc_alloc if there's no room).  Same (arg_y=count,
  * arg_z=subtag) convention and byte-count arithmetic as misc_alloc above.
  * ported from ppc-spentry.s:1025-1069 (PPC64 branch): dnode_align + a
- * tstack_alloc_limit check, then TSP_Alloc_Var_Boxed_nz (real tsp=x24
+ * tstack_alloc_limit check, then TSP_Alloc_Var_Boxed (real tsp=x24
  * register, PPC discipline) with heap-cons fallback via TSP_Alloc_Fixed_
  * Unboxed(0) + tail to misc_alloc. */
 spentry stack_misc_alloc
@@ -881,7 +881,7 @@ spentry stack_misc_alloc
         /* Push a boxed frame of imm1 bytes (built below the live tsp and
          * published atomically).  "_nz": imm1 always includes the frame
          * overhead + object header, so the data area is never empty. */
-        TSP_Alloc_Var_Boxed_nz imm1, temp4
+        TSP_Alloc_Var_Boxed imm1, temp4
         str     imm0, [tsp, #tsp_frame.data_offset]  /* object header */
         add     arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         ret
@@ -1557,12 +1557,12 @@ endsp stkconslist_star
 /* ported from ppc-spentry.s:914-933 (PPC64 branch) */
 spentry mkstackv
         cmp nargs, #0
-        /* dnode_align + TSP_Alloc_Var_Boxed_nz: PPC64 916-917.  fixed_overhead
+        /* dnode_align + TSP_Alloc_Var_Boxed: PPC64 916-917.  fixed_overhead
            is a dnode multiple, so folding it into the round-up delta with the
            header word (node_size) is exact.  Data area is always >= one dnode
            (header + pad), so the _nz form's do-while zero is safe. */
         dnode_align imm1, nargs, (node_size + tsp_frame.fixed_overhead)
-        TSP_Alloc_Var_Boxed_nz imm1, imm2  /* ppc:917 */
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:917 */
         lsl imm0, nargs, #(num_subtag_bits - fixnumshift)
         mov temp0, #subtag_simple_vector    /* not a valid logical-imm:    */
         orr imm0, imm0, temp0               /* materialize, then orr       */
@@ -2015,7 +2015,7 @@ spentry stkgvector
            object header, so the data area is never empty.  (An earlier bare
            `sub tsp' dropped the backlink and fed tsp:=0 into a later
            TSP_Unlink -- 16m5k wall, gdb-observed 2026-07-17.) */
-        TSP_Alloc_Var_Boxed_nz imm0, imm4
+        TSP_Alloc_Var_Boxed imm0, imm4
         str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16) */
         add arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         add imm3, arg_z, #misc_header_offset     /* pointer to header area for data copy */
@@ -3006,7 +3006,7 @@ endsp throw
 /* ported from ppc-spentry.s:166-284 (PPC64 branch) */
 /* Unwind N frames (imm0 = count), processing unwind-protects */
 /* N multiple values atop vstack, nargs = count */
-/* tsp_alloc_var_boxed_nz moved to arm64-macros.s as TSP_Alloc_Var_Boxed_nz
+/* tsp_alloc_var_boxed_nz moved to arm64-macros.s as TSP_Alloc_Var_Boxed
    (publish-last, 2-reg: size, scratch -- size is clobbered as the zeroing
    cursor, the live tsp is the loop's end sentinel). */
 
@@ -3075,7 +3075,7 @@ spentry nthrowvalues
         /* allocate a boxed tsp frame: overhead + nargs bytes + 2 nodes        */
         add imm0, nargs, #(tsp_frame.fixed_overhead + (2*node_size) + (dnode_size-1))
         and imm0, imm0, #~(dnode_size-1)
-        TSP_Alloc_Var_Boxed_nz imm0, imm1
+        TSP_Alloc_Var_Boxed imm0, imm1
         mov imm2, nargs
         add imm1, vsp, nargs            /* imm1 = top of value block            */
         add imm0, tsp, #tsp_frame.data_offset
@@ -3801,10 +3801,10 @@ spentry stack_cons_rest_arg
         /* ppc:2035-2063.  imm0 = required args already consumed; nargs = total.
            Cons the rest args into a list on the temp stack (heap-cons if the
            block would be too large).  arg_z accumulates the list. */
-        /* Labels 8/9 for the ble/bge targets (not 2/3): the inlined
-           tsp_alloc_var_boxed_nz macro emits its own local 1:/2:, so a forward
-           `2f` here would bind to the macro's label.  Matches throw/nthrowvalues
-           high-label convention. */
+        /* Labels 8/9 for the ble/bge targets (not 2/3), matching the
+           throw/nthrowvalues high-label convention.  (The TSP_Alloc_* macros
+           now use \@-unique local labels, so a forward `2f' here would no
+           longer be captured by the macro -- but the convention is kept.) */
         sub imm1, nargs, imm0           /* ppc:2036 imm1 = rest count (bytes)   */
         mov arg_z, rnil                 /* ppc:2039 li arg_z,nil_value          */
         cmp imm1, #0                    /* ppc:2037 cmpri(cr0,imm1,0), signed   */
@@ -3816,7 +3816,7 @@ spentry stack_cons_rest_arg
            per spentry-A:447-448. */
         add imm2, imm1, #(tsp_frame.fixed_overhead + dnode_size - 1)
         and imm2, imm2, #0xfffffffffffffff0
-        TSP_Alloc_Var_Boxed_nz imm2, imm3   /* ppc:2044 TSP_Alloc_Var_Boxed */
+        TSP_Alloc_Var_Boxed imm2, imm3   /* ppc:2044 TSP_Alloc_Var_Boxed */
         add imm0, tsp, #(tsp_frame.data_offset + fulltag_cons)  /* ppc:2045     */
 1:      /* ppc:2046 */
         cmp imm1, #cons.size            /* ppc:2047 cmpri(cr0,imm1,cons.size)   */
@@ -4197,7 +4197,7 @@ spentry save_values
 save_values_to_tsp:                                 /* ppc:4992 (named label)     */
         mov imm2, tsp                               /* ppc:4993 previous tsp      */
         dnode_align imm0, nargs, (tsp_frame.fixed_overhead + 2*node_size) /* ppc:4994 */
-        TSP_Alloc_Var_Boxed_nz imm0, imm3     /* ppc:4995 */
+        TSP_Alloc_Var_Boxed imm0, imm3     /* ppc:4995 */
         str imm1, [tsp, #tsp_frame.backlink]        /* ppc:4996 one tsp "frame"   */
         str nargs, [tsp, #tsp_frame.data_offset]    /* ppc:4997 value count       */
         str imm2, [tsp, #(tsp_frame.data_offset+node_size)] /* ppc:4998 prev tsp  */
