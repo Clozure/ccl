@@ -2049,13 +2049,36 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
 */
 
 extern opcode
-  egc_rplaca, egc_rplaca_did_store,          /* spentry-D (window half 1) */
-  egc_rplacd, egc_rplacd_did_store, egc_rplacd_end,
-  egc_gvset, egc_gvset_did_store,            /* spentry-B (window half 2) */
+  egc_write_barrier_start,
+  egc_rplaca, egc_rplaca_did_store,
+  egc_rplacd, egc_rplacd_did_store,
+  egc_gvset, egc_gvset_did_store,
   egc_set_hash_key, egc_set_hash_key_did_store,
   egc_store_node_conditional, egc_store_node_conditional_test,
   egc_set_hash_key_conditional, egc_set_hash_key_conditional_test,
   egc_write_barrier_end;
+
+/*
+ * Assert that EGC subprims are in expected address order.  If this is
+ * not true, pc_luser_xp's >= chain over the labels will be wrong.
+ */
+static void
+assert_egc_subprim_order(void)
+{
+  const opcode *seq[] = {
+    &egc_write_barrier_start,
+    &egc_rplaca, &egc_rplacd, &egc_gvset, &egc_set_hash_key,
+    &egc_store_node_conditional, &egc_set_hash_key_conditional,
+    &egc_write_barrier_end,
+  };
+  unsigned n = sizeof(seq) / sizeof(seq[0]);
+
+  for (unsigned i = 1; i < n; i++) {
+    if (seq[i] < seq[i - 1]) {
+      Fatal(": EGC write-barrier subprims are out of address order", "");
+    }
+  }
+}
 
 /* The tsp-frame "raw" mark: `str tsp, [tsp, #tsp_frame.type]' (type == 8;
    spentry-A tsp_frame equates / arm64-macros.s TSP frame discipline).
@@ -2155,27 +2178,16 @@ restart_allocation(ExceptionInformation *xp, TCR *tcr)
 
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
-{                                 /* ppc-exceptions.c:1900-2130 */
+{
   pc program_counter = xpPC(xp);
   opcode instr = *program_counter;
   lisp_frame *frame = (lisp_frame *)ptr_from_lispobj(xpSP(xp));
   LispObj cur_allocptr = xpGPR(xp, allocptr);
   int allocptr_tag = fulltag_of(cur_allocptr);
 
-  /* (e) EGC write-barrier subprims.  ARM64-DEVIATION (window shape only):
-     PPC brackets ALL barrier subprims in one contiguous
-     [egc_write_barrier_start, egc_write_barrier_end) region; here the
-     family is split across spentry-D (rplaca/rplacd) and spentry-B
-     (gvset/set-hash-key/conditionals), so we test the two per-file
-     windows.  Case logic and memoization are ppc:1911-1979 verbatim.
-     Conditional-store "did it store?" test: PPC reads CR0.EQ
-     (xpCCR & 0x20000000); the drafts' ll/sc loops leave the stxr status
-     in w17 (= temp5 after the 01d73c3 renumber; the uniform status register):
-     status != 0 means not-stored/will-retry. */
-  if (((program_counter >= &egc_rplaca) &&
-       (program_counter < &egc_rplacd_end)) ||
-      ((program_counter >= &egc_gvset) &&
-       (program_counter < &egc_write_barrier_end))) {
+  /* are we in the EGC write-barrier region? */
+  if ((program_counter >= &egc_write_barrier_start) &&
+      (program_counter < &egc_write_barrier_end)) {
     LispObj *ea = 0, val = 0, root = 0;
     bitvector refbits = (bitvector)(lisp_global(REFBITS));
     Boolean need_check_memo = true, need_memoize_root = false;
@@ -2560,6 +2572,7 @@ extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp, unsigned idx_regno)
 
 void
 exception_init()
-{                                 /* ppc-exceptions.c:2327-2331, verbatim */
+{
+  assert_egc_subprim_order();
   install_pmcl_exception_handlers();
 }

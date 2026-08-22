@@ -1180,6 +1180,119 @@ endsp makestackblock0
    has been replaced by TSP_Alloc_Var_Boxed in arm64-macros.s, which builds the
    frame below the live tsp and publishes it atomically.) */
 
+/*
+ * The EGC write barrier family
+ *
+ * The function pc_luser_xp, which is used to ensure that suspended
+ * threads are suspended in a GC-safe way, must treat the following
+ * subprims (which implement the EGC write barrier) specially.
+ *
+ * Specifically, a store that might introduce an inter-generational
+ * reference (a young pointer stored into an old object) has to
+ * "memoize" that reference by setting a bit in the global refbits
+ * bitmap.  This has to happen atomically, and has to happen
+ * atomically wrt GC.  Note that updating a word in a bitmap is itself
+ * not atomic, unless we use interlocked loads and stores.
+ *
+ * These subprims (rplaca, rplacd, gvset, set_hash_key,
+ * store_node_conditional, and set_hash_key_conditional) must remain
+ * contiguous and in this exact address order.  pc_luser_xp relies on
+ * this.
+ */
+
+        .globl C(egc_write_barrier_start)
+C(egc_write_barrier_start):
+
+        .globl C(egc_rplaca)
+        .globl C(egc_rplaca_did_store)
+spentry rplaca
+C(egc_rplaca):
+        cmp arg_z, arg_y                /* ppc:484 cmplr(cr2,arg_z,arg_y)  */
+        str arg_z, [arg_y, #cons.car]   /* ppc:485 _rplaca                 */
+C(egc_rplaca_did_store):
+        b.ls 1f                         /* ppc:487 blelr cr2 (no barrier)  */
+        ref_global imm2, ref_base               /* ppc:488 ref_global      */
+        mov imm3, #0x8000000000000000           /* ppc:489 load_highbit    */
+        ref_global imm1, oldspace_dnode_count   /* ppc:493                 */
+        sub imm0, arg_y, imm2                   /* ppc:490                 */
+        lsr imm0, imm0, #dnode_shift            /* ppc:491                 */
+        cmp imm0, imm1                          /* ppc:495 cmplr           */
+        lsr imm2, imm0, #8                      /* ppc:492 refidx granule  */
+        and imm4, imm0, #0x3f                   /* ppc:494 bit shift count */
+        lsr imm0, imm0, #bitmap_shift           /* ppc:497                 */
+        lsr imm3, imm3, imm4                    /* ppc:496                 */
+        ref_global temp0, refbits               /* ppc:498                 */
+        b.hs 1f                                 /* ppc:499 bgelr (UNSIGNED)*/
+        lsl imm0, imm0, #3                      /* ppc:500 word_shift      */
+        ldr imm1, [temp0, imm0]                 /* ppc:501                 */
+        tst imm1, imm3                          /* ppc:502 and.            */
+        b.ne 1f                                 /* ppc:503 bnelr           */
+        add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
+2:      ldxr imm1, [temp0]                      /* ppc:504 lrarx           */
+        orr imm1, imm1, imm3                    /* ppc:505                 */
+        stxr w17, imm1, [temp0]                  /* ppc:506 strcx           */
+        cbnz w17, 2b                             /* ppc:507                 */
+        dmb ish                                 /* ppc:508 isync           */
+        and imm4, imm2, #0x3f                   /* ppc:509                 */
+        lsr imm2, imm2, #bitmap_shift           /* ppc:510                 */
+        mov imm3, #0x8000000000000000           /* ppc:511                 */
+        ref_global temp0, ephemeral_refidx      /* ppc:512                 */
+        lsl imm2, imm2, #3                      /* ppc:513                 */
+        lsr imm3, imm3, imm4                    /* ppc:514                 */
+        add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
+3:      ldxr imm1, [temp0]                      /* ppc:515 lrarx           */
+        orr imm1, imm1, imm3                    /* ppc:516                 */
+        stxr w17, imm1, [temp0]                  /* ppc:517 strcx           */
+        cbnz w17, 3b                             /* ppc:518                 */
+        dmb ish                                 /* ppc:519 isync           */
+1:      ret
+endsp rplaca
+
+        .globl C(egc_rplacd)
+        .globl C(egc_rplacd_did_store)
+spentry rplacd
+C(egc_rplacd):
+        cmp arg_z, arg_y
+        str arg_z, [arg_y, #cons.cdr]
+C(egc_rplacd_did_store):
+        b.ls 1f
+        ref_global imm2, ref_base               /* ppc:528 ref_global      */
+        mov imm3, #0x8000000000000000           /* ppc:529 load_highbit    */
+        ref_global imm1, oldspace_dnode_count   /* ppc:533                 */
+        sub imm0, arg_y, imm2                   /* ppc:530                 */
+        lsr imm0, imm0, #dnode_shift            /* ppc:531                 */
+        cmp imm0, imm1                          /* ppc:535 cmplr           */
+        lsr imm2, imm0, #8                      /* ppc:532 refidx granule  */
+        and imm4, imm0, #0x3f                   /* ppc:534 bit shift count */
+        lsr imm0, imm0, #bitmap_shift           /* ppc:537                 */
+        lsr imm3, imm3, imm4                    /* ppc:536                 */
+        ref_global temp0, refbits               /* ppc:538                 */
+        b.hs 1f                                 /* ppc:539 bgelr (UNSIGNED)*/
+        lsl imm0, imm0, #3                      /* ppc:540 word_shift      */
+        ldr imm1, [temp0, imm0]                 /* ppc:541                 */
+        tst imm1, imm3                          /* ppc:542 and.            */
+        b.ne 1f                                 /* ppc:543 bnelr           */
+        add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
+2:      ldxr imm1, [temp0]                      /* ppc:544 lrarx           */
+        orr imm1, imm1, imm3                    /* ppc:545                 */
+        stxr w17, imm1, [temp0]                  /* ppc:546 strcx           */
+        cbnz w17, 2b                             /* ppc:547                 */
+        dmb ish                                 /* ppc:548 isync           */
+        and imm4, imm2, #0x3f                   /* ppc:549                 */
+        lsr imm2, imm2, #bitmap_shift           /* ppc:550                 */
+        mov imm3, #0x8000000000000000           /* ppc:551                 */
+        ref_global temp0, ephemeral_refidx      /* ppc:552                 */
+        lsl imm2, imm2, #3                      /* ppc:553                 */
+        lsr imm3, imm3, imm4                    /* ppc:554                 */
+        add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
+3:      ldxr imm1, [temp0]                      /* ppc:555 lrarx           */
+        orr imm1, imm1, imm3                    /* ppc:556                 */
+        stxr w17, imm1, [temp0]                  /* ppc:557 strcx           */
+        cbnz w17, 3b                             /* ppc:558                 */
+        dmb ish                                 /* ppc:559 isync           */
+1:      ret
+endsp rplacd
+
 /* ===== gvset ===== */
 /* ported from ppc-spentry.s:568-608 (PPC64 branch) */
         .globl C(egc_gvset)
@@ -1362,11 +1475,6 @@ C(egc_store_node_conditional_test):
         stxr w17, imm1, [temp1]
         cbnz w17, 3b
         dmb ish                         /* ppc:747                         */
-        /* NOTE: PPC puts C(egc_write_barrier_end) at the END of
-           set_hash_key_conditional (the runtime checks the whole family
-           as one PC range); moved there - MERGE-ORDER NOTE: when these
-           drafts land in Matt's arm64-spentry.s, the EGC family
-           (rplaca..set_hash_key_conditional) must stay contiguous. */
 8:      add arg_z, rnil, #t_offset            /* success => T              */
         ret
 9:      clrex                                 /* PPC strcx-to-RESERVATION_
@@ -4502,117 +4610,6 @@ spentry funcall
         uuo_error_reg_not_callable temp0 /* his macro name */
 endsp funcall
 
-/* ========== CONS MUTATION (with EGC write barrier) ========== */
-
-/* ported from ppc-spentry.s:482-520 (PPC64 branch).
- * The store is real; the EGC write-barrier memoization (ppc:487-519:
- * dnode math on (arg_y - ref_base), set bit in refbits + ephemeral_refidx
- * with ldxr/stxr) needs the ref_base/oldspace_dnode_count/refbits/
- * ephemeral_refidx GLOBALS, which have no ARM64 anchor yet - the same
- * open idiom as the spentry-B barrier sites.  #error so a build cannot
- * silently drop the memoization (young-object refs would be lost by the
- * EGC). */
-/* pc_luser_xp window labels (ppc-spentry.s:480-486 places egc_rplaca at
- * the subprim entry and did_store right after the str; NOTE: PPC's single
- * contiguous [write_barrier_start, write_barrier_end) window does NOT
- * exist on ARM64 — the barrier family is split between this file and
- * spentry-B, so arm64-exceptions.c's pc_luser_xp checks per-family
- * windows instead). */
-        .globl C(egc_rplaca)
-        .globl C(egc_rplaca_did_store)
-spentry rplaca
-C(egc_rplaca):
-        cmp arg_z, arg_y                /* ppc:484 cmplr(cr2,arg_z,arg_y)  */
-        str arg_z, [arg_y, #cons.car]   /* ppc:485 _rplaca                 */
-C(egc_rplaca_did_store):
-        b.ls 1f                         /* ppc:487 blelr cr2 (no barrier)  */
-        ref_global imm2, ref_base               /* ppc:488 ref_global      */
-        mov imm3, #0x8000000000000000           /* ppc:489 load_highbit    */
-        ref_global imm1, oldspace_dnode_count   /* ppc:493                 */
-        sub imm0, arg_y, imm2                   /* ppc:490                 */
-        lsr imm0, imm0, #dnode_shift            /* ppc:491                 */
-        cmp imm0, imm1                          /* ppc:495 cmplr           */
-        lsr imm2, imm0, #8                      /* ppc:492 refidx granule  */
-        and imm4, imm0, #0x3f                   /* ppc:494 bit shift count */
-        lsr imm0, imm0, #bitmap_shift           /* ppc:497                 */
-        lsr imm3, imm3, imm4                    /* ppc:496                 */
-        ref_global temp0, refbits               /* ppc:498                 */
-        b.hs 1f                                 /* ppc:499 bgelr (UNSIGNED)*/
-        lsl imm0, imm0, #3                      /* ppc:500 word_shift      */
-        ldr imm1, [temp0, imm0]                 /* ppc:501                 */
-        tst imm1, imm3                          /* ppc:502 and.            */
-        b.ne 1f                                 /* ppc:503 bnelr           */
-        add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
-2:      ldxr imm1, [temp0]                      /* ppc:504 lrarx           */
-        orr imm1, imm1, imm3                    /* ppc:505                 */
-        stxr w17, imm1, [temp0]                  /* ppc:506 strcx           */
-        cbnz w17, 2b                             /* ppc:507                 */
-        dmb ish                                 /* ppc:508 isync           */
-        and imm4, imm2, #0x3f                   /* ppc:509                 */
-        lsr imm2, imm2, #bitmap_shift           /* ppc:510                 */
-        mov imm3, #0x8000000000000000           /* ppc:511                 */
-        ref_global temp0, ephemeral_refidx      /* ppc:512                 */
-        lsl imm2, imm2, #3                      /* ppc:513                 */
-        lsr imm3, imm3, imm4                    /* ppc:514                 */
-        add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
-3:      ldxr imm1, [temp0]                      /* ppc:515 lrarx           */
-        orr imm1, imm1, imm3                    /* ppc:516                 */
-        stxr w17, imm1, [temp0]                  /* ppc:517 strcx           */
-        cbnz w17, 3b                             /* ppc:518                 */
-        dmb ish                                 /* ppc:519 isync           */
-1:      ret
-endsp rplaca
-
-/* ported from ppc-spentry.s:524-562 (PPC64 branch); see rplaca above. */
-/* pc_luser_xp window labels (ppc-spentry.s:522-528). */
-        .globl C(egc_rplacd)
-        .globl C(egc_rplacd_did_store)
-spentry rplacd
-C(egc_rplacd):
-        cmp arg_z, arg_y
-        str arg_z, [arg_y, #cons.cdr]
-C(egc_rplacd_did_store):
-        b.ls 1f
-        ref_global imm2, ref_base               /* ppc:528 ref_global      */
-        mov imm3, #0x8000000000000000           /* ppc:529 load_highbit    */
-        ref_global imm1, oldspace_dnode_count   /* ppc:533                 */
-        sub imm0, arg_y, imm2                   /* ppc:530                 */
-        lsr imm0, imm0, #dnode_shift            /* ppc:531                 */
-        cmp imm0, imm1                          /* ppc:535 cmplr           */
-        lsr imm2, imm0, #8                      /* ppc:532 refidx granule  */
-        and imm4, imm0, #0x3f                   /* ppc:534 bit shift count */
-        lsr imm0, imm0, #bitmap_shift           /* ppc:537                 */
-        lsr imm3, imm3, imm4                    /* ppc:536                 */
-        ref_global temp0, refbits               /* ppc:538                 */
-        b.hs 1f                                 /* ppc:539 bgelr (UNSIGNED)*/
-        lsl imm0, imm0, #3                      /* ppc:540 word_shift      */
-        ldr imm1, [temp0, imm0]                 /* ppc:541                 */
-        tst imm1, imm3                          /* ppc:542 and.            */
-        b.ne 1f                                 /* ppc:543 bnelr           */
-        add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
-2:      ldxr imm1, [temp0]                      /* ppc:544 lrarx           */
-        orr imm1, imm1, imm3                    /* ppc:545                 */
-        stxr w17, imm1, [temp0]                  /* ppc:546 strcx           */
-        cbnz w17, 2b                             /* ppc:547                 */
-        dmb ish                                 /* ppc:548 isync           */
-        and imm4, imm2, #0x3f                   /* ppc:549                 */
-        lsr imm2, imm2, #bitmap_shift           /* ppc:550                 */
-        mov imm3, #0x8000000000000000           /* ppc:551                 */
-        ref_global temp0, ephemeral_refidx      /* ppc:552                 */
-        lsl imm2, imm2, #3                      /* ppc:553                 */
-        lsr imm3, imm3, imm4                    /* ppc:554                 */
-        add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
-3:      ldxr imm1, [temp0]                      /* ppc:555 lrarx           */
-        orr imm1, imm1, imm3                    /* ppc:556                 */
-        stxr w17, imm1, [temp0]                  /* ppc:557 strcx           */
-        cbnz w17, 3b                             /* ppc:558                 */
-        dmb ish                                 /* ppc:559 isync           */
-1:      ret
-/* end of the rplaca/rplacd pc_luser_xp window (this file's half of the
- * split barrier family; spentry-B holds the other four families). */
-        .globl C(egc_rplacd_end)
-C(egc_rplacd_end):
-endsp rplacd
 
 /* ========== MULTIPLE VALUES ========== */
 
