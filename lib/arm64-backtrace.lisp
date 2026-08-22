@@ -13,15 +13,18 @@
 ;;; lisp-frame-marker, NOT chained through a stored backlink as on
 ;;; PPC).
 ;;;
-;;; Scope follows the shipped ARM32 port (lib/arm-backtrace.lisp): the
-;;; saved-register machinery (registers-used-by encodings, srv vectors,
-;;; frame-restartable-p, %apply-in-frame and its PPC-instruction
-;;; branch-tree parser, ppc:379-736) has no analog because this design
-;;; keeps NO non-volatile lisp registers (lib/arm64env.lisp R1:
-;;; empty save pool) — the compiler can never record a saved-register
-;;; variable location.  APPLY-IN-FRAME is therefore unimplemented, as
-;;; on ARM32.  LATENT: revisit if save0-3 ever enter the register
-;;; pool.
+;;; Scope: save0..save3 are IN the register pool (*arm642-nvrs*,
+;;; arm642.lisp), so the saved-register recovery set is real here:
+;;; the compiler homes variables in save0-3, records those locations
+;;; in the symbol map (arm642-digest-symbols), and records the
+;;; register-save frame layout as a REGISTER-SAVE-INFO entry in the
+;;; function's %LFUN-INFO plist (arm642-encode-regsave-info, format
+;;; documented there) that REGISTERS-USED-BY below reads back -- PPC's
+;;; LWZ-trailer scheme (ppc:101-134) with the metadata kept in the
+;;; function object rather than the code vector.  Still absent, as on ARM32
+;;; (lib/arm-backtrace.lisp): the srv vectors, frame-restartable-p and
+;;; %apply-in-frame's PPC-instruction branch-tree parser (ppc:379-736).
+;;; APPLY-IN-FRAME therefore remains unimplemented.
 ;;;
 ;;; %frame-backlink and lisp-frame-p live HERE, not in
 ;;; arm64-threads-utils.lisp as on PPC: they need the
@@ -102,13 +105,37 @@
                   (%ptr-in-area-p index2 cs-area)
                   (< (the fixnum index1) (the fixnum index2)))))))
 
-;;; No non-volatile lisp registers in this design (header note), so no
-;;; register-save encoding exists to decode — the ARM32 answer
-;;; (arm-backtrace.lisp:49-51), not PPC's LWZ-trailer scheme
-;;; (ppc:101-134).
+;;; ppc:101-134 (the ppc64 arm), with the register-save record read
+;;; from the function's %LFUN-INFO plist (REGISTER-SAVE-INFO, a packed
+;;; fixnum emitted by arm642-encode-regsave-info) rather than from a
+;;; code-vector trailer.  Fields (keep in sync with the emitter):
+;;;   bits 2..0 nregs   bits 28..3 pc (words)   bits 54..29 ea (cells)
+;;; Returns (mask where) once AT-PC has passed the save sequence,
+;;; (mask nil) with no AT-PC ("saved somewhere, can't locate" -- the
+;;; walkers then answer their BAD value), (nil nil) otherwise.
+;;; Index space, shared by the mask, *saved-register-names* and the
+;;; catch-frame fallback: save0=3 .. save3=0.  The save-nvrs vinsn
+;;; (arm64-vinsns.lisp:7741) pushes save0 FIRST, so save0 sits at the
+;;; HIGHEST address = raw-frame index WHERE+0 = the highest mask bit,
+;;; PPC's exact geometry (stmw leaves save0=r31 highest, index 7).
+;;; ARM64-DEVIATION: the recorded pc is the save COMPLETION point, so
+;;; the AT-PC comparison is exact even for an exception pc inside the
+;;; save sequence; PPC (>= the sequence START) and x86-64 (<= rpc) are
+;;; both off by up to the sequence length there.
 (defun registers-used-by (lfun &optional at-pc)
-  (declare (ignore lfun at-pc))
-  (values nil nil))
+  (let* ((info (getf (%lfun-info lfun) 'register-save-info)))
+    (if info
+      (let* ((nregs (ldb (byte 3 0) info))
+             (pc (ldb (byte 26 3) info))
+             (ea-cells (ldb (byte 26 29) info))
+             (mask (ash (1- (ash 1 nregs)) (- 4 nregs))))
+        (declare (fixnum nregs pc ea-cells mask))
+        (if at-pc
+          (if (>= (ash at-pc -2) pc)
+            (values mask (- ea-cells nregs))
+            (values nil nil))
+          (values mask nil)))
+      (values nil nil))))
 
 (defun %frame-savefn (p)        ; ppc:153-156
   (if (fake-stack-frame-p p)
@@ -181,16 +208,95 @@
         (setq last-catch catch
               catch (next-catch catch))))))
 
-;;; With no saved registers (see registers-used-by) the compiler never
-;;; records a saved-register variable location, so these are
-;;; unreachable — the ARM32 answer (arm-backtrace.lisp:131-139).
-(defun %find-register-argument-value (context cfp regval bad)
-  (declare (ignore context cfp regval))
-  bad)
+;;; ppc:224-225.  ARM64-DEVIATION: this pool ASCENDS from save0=x19
+;;; where PPC's DESCENDS to save0=r31, and save0 must get the highest
+;;; index (see registers-used-by), so the sense flips: save3 - regno.
+(defun register-number->saved-register-index (regno)
+  (- arm64::save3 regno))
 
+;;; ppc:340-351.  ARM64-DEVIATION: our catch frame stores save0 FIRST,
+;;; ascending (arm64-arch.lisp catch-frame: "regs[] holds save0..save3
+;;; in ascending order"); PPC stores save7 first.  With index save0=3,
+;;; the cell is save-save0-cell + (3 - index).
+(defun get-register-value (address last-catch index)
+  (if address
+    (%fixnum-ref address)
+    (uvref last-catch (+ (- 3 index) target::catch-frame.save-save0-cell))))
+
+;;; Inverse of get-register-value
+(defun set-register-value (value address last-catch index)
+  (if address
+    (%fixnum-set address value)
+    (setf (uvref last-catch (+ (- 3 index) target::catch-frame.save-save0-cell))
+          value)))
+
+;;; ppc:227-249, with x86-backtrace.lisp:176-181's nil-WHERE guard (a
+;;; younger frame that saved the register at an unknown location must
+;;; answer BAD, not keep walking: an older copy or the catch snapshot
+;;; would be a stale value presented as current).  Walk correctness:
+;;; going from CFP toward YOUNGER frames, the FIRST frame whose mask
+;;; claims the register stored the value it saw at ITS entry, and no
+;;; live frame between CFP and it touched the register (one that had
+;;; would have saved it and been found first), so that stored value is
+;;; CFP's function's value.  A fake frame carries the register live in
+;;; its exception context.  If nothing saved it, the innermost catch
+;;; frame's snapshot is the donor-sanctioned fallback.
+(defun %find-register-argument-value (context cfp regval bad)
+  (let* ((last-catch (last-catch-since cfp context))
+         (index (register-number->saved-register-index regval)))
+    (do* ((frame cfp (child-frame frame context))
+          (first t))
+         ((null frame))
+      (if (fake-stack-frame-p frame)
+        (return-from %find-register-argument-value
+          (xp-gpr-lisp (%fake-stack-frame.xp frame) regval))
+        (if first
+          (setq first nil)
+          (multiple-value-bind (lfun pc)
+              (cfp-lfun frame)
+            (when lfun
+              (multiple-value-bind (mask where)
+                  (registers-used-by lfun pc)
+                (when (if mask (logbitp index mask))
+                  (return-from %find-register-argument-value
+                    (if where
+                      (raw-frame-ref frame context
+                                     (+ where
+                                        (logcount
+                                         (logandc2 mask
+                                                   (1- (ash 1 (1+ index))))))
+                                     bad)
+                      bad)))))))))
+    (get-register-value nil last-catch index)))
+
+;;; ppc:251-275, same shape and the same nil-WHERE guard (return NIL:
+;;; the caller set-map-entry-value treats non-nil as success).
 (defun %set-register-argument-value (context cfp regval new)
-  (declare (ignore context cfp regval))
-  new)
+  (let* ((last-catch (last-catch-since cfp context))
+         (index (register-number->saved-register-index regval)))
+    (do* ((frame cfp (child-frame frame context))
+          (first t))
+         ((null frame))
+      (if (fake-stack-frame-p frame)
+        (return-from %set-register-argument-value
+          (setf (xp-gpr-lisp (%fake-stack-frame.xp frame) regval) new))
+        (if first
+          (setq first nil)
+          (multiple-value-bind (lfun pc)
+              (cfp-lfun frame)
+            (when lfun
+              (multiple-value-bind (mask where)
+                  (registers-used-by lfun pc)
+                (when (if mask (logbitp index mask))
+                  (return-from %set-register-argument-value
+                    (when where
+                      (raw-frame-set frame context
+                                     (+ where
+                                        (logcount
+                                         (logandc2 mask
+                                                   (1- (ash 1 (1+ index))))))
+                                     new))))))))))
+    (set-register-value new nil last-catch index)))
 
 (defun %raw-frame-ref (cfp context idx bad) ; ppc:276-297
   (declare (fixnum idx))

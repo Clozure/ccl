@@ -618,6 +618,10 @@
                        (setq debug-info (list* 'function-symbol-map *arm642-recorded-symbols* debug-info)))
                      (when (and (getf debug-info '%function-source-note) *arm642-emitted-source-notes*)
                        (setq debug-info (list* 'pc-source-map *arm642-emitted-source-notes* debug-info)))
+                     ;; Reserve the REGISTER-SAVE-INFO slot now (real value
+                     ;; needs label addresses assigned by FINALIZE below).
+                     (when *arm642-register-restore-count*
+                       (setq debug-info (list* 'register-save-info t debug-info)))
                      (when debug-info
                        (setq bits (logior (ash 1 $lfbits-info-bit) bits))
                        (backend-new-immediate debug-info))
@@ -639,7 +643,16 @@
                              (arm642-generate-pc-source-map debug-info)))
                      (when (getf debug-info 'function-symbol-map)
                        (setf (getf debug-info 'function-symbol-map)
-                             (arm642-digest-symbols)))))))))
+                             (arm642-digest-symbols)))
+                     ;; FINALIZE has now assigned the save-note's label,
+                     ;; so the real record can be filled into the slot
+                     ;; reserved above.
+                     (when *arm642-register-restore-count*
+                       (setf (getf debug-info 'register-save-info)
+                             (arm642-encode-regsave-info
+                              *arm642-compiler-register-save-note*
+                              *arm642-register-restore-ea*
+                              *arm642-register-restore-count*)))))))))
     afunc))
 
 (defun arm642-xmake-function (code imms bits)
@@ -648,6 +661,47 @@
       (lap-imms (cons (aref imms i) i)))
     (let* ((arm64::*constants* (lap-imms)))
       (arm64-lap-generate-code code (arm64::finalize code) bits))))
+
+;;; Register-save record: a packed fixnum recording where the function
+;;; saved save0..save(nregs-1).  It rides in the function's %LFUN-INFO
+;;; plist under REGISTER-SAVE-INFO -- alongside FUNCTION-SYMBOL-MAP,
+;;; which backtrace already reads from there -- NOT in the code vector.
+;;; lib/arm64-backtrace.lisp's REGISTERS-USED-BY reads it back.  This is
+;;; PPC's scheme (ppc-lap.lisp:68 / lib/ppc-backtrace.lisp:101-134) with
+;;; the storage moved off the instruction stream: nothing is appended to
+;;; the code vector, so no reserved-encoding marker, disjointness
+;;; argument, or last-instruction scan is needed, and the metadata stays
+;;; in ordinary heap where a future execute-only code region cannot
+;;; strand it.
+;;;   bits  2..0   nregs  1..4
+;;;   bits 28..3   pc     save-COMPLETION pc in words, %cfp-lfun origin
+;;;                       (label bytes/4 + 1 prefix word + nregs instructions)
+;;;   bits 54..29  ea     *arm642-register-restore-ea* in 8-byte cells
+;;; Total 55 bits, inside an arm64 fixnum (>= 61 value bits).  The 26-bit
+;;; pc/ea fields hold any real function (a 256M-instruction prologue /
+;;; 512MB frame); the pack still returns NIL if one somehow overflows, so
+;;; a wrong packing can never reach the walk.  NIL also results when
+;;; nothing was saved or the save-nvrs vinsn was optimized away (its note
+;;; then never got a label).  REGISTERS-USED-BY then answers (nil nil) as
+;;; it did when the pool was empty, and the register walk degrades to the
+;;; xp/catch-frame fallback.  Keep this layout in sync with the LDB
+;;; fields in REGISTERS-USED-BY.
+(defun arm642-encode-regsave-info (note restore-ea nregs)
+  (when (and (typep note 'vinsn-note)
+             nregs
+             (> nregs 0)
+             restore-ea)
+    (let* ((lap-label (vinsn-note-address note))
+           (addr (and lap-label (arm64::label-address lap-label))))
+      (when addr
+        (let* ((pc-words (+ (ash addr -2) 1 nregs))
+               (ea-cells (ash restore-ea (- arm64::word-shift))))
+          (declare (fixnum pc-words ea-cells))
+          (when (and (< pc-words (ash 1 26))
+                     (< ea-cells (ash 1 26)))
+            (logior nregs
+                    (ash pc-words 3)
+                    (ash ea-cells 29))))))))
 
 (defun arm642-make-stack (size &optional (subtype target::subtag-s16-vector))
   (make-uarray-1 subtype size t 0 nil nil nil nil t nil))
