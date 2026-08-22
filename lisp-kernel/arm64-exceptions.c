@@ -2080,6 +2080,22 @@ assert_egc_subprim_order(void)
   }
 }
 
+/* The two lr <-> lisp_frame.savelr swap windows in the nthrow spentries
+   (ARM32: swap_lr_lisp_frame_temp0 / _arg_z, arm-exceptions.c).  Window
+   body, 4 insns:
+       ldr temp4, [sp, #lisp_frame.savelr]
+       str lr,    [sp, #lisp_frame.savelr]
+       mov lr, temp4
+       mov temp4, #0
+   A movable interior code pc may rest ONLY in a pc-locative home (xpPC,
+   xpLR, or a walked savelr slot); these windows are the sole instants a
+   throw holds one in a scratch register, and pc_luser_xp rolls them
+   forward before any GC phase reads the context (16m86 pc-locative
+   class; comms/MT-CRASH-16m86.md C5/C6). */
+extern opcode
+  swap_lr_lisp_frame_0,                      /* nthrowvalues do_unwind    */
+  swap_lr_lisp_frame_1;                      /* nthrow1value do_unwind    */
+
 /* The tsp-frame "raw" mark: `str tsp, [tsp, #tsp_frame.type]' (type == 8;
    spentry-A tsp_frame equates / arm64-macros.s TSP frame discipline).
    STR (unsigned offset, 64-bit): 0xF9000000 | (8>>3)<<10 | tsp<<5 | tsp,
@@ -2094,6 +2110,20 @@ assert_egc_subprim_order(void)
 #define CREATE_LISP_FRAME_INSTRUCTION 0xD10083FF
 #define IS_STR_TO_SP(i) (((i) & 0xFFC003E0) == 0xF90003E0)
 #define STR_TO_SP_DISP(i) ((((i) >> 10) & 0xfff) << 3)
+
+/* The stp-pair marker-frame build (compiler save-lisp-context vinsns and
+   spentry build_catch_lisp_frame):
+       mov Xm, #lisp_frame_marker
+       stp Xm, vsp, [sp, #-32]!     <- frame created; marker+savevsp stored
+       stp Xa, Xb,  [sp, #16]       <- savefn, savelr
+   STP (64-bit, signed offset) Xa,Xb,[sp,#16]:
+     0xA9000000 | (16>>3)<<15 | Rt2<<10 | 31<<5 | Rt; Rt/Rt2 masked out
+     (fn/lr in most builds, xzr/temp4 in the lexpr prologue).
+   STP (64-bit, pre-index) Xm,vsp,[sp,#-32]!:
+     0xA9800000 | ((-32>>3)&0x7f)<<15 | 25<<10 | 31<<5 | Rt; Rt masked out
+     (the marker register is any :imm temp). */
+#define IS_STP_PAIR_TO_SP16(i) (((i) & 0xFFFF83E0) == 0xA90103E0)
+#define IS_STP_MARKER_VSP_PUSH(i) (((i) & 0xFFFFFFE0) == 0xA9BE67E0)
 
 /*
  * Identify where we are in the consing sequence according to the
@@ -2300,6 +2330,24 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     }
   }
 
+  /* (a2) the stp-pair marker-frame build:
+         mov Xm, #lisp_frame_marker
+         stp Xm, vsp, [sp, #-32]!    <- frame created + marker,savevsp stored
+     --> stp fn, lr,  [sp, #16]      <- interrupted HERE
+     (compiler save-lisp-context-no-stack-args / save-lisp-context-lexpr
+     (stp xzr,temp4) and spentry build_catch_lisp_frame).  The frame shows
+     a valid marker with GARBAGE savefn (node-scanned) and savelr
+     (locative-scanned); zero both -- the interrupted stp re-executes on
+     resume.  The save-lisp-context vinsn comment has claimed since its
+     port that pc_luser_xp recognizes this build; case (a) above only ever
+     matched single-str builds, so until 16m86 nothing did. */
+  if (IS_STP_PAIR_TO_SP16(instr) &&
+      IS_STP_MARKER_VSP_PUSH(program_counter[-1])) {
+    frame->savefn = 0;
+    frame->savelr = 0;
+    return;
+  }
+
   /* (c) consing / uvector allocation */
 
   /*
@@ -2386,6 +2434,41 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
           (LispObj)xpPC(xp));
     }
     return;
+  }
+
+  /* (f) the nthrow lr <-> savelr swap windows (ARM32 arm-exceptions.c,
+     swap_lr_lisp_frame_temp0/_arg_z; extern decls + window shape above).
+     Roll the swap FORWARD in the context: complete whichever of the
+     str/mov remain, so the cleanup pc and the caller's return pc both
+     rest in pc-locative homes (xpLR / the walked savelr slot) before
+     mark/forward/purify/impurify read the context.  temp4 is dead after
+     the window; zero it so a stale interior pc is never node-scanned. */
+  {
+    pc base = &swap_lr_lisp_frame_0;
+
+    if (!((program_counter > base) && (program_counter < (base + 4)))) {
+      base = &swap_lr_lisp_frame_1;
+      if (!((program_counter > base) && (program_counter < (base + 4)))) {
+        base = NULL;
+      }
+    }
+    if (base) {
+      lisp_frame *swap_frame = (lisp_frame *)ptr_from_lispobj(xpSP(xp));
+
+      if (program_counter == (base + 1)) {
+        /* ldr done, str pending: complete the str of our return pc. */
+        swap_frame->savelr = xpLR(xp);
+      }
+      /* Complete the `mov lr, temp4' -- idempotent when it already ran
+         (temp4 still holds the same pc at base+2 and base+3) -- and the
+         `mov temp4, #0'.  PC points at the NEXT insn to execute, so
+         every remaining step is completed here and none is redone in a
+         way that could differ. */
+      xpLR(xp) = xpGPR(xp, temp4);
+      xpGPR(xp, temp4) = 0;
+      xpPC(xp) = base + 4;
+      return;
+    }
   }
 
   /* PPC's INIT_CATCH_FRAME partial-init back-out (ppc:2096-2110) is NOT
