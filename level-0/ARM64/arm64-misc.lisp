@@ -189,11 +189,10 @@
   (unbox-fixnum imm1 disp)                          ; ppc:557
   (add imm0 node imm1)                             ; base = node+disp ([Xn]-only)
   @again
-  (ldxr arg_z (:@ imm0))                           ; ppc:559 lrarx
+  (ldaxr arg_z (:@ imm0))                           ; ppc:559 lrarx
   (add arg_z arg_z by)                             ; ppc:560
-  (stxr (:w temp4) arg_z (:@ imm0))                ; ppc:561 strcx.
+  (stlxr (:w temp4) arg_z (:@ imm0))                ; ppc:561 strcx.
   (cbnz (:w temp4) @again)                          ; ppc:562 (bne- @again)
-  (dmb (:$ 11))                                    ; ppc:563 isync
   (ret))                                           ; ppc:564
 
 ;;; =====================================================================
@@ -305,12 +304,11 @@
 (defarm64lapfunction %ptr-store-fixnum-conditional ((ptr arg_x) (expected-oldval arg_y) (newval arg_z))
   (macptr-ptr imm0 ptr)                            ; ppc:654 (base)
   @again
-  (ldxr imm1 (:@ imm0))                            ; ppc:656 lrarx actual-oldval
+  (ldaxr imm1 (:@ imm0))                            ; ppc:656 lrarx actual-oldval
   (cmp imm1 expected-oldval)                        ; ppc:657 cmpr
   (b.ne @done)                                     ; ppc:658 (bne-)
-  (stxr (:w temp4) newval (:@ imm0))               ; ppc:659 strcx.
+  (stlxr (:w temp4) newval (:@ imm0))               ; ppc:659 strcx.
   (cbnz (:w temp4) @again)                          ; ppc:660 (bne- @again)
-  (dmb (:$ 11))                                    ; ppc:661 isync
   (mov arg_z imm1)                                 ; ppc:662
   (ret)                                            ; ppc:663
   @done
@@ -335,8 +333,7 @@
 ;;; waiter path's avail increment before the release.
 (defarm64lapfunction %release-spin-lock ((p arg_z))
   (macptr-ptr imm0 p)
-  (dmb (:$ 11))                                    ; DMB ISH: release fence
-  (str xzr (:@ imm0))
+  (stlr xzr (:@ imm0))                             ; release store (0212)
   (mov arg_z rnil)
   (ret))
 
