@@ -1016,25 +1016,10 @@
 ;;; guard and Matt's one-register lane model).
 
 
-;;; ============ copy-lexpr-argument ============
-;;; Donor: vinsn-retrofit-queue.lisp:89; PPC64 ppc64-vinsns.lisp:2462:
-;;;   (ldx temp vsp nargs) / (stdu temp -8 vsp)
-;;; PPC nargs is BYTE-scaled (fixnum, shift 3 = word-shift) and is used
-;;; directly as the byte offset of the top argument.  Matt's nargs is
-;;; fixnum-tagged = count<<3 = the same byte offset -- the v2 donor's
-;;; extra lsl-by-3 temp (needed at v2's shift 0) DROPS OUT and the body
-;;; returns to the exact PPC64 shape: register-offset ldr + vpush.
-;;; temp is WIRED to temp0: this vinsn runs between save-lexpr-argregs
-;;; and save-lisp-context-lexpr, where temp4 carries the LEXPR-RA as a
-;;; hidden cross-vinsn channel the allocator cannot see -- and the
-;;; unwired :lisp pool INCLUDES temp4 (lib/arm64env.lisp:33
-;;; arm64-temp-node-regs = temp0-4 + arg_x/y/z).  PPC's unwired temp is
-;;; safe only because its RA rides loc_pc, which is not in ITS pool
-;;; (16m5h unwired-temp class, third instance).
 (define-arm64-vinsn copy-lexpr-argument (()
                                          ()
-                                         ((temp (:lisp #.arm64::temp0))))
-  (ldr temp (:@ vsp nargs))
+                                         ((temp :lisp)))
+  (ldr temp (:@ vsp nargs))             ;nargs already fixum-tagged
   (str temp (:@! vsp (:$ (- arm64::node-size)))))
 
 ;;; ============ default-1-arg ============
@@ -3996,28 +3981,17 @@
 
 ;;; ============ demand-scan CUT-6 wave: the last 2 ============
 
-;;; save-lisp-context-lexpr -- PPC64 ppc64-vinsns.lisp:3502 (like the
-;;; vsp variant but savefn = 0: lexpr frames carry no fn).  HIS frame
-;;; canon (marker/vsp @0/8, fn/lr @16/24; -32 = stack-down, msg-26 +
-;;; his fixed canon); xzr in the fn slot; (mov fn nfn) per the PPC64
-;;; donor.
+;;; Similar to save-lisp-context, but lexpr frames have 0 in the fn slot.
 (define-arm64-vinsn save-lisp-context-lexpr (()
                                              ()
                                              ((marker-reg :imm)))
   (mov marker-reg (:$ arm64::lisp-frame-marker))
   (stp marker-reg vsp (:@! sp (:$ -32)))
-  ;; savelr = temp4 = the lexpr cleanup continuation .SPlexpr-entry
-  ;; handed back (ret1val_addr on the mv path, lexpr_return1v on the
-  ;; 1v path) -- PPC64's `std loc_pc savelr(sp)', NOT lr: lr here is
-  ;; the return-to-prologue from the subprim blr, and storing it made
-  ;; the function's return jump back into its own prologue (16m10
-  ;; infinite vector-allocation loop, disasm-observed).  CONSTRAINT:
-  ;; temp4 must survive from save-lexpr-argregs to here --
-  ;; copy-lexpr-argument sits between them for num-fixed > 0 lexprs;
-  ;; RESOLVED 16m11: the unwired :lisp pool DOES include temp4
-  ;; (lib/arm64env.lisp:33), so copy-lexpr-argument's temp is WIRED to
-  ;; temp0 (w1).
-  (stp xzr temp4 (:@ sp (:$ 16)))
+  ;; savelr = the lexpr cleanup continuation (ret1val_addr on the mv
+  ;; path, lexpr_return1v on the 1v path) that the inlined lexpr entry in
+  ;; save-lexpr-argregs left in lr.  This vinsn is emitted immediately
+  ;; after it (arm642-lexpr-entry), so lr is untouched in between.
+  (stp xzr lr (:@ sp (:$ 16)))
   (mov fn nfn)
   ;; cstack overflow probe
   (ldr marker-reg (:@ rcontext (:$ arm64::tcr.cs-limit)))
@@ -4066,22 +4040,26 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; save-lexpr-argregs -- PPC64 ppc64-vinsns.lisp:3525 LINE-PORT.
-;;; vpush the received register args (arg_x/y/z) under min-fixed
-;;; predicates, push the extra-args count, entry-vsp (WIRED imm0 -- the
-;;; .SPlexpr-entry payload, so dispatch scratch is imm1), call
-;;; .SPlexpr-entry (kernel body spentry-E lexpr_entry@604; registered).
-;;; PPC's dual-crf compares (crfx/crfy live simultaneously) serialize
-;;; onto NZCV: compare/branch pairs in an order that preserves the
-;;; exactly-0/exactly-2/one/3+ dispatch; unsigned branches (b.lo)
-;;; mirror cmpldi.  nargs fixnums => (ash n 3) byte constants.
-;;; 3 = $numarm64argregs, INLINED (arm64env loads later -- cut-3 lesson).
-(define-arm64-vinsn (save-lexpr-argregs :call :subprim)
+;;; save-lexpr-argregs -- vpush the received register args (arg_x/y/z)
+;;; under min-fixed predicates, push the extra-args count, then INLINE the
+;;; whole lexpr entry (formerly the .SPlexpr-entry subprim).  ARM64-
+;;; DEVIATION from the PPC64 line-port (ppc64-vinsns.lisp:3525 +
+;;; ppc-spentry.s lexpr_entry): PPC keeps the caller's return pc in loc_pc
+;;; across the subprim `bla', but arm64 has no loc_pc.  Rather than spend a
+;;; gpr or smuggle a pc-locative through the node register temp4, we follow
+;;; ARM32 (arm-vinsns.lisp:3654) and inline everything, so the caller's
+;;; return pc simply rides lr and is stored straight into savelr -- no
+;;; second return-pc channel, and nothing GC-hazardous in a node register.
+;;; The arg-push half keeps PPC's dispatch: dual-crf compares serialize
+;;; onto NZCV in an order preserving the exactly-0/2/one/3+ cases; unsigned
+;;; branches (b.lo) mirror cmpldi; nargs fixnums => (ash n 3) byte
+;;; constants; 3 = $numarm64argregs, inlined.
+(define-arm64-vinsn save-lexpr-argregs
     (()
      ((min-fixed :u16const))
-     ((entry-vsp (:u64 #.arm64::imm0))
-      (arg-temp :u64)
-      (temp (:u64 #.arm64::imm1))))
+     ((t0 :u64)          ;count scratch / entry-vsp / MV lexpr_return
+      (t1 :u64)          ;frame marker
+      (ra :u64)))        ;ret1val_addr, held for the MV continuation
   ((:pred >= min-fixed 3)               ;all argregs already fixed
    (str arg_x (:@! vsp (:$ -8)))
    (str arg_y (:@! vsp (:$ -8)))
@@ -4114,26 +4092,37 @@
    (str arg_y (:@! vsp (:$ -8)))
    :z0
    (str arg_z (:@! vsp (:$ -8)))
-   :none
-   )
+   :none)
   ((:pred = min-fixed 0)
    (str nargs (:@! vsp (:$ -8))))
   ((:not (:pred = min-fixed 0))
-   (sub arg-temp nargs (:$ (:apply ash min-fixed arm64::fixnumshift)))
-   (str arg-temp (:@! vsp (:$ -8))))
-  (add entry-vsp vsp nargs)
-  (add entry-vsp entry-vsp (:$ 8))
-  ;; LEXPR-RA (spentry-E lexpr_entry contract): the caller's return pc
-  ;; travels in temp4 (PPC's loc_pc channel); the subprim hands back the
-  ;; lexpr cleanup continuation in temp4 for save-lisp-context-lexpr's
-  ;; savelr.  Last before the blr so the unwired arg-temp above can't
-  ;; alias it.  (16m10 third spin: without this + the savelr store
-  ;; below, a compiled lexpr's frame savelr was the return-to-prologue
-  ;; address -- returning re-entered the function forever.)
-  (mov temp4 lr)
-  (movz temp (:$ (:apply arm64::subprimitive-offset ".SPlexpr-entry")))
-  (ldr temp (:@ rcontext temp))
-  (blr temp))
+   (sub t0 nargs (:$ (:apply ash min-fixed arm64::fixnumshift)))
+   (str t0 (:@! vsp (:$ -8))))
+  (add t0 vsp nargs)                     ;entry-vsp = vsp + nargs + 8
+  (add t0 t0 (:$ 8))
+  ;; Instead of calling a subprim (.SPlexpr-entry), we inline everything
+  ;; here, mainly so that we can easily preserve lr.
+  (sub ra rnil (:$ (- (arm64::%kernel-global 'arm64::ret1valaddr))))
+  (ldr ra (:@ ra (:$ 0)))
+  (cmp ra lr)                  ;magic ret1valaddr means multiple values
+  ;; FRAME-A: marker / savevsp=entry-vsp / savefn=fn / savelr=lr(caller RA)
+  (mov t1 (:$ arm64::lisp-frame-marker))
+  (stp t1 t0 (:@! sp (:$ -32)))
+  (stp fn lr (:@ sp (:$ 16)))
+  (mov fn (:$ 0))
+  (b.ne :lexpr-1v)
+  ;; multiple-value: FRAME-B / savevsp=vsp / savefn=0 / savelr=lexpr_return
+  (sub t0 rnil (:$ (- (arm64::%kernel-global 'arm64::lexpr-return))))
+  (ldr t0 (:@ t0 (:$ 0)))
+  (mov t1 (:$ arm64::lisp-frame-marker))
+  (stp t1 vsp (:@! sp (:$ -32)))
+  (stp xzr t0 (:@ sp (:$ 16)))
+  (mov lr ra)                           ;continuation = ret1val_addr
+  (b :lexpr-done)
+  :lexpr-1v
+  (sub lr rnil (:$ (- (arm64::%kernel-global 'arm64::lexpr-return1v))))
+  (ldr lr (:@ lr (:$ 0)))               ;continuation = lexpr_return1v
+  :lexpr-done)
 
 ;;; ============ demand-scan CUT-4 wave: 3 micro-layer vinsns ============
 
