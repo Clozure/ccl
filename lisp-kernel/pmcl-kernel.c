@@ -624,10 +624,14 @@ create_reserved_area(natural totalsize)
         perror("reserve static space");
         exit(1);
       }
-      fprintf(dbgout,
-              "note: static space at %p (canonical 0x%llx unavailable: %s)\n",
-              sbase, (unsigned long long)STATIC_BASE_ADDRESS,
-              strerror(err));
+      /* Relocation is normal operation under hardened VM policy;
+         only narrate it when debugging (CCL_DEBUG_WX). */
+      if (getenv("CCL_DEBUG_WX")) {
+        fprintf(dbgout,
+                "note: static space at %p (canonical 0x%llx unavailable: %s)\n",
+                sbase, (unsigned long long)STATIC_BASE_ADDRESS,
+                strerror(err));
+      }
     }
     static_space_start = static_space_active = sbase;
     static_space_limit = sbase + STATIC_RESERVE;
