@@ -606,8 +606,9 @@
                  (format t "~%~%"))
 
                (with-dll-node-freelist (code arm64::*instruction-freelist*)
-                 (let* ((arm64::*labels* nil)
-                        debug-info)
+                 (unwind-protect
+                   (let* ((arm64::*labels* nil)
+                          debug-info)
                      (arm642-expand-vinsns vinsns code)
                      (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
                        (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
@@ -652,7 +653,10 @@
                              (arm642-encode-regsave-info
                               *arm642-compiler-register-save-note*
                               *arm642-register-restore-ea*
-                              *arm642-register-restore-count*)))))))))
+                              *arm642-register-restore-count*))))
+                   ;; This cleanup runs before WITH-DLL-NODE-FREELIST
+                   ;; returns the nodes to the always-live pool.
+                   (arm64::reset-instruction-elements code)))))))
     afunc))
 
 (defun arm642-xmake-function (code imms bits)

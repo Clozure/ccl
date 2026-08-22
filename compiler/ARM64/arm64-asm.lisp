@@ -2664,6 +2664,27 @@
         name)
       (%%make-label name))))
 
+;;; Instructions and labels return to *INSTRUCTION-FREELIST* with their
+;;; slots intact, and the pool is a permanent root.  A parked node then
+;;; keeps the finished compile's whole IR graph reachable: SOURCE holds
+;;; the lap form, PARSED-OPERANDS holds the operand structures, a label's
+;;; NAME can hold a vinsn-label, and a label's REFS holds (insn . reftype)
+;;; conses.  MAKE-INSTRUCTION and %MAKE-LABEL clear these slots only at
+;;; the next reuse, after the stale graph has already tenured.  Clear the
+;;; reference-carrying slots when a section is done, before its nodes go
+;;; back to the pool.  The numeric slots keep their values, and reuse
+;;; resets them.
+(defun reset-instruction-elements (seg)
+  (ccl::do-dll-nodes (element seg)
+    (typecase element
+      (instruction
+       (setf (instruction-source element) nil
+             (instruction-template element) nil
+             (instruction-parsed-operands element) nil))
+      (label
+       (setf (label-name element) nil
+             (label-refs element) nil)))))
+
 (defun emit-element (seg element)
   (ccl::append-dll-node element seg)
   element)
