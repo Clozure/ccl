@@ -240,6 +240,17 @@ not):
 Nil = static + 4 KiB + `fulltag_nil` (`#x20000100b`).  Longer term this
 should move to rnil-relative addressing without fixed static VA.
 
+## .SPsyscall is parity-only (no lisp consumers)
+
+The lisp-side syscall layer (SYSCALLS package, `define-syscall`,
+per-platform tables) was removed upstream; every port here does OS
+work via `#_` ff-calls into libc.  `.SPsyscall` is kept for PPC parity
+with the Darwin convention (number in x16, `svc #0x80`, carry →
+-errno) but nothing emits it — there is no arm64 syscall vinsn.  Keep
+it that way on Darwin: raw syscall numbers are not a stable Apple ABI
+(libSystem is), and hardened-process policy is moving toward flagging
+raw `svc` outside libSystem.
+
 ## Enhanced Security / MIE readiness (macOS 26)
 
 Memory Integrity Enforcement (EMTE tagging, kernel + ~70 system
