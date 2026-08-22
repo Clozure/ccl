@@ -905,7 +905,7 @@ spentry stack_misc_alloc
         add     imm1, arg_y, arg_y
         b       1b
 9:      /* Too large for the tstack: push one empty UNBOXED tsp frame
-         * (TSP_Alloc_Fixed_Unboxed(0), ppc-spentry.s:1068 -- type=self,
+         * (TSP_Alloc_Fixed_Unboxed (0), ppc-spentry.s:1068 -- type=self,
          * nonzero, so GC skips it) so the compiler's balancing discard-
          * temp-frame still has a frame to pop, then heap-cons via
          * misc_alloc instead; arg_y/arg_z are unchanged, matching
@@ -925,17 +925,13 @@ endsp stack_misc_alloc
  * is a PROPOSED constant above. */
 spentry makestackblock
         asr     imm0, arg_z, #fixnumshift
-        add     imm0, imm0, #(tsp_frame.fixed_overhead + macptr.size + (dnode_size - 1))
-        and     imm0, imm0, #0xfffffffffffffff0
+        dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
         b.ge    1f
-        /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
+         * and published atomically -- see arm64-macros.s). */
+        TSP_Alloc_Var_Unboxed imm0, temp4
         mov     imm0, #macptr_header
         add     imm1, tsp, #(tsp_frame.data_offset + macptr.size)
         str     imm0, [tsp, #tsp_frame.data_offset]
@@ -946,10 +942,7 @@ spentry makestackblock
         ret
 1:      /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr (ppc-spentry.s:3317-3321). */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         mov     nargs, #(1 << fixnumshift)      /* ppc:3319 set_nargs(1)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3320 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3321 jump_fname()          */
@@ -1213,21 +1206,10 @@ endsp makestackblock0
    and made a tripped aset2/aref2 trap report "(SIGNED-BYTE 64)"
    (0x28 = his xtype_s64) with the ARRAY as datum. */
 
-/* Variable-sized BOXED tstack frame (ppc-macros.s:714-719
-   TSP_Alloc_Var_Boxed): link the old tsp, mark boxed (type=0), and ZERO
-   the data area so the GC never scans garbage.  \size = total bytes
-   including tsp_frame.fixed_overhead; clobbers both operands and NZCV. */
-.macro tsp_alloc_var_boxed size, tmp
-        mov \tmp, tsp
-        sub tsp, tsp, \size
-        str \tmp, [tsp, #tsp_frame.backlink]
-        str xzr, [tsp, #tsp_frame.type]
-        add \size, tsp, #tsp_frame.fixed_overhead
-        b 8886f
-8885:   str xzr, [\size], #node_size
-8886:   cmp \size, \tmp
-        b.ne 8885b
-.endm
+/* (The local tsp_alloc_var_boxed macro that lived here -- which flipped the
+   frame to boxed BEFORE zeroing its data, exposing garbage nodes to the GC --
+   has been replaced by TSP_Alloc_Var_Boxed in arm64-macros.s, which builds the
+   frame below the live tsp and publishes it atomically.) */
 
 /* ===== gvset ===== */
 /* ported from ppc-spentry.s:568-608 (PPC64 branch) */
@@ -1560,7 +1542,7 @@ spentry stkconslist
                                            wrongly the TAG constant)       */
         add imm1, nargs, nargs          /* ppc:873                         */
         add imm1, imm1, #tsp_frame.fixed_overhead  /* ppc:874              */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:875 (links+marks+ZEROES;
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:875 (links+marks+ZEROES;
                                            PPC has no ts_area limit check
                                            here - drafter confusion)       */
         add imm1, tsp, #(tsp_frame.data_offset + fulltag_cons) /* ppc:876  */
@@ -1586,7 +1568,7 @@ endsp stkconslist
 spentry stkconslist_star
         add imm1, nargs, nargs          /* ppc:894                         */
         add imm1, imm1, #tsp_frame.fixed_overhead  /* ppc:895              */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:896                         */
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:896                         */
         add imm1, tsp, #(tsp_frame.data_offset + fulltag_cons) /* ppc:897  */
         cmp nargs, #0                   /* ppc:893 cmpri cr1 (post-alloc)  */
         b 2f
@@ -1606,13 +1588,12 @@ endsp stkconslist_star
 /* ported from ppc-spentry.s:914-933 (PPC64 branch) */
 spentry mkstackv
         cmp nargs, #0
-        /* dnode_align + TSP_Alloc_Var_Boxed_nz: PPC64 916-917 */
-        add imm1, nargs, #(dnode_size + node_size - 1)  /* dnode_size is real (arm64-constants.h:33) */
-        and imm1, imm1, #(~(dnode_size - 1))
-        add imm1, imm1, #tsp_frame.fixed_overhead
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:917 TSP_Alloc_Var_Boxed_nz
-                                           (was a bare sub: no backlink/
-                                           type/zeroing - GC hazard)       */
+        /* dnode_align + TSP_Alloc_Var_Boxed_nz: PPC64 916-917.  fixed_overhead
+           is a dnode multiple, so folding it into the round-up delta with the
+           header word (node_size) is exact.  Data area is always >= one dnode
+           (header + pad), so the _nz form's do-while zero is safe. */
+        dnode_align imm1, nargs, (node_size + tsp_frame.fixed_overhead)
+        TSP_Alloc_Var_Boxed_nz imm1, imm2  /* ppc:917 */
         lsl imm0, nargs, #(num_subtag_bits - fixnumshift)
         mov temp0, #subtag_simple_vector    /* not a valid logical-imm:    */
         orr imm0, imm0, temp0               /* materialize, then orr       */
@@ -1684,16 +1665,12 @@ progvsave_improper:                     /* circular or non-list            */
         add imm1, imm1, #(dnode_size + node_size - 1)   /* ppc:987         */
         and imm1, imm1, #(~(dnode_size - 1))            /* dnode_align     */
         b.ne 2f                         /* ppc:988                         */
-        /* count 0: empty boxed frame (ppc:989 TSP_Alloc_Fixed_Boxed(16)) */
-        mov imm2, tsp
-        sub tsp, tsp, #(2*node_size + tsp_frame.fixed_overhead)
-        str imm2, [tsp, #tsp_frame.backlink]
-        str xzr, [tsp, #tsp_frame.type]                 /* boxed           */
-        str xzr, [tsp, #tsp_frame.data_offset]          /* count = 0       */
-        str xzr, [tsp, #(tsp_frame.data_offset + node_size)]
+        /* count 0: empty boxed frame (ppc:989 TSP_Alloc_Fixed_Boxed(16)).
+           The macro zeroes both data words, so the count(=0) store is subsumed. */
+        TSP_Alloc_Fixed_Boxed 2*node_size, imm2
         ret                             /* ppc:990                         */
 2:      add imm1, imm1, #tsp_frame.fixed_overhead       /* ppc:992         */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:993 (zeroes; clobbers NZCV) */
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:993 (zeroes; clobbers NZCV) */
         str imm0, [tsp, #tsp_frame.data_offset]         /* ppc:994 count   */
         ldr imm2, [tsp, #tsp_frame.backlink]            /* ppc:995 cursor
                                            = frame end (triplets push down)*/
@@ -2070,7 +2047,7 @@ spentry stkgvector
            backlink, zero the data area, mark boxed.  The previous bare
            `sub tsp` dropped the backlink (PPC's stru writes it as a
            store-with-update side effect) — the frame's [tsp]=0 then fed
-           tsp:=0 into the caller's tsp_unlink on the toplevel fn's second
+           tsp:=0 into the caller's TSP_Unlink on the toplevel fn's second
            lap (16m5k wall, gdb-observed 2026-07-17). */
         mov imm4, tsp
         sub tsp, tsp, imm0
@@ -2897,21 +2874,11 @@ endsp aset3
         str \clpc, [sp, #lisp_frame.savelr]
 .endm
 
-/* temp-stack allocation (real tsp register, PPC discipline).
-   ppc-macros.s TSP_Alloc_Fixed_Unboxed / Set_TSP_Frame_{Un,}boxed. */
-.macro tsp_alloc_fixed_unboxed nbytes, tmp
-        mov \tmp, tsp
-        sub tsp, tsp, #((\nbytes) + tsp_frame.data_offset)
-        str \tmp, [tsp, #tsp_frame.backlink]
-        str tsp, [tsp, #tsp_frame.type]         /* non-zero => unboxed */
-.endm
-.macro set_tsp_frame_boxed
-        str xzr, [tsp, #tsp_frame.type]         /* zero => boxed (GC-scanned) */
-.endm
-/* pop one tsp frame (ppc-macros.s unlink(tsp)). */
-.macro tsp_unlink
-        ldr tsp, [tsp, #tsp_frame.backlink]
-.endm
+/* tsp_alloc_fixed_unboxed / Set_TSP_Frame_Boxed / TSP_Unlink moved to the
+   canonical set in arm64-macros.s (TSP_Alloc_Fixed_Unboxed / Set_TSP_Frame_
+   Boxed / TSP_Unlink).  GNU as macro names are case-insensitive, so the local
+   copies would collide with the canonical ones; call sites bind to the
+   arm64-macros.s versions unchanged. */
 
 /* save/restore the boxed NVRs into/from a catch frame's regs[] (save0..save3).
    catch_frame is a fulltag_misc-biased _structf, so .regs = 36 is only
@@ -2956,7 +2923,7 @@ endsp aset3
         build_catch_lisp_frame imm4, imm5     /* csp frame: fn,cleanupPC,vsp  */
         ldr imm3, [rcontext, #tcr.xframe]
         ldr imm1, [rcontext, #tcr.db_link]
-        tsp_alloc_fixed_unboxed catch_frame.size, imm4
+        TSP_Alloc_Fixed_Unboxed catch_frame.size, imm4
         add nargs, tsp, #(tsp_frame.data_offset + fulltag_misc)  /* tagged cf
                                           (PPC uses nargs for this too)       */
         mov imm4, #((catch_frame.element_count<<num_subtag_bits) | subtag_catch_frame)
@@ -2971,7 +2938,7 @@ endsp aset3
         str imm3, [nargs, #catch_frame.xframe]
         ldr imm0, [rcontext, #tcr.nfp]
         str imm0, [nargs, #catch_frame.nfp]
-        set_tsp_frame_boxed
+        Set_TSP_Frame_Boxed
         str nargs, [rcontext, #tcr.catch_top]
         set_nargs 0
         .endm
@@ -3071,7 +3038,7 @@ spentry throw
         restore_catch_regs imm3
         ldr imm3, [imm3, #catch_frame.link]
         str imm3, [rcontext, #tcr.catch_top]
-        tsp_unlink
+        TSP_Unlink
         ret
 9:      /* _throw_tag_not_found */
         uuo_error_no_throw_tag temp0
@@ -3082,26 +3049,9 @@ endsp throw
 /* ported from ppc-spentry.s:166-284 (PPC64 branch) */
 /* Unwind N frames (imm0 = count), processing unwind-protects */
 /* N multiple values atop vstack, nargs = count */
-/* Variable-size boxed tsp frame (ppc-macros.s TSP_Alloc_Var_Boxed_nz).
-   \size = 16-aligned data byte count (in a reg).  \p,\e scratch. */
-        .macro tsp_alloc_var_boxed_nz size, p, e
-        mov \p, tsp
-        sub tsp, tsp, \size
-        str \p, [tsp, #tsp_frame.backlink]
-        /* zero data words [data_offset .. backlink) so GC sees clean slots */
-        add \e, tsp, \size                    /* end = old tsp                */
-        add \p, tsp, #tsp_frame.data_offset
-        /* \@-unique labels: a bare 1:/2: inside a macro CAPTURES callers'
-           1f/2f branches that cross the expansion (the 16m5t makes128/
-           Misc_Alloc_Fixed class, patch 0011) */
-.Ltavb\@:
-        cmp \p, \e
-        b.hs .Ltavbdone\@
-        str xzr, [\p], #node_size
-        b .Ltavb\@
-.Ltavbdone\@:
-        str xzr, [tsp, #tsp_frame.type]       /* boxed                        */
-        .endm
+/* tsp_alloc_var_boxed_nz moved to arm64-macros.s as TSP_Alloc_Var_Boxed_nz
+   (publish-last, 2-reg: size, scratch -- size is clobbered as the zeroing
+   cursor, the live tsp is the loop's end sentinel). */
 
 spentry nthrowvalues
         /* ppc-spentry.s:166-284.  N values atop the vstack, nargs=count. */
@@ -3149,7 +3099,7 @@ spentry nthrowvalues
         restore_catch_regs temp0
 3:      /* _nthrowv_skip */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)
-        tsp_unlink
+        TSP_Unlink
         discard_lisp_frame
         b 1b
 4:      /* _nthrowv_do_unwind: run the cleanup form with values preserved      */
@@ -3159,7 +3109,7 @@ spentry nthrowvalues
         str imm3, [rcontext, #tcr.nfp]
         restore_catch_regs temp0
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)
-        tsp_unlink
+        TSP_Unlink
         ldr temp4, [sp, #lisp_frame.savelr]   /* cleanup code address          */
         ldr nfn, [sp, #lisp_frame.savefn]     /* cleanup's own fn              */
         str fn, [sp, #lisp_frame.savefn]      /* stash caller fn in the frame  */
@@ -3168,7 +3118,7 @@ spentry nthrowvalues
         /* allocate a boxed tsp frame: overhead + nargs bytes + 2 nodes        */
         add imm0, nargs, #(tsp_frame.fixed_overhead + (2*node_size) + (dnode_size-1))
         and imm0, imm0, #~(dnode_size-1)
-        tsp_alloc_var_boxed_nz imm0, imm1, imm2
+        TSP_Alloc_Var_Boxed_nz imm0, imm1
         mov imm2, nargs
         add imm1, vsp, nargs            /* imm1 = top of value block            */
         add imm0, tsp, #tsp_frame.data_offset
@@ -3201,7 +3151,7 @@ spentry nthrowvalues
 44:     cmp imm2, #0
         b.ne 43b
         ldr imm4, [imm0, #node_size]    /* restore throw count                  */
-        tsp_unlink
+        TSP_Unlink
         b 1b
 8:      /* _nthrowv_done */
         str xzr, [rcontext, #tcr.unwinding]
@@ -3248,21 +3198,21 @@ spentry nthrow1value
         restore_catch_regs temp0        /* ppc:320 */
 3:      /* ppc:321 _nthrow1v_skip */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)  /* ppc:322 */
-        tsp_unlink                      /* ppc:323 */
+        TSP_Unlink                      /* ppc:323 */
         discard_lisp_frame              /* ppc:324 */
         b 1b                            /* ppc:325 */
 4:      /* ppc:326 _nthrow1v_do_unwind */
         restore_catch_regs temp0        /* ppc:332 */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)  /* ppc:333 */
-        tsp_unlink                      /* ppc:334 */
+        TSP_Unlink                      /* ppc:334 */
         ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:335,337 cleanup PC -> temp4  */
         ldr nfn, [sp, #lisp_frame.savefn]    /* ppc:336 cleanup's own fn         */
         str fn, [sp, #lisp_frame.savefn]     /* ppc:338 stash caller fn          */
         mov fn, nfn                     /* ppc:340 */
         str lr, [sp, #lisp_frame.savelr]     /* ppc:339,341 stash our return     */
         /* fixed boxed tsp frame: value + throw count = 2 nodes (ppc:342)        */
-        tsp_alloc_fixed_unboxed 2*node_size, imm0
-        set_tsp_frame_boxed
+        TSP_Alloc_Fixed_Unboxed 2*node_size, imm0
+        Set_TSP_Frame_Boxed
         str arg_z, [tsp, #tsp_frame.data_offset]                /* ppc:343 */
         str imm4, [tsp, #(tsp_frame.data_offset + node_size)]   /* ppc:344 */
         ldr vsp, [sp, #lisp_frame.savevsp]   /* ppc:345 */
@@ -3276,7 +3226,7 @@ spentry nthrow1value
         ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:353 */
         discard_lisp_frame              /* ppc:354 */
         mov lr, temp4                   /* ppc:355 */
-        tsp_unlink                      /* ppc:356 */
+        TSP_Unlink                      /* ppc:356 */
         b 1b                            /* ppc:357 */
 8:      /* ppc:358 _nthrow1v_done.  nargs is dead here, so the poll may clobber it. */
         str xzr, [rcontext, #tcr.unwinding]  /* ppc:359 */
@@ -3909,7 +3859,7 @@ spentry stack_cons_rest_arg
            per spentry-A:447-448. */
         add imm2, imm1, #(tsp_frame.fixed_overhead + dnode_size - 1)
         and imm2, imm2, #0xfffffffffffffff0
-        tsp_alloc_var_boxed_nz imm2, imm3, imm4   /* ppc:2044 TSP_Alloc_Var_Boxed */
+        TSP_Alloc_Var_Boxed_nz imm2, imm3   /* ppc:2044 TSP_Alloc_Var_Boxed */
         add imm0, tsp, #(tsp_frame.data_offset + fulltag_cons)  /* ppc:2045     */
 1:      /* ppc:2046 */
         cmp imm1, #cons.size            /* ppc:2047 cmpri(cr0,imm1,cons.size)   */
@@ -3923,11 +3873,11 @@ spentry stack_cons_rest_arg
         vpush1 arg_z                    /* ppc:2055 vpush(arg_z)                */
         ret                             /* ppc:2056 blr                         */
 8:      /* ppc:2057 */
-        tsp_alloc_fixed_unboxed 0, imm3 /* ppc:2058 TSP_Alloc_Fixed_Unboxed(0)  */
+        TSP_Alloc_Fixed_Unboxed 0, imm3 /* ppc:2058 TSP_Alloc_Fixed_Unboxed (0)  */
         vpush1 arg_z                    /* ppc:2059 vpush(arg_z)                */
         ret                             /* ppc:2060 blr                         */
 9:      /* ppc:2061 */
-        tsp_alloc_fixed_unboxed 0, imm3 /* ppc:2062 TSP_Alloc_Fixed_Unboxed(0)  */
+        TSP_Alloc_Fixed_Unboxed 0, imm3 /* ppc:2062 TSP_Alloc_Fixed_Unboxed (0)  */
         b _SPheap_cons_rest_arg         /* ppc:2063                             */
 endsp stack_cons_rest_arg
 
@@ -4274,7 +4224,7 @@ spentry recover_values
         cmp imm2, tsp                               /* ppc:3839 cr1 (test old imm2)*/
         ldr imm2, [imm2, #(tsp_frame.data_offset+node_size)] /* ppc:3851 prev seg */
         b.ne 2b                                     /* ppc:3852 bne cr1 (ldr flag-neut)*/
-        tsp_unlink                                  /* ppc:3853 unlink(tsp)       */
+        TSP_Unlink                                  /* ppc:3853 unlink(tsp)       */
         ret                                         /* ppc:3854 blr               */
 endsp recover_values
 
@@ -4293,7 +4243,7 @@ save_values_to_tsp:                                 /* ppc:4992 (named label)   
            inlined per spentry-A:447-448. */
         add imm0, nargs, #(tsp_frame.fixed_overhead+(2*node_size)+dnode_size-1)
         and imm0, imm0, #0xfffffffffffffff0
-        tsp_alloc_var_boxed_nz imm0, imm3, imm4     /* ppc:4995 (imm3+scratch)    */
+        TSP_Alloc_Var_Boxed_nz imm0, imm3     /* ppc:4995 */
         str imm1, [tsp, #tsp_frame.backlink]        /* ppc:4996 one tsp "frame"   */
         str nargs, [tsp, #tsp_frame.data_offset]    /* ppc:4997 value count       */
         str imm2, [tsp, #(tsp_frame.data_offset+node_size)] /* ppc:4998 prev tsp  */
