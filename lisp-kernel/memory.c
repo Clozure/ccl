@@ -210,6 +210,30 @@ CommitMemory (LogicalAddress start, natural len)
   int i;
   void *addr;
 
+#if defined(DARWIN) && defined(ARM64)
+  /* Callers compute 4KiB-masked addresses (x86 heritage); Darwin pages
+     are 16KiB and MAP_FIXED demands page alignment (EINVAL).  A fresh
+     MAP_FIXED of the containing pages would zero live neighbors, so
+     commit misaligned requests by mprotect(RW) on the containing span:
+     these are slivers inside our own PROT_NONE reservations. */
+  {
+    natural misalign = ((natural)start) & (page_size-1);
+
+    if (misalign || (len & (page_size-1))) {
+      LogicalAddress pstart = start - misalign;
+      natural plen = align_to_power_of_2(len + misalign, log2_page_size);
+
+      if (mprotect(pstart, plen, MEMPROTECT_RW) == 0) {
+        return true;
+      }
+      fprintf(dbgout,
+              "CommitMemory: mprotect RW 0x" LISP " len 0x" LISP
+              " failed: %s (errno %d)\n",
+              (natural)pstart, plen, strerror(errno), errno);
+      return false;
+    }
+  }
+#endif
   for (i = 0; i < 3; i++) {
 #if defined(DARWIN) && defined(ARM64)
     /* W^X: RWX mmap is rejected.  Dynamic heap is RW only; executable
