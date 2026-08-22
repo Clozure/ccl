@@ -239,3 +239,71 @@ not):
 
 Nil = static + 4 KiB + `fulltag_nil` (`#x20000100b`).  Longer term this
 should move to rnil-relative addressing without fixed static VA.
+
+## .SPsyscall is parity-only (no lisp consumers)
+
+The lisp-side syscall layer (SYSCALLS package, `define-syscall`,
+per-platform tables) was removed upstream; every port here does OS
+work via `#_` ff-calls into libc.  `.SPsyscall` is kept for PPC parity
+with the Darwin convention (number in x16, `svc #0x80`, carry →
+-errno) but nothing emits it — there is no arm64 syscall vinsn.  Keep
+it that way on Darwin: raw syscall numbers are not a stable Apple ABI
+(libSystem is), and hardened-process policy is moving toward flagging
+raw `svc` outside libSystem.
+
+## Enhanced Security / MIE readiness (macOS 26)
+
+Memory Integrity Enforcement (EMTE tagging, kernel + ~70 system
+processes) is always-on **hardware** on A19/M5+ and opt-in per app via
+`com.apple.security.hardened-process.*` entitlements; there is no user
+toggle.  Measured on macOS 26.6.2 / M4 by re-signing `darm64cl` with
+those entitlements (`tools/darwin-fixed-mmap-probe.c` bisects VA
+policy per entitlement):
+
+| Entitlement | Effect on this port |
+|---|---|
+| `hardened-process` + `enhanced-security-version` 2 | boots; no VA change |
+| `+ hardened-heap` (guard objects, xzone) | boots; GC stress clean |
+| `+ dyld-ro` | **breaks**: `MAP_FIXED` RW at `#x200000000` → EPERM; image load fails at `AREA_STATIC` |
+| `+ platform-restrictions` 2 | **killed at exec** (ad-hoc signature; Mach IPC hardening unprobed) |
+
+Consequences:
+
+* ~~The fixed `STATIC_BASE_ADDRESS` is the single point of failure~~
+  **Fixed: statics are relocatable.**  The loader probes the canonical
+  base; when the OS refuses (dyld-ro owns `#x200000000`) it maps the
+  static section wherever allowed and rebases references
+  (`static_space_bias`, saved base stashed in the `AREA_STATIC` section
+  header's `static_dnodes` slot; older images imply the canonical
+  base).  The nilreg area is rebased word-wise (raw globals page + nil
+  pun would misparse the object walker).  Kernel-global access compiles
+  rnil-relative (`%get-kernel-global*` archmacros → `*-from-offset`
+  primitives); `(target-nil-value)` must never be baked into arm64
+  code.  Test: `CCL_FORCE_STATIC_RELOC=1`
+  (`tools/darwin-static-reloc-smoke.lisp`, in the CI gate); audit knob
+  `CCL_STATIC_RELOC_AUDIT=1` reports leftover unrebased references.
+  Verified: full smoke gate under forced relocation, hardened
+  (dyld-ro and full Enhanced Security set) boots, save/reload
+  round-trips both directions.
+* EMTE tag checks apply to secure-allocator (`malloc`) memory, not raw
+  anonymous `mmap`; the lisp heap is untagged either way.  FFI keeps
+  full 64-bit pointers (tag byte intact).  Audit deliberate
+  out-of-bounds reads in FFI/string paths before enabling
+  `checked-allocations` on M5 hardware (`…soft-mode` gives simulated
+  crashes for auditing).
+* Mach exception ports may conflict with platform-restrictions Mach
+  IPC hardening; the Unix-signal fallback path
+  (`DARWIN_USE_PSEUDO_SIGRETURN`) is the escape hatch to validate on
+  MIE hardware.
+* `load_image_section` / `CommitMemory` / `MapFile` failures now name
+  the syscall, VA, length, and errno — a bare
+  "Couldn't load lisp heap image: Invalid argument" on a newer
+  machine is this policy family until proven otherwise.
+* One-shot sanitized report (hardware, VM policy at the CCL bases,
+  kernel entitlements, loader diagnostics — no usernames/paths, safe
+  to paste into a GitHub thread):
+
+  ```sh
+  ./tools/darwin-image-load-diag.sh          # checks darm64cl.image
+  ./tools/darwin-image-load-diag.sh arm64-boot.image
+  ```
