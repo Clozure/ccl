@@ -2820,15 +2820,19 @@ endsp aset3
    unary-misc sub = error_propagate_suspend (10); reg field unused (x0). */
 
 /* control-stack lisp_frame build/discard (MARKER frame: \tmp carries the
-   marker constant, not a backlink).  savelr gets \clpc (catch cleanup
-   PC), savefn gets the volatile fn. */
-.macro build_catch_lisp_frame tmp, clpc
-        sub sp, sp, #lisp_frame.size
+   marker constant, not a backlink).  savelr gets LR ITSELF -- the address
+   of the compiler's forward `b <cleanup>` insn (ARM32 model, arm-macros.s
+   mkcatch): at throw time nthrow branches there and the b EXECUTES, so no
+   derived cleanup PC ever occupies a register the GC cannot see (16m86
+   pc-locative class, W1).  savefn gets the volatile fn.
+   Same stp shape as the compiler's save-lisp-context vinsns: the first stp
+   creates the frame and publishes marker+savevsp in one insn; a thread
+   suspended before the second stp shows garbage savefn/savelr, which
+   pc_luser_xp's stp-pair case zeroes (arm64-exceptions.c). */
+.macro build_catch_lisp_frame tmp
         mov \tmp, #lisp_frame_marker
-        str \tmp, [sp, #lisp_frame.marker]
-        str vsp, [sp, #lisp_frame.savevsp]
-        str fn, [sp, #lisp_frame.savefn]
-        str \clpc, [sp, #lisp_frame.savelr]
+        stp \tmp, vsp, [sp, #-lisp_frame.size]!
+        stp fn, lr, [sp, #lisp_frame.savefn]
 .endm
 
 /* tsp_alloc_fixed_unboxed / Set_TSP_Frame_Boxed / TSP_Unlink moved to the
@@ -2862,22 +2866,25 @@ endsp aset3
 
 /* mkcatch (ppc-macros.s:481-517).  Build a catch/unwind frame on the temp
    stack, with the caller's continuation saved in a control-stack lisp_frame.
-   In: arg_z = catch tag, imm2 = mvflag (0 or fixnum 1).  Clobbers imm0-5 and
+   In: arg_z = catch tag, imm2 = mvflag (0 or fixnum 1).  Clobbers imm0-4 and
    nargs ONLY; preserves save0..save3 (stored into the frame) and ALL temp
    regs -- PPC parity: ppc-macros.s mkcatch scratches imm0-4/loc_pc/nargs,
    and callers (toplevel_loop, compiled catch) keep the funcall target in
    temp0 across the _SPmkcatch* call (16j boot: temp0-as-scratch clobbered
    the toplevel function -> udf #49 in _SPfuncall).
-   PROPOSED: the cleanup-PC recovery assumes Matt's arm64 compiler emits a
-   forward `b <cleanup>` immediately after the `bl _SPmkcatch*`, exactly as the
-   PPC backend does. */
+   The compiler emits a forward `b <cleanup>` immediately after the
+   `bl _SPmkcatch*` (PPC protocol).  PPC decodes that insn HERE into loc_pc,
+   which its GC forwards as a pc-locative; arm64 has no loc_pc, and deriving
+   the target into imm5 left a ~7-insn window where a GC suspension
+   relocated the codevector but not the derived PC (16m86 corpse,
+   comms/MT-CRASH-16m86.md C5/C6, W1).  So store lr ITSELF as savelr (a
+   locative the frame walker updates) and let the b insn EXECUTE at throw
+   time -- the ARM32 model (arm-macros.s mkcatch), which needs no decode
+   and no derived PC at all. */
         .macro mkcatch
-        ldr w5, [lr]                   /* imm5: the forward branch insn       */
         ldr imm0, [rcontext, #tcr.catch_top]
-        sbfx imm5, imm5, #0, #26       /* B imm26, sign-extended              */
-        add imm5, lr, imm5, lsl #2     /* cleanup PC = lr + imm26*4           */
+        build_catch_lisp_frame imm4    /* csp frame: fn, lr(= the b insn), vsp */
         add lr, lr, #4                 /* normal return addr: skip the branch */
-        build_catch_lisp_frame imm4, imm5     /* csp frame: fn,cleanupPC,vsp  */
         ldr imm3, [rcontext, #tcr.xframe]
         ldr imm1, [rcontext, #tcr.db_link]
         TSP_Alloc_Fixed_Unboxed catch_frame.size, imm4
@@ -2989,9 +2996,11 @@ spentry throw
         ldr temp0, [imm3, #catch_frame.csp]
         mov sp, temp0
         ldr fn, [sp, #lisp_frame.savefn]
-        ldr temp4, [sp, #lisp_frame.savelr]  /* catch exit / cleanup PC        */
+        ldr lr, [sp, #lisp_frame.savelr]  /* catch exit pc STRAIGHT to lr: a
+                                             code pc parked in temp4 is a node
+                                             to the GC and goes stale across a
+                                             suspension (16m86 W2) */
         discard_lisp_frame
-        mov lr, temp4
         restore_catch_regs imm3
         ldr imm3, [imm3, #catch_frame.link]
         str imm3, [rcontext, #tcr.catch_top]
@@ -3009,6 +3018,30 @@ endsp throw
 /* tsp_alloc_var_boxed_nz moved to arm64-macros.s as TSP_Alloc_Var_Boxed
    (publish-last, 2-reg: size, scratch -- size is clobbered as the zeroing
    cursor, the live tsp is the loop's end sentinel). */
+
+/* Inline unbind-to-imm0 (ARM32 do_unbind_to model, arm-macros.s).
+   The nthrow spentries must NOT `bl _SPunbind_to': any bl clobbers lr, and
+   parking the caller's return pc in temp4 around the call hides a movable
+   interior code PC from the GC for the whole unbind (a node register skips
+   an untagged address -- the 16m86 pc-locative class, W2a).  PPC affords
+   the bl because it stashes into loc_pc, which ppc-gc.c forwards as a
+   pc-locative; arm64 has no loc_pc, so the loop is inlined (as on ARM32)
+   and lr is never disturbed.
+   Same body as `spentry unbind_to' (which now expands this macro).
+   In: imm0 = target db_link.  Clobbers imm1,imm2,arg_x,arg_y ONLY;
+   preserves nargs (.SPthrow relies on that). */
+        .macro unbind_to_imm0
+        ldr imm1, [rcontext, #tcr.db_link]
+        ldr imm2, [rcontext, #tcr.tlb_pointer]
+.Lu2i\@:
+        ldr arg_x, [imm1, #binding.sym]
+        ldr arg_y, [imm1, #binding.val]
+        ldr imm1, [imm1, #binding.link]
+        cmp imm0, imm1
+        str arg_y, [imm2, arg_x]
+        b.ne .Lu2i\@
+        str imm1, [rcontext, #tcr.db_link]
+        .endm
 
 spentry nthrowvalues
         /* ppc-spentry.s:166-284.  N values atop the vstack, nargs=count. */
@@ -3032,9 +3065,8 @@ spentry nthrowvalues
         mov sp, imm2                    /* sp = the frame's saved lisp_frame    */
         cmp imm0, imm1                  /* special bindings to undo?            */
         b.eq 2f
-        mov temp4, lr
-        bl _SPunbind_to                 /* imm0 = target db_link                */
-        mov lr, temp4
+        unbind_to_imm0                  /* imm0 = target db_link; inlined so
+                                           lr never leaves a pc-locative home */
 2:      /* _nthrowv_dont_unbind */
         cmp temp1, #unbound_marker      /* unwind-protect frame?                */
         b.eq 4f
@@ -3067,11 +3099,12 @@ spentry nthrowvalues
         restore_catch_regs temp0
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)
         TSP_Unlink
-        ldr temp4, [sp, #lisp_frame.savelr]   /* cleanup code address          */
         ldr nfn, [sp, #lisp_frame.savefn]     /* cleanup's own fn              */
         str fn, [sp, #lisp_frame.savefn]      /* stash caller fn in the frame  */
         mov fn, nfn
-        str lr, [sp, #lisp_frame.savelr]      /* stash our return in the frame */
+        /* The cleanup pc stays in the frame slot (locative-walked) until the
+           last moment; the lr<->savelr swap below is the only transit and
+           pc_luser_xp rolls it forward (16m86 W2b). */
         /* allocate a boxed tsp frame: overhead + nargs bytes + 2 nodes        */
         add imm0, nargs, #(tsp_frame.fixed_overhead + (2*node_size) + (dnode_size-1))
         and imm0, imm0, #~(dnode_size-1)
@@ -3089,15 +3122,28 @@ spentry nthrowvalues
         b.ne 41b
         str imm4, [imm0, #node_size]!   /* stash throw count after the values   */
         ldr vsp, [sp, #lisp_frame.savevsp]
+        /* lr <-> savelr swap: 3 insns, exported window; a thread suspended
+           inside it is rolled forward by pc_luser_xp (ARM32 model,
+           swap_lr_lisp_frame_temp0).  After the swap the cleanup pc rides in
+           lr, which every GC phase treats as a pc-locative. */
+        .globl C(swap_lr_lisp_frame_0)
+C(swap_lr_lisp_frame_0):
+        ldr temp4, [sp, #lisp_frame.savelr]   /* cleanup code address          */
+        str lr, [sp, #lisp_frame.savelr]      /* stash our return in the frame */
+        mov lr, temp4
+        mov temp4, #0                   /* dead, and an interior pc with low
+                                           nibble 0xc would be node-scanned
+                                           as a misc pointer at the next
+                                           suspension -- never leave one     */
         str xzr, [rcontext, #tcr.unwinding]
-        blr temp4                       /* call the cleanup form                */
+        blr lr                          /* call the cleanup form (blr reads Xn
+                                           before writing x30, C6.2.34)        */
         mov imm1, #1
         add imm0, tsp, #tsp_frame.data_offset
         str imm1, [rcontext, #tcr.unwinding]
         ldr fn, [sp, #lisp_frame.savefn]
-        ldr temp4, [sp, #lisp_frame.savelr]
+        ldr lr, [sp, #lisp_frame.savelr]    /* direct to lr: zero window     */
         discard_lisp_frame
-        mov lr, temp4
         ldr nargs, [imm0]               /* restore value count                  */
         mov imm2, nargs
         b 44f
@@ -3143,9 +3189,9 @@ spentry nthrow1value
         mov sp, imm2
         cmp imm0, imm1                  /* ppc:302 cr0, at its branch            */
         b.eq 2f                         /* ppc:311 beq cr0 -> dont_unbind        */
-        mov temp4, lr                   /* ppc:312 mflr                          */
-        bl _SPunbind_to                 /* ppc:313 (clobbers flags)              */
-        mov lr, temp4                   /* ppc:314 mtlr                          */
+        unbind_to_imm0                  /* ppc:312-314 mflr loc_pc/bl/mtlr --
+                                           inlined: temp4 is a NODE to the GC,
+                                           loc_pc was a pc-locative (16m86 W2a) */
 2:      /* ppc:315 _nthrow1v_dont_unbind */
         cmp temp1, #unbound_marker      /* ppc:307 cr7, recomputed post-unbind   */
         b.eq 4f                         /* ppc:316 beq cr7 -> do_unwind          */
@@ -3162,27 +3208,35 @@ spentry nthrow1value
         restore_catch_regs temp0        /* ppc:332 */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)  /* ppc:333 */
         TSP_Unlink                      /* ppc:334 */
-        ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:335,337 cleanup PC -> temp4  */
         ldr nfn, [sp, #lisp_frame.savefn]    /* ppc:336 cleanup's own fn         */
         str fn, [sp, #lisp_frame.savefn]     /* ppc:338 stash caller fn          */
         mov fn, nfn                     /* ppc:340 */
-        str lr, [sp, #lisp_frame.savelr]     /* ppc:339,341 stash our return     */
+        /* ppc:335/337/339/341 load loc_pc and stash lr here; on arm64 the
+           cleanup pc must not sit in temp4 across the tsp stores (16m86
+           W2b') -- it stays in the frame slot until the swap below. */
         /* fixed boxed tsp frame: value + throw count = 2 nodes (ppc:342)        */
         TSP_Alloc_Fixed_Unboxed 2*node_size, imm0
         Set_TSP_Frame_Boxed
         str arg_z, [tsp, #tsp_frame.data_offset]                /* ppc:343 */
         str imm4, [tsp, #(tsp_frame.data_offset + node_size)]   /* ppc:344 */
         ldr vsp, [sp, #lisp_frame.savevsp]   /* ppc:345 */
+        /* lr <-> savelr swap window; sibling of swap_lr_lisp_frame_0 above,
+           rolled forward by pc_luser_xp if a suspension lands inside. */
+        .globl C(swap_lr_lisp_frame_1)
+C(swap_lr_lisp_frame_1):
+        ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:335,337 cleanup pc        */
+        str lr, [sp, #lisp_frame.savelr]     /* ppc:339,341 stash our return  */
+        mov lr, temp4
+        mov temp4, #0                   /* see swap_lr_lisp_frame_0          */
         str xzr, [rcontext, #tcr.unwinding]  /* ppc:346 */
-        blr temp4                       /* ppc:347 bctrl -> cleanup form         */
+        blr lr                          /* ppc:347 bctrl -> cleanup form         */
         mov imm1, #1                    /* ppc:348 */
         ldr arg_z, [tsp, #tsp_frame.data_offset]                /* ppc:349 */
         str imm1, [rcontext, #tcr.unwinding] /* ppc:350 */
         ldr imm4, [tsp, #(tsp_frame.data_offset + node_size)]   /* ppc:351 */
         ldr fn, [sp, #lisp_frame.savefn]     /* ppc:352 */
-        ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:353 */
+        ldr lr, [sp, #lisp_frame.savelr]     /* ppc:353,355: direct to lr     */
         discard_lisp_frame              /* ppc:354 */
-        mov lr, temp4                   /* ppc:355 */
         TSP_Unlink                      /* ppc:356 */
         b 1b                            /* ppc:357 */
 8:      /* ppc:358 _nthrow1v_done.  nargs is dead here, so the poll may clobber it. */
@@ -3356,17 +3410,10 @@ endsp unbind_n
 spentry unbind_to
         /* Unbind until db_link == imm0.  Clobbers imm1,imm2,arg_x,arg_y.
            NOTE: unlike PPC (imm5 scratch), we must NOT touch imm5==nargs,
-           because .SPthrow relies on nargs surviving this call. */
-        ldr imm1, [rcontext, #tcr.db_link]
-        ldr imm2, [rcontext, #tcr.tlb_pointer]
-1:
-        ldr arg_x, [imm1, #binding.sym]
-        ldr arg_y, [imm1, #binding.val]
-        ldr imm1, [imm1, #binding.link]
-        cmp imm0, imm1
-        str arg_y, [imm2, arg_x]
-        b.ne 1b
-        str imm1, [rcontext, #tcr.db_link]
+           because .SPthrow relies on nargs surviving this call.
+           Body = unbind_to_imm0 (defined above spentry nthrowvalues), which
+           the nthrow spentries expand INLINE instead of bl'ing here. */
+        unbind_to_imm0
         ret
 endsp unbind_to
 
