@@ -872,29 +872,17 @@ spentry stack_misc_alloc
         cmp     imm3, #subtag_s8_vector            /* no 8_bit class: 8-bit subtags are >= s8 within class other (see misc_alloc note) */
         b.lt    1f
         lsr     imm1, imm1, #1
-1:      /* imm1 = byte count; dnode_align(imm1,imm1,tsp_frame.fixed_overhead
-         * +node_size) -- the total tsp allocation (frame header + object
-         * header + data), ppc-spentry.s:1058. */
-        add     imm1, imm1, #(tsp_frame.fixed_overhead + node_size + (dnode_size - 1))
-        and     imm1, imm1, #0xfffffffffffffff0
+1:      /* imm1 = byte count; round up to the total tsp allocation (frame
+         * header + object header + data), ppc-spentry.s:1058. */
+        dnode_align imm1, imm1, (tsp_frame.fixed_overhead + node_size)
         mov     imm3, #tstack_alloc_limit
         cmp     imm1, imm3
         b.ge    9f
-        /* TSP_Alloc_Var_Boxed_nz(imm1): push a new tsp frame of size imm1,
-         * zero its data area, mark it boxed (type=0).  "_nz": imm1 always
-         * includes the fixed frame overhead, so the frame can never be
-         * empty -- ppc-macros.s:695-704,721-725. */
-        mov     temp4, tsp                        /* old tsp -> backlink */
-        sub     tsp, tsp, imm1
-        str     temp4, [tsp, #tsp_frame.backlink]
-        mov     temp0, tsp
-        add     temp1, tsp, imm1
-        sub     temp1, temp1, #8
-7:      str     xzr, [temp0, #8]!
-        cmp     temp0, temp1
-        b.ne    7b
-        str     xzr, [tsp, #tsp_frame.type]
-        str     imm0, [tsp, #tsp_frame.data_offset]
+        /* Push a boxed frame of imm1 bytes (built below the live tsp and
+         * published atomically).  "_nz": imm1 always includes the frame
+         * overhead + object header, so the data area is never empty. */
+        TSP_Alloc_Var_Boxed_nz imm1, temp4
+        str     imm0, [tsp, #tsp_frame.data_offset]  /* object header */
         add     arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         ret
 5:      /* bit-vector: byte_count = (arg_y + 7<<fixnumshift) >> (3+fixnumshift) */
@@ -910,10 +898,7 @@ spentry stack_misc_alloc
          * temp-frame still has a frame to pop, then heap-cons via
          * misc_alloc instead; arg_y/arg_z are unchanged, matching
          * misc_alloc's own (count, subtag) calling convention. */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         b       _SPmisc_alloc
 endsp stack_misc_alloc
 
@@ -962,20 +947,11 @@ spentry makestacklist
         cmp     imm0, imm3
         add     imm0, imm0, #tsp_frame.fixed_overhead
         b.ge    3f
-        /* TSP_Alloc_Var_Boxed(imm0): push frame, zero its data area (may be
-         * empty when arg_y=0, hence the leading compare instead of the "_nz"
-         * do-while form), mark boxed -- ppc-macros.s:681-692,714-718. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        mov     temp0, tsp
-        add     temp1, tsp, imm0
-        sub     temp1, temp1, #8
-1:      cmp     temp0, temp1
-        b.eq    2f
-        str     xzr, [temp0, #8]!
-        b       1b
-2:      str     xzr, [tsp, #tsp_frame.type]
+        /* Push a boxed frame of imm0 bytes (built below the live tsp and
+         * published atomically).  imm0 == fixed_overhead when arg_y=0, so the
+         * data area may be empty -- the leading-test TSP_Alloc_Var_Boxed (not
+         * the "_nz" do-while) handles that. */
+        TSP_Alloc_Var_Boxed imm0, temp4
         mov     imm1, arg_y                       /* count */
         cmp     imm1, #0
         mov     arg_y, arg_z                       /* initial value */
@@ -991,13 +967,10 @@ spentry makestacklist
         sub     imm2, imm2, #cons.size
 10:     b.ne    4b
         ret
-3:      /* Too big for the tstack: push one empty BOXED (zeroed) tsp frame
+3:      /* Too big for the tstack: push one empty BOXED tsp frame
          * (TSP_Alloc_Fixed_Boxed(0), ppc-spentry.s:3377), then heap-cons
          * cell by cell via Cons. */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     xzr,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Boxed 0, temp4
         mov     imm1, arg_y
         mov     arg_y, arg_z
         mov     arg_z, rnil
@@ -1096,21 +1069,20 @@ endsp stack_misc_alloc_init
  * from the frame-zero pass), (3) too-big path passes 2 args (size, t=clear). */
 spentry makestackblock0
         asr     imm0, arg_z, #fixnumshift
-        add     imm0, imm0, #(tsp_frame.fixed_overhead + macptr.size + (dnode_size - 1))
-        and     imm0, imm0, #0xfffffffffffffff0
+        dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
         b.ge    makestackblock0_too_big
-        /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
-        /* Zero_TSP_Frame(imm0, imm1): zero from tsp+data_offset through
-         * old_tsp-8 inclusive.  ppc-macros.s:681-692. */
+        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
+         * and published atomically).  The frame stays raw, so the GC skips
+         * it -- the data-zeroing below is for the block's contents (clear-p),
+         * not GC safety. */
+        TSP_Alloc_Var_Unboxed imm0, temp4
+        /* Zero the data area [data_offset .. old_tsp).  old_tsp = tsp + imm0
+         * (Var_Unboxed preserves imm0); end (old_tsp-8) in imm1, cursor imm0. */
+        add     imm1, tsp, imm0
+        sub     imm1, imm1, #node_size
         add     imm0, tsp, #tsp_frame.data_offset
-        sub     imm1, temp4, #node_size
         b       makestackblock0_zero_test
 makestackblock0_zero_loop:
         str     xzr, [imm0], #node_size
@@ -1131,10 +1103,7 @@ makestackblock0_too_big:
         /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr with clear-p=T (ppc-spentry.s:3340-3347).
          * Two args: arg_y=size, arg_z=t_value (clear-p). */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         mov     arg_y, arg_z                    /* ppc:3343 mr arg_y,arg_z (save block size) */
         add     arg_z, rnil, #t_offset          /* ppc:3344 li arg_z,t_value (clear-p = T)   */
         mov     nargs, #(2 << fixnumshift)      /* ppc:3345 set_nargs(2)          */
@@ -2040,26 +2009,14 @@ spentry stkgvector
         lsl imm2, imm0, #(num_subtag_bits - fixnumshift)  /* element_count << num_subtag_bits (PPC slri = shift LEFT; the earlier lsr right-shifted the count into the low byte -> header count field always 0 -> malformed stack closures overflowed the vstack in _SPcall_closure) */
         asr imm3, temp0, #fixnumshift            /* unbox subtag */
         orr imm2, imm3, imm2                     /* header = (element_count << num_subtag_bits) | subtag */
-        /* dnode_align: (imm0 + node_size + tsp_frame.fixed_overhead + dnode_size - 1) & ~(dnode_size-1) */
-        add imm0, imm0, #(node_size + tsp_frame.fixed_overhead + dnode_size - 1)  /* fixed_overhead=16, was mis-guessed 8 */
-        and imm0, imm0, #(~(dnode_size - 1))
-        /* TSP_Alloc_Var_Boxed_nz (ppc-macros.s:721-725): push frame WITH
-           backlink, zero the data area, mark boxed.  The previous bare
-           `sub tsp` dropped the backlink (PPC's stru writes it as a
-           store-with-update side effect) — the frame's [tsp]=0 then fed
-           tsp:=0 into the caller's TSP_Unlink on the toplevel fn's second
-           lap (16m5k wall, gdb-observed 2026-07-17). */
-        mov imm4, tsp
-        sub tsp, tsp, imm0
-        str imm4, [tsp, #tsp_frame.backlink]
-        mov imm3, tsp
-        sub imm0, imm4, #node_size
-3:      cmp imm3, imm0
-        b.eq 4f
-        str xzr, [imm3, #node_size]!
-        b 3b
-4:      str xzr, [tsp, #tsp_frame.type]          /* Set_TSP_Frame_Boxed */
-        str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16, was mis-guessed 8) */
+        dnode_align imm0, imm0, (node_size + tsp_frame.fixed_overhead)
+        /* Push a boxed frame of imm0 bytes (built below the live tsp and
+           published atomically).  "_nz": imm0 always covers frame overhead +
+           object header, so the data area is never empty.  (An earlier bare
+           `sub tsp' dropped the backlink and fed tsp:=0 into a later
+           TSP_Unlink -- 16m5k wall, gdb-observed 2026-07-17.) */
+        TSP_Alloc_Var_Boxed_nz imm0, imm4
+        str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16) */
         add arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         add imm3, arg_z, #misc_header_offset     /* pointer to header area for data copy */
         mov imm0, #(1<<fixnumshift)
@@ -4239,10 +4196,7 @@ spentry save_values
         /* common exit: nargs = values in this set, imm1 = tsp before the call. */
 save_values_to_tsp:                                 /* ppc:4992 (named label)     */
         mov imm2, tsp                               /* ppc:4993 previous tsp      */
-        /* dnode_align(imm0,nargs,tsp_frame.fixed_overhead+2*node_size) ppc:4994,
-           inlined per spentry-A:447-448. */
-        add imm0, nargs, #(tsp_frame.fixed_overhead+(2*node_size)+dnode_size-1)
-        and imm0, imm0, #0xfffffffffffffff0
+        dnode_align imm0, nargs, (tsp_frame.fixed_overhead + 2*node_size) /* ppc:4994 */
         TSP_Alloc_Var_Boxed_nz imm0, imm3     /* ppc:4995 */
         str imm1, [tsp, #tsp_frame.backlink]        /* ppc:4996 one tsp "frame"   */
         str nargs, [tsp, #tsp_frame.data_offset]    /* ppc:4997 value count       */
