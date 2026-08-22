@@ -173,24 +173,15 @@
   (add temp0 vsp (:$ 16))
   (jump-subprim .SPvalues)
   @sym
-  ;; No thread-local binding — return (values symptr symbol.vcell-offset)
-  ;; PPC64: (li arg_y '#.target::symbol.vcell)
-  ;; symbol.vcell = 9 on arm64; as a fixnum-tagged constant:
-  ;; the offset itself is what gets pushed, not a fixnum-encoded version.
-  ;; Actually looking at PPC64: (li arg_y '#.target::symbol.vcell) where
-  ;; #. reads the constant at read-time.  On PPC64 symbol.vcell = 32 (a
-  ;; fixnum since fixnumshift=3 and 32 is divisible by 8).  On arm64
-  ;; symbol.vcell = 9 which is NOT a fixnum (not multiple of 8).
-  ;; This is a layout mismatch — the field offset isn't fixnum-aligned.
-  ;; We need to pass the fixnum-tagged cell index instead.
-  ;; PPC64 symbol.vcell IS a fixnum (all field offsets are multiples of 8
-  ;; on PPC64 because node-size=8 and bias doesn't break alignment).
-  ;; On arm64, symbol.vcell = 9 (= -fulltag-symbol + 2*8 = -7 + 16).
-  ;; Hmm, not a fixnum.  The caller uses this to index into the object.
-  ;; DECIDE-BLOCKED: symbol.vcell offset not fixnum-aligned on arm64;
-  ;; need to understand how callers use this return value (raw offset
-  ;; vs fixnum-tagged cell index).  For now, pass the raw offset.
-  (mov arg_y (:$ arm64::symbol.vcell))
+  ;; No thread-local binding — return (values symptr fixnum-boxed-byte-offset).
+  ;; %atomic-incf-node does unbox-fixnum on the offset, so we must return a
+  ;; proper fixnum whose integer value is the byte offset (symbol.vcell = 9).
+  ;; Loading the raw 9 into a Lisp value makes #<BOGUS @ #x9> (tag 001) and
+  ;; atomic-decf of specials (e.g. Hemlock *cache-modification-tick*) returns
+  ;; garbage → Listener insert-string TYPE-ERROR REAL / Hemlock sheets.
+  ;; PPC LAP uses (li arg_y '#.symbol.vcell) — the quote boxes a fixnum;
+  ;; (ash offset fixnumshift) is the arm64 equivalent.
+  (mov arg_y (:$ (ash arm64::symbol.vcell arm64::fixnumshift)))
   (vpush arg_z)
   (vpush arg_y)
   (set-nargs 2)

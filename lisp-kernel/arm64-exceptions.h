@@ -17,7 +17,15 @@ typedef arm_exception_state64_t native_exception_state_t;
 
 void associate_tcr_with_exception_port(mach_port_t, TCR *);
 void disassociate_tcr_from_exception_port(mach_port_t);
+kern_return_t tcr_establish_lisp_exception_port(TCR *);
+kern_return_t restore_foreign_exception_ports(TCR *);
+ExceptionInformation *create_thread_context_frame(mach_port_t, natural *,
+                                                  siginfo_t **, TCR *,
+                                                  native_thread_state_t *);
 
+#ifndef __lisp_kernel_opcode_defined
+#define __lisp_kernel_opcode_defined
 typedef uint32_t opcode, *pc;   /* AArch64 instructions are 32-bit */
+#endif
 
 #endif

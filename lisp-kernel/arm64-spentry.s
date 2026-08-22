@@ -2074,7 +2074,7 @@ misc_set_common:
            slot-vector/lock/instance/istruct/… (boot-16m5b). */
         and imm2, imm1, #7
         cmp imm2, #6                    /* fulltag_nodeheader_{0,1} & 7 */
-        b.eq _SPgvset
+        bcond_ext eq, _SPgvset
         /* Integer vectors */
         cmp imm1, #subtag_u8_vector
         b.eq misc_set_u8
@@ -2361,7 +2361,7 @@ spentry progvrestore
         ldr imm0, [imm0, #tsp_frame.data_offset]  /* ppc:6954 (data_offset=16, was mis-guessed 8) */
         cmp imm0, #0
         asr imm0, imm0, #fixnumshift
-        b.ne _SPunbind_n
+        bcond_ext ne, _SPunbind_n
         ret
 endsp progvrestore
 
@@ -3308,7 +3308,7 @@ spentry setqsym
            Constant symbol => error; otherwise the real work is in .SPspecset. */
         ldr imm0, [arg_y, #symbol.flags]
         tst imm0, #sym_vbit_const_mask
-        b.eq _SPspecset
+        bcond_ext eq, _SPspecset
         mov arg_z, arg_y
         mov arg_y, #XCONST
         set_nargs 2
@@ -3424,7 +3424,7 @@ spentry bind_interrupt_level
         ldr imm4, [rcontext, #tcr.tlb_pointer]              /* ppc:7002 */
         ldr temp0, [imm4, #INTERRUPT_LEVEL_BINDING_INDEX]   /* ppc:7003 old level */
         ldr imm1, [rcontext, #tcr.db_link]                  /* ppc:7004 */
-        b.eq _SPbind_interrupt_level_0  /* ppc:7005 beq -> bind to 0 */
+        bcond_ext eq, _SPbind_interrupt_level_0  /* ppc:7005 beq -> bind to 0 */
         vpush1 temp0                    /* ppc:7006 binding frame: old value */
         vpush1 imm3                     /* ppc:7007               tlb index   */
         vpush1 imm1                     /* ppc:7008               prev db_link*/
@@ -5092,7 +5092,7 @@ endsp tcallsymslide
 spentry tcallnfngen
         /* Tail call nfn - general */
         cmp nargs, #(nargregs << fixnumshift)
-        b.le _SPtcallnfnvsp
+        bcond_ext le, _SPtcallnfnvsp
         b _SPtcallnfnslide
 endsp tcallnfngen
 
@@ -5741,7 +5741,7 @@ ash_shift64:
          * PPC branches on cr0.eq from cntlzd. -- this reflects whether
          * original value was negative. */
         cmp imm0, #0
-        b.lt _SPmakes128
+        bcond_ext lt, _SPmakes128
         b _SPmakeu128
 9:
         /* ppc:5990 */
@@ -5807,7 +5807,7 @@ spentry builtin_aref1
         cmp imm0, #subtag_simple_vector
         /* ppc:3216 box_fixnum(arg_x,imm0) -- save typecode for subtag_misc_ref */
         lsl arg_x, imm0, #fixnumshift
-        b.eq _SPsubtag_misc_ref         /* ppc:3217 */
+        bcond_ext eq, _SPsubtag_misc_ref         /* ppc:3217 */
         /* ppc:3218 ivector_typecode_p(imm1,imm0,imm2) (ppc-macros.s:747):
            ONLY immediate-header subtags are CL ivectors; the macro zeroes a
            node-header subtag so the following compare fails.  We must do the
@@ -5821,7 +5821,7 @@ spentry builtin_aref1
         cmp imm1, #tag_nodeheader
         b.eq 1f
         cmp imm0, #min_cl_ivector_subtag  /* ppc:3219-3220 */
-        b.ge _SPsubtag_misc_ref
+        bcond_ext ge, _SPsubtag_misc_ref
 1:      jump_builtin _builtin_aref1, 2  /* ppc:3221 */
 endsp builtin_aref1
 
@@ -5838,7 +5838,7 @@ spentry builtin_aset1
         cmp imm0, #subtag_simple_vector
         /* ppc:6033 box_fixnum(temp0,imm0) -- subtag_misc_set wants boxed typecode */
         lsl temp0, imm0, #fixnumshift
-        b.eq _SPsubtag_misc_set         /* ppc:6034 */
+        bcond_ext eq, _SPsubtag_misc_set         /* ppc:6034 */
         /* ppc:6035-6037 ivector_typecode_p + compare.  Exclude node-headers
            (vectorH/arrayH) before the >= test — see builtin_aref1 for the
            tag-scheme rationale (raw compare would treat a complex array as an
@@ -5847,7 +5847,7 @@ spentry builtin_aset1
         cmp imm1, #tag_nodeheader
         b.eq 1f
         cmp imm0, #min_cl_ivector_subtag
-        b.ge _SPsubtag_misc_set
+        bcond_ext ge, _SPsubtag_misc_set
 1:      jump_builtin _builtin_aset1, 3  /* ppc:6038 */
 endsp builtin_aset1
 
@@ -6541,7 +6541,7 @@ spentry callback
         mov save2, arg_w                        /* incoming x8           */
         /* Recover the thread context (ppc:5114-5124 get_tcr(1)). */
         mov x0, #1
-        bl get_tcr
+        bl C(get_tcr)
         mov rcontext, x0
         /* Stash the exact foreign sp for the return path, pairing it
            with the incoming x8 (slot CBF-248 =
@@ -6584,7 +6584,7 @@ spentry callback
            must reload it.  Use the SAME idiom as start_lisp below: nil_value
            is patched into the C global lisp_nil at initial heap mapping (Matt
            2026-07-11), so it is NOT a compile-time immediate. */
-        ldr rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr rnil, [rnil]
         /* Cover the foreign region below the enclosing lisp boundary -- the C
            caller's frames plus every register block this spentry just pushed --
@@ -6657,22 +6657,17 @@ spentry callback
         ret
 endsp callback
 
-/* Do a LINUX system call (ppc:5402 poweropen_syscall; the Darwin
- * carry-flag/return-twice protocol is NOT ported).  Same c_frame contract
- * and lisp<->foreign transition as ffcall; the middle is the AArch64
- * Linux syscall sequence instead of a call:
- *   x8 = syscall number (unboxed from arg_z), x0-x5 = args, `svc #0'
- * (analog of x86-spentry64.s:4619 syscall; AArch64 Linux takes <=6
- * integer args).
- * ARM64-DEVIATION: Linux/AArch64 returns -errno directly in x0, so PPC's
- * error-path negation (ppc:5441-5454) has no analog - imm0 carries the
- * raw result.  No FP args => the FPCR dance is skipped (as on PPC, which
- * doesn't touch the FPSCR in syscall). */
-#ifdef DARWIN
-#error "Darwin syscall convention not ported (svc #0x80 + carry-flag error protocol)"
-#endif
+/* Do a system call (ppc:5402 poweropen_syscall).  Same c_frame contract
+ * and lisp<->foreign transition as ffcall; the middle is the platform
+ * AArch64 syscall sequence:
+ *   Linux:  x8 = number, x0-x5 = args, `svc #0'; result/-errno in x0
+ *   Darwin: x16 = number, x0-x5 = args, `svc #0x80'; C set on error with
+ *           errno in x0 - negate to match Linux-style -errno for Lisp.
+ * (analog of x86-spentry64.s:4619 syscall + SYSCALL_SETS_CARRY_ON_ERROR).
+ * No FP args => the FPCR dance is skipped (as on PPC, which doesn't
+ * touch the FPSCR in syscall). */
 /* Body = patch-0003 _SPffcall shape (same c_frame contract and
- * lisp<->foreign transition) with the AArch64 Linux syscall sequence
+ * lisp<->foreign transition) with the AArch64 syscall sequence
  * in the middle instead of a call. */
 spentry syscall
         /* fn + all four boxed NVRs, exactly as `spentry ffcall'
@@ -6727,7 +6722,11 @@ spentry syscall
         /* (No tcr.foreign_fpsr store: the slot is no longer consumed --
            the float wrappers read the live FPSR; see `spentry ffcall'.) */
         /* Syscall number + up to 6 args (ppc:5424-5432 loads r3-r10 + r0). */
+#ifdef DARWIN
+        asr x16, arg_z, #fixnumshift            /* Darwin: number in x16 */
+#else
         asr x8, arg_z, #fixnumshift             /* ppc:5432 unbox_fixnum     */
+#endif
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
@@ -6750,7 +6749,14 @@ spentry syscall
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
+#ifdef DARWIN
+        svc #0x80                               /* Darwin AArch64 syscall */
+        b.cc 1f                                 /* C clear => success */
+        neg x0, x0                              /* errno -> -errno */
+1:
+#else
         svc #0                                  /* ppc:5433 sc               */
+#endif
         /* ---- return path (x0 = raw result / -errno) (ppc:5455-5489) ----
          * Order is PPC64's, instruction for instruction: make every node
          * register GC-valid, flip to lisp valence, and only THEN reload
@@ -6987,7 +6993,7 @@ C(start_lisp):
         mov     save2, xzr
         mov     save3, xzr
         /* rnil: from the C global (image loader patches nil_value). */
-        ldr     rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr     rnil, [rnil]
         /* Lisp stack/alloc state from the TCR (ppc:162-165). */
         ldr     vsp, [rcontext, #tcr.save_vsp]

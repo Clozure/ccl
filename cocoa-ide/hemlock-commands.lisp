@@ -20,10 +20,10 @@
 
 (defun make-standard-window (x y w h)
   (ns:with-ns-rect (rect x y w h)
-    (let* ((style-mask (logior #$NSTitledWindowMask
-                               #$NSClosableWindowMask
-                               #$NSMiniaturizableWindowMask
-                               #$NSResizableWindowMask))
+    (let* ((style-mask (logior $window-style-mask-titled
+                               $window-style-mask-closable
+                               $window-style-mask-miniaturizable
+                               $window-style-mask-resizable))
            (window (#/initWithContentRect:styleMask:backing:defer:
                     (#/alloc ns:ns-window)
                     rect
@@ -238,7 +238,7 @@
   (declare (ignore notification))
   (with-slots (array-controller text-view) self
     (let ((selected-row (#/selectionIndex array-controller)))
-      (if (= selected-row #$NSNotFound)
+      (if (= selected-row $ns-not-found)
         (#/setString: (#/mutableString (#/textStorage text-view)) #@"")
         (let* ((item (#/objectAtIndex: (#/arrangedObjects array-controller) selected-row))
                (info (hemlock-commands-item-info item))

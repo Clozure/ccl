@@ -377,21 +377,34 @@
           (when expression (values (eval-parsed-c-expression expression constant-alist) t)))))))
 
 ;;; Repeatedly iterate over the macros until nothing new's defined.
+;;; Macros that parse but don't evaluate are marked :pending and only
+;;; retried after a pass that defines new constants — otherwise Cocoa-
+;;; scale .ffi (thousands of macros) re-evals forever and appears hung.
 (defun process-defined-macros (ffi-macros constant-alist parameterized-macros)
   (let* ((new-def ()))
     (loop
         (setq new-def nil)
         (dolist (macro ffi-macros)
+          (when (eq (ffi-macro-disposition macro) :pending)
+            (setf (ffi-macro-disposition macro) nil)))
+        (dolist (macro ffi-macros)
           (unless (ffi-macro-disposition macro)
             (let* ((expansion (ffi-macro-expansion macro))
                    (name (ffi-macro-name macro))
                    (value nil))
-              (if (string= name expansion)
-                (setf (ffi-macro-disposition macro) t)
-                (when (setq value (eval-c-expression macro constant-alist parameterized-macros))
-                  (push (cons name value) constant-alist)
-                  (setf (ffi-macro-disposition macro) t)
-                  (setq new-def t))))))
+              (cond ((string= name expansion)
+                     (setf (ffi-macro-disposition macro) t))
+                    ((setq value (eval-c-expression macro constant-alist parameterized-macros))
+                     (push (cons name value) constant-alist)
+                     (setf (ffi-macro-disposition macro) t)
+                     (setq new-def t))
+                    ((or (ffi-macro-expression macro)
+                         (eq (ffi-macro-disposition macro) :bad-parse)
+                         (eq (ffi-macro-disposition macro) :bad-tokenize))
+                     (unless (ffi-macro-disposition macro)
+                       (setf (ffi-macro-disposition macro) :pending)))
+                    (t
+                     (setf (ffi-macro-disposition macro) :give-up))))))
         (unless new-def
           (return (values (reverse constant-alist) nil))))))
 
@@ -407,6 +420,10 @@
     (:pointer (list :pointer (reference-ffi-type (cadr spec))))
     (:array (list :array (cadr spec) (reference-ffi-type (caddr spec))))
     (:void *ffi-void-reference*)
+    ;; ffigen5 emits (null ()) for unmapped clang kinds (Half/Float16).
+    ;; Prefer skipping the enclosing function (see parse-ffi handler-case);
+    ;; if one leaks through, treat as void rather than ecase failure.
+    (:null *ffi-void-reference*)
     (t
      (list :primitive
            (ecase (car spec)
@@ -592,10 +609,25 @@
 (defun process-ffi-enum (form)
   (declare (ignore form)))
 
+(defun ffi-var-static-p (form)
+  ;; (var source name type [storage]) — storage is (static) or (extern).
+  ;; After the keyword-package read that becomes (:static) / (:extern).
+  (let* ((storage (car (cddddr form))))
+    (or (eq storage :static)
+        (eq storage 'static)
+        (and (consp storage)
+             (or (eq (car storage) :static)
+                 (eq (car storage) 'static))))))
+
 (defun process-ffi-var (form)
-  (let* ((name (caddr form))
-         (type (cadddr form)))
-    (cons name (reference-ffi-type type))))
+  ;; `static const` has internal linkage — not a dyld symbol.  Recording
+  ;; it in vars.cdb makes #$ fall through to resolve-foreign-variable
+  ;; ("Can't resolve foreign symbol NSOffState").  Skip; numeric aliases
+  ;; belong in constants.cdb (enum-ident / inject).
+  (unless (ffi-var-static-p form)
+    (let* ((name (caddr form))
+           (type (cadddr form)))
+      (cons name (reference-ffi-type type)))))
 
 (defun process-ffi-enum-ident (form)
   (cons (caddr form) (cadddr form)))
@@ -769,14 +801,21 @@
                   :objc-protocol-instance-method
                   )
                  (process-ffi-objc-method form))
-                (:function (push (process-ffi-function form) defined-functions))
+                (:function
+                 (handler-case
+                     (push (process-ffi-function form) defined-functions)
+                   (error (c)
+                     ;; Darwin/ffigen5: CXType_Half/__fp16 → "(null ())"; skip.
+                     (warn "parse-ffi: skipping function ~s: ~a"
+                           (cadr form) c))))
                 (:macro (let* ((m (process-ffi-macro form))
                                (args (ffi-macro-args m)))
                           (if args
                             (setf (gethash (string (ffi-macro-name m)) argument-macros) args)
                             (push m defined-macros))))
                 (:type (push (process-ffi-typedef form) defined-types))
-                (:var (push (process-ffi-var form) defined-vars))
+                (:var (let ((v (process-ffi-var form)))
+                        (when v (push v defined-vars))))
                 (:enum-ident (push (process-ffi-enum-ident form) defined-constants))
                 (:enum (process-ffi-enum form))
                 (:union (push (process-ffi-union form) defined-types))

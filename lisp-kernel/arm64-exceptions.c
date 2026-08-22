@@ -55,6 +55,12 @@
 
 #include "threads.h"              /* ppc-exceptions.c:49 */
 
+#ifdef DARWIN
+#include "memprotect.h"
+extern Boolean use_mach_exception_handling;
+void signal_handler(int, siginfo_t *, ExceptionInformation *, TCR *, int);
+#endif
+
 /* ------------------------------------------------------------------ */
 /* lisp_globals.h grew a real ARM64 branch @ 93d72a0 (nil-anchored via
  * the runtime lisp_nil) -- the fixed-address PROPOSED shim that lived
@@ -765,8 +771,13 @@ signal_stack_soft_overflow(ExceptionInformation *xp, unsigned reg)
 
 void
 adjust_soft_protection_limit(area *a)
-{                                 /* ppc-exceptions.c:575-592 */
-  char *proposed_new_soft_limit = a->softlimit - 4096;
+{                                 /* ppc-exceptions.c:575-592.
+                                     ARM64-DEVIATION: step by the real
+                                     page size (16KiB on Darwin arm64,
+                                     4KiB elsewhere), not a hardcoded
+                                     4096, so the softlimit stays in sync
+                                     with mprotect granularity. */
+  char *proposed_new_soft_limit = a->softlimit - page_size;
   protected_area_ptr p = a->softprot;
 
   if (proposed_new_soft_limit >= (p->start+16384)) {
@@ -785,10 +796,11 @@ restore_soft_stack_limit(unsigned stkreg)
 
   switch (stkreg) {
   case Rsp:  /* ARM64-DEVIATION: PPC used sp=r1; AArch64 SP is not a
-                numbered GPR, selector Rsp=31 (see enum above). */
+                numbered GPR, selector Rsp=31 (see enum above).
+                Step by page_size (16KiB on Darwin arm64), not 4096. */
     a = tcr->cs_area;
-    if ((a->softlimit - 4096) > (a->hardlimit + 16384)) {
-      a->softlimit -= 4096;
+    if ((a->softlimit - page_size) > (a->hardlimit + 16384)) {
+      a->softlimit -= page_size;
     }
     tcr->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
     break;
@@ -1033,11 +1045,20 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 {                                 /* ppc-exceptions.c:866-925 */
   /* ppc:869-885: use the siginfo.  Linux delivers write-protection
      faults as SIGSEGV with SEGV_ACCERR in the low bits of si_code.
-     ARM64-DEVIATION: the non-siginfo fallback read PPC's DSISR bit 25 /
-     TRAP=0x300 (ppc:886-895); AArch64's mcontext has no fault-status
-     register (the ESR lives in an optional esr_context extension that
-     older kernels omit), so there is no register fallback — Linux
-     sigaction with SA_SIGINFO always supplies info. */
+     ARM64-DEVIATION: Darwin surfaces ESR in uc_mcontext->__es.__esr.
+     Data-abort ISS bit 6 (WnR) discriminates write vs read; without it
+     Darwin often delivers RX-store faults as SIGBUS and the Linux
+     SIGSEGV+SEGV_ACCERR test mis-classifies them as reads. */
+#if defined(DARWIN) && defined(ARM64)
+  if (xp) {
+    natural esr = (natural)UC_MCONTEXT(xp)->__es.__esr;
+    unsigned ec = (unsigned)((esr >> 26) & 0x3f);
+    /* EC 0x24/0x25 = Data Abort (lower/current EL) */
+    if (ec == 0x24 || ec == 0x25) {
+      return ((esr & (1u << 6)) != 0); /* ISS.WnR */
+    }
+  }
+#endif
   if (info) {
     return ((info->si_signo == SIGSEGV) &&
             ((info->si_code & 0xff) == (SEGV_ACCERR & 0xff)));
@@ -1048,6 +1069,95 @@ is_write_fault(ExceptionInformation *xp, siginfo_t *info)
 
 static OSStatus pv_cold_load_fatal(ExceptionInformation *xp, BytePtr addr,
                                    Boolean is_write);
+static void cold_load_dump_frame(ExceptionInformation *xp);
+static void uuo_describe_symbol(LispObj sym);
+
+#if defined(DARWIN) && defined(ARM64)
+static void
+darwin_arm64_describe_pc_object(natural pcval)
+{
+  natural probe = pcval & ~(natural)15;
+  int i;
+
+  fprintf(dbgout, "  pc-object scan:");
+  for (i = 0; i < 8; i++) {
+    if (probe < (natural)IMAGE_BASE_ADDRESS) {
+      break;
+    }
+    {
+      natural header = *(natural *)probe;
+      unsigned st = (unsigned)(header & subtagmask);
+      natural count = header >> num_subtag_bits;
+      fprintf(dbgout, "\n    hdr@0x%lx subtag=0x%x count=%lu",
+              (unsigned long)probe, st, (unsigned long)count);
+      if (st == subtag_simple_base_string) {
+        natural j, n = count < 64 ? count : 64;
+        unsigned *chars = (unsigned *)(probe + node_size);
+        fprintf(dbgout, " string=\"");
+        for (j = 0; j < n; j++) {
+          unsigned c = chars[j];
+          fputc((c >= 0x20 && c < 0x7f) ? (int)c : '?', dbgout);
+        }
+        fprintf(dbgout, "\"");
+      }
+    }
+    probe -= 16;
+  }
+  fprintf(dbgout, "\n");
+  fflush(dbgout);
+}
+
+static void
+darwin_arm64_describe_fn(LispObj fn)
+{
+  if (fulltag_of(fn) != fulltag_misc) {
+    fprintf(dbgout, "  fn 0x%lx not misc (tag %u)\n",
+            (unsigned long)fn, (unsigned)fulltag_of(fn));
+    return;
+  }
+  {
+    natural header = header_of(fn);
+    unsigned st = (unsigned)header_subtag(header);
+    natural elems = header_element_count(header);
+    LispObj cv = deref(fn, 1); /* function.code_vector @ slot 1 */
+    natural i;
+
+    fprintf(dbgout,
+            "  fn 0x%lx subtag=0x%x elems=%lu code_vector=0x%lx\n",
+            (unsigned long)fn, st, (unsigned long)elems, (unsigned long)cv);
+    if (fulltag_of(cv) == fulltag_misc) {
+      natural ch = header_of(cv);
+      fprintf(dbgout, "    cv subtag=0x%x count=%lu\n",
+              (unsigned)header_subtag(ch),
+              (unsigned long)(ch >> num_subtag_bits));
+    }
+    /* Print immediate slots that look like symbols/strings (name). */
+    for (i = 2; i <= elems && i < 12; i++) {
+      LispObj imm = deref(fn, i);
+      if (fulltag_of(imm) == fulltag_symbol) {
+        fprintf(dbgout, "    imm[%lu]=", (unsigned long)i);
+        uuo_describe_symbol(imm);
+        fprintf(dbgout, "\n");
+      } else if (fulltag_of(imm) == fulltag_misc) {
+        natural ih = header_of(imm);
+        unsigned ist = (unsigned)header_subtag(ih);
+        if (ist == subtag_simple_base_string) {
+          natural j, n = header_element_count(ih);
+          unsigned *chars = (unsigned *)(untag(imm) + node_size);
+          if (n > 80) n = 80;
+          fprintf(dbgout, "    imm[%lu]=\"", (unsigned long)i);
+          for (j = 0; j < n; j++) {
+            unsigned c = chars[j];
+            fputc((c >= 0x20 && c < 0x7f) ? (int)c : '?', dbgout);
+          }
+          fprintf(dbgout, "\"\n");
+        }
+      }
+    }
+  }
+  fflush(dbgout);
+}
+#endif
 
 OSStatus
 handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr, int old_valence)
@@ -1079,6 +1189,55 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
     return 0;
   }
 
+#if defined(DARWIN) && defined(ARM64)
+  /* Dynamic heap is never executable.  Executable code is MAP_JIT
+     (darwin_arm64_code_*) or AREA_READONLY.
+
+     Stock ports dirty AREA_READONLY with UnProtect→RWX (page stays
+     executable).  Darwin W^X forbids RWX, so we oscillate:
+       write fault  → mprotect RW (store retries)
+       NX fetch     → mprotect RX (insn retries)
+     Same page may flip again on a later store.  NX into the RW *dynamic*
+     heap (not readonly, not MAP_JIT) remains a hard bug. */
+  if (xp) {
+    natural esr = (natural)UC_MCONTEXT(xp)->__es.__esr;
+    unsigned ec = (unsigned)((esr >> 26) & 0x3f);
+    natural pcval = (natural)xpPC(xp);
+    natural far = (natural)addr;
+    Boolean insn_abort = (ec == 0x20 || ec == 0x21);
+    Boolean in_readonly =
+      readonly_area &&
+      pcval >= (natural)readonly_area->low &&
+      pcval < (natural)readonly_area->active;
+
+    if (insn_abort && pcval == far && in_readonly) {
+      LogicalAddress page =
+        (LogicalAddress)truncate_to_power_of_2(pcval, log2_page_size);
+      if (mprotect(page, page_size, PROT_READ | PROT_EXEC) == 0) {
+        return 0;
+      }
+      fprintf(dbgout,
+              "\nFATAL: mprotect(RX) failed for AREA_READONLY page 0x%lx errno=%d\n",
+              (unsigned long)(natural)page, errno);
+      cold_load_dump_frame(xp);
+      _exit(157);
+    }
+
+    if (insn_abort &&
+        pcval == far &&
+        pcval >= (natural)IMAGE_BASE_ADDRESS &&
+        !in_readonly &&
+        !darwin_arm64_in_code_heap((void *)pcval)) {
+      fprintf(dbgout,
+              "\nFATAL: NX fetch into non-code heap at 0x%lx\n",
+              (unsigned long)pcval);
+      cold_load_dump_frame(xp);
+      darwin_arm64_describe_pc_object(pcval);
+      darwin_arm64_describe_fn(xpGPR(xp, 7));
+      _exit(157);
+    }
+  }
+#endif
 
   if (is_write_fault(xp,info)) {                  /* ppc:956-969 */
     area = find_protected_area(addr);
@@ -1088,6 +1247,7 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
     } else {
       if ((addr >= readonly_area->low) &&
           (addr < readonly_area->active)) {
+        /* Darwin: RW only (see UnProtectMemory).  NX restore is above. */
         UnProtectMemory((LogicalAddress)(truncate_to_power_of_2(addr,log2_page_size)),
                         page_size);
         return 0;
@@ -1351,22 +1511,40 @@ uuo_describe_symbol(LispObj sym)
 static void
 cold_load_dump_frame(ExceptionInformation *xp)
 {
+  pc where = xpPC(xp);
+  unsigned i;
+
   fprintf(dbgout,
           "  lr 0x%lx  nargs 0x%lx  vsp 0x%lx  tsp 0x%lx  sp 0x%lx\n"
-          "  imm0-2 0x%lx 0x%lx 0x%lx\n"
+          "  imm0-5 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n"
           "  arg_w..z(x8-11) 0x%lx 0x%lx 0x%lx 0x%lx  fn(x7) 0x%lx\n"
-          "  temp0-5(x12-17) 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n",
+          "  temp0-5(x12-17) 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n"
+          "  save0-3(x19-22) 0x%lx 0x%lx 0x%lx 0x%lx  rnil 0x%lx\n"
+          "  allocptr(x26) 0x%lx  allocbase(x27) 0x%lx  rcontext 0x%lx\n",
           (unsigned long)xpGPR(xp, 30), (unsigned long)xpGPR(xp, 6),
           (unsigned long)xpGPR(xp, 25), (unsigned long)xpGPR(xp, 24),
           (unsigned long)xpSP(xp),
           (unsigned long)xpGPR(xp, 0), (unsigned long)xpGPR(xp, 1),
-          (unsigned long)xpGPR(xp, 2),
+          (unsigned long)xpGPR(xp, 2), (unsigned long)xpGPR(xp, 3),
+          (unsigned long)xpGPR(xp, 4), (unsigned long)xpGPR(xp, 5),
           (unsigned long)xpGPR(xp, 8), (unsigned long)xpGPR(xp, 9),
           (unsigned long)xpGPR(xp, 10), (unsigned long)xpGPR(xp, 11),
           (unsigned long)xpGPR(xp, 7),
           (unsigned long)xpGPR(xp, 12), (unsigned long)xpGPR(xp, 13),
           (unsigned long)xpGPR(xp, 14), (unsigned long)xpGPR(xp, 15),
-          (unsigned long)xpGPR(xp, 16), (unsigned long)xpGPR(xp, 17));
+          (unsigned long)xpGPR(xp, 16), (unsigned long)xpGPR(xp, 17),
+          (unsigned long)xpGPR(xp, 19), (unsigned long)xpGPR(xp, 20),
+          (unsigned long)xpGPR(xp, 21), (unsigned long)xpGPR(xp, 22),
+          (unsigned long)xpGPR(xp, 23),
+          (unsigned long)xpGPR(xp, 26), (unsigned long)xpGPR(xp, 27),
+          (unsigned long)xpGPR(xp, 28));
+  if (where) {
+    fprintf(dbgout, "  code@pc:");
+    for (i = 0; i < 8; i++) {
+      fprintf(dbgout, " %08x", (unsigned)where[i]);
+    }
+    fprintf(dbgout, "\n");
+  }
   fflush(dbgout);
 }
 
@@ -1374,12 +1552,19 @@ static OSStatus
 uuo_cold_load_fatal(ExceptionInformation *xp, pc where, opcode the_uuo,
                     const char *what, unsigned gpr)
 {
+  natural pcval = (natural)where;
+
   fprintf(dbgout, "\nFATAL (cold load, no lisp error system): %s --", what);
   uuo_describe_symbol(xpGPR(xp, gpr));
   fprintf(dbgout, "\n  at pc 0x%lx, uuo 0x%08x, x%u = 0x%lx\n",
-          (unsigned long)(natural)where, the_uuo, gpr,
+          (unsigned long)pcval, the_uuo, gpr,
           (unsigned long)xpGPR(xp, gpr));
   cold_load_dump_frame(xp);
+#if defined(DARWIN) && defined(ARM64)
+  darwin_arm64_describe_pc_object(pcval);
+  darwin_arm64_describe_fn(xpGPR(xp, 7));
+  darwin_arm64_describe_fn(xpGPR(xp, 14)); /* nfn = temp2 */
+#endif
   _exit(157);
   return -1;                      /* not reached */
 }
@@ -1393,12 +1578,28 @@ uuo_cold_load_fatal(ExceptionInformation *xp, pc where, opcode the_uuo,
 static OSStatus
 pv_cold_load_fatal(ExceptionInformation *xp, BytePtr addr, Boolean is_write)
 {
+  natural pcval = (natural)xpPC(xp);
+
   fprintf(dbgout,
           "\nFATAL (cold load, no lisp error system): unhandled %s fault\n"
           "  at pc 0x%lx, fault address 0x%lx\n",
           is_write ? "write" : "read",
-          (unsigned long)(natural)xpPC(xp), (unsigned long)(natural)addr);
+          (unsigned long)pcval, (unsigned long)(natural)addr);
   cold_load_dump_frame(xp);
+#if defined(DARWIN) && defined(ARM64)
+  darwin_arm64_describe_pc_object(pcval);
+  darwin_arm64_describe_fn(xpGPR(xp, 7));
+  /* Dump a few words before the faulting store for context. */
+  if (pcval >= 16) {
+    unsigned *ip = (unsigned *)(pcval - 16);
+    int k;
+    fprintf(dbgout, "  code@pc-16:");
+    for (k = 0; k < 12; k++) {
+      fprintf(dbgout, " %08x", ip[k]);
+    }
+    fprintf(dbgout, "\n");
+  }
+#endif
   _exit(157);
   return -1;                      /* not reached */
 }
@@ -1952,14 +2153,22 @@ exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
 }
 
 void
-signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
+signal_handler(int signum, siginfo_t *info, ExceptionInformation *context
+#ifdef DARWIN
+               , TCR *tcr, int old_valence
+#endif
+)
 {                                 /* ppc-exceptions.c:1823-1866 */
+#ifndef DARWIN
   TCR *tcr;
   int old_valence;
+#endif
   natural old_last_lisp_frame;
   xframe_list xframe_link;
 
+#ifndef DARWIN
   tcr = (TCR *) get_interrupt_tcr(false);
+#endif
 
   /* The signal handler's entered with all signals (notably the
      thread_suspend signal) blocked.  Don't allow any other signals
@@ -1977,7 +2186,14 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
   old_last_lisp_frame = tcr->last_lisp_frame;
   tcr->last_lisp_frame = (natural)ptr_to_lispobj(xpSP(context));
 
+#ifndef DARWIN
   old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+#else
+  /* Mach path: setup_signal_frame already set EXCEPTION_WAIT + pending xp.
+     Unix bring-up fallback still needs prepare_to_wait. */
+  if (!use_mach_exception_handling)
+    old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+#endif
 
   if (tcr->flags & (1 << TCR_FLAG_BIT_PENDING_SUSPEND)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
@@ -2036,8 +2252,13 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
      executing lisp code.  If some other thread gets the exception
      lock and GCs, the context (this thread's suspend_context) will
      be updated.  (ppc:1858-1863) */
-  exit_signal_handler(tcr, old_valence, old_last_lisp_frame);
-  raise_pending_interrupt(tcr);
+  /* Mach + pseudo_sigreturn: leave pending_exception_context for
+     do_pseudo_sigreturn (matches x86 Darwin).  Unix signal path still
+     needs exit_signal_handler + return to _sigtramp. */
+  if (!use_mach_exception_handling) {
+    exit_signal_handler(tcr, old_valence, old_last_lisp_frame);
+    raise_pending_interrupt(tcr);
+  }
 }
 
 /*
@@ -2451,19 +2672,37 @@ install_signal_handler(int signo, void *handler, unsigned flags)
   }
 }
 
+#ifdef DARWIN
+/* Mach resumes into the 5-arg signal_handler.  Unix sigaction only
+ * supplies 3 args — bridge when Mach is off. */
+static void
+unix_signal_handler(int signum, siginfo_t *info, ExceptionInformation *context)
+{
+  TCR *tcr = (TCR *)get_interrupt_tcr(false);
+  int old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+  signal_handler(signum, info, context, tcr, old_valence);
+}
+#endif
+
 void
 install_pmcl_exception_handlers()
 {                                 /* ppc-exceptions.c:2210-2226 */
   extern int no_sigtrap;
-  /* udf raises SIGILL on aarch64-linux; brk (the drafts' remaining
-     placeholders + the debugger entry) raises SIGTRAP. */
-  install_signal_handler(SIGILL, (void *)signal_handler, RESERVE_FOR_LISP);
-  if (no_sigtrap != 1) {
-    install_signal_handler(SIGTRAP, (void *)signal_handler, RESERVE_FOR_LISP);
+  /* Darwin x86 skips SIGILL/BUS/SEGV/FPE when Mach owns them.  Same here. */
+  if (!use_mach_exception_handling) {
+#ifdef DARWIN
+    void *handler = (void *)unix_signal_handler;
+#else
+    void *handler = (void *)signal_handler;
+#endif
+    install_signal_handler(SIGILL, handler, RESERVE_FOR_LISP);
+    if (no_sigtrap != 1) {
+      install_signal_handler(SIGTRAP, handler, RESERVE_FOR_LISP);
+    }
+    install_signal_handler(SIGBUS, handler, RESERVE_FOR_LISP);
+    install_signal_handler(SIGSEGV, handler, RESERVE_FOR_LISP);
+    install_signal_handler(SIGFPE, handler, RESERVE_FOR_LISP);
   }
-  install_signal_handler(SIGBUS, (void *)signal_handler, RESERVE_FOR_LISP);
-  install_signal_handler(SIGSEGV, (void *)signal_handler, RESERVE_FOR_LISP);
-  install_signal_handler(SIGFPE, (void *)signal_handler, RESERVE_FOR_LISP);
 
   install_signal_handler(SIGNAL_FOR_PROCESS_INTERRUPT,
                          (void *)interrupt_handler, RESERVE_FOR_LISP);

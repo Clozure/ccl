@@ -1,0 +1,9 @@
+;; ObjC runtime Protocol class — missing from modern SDK cocoa
+;; objc-classes.cdb (x86 CDB still has it).  Without this,
+;; install-foreign-objc-class keeps Protocol private and never
+;; exports ns:protocol.
+(objc-class ("" 0)
+ "Protocol"
+ ("NSObject")
+ ()
+ ())

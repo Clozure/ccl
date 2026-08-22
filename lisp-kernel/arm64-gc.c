@@ -64,7 +64,11 @@
 #include <sys/time.h>             /* ppc-gc.c:26 */
 #include <sys/mman.h>             /* for munmap in impurify (ppc-gc.c:2283
                                      calls munmap; PPC got the prototype
-                                     transitively) */
+                                     transitively). Darwin/arm64 purify RX. */
+#if defined(DARWIN) && defined(ARM64)
+#include "memprotect.h"
+#include <pthread.h>
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Guarded shims for headers that lack an ARM64 branch at the pin.
@@ -106,10 +110,49 @@
  * ~400MB memset ran off the mapping and the SEGV handler looped at
  * 100% CPU).  Any claimed extent beyond the GC area is proof of a
  * corrupt header - die loudly at the object, not in the storm. */
+extern char *GCmark_phase;
+extern void *GCmark_phase_area;
+extern LispObj *GCmark_phase_slot;
+static LispObj GCmark_parent = 0;
+
 static void
 check_marked_extent(LispObj n, natural dnode, natural suffix_dnodes)
 {
   if ((dnode + 1 + suffix_dnodes) > GCndnodes_in_area) {
+    /* Dump the neighborhood before dying: the "header" is usually a
+       stray tagged pointer or float bits; the surrounding words often
+       identify the victim object and the writer's stride. */
+    natural base = untag(n);
+    int i;
+    fprintf(dbgout, "\n[GC corrupt header] object 0x%lx neighborhood:\n",
+            (unsigned long)n);
+    for (i = -4; i <= 4; i++) {
+      natural addr = base + ((natural)(i * 8));
+      fprintf(dbgout, "  %+3d  0x%012lx : 0x%016lx\n",
+              i * 8, (unsigned long)addr,
+              (unsigned long)*(LispObj *)addr);
+    }
+    fprintf(dbgout,
+            "[GC corrupt header] root origin: phase=%s area/tcr=%p slot=%p"
+            " slot-value=0x%lx parent=0x%lx\n",
+            GCmark_phase, GCmark_phase_area, (void *)GCmark_phase_slot,
+            GCmark_phase_slot ? (unsigned long)*GCmark_phase_slot : 0UL,
+            (unsigned long)GCmark_parent);
+    if (GCmark_phase_slot) {
+      fprintf(dbgout, "[GC corrupt header] slot neighborhood:\n");
+      for (i = -6; i <= 6; i++) {
+        fprintf(dbgout, "  %+3d  %p : 0x%016lx\n",
+                i * 8, (void *)(GCmark_phase_slot + i),
+                (unsigned long)GCmark_phase_slot[i]);
+      }
+    }
+    if (GCmark_phase_area && !strcmp(GCmark_phase, "vstack")) {
+      area *ar = (area *)GCmark_phase_area;
+      fprintf(dbgout,
+              "[GC corrupt header] vstack area: low=%p active=%p high=%p\n",
+              ar->low, ar->active, ar->high);
+    }
+    fflush(dbgout);
     Bug(NULL, "GC: object 0x%lx (dnode 0x%lx) claims 0x%lx suffix dnodes"
         " but the area has only 0x%lx - corrupt uvector header?",
         (unsigned long)n, (unsigned long)dnode,
@@ -133,6 +176,18 @@ check_marked_extent(LispObj n, natural dnode, natural suffix_dnodes)
  * ASSUMPTION (report OPEN #8): no other 0x00000000 word at an 8-aligned
  * offset inside the instruction stream (no inline literal pools).      */
 #define ARM64_CODE_VECTOR_SENTINEL 0
+
+#if defined(DARWIN) && defined(ARM64)
+/* PC/LR are always the canonical VA (pure RX or MAP_JIT). */
+static inline Boolean
+darwin_arm64_ptr_in_purify_source(BytePtr p, BytePtr low, BytePtr high)
+{
+  if (p > low && p < high) {
+    return true;
+  }
+  return darwin_arm64_in_code_heap(p);
+}
+#endif
 
 /* PROPOSED (ratify with Matt): arm64-constants.h defines
  * subtag_lisp_frame_marker = SUBTAG(fulltag_imm_1,5) but no
@@ -569,6 +624,7 @@ mark_root(LispObj n)                                 /* ppc-gc.c:216-334 */
       base += (1+element_count);
 
       while(element_count--) {
+        GCmark_parent = n;
         rmark(*--base);
       }
       if (subtag == subtag_weak) {
@@ -714,7 +770,9 @@ rmark(LispObj n)                                     /* ppc-gc.c:476-787 */
 
   if (current_stack_pointer() > GCstack_limit) {     /* ppc-gc.c:497 */
     if (tag_n == fulltag_cons) {
+      GCmark_parent = n;
       rmark(deref(n,1));
+      GCmark_parent = n;
       rmark(deref(n,0));
     } else {
       LispObj *base = (LispObj *) ptr_from_lispobj(untag(n));
@@ -783,6 +841,7 @@ rmark(LispObj n)                                     /* ppc-gc.c:476-787 */
           element_count -= 1;
       }
       while (element_count) {
+        GCmark_parent = n;
         rmark(deref(n,element_count));
         element_count--;
       }
@@ -980,6 +1039,7 @@ rmark(LispObj n)                                     /* ppc-gc.c:476-787 */
       suffix_dnodes = ((total_size_in_bytes+(dnode_size-1))>>dnode_shift)-1;
 
       if (suffix_dnodes) {
+        GCmark_parent = prev;   /* FSM: prev = (link-inverted) parent */
         check_marked_extent(this, dnode, suffix_dnodes);
         set_n_bits(GCmarkbits, dnode+1, suffix_dnodes);
       }
@@ -1195,8 +1255,10 @@ mark_simple_area_range(LispObj *start, LispObj *end) /* ppc-gc.c:912-963 */
     if (immheader_tag_p(tag)) {
       start = (LispObj *)ptr_from_lispobj(skip_over_ivector(ptr_to_lispobj(start), x1));
     } else if (!nodeheader_tag_p(tag)) {
+      GCmark_phase_slot = start;
       ++start;
       mark_root(x1);
+      GCmark_phase_slot = start;
       mark_root(*start++);
     } else {
       int subtag = header_subtag(x1);
@@ -1231,6 +1293,7 @@ mark_simple_area_range(LispObj *start, LispObj *end) /* ppc-gc.c:912-963 */
          here; a fixnum-tagged locative (assumed convention) no-ops. */
       base = start + element_count + 1;
       while(element_count--) {
+        GCmark_phase_slot = base - 1;
         mark_root(*--base);
       }
       start += size;
@@ -1246,6 +1309,9 @@ mark_tstack_area(area *a)                            /* ppc-gc.c:967-986 */
   /* Matt's arm64 HAS a tsp/tstack (tsp=x24; tcr.save_tsp/next_tsp/
      ts_area) â€” PPC-shaped {backlink, type, data...} frames; the walk
      ports verbatim (ARM32's empty stub, arm-gc.c:851, does NOT apply). */
+  GCmark_phase = "tstack";
+  GCmark_phase_area = a;
+  {
   LispObj
     *current,
     *next,
@@ -1261,6 +1327,7 @@ mark_tstack_area(area *a)                            /* ppc-gc.c:967-986 */
     if (current[1] == 0) {
       mark_simple_area_range(current+2, end);
     }
+  }
   }
 }
 
@@ -1283,8 +1350,11 @@ mark_vstack_area(area *a)                            /* ppc-gc.c:997-1013 */
 #if 0
   fprintf(dbgout, "mark VSP range: 0x%lx:0x%lx\n", start, end);
 #endif
+  GCmark_phase = "vstack";
+  GCmark_phase_area = a;
   if (((natural)start) & (sizeof(natural))) {
     /* Odd number of words.  Mark the first (can't be a header) */
+    GCmark_phase_slot = start;
     mark_root(*start);
     ++start;
   }
@@ -1314,6 +1384,8 @@ mark_cstack_area(area *a)                            /* arm-gc.c:889-928 */
   lisp_frame *frame;
   CSTACK_TRAIL_DECL;                                 /* 16m41 DIAG */
 
+  GCmark_phase = "cstack";
+  GCmark_phase_area = a;
   while(current < limit) {
     header = *current;
     _cfrom = current;                                /* 16m41 DIAG */
@@ -1321,8 +1393,11 @@ mark_cstack_area(area *a)                            /* arm-gc.c:889-928 */
     if (header == lisp_frame_marker) {
       frame = (lisp_frame *)current;
 
+      GCmark_phase_slot = &frame->savevsp;
       mark_root(frame->savevsp); /* likely a fixnum */
+      GCmark_phase_slot = &frame->savefn;
       mark_root(frame->savefn);
+      GCmark_phase_slot = &frame->savelr;
       mark_pc_root(frame->savelr);
       current += sizeof(lisp_frame)/sizeof(LispObj);
       CSTACK_TRAIL_STEP(CB_FRAME);                   /* 16m41 DIAG */
@@ -1334,6 +1409,7 @@ mark_cstack_area(area *a)                            /* arm-gc.c:889-928 */
 
       current++;
       while(elements--) {
+        GCmark_phase_slot = current;
         mark_root(*current++);
       }
       if (((natural)current) & sizeof(natural)) {
@@ -1398,8 +1474,11 @@ mark_xp(ExceptionInformation *xp)                    /* ppc-gc.c:1054-1083 */
      stacks, nilreg-relative globals, etc.
      */
 
+  GCmark_phase = "xp";
+  GCmark_phase_area = xp;
   for (r = fn; r <= rnil; r++) {
     if (r != 18) {
+      GCmark_phase_slot = (LispObj *)&regs[r];
       mark_root((regs[r]));
     }
   }
@@ -1606,8 +1685,10 @@ dnode_forwarding_address(natural dnode, int tag_n)   /* ppc-gc.c:1131-1174 (PPC6
 LispObj
 locative_forwarding_address(LispObj obj)             /* ppc-gc.c:1223-1257 */
 {
-  int tag_n = fulltag_of(obj);
+  int tag_n;
   natural dnode;
+
+  tag_n = fulltag_of(obj);
 
   /* Locatives can be tagged as misc objects, as fixnums, or be raw
      4-byte-aligned instruction addresses (residues 0/4/8/12 mod 16 =
@@ -2143,6 +2224,9 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
   natural
     start = (natural)old,
     physbytes;
+#if defined(DARWIN) && defined(ARM64)
+  Boolean jit_src = darwin_arm64_in_code_heap(old);
+#endif
 
   physbytes = ((natural)(skip_over_ivector(start,header))) - start;
   dest->active += physbytes;
@@ -2159,12 +2243,25 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
      it's easiest to do so if we leave a {forward_marker, dnode_locative}
      pair at every doubleword in the old vector.
   */
+#if defined(DARWIN) && defined(ARM64)
+  /* Forwarding markers are stores into the old object.  MAP_JIT sources
+     need WP=0; purify runs entirely in C so restoring WP=1 before return
+     to lisp is enough. */
+  if (jit_src) {
+    pthread_jit_write_protect_np(0);
+  }
+#endif
   while(physbytes) {
     *old++ = (BytePtr) forward_marker;   /* = fulltag_nil under -DARM64, see shim note */
     *old++ = (BytePtr) free;
     free += dnode_size;
     physbytes -= dnode_size;
   }
+#if defined(DARWIN) && defined(ARM64)
+  if (jit_src) {
+    pthread_jit_write_protect_np(1);
+  }
+#endif
   return new;
 }
 
@@ -2181,13 +2278,18 @@ copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {                                                    /* ppc-gc.c:1737-1758 */
   LispObj obj = *ref, header;
   natural tag = fulltag_of(obj), header_tag;
+  BytePtr objp = (BytePtr)ptr_from_lispobj(obj);
+  Boolean in_src;
 
   /* Only fulltag_misc references can name ivectors on arm64 (symbols and
      functions are gvectors; a function's codevector slot is misc-tagged),
      so PPC's misc-only test ports unchanged. */
-  if ((tag == fulltag_misc) &&
-      (((BytePtr)ptr_from_lispobj(obj)) > low) &&
-      (((BytePtr)ptr_from_lispobj(obj)) < high)) {
+#if defined(DARWIN) && defined(ARM64)
+  in_src = darwin_arm64_ptr_in_purify_source(objp, low, high);
+#else
+  in_src = (objp > low) && (objp < high);
+#endif
+  if ((tag == fulltag_misc) && in_src) {
     header = deref(obj, 0);
     if (header == forward_marker) { /* already copied */
       *ref = (untag(deref(obj,1)) + tag);
@@ -2212,10 +2314,17 @@ purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
     *p,
     insn;
   natural
-    tag = fulltag_of(loc);
+    tag;
 
+  tag = fulltag_of(loc);
+
+#if defined(DARWIN) && defined(ARM64)
+  if (darwin_arm64_ptr_in_purify_source((BytePtr)ptr_from_lispobj(loc),
+                                        low, high)) {
+#else
   if (((BytePtr)ptr_from_lispobj(loc) > low) &&
       ((BytePtr)ptr_from_lispobj(loc) < high)) {
+#endif
 
     headerP = (LispObj *)ptr_from_lispobj(untag(loc));
     /* ARM64-DEVIATION: `(loc & 3) == 0' replaces PPC64's four-case
@@ -2224,7 +2333,7 @@ purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
        locative_forwarding_address. */
     if ((loc & 3) == 0) {
       if (*headerP == forward_marker) {
-        *locaddr = (headerP[1]+tag);                 /* ppc-gc.c:1784-1785 */
+        *locaddr = (headerP[1]+tag);                    /* ppc-gc.c:1784-1785 */
       } else {
         /* Grovel backwards until the code vector's udf#0 sentinel is
            found; copy the code vector to to-space, then treat it as if
@@ -2556,9 +2665,21 @@ purify(TCR *tcr, signed_natural param)               /* ppc-gc.c:2001-2048 */
 
       }
     }
+#if defined(DARWIN) && defined(ARM64)
+    /* ProtectMemory is PROT_NONE on Darwin/arm64 (stack guards).  Pure
+       code needs RX on the canonical VA — same as image.c AREA_READONLY. */
+    {
+      natural span = align_to_power_of_2(new_pure_area->active - new_pure_area->low,
+                                         log2_page_size);
+      if (span && mprotect(new_pure_area->low, span, PROT_READ | PROT_EXEC) != 0) {
+        Bug(NULL, "purify: mprotect(RX) failed, errno = %d", errno);
+      }
+    }
+#else
     ProtectMemory(new_pure_area->low,
                   align_to_power_of_2(new_pure_area->active-new_pure_area->low,
                                       log2_page_size));
+#endif
     lisp_global(IN_GC) = 0;
     just_purified_p = true;
     return 0;

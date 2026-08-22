@@ -164,7 +164,6 @@
 		      :application-class 'cocoa-ide
 		      #+windows-target #+windows-target
 		      :application-type :gui)))
-
 ;;; If we're running as a standalone .app, try to see if a bundle named
 ;;; AltConsole.app exists in our Resources directory.  If so, execute
 ;;; that bundle'es executable file, with its standard input/output/error

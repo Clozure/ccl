@@ -407,12 +407,18 @@
 #+darwin-target
 ;;; Nuke any command-line arguments, to keep the Cocoa runtime from
 ;;; trying to process them.
+;;;
+;;; NXArgv is char**; element type must be (:* (:* :char)) (or :address),
+;;; NOT (:* :char).  The latter makes PAREF index bytes — SETF then smashes
+;;; argv[0] mid-pointer.  On darwinarm64 that corruption shows up as an
+;;; intermittent os_unfair_lock_lock SIGSEGV inside Cocoa dlopen
+;;; (fault addr often cs_area.high+0x4c10).
 (let* ((argv (foreign-symbol-address "NXArgv"))
        (argc (foreign-symbol-address "NXArgc")))
   (when argc
     (setf (pref argc :int) 1))
   (when argv
-    (setf (paref (%get-ptr argv) (:* :char) 1) +null-ptr+)))
+    (setf (paref (%get-ptr argv) (:* (:* :char)) 1) (%null-ptr))))
 
 #-cocotron
 (load-cocoa-framework)
@@ -1365,15 +1371,21 @@ argument lisp string."
 ;;; invisible-first-argument convention is used to return a structure
 ;;; and must NOT be used otherwise. (The Darwin ppc64 and all
 ;;; supported x86-64 ABIs often use more complicated structure return
-;;; conventions than ppc32 Darwin or ppc Linux.)  We should use
-;;; OBJC-MESSAGE-SEND-STRET to send any message that returns a
-;;; structure or union, regardless of how that structure return is
-;;; actually implemented.
+;;; conventions than ppc32 Darwin or ppc Linux.)  On Apple arm64 the
+;;; stret entry points do not exist — always use objc_msgSend /
+;;; objc_msgSendSuper; AAPCS64 (HFA / ≤16B GPR / x8) is handled by
+;;; expand-ff-call.  We should use OBJC-MESSAGE-SEND-STRET to send any
+;;; message that returns a structure or union, regardless of how that
+;;; structure return is actually implemented.
 
 (defmacro objc-message-send-stret (structptr receiver selector-name &rest argspecs)
     #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
-           (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
+           ;; Apple arm64 ObjC never exposes *_stret; composites use the
+           ;; standard AAPCS64 return convention via objc_msgSend.
+           (entry-name #+arm64-target "objc_msgSend"
+                       #-arm64-target
+                       (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
                          "objc_msgSend_stret"
                          "objc_msgSend")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
@@ -1400,7 +1412,9 @@ argument lisp string."
 (defmacro objc-message-send-stret-with-selector (structptr receiver selector &rest argspecs)
     #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
-           (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
+           (entry-name #+arm64-target "objc_msgSend"
+                       #-arm64-target
+                       (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
                          "objc_msgSend_stret"
                          "objc_msgSend")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
@@ -1483,7 +1497,9 @@ argument lisp string."
     (structptr super selector-name &rest argspecs)
   #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
-           (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
+           (entry-name #+arm64-target "objc_msgSendSuper"
+                       #-arm64-target
+                       (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
                          "objc_msgSendSuper_stret"
                          "objc_msgSendSuper")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
@@ -1512,7 +1528,9 @@ argument lisp string."
     (structptr super selector &rest argspecs)
   #+(or apple-objc cocotron-objc)
     (let* ((return-typespec (car (last argspecs)))
-           (entry-name (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
+           (entry-name #+arm64-target "objc_msgSendSuper"
+                       #-arm64-target
+                       (if (funcall (ftd-ff-call-struct-return-by-implicit-arg-function *target-ftd*) return-typespec)
                          "objc_msgSendSuper_stret"
                          "objc_msgSendSuper")))
       (funcall (ftd-ff-call-expand-function *target-ftd*)
@@ -1695,6 +1713,95 @@ argument lisp string."
   )
 
   
+;;; Darwin/arm64 ObjC *method* varargs: fixed args (self/SEL/typed) use
+;;; the register ABI; the method's `...` args are Darwin stack-only
+;;; (Apple AAPCS64).  Always park &rest in the argbuf overflow/stack
+;;; region — never consume remaining GPR/FPR slots.
+#+(and apple-objc-2.0 arm64-target)
+(defun %objc-varargs-specs-and-vals (arglist tail)
+  ;; Build %ff-call spec/value pairs for a method's `...' args.  The
+  ;; caller has already emitted the :variadic marker, so these all go
+  ;; to the stack (Darwin C variadic convention); apply the C default
+  ;; argument promotions (float -> double, integers -> full words).
+  (let ((acc ()))
+    (dolist (arg arglist)
+      (typecase arg
+        (double-float
+         (push :double-float acc) (push arg acc))
+        (single-float
+         (push :double-float acc) (push (float arg 0.0d0) acc))
+        (macptr
+         (push :address acc) (push arg acc))
+        ((unsigned-byte 64)
+         (push :unsigned-doubleword acc) (push arg acc))
+        (t
+         (push :signed-doubleword acc) (push arg acc))))
+    (nreconc acc tail)))
+
+#+(and apple-objc-2.0 arm64-target)
+(defun %compile-varargs-send-function-for-signature (sig)
+  ;; A varargs message send lowers onto the interpreted %ff-call: the
+  ;; method's fixed args use their CDB reps (registers first), then the
+  ;; :variadic marker puts every &rest arg on the stack per the Darwin
+  ;; C variadic convention.
+  (let* ((return-type-spec (car sig))
+         (result-rep (foreign-type-to-representation-type return-type-spec))
+         (arg-type-specs (butlast (cdr sig)))
+         (args (objc-gen-message-arglist (length arg-type-specs)))
+         (receiver (gensym))
+         (selector (gensym))
+         (rest-arg (gensym))
+         (selptr (gensym))
+         (entry (gensym)))
+    (collect ((static-pairs))
+      (do* ((args args (cdr args))
+            (arg-type-specs arg-type-specs (cdr arg-type-specs)))
+           ((null args))
+        (let* ((arg (car args))
+               (spec (car arg-type-specs))
+               (static-arg-type (parse-foreign-type spec)))
+          (etypecase static-arg-type
+            (foreign-integer-type
+             (when (eq spec :<BOOL>)
+               (setq arg `(%coerce-to-bool ,arg)))
+             (static-pairs (foreign-type-to-representation-type
+                            static-arg-type))
+             (static-pairs arg))
+            (foreign-single-float-type
+             (static-pairs :single-float)
+             (static-pairs arg))
+            (foreign-double-float-type
+             (static-pairs :double-float)
+             (static-pairs arg))
+            (foreign-pointer-type
+             (when (eq spec :id)
+               (setq arg `(%coerce-to-address ,arg)))
+             (static-pairs :address)
+             (static-pairs arg))
+            (foreign-record-type
+             ;; <=16-byte records arrive as macptrs and pass by value
+             ;; (%ff-call word-count spec, C.10/C.11); larger records
+             ;; pass by reference (AAPCS64 B.4).
+             (let* ((bits (ensure-foreign-type-bits static-arg-type)))
+               (if (<= bits 128)
+                 (static-pairs (ceiling bits 64))
+                 (static-pairs :address))
+               (static-pairs arg))))))
+      (compile
+       nil
+       `(lambda (,receiver ,selector ,@args &rest ,rest-arg)
+          (declare (dynamic-extent ,rest-arg))
+          (let* ((,selptr (%get-selector ,selector))
+                 (,entry (%reference-external-entry-point
+                          (load-time-value (external "objc_msgSend")))))
+            (apply (function %ff-call) ,entry
+                   :address ,receiver
+                   :address ,selptr
+                   ,@(static-pairs)
+                   :variadic nil
+                   (%objc-varargs-specs-and-vals
+                    ,rest-arg (list ,result-rep)))))))))
+
 #+(and apple-objc-2.0 x8664-target)
 (defun %compile-varargs-send-function-for-signature (sig)
   (let* ((return-type-spec (foreign-type-to-representation-type (car sig)))
@@ -2275,7 +2382,10 @@ argument lisp string."
 		max-parm-end
 		arg-info)))))
 
-#+x86-target
+;;; Type-encoding string for method registration.  Offsets are
+;;; sequential node-sized slots (x86-64 / arm64); PPC has its own
+;;; GPR/FPR-aware encoder above.
+#-(or ppc-target)
 (defun encode-objc-method-arglist (arglist result-spec)
   (let* ((offset 0)
 	 (arg-info
@@ -2653,11 +2763,32 @@ argument lisp string."
   (>= #&kCFCoreFoundationVersionNumber 635.0d0))
 
 (defun tagged-objc-instance-p (p)
+  "Return a cache-key tag if P is an ObjC tagged pointer, else NIL.
+
+Apple's encoding differs by arch (objc4 objc-internal.h):
+  - x86_64 macOS: tag in low nibble, bit0 set (_OBJC_TAG_MASK = 1)
+  - arm64: MSB set (_OBJC_TAG_MASK = 1<<63); basic tag in low 3 bits,
+    value 7 selects an extended tag in the high bits.
+
+The old low-nibble-only test made arm64 tagged NSStrings
+(e.g. short literals from initWithUTF8String:) look untagged; we then
+safe-get-ptr'd the payload address (not a real isa) and recognize failed
+— the substringWithRange heisenbug."
   (when *objc-runtime-uses-tags*
-    (let* ((tag (logand (the natural (%ptr-to-int p)) #xf)))
-      (declare (fixnum tag))
-      (if (logbitp 0 tag)
-        tag))))
+    (let* ((raw (%ptr-to-int p)))
+      #+arm64-target
+      (when (logbitp 63 raw)
+        (let* ((basic (logand raw #x7)))
+          (declare (fixnum basic))
+          (if (eql basic 7)
+            ;; Extended tag — keep cache keys out of 0..6.
+            (logior #x100 (ldb (byte 8 55) raw))
+            basic)))
+      #-arm64-target
+      (let* ((tag (logand (the natural raw) #xf)))
+        (declare (fixnum tag))
+        (if (logbitp 0 tag)
+          tag)))))
 
 (defun %objc-instance-class-index (p)
   (unless (%null-ptr-p p)
@@ -3112,14 +3243,16 @@ argument lisp string."
                                ,@body))))
               (setq body `((flet ((call-next-method (&rest args)
                                   (declare (dynamic-extent args))
-                                  (apply (function ,(if class-p
-                                                        '%call-next-objc-class-method
-                                                        '%call-next-objc-method))
-                                         ,self-name
-                                         (@class ,objc-class-name)
-                                         (@selector ,selector)
-                                         ',signature
-                                         args)))
+                                  ;; Arm64: do not APPLY into %call-next-*;
+                                  ;; pass the &rest list as one argument.
+                                  (,(if class-p
+                                      '%call-next-objc-class-method-apply
+                                      '%call-next-objc-method-apply)
+                                   ,self-name
+                                   (@class ,objc-class-name)
+                                   (@selector ,selector)
+                                   ',signature
+                                   args)))
                                  (declare (inline call-next-method))
                                  ,@body)))
               `(progn

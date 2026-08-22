@@ -2077,7 +2077,7 @@ suspend_tcr(TCR *tcr)
 #else
 #ifdef DARWIN
 extern ExceptionInformation *
-create_thread_context_frame(mach_port_t, natural *, siginfo_t *, TCR*, native_thread_state_t *);
+create_thread_context_frame(mach_port_t, natural *, siginfo_t **, TCR*, native_thread_state_t *);
 
 Boolean mach_suspend_tcr(TCR *tcr)
 {

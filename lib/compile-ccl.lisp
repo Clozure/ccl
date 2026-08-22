@@ -171,27 +171,32 @@
 (defun target-env-modules (&optional (target
 				      (backend-name *host-backend*)))
   (append *env-modules*
-          (list
-           (ecase target
-             (:linuxppc32 'ffi-linuxppc32)
-             (:darwinppc32 'ffi-darwinppc32)
-             (:darwinppc64 'ffi-darwinppc64)
-             (:linuxppc64 'ffi-linuxppc64)
-	     (:darwinx8632 'ffi-darwinx8632)
-             (:linuxx8664 'ffi-linuxx8664)
-             (:darwinx8664 'ffi-darwinx8664)
-             (:freebsdx8664 'ffi-freebsdx8664)
-             (:solarisx8664 'ffi-solarisx8664)
-             (:win64 'ffi-win64)
-             (:linuxx8632 'ffi-linuxx8632)
-             (:win32 'ffi-win32)
-             (:solarisx8632 'ffi-solarisx8632)
-             (:freebsdx8632 'ffi-freebsdx8632)
-             (:linuxarm 'ffi-linuxarm)
-             (:androidarm 'ffi-androidarm)
-             (:darwinarm 'ffi-darwinarm)
-             (:darwinarm64 'ffi-darwinarm64)
-             (:linuxarm64 'ffi-linuxarm64)))))
+          (let* ((ffi (ecase target
+                        (:linuxppc32 'ffi-linuxppc32)
+                        (:darwinppc32 'ffi-darwinppc32)
+                        (:darwinppc64 'ffi-darwinppc64)
+                        (:linuxppc64 'ffi-linuxppc64)
+                        (:darwinx8632 'ffi-darwinx8632)
+                        (:linuxx8664 'ffi-linuxx8664)
+                        (:darwinx8664 'ffi-darwinx8664)
+                        (:freebsdx8664 'ffi-freebsdx8664)
+                        (:solarisx8664 'ffi-solarisx8664)
+                        (:win64 'ffi-win64)
+                        (:linuxx8632 'ffi-linuxx8632)
+                        (:win32 'ffi-win32)
+                        (:solarisx8632 'ffi-solarisx8632)
+                        (:freebsdx8632 'ffi-freebsdx8632)
+                        (:linuxarm 'ffi-linuxarm)
+                        (:androidarm 'ffi-androidarm)
+                        (:darwinarm 'ffi-darwinarm)
+                        (:darwinarm64 'ffi-darwinarm64)
+                        (:linuxarm64 'ffi-linuxarm64))))
+            ;; Both arm64 targets delegate to the shared AAPCS64
+            ;; implementation in ffi-arm64; build it alongside the OS
+            ;; module.
+            (if (memq target '(:darwinarm64 :linuxarm64))
+              (list 'ffi-arm64 ffi)
+              (list ffi)))))
 
 
 (defun target-compiler-modules (&optional (target
@@ -683,6 +688,9 @@ the lisp and run REBUILD-CCL again.")
                                            :type (pathname-type *.fasl-pathname*))
                             "ccl:**;")))
                  (delete-file f)))
+             #+darwinarm64-target
+             (when (fboundp '%enable-darwinarm64-map-jit-fasls)
+               (%enable-darwinarm64-map-jit-fasls))
              (with-global-optimization-settings ()
                (compile-ccl (not (null force)))
                (if force (xload-level-0 :force) (xload-level-0)))
@@ -724,12 +732,12 @@ the lisp and run REBUILD-CCL again.")
                (let* ((old-write-date
                        (or (ignore-errors (file-write-date (standard-image-name)))
                            0)))
-                 (with-input-from-string (cmd (format nil
-                                                "(save-application ~s)"
-                                                (standard-image-name)))
-                   (with-output-to-string (output)
-                     (multiple-value-bind (status exit-code)
-                         (external-process-status
+                 (with-output-to-string (output)
+                   (multiple-value-bind (status exit-code)
+                       (external-process-status
+                        (with-input-from-string
+                            (cmd (format nil "(save-application ~s)"
+                                         (standard-image-name)))
                           (run-program
                            (format nil "./~a" (standard-kernel-name))
                            (list* "--image-name" (standard-boot-image-name)
@@ -738,21 +746,21 @@ the lisp and run REBUILD-CCL again.")
                                   reload-arguments)
                            :input cmd
                            :output output
-                           :error output))
-                       (if (and (eq status :exited)
-                                (eql exit-code 0))
-                         (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
-                           (unless (and write-date (> write-date old-write-date))
-                             (error "The heap image ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
-                           (format t "~&;Wrote heap image: ~s"
-                                   (truename (format nil "ccl:~a"
-                                                     (standard-image-name))))
-                           (when verbose
-                             (format t "~&;Reload heap image output:~%~a"
-                                     (get-output-stream-string output))))
-                         (error "Errors (~s ~s) reloading boot image:~&~a"
-                                status exit-code
-                                (get-output-stream-string output))))))))
+                           :error output)))
+                     (if (and (eq status :exited)
+                              (eql exit-code 0))
+                       (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
+                         (unless (and write-date (> write-date old-write-date))
+                           (error "The heap image ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
+                         (format t "~&;Wrote heap image: ~s"
+                                 (truename (format nil "ccl:~a"
+                                                   (standard-image-name))))
+                         (when verbose
+                           (format t "~&;Reload heap image output:~%~a"
+                                   (get-output-stream-string output))))
+                       (error "Errors (~s ~s) reloading boot image:~&~a"
+                              status exit-code
+                              (get-output-stream-string output)))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))

@@ -829,6 +829,8 @@
 ;;; vector as `object`).  Call scratch must NEVER be an allocatable
 ;;; arg/imm/temp-with-ABI-meaning -- v2 cont-71 class; temp0 is dead at
 ;;; every call boundary (callee prologue reads only nfn).
+;;; Darwin W^X: code executes at the canonical VA (purify RX + MAP_JIT);
+;;; no address bias on the code-vector branch.
 (define-arm64-vinsn (jump-known-symbol :jumplr) (()
                                                  ()
                                                  ((cv (:lisp #.arm64::temp0))))
@@ -6145,13 +6147,16 @@
 ;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:3398): (mr dest ppc::sp) -- the
 ;;; control-stack pointer AS a node value (frames are 16-aligned, so
 ;;; under fixnumshift=3 the raw SP is a valid boxed fixnum, same pun as
-;;; PPC).  A64: reg 31 in an add-immediate Rn slot IS SP (the alias of
-;;; `mov Xd, SP`); bare `sp` is this lane's gate-proven operand spelling
-;;; for it (w4:443 / w10:558 build-lisp-frame bases).  May DUPLICATE a
-;;; definition in Matt's arm64-vinsns.lisp (unverifiable locally) --
-;;; by-name redefinition is benign; drop this one if his tree has it.
-(define-arm64-vinsn %current-frame-ptr (((dest :imm))
+;;; PPC).  Dest must be :lisp (not :imm) — ALLOCATE-TEMPORARY-VREG on
+;;; arm64 rejects :imm as a result mode.
+(define-arm64-vinsn %current-frame-ptr (((dest :lisp))
                                         ())
+  (add dest sp (:$ 0)))
+
+;;; ARM64 C frames live on the Lisp SP (alloc-c-frame), unlike x86's
+;;; separate tcr.foreign-sp.  %foreign-stack-pointer is therefore SP.
+(define-arm64-vinsn %foreign-stack-pointer (((dest :lisp))
+                                            ())
   (add dest sp (:$ 0)))
 
 ;;; mem-ref-c-address / mem-ref-address -- demanded by the
@@ -6536,6 +6541,40 @@
                                        (argnum :u16const)))
   (str argval (:@ sp (:$ (:apply + arm64::c-frame.param0
                                  (:apply ash argnum 3))))))
+
+;;; Darwin non-variadic stack overflow: natural-size packing (Apple ABI).
+;;; byte-off is a byte index from param0 (0 = first GPR save word).
+;;; Integer temps are :u64 like set-c-arg; strb/strh/W-str take the low bits.
+;;; Callers must pass a naturally aligned offset for the store width.
+(define-arm64-vinsn set-c-arg-byte (()
+                                    ((argval :u64)
+                                     (byte-off :u16const)))
+  (strb (:w argval) (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
+
+(define-arm64-vinsn set-c-arg-halfword (()
+                                        ((argval :u64)
+                                         (byte-off :u16const)))
+  (strh (:w argval) (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
+
+(define-arm64-vinsn set-c-arg-fullword (()
+                                        ((argval :u64)
+                                         (byte-off :u16const)))
+  (str (:w argval) (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
+
+(define-arm64-vinsn set-c-arg-doubleword-bytes (()
+                                                ((argval :u64)
+                                                 (byte-off :u16const)))
+  (str argval (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
+
+(define-arm64-vinsn set-single-c-arg-bytes (()
+                                            ((argval :single-float)
+                                             (byte-off :u16const)))
+  (str argval (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
+
+(define-arm64-vinsn set-double-c-arg-bytes (()
+                                            ((argval :double-float)
+                                             (byte-off :u16const)))
+  (str argval (:@ sp (:$ (:apply + arm64::c-frame.param0 byte-off)))))
 
 (define-arm64-vinsn reload-single-c-arg (((argval :single-float))
                                          ((argnum :u16const)))
