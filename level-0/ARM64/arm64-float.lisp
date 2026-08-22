@@ -271,8 +271,14 @@
 ;;;
 ;;; THE RE-PORT.  Same W6-D40 formula, sourced from what the lane HAS:
 ;;;   * enables  — hardware FPCR bits 8-15, not a software TCR word.
-;;;   * status   — tcr.foreign-fpsr, which our spentry publishes after
-;;;                every ff-call (arm64-spentry.s:265, spentry-E-ffi.s:337).
+;;;   * status   — the LIVE cumulative FPSR (%get-fpscr-status), cleared at
+;;;                each float-wrapper call site (l1-numbers.lisp), the ARM32
+;;;                idiom.  16m82: this used to be tcr.foreign-fpsr, captured
+;;;                by the ffcall spentry around EVERY foreign call; the three
+;;;                FPSR system-register accesses that capture cost were
+;;;                MEASURED at 13.3 ns/call on Neoverse-N1 — most of the FFI
+;;;                transition excess — so the window moved to the ~30 sites
+;;;                that consume it (see `spentry ffcall', arm64-spentry.s).
 ;;; AArch64 keeps the trap-enable bits 8 above their FPSR flag twins
 ;;; (IOE8/IOC0, DZE9/DZC1, OFE10/OFC2, UFE11/UFC3, IXE12/IXC4, IDE15/IDC7),
 ;;; so enabled-and-occurred = flags AND (enables>>8) — one shift and one
@@ -290,10 +296,10 @@
 ;;; signals FLOATING-POINT-OVERFLOW.
 ;;;
 ;;; Hardware traps are also the wrong mechanism here regardless of support:
-;;; the exception happens inside libm, during a foreign call.  The ffcall
-;;; spentry already captures the callee's cumulative FPSR into
-;;; tcr.foreign_fpsr and then zeroes FPSR (arm64-spentry.s:264-266), so the
-;;; check is a pure software AND against the LOGICAL enables afterwards --
+;;; the exception happens inside libm, during a foreign call.  The wrapper
+;;; clears the cumulative flags immediately before the call
+;;; (%set-fpscr-status 0, l1-numbers.lisp) and reads the live FPSR after it,
+;;; so the check is a pure software AND against the LOGICAL enables --
 ;;; which is exactly the ARM32 model (arm-float.lisp:384-390) and the reason
 ;;; ARM32 keeps its enables in tcr.lisp-fpscr rather than in the FPSCR.
 ;;;
@@ -328,37 +334,22 @@
   (msr fpcr imm0)
   (ret))
 
-;;; The FPSR flag byte captured by the ffcall spentry, consumed and cleared
-;;; on read — x86-64's %get-post-ffi-mxcsr shape (x86-float.lisp:201).
-;;;
-;;; ⚠ CORRECTED 16m48b.  This comment used to say: "the spentry does
-;;; `msr fpsr, xzr' immediately AFTER capturing, so the slot carries THIS
-;;; call's flags only and cannot accumulate across calls."  That does not
-;;; follow, and it was the bug.  FPSR is CUMULATIVE: zeroing it after the
-;;; capture makes the slot carry everything raised since the PREVIOUS
-;;; ff-call, which includes all the inline lisp float arithmetic in between.
-;;; The parenthetical the old comment added — "a sticky source here would
-;;; make every transcendental after the first overflow report an overflow" —
-;;; was an accurate description of the behaviour the code actually had.
-;;; Measured: clear FPSR, do `(* most-positive-single-float
-;;; most-positive-single-float)' inline (FPSR := #x14), then `(log 2.0d0)'
-;;; signalled FLOATING-POINT-OVERFLOW on (2.0D0); the next identical call
-;;; returned 0.693....  log/exp/sin/atan all reproduced it.
-;;;
-;;; The spentry now clears FPSR immediately BEFORE the `blr' as well, so the
-;;; window really is the callee's (arm64-spentry.s `spentry ffcall',
-;;; spentry-E-ffi.s `spentry ffcall_return_registers').  That is the arm64
-;;; equivalent of ARM32's per-call-site `#+arm-target (%set-fpscr-status 0)'
-;;; (33 sites in level-1/l1-numbers.lisp) — ARM32 needs it at every site
-;;; because it has no tcr.foreign_fpsr and reads the live FPSCR after the
-;;; call; we own the slot, so we clear at the one seam that owns it.
-(defarm64lapfunction %get-post-ffi-fpsr ()
-  (ldr imm0 (:@ rcontext (:$ arm64::tcr.foreign-fpsr)))
-  (mov imm1 (:$ 0))
-  (str imm1 (:@ rcontext (:$ arm64::tcr.foreign-fpsr)))
-  (and imm0 imm0 (:$ #xff))
-  (box-fixnum arg_z imm0)
-  (ret))
+;;; ⚠ HISTORY: %get-post-ffi-fpsr lived here until 16m82 — it consumed the
+;;; FPSR flag byte the ffcall spentry captured into tcr.foreign_fpsr around
+;;; EVERY foreign call (x86-64's %get-post-ffi-mxcsr shape), with the window
+;;; opened as well as closed after 16m48b showed a close-only window charges
+;;; every flag since the PREVIOUS ff-call — inline lisp float arithmetic
+;;; included — to this callee (log/exp/sin/atan all reproduced it).
+;;; MEASURED 16m82 (tools/perf/ffcall-replica.c, Neoverse-N1): the window's
+;;; three FPSR system-register accesses cost 13.3 ns of an 18 ns per-call
+;;; FFI transition excess over x86-64, paid by every ff-call to serve only
+;;; the float transcendental wrappers.  So the window moved to its
+;;; consumers — ARM32's model, per-call-site `(%set-fpscr-status 0)' in
+;;; level-1/l1-numbers.lisp followed by a LIVE FPSR read
+;;; (%ffi-exception-status below wraps %get-fpscr-status).  The 16m48b
+;;; attribution guarantee is preserved by the call-site clear; the spentries
+;;; no longer touch FPSR, and tcr.foreign_fpsr is a dead slot kept only for
+;;; TCR layout stability.
 
 ;;; from ppc-float.lisp:368 (%get-fpscr-status — cumulative exception flags)
 ;;; ARM32 shape (arm-float.lisp:402-406).  NB the PPC original loads from
@@ -506,12 +497,15 @@
   new)
 
 ;;; from ppc-float.lisp:394 (%ffi-exception-status)
-;;; enabled-and-occurred = captured flags AND (enables >> 8).  Returns NIL
-;;; when nothing fired, else the offending flag bits — the ARM32 contract
-;;; (arm-float.lisp:270-280); the %*-check-exception-* defuns test it with
-;;; WHEN.
+;;; enabled-and-occurred = LIVE cumulative flags AND (enables >> 8).
+;;; Returns NIL when nothing fired, else the offending flag bits — the
+;;; ARM32 contract (arm-float.lisp:270-280); the %*-check-exception-*
+;;; defuns test it with WHEN.  The caller must have cleared the flags
+;;; immediately before its foreign call (`%set-fpscr-status 0',
+;;; l1-numbers.lisp — 16m82, the window moved here from the ffcall
+;;; spentry; history above %get-fpscr-status).
 (defun %ffi-exception-status ()
-  (let* ((hit (logand (%get-post-ffi-fpsr)
+  (let* ((hit (logand (%get-fpscr-status)
                       (ash (logand #xff00 *fp-logical-enables*) -8))))
     (unless (eql 0 hit) hit)))
 
@@ -556,8 +550,8 @@ reports only what the operation in between raised."
 
 (defun %fp-inline-exception-status ()
   "Enabled-and-occurred flags from the LIVE FPSR, or NIL.  The inline-
-arithmetic twin of %FFI-EXCEPTION-STATUS, which reads the ffcall spentry's
-captured copy and would return 0 here."
+arithmetic twin of %FFI-EXCEPTION-STATUS -- since 16m82 both read the live
+FPSR; they differ only in which caller owns the preceding clear."
   (let* ((hit (logand (%get-fpscr-status)
                       (ash (logand #xff00 *fp-logical-enables*) -8))))
     (unless (eql 0 hit) hit)))

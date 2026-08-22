@@ -499,6 +499,9 @@ check_all_areas(TCR *tcr)                            /* ppc-gc.c:156-204 */
         }
       }
       break;
+
+    default:
+      break;
     }
     a = a->succ;
     code = (a->code);
@@ -1997,9 +2000,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
      walker name that the slot value contradicts is one of THOSE. */
   GCforward_context = "compact (slot of a MARKED object)";
   GCforward_slot = NULL; GCforward_branch = "(compact)";
-    /* keep track of whether or not we saw any
-       code_vector headers, and only flush cache if so. */
-  Boolean GCrelocated_code_vector = false;
 
   if (dnode < GCndnodes_in_area) {
     lisp_global(FWDNUM) += (1<<fixnum_shift);
@@ -2087,6 +2087,7 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
           }
           set_bitidx_vars(markbits,dnode,bitsp,bits,bitidx);
         } else if (immheader_tag_p(tag)) {           /* ppc-gc.c:1534-1587 */
+          LispObj *obj_dest = dest;
           *dest++ = node;
           *dest++ = *src++;
           elements = header_element_count(node);
@@ -2100,9 +2101,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
             imm_dnodes = ((elements+1)+1)>>1;
             break;
           case ivector_class_32_bit:
-            if (tag == subtag_code_vector) {
-              GCrelocated_code_vector = true;
-            }
             imm_dnodes = (((elements+2)+3)>>2);
             break;
           case ivector_class_other_bit:
@@ -2127,6 +2125,14 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
             *dest++ = *src++;
             *dest++ = *src++;
           }
+          if (tag == subtag_code_vector) {
+            /*
+             * Flush each relocated code vector as we go, rather than
+             * flushing the whole compacted region at the end. (#603)
+             */
+            xMakeDataExecutable((BytePtr)obj_dest,
+                                (natural)((char *)dest - (char *)obj_dest));
+          }
           set_bitidx_vars(markbits,dnode,bitsp,bits,bitidx);
         } else {                                     /* ppc-gc.c:1588-1594 */
           *dest++ = node_forwarding_address(node);
@@ -2135,20 +2141,6 @@ compact_dynamic_heap()                               /* ppc-gc.c:1437-1607 */
           dnode++;
           bitidx++;
         }
-      }
-
-    }
-
-    {
-      natural nbytes = (natural)ptr_to_lispobj(dest) - (natural)GCfirstunmarked;
-      if ((nbytes != 0) && GCrelocated_code_vector) {
-        /*
-         * An earlier change flushed icache lines for code vectors
-         * incrementally, but for some reason, that still leaves some
-         * stale lines.  Reinstate the whole-region flush for
-         * correctness.
-         */
-        xMakeDataExecutable((BytePtr)ptr_from_lispobj(GCfirstunmarked), nbytes);
       }
     }
   }

@@ -441,14 +441,19 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
   LispObj image_nil = 0;
   area *a;
   if (find_openmcl_image_file_header(fd, h)) {
-    int i, nsections = h->nsections;
-    openmcl_image_section_header sections[nsections], *sect=sections;
+    unsigned i, nsections = h->nsections;
+    openmcl_image_section_header sections[NUM_IMAGE_SECTIONS], *sect=sections;
     LispObj bias = image_base - ACTUAL_IMAGE_BASE(h);
 #if (WORD_SIZE== 64)
     signed_natural section_data_delta = 
       ((signed_natural)(h->section_data_offset_high) << 32L) | h->section_data_offset_low;
 #endif
 
+    if (nsections > NUM_IMAGE_SECTIONS) {
+      fprintf(dbgout, "Heap image has %u sections; this kernel supports "
+              "at most %d.\n", nsections, NUM_IMAGE_SECTIONS);
+      return 0;
+    }
     if (read (fd, sections, nsections*sizeof(openmcl_image_section_header)) !=
 	nsections * sizeof(openmcl_image_section_header)) {
       return 0;

@@ -574,41 +574,69 @@
   (ccl::arm64-disassemble-xfunction (ccl::function-to-function-vector function)
                                     *standard-output*))
 
-;;; Inspector expects a simple-vector of either comment strings or
-;;; (object label instr) where label is a PC fixnum or (:label PC) and
-;;; instr is the printed instruction string.  OBJECT is an inspectable
-;;; constant referenced by the insn when we can recover one (nil for now —
-;;; arm64 immediates rarely embed lisp pointers the way x86 does).
+;;; The Inspector's disassembly pane (lib/describe.lisp) asks for a VECTOR of
+;;; lines rather than printed output.  Each line is (OBJECT LABEL INSTRUCTION):
+;;; OBJECT is a constant the instruction refers to, so the pane can inspect it;
+;;; LABEL is the pc, or (:label pc) when a label is defined there; INSTRUCTION
+;;; is the printed form.  x86-64 is the model -- lib/describe.lisp already
+;;; dispatches its prin1-value method on #+(or x86-target arm64-target) and so
+;;; expects exactly that shape from us.  Without this, the pane signals
+;;; "undefined function CCL::DISASSEMBLE-LINES" (Clozure/ccl#601).
+;;;
+;;; #+arm64-target because a cross-compiling host loads this backend: an
+;;; unguarded definition of CCL::DISASSEMBLE-LINES would clobber the host's own.
+;;; ARM32 guards its stub the same way (compiler/ARM/arm-disassemble.lisp).
+
+(defun constant-referenced-by (di function-vector)
+  ;; The constant an instruction loads out of the function vector, or NIL.
+  ;; The ref-constant vinsn emits `ldur dest,(:@ fn (:$ function.constants+8i))',
+  ;; so a non-indexed memory operand based on FN names constant i.  FN is an
+  ;; index into *REGISTERS* and GPR-REF interns out of that same vector, so EQ
+  ;; is exact here and discriminates x7 from w7 without comparing numbers.
+  ;; ref-indexed-constant computes its offset in a register and is not
+  ;; statically resolvable; those lines get NIL, as they should.
+  (dolist (op (di-operands di))
+    (when (memory-operand-p op)
+      (let ((base (memory-operand-base op))
+            (offset (memory-operand-offset op)))
+        (when (and (register-operand-p base)
+                   (eq (register-operand-register base) (svref *registers* fn))
+                   (immediate-operand-p offset)
+                   (not (memory-operand-pre-indexed op))
+                   (not (memory-operand-post-indexed op)))
+          (let ((byte-offset (immediate-operand-value offset)))
+            (when (and (>= byte-offset arm64::function.constants)
+                       (zerop (logand (- byte-offset arm64::function.constants) 7)))
+              ;; Slot 0 of the function vector is the code vector, so constant i
+              ;; lives at slot i+1.
+              (let ((slot (1+ (ash (- byte-offset arm64::function.constants) -3))))
+                (when (< slot (uvsize function-vector))
+                  (return (uvref function-vector slot)))))))))))
+
+(defun di-instruction-string (di)
+  ;; Reuse PRINT-DI so the pane and the disassembler listing can never drift.
+  ;; The instruction word is suppressed: the pane shows the pc in its own
+  ;; column and the raw word would only be noise there.  PRINT-DI opens with
+  ;; ~& , which emits nothing at column 0 of a fresh string stream, and indents
+  ;; by two -- trimmed here because the pane does its own layout.
+  (let ((*disassemble-print-instruction-word* nil))
+    (string-left-trim " " (with-output-to-string (s) (print-di di s)))))
+
+#+arm64-target
 (defun ccl::disassemble-lines (function)
-  (let ((source-note (function-source-note function)))
-    (when source-note
-      (ccl::ensure-source-note-text source-note)))
-  (let* ((xfunction (ccl::function-to-function-vector function))
-         (code-vector (uvref xfunction 0))
-         (di-vector (make-di-vector code-vector))
-         (previous-source-note nil)
-         (lines (make-array 20 :adjustable t :fill-pointer 0)))
+  (let* ((function (ccl::require-type function 'function))
+         (function-vector (ccl::function-to-function-vector function))
+         (di-vector (make-di-vector (uvref function-vector 0)))
+         (lines (make-array (length di-vector) :fill-pointer 0)))
+    (let ((source-note (ccl::function-source-note function)))
+      (when source-note
+        (ccl::ensure-source-note-text source-note)))
     (resolve-labels di-vector)
     (dotimes (i (length di-vector))
-      (let* ((pc (* i 4))
-             (di (svref di-vector i))
-             (source-note (find-source-note-at-pc function pc)))
-        (unless (eql (ccl::source-note-file-range source-note)
-                     (ccl::source-note-file-range previous-source-note))
-          (setf previous-source-note source-note)
-          (let* ((source-text (source-note-text source-note))
-                 (text (if source-text
-                         (ccl::string-sans-most-whitespace source-text 100)
-                         "#<no source text>")))
-            (vector-push-extend (format nil ";;; ~A" text) lines)))
-        (vector-push-extend
-         (list nil
-               (if (di-label di) (list :label pc) pc)
-               (with-output-to-string (s)
-                 (format s "(~a" (di-mnemonic di))
-                 (dolist (op (di-operands di))
-                   (write-char #\space s)
-                   (print-operand op s))
-                 (write-char #\) s)))
-         lines)))
+      (let ((di (svref di-vector i))
+            (pc (* 4 i)))
+        (vector-push (list (constant-referenced-by di function-vector)
+                           (if (di-label di) (list :label pc) pc)
+                           (di-instruction-string di))
+                     lines)))
     (coerce lines 'simple-vector)))

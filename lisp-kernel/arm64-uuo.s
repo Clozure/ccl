@@ -106,6 +106,14 @@ uuo_format_wrong_type = 3
         uuo_misc 8
 .endm
 
+// Only the control stack probes for overflow inline: the value/temp stacks
+// fault on guard pages.  (If we can use sigaltstack, we can use guard
+// pages on arm64, too.)
+// See handler in arm64-exceptions.c uuo_misc_cstack_overflow.
+.macro uuo_error_cstack_overflow
+        uuo_misc 9
+.endm
+
 // unary format
 .macro uuo_unary reg, info
         udf # ((\info) << 7 | R\reg << 2 | uuo_format_unary)

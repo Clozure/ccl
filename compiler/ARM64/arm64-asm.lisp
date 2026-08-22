@@ -458,6 +458,7 @@
    (def uuo-error-too-few-args () (ash 6 2) #xffffffff)
    (def uuo-error-too-many-args () (ash 7 2) #xffffffff)
    (def uuo-error-wrong-number-of-args () (ash 8 2) #xffffffff)
+   (def uuo-error-cstack-overflow () (ash 9 2) #xffffffff)
 
    ;; unary UUOs (uuo format #b001)
    ;; reg in 6:2, 9 bits of info in 15:7.

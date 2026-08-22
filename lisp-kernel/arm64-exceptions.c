@@ -163,12 +163,14 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
  * delivers it as SIGILL.
  *
  * imm16 low 2 BITS = format:
- *   0 misc: 14 bits of info in 15:2, NEVER all-0.  His values 1-8
+ *   0 misc: 14 bits of info in 15:2, NEVER all-0.  His values 1-9
  *     (1 alloc, 2 gc, 3 debug, 4 interrupt_now, 5 suspend_now,
- *     6 too_few_args, 7 too_many_args, 8 wrong_number_of_args).
+ *     6 too_few_args, 7 too_many_args, 8 wrong_number_of_args,
+ *     9 cstack_overflow).
  *     PROPOSED extension (arm64-globals-proposed.s uuo_interr; ratify):
  *     info bit 13 set = "interr": bits 12:5 = errors.s errnum,
- *     bits 4:0 = register.
+ *     bits 4:0 = register -- kernel-service entry (thread ops) plus the
+ *     generic handle_error escape.
  *   1 unary: reg in bits 6:2, 9 bits of info in 15:7 (0 not_callable,
  *     1 no_throw_tag, 2 unbound, 3 udf, 4 udf_call, 5 tlb_too_small).
  *   2 binary: ra in 6:2, rb in 11:7, 4 bits of info in 15:12
@@ -232,6 +234,7 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 #define uuo_misc_too_few        6
 #define uuo_misc_too_many       7
 #define uuo_misc_wrong_number   8
+#define uuo_misc_cstack_overflow 9
 
 /* Whole-instruction forms tested for directly:
    udf #((info<<2) | uuo_format_misc). */
@@ -1804,86 +1807,43 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
     }
 
     if (UUO_MISC_IS_INTERR(mi)) {
-      /* PROPOSED uuo_interr extension (arm64-globals-proposed.s;
-         ratify): PPC uuo_interr(errnum, reg), ppc:1387-1419. */
+      /* uuo_interr (PPC uuo_interr(errnum, reg), ppc:1387-1419): a trap
+         carrying an errors.s errnum + register.  On arm64 this is now
+         only the kernel-service entries (thread ops, allocate-list) and
+         the generic handle_error escape; control-stack overflow is a
+         dedicated misc UUO (uuo_misc_cstack_overflow, below) and the
+         structured UUO formats carry the type/bounds/unbound errors. */
       unsigned errnum = UUO_INTERR_ERRNUM(mi);
       unsigned gpr = UUO_INTERR_GPR(mi);
-
-      if ((errnum == error_stack_overflow) && (gpr == Rsp)) {
-        /* Failed control-stack overflow check (spentry-C savecontext*
-           emits uuo_interr error_stack_overflow, sp).  PPC
-           handle_trap's "trllt RA==sp" yellow-zone logic,
-           ppc:1564-1629, ported whole. */
-        area
-          *CS_area = tcr->cs_area,
-          *VS_area = tcr->vs_area;
-
-        natural
-          current_SP = xpSP(xp),        /* ppc:1599 xpGPR(sp) */
-          current_VSP = xpGPR(xp,vsp);  /* ppc:1600 */
-
-        if (current_SP  < (natural) (CS_area->hardlimit)) { /* ppc:1602 */
-          /* If we are not in soft overflow mode yet, assume that the
-             user has set the soft overflow size very small and try to
-             continue on another thread before throwing to toplevel */
-          if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) {
-            reset_lisp_process(xp);
-          }
-        } else {
-          if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) { /* ppc:1610 */
-            /* If the control stack pointer is at least 4K away from its
-               soft limit and the value stack pointer is at least 4K away
-               from its soft limit, stop trapping.  Else keep trapping. */
-            if ((current_SP > (natural) ((CS_area->softlimit)+4096)) &&
-                (current_VSP > (natural) ((VS_area->softlimit)+4096))) {
-              protected_area_ptr vs_soft = VS_area->softprot;
-              if (vs_soft->nprot == 0) {
-                protect_area(vs_soft);
-              }
-              tcr->cs_limit = ptr_to_lispobj(CS_area->softlimit);
-            }
-          } else {
-            tcr->cs_limit = ptr_to_lispobj(CS_area->hardlimit); /* ppc:1623 */
-            signal_stack_soft_overflow(xp, Rsp);
-          }
-        }
-        status = 0;                     /* ppc:1628-1629 */
+      TCR *target = (TCR *)xpGPR(xp,arg_z);  /* ppc:1389 */
+      status = 0;
+      switch (errnum) {
+      case error_propagate_suspend:   /* ppc:1392-1393 */
         break;
-      }
-
-      {
-        /* Kernel-service + generic errnum dispatch, PPC handle_uuo
-           UUO_INTERR (ppc:1387-1419). */
-        TCR *target = (TCR *)xpGPR(xp,arg_z);  /* ppc:1389 */
-        status = 0;
-        switch (errnum) {
-        case error_propagate_suspend:   /* ppc:1392-1393 */
-          break;
-        case error_interrupt:           /* ppc:1394-1396 */
-          xpGPR(xp,imm0) = (LispObj) raise_thread_interrupt(target);
-          break;
-        case error_suspend:             /* ppc:1397-1399 */
-          xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
-          break;
-        case error_suspend_all:         /* ppc:1400-1402 */
-          lisp_suspend_other_threads();
-          break;
-        case error_resume:              /* ppc:1403-1405 */
-          xpGPR(xp,imm0) = (LispObj) lisp_resume_tcr(target);
-          break;
-        case error_resume_all:          /* ppc:1406-1408 */
-          lisp_resume_other_threads();
-          break;
-        case error_kill:                /* ppc:1409-1411 */
-          xpGPR(xp,imm0) = (LispObj)kill_tcr(target);
-          break;
-        case error_allocate_list:       /* ppc:1412-1414 */
-          allocate_list(xp,get_tcr(true));
-          break;
-        default:                        /* ppc:1415-1417 */
-          status = handle_error(xp, errnum, gpr, 0,  where);
-          break;
-        }
+      case error_interrupt:           /* ppc:1394-1396 */
+        xpGPR(xp,imm0) = (LispObj) raise_thread_interrupt(target);
+        break;
+      case error_suspend:             /* ppc:1397-1399 */
+        xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
+        break;
+      case error_suspend_all:         /* ppc:1400-1402 */
+        lisp_suspend_other_threads();
+        break;
+      case error_resume:              /* ppc:1403-1405 */
+        xpGPR(xp,imm0) = (LispObj) lisp_resume_tcr(target);
+        break;
+      case error_resume_all:          /* ppc:1406-1408 */
+        lisp_resume_other_threads();
+        break;
+      case error_kill:                /* ppc:1409-1411 */
+        xpGPR(xp,imm0) = (LispObj)kill_tcr(target);
+        break;
+      case error_allocate_list:       /* ppc:1412-1414 */
+        allocate_list(xp,get_tcr(true));
+        break;
+      default:                        /* ppc:1415-1417 */
+        status = handle_error(xp, errnum, gpr, 0,  where);
+        break;
       }
       break;
     }
@@ -1932,6 +1892,49 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
                                      "wrong argument count", nargs);
       }
       break;
+
+    case uuo_misc_cstack_overflow: {
+      /* Failed control-stack overflow check (the cs-limit probe in the
+         save-lisp-context vinsns, arm64-vinsns.lisp).  PPC handle_trap's
+         "trllt RA==sp" yellow-zone logic, ppc:1564-1629, ported whole.
+         The probe only guards the control stack, so the target is always
+         Rsp. */
+      area
+        *CS_area = tcr->cs_area,
+        *VS_area = tcr->vs_area;
+
+      natural
+        current_SP = xpSP(xp),        /* ppc:1599 xpGPR(sp) */
+        current_VSP = xpGPR(xp,vsp);  /* ppc:1600 */
+
+      if (current_SP  < (natural) (CS_area->hardlimit)) { /* ppc:1602 */
+        /* If we are not in soft overflow mode yet, assume that the
+           user has set the soft overflow size very small and try to
+           continue on another thread before throwing to toplevel */
+        if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) {
+          reset_lisp_process(xp);
+        }
+      } else {
+        if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) { /* ppc:1610 */
+          /* If the control stack pointer is at least 4K away from its
+             soft limit and the value stack pointer is at least 4K away
+             from its soft limit, stop trapping.  Else keep trapping. */
+          if ((current_SP > (natural) ((CS_area->softlimit)+4096)) &&
+              (current_VSP > (natural) ((VS_area->softlimit)+4096))) {
+            protected_area_ptr vs_soft = VS_area->softprot;
+            if (vs_soft->nprot == 0) {
+              protect_area(vs_soft);
+            }
+            tcr->cs_limit = ptr_to_lispobj(CS_area->softlimit);
+          }
+        } else {
+          tcr->cs_limit = ptr_to_lispobj(CS_area->hardlimit); /* ppc:1623 */
+          signal_stack_soft_overflow(xp, Rsp);
+        }
+      }
+      status = 0;                     /* ppc:1628-1629 */
+      break;
+    }
 
     default:
       status = -1;

@@ -133,26 +133,30 @@ endsp makeu64
  * register: park it on the value stack (GC-visible via
  * tcr.save_vsp) before the argument load clobbers it.  We don't
  * save/restore FPCR: lisp runs with the process-default FPCR and a
- * conforming callee doesn't dirty it.  Cumulative FPSR exception
- * flags from the callee are published to tcr.foreign_fpsr.
+ * conforming callee doesn't dirty it.
  *
- * FPSR IS CUMULATIVE, SO THE WINDOW MUST BE OPENED AS WELL AS CLOSED.
- * Zeroing FPSR only on the way back makes tcr.foreign_fpsr carry every
- * flag raised since the PREVIOUS ff-call -- all the inline lisp float
- * arithmetic in between -- and %ffi-exception-status then charges it to
- * this callee.  Measured 16m48b: clear FPSR, `(* most-positive-single-float
- * most-positive-single-float)' inline (no FFI at all, FPSR := 0x14
- * OFC|IXC), then `(log 2.0d0)' => FLOATING-POINT-OVERFLOW on (2.0D0);
- * the immediately following identical call returns 0.693...  Every FFI
- * transcendental was affected (log/exp/sin/atan all reproduced); the ANSI
- * suite caught it as PRINT.SHORT-FLOAT.RANDOM / PRINT.SINGLE-FLOAT.RANDOM,
- * whose deftest bodies constant-fold (expt 10.0f0 100) -- an overflow in
- * SINGLE range but not in double, which is exactly why the double and long
- * variants of the same test passed.  ARM32 has no tcr.foreign_fpsr and so
- * must clear at each of its 33 lisp call sites
- * (`#+arm-target (%set-fpscr-status 0)', level-1/l1-numbers.lisp); arm64 is
- * not `arm-target', gets no such clear, and does not need one -- the slot
- * this spentry owns is the right seam.
+ * NO FPSR ACCESS ON THIS PATH.  This spentry used to own an FPSR capture
+ * window -- `msr fpsr, xzr' before the blr, `mrs' + publish to
+ * tcr.foreign_fpsr + `msr' after, opened as well as closed because FPSR
+ * is cumulative (16m48b: a window only closed charges every flag raised
+ * since the PREVIOUS ff-call, including inline lisp float arithmetic, to
+ * this callee; log/exp/sin/atan all reproduced, ANSI caught it as
+ * PRINT.SHORT-FLOAT.RANDOM).  MEASURED on Neoverse-N1 (16m82,
+ * tools/perf/ffcall-replica.c): those three FPSR accesses cost 13.3 ns
+ * of an 18 ns per-call transition excess over x86-64 -- FPSR is not
+ * renamed, and each access synchronizes the FP pipeline.  x86-64 pays
+ * nothing on its common path (the SIGFPE handler captures MXCSR lazily);
+ * AArch64 without trapped-FP support cannot take that path, but it can
+ * take ARM32's, which is where the flag window now lives: the float
+ * transcendental wrappers -- the ONLY consumers of the captured flags --
+ * clear the cumulative flags at the call site (`%set-fpscr-status 0',
+ * level-1/l1-numbers.lisp, the idiom ARM32 has always used there) and
+ * read the LIVE FPSR afterwards (%get-fpscr-status, which
+ * %ffi-exception-status now wraps).  A plain ff-call touches no FP
+ * state at all, and lisp's accrued FPSR flags survive foreign calls
+ * instead of being discarded per call.  The 16m48b attribution
+ * guarantee is preserved: the call-site clear immediately before the
+ * foreign call is exactly what prevents it.
  */
 spentry ffcall
         /* Spill fn AND all four boxed NVRs to the vstack (the protocol the
@@ -264,9 +268,9 @@ spentry ffcall
         /* Record the lisp<->foreign boundary for the GC (16m41 protocol,
          * re-pointed for stack args): the boundary is now the PUBLISHED
          * boundary lisp_frame itself -- mark_cstack_area classifies a walk
-         * that STARTS on lisp_frame_marker, exactly as it already does for
-         * the syscall sibling's post-pop boundary -- because the old start
-         * point, the c_frame base, dies once SP steps over it at the blr.
+         * that STARTS on lisp_frame_marker, which is what the syscall
+         * sibling also hands it -- because the old start point, the c_frame
+         * base, dies once SP steps over it at the blr.
          * Everything below the boundary is foreign to the GC while the
          * callee runs, which was already the status of the raw, never-
          * scanned param/stack-arg words when the ivector cover held them.
@@ -286,16 +290,12 @@ spentry ffcall
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* Open the capture window: discard lisp-side cumulative flags so
-         * tcr.foreign_fpsr below is the CALLEE's, not "everything since the
-         * last ff-call".  See the header note.  msr writes FPSR only --
-         * PSTATE.NZCV is a separate register in AArch64, so this cannot
-         * disturb the condition flags. */
-        msr fpsr, xzr
         /* ARM64-DEVIATION: step SP over header+savedsp+params[0..7] so the
          * callee sees its stack arguments AT [SP], per AAPCS64 5.4.2 (the
-         * single NSAA area the codegen marshals at param words 8..; +80 is
-         * the same c_frame.size + 8 words the syscall sibling steps by).
+         * single NSAA area the codegen marshals at param words 8..; +80 =
+         * c_frame.size + the 8 GPR param words).  The syscall sibling does
+         * NOT do this: `svc' takes no stack arguments, so it leaves SP at
+         * the frame head and its c_frame stays live above SP throughout.
          * PPC64 never moves SP here -- PowerOpen stack params live in the
          * CALLER's frame at positive offsets from the caller's SP; x86-64
          * is the shape donor (_SPffcall's ffcall_setup pops the frame head
@@ -309,10 +309,8 @@ spentry ffcall
         /* Back.  x0/d0 hold the results.  [save3, save3+80) is DEAD -- it
          * sat below the callee's incoming SP -- so nothing on this path may
          * read the c_frame head: the return runs entirely from the save0/
-         * save1 hoist.  x0/d0 are never touched: imm1/imm2 scratch only. */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * save1 hoist.  x0/d0 are never touched.  No FPSR access here --
+         * the float wrappers own the flag window (header note). */
         /* Retreat SP onto the boundary lisp_frame (it sat at/above the
          * callee's incoming SP, so it is intact, and the foreign-era GC has
          * been walking AND FORWARDING its slots).  This is PPC64's shape:
@@ -435,52 +433,8 @@ endsp ffcall
  * definitions using the SAME _struct/_structf macro conventions already
  * present in arm64-constants.h; NOT invented.  Cited per-field below. */
 
-/* tsp_frame: ppc-constants64.s:228-233 (backlink, type, then fixed_overhead
- * and data_offset alias the SAME offset -- Matt's _struct macro block in
- * arm64-constants.h has no _struct_label primitive, so these are plain .set
- * equates rather than routed through the struct-generator macros). */
-.set tsp_frame.backlink, 0
-.set tsp_frame.type, 8
-.set tsp_frame.fixed_overhead, 16
-.set tsp_frame.data_offset, 16
-.set tsp_frame.size, 16
 /* ppc-constants.s:171 "(UNSIGNED-BYTE 16), one less than TSTACK_SOFTPROT" */
 .set tstack_alloc_limit, 0xffff
-
-/* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame.
- * Ground truth: his popj vinsn (compiler/ARM64/arm64-vinsns.lisp:61-67)
- * does ldp fn,lr,[sp,#16] / ldr vsp,[sp,#8] ("ignore marker") / add sp,#32,
- * and arm64-constants.h:177-178 defines subtag_lisp_frame_marker.  Layout
- * matches ARM32 (arm-constants.s:374-379): marker,savevsp,savefn,savelr. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* symbol: field order ppc-constants64.s:237-245, but biased by
- * -fulltag_symbol: Matt's design gives symbols their OWN pointer tag
- * (arm64-constants.h:90 fulltag_symbol=0b0111; arm64-arch.lisp:196
- * misc-symbol-offset = node_size - fulltag_symbol), so slot n of a
- * symbol-tagged pointer is at (n+1)*node_size - fulltag_symbol.
- * (Was wrongly -misc_bias=-4; caught in the D-repair sibling sweep.
- * These odd offsets are the ledger's "symbol.vcell=9" item.) */
-.set symbol.header, (0*node_size - fulltag_symbol)
-.set symbol.pname, (1*node_size - fulltag_symbol)
-.set symbol.vcell, (2*node_size - fulltag_symbol)
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set symbol.package_predicate, (4*node_size - fulltag_symbol)
-.set symbol.flags, (5*node_size - fulltag_symbol)
-.set symbol.plist, (6*node_size - fulltag_symbol)
-.set symbol.binding_index, (7*node_size - fulltag_symbol)
-.set symbol.size, 64
-
-/* _function: slot order ppc-constants64.s:223-226 (codevector = slot 0),
- * biased by -fulltag_misc: a function is an ordinary miscobj
- * (fulltag_function removed, patch 0055; codevector offset -7 -> -4). */
-.set _function.header, misc_header_offset
-.set _function.codevector, misc_data_offset
-.set _function.size, 16
 
 /* bignum headers not already in arm64-constants.h (two/three/four_digit_
  * bignum_header ARE already defined there).  Derived via the same
@@ -825,7 +779,7 @@ spentry builtin_div
         mov     nargs, #(2 << fixnumshift)      /* ppc-spentry.s:39 set_nargs(2) */
         ldr     fname, [fname, #(misc_data_offset + _builtin_div * node_size)] /* ppc:40 vrefr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:41 jump_fname            */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp builtin_div
 
@@ -891,7 +845,7 @@ endsp misc_alloc
  * object via misc_alloc if there's no room).  Same (arg_y=count,
  * arg_z=subtag) convention and byte-count arithmetic as misc_alloc above.
  * ported from ppc-spentry.s:1025-1069 (PPC64 branch): dnode_align + a
- * tstack_alloc_limit check, then TSP_Alloc_Var_Boxed_nz (real tsp=x24
+ * tstack_alloc_limit check, then TSP_Alloc_Var_Boxed (real tsp=x24
  * register, PPC discipline) with heap-cons fallback via TSP_Alloc_Fixed_
  * Unboxed(0) + tail to misc_alloc. */
 spentry stack_misc_alloc
@@ -918,29 +872,17 @@ spentry stack_misc_alloc
         cmp     imm3, #subtag_s8_vector            /* no 8_bit class: 8-bit subtags are >= s8 within class other (see misc_alloc note) */
         b.lt    1f
         lsr     imm1, imm1, #1
-1:      /* imm1 = byte count; dnode_align(imm1,imm1,tsp_frame.fixed_overhead
-         * +node_size) -- the total tsp allocation (frame header + object
-         * header + data), ppc-spentry.s:1058. */
-        add     imm1, imm1, #(tsp_frame.fixed_overhead + node_size + (dnode_size - 1))
-        and     imm1, imm1, #0xfffffffffffffff0
+1:      /* imm1 = byte count; round up to the total tsp allocation (frame
+         * header + object header + data), ppc-spentry.s:1058. */
+        dnode_align imm1, imm1, (tsp_frame.fixed_overhead + node_size)
         mov     imm3, #tstack_alloc_limit
         cmp     imm1, imm3
-        b.ge    9f
-        /* TSP_Alloc_Var_Boxed_nz(imm1): push a new tsp frame of size imm1,
-         * zero its data area, mark it boxed (type=0).  "_nz": imm1 always
-         * includes the fixed frame overhead, so the frame can never be
-         * empty -- ppc-macros.s:695-704,721-725. */
-        mov     temp4, tsp                        /* old tsp -> backlink */
-        sub     tsp, tsp, imm1
-        str     temp4, [tsp, #tsp_frame.backlink]
-        mov     temp0, tsp
-        add     temp1, tsp, imm1
-        sub     temp1, temp1, #8
-7:      str     xzr, [temp0, #8]!
-        cmp     temp0, temp1
-        b.ne    7b
-        str     xzr, [tsp, #tsp_frame.type]
-        str     imm0, [tsp, #tsp_frame.data_offset]
+        b.hs    9f                    /* cmplri (ppc:1093) is UNSIGNED; b.ge accepted a bit-63 size */
+        /* Push a boxed frame of imm1 bytes (built below the live tsp and
+         * published atomically).  "_nz": imm1 always includes the frame
+         * overhead + object header, so the data area is never empty. */
+        TSP_Alloc_Var_Boxed imm1, temp4
+        str     imm0, [tsp, #tsp_frame.data_offset]  /* object header */
         add     arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         ret
 5:      /* bit-vector: byte_count = (arg_y + 7<<fixnumshift) >> (3+fixnumshift) */
@@ -951,15 +893,12 @@ spentry stack_misc_alloc
         add     imm1, arg_y, arg_y
         b       1b
 9:      /* Too large for the tstack: push one empty UNBOXED tsp frame
-         * (TSP_Alloc_Fixed_Unboxed(0), ppc-spentry.s:1068 -- type=self,
+         * (TSP_Alloc_Fixed_Unboxed (0), ppc-spentry.s:1068 -- type=self,
          * nonzero, so GC skips it) so the compiler's balancing discard-
          * temp-frame still has a frame to pop, then heap-cons via
          * misc_alloc instead; arg_y/arg_z are unchanged, matching
          * misc_alloc's own (count, subtag) calling convention. */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         b       _SPmisc_alloc
 endsp stack_misc_alloc
 
@@ -971,17 +910,13 @@ endsp stack_misc_alloc
  * is a PROPOSED constant above. */
 spentry makestackblock
         asr     imm0, arg_z, #fixnumshift
-        add     imm0, imm0, #(tsp_frame.fixed_overhead + macptr.size + (dnode_size - 1))
-        and     imm0, imm0, #0xfffffffffffffff0
+        dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
-        b.ge    1f
-        /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        b.hs    1f                    /* cmplri (ppc:3300) is UNSIGNED; b.ge accepted a bit-63 size */
+        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
+         * and published atomically -- see arm64-macros.s). */
+        TSP_Alloc_Var_Unboxed imm0, temp4
         mov     imm0, #macptr_header
         add     imm1, tsp, #(tsp_frame.data_offset + macptr.size)
         str     imm0, [tsp, #tsp_frame.data_offset]
@@ -992,14 +927,11 @@ spentry makestackblock
         ret
 1:      /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr (ppc-spentry.s:3317-3321). */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         mov     nargs, #(1 << fixnumshift)      /* ppc:3319 set_nargs(1)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3320 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3321 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp makestackblock
 
@@ -1014,21 +946,12 @@ spentry makestacklist
         mov     imm3, #((tstack_alloc_limit + 1) - cons.size)
         cmp     imm0, imm3
         add     imm0, imm0, #tsp_frame.fixed_overhead
-        b.ge    3f
-        /* TSP_Alloc_Var_Boxed(imm0): push frame, zero its data area (may be
-         * empty when arg_y=0, hence the leading compare instead of the "_nz"
-         * do-while form), mark boxed -- ppc-macros.s:681-692,714-718. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        mov     temp0, tsp
-        add     temp1, tsp, imm0
-        sub     temp1, temp1, #8
-1:      cmp     temp0, temp1
-        b.eq    2f
-        str     xzr, [temp0, #8]!
-        b       1b
-2:      str     xzr, [tsp, #tsp_frame.type]
+        b.hs    3f                    /* cmplri (ppc:3353) is UNSIGNED; b.ge accepted a bit-63 size */
+        /* Push a boxed frame of imm0 bytes (built below the live tsp and
+         * published atomically).  imm0 == fixed_overhead when arg_y=0, so the
+         * data area may be empty -- the leading-test TSP_Alloc_Var_Boxed (not
+         * the "_nz" do-while) handles that. */
+        TSP_Alloc_Var_Boxed imm0, temp4
         mov     imm1, arg_y                       /* count */
         cmp     imm1, #0
         mov     arg_y, arg_z                       /* initial value */
@@ -1044,13 +967,10 @@ spentry makestacklist
         sub     imm2, imm2, #cons.size
 10:     b.ne    4b
         ret
-3:      /* Too big for the tstack: push one empty BOXED (zeroed) tsp frame
+3:      /* Too big for the tstack: push one empty BOXED tsp frame
          * (TSP_Alloc_Fixed_Boxed(0), ppc-spentry.s:3377), then heap-cons
          * cell by cell via Cons. */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     xzr,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Boxed 0, temp4
         mov     imm1, arg_y
         mov     arg_y, arg_z
         mov     arg_z, rnil
@@ -1100,7 +1020,7 @@ spentry misc_alloc_init
         mov     nargs, #(2 << fixnumshift)      /* ppc:5245 set_nargs(2)          */
         ref_nrs_symbol fname, init_misc         /* ppc:5244 li fname,nrs.init_misc */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:5247 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp misc_alloc_init
 
@@ -1136,7 +1056,7 @@ spentry stack_misc_alloc_init
         mov     nargs, #(2 << fixnumshift)      /* ppc:5265 set_nargs(2)          */
         ref_nrs_symbol fname, init_misc         /* ppc:5264 li fname,nrs.init_misc */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:5267 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp stack_misc_alloc_init
 
@@ -1149,21 +1069,20 @@ endsp stack_misc_alloc_init
  * from the frame-zero pass), (3) too-big path passes 2 args (size, t=clear). */
 spentry makestackblock0
         asr     imm0, arg_z, #fixnumshift
-        add     imm0, imm0, #(tsp_frame.fixed_overhead + macptr.size + (dnode_size - 1))
-        and     imm0, imm0, #0xfffffffffffffff0
+        dnode_align imm0, imm0, (tsp_frame.fixed_overhead + macptr.size)
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
-        b.ge    makestackblock0_too_big
-        /* TSP_Alloc_Var_Unboxed(imm0): push a new tsp frame, leave it
-         * "raw"/unboxed (type=self, nonzero) -- ppc-macros.s:708-712. */
-        mov     temp4, tsp
-        sub     tsp, tsp, imm0
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
-        /* Zero_TSP_Frame(imm0, imm1): zero from tsp+data_offset through
-         * old_tsp-8 inclusive.  ppc-macros.s:681-692. */
+        b.hs    makestackblock0_too_big  /* cmplri (ppc:3327) is UNSIGNED; b.ge accepted a bit-63 size */
+        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
+         * and published atomically).  The frame stays raw, so the GC skips
+         * it -- the data-zeroing below is for the block's contents (clear-p),
+         * not GC safety. */
+        TSP_Alloc_Var_Unboxed imm0, temp4
+        /* Zero the data area [data_offset .. old_tsp).  old_tsp = tsp + imm0
+         * (Var_Unboxed preserves imm0); end (old_tsp-8) in imm1, cursor imm0. */
+        add     imm1, tsp, imm0
+        sub     imm1, imm1, #node_size
         add     imm0, tsp, #tsp_frame.data_offset
-        sub     imm1, temp4, #node_size
         b       makestackblock0_zero_test
 makestackblock0_zero_loop:
         str     xzr, [imm0], #node_size
@@ -1184,16 +1103,13 @@ makestackblock0_too_big:
         /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr with clear-p=T (ppc-spentry.s:3340-3347).
          * Two args: arg_y=size, arg_z=t_value (clear-p). */
-        mov     temp4, tsp
-        sub     tsp, tsp, #tsp_frame.data_offset
-        str     temp4, [tsp, #tsp_frame.backlink]
-        str     tsp,   [tsp, #tsp_frame.type]
+        TSP_Alloc_Fixed_Unboxed 0, temp4
         mov     arg_y, arg_z                    /* ppc:3343 mr arg_y,arg_z (save block size) */
         add     arg_z, rnil, #t_offset          /* ppc:3344 li arg_z,t_value (clear-p = T)   */
         mov     nargs, #(2 << fixnumshift)      /* ppc:3345 set_nargs(2)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3346 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3347 jump_fname()          */
-        ldr     temp0, [nfn, #_function.codevector]
+        ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp makestackblock0
 
@@ -1223,25 +1139,12 @@ endsp makestackblock0
 .set dnode_shift, 4
 .set bitmap_shift, 6
 
-/* tsp_frame: ppc-constants64.s:228-233 {backlink@0, type@8}; fixed_overhead
-   and data_offset alias offset 16 (same equates as spentry-A:42-46).
-   dnode_size itself is already real in Matt's arm64-constants.h. */
-.set tsp_frame.backlink, 0
-.set tsp_frame.type, 8
-.set tsp_frame.fixed_overhead, 16
-.set tsp_frame.data_offset, 16
-.set tsp_frame.size, 16
-
 /* Lisp error selectors: errors.s deferr(NAME,N) = boxed fixnum N. */
 .set XBADVEC,    (2<<fixnumshift)       /* errors.s:177 */
 .set XSETBADVEC, (7<<fixnumshift)       /* errors.s:182 */
 .set XNOTELT,    (174<<fixnumshift)     /* errors.s:227 */
 .set XIMPROPERLIST, (170<<fixnumshift)  /* errors.s:223 */
 .set tstack_alloc_limit, 0xffff         /* ppc-constants.s:171 (as spentry-A) */
-
-/* symbol.binding_index: slot 7 via the dedicated symbol fulltag
-   (ppc-constants64.s:237-245 order; arm64 bias = -fulltag_symbol). */
-.set symbol.binding_index, (7*node_size - fulltag_symbol)
 
 /* misc_complex_dfloat_offset (16m48) — Matt's arm64-arch.lisp:259-261:
      ;;; There is a pad word after the uvector header so that the
@@ -1272,21 +1175,10 @@ endsp makestackblock0
    and made a tripped aset2/aref2 trap report "(SIGNED-BYTE 64)"
    (0x28 = his xtype_s64) with the ARRAY as datum. */
 
-/* Variable-sized BOXED tstack frame (ppc-macros.s:714-719
-   TSP_Alloc_Var_Boxed): link the old tsp, mark boxed (type=0), and ZERO
-   the data area so the GC never scans garbage.  \size = total bytes
-   including tsp_frame.fixed_overhead; clobbers both operands and NZCV. */
-.macro tsp_alloc_var_boxed size, tmp
-        mov \tmp, tsp
-        sub tsp, tsp, \size
-        str \tmp, [tsp, #tsp_frame.backlink]
-        str xzr, [tsp, #tsp_frame.type]
-        add \size, tsp, #tsp_frame.fixed_overhead
-        b 8886f
-8885:   str xzr, [\size], #node_size
-8886:   cmp \size, \tmp
-        b.ne 8885b
-.endm
+/* (The local tsp_alloc_var_boxed macro that lived here -- which flipped the
+   frame to boxed BEFORE zeroing its data, exposing garbage nodes to the GC --
+   has been replaced by TSP_Alloc_Var_Boxed in arm64-macros.s, which builds the
+   frame below the live tsp and publishes it atomically.) */
 
 /* ===== gvset ===== */
 /* ported from ppc-spentry.s:568-608 (PPC64 branch) */
@@ -1619,7 +1511,7 @@ spentry stkconslist
                                            wrongly the TAG constant)       */
         add imm1, nargs, nargs          /* ppc:873                         */
         add imm1, imm1, #tsp_frame.fixed_overhead  /* ppc:874              */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:875 (links+marks+ZEROES;
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:875 (links+marks+ZEROES;
                                            PPC has no ts_area limit check
                                            here - drafter confusion)       */
         add imm1, tsp, #(tsp_frame.data_offset + fulltag_cons) /* ppc:876  */
@@ -1645,7 +1537,7 @@ endsp stkconslist
 spentry stkconslist_star
         add imm1, nargs, nargs          /* ppc:894                         */
         add imm1, imm1, #tsp_frame.fixed_overhead  /* ppc:895              */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:896                         */
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:896                         */
         add imm1, tsp, #(tsp_frame.data_offset + fulltag_cons) /* ppc:897  */
         cmp nargs, #0                   /* ppc:893 cmpri cr1 (post-alloc)  */
         b 2f
@@ -1665,13 +1557,12 @@ endsp stkconslist_star
 /* ported from ppc-spentry.s:914-933 (PPC64 branch) */
 spentry mkstackv
         cmp nargs, #0
-        /* dnode_align + TSP_Alloc_Var_Boxed_nz: PPC64 916-917 */
-        add imm1, nargs, #(dnode_size + node_size - 1)  /* dnode_size is real (arm64-constants.h:33) */
-        and imm1, imm1, #(~(dnode_size - 1))
-        add imm1, imm1, #tsp_frame.fixed_overhead
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:917 TSP_Alloc_Var_Boxed_nz
-                                           (was a bare sub: no backlink/
-                                           type/zeroing - GC hazard)       */
+        /* dnode_align + TSP_Alloc_Var_Boxed: PPC64 916-917.  fixed_overhead
+           is a dnode multiple, so folding it into the round-up delta with the
+           header word (node_size) is exact.  Data area is always >= one dnode
+           (header + pad), so the _nz form's do-while zero is safe. */
+        dnode_align imm1, nargs, (node_size + tsp_frame.fixed_overhead)
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:917 */
         lsl imm0, nargs, #(num_subtag_bits - fixnumshift)
         mov temp0, #subtag_simple_vector    /* not a valid logical-imm:    */
         orr imm0, imm0, temp0               /* materialize, then orr       */
@@ -1743,16 +1634,12 @@ progvsave_improper:                     /* circular or non-list            */
         add imm1, imm1, #(dnode_size + node_size - 1)   /* ppc:987         */
         and imm1, imm1, #(~(dnode_size - 1))            /* dnode_align     */
         b.ne 2f                         /* ppc:988                         */
-        /* count 0: empty boxed frame (ppc:989 TSP_Alloc_Fixed_Boxed(16)) */
-        mov imm2, tsp
-        sub tsp, tsp, #(2*node_size + tsp_frame.fixed_overhead)
-        str imm2, [tsp, #tsp_frame.backlink]
-        str xzr, [tsp, #tsp_frame.type]                 /* boxed           */
-        str xzr, [tsp, #tsp_frame.data_offset]          /* count = 0       */
-        str xzr, [tsp, #(tsp_frame.data_offset + node_size)]
+        /* count 0: empty boxed frame (ppc:989 TSP_Alloc_Fixed_Boxed(16)).
+           The macro zeroes both data words, so the count(=0) store is subsumed. */
+        TSP_Alloc_Fixed_Boxed 2*node_size, imm2
         ret                             /* ppc:990                         */
 2:      add imm1, imm1, #tsp_frame.fixed_overhead       /* ppc:992         */
-        tsp_alloc_var_boxed imm1, imm2  /* ppc:993 (zeroes; clobbers NZCV) */
+        TSP_Alloc_Var_Boxed imm1, imm2  /* ppc:993 (zeroes; clobbers NZCV) */
         str imm0, [tsp, #tsp_frame.data_offset]         /* ppc:994 count   */
         ldr imm2, [tsp, #tsp_frame.backlink]            /* ppc:995 cursor
                                            = frame end (triplets push down)*/
@@ -1828,7 +1715,7 @@ spentry misc_ref
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_z, imm1
-        b.ge misc_ref_invalid
+        b.hs misc_ref_invalid           /* trlge (ppc:2409) is UNSIGNED; b.ge accepted a negative index */
         /* Extract subtag */
         and imm1, imm0, #subtagmask
 misc_ref_common:
@@ -2086,7 +1973,7 @@ spentry subtag_misc_ref
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_z, imm1
-        b.ge 1f
+        b.hs 1f                         /* trlge (ppc:3209) is UNSIGNED; b.ge accepted a negative index */
         asr imm1, arg_x, #fixnumshift         /* unbox_fixnum(imm1,arg_x) = subtag override */
         b misc_ref_common
 1:      mov arg_x, #XBADVEC             /* errors.s:177 deferr           */
@@ -2122,26 +2009,14 @@ spentry stkgvector
         lsl imm2, imm0, #(num_subtag_bits - fixnumshift)  /* element_count << num_subtag_bits (PPC slri = shift LEFT; the earlier lsr right-shifted the count into the low byte -> header count field always 0 -> malformed stack closures overflowed the vstack in _SPcall_closure) */
         asr imm3, temp0, #fixnumshift            /* unbox subtag */
         orr imm2, imm3, imm2                     /* header = (element_count << num_subtag_bits) | subtag */
-        /* dnode_align: (imm0 + node_size + tsp_frame.fixed_overhead + dnode_size - 1) & ~(dnode_size-1) */
-        add imm0, imm0, #(node_size + tsp_frame.fixed_overhead + dnode_size - 1)  /* fixed_overhead=16, was mis-guessed 8 */
-        and imm0, imm0, #(~(dnode_size - 1))
-        /* TSP_Alloc_Var_Boxed_nz (ppc-macros.s:721-725): push frame WITH
-           backlink, zero the data area, mark boxed.  The previous bare
-           `sub tsp` dropped the backlink (PPC's stru writes it as a
-           store-with-update side effect) — the frame's [tsp]=0 then fed
-           tsp:=0 into the caller's tsp_unlink on the toplevel fn's second
-           lap (16m5k wall, gdb-observed 2026-07-17). */
-        mov imm4, tsp
-        sub tsp, tsp, imm0
-        str imm4, [tsp, #tsp_frame.backlink]
-        mov imm3, tsp
-        sub imm0, imm4, #node_size
-3:      cmp imm3, imm0
-        b.eq 4f
-        str xzr, [imm3, #node_size]!
-        b 3b
-4:      str xzr, [tsp, #tsp_frame.type]          /* Set_TSP_Frame_Boxed */
-        str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16, was mis-guessed 8) */
+        dnode_align imm0, imm0, (node_size + tsp_frame.fixed_overhead)
+        /* Push a boxed frame of imm0 bytes (built below the live tsp and
+           published atomically).  "_nz": imm0 always covers frame overhead +
+           object header, so the data area is never empty.  (An earlier bare
+           `sub tsp' dropped the backlink and fed tsp:=0 into a later
+           TSP_Unlink -- 16m5k wall, gdb-observed 2026-07-17.) */
+        TSP_Alloc_Var_Boxed imm0, imm4
+        str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16) */
         add arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         add imm3, arg_z, #misc_header_offset     /* pointer to header area for data copy */
         mov imm0, #(1<<fixnumshift)
@@ -2169,7 +2044,7 @@ spentry subtag_misc_set
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_y, imm1
-        b.ge 1f
+        b.hs 1f                         /* trlge (ppc:3911) is UNSIGNED; b.ge accepted a negative index */
         asr imm1, temp0, #fixnumshift         /* unbox subtag override from temp0 */
         b misc_set_common
 1:      mov arg_w, #XBADVEC             /* errors.s:177 deferr           */
@@ -2189,7 +2064,7 @@ spentry misc_set
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_y, imm1
-        b.ge misc_set_invalid
+        b.hs misc_set_invalid           /* trlge (ppc:4877) is UNSIGNED; b.ge accepted a negative index */
         and imm1, imm0, #subtagmask
 misc_set_common:
         /* Node vectors -> delegate to gvset for write barrier.  Class
@@ -2496,25 +2371,6 @@ endsp progvrestore
  * Computes row-major index, follows displaced-array chain, then branches to
  * misc_ref_common with: arg_y=underlying-vector, arg_z=row-major-index(boxed),
  * imm1=subtag. */
-
-/* PROPOSED-CONSTANTS: arrayH struct offsets (not yet in arm64-constants.h).
- * define-lisp-object arrayH fulltag-misc (arm64-arch.lisp:683): slots
- * header, rank, physsize, data-vector, displacement, flags, then dims --
- * slot k sits at (k*node_size - fulltag_misc) from the tagged pointer
- * (fulltag_misc = 12, arm64-constants.h:144; misc-data-offset = -4).
- * 16m41: this block used to hand-number the offsets with PPC64's bias
- * (-4, i.e. rank@4 ... dim0@44), +8 off for every slot, so the rank
- * check read physsize and aset2/aref2/aset3/aref3 trapped on EVERY
- * valid array.  Symbolic now: correct by construction.  */
-#ifndef ARRAYH_STRUCT_DEFINED
-.set arrayH.rank,         (1*node_size - fulltag_misc)
-.set arrayH.physsize,     (2*node_size - fulltag_misc)
-.set arrayH.data_vector,  (3*node_size - fulltag_misc)
-.set arrayH.displacement, (4*node_size - fulltag_misc)
-.set arrayH.flags,        (5*node_size - fulltag_misc)
-.set arrayH.dim0,         (6*node_size - fulltag_misc)
-#define ARRAYH_STRUCT_DEFINED
-#endif
 
 spentry aref2
         /* extract_typecode(imm2, arg_x): get fulltag, then if misc load subtag */
@@ -2935,63 +2791,11 @@ endsp aset3
 /* log2(dnode_size=16): ppc-constants64.s:37 dnode_shift = dnode_align_bits. */
 .set dnode_shift, 4
 
-/* Function codevector lives in slot 0 (CLAUDE.md "codevector @ slot 0"; PPC
-   _function.entrypoint).  Referenced through a fulltag_misc function pointer. */
-.set function.codevector, misc_data_offset
-
 /* symbol.flags bits (x86-constants64.s:707-710; low-tag => +fixnum_shift). */
 .set sym_vbit_bound,      (0+fixnumshift)
 .set sym_vbit_bound_mask, (1<<sym_vbit_bound)
 .set sym_vbit_const,      (1+fixnumshift)
 .set sym_vbit_const_mask, (1<<sym_vbit_const)
-
-/*
- * ---------------------------------------------------------------------------
- * PROPOSED struct layouts (ratify with Matt; C side must match)
- * Defined with the _struct/_node/_field/_ends macros from arm64-constants.h.
- * ---------------------------------------------------------------------------
- */
-
-/* symbol: referenced through a fulltag_symbol pointer (see spentry-D funcall,
-   x86-constants64.s:616 `_structf(symbol,-fulltag_symbol)`).  Field order is
-   the CCL-universal pname,vcell,fcell,...,binding_index. */
-_structf symbol, -fulltag_symbol
-  _node pname
-  _node vcell
-  _node fcell
-  _node package_predicate
-  _node flags
-  _node plist
-  _node binding_index
-_endstructf
-
-/* binding frame (vstack-consed): ppc-constants64.s _struct(binding,0). */
-_struct binding, 0
-  _node link
-  _node sym
-  _node val
-_ends
-
-/* lisp_frame on the control stack: Matt's ARM-family MARKER frame, NOT
-   PPC's backlink frame (ground truth: his popj vinsn, compiler/ARM64/
-   arm64-vinsns.lisp:61-67, + subtag_lisp_frame_marker).  Same layout as
-   spentry-A/-D/-E.  Frame builds store #lisp_frame_marker at slot 0; no
-   backlink word.  fn is VOLATILE (x7) in this design, so it is saved
-   here across catch. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* temp-stack frame header: ppc-constants64.s _struct(tsp_frame,0).
-   backlink+type = 2 nodes of fixed overhead; data follows. */
-_struct tsp_frame, 0
-  _node backlink
-  _node type
-_ends
-.set tsp_frame.fixed_overhead, tsp_frame.size
-.set tsp_frame.data_offset, tsp_frame.size
 
 /* catch_frame comes from arm64-constants.h: PPC64's layout
    (ppc-constants64.s _structf(catch_frame); ppc-constants64.h:213), with
@@ -3027,21 +2831,11 @@ _ends
         str \clpc, [sp, #lisp_frame.savelr]
 .endm
 
-/* temp-stack allocation (real tsp register, PPC discipline).
-   ppc-macros.s TSP_Alloc_Fixed_Unboxed / Set_TSP_Frame_{Un,}boxed. */
-.macro tsp_alloc_fixed_unboxed nbytes, tmp
-        mov \tmp, tsp
-        sub tsp, tsp, #((\nbytes) + tsp_frame.data_offset)
-        str \tmp, [tsp, #tsp_frame.backlink]
-        str tsp, [tsp, #tsp_frame.type]         /* non-zero => unboxed */
-.endm
-.macro set_tsp_frame_boxed
-        str xzr, [tsp, #tsp_frame.type]         /* zero => boxed (GC-scanned) */
-.endm
-/* pop one tsp frame (ppc-macros.s unlink(tsp)). */
-.macro tsp_unlink
-        ldr tsp, [tsp, #tsp_frame.backlink]
-.endm
+/* tsp_alloc_fixed_unboxed / Set_TSP_Frame_Boxed / TSP_Unlink moved to the
+   canonical set in arm64-macros.s (TSP_Alloc_Fixed_Unboxed / Set_TSP_Frame_
+   Boxed / TSP_Unlink).  GNU as macro names are case-insensitive, so the local
+   copies would collide with the canonical ones; call sites bind to the
+   arm64-macros.s versions unchanged. */
 
 /* save/restore the boxed NVRs into/from a catch frame's regs[] (save0..save3).
    catch_frame is a fulltag_misc-biased _structf, so .regs = 36 is only
@@ -3086,7 +2880,7 @@ _ends
         build_catch_lisp_frame imm4, imm5     /* csp frame: fn,cleanupPC,vsp  */
         ldr imm3, [rcontext, #tcr.xframe]
         ldr imm1, [rcontext, #tcr.db_link]
-        tsp_alloc_fixed_unboxed catch_frame.size, imm4
+        TSP_Alloc_Fixed_Unboxed catch_frame.size, imm4
         add nargs, tsp, #(tsp_frame.data_offset + fulltag_misc)  /* tagged cf
                                           (PPC uses nargs for this too)       */
         mov imm4, #((catch_frame.element_count<<num_subtag_bits) | subtag_catch_frame)
@@ -3101,7 +2895,7 @@ _ends
         str imm3, [nargs, #catch_frame.xframe]
         ldr imm0, [rcontext, #tcr.nfp]
         str imm0, [nargs, #catch_frame.nfp]
-        set_tsp_frame_boxed
+        Set_TSP_Frame_Boxed
         str nargs, [rcontext, #tcr.catch_top]
         set_nargs 0
         .endm
@@ -3201,7 +2995,7 @@ spentry throw
         restore_catch_regs imm3
         ldr imm3, [imm3, #catch_frame.link]
         str imm3, [rcontext, #tcr.catch_top]
-        tsp_unlink
+        TSP_Unlink
         ret
 9:      /* _throw_tag_not_found */
         uuo_error_no_throw_tag temp0
@@ -3212,26 +3006,9 @@ endsp throw
 /* ported from ppc-spentry.s:166-284 (PPC64 branch) */
 /* Unwind N frames (imm0 = count), processing unwind-protects */
 /* N multiple values atop vstack, nargs = count */
-/* Variable-size boxed tsp frame (ppc-macros.s TSP_Alloc_Var_Boxed_nz).
-   \size = 16-aligned data byte count (in a reg).  \p,\e scratch. */
-        .macro tsp_alloc_var_boxed_nz size, p, e
-        mov \p, tsp
-        sub tsp, tsp, \size
-        str \p, [tsp, #tsp_frame.backlink]
-        /* zero data words [data_offset .. backlink) so GC sees clean slots */
-        add \e, tsp, \size                    /* end = old tsp                */
-        add \p, tsp, #tsp_frame.data_offset
-        /* \@-unique labels: a bare 1:/2: inside a macro CAPTURES callers'
-           1f/2f branches that cross the expansion (the 16m5t makes128/
-           Misc_Alloc_Fixed class, patch 0011) */
-.Ltavb\@:
-        cmp \p, \e
-        b.hs .Ltavbdone\@
-        str xzr, [\p], #node_size
-        b .Ltavb\@
-.Ltavbdone\@:
-        str xzr, [tsp, #tsp_frame.type]       /* boxed                        */
-        .endm
+/* tsp_alloc_var_boxed_nz moved to arm64-macros.s as TSP_Alloc_Var_Boxed
+   (publish-last, 2-reg: size, scratch -- size is clobbered as the zeroing
+   cursor, the live tsp is the loop's end sentinel). */
 
 spentry nthrowvalues
         /* ppc-spentry.s:166-284.  N values atop the vstack, nargs=count. */
@@ -3279,7 +3056,7 @@ spentry nthrowvalues
         restore_catch_regs temp0
 3:      /* _nthrowv_skip */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)
-        tsp_unlink
+        TSP_Unlink
         discard_lisp_frame
         b 1b
 4:      /* _nthrowv_do_unwind: run the cleanup form with values preserved      */
@@ -3289,7 +3066,7 @@ spentry nthrowvalues
         str imm3, [rcontext, #tcr.nfp]
         restore_catch_regs temp0
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)
-        tsp_unlink
+        TSP_Unlink
         ldr temp4, [sp, #lisp_frame.savelr]   /* cleanup code address          */
         ldr nfn, [sp, #lisp_frame.savefn]     /* cleanup's own fn              */
         str fn, [sp, #lisp_frame.savefn]      /* stash caller fn in the frame  */
@@ -3298,7 +3075,7 @@ spentry nthrowvalues
         /* allocate a boxed tsp frame: overhead + nargs bytes + 2 nodes        */
         add imm0, nargs, #(tsp_frame.fixed_overhead + (2*node_size) + (dnode_size-1))
         and imm0, imm0, #~(dnode_size-1)
-        tsp_alloc_var_boxed_nz imm0, imm1, imm2
+        TSP_Alloc_Var_Boxed imm0, imm1
         mov imm2, nargs
         add imm1, vsp, nargs            /* imm1 = top of value block            */
         add imm0, tsp, #tsp_frame.data_offset
@@ -3331,7 +3108,7 @@ spentry nthrowvalues
 44:     cmp imm2, #0
         b.ne 43b
         ldr imm4, [imm0, #node_size]    /* restore throw count                  */
-        tsp_unlink
+        TSP_Unlink
         b 1b
 8:      /* _nthrowv_done */
         str xzr, [rcontext, #tcr.unwinding]
@@ -3378,21 +3155,21 @@ spentry nthrow1value
         restore_catch_regs temp0        /* ppc:320 */
 3:      /* ppc:321 _nthrow1v_skip */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)  /* ppc:322 */
-        tsp_unlink                      /* ppc:323 */
+        TSP_Unlink                      /* ppc:323 */
         discard_lisp_frame              /* ppc:324 */
         b 1b                            /* ppc:325 */
 4:      /* ppc:326 _nthrow1v_do_unwind */
         restore_catch_regs temp0        /* ppc:332 */
         sub tsp, temp0, #(tsp_frame.fixed_overhead + fulltag_misc)  /* ppc:333 */
-        tsp_unlink                      /* ppc:334 */
+        TSP_Unlink                      /* ppc:334 */
         ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:335,337 cleanup PC -> temp4  */
         ldr nfn, [sp, #lisp_frame.savefn]    /* ppc:336 cleanup's own fn         */
         str fn, [sp, #lisp_frame.savefn]     /* ppc:338 stash caller fn          */
         mov fn, nfn                     /* ppc:340 */
         str lr, [sp, #lisp_frame.savelr]     /* ppc:339,341 stash our return     */
         /* fixed boxed tsp frame: value + throw count = 2 nodes (ppc:342)        */
-        tsp_alloc_fixed_unboxed 2*node_size, imm0
-        set_tsp_frame_boxed
+        TSP_Alloc_Fixed_Unboxed 2*node_size, imm0
+        Set_TSP_Frame_Boxed
         str arg_z, [tsp, #tsp_frame.data_offset]                /* ppc:343 */
         str imm4, [tsp, #(tsp_frame.data_offset + node_size)]   /* ppc:344 */
         ldr vsp, [sp, #lisp_frame.savevsp]   /* ppc:345 */
@@ -3406,7 +3183,7 @@ spentry nthrow1value
         ldr temp4, [sp, #lisp_frame.savelr]  /* ppc:353 */
         discard_lisp_frame              /* ppc:354 */
         mov lr, temp4                   /* ppc:355 */
-        tsp_unlink                      /* ppc:356 */
+        TSP_Unlink                      /* ppc:356 */
         b 1b                            /* ppc:357 */
 8:      /* ppc:358 _nthrow1v_done.  nargs is dead here, so the poll may clobber it. */
         str xzr, [rcontext, #tcr.unwinding]  /* ppc:359 */
@@ -3710,34 +3487,49 @@ endsp unbind_interrupt_level
 
    ORDERING (16m5t root cause): in PPC this is a STANDALONE _exportfn
    defined BEFORE _spentry(values) (ppc:1171), and `values' falls
-   straight through `mflr loc_pc' into local_label(return_values)
-   (ppc:1214-1216).  A prior port mis-inserted this block BETWEEN
-   `values' `mov temp4,lr' and `return_values', so `values' fell into
-   ret1valn and ALWAYS delivered 1 value (set_nargs 1) -- the mv-return
-   branch logic at return_values was only reachable via nvalret's
-   explicit `b'.  Kept here, ABOVE `spentry values', so the fall-through
-   values -> return_values is intact. */
+   straight through into local_label(return_values) (ppc:1214-1216).  A
+   prior port mis-inserted this block BETWEEN `values' and
+   `return_values', so `values' fell into ret1valn and ALWAYS delivered 1
+   value (set_nargs 1) -- the mv-return branch logic at return_values was
+   only reachable via nvalret's explicit `b'.  Kept here, ABOVE `spentry
+   values', so the fall-through values -> return_values is intact. */
         .globl C(ret1valn)
 C(ret1valn):
-        ldr lr, [sp, #lisp_frame.savelr]        /* ppc:1172 ldr loc_pc  */
-        ldr vsp, [sp, #lisp_frame.savevsp]      /* ppc:1173             */
-        ldr fn, [sp, #lisp_frame.savefn]        /* ppc:1175             */
+        ldr vsp, [sp, #lisp_frame.savevsp]      /* ppc:1173 savevsp@8 (unpaired)     */
+        ldp fn, lr, [sp, #lisp_frame.savefn]    /* ppc:1175,1172 savefn@16 + savelr@24 */
         add sp, sp, #lisp_frame.size            /* ppc:1176 discard     */
         vpush1 arg_z                            /* ppc:1177             */
         set_nargs 1                             /* ppc:1178             */
         ret                                     /* ppc:1179 blr         */
+
+/* nvalret (ppc-spentry.s:1270-1276): come here with saved context on top
+ * of the stack.  Its return pc lives in savelr, so load it straight into
+ * lr to match the `values' entry, then FALL THROUGH into the shared body
+ * below.  PPC/ARM32 keep nvalret past `values' and branch back up to a
+ * global `return_values'; falling through instead drops that branch and
+ * the exported label (the two spentries are contiguous now that spentry-C
+ * and spentry-D are one file).  pmcl-kernel.c:2110 takes &nvalret for
+ * lisp_global(LEXPR_RETURN) (PPC exports it the same way, ppc:1267-1271). */
+        .globl C(nvalret)
+spentry nvalret
+C(nvalret):
+        ldr temp0, [sp, #lisp_frame.savevsp]    /* ppc:1273 savevsp@8 (unpaired)     */
+        ldp fn, lr, [sp, #lisp_frame.savefn]    /* ppc:1274,1272 savefn@16 + savelr@24 (->lr) */
+        discard_lisp_frame                      /* ppc:1275                */
+        /* FALL THROUGH into `values'/the shared body (ppc:1276 was a branch). */
+endsp nvalret
 
 /* ported from ppc-spentry.s:1214-1248 (PPC64 branch) */
 /* Return multiple values. nargs = count (fixnum), values on stack */
 spentry values
         /* ppc-spentry.s:1214-1265 (PPC64 branch).  temp0 = entry vsp (VERIFIED
            cont-71); nargs = boxed value count.  No loc_pc register in this
-           design -- lr(x30) carries the return pc, stashed in temp4. */
-        mov temp4, lr                   /* ppc:1215 mflr loc_pc (->temp4)        */
-        /* FALL THROUGH to return_values (ppc:1216 local_label). */
-
-        .globl return_values
-return_values:                          /* ppc:1216 shared entry; spentry-D nvalret must `b return_values' */
+           design -- lr(x30) carries the return pc and STAYS there through the
+           whole body (ARM32 arm-spentry.s:596-635 does the same): PPC's `mflr
+           loc_pc' has no analog because we never move it out of lr.  Reached
+           two ways: called at `values' (pc already in lr), or fallen into from
+           `nvalret' just above (which loaded the pc from savelr into lr) -- so
+           the body is single-channel on lr and needs no shared label. */
         /* ppc:1217 ref_global(imm0,ret1val_addr): load the ret1val_addr global.
            No ref_global / lisp_globals idiom exists for ARM64 in this file or
            its includes (see spentry-A-alloc-numbers.s:25-26 and the open
@@ -3746,9 +3538,9 @@ return_values:                          /* ppc:1216 shared entry; spentry-D nval
         mov arg_z, rnil                 /* ppc:1218 li arg_z,nil_value           */
         cmp nargs, #(4096-(dnode_size+dnode_size))  /* ppc:1221 cmpri cr2        */
         b.ge 2f                         /* ppc:1224 bge cr2 -> too many values   */
-        cmp imm0, temp4                 /* ppc:1222 cmpr cr1 (imm0==ret1val_addr?)*/
+        cmp imm0, lr                    /* ppc:1222 cmpr cr1 (imm0==ret1val_addr?)*/
         b.eq 3f                         /* ppc:1225 beq cr1 -> return to real caller*/
-        mov lr, temp4                   /* ppc:1226 mtlr loc_pc                   */
+        /* ppc:1226 mtlr loc_pc: no-op here -- the return pc is already in lr.   */
         add imm0, vsp, nargs            /* ppc:1227 add imm0,nargs,vsp            */
         cmp nargs, #fixnum_one          /* ppc:1223 cmpri cr0, recomputed here    */
         b.lt 1f                         /* ppc:1228 blt cr0 -> no values, keep nil*/
@@ -3762,11 +3554,11 @@ return_values:                          /* ppc:1216 shared entry; spentry-D nval
         uuo_interr error_too_many_values, nargs /* PROPOSED ext (globals-proposed.s) */
         b 2b                            /* ppc:1236 */
 3:      /* ppc:1239 return multiple values to real caller */
-        ldr temp4, [sp, #lisp_frame.savelr]   /* ppc:1240 ldr loc_pc            */
+        ldr lr, [sp, #lisp_frame.savelr]      /* ppc:1240 ldr loc_pc (straight to lr) */
         add imm1, vsp, nargs            /* ppc:1241 add imm1,nargs,vsp            */
         ldr imm0, [sp, #lisp_frame.savevsp]   /* ppc:1242                        */
         ldr fn, [sp, #lisp_frame.savefn]      /* ppc:1243                        */
-        mov lr, temp4                   /* ppc:1245 mtlr loc_pc                   */
+        /* ppc:1245 mtlr loc_pc: no-op -- savelr was loaded straight into lr.    */
         discard_lisp_frame              /* ppc:1247                              */
         cmp imm1, imm0                  /* ppc:1244 cmpr cr0, recomputed post-discard*/
         b.eq 7f                         /* ppc:1248 beqlr cr0 -> already in place */
@@ -4009,10 +3801,10 @@ spentry stack_cons_rest_arg
         /* ppc:2035-2063.  imm0 = required args already consumed; nargs = total.
            Cons the rest args into a list on the temp stack (heap-cons if the
            block would be too large).  arg_z accumulates the list. */
-        /* Labels 8/9 for the ble/bge targets (not 2/3): the inlined
-           tsp_alloc_var_boxed_nz macro emits its own local 1:/2:, so a forward
-           `2f` here would bind to the macro's label.  Matches throw/nthrowvalues
-           high-label convention. */
+        /* Labels 8/9 for the ble/bge targets (not 2/3), matching the
+           throw/nthrowvalues high-label convention.  (The TSP_Alloc_* macros
+           now use \@-unique local labels, so a forward `2f' here would no
+           longer be captured by the macro -- but the convention is kept.) */
         sub imm1, nargs, imm0           /* ppc:2036 imm1 = rest count (bytes)   */
         mov arg_z, rnil                 /* ppc:2039 li arg_z,nil_value          */
         cmp imm1, #0                    /* ppc:2037 cmpri(cr0,imm1,0), signed   */
@@ -4024,7 +3816,7 @@ spentry stack_cons_rest_arg
            per spentry-A:447-448. */
         add imm2, imm1, #(tsp_frame.fixed_overhead + dnode_size - 1)
         and imm2, imm2, #0xfffffffffffffff0
-        tsp_alloc_var_boxed_nz imm2, imm3, imm4   /* ppc:2044 TSP_Alloc_Var_Boxed */
+        TSP_Alloc_Var_Boxed imm2, imm3   /* ppc:2044 TSP_Alloc_Var_Boxed */
         add imm0, tsp, #(tsp_frame.data_offset + fulltag_cons)  /* ppc:2045     */
 1:      /* ppc:2046 */
         cmp imm1, #cons.size            /* ppc:2047 cmpri(cr0,imm1,cons.size)   */
@@ -4038,11 +3830,11 @@ spentry stack_cons_rest_arg
         vpush1 arg_z                    /* ppc:2055 vpush(arg_z)                */
         ret                             /* ppc:2056 blr                         */
 8:      /* ppc:2057 */
-        tsp_alloc_fixed_unboxed 0, imm3 /* ppc:2058 TSP_Alloc_Fixed_Unboxed(0)  */
+        TSP_Alloc_Fixed_Unboxed 0, imm3 /* ppc:2058 TSP_Alloc_Fixed_Unboxed (0)  */
         vpush1 arg_z                    /* ppc:2059 vpush(arg_z)                */
         ret                             /* ppc:2060 blr                         */
 9:      /* ppc:2061 */
-        tsp_alloc_fixed_unboxed 0, imm3 /* ppc:2062 TSP_Alloc_Fixed_Unboxed(0)  */
+        TSP_Alloc_Fixed_Unboxed 0, imm3 /* ppc:2062 TSP_Alloc_Fixed_Unboxed (0)  */
         b _SPheap_cons_rest_arg         /* ppc:2063                             */
 endsp stack_cons_rest_arg
 
@@ -4389,7 +4181,7 @@ spentry recover_values
         cmp imm2, tsp                               /* ppc:3839 cr1 (test old imm2)*/
         ldr imm2, [imm2, #(tsp_frame.data_offset+node_size)] /* ppc:3851 prev seg */
         b.ne 2b                                     /* ppc:3852 bne cr1 (ldr flag-neut)*/
-        tsp_unlink                                  /* ppc:3853 unlink(tsp)       */
+        TSP_Unlink                                  /* ppc:3853 unlink(tsp)       */
         ret                                         /* ppc:3854 blr               */
 endsp recover_values
 
@@ -4404,11 +4196,8 @@ spentry save_values
         /* common exit: nargs = values in this set, imm1 = tsp before the call. */
 save_values_to_tsp:                                 /* ppc:4992 (named label)     */
         mov imm2, tsp                               /* ppc:4993 previous tsp      */
-        /* dnode_align(imm0,nargs,tsp_frame.fixed_overhead+2*node_size) ppc:4994,
-           inlined per spentry-A:447-448. */
-        add imm0, nargs, #(tsp_frame.fixed_overhead+(2*node_size)+dnode_size-1)
-        and imm0, imm0, #0xfffffffffffffff0
-        tsp_alloc_var_boxed_nz imm0, imm3, imm4     /* ppc:4995 (imm3+scratch)    */
+        dnode_align imm0, nargs, (tsp_frame.fixed_overhead + 2*node_size) /* ppc:4994 */
+        TSP_Alloc_Var_Boxed imm0, imm3     /* ppc:4995 */
         str imm1, [tsp, #tsp_frame.backlink]        /* ppc:4996 one tsp "frame"   */
         str nargs, [tsp, #tsp_frame.data_offset]    /* ppc:4997 value count       */
         str imm2, [tsp, #(tsp_frame.data_offset+node_size)] /* ppc:4998 prev tsp  */
@@ -4439,28 +4228,6 @@ spentry add_values
         ret                                         /* ppc:5026 blr               */
 endsp add_values
 
-/* ported from ppc-spentry.s:5330-5334 (PPC64 branch) */
-/* Save context and vsp */
-spentry savecontextvsp
-        /* ppc-spentry.s:5330-5334.  Save fn, return-pc, vsp into a control-stack
-           lisp_frame, install nfn as the current fn, trap on stack overflow.
-           No generic build_lisp_frame macro here; inline it (mirrors
-           build_catch_lisp_frame but stores lr as savelr).  loc_pc == lr == x30.
-           temp0 is a free scratch (not a live input; mkcatch uses it likewise). */
-        ldr imm0, [rcontext, #tcr.cs_limit]     /* ppc:5331 cs_limit            */
-        sub sp, sp, #lisp_frame.size            /* ppc:5332 build_lisp_frame:   */
-        mov temp0, #lisp_frame_marker           /*   MARKER frame               */
-        str temp0, [sp, #lisp_frame.marker]
-        str vsp, [sp, #lisp_frame.savevsp]
-        str fn, [sp, #lisp_frame.savefn]
-        str lr, [sp, #lisp_frame.savelr]        /* loc_pc == return pc          */
-        mov fn, nfn                             /* ppc:5333 mr fn,nfn           */
-        cmp sp, imm0                            /* ppc:5334 trllt(sp,imm0)      */
-        b.hs 1f                                 /* sp>=cs_limit: no overflow    */
-        uuo_interr error_stack_overflow, sp /* ppc:5334 trllt (PROPOSED ext) */
-1:      ret                                     /* ppc:5335 blr                 */
-endsp savecontextvsp
-
 /* ported from ppc-spentry.s:7200-7230 (PPC64 branch) */
 /* Make an unwind marker (for %unwind-protect) */
 spentry nmkunwind
@@ -4487,27 +4254,6 @@ spentry nmkunwind
         mov arg_z, arg_y                /* ppc:7214 mr arg_z,arg_y (old level)  */
         b _SPbind_interrupt_level       /* ppc:7215 b _SPbind_interrupt_level   */
 endsp nmkunwind
-
-/* ported from ppc-spentry.s:5337-5343 (PPC64 branch) */
-/* Save context with vsp+imm0 as the stored vsp (callee-save setup variant). */
-spentry savecontext0
-        /* ppc-spentry.s:5337-5343.  Like savecontextvsp, but the stored vsp is
-           (vsp + imm0), and cs_limit is loaded AFTER building the frame (the PPC
-           ordering differs from savecontextvsp).  imm0 is an unboxed byte delta. */
-        add imm0, vsp, imm0             /* ppc:5338 add imm0,vsp,imm0           */
-        sub sp, sp, #lisp_frame.size    /* ppc:5339 build_lisp_frame: MARKER    */
-        mov temp0, #lisp_frame_marker
-        str temp0, [sp, #lisp_frame.marker]
-        str imm0, [sp, #lisp_frame.savevsp] /* stored vsp = vsp+delta           */
-        str fn, [sp, #lisp_frame.savefn]
-        str lr, [sp, #lisp_frame.savelr]
-        ldr imm0, [rcontext, #tcr.cs_limit] /* ppc:5340 ldr(imm0,tcr.cs_limit)  */
-        mov fn, nfn                     /* ppc:5341 mr fn,nfn                   */
-        cmp sp, imm0                    /* ppc:5342 trllt(sp,imm0)              */
-        b.hs 1f                         /* sp>=cs_limit: no overflow            */
-        uuo_interr error_stack_overflow, sp /* ppc:5342 trllt (PROPOSED ext) */
-1:      ret                             /* ppc:5343 blr                         */
-endsp savecontext0
 
 /* ported from ppc-spentry.s:5348-5353 (PPC64 branch) */
 /* Like restorefullcontext, only the saved return address winds up in
@@ -4634,8 +4380,6 @@ endsp stkvcell0
  *   - error_too_many_values uuo_interr trap convention (values, ppc:1235)
  *   - nrs.kallowotherkeys rnil-relative ref (keyword_bind ppc:1507,
  *     destructuring_bind_inner ppc:3753)
- *   - stack-overflow (trllt) trap convention (savecontextvsp ppc:5333;
- *     savecontext0 ppc:5342)
  *   - deferred-interrupt trap trgti (restoreintlevel ppc:6751)
  * PROPOSED (ratify): mask_initopt/keyp/aok/restp adopt the ARM32 bit layout
  * (arm-constants.s:561-567), NOT the PPC big-endian bit indices; must match
@@ -4680,28 +4424,6 @@ endsp stkvcell0
 
 /* ========== LOCAL HELPER MACROS ========== */
 
-/* lisp_frame: Matt's ARM-family MARKER frame, NOT PPC's backlink frame
- * (ground truth: his popj vinsn, compiler/ARM64/arm64-vinsns.lisp:61-67,
- * + subtag_lisp_frame_marker, arm64-constants.h:177).  Same equates as
- * spentry-A:55-59 / spentry-E.  Frame builds store #lisp_frame_marker at
- * slot 0; there is NO backlink word. */
-.set lisp_frame.marker, 0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn, 16
-.set lisp_frame.savelr, 24
-.set lisp_frame.size, 32
-
-/* symbol.fcell / function codevector: slot order from ppc-constants64.s
- * :237-245/:223-226.  Symbols keep their dedicated pointer tag; a function
- * is an ordinary miscobj (fulltag_function removed, patch 0055), so its
- * codevector slot sits at misc_data_offset (-4). */
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set _function.codevector, misc_data_offset
-
-/* vectorH.logsize: slot 0 of a (misc-tagged) vector header,
- * ppc-constants64.s:259-265 _structf(vectorH). */
-.set vectorH.logsize, misc_data_offset
-
 /* Lisp error selectors: errors.s deferr(NAME,N) = boxed fixnum N. */
 .set XSTKOVER,  (75<<fixnumshift)       /* errors.s:196  */
 .set XNOSPREAD, (120<<fixnumshift)      /* errors.s:202  */
@@ -4730,7 +4452,7 @@ endsp stkvcell0
         set_nargs \nargs_count
         ldr fname, [fname, #(misc_data_offset + (\idx) * node_size)]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 .endm
 
@@ -4739,13 +4461,13 @@ endsp stkvcell0
 /* ported from ppc-spentry.s:44-45 (PPC64 branch: jump_fname macro) */
 spentry jmpsym
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp jmpsym
 
 /* ported from ppc-spentry.s:47-48 (PPC64 branch: jump_nfn macro) */
 spentry jmpnfn
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp jmpnfn
 
@@ -4769,12 +4491,12 @@ spentry funcall
         cmp imm1, #subtag_function
         b.ne 3f
         mov nfn, temp0
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 2:      /* symbol: call its function cell (unchecked slot-0 jump) */
         mov fname, temp0
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 3:      /* ppc-macros.s do_funcall: uuo_interr(error_cant_call, temp0) */
         uuo_error_reg_not_callable temp0 /* his macro name */
@@ -4949,22 +4671,6 @@ spentry nthvalue
         ret
 endsp nthvalue
 
-/* ported from ppc-spentry.s:1270-1276 (PPC64 branch).
- * Come here with saved context on top of stack.  Tail into the shared
- * return_values entry exported by spentry-C (_spentry(values):
- * contract there is temp4 = return pc, temp0 = entry vsp). */
-/* pmcl-kernel.c:2110 takes &nvalret for lisp_global(LEXPR_RETURN)
-   (PPC exports it the same way, ppc-spentry.s:1267-1271). */
-        .globl C(nvalret)
-spentry nvalret
-C(nvalret):
-        ldr temp4, [sp, #lisp_frame.savelr]     /* ppc:1272 ldr loc_pc     */
-        ldr temp0, [sp, #lisp_frame.savevsp]    /* ppc:1273                */
-        ldr fn, [sp, #lisp_frame.savefn]        /* ppc:1274                */
-        discard_lisp_frame                      /* ppc:1275                */
-        b return_values                         /* ppc:1276 (.globl in C)  */
-endsp nvalret
-
 /* ========== OPTIONAL/REST/KEYWORD ARGUMENTS ========== */
 
 /* ported from ppc-spentry.s:1282-1293 (PPC64 branch).
@@ -5123,7 +4829,7 @@ endsp keyword_args
 spentry ksignalerr
         ref_nrs_symbol fname, errdisp   /* ppc:2021 li fname,nrs.errdisp   */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp ksignalerr
 
@@ -5224,7 +4930,7 @@ spentry call_closure
         b.ne .Lcc_set_arg_y                 /* ppc:2160                    */
 .Lcc_go:
         ldr nfn, [nfn, #(misc_data_offset + node_size)] /* ppc:2163 slot 1 */
-        ldr temp0, [nfn, #_function.codevector]         /* ppc:2164        */
+        ldr temp0, [nfn, #_function.code_vector]         /* ppc:2164        */
         br temp0                            /* ppc:2165-2166 mtctr+bctr    */
 endsp call_closure
 
@@ -5351,13 +5057,13 @@ spentry tcallsymgen
         mov vsp, imm0
         /* Jump to fname */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 
 2:      ldr vsp, [sp, #lisp_frame.savevsp]
         add sp, sp, #lisp_frame.size
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallsymgen
 
@@ -5378,7 +5084,7 @@ spentry tcallsymslide
         b.ne 1b
         mov vsp, imm0
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallsymslide
 
@@ -5405,7 +5111,7 @@ spentry tcallnfnslide
         str fname, [imm0, #-node_size]!
         b.ne 1b
         mov vsp, imm0
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp tcallnfnslide
 
@@ -5801,7 +5507,7 @@ spentry callbuiltin
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin
 
@@ -5813,7 +5519,7 @@ spentry callbuiltin0
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin0
 
@@ -5825,7 +5531,7 @@ spentry callbuiltin1
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin1
 
@@ -5837,7 +5543,7 @@ spentry callbuiltin2
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin2
 
@@ -5849,7 +5555,7 @@ spentry callbuiltin3
         add imm0, imm0, #misc_data_offset
         ldr fname, [fname, imm0]
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp callbuiltin3
 
@@ -6262,7 +5968,7 @@ spentry mvpasssym
         mov fn, xzr                     /* ppc:6896 li fn,0 */
         /* ppc:6898 jump_fname() */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp0, [nfn, #_function.codevector]
+        ldr temp0, [nfn, #_function.code_vector]
         br temp0
 endsp mvpasssym
 
@@ -6277,7 +5983,7 @@ endsp mvpasssym
  * trap encodings (canonical arm64-uuo.s scheme + PROPOSED extensions; see
  * the trap block above and spentry-A's namespace doc).  All other former
  * MISSING-CONSTANT holes are derived locally in the header block above
- * (symbol.fcell, _function.codevector, t_offset, lisp_frame marker layout,
+ * (symbol.fcell, _function.code_vector, t_offset, lisp_frame marker layout,
  * vectorH.logsize, XSTKOVER, XNOSPREAD, error_object_not_list). */
 
 /* PORT-TODO items requiring design decisions or missing mechanisms:
@@ -6383,41 +6089,6 @@ endsp mvpasssym
    Matt's tree; a C header, so re-equated here for the assembler). */
 .set TCR_STATE_LISP,    0
 .set TCR_STATE_FOREIGN, 1
-
-/* lisp_frame: Matt's ARM-family MARKER frame (ground truth: his popj vinsn,
-   compiler/ARM64/arm64-vinsns.lisp:61-67, + subtag_lisp_frame_marker,
-   arm64-constants.h:177).  Same equates as spentry-A:55-59. */
-.set lisp_frame.marker,  0
-.set lisp_frame.savevsp, 8
-.set lisp_frame.savefn,  16
-.set lisp_frame.savelr,  24
-.set lisp_frame.size,    32
-
-/* symbol.fcell / function codevector: slot order from ppc-constants64.s
-   :237-245/:223-226.  Symbols keep their dedicated pointer tag; a function
-   is an ordinary miscobj (fulltag_function removed, patch 0055), so its
-   codevector slot is misc_data_offset.  Same equates as spentry-A. */
-.set symbol.fcell, (3*node_size - fulltag_symbol)
-.set _function.codevector, misc_data_offset
-
-/* area: ppc-constants64.s:382-401 _struct(area,0).
-   16m41 CORRECTION: the note here said "Matt's tcr has NO
-   tcr.last_lisp_frame, so [writing area.active from asm] is the line-port".
-   STALE -- arm64-constants.h:470 (asm) / :531 (C) both carry
-   last_lisp_frame at this pin, and nothing in this file ever wrote
-   area.active either, so the boundary went unrecorded entirely.  The
-   protocol now lives in tcr.last_lisp_frame (see the macros above); the C
-   side does the area lookup in normalize_tcr, which also keeps the
-   cs_area->older chain consistent, something a raw asm store could not. */
-_struct area, 0
-  _node pred
-  _node succ
-  _node low
-  _node high
-  _node active
-  _node softlimit
-  _node hardlimit
-_ends
 
 /* c_frame (the outgoing-argument staging frame built by the compiler's
    alloc-c-frame vinsn) is defined in arm64-constants.h since upstream
@@ -6525,9 +6196,9 @@ _ends
  * re-ported there against the w13 aapcs64-ff-call codegen unit's
  * c_frame protocol ([backlink,savelr,params...]; entry point unboxed
  * from a macptr OR a fixnum-locative; no FPCR switching -- lisp runs
- * with the process-default FPCR; FPSR exception flags published to
- * tcr.foreign_fpsr per Matt's f067047 TCR).  The earlier draft that
- * lived here used the pre-w13 frame layout and the removed
+ * with the process-default FPCR; no FPSR access either -- the float
+ * wrappers own the flag window, see `spentry ffcall').  The earlier
+ * draft that lived here used the pre-w13 frame layout and the removed
  * tcr.lisp_mxcsr/ffi_exception slots. */
 
 /* Just like ffcall, but saves all AAPCS64 result registers into a buffer
@@ -6617,10 +6288,6 @@ spentry ffcall_return_registers
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* Open the FPSR capture window -- FPSR is cumulative, so clearing it
-           only on the way back publishes every flag raised since the PREVIOUS
-           ff-call.  Canonical note: `spentry ffcall' in arm64-spentry.s. */
-        msr fpsr, xzr
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
         blr temp4                               /* ppc:1849 bctrl            */
@@ -6636,10 +6303,8 @@ spentry ffcall_return_registers
         stp d6, d7, [save2, #((8*node_size) + 6*8)]
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
-         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * [save3, save3+80) is DEAD; run entirely from the hoist.
+         * No FPSR access -- the float wrappers own the flag window. ---- */
         mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
@@ -6745,17 +6410,13 @@ spentry ffcall_indirect_result
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
-        /* FPSR capture window -- canonical note: `spentry ffcall'. */
-        msr fpsr, xzr
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
         blr temp4
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
-         * [save3, save3+80) is DEAD; run entirely from the hoist. ---- */
-        mrs imm1, fpsr
-        str imm1, [rcontext, #tcr.foreign_fpsr]
-        msr fpsr, xzr
+         * [save3, save3+80) is DEAD; run entirely from the hoist.
+         * No FPSR access -- the float wrappers own the flag window. ---- */
         mov sp, save1                       /* retreat onto the boundary frame */
         mov arg_w, rnil
         mov arg_x, rnil
@@ -6944,7 +6605,7 @@ spentry callback
         set_nargs 2
         ref_nrs_symbol fname, callbacks         /* ppc:5157 li fname,nrs.callbacks */
         ldr nfn, [fname, #symbol.fcell]
-        ldr temp4, [nfn, #_function.codevector]
+        ldr temp4, [nfn, #_function.code_vector]
         blr temp4
         /* Lisp wrote the result into CBF+0/+8 / CBF-64..-40 (glue
            contract; a >16-byte non-HFA record went through the pointer
@@ -7009,15 +6670,19 @@ endsp callback
  * lisp<->foreign transition) with the AArch64 syscall sequence
  * in the middle instead of a call. */
 spentry syscall
-        /* Spill ALL boxed NVRs - same GC-visibility contract as ffcall
-         * (a thread in a syscall has gc_context = NULL, so the GC sees
-         * only the vstack; boxed values left in x19-x21 would be
-         * invisible while foreign and stale after a compacting GC). */
+        /* fn + all four boxed NVRs, exactly as `spentry ffcall'
+         * (arm64-spentry.s -- the CANONICAL NOTE for this whole body), and for
+         * the same reason: the vstack copies are what the GC forwards while
+         * this thread is foreign.  The kernel preserves x19-x22 across the
+         * trap, but preservation is not FORWARDING -- a lisp value that
+         * survives only in an NVR misses any relocation a foreign-era GC
+         * applied.  PPC64 vpush_saveregs()es all eight of its save regs here
+         * (ppc:5404) for exactly this; two of five was an arm64 shortfall. */
         str fn, [vsp, #-node_size]!             /* ppc:5404 vpush_saveregs   */
-        str save0, [vsp, #-node_size]!
-        str save1, [vsp, #-node_size]!
-        str save2, [vsp, #-node_size]!
         str save3, [vsp, #-node_size]!
+        str save2, [vsp, #-node_size]!
+        str save1, [vsp, #-node_size]!
+        str save0, [vsp, #-node_size]!
         mov save3, sp
         /* Park lr in the boundary lisp_frame his alloc-c-frame RESERVED at the
          * frame top, and publish it by shrinking the header count by 4.  The
@@ -7042,37 +6707,46 @@ spentry syscall
         sub imm0, imm0, #(4 << num_subtag_bits)
         str imm0, [sp, #c_frame.header]
         stp fn, lr, [imm2, #lisp_frame.savefn]
+        /* Cross-trap hoist (canonical note: `spentry ffcall'): everything the
+         * return path needs, in callee-saved registers, so that path never
+         * reads the c_frame head -- and never reads BELOW SP, which is what
+         * the old return path did. */
+        mov save1, imm2                         /* boundary lisp_frame       */
+        ldr save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary    */
         /* Publish lisp state to the TCR for the GC, then go foreign
            (ppc:5405-5422). */
         str vsp, [rcontext, #tcr.save_vsp]
         str tsp, [rcontext, #tcr.save_tsp]
         str allocptr, [rcontext, #tcr.save_allocptr]
         str allocbase, [rcontext, #tcr.save_allocbase]
-        str xzr, [rcontext, #tcr.foreign_fpsr]  /* syscalls raise no FP
-                           exceptions; publish a clean slate (PPC zeroes
-                           ffi_exception here, ppc:5415-5419) */
+        /* (No tcr.foreign_fpsr store: the slot is no longer consumed --
+           the float wrappers read the live FPSR; see `spentry ffcall'.) */
         /* Syscall number + up to 6 args (ppc:5424-5432 loads r3-r10 + r0). */
 #ifdef DARWIN
         asr x16, arg_z, #fixnumshift            /* Darwin: number in x16 */
 #else
-        asr x8, arg_z, #fixnumshift             /* Linux: number in x8 */
+        asr x8, arg_z, #fixnumshift             /* ppc:5432 unbox_fixnum     */
 #endif
         ldp x0, x1, [sp, #c_frame.params]
         ldp x2, x3, [sp, #(c_frame.params + 2*node_size)]
         ldp x4, x5, [sp, #(c_frame.params + 4*node_size)]
-        /* 16m41 PARITY (this spentry goes foreign exactly like ffcall and was
-         * missing the same bookkeeping): park the enclosing boundary in the
-         * now-dead param word 0, then record the boundary and only then
-         * advertise foreign valence.  Unlike ffcall this frame is POPPED
-         * before the trap, so the boundary is taken AFTER the pop and names
-         * live stack -- the caller's own region, since the c_frame (still
-         * intact below SP, which is what the return path already relies on)
-         * has nothing the GC needs. */
-        ldr temp0, [rcontext, #tcr.last_lisp_frame]
-        str temp0, [sp, #c_frame.params]
-        add sp, sp, #(c_frame.size + 8*node_size)
-        mov temp0, sp
-        str temp0, [rcontext, #tcr.last_lisp_frame]
+        /* Boundary bookkeeping + valence, identical to `spentry ffcall' in
+         * arm64-spentry.s (the ordering rationale lives there): the boundary
+         * is the PUBLISHED boundary lisp_frame, stored BEFORE the valence
+         * flip so a GC that suspends us foreign finds it.
+         *
+         * ARM64-DEVIATION vs the three ff-call siblings: there is NO SP step
+         * here.  They step SP over the frame head so the callee sees its NSAA
+         * stack arguments at [SP] (AAPCS64 5.4.2); a Linux/AArch64 syscall has
+         * no stack arguments at all -- x8 is the number and x0-x5 are the <=6
+         * integer arguments -- so the step would expose nothing.  Leaving SP
+         * at the frame head keeps the whole c_frame ABOVE SP for the duration
+         * of the trap, and removes every below-SP read the old return path
+         * relied on.  It also drops an unstated assumption: the old code took
+         * `sp + c_frame.size + 8*node_size' to BE the boundary lisp_frame,
+         * which only holds while the frame has exactly 8 param words; save1
+         * is the address the header count actually strides to. */
+        str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
 #ifdef DARWIN
@@ -7081,31 +6755,22 @@ spentry syscall
         neg x0, x0                              /* errno -> -errno */
 1:
 #else
-        svc #0                                  /* Linux AArch64 syscall */
+        svc #0                                  /* ppc:5433 sc               */
 #endif
-        /* ---- return path (x0 = raw result / -errno) (ppc:5455-5489) ---- */
-        ldr allocptr,  [rcontext, #tcr.save_allocptr]   /* ppc:5470-5472     */
-        ldr allocbase, [rcontext, #tcr.save_allocbase]
-        /* lr from the boundary lisp_frame; sp from the SAVED SP word, not the
-         * header at offset 0 (16m30).  Count is already shrunk by 4, so
-         * reserved_base = save3 + node_size*(count+1).  imm1/imm2 only. */
-        ldr imm1, [save3, #c_frame.header]
-        lsr imm1, imm1, #num_subtag_bits
-        add imm1, imm1, #1
-        add imm2, save3, imm1, lsl #node_shift
-        ldr lr, [imm2, #lisp_frame.savelr]
-        ldr imm1, [save3, #c_frame.savedsp]
-        /* Hand the enclosing foreign boundary back BEFORE sp moves (16m41). */
-        ldr imm2, [save3, #c_frame.params]
-        str imm2, [rcontext, #tcr.last_lisp_frame]
-        mov sp, imm1
-        /* Reload the boxed NVRs from the vstack - the GC may have moved
-         * the objects they reference while we were foreign. */
-        ldr save3, [vsp], #node_size
-        ldr save2, [vsp], #node_size
-        ldr save1, [vsp], #node_size
-        ldr save0, [vsp], #node_size
-        ldr fn, [vsp], #node_size
+        /* ---- return path (x0 = raw result / -errno) (ppc:5455-5489) ----
+         * Order is PPC64's, instruction for instruction: make every node
+         * register GC-valid, flip to lisp valence, and only THEN reload
+         * anything a foreign-era GC may have moved.  ppc:5478-5487 flips
+         * tcr.valence and then does vpop_saveregs / ldr savelr / ldr savefn /
+         * discard_lisp_frame; x86-spentry64.s:4619 syscall stores
+         * TCR_STATE_LISP and only then pops fn and the rest.  Both ports do
+         * the reloads AFTER the flip because the GC forwards the vstack slot
+         * and the TCR slot but never the register: popping while still
+         * FOREIGN makes a stale node pointer live at the flip, and `fn' --
+         * a function pointer -- is the worst of them.
+         * No scratch register is used at all, so x0 (the result) and imm1-5
+         * are untouched on this path. */
+        mov sp, save1                       /* onto the boundary lisp_frame  */
         mov arg_w, rnil                         /* ppc:5461-5468             */
         mov arg_x, rnil
         mov arg_y, rnil
@@ -7117,7 +6782,25 @@ spentry syscall
         mov temp4, rnil
         mov temp5, rnil
         mov nargs, xzr
+        mov fn, rnil
+        mov save1, xzr
+        mov save2, xzr
+        mov save3, xzr
+        mov allocptr,  #-dnode_size         // VOID_ALLOCPTR (ppc idiom)
+        mov allocbase, #-dnode_size
         str xzr, [rcontext, #tcr.valence]       /* TCR_STATE_LISP; ppc:5481  */
+        /* save0 is a raw cstack address, so it reads as a fixnum and is
+         * GC-valid across the flip without being nil'd. */
+        str save0, [rcontext, #tcr.last_lisp_frame] /* enclosing boundary back */
+        ldr lr, [sp, #lisp_frame.savelr]    /* post-flip: GC-forwarded       */
+        ldr save0, [vsp], #node_size
+        ldr save1, [vsp], #node_size
+        ldr save2, [vsp], #node_size
+        ldr save3, [vsp], #node_size
+        ldr fn,    [vsp], #node_size
+        ldr allocptr,  [rcontext, #tcr.save_allocptr]   /* ppc:5470-5472     */
+        ldr allocbase, [rcontext, #tcr.save_allocbase]
+        add sp, sp, #lisp_frame.size        /* drop the frame: sp = prev SP  */
         check_pending_interrupt                 /* ppc:5488                  */
         ret                                     /* ppc:5489 blr              */
 endsp syscall
@@ -7170,7 +6853,7 @@ spentry lexpr_entry
         ldr imm0, [rcontext, #tcr.cs_limit]
         cmp sp, imm0
         b.hi 2f
-        uuo_interr error_stack_overflow, sp /* ppc:5371 trllt (PROPOSED ext) */
+        uuo_error_cstack_overflow
 2:      mov fn, #0                              /* ppc:5372                  */
         ret                                     /* ppc:5373 blr (to prologue)*/
         /* Single-value case: return to something that pops the variable-
@@ -7180,7 +6863,7 @@ spentry lexpr_entry
         ldr imm0, [rcontext, #tcr.cs_limit]     /* ppc:5379-5380             */
         cmp sp, imm0
         b.hi 3f
-        uuo_interr error_stack_overflow, sp /* ppc:5380 trllt (PROPOSED ext) */
+        uuo_error_cstack_overflow
 3:      mov fn, #0                              /* ppc:5381                  */
         ret                                     /* ppc:5382 blr              */
 endsp lexpr_entry

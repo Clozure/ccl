@@ -203,7 +203,8 @@
 (defvar *arm642-emitted-source-notes* nil)
 
 (defvar *arm642-result-reg* arm64::arg_z)
-(defparameter *arm642-nvrs* nil)
+(defparameter *arm642-nvrs* (list arm64::save0 arm64::save1
+                                  arm64::save2 arm64::save3))
 (defparameter *arm642-first-nvr* -1)
 
 (defvar *arm642-gpr-locations* nil)
@@ -617,6 +618,10 @@
                        (setq debug-info (list* 'function-symbol-map *arm642-recorded-symbols* debug-info)))
                      (when (and (getf debug-info '%function-source-note) *arm642-emitted-source-notes*)
                        (setq debug-info (list* 'pc-source-map *arm642-emitted-source-notes* debug-info)))
+                     ;; Reserve the REGISTER-SAVE-INFO slot now (real value
+                     ;; needs label addresses assigned by FINALIZE below).
+                     (when *arm642-register-restore-count*
+                       (setq debug-info (list* 'register-save-info t debug-info)))
                      (when debug-info
                        (setq bits (logior (ash 1 $lfbits-info-bit) bits))
                        (backend-new-immediate debug-info))
@@ -638,7 +643,16 @@
                              (arm642-generate-pc-source-map debug-info)))
                      (when (getf debug-info 'function-symbol-map)
                        (setf (getf debug-info 'function-symbol-map)
-                             (arm642-digest-symbols)))))))))
+                             (arm642-digest-symbols)))
+                     ;; FINALIZE has now assigned the save-note's label,
+                     ;; so the real record can be filled into the slot
+                     ;; reserved above.
+                     (when *arm642-register-restore-count*
+                       (setf (getf debug-info 'register-save-info)
+                             (arm642-encode-regsave-info
+                              *arm642-compiler-register-save-note*
+                              *arm642-register-restore-ea*
+                              *arm642-register-restore-count*)))))))))
     afunc))
 
 (defun arm642-xmake-function (code imms bits)
@@ -647,6 +661,47 @@
       (lap-imms (cons (aref imms i) i)))
     (let* ((arm64::*constants* (lap-imms)))
       (arm64-lap-generate-code code (arm64::finalize code) bits))))
+
+;;; Register-save record: a packed fixnum recording where the function
+;;; saved save0..save(nregs-1).  It rides in the function's %LFUN-INFO
+;;; plist under REGISTER-SAVE-INFO -- alongside FUNCTION-SYMBOL-MAP,
+;;; which backtrace already reads from there -- NOT in the code vector.
+;;; lib/arm64-backtrace.lisp's REGISTERS-USED-BY reads it back.  This is
+;;; PPC's scheme (ppc-lap.lisp:68 / lib/ppc-backtrace.lisp:101-134) with
+;;; the storage moved off the instruction stream: nothing is appended to
+;;; the code vector, so no reserved-encoding marker, disjointness
+;;; argument, or last-instruction scan is needed, and the metadata stays
+;;; in ordinary heap where a future execute-only code region cannot
+;;; strand it.
+;;;   bits  2..0   nregs  1..4
+;;;   bits 28..3   pc     save-COMPLETION pc in words, %cfp-lfun origin
+;;;                       (label bytes/4 + 1 prefix word + nregs instructions)
+;;;   bits 54..29  ea     *arm642-register-restore-ea* in 8-byte cells
+;;; Total 55 bits, inside an arm64 fixnum (>= 61 value bits).  The 26-bit
+;;; pc/ea fields hold any real function (a 256M-instruction prologue /
+;;; 512MB frame); the pack still returns NIL if one somehow overflows, so
+;;; a wrong packing can never reach the walk.  NIL also results when
+;;; nothing was saved or the save-nvrs vinsn was optimized away (its note
+;;; then never got a label).  REGISTERS-USED-BY then answers (nil nil) as
+;;; it did when the pool was empty, and the register walk degrades to the
+;;; xp/catch-frame fallback.  Keep this layout in sync with the LDB
+;;; fields in REGISTERS-USED-BY.
+(defun arm642-encode-regsave-info (note restore-ea nregs)
+  (when (and (typep note 'vinsn-note)
+             nregs
+             (> nregs 0)
+             restore-ea)
+    (let* ((lap-label (vinsn-note-address note))
+           (addr (and lap-label (arm64::label-address lap-label))))
+      (when addr
+        (let* ((pc-words (+ (ash addr -2) 1 nregs))
+               (ea-cells (ash restore-ea (- arm64::word-shift))))
+          (declare (fixnum pc-words ea-cells))
+          (when (and (< pc-words (ash 1 26))
+                     (< ea-cells (ash 1 26)))
+            (logior nregs
+                    (ash pc-words 3)
+                    (ash ea-cells 29))))))))
 
 (defun arm642-make-stack (size &optional (subtype target::subtag-s16-vector))
   (make-uarray-1 subtype size t 0 nil nil nil nil t nil))
@@ -895,7 +950,11 @@
     (setq *arm642-register-restore-ea* *arm642-vstack*
           *arm642-register-restore-count* n)))
 
-(defun arm642-restore-nvrs (seg multiple-values-on-stack)
+;;; ARM64-DEVIATION: base-reg follows PPC64's ppc2-restore-nvrs base
+;;; parameter (default vsp).  A tail spread call passes a PRE-spread
+;;; vsp snapshot, because the spread subprim moves vsp at run time.
+(defun arm642-restore-nvrs (seg multiple-values-on-stack
+                            &optional (base-reg arm64::vsp))
   (let* ((ea *arm642-register-restore-ea*)
          (n *arm642-register-restore-count*))
     (when (and ea n)
@@ -903,7 +962,7 @@
         (let* ((diff (- *arm642-vstack* ea)))
           (if (and (eql 0 diff)
                    (not multiple-values-on-stack))
-            (! restore-nvrs n arm64::vsp)
+            (! restore-nvrs n base-reg)
             ;; ARM64-DEVIATION: rebind the temp-register masks around the
             ;; scratch selection.  The ARM32 original (arm2.lisp, same
             ;; function) calls SELECT-IMM-TEMP/SELECT-NODE-TEMP here with the
@@ -929,13 +988,13 @@
                          :class hard-reg-class-gpr
                          :mode hard-reg-class-gpr-mode-node)))
               (if (eql 0 diff)
-                (! fixnum-add reg arm64::vsp arm64::nargs)
+                (! fixnum-add reg base-reg arm64::nargs)
                 (progn
                   (if (< diff 4096)
-                    (! add-immediate reg arm64::vsp diff)
+                    (! add-immediate reg base-reg diff)
                     (progn
                       (arm642-lri seg reg diff)
-                      (! fixnum-add reg arm64::vsp reg)))
+                      (! fixnum-add reg base-reg reg)))
                   (when multiple-values-on-stack
                     (! fixnum-add reg reg arm64::nargs))))
               (! restore-nvrs n reg))))))))
@@ -1161,9 +1220,23 @@
 (defun arm642-lexpr-entry (seg num-fixed)
   (with-arm64-local-vinsn-macros (seg)
     (! save-lexpr-argregs num-fixed)
+    ;; ARM64-DEVIATION: build the frame BEFORE the fixed-arg copies --
+    ;; x86-64's order (x862-lexpr-entry), not PPC64's.
+    ;; save-lisp-context-lexpr stores the CURRENT vsp as the frame's
+    ;; savevsp, and the backtrace decoder (map-entry-value ->
+    ;; %raw-frame-ref) uses that savevsp as the symbol map's vloc-0
+    ;; origin.  The origin is the lexpr count cell; each
+    ;; copy-lexpr-argument push moves vsp one word below it, so the
+    ;; copies-then-frame order records a savevsp 8*num-fixed bytes low
+    ;; and every symbol-map entry of a lexpr function reads one slot
+    ;; below its variable (Clozure/ccl#600: MORE decodes to the fixnum
+    ;; count, and %lexpr-count then reads machine address 8).  The
+    ;; savevsp slot is dead on the return path -- popj / nvalret
+    ;; restore vsp from the frames .SPlexpr-entry built -- so only the
+    ;; decoder sees the difference.
+    (! save-lisp-context-lexpr)
     (dotimes (i num-fixed)
-      (! copy-lexpr-argument))
-    (! save-lisp-context-lexpr)))
+      (! copy-lexpr-argument))))
 
 (defun arm642-load-lexpr-address (seg dest)
   (with-arm64-local-vinsn-macros (seg)
@@ -2849,10 +2922,33 @@
       (if spread-p
         (progn
           (arm642-set-nargs seg (%i- nargs 1))
+          ;; ARM64-DEVIATION: snapshot the pre-spread vsp, following
+          ;; PPC64 (ppc2.lisp:2385-2386).  spreadargz/spread_lexprz
+          ;; preserve temp1 (x13): arm64-spentry.s shows both touch
+          ;; only imm0/imm1/arg_x/arg_y/arg_z/nargs/vsp.  The spread
+          ;; vinsns' own scratch is imm1, so temp1 survives into the
+          ;; restore below.
+          (when (and tail-p *arm642-register-restore-count*)
+            (! copy-gpr ($ arm64::temp1) ($ arm64::vsp)))
           (if (eq spread-p 0)
             (! spread-lexpr)
             (! spread-list))
-          (arm642-restore-nvrs seg nil)
+          ;; ARM64-DEVIATION: guarded with tail-p, following PPC64
+          ;; (ppc2.lisp:2383-2391, `(when (and tail-p
+          ;; *ppc2-register-restore-count*) ...)') and x86-64
+          ;; (x862.lisp:3512).  ARM32 (arm2.lisp:2832) leaves it
+          ;; unguarded and ARM64 inherited that form.  Unguarded, every
+          ;; NON-tail (apply f list) reloads the caller's saved NVRs over
+          ;; this frame's live NVR-homed lexicals just before the call.
+          ;; The restore lives in this branch because the tail-p block
+          ;; above defers to it ((unless spread-p ...)) -- but that branch
+          ;; runs for non-tail calls too.  Invisible while *arm642-nvrs*
+          ;; is nil.  A tail spread of more than $numarm64argregs
+          ;; arguments pushes value-stack words and moves vsp below
+          ;; the save area, so the restore reads relative to the
+          ;; PRE-spread snapshot in temp1, as PPC64 does.
+          (when tail-p
+            (arm642-restore-nvrs seg nil arm64::temp1))
           (arm642-restore-non-volatile-fprs seg)
           (! restore-nfp))
         (if nargs
@@ -5882,6 +5978,22 @@
       (with-arm64-p2-declarations p2decls
         (setq *arm642-inhibit-register-allocation*
               (setq no-regs (%ilogbitp $fbitnoregs fbits)))
+        ;; ARM64-DEVIATION: x86-64's guard (x862.lisp:7297-7305), ported
+        ;; verbatim.  A float-typed lexical must never win a GPR NVR:
+        ;; homing one there boxes the value on every setq, which turns an
+        ;; unboxed accumulator loop into an allocation loop (measured
+        ;; Measured under the pool: float-sum-unboxed 2.4 -> 4.3 ns/it,
+        ;; aref-df-declared 9955 -> 11830).  PPC64 has no such guard;
+        ;; the donor here is the port that added one.
+        (unless no-regs
+          (dolist (v (afunc-all-vars afunc))
+            (let* ((type (acode-var-type v *arm642-trust-declarations*)))
+              (when (or (subtypep type 'single-float)
+                        (subtypep type 'double-float)
+                        (subtypep type '(complex single-float))
+                        (subtypep type '(complex double-float)))
+                (nx-set-var-bits v (logior (ash 1 $vbitnoreg)
+                                           (nx-var-bits v)))))))
         (multiple-value-setq (pregs reglocatives)
 
           (nx2-afunc-allocate-global-registers afunc (unless no-regs *arm642-nvrs*)))
@@ -9887,6 +9999,24 @@
     (ensuring-node-target (target vreg)
       (! %current-frame-ptr target)))
   (^))
+
+;;; WITH-C-FRAME: allocate a c-frame of the default size around BODY.
+;;; The fixed-size half of the pair below; every other back end defines
+;;; both (ppc2.lisp ppc2-with-c-frame / arm2.lisp arm2-with-c-frame /
+;;; x862.lisp x862-with-c-frame), and this one is byte-for-byte the
+;;; x86-64 shape because arm64, like x86-64, has a single c-frame vinsn
+;;; and no EABI variant to ecase over.
+;;;
+;;; The only in-tree caller is the objc-bridge (objc-runtime.lisp:3207,
+;;; 3223), which is Darwin-only -- so this is latent on linuxarm64.  It
+;;; is NOT latent on darwinarm64: arm642.lisp is the back end for both
+;;; arm64 targets, so without this handler the bridge has no locative
+;;; for the operator and simply cannot compile there.
+(defarm642 arm642-with-c-frame with-c-frame (seg vreg xfer body &aux
+                                                 (old-stack (arm642-encode-stack)))
+  (! alloc-c-frame 0)
+  (arm642-open-undo $undo-arm64-c-frame)
+  (arm642-undo-body seg vreg xfer body old-stack))
 
 ;;; WITH-VARIABLE-C-FRAME: allocate a c-frame of SIZE param words around
 ;;; BODY.  Model: x862-with-variable-c-frame (x862.lisp); the
