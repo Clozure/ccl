@@ -4209,9 +4209,17 @@
   (generic-character-read-list s list count))
 
 (defmethod stream-read-vector ((s concatenated-stream) vector start end)
-  (if (subtypep (stream-element-type s) 'character)
-      (generic-character-read-vector s vector start end)
-    (generic-binary-read-vector s vector start end)))
+  (let ((c (concatenated-stream-current-input-stream s)))
+    (loop
+      ;; Check if any work needs or can be done
+      (when (or (null c) (>= start end))
+        (return start))
+      ;; Read and pop a stream if the current hasn't entirely
+      ;; fulfilled the request
+      (let ((first-not-done (stream-read-vector c vector start end)))
+        (when (< first-not-done end)
+          (setq c (concatenated-stream-next-input-stream s)))
+        (setq start first-not-done)))))
 
 (defmethod stream-unread-char ((s concatenated-stream) char)
   (let* ((c (concatenated-stream-current-input-stream s)))
