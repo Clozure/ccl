@@ -242,6 +242,23 @@ _SP\name:
         mov nargs, #((\n)<<fixnumshift)
 .endm
 
+/*
+ * Build a lisp frame on the control stack, saving the current vsp,
+ * fn, and lr there.  This two-stp sequence is the sole sanctioned way
+ * to build a lisp frame: pc_luser_xp recognizes this sequence so that
+ * if a thread is suspended between the two stps, it will zero the
+ * not-yet-stored savefn and savelr slots in the frame.  Compare with
+ * the save-lisp-context vinsns.
+ *
+ * tmp is a register to contain the lisp frame marker; the marker is an
+ * immediate, so pass an :imm register, not a node temp.
+ */
+.macro build_lisp_frame tmp
+        mov \tmp, #lisp_frame_marker
+        stp \tmp, vsp, [sp, #-lisp_frame.size]!
+        stp fn, lr, [sp, #lisp_frame.savefn]
+.endm
+
 /* pop a lisp frame off the control stack */
 .macro discard_lisp_frame
         add sp, sp, #lisp_frame.size

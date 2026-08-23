@@ -2102,36 +2102,7 @@ extern opcode
    tsp = x24 (arm64-asm.lisp:215). */
 #define MARK_TSP_FRAME_INSTRUCTION 0xF9000718
 
-/* Marker lisp-frame creation + slot stores (the drafts' canonical build
-   order: sub sp,sp,#32; str marker@0; str vsp@8; str fn@16; str lr@24 --
-   spentry-A misc_alloc_init:661-666 et al.).
-   SUB sp,sp,#32: 0xD1000000 | (32<<10) | (31<<5) | 31 = 0xD10083FF.
-   STR Xt,[sp,#imm]: 0xF9000000 | (imm>>3)<<10 | (31<<5) | Rt. */
-#define CREATE_LISP_FRAME_INSTRUCTION 0xD10083FF
-#define IS_STR_TO_SP(i) (((i) & 0xFFC003E0) == 0xF90003E0)
-#define STR_TO_SP_DISP(i) ((((i) >> 10) & 0xfff) << 3)
 
-/* The stp-pair marker-frame build (compiler save-lisp-context vinsns,
-   spentry build_catch_lisp_frame, mvpass, mvpasssym and lexpr_entry
-   FRAME-A/FRAME-B):
-       mov Xm, #lisp_frame_marker
-       stp Xm, Xv,  [sp, #-32]!     <- frame created; marker+savevsp stored
-       stp Xa, Xb,  [sp, #16]       <- savefn, savelr
-   STP (64-bit, signed offset) Xa,Xb,[sp,#16]:
-     0xA9000000 | (16>>3)<<15 | Rt2<<10 | 31<<5 | Rt; Rt/Rt2 masked out
-     (fn/lr in most builds, xzr/temp4 in the lexpr prologue).
-   STP (64-bit, pre-index) Xm,Xv,[sp,#-32]!:
-     0xA9800000 | ((-32>>3)&0x7f)<<15 | Rt2<<10 | 31<<5 | Rt; Rt/Rt2
-     masked out (the marker register is any :imm temp; Xv is vsp in the
-     vinsn and catch builds, a computed entry-vsp in imm0 at mvpass,
-     mvpasssym and lexpr_entry FRAME-A). */
-#define IS_STP_PAIR_TO_SP16(i) (((i) & 0xFFFF83E0) == 0xA90103E0)
-/* stp Xt, Xt2, [sp, #-32]! -- the marker-frame push.  Rt2 is free:
-   the compiler vinsns and build_catch_lisp_frame push vsp, but
-   mvpass, mvpasssym and lexpr_entry FRAME-A push a computed
-   entry-vsp from imm0 (16m87 W5).  The stored marker word is
-   confirmed at run time instead (case (a2) below). */
-#define IS_STP_MARKER_PUSH(i) (((i) & 0xFFFF83E0) == 0xA9BE03E0)
 
 /*
  * Identify where we are in the consing sequence according to the
@@ -2305,54 +2276,64 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     return;
   }
 
-  /* (a) storing into a newly-allocated lisp frame on the stack.
-     ppc:1992-2032, re-derived for the marker frame: PPC detects a std
-     to sp with a CREATE_LISP_FRAME (stdu) 1-3 instructions back and
-     zeroes the not-yet-stored slots so the GC never sees garbage in a
-     fresh frame.  The ARM64 marker frame is built sub sp,sp,#32 then
-     marker@0 / savevsp@8 / savefn@16 / savelr@24 in that order
-     (drafts' canonical sequence).  PROPOSED: compiler-emitted frame
-     builds must keep this store order (flagged in the report; ARM32
-     never had this window because its stmdb build was atomic). */
-  if (IS_STR_TO_SP(instr) &&
-      ((program_counter[-1] == CREATE_LISP_FRAME_INSTRUCTION) ||
-       (program_counter[-2] == CREATE_LISP_FRAME_INSTRUCTION) ||
-       (program_counter[-3] == CREATE_LISP_FRAME_INSTRUCTION))) {
-    natural disp = STR_TO_SP_DISP(instr);
+  /*
+   * Ensure GC safety when building lisp frames on the control stack
+   *
+   * The canonical way to build a lisp frame on the control stack is
+   * to use a pair of stp instructions.  In the most general form, the
+   * sequence looks like this (note that the stp instructions must be
+   * adjacent; it doesn't matter when the marker is loaded):
+   *
+   *  mov Xm, #lisp_frame_marker
+   *  stp Xm, Xv, [sp, #-32]!      // create frame; store marker and savevsp
+   *  stp Xa, Xb, [sp, #16]        // store savefn and savelr
+   *
+   * The hazard is that if the GC runs after the first stp has
+   * executed but before the second (remember that in CCL a GC can
+   * occur at any instruction boundary), it will get confused because
+   * the savefn and savelr slots in the lisp frame will be arbitrary
+   * stack junk: we haven't stored to them yet.
+   *
+   * We detect that situation here.  When we match, the first stp will
+   * have already executed.  It will have decremented the stack
+   * pointer and stored the marker and savevsp.  We confirm that this
+   * is really a lisp frame being built by testing whether
+   * frame->marker == lisp_frame_marker.  If so, we zero the savefn
+   * and savelr slots in the frame to prevent the GC from seeing the
+   * leftover stack junk that would otherwise be there.  When the
+   * thread resumes, the second stp will execute and fill in the real
+   * values.
+   *
+   * We match the general form (by masking the register operand fields
+   * of the instruction) because any one of the registers can vary:
+   *
+   * Xm  marker    any free scratch
+   * Xv  savevsp   often the current vsp, but can also be a computed
+   *               caller-vsp where the callee already pushed values (spread
+   *               multiple values, a lexpr arg vector) or else received
+   *               stack args
+   * Xa  savefn    fn, or sometimes xzr for a frame that owns no function
+   * Xb  savelr    lr, a fixed kernel return address (ret1val_addr
+   *               or lexpr_return) for a frame that returns into a
+   *               subprim rather than to its caller
+   */
 
-    if (disp < lisp_frame_size) {
-      /* Slots at and above `disp' haven't been stored yet: zero them
-         (the interrupted store re-executes on resume).  If even the
-         marker hasn't landed, plant it so the frame is walkable. */
-      if (disp == 0) {
-        frame->marker = lisp_frame_marker;
-      }
-      if (disp <= 8) {
-        frame->savevsp = 0;
-      }
-      if (disp <= 16) {
-        frame->savefn = 0;
-      }
-      frame->savelr = 0;          /* disp <= 24 always true here */
-      return;
-    }
-  }
+/*
+ * stp Xt, Xt2, [sp,#-32]! (pre-index, 64-bit)
+ *  0xA9800000 | (imm7<<15) | (Rt2<<10) | (Rn<<5) | Rt
+ *  mask Rt (4:0) and Rt2 (14:10) (both registers vary)
+ *  keep opcode, imm7=-4 (=-32/8), Rn=31(sp): mask 0xFFFF83E0, match 0xA9BE03E0
+ */
+#define IS_STP_MARKER_PUSH(i) (((i) & 0xFFFF83E0) == 0xA9BE03E0)
 
-  /* (a2) the stp-pair marker-frame build:
-         mov Xm, #lisp_frame_marker
-         stp Xm, vsp, [sp, #-32]!    <- frame created + marker,savevsp stored
-     --> stp fn, lr,  [sp, #16]      <- interrupted HERE
-     (compiler save-lisp-context-no-stack-args / save-lisp-context-lexpr
-     (stp xzr,temp4), spentry build_catch_lisp_frame, and -- 16m87 W5 --
-     mvpass, mvpasssym and lexpr_entry FRAME-A/FRAME-B).  The frame shows
-     a valid marker with GARBAGE savefn (node-scanned) and savelr
-     (locative-scanned); zero both -- the interrupted stp re-executes on
-     resume.  The save-lisp-context vinsn comment has claimed since its
-     port that pc_luser_xp recognizes this build; case (a) above only ever
-     matched single-str builds, so until 16m86 nothing did.
-     The push recognizer no longer pins Rt2 to vsp, so the marker word
-     the completed push stored is checked instead: at this PC the push
-     HAS executed, so a real frame build always passes. */
+/*
+ * stp Xt, Xt2, [sp,#16] (signed offset, 64-bit)
+ *  0xA9000000 | (imm7<<15) | (Rt2<<10) | (Rn<<5) | Rt
+ *  mask Rt (4:0) and Rt2 (14:10) (both registers vary)
+ *  keep opcode, imm7=2 (=16/8), Rn=31(sp): mask 0xFFFF83E0, match 0xA90103E0
+ */
+#define IS_STP_PAIR_TO_SP16(i) (((i) & 0xFFFF83E0) == 0xA90103E0)
+
   if (IS_STP_PAIR_TO_SP16(instr) &&
       IS_STP_MARKER_PUSH(program_counter[-1]) &&
       (frame->marker == lisp_frame_marker)) {

@@ -1001,18 +1001,13 @@ spentry misc_alloc_init
          * relocates it in place.  The TSTACK twin below could not keep it:
          * _SPstack_misc_alloc uses temp0 as its frame-zeroing cursor.  If
          * misc_alloc ever grows a temp0 use, this breaks the same way. */
-        sub     sp, sp, #lisp_frame.size
-        mov     temp4, #lisp_frame_marker
-        str     temp4, [sp, #lisp_frame.marker]
-        str     vsp,   [sp, #lisp_frame.savevsp]
-        str     fn,    [sp, #lisp_frame.savefn]
-        str     x30,   [sp, #lisp_frame.savelr]
+        build_lisp_frame imm0
         mov     fn, xzr
         mov     temp0, arg_z                       /* initval */
         mov     arg_z, arg_y                        /* subtag */
         mov     arg_y, arg_x                         /* element-count */
         bl      _SPmisc_alloc
-        ldr     x30, [sp, #lisp_frame.savelr]
+        ldr     lr,  [sp, #lisp_frame.savelr]
         ldr     fn,  [sp, #lisp_frame.savefn]
         ldr     vsp, [sp, #lisp_frame.savevsp]
         add     sp, sp, #lisp_frame.size
@@ -1038,17 +1033,12 @@ spentry stack_misc_alloc_init
          * see the note on the heap twin above).  The push precedes savevsp so an
          * unwind restores a vsp that still covers the parked word. */
         str     arg_z, [vsp, #-node_size]!      /* park the initval */
-        sub     sp, sp, #lisp_frame.size
-        mov     temp4, #lisp_frame_marker
-        str     temp4, [sp, #lisp_frame.marker]
-        str     vsp,   [sp, #lisp_frame.savevsp]
-        str     fn,    [sp, #lisp_frame.savefn]
-        str     x30,   [sp, #lisp_frame.savelr]
+        build_lisp_frame imm0
         mov     fn, xzr
         mov     arg_z, arg_y                        /* subtag */
         mov     arg_y, arg_x                         /* element-count */
         bl      _SPstack_misc_alloc
-        ldr     x30, [sp, #lisp_frame.savelr]
+        ldr     lr,  [sp, #lisp_frame.savelr]
         ldr     fn,  [sp, #lisp_frame.savefn]
         ldr     vsp, [sp, #lisp_frame.savevsp]
         add     sp, sp, #lisp_frame.size
@@ -2927,21 +2917,8 @@ endsp aset3
 /* signal a deferred/pending suspend (ppc-macros.s suspend_now).
    unary-misc sub = error_propagate_suspend (10); reg field unused (x0). */
 
-/* control-stack lisp_frame build/discard (MARKER frame: \tmp carries the
-   marker constant, not a backlink).  savelr gets LR ITSELF -- the address
-   of the compiler's forward `b <cleanup>` insn (ARM32 model, arm-macros.s
-   mkcatch): at throw time nthrow branches there and the b EXECUTES, so no
-   derived cleanup PC ever occupies a register the GC cannot see (16m86
-   pc-locative class, W1).  savefn gets the volatile fn.
-   Same stp shape as the compiler's save-lisp-context vinsns: the first stp
-   creates the frame and publishes marker+savevsp in one insn; a thread
-   suspended before the second stp shows garbage savefn/savelr, which
-   pc_luser_xp's stp-pair case zeroes (arm64-exceptions.c). */
-.macro build_catch_lisp_frame tmp
-        mov \tmp, #lisp_frame_marker
-        stp \tmp, vsp, [sp, #-lisp_frame.size]!
-        stp fn, lr, [sp, #lisp_frame.savefn]
-.endm
+/* build_lisp_frame lives with discard_lisp_frame in arm64-macros.s (included
+   above), so it is available to every spentry in this file. */
 
 /* tsp_alloc_fixed_unboxed / Set_TSP_Frame_Boxed / TSP_Unlink moved to the
    canonical set in arm64-macros.s (TSP_Alloc_Fixed_Unboxed / Set_TSP_Frame_
@@ -2991,7 +2968,7 @@ endsp aset3
    and no derived PC at all. */
         .macro mkcatch
         ldr imm0, [rcontext, #tcr.catch_top]
-        build_catch_lisp_frame imm4    /* csp frame: fn, lr(= the b insn), vsp */
+        build_lisp_frame imm4          /* csp frame: fn, lr(= the b insn), vsp */
         add lr, lr, #4                 /* normal return addr: skip the branch */
         ldr imm3, [rcontext, #tcr.xframe]
         ldr imm1, [rcontext, #tcr.db_link]
@@ -4674,7 +4651,9 @@ spentry mvpass
            marker+savevsp in one insn; a thread suspended before the
            second stp shows garbage savefn/savelr, which pc_luser_xp's
            stp-pair case zeroes (16m87 W5; same shape as
-           build_catch_lisp_frame and the save-lisp-context vinsns). */
+           build_lisp_frame and the save-lisp-context vinsns).
+           Open-coded, not build_lisp_frame: savevsp = the computed
+           entry-vsp in imm0, not vsp. */
         mov temp1, #lisp_frame_marker
         stp temp1, imm0, [sp, #-lisp_frame.size]!
         stp fn, lr, [sp, #lisp_frame.savefn]
@@ -7115,13 +7094,8 @@ C(toplevel_loop):
          * guarantee for it trivially.
          * ARM64-DEVIATION: a marker frame where PPC needs no frame, for the same
          * reason the covers above exist -- marker walk, not a backlink chain. */
-        sub     sp, sp, #lisp_frame.size
-        mov     imm0, #lisp_frame_marker /* imm0 is dead here: start_lisp's last
-                                            use was the valence store (:873) */
-        str     imm0, [sp, #lisp_frame.marker]
-        str     vsp, [sp, #lisp_frame.savevsp]
-        str     fn,  [sp, #lisp_frame.savefn]
-        str     lr,  [sp, #lisp_frame.savelr]   /* ppc:35-40 mflr/save    */
+        build_lisp_frame imm0           /* imm0 dead since the valence store
+                                           (:873); savelr = lr (ppc:35-40) */
         b       3f                      /* ppc:41 b test                  */
 1:      /* loop, ppc:42-45 */
         ref_nrs_value arg_z, toplcatch  /* ppc:43 catch tag = %toplevel-catch% value */
