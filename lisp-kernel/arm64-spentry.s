@@ -439,7 +439,6 @@ endsp ffcall
  * def_header(name,count,subtag) formula as ppc-constants.s:330-333/
  * ppc-constants32.s:388, using macptr.element_count/subtag_bignum which
  * arm64-constants.h already defines for real. */
-.set one_digit_bignum_header, (1 << num_subtag_bits) | subtag_bignum
 .set five_digit_bignum_header, (5 << num_subtag_bits) | subtag_bignum
 .set macptr_header, (macptr.element_count << num_subtag_bits) | subtag_macptr
 
@@ -626,69 +625,15 @@ spentry gets64
         uuo_error_reg_not_xtype arg_z, xtype_s64
 endsp gets64
 
-/* arg_z should be (signed-byte 32); return unboxed value in imm0.
- * ported from ppc-spentry.s:6804-6813 (PPC64 branch), reimplemented per the
- * function's stated contract ("return unboxed result in imm0") rather than
- * transliterated literally: the vendored PPC64 branch's last step reads
- * `box_fixnum(imm0,arg_z)`, which would leave imm0 BOXED, contradicting the
- * subprim's own header comment and every other get* subprim's convention --
- * almost certainly a `box_fixnum`/`unbox_fixnum` transcription slip in the
- * vendored source (flag for a future PPC64-diff audit).  Implemented here as
- * the evident intent: arg_z is (signed-byte 32) iff unboxing it round-trips
- * through a 32-bit sign-extend. */
+/*
+ * Not used on 64-bit targets.
+ */
 spentry gets32
-        and     imm0, arg_z, #tagmask
-        asr     imm1, arg_z, #fixnumshift
-        cmp     imm0, #tag_fixnum
-        b.ne    9f
-        sxtw    imm2, w1
-        cmp     imm2, imm1
-        b.ne    9f
-        mov     imm0, imm1
-        ret
-9:      /* ppc-spentry.s:6827 uuo_interr(error_object_not_signed_byte_32,
-         * arg_z) */
-        uuo_error_reg_not_xtype arg_z, xtype_s32
+        brk #0
 endsp gets32
 
-/* arg_z should be (unsigned-byte 32); return unboxed value in imm0.
- * ported from ppc-spentry.s:6833-6857.  Reimplemented digit-wise (a plain
- * 32-bit LDR zero-extends into the 64-bit register, giving exactly the
- * unsigned digit magnitude with no sign ambiguity) rather than PPC64's
- * paired 64-bit vrefr reads, which fold digit-pair endianness assumptions
- * that don't apply on little-endian AArch64. one_digit_bignum_header is a
- * PROPOSED constant above (ppc-constants32.s:388 -- 64-bit targets normally
- * never need it since a lone 32-bit digit always fits a fixnum, but getu32
- * itself is not #ifdef(PPC64)-split in the vendored source, so it defensively
- * accepts one). */
 spentry getu32
-        and     imm1, arg_z, #tagmask
-        asr     imm0, arg_z, #fixnumshift
-        cmp     imm1, #tag_fixnum
-        b.ne    1f
-        cmp     imm0, #0
-        b.lt    9f
-        lsr     imm2, imm0, #32
-        cbnz    imm2, 9f
-        ret
-1:      and     imm1, arg_z, #fulltagmask
-        cmp     imm1, #fulltag_misc
-        b.ne    9f
-        ldrb    w1, [arg_z, #misc_subtag_offset]  /* ldrb needs a W reg (imm1=x1) */
-        cmp     imm1, #subtag_bignum
-        b.ne    9f
-        ldr     imm1, [arg_z, #misc_header_offset]
-        ldr     w0, [arg_z, #misc_data_offset]        /* digit0, zero-extended */
-        cmp     imm1, #one_digit_bignum_header
-        b.eq    8f
-        cmp     imm1, #two_digit_bignum_header
-        b.ne    9f
-        ldr     w2, [arg_z, #(misc_data_offset + 4)]  /* digit1 must be 0 */
-        cbnz    w2, 9f
-8:      ret
-9:      /* ppc-spentry.s:6857 uuo_interr(error_object_not_unsigned_byte_32,
-         * arg_z) */
-        uuo_error_reg_not_xtype arg_z, xtype_u32
+        brk #0
 endsp getu32
 
 /* On entry arg_z = symbol.  On exit arg_z = value (possibly unbound_marker),
