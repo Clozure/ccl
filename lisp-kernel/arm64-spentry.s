@@ -433,8 +433,6 @@ endsp ffcall
  * definitions using the SAME _struct/_structf macro conventions already
  * present in arm64-constants.h; NOT invented.  Cited per-field below. */
 
-/* ppc-constants.s:171 "(UNSIGNED-BYTE 16), one less than TSTACK_SOFTPROT" */
-.set tstack_alloc_limit, 0xffff
 
 /* bignum headers not already in arm64-constants.h (two/three/four_digit_
  * bignum_header ARE already defined there).  Derived via the same
@@ -1134,7 +1132,6 @@ endsp makestackblock0
 .set XSETBADVEC, (7<<fixnumshift)       /* errors.s:182 */
 .set XNOTELT,    (174<<fixnumshift)     /* errors.s:227 */
 .set XIMPROPERLIST, (170<<fixnumshift)  /* errors.s:223 */
-.set tstack_alloc_limit, 0xffff         /* ppc-constants.s:171 (as spentry-A) */
 
 /* misc_complex_dfloat_offset (16m48) — Matt's arm64-arch.lisp:259-261:
      ;;; There is a pad word after the uvector header so that the

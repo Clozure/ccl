@@ -43,6 +43,13 @@ DEFCONST(nsaveregs, 4)
 DEFCONST(fixnumone, (1<<fixnumshift))
 DEFCONST(fixnum_one, fixnumone)
 DEFCONST(call_arguments_limit, 0x10000)
+/*
+ * Largest object (bytes, including tsp frame overhead) that should be
+ * allocated on the temp stack; larger requests heap cons instead.
+ * Must stay <= TSTACK_SOFTPROT (area.h) so that a single frame push
+ * can't step over the guard page.
+ */
+DEFCONST(tstack_alloc_limit, 0xffff)
 DEFCONST(heap_segment_size, 0x20000)
 DEFCONST(log2_heap_segment_size, 17)
 // XXX - This is not going to work on macOS
