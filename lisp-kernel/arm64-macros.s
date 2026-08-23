@@ -113,8 +113,8 @@ _SP\name:
  *
  *   For a variable-size frame, where the size is specified with a
  *   register, we build the whole frame below the still-live tsp
- *   (invisible to the gc), then make it visible with a single `mov
- *   tsp, scratch'.  A GC on either side of that mov sees a complete
+ *   (invisible to the gc), then make it visible with a single mov
+ *   tsp, scratch.  A GC on either side of that mov sees a complete
  *   frame; nothing is ever half-published.
  *
  * When initializing the type field of a tsp frame, we will sometimes
@@ -131,22 +131,25 @@ _SP\name:
  */
 .macro TSP_Alloc_Fixed_Unboxed nbytes, tmp
         mov \tmp, tsp
+        // tsp_frame.backlink = tsp
+        // tsp_frame.type = tsp (non-zero value to mark frame as raw)
         stp \tmp, \tmp, [tsp, #-(\nbytes + tsp_frame.fixed_overhead)]!
 .endm
 
 /*
- * Mark the current (topmost) tsp frame boxed or unboxed.
+ * Mark the current (topmost) tsp frame as boxed, which indicates to
+ * the gc that it should scan the contents of the frame.  Frames are
+ * born raw via the allocators above, so there's no
+ * Set_TSP_Frame_Unboxed counterpart.
  */
 .macro Set_TSP_Frame_Boxed
-        str xzr, [tsp, #tsp_frame.type] // zero => contains nodes
-.endm
-.macro Set_TSP_Frame_Unboxed
-        str tsp, [tsp, #tsp_frame.type] // non-zero => raw data
+        str xzr, [tsp, #tsp_frame.type] // zero means contains nodes
 .endm
 
 /*
  * Allocate a small frame for nodes.  nbytes must be a multiple of
- * node_size, and tmp is a register that will hold a copy of tsp.
+ * node_size; tmp is a scratch register (it holds the old tsp during the
+ * push, then serves as the zeroing cursor).
  *
  * This works by allocating a raw frame, zeroing it, and then setting
  * the type field of the frame to 0 (nodes).
@@ -160,11 +163,14 @@ _SP\name:
         .error "frame too large: use TSP_Alloc_Var_Boxed"
         .endif
         TSP_Alloc_Fixed_Unboxed \nbytes, \tmp
-        .set _tspab_off\@, tsp_frame.fixed_overhead
+        .if ((\nbytes) / node_size) > 0
+        // zero the data area: a cursor walks up from the first data word,
+        // storing xzr with post-indexed addressing (same insn each time)
+        add \tmp, tsp, #tsp_frame.fixed_overhead
         .rept (\nbytes) / node_size
-        str xzr, [tsp, #_tspab_off\@]
-        .set _tspab_off\@, _tspab_off\@ + node_size
+        str xzr, [\tmp], #node_size
         .endr
+        .endif
         Set_TSP_Frame_Boxed
 .endm
 
@@ -190,7 +196,7 @@ _SP\name:
  */
 .macro TSP_Alloc_Var_Boxed size, scratch
         sub \scratch, tsp, \size // make room
-        str tsp, [\scratch, #tsp_frame.backlink]
+        stp tsp, xzr, [\scratch] // backlink, boxed type (still not gc visible)
         // size is now a cursor
         add \size, \scratch, #tsp_frame.fixed_overhead  // first data word
         cmp \size, tsp          // empty? (size == fixed_overhead)
@@ -200,8 +206,7 @@ _SP\name:
         cmp \size, tsp
         b.lo .Lloop\@
 .Ldone\@:
-        str xzr, [\scratch, #tsp_frame.type]  // set boxed, still not visible
-        mov tsp, \scratch                     // make boxed frame visible
+        mov tsp, \scratch       // make boxed frame visible
 .endm
 
 // Pop the topmost tsp frame.
@@ -250,8 +255,7 @@ _SP\name:
  * not-yet-stored savefn and savelr slots in the frame.  Compare with
  * the save-lisp-context vinsns.
  *
- * tmp is a register to contain the lisp frame marker; the marker is an
- * immediate, so pass an :imm register, not a node temp.
+ * tmp is a register to contain the lisp frame marker.
  */
 .macro build_lisp_frame tmp
         mov \tmp, #lisp_frame_marker
