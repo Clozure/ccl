@@ -140,6 +140,7 @@ typedef uint32_t opcode, *pc;
 #define xpPC(x) (*((pc*)(&((x)->uc_mcontext.pc))))
 #define set_xpPC(x,new) (xpPC(x) = (pc)(new))
 #define xpLR(x) (*((pc*)(&(xpGPR(x,30)))))  /* x30 = LR */
+#define set_xpLR(x,new) (xpLR(x) = (pc)(new))
 #define xpSP(x) ((x)->uc_mcontext.sp)
 #define xpPSR(x) ((x)->uc_mcontext.pstate)
 #define xpFaultAddress(x) ((x)->uc_mcontext.fault_address)

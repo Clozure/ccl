@@ -2451,14 +2451,14 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
 
       if (program_counter == (base + 1)) {
         /* ldr done, str pending: complete the str of our return pc. */
-        swap_frame->savelr = xpLR(xp);
+        swap_frame->savelr = (LispObj)xpLR(xp);
       }
       /* Complete the `mov lr, temp4' -- idempotent when it already ran
          (temp4 still holds the same pc at base+2 and base+3) -- and the
          `mov temp4, #0'.  PC points at the NEXT insn to execute, so
          every remaining step is completed here and none is redone in a
          way that could differ. */
-      xpLR(xp) = xpGPR(xp, temp4);
+      set_xpLR(xp, xpGPR(xp, temp4));
       xpGPR(xp, temp4) = 0;
       xpPC(xp) = base + 4;
       return;
@@ -2466,8 +2466,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   }
 
   /* PPC's INIT_CATCH_FRAME partial-init back-out (ppc:2096-2110) is NOT
-     ported yet: the ARM64 catch-frame build sequence (spentry-C
-     build_catch_lisp_frame + catch push) has no settled single
+     ported yet: the ARM64 catch-frame build sequence (mkcatch's
+     build_lisp_frame + catch push) has no settled single
      detection instruction, and the compiler side doesn't emit catch
      frames yet.  Risk window = interrupting a thread mid-catch-push;
      revisit when Matt's vinsns build catch frames (report item).

@@ -34,6 +34,7 @@ extern void darwin_sigreturn(ExceptionInformation *, unsigned);
 #define xpLR(x) (UC_MCONTEXT(x)->__ss.__lr)
 #define xpPC(x) (*(pc *)&(UC_MCONTEXT(x)->__ss.__pc))
 #define set_xpPC(x, new) (xpPC(x) = (pc)(new))
+#define set_xpLR(x, new) (xpLR(x) = (natural)(new))
 #define xpFaultAddress(x) (UC_MCONTEXT(x)->__es.__far)
 
 #include <mach/mach.h>
