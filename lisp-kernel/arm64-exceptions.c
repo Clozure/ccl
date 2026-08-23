@@ -2096,12 +2096,6 @@ extern opcode
   swap_lr_lisp_frame_0,                      /* nthrowvalues do_unwind    */
   swap_lr_lisp_frame_1;                      /* nthrow1value do_unwind    */
 
-/* The tsp-frame "raw" mark: `str tsp, [tsp, #tsp_frame.type]' (type == 8;
-   spentry-A tsp_frame equates / arm64-macros.s TSP frame discipline).
-   STR (unsigned offset, 64-bit): 0xF9000000 | (8>>3)<<10 | tsp<<5 | tsp,
-   tsp = x24 (arm64-asm.lisp:215). */
-#define MARK_TSP_FRAME_INSTRUCTION 0xF9000718
-
 
 
 /*
@@ -2263,16 +2257,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     /* Barrier subprims are leaves: returning to LR skips the remaining
        asm barrier (the memoization just happened here).  ppc:1977 */
     set_xpPC(xp, xpLR(xp));
-    return;
-  }
-
-  /* (b) marking a newly-allocated TSP frame as containing "raw" data.
-     ppc:1983-1990 */
-  if (instr == MARK_TSP_FRAME_INSTRUCTION) {
-    LispObj tsp_val = xpGPR(xp, tsp);
-
-    ((LispObj *)ptr_from_lispobj(tsp_val))[1] = tsp_val;
-    adjust_exception_pc(xp, 4);
     return;
   }
 
