@@ -823,8 +823,7 @@ spentry misc_alloc
         cmp     imm3, #subtag_s8_vector
         b.lt    1f                                 /* 16-bit: n*2 stands */
         lsr     imm1, imm1, #1                     /* 8-bit: n*1 */
-1:      add     imm1, imm1, #(node_size + dnode_size - 1)   /* dnode_align(imm1,imm1,node_size) */
-        and     imm1, imm1, #0xfffffffffffffff0
+1:      dnode_align imm1, imm1, node_size
         Misc_Alloc arg_z, imm0, imm1
         ret
 2:      add     imm1, arg_y, #(7 << fixnumshift)
@@ -1726,8 +1725,7 @@ progvsave_improper:                     /* circular or non-list            */
         cmp imm0, #0                    /* ppc:984                         */
         add imm1, imm0, imm0            /* ppc:985                         */
         add imm1, imm1, imm0            /* ppc:986 3*count*node_size       */
-        add imm1, imm1, #(dnode_size + node_size - 1)   /* ppc:987         */
-        and imm1, imm1, #(~(dnode_size - 1))            /* dnode_align     */
+        dnode_align imm1, imm1, node_size
         b.ne 2f                         /* ppc:988                         */
         /* count 0: empty boxed frame (ppc:989 TSP_Alloc_Fixed_Boxed(16)).
            The macro zeroes both data words, so the count(=0) store is subsumed. */
@@ -1780,8 +1778,7 @@ spentry gvector
         asr imm0, arg_z, #fixnumshift         /* unbox_fixnum(imm0,arg_z) */
         lsl imm1, nargs, #(num_subtag_bits - fixnumshift)
         orr imm0, imm0, imm1                  /* header = count<<8 | subtag */
-        add imm1, nargs, #(node_size + (dnode_size - 1))
-        and imm1, imm1, #~(dnode_size - 1)    /* dnode_align(nargs+node_size) */
+        dnode_align imm1, nargs, node_size
         Misc_Alloc arg_z, imm0, imm1
         mov imm1, nargs
         mov imm2, #misc_data_offset           /* negative; keep out of add-imm */
@@ -3188,8 +3185,7 @@ spentry nthrowvalues
            last moment; the lr<->savelr swap below is the only transit and
            pc_luser_xp rolls it forward (16m86 W2b). */
         /* allocate a boxed tsp frame: overhead + nargs bytes + 2 nodes        */
-        add imm0, nargs, #(tsp_frame.fixed_overhead + (2*node_size) + (dnode_size-1))
-        and imm0, imm0, #~(dnode_size-1)
+        dnode_align imm0, nargs, (tsp_frame.fixed_overhead + 2*node_size)
         TSP_Alloc_Var_Boxed imm0, imm1
         mov imm2, nargs
         add imm1, vsp, nargs            /* imm1 = top of value block            */
@@ -3943,8 +3939,7 @@ spentry stack_cons_rest_arg
         add imm1, imm1, imm1            /* ppc:2042 imm1 *= 2 -> cons byte count */
         /* dnode_align(imm2,imm1,tsp_frame.fixed_overhead) (ppc:2043), inlined
            per spentry-A:447-448. */
-        add imm2, imm1, #(tsp_frame.fixed_overhead + dnode_size - 1)
-        and imm2, imm2, #0xfffffffffffffff0
+        dnode_align imm2, imm1, tsp_frame.fixed_overhead
         TSP_Alloc_Var_Boxed imm2, imm3   /* ppc:2044 TSP_Alloc_Var_Boxed */
         add imm0, tsp, #(tsp_frame.data_offset + fulltag_cons)  /* ppc:2045     */
 1:      /* ppc:2046 */
