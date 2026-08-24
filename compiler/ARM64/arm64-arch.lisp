@@ -1426,3 +1426,11 @@
 ;;; ".SPRPLACD not found" while the variable held it.  Refresh the
 ;;; struct so both lookup paths see the extended vector.
 (setf (arch::target-subprims-table *arm64-target-arch*) *subprims*)
+
+;;; The trap-support callbacks hand %error a FAKE-STACK-FRAME istruct as
+;;; the error-pointer (the PPC model; lispequ.lisp %cons-fake-stack-frame
+;;; conses the CCL-package name).  Give that istruct a class, the way
+;;; arm-arch.lisp does for ARM32's fake-stack-frame.  Without it,
+;;; class-cell-typep chases the istruct's NIL class wrapper and faults,
+;;; and a backtrace after any trap-raised error dies (issue #610).
+(ccl::make-istruct-class 'ccl::fake-stack-frame ccl::*istruct-class*)
