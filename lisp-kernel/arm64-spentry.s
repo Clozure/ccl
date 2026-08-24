@@ -401,34 +401,6 @@ spentry ffcall
         ret
 endsp ffcall
 
-/*
- * Cluster A: alloc-numbers subprims
- * Ported from vendor/ccl/lisp-kernel/ppc-spentry.s (PPC64 branch) to
- * Matt Emerson's upstream ARM64 low-tag design.
- *
- * 20 subprims (per CLAUDE.md upstream-port task): stack_misc_alloc,
- * makestackblock, makestacklist, misc_alloc, misc_alloc_init, integer_sign,
- * builtin_div, getu64, gets64, makeu64, makes128, specref,
- * specrefcheck, makes32, makeu32, gets32, getu32, stack_misc_alloc_init,
- * makestackblock0.
- *
- * makes64/fix_overflow are Matt's OWN already-real examples in his
- * arm64-spentry.s (not owned by this cluster).  gets32/getu32 exist in our
- * own high-tag arm64-spentry.s; makes32/makeu32 do not (derived from PPC64
- * only).
- *
- * PORT-NOTE: the cross-cutting infrastructure this file's error paths and
- * tail-jumps depend on is now PROPOSED (ratify with Matt) and shared with
- * the sibling clusters:
- * (a) NRS/global-relative addressing: arm64-globals-proposed.s
- *     (rnil-relative ref_nrs_symbol/ref_nrs_value, indices from the vendor
- *     lisp_globals.s nrs order) -- same idiom as spentry-C/D.
- * (b) error/trap signalling: the `udf #imm16' UUO scheme (canonical:
- *     arm64-asm.lisp:435-450; namespace doc = PROPOSED-CONSTANTS block
- *     below, BINDING for all clusters) plus the _SPksignalerr subprim
- *     (spentry-D-call-builtins.s:488, real body).
- */
-
 /* PROPOSED-CONSTANTS (ratify with Matt) -- derived from PPC64 struct/header
  * definitions using the SAME _struct/_structf macro conventions already
  * present in arm64-constants.h; NOT invented.  Cited per-field below. */
@@ -465,22 +437,15 @@ endsp ffcall
  * .sets here (integer=4, s64=8, ...) SHADOWED his values, so unboxing
  * traps reported wrong expected types. */
 
-/* Construct a lisp integer out of the 32-bit signed value in imm0.
- * ported from ppc-spentry.s:6762-6774 (PPC64 branch only: box_fixnum and
- * return -- a (signed-byte 32) always fits in Matt's 61-bit-magnitude
- * fixnum, so the PPC32-only bignum-overflow path in the same subprim is not
- * reachable on a 64-bit target and is not ported). */
+/*
+ * Not used on 64-bit targets.
+ */
 spentry makes32
-        lsl     arg_z, imm0, #fixnumshift
-        ret
+        brk #0
 endsp makes32
 
-/* Construct a lisp integer out of the 32-bit unsigned value in imm0.
- * ported from ppc-spentry.s:6780-6783 (PPC64 branch): an (unsigned-byte 32)
- * also always fits Matt's 61-bit-magnitude fixnum. */
 spentry makeu32
-        lsl     arg_z, imm0, #fixnumshift
-        ret
+        brk #0
 endsp makeu32
 
 /*
