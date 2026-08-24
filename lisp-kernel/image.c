@@ -28,6 +28,17 @@
 #include <limits.h>
 #include <time.h>
 
+/* Darwin arm64 OS pages are 16KiB; image sections are only 4KiB-padded.
+   MapFile there commits the OS-page span but must *read* the section
+   payload size only — see memory.c.  Other platforms still pass the
+   OS-page-rounded length to mmap/MapFile. */
+#if defined(DARWIN) && defined(ARM64)
+#define IMAGE_MAPFILE_NBYTES(mem_size) (mem_size)
+#else
+#define IMAGE_MAPFILE_NBYTES(mem_size) \
+  align_to_power_of_2((mem_size), log2_page_size)
+#endif
+
 
 #if defined(PPC64) || defined(X8632)
 #define RELOCATABLE_FULLTAG_MASK \
@@ -131,7 +142,10 @@ off_t
 seek_to_next_page(int fd)
 {
   off_t pos = LSEEK(fd, 0, SEEK_CUR);
-  pos = align_to_power_of_2(pos, log2_page_size);
+  /* Heap image on-disk layout is always 4KiB-aligned (heap-image.lisp
+     image-align-output-position), independent of the OS page size.
+     Apple Silicon Darwin uses 16KiB pages — do not use log2_page_size here. */
+  pos = align_to_power_of_2(pos, 12);
   return LSEEK(fd, pos, SEEK_SET);
 }
   
@@ -221,7 +235,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     if (mem_size != 0) {
       if (!MapFile(pure_space_active,
                    pos,
-                   align_to_power_of_2(mem_size,log2_page_size),
+                   IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RX,
                    fd)) {
         return;
@@ -236,7 +250,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
   case AREA_STATIC:
     if (!MapFile(static_space_active,
 		 pos,
-		 align_to_power_of_2(mem_size,log2_page_size),
+		 IMAGE_MAPFILE_NBYTES(mem_size),
 		 MEMPROTECT_RWX,
 		 fd)) {
       return;
@@ -251,7 +265,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     a = allocate_dynamic_area(mem_size);
     if (!MapFile(a->low,
 		 pos,
-		 align_to_power_of_2(mem_size,log2_page_size),
+		 IMAGE_MAPFILE_NBYTES(mem_size),
 		 MEMPROTECT_RWX,
 		 fd)) {
       return;
@@ -270,7 +284,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
                                            log2_page_size);
       if (!MapFile(a->low,
                    pos,
-                   align_to_power_of_2(mem_size,log2_page_size),
+                   IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RWX,
                    fd)) {
         return;
@@ -321,7 +335,7 @@ load_image_section(int fd, openmcl_image_section_header *sect)
     if (mem_size) {      
       if (!MapFile(a->low,
                    pos,
-                   align_to_power_of_2(mem_size,log2_page_size),
+                   IMAGE_MAPFILE_NBYTES(mem_size),
                    MEMPROTECT_RWX,
                    fd)) {
         return;
@@ -430,6 +444,16 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
           relocate_area_contents(a, bias);
           ProtectMemory(a->low, a->active-a->low);
         }
+#if defined(DARWIN) && defined(ARM64)
+        /* Mapped RW due to W^X; pure code needs RX on the canonical VA.
+           Span must be OS-page-aligned (16KiB on Apple Silicon). */
+        if (a->active > a->low) {
+          natural span = align_to_power_of_2(a->active - a->low, log2_page_size);
+          if (mprotect(a->low, span, PROT_READ|PROT_EXEC) != 0) {
+            Fatal(": Couldn't map readonly area executable", "");
+          }
+        }
+#endif
         readonly_area = a;
 	add_area_holding_area_lock(a);
 	break;
@@ -461,6 +485,16 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
           relocate_area_contents(a, bias);
         }
 	resize_dynamic_heap(a->active, lisp_heap_gc_threshold);
+#if defined(DARWIN) && defined(ARM64)
+        /* Do NOT mprotect the dynamic area RX.  It holds mixed code and
+           data; RX makes every heap store (SPgvset, cons init, …) fault
+           with EXC_BAD_ACCESS while subprims in the kernel still run
+           (observed: handle_alloc_trap succeeds, then SPgvset faults on
+           0x3020… and cold-load reports a nested “read” fault).
+           Pure/readonly above is RX for boot code.  Runtime code in
+           dynamic still needs MAP_JIT / a separate code area
+           (doc/porting/darwin.md). */
+#endif
 	xMakeDataExecutable(a->low, a->active - a->low);
 	break;
       }

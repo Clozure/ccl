@@ -32,6 +32,9 @@
 #endif
 #ifdef DARWIN
 #include <pthread.h>
+#if defined(ARM64)
+#include <libkern/OSCacheControl.h>
+#endif
 #endif
 
 #ifndef WINDOWS
@@ -47,6 +50,66 @@
 #endif
 
 #define DEBUG_MEMORY 0
+
+#if defined(DARWIN) && defined(ARM64)
+/* MAP_JIT code heap (AREA_CODE stand-in).  Executable lisp lives here or
+   in AREA_READONLY after purify — never in the RW dynamic heap. */
+BytePtr darwin_arm64_code_low = NULL;
+BytePtr darwin_arm64_code_active = NULL;
+
+void
+darwin_arm64_set_code_heap(void *low, void *active)
+{
+  darwin_arm64_code_low = (BytePtr)low;
+  darwin_arm64_code_active = (BytePtr)active;
+}
+
+Boolean
+darwin_arm64_in_code_heap(void *p)
+{
+  BytePtr bp = (BytePtr)p;
+  return (darwin_arm64_code_low != NULL &&
+          bp >= darwin_arm64_code_low &&
+          bp < darwin_arm64_code_active);
+}
+
+/* Install nbytes from src into a MAP_JIT code-vector payload at dest.
+   WP toggles stay in C so MAP_JIT-resident lisp is executable again
+   before return (pthread_jit_write_protect_np(0) NX's all JIT pages
+   for this thread). */
+void
+darwin_arm64_jit_install_code(void *dest, const void *src, size_t nbytes)
+{
+  pthread_jit_write_protect_np(0);
+  if (nbytes) {
+    memcpy(dest, src, nbytes);
+  }
+  pthread_jit_write_protect_np(1);
+  if (nbytes) {
+    sys_icache_invalidate(dest, nbytes);
+  }
+}
+
+/* Zero TOTAL bytes at dest and write an 8-byte uvector header at dest.
+   Used by %allocate-code-vector so header/clear never run under WP from lisp. */
+void
+darwin_arm64_jit_init_code_vector(void *dest, unsigned long long header, size_t total_bytes)
+{
+  pthread_jit_write_protect_np(0);
+  if (total_bytes) {
+    memset(dest, 0, total_bytes);
+  }
+  if (total_bytes >= sizeof(header)) {
+    memcpy(dest, &header, sizeof(header));
+  }
+  pthread_jit_write_protect_np(1);
+  /* Keep I/D coherent even before code bytes arrive via
+     darwin_arm64_jit_install_code (zeroed payload = udf #0 sentinels). */
+  if (total_bytes) {
+    sys_icache_invalidate(dest, total_bytes);
+  }
+}
+#endif
 
 void
 allocation_failure(Boolean pointerp, natural size)
@@ -148,7 +211,13 @@ CommitMemory (LogicalAddress start, natural len)
   void *addr;
 
   for (i = 0; i < 3; i++) {
+#if defined(DARWIN) && defined(ARM64)
+    /* W^X: RWX mmap is rejected.  Dynamic heap is RW only; executable
+       code lives in MAP_JIT (AREA_CODE) or AREA_READONLY after purify. */
+    addr = mmap(start, len, MEMPROTECT_RW, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+#else
     addr = mmap(start, len, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON|MAP_FIXED, -1, 0);
+#endif
     if (addr == start) {
       return true;
     } else {
@@ -217,7 +286,11 @@ MapMemoryForStack(natural nbytes)
 #ifdef WINDOWS
   return VirtualAlloc(0, nbytes, MEM_RESERVE|MEM_COMMIT, MEMPROTECT_RWX);
 #else
+#if defined(DARWIN) && defined(ARM64)
+  return mmap(NULL, nbytes, MEMPROTECT_RW, MAP_PRIVATE|MAP_ANON, -1, 0);
+#else
   return mmap(NULL, nbytes, MEMPROTECT_RWX, MAP_PRIVATE|MAP_ANON, -1, 0);
+#endif
 #endif
 }
 
@@ -254,13 +327,24 @@ ProtectMemory(LogicalAddress addr, natural nbytes)
   }
   return status;
 #else
-  int status = mprotect(addr, nbytes, PROT_READ | PROT_EXEC);
+  int prot;
+  int status;
+#if defined(DARWIN) && defined(ARM64)
+  /* Stack soft/hard guards: PROT_NONE.  RX is historically used on
+     other ports as "not writable"; on Darwin arm64 RX also requires
+     page-aligned ranges and is the wrong model for guards.  Callers
+     that need RX (pure space) should mprotect directly. */
+  prot = PROT_NONE;
+#else
+  prot = PROT_READ | PROT_EXEC;
+#endif
+  status = mprotect(addr, nbytes, prot);
   
   if (status) {
     status = errno;
     
     if (status == ENOMEM) {
-      void *mapaddr = mmap(addr,nbytes, PROT_READ | PROT_EXEC, MAP_ANON|MAP_PRIVATE|MAP_FIXED,-1,0);
+      void *mapaddr = mmap(addr,nbytes, prot, MAP_ANON|MAP_PRIVATE|MAP_FIXED,-1,0);
       if (mapaddr != MAP_FAILED) {
         return 0;
       }
@@ -281,7 +365,12 @@ UnProtectMemory(LogicalAddress addr, natural nbytes)
   DWORD oldProtect;
   return VirtualProtect(addr, nbytes, MEMPROTECT_RWX, &oldProtect);
 #else
+#if defined(DARWIN) && defined(ARM64)
+  /* W^X: cannot restore RWX; stack/data need RW. */
+  return mprotect(addr, nbytes, PROT_READ|PROT_WRITE);
+#else
   return mprotect(addr, nbytes, PROT_READ|PROT_WRITE|PROT_EXEC);
+#endif
 #endif
 }
 
@@ -338,7 +427,45 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
   return true;
 #endif
 #else
+#if defined(DARWIN) && defined(ARM64)
+  /* arm64 Darwin: file MAP_FIXED fails for nonzero file offsets (EINVAL).
+     Also W^X rejects RWX.  Commit anon RW, then read like the Windows path.
+
+     nbytes is the *section payload* size (image sections are 4KiB-padded).
+     OS pages are 16KiB: commit the page-rounded span, but read ONLY nbytes.
+     Reading a 16KiB OS page from a 4KiB-padded section pulls the next
+     image section / trailer ("nepOILCMegam") into the heap free zone and
+     breaks walk-dynamic-area's zero-cons bridge to the sentinel. */
+  {
+    ssize_t count;
+    size_t total = 0;
+    off_t opos;
+    natural map_bytes = align_to_power_of_2(nbytes, log2_page_size);
+
+    (void)permissions;
+    opos = LSEEK(fd, 0, SEEK_CUR);
+    if (!CommitMemory(addr, map_bytes)) {
+      return false;
+    }
+    if (LSEEK(fd, pos, SEEK_SET) < 0) {
+      return false;
+    }
+    while (total < nbytes) {
+      count = read(fd, ((char *)addr) + total, nbytes - total);
+      if (count < 0) {
+        return false;
+      }
+      if (count == 0) {
+        break;                  /* EOF: remainder already zero */
+      }
+      total += (size_t)count;
+    }
+    LSEEK(fd, opos, SEEK_SET);
+    return true;
+  }
+#else
   return mmap(addr, nbytes, permissions, MAP_PRIVATE|MAP_FIXED, fd, pos) != MAP_FAILED;
+#endif
 #endif
 }
 
