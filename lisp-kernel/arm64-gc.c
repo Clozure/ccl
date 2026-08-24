@@ -64,7 +64,11 @@
 #include <sys/time.h>             /* ppc-gc.c:26 */
 #include <sys/mman.h>             /* for munmap in impurify (ppc-gc.c:2283
                                      calls munmap; PPC got the prototype
-                                     transitively) */
+                                     transitively). Darwin/arm64 purify RX. */
+#if defined(DARWIN) && defined(ARM64)
+#include "memprotect.h"
+#include <pthread.h>
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Guarded shims for headers that lack an ARM64 branch at the pin.
@@ -133,6 +137,18 @@ check_marked_extent(LispObj n, natural dnode, natural suffix_dnodes)
  * ASSUMPTION (report OPEN #8): no other 0x00000000 word at an 8-aligned
  * offset inside the instruction stream (no inline literal pools).      */
 #define ARM64_CODE_VECTOR_SENTINEL 0
+
+#if defined(DARWIN) && defined(ARM64)
+/* PC/LR are always the canonical VA (pure RX or MAP_JIT). */
+static inline Boolean
+darwin_arm64_ptr_in_purify_source(BytePtr p, BytePtr low, BytePtr high)
+{
+  if (p > low && p < high) {
+    return true;
+  }
+  return darwin_arm64_in_code_heap(p);
+}
+#endif
 
 /* PROPOSED (ratify with Matt): arm64-constants.h defines
  * subtag_lisp_frame_marker = SUBTAG(fulltag_imm_1,5) but no
@@ -2143,6 +2159,9 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
   natural
     start = (natural)old,
     physbytes;
+#if defined(DARWIN) && defined(ARM64)
+  Boolean jit_src = darwin_arm64_in_code_heap(old);
+#endif
 
   physbytes = ((natural)(skip_over_ivector(start,header))) - start;
   dest->active += physbytes;
@@ -2159,12 +2178,25 @@ purify_displaced_object(LispObj obj, area *dest, natural disp)
      it's easiest to do so if we leave a {forward_marker, dnode_locative}
      pair at every doubleword in the old vector.
   */
+#if defined(DARWIN) && defined(ARM64)
+  /* Forwarding markers are stores into the old object.  MAP_JIT sources
+     need WP=0; purify runs entirely in C so restoring WP=1 before return
+     to lisp is enough. */
+  if (jit_src) {
+    pthread_jit_write_protect_np(0);
+  }
+#endif
   while(physbytes) {
     *old++ = (BytePtr) forward_marker;   /* = fulltag_nil under -DARM64, see shim note */
     *old++ = (BytePtr) free;
     free += dnode_size;
     physbytes -= dnode_size;
   }
+#if defined(DARWIN) && defined(ARM64)
+  if (jit_src) {
+    pthread_jit_write_protect_np(1);
+  }
+#endif
   return new;
 }
 
@@ -2181,13 +2213,18 @@ copy_ivector_reference(LispObj *ref, BytePtr low, BytePtr high, area *dest)
 {                                                    /* ppc-gc.c:1737-1758 */
   LispObj obj = *ref, header;
   natural tag = fulltag_of(obj), header_tag;
+  BytePtr objp = (BytePtr)ptr_from_lispobj(obj);
+  Boolean in_src;
 
   /* Only fulltag_misc references can name ivectors on arm64 (symbols and
      functions are gvectors; a function's codevector slot is misc-tagged),
      so PPC's misc-only test ports unchanged. */
-  if ((tag == fulltag_misc) &&
-      (((BytePtr)ptr_from_lispobj(obj)) > low) &&
-      (((BytePtr)ptr_from_lispobj(obj)) < high)) {
+#if defined(DARWIN) && defined(ARM64)
+  in_src = darwin_arm64_ptr_in_purify_source(objp, low, high);
+#else
+  in_src = (objp > low) && (objp < high);
+#endif
+  if ((tag == fulltag_misc) && in_src) {
     header = deref(obj, 0);
     if (header == forward_marker) { /* already copied */
       *ref = (untag(deref(obj,1)) + tag);
@@ -2212,10 +2249,17 @@ purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
     *p,
     insn;
   natural
-    tag = fulltag_of(loc);
+    tag;
 
+  tag = fulltag_of(loc);
+
+#if defined(DARWIN) && defined(ARM64)
+  if (darwin_arm64_ptr_in_purify_source((BytePtr)ptr_from_lispobj(loc),
+                                        low, high)) {
+#else
   if (((BytePtr)ptr_from_lispobj(loc) > low) &&
       ((BytePtr)ptr_from_lispobj(loc) < high)) {
+#endif
 
     headerP = (LispObj *)ptr_from_lispobj(untag(loc));
     /* ARM64-DEVIATION: `(loc & 3) == 0' replaces PPC64's four-case
@@ -2224,7 +2268,7 @@ purify_locref(LispObj *locaddr, BytePtr low, BytePtr high, area *to)
        locative_forwarding_address. */
     if ((loc & 3) == 0) {
       if (*headerP == forward_marker) {
-        *locaddr = (headerP[1]+tag);                 /* ppc-gc.c:1784-1785 */
+        *locaddr = (headerP[1]+tag);                    /* ppc-gc.c:1784-1785 */
       } else {
         /* Grovel backwards until the code vector's udf#0 sentinel is
            found; copy the code vector to to-space, then treat it as if
@@ -2556,9 +2600,21 @@ purify(TCR *tcr, signed_natural param)               /* ppc-gc.c:2001-2048 */
 
       }
     }
+#if defined(DARWIN) && defined(ARM64)
+    /* ProtectMemory is PROT_NONE on Darwin/arm64 (stack guards).  Pure
+       code needs RX on the canonical VA — same as image.c AREA_READONLY. */
+    {
+      natural span = align_to_power_of_2(new_pure_area->active - new_pure_area->low,
+                                         log2_page_size);
+      if (span && mprotect(new_pure_area->low, span, PROT_READ | PROT_EXEC) != 0) {
+        Bug(NULL, "purify: mprotect(RX) failed, errno = %d", errno);
+      }
+    }
+#else
     ProtectMemory(new_pure_area->low,
                   align_to_power_of_2(new_pure_area->active-new_pure_area->low,
                                       log2_page_size));
+#endif
     lisp_global(IN_GC) = 0;
     just_purified_p = true;
     return 0;
