@@ -4814,17 +4814,6 @@ spentry call_closure
         br temp0                            /* ppc:2165-2166 mtctr+bctr    */
 endsp call_closure
 
-/* ========== INTEGER/NATURAL CONVERSION ========== */
-
-/* ported from ppc-spentry.s:2173-2202: the PPC64 branch of getxlong is
- * EMPTY (the __ifdef(`PPC64') arm has no code - only the PPC32 arm has a
- * body), i.e. this subprim is unreferenced on 64-bit targets.  Ported as
- * a loud trap, exactly like the trap-only PPC64 entries in spentry-E
- * (ffcallX/callbackX). */
-spentry getxlong
-        brk #0
-endsp getxlong
-
 /* ========== ARGUMENT SPREADING ========== */
 
 /* ported from ppc-spentry.s:2209-2252 (PPC64 branch).
