@@ -22,8 +22,6 @@
 ;;; ONE-NZCV: PPC's cmplr/cmpri pairs are serialized — unsigned bounds
 ;;; compare (cmplr → b.hs) issued adjacent to its branch; the map-entry
 ;;; zero test (cmpri/cmpwi 0 → cbz) uses no flags at all.
-;;;
-;;; STATUS: DRAFT — not assembled; ledger in wave8-array-clos-report.md.
 
 (in-package "CCL")
 
@@ -221,20 +219,20 @@
   (ldur temp0 (:@ nfn (:$ arm64::misc-function-offset))) ; ppc:193 — W8-D80
   (br temp0))                           ; ppc:194-195
 
-;;; =====================================================================
-;;; *gf-proto* — ppc:197-218 (#-dont-use-lexprs branch; W8-D83 closed
-;;; 16m10, demanded by l1-dcode load: register-dcode-proto references)
-;;; =====================================================================
 ;;; The gag lexpr prototype CLOS instantiates for real gfs.  PPC keeps
-;;; the caller's return pc in loc_pc across .SPlexpr-entry (mflr/mtlr);
-;;; Matt's map has no loc_pc, so the LEXPR-RA channel is temp4 (spentry-E
-;;; lexpr_entry contract): prologue passes caller's return pc in temp4,
-;;; the subprim hands back the continuation the body must return through
+;;; the caller's return pc in loc_pc across .SPlexpr-entry
+;;; (mflr/mtlr); arm64 has no loc_pc, and a caller return pc must
+;;; never ride in a register such as temp4 (a node-scanned register:
+;;; after relocating a code vector, the GC would leave the untagged
+;;; code address stale).  Instead this prototype builds FRAME-A
+;;; itself, before the call, storing lr straight to savelr; the
+;;; subprim then reads the caller's return pc from that walked slot.
+;;; It hands back the continuation the body must return through
 ;;; (ret1val_addr on the mv path, lexpr_return1v on the 1v path) in
-;;; temp4, restored into lr before the tail transfer.  call-subprim
-;;; clobbers only imm1+lr, so temp4 survives into the kernel.  nfn (the
-;;; gf) is untouched by lexpr_entry; gf.dispatch-table = 3, gf.dcode = 4
-;;; (lispequ.lisp:1186-1194), both svrefs re-bias per W8-D80.
+;;; temp4 -- safe there because both are immovable kernel statics --
+;;; and the body restores it into lr before the tail transfer.  nfn
+;;; (the gf) is untouched by lexpr_entry; gf.dispatch-table = 3,
+;;; gf.dcode = 4 (lispequ.lisp:1186-1194)
 (defparameter *gf-proto*
   (nfunction
    gag
@@ -246,10 +244,8 @@
       (vpush nargs)                         ; ppc:207
       (add imm0 vsp nargs)                  ; ppc:208
       (add imm0 imm0 (:$ arm64::node-size)) ; ppc:209 caller's vsp
-      ;; W6/KI-026 co-design (was ppc:205 mflr loc-pc): the caller's
-      ;; return pc never rides in temp4 (node-scanned).  Build FRAME-A
-      ;; here, 0221 stp-pair shape; lr still holds the caller's pc and
-      ;; imm1 is call-subprim's scratch, free here.
+      ;; Build FRAME-A here; lr still holds the caller's pc and imm1
+      ;; is call-subprim's scratch, free here.
       (mov imm1 (:$ arm64::lisp-frame-marker))
       (stp imm1 imm0 (:@! sp (:$ -32)))
       (stp fn lr (:@ sp (:$ 16)))
@@ -327,13 +323,10 @@
   (ldur temp0 (:@ nfn (:$ arm64::misc-function-offset)))     ; ppc:306 codevector — W8-D80
   (br temp0))                           ; ppc:307-308 — DECIDE-15
 
-;;; =====================================================================
-;;; *cm-proto* — ppc:310-330 (W8-D83 closed 16m10)
-;;; =====================================================================
-;;; Combined-method prototype: same lexpr shape as *gf-proto* (LEXPR-RA
-;;; temp4 channel, see the *gf-proto* header comment).  Slots differ:
-;;; combined-method.thing = 1, combined-method.dcode = 2
-;;; (lispequ.lisp:1178-1184); both svrefs re-bias per W8-D80.
+;;; Combined-method prototype: same lexpr shape as *gf-proto*
+;;; (caller-RA rides lr into a self-built FRAME-A, see the *gf-proto*
+;;; header comment).  Slots differ: combined-method.thing = 1,
+;;; combined-method.dcode = 2
 (defparameter *cm-proto*
   (nfunction
    gag
@@ -345,8 +338,7 @@
       (vpush nargs)                         ; ppc:319
       (add imm0 vsp nargs)                  ; ppc:320
       (add imm0 imm0 (:$ arm64::node-size)) ; ppc:321 caller's vsp
-      ;; W6/KI-026 co-design (was ppc:317 mflr loc-pc): FRAME-A built
-      ;; here, 0221 stp-pair shape -- see *gf-proto* above.
+      ;; FRAME-A built here -- see *gf-proto* above.
       (mov imm1 (:$ arm64::lisp-frame-marker))
       (stp imm1 imm0 (:@! sp (:$ -32)))
       (stp fn lr (:@ sp (:$ 16)))
