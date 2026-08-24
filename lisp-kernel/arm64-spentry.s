@@ -408,7 +408,7 @@ endsp ffcall
  *
  * 20 subprims (per CLAUDE.md upstream-port task): stack_misc_alloc,
  * makestackblock, makestacklist, misc_alloc, misc_alloc_init, integer_sign,
- * builtin_div, getu64, gets64, makeu64, makeu128, makes128, specref,
+ * builtin_div, getu64, gets64, makeu64, makes128, specref,
  * specrefcheck, makes32, makeu32, gets32, getu32, stack_misc_alloc_init,
  * makestackblock0.
  *
@@ -439,7 +439,6 @@ endsp ffcall
  * def_header(name,count,subtag) formula as ppc-constants.s:330-333/
  * ppc-constants32.s:388, using macptr.element_count/subtag_bignum which
  * arm64-constants.h already defines for real. */
-.set five_digit_bignum_header, (5 << num_subtag_bits) | subtag_bignum
 .set macptr_header, (macptr.element_count << num_subtag_bits) | subtag_macptr
 
 /* %builtin-functions% vector index (ppc-constants.s:131; arch-independent
@@ -484,80 +483,33 @@ spentry makeu32
         ret
 endsp makeu32
 
-/* Construct a lisp integer out of the unsigned 128-bit value in imm0 (high
- * 64 bits) : imm1 (low 64 bits) -- PPC64's "imm0:imm1" register-pair
- * comment convention, high-part-first.
- * ported from ppc-spentry.s:6621-6660 (PPC64 branch), logic re-derived from
- * first principles (minimal-digit unsigned-bignum normalization: keep
- * digits up through the highest nonzero one; append one more zero digit iff
- * that digit's own top bit is set) rather than transliterating PPC's
- * per-32-bit-half CR-probe sequence, which relies on POWER's multiple
- * parallel condition-register fields with no 1:1 AArch64 (single NZCV)
- * analog.  rotldi byte-swaps dropped throughout: AArch64 is little-endian,
- * so a direct 64-bit store already places digit pairs in the correct
- * byte order with no swap needed (PPC64/CCL historically ran big-endian). */
-spentry makeu128
-        cbz     imm0, 6f                       /* whole value fits in imm1 alone */
-        /* GC SAFETY (Matt, 2026-07-11 mail): scratch must be an IMM reg,
-         * never a node reg like temp0 -- an unboxed value there has an
-         * arbitrary tag the GC could see. */
-        lsr     imm3, imm0, #32
-        cbnz    imm3, 2f                       /* digit3 (imm0's high half) != 0 */
-        /* digit3 == 0: 3 or 4 digits, decided by imm0's bit31 (== digit2's
-         * own sign bit, since digit3==0 means imm0 < 2^32). */
-        lsr     imm3, imm0, #31
-        cbnz    imm3, 1f
-        mov     imm2, #three_digit_bignum_header
-        Misc_Alloc_Fixed arg_z, imm2, aligned_bignum_size(3)
-        str     imm1, [arg_z, #misc_data_offset]
-        str     w0,   [arg_z, #(misc_data_offset + 8)]   /* w0 = low 32 bits of imm0 */
-        ret
-1:      mov     imm2, #four_digit_bignum_header
-        Misc_Alloc_Fixed arg_z, imm2, aligned_bignum_size(4)
-        str     imm1, [arg_z, #misc_data_offset]
-        str     imm0, [arg_z, #(misc_data_offset + 8)]
-        ret
-2:      /* digit3 != 0: 4 or 5 digits, decided by imm0's sign (bit63). */
-        cmp     imm0, #0
-        b.ge    1b
-        mov     imm2, #five_digit_bignum_header
-        Misc_Alloc_Fixed arg_z, imm2, aligned_bignum_size(5)
-        str     imm1, [arg_z, #misc_data_offset]
-        str     imm0, [arg_z, #(misc_data_offset + 8)]
-        str     xzr,  [arg_z, #(misc_data_offset + 16)]
-        ret
-6:      mov     imm0, imm1
-        b       _SPmakeu64
-endsp makeu128
-
-/* Construct a lisp integer out of the signed 128-bit value in imm0 (high 64
- * bits) : imm1 (low 64 bits).
- * ported from ppc-spentry.s:6667-6693 (PPC64 branch).  Unlike makeu128, a
- * signed value never needs a 5th padding digit: a kept top digit's own
- * bit31 already correctly encodes the sign, since the whole point of
- * dropping a would-be digit is only valid when it's pure sign-extension of
- * the one below -- which is exactly the "imm0 == sign_extend(imm1)" /
- * "imm0 fits signed32" tests below.  rotldi byte-swaps dropped (see
- * makeu128 comment -- little-endian AArch64 needs none). */
+/*
+ * The bits in imm1:imm0 constitute a signed integer, almost certainly
+ * a bignum.  Make a lisp integer out of those bits.
+ */
 spentry makes128
-        asr     imm2, imm1, #63
-        cmp     imm2, imm0
-        b.eq    2f
-        sxtw    imm3, w0                        /* sign-extend low 32 bits of imm0 */
-        cmp     imm3, imm0
-        b.eq    1f
-        mov     imm2, #four_digit_bignum_header
+        asr imm2, imm0, #63    // fill imm2 with sign of imm0
+        cmp imm2, imm1         // is imm1 just sign-extension of imm0?
+        b.eq 2f                // just sign: make 64-bit integer
+        /*
+         * Otherwise, if the high 32 bits of imm1 are a sign-extension of
+         * the low 32 bits, then make a 3-digit bignum.  If the upper 32
+         * bits of imm1 are significant, then make a 4-digit bignum.
+         */
+        sxtw imm2, w1           // sign-extend low 32 bits of imm1
+        cmp imm2, imm1
+        b.eq 1f                 // just sign: make 3-digit bignum
+        mov imm2, #four_digit_bignum_header
         Misc_Alloc_Fixed arg_z, imm2, aligned_bignum_size(4)
-        str     imm1, [arg_z, #misc_data_offset]
-        str     imm0, [arg_z, #(misc_data_offset + 8)]
+        str imm0, [arg_z, #misc_data_offset]
+        str imm1, [arg_z, #(misc_data_offset + 8)]
         ret
-1:      mov     imm2, #three_digit_bignum_header
+1:      mov imm2, #three_digit_bignum_header
         Misc_Alloc_Fixed arg_z, imm2, aligned_bignum_size(3)
-        str     imm1, [arg_z, #misc_data_offset]
-        str     w3,   [arg_z, #(misc_data_offset + 8)]
+        str imm0, [arg_z, #misc_data_offset]
+        str w1,   [arg_z, #(misc_data_offset + 8)] // w1 is low half of imm1
         ret
-2:      mov     imm0, imm1
-        b       _SPmakes64
+2:      b _SPmakes64            // low 64 bits in imm0
 endsp makes128
 
 /* makeu64: Matt's own implementation landed upstream @ 115b7aa
@@ -738,7 +690,8 @@ endsp builtin_div
  * fields) means the parallel cr1..cr5 compares are serialized below into an
  * if/elif cascade; the VALUES/arithmetic are unchanged. */
 spentry misc_alloc
-        /* GC SAFETY: imm scratch, not temp0 (see makeu128 note). */
+        /* GC SAFETY: imm scratch, not temp0 -- an unboxed value in a node
+         * reg has an arbitrary tag the GC could see. */
         lsr     imm4, arg_y, #59                  /* bounds: raw count fits unsigned-byte-56 */
         cbnz    imm4, 9f
         asr     imm0, arg_z, #fixnumshift          /* imm0 = raw subtag byte */
@@ -1945,7 +1898,7 @@ misc_ref_complex_single_float_vector:
            (arm64-constants.h:344-347), i.e. the same 8-byte word, so one load
            and one store carry both parts.
            imm0 must survive Misc_Alloc_Fixed with the header in imm2 -- the
-           makeu128 precedent (spentry-A:167-176) depends on exactly that. */
+           same guarantee makes128 relies on. */
         add imm0, arg_y, arg_z
         ldr imm0, [imm0, #misc_data_offset]
         /* Literal 2, not complex_single_float.element_count: ivector_class_32_bit
@@ -5139,8 +5092,8 @@ spentry builtin_times
         asr imm2, arg_y, #fixnumshift
         /* Multiply with overflow detection */
         asr imm3, arg_z, #fixnumshift
-        mul imm1, imm3, imm2  /* low 64 bits */
-        smulh imm0, imm3, imm2  /* high 64 bits */
+        mul imm0, imm3, imm2  /* low 64 bits */
+        smulh imm1, imm3, imm2  /* high 64 bits */
 
         /* Check if result fits in fixnum.  GC SAFETY (Matt 2026-07-11):
            imm scratch, never a node reg.
@@ -5152,16 +5105,16 @@ spentry builtin_times
            fixnum overflow, ppc:5548); with both operands unboxed we need
            BOTH: product fits s64 (smulh == sign of low) AND low fits s61
            (sbfx round-trip, Matt's makes64 idiom). */
-        asr imm4, imm1, #63
-        cmp imm4, imm0
-        b.ne 2f
-        sbfx imm4, imm1, #0, #(nbits_in_word - nfixnumtagbits)
+        asr imm4, imm0, #63
         cmp imm4, imm1
         b.ne 2f
-        lsl arg_z, imm1, #fixnumshift
+        sbfx imm4, imm0, #0, #(nbits_in_word - nfixnumtagbits)
+        cmp imm4, imm0
+        b.ne 2f
+        lsl arg_z, imm0, #fixnumshift
         ret
 
-2:      /* Result doesn't fit in fixnum - call makes128 */
+2:      /* Result doesn't fit in fixnum - call makes128 (imm1:imm0 = high:low) */
         b _SPmakes128
 
 1:      jump_builtin _builtin_times, 2  /* ppc:5576 */
@@ -5607,107 +5560,74 @@ spentry builtin_logand
 1:      jump_builtin _builtin_logand, 2 /* ppc:5869 */
 endsp builtin_logand
 
-/* ported from ppc-spentry.s:5871-5990 (PPC64 branch)
- * builtin_ash: arithmetic shift.  Positive arg_z = left shift, negative = right.
- * PPC64 branch only (5872-5930). */
+/*
+ * (ash arg_y arg_z)
+ *
+ * We do the shift here if both args are fixnums, and if the shift
+ * count (arg_z) is 64 or less.  Otherwise, we call out.
+ *
+ * Note: a fixnum is a (signed-byte 61).  Shifting left by 64 thus
+ * produces at most a (signed-byte 125).  As long as the shift count
+ * is 64 or less, the result will always fit in a (signed-byte 128),
+ * which is what makes128 constructs.  (In other words, there's no
+ * need for a makeu128.)
+ */
 spentry builtin_ash
-        /* ppc:5873 cmpdi cr1,arg_z,0 */
-        cmp arg_z, #0
-        /* ppc:5874-5877 extract tags, compare to fixnum */
-        and imm0, arg_y, #tagmask
-        and imm1, arg_z, #tagmask
-        cmp imm0, #tag_fixnum
-        b.ne 9f
-        cmp imm1, #tag_fixnum
-        b.ne 9f
-        /* ppc:5878 cmpdi cr2,arg_z,-(63<<3) -- check shift magnitude */
-        /* Retest arg_z sign (flags clobbered by tag checks) */
-        cmp arg_z, #0
-        b.gt 2f
-        /* ppc:5881 bne cr1,0f -- if arg_z != 0, proceed; else return arg_y */
-        b.ne 0f
-        mov arg_z, arg_y                /* ppc:5882 (ash n 0) => n */
-        ret                             /* ppc:5883 */
-0:
-        /* Negative shift (right shift) */
-        /* ppc:5885 unbox_fixnum(imm1,arg_y) */
-        asr imm1, arg_y, #fixnumshift
-        /* ppc:5886 unbox_fixnum(imm0,arg_z) -- shift count (negative) */
-        asr imm0, arg_z, #fixnumshift
-        /* ppc:5889 neg imm2,imm0 -- positive shift count */
-        neg imm2, imm0
-        /* ppc:5878/5890 bgt cr2 / li imm2,63 -- clamp to 63 */
-        cmp imm2, #63
-        b.le 1f
-        mov imm2, #63
-1:
-        /* ppc:5893 srad imm0,imm1,imm2 */
-        asr imm0, imm1, imm2
-        /* ppc:5894 box_fixnum(arg_z,imm0) */
-        lsl arg_z, imm0, #fixnumshift
-        ret                             /* ppc:5895 */
-2:
-        /* Positive shift (left shift) */
-        /* ppc:5897 Integer-length of arg_y/imm1 to imm2 */
-        asr imm1, arg_y, #fixnumshift   /* ppc:5885 (reuse) */
-        asr imm0, arg_z, #fixnumshift   /* ppc:5886 (reuse) */
-        /* ppc:5898 cntlzd. imm2,imm1 */
-        cmp imm1, #0
-        b.ge 3f
-        /* Negative value: count leading zeros of NOT(imm1) */
-        mvn imm2, imm1                  /* ppc:5900 not imm2,imm1 */
-        clz imm2, imm2                  /* ppc:5901 cntlzd imm2,imm2 */
-        b 4f
-3:      clz imm2, imm1                  /* ppc:5898 cntlzd imm2,imm1 */
-4:
-        /* ppc:5903 subfic imm2,imm2,64 -- integer-length = 64 - clz */
-        mov imm3, #64
-        sub imm2, imm3, imm2
-        /* ppc:5904 add imm2,imm2,imm0 -- total bits needed */
-        add imm2, imm2, imm0
-        /* ppc:5905 cmpdi cr1,imm2,63-fixnumshift -- fits in fixnum? */
+        orr imm0, arg_y, arg_z        // both args fixnums?
+        tst imm0, #tagmask
+        b.ne 9f                       // no: call out
+        cbz arg_z, 4f                 // (ash n 0) => return n
+        asr imm1, arg_y, #fixnumshift // value
+        asr imm0, arg_z, #fixnumshift // count
+        tbnz imm0, #63, 3f            // negative count => right shift
+        /*
+         * Left shift by imm0 (> 0). We can compute integer-length of
+         * value with 63 - cls(value).  The result then needs
+         * integer-length plus count significant bits.
+         */
+        cls imm2, imm1          // count redundant sign bits
+        mov imm3, #63
+        sub imm2, imm3, imm2    // integer-length of value
+        add imm2, imm2, imm0    // bits needed for result
         cmp imm2, #(63 - fixnumshift)
-        /* ppc:5907 sld imm2,imm1,imm0 -- perform the shift */
-        lsl imm2, imm1, imm0
-        b.gt 6f
-        /* ppc:5909 box_fixnum(arg_z,imm2) -- result fits */
-        lsl arg_z, imm2, #fixnumshift
-        ret                             /* ppc:5910 */
-6:
-        /* Result does not fit in a fixnum */
-        /* ppc:5906 cmpdi cr2,imm0,64 */
-        cmp imm0, #64
-        b.gt 9f                         /* ppc:5912 shift > 64: bail to generic */
-        b.eq ash_shift64                /* ppc:5913 shift == 64 exactly */
-        /* ppc:5920-5925: Shift left by fewer than 64 bits, result not fixnum */
-        /* ppc:5921 subfic imm0,imm0,64 */
+        lsl imm2, imm1, imm0          // value << count
+        b.gt 1f                       // need to make a bignum
+        lsl arg_z, imm2, #fixnumshift // result fits in a fixnum
+        ret
+        /*
+         * The shifted result needs to be a bignum.  We can shift a
+         * fixnum left by up to 64 bits and fit into a 128-bit result,
+         * which we can handle here directly.  If the shift is larger,
+         * we have to call out.
+         */
+1:      cmp imm0, #64
+        b.gt 9f               // count > 64: too wide for 128 bits, call out
+        b.eq 2f               // count == 64: high = value, low = 0, easy
+        // We now know that count is in the interval [1, 63].
         mov imm3, #64
-        sub imm3, imm3, imm0           /* 64 - shift_count */
-        /* Need to check sign for signed vs unsigned result */
-        cmp imm1, #0
-        b.lt 8f
-        /* ppc:5923 srd imm0,imm1,imm0 -- high part (unsigned) */
-        lsr imm0, imm1, imm3
-        mov imm1, imm2                  /* ppc:5924 mr imm1,imm2 (low part) */
-        b _SPmakeu128                   /* ppc:5925 */
-8:
-        /* ppc:5927 srad imm0,imm1,imm0 -- high part (signed) */
-        asr imm0, imm1, imm3
-        mov imm1, imm2                  /* ppc:5928 */
-        b _SPmakes128                   /* ppc:5929 */
-ash_shift64:
-        /* ppc:5915-5918: Shift left by exactly 64 bits */
-        mov imm0, imm1                  /* ppc:5915 mr imm0,imm1 */
-        mov imm1, #0                    /* ppc:5916 li imm1,0 */
-        /* ppc:5917-5918: beq _SPmakes128 / b _SPmakeu128
-         * PPC branches on cr0.eq from cntlzd. -- this reflects whether
-         * original value was negative. */
-        cmp imm0, #0
-        b.lt _SPmakes128
-        b _SPmakeu128
-9:
-        /* ppc:5990 */
-        jump_builtin _builtin_ash, 2
+        sub imm3, imm3, imm0  // 64 - count
+        asr imm1, imm1, imm3  // high = value >> (64 - count), sign-extended
+                              // (the bits shifted left out of the low word)
+        mov imm0, imm2        // low  = value << count (computed earlier)
+        b _SPmakes128
+2:      mov imm0, xzr         // low = 0 (value << 64); high already in imm1
+        b _SPmakes128
+        /*
+         * Count is negative, so we want to right shift by -count.  No
+         * matter how big -count is, the result fits in a fixnum.  We
+         * do have to clamp the shift amount to 63: a fixnum needs no
+         * more, and the arm64 variable shift amount is taken mod 64.
+         */
+3:      neg  imm0, imm0                 // shift count now positive
+        cmp  imm0, #63
+        mov  imm2, #63
+        csel imm0, imm0, imm2, ls       // clamp to 63
+        asr  imm1, imm1, imm0           // arithmetic right shift
+        lsl  arg_z, imm1, #fixnumshift  // box result
+        ret
+4:      mov arg_z, arg_y
+        ret
+9:      jump_builtin _builtin_ash, 2
 endsp builtin_ash
 
 /* ported from ppc-spentry.s:5992-6013 (PPC64 branch)
