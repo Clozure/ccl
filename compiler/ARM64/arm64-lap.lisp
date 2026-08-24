@@ -100,23 +100,65 @@
                                           target::subtag-function)))
          (i prefix-size))
     (declare (fixnum i constants-size))
-    (let* ((code-vector (%alloc-misc
-                         (+ code-vector-size prefix-size)
-                         (if cross-compiling
-                           target::subtag-xcode-vector
-                           arm64::subtag-code-vector))))
+    (let* ((code-vector
+            (cond
+              ;; Native Darwin/arm64: always MAP_JIT (AREA_CODE).  Heap is NX.
+              ;; compile-file used to allocate heap vectors "for fasl dump
+              ;; only", but eval-when (:compile-toplevel) executes those
+              ;; functions in-process — FATAL NX.  fasl-dump-codevector
+              ;; only needs readable bytes (uvref / fasl-out-ivect); MAP_JIT
+              ;; RX satisfies that.  Load of the fasl still goes through
+              ;; $fasl-code-vector → %allocate-code-vector.
+              #+(and darwinarm64-target)
+              ((and (not cross-compiling)
+                    (fboundp '%allocate-code-vector))
+               (%allocate-code-vector (+ code-vector-size prefix-size)))
+              (t
+               (%alloc-misc
+                (+ code-vector-size prefix-size)
+                (if cross-compiling
+                  target::subtag-xcode-vector
+                  arm64::subtag-code-vector)))))
+           #+darwinarm64-target
+           (use-jit-blit
+            (and (not cross-compiling)
+                 (fboundp '%darwinarm64-jit-install-code)
+                 (fboundp '%allocate-code-vector)))
+           #+darwinarm64-target
+           (scratch
+            (when use-jit-blit
+              ;; Assemble into a heap code-vector (RW), then C-blit into
+              ;; MAP_JIT.  Never hold pthread_jit_write_protect_np(0)
+              ;; across lisp — that makes already-loaded JIT fasls NX.
+              (%alloc-misc (+ code-vector-size prefix-size)
+                           arm64::subtag-code-vector)))
+           (fill-target #+darwinarm64-target (or scratch code-vector)
+                        #-darwinarm64-target code-vector))
       (dotimes (j prefix-size)
-        (setf (uvref code-vector j) (pop prefix)))
+        (setf (uvref fill-target j) (pop prefix)))
       (do-dll-nodes (insn seg)
         (unless (eql (arm64::instruction-element-size insn) 0)
-          (setf (uvref code-vector i) (arm64::instruction-word insn))
+          (setf (uvref fill-target i) (arm64::instruction-word insn))
           (incf i)))
+      #+darwinarm64-target
+      (when use-jit-blit
+        (%darwinarm64-jit-install-code
+         code-vector scratch
+         (ash (+ code-vector-size prefix-size) 2)))
       (dolist (pair arm64::*constants*)
         (let ((imm (car pair))
               (k (cdr pair)))
           (setf (uvref constants-vector (1+ k)) imm)))
       (setf (uvref constants-vector (1- constants-size)) lfbits
             (uvref constants-vector 0) code-vector)
+      ;; Match ARM32/PPC: flush I/D cache before execution.
+      ;; Darwin/arm64 MAP_JIT blit path already icaches in jit_install_code.
+      (unless cross-compiling
+        #-darwinarm64-target
+        (%make-code-executable code-vector)
+        #+darwinarm64-target
+        (unless use-jit-blit
+          (%make-code-executable code-vector)))
       ;; %alloc-misc returns a misc-tagged vector; hand the resident
       ;; (non-cross) path to function-vector-to-function so both ends name
       ;; the conversion, as $fasl-clfun does.  NOT a retag on arm64: since

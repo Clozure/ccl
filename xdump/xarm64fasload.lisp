@@ -186,11 +186,14 @@
    :default-startup-file-name "level-1.da64fsl"
    :subdirs '("ccl:level-0;ARM64;")
    :compiler-target-name :darwinarm64
-   :image-base-address 0 ;xxx
+   ;; High addresses: arm64 Darwin rejects MAP_FIXED in low memory and
+   ;; rejects RWX.  Must match STATIC_BASE_ADDRESS / IMAGE_BASE_ADDRESS
+   ;; in lisp-kernel/platform-darwinarm64.h.
+   :image-base-address #x300000000000
    :nil-relative-symbols arm64::*nilreg-relative-symbols*
    :static-space-init-function 'arm64-initialize-static-space
    :purespace-reserve (ash 128 30)
-   :static-space-address 0 ;xxx
+   :static-space-address #x200000000
 ))
 
 (add-xload-backend *darwinarm64-xload-backend*)
@@ -203,6 +206,11 @@
 #+linuxarm64-target
 (progn
 (setq *xload-default-backend* *linuxarm64-xload-backend*)
+)
+
+#+darwinarm64-target
+(progn
+(setq *xload-default-backend* *darwinarm64-xload-backend*)
 )
 
 

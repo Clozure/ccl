@@ -15,11 +15,17 @@
 ;;; =====================================================================
 ;;; offset is a boxed fixnum, one of the target::kernel-import-xxx BYTE
 ;;; offsets; unboxing yields the raw byte offset.
+;;;
+;;; Return a fixnum-locative: the raw C address in a node register.
+;;; Aligned code addresses have low tag bits clear, so they look like
+;;; fixnums.  Matches PPC (ppc-utils:623 ldrx→arg_z, no box) and
+;;; _SPffcall's "non-macptr bits ARE the address" contract.  Do NOT
+;;; box-fixnum like x86 — x86 ffcall unboxes first; arm64 ffcall does not.
 (defarm64lapfunction %kernel-import ((offset arg_z))
   (ref-global imm0 kernel-imports)      ; ppc:621
   (unbox-fixnum imm1 arg_z)             ; ppc:622
-  (ldr arg_z (:@ imm0 imm1))            ; ppc:623 (ldrx)
-  (ret))                                ; ppc:624
+  (ldr arg_z (:@ imm0 imm1))            ; ppc:623 — raw address / fixnum-locative
+  (ret))
 
 ;;; =====================================================================
 ;;; %get-unboxed-ptr — ppc:626
@@ -180,6 +186,10 @@
     (ref-global imm0 tenured-area)      ; ppc:380
     (cmp imm0 (:$ 0))                   ; ppc:381 (cmpdi cr0)
     (csel a imm0 a (:? ne))             ; ppc:390-391 (if :ne (mr a imm0)) — moved up
+    ;; Load area.low and fun before the alloc trap — Darwin handle_alloc_trap
+    ;; can clobber volatile arg_y/arg_z (x86 loads area.low before uuo-alloc).
+    (ldr imm5 (:@ a (:$ arm64::area.low))) ; ppc:392
+    (mov fun f)                         ; ppc:389
     ;; Force the uuo-alloc-trap by setting allocbase to all ones so
     ;; that the b.hi will never be taken (nothing is unsigned-higher
     ;; than all ones).  This gets us a fresh segment, and the cons
@@ -192,8 +202,6 @@
     @no-trap
     (mov sentinel allocptr)
     (bic allocptr allocptr (:$ arm64::fulltagmask))
-    (mov fun f)                         ; ppc:389 (mr)
-    (ldr imm5 (:@ a (:$ arm64::area.low))) ; ppc:392 (ld imm5 …)
     @loop
     (ldr header (:@ imm5 (:$ 0)))       ; ppc:394
     ;; ppc:395-399 — header-vs-cons discrimination on the header fulltag
@@ -422,6 +430,12 @@
   (sturb (:w imm0) (:@ p (:$ arm64::misc-subtag-offset))) ; ppc:634 (stb)
   (ret))                                   ; ppc:635 (blr)
 
+;;; Tag raw address (macptr) as a misc-tagged lisp object.
+(defarm64lapfunction %tag-as-misc ((p arg_z))
+  (macptr-ptr imm0 p)
+  (add arg_z imm0 (:$ arm64::fulltag-misc))
+  (ret))
+
 ;;; =====================================================================
 ;;; %class-of-instance — ppc-utils.lisp:459
 ;;; =====================================================================
@@ -491,7 +505,7 @@
   (mov nfn temp0)                        ; ppc:486 (mr)
   (ldur imm0 (:@ nfn (:$ arm64::misc-function-offset))) ; ppc:487 (ldr misc-data-offset)
   (set-nargs 1)                          ; ppc:488
-  (br imm0)                              ; ppc:489-490 (mtctr/bctr)
+  (br imm0)                   ; ppc:489-490 (mtctr/bctr)
   @bad
   (load-nfn-constant fname no-class-error) ; ppc:492
   ;; ppc:493 (ba .spjmpsym) — no-link tail jump per the EQUAL canon;
@@ -848,3 +862,101 @@ be somewhat larger than what was specified)."
   (trap-unless-typecode= p arm64::subtag-macptr)  ; ppc:661
   (svset imm1 arm64::macptr.domain-cell p)        ; ppc:662
   (ret))                                          ; ppc:663
+
+;;; =====================================================================
+;;; Darwin/arm64 MAP_JIT code-vector heap (AREA_CODE)
+;;; =====================================================================
+;;; Prefer DEFVAR with constant init ($fasl-defvar-init).  Avoid
+;;; DEFSTATIC/DEFCONSTANT/%DEFPARAMETER random toplevel (cold-load UUO).
+;;;
+;;; All executable code (cold-load fasls + interactive compile) lives here.
+;;; Purify copies live vectors into AREA_READONLY.  Dynamic heap is never
+;;; executable.  WP toggles only in
+;;; kernel C (darwin_arm64_jit_*); never call pthread_jit_write_protect_np
+;;; from lisp (NX's all MAP_JIT pages for the thread).
+
+#+(and darwinarm64-target)
+(progn
+
+;;; T from cold-load onward.  Native compile (incl. compile-file) allocates
+;;; MAP_JIT code-vectors; fasl dump reads their bytes.  Fasl *load* also
+;;; MAP_JIT via $fasl-code-vector.
+(defvar *darwinarm64-map-jit-fasls* t)
+
+(defvar *jit-code-base* nil)
+(defvar *jit-code-limit* nil)
+(defvar *jit-code-free* nil)
+
+(defun %darwinarm64-register-code-heap ()
+  "Publish MAP_JIT [base,free) to the kernel for purify."
+  (when *jit-code-base*
+    (ff-call (foreign-symbol-address "darwin_arm64_set_code_heap")
+             :address *jit-code-base*
+             :address *jit-code-free*
+             :void)))
+
+(defun %ensure-jit-code-heap ()
+  "MAP_JIT code heap for this process.  Not part of the saved image —
+lisp macptrs are cleared before dumplisp; restart remmaps."
+  (unless (and *jit-code-base*
+               (typep *jit-code-base* 'macptr)
+               (not (%null-ptr-p *jit-code-base*)))
+    (let* ((len #.(* 256 1024 1024))
+           (p (ff-call (foreign-symbol-address "mmap")
+                       :address (%null-ptr)
+                       :unsigned-fullword len
+                       :int #x7
+                       :int (logior #x1002 #x0800)
+                       :int -1 :long 0 :address)))
+      (when (or (%null-ptr-p p) (eql (%ptr-to-int p) -1))
+        (error "mmap(MAP_JIT) code heap failed"))
+      (setq *jit-code-base* p
+            *jit-code-limit* (%inc-ptr p len)
+            *jit-code-free* p)
+      (%darwinarm64-register-code-heap)))
+  *jit-code-base*)
+
+(defun %allocate-code-vector (element-count)
+  "Allocate a code-vector of ELEMENT-COUNT u32 words in MAP_JIT.
+Header/zero via kernel C (no lisp under WP).  Fill with
+%darwinarm64-jit-install-code or LAP scratch+blit."
+  (declare (fixnum element-count))
+  (%ensure-jit-code-heap)
+  (let* ((payload (ash element-count 2))
+         (total (logandc2 (+ payload 8 15) 15))
+         (header (logior (ash element-count arm64::num-subtag-bits)
+                         arm64::subtag-code-vector))
+         (free *jit-code-free*)
+         (next (%inc-ptr free total)))
+    (when (>= (%ptr-to-int next) (%ptr-to-int *jit-code-limit*))
+      (error "MAP_JIT code heap exhausted"))
+    (ff-call (foreign-symbol-address "darwin_arm64_jit_init_code_vector")
+             :address free
+             :unsigned-doubleword header
+             :unsigned-fullword total
+             :void)
+    (setq *jit-code-free* next)
+    (%darwinarm64-register-code-heap)
+    (%tag-as-misc free)))
+
+(defun %darwinarm64-jit-install-code (code-vector src-ivector nbytes)
+  "Copy NBYTES from SRC-IVECTOR payload into CODE-VECTOR.  WP+icache
+in kernel C — no lisp runs while MAP_JIT pages are RW-only."
+  (declare (fixnum nbytes))
+  (with-macptrs ((d) (s))
+    (%vect-data-to-macptr code-vector d)
+    (%vect-data-to-macptr src-ivector s)
+    (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+             :address d
+             :address s
+             :unsigned-fullword nbytes
+             :void))
+  code-vector)
+
+(defun %enable-darwinarm64-map-jit-fasls ()
+  "Ensure MAP_JIT fasl loads (default).  Kept for dumplisp / rebuild callers."
+  (setq *darwinarm64-map-jit-fasls* t)
+  (%ensure-jit-code-heap)
+  t)
+
+) ; progn

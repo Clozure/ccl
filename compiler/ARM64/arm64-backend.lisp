@@ -234,6 +234,23 @@
                 :target-foreign-type-data nil
                 :target-arch arm64::*arm64-target-arch*))
 
+;;; Darwin cannot MAP_FIXED the linux/x8664 static page (#x12000); static
+;;; space lives at #x200000000 (platform-darwinarm64.h).  nil = static+4K+tag.
+;;; Must NOT share *arm64-target-arch* with linux — native xload otherwise
+;;; embeds #x1300b and cold-load faults in %FIND-PKG (read @ #x13010).
+(defconstant +darwinarm64-nil-value+ #x20000100b)
+
+(defvar *darwinarm64-target-arch* nil)
+
+(defun ensure-darwinarm64-target-arch ()
+  "Fresh arch copy with Darwin nil-value; install on *darwinarm64-backend*."
+  (let ((a (copy-structure arm64::*arm64-target-arch*)))
+    (setf (arch::target-nil-value a) +darwinarm64-nil-value+)
+    (setq *darwinarm64-target-arch* a)
+    (when (and (boundp '*darwinarm64-backend*) *darwinarm64-backend*)
+      (setf (backend-target-arch *darwinarm64-backend*) a))
+    a))
+
 #+(or darwinarm64-target (not arm64-target))
 (defvar *darwinarm64-backend*
   (make-backend :lookup-opcode #'false
@@ -256,7 +273,8 @@
                 :name :darwinarm64
                 :target-arch-name :arm64
                 :target-foreign-type-data nil
-                :target-arch arm64::*arm64-target-arch*))
+                :target-arch (or *darwinarm64-target-arch*
+                                 (ensure-darwinarm64-target-arch))))
 
 #+(or linuxarm64-target (not arm64-target))
 (pushnew *linuxarm64-backend* *known-arm64-backends*)
@@ -272,7 +290,11 @@
           (backend-p2-dispatch b) *arm642-specials*
           (backend-p2-vinsn-templates b)  *arm64-vinsn-templates*)
     (or (backend-lap-macros b) (setf (backend-lap-macros b)
-                                     (make-hash-table :test #'equalp)))))
+                                     (make-hash-table :test #'equalp))))
+  ;; Keep Darwin nil-value correct even after arm64-arch reload resets
+  ;; the shared linux-shaped *arm64-target-arch*.
+  #+(or darwinarm64-target (not arm64-target))
+  (ensure-darwinarm64-target-arch))
 
 (fixup-arm64-backend)
 
@@ -393,45 +415,9 @@
   (pushnew *linuxarm64-backend* *known-backends* :key #'backend-name))
 
 
-;;; FFI stuff
-
-;;; If the type, T, of the result of a function is such that
-;;;
-;;;   void func(T arg)
-;;;
-;;; would require that arg be passed as a value in a register (or set
-;;; of registers) according to the rules in Parameter passing, then
-;;; the result is returned in the same registers as would be used for
-;;; such an argument.
-;;;
-;;; Otherwise, the caller shall reserve a block of memory of
-;;; sufficient size and alignment to hold the result. The address of
-;;; the memory block shall be passed as an additional argument to the
-;;; function in x8. The callee may modify the result memory block at
-;;; any point during the execution of the subroutine (there is no
-;;; requirement for the callee to preserve the value stored in x8).
-;;;
-;;;                                - Procedure Call Standard, § 6.9
-
-;;; If a returned struct is more than 16 bytes long, the caller will
-;;; reserve memory for the return value and pass a pointer to that
-;;; memory in register x8.  (Not as a hidden first argument, despite
-;;; the name of this function.)
-(defun arm64::record-type-returns-structure-as-first-arg (rtype)
-  (when (and rtype
-             (not (typep rtype 'unsigned-byte))
-             (not (member rtype *foreign-representation-type-keywords*
-                          :test #'eq)))
-    (let* ((ftype (if (typep rtype 'foreign-type)
-                    rtype
-                    (parse-foreign-type rtype))))
-      (> (ensure-foreign-type-bits ftype) 128))))
-
-(defun arm64::expand-ff-call (callform args
-                              &key
-                                (arg-coerce #'null-coerce-foreign-arg)
-                                (result-coerce #'null-coerce-foreign-result))
-  (declare (ignore callform args arg-coerce result-coerce)))
+;;; The FFI entry points (record classification, expand-ff-call, and
+;;; the callback generators) live in lib/ffi-arm64.lisp, shared by both
+;;; arm64 OS targets.
 
 ;;; A resident (native) arm64 compiler is DEMAND-LOADED module by module,
 ;;; not dumped into the image the way the ppc/x86 ones are, so nothing pulls

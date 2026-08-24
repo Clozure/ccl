@@ -944,17 +944,25 @@ are running on, or NIL if we can't find any useful information."
       "svnversion"))
 
 (defun local-git-revision ()
-  (let ((s (make-string-output-stream))
-	(git-dir (native-translated-namestring
-		  (merge-pathnames (ccl-directory) ".git"))))
-    (multiple-value-bind (status exit-code)
-	(external-process-status
-	 (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
-		      :output s :error :output))
-      (when (and (eq status :exited)
-		 (= exit-code 0))
-	(string-right-trim (list #\space #\newline)
-			   (get-output-stream-string s))))))
+  ;; After MAP_JIT-heavy compile on Darwin/arm64, fork/run-program has
+  ;; occasionally returned with pid NIL ("Bug: fork failed but status
+  ;; field not set?").  Retry; never abort an xload for a version string.
+  (dotimes (attempt 5)
+    (when (plusp attempt) (gc) (sleep 0.2))
+    (handler-case
+        (let ((s (make-string-output-stream))
+              (git-dir (native-translated-namestring
+                        (merge-pathnames (ccl-directory) ".git"))))
+          (multiple-value-bind (status exit-code)
+              (external-process-status
+               (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
+                            :output s :error :output))
+            (when (and (eq status :exited)
+                       (= exit-code 0))
+              (return-from local-git-revision
+                (string-right-trim (list #\space #\newline)
+                                   (get-output-stream-string s))))))
+      (error ()))))
 
 (defun local-svn-revision ()
   (let* ((s (make-string-output-stream))
@@ -1465,7 +1473,11 @@ are running on, or NIL if we can't find any useful information."
 
 (defun kernel-global-address (global)
   (check-type global symbol)
-  (+ (target-nil-value) (target::%kernel-global global)))
+  ;; arm64: statics (and therefore nil) have no fixed VA; the canonical
+  ;; (target-nil-value) is wrong when the loader relocated the static
+  ;; section.  Use the live nil address.
+  #+arm64-target (+ (%address-of nil) (target::%kernel-global global))
+  #-arm64-target (+ (target-nil-value) (target::%kernel-global global)))
 
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 

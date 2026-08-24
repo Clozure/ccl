@@ -18,6 +18,13 @@
 
 (require "COMPILE-HEMLOCK")
 
-(format t "~&;;; Compiling Hemlock ...")
-
-(compile-hemlock t)
+;;; Historically this always passed T (force-recompile every IDE load).
+;;; On Darwin/arm64 that recompiles ~50 Hemlock files under W^X on every
+;;; (require "COCOA"), thrashing the heap (BOGUS semaphore macptrs, corrupt
+;;; uvector headers, CLASS-CELL-TYPEP FAR faults) before the event loop is
+;;; usable.  Only force when *cocoa-ide-force-compile* is true; otherwise
+;;; load existing fasls (recompile when sources are newer).
+(let* ((force (and (boundp '*cocoa-ide-force-compile*)
+                   *cocoa-ide-force-compile*)))
+  (format t "~&;;; ~:[Loading~;Compiling~] Hemlock ...~%" force)
+  (compile-hemlock force))

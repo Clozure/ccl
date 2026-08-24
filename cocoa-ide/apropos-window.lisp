@@ -212,7 +212,7 @@
     (let* ((s (lisp-string-from-nsstring string)))
       (or (position s packages :test #'(lambda (str pkg)
 					 (string-equal str (package-name pkg))))
-	  #$NSNotFound))))
+	  $ns-not-found))))
 
 
 ;;; Table view delegate methods

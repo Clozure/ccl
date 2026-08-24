@@ -50,10 +50,10 @@
       (setf case-sensitive-p (not *grep-ignore-case*))
       (#/setState: case-sensitive-checkbox
                    (if (not *grep-ignore-case*)
-                       #$NSOnState
-                       #$NSOffState))
+                       $control-state-value-on
+                       $control-state-value-off))
       (setf expand-results-p t)
-      (#/setState: expand-results-checkbox #$NSOnState))
+      (#/setState: expand-results-checkbox $control-state-value-on))
     (#/doSearch: wc +null-ptr+)))
 
 (hi:defhvar "Grep Directory"

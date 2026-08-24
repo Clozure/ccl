@@ -94,6 +94,23 @@
       (mapc #'unwatch watched)))
   (when (and native prepend-kernel)
     (error "~S and ~S can't both be specified (yet)." :native :prepend-kernel))
+  ;; Saving from inside WITH-COMPILATION-UNIT leaves a parent deferred-
+  ;; warnings object in the image; compile-file then never signals
+  ;; undefined-type/function warnings (darwinarm64 bring-up hit this).
+  (setq *outstanding-deferred-warnings* nil)
+  ;; Darwin/arm64 AREA_CODE: publish MAP_JIT bounds to the kernel for
+  ;; purify, then drop lisp macptrs so they are not dumped (would be
+  ;; dead after restart).  Fresh mmap on next %ensure-jit-code-heap.
+  #+darwinarm64-target
+  (progn
+    (unless (fboundp '%enable-darwinarm64-map-jit-fasls)
+      (require "ARM64ENV"))
+    (%enable-darwinarm64-map-jit-fasls)
+    (when (fboundp '%darwinarm64-register-code-heap)
+      (%darwinarm64-register-code-heap))
+    (setq *jit-code-base* nil
+          *jit-code-limit* nil
+          *jit-code-free* nil))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
@@ -120,6 +137,7 @@
       (unless (eq cp ip)
 	(process-kill cp)))))
 
+
 (defun %save-application-internal (fd &key
                                       toplevel-function ;???? 
                                       error-handler ; meaningless unless application-class or *application* not lisp-development..
@@ -133,6 +151,10 @@
                                       #+windows-target application-type
                                       native)
   (declare (ignore mode prepend-kernel #+windows-target application-type native))
+  ;; Must clear on the dumping process (initial): a listener setq is not
+  ;; enough if a dynamic binding still shadows on *initial-process*, and
+  ;; a leftover parent unit makes compile-file swallow deferred warnings.
+  (setq *outstanding-deferred-warnings* nil)
   (when (and application-class (neq  (class-of *application*)
                                      (if (symbolp application-class)
                                        (find-class application-class)

@@ -652,6 +652,14 @@ ncircle_markhtabvs()
   mark_termination_lists();
 }
 
+/* Mark-origin diagnostics: which root class / area / slot supplied the
+   value currently being marked.  Written by the per-phase markers, read
+   by corrupt-header checks (e.g. arm64-gc.c check_marked_extent) so a
+   stale root identifies its source.  Costs a few stores per root. */
+char *GCmark_phase = "early";
+void *GCmark_phase_area = NULL;
+LispObj *GCmark_phase_slot = NULL;
+
 void
 mark_tcr_tlb(TCR *tcr)
 {
@@ -661,9 +669,12 @@ mark_tcr_tlb(TCR *tcr)
     *end = (LispObj *) ((BytePtr)start+n),
     node;
 
+  GCmark_phase = "tcr-tlb";
+  GCmark_phase_area = tcr;
   while (start < end) {
     node = *start;
     if (node != no_thread_local_binding_marker) {
+      GCmark_phase_slot = start;
       mark_root(node);
     }
     start++;
@@ -1735,6 +1746,9 @@ gc(TCR *tcr, signed_natural param)
       }
     }
 
+    GCmark_phase = "memoized";
+    GCmark_phase_area = NULL;
+    GCmark_phase_slot = NULL;
     if (GCephemeral_low) {
       mark_memoized_area(tenured_area, area_dnode(a->low,tenured_area->low), tenured_area->refidx);
       mark_memoized_area(managed_static_area,managed_static_area->ndnodes, managed_static_area->refidx);
@@ -1743,6 +1757,8 @@ gc(TCR *tcr, signed_natural param)
     }
     other_tcr = tcr;
     do {
+      GCmark_phase = "tcr-xframes";
+      GCmark_phase_area = other_tcr;
       mark_tcr_xframes(other_tcr);
       mark_tcr_tlb(other_tcr);
       other_tcr = TCR_AUX(other_tcr)->next;
