@@ -124,12 +124,22 @@
 ;;; 
 (defun %make-executable-page ()
   #-windows-target
-  (#_mmap (%null-ptr)
-          (get-page-size)
-          (logior #$PROT_READ #$PROT_WRITE #$PROT_EXEC)
-          (logior #$MAP_PRIVATE #$MAP_ANON)
-          -1
-          0)
+  (let* ((len (get-page-size))
+         ;; Apple Silicon rejects RWX unless MAP_JIT (0x0800).  Without it
+         ;; mmap returns MAP_FAILED (-1) and %inc-ptr yields ~0x3fdf.
+         (flags (logior #$MAP_PRIVATE #$MAP_ANON
+                        #+(and darwin-target arm64-target) #x0800))
+         (p (#_mmap (%null-ptr)
+                    len
+                    (logior #$PROT_READ #$PROT_WRITE #$PROT_EXEC)
+                    flags
+                    -1
+                    0)))
+    (when (or (%null-ptr-p p)
+              (eql (%ptr-to-int p) -1))
+      (error "~S: mmap failed (Darwin arm64 needs MAP_JIT for RWX)"
+             '%make-executable-page))
+    p)
   #+windows-target
   (#_VirtualAlloc (%null-ptr)
                   (ash 1 16)            ; should use GetSystemInfo

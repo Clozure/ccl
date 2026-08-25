@@ -369,10 +369,17 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "FFI-ANDROIDARM" "ffi-androidarm")
       #+(and arm-target darwin-target)
       (bin-load-provide "FFI-DARWINARM" "ffi-darwinarm")
+      ;; The arm64 OS files (require "FFI-ARM64") for the shared AAPCS64
+      ;; logic: load that fasl first so the require is satisfied without
+      ;; falling back to .lisp source this early in the boot.
       #+(and arm64-target linux-target)
-      (bin-load-provide "FFI-LINUXARM64" "ffi-linuxarm64")
+      (progn
+        (bin-load-provide "FFI-ARM64" "ffi-arm64")
+        (bin-load-provide "FFI-LINUXARM64" "ffi-linuxarm64"))
       #+(and arm64-target darwin-target)
-      (bin-load-provide "FFI-DARWINARM64" "ffi-darwinarm64")
+      (progn
+        (bin-load-provide "FFI-ARM64" "ffi-arm64")
+        (bin-load-provide "FFI-DARWINARM64" "ffi-darwinarm64"))
 
 
       ;; Knock wood: all standard reader macros and no non-standard

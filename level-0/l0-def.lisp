@@ -316,4 +316,60 @@
               (info (%lisp-word-ref valptr i)))))
         (info)))))
 
+#+arm64-target
+(defun %throwing-through-cleanup-p ()
+  ;; Arm64 cannot use the x86 "RA has no function" tsp test: nthrowvalues
+  ;; parks [nargs,val*,frame-count] on the tsp without a distinguishable RA.
+  ;;
+  ;; Match x86 semantics: only THROW (via .SPthrow → .SPnthrowvalues) counts
+  ;; as "throwing through cleanup".  Compiled normal unwind-protect exit and
+  ;; return-from both use .SPnthrow1value with tsp nodes=4 ([value,count]) —
+  ;; the same layout — so nodes=4 alone is a false positive.  That false
+  ;; positive made every :propagate-throw ObjC callback believe it was
+  ;; throwing on normal return, patch the foreign LR to the exception
+  ;; trampoline, and SIGBUS (darwinarm64 cocoa #/init / call-next-method).
+  ;;
+  ;; THROW marker: tsp nodes >= 6 and two consecutive savefn=0 csp frames
+  ;; (.SPthrow zeros fn before bl .SPnthrowvalues; normal nthrow1value
+  ;; frames alternate fn/0).  Scan upward so helpers in the cleanup form
+  ;; do not matter.  Frame-count = remaining catch frames after this
+  ;; cleanup (0 => target is current catch_top, which already skips the
+  ;; uwp we are in).
+  (let* ((tsp (%current-tsp))
+         (backlink (%lisp-word-ref tsp 0))
+         (nodes (%i- backlink tsp)))
+    (declare (fixnum tsp backlink nodes))
+    (labels ((small-count-p (x)
+               (and (typep x 'fixnum) (not (minusp x)) (< x 65536)))
+             (tag-at (frame-count)
+               (let* ((cf (%catch-top (%current-tcr))))
+                 (dotimes (i frame-count
+                           (%svref cf target::catch-frame.catch-tag-cell))
+                   (setq cf (%svref cf target::catch-frame.link-cell)))))
+             (nthrowvalues-throwing-p ()
+               (do* ((f (%current-frame-ptr) (%frame-backlink f))
+                     (i 0 (%i+ i 1)))
+                    ((> i 32) nil)
+                 (declare (fixnum f i))
+                 (let* ((fn (%lisp-word-ref f 2)))
+                   (when (or (null fn) (eql fn 0))
+                     (let* ((nfn (%lisp-word-ref (%frame-backlink f) 2)))
+                       (return (or (null nfn) (eql nfn 0)))))))))
+      (when (and (>= nodes 6)
+                 (nthrowvalues-throwing-p)
+                 (let* ((nargs (%lisp-word-ref tsp 2)))
+                   (and (typep nargs 'fixnum)
+                        (>= nargs 1)
+                        (< nargs 64)
+                        (small-count-p (%lisp-word-ref tsp (%i+ 3 nargs))))))
+        (let* ((nargs (%lisp-word-ref tsp 2))
+               (frame-count (%lisp-word-ref tsp (%i+ 3 nargs))))
+          (declare (fixnum nargs frame-count))
+          (collect ((info))
+            (info (tag-at frame-count))
+            (dotimes (i nargs)
+              (declare (fixnum i))
+              (info (%lisp-word-ref tsp (%i+ 3 i))))
+            (info)))))))
+
 ;;; end of l0-def.lisp

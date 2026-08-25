@@ -29,8 +29,8 @@
 ;;;   20: nop
 ;;;   24: .quad <_SPcallback kernel address>
 ;;;
-;;; MATCHED PAIR: _SPcallback (upstream-port/lisp-kernel/spentry-E-ffi.s)
-;;; reads the index from arg_y = x10 (`mov save0, arg_y`).  Change this
+;;; MATCHED PAIR: _SPcallback (lisp-kernel/arm64-spentry.s) reads the
+;;; index from arg_y = x10 (`mov save0, arg_y`).  Change this
 ;;; generator and that entry together.
 
 (in-package "CCL")
@@ -39,20 +39,39 @@
   (declare (ignorable info))
   (let* ((p (%allocate-callback-pointer 32))
          (addr (%lookup-subprim-address
-                #.(arm64::subprimitive-offset ".SPcallback"))))
-    (setf (%get-unsigned-long p 0)          ; movz x10,#lo16(index)
-          (logior #xd280000a (ash (ldb (byte 16 0) index) 5))
-          (%get-unsigned-long p 4)          ; movk x10,#hi16(index),lsl #16
-          (logior #xf2a0000a (ash (ldb (byte 16 16) index) 5))
-          (%get-unsigned-long p 8)  #x58000090   ; ldr x16,.+16
-          (%get-unsigned-long p 12) #xd61f0200   ; br x16
-          (%get-unsigned-long p 16) #xd503201f   ; nop
-          (%get-unsigned-long p 20) #xd503201f   ; nop
-          (%%get-unsigned-longlong p 24) addr)
-    ;; I/D-cache sync — REQUIRED on arm64 before the stub is executed
-    ;; (same idiom as %make-code-executable, arm64-def.lisp).
+                #.(arm64::subprimitive-offset ".SPcallback")))
+         ;; On Darwin the callback page is MAP_JIT: assemble into a heap
+         ;; u8 scratch, then C-blit into place.  Never call
+         ;; pthread_jit_write_protect_np from MAP_JIT-resident lisp —
+         ;; that makes the caller non-executable.
+         (scratch (make-array 32 :element-type '(unsigned-byte 8)
+                              :initial-element 0)))
+    (with-macptrs ((s))
+      (%vect-data-to-macptr scratch s)
+      (setf (%get-unsigned-long s 0)          ; movz x10,#lo16(index)
+            (logior #xd280000a (ash (ldb (byte 16 0) index) 5))
+            (%get-unsigned-long s 4)          ; movk x10,#hi16(index),lsl #16
+            (logior #xf2a0000a (ash (ldb (byte 16 16) index) 5))
+            (%get-unsigned-long s 8)  #x58000090   ; ldr x16,.+16
+            (%get-unsigned-long s 12) #xd61f0200   ; br x16
+            (%get-unsigned-long s 16) #xd503201f   ; nop
+            (%get-unsigned-long s 20) #xd503201f   ; nop
+            (%%get-unsigned-longlong s 24) addr)
+      #+(and darwin-target arm64-target)
+      (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+               :address p
+               :address s
+               :unsigned-fullword 32
+               :void)
+      #-(and darwin-target arm64-target)
+      (dotimes (i 32)
+        (setf (%get-unsigned-byte p i) (%get-unsigned-byte s i))))
+    ;; Non-Darwin: I/D-cache sync via kernel import.  The Darwin path
+    ;; already syncs the icache inside darwin_arm64_jit_install_code.
+    #-(and darwin-target arm64-target)
     (ff-call (%kernel-import #.arm64::kernel-import-makedataexecutable)
              :address p
              :unsigned-fullword 32
              :void)
     p))
+
