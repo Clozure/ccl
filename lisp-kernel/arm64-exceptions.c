@@ -55,9 +55,10 @@
 
 #include "threads.h"              /* ppc-exceptions.c:49 */
 
+extern Boolean use_mach_exception_handling;
+
 #ifdef DARWIN
 #include "memprotect.h"
-extern Boolean use_mach_exception_handling;
 void signal_handler(int, siginfo_t *, ExceptionInformation *, TCR *, int);
 #endif
 
