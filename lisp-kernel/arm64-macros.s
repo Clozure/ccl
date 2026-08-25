@@ -31,6 +31,17 @@ _SP\name:
         note_function_end _SP\name
 .endm
 
+/* Load the C global lisp_nil into dest (then usually ldr dest,[dest]).
+ * Darwin/arm64 forbids text relocations from `ldr Rd, =sym`; use ADRP. */
+.macro load_addr_of_lisp_nil dest
+#if defined(__APPLE__)
+        adrp    \dest, C(lisp_nil)@PAGE
+        add     \dest, \dest, C(lisp_nil)@PAGEOFF
+#else
+        ldr     \dest, =C(lisp_nil)
+#endif
+.endm
+
 .macro clear_allocptr_tag
         bic allocptr, allocptr, #fulltagmask
 .endm

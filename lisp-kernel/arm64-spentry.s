@@ -6376,7 +6376,7 @@ spentry callback
         mov save2, arg_w                        /* incoming x8           */
         /* Recover the thread context (ppc:5114-5124 get_tcr(1)). */
         mov x0, #1
-        bl get_tcr
+        bl C(get_tcr)
         mov rcontext, x0
         /* Stash the exact foreign sp for the return path, pairing it
            with the incoming x8 (slot CBF-248 =
@@ -6419,7 +6419,7 @@ spentry callback
            must reload it.  Use the SAME idiom as start_lisp below: nil_value
            is patched into the C global lisp_nil at initial heap mapping (Matt
            2026-07-11), so it is NOT a compile-time immediate. */
-        ldr rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr rnil, [rnil]
         /* Cover the foreign region below the enclosing lisp boundary -- the C
            caller's frames plus every register block this spentry just pushed --
@@ -6826,7 +6826,7 @@ C(start_lisp):
         mov     save2, xzr
         mov     save3, xzr
         /* rnil: from the C global (image loader patches nil_value). */
-        ldr     rnil, =lisp_nil
+        load_addr_of_lisp_nil rnil
         ldr     rnil, [rnil]
         /* Lisp stack/alloc state from the TCR (ppc:162-165). */
         ldr     vsp, [rcontext, #tcr.save_vsp]
