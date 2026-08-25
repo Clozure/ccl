@@ -6503,9 +6503,6 @@ endsp callback
  * error-path negation (ppc:5441-5454) has no analog - imm0 carries the
  * raw result.  No FP args => the FPCR dance is skipped (as on PPC, which
  * doesn't touch the FPSCR in syscall). */
-#ifdef DARWIN
-#error "Darwin syscall convention not ported (svc #0x80 + carry-flag error protocol)"
-#endif
 /* Body = patch-0003 _SPffcall shape (same c_frame contract and
  * lisp<->foreign transition) with the AArch64 Linux syscall sequence
  * in the middle instead of a call. */
@@ -6585,7 +6582,19 @@ spentry syscall
         str save1, [rcontext, #tcr.last_lisp_frame]
         mov temp0, #TCR_STATE_FOREIGN
         str temp0, [rcontext, #tcr.valence]
+#ifdef DARWIN
+        brk #0                  /* fail loudly, we shouldn't be here */
+        /*
+         * Darwin system call interface is not public. If ever needed:
+         *
+         *   svc #0x80
+         *   b.cc 1f
+         *   neg x0, x0
+         * 1:
+         */
+#else
         svc #0                                  /* ppc:5433 sc               */
+#endif
         /* ---- return path (x0 = raw result / -errno) (ppc:5455-5489) ----
          * Order is PPC64's, instruction for instruction: make every node
          * register GC-valid, flip to lisp valence, and only THEN reload
