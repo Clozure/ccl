@@ -2029,7 +2029,11 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
   */
   callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
   UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
-  ((void (*)())callback_ptr) (xp, arg1, arg2, arg3, arg4, arg5);
+  {
+    typedef void (*xp_trap_callback)(ExceptionInformation *, natural,
+                                     natural, natural, natural, natural);
+    ((xp_trap_callback)callback_ptr)(xp, arg1, arg2, arg3, arg4, arg5);
+  }
   LOCK(lisp_global(EXCEPTION_LOCK), tcr);
 
 
