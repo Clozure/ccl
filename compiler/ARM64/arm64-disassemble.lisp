@@ -536,8 +536,7 @@
   (let* ((code-vector (uvref xfunction 0))
          (di-vector (make-di-vector code-vector))
          (functionp (typep xfunction 'function)) ;not cross-compiling
-         (previous-source-note nil)
-         (pc-counter 0))
+         (previous-source-note nil))
     (when functionp
       (let ((source-note (function-source-note xfunction)))
         (when source-note
@@ -563,8 +562,7 @@
                    (text (if source-text
                            (ccl::string-sans-most-whitespace source-text 100)
                            "#<no source text>")))
-              (format stream "~&~%;;; ~A" text)
-              (setq pc-counter 3)))))
+              (format stream "~&~%;;; ~A" text)))))
       (let ((di (svref di-vector i)))
         (when (di-label di)
           (format stream "~&~a" (di-label di)))

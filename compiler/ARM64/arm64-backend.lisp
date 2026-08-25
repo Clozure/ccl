@@ -240,15 +240,9 @@
 ;;; embeds #x1300b and cold-load faults in %FIND-PKG (read @ #x13010).
 (defconstant +darwinarm64-nil-value+ #x20000100b)
 
-(defvar *darwinarm64-target-arch* nil)
-
-(defun ensure-darwinarm64-target-arch ()
-  "Fresh arch copy with Darwin nil-value; install on *darwinarm64-backend*."
+(defvar *darwinarm64-target-arch*
   (let ((a (copy-structure arm64::*arm64-target-arch*)))
     (setf (arch::target-nil-value a) +darwinarm64-nil-value+)
-    (setq *darwinarm64-target-arch* a)
-    (when (and (boundp '*darwinarm64-backend*) *darwinarm64-backend*)
-      (setf (backend-target-arch *darwinarm64-backend*) a))
     a))
 
 #+(or darwinarm64-target (not arm64-target))
@@ -273,8 +267,7 @@
                 :name :darwinarm64
                 :target-arch-name :arm64
                 :target-foreign-type-data nil
-                :target-arch (or *darwinarm64-target-arch*
-                                 (ensure-darwinarm64-target-arch))))
+                :target-arch *darwinarm64-target-arch*))
 
 #+(or linuxarm64-target (not arm64-target))
 (pushnew *linuxarm64-backend* *known-arm64-backends*)
@@ -290,11 +283,7 @@
           (backend-p2-dispatch b) *arm642-specials*
           (backend-p2-vinsn-templates b)  *arm64-vinsn-templates*)
     (or (backend-lap-macros b) (setf (backend-lap-macros b)
-                                     (make-hash-table :test #'equalp))))
-  ;; Keep Darwin nil-value correct even after arm64-arch reload resets
-  ;; the shared linux-shaped *arm64-target-arch*.
-  #+(or darwinarm64-target (not arm64-target))
-  (ensure-darwinarm64-target-arch))
+                                     (make-hash-table :test #'equalp)))))
 
 (fixup-arm64-backend)
 

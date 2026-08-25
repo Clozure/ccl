@@ -695,18 +695,25 @@
                        (fboundp '%allocate-code-vector))
                   #-darwinarm64-target
                   nil)
-         (vector (if use-jit
+         (vector #+darwinarm64-target
+                 (if use-jit
                    (%allocate-code-vector element-count)
-                   (allocate-typed-vector :code-vector element-count))))
+                   (allocate-typed-vector :code-vector element-count))
+                 #-darwinarm64-target
+                 (allocate-typed-vector :code-vector element-count)))
     (declare (fixnum element-count size-in-bytes))
+    (declare (ignorable use-jit))
     (%epushval s vector)
+    #+darwinarm64-target
     (if use-jit
-      (let ((scratch (make-array size-in-bytes :element-type '(unsigned-byte 8))))
+      (let ((scratch (make-array size-in-bytes :element-type
+                                 '(unsigned-byte 8))))
         (%fasl-read-n-bytes s scratch 0 size-in-bytes)
-        (%darwinarm64-jit-install-code vector scratch size-in-bytes))
-      (progn
-        (%fasl-read-n-bytes s vector 0 size-in-bytes)
-        (%make-code-executable vector)))
+        (%darwinarm64-jit-install-code vector scratch size-in-bytes)))
+    #-darwinarm64-target
+    (progn
+      (%fasl-read-n-bytes s vector 0 size-in-bytes)
+      (%make-code-executable vector))
     vector))
 
 (defun fasl-read-gvector (s subtype)
