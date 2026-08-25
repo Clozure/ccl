@@ -178,6 +178,7 @@
     (ffi-linuxarm     "ccl:bin;ffi-linuxarm"     ("ccl:lib;ffi-linuxarm.lisp"))
     (ffi-darwinarm    "ccl:bin;ffi-darwinarm"    ("ccl:lib;ffi-darwinarm.lisp"))
     (ffi-androidarm   "ccl:bin;ffi-androidarm"   ("ccl:lib;ffi-androidarm.lisp"))
+    (ffi-arm64        "ccl:bin;ffi-arm64"        ("ccl:lib;ffi-arm64.lisp"))
     (ffi-darwinarm64  "ccl:bin;ffi-darwinarm64"  ("ccl:lib;ffi-darwinarm64.lisp"))
     (ffi-linuxarm64   "ccl:bin;ffi-linuxarm64"   ("ccl:lib;ffi-linuxarm64.lisp"))
     (db-io            "ccl:bin;db-io"            ("ccl:lib;db-io.lisp"))
